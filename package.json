@@ -1,0 +1,13 @@
+{
+  "name": "daily-brief-dashboard",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch server.ts",
+    "start": "bun server.ts"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0",
+    "hono": "^4.7.0"
+  }
+}

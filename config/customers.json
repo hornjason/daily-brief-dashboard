@@ -1,0 +1,20 @@
+{
+  "customers": [
+    { "name": "Shutterfly",               "domain": "shutterfly.com",         "accountNumbers": [565461],               "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
+    { "name": "A10 Networks",             "domain": "a10networks.com",         "accountNumbers": [5929071],              "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
+    { "name": "Dropbox",                  "domain": "dropbox.com",             "accountNumbers": [10375220, 5366809],    "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
+    { "name": "Fred Hutch",               "domain": "fredhutch.org",           "accountNumbers": [5456785],              "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
+    { "name": "Illumio",                  "domain": "illumio.com",             "accountNumbers": [5963272, 12550526],    "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
+    { "name": "REI",                      "domain": "rei.com",                 "accountNumbers": [627962],               "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01", "sheetTab": "RECREATIONAL EQUIPMENT" },
+    { "name": "Crowdstrike",              "domain": "crowdstrike.com",         "accountNumbers": [5311018, 5857069],     "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
+    { "name": "Bespin",                   "domain": "bespin.com",              "accountNumbers": [9510919],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
+    { "name": "Bitrise",                  "domain": "bitrise.io",              "accountNumbers": [11416649],             "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
+    { "name": "Intrado",                  "domain": "intrado.com",             "accountNumbers": [11607015],             "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
+    { "name": "McAfee",                   "domain": "mcafee.com",              "accountNumbers": [1264530],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
+    { "name": "Omnivision",               "domain": "omnivision.com",          "accountNumbers": [1207290],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
+    { "name": "Robert Half International","domain": "roberthalf.com",          "accountNumbers": [1207290],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
+    { "name": "Taylor Fresh Foods",       "domain": "taylorfreshfoods.com",    "accountNumbers": [11823554],             "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
+    { "name": "Uber",                     "domain": "uber.com",                "accountNumbers": [913977],               "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
+    { "name": "Workday",                  "domain": "workday.com",             "accountNumbers": [5350212],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" }
+  ]
+}
