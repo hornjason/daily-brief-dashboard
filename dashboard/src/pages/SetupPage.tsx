@@ -22,6 +22,9 @@ interface AuthTokens {
   drive: boolean
   calendar: boolean
   allConfigured: boolean
+  valid?: boolean
+  expired?: boolean
+  email?: string
 }
 
 interface StepStatus {
@@ -902,6 +905,8 @@ function Step1Sheets({ onImported }: { onImported: () => void }) {
 
 interface OAuthStatus {
   authorized: boolean
+  expired?: boolean
+  email?: string
   configuredAt: string | null
 }
 
@@ -926,17 +931,44 @@ function Step2GoogleAuth() {
     )
   }
 
+  if (oauthStatus?.expired) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-bold text-white mb-1">Google Workspace</h2>
+          <p className="text-slate-400">Token expired — re-authenticate to continue.</p>
+        </div>
+        <div className="bg-amber-950/50 border border-amber-700 rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <XCircle className="w-5 h-5 text-amber-400" />
+            <span className="font-semibold text-white">Session Expired</span>
+          </div>
+          <p className="text-sm text-slate-400">Your Google token is no longer valid. Click below to re-authenticate.</p>
+          <button
+            onClick={() => window.location.href = '/oauth/start'}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            Re-authenticate with Google
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   if (oauthStatus?.authorized) {
     return (
       <div className="space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-white mb-1">Google Workspace</h2>
-          <p className="text-slate-400">Connected and authorized.</p>
+          <p className="text-slate-400">Connected and verified.</p>
         </div>
         <div className="bg-emerald-950/50 border border-emerald-700 rounded-xl p-5 space-y-3">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-emerald-400" />
             <span className="font-semibold text-white">Google Workspace Connected</span>
+            {oauthStatus.email && (
+              <span className="text-sm text-slate-400 ml-1">· {oauthStatus.email}</span>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm">
             {['Gmail (read)', 'Google Drive (read)', 'Google Calendar (read)', 'Google Sheets (read)'].map(s => (

@@ -217,11 +217,22 @@ app.get('/oauth/callback', async (c) => {
 })
 
 // GET /api/oauth/status — Check if unified Google token exists
-app.get('/api/oauth/status', (c) => {
+app.get('/api/oauth/status', async (c) => {
   if (!existsSync(GOOGLE_UNIFIED_TOKEN_PATH)) return c.json({ authorized: false })
   try {
     const token = JSON.parse(readFileSync(GOOGLE_UNIFIED_TOKEN_PATH, 'utf-8'))
-    return c.json({ authorized: true, configuredAt: token.configuredAt ?? null })
+    // Validate token is actually live
+    let email: string | undefined
+    let expired = false
+    try {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const gmail = google.gmail({ version: 'v1', auth })
+      const profile = await gmail.users.getProfile({ userId: 'me' })
+      email = profile.data.emailAddress ?? undefined
+    } catch (e: any) {
+      expired = e.message?.includes('invalid_grant') || e.message?.includes('Token has been expired') || e.message?.includes('invalid_token')
+    }
+    return c.json({ authorized: !expired, expired, email, configuredAt: token.configuredAt ?? null })
   } catch {
     return c.json({ authorized: false })
   }
@@ -364,21 +375,43 @@ app.get('/api/accounts', (c) => {
 })
 
 // GET /api/setup/check-auth — Check Google OAuth token availability
-app.get('/api/setup/check-auth', (c) => {
+app.get('/api/setup/check-auth', async (c) => {
   const CI_CONFIG = resolve(import.meta.dir, '../CustomerIntelligence/config')
   const configDir = process.env.CONFIG_DIR
   const check = (filename: string) => {
     if (configDir && existsSync(resolve(configDir, filename))) return true
     return existsSync(resolve(CI_CONFIG, filename))
   }
-  // Unified browser-OAuth token covers all three services
   const unified = check('.google-token.json')
-  const tokens = {
+  const hasFile = {
     gmail:    unified || check('.gmail-token.json'),
     drive:    unified || check('.gdrive-server-credentials.json'),
     calendar: unified || check('.calendar-token.json'),
   }
-  return c.json({ tokens, allConfigured: Object.values(tokens).every(Boolean) })
+
+  // Validate token is actually live with a lightweight Gmail profile call
+  let valid = false
+  let expired = false
+  let email: string | undefined
+  if (hasFile.gmail) {
+    try {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const gmail = google.gmail({ version: 'v1', auth })
+      const profile = await gmail.users.getProfile({ userId: 'me' })
+      email = profile.data.emailAddress ?? undefined
+      valid = true
+    } catch (e: any) {
+      expired = e.message?.includes('invalid_grant') || e.message?.includes('Token has been expired')
+    }
+  }
+
+  const tokens = {
+    gmail:    hasFile.gmail,
+    drive:    hasFile.drive,
+    calendar: hasFile.calendar,
+    allConfigured: Object.values(hasFile).every(Boolean),
+  }
+  return c.json({ tokens, valid, expired, email })
 })
 
 // POST /api/setup/reset — Clear all config and cache for a clean setup
