@@ -3,7 +3,7 @@
     {
       "name": "A10 NETWORKS, INC.",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "a10networks.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [
@@ -14,7 +14,7 @@
     {
       "name": "BESPIN GLOBAL U.S.",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "bespinglobal.us",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -23,7 +23,7 @@
     {
       "name": "BITRISE",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "bitrise.io",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -32,7 +32,7 @@
     {
       "name": "CONFLUENT",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "confluent.io",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -41,16 +41,19 @@
     {
       "name": "CROWDSTRIKE",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "crowdstrike.com",
       "segment": "Commercial",
       "region": "",
-      "accountNumbers": [],
+      "accountNumbers": [
+        "5311018",
+        "5857069"
+      ],
       "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
     },
     {
       "name": "DROPBOX, INC.",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "dropbox.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [
@@ -61,10 +64,12 @@
     {
       "name": "FRED HUTCH",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "fredhutch.org",
       "segment": "Commercial",
       "region": "",
-      "accountNumbers": [],
+      "accountNumbers": [
+        "5456785"
+      ],
       "aliases": [
         "fred hutchinson",
         "fred hutchinson cancer center",
@@ -76,7 +81,7 @@
     {
       "name": "ILLUMIO",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "illumio.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -85,7 +90,7 @@
     {
       "name": "INTRADO CORPORATION",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "intrado.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [
@@ -97,7 +102,7 @@
     {
       "name": "LIFETOUCH",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "lifetouch.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [
@@ -108,7 +113,7 @@
     {
       "name": "LYNDEN LOGISTICS",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "lynden.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -120,7 +125,7 @@
     {
       "name": "MCAFEE",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "mcafee.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -129,16 +134,18 @@
     {
       "name": "OMNIVISION TECHNOLOGIES",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "ovt.com",
       "segment": "Commercial",
       "region": "",
-      "accountNumbers": [],
+      "accountNumbers": [
+        "1207290"
+      ],
       "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
     },
     {
       "name": "RECREATIONAL EQUIPMENT",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "rei.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -147,7 +154,7 @@
     {
       "name": "ROBERT HALF INTERNATIONAL",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "roberthalf.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -156,7 +163,7 @@
     {
       "name": "SHUTTERFLY",
       "ae": "Carolanne Farrell",
-      "domain": "",
+      "domain": "shutterfly.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [
@@ -167,16 +174,20 @@
     {
       "name": "TAYLOR FRESH FOODS",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "taylorfarms.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
-      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY",
+      "aliases": [
+        "Taylor Farms",
+        "Taylor Fresh"
+      ]
     },
     {
       "name": "UBER",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "uber.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [
@@ -192,7 +203,7 @@
     {
       "name": "WORKDAY",
       "ae": "Elmer Alvarez",
-      "domain": "",
+      "domain": "workdaystore.eu",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],

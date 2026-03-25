@@ -1382,13 +1382,17 @@ function Step3DomainDetection({ onSaved }: { onSaved: () => void }) {
       {loading && (
         <div className="flex items-center gap-3 py-8 justify-center text-slate-400">
           <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">Scanning Gmail and Calendar…</span>
+          <span className="text-sm">Scanning Gmail, Calendar, and web…</span>
         </div>
       )}
 
       {error && (
         <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4 text-red-300 text-sm">
-          {error} — check that Google Auth is complete (Step 2).
+          {error.includes('No customers') || error.includes('not configured')
+            ? 'No accounts found — complete Step 1 (Sheets import) first.'
+            : error.includes('Token') || error.includes('token') || error.includes('auth') || error.includes('OAuth')
+            ? 'Google Auth error — complete Step 2 first, then return here.'
+            : `Network error scanning for domains: ${error}`}
         </div>
       )}
 
@@ -1529,11 +1533,24 @@ function Step5Launch({ status }: { status: StepStatus }) {
 
 const OPTIONAL_STEPS = new Set([2, 3])
 
+const LS_STEP_KEY = 'pai-setup-step'
+
 export function SetupPage() {
-  const [step, setStep] = useState(() => {
-    const s = parseInt(new URLSearchParams(window.location.search).get('step') ?? '0', 10)
-    return isNaN(s) ? 0 : Math.min(Math.max(s, 0), 4)  // max step index is 4
+  const [step, setStepRaw] = useState(() => {
+    // URL param takes priority (e.g. OAuth redirect back), then localStorage, then 0
+    const urlStep = parseInt(new URLSearchParams(window.location.search).get('step') ?? '', 10)
+    if (!isNaN(urlStep)) return Math.min(Math.max(urlStep, 0), 4)
+    const saved = parseInt(localStorage.getItem(LS_STEP_KEY) ?? '', 10)
+    return isNaN(saved) ? 0 : Math.min(Math.max(saved, 0), 4)
   })
+
+  const setStep = (fn: number | ((s: number) => number)) => {
+    setStepRaw((prev) => {
+      const next = typeof fn === 'function' ? fn(prev) : fn
+      localStorage.setItem(LS_STEP_KEY, String(next))
+      return next
+    })
+  }
   const [status, setStatus] = useState<StepStatus>({
     customersOk: null,
     authTokens: null,
@@ -1582,13 +1599,11 @@ export function SetupPage() {
       await fetch('/api/setup/reset', { method: 'POST' })
     } catch {}
     setResetting(false)
-    setStep(0)
-    setStatus({ customersOk: null, authTokens: null, provider: 'pai', testResult: null })
-    // Remove ?step param from URL without reload
-    window.history.replaceState(null, '', window.location.pathname)
+    localStorage.removeItem(LS_STEP_KEY)
+    window.location.href = '/dashboard/setup'
   }
 
-  const canGoNext = step < 4
+  const canGoNext = step < 4 && (step !== 0 || status.customersOk === true)
   const canGoBack = step > 0
 
   return (
@@ -1645,6 +1660,12 @@ export function SetupPage() {
             </button>
 
             <div className="flex items-center gap-3">
+              {step === 1 && status.authTokens && !status.authTokens.allConfigured && (
+                <span className="text-xs text-amber-400">Auth incomplete — connect Google first</span>
+              )}
+              {step === 0 && status.customersOk !== true && (
+                <span className="text-xs text-amber-400">Import accounts to continue</span>
+              )}
               {OPTIONAL_STEPS.has(step) && (
                 <button
                   onClick={() => setStep((s) => s + 1)}
@@ -1666,17 +1687,6 @@ export function SetupPage() {
           </div>
         )}
 
-        {step === 3 && canGoBack && (
-          <div className="flex justify-start">
-            <button
-              onClick={() => setStep((s) => s - 1)}
-              className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Back
-            </button>
-          </div>
-        )}
       </div>
     </div>
   )

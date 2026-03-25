@@ -52,7 +52,7 @@ export async function inferCustomerDomain(
     .replace(/,?\s+(INC|LLC|LTD|CORP|CORPORATION|INCORPORATED|LIMITED|CO|GROUP|HOLDINGS|INTERNATIONAL|TECHNOLOGIES|LOGISTICS|SOLUTIONS|SERVICES|FOODS|SYSTEMS|GLOBAL|NETWORKS|SOFTWARE)\.?$/i, '')
     .trim()
 
-  const clearbitQueries = [...new Set([cleanName, name])].slice(0, 2)
+  const clearbitQueries = [...new Set([cleanName, name, ...(customer.aliases ?? [])])].slice(0, 4)
 
   for (const q of clearbitQueries) {
     try {
