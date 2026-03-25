@@ -8,6 +8,10 @@ const BLOCKLIST = new Set([
   'outlook.com', 'hotmail.com', 'yahoo.com', 'microsoft.com', 'live.com',
   'icloud.com', 'me.com', 'mac.com', 'aol.com', 'protonmail.com',
   'salesforce.com', 'zoom.us', 'slack.com', 'dropboxmail.com',
+  // Known false-positive tooling/partner domains
+  'tableau.com', 'cisco.com', 'gdt.com', 'concursolutions.com', 'insight.com',
+  'workday.com', 'servicenow.com', 'docusign.com', 'box.com', 'okta.com',
+  'qualtrics.com', 'coupa.com', 'ariba.com', 'oracle.com', 'sap.com',
 ])
 
 function extractDomain(email: string): string | null {
@@ -17,23 +21,15 @@ function extractDomain(email: string): string | null {
   return BLOCKLIST.has(d) ? null : d
 }
 
-function tally(domains: (string | null)[]): Map<string, number> {
-  const counts = new Map<string, number>()
-  for (const d of domains) {
-    if (d) counts.set(d, (counts.get(d) ?? 0) + 1)
-  }
-  return counts
-}
-
 export interface DomainCandidate {
   domain: string
   count: number
-  sources: ('gmail' | 'calendar')[]
+  sources: ('gmail' | 'calendar' | 'web')[]
 }
 
 export interface DomainInferenceResult {
   customerName: string
-  candidates: DomainCandidate[]  // sorted by count desc
+  candidates: DomainCandidate[]  // sorted: confirmed > web-only > signal-only
   currentDomain?: string
 }
 
@@ -43,17 +39,44 @@ export async function inferCustomerDomain(
 ): Promise<DomainInferenceResult> {
   const auth = makeAuth(authPath)
   const name = customer.name
+  const nameTerms = [name, ...(customer.aliases ?? [])].map((n) => n.toLowerCase())
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
   const afterStr = `${since.getFullYear()}/${since.getMonth() + 1}/${since.getDate()}`
 
+  const webDomains: string[] = []
   const gmailCounts = new Map<string, number>()
   const calCounts   = new Map<string, number>()
 
-  // ── Gmail ────────────────────────────────────────────────────────────────────
+  // ── 1. Web search (Clearbit) — always runs ───────────────────────────────────
+  const cleanName = name
+    .replace(/,?\s+(INC|LLC|LTD|CORP|CORPORATION|INCORPORATED|LIMITED|CO|GROUP|HOLDINGS|INTERNATIONAL|TECHNOLOGIES|LOGISTICS|SOLUTIONS|SERVICES|FOODS|SYSTEMS|GLOBAL|NETWORKS|SOFTWARE)\.?$/i, '')
+    .trim()
+
+  const clearbitQueries = [...new Set([cleanName, name])].slice(0, 2)
+
+  for (const q of clearbitQueries) {
+    try {
+      const res = await fetch(
+        `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(q)}`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
+      )
+      if (res.ok) {
+        const hits: { name: string; domain: string }[] = await res.json()
+        for (const hit of hits.slice(0, 3)) {
+          if (hit.domain && !BLOCKLIST.has(hit.domain) && !webDomains.includes(hit.domain)) {
+            webDomains.push(hit.domain)
+          }
+        }
+      }
+    } catch {}
+    if (webDomains.length >= 3) break
+  }
+
+  // ── 2. Gmail — From domain only, Subject must contain customer name ──────────
   try {
     const gmail = google.gmail({ version: 'v1', auth })
-    // Search for threads that mention this customer — cast wide net
-    const q = `("${name}" OR "${name.split(' ')[0]}") after:${afterStr}`
+    const nameTermsQuoted = [name, ...(customer.aliases ?? [])].map((n) => `"${n}"`).join(' OR ')
+    const q = `(${nameTermsQuoted}) after:${afterStr}`
     const list = await gmail.users.messages.list({ userId: 'me', q, maxResults: 50 })
     const msgs = list.data.messages ?? []
 
@@ -63,25 +86,26 @@ export async function inferCustomerDomain(
           gmail.users.messages.get({
             userId: 'me', id: m.id!,
             format: 'metadata',
-            metadataHeaders: ['From', 'To', 'Cc'],
+            metadataHeaders: ['From', 'Subject'],
           })
         )
       )
 
       for (const { data } of details) {
         const headers = data.payload?.headers ?? []
-        const addresses = headers
-          .filter((h) => ['From', 'To', 'Cc'].includes(h.name ?? ''))
-          .flatMap((h) => (h.value ?? '').split(','))
-        for (const addr of addresses) {
-          const d = extractDomain(addr.trim())
-          if (d) gmailCounts.set(d, (gmailCounts.get(d) ?? 0) + 1)
-        }
+        const subject = headers.find((h) => h.name === 'Subject')?.value?.toLowerCase() ?? ''
+        const from    = headers.find((h) => h.name === 'From')?.value ?? ''
+
+        // Only count if subject actually references the customer
+        if (!nameTerms.some((t) => subject.includes(t))) continue
+
+        const d = extractDomain(from)
+        if (d) gmailCounts.set(d, (gmailCounts.get(d) ?? 0) + 1)
       }
     }
   } catch {}
 
-  // ── Calendar ─────────────────────────────────────────────────────────────────
+  // ── 3. Calendar — attendee domains ───────────────────────────────────────────
   try {
     const calendar = google.calendar({ version: 'v3', auth })
     const res = await calendar.events.list({
@@ -90,13 +114,12 @@ export async function inferCustomerDomain(
       timeMax: new Date().toISOString(),
       singleEvents: true,
       maxResults: 100,
-      q: name.split(' ')[0],  // search by first word for broader recall
+      q: name,
     })
 
     const events = (res.data.items ?? []).filter((ev) => {
       const title = (ev.summary ?? '').toLowerCase()
-      return title.includes(name.toLowerCase()) ||
-             title.includes(name.split(' ')[0].toLowerCase())
+      return nameTerms.some((t) => title.includes(t))
     })
 
     for (const ev of events) {
@@ -111,23 +134,45 @@ export async function inferCustomerDomain(
   } catch {}
 
   // ── Merge + rank ─────────────────────────────────────────────────────────────
-  const allDomains = new Set([...gmailCounts.keys(), ...calCounts.keys()])
+  // Strategy: confirmed (web + signal) > web only > signal only
+  const allSignalDomains = new Set([...gmailCounts.keys(), ...calCounts.keys()])
   const candidates: DomainCandidate[] = []
 
-  for (const domain of allDomains) {
+  // Web candidates first — add signal counts if they happen to match
+  for (const domain of webDomains) {
     const gc = gmailCounts.get(domain) ?? 0
     const cc = calCounts.get(domain) ?? 0
-    const sources: ('gmail' | 'calendar')[] = []
+    const sources: ('gmail' | 'calendar' | 'web')[] = ['web']
+    if (gc > 0) sources.push('gmail')
+    if (cc > 0) sources.push('calendar')
+    candidates.push({ domain, count: gc + cc, sources })
+    allSignalDomains.delete(domain)  // don't double-count
+  }
+
+  // Remaining signal-only candidates (not in web results)
+  for (const domain of allSignalDomains) {
+    const gc = gmailCounts.get(domain) ?? 0
+    const cc = calCounts.get(domain) ?? 0
+    const sources: ('gmail' | 'calendar' | 'web')[] = []
     if (gc > 0) sources.push('gmail')
     if (cc > 0) sources.push('calendar')
     candidates.push({ domain, count: gc + cc, sources })
   }
 
-  candidates.sort((a, b) => b.count - a.count)
+  // Sort: confirmed (web + signal) first, then by count
+  candidates.sort((a, b) => {
+    const aConfirmed = a.sources.includes('web') && a.count > 0 ? 1 : 0
+    const bConfirmed = b.sources.includes('web') && b.count > 0 ? 1 : 0
+    if (aConfirmed !== bConfirmed) return bConfirmed - aConfirmed
+    const aWeb = a.sources.includes('web') ? 1 : 0
+    const bWeb = b.sources.includes('web') ? 1 : 0
+    if (aWeb !== bWeb) return bWeb - aWeb
+    return b.count - a.count
+  })
 
   return {
     customerName: name,
-    candidates: candidates.slice(0, 5),  // top 5 for UI
+    candidates: candidates.slice(0, 5),
     currentDomain: customer.domain,
   }
 }
