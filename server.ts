@@ -1,5 +1,4 @@
 import { Hono } from 'hono'
-import { serveStatic } from 'hono/bun'
 import { streamSSE } from 'hono/streaming'
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync } from 'fs'
 import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
@@ -104,8 +103,8 @@ function writeSheetCache(customerName: string, rows: ProductSubscription[]): voi
 
 const app = new Hono()
 
-// Serve landing page
-app.get('/', serveStatic({ path: './public/index.html' }))
+// Redirect root to command center
+app.get('/', (c) => c.redirect('/dashboard'))
 
 // Customer list for landing page
 app.get('/customers', (c) => c.json(customers))
@@ -1304,8 +1303,6 @@ app.get('/customer/:name/pipeline', (c) => {
 })
 
 // ── Customer intelligence pages ───────────────────────────────────────────────
-app.get('/customer/:name', serveStatic({ path: './public/customer.html' }))
-
 app.get('/customer/:name/events', (c) => {
   const rawName = decodeURIComponent(c.req.param('name'))
   const customer = customers.find(
