@@ -1594,7 +1594,7 @@ export function SetupPage() {
   const checkAuth = () => {
     fetch('/api/setup/check-auth')
       .then((r) => r.json())
-      .then((d) => setStatus((s) => ({ ...s, authTokens: d.tokens ?? d })))
+      .then((d) => setStatus((s) => ({ ...s, authTokens: { ...(d.tokens ?? d), valid: d.valid, expired: d.expired, email: d.email } })))
       .catch(() => {})
   }
 
@@ -1692,8 +1692,10 @@ export function SetupPage() {
             </button>
 
             <div className="flex items-center gap-3">
-              {step === 1 && status.authTokens && !status.authTokens.allConfigured && (
-                <span className="text-xs text-amber-400">Auth incomplete — connect Google first</span>
+              {step === 1 && status.authTokens && (status.authTokens.valid === false || status.authTokens.expired) && (
+                <span className="text-xs text-amber-400">
+                  {status.authTokens.expired ? 'Token expired — re-authenticate' : 'Auth incomplete — connect Google first'}
+                </span>
               )}
               {step === 0 && status.customersOk !== true && (
                 <span className="text-xs text-amber-400">Import accounts to continue</span>
