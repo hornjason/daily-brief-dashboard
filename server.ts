@@ -12,6 +12,7 @@ import type { CCSPRecord } from './src/sheets.ts'
 import { fetchPipelineData, buildPipelineSummary } from './src/pipeline.ts'
 import type { PipelineRecord } from './src/pipeline.ts'
 import type { Customer, ProductSubscription } from './src/types.ts'
+import { inferCustomerDomain } from './src/domains.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -403,6 +404,48 @@ app.post('/api/setup/reset', (c) => {
   if (process.env.AE_PARENT_FOLDER_IDS) delete process.env.AE_PARENT_FOLDER_IDS
 
   return c.json({ ok: true, deleted: deleted.length })
+})
+
+// POST /api/setup/infer-domains — infer customer domains from Gmail + Calendar signal
+app.post('/api/setup/infer-domains', async (c) => {
+  if (customers.length === 0) return c.json({ error: 'No customers configured' }, 400)
+  try {
+    const results = await Promise.all(
+      customers.map((cu) =>
+        inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e) => ({
+          customerName: cu.name,
+          candidates: [],
+          currentDomain: cu.domain,
+          error: e.message,
+        }))
+      )
+    )
+    return c.json({ results })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// POST /api/setup/save-domains — persist inferred/edited domains to customers.json
+app.post('/api/setup/save-domains', async (c) => {
+  const body = await c.req.json<{ domains: { name: string; domain: string }[] }>()
+  if (!body.domains?.length) return c.json({ error: 'No domains provided' }, 400)
+
+  const domainMap = new Map(body.domains.map((d) => [d.name, d.domain]))
+  const updated = customers.map((cu) => {
+    const inferred = domainMap.get(cu.name)
+    if (inferred !== undefined) return { ...cu, domain: inferred }
+    return cu
+  })
+
+  try {
+    writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
+    renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+    customers.splice(0, customers.length, ...updated)
+    return c.json({ ok: true, updated: body.domains.length })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
 })
 
 // GET /api/cases/all — Non-closed support cases across ALL accounts

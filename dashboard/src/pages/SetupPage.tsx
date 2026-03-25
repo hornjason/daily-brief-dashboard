@@ -92,7 +92,7 @@ function CodeBlock({ code, copyable = true }: { code: string; copyable?: boolean
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
-const STEP_LABELS = ['Accounts', 'Google Auth', 'AI Provider', 'Launch']
+const STEP_LABELS = ['Accounts', 'Google Auth', 'Domains', 'AI Provider', 'Launch']
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -1315,6 +1315,133 @@ function RefreshTimerSettings() {
   )
 }
 
+// ── Step 3: Domain Detection ───────────────────────────────────────────────────
+
+interface InferredDomain {
+  customerName: string
+  candidates: { domain: string; count: number; sources: string[] }[]
+  currentDomain?: string
+  error?: string
+}
+
+function Step3DomainDetection({ onSaved }: { onSaved: () => void }) {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [results, setResults] = useState<InferredDomain[]>([])
+  const [edits, setEdits] = useState<Record<string, string>>({})
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/setup/infer-domains', { method: 'POST' })
+      .then((r) => r.json())
+      .then((d) => {
+        const res: InferredDomain[] = d.results ?? []
+        setResults(res)
+        // Pre-fill edits with top candidate or existing domain
+        const initial: Record<string, string> = {}
+        for (const r of res) {
+          initial[r.customerName] = r.currentDomain || r.candidates[0]?.domain || ''
+        }
+        setEdits(initial)
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const domains = Object.entries(edits).map(([name, domain]) => ({ name, domain }))
+      const r = await fetch('/api/setup/save-domains', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domains }),
+      })
+      const d = await r.json()
+      if (!d.ok) throw new Error(d.error ?? 'Save failed')
+      setSaved(true)
+      onSaved()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-bold text-white mb-1">Auto-Detect Domains</h2>
+        <p className="text-slate-400 text-sm">
+          Scanning your Gmail and Calendar for signals to infer each customer's email domain.
+          Review and edit before saving — domains improve email and meeting matching.
+        </p>
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-3 py-8 justify-center text-slate-400">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span className="text-sm">Scanning Gmail and Calendar…</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4 text-red-300 text-sm">
+          {error} — check that Google Auth is complete (Step 2).
+        </div>
+      )}
+
+      {!loading && results.length > 0 && (
+        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+          {results.map((r) => (
+            <div key={r.customerName} className="bg-slate-700/50 rounded-lg px-4 py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-200 truncate">{r.customerName}</p>
+                {r.candidates.length > 0 && (
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {r.candidates[0].count} signal{r.candidates[0].count !== 1 ? 's' : ''} from {r.candidates[0].sources.join(' + ')}
+                    {r.candidates.length > 1 && ` · also: ${r.candidates.slice(1, 3).map(c => c.domain).join(', ')}`}
+                  </p>
+                )}
+                {r.candidates.length === 0 && (
+                  <p className="text-xs text-slate-500 mt-0.5 italic">No signal found — enter manually</p>
+                )}
+              </div>
+              <input
+                type="text"
+                value={edits[r.customerName] ?? ''}
+                onChange={(e) => setEdits((prev) => ({ ...prev, [r.customerName]: e.target.value }))}
+                placeholder="domain.com"
+                className="w-44 bg-slate-600 border border-slate-500 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="flex items-center gap-3 pt-2">
+          {saved ? (
+            <span className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+              <CheckCircle className="w-4 h-4" /> Domains saved
+            </span>
+          ) : (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {saving ? 'Saving…' : 'Confirm & Save Domains'}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Step 4: Launch ─────────────────────────────────────────────────────────────
 
 function Step5Launch({ status }: { status: StepStatus }) {
@@ -1400,12 +1527,12 @@ function Step5Launch({ status }: { status: StepStatus }) {
 
 // ── Main wizard ────────────────────────────────────────────────────────────────
 
-const OPTIONAL_STEPS = new Set([2])
+const OPTIONAL_STEPS = new Set([2, 3])
 
 export function SetupPage() {
   const [step, setStep] = useState(() => {
     const s = parseInt(new URLSearchParams(window.location.search).get('step') ?? '0', 10)
-    return isNaN(s) ? 0 : Math.min(Math.max(s, 0), 3)  // max step index is 3
+    return isNaN(s) ? 0 : Math.min(Math.max(s, 0), 4)  // max step index is 4
   })
   const [status, setStatus] = useState<StepStatus>({
     customersOk: null,
@@ -1461,7 +1588,7 @@ export function SetupPage() {
     window.history.replaceState(null, '', window.location.pathname)
   }
 
-  const canGoNext = step < 3
+  const canGoNext = step < 4
   const canGoBack = step > 0
 
   return (
@@ -1495,15 +1622,18 @@ export function SetupPage() {
             <Step2GoogleAuth />
           )}
           {step === 2 && (
-            <Step3AIProvider status={status.testResult} onTest={handleTest} />
+            <Step3DomainDetection onSaved={() => {}} />
           )}
           {step === 3 && (
+            <Step3AIProvider status={status.testResult} onTest={handleTest} />
+          )}
+          {step === 4 && (
             <Step5Launch status={status} />
           )}
         </div>
 
         {/* Navigation */}
-        {step < 3 && (
+        {step < 4 && (
           <div className="flex items-center justify-between">
             <button
               onClick={() => setStep((s) => s - 1)}
