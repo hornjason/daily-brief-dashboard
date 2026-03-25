@@ -5,12 +5,13 @@ import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { KPICards } from './components/KPICards'
 import { CalendarStrip } from './components/CalendarStrip'
-import { MeetingPrepCards } from './components/MeetingPrepCards'
-import { SupportCasesTable } from './components/SupportCasesTable'
 import { AccountPortfolioGrid } from './components/AccountPortfolioGrid'
+import { CloudSpendSection } from './components/CloudSpendSection'
+import { PipelineSection } from './components/PipelineSection'
 import { CustomerDetailPage } from './pages/CustomerDetailPage'
+import { SetupPage } from './pages/SetupPage'
 import { formatRelTime } from './lib/format'
-import type { KPIs, CalendarEvent, SupportCase, AccountInfo } from './types'
+import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, PipelineSummary } from './types'
 
 function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0)
@@ -20,6 +21,8 @@ function Dashboard() {
   const calendarAllApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&all=true&_=${refreshKey}`)
   const casesApi = useApi<{ cases: SupportCase[]; totalCount: number }>(`/api/cases/all?_=${refreshKey}`)
   const accountsApi = useApi<{ customers: AccountInfo[] }>(`/api/accounts?_=${refreshKey}`)
+  const ccspApi     = useApi<CCSPSummary>(`/api/ccsp`)
+  const pipelineApi = useApi<PipelineSummary>(`/api/pipeline`)
 
   const anyLoading = kpisApi.loading || calendarApi.loading || calendarAllApi.loading || casesApi.loading || accountsApi.loading
 
@@ -40,32 +43,27 @@ function Dashboard() {
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* KPI Cards */}
           <section id="section-command">
-            <KPICards kpis={kpisApi.data} loading={kpisApi.loading} />
+            <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={accountsApi.data?.customers ?? []} loading={kpisApi.loading} />
           </section>
 
-          {/* Calendar Strip */}
+          {/* Pipeline */}
+          <section id="section-pipeline">
+            <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} />
+          </section>
+
+          {/* Cloud Spend */}
+          <section id="section-cloudspend">
+            <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} />
+          </section>
+
+          {/* Calendar + Meeting Prep */}
           <section id="section-calendar">
             <CalendarStrip
               events={calendarApi.data?.events ?? []}
               allEvents={calendarAllApi.data?.events ?? []}
+              cases={casesApi.data?.cases ?? []}
+              accounts={accountsApi.data?.customers ?? []}
               loading={calendarApi.loading || calendarAllApi.loading}
-            />
-          </section>
-
-          {/* Meeting Prep Cards */}
-          <section id="section-briefs">
-            <MeetingPrepCards
-              events={calendarApi.data?.events ?? []}
-              cases={casesApi.data?.cases ?? []}
-              loading={calendarApi.loading || casesApi.loading}
-            />
-          </section>
-
-          {/* Support Cases Table */}
-          <section id="section-cases">
-            <SupportCasesTable
-              cases={casesApi.data?.cases ?? []}
-              loading={casesApi.loading}
             />
           </section>
 
@@ -88,6 +86,7 @@ function App() {
   return (
     <Routes>
       <Route path="/dashboard/customer/:name" element={<CustomerDetailPage />} />
+      <Route path="/dashboard/setup" element={<SetupPage />} />
       <Route path="*" element={<Dashboard />} />
     </Routes>
   )

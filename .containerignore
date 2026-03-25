@@ -1,0 +1,7 @@
+node_modules
+dashboard/node_modules
+dashboard/dist
+cache/
+.env
+*.log
+.git

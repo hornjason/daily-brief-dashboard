@@ -1,11 +1,13 @@
 export interface Customer {
   name: string
   domain?: string
-  accountNumbers?: number[]
+  accountNumbers?: string[]
   ae?: string
   segment?: string
   region?: string
-  sheetTab?: string  // override when customer name doesn't match sheet tab (e.g. REI → "RECREATIONAL EQUIPMENT")
+  sheetTab?: string      // override when customer name doesn't match sheet tab (e.g. REI → "RECREATIONAL EQUIPMENT")
+  aliases?: string[]     // known subsidiaries / former names that map to this account
+  supportableFileId?: string  // Google Sheets file ID of the AE's Supportable file
 }
 
 export interface CustomerSubscription {
@@ -79,4 +81,5 @@ export interface CalendarEvent {
   joinUrl?: string     // Google Meet / Zoom / Teams link
   description?: string // event description / agenda (plain text, first 300 chars)
   notesUrl?: string    // first Google Doc link found in description
+  solo?: boolean       // true when only the calendar owner is on the event
 }

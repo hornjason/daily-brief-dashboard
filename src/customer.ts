@@ -1,5 +1,5 @@
 import { google } from 'googleapis'
-import { inference } from '../../../Tools/Inference.ts'
+// PAI inference — optional, only available when running with PAI installed locally
 import { resolve } from 'path'
 import { makeAuth } from './google.ts'
 import type { Customer, CalendarEvent, EmailHighlight, DriveFile, SupportCase, CustomerSubscription, ProductSubscription } from './types.ts'
@@ -145,7 +145,109 @@ export async function fetchCustomerDocs(customer: Customer): Promise<DriveFile[]
   }))
 }
 
-// ── Claude brief ─────────────────────────────────────────────────────────────
+// ── LLM provider routing ──────────────────────────────────────────────────────
+
+export function getBriefProvider(): string {
+  return (process.env.LLM_PROVIDER ?? 'pai').toLowerCase()
+}
+
+export function isBriefConfigured(): boolean {
+  const p = getBriefProvider()
+  if (p === 'pai')       return true  // PAI inference always available
+  if (p === 'openai')      return !!process.env.OPENAI_API_KEY
+  if (p === 'anthropic')   return !!process.env.ANTHROPIC_API_KEY
+  if (p === 'claude-code') return Bun.which('claude') !== null
+  if (p === 'gemini')      return false  // manual only — no API integration
+  if (p === 'ollama')      return true   // Ollama assumed local, no key needed
+  return false
+}
+
+async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
+  const provider = getBriefProvider()
+
+  if (provider === 'openai' || provider === 'ollama') {
+    const baseUrl = provider === 'ollama'
+      ? (process.env.OLLAMA_URL ?? 'http://localhost:11434') + '/v1'
+      : 'https://api.openai.com/v1'
+    const model = provider === 'ollama'
+      ? (process.env.OLLAMA_MODEL ?? 'llama3')
+      : (process.env.OPENAI_MODEL ?? 'gpt-4o')
+    const apiKey = provider === 'ollama' ? 'ollama' : process.env.OPENAI_API_KEY
+    if (provider === 'openai' && !apiKey) throw new Error('OPENAI_API_KEY not set in .env')
+
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+        max_tokens: 1200,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`${provider} API error ${res.status}: ${err.slice(0, 200)}`)
+    }
+    const json = await res.json() as any
+    return json.choices?.[0]?.message?.content ?? ''
+  }
+
+  if (provider === 'claude-code') {
+    const claudeBin = Bun.which('claude')
+    if (!claudeBin) throw new Error('claude CLI not found. Install Claude Code from claude.ai/code and run `claude login`.')
+    const proc = Bun.spawn([claudeBin, '-p', `${systemPrompt}\n\n${userPrompt}`], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    const output = await new Response(proc.stdout).text()
+    const exitCode = await proc.exited
+    if (exitCode !== 0) {
+      const err = await new Response(proc.stderr).text()
+      throw new Error(`claude CLI error (exit ${exitCode}): ${err.slice(0, 200)}`)
+    }
+    return output.trim()
+  }
+
+  if (provider === 'gemini') {
+    throw new Error('Gemini is configured as manual-only. Use the sample prompt from Setup → Step 3 to generate briefs in Gemini.')
+  }
+
+  if (provider === 'anthropic') {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set in .env')
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6',
+        max_tokens: 1200,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    })
+    if (!res.ok) throw new Error(`Anthropic API error ${res.status}`)
+    const json = await res.json() as any
+    return json.content?.[0]?.text ?? ''
+  }
+
+  // Default: PAI inference (dynamic import — graceful fail if PAI not installed)
+  try {
+    const { inference } = await import('../../../Tools/Inference.ts')
+    const result = await inference({ systemPrompt, userPrompt, level: 'standard', timeout: 60000 })
+    if (!result.success) throw new Error(result.error ?? 'PAI inference failed')
+    return result.output
+  } catch (e: any) {
+    if (e.code === 'MODULE_NOT_FOUND' || e.message?.includes('Cannot find module')) {
+      throw new Error('PAI inference not available. Set LLM_PROVIDER=anthropic, openai, or ollama in your .env file.')
+    }
+    throw e
+  }
+}
+
+// ── Brief generation ──────────────────────────────────────────────────────────
 
 export async function generateBrief(
   customer: Customer,
@@ -235,13 +337,8 @@ List open cases with severity, days open, and product. Flag Sev1/Sev2 explicitly
 
 Keep each section tight and scannable. Total brief under 500 words.`
 
-  const result = await inference({
-    systemPrompt: 'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable.',
-    userPrompt: prompt,
-    level: 'standard',
-    timeout: 60000,
-  })
-
-  if (!result.success) throw new Error(result.error ?? 'Inference failed')
-  return result.output
+  return callLLM(
+    'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable.',
+    prompt,
+  )
 }

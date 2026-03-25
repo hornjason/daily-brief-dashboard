@@ -1,20 +1,200 @@
 {
   "customers": [
-    { "name": "Shutterfly",               "domain": "shutterfly.com",         "accountNumbers": [565461],               "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
-    { "name": "A10 Networks",             "domain": "a10networks.com",         "accountNumbers": [5929071],              "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
-    { "name": "Dropbox",                  "domain": "dropbox.com",             "accountNumbers": [10375220, 5366809],    "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
-    { "name": "Fred Hutch",               "domain": "fredhutch.org",           "accountNumbers": [5456785],              "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
-    { "name": "Illumio",                  "domain": "illumio.com",             "accountNumbers": [5963272, 12550526],    "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
-    { "name": "REI",                      "domain": "rei.com",                 "accountNumbers": [627962],               "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01", "sheetTab": "RECREATIONAL EQUIPMENT" },
-    { "name": "Crowdstrike",              "domain": "crowdstrike.com",         "accountNumbers": [5311018, 5857069],     "ae": "Carolanne Farrell", "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR01" },
-    { "name": "Bespin",                   "domain": "bespin.com",              "accountNumbers": [9510919],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
-    { "name": "Bitrise",                  "domain": "bitrise.io",              "accountNumbers": [11416649],             "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
-    { "name": "Intrado",                  "domain": "intrado.com",             "accountNumbers": [11607015],             "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
-    { "name": "McAfee",                   "domain": "mcafee.com",              "accountNumbers": [1264530],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
-    { "name": "Omnivision",               "domain": "omnivision.com",          "accountNumbers": [1207290],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
-    { "name": "Robert Half International","domain": "roberthalf.com",          "accountNumbers": [1207290],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
-    { "name": "Taylor Fresh Foods",       "domain": "taylorfreshfoods.com",    "accountNumbers": [11823554],             "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
-    { "name": "Uber",                     "domain": "uber.com",                "accountNumbers": [913977],               "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" },
-    { "name": "Workday",                  "domain": "workday.com",             "accountNumbers": [5350212],              "ae": "Elmer Alvarez",    "segment": "corporate", "region": "Northwest Corporate", "territory": "WEST_COMM_CORP_NORTHWEST_TERR06" }
+    {
+      "name": "A10 NETWORKS, INC.",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [
+        "5929071"
+      ],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "BESPIN GLOBAL U.S.",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "BITRISE",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "CONFLUENT",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "CROWDSTRIKE",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "DROPBOX, INC.",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "FRED HUTCH",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "aliases": [
+        "fred hutchinson",
+        "fred hutchinson cancer center",
+        "fred hutch cancer center",
+        "Seattle Cancer Care Alliance"
+      ],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "ILLUMIO",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "INTRADO CORPORATION",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [
+        "11823554",
+        "11607015"
+      ],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "LIFETOUCH",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [
+        "1368936"
+      ],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "LYNDEN LOGISTICS",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "aliases": [
+        "Lynden Incorporated"
+      ],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "MCAFEE",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "OMNIVISION TECHNOLOGIES",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "RECREATIONAL EQUIPMENT",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "ROBERT HALF INTERNATIONAL",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "SHUTTERFLY",
+      "ae": "Carolanne Farrell",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [
+        "565461"
+      ],
+      "supportableFileId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM"
+    },
+    {
+      "name": "TAYLOR FRESH FOODS",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "UBER",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [
+        "913977"
+      ],
+      "aliases": [
+        "uber freight",
+        "Transplace",
+        "Transplace Texas"
+      ],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    },
+    {
+      "name": "WORKDAY",
+      "ae": "Elmer Alvarez",
+      "domain": "",
+      "segment": "Commercial",
+      "region": "",
+      "accountNumbers": [],
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+    }
   ]
 }

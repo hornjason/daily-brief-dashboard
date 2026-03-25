@@ -10,14 +10,21 @@ const GMAIL_TOKEN_PATH   = process.env.GMAIL_TOKEN         ?? `${CI_CONFIG}/.gma
 const GDRIVE_TOKEN_PATH  = process.env.GDRIVE_TOKEN        ?? `${CI_CONFIG}/.gdrive-server-credentials.json`
 const GCAL_TOKEN_PATH    = process.env.GCAL_TOKEN          ?? `${CI_CONFIG}/.calendar-token.json`
 
+const GOOGLE_UNIFIED_TOKEN_PATH = process.env.CONFIG_DIR
+  ? resolve(process.env.CONFIG_DIR, '.google-token.json')
+  : `${CI_CONFIG}/.google-token.json`
+
+export { GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH }
+
 export function makeAuth(tokenPath: string) {
   if (!existsSync(OAUTH_KEYS_PATH)) throw new Error(`OAuth keys not found: ${OAUTH_KEYS_PATH}`)
-  if (!existsSync(tokenPath)) throw new Error(`Token not found: ${tokenPath} — run auth flow first`)
-
+  // Use unified browser-OAuth token if available, fall back to individual token file
+  const resolvedPath = existsSync(GOOGLE_UNIFIED_TOKEN_PATH) ? GOOGLE_UNIFIED_TOKEN_PATH : tokenPath
+  if (!existsSync(resolvedPath)) throw new Error(`Token not found: ${resolvedPath} — complete OAuth setup at /dashboard/setup`)
   const keys = JSON.parse(readFileSync(OAUTH_KEYS_PATH, 'utf-8'))
   const { client_id, client_secret } = keys.installed ?? keys.web
   const auth = new google.auth.OAuth2(client_id, client_secret)
-  auth.setCredentials(JSON.parse(readFileSync(tokenPath, 'utf-8')))
+  auth.setCredentials(JSON.parse(readFileSync(resolvedPath, 'utf-8')))
   return auth
 }
 
@@ -120,7 +127,9 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
 
   return items
     .map((ev) => {
-      const attendees = (ev.attendees ?? [])
+      const rawAttendees = ev.attendees ?? []
+      const solo = rawAttendees.length === 0 || rawAttendees.every((a) => a.self)
+      const attendees = rawAttendees
         .filter((a) => !a.self)
         .map((a) => a.email ?? '')
         .filter(Boolean)
@@ -129,11 +138,48 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
 
       // Customers present: match attendee domain or event title
       const title = ev.summary ?? ''
+
+      // Normalize a string to alphanumeric-only lowercase for fuzzy comparison
+      const normAlpha = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+      // Extract company part of an email domain (strip TLD(s))
+      // e.g. "shutterfly.com" → "shutterfly", "a10networks.com" → "a10networks", "fredhutch.org" → "fredhutch"
+      const domainCompany = (email: string) => {
+        const domain = email.split('@')[1] ?? ''
+        const parts  = domain.split('.')
+        return normAlpha(parts.length >= 2 ? parts.slice(0, -1).join('') : domain)
+      }
+
+      // Significant words from customer name (> 3 chars, no legal suffixes)
+      const custKeywords = (name: string) =>
+        name.toLowerCase()
+          .replace(/\b(inc|llc|corp|ltd|co|corporation|incorporated|u\.s|us)\b\.?/g, '')
+          .replace(/[^a-z0-9\s]/g, ' ')
+          .split(/\s+/)
+          .filter(w => w.length > 2)
+
       const matchedCustomers = customers
         .filter((c) => {
-          const domainMatch = c.domain && externalAttendees.some((e) => e.endsWith(c.domain!))
-          const nameMatch   = new RegExp(`\\b${c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(title)
-          return domainMatch || nameMatch
+          // 1. Explicit domain config (exact suffix match)
+          if (c.domain && externalAttendees.some((e) => e.endsWith(c.domain!))) return true
+
+          // 2. Auto domain: company part of attendee email appears in customer name (or vice versa)
+          const normCust = normAlpha(c.name)
+          const autoDomainMatch = externalAttendees.some((e) => {
+            const co = domainCompany(e)
+            return co.length > 3 && (normCust.includes(co) || co.includes(normAlpha(c.name.split(/[\s,]/)[0])))
+          })
+          if (autoDomainMatch) return true
+
+          // 3. Title: any significant keyword from customer name appears as a word in the title
+          const keywords = custKeywords(c.name)
+          const titleNorm = title.toLowerCase()
+          if (keywords.some(kw => new RegExp(`\\b${kw}`, 'i').test(titleNorm))) return true
+
+          // 4. Aliases: check title against aliases too
+          if (c.aliases?.some(alias => custKeywords(alias).some(kw => new RegExp(`\\b${kw}`, 'i').test(titleNorm)))) return true
+
+          return false
         })
         .map((c) => c.name)
 
@@ -191,6 +237,7 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
         joinUrl,
         description: plainDesc,
         notesUrl,
+        solo: solo && matchedCustomers.length === 0,
       } satisfies CalendarEvent
     })
     .filter((ev): ev is CalendarEvent => ev !== null)

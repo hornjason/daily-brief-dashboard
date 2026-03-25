@@ -179,8 +179,120 @@ function ProductsModal({
 
 // ── Grid ──────────────────────────────────────────────────────────────────────
 
+function AccountCard({
+  account,
+  cases,
+  events,
+  showAE,
+  onProductClick,
+}: {
+  account: AccountInfo
+  cases: SupportCase[]
+  events: CalendarEvent[]
+  showAE: boolean
+  onProductClick: (a: AccountInfo) => void
+}) {
+  const health = getHealthStatus(account, cases)
+  const openCases = getOpenCasesCount(account, cases)
+  const nextMeeting = getNextMeeting(account, events)
+
+  return (
+    <div className="bg-surface border border-border rounded-xl p-4 hover:border-accent/30 transition-all group">
+      {/* Header — links to customer page */}
+      <a
+        href={`/dashboard/customer/${encodeURIComponent(account.name)}`}
+        className="flex items-center justify-between mb-3"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className="w-2.5 h-2.5 rounded-full shrink-0"
+            style={{ backgroundColor: health.color }}
+            title={health.label}
+          />
+          <span className="text-sm font-semibold text-text-primary group-hover:text-accent transition-colors truncate">
+            {account.name}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {showAE && account.ae && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 font-medium">
+              {account.ae.split(' ')[0]}
+            </span>
+          )}
+          <span className="text-xs text-text-secondary">{account.segment}</span>
+        </div>
+      </a>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-1 text-text-secondary mb-0.5">
+            <Shield className="w-3 h-3" />
+          </div>
+          <div className={`text-sm font-bold ${openCases > 0 ? 'text-warning' : 'text-success'}`}>
+            {openCases}
+          </div>
+          <div className="text-xs text-text-secondary">Cases</div>
+        </div>
+        <button
+          onClick={() => onProductClick(account)}
+          className="text-center hover:bg-accent/10 rounded-lg p-1 -m-1 transition-colors group/stat"
+          title="View product details"
+        >
+          <div className="flex items-center justify-center gap-1 text-text-secondary mb-0.5 group-hover/stat:text-accent transition-colors">
+            <Package className="w-3 h-3" />
+          </div>
+          <div className="text-sm font-bold text-text-primary group-hover/stat:text-accent transition-colors underline decoration-dotted underline-offset-2">
+            {account.productCount}
+          </div>
+          <div className="text-xs text-text-secondary">Products</div>
+        </button>
+        <button
+          onClick={() => onProductClick(account)}
+          className="text-center hover:bg-accent/10 rounded-lg p-1 -m-1 transition-colors group/stat"
+          title="View license details"
+        >
+          <div className="flex items-center justify-center gap-1 text-text-secondary mb-0.5 group-hover/stat:text-accent transition-colors">
+            <Key className="w-3 h-3" />
+          </div>
+          <div className="text-sm font-bold text-text-primary group-hover/stat:text-accent transition-colors underline decoration-dotted underline-offset-2">
+            {account.totalLicenses.toLocaleString()}
+          </div>
+          <div className="text-xs text-text-secondary">Licenses</div>
+        </button>
+      </div>
+
+      {nextMeeting ? (
+        <div className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent">
+          <Calendar className="w-3 h-3 shrink-0" />
+          <span className="font-medium truncate">{formatDate(nextMeeting.start)} · {nextMeeting.title}</span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 text-xs text-text-secondary/50">
+          <Calendar className="w-3 h-3 shrink-0" />
+          <span>No upcoming meetings</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AccountPortfolioGrid({ accounts, cases, events, loading }: AccountPortfolioGridProps) {
   const [modalAccount, setModalAccount] = useState<AccountInfo | null>(null)
+  const [groupByAE, setGroupByAE] = useState(false)
+
+  // Group accounts by AE
+  const aeGroups = (() => {
+    if (!groupByAE) return null
+    const map = new Map<string, AccountInfo[]>()
+    for (const a of accounts) {
+      const key = a.ae || 'Unassigned'
+      const arr = map.get(key) ?? []
+      arr.push(a)
+      map.set(key, arr)
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  })()
 
   if (loading) {
     return (
@@ -209,97 +321,62 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
           <Building2 className="w-4 h-4 text-accent" />
           <h2 className="text-sm font-semibold text-text-primary">Account Portfolio</h2>
           <span className="text-xs text-text-secondary">{accounts.length} accounts</span>
+          <div className="ml-auto flex items-center gap-0.5 bg-border/30 rounded-md p-0.5">
+            <button
+              onClick={() => setGroupByAE(false)}
+              className={`text-xs px-2 py-0.5 rounded transition-colors ${!groupByAE ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setGroupByAE(true)}
+              className={`text-xs px-2 py-0.5 rounded transition-colors ${groupByAE ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+            >
+              By AE
+            </button>
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {accounts.map((account) => {
-            const health = getHealthStatus(account, cases)
-            const openCases = getOpenCasesCount(account, cases)
-            const nextMeeting = getNextMeeting(account, events)
 
-            return (
-              <div
-                key={account.name}
-                className="bg-surface border border-border rounded-xl p-4 hover:border-accent/30 transition-all group"
-              >
-                {/* Header — links to customer page */}
-                <a
-                  href={`/dashboard/customer/${encodeURIComponent(account.name)}`}
-                  className="flex items-center justify-between mb-3"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: health.color }}
-                      title={health.label}
-                    />
-                    <span className="text-sm font-semibold text-text-primary group-hover:text-accent transition-colors">
-                      {account.name}
-                    </span>
-                  </div>
-                  <span className="text-xs text-text-secondary">{account.segment}</span>
-                </a>
-
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  {/* Cases — plain stat */}
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1 text-text-secondary mb-0.5">
-                      <Shield className="w-3 h-3" />
-                    </div>
-                    <div className={`text-sm font-bold ${openCases > 0 ? 'text-warning' : 'text-success'}`}>
-                      {openCases}
-                    </div>
-                    <div className="text-xs text-text-secondary">Cases</div>
-                  </div>
-
-                  {/* Products — clickable */}
-                  <button
-                    onClick={() => setModalAccount(account)}
-                    className="text-center hover:bg-accent/10 rounded-lg p-1 -m-1 transition-colors group/stat"
-                    title="View product details"
-                  >
-                    <div className="flex items-center justify-center gap-1 text-text-secondary mb-0.5 group-hover/stat:text-accent transition-colors">
-                      <Package className="w-3 h-3" />
-                    </div>
-                    <div className="text-sm font-bold text-text-primary group-hover/stat:text-accent transition-colors underline decoration-dotted underline-offset-2">
-                      {account.productCount}
-                    </div>
-                    <div className="text-xs text-text-secondary">Products</div>
-                  </button>
-
-                  {/* Licenses — clickable */}
-                  <button
-                    onClick={() => setModalAccount(account)}
-                    className="text-center hover:bg-accent/10 rounded-lg p-1 -m-1 transition-colors group/stat"
-                    title="View license details"
-                  >
-                    <div className="flex items-center justify-center gap-1 text-text-secondary mb-0.5 group-hover/stat:text-accent transition-colors">
-                      <Key className="w-3 h-3" />
-                    </div>
-                    <div className="text-sm font-bold text-text-primary group-hover/stat:text-accent transition-colors underline decoration-dotted underline-offset-2">
-                      {account.totalLicenses.toLocaleString()}
-                    </div>
-                    <div className="text-xs text-text-secondary">Licenses</div>
-                  </button>
+        {aeGroups ? (
+          <div className="space-y-6">
+            {aeGroups.map(([ae, aeAccounts]) => (
+              <div key={ae}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs font-semibold text-accent">{ae}</span>
+                  <span className="text-xs text-text-secondary">{aeAccounts.length} accounts</span>
+                  <div className="flex-1 h-px bg-border/50" />
                 </div>
-
-                {/* Next meeting */}
-                {nextMeeting ? (
-                  <div className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent">
-                    <Calendar className="w-3 h-3 shrink-0" />
-                    <span className="font-medium truncate">{formatDate(nextMeeting.start)} · {nextMeeting.title}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-xs text-text-secondary/50">
-                    <Calendar className="w-3 h-3 shrink-0" />
-                    <span>No upcoming meetings</span>
-                  </div>
-                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {aeAccounts.map((account) => (
+                    <AccountCard
+                      key={account.name}
+                      account={account}
+                      cases={cases}
+                      events={events}
+                      showAE={false}
+                      onProductClick={setModalAccount}
+                    />
+                  ))}
+                </div>
               </div>
-            )
-          })}
+            ))}
+          </div>
+        ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {accounts.map((account) => (
+            <AccountCard
+              key={account.name}
+              account={account}
+              cases={cases}
+              events={events}
+              showAE={true}
+              onProductClick={setModalAccount}
+            />
+          ))}
         </div>
+        )}
       </div>
     </>
   )
 }
+

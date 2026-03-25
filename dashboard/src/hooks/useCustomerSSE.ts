@@ -30,6 +30,7 @@ export interface CustomerSubscription {
 export interface CustomerMeta {
   name: string
   domain?: string
+  accountNumbers?: number[]
   ae?: string
   segment?: string
   region?: string

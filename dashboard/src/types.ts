@@ -41,6 +41,77 @@ export interface CalendarEvent {
   joinUrl?: string
   description?: string
   notesUrl?: string
+  solo?: boolean
+}
+
+export interface CCSPCustomer {
+  name: string
+  acv: number
+  partners: CCSPPartner[]
+}
+
+export interface CCSPQuarter {
+  quarter: string
+  acv: number
+}
+
+export interface CCSPPartner {
+  partner: string
+  acv: number
+}
+
+export interface CCSPSummary {
+  totalAcv: number
+  cachedAt: string | null
+  byCustomer: CCSPCustomer[]
+  byQuarter: CCSPQuarter[]
+  byPartner: CCSPPartner[]
+}
+
+export interface PipelineOpp {
+  oppNumber: string
+  accountName: string
+  oppName: string
+  acv: number
+  closeDate: string
+  forecastCategory: string
+  owner: string
+  renewal: boolean
+  offeringGroup: string
+  probability: number
+  products: string[]
+}
+
+export interface PipelineByStage {
+  stage: string
+  acv: number
+  count: number
+}
+
+export interface PipelineByQuarterStage {
+  quarter: string
+  commit: number
+  bestCase: number
+  pipeline: number
+}
+
+export interface PipelineByOwner {
+  owner: string
+  acv: number
+  count: number
+}
+
+export interface PipelineSummary {
+  totalAcv: number
+  openCount: number
+  renewalAcv: number
+  newAcv: number
+  byStage: PipelineByStage[]
+  byOwner: PipelineByOwner[]
+  byQuarterStage: PipelineByQuarterStage[]
+  topOpps: PipelineOpp[]
+  closedOpps: PipelineOpp[]
+  cachedAt: string | null
 }
 
 export interface KPIs {

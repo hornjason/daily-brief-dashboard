@@ -4,10 +4,12 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch server.ts",
-    "start": "bun server.ts"
+    "start": "bun server.ts",
+    "refresh": "bun run scripts/refresh-all.ts"
   },
   "dependencies": {
     "googleapis": "^144.0.0",
-    "hono": "^4.7.0"
+    "hono": "^4.7.0",
+    "xlsx": "^0.18.5"
   }
 }

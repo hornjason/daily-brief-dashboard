@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import {
   LayoutDashboard,
-  Shield,
   Calendar,
   Users,
-  FileText,
+  Cloud,
+  TrendingUp,
   Settings,
 } from 'lucide-react'
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Command Center', sectionId: 'section-command' },
-  { icon: Shield,          label: 'Support Cases',  sectionId: 'section-cases' },
+  { icon: TrendingUp,      label: 'Pipeline',        sectionId: 'section-pipeline' },
+  { icon: Cloud,           label: 'Cloud Spend',     sectionId: 'section-cloudspend' },
   { icon: Calendar,        label: 'Calendar',        sectionId: 'section-calendar' },
   { icon: Users,           label: 'Accounts',        sectionId: 'section-accounts' },
-  { icon: FileText,        label: 'Briefs',           sectionId: 'section-briefs' },
 ]
 
 export function Sidebar() {

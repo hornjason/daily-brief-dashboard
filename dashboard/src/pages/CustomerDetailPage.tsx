@@ -18,9 +18,139 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Cloud,
+  TrendingUp,
+  Settings,
+  Copy,
+  Check,
+  Zap,
 } from 'lucide-react'
+import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCustomerSSE } from '../hooks/useCustomerSSE'
 import { formatDate, formatTime, formatRelTime } from '../lib/format'
+import { OppDetail } from '../components/PipelineSection'
+import type { PipelineOpp } from '../types'
+
+// ── Config / provider setup ───────────────────────────────────────────────────
+
+interface ProviderInfo { vars: string[]; snippet: string; description: string }
+interface DashboardConfig {
+  briefProvider: string
+  briefConfigured: boolean
+  providers: Record<string, ProviderInfo>
+}
+
+let _configCache: DashboardConfig | null = null
+
+function useDashboardConfig() {
+  const [config, setConfig] = useState<DashboardConfig | null>(_configCache)
+  useEffect(() => {
+    if (_configCache) return
+    fetch('/api/config').then(r => r.json()).then(d => { _configCache = d; setConfig(d) }).catch(() => {})
+  }, [])
+  return config
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+      className="shrink-0 p-1 rounded hover:bg-border/40 transition-colors text-text-secondary hover:text-text-primary"
+      title="Copy to clipboard"
+    >
+      {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
+    </button>
+  )
+}
+
+function BriefSetupCard({ config, onTestDone }: { config: DashboardConfig; onTestDone: () => void }) {
+  const [selected, setSelected] = useState('pai')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string; preview?: string } | null>(null)
+
+  const provider = config.providers[selected]
+
+  async function runTest() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const r = await fetch('/api/config/test')
+      const j = await r.json()
+      setTestResult(j)
+      if (j.ok) { _configCache = null; setTimeout(onTestDone, 1500) }
+    } catch {
+      setTestResult({ ok: false, error: 'Could not reach server' })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div className="bg-surface border border-border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b border-border/60 flex items-center gap-2">
+        <Settings className="w-4 h-4 text-accent" />
+        <h2 className="text-sm font-semibold text-text-primary">AI Brief Setup Required</h2>
+      </div>
+      <div className="px-5 py-4 space-y-4">
+        <p className="text-xs text-text-secondary leading-relaxed">
+          No AI provider is configured. Pick one below and add the variables to your <code className="bg-border/40 px-1 rounded">.env</code> file, then restart the server.
+        </p>
+
+        {/* Provider tabs */}
+        <div className="flex gap-1 flex-wrap">
+          {Object.entries(config.providers).map(([key, p]) => (
+            <button
+              key={key}
+              onClick={() => setSelected(key)}
+              className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                selected === key
+                  ? 'bg-accent/10 border-accent/30 text-accent'
+                  : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+              }`}
+            >
+              {key === 'pai' ? 'PAI' : key === 'openai' ? 'OpenAI' : key === 'anthropic' ? 'Anthropic' : 'Ollama'}
+            </button>
+          ))}
+        </div>
+
+        {provider && (
+          <div className="space-y-2">
+            <p className="text-xs text-text-secondary">{provider.description}</p>
+            <div className="bg-bg rounded-lg border border-border/60 overflow-hidden">
+              <div className="flex items-start justify-between gap-2 px-3 py-2.5">
+                <pre className="text-xs text-success font-mono whitespace-pre leading-relaxed flex-1">{provider.snippet}</pre>
+                <CopyButton text={provider.snippet} />
+              </div>
+            </div>
+            {selected === 'ollama' && (
+              <p className="text-xs text-text-secondary">
+                Install Ollama: <code className="bg-border/40 px-1 rounded">brew install ollama && ollama pull llama3</code>
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Test button */}
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={runTest}
+            disabled={testing}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-xs hover:bg-accent/20 transition-colors disabled:opacity-50"
+          >
+            <Zap className={`w-3.5 h-3.5 ${testing ? 'animate-pulse' : ''}`} />
+            {testing ? 'Testing…' : 'Test Connection'}
+          </button>
+          {testResult && (
+            <span className={`text-xs ${testResult.ok ? 'text-success' : 'text-critical'}`}>
+              {testResult.ok ? `✓ Connected — ${testResult.preview?.slice(0, 60)}…` : `✗ ${testResult.error}`}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Brief fetch ───────────────────────────────────────────────────────────────
 
@@ -87,17 +217,29 @@ interface AccountInfo {
 function useAccountInfo(customerName: string): AccountInfo | null {
   const [info, setInfo] = useState<AccountInfo | null>(null)
   useEffect(() => {
+    const encoded = encodeURIComponent(customerName)
     fetch('/api/accounts')
       .then((r) => r.json())
       .then((json) => {
         const acct = (json.customers ?? []).find(
           (c: any) => c.name.toLowerCase() === customerName.toLowerCase()
         )
-        if (acct) setInfo({
-          productCount: acct.productCount,
-          totalLicenses: acct.totalLicenses,
-          products: acct.products ?? [],
-        })
+        if (acct && (acct.products ?? []).length > 0) {
+          setInfo({ productCount: acct.productCount, totalLicenses: acct.totalLicenses, products: acct.products })
+        } else {
+          // Cache empty — fetch from sheet then re-read accounts
+          fetch(`/customer/${encoded}/sheetdata`)
+            .then((r) => r.json())
+            .then((sd) => {
+              const products = sd.rows ?? []
+              setInfo({
+                productCount: new Set(products.map((p: any) => p.productDescription)).size,
+                totalLicenses: products.reduce((s: number, p: any) => s + p.quantity, 0),
+                products,
+              })
+            })
+            .catch(() => {})
+        }
       })
       .catch(() => {})
   }, [customerName])
@@ -152,22 +294,30 @@ function Skeleton({ className = '' }: { className?: string }) {
 function BriefSection({ name }: { name: string }) {
   const { data, loading, error, refresh } = useBrief(name)
   const [expanded, setExpanded] = useState(false)
+  const config = useDashboardConfig()
+  const [configDismissed, setConfigDismissed] = useState(false)
+
+  // Show setup card if provider not configured and brief hasn't loaded
+  if (config && !config.briefConfigured && !data && !configDismissed) {
+    return <BriefSetupCard config={config} onTestDone={() => { setConfigDismissed(true); refresh() }} />
+  }
 
   const sections = useMemo(() => {
     if (!data?.text) return {} as Record<string, string>
     const result: Record<string, string> = {}
     let current = ''
     for (const line of data.text.split('\n')) {
-      const h = line.match(/^\*{2}(.+?)\*{2}$/)
+      const h = line.match(/^##\s+(.+)$/)
       if (h) { current = h[1].trim(); result[current] = '' }
-      else if (current) result[current] += line + '\n'
+      else if (current && line !== '---') result[current] += line + '\n'
     }
     return result
   }, [data?.text])
 
-  const overview = sections['Account Overview']?.trim() ?? ''
-  const talkingPoints = sections['Talking Points & Prep']?.trim() ?? ''
-  const casesNote = sections['Open Support Cases']?.trim() ?? ''
+  // Header names may include date suffix e.g. "Talking Points & Prep (Mar 24, 2026)"
+  const overview = Object.entries(sections).find(([k]) => k.startsWith('Account Overview'))?.[1]?.trim() ?? ''
+  const talkingPoints = Object.entries(sections).find(([k]) => k.startsWith('Talking Points'))?.[1]?.trim() ?? ''
+  const casesNote = Object.entries(sections).find(([k]) => k.startsWith('Open Support Cases'))?.[1]?.trim() ?? ''
 
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden">
@@ -573,24 +723,64 @@ function SubscriptionsSection({ products, loading }: { products: SheetProduct[];
 
 // ── Key Contacts ──────────────────────────────────────────────────────────────
 
-interface Contact {
-  email: string
-  meetingCount: number
+const SKIP_EMAILS = /noreply|no-reply|gemini-notes|calendar-notification|notifications|donotreply|bounce|mailer-daemon|jhorn@redhat\.com/i
+
+function parseEmailAddress(raw: string): string {
+  const angleMatch = raw.match(/<([^>]+)>/)
+  const email = angleMatch ? angleMatch[1].trim() : raw.replace(/^"[^"]*"\s*/, '').trim()
+  return email.toLowerCase()
 }
 
-function KeyContacts({ meetings, loading }: { meetings: any[]; loading: boolean }) {
+function parseSenderName(raw: string): string | null {
+  const angleMatch = raw.match(/^"?([^"<]+?)"?\s*</)
+  if (angleMatch) {
+    const name = angleMatch[1].trim().replace(/^"|"$/g, '')
+    if (name && !name.includes('@')) return name
+  }
+  return null
+}
+
+interface Contact {
+  email: string
+  name: string
+  interactions: number
+  sources: Set<'meeting' | 'email'>
+}
+
+function KeyContacts({ meetings, emails, loading }: { meetings: any[]; emails: any[]; loading: boolean }) {
   const contacts = useMemo((): Contact[] => {
-    const counts = new Map<string, number>()
-    for (const ev of meetings) {
-      for (const email of ev.attendees ?? []) {
-        counts.set(email, (counts.get(email) ?? 0) + 1)
+    const map = new Map<string, Contact>()
+
+    function touch(email: string, rawName: string | null, source: 'meeting' | 'email') {
+      if (!email || !email.includes('@') || SKIP_EMAILS.test(email)) return
+      const existing = map.get(email)
+      if (existing) {
+        existing.interactions++
+        existing.sources.add(source)
+        if (!existing.name && rawName) existing.name = rawName
+      } else {
+        const fallback = email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+        map.set(email, { email, name: rawName ?? fallback, interactions: 1, sources: new Set([source]) })
       }
     }
-    return Array.from(counts.entries())
-      .map(([email, meetingCount]) => ({ email, meetingCount }))
-      .sort((a, b) => b.meetingCount - a.meetingCount)
-      .slice(0, 8)
-  }, [meetings])
+
+    for (const ev of meetings) {
+      for (const addr of ev.attendees ?? []) {
+        touch(addr.toLowerCase(), null, 'meeting')
+      }
+    }
+
+    for (const em of emails) {
+      if (!em.from) continue
+      const email = parseEmailAddress(em.from)
+      const name = parseSenderName(em.from)
+      touch(email, name, 'email')
+    }
+
+    return Array.from(map.values())
+      .sort((a, b) => b.interactions - a.interactions)
+      .slice(0, 10)
+  }, [meetings, emails])
 
   if (!loading && contacts.length === 0) return null
 
@@ -611,18 +801,24 @@ function KeyContacts({ meetings, loading }: { meetings: any[]; loading: boolean 
       {!loading && (
         <div className="space-y-2">
           {contacts.map((c) => {
-            const name = c.email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
             const domain = c.email.split('@')[1] ?? ''
+            const isExternal = !domain.endsWith('redhat.com')
             return (
               <div key={c.email} className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-full bg-border/60 flex items-center justify-center shrink-0 text-xs font-semibold text-text-secondary">
-                  {name[0]?.toUpperCase() ?? '?'}
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold ${
+                  isExternal ? 'bg-accent/15 text-accent' : 'bg-border/60 text-text-secondary'
+                }`}>
+                  {c.name[0]?.toUpperCase() ?? '?'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-text-primary truncate">{name}</p>
-                  <p className="text-xs text-text-secondary truncate">{domain}</p>
+                  <p className="text-xs font-medium text-text-primary truncate">{c.name}</p>
+                  <p className="text-xs text-text-secondary truncate">{c.email}</p>
                 </div>
-                <span className="text-xs text-text-secondary shrink-0">{c.meetingCount}× met</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {c.sources.has('meeting') && <span title="Met in meeting"><Calendar className="w-3 h-3 text-text-secondary" /></span>}
+                  {c.sources.has('email') && <span title="Email contact"><Mail className="w-3 h-3 text-text-secondary" /></span>}
+                  <span className="text-xs text-text-secondary">{c.interactions}×</span>
+                </div>
               </div>
             )
           })}
@@ -686,6 +882,227 @@ function DriveSection({ files, loading }: { files: any[]; loading: boolean }) {
   )
 }
 
+// ── Cloud Spend (CCSP) ────────────────────────────────────────────────────────
+
+interface CCSPData {
+  totalAcv: number
+  cachedAt?: string
+  byQuarter: { quarter: string; acv: number }[]
+  byPartner: { partner: string; acv: number }[]
+}
+
+function useCCSP(customerName: string) {
+  const [data, setData] = useState<CCSPData | null>(null)
+  useEffect(() => {
+    fetch(`/customer/${encodeURIComponent(customerName)}/ccsp`)
+      .then((r) => r.json())
+      .then((json) => setData(json))
+      .catch(() => {})
+  }, [customerName])
+  return data
+}
+
+const PARTNER_COLORS: Record<string, string> = {
+  AWS: '#FF9900', Google: '#4285F4', Microsoft: '#00A4EF', Other: '#6B7280',
+}
+
+function fmtAcv(val: number): string {
+  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
+  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`
+  return `$${val.toFixed(0)}`
+}
+
+function CloudSpendCard({ customerName }: { customerName: string }) {
+  const data = useCCSP(customerName)
+
+  // Don't render until loaded, and hide entirely if no spend
+  if (!data || data.totalAcv === 0) return null
+
+  return (
+    <div className="bg-surface border border-border rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Cloud className="w-4 h-4 text-accent" />
+        <h2 className="text-sm font-semibold text-text-primary">Cloud Spend (CCSP)</h2>
+        <span className="text-xs text-text-secondary">2025</span>
+      </div>
+
+      {/* Total */}
+      <div className="mb-4">
+        <div className="text-2xl font-bold text-text-primary">{fmtAcv(data.totalAcv)}</div>
+        <div className="text-xs text-text-secondary">marketplace revenue</div>
+      </div>
+
+      {/* Partner breakdown */}
+      {data.byPartner.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {data.byPartner.map(({ partner, acv }) => {
+            const pct = data.totalAcv > 0 ? (acv / data.totalAcv) * 100 : 0
+            const color = PARTNER_COLORS[partner] ?? PARTNER_COLORS.Other
+            return (
+              <div key={partner}>
+                <div className="flex justify-between text-xs mb-0.5">
+                  <span className="text-text-primary font-medium">{partner}</span>
+                  <span className="text-text-secondary">{fmtAcv(acv)} · {pct.toFixed(0)}%</span>
+                </div>
+                <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Quarterly trend */}
+      {data.byQuarter.length > 1 && (
+        <div>
+          <div className="text-xs text-text-secondary mb-2">Quarterly trend</div>
+          <ResponsiveContainer width="100%" height={56}>
+            <BarChart data={data.byQuarter} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                content={({ active, payload, label }) =>
+                  active && payload?.length ? (
+                    <div className="bg-surface border border-border rounded px-2 py-1 text-xs shadow">
+                      <div className="text-text-secondary">{label}</div>
+                      <div className="text-text-primary font-semibold">{fmtAcv(payload[0].value as number)}</div>
+                    </div>
+                  ) : null
+                }
+              />
+              <Bar dataKey="acv" radius={[3, 3, 0, 0]}>
+                {data.byQuarter.map((_, i) => (
+                  <Cell key={i} fill={i === data.byQuarter.length - 1 ? '#00BCD4' : '#00BCD440'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex justify-between text-xs text-text-secondary mt-1 px-0.5">
+            {data.byQuarter.map(({ quarter }) => (
+              <span key={quarter}>{quarter.replace('20', '').replace('-', ' ')}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Pipeline Card ─────────────────────────────────────────────────────────────
+
+const PIPE_STAGE_COLORS: Record<string, string> = {
+  Commit:       '#3FB950',
+  'Best Case':  '#D29922',
+  Pipeline:     '#58A6FF',
+  Closed:       '#A371F7',
+  Omitted:      '#6B7280',
+}
+
+function pipeDate(iso: string): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+}
+
+function pipeUrgency(iso: string): 'overdue' | 'urgent' | 'soon' | 'ok' {
+  if (!iso) return 'ok'
+  const days = (new Date(iso).getTime() - Date.now()) / 86_400_000
+  if (days < 0) return 'overdue'
+  if (days <= 30) return 'urgent'
+  if (days <= 90) return 'soon'
+  return 'ok'
+}
+
+const PIPE_URGENCY_COLORS: Record<string, string> = {
+  overdue: 'text-critical', urgent: 'text-warning', soon: 'text-accent', ok: 'text-text-secondary',
+}
+
+interface AccountPipelineData {
+  totalAcv: number
+  openCount: number
+  opps: PipelineOpp[]
+  closedOpps: PipelineOpp[]
+  cachedAt: string | null
+}
+
+function usePipeline(customerName: string) {
+  const [data, setData] = useState<AccountPipelineData | null>(null)
+  useEffect(() => {
+    fetch(`/customer/${encodeURIComponent(customerName)}/pipeline`)
+      .then((r) => r.json())
+      .then((json) => setData(json))
+      .catch(() => {})
+  }, [customerName])
+  return data
+}
+
+function PipelineCard({ customerName }: { customerName: string }) {
+  const data = usePipeline(customerName)
+  const [selectedOpp, setSelectedOpp] = useState<PipelineOpp | null>(null)
+
+  if (!data) return null
+  if (data.openCount === 0 && data.closedOpps.length === 0) return null
+
+  const closedAcv = data.closedOpps.reduce((s, o) => s + o.acv, 0)
+
+  return (
+    <div className="bg-surface border border-border rounded-xl p-5">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="w-4 h-4 text-accent" />
+        <h2 className="text-sm font-semibold text-text-primary">Open Pipeline</h2>
+        {data.openCount > 0 && (
+          <span className="text-xs text-text-secondary">{data.openCount} open</span>
+        )}
+      </div>
+
+      {/* Total ACV */}
+      {data.openCount > 0 && (
+        <div className="mb-4">
+          <div className="text-2xl font-bold text-text-primary">{fmtAcv(data.totalAcv)}</div>
+          <div className="text-xs text-text-secondary">open ACV</div>
+        </div>
+      )}
+
+      {/* Opp rows */}
+      {data.opps.length > 0 && (
+        <div className="overflow-y-auto max-h-48 mb-3">
+          {data.opps.map((opp) => {
+            const urgency = pipeUrgency(opp.closeDate)
+            const stageColor = PIPE_STAGE_COLORS[opp.forecastCategory] ?? PIPE_STAGE_COLORS.Omitted
+            return (
+              <div
+                key={opp.oppNumber}
+                onClick={() => setSelectedOpp(opp)}
+                className="flex items-center gap-2 py-1.5 px-1 -mx-1 hover:bg-border/20 rounded cursor-pointer"
+              >
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: stageColor }} />
+                <span className="text-xs font-medium shrink-0 w-10" style={{ color: stageColor }}>
+                  {opp.forecastCategory === 'Best Case' ? 'Best' : opp.forecastCategory}
+                </span>
+                <span className="text-xs text-text-primary truncate flex-1 min-w-0">{opp.oppName}</span>
+                <span className={`text-xs shrink-0 ${PIPE_URGENCY_COLORS[urgency]}`}>{pipeDate(opp.closeDate)}</span>
+                <span className="text-xs font-mono text-text-primary shrink-0">{fmtAcv(opp.acv)}</span>
+                {opp.renewal && <span className="text-xs text-text-secondary/50 shrink-0">↻</span>}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Closed summary */}
+      {data.closedOpps.length > 0 && (
+        <div className="pt-2 border-t border-border/40">
+          <span className="text-xs text-text-secondary">
+            Closed: {data.closedOpps.length} {data.closedOpps.length === 1 ? 'opp' : 'opps'} · {fmtAcv(closedAcv)}
+          </span>
+        </div>
+      )}
+
+      {selectedOpp && <OppDetail opp={selectedOpp} onClose={() => setSelectedOpp(null)} />}
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CustomerDetailPage() {
@@ -723,7 +1140,12 @@ export function CustomerDetailPage() {
             <h1 className="text-base font-bold text-text-primary truncate">{customerName}</h1>
           </div>
 
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2 flex-wrap">
+            {meta?.accountNumbers && meta.accountNumbers.length > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded bg-border/40 text-text-secondary font-mono">
+                #{meta.accountNumbers.join(' · #')}
+              </span>
+            )}
             {meta?.segment && (
               <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 font-medium">
                 {meta.segment}
@@ -793,6 +1215,8 @@ export function CustomerDetailPage() {
         {/* Left column — 65% */}
         <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
           <BriefSection name={customerName} />
+          <CloudSpendCard customerName={customerName} />
+          <PipelineCard customerName={customerName} />
           <ActivityTimeline
             meetings={sse.meetings}
             emails={sse.emails}
@@ -805,7 +1229,7 @@ export function CustomerDetailPage() {
         <aside className="hidden lg:block w-[35%] overflow-y-auto p-6 pl-3 space-y-4 border-l border-border/40">
           <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} />
           <CasesSection cases={sse.cases} loading={sectionLoading} />
-          <KeyContacts meetings={sse.meetings} loading={sectionLoading} />
+          <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
           <DriveSection files={sse.drive} loading={sectionLoading} />
         </aside>
       </div>
