@@ -1731,6 +1731,71 @@ app.post('/api/settings/refresh', async (c) => {
   }
 })
 
+// ── Weather settings + proxy ──────────────────────────────────────────────────
+
+interface WeatherSettings { enabled: boolean; zipCode: string }
+
+function getWeatherSettings(): WeatherSettings {
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    return { enabled: false, zipCode: '', ...(ds.weather ?? {}) }
+  } catch { return { enabled: false, zipCode: '' } }
+}
+
+app.get('/api/settings/weather', (c) => c.json(getWeatherSettings()))
+
+app.post('/api/settings/weather', async (c) => {
+  const body = await c.req.json<Partial<WeatherSettings>>().catch(() => ({}))
+  const current = getWeatherSettings()
+  const updated: WeatherSettings = {
+    enabled: typeof body.enabled === 'boolean' ? body.enabled : current.enabled,
+    zipCode: typeof body.zipCode === 'string' ? body.zipCode.trim() : current.zipCode,
+  }
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    const tmpPath = DATA_SOURCES_PATH + '.tmp'
+    writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, weather: updated }, null, 2))
+    renameSync(tmpPath, DATA_SOURCES_PATH)
+    _weatherCache = null // invalidate cache on settings change
+    return c.json(updated)
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+// 30-minute in-memory weather cache
+let _weatherCache: { data: object; fetchedAt: number } | null = null
+const WEATHER_CACHE_MS = 30 * 60 * 1000
+
+app.get('/api/weather', async (c) => {
+  const settings = getWeatherSettings()
+  if (!settings.enabled || !settings.zipCode) return c.json({ enabled: false })
+
+  if (_weatherCache && Date.now() - _weatherCache.fetchedAt < WEATHER_CACHE_MS) {
+    return c.json({ enabled: true, ..._weatherCache.data })
+  }
+
+  try {
+    const res = await fetch(`https://wttr.in/${encodeURIComponent(settings.zipCode)}?format=j1`, {
+      headers: { 'User-Agent': 'DailyBriefDashboard/1.0' },
+    })
+    if (!res.ok) throw new Error(`wttr.in ${res.status}`)
+    const raw = await res.json() as any
+    const cc = raw.current_condition?.[0] ?? {}
+    const data = {
+      tempF:     cc.temp_F ?? '',
+      condition: cc.weatherDesc?.[0]?.value ?? '',
+      humidity:  cc.humidity ?? '',
+      feelsLikeF: cc.FeelsLikeF ?? '',
+    }
+    _weatherCache = { data, fetchedAt: Date.now() }
+    return c.json({ enabled: true, ...data })
+  } catch (e: any) {
+    console.warn('[weather]', e.message)
+    return c.json({ enabled: true, error: 'unavailable' })
+  }
+})
+
 // ── Drive watcher endpoints ───────────────────────────────────────────────────
 
 app.get('/api/drive-watcher/status', (c) => {
@@ -2012,6 +2077,41 @@ if (customers.length > 0) {
   refreshAll().catch(() => {})
   rescheduleRefreshTimers(getRefreshIntervals())
 }
+
+// On startup: discover account numbers from Supportable sheets for any customer missing them
+;(async () => {
+  const missing = customers.filter((c) => !c.accountNumbers?.length)
+  if (!missing.length) return
+
+  console.log(`[account-discovery] discovering account numbers for ${missing.length} customers…`)
+  let discovered = 0
+
+  for (const customer of missing) {
+    try {
+      const nums = await fetchCustomerAccountNumbers(customer)
+      if (!nums.length) continue
+      customer.accountNumbers = nums
+      const updated = customers.map((cu) =>
+        cu.name === customer.name ? { ...cu, accountNumbers: nums } : cu
+      )
+      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
+      renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+      customers.splice(0, customers.length, ...updated)
+      console.log(`[account-discovery] ${customer.name}: ${nums.join(', ')}`)
+      discovered++
+    } catch (e: any) {
+      console.warn(`[account-discovery] ${customer.name}: ${e.message}`)
+    }
+  }
+
+  if (discovered > 0) {
+    console.log(`[account-discovery] done — ${discovered} customers updated`)
+    // Trigger a fresh scrape now that more account numbers are available
+    runRhScrapeWithState().catch(() => {})
+  } else {
+    console.log('[account-discovery] no new account numbers found')
+  }
+})()
 
 // On startup: open persistent scrape context and run initial scrape if session exists
 if (existsSync(RH_SESSION_PATH)) {

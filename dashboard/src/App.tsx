@@ -9,6 +9,7 @@ import { AccountPortfolioGrid } from './components/AccountPortfolioGrid'
 import { CloudSpendSection } from './components/CloudSpendSection'
 import { PipelineSection } from './components/PipelineSection'
 import { RefreshTimerSettings } from './components/RefreshTimerSettings'
+import { WeatherSettings } from './components/WeatherSettings'
 import { CustomerDetailPage } from './pages/CustomerDetailPage'
 import { SetupPage } from './pages/SetupPage'
 import { formatRelTime } from './lib/format'
@@ -125,7 +126,10 @@ function Dashboard() {
           <main className="flex-1 overflow-y-auto p-6">
             <div className="max-w-lg">
               <h2 className="text-lg font-semibold text-text-primary mb-4">Settings</h2>
-              <RefreshTimerSettings />
+              <div className="space-y-4">
+                <WeatherSettings />
+                <RefreshTimerSettings />
+              </div>
             </div>
           </main>
         ) : (

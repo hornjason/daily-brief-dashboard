@@ -7,6 +7,7 @@ export interface Customer {
   region?: string
   sheetTab?: string      // override when customer name doesn't match sheet tab (e.g. REI → "RECREATIONAL EQUIPMENT")
   aliases?: string[]     // known subsidiaries / former names that map to this account
+  aliasDomains?: string[] // email domains for aliases (e.g. ["lifetouch.com"] for Shutterfly)
   supportableFileId?: string  // Google Sheets file ID of the AE's Supportable file
 }
 

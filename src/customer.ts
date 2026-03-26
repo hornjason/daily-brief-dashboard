@@ -30,13 +30,22 @@ export async function fetchCustomerMeetings(customer: Customer): Promise<Calenda
   const items = res.data.items ?? []
   return items
     .filter((ev) => {
-      const title = (ev.summary ?? '').toLowerCase()
       const attendees = (ev.attendees ?? []).map((a) => a.email ?? '').join(' ')
-      const nameMatch = title.includes(customer.name.toLowerCase())
-      const domainMatch = customer.domain
-        ? attendees.includes(customer.domain)
-        : false
-      return nameMatch || domainMatch
+      const title    = (ev.summary     ?? '').toLowerCase()
+      const agenda   = (ev.description ?? '').toLowerCase()
+      const nameTerms = [customer.name, ...(customer.aliases ?? [])].map((n) => n.toLowerCase())
+
+      // 1. Domain match (highest confidence — attendee emails)
+      const domains = [customer.domain, ...(customer.aliasDomains ?? [])].filter(Boolean) as string[]
+      if (domains.some((d) => attendees.includes(d))) return true
+
+      // 2. Title match
+      if (nameTerms.some((n) => title.includes(n))) return true
+
+      // 3. Agenda / description match
+      if (nameTerms.some((n) => agenda.includes(n))) return true
+
+      return false
     })
     .map((ev) => {
       const attendees = (ev.attendees ?? [])

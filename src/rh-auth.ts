@@ -8,7 +8,8 @@
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
 import { writeFileSync, existsSync } from 'node:fs'
-import { closeScrapeContext, initScrapeContext } from './rh-scraper.ts'
+import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
+import type { Page } from '@playwright/test'
 
 const RH_PORTAL_URL = 'https://access.redhat.com/support/cases/#/case/list'
 const LOGIN_POLL_INTERVAL_MS = 2_000
@@ -36,7 +37,7 @@ export interface RhStatus {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isPortalUrl(url: string): boolean {
-  return url.includes('access.redhat.com') && !url.includes('sso.redhat.com')
+  return url.includes('access.redhat.com/support')
 }
 
 async function cleanupBrowser(): Promise<void> {
@@ -109,9 +110,18 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
           writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }))
           console.log('[rh-auth] Login confirmed — profile:', profileDir)
           rhSessionExpired = false
-          await cleanupBrowser()
-          // Reopen headless scrape context with the fresh session cookies
-          await initScrapeContext(profileDir)
+
+          // Transfer the live context + page to the scraper without closing.
+          // The page retains sessionStorage (PKCE state, SSO tokens) that is
+          // required for transparent session renewal. Closing it and opening
+          // a new page loses that state and breaks SSO authentication.
+          const ctx = activeContext!
+          const livePage = activePage! as Page
+          activeContext = null
+          activePage = null
+          loginInProgress = false
+
+          adoptScrapeContext(ctx, profileDir, livePage)
           onComplete?.()
           return
         }
