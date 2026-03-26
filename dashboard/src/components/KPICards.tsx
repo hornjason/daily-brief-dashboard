@@ -21,9 +21,10 @@ interface KPICardProps {
   accent?: string
   loading?: boolean
   onClick?: () => void
+  subtitle?: React.ReactNode
 }
 
-function KPICard({ label, value, icon, accent, loading, onClick }: KPICardProps) {
+function KPICard({ label, value, icon, accent, loading, onClick, subtitle }: KPICardProps) {
   return (
     <div
       className={`bg-surface border border-border rounded-xl p-4 flex items-center gap-4 ${
@@ -44,6 +45,7 @@ function KPICard({ label, value, icon, accent, loading, onClick }: KPICardProps)
           <div className="text-2xl font-bold text-text-primary">{value}</div>
         )}
         <div className="text-xs text-text-secondary leading-tight">{label}</div>
+        {subtitle && <div className="text-xs text-text-secondary/60 leading-tight mt-0.5">{subtitle}</div>}
       </div>
     </div>
   )
@@ -160,9 +162,21 @@ interface KPICardsProps {
   accounts: AccountInfo[]
   techWinsNeeded: PipelineOpp[]
   loading: boolean
+  rhLastScraped?: string | null
+  rhHasSession?: boolean
 }
 
-export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading }: KPICardsProps) {
+function rhTimeAgo(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession }: KPICardsProps) {
   const [casesOpen, setCasesOpen] = useState(false)
   const [redOpen, setRedOpen] = useState(false)
   const [amberOpen, setAmberOpen] = useState(false)
@@ -216,6 +230,13 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading }: KPI
           accent="#00BCD4"
           loading={loading}
           onClick={() => setCasesOpen(true)}
+          subtitle={
+            rhHasSession === false
+              ? 'No RH session'
+              : rhLastScraped
+              ? `Synced ${rhTimeAgo(rhLastScraped)}`
+              : undefined
+          }
         />
         <KPICard
           label="Sev 1 Cases"

@@ -14,6 +14,8 @@ import type { PipelineRecord } from './src/pipeline.ts'
 import type { Customer, ProductSubscription } from './src/types.ts'
 import { inferCustomerDomain } from './src/domains.ts'
 import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState, checkFilesModified } from './src/drive-watcher.ts'
+import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired } from './src/rh-auth.ts'
+import { runRhScrape, SessionExpiredError } from './src/rh-scraper.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -58,6 +60,10 @@ const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
 
 const GOOGLE_OAUTH_KEYS_PATH = process.env.GOOGLE_OAUTH_KEYS
   ?? resolve(SRV_CONFIG_DIR, 'gcp-oauth.keys.json')
+
+const RH_SESSION_PATH = process.env.RH_SESSION
+  ?? resolve(SRV_CONFIG_DIR, '.rh-session.json')
+const RH_CASES_CACHE_PATH = resolve(CACHE_DIR, 'cases.json')
 
 let oauthState = '' // CSRF state token for browser OAuth flow
 
@@ -238,6 +244,35 @@ app.get('/api/oauth/status', async (c) => {
   } catch {
     return c.json({ authorized: false })
   }
+})
+
+// ── Red Hat Portal auth endpoints ────────────────────────────────────────────
+
+// GET /api/auth/redhat/status — Session health, scrape timestamps, login state
+app.get('/api/auth/redhat/status', (c) => {
+  return c.json(getRhStatus(RH_SESSION_PATH))
+})
+
+// POST /api/auth/redhat/start — Launch headed browser for RH portal login
+app.post('/api/auth/redhat/start', async (c) => {
+  try {
+    await startLoginBrowser(RH_SESSION_PATH)
+    return c.json({ started: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 409)
+  }
+})
+
+// DELETE /api/auth/redhat/session — Cancel in-progress login
+app.delete('/api/auth/redhat/session', async (c) => {
+  await cancelLoginBrowser()
+  return c.json({ cancelled: true })
+})
+
+// POST /api/auth/redhat/sync — Trigger immediate scrape
+app.post('/api/auth/redhat/sync', async (c) => {
+  runRhScrapeWithState().catch(() => {})
+  return c.json({ started: true })
 })
 
 // GET /api/data-sources/status — List connected AE folders
@@ -1883,6 +1918,42 @@ async function refreshPipeline(): Promise<void> {
   }
 }
 
+// ── Red Hat support case scraper ──────────────────────────────────────────────
+
+async function runRhScrapeWithState(): Promise<void> {
+  if (!existsSync(RH_SESSION_PATH)) return
+
+  // Collect account numbers from customers config
+  const accountNumbers = customers
+    .flatMap((c) => (c.accountNumbers ?? []).map(String))
+    .filter(Boolean)
+
+  if (accountNumbers.length === 0) {
+    console.log('[rh-scraper] no account numbers configured — skipping')
+    return
+  }
+
+  try {
+    console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
+    const cases = await runRhScrape({
+      accountNumbers,
+      sessionPath: RH_SESSION_PATH,
+      cachePath: RH_CASES_CACHE_PATH,
+    })
+    recordScrapeSuccess(cases.length)
+    console.log(`[rh-scraper] done — ${cases.length} cases cached`)
+  } catch (e: any) {
+    if (e instanceof SessionExpiredError) {
+      recordScrapeExpired()
+      console.warn('[rh-scraper] session expired — reconnect via dashboard')
+    } else {
+      console.warn('[rh-scraper]', e.message)
+    }
+  }
+}
+
+const RH_SCRAPE_INTERVAL_MS = 4 * 60 * 60 * 1000 // 4 hours
+
 // ── Configurable timer management ─────────────────────────────────────────────
 
 let _subscriptionsTimer: ReturnType<typeof setInterval> | null = null
@@ -1913,6 +1984,12 @@ if (customers.length > 0) {
   refreshAll().catch(() => {})
   rescheduleRefreshTimers(getRefreshIntervals())
 }
+
+// On startup: run initial RH case scrape if session exists, then schedule 4-hour interval
+if (existsSync(RH_SESSION_PATH)) {
+  setTimeout(() => runRhScrapeWithState().catch(() => {}), 5_000)
+}
+setInterval(() => runRhScrapeWithState().catch(() => {}), RH_SCRAPE_INTERVAL_MS)
 
 // ── Drive watcher — init and background polling ────────────────────────────────
 
