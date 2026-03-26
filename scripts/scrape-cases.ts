@@ -86,7 +86,7 @@ for (const accountNum of accountNumbers) {
   console.log(`→ Fetching account ${accountNum}...`)
 
   try {
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 })
+    await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
 
     // Detect expired session
     const currentUrl = page.url()
@@ -132,14 +132,15 @@ for (const accountNum of accountNumbers) {
           (td) => td.textContent?.trim() ?? ''
         )
 
-        // Portal column order (verified): Case#, Summary, Status, Severity, Product, Last Modified
+        // Portal columns (verified, 14 total):
+        // [0]=checkbox [1]=case# [2]=summary [3]=opened-by [4]=modified [5]=severity [6]=status [8]=product [12]=date
         results.push({
           caseNumber,
-          summary:     cells[1] ?? '',
-          status:      cells[2] ?? '',
-          severity:    cells[3] ?? '',
-          product:     cells[4] ?? '',
-          createdDate: cells[5] ?? '',
+          summary:     cells[2] ?? '',
+          status:      cells[6] ?? '',
+          severity:    cells[5] ?? '',
+          product:     cells[8] ?? '',
+          createdDate: cells[12] ?? '',
           accountNumber: acctNum,
         })
       }

@@ -45,7 +45,7 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
         `?query=accountNumber%3A%20(%22${accountNum}%22)%20orderBy%20severity%20asc` +
         `&p=1&size=100&searchType=basic`
 
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 })
+      await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
 
       // Detect expired session
       const currentUrl = page.url()
@@ -83,12 +83,14 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
             (td) => td.textContent?.trim() ?? ''
           )
 
+          // Portal columns (verified, 14 total):
+          // [0]=checkbox [1]=case# [2]=summary [3]=opened-by [4]=modified [5]=severity [6]=status [8]=product
           results.push({
             caseNumber,
-            summary: cells[1] ?? '',
-            status: cells[2] ?? '',
-            severity: cells[3] ?? '',
-            product: cells[4] ?? '',
+            summary: cells[2] ?? '',
+            status: cells[6] ?? '',
+            severity: cells[5] ?? '',
+            product: cells[8] ?? '',
             accountNumber: acctNum,
           })
         }

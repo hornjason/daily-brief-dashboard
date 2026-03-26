@@ -655,10 +655,19 @@ app.post('/api/setup/save-domains', async (c) => {
   }
 })
 
-// GET /api/cases/all — Non-closed support cases across ALL accounts
+// GET /api/cases/all — Support cases across ALL accounts
+// ?includeAll=true returns closed/resolved cases too (default: open only)
+// ?account=NNNN filters to a specific account number
 app.get('/api/cases/all', async (c) => {
   try {
-    const allCases = await fetchCases().catch(() => [])
+    const includeAll = c.req.query('includeAll') === 'true'
+    const accountFilter = c.req.query('account')
+
+    let allCases = await fetchCases({ includeAll }).catch(() => [])
+
+    if (accountFilter) {
+      allCases = allCases.filter((sc) => String(sc.accountNumber) === accountFilter)
+    }
 
     // Enrich with customer name by matching accountNumber
     const enriched = allCases.map((sc) => {
@@ -1920,8 +1929,12 @@ async function refreshPipeline(): Promise<void> {
 
 // ── Red Hat support case scraper ──────────────────────────────────────────────
 
+let _rhScrapeRunning = false
+
 async function runRhScrapeWithState(): Promise<void> {
+  if (_rhScrapeRunning) { console.log('[rh-scraper] already running — skipping'); return }
   if (!existsSync(RH_SESSION_PATH)) return
+  _rhScrapeRunning = true
 
   // Collect account numbers from customers config
   const accountNumbers = customers
@@ -1949,6 +1962,8 @@ async function runRhScrapeWithState(): Promise<void> {
     } else {
       console.warn('[rh-scraper]', e.message)
     }
+  } finally {
+    _rhScrapeRunning = false
   }
 }
 

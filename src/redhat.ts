@@ -52,17 +52,17 @@ async function rhPost(url: string, body: object): Promise<any> {
   return res.json()
 }
 
-export async function fetchCases(): Promise<SupportCase[]> {
+export async function fetchCases(opts: { includeAll?: boolean } = {}): Promise<SupportCase[]> {
   // Primary: read from Playwright-scraped cache (scrape-cases.ts writes this)
   if (existsSync(CASES_CACHE_PATH)) {
     try {
       const raw = JSON.parse(readFileSync(CASES_CACHE_PATH, 'utf-8'))
       const cases: SupportCase[] = raw.cases ?? []
-      const open = cases.filter((c) => {
+      const filtered = opts.includeAll ? cases : cases.filter((c) => {
         const s = (c.status ?? '').toLowerCase()
         return !s.includes('closed') && !s.includes('resolved')
       })
-      return open.sort(
+      return filtered.sort(
         (a, b) => parseInt(a.severity) - parseInt(b.severity) || b.daysOpen - a.daysOpen
       )
     } catch {
