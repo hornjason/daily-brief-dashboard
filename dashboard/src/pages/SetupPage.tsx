@@ -80,7 +80,7 @@ function CodeBlock({ code, copyable = true }: { code: string; copyable?: boolean
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
-const STEP_LABELS = ['OAuth Keys', 'Google Auth', 'Accounts', 'Domains', 'AI Provider', 'Launch']
+const STEP_LABELS = ['OAuth Keys', 'Google Auth', 'Accounts', 'Domains', 'AI Provider', 'Red Hat Portal', 'Launch']
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -1215,9 +1215,148 @@ function Step0OAuthKeys({ onReady }: { onReady: () => void }) {
   )
 }
 
+// ── Step 5: Red Hat Portal ─────────────────────────────────────────────────────
+
+interface RhStatus {
+  hasSession: boolean
+  sessionExpired: boolean
+  lastScraped: string | null
+  caseCount: number
+  loginInProgress: boolean
+  loginTimedOut: boolean
+}
+
+function Step5RedHat({ onConnected }: { onConnected: () => void }) {
+  const [status, setStatus] = useState<RhStatus | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchStatus = async () => {
+    try {
+      const d: RhStatus = await fetch('/api/auth/redhat/status').then((r) => r.json())
+      setStatus(d)
+      if (d.hasSession && !d.loginInProgress && connecting) {
+        setConnecting(false)
+        // Trigger first scrape immediately after session saved
+        fetch('/api/auth/redhat/sync', { method: 'POST' }).catch(() => {})
+        onConnected()
+      }
+    } catch {}
+  }
+
+  useEffect(() => {
+    fetchStatus()
+  }, [])
+
+  // Poll every 2s while login is in progress
+  useEffect(() => {
+    if (!connecting) return
+    const interval = setInterval(fetchStatus, 2_000)
+    return () => clearInterval(interval)
+  }, [connecting])
+
+  const handleConnect = async () => {
+    setError(null)
+    setConnecting(true)
+    try {
+      const res = await fetch('/api/auth/redhat/start', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) {
+        setError(d.error)
+        setConnecting(false)
+      }
+    } catch (e: any) {
+      setError(e.message)
+      setConnecting(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    await fetch('/api/auth/redhat/session', { method: 'DELETE' }).catch(() => {})
+    setConnecting(false)
+    fetchStatus()
+  }
+
+  if (status?.hasSession && !connecting) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <CheckCircle className="w-5 h-5 text-emerald-400" />
+          Red Hat Portal Connected
+        </h2>
+        <p className="text-slate-400 text-sm">
+          Support cases will sync automatically every 4 hours.
+          {status.lastScraped && (
+            <> Last synced {timeAgo(status.lastScraped)} — {status.caseCount} cases.</>
+          )}
+        </p>
+        <button
+          onClick={handleConnect}
+          className="text-sm text-slate-400 hover:text-white underline transition-colors"
+        >
+          Reconnect session
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-white">Red Hat Portal</h2>
+        <p className="text-slate-400 text-sm mt-1">
+          Connect your Red Hat Customer Portal session to surface open support cases in the
+          dashboard. A browser window will open — log in, then return here.
+        </p>
+      </div>
+
+      {connecting ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 bg-indigo-900/30 border border-indigo-700/50 rounded-lg p-4">
+            <Loader2 className="w-5 h-5 text-indigo-400 animate-spin shrink-0" />
+            <div>
+              <p className="text-white text-sm font-medium">Browser window opened</p>
+              <p className="text-slate-400 text-xs mt-0.5">
+                Log in to access.redhat.com, then return here. Session saves automatically.
+              </p>
+            </div>
+          </div>
+          {status?.loginTimedOut && (
+            <p className="text-amber-400 text-sm">Login timed out — try again.</p>
+          )}
+          <button
+            onClick={handleCancel}
+            className="text-sm text-slate-500 hover:text-slate-300 underline transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <button
+            onClick={handleConnect}
+            className="flex items-center gap-2 bg-red-700 hover:bg-red-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Connect Red Hat Portal
+          </button>
+          {error && (
+            <p className="text-red-400 text-sm flex items-center gap-1.5">
+              <XCircle className="w-4 h-4" /> {error}
+            </p>
+          )}
+          <p className="text-slate-500 text-xs">
+            Optional — you can skip this step and connect later from the dashboard.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main wizard ────────────────────────────────────────────────────────────────
 
-const OPTIONAL_STEPS = new Set([3, 4])
+const OPTIONAL_STEPS = new Set([3, 4, 5])
 
 const LS_STEP_KEY = 'pai-setup-step'
 
@@ -1225,9 +1364,9 @@ export function SetupPage() {
   const [step, setStepRaw] = useState(() => {
     // URL param takes priority (e.g. OAuth redirect back), then localStorage, then 0
     const urlStep = parseInt(new URLSearchParams(window.location.search).get('step') ?? '', 10)
-    if (!isNaN(urlStep)) return Math.min(Math.max(urlStep, 0), 5)
+    if (!isNaN(urlStep)) return Math.min(Math.max(urlStep, 0), 6)
     const saved = parseInt(localStorage.getItem(LS_STEP_KEY) ?? '', 10)
-    return isNaN(saved) ? 0 : Math.min(Math.max(saved, 0), 5)
+    return isNaN(saved) ? 0 : Math.min(Math.max(saved, 0), 6)
   })
 
   const setStep = (fn: number | ((s: number) => number)) => {
@@ -1294,7 +1433,7 @@ export function SetupPage() {
     window.location.href = '/dashboard/setup'
   }
 
-  const canGoNext = step < 5 && (step !== 0 || oauthKeysOk) && (step !== 2 || status.customersOk === true)
+  const canGoNext = step < 6 && (step !== 0 || oauthKeysOk) && (step !== 2 || status.customersOk === true)
   const canGoBack = step > 0
 
   return (
@@ -1306,7 +1445,7 @@ export function SetupPage() {
             <span className="text-xl">🗂️</span>
           </div>
           <h1 className="text-3xl font-bold text-white">Daily Brief Dashboard</h1>
-          <p className="text-slate-400 mt-1 text-sm">Setup wizard — 6 steps to get started</p>
+          <p className="text-slate-400 mt-1 text-sm">Setup wizard — 7 steps to get started</p>
           <div className="absolute top-0 right-0 flex flex-col items-end gap-1">
             <button
               onClick={() => doReset(true)}
@@ -1347,12 +1486,15 @@ export function SetupPage() {
             <Step3AIProvider status={status.testResult} onTest={handleTest} />
           )}
           {step === 5 && (
+            <Step5RedHat onConnected={() => setStep((s) => s + 1)} />
+          )}
+          {step === 6 && (
             <Step5Launch status={status} />
           )}
         </div>
 
         {/* Navigation */}
-        {step < 5 && (
+        {step < 6 && (
           <div className="flex items-center justify-between">
             <button
               onClick={() => setStep((s) => s - 1)}

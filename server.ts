@@ -5,7 +5,7 @@ import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { fetchEmail, fetchDrive, fetchCalendar, makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './src/google.ts'
-import { fetchCases, fetchCustomerCases, fetchCustomerSubscriptions } from './src/redhat.ts'
+import { fetchCases, fetchCustomerCases, fetchCustomerSubscriptions, fetchCaseLatestComment } from './src/redhat.ts'
 import { fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief, getBriefProvider, isBriefConfigured } from './src/customer.ts'
 import { fetchCustomerSheetData, fetchCustomerSheetRaw, fetchCCSPData, fetchCustomerAccountNumbers } from './src/sheets.ts'
 import type { CCSPRecord } from './src/sheets.ts'
@@ -14,6 +14,8 @@ import type { PipelineRecord } from './src/pipeline.ts'
 import type { Customer, ProductSubscription } from './src/types.ts'
 import { inferCustomerDomain } from './src/domains.ts'
 import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState, checkFilesModified } from './src/drive-watcher.ts'
+import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired } from './src/rh-auth.ts'
+import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext } from './src/rh-scraper.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -58,6 +60,13 @@ const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
 
 const GOOGLE_OAUTH_KEYS_PATH = process.env.GOOGLE_OAUTH_KEYS
   ?? resolve(SRV_CONFIG_DIR, 'gcp-oauth.keys.json')
+
+const RH_SESSION_PATH = process.env.RH_SESSION
+  ?? resolve(SRV_CONFIG_DIR, '.rh-session.json')
+const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR
+  ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
+const RH_CASES_CACHE_PATH = resolve(CACHE_DIR, 'cases.json')
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'your-admin@example.com'
 
 let oauthState = '' // CSRF state token for browser OAuth flow
 
@@ -169,9 +178,9 @@ app.get('/oauth/callback', async (c) => {
         <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9;max-width:600px;margin:0 auto">
           <h2 style="color:#fbbf24">Access Denied</h2>
           <p style="color:#94a3b8">Your Google account hasn't been added as a test user yet.</p>
-          <p style="color:#94a3b8">Email <strong style="color:#f1f5f9">jhorn@redhat.com</strong> and ask to be added, then try again.</p>
+          <p style="color:#94a3b8">Email <strong style="color:#f1f5f9">${ADMIN_EMAIL}</strong> and ask to be added, then try again.</p>
           <p style="margin-top:1.5rem">
-            <a href="mailto:jhorn@redhat.com?subject=Dashboard%20Access%20Request&body=Hi%20Jason%2C%0A%0APlease%20add%20my%20Google%20account%20as%20a%20test%20user%20for%20the%20PAI%20Dashboard.%0A%0AMy%20email%3A%20%5Byour%40redhat.com%5D%0A%0AThanks"
+            <a href="mailto:${ADMIN_EMAIL}?subject=Dashboard%20Access%20Request&body=Please%20add%20my%20Google%20account%20as%20a%20test%20user.%0A%0AMy%20email%3A%20%5Byour%40email.com%5D"
                style="background:#4f46e5;color:white;padding:.75rem 1.5rem;border-radius:.5rem;text-decoration:none;display:inline-block">
               Request Access via Email
             </a>
@@ -238,6 +247,37 @@ app.get('/api/oauth/status', async (c) => {
   } catch {
     return c.json({ authorized: false })
   }
+})
+
+// ── Red Hat Portal auth endpoints ────────────────────────────────────────────
+
+// GET /api/auth/redhat/status — Session health, scrape timestamps, login state
+app.get('/api/auth/redhat/status', (c) => {
+  return c.json(getRhStatus(RH_SESSION_PATH))
+})
+
+// POST /api/auth/redhat/start — Launch headed browser for RH portal login
+app.post('/api/auth/redhat/start', async (c) => {
+  try {
+    await startLoginBrowser(RH_SESSION_PATH, RH_PROFILE_DIR, () => {
+      runRhScrapeWithState().catch(() => {})
+    })
+    return c.json({ started: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 409)
+  }
+})
+
+// DELETE /api/auth/redhat/session — Cancel in-progress login
+app.delete('/api/auth/redhat/session', async (c) => {
+  await cancelLoginBrowser()
+  return c.json({ cancelled: true })
+})
+
+// POST /api/auth/redhat/sync — Trigger immediate scrape
+app.post('/api/auth/redhat/sync', async (c) => {
+  runRhScrapeWithState().catch(() => {})
+  return c.json({ started: true })
 })
 
 // GET /api/data-sources/status — List connected AE folders
@@ -620,10 +660,19 @@ app.post('/api/setup/save-domains', async (c) => {
   }
 })
 
-// GET /api/cases/all — Non-closed support cases across ALL accounts
+// GET /api/cases/all — Support cases across ALL accounts
+// ?includeAll=true returns closed/resolved cases too (default: open only)
+// ?account=NNNN filters to a specific account number
 app.get('/api/cases/all', async (c) => {
   try {
-    const allCases = await fetchCases().catch(() => [])
+    const includeAll = c.req.query('includeAll') === 'true'
+    const accountFilter = c.req.query('account')
+
+    let allCases = await fetchCases({ includeAll }).catch(() => [])
+
+    if (accountFilter) {
+      allCases = allCases.filter((sc) => String(sc.accountNumber) === accountFilter)
+    }
 
     // Enrich with customer name by matching accountNumber
     const enriched = allCases.map((sc) => {
@@ -637,6 +686,13 @@ app.get('/api/cases/all', async (c) => {
   } catch (e: any) {
     return c.json({ cases: [], totalCount: 0, error: e.message }, 500)
   }
+})
+
+// GET /api/cases/:caseNumber/latest-comment — most recent comment for a case
+app.get('/api/cases/:caseNumber/latest-comment', async (c) => {
+  const caseNumber = c.req.param('caseNumber')
+  const comment = await fetchCaseLatestComment(caseNumber).catch(() => null)
+  return c.json({ comment })
 })
 
 // ── Brief helpers ────────────────────────────────────────────────────────────
@@ -1883,6 +1939,49 @@ async function refreshPipeline(): Promise<void> {
   }
 }
 
+// ── Red Hat support case scraper ──────────────────────────────────────────────
+
+let _rhScrapeRunning = false
+
+async function runRhScrapeWithState(): Promise<void> {
+  if (_rhScrapeRunning) { console.log('[rh-scraper] already running — skipping'); return }
+  if (!existsSync(RH_SESSION_PATH)) return
+  _rhScrapeRunning = true
+
+  // Collect account numbers from customers config
+  const accountNumbers = customers
+    .flatMap((c) => (c.accountNumbers ?? []).map(String))
+    .filter(Boolean)
+
+  if (accountNumbers.length === 0) {
+    console.log('[rh-scraper] no account numbers configured — skipping')
+    return
+  }
+
+  try {
+    console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
+    const cases = await runRhScrape({
+      accountNumbers,
+      profileDir: RH_PROFILE_DIR,
+      cachePath: RH_CASES_CACHE_PATH,
+    })
+    recordScrapeSuccess(cases.length)
+    console.log(`[rh-scraper] done — ${cases.length} cases cached`)
+  } catch (e: any) {
+    if (e instanceof SessionExpiredError) {
+      recordScrapeExpired()
+      await closeScrapeContext() // discard expired context so next login gets a clean one
+      console.warn('[rh-scraper] session expired — reconnect via dashboard')
+    } else {
+      console.warn('[rh-scraper]', e.message)
+    }
+  } finally {
+    _rhScrapeRunning = false
+  }
+}
+
+const RH_SCRAPE_INTERVAL_MS = 4 * 60 * 60 * 1000 // 4 hours
+
 // ── Configurable timer management ─────────────────────────────────────────────
 
 let _subscriptionsTimer: ReturnType<typeof setInterval> | null = null
@@ -1913,6 +2012,15 @@ if (customers.length > 0) {
   refreshAll().catch(() => {})
   rescheduleRefreshTimers(getRefreshIntervals())
 }
+
+// On startup: open persistent scrape context and run initial scrape if session exists
+if (existsSync(RH_SESSION_PATH)) {
+  setTimeout(async () => {
+    await initScrapeContext(RH_PROFILE_DIR)
+    runRhScrapeWithState().catch(() => {})
+  }, 5_000)
+}
+setInterval(() => runRhScrapeWithState().catch(() => {}), RH_SCRAPE_INTERVAL_MS)
 
 // ── Drive watcher — init and background polling ────────────────────────────────
 
@@ -1945,5 +2053,14 @@ setInterval(async () => {
     console.warn('[drive-watcher] interval check failed:', e.message)
   }
 }, DRIVE_WATCHER_INTERVAL_MS)
+
+// Graceful shutdown — close Chromium so it doesn't orphan in containers
+async function shutdown() {
+  console.log('[shutdown] closing browser context…')
+  await closeScrapeContext().catch(() => {})
+  process.exit(0)
+}
+process.on('SIGTERM', shutdown)
+process.on('SIGINT',  shutdown)
 
 export default { port, fetch: app.fetch, idleTimeout: 120 }

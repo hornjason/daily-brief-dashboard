@@ -21,9 +21,10 @@ interface KPICardProps {
   accent?: string
   loading?: boolean
   onClick?: () => void
+  subtitle?: React.ReactNode
 }
 
-function KPICard({ label, value, icon, accent, loading, onClick }: KPICardProps) {
+function KPICard({ label, value, icon, accent, loading, onClick, subtitle }: KPICardProps) {
   return (
     <div
       className={`bg-surface border border-border rounded-xl p-4 flex items-center gap-4 ${
@@ -44,6 +45,7 @@ function KPICard({ label, value, icon, accent, loading, onClick }: KPICardProps)
           <div className="text-2xl font-bold text-text-primary">{value}</div>
         )}
         <div className="text-xs text-text-secondary leading-tight">{label}</div>
+        {subtitle && <div className="text-xs text-text-secondary/60 leading-tight mt-0.5">{subtitle}</div>}
       </div>
     </div>
   )
@@ -160,10 +162,23 @@ interface KPICardsProps {
   accounts: AccountInfo[]
   techWinsNeeded: PipelineOpp[]
   loading: boolean
+  rhLastScraped?: string | null
+  rhHasSession?: boolean
 }
 
-export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading }: KPICardsProps) {
+function rhTimeAgo(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession }: KPICardsProps) {
   const [casesOpen, setCasesOpen] = useState(false)
+  const [sev1Open, setSev1Open] = useState(false)
   const [redOpen, setRedOpen] = useState(false)
   const [amberOpen, setAmberOpen] = useState(false)
   const [techWinsOpen, setTechWinsOpen] = useState(false)
@@ -216,6 +231,13 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading }: KPI
           accent="#00BCD4"
           loading={loading}
           onClick={() => setCasesOpen(true)}
+          subtitle={
+            rhHasSession === false
+              ? 'No RH session'
+              : rhLastScraped
+              ? `Synced ${rhTimeAgo(rhLastScraped)}`
+              : undefined
+          }
         />
         <KPICard
           label="Sev 1 Cases"
@@ -223,7 +245,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading }: KPI
           icon={<AlertTriangle className="w-5 h-5" />}
           accent="#F85149"
           loading={loading}
-          onClick={() => setCasesOpen(true)}
+          onClick={() => setSev1Open(true)}
         />
         <KPICard
           label="Meetings Today"
@@ -285,6 +307,30 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading }: KPI
           </div>
         </div>
       )}
+
+      {/* Sev 1 cases modal */}
+      {sev1Open && (() => {
+        const sev1Cases = cases.filter((c) => String(c.severity) === '1')
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSev1Open(false)}>
+            <div className="bg-surface border border-border rounded-2xl w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-critical" />
+                  <h2 className="text-sm font-semibold text-text-primary">Severity 1 Cases</h2>
+                  <span className="text-xs text-text-secondary">{sev1Cases.length} open</span>
+                </div>
+                <button onClick={() => setSev1Open(false)} className="text-text-secondary hover:text-text-primary transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1">
+                <SupportCasesTable cases={sev1Cases} loading={false} />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Red renewals modal — expired + <30d */}
       {redOpen && (

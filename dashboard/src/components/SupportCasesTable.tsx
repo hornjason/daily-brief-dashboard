@@ -10,7 +10,7 @@ import {
 import { useState } from 'react'
 import type { SupportCase } from '../types'
 import { formatRelTime } from '../lib/format'
-import { ArrowUpDown, ShieldAlert } from 'lucide-react'
+import { ArrowUpDown, ShieldAlert, ExternalLink } from 'lucide-react'
 
 const columnHelper = createColumnHelper<SupportCase>()
 
@@ -29,9 +29,19 @@ export function SupportCasesTable({ cases, loading }: SupportCasesTableProps) {
     () => [
       columnHelper.accessor('customerName', {
         header: 'Customer',
-        cell: (info) => (
-          <span className="text-text-primary font-medium">{info.getValue() ?? 'Unknown'}</span>
-        ),
+        cell: (info) => {
+          const name = info.getValue()
+          if (!name) return <span className="text-text-secondary">Unknown</span>
+          return (
+            <a
+              href={`/dashboard/customer/${encodeURIComponent(name)}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-text-primary font-medium hover:text-accent transition-colors"
+            >
+              {name}
+            </a>
+          )
+        },
       }),
       columnHelper.accessor('caseNumber', {
         header: 'Case #',
@@ -157,10 +167,12 @@ export function SupportCasesTable({ cases, loading }: SupportCasesTableProps) {
             <tbody>
               {table.getRowModel().rows.map((row) => {
                 const sev = row.original.severity
+                const portalUrl = `https://access.redhat.com/support/cases/#/case/${row.original.caseNumber}`
                 return (
                   <tr
                     key={row.id}
-                    className={`border-b border-border/50 hover:bg-bg/50 transition-colors ${
+                    onClick={() => window.open(portalUrl, '_blank', 'noopener,noreferrer')}
+                    className={`border-b border-border/50 hover:bg-accent/5 cursor-pointer transition-colors group ${
                       sev === '1'
                         ? 'border-l-2 border-l-critical'
                         : sev === '2'
@@ -173,6 +185,9 @@ export function SupportCasesTable({ cases, loading }: SupportCasesTableProps) {
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
+                    <td className="px-3 py-3 w-6">
+                      <ExternalLink className="w-3.5 h-3.5 text-text-secondary/30 group-hover:text-accent transition-colors" />
+                    </td>
                   </tr>
                 )
               })}

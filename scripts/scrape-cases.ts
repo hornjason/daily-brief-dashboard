@@ -86,27 +86,24 @@ for (const accountNum of accountNumbers) {
   console.log(`→ Fetching account ${accountNum}...`)
 
   try {
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 })
+    await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
 
-    // Detect expired session
-    const currentUrl = page.url()
-    if (currentUrl.includes('sso.redhat.com') || currentUrl.includes('/login')) {
+    // Detect expired session — wait for portal URL; transparent SSO renewal is allowed
+    if (!page.url().includes('access.redhat.com/support')) {
+      await page.waitForURL('**/access.redhat.com/support/**', { timeout: 20_000 }).catch(() => {})
+    }
+    if (!page.url().includes('access.redhat.com/support')) {
       await browser.close()
       console.error('\n❌  Session expired. Run:  bun scripts/login-rh.ts')
       process.exit(2)
     }
 
-    // Wait for the Angular table to render
-    await page.waitForTimeout(2000)
+    // Wait for Angular table to fully render (partial row appears quickly, rest loads over ~6-7s)
+    await page.waitForSelector('table tbody tr', { timeout: 15_000 }).catch(() => {})
+    await page.waitForTimeout(7000)
 
-    // Try to find any case rows
     const rowCount = await page.locator('table tbody tr').count()
     console.log(`   Found ${rowCount} table rows`)
-
-    if (rowCount === 0) {
-      // Try waiting a bit longer for dynamic render
-      await page.waitForSelector('table tbody tr', { timeout: 10_000 }).catch(() => {})
-    }
 
     const cases = await page.evaluate((acctNum: string) => {
       const results: Array<{
@@ -132,14 +129,15 @@ for (const accountNum of accountNumbers) {
           (td) => td.textContent?.trim() ?? ''
         )
 
-        // Portal column order (verified): Case#, Summary, Status, Severity, Product, Last Modified
+        // Portal columns (verified, 14 total):
+        // [0]=checkbox [1]=case# [2]=summary [3]=opened-by [4]=modified [5]=severity [6]=status [8]=product [12]=date
         results.push({
           caseNumber,
-          summary:     cells[1] ?? '',
-          status:      cells[2] ?? '',
-          severity:    cells[3] ?? '',
-          product:     cells[4] ?? '',
-          createdDate: cells[5] ?? '',
+          summary:     cells[2] ?? '',
+          status:      cells[6] ?? '',
+          severity:    cells[5] ?? '',
+          product:     cells[8] ?? '',
+          createdDate: cells[12] ?? '',
           accountNumber: acctNum,
         })
       }
