@@ -50,13 +50,14 @@ try {
   }
 } catch {}
 
+const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, 'config')
 const SHEETS_TOKEN_PATH_SRV = process.env.SHEETS_TOKEN
-  ?? resolve(import.meta.dir, '../CustomerIntelligence/config/.sheets-token.json')
+  ?? resolve(SRV_CONFIG_DIR, '.sheets-token.json')
 const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
-  ?? resolve(import.meta.dir, '../CustomerIntelligence/config/.gdrive-server-credentials.json')
+  ?? resolve(SRV_CONFIG_DIR, '.gdrive-server-credentials.json')
 
 const GOOGLE_OAUTH_KEYS_PATH = process.env.GOOGLE_OAUTH_KEYS
-  ?? resolve(import.meta.dir, '../CustomerIntelligence/config/gcp-oauth.keys.json')
+  ?? resolve(SRV_CONFIG_DIR, 'gcp-oauth.keys.json')
 
 let oauthState = '' // CSRF state token for browser OAuth flow
 
@@ -488,12 +489,7 @@ app.get('/api/accounts', (c) => {
 
 // GET /api/setup/check-auth — Check Google OAuth token availability
 app.get('/api/setup/check-auth', async (c) => {
-  const CI_CONFIG = resolve(import.meta.dir, '../CustomerIntelligence/config')
-  const configDir = process.env.CONFIG_DIR
-  const check = (filename: string) => {
-    if (configDir && existsSync(resolve(configDir, filename))) return true
-    return existsSync(resolve(CI_CONFIG, filename))
-  }
+  const check = (filename: string) => existsSync(resolve(SRV_CONFIG_DIR, filename))
   const unified = check('.google-token.json')
   const hasFile = {
     gmail:    unified || check('.gmail-token.json'),

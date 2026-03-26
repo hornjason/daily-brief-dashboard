@@ -3,16 +3,14 @@ import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import type { EmailHighlight, DriveFile, CalendarEvent, Customer } from './types.ts'
 
-// Shared config path — defaults to CustomerIntelligence project config
-const CI_CONFIG = resolve(import.meta.dir, '../../CustomerIntelligence/config')
-const OAUTH_KEYS_PATH    = process.env.GOOGLE_OAUTH_KEYS  ?? `${CI_CONFIG}/gcp-oauth.keys.json`
-const GMAIL_TOKEN_PATH   = process.env.GMAIL_TOKEN         ?? `${CI_CONFIG}/.gmail-token.json`
-const GDRIVE_TOKEN_PATH  = process.env.GDRIVE_TOKEN        ?? `${CI_CONFIG}/.gdrive-server-credentials.json`
-const GCAL_TOKEN_PATH    = process.env.GCAL_TOKEN          ?? `${CI_CONFIG}/.calendar-token.json`
+// Shared config path — uses CONFIG_DIR env var (container) or local config/ dir
+const CONFIG_DIR_PATH = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+const OAUTH_KEYS_PATH    = process.env.GOOGLE_OAUTH_KEYS  ?? resolve(CONFIG_DIR_PATH, 'gcp-oauth.keys.json')
+const GMAIL_TOKEN_PATH   = process.env.GMAIL_TOKEN         ?? resolve(CONFIG_DIR_PATH, '.gmail-token.json')
+const GDRIVE_TOKEN_PATH  = process.env.GDRIVE_TOKEN        ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
+const GCAL_TOKEN_PATH    = process.env.GCAL_TOKEN          ?? resolve(CONFIG_DIR_PATH, '.calendar-token.json')
 
-const GOOGLE_UNIFIED_TOKEN_PATH = process.env.CONFIG_DIR
-  ? resolve(process.env.CONFIG_DIR, '.google-token.json')
-  : `${CI_CONFIG}/.google-token.json`
+const GOOGLE_UNIFIED_TOKEN_PATH = resolve(CONFIG_DIR_PATH, '.google-token.json')
 
 export { GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH }
 

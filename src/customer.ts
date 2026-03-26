@@ -4,10 +4,10 @@ import { resolve } from 'path'
 import { makeAuth } from './google.ts'
 import type { Customer, CalendarEvent, EmailHighlight, DriveFile, SupportCase, CustomerSubscription, ProductSubscription } from './types.ts'
 
-const CI_CONFIG         = resolve(import.meta.dir, '../../CustomerIntelligence/config')
-const GMAIL_TOKEN_PATH  = process.env.GMAIL_TOKEN       ?? `${CI_CONFIG}/.gmail-token.json`
-const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN      ?? `${CI_CONFIG}/.gdrive-server-credentials.json`
-const GCAL_TOKEN_PATH   = process.env.GCAL_TOKEN        ?? `${CI_CONFIG}/.calendar-token.json`
+const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+const GMAIL_TOKEN_PATH  = process.env.GMAIL_TOKEN       ?? resolve(CONFIG_DIR_PATH, '.gmail-token.json')
+const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN      ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
+const GCAL_TOKEN_PATH   = process.env.GCAL_TOKEN        ?? resolve(CONFIG_DIR_PATH, '.calendar-token.json')
 
 // ── Calendar: meetings for this customer (next 30 days) ──────────────────────
 

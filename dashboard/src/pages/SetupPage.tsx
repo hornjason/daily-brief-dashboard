@@ -80,7 +80,7 @@ function CodeBlock({ code, copyable = true }: { code: string; copyable?: boolean
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
-const STEP_LABELS = ['OAuth Keys', 'Accounts', 'Google Auth', 'Domains', 'AI Provider', 'Launch']
+const STEP_LABELS = ['OAuth Keys', 'Google Auth', 'Accounts', 'Domains', 'AI Provider', 'Launch']
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -208,7 +208,7 @@ function Step1Sheets({ onImported }: { onImported: () => void }) {
       setAeFolders(prev => [...prev.filter(f => f.folderId !== d.folderId), { folderId: d.folderId, folderName: d.folderName, connectedAt: d.connectedAt }])
       setAddFolderUrl('')
     } catch {
-      setAddFolderError('Failed to connect — ensure Google Auth is complete (Step 2)')
+      setAddFolderError('Failed to connect — ensure Google Auth is complete (Step 1)')
     } finally {
       setAddFolderLoading(false)
     }
@@ -250,7 +250,7 @@ function Step1Sheets({ onImported }: { onImported: () => void }) {
         setError('No Supportable file found. Check your file naming and folder structure above.')
       }
     } catch {
-      setError('Discovery failed — ensure Google Auth is complete (Step 2)')
+      setError('Discovery failed — ensure Google Auth is complete (Step 1)')
     } finally {
       setDiscoverLoading(false)
     }
@@ -1263,9 +1263,9 @@ export function SetupPage() {
 
   const [oauthKeysOk, setOauthKeysOk] = useState(false)
 
-  // Re-check auth when entering step 2 (0-indexed, Google Auth is now step 2)
+  // Re-check auth when entering step 1 (0-indexed, Google Auth is now step 1)
   useEffect(() => {
-    if (step === 2) checkAuth()
+    if (step === 1) checkAuth()
   }, [step])
 
   const handleTest = async (_provider: string) => {
@@ -1294,7 +1294,7 @@ export function SetupPage() {
     window.location.href = '/dashboard/setup'
   }
 
-  const canGoNext = step < 5 && (step !== 0 || oauthKeysOk) && (step !== 1 || status.customersOk === true)
+  const canGoNext = step < 5 && (step !== 0 || oauthKeysOk) && (step !== 2 || status.customersOk === true)
   const canGoBack = step > 0
 
   return (
@@ -1335,10 +1335,10 @@ export function SetupPage() {
             <Step0OAuthKeys onReady={() => setOauthKeysOk(true)} />
           )}
           {step === 1 && (
-            <Step1Sheets onImported={() => setStatus((s) => ({ ...s, customersOk: true }))} />
+            <Step2GoogleAuth />
           )}
           {step === 2 && (
-            <Step2GoogleAuth />
+            <Step1Sheets onImported={() => setStatus((s) => ({ ...s, customersOk: true }))} />
           )}
           {step === 3 && (
             <Step3DomainDetection onSaved={() => {}} />
@@ -1364,7 +1364,7 @@ export function SetupPage() {
             </button>
 
             <div className="flex items-center gap-3">
-              {step === 2 && status.authTokens && (status.authTokens.valid === false || status.authTokens.expired) && (
+              {step === 1 && status.authTokens && (status.authTokens.valid === false || status.authTokens.expired) && (
                 <span className="text-xs text-amber-400">
                   {status.authTokens.expired ? 'Token expired — re-authenticate' : 'Auth incomplete — connect Google first'}
                 </span>
@@ -1372,7 +1372,7 @@ export function SetupPage() {
               {step === 0 && !oauthKeysOk && (
                 <span className="text-xs text-amber-400">Upload OAuth keys to continue</span>
               )}
-              {step === 1 && status.customersOk !== true && (
+              {step === 2 && status.customersOk !== true && (
                 <span className="text-xs text-amber-400">Import accounts to continue</span>
               )}
               {OPTIONAL_STEPS.has(step) && (
