@@ -186,8 +186,9 @@ export function buildPipelineSummary(records: PipelineRecord[], cachedAt: string
   }
   const byOwner = [...ownerMap.entries()].map(([owner, v]) => ({ owner, ...v })).sort((a, b) => b.acv - a.acv)
 
-  const topOpps    = [...open].sort((a, b) => b.acv - a.acv)
-  const closedOpps = [...closed].sort((a, b) => b.closeDate.localeCompare(a.closeDate))
+  const topOpps       = [...open].sort((a, b) => b.acv - a.acv)
+  const closedOpps    = [...closed].sort((a, b) => b.closeDate.localeCompare(a.closeDate))
+  const techWinsNeeded = open.filter(r => r.acv >= 100_000).sort((a, b) => b.acv - a.acv)
 
   function closeQuarter(iso: string): string {
     if (!iso) return ''
@@ -210,5 +211,5 @@ export function buildPipelineSummary(records: PipelineRecord[], cachedAt: string
   }
   const byQuarterStage = [...qMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([quarter, v]) => ({ quarter, ...v }))
 
-  return { totalAcv, openCount: records.length, renewalAcv, newAcv, byStage, byOwner, byQuarterStage, topOpps, closedOpps, cachedAt }
+  return { totalAcv, openCount: records.length, renewalAcv, newAcv, byStage, byOwner, byQuarterStage, topOpps, closedOpps, techWinsNeeded, cachedAt }
 }

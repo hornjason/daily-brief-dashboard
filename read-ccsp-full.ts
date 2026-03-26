@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
 import { makeAuth } from './src/google.ts'
 
-const CI_CONFIG = '/Users/jhorn/.claude/PAI/Projects/CustomerIntelligence/config'
+const CI_CONFIG = '/Users/jhorn/.claude/PAI/Projects/DailyBriefDashboard/config'
 const GDRIVE_TOKEN = `${CI_CONFIG}/.gdrive-server-credentials.json`
 const SHEETS_TOKEN = `${CI_CONFIG}/.sheets-token.json`
 

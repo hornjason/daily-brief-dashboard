@@ -111,6 +111,7 @@ export interface PipelineSummary {
   byQuarterStage: PipelineByQuarterStage[]
   topOpps: PipelineOpp[]
   closedOpps: PipelineOpp[]
+  techWinsNeeded: PipelineOpp[]
   cachedAt: string | null
 }
 

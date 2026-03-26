@@ -8,7 +8,7 @@ import { google } from 'googleapis'
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 
-const CI_CONFIG = resolve(import.meta.dir, '../../CustomerIntelligence/config')
+const CI_CONFIG = resolve(import.meta.dir, '../config')
 const OAUTH_KEYS_PATH = process.env.GOOGLE_OAUTH_KEYS ?? `${CI_CONFIG}/gcp-oauth.keys.json`
 const TOKEN_PATH      = process.env.CONFIG_DIR
   ? resolve(process.env.CONFIG_DIR, '.google-token.json')

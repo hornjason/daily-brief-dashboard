@@ -1,6 +1,9 @@
+import { readFileSync, existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { SupportCase, Renewal, Customer, CustomerSubscription } from './types.ts'
 
 const SSO_URL = 'https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token'
+const CASES_CACHE_PATH = resolve(import.meta.dir, '../cache/cases.json')
 const SUPPORT_API = 'https://api.access.redhat.com/support/v1'
 const MGMT_API = 'https://api.access.redhat.com/management/v1'
 
@@ -50,6 +53,24 @@ async function rhPost(url: string, body: object): Promise<any> {
 }
 
 export async function fetchCases(): Promise<SupportCase[]> {
+  // Primary: read from Playwright-scraped cache (scrape-cases.ts writes this)
+  if (existsSync(CASES_CACHE_PATH)) {
+    try {
+      const raw = JSON.parse(readFileSync(CASES_CACHE_PATH, 'utf-8'))
+      const cases: SupportCase[] = raw.cases ?? []
+      const open = cases.filter((c) => {
+        const s = (c.status ?? '').toLowerCase()
+        return !s.includes('closed') && !s.includes('resolved')
+      })
+      return open.sort(
+        (a, b) => parseInt(a.severity) - parseInt(b.severity) || b.daysOpen - a.daysOpen
+      )
+    } catch {
+      // Cache unreadable — fall through to API
+    }
+  }
+
+  // Fallback: token-based API (only returns cases where user is direct owner)
   const data = await rhPost(`${SUPPORT_API}/cases/filter`, { offset: 0, maxResults: 100 })
   const cases: any[] = Array.isArray(data) ? data : (data.cases ?? [])
 

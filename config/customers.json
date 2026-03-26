@@ -74,9 +74,7 @@
       "domain": "fredhutch.org",
       "segment": "Commercial",
       "region": "",
-      "accountNumbers": [
-        "5456785"
-      ],
+      "accountNumbers": [],
       "aliases": [
         "fred hutchinson",
         "fred hutchinson cancer center",
@@ -109,7 +107,7 @@
     {
       "name": "LIFETOUCH",
       "ae": "Carolanne Farrell",
-      "domain": "shutterfly.com",
+      "domain": "lifetouch.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
@@ -151,7 +149,7 @@
     {
       "name": "RECREATIONAL EQUIPMENT",
       "ae": "Carolanne Farrell",
-      "domain": "rei.com",
+      "domain": "recreationalequipment.com",
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],

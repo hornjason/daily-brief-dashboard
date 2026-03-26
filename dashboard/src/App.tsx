@@ -53,7 +53,7 @@ function Dashboard() {
           <main className="flex-1 overflow-y-auto p-6 space-y-6">
             {/* KPI Cards */}
             <section id="section-command">
-              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={accountsApi.data?.customers ?? []} loading={kpisApi.loading} />
+              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={accountsApi.data?.customers ?? []} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} />
             </section>
 
             {/* Pipeline */}

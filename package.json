@@ -6,6 +6,8 @@
     "dev": "bun --watch server.ts",
     "start": "bun server.ts",
     "refresh": "bun run scripts/refresh-all.ts",
+    "login:rh": "bun scripts/login-rh.ts",
+    "scrape:cases": "bun scripts/scrape-cases.ts",
     "test": "bun test src/**/*.test.ts",
     "test:e2e": "bunx playwright test"
   },

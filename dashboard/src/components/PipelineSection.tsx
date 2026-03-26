@@ -135,15 +135,14 @@ export function PipelineSection({ data, loading }: Props) {
   const [activeOwner, setActiveOwner] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'acv' | 'date' | 'stage'>('acv')
   const [selectedOpp, setSelectedOpp] = useState<PipelineOpp | null>(null)
-
-  const totalAcv   = data?.totalAcv   ?? 0
-  const openCount  = data?.openCount  ?? 0
-  const renewalAcv = data?.renewalAcv ?? 0
-  const newAcv     = data?.newAcv     ?? 0
-  const byStage    = data?.byStage    ?? []
-  const byOwner    = data?.byOwner    ?? []
-  const topOpps    = data?.topOpps    ?? []
-  const closedOpps = data?.closedOpps ?? []
+  const totalAcv       = data?.totalAcv       ?? 0
+  const openCount      = data?.openCount      ?? 0
+  const renewalAcv     = data?.renewalAcv     ?? 0
+  const newAcv         = data?.newAcv         ?? 0
+  const byStage        = data?.byStage        ?? []
+  const byOwner        = data?.byOwner        ?? []
+  const topOpps        = data?.topOpps        ?? []
+  const closedOpps     = data?.closedOpps     ?? []
 
   const maxStageAcv = byStage.reduce((m, s) => Math.max(m, s.acv), 0)
   const maxOwnerAcv = byOwner.reduce((m, o) => Math.max(m, o.acv), 0)

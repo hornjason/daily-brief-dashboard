@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
 import { makeAuth } from '../src/google.ts'
 
-const CI_CONFIG = '/Users/jhorn/.claude/PAI/Projects/CustomerIntelligence/config'
+const CI_CONFIG = '/Users/jhorn/.claude/PAI/Projects/DailyBriefDashboard/config'
 const driveAuth = makeAuth(`${CI_CONFIG}/.gdrive-server-credentials.json`)
 const sheetsAuth = makeAuth(`${CI_CONFIG}/.sheets-token.json`)
 const drive = google.drive({ version: 'v3', auth: driveAuth })

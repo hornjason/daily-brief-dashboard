@@ -2,7 +2,7 @@ import { google } from 'googleapis'
 import { makeAuth } from './src/google.ts'
 import { resolve } from 'path'
 
-const CI_CONFIG = resolve(import.meta.dir, '../../../CustomerIntelligence/config')
+const CI_CONFIG = resolve(import.meta.dir, '../../config')
 const SHEETS_TOKEN_PATH = process.env.SHEETS_TOKEN ?? `${CI_CONFIG}/.sheets-token.json`
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? `${CI_CONFIG}/.gdrive-server-credentials.json`
 

@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 import { createServer } from 'http'
 
-const CONFIG      = resolve(import.meta.dir, '../../CustomerIntelligence/config')
+const CONFIG      = resolve(import.meta.dir, '../config')
 const KEYS_PATH   = `${CONFIG}/gcp-oauth.keys.json`
 const TOKEN_PATH  = `${CONFIG}/.calendar-token.json`
 

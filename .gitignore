@@ -16,7 +16,10 @@ logs/
 config/.gmail-token.json
 config/.gdrive-server-credentials.json
 config/.calendar-token.json
+config/.sheets-token.json
+config/.google-token.json
 config/gcp-oauth.keys.json
+config/.rh-session.json
 
 # Runtime state — user-specific, not source
 config/data-sources.json
