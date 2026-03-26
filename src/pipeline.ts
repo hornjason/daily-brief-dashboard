@@ -23,7 +23,7 @@ const STAGE_ORDER = ['Commit', 'Best Case', 'Pipeline', 'Omitted']
 
 // ── Row parser (shared between XLSX-era and Sheets-era) ────────────────────────
 
-function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
+export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
   if (rawRows.length < 2) return []
   const headers = (rawRows[0] ?? []).map(String)
 

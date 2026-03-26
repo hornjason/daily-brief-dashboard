@@ -3,7 +3,7 @@ import { makeAuth } from './google.ts'
 import type { Customer } from './types.ts'
 
 // Extract all email domains from a flat array of cell values
-function extractDomainsFromCells(cells: string[]): Map<string, number> {
+export function extractDomainsFromCells(cells: string[]): Map<string, number> {
   const counts = new Map<string, number>()
   for (const cell of cells) {
     const emails = cell.match(/[a-zA-Z0-9._%+\-]+@([\w.-]+\.[a-z]{2,})/gi) ?? []
@@ -16,7 +16,7 @@ function extractDomainsFromCells(cells: string[]): Map<string, number> {
 }
 
 // Domains that are never customer domains
-const BLOCKLIST = new Set([
+export const BLOCKLIST = new Set([
   'redhat.com', 'ibm.com', 'gmail.com', 'googlemail.com', 'google.com',
   'outlook.com', 'hotmail.com', 'yahoo.com', 'microsoft.com', 'live.com',
   'icloud.com', 'me.com', 'mac.com', 'aol.com', 'protonmail.com',
@@ -27,7 +27,7 @@ const BLOCKLIST = new Set([
   'qualtrics.com', 'coupa.com', 'ariba.com', 'oracle.com', 'sap.com',
 ])
 
-function extractDomain(email: string): string | null {
+export function extractDomain(email: string): string | null {
   const m = email.match(/@([\w.-]+\.[a-z]{2,})$/i)
   if (!m) return null
   const d = m[1].toLowerCase()

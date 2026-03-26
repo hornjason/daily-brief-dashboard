@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Unit tests & type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install --frozen-lockfile
+
+      - name: TypeScript check (dashboard)
+        run: cd dashboard && bunx tsc --noEmit
+
+      - name: Run unit tests
+        run: bun test src/**/*.test.ts
+
+      - name: Build dashboard
+        run: cd dashboard && bun run build
+
+  container-build:
+    name: Container build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build container image
+        run: docker build -f Containerfile -t daily-brief-dashboard .
+
+  e2e:
+    name: Wizard E2E tests
+    runs-on: ubuntu-latest
+    needs: [test, container-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bunx playwright install chromium --with-deps
+
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install --frozen-lockfile
+
+      - name: Build dashboard
+        run: cd dashboard && bun run build
+
+      - name: Run E2E wizard tests
+        run: CI=true bun run test:e2e
+        # Server started automatically by playwright.config.ts webServer
+        # No Google credentials needed — only tests UI rendering and step labels

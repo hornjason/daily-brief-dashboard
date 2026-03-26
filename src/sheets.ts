@@ -72,7 +72,7 @@ async function getSpreadsheetIdsUnderRoot(
 // ── Tab-to-customer matching ───────────────────────────────────────────────────
 
 // Strip legal entity suffixes and punctuation so "A10 Networks, Inc." matches "A10 NETWORKS"
-function normalizeForMatch(name: string): string {
+export function normalizeForMatch(name: string): string {
   return name
     .toLowerCase()
     .replace(/\b(inc|llc|corp|ltd|co|corporation|incorporated|limited|company|lp|llp|plc|gmbh|bv|sa|ag)\b\.?/g, '')
@@ -83,7 +83,7 @@ function normalizeForMatch(name: string): string {
 
 // True if tabName and customerName refer to the same entity.
 // Bidirectional: tab⊆customer OR customer⊆tab (after normalization).
-function tabMatchesCustomer(tabName: string, customerName: string): boolean {
+export function tabMatchesCustomer(tabName: string, customerName: string): boolean {
   const normTab  = normalizeForMatch(tabName)
   const normCust = normalizeForMatch(customerName)
   if (!normTab || !normCust) return false
@@ -91,7 +91,7 @@ function tabMatchesCustomer(tabName: string, customerName: string): boolean {
 }
 
 // True if tabName matches the customer's canonical name, sheetTab override, or any alias.
-function tabMatchesAny(tabName: string, customer: Customer): boolean {
+export function tabMatchesAny(tabName: string, customer: Customer): boolean {
   const names = [customer.sheetTab ?? customer.name, ...(customer.aliases ?? [])]
   return names.some(n => tabMatchesCustomer(tabName, n))
 }
@@ -174,7 +174,7 @@ function normalizeFlatFormat(rows: SheetRow[], customerName?: string): ProductSu
     }))
 }
 
-function normalizeRows(rows: SheetRow[], customerName?: string): ProductSubscription[] {
+export function normalizeRows(rows: SheetRow[], customerName?: string): ProductSubscription[] {
   if (!rows.length) return []
   const headers = Object.keys(rows[0])
   const raw = headers.includes('Subscription#')

@@ -5,11 +5,16 @@
   "scripts": {
     "dev": "bun --watch server.ts",
     "start": "bun server.ts",
-    "refresh": "bun run scripts/refresh-all.ts"
+    "refresh": "bun run scripts/refresh-all.ts",
+    "test": "bun test src/**/*.test.ts",
+    "test:e2e": "bunx playwright test"
   },
   "dependencies": {
     "googleapis": "^144.0.0",
     "hono": "^4.7.0",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
   }
 }
