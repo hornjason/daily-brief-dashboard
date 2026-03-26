@@ -13,6 +13,7 @@ import { fetchPipelineData, buildPipelineSummary } from './src/pipeline.ts'
 import type { PipelineRecord } from './src/pipeline.ts'
 import type { Customer, ProductSubscription } from './src/types.ts'
 import { inferCustomerDomain } from './src/domains.ts'
+import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState, checkFilesModified } from './src/drive-watcher.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -208,8 +209,8 @@ app.get('/oauth/callback', async (c) => {
         <h2 style="color:#34d399">✓ Google Workspace Connected</h2>
         <p style="color:#94a3b8">Calendar, Gmail, Drive, and Sheets access authorized.</p>
         <p style="color:#94a3b8">Redirecting to setup wizard…</p>
-        <script>setTimeout(() => window.location.href = '/dashboard/setup?step=1', 1500)</script>
-        <p><a href="/dashboard/setup?step=1" style="color:#818cf8">Continue →</a></p>
+        <script>setTimeout(() => window.location.href = '/dashboard/setup?step=2', 1500)</script>
+        <p><a href="/dashboard/setup?step=2" style="color:#818cf8">Continue →</a></p>
       </body></html>`)
   } catch (e: any) {
     return errorPage('Token exchange failed', e.message)
@@ -247,6 +248,117 @@ app.get('/api/data-sources/status', (c) => {
     return c.json({ folders })
   } catch {
     return c.json({ folders: [] })
+  }
+})
+
+// POST /api/data-sources/check-files — Check each connected AE folder for required files
+// Returns per-folder presence of [AE Name] Supportable, CCSP, and Pipeline files.
+app.post('/api/data-sources/check-files', async (c) => {
+  const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
+  if (!parentIds.length) return c.json({ error: 'No AE folders connected.' }, 400)
+
+  try {
+    const auth  = makeAuth(GDRIVE_TOKEN_PATH_SRV)
+    const drive = google.drive({ version: 'v3', auth })
+
+    const results: {
+      aeName: string
+      folderId: string
+      supportable: { found: boolean; fileName?: string }
+      ccsp:        { found: boolean; fileName?: string }
+      pipeline:    { found: boolean; fileName?: string }
+    }[] = []
+
+    for (const parentId of parentIds) {
+      // Get the connected folder's own name so we can check direct children first
+      const selfMeta = await drive.files.get({ fileId: parentId, fields: 'id,name' }).catch(() => ({ data: { name: '' } }))
+      const selfName = ((selfMeta.data as any).name ?? '').trim()
+      const selfNameLower = selfName.toLowerCase()
+
+      // Check direct spreadsheet children (native sheets + shortcuts to sheets)
+      const [selfSheetsRes, selfShortcutsRes] = await Promise.all([
+        drive.files.list({
+          q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+          fields: 'files(id,name)', pageSize: 50,
+        }).catch(() => ({ data: { files: [] as any[] } })),
+        drive.files.list({
+          q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
+          fields: 'files(id,name,shortcutDetails)', pageSize: 50,
+        }).catch(() => ({ data: { files: [] as any[] } })),
+      ])
+
+      const selfFiles: { name: string }[] = [
+        ...((selfSheetsRes.data as any).files ?? []),
+        ...((selfShortcutsRes.data as any).files ?? []).filter((f: any) =>
+          (f.shortcutDetails?.targetMimeType ?? '').includes('spreadsheet')
+        ),
+      ]
+      const selfNameOf = (suffix: string) =>
+        selfFiles.find(f => f.name.toLowerCase().startsWith(selfNameLower) && f.name.toLowerCase().includes(suffix.toLowerCase()))
+
+      // If the connected folder itself contains the required files, treat it as the AE folder
+      if (selfFiles.some(f => f.name.toLowerCase().startsWith(selfNameLower))) {
+        const supportableFile = selfNameOf('supportable')
+        const ccspFile        = selfNameOf('ccsp')
+        const pipelineFile    = selfNameOf('pipeline')
+        results.push({
+          aeName: selfName,
+          folderId: parentId,
+          supportable: { found: !!supportableFile, fileName: supportableFile?.name },
+          ccsp:        { found: !!ccspFile,        fileName: ccspFile?.name },
+          pipeline:    { found: !!pipelineFile,    fileName: pipelineFile?.name },
+        })
+        continue
+      }
+
+      // Otherwise scan subfolders (for a root folder containing multiple AE folders)
+      const foldersRes = await drive.files.list({
+        q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id,name)', pageSize: 50,
+      }).catch(() => ({ data: { files: [] as any[] } }))
+
+      for (const aeFolder of ((foldersRes.data as any).files ?? [])) {
+        if (!aeFolder.id) continue
+        const aeName = (aeFolder.name ?? '').trim()
+        const aeNameLower = aeName.toLowerCase()
+
+        const [sheetsRes, shortcutsRes] = await Promise.all([
+          drive.files.list({
+            q: `'${aeFolder.id}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+            fields: 'files(id,name)', pageSize: 50,
+          }).catch(() => ({ data: { files: [] as any[] } })),
+          drive.files.list({
+            q: `'${aeFolder.id}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
+            fields: 'files(id,name,shortcutDetails)', pageSize: 50,
+          }).catch(() => ({ data: { files: [] as any[] } })),
+        ])
+
+        const files: { name: string }[] = [
+          ...((sheetsRes.data as any).files ?? []),
+          ...((shortcutsRes.data as any).files ?? []).filter((f: any) =>
+            (f.shortcutDetails?.targetMimeType ?? '').includes('spreadsheet')
+          ),
+        ]
+        const nameOf = (suffix: string) =>
+          files.find(f => f.name.toLowerCase().startsWith(aeNameLower) && f.name.toLowerCase().includes(suffix.toLowerCase()))
+
+        const supportableFile = nameOf('supportable')
+        const ccspFile        = nameOf('ccsp')
+        const pipelineFile    = nameOf('pipeline')
+
+        results.push({
+          aeName,
+          folderId: aeFolder.id,
+          supportable: { found: !!supportableFile, fileName: supportableFile?.name },
+          ccsp:        { found: !!ccspFile,        fileName: ccspFile?.name },
+          pipeline:    { found: !!pipelineFile,    fileName: pipelineFile?.name },
+        })
+      }
+    }
+
+    return c.json({ results })
+  } catch (e: any) {
+    return c.json({ error: e.message ?? 'File check failed' }, 500)
   }
 })
 
@@ -414,8 +526,31 @@ app.get('/api/setup/check-auth', async (c) => {
   return c.json({ tokens, valid, expired, email })
 })
 
+// GET /api/setup/oauth-keys-status — Check if OAuth keys file exists
+app.get('/api/setup/oauth-keys-status', (c) => {
+  return c.json({ exists: existsSync(GOOGLE_OAUTH_KEYS_PATH) })
+})
+
+// POST /api/setup/upload-oauth-keys — Save uploaded GCP OAuth keys JSON
+app.post('/api/setup/upload-oauth-keys', async (c) => {
+  try {
+    const body = await c.req.json()
+    if (!body || typeof body !== 'object') return c.json({ error: 'Invalid JSON' }, 400)
+    const { client_id, client_secret } = (body.installed ?? body.web ?? {})
+    if (!client_id || !client_secret) return c.json({ error: 'Missing client_id or client_secret' }, 400)
+    const dir = resolve(GOOGLE_OAUTH_KEYS_PATH, '..')
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    writeFileSyncRaw(GOOGLE_OAUTH_KEYS_PATH, JSON.stringify(body, null, 2))
+    return c.json({ ok: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 // POST /api/setup/reset — Clear all config and cache for a clean setup
+// ?full=true also removes the OAuth keys file (simulate brand new user)
 app.post('/api/setup/reset', (c) => {
+  const full = c.req.query('full') === 'true'
   const deleted: string[] = []
   const tryDelete = (p: string) => { try { if (existsSync(p)) { unlinkSync(p); deleted.push(p) } } catch {} }
 
@@ -424,6 +559,7 @@ app.post('/api/setup/reset', (c) => {
   tryDelete(SHEETS_SYNC_PATH)
   tryDelete(DATA_SOURCES_PATH)
   tryDelete(GOOGLE_UNIFIED_TOKEN_PATH)
+  if (full) tryDelete(GOOGLE_OAUTH_KEYS_PATH)
 
   // All cache files
   try {
@@ -550,7 +686,7 @@ app.get('/api/briefs', (c) => {
 // ── CCSP Cloud Spend cache ────────────────────────────────────────────────────
 const CCSP_CACHE_PATH = `${CACHE_DIR}/ccsp-data.json`
 
-function readCCSPCache(): { records: CCSPRecord[]; cachedAt: string } | null {
+function readCCSPCache(): { records: CCSPRecord[]; cachedAt: string; fileIds?: string[] } | null {
   try {
     return JSON.parse(readFileSync(CCSP_CACHE_PATH, 'utf-8'))
   } catch {
@@ -558,9 +694,9 @@ function readCCSPCache(): { records: CCSPRecord[]; cachedAt: string } | null {
   }
 }
 
-function writeCCSPCache(records: CCSPRecord[]): void {
+function writeCCSPCache(records: CCSPRecord[], fileIds: string[] = []): void {
   try {
-    writeFileSync(CCSP_CACHE_PATH, JSON.stringify({ records, cachedAt: new Date().toISOString() }))
+    writeFileSync(CCSP_CACHE_PATH, JSON.stringify({ records, cachedAt: new Date().toISOString(), fileIds }))
   } catch {}
 }
 
@@ -573,8 +709,8 @@ app.get('/api/ccsp', async (c) => {
     return c.json(buildCCSPSummary(cached.records, cached.cachedAt))
   }
   try {
-    const records = await fetchCCSPData()
-    writeCCSPCache(records)
+    const { records, fileIds } = await fetchCCSPData()
+    writeCCSPCache(records, fileIds)
     return c.json(buildCCSPSummary(records, new Date().toISOString()))
   } catch (e: any) {
     if (cached) return c.json(buildCCSPSummary(cached.records, cached.cachedAt))
@@ -658,7 +794,7 @@ app.get('/customer/:name/ccsp', (c) => {
 // ── Pipeline cache ────────────────────────────────────────────────────────────
 const PIPELINE_CACHE_PATH = `${CACHE_DIR}/pipeline-data.json`
 
-function readPipelineCache(): { records: PipelineRecord[]; cachedAt: string } | null {
+function readPipelineCache(): { records: PipelineRecord[]; cachedAt: string; fileIds?: string[] } | null {
   try {
     return JSON.parse(readFileSync(PIPELINE_CACHE_PATH, 'utf-8'))
   } catch {
@@ -666,9 +802,9 @@ function readPipelineCache(): { records: PipelineRecord[]; cachedAt: string } | 
   }
 }
 
-function writePipelineCache(records: PipelineRecord[]): void {
+function writePipelineCache(records: PipelineRecord[], fileIds: string[] = []): void {
   try {
-    writeFileSync(PIPELINE_CACHE_PATH, JSON.stringify({ records, cachedAt: new Date().toISOString() }))
+    writeFileSync(PIPELINE_CACHE_PATH, JSON.stringify({ records, cachedAt: new Date().toISOString(), fileIds }))
   } catch {}
 }
 
@@ -691,8 +827,8 @@ app.get('/api/pipeline', async (c) => {
     return c.json({ totalAcv: 0, openCount: 0, renewalAcv: 0, newAcv: 0, byStage: [], byOwner: [], topOpps: [], cachedAt: null })
   }
   try {
-    const records = await fetchPipelineData()
-    writePipelineCache(records)
+    const { records, fileIds } = await fetchPipelineData()
+    writePipelineCache(records, fileIds)
     return c.json(buildPipelineSummary(filterToAEs(records), new Date().toISOString()))
   } catch (e: any) {
     if (cached) return c.json(buildPipelineSummary(filterToAEs(cached.records), cached.cachedAt))
@@ -959,12 +1095,49 @@ async function discoverAccountsFromFolders(
   const autoDiscoveredPipelineIds: string[] = []
 
   for (const parentId of parentIds) {
+    // Get the connected folder's own name to check if it IS the AE folder
+    const selfMeta = await drive.files.get({ fileId: parentId, fields: 'id,name' }).catch(() => ({ data: { name: '' } }))
+    const selfName = ((selfMeta.data as any).name ?? '').trim()
+    const selfNameLower = selfName.toLowerCase()
+
+    // Check direct children (sheets + shortcuts) of the connected folder
+    const [selfSheetsRes, selfShortcutsRes] = await Promise.all([
+      drive.files.list({
+        q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+        fields: 'files(id,name)', pageSize: 50,
+      }).catch(() => ({ data: { files: [] as any[] } })),
+      drive.files.list({
+        q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
+        fields: 'files(id,name,shortcutDetails)', pageSize: 50,
+      }).catch(() => ({ data: { files: [] as any[] } })),
+    ])
+
+    const selfFiles: { id: string; name: string }[] = [
+      ...((selfSheetsRes.data as any).files ?? []).map((f: any) => ({ id: f.id, name: f.name ?? '' })),
+      ...((selfShortcutsRes.data as any).files ?? [])
+        .filter((f: any) => (f.shortcutDetails?.targetMimeType ?? '').includes('spreadsheet'))
+        .map((f: any) => ({ id: f.shortcutDetails.targetId, name: f.name ?? '' })),
+    ]
+
+    // If this folder contains files named with the folder's own name, it IS the AE folder
+    const isAeFolder = selfFiles.some(f => f.name.toLowerCase().startsWith(selfNameLower))
+
+    if (isAeFolder) {
+      for (const s of selfFiles) {
+        console.log(`[discovery] AE="${selfName}" file="${s.name}"`)
+        byAe.push({ aeName: selfName, fileId: s.id, fileName: s.name })
+        if (s.name.toLowerCase().includes('pipeline')) autoDiscoveredPipelineIds.push(s.id)
+      }
+      continue
+    }
+
+    // Otherwise treat as a parent folder containing AE subfolders
     const foldersRes = await drive.files.list({
       q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
       fields: 'files(id,name)', pageSize: 50,
     }).catch(() => ({ data: { files: [] as any[] } }))
 
-    for (const aeFolder of (foldersRes.data.files ?? [])) {
+    for (const aeFolder of ((foldersRes.data as any).files ?? [])) {
       if (!aeFolder.id) continue
       const aeName = aeFolder.name ?? ''
       const spreadsheets = await getSpreadsheetsUnderFolder(drive, aeFolder.id)
@@ -1499,6 +1672,29 @@ app.post('/api/settings/refresh', async (c) => {
   }
 })
 
+// ── Drive watcher endpoints ───────────────────────────────────────────────────
+
+app.get('/api/drive-watcher/status', (c) => {
+  const state = getWatcherState()
+  if (!state) return c.json({ enabled: false, folderMap: [], lastChecked: null, builtAt: null })
+  return c.json({
+    enabled: state.enabled,
+    folderMap: state.folderMap,
+    lastChecked: state.lastChecked ?? null,
+    builtAt: state.builtAt,
+  })
+})
+
+app.post('/api/drive-watcher/rebuild', async (c) => {
+  const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
+  try {
+    const folderMap = await rebuildFolderMap(customers, parentIds)
+    return c.json({ rebuilt: true, folders: folderMap.length, map: folderMap })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 // ── Full data refresh ─────────────────────────────────────────────────────────
 
 async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; pipeline: boolean; errors: string[] }> {
@@ -1519,16 +1715,16 @@ async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; pipeline: 
   // 2. CCSP
   let ccspOk = false
   try {
-    const records = await fetchCCSPData()
-    writeCCSPCache(records)
+    const { records, fileIds } = await fetchCCSPData()
+    writeCCSPCache(records, fileIds)
     ccspOk = true
   } catch (e: any) { errors.push(`ccsp: ${e.message}`) }
 
   // 3. Pipeline
   let pipelineOk = false
   try {
-    const records = await fetchPipelineData()
-    writePipelineCache(records)
+    const { records, fileIds } = await fetchPipelineData()
+    writePipelineCache(records, fileIds)
     pipelineOk = true
   } catch (e: any) { errors.push(`pipeline: ${e.message}`) }
 
@@ -1628,6 +1824,21 @@ app.get('/events', (c) => {
 // ── Per-source refresh functions ──────────────────────────────────────────────
 
 async function refreshSubscriptions(): Promise<void> {
+  // Check if Supportable source sheet has changed before re-fetching all customers
+  try {
+    const syncConfig = JSON.parse(readFileSync(SHEETS_SYNC_PATH, 'utf-8')) as { fileId?: string }
+    if (syncConfig.fileId) {
+      // Use oldest sheet cachedAt as the baseline — if the source file is newer, all customers refresh
+      const timestamps = customers.map(cu => readSheetCache(cu.name)?.cachedAt).filter(Boolean) as string[]
+      const oldestCachedAt = timestamps.length ? timestamps.reduce((a, b) => a < b ? a : b) : null
+      if (oldestCachedAt) {
+        const changed = await checkFilesModified([syncConfig.fileId], oldestCachedAt)
+        if (!changed) { console.log(`[refresh:subscriptions] skipped — source file unchanged`); return }
+      }
+    }
+  } catch {
+    // If we can't check, proceed with refresh
+  }
   for (const customer of customers) {
     try {
       const rows = await fetchCustomerSheetData(customer)
@@ -1641,8 +1852,13 @@ async function refreshSubscriptions(): Promise<void> {
 
 async function refreshCCSP(): Promise<void> {
   try {
-    const records = await fetchCCSPData()
-    writeCCSPCache(records)
+    const cached = readCCSPCache()
+    if (cached?.fileIds?.length && cached.cachedAt) {
+      const changed = await checkFilesModified(cached.fileIds, cached.cachedAt)
+      if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
+    }
+    const { records, fileIds } = await fetchCCSPData()
+    writeCCSPCache(records, fileIds)
     console.log(`[refresh:ccsp] done`)
   } catch (e: any) {
     console.warn(`[refresh:ccsp] ${e.message}`)
@@ -1651,8 +1867,13 @@ async function refreshCCSP(): Promise<void> {
 
 async function refreshPipeline(): Promise<void> {
   try {
-    const records = await fetchPipelineData()
-    writePipelineCache(records)
+    const cached = readPipelineCache()
+    if (cached?.fileIds?.length && cached.cachedAt) {
+      const changed = await checkFilesModified(cached.fileIds, cached.cachedAt)
+      if (!changed) { console.log(`[refresh:pipeline] skipped — source files unchanged`); return }
+    }
+    const { records, fileIds } = await fetchPipelineData()
+    writePipelineCache(records, fileIds)
     console.log(`[refresh:pipeline] done`)
   } catch (e: any) {
     console.warn(`[refresh:pipeline] ${e.message}`)
@@ -1689,5 +1910,37 @@ if (customers.length > 0) {
   refreshAll().catch(() => {})
   rescheduleRefreshTimers(getRefreshIntervals())
 }
+
+// ── Drive watcher — init and background polling ────────────────────────────────
+
+const DRIVE_WATCHER_INTERVAL_MS = 10 * 60 * 1000 // 10 minutes
+
+;(async () => {
+  const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '')
+    .split(',').filter(Boolean)
+  if (!parentIds.length) return
+  try {
+    await initDriveWatcher(customers, parentIds)
+  } catch (e: any) {
+    console.warn('[drive-watcher] startup init failed:', e.message)
+  }
+})()
+
+setInterval(async () => {
+  try {
+    const affected = await checkDriveChanges()
+    for (const customerName of affected) {
+      const cachePath = briefCachePath(customerName)
+      try {
+        unlinkSync(cachePath)
+        console.log(`[drive-watcher] invalidated brief cache for ${customerName}`)
+      } catch {
+        // Cache file may not exist — that's fine
+      }
+    }
+  } catch (e: any) {
+    console.warn('[drive-watcher] interval check failed:', e.message)
+  }
+}, DRIVE_WATCHER_INTERVAL_MS)
 
 export default { port, fetch: app.fetch, idleTimeout: 120 }

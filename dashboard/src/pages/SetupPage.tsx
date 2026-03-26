@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { RefreshTimerSettings } from '../components/RefreshTimerSettings'
 import {
   CheckCircle,
   XCircle,
@@ -8,11 +9,9 @@ import {
   ChevronLeft,
   ExternalLink,
   Loader2,
-  RefreshCw,
-  Link,
-  Table2,
   Plus,
   Zap,
+  Search,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -32,20 +31,6 @@ interface StepStatus {
   authTokens: AuthTokens | null
   provider: string
   testResult: { ok: boolean; error?: string } | null
-}
-
-interface SheetFile {
-  id: string
-  name: string
-  webViewLink: string
-  modifiedTime: string
-}
-
-interface SheetStatus {
-  connected: boolean
-  fileId?: string
-  fileName?: string
-  syncedAt?: string
 }
 
 // ── Small helpers ──────────────────────────────────────────────────────────────
@@ -95,7 +80,7 @@ function CodeBlock({ code, copyable = true }: { code: string; copyable?: boolean
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
-const STEP_LABELS = ['Accounts', 'Google Auth', 'Domains', 'AI Provider', 'Launch']
+const STEP_LABELS = ['OAuth Keys', 'Accounts', 'Google Auth', 'Domains', 'AI Provider', 'Launch']
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -137,27 +122,27 @@ function StepIndicator({ current }: { current: number }) {
   )
 }
 
-// ── Step 1: Sheets import ──────────────────────────────────────────────────────
+// ── Template links ─────────────────────────────────────────────────────────────
 
-const HEADER_TEMPLATE = 'name\tdomain\tae\tsegment\tregion\taccountNumbers'
-const EXAMPLE_ROW = 'Acme Corp\tacme.com\tJane Smith\tEnterprise\tAmericas\t12345,67890'
-
-type Step1Tab = 'browse' | 'paste' | 'create'
-
-const CUSTOMER_FIELDS: Array<{
-  key: string
-  label: string
-  required: boolean
-  aliases: string[]
-  hint?: string
-}> = [
-  { key: 'name', label: 'Name', required: true, aliases: ['name', 'account name', 'company', 'customer', 'account'] },
-  { key: 'domain', label: 'Domain', required: false, aliases: ['domain', 'email domain', 'website', 'url'], hint: 'auto-matched by name if blank' },
-  { key: 'ae', label: 'AE', required: false, aliases: ['ae', 'account executive', 'rep', 'owner', 'salesperson'] },
-  { key: 'segment', label: 'Segment', required: false, aliases: ['segment', 'tier', 'type', 'size'] },
-  { key: 'region', label: 'Region', required: false, aliases: ['region', 'territory', 'geo', 'area'] },
-  { key: 'accountNumbers', label: 'Account Numbers', required: false, aliases: ['account number', 'account id', 'rh account', 'account #'] },
+const DATA_FILE_TEMPLATES = [
+  {
+    label: '[AE Name] Supportable',
+    href: 'https://docs.google.com/spreadsheets/d/17EL8vf-WLRhRphWCmcWzW5aEAf5xbGqQ-dpJbinAU1c/edit',
+    instruction: 'This is the account list source of truth. You need to run supportable pulls for each Account Number you support, downloading the sales information for Active contracts and placing it in a tab labeled the same name as the account. You should have 1 Account List tab and individual tabs for each customer\'s supportable pull, as shown in the template.',
+  },
+  {
+    label: '[AE Name] CCSP',
+    href: 'https://docs.google.com/spreadsheets/d/1HUlZsqQVIVCbyrgSU467f7vVSLoSOdGFNplyefJRGwg/edit',
+    instruction: 'Run the CCSP report to generate cloud spend data — run one report for each territory you cover.',
+  },
+  {
+    label: '[AE Name] Pipeline',
+    href: 'https://docs.google.com/spreadsheets/d/1af6JuVNilnUhMII9x9-r1Pkvlp9o_1hEU3ul-JaTMLA/edit',
+    instruction: 'Talk to your manager about running a Salescloud Opportunity report for each territory you cover.',
+  },
 ]
+
+// ── Step 1: Sheets import ──────────────────────────────────────────────────────
 
 function timeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime()
@@ -169,86 +154,37 @@ function timeAgo(isoString: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-function fuzzyMatch(header: string, aliases: string[]): boolean {
-  const h = header.toLowerCase().trim()
-  return aliases.some((a) => h === a || h.includes(a) || a.includes(h))
+interface FileCheckResult {
+  aeName: string
+  folderId: string
+  supportable: { found: boolean; fileName?: string }
+  ccsp: { found: boolean; fileName?: string }
+  pipeline: { found: boolean; fileName?: string }
 }
 
-type ColMapVal = number | string | null
-
-function buildAutoColumnMap(headers: string[]): Record<string, ColMapVal> {
-  const map: Record<string, ColMapVal> = {}
-  for (const field of CUSTOMER_FIELDS) {
-    const idx = headers.findIndex((h) => fuzzyMatch(h, field.aliases))
-    map[field.key] = idx >= 0 ? idx : null
-  }
-  return map
-}
-
-function SheetUrlInput({
-  value,
-  onChange,
-  onSubmit,
-}: {
-  value: string
-  onChange: (v: string) => void
-  onSubmit: () => void
-}) {
-  return (
-    <div className="flex gap-2">
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && value.trim() && onSubmit()}
-        placeholder="https://docs.google.com/spreadsheets/d/…"
-        className="flex-1 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm placeholder:text-slate-500"
-      />
-      <button
-        onClick={onSubmit}
-        disabled={!value.trim()}
-        className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-      >
-        Load
-      </button>
-    </div>
-  )
-}
+const AE_FOLDER_STRUCTURE = `My Drive/
+├── Jane Smith/                     ← connect this folder
+│   ├── Jane Smith Supportable      (Google Sheet)
+│   ├── Jane Smith CCSP             (Google Sheet)
+│   └── Jane Smith Pipeline         (Google Sheet)
+└── Bob Jones/                      ← or connect this
+    ├── Bob Jones Supportable
+    ├── Bob Jones CCSP
+    └── Bob Jones Pipeline`
 
 function Step1Sheets({ onImported }: { onImported: () => void }) {
-  const [tab, setTab] = useState<Step1Tab>('browse')
-  const [sheetFiles, setSheetFiles] = useState<SheetFile[]>([])
-  const [filesLoading, setFilesLoading] = useState(false)
-  const [selectedFileId, setSelectedFileId] = useState('')
-  const [selectedFileName, setSelectedFileName] = useState('')
-  const [headers, setHeaders] = useState<string[]>([])
-  const [headersLoading, setHeadersLoading] = useState(false)
-  const [columnMap, setColumnMap] = useState<Record<string, ColMapVal>>({})
-  const [pasteUrl, setPasteUrl] = useState('')
-  const [importLoading, setImportLoading] = useState(false)
-  const [importResult, setImportResult] = useState<{ imported: number; syncedAt: string } | null>(null)
-  const [syncLoading, setSyncLoading] = useState(false)
-  const [syncedAt, setSyncedAt] = useState<string | null>(null)
-  const [sheetStatus, setSheetStatus] = useState<SheetStatus | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [bootstrapUrl, setBootstrapUrl] = useState('')
-  const [bootstrapAccounts, setBootstrapAccounts] = useState<{ name: string; ae: string }[] | null>(null)
-  const [bootstrapSource, setBootstrapSource] = useState<'pipeline' | 'territory' | 'territory+pipeline' | 'manual' | null>(null)
-  const [bootstrapLoading, setBootstrapLoading] = useState(false)
-  const [bootstrapDone, setBootstrapDone] = useState(false)
-
   const [aeFolders, setAeFolders] = useState<{ folderId: string; folderName: string | null; connectedAt: string | null }[]>([])
   const [addFolderUrl, setAddFolderUrl] = useState('')
   const [addFolderLoading, setAddFolderLoading] = useState(false)
   const [addFolderError, setAddFolderError] = useState<string | null>(null)
 
-  // On mount: check if already connected
-  useEffect(() => {
-    fetch('/api/sheets/status')
-      .then((r) => r.json())
-      .then((d: SheetStatus) => setSheetStatus(d))
-      .catch(() => {})
-  }, [])
+  const [discoverLoading, setDiscoverLoading] = useState(false)
+  const [fileCheckResults, setFileCheckResults] = useState<FileCheckResult[]>([])
+  const [accountPreview, setAccountPreview] = useState<{ name: string; ae: string }[] | null>(null)
+  const [importLoading, setImportLoading] = useState(false)
+  const [importDone, setImportDone] = useState(false)
+  const [importCount, setImportCount] = useState(0)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/data-sources/status')
@@ -256,82 +192,6 @@ function Step1Sheets({ onImported }: { onImported: () => void }) {
       .then((d: { folders: { folderId: string; folderName: string | null; connectedAt: string | null }[] }) => setAeFolders(d.folders ?? []))
       .catch(() => {})
   }, [])
-
-  // Fetch sheet list when browse tab is active (only if not already loaded)
-  useEffect(() => {
-    if (tab !== 'browse' || sheetFiles.length > 0) return
-    setFilesLoading(true)
-    fetch('/api/sheets/list')
-      .then((r) => r.json())
-      .then((d: { files: SheetFile[] }) => setSheetFiles(d.files ?? []))
-      .catch(() => setError('Failed to load sheets'))
-      .finally(() => setFilesLoading(false))
-  }, [tab, sheetFiles.length])
-
-  async function fetchHeaders(fileId: string, fileName: string) {
-    setHeadersLoading(true)
-    setError(null)
-    setHeaders([])
-    setColumnMap({})
-    setSelectedFileId(fileId)
-    setSelectedFileName(fileName)
-    try {
-      const r = await fetch(`/api/sheets/headers?fileId=${encodeURIComponent(fileId)}`)
-      const d: { headers: string[]; fileName: string } = await r.json()
-      setHeaders(d.headers)
-      setColumnMap(buildAutoColumnMap(d.headers))
-      if (d.fileName) setSelectedFileName(d.fileName)
-    } catch {
-      setError('Failed to load sheet headers')
-    } finally {
-      setHeadersLoading(false)
-    }
-  }
-
-  function handlePasteSubmit() {
-    const match = pasteUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)
-    if (!match) {
-      setError('Could not extract file ID from URL. Make sure it looks like: docs.google.com/spreadsheets/d/FILE_ID/edit')
-      return
-    }
-    const fileId = match[1]
-    fetchHeaders(fileId, '')
-  }
-
-  async function handleImport() {
-    setImportLoading(true)
-    setError(null)
-    try {
-      const r = await fetch('/api/sheets/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileId: selectedFileId, fileName: selectedFileName, columnMap }),
-      })
-      if (!r.ok) throw new Error((await r.json()).error ?? 'Import failed')
-      const d: { imported: number; syncedAt: string } = await r.json()
-      setImportResult(d)
-      setSyncedAt(d.syncedAt)
-      onImported()
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Import failed')
-    } finally {
-      setImportLoading(false)
-    }
-  }
-
-  async function handleSync() {
-    setSyncLoading(true)
-    setError(null)
-    try {
-      const r = await fetch('/api/sheets/sync', { method: 'POST' })
-      const d: { syncedAt: string } = await r.json()
-      setSyncedAt(d.syncedAt)
-    } catch {
-      setError('Sync failed')
-    } finally {
-      setSyncLoading(false)
-    }
-  }
 
   async function handleAddFolder() {
     if (!addFolderUrl.trim()) return
@@ -362,159 +222,62 @@ function Step1Sheets({ onImported }: { onImported: () => void }) {
         body: JSON.stringify({ folderId }),
       })
       setAeFolders(prev => prev.filter(f => f.folderId !== folderId))
+      setFileCheckResults([])
+      setAccountPreview(null)
     } catch {}
   }
 
-  const nameVal = columnMap['name']
-  const nameNotMapped = nameVal == null || (typeof nameVal === 'string' && !nameVal.trim())
-
-  // Connected state: show summary + sync + change sheet
-  if (sheetStatus?.connected) {
-    return (
-      <div className="space-y-5">
-        {/* AE Data Folders */}
-        <div className="space-y-3 pb-5 border-b border-slate-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-white">Sales Root Folder</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Connect your root sales folder — the dashboard searches all subfolders automatically at any depth.</p>
-            </div>
-            {aeFolders.length > 0 && (
-              <span className="text-xs bg-emerald-900/60 text-emerald-400 border border-emerald-700/50 px-2 py-0.5 rounded-full font-medium">
-                {aeFolders.length} connected
-              </span>
-            )}
-          </div>
-
-          {aeFolders.length > 0 && (
-            <div className="space-y-2">
-              {aeFolders.map(f => (
-                <div key={f.folderId} className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2 border border-slate-700">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="text-sm text-white truncate">{f.folderName ?? f.folderId}</span>
-                    {f.connectedAt && <span className="text-xs text-slate-500 shrink-0">{timeAgo(f.connectedAt)}</span>}
-                  </div>
-                  <button
-                    onClick={() => handleRemoveFolder(f.folderId)}
-                    className="text-slate-500 hover:text-red-400 transition-colors text-xs ml-3 shrink-0"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={addFolderUrl}
-              onChange={e => setAddFolderUrl(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddFolder()}
-              placeholder="Paste Google Drive folder URL…"
-              className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-            />
-            <button
-              onClick={handleAddFolder}
-              disabled={addFolderLoading || !addFolderUrl.trim()}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors shrink-0"
-            >
-              {addFolderLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Add
-            </button>
-          </div>
-          {addFolderError && <p className="text-xs text-red-400">{addFolderError}</p>}
-        </div>
-
-        <div>
-          <h2 className="text-2xl font-bold text-white mb-1">Add Your Accounts</h2>
-          <p className="text-slate-400">Google Sheets is connected as your account source.</p>
-        </div>
-        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 space-y-3">
-          <div className="flex items-center gap-2 text-slate-300">
-            <Table2 className="w-4 h-4 text-emerald-400" />
-            <span className="font-medium text-white">{sheetStatus.fileName}</span>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={handleSync}
-              disabled={syncLoading}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-            >
-              {syncLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-              Sync Now
-            </button>
-            <button
-              onClick={() => setSheetStatus({ connected: false })}
-              className="text-sm text-slate-400 hover:text-white underline transition-colors"
-            >
-              Change Sheet
-            </button>
-          </div>
-          {(syncedAt ?? sheetStatus.syncedAt) && (
-            <p className={`text-xs ${syncedAt ? 'text-emerald-400' : 'text-slate-400'}`}>
-              Last synced: {timeAgo((syncedAt ?? sheetStatus.syncedAt)!)}
-            </p>
-          )}
-          {error && <p className="text-sm text-red-400">{error}</p>}
-        </div>
-      </div>
-    )
-  }
-
-  function extractFileId(url: string): string {
-    const m = url.match(/\/d\/([a-zA-Z0-9_-]{20,})/)
-    return m ? m[1] : url.trim()
-  }
-
-  async function handleBootstrapPreview() {
-    const manualFileId = extractFileId(bootstrapUrl)
-    if (aeFolders.length === 0 && !manualFileId) {
-      setError('Paste a Google Sheets or Drive URL first'); return
-    }
-    setBootstrapLoading(true)
+  async function handleDiscover() {
+    if (aeFolders.length === 0) { setError('Add at least one AE folder above before discovering.'); return }
+    setDiscoverLoading(true)
     setError(null)
+    setFileCheckResults([])
+    setAccountPreview(null)
     try {
-      const body = manualFileId ? { fileId: manualFileId } : {}
-      const r = await fetch('/api/sheets/bootstrap-preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const d: { accounts?: { name: string; ae: string }[]; source?: 'pipeline' | 'territory' | 'territory+pipeline' | 'manual'; error?: string } = await r.json()
-      if (d.error) setError(d.error)
-      else if (!d.accounts?.length) setError('No accounts found. Check your folder connection or paste a pipeline URL.')
-      else { setBootstrapAccounts(d.accounts); setBootstrapSource(d.source ?? null) }
+      const [checkRes, previewRes] = await Promise.all([
+        fetch('/api/data-sources/check-files', { method: 'POST' }).then(r => r.json()),
+        fetch('/api/sheets/bootstrap-preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }).then(r => r.json()),
+      ])
+      if (checkRes.error) { setError(checkRes.error); return }
+      setFileCheckResults(checkRes.results ?? [])
+      if (previewRes.accounts?.length) {
+        setAccountPreview(previewRes.accounts)
+      } else if (!checkRes.results?.some((r: FileCheckResult) => r.supportable.found)) {
+        setError('No Supportable file found. Check your file naming and folder structure above.')
+      }
     } catch {
-      setError('Failed to read pipeline sheet')
+      setError('Discovery failed — ensure Google Auth is complete (Step 2)')
     } finally {
-      setBootstrapLoading(false)
+      setDiscoverLoading(false)
     }
   }
 
-  async function handleBootstrapImport() {
-    setBootstrapLoading(true)
+  async function handleConfirmImport() {
+    setImportLoading(true)
     setError(null)
     try {
-      const manualFileId = extractFileId(bootstrapUrl)
-      const body = manualFileId ? { fileId: manualFileId } : {}
       const r = await fetch('/api/sheets/bootstrap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({}),
       })
       const d: { imported?: number; error?: string } = await r.json()
       if (d.error) { setError(d.error); return }
-      setBootstrapDone(true)
-      setBootstrapAccounts(null)
+      setImportCount(d.imported ?? 0)
+      setImportDone(true)
       onImported()
     } catch {
-      setError('Bootstrap failed')
+      setError('Import failed')
     } finally {
-      setBootstrapLoading(false)
+      setImportLoading(false)
     }
   }
+
+  const canImport = fileCheckResults.some(r => r.supportable.found) && (accountPreview?.length ?? 0) > 0
 
   return (
     <div className="space-y-5">
@@ -523,7 +286,7 @@ function Step1Sheets({ onImported }: { onImported: () => void }) {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-white">AE Data Folders</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Connect Google Drive folders to enable CCSP spend and subscription data in briefs.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Connect a Google Drive folder for each AE you support. Each folder must contain the three required data files with correct naming before auto-discovery will work.</p>
           </div>
           {aeFolders.length > 0 && (
             <span className="text-xs bg-emerald-900/60 text-emerald-400 border border-emerald-700/50 px-2 py-0.5 rounded-full font-medium">
@@ -571,329 +334,145 @@ function Step1Sheets({ onImported }: { onImported: () => void }) {
           </button>
         </div>
         {addFolderError && <p className="text-xs text-red-400">{addFolderError}</p>}
+
         {/* Drive folder structure */}
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-slate-300">Recommended Google Drive folder structure</p>
-          <pre className="text-xs text-slate-400 font-mono bg-slate-900 rounded-lg p-3 border border-slate-700 overflow-x-auto">{DRIVE_FOLDER_STRUCTURE}</pre>
-          <p className="text-xs text-slate-500">One folder per account, named to match your customer list. The dashboard uses these to find account documents automatically.</p>
+          <p className="text-xs font-medium text-slate-300">Required Google Drive folder structure</p>
+          <pre className="text-xs text-slate-400 font-mono bg-slate-900 rounded-lg p-3 border border-slate-700 overflow-x-auto">{AE_FOLDER_STRUCTURE}</pre>
+          <p className="text-xs text-slate-500">One folder per AE, named to match the prefix in each data file. The folder name must match the AE name used in your Supportable, CCSP, and Pipeline files. This structure must be in place before running discovery.</p>
         </div>
+
         {/* Naming guidelines */}
         <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700/50 space-y-1.5">
-          <p className="text-xs font-medium text-slate-300">Required naming conventions in your Territory Data spreadsheet:</p>
-          <div className="space-y-1 text-xs text-slate-400">
-            <div className="flex items-start gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 shrink-0" /><span>CCSP tab — name must contain <code className="bg-slate-700 px-1 rounded text-amber-300">CCSP</code> anywhere (e.g. "CCSP Raw Data", "Q1 CCSP")</span></div>
-            <div className="flex items-start gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 shrink-0" /><span>Subscription tabs — tab name must contain the customer/account name (e.g. "Acme Corp", "Acme Corp Subs 2025")</span></div>
-            <div className="flex items-start gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 shrink-0" /><span>Pipeline sheet — spreadsheet file name must contain <code className="bg-slate-700 px-1 rounded text-amber-300">pipeline</code> (case-insensitive)</span></div>
+          <p className="text-xs font-medium text-slate-300">Required file naming for auto-discovery:</p>
+          <div className="space-y-1.5 text-xs text-slate-400">
+            <div className="flex items-start gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 shrink-0" /><span>Your account and subscription data file must be named <code className="bg-slate-700 px-1 rounded text-amber-300">[AE Name] Supportable</code> — for example <code className="bg-slate-700 px-1 rounded text-slate-300">Jane Smith Supportable</code>.</span></div>
+            <div className="flex items-start gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 shrink-0" /><span>Your cloud spend file must be named <code className="bg-slate-700 px-1 rounded text-amber-300">[AE Name] CCSP</code> — for example <code className="bg-slate-700 px-1 rounded text-slate-300">Jane Smith CCSP</code>.</span></div>
+            <div className="flex items-start gap-1.5"><div className="w-1 h-1 rounded-full bg-amber-400 mt-1.5 shrink-0" /><span>Your pipeline file must be named <code className="bg-slate-700 px-1 rounded text-amber-300">[AE Name] Pipeline</code> — for example <code className="bg-slate-700 px-1 rounded text-slate-300">Jane Smith Pipeline</code>.</span></div>
+            <div className="flex items-start gap-1.5"><div className="w-1 h-1 rounded-full bg-slate-500 mt-1.5 shrink-0" /><span className="text-slate-500">All three files must live inside the AE folder at its root. The folder and file naming must be complete before you run Discover below.</span></div>
           </div>
         </div>
       </div>
 
-      <div>
-        <h2 className="text-2xl font-bold text-white mb-1">Add Your Accounts</h2>
-        <p className="text-slate-400">Import your accounts from a Google Sheet, or bootstrap instantly from your pipeline data.</p>
-      </div>
-
-      {/* Bootstrap from pipeline */}
-      {!bootstrapDone ? (
-        <div className="bg-indigo-950/50 border border-indigo-700 rounded-xl p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-indigo-400 shrink-0" />
-            <span className="text-sm font-semibold text-white">Quick Start: Bootstrap from Pipeline</span>
-            <span className="text-xs bg-indigo-700 text-indigo-200 px-2 py-0.5 rounded-full">Recommended</span>
+      {/* Required Data Files */}
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Required Data Files</p>
+        {DATA_FILE_TEMPLATES.map((t) => (
+          <div key={t.label} className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-2">
+            <p className="text-xs text-slate-400">{t.instruction}</p>
+            <a
+              href={t.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              View {t.label} template
+            </a>
           </div>
-          <p className="text-sm text-slate-400">Paste your pipeline spreadsheet URL to pull account names and AE assignments directly.</p>
-          {!bootstrapAccounts ? (
-            <div className="space-y-2">
-              {aeFolders.length > 0 ? (
-                <p className="text-xs text-slate-400">
-                  Pipeline sheets will be auto-discovered anywhere under your {aeFolders.length === 1 ? `"${aeFolders[0].folderName ?? 'connected'}"` : `${aeFolders.length} connected`} folder{aeFolders.length > 1 ? 's' : ''}.
-                  {' '}If your pipeline file isn't named with "pipeline", paste its URL below to override.
-                </p>
-              ) : null}
-              <input
-                type="text"
-                value={bootstrapUrl}
-                onChange={(e) => setBootstrapUrl(e.target.value)}
-                placeholder={aeFolders.length > 0 ? 'Optional: paste pipeline URL to override auto-discovery…' : 'https://docs.google.com/spreadsheets/d/...'}
-                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-              />
-              <button
-                onClick={handleBootstrapPreview}
-                disabled={bootstrapLoading || (aeFolders.length === 0 && !bootstrapUrl.trim())}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                {bootstrapLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                Preview Accounts
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {bootstrapSource === 'territory' && (
-                <p className="text-xs text-amber-400 flex items-center gap-1.5">
-                  <span>⚠</span> No pipeline file found — accounts discovered from Supportable spreadsheet tabs. Add a pipeline file named with "pipeline" for richer data (ACV, close date, etc.).
-                </p>
-              )}
-              {bootstrapSource === 'territory+pipeline' && (
-                <p className="text-xs text-emerald-400 flex items-center gap-1.5">
-                  <span>✓</span> Accounts from Supportable tabs + any additional accounts from pipeline.
-                </p>
-              )}
-              <div className="bg-slate-900 rounded-lg p-3 max-h-40 overflow-y-auto space-y-1">
-                {bootstrapAccounts.slice(0, 50).map((a) => (
-                  <div key={a.name} className="flex items-center justify-between text-sm">
-                    <span className="text-white">{a.name}</span>
-                    <span className="text-slate-500 text-xs">{a.ae}</span>
-                  </div>
-                ))}
-                {bootstrapAccounts.length > 50 && (
-                  <p className="text-slate-500 text-xs pt-1">+ {bootstrapAccounts.length - 50} more</p>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleBootstrapImport}
-                  disabled={bootstrapLoading}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {bootstrapLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                  Import {bootstrapAccounts.length} Accounts
-                </button>
-                <button onClick={() => setBootstrapAccounts(null)} className="text-sm text-slate-400 hover:text-white transition-colors">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="bg-emerald-950/50 border border-emerald-700 rounded-xl p-4 flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-white">
-              {bootstrapSource === 'territory' && 'Accounts imported from Supportable spreadsheet tabs'}
-              {bootstrapSource === 'territory+pipeline' && 'Accounts imported from Supportable tabs + pipeline'}
-              {(bootstrapSource === 'pipeline' || bootstrapSource === 'manual') && 'Accounts imported from pipeline'}
-              {!bootstrapSource && 'Accounts imported'}
-            </p>
-            <p className="text-xs text-slate-400">Connect a Google Sheet below to keep them in sync.</p>
-          </div>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-900 rounded-lg p-1 w-fit">
-        {([
-          { id: 'browse' as Step1Tab, icon: <Table2 className="w-3.5 h-3.5" />, label: 'Browse My Sheets' },
-          { id: 'paste' as Step1Tab, icon: <Link className="w-3.5 h-3.5" />, label: 'Paste Sheet URL' },
-          { id: 'create' as Step1Tab, icon: <Plus className="w-3.5 h-3.5" />, label: 'Create New Sheet' },
-        ] as const).map(({ id, icon, label }) => (
-          <button
-            key={id}
-            onClick={() => { setTab(id); setError(null) }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              tab === id ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {icon}
-            {label}
-          </button>
         ))}
       </div>
 
-      {/* Browse tab */}
-      {tab === 'browse' && (
-        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 space-y-3">
-          {filesLoading ? (
-            <div className="flex items-center gap-2 text-slate-400 text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading your sheets…
-            </div>
-          ) : sheetFiles.length === 0 ? (
-            <p className="text-slate-400 text-sm">No recent sheets found.</p>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-300">Select a sheet:</p>
-              <select
-                className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm"
-                value={selectedFileId}
-                onChange={(e) => {
-                  const file = sheetFiles.find((f) => f.id === e.target.value)
-                  if (file) fetchHeaders(file.id, file.name)
-                }}
-              >
-                <option value="">— choose a sheet —</option>
-                {sheetFiles.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name} · {timeAgo(f.modifiedTime)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Paste URL tab */}
-      {tab === 'paste' && (
-        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 space-y-3">
-          <p className="text-sm font-medium text-slate-300">Paste your Google Sheets URL</p>
-          <SheetUrlInput value={pasteUrl} onChange={setPasteUrl} onSubmit={handlePasteSubmit} />
-        </div>
-      )}
-
-      {/* Create New Sheet tab */}
-      {tab === 'create' && (
-        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 space-y-4">
-          <a
-            href="https://sheets.new"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+      {/* Discover & Verify / Results */}
+      {importDone ? (
+        <div className="bg-emerald-950/50 border border-emerald-700 rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span className="text-sm font-semibold text-white">{importCount} accounts imported from Supportable files</span>
+          </div>
+          <button
+            onClick={() => { setImportDone(false); setFileCheckResults([]); setAccountPreview(null) }}
+            className="text-xs text-slate-400 hover:text-white transition-colors underline"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Open Google Sheets
-          </a>
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium text-slate-300">Copy this as row 1 (headers):</p>
-            <CodeBlock code={HEADER_TEMPLATE.replace(/\t/g, '  ')} />
-          </div>
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium text-slate-300">Example row 2 (data):</p>
-            <pre className="bg-slate-900 rounded-lg p-3 font-mono text-sm text-slate-500 border border-slate-700 overflow-x-auto">
-              {EXAMPLE_ROW.replace(/\t/g, '  ')}
-            </pre>
-          </div>
-          <div className="space-y-2 pt-1 border-t border-slate-700">
-            <p className="text-sm font-medium text-slate-300">Paste your sheet URL here</p>
-            <SheetUrlInput value={pasteUrl} onChange={setPasteUrl} onSubmit={handlePasteSubmit} />
-          </div>
+            Re-discover
+          </button>
         </div>
-      )}
+      ) : (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-1">Discover & Verify</h2>
+            <p className="text-slate-400 text-sm">Scan your connected AE folders for the required data files and preview accounts before importing.</p>
+          </div>
 
-      {/* Error */}
-      {error && !headersLoading && (
-        <p className="text-sm text-red-400">{error}</p>
-      )}
+          <button
+            onClick={handleDiscover}
+            disabled={discoverLoading || aeFolders.length === 0}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            {discoverLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {discoverLoading ? 'Scanning folders…' : 'Discover & Verify'}
+          </button>
 
-      {/* Headers loading */}
-      {headersLoading && (
-        <div className="flex items-center gap-2 text-slate-400 text-sm">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading columns…
-        </div>
-      )}
+          {aeFolders.length === 0 && (
+            <p className="text-xs text-amber-400">Add at least one AE folder above to enable discovery.</p>
+          )}
 
-      {/* Column mapping */}
-      {headers.length > 0 && !headersLoading && (
-        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 space-y-4">
-          <p className="text-sm font-medium text-slate-300">
-            Map columns from <span className="text-white font-semibold">{selectedFileName}</span>
-          </p>
-          <div className="space-y-3">
-            {CUSTOMER_FIELDS.map((field) => {
-              const val = columnMap[field.key]
-              const isCustom = typeof val === 'string'
-              const isInvalid = field.required && !isCustom && val == null
-              return (
-                <div key={field.key} className="flex items-start gap-3">
-                  <div className="w-36 shrink-0 pt-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-200">{field.label}</span>
-                      {field.required ? (
-                        <span className="text-xs bg-red-900/50 text-red-300 px-1.5 py-0.5 rounded">required</span>
-                      ) : (
-                        <span className="text-xs bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded">optional</span>
-                      )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          {fileCheckResults.length > 0 && (
+            <div className="space-y-4">
+              {/* Per-folder file checklist */}
+              <div className="space-y-3">
+                {fileCheckResults.map(r => (
+                  <div key={r.folderId} className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium text-white">{r.aeName}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(
+                        [
+                          { label: 'Supportable', result: r.supportable },
+                          { label: 'CCSP', result: r.ccsp },
+                          { label: 'Pipeline', result: r.pipeline },
+                        ] as { label: string; result: { found: boolean; fileName?: string } }[]
+                      ).map(({ label, result }) => (
+                        <div
+                          key={label}
+                          className={`flex items-center gap-1.5 text-xs px-2 py-1.5 rounded ${
+                            result.found ? 'bg-emerald-950/50 text-emerald-400' : 'bg-red-950/50 text-red-400'
+                          }`}
+                        >
+                          {result.found
+                            ? <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                            : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+                          <span>{label}</span>
+                        </div>
+                      ))}
                     </div>
-                    {field.hint && (
-                      <p className="text-xs text-slate-500 mt-0.5">{field.hint}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Account preview */}
+              {accountPreview && accountPreview.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{accountPreview.length} accounts discovered</p>
+                  <div className="bg-slate-900 rounded-lg p-3 max-h-40 overflow-y-auto space-y-1 border border-slate-700">
+                    {accountPreview.slice(0, 50).map((a) => (
+                      <div key={a.name} className="flex items-center justify-between text-sm">
+                        <span className="text-white">{a.name}</span>
+                        <span className="text-slate-500 text-xs">{a.ae}</span>
+                      </div>
+                    ))}
+                    {accountPreview.length > 50 && (
+                      <p className="text-slate-500 text-xs pt-1">+ {accountPreview.length - 50} more</p>
                     )}
                   </div>
-                  {isCustom ? (
-                    <div className="flex-1 flex gap-2">
-                      <input
-                        type="text"
-                        value={val}
-                        onChange={(e) => setColumnMap((m) => ({ ...m, [field.key]: e.target.value }))}
-                        placeholder={
-                          field.key === 'domain' ? 'e.g. acme.com (applies to all rows)' :
-                          field.key === 'ae' ? 'e.g. Jane Smith' :
-                          field.key === 'segment' ? 'e.g. Enterprise' :
-                          field.key === 'region' ? 'e.g. Americas West' :
-                          `Custom ${field.label.toLowerCase()}…`
-                        }
-                        className="flex-1 bg-slate-700 border border-slate-600 text-white rounded-lg px-3 py-2 text-sm placeholder:text-slate-500"
-                      />
-                      <button
-                        onClick={() => setColumnMap((m) => ({ ...m, [field.key]: null }))}
-                        className="text-xs text-slate-400 hover:text-slate-200 px-2.5 py-1 bg-slate-700 border border-slate-600 rounded-lg whitespace-nowrap transition-colors"
-                        title="Switch back to column mapping"
-                      >
-                        ← col
-                      </button>
-                    </div>
-                  ) : (
-                    <select
-                      className={`flex-1 bg-slate-700 border rounded-lg px-3 py-2 text-sm text-white ${
-                        isInvalid ? 'border-red-500' : 'border-slate-600'
-                      }`}
-                      value={val ?? ''}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        if (v === '__custom__') {
-                          setColumnMap((m) => ({ ...m, [field.key]: '' }))
-                        } else {
-                          setColumnMap((m) => ({ ...m, [field.key]: v === '' ? null : Number(v) }))
-                        }
-                      }}
-                    >
-                      <option value="">(not mapped)</option>
-                      {headers.map((h, i) => (
-                        <option key={i} value={i}>{h}</option>
-                      ))}
-                      <option value="__custom__">✏ Enter custom value…</option>
-                    </select>
-                  )}
                 </div>
-              )
-            })}
-          </div>
-
-          {importResult ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-emerald-400 text-sm">
-                <CheckCircle className="w-4 h-4 shrink-0" />
-                Imported {importResult.imported} accounts from {selectedFileName}
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleSync}
-                  disabled={syncLoading}
-                  className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                >
-                  {syncLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                  Sync Now
-                </button>
-                {syncedAt && (
-                  <span className="text-xs text-slate-400">Last synced: {timeAgo(syncedAt)}</span>
-                )}
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={handleImport}
-              disabled={nameNotMapped || importLoading}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              {importLoading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Importing…
-                </>
-              ) : (
-                'Import Accounts'
               )}
-            </button>
+
+              {/* Confirm & Import */}
+              {canImport ? (
+                <button
+                  onClick={handleConfirmImport}
+                  disabled={importLoading}
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {importLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  {importLoading ? 'Importing…' : `Confirm & Import ${accountPreview?.length ?? 0} Accounts`}
+                </button>
+              ) : (
+                <p className="text-xs text-amber-400">No Supportable file found in any connected folder. Check your file naming and folder structure, then discover again.</p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -1255,98 +834,6 @@ function Step3AIProvider({
   )
 }
 
-// ── Refresh Timer Settings ─────────────────────────────────────────────────────
-
-interface RefreshIntervals {
-  subscriptions: number
-  ccsp: number
-  pipeline: number
-}
-
-function RefreshTimerSettings() {
-  const [intervals, setIntervals] = useState<RefreshIntervals | null>(null)
-  const [draft, setDraft] = useState<RefreshIntervals | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch('/api/settings/refresh')
-      .then(r => r.json())
-      .then((d: { intervals: RefreshIntervals }) => {
-        setIntervals(d.intervals)
-        setDraft(d.intervals)
-      })
-      .catch(() => {})
-  }, [])
-
-  if (!draft) return null
-
-  const handleSave = async () => {
-    setSaving(true); setError(null)
-    try {
-      const res = await fetch('/api/settings/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Save failed'); return }
-      setIntervals(data.intervals)
-      setDraft(data.intervals)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const dirty = JSON.stringify(draft) !== JSON.stringify(intervals)
-
-  const fields: Array<{ key: keyof RefreshIntervals; label: string; hint: string }> = [
-    { key: 'subscriptions', label: 'Subscriptions', hint: 'How often to sync product data from Supportable sheets' },
-    { key: 'ccsp',          label: 'CCSP Spend',    hint: 'How often to refresh cloud spend data' },
-    { key: 'pipeline',      label: 'Pipeline',      hint: 'How often to pull pipeline records' },
-  ]
-
-  return (
-    <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 space-y-4">
-      <p className="text-sm font-medium text-slate-300">Auto-Refresh Intervals</p>
-      <div className="space-y-3">
-        {fields.map(({ key, label, hint }) => (
-          <div key={key} className="flex items-center gap-3">
-            <div className="flex-1">
-              <p className="text-sm text-slate-200">{label}</p>
-              <p className="text-xs text-slate-500">{hint}</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <input
-                type="number"
-                min={1}
-                value={draft[key]}
-                onChange={e => setDraft(prev => prev ? { ...prev, [key]: Number(e.target.value) } : prev)}
-                className="w-20 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              <span className="text-xs text-slate-500 w-8">min</span>
-            </div>
-          </div>
-        ))}
-      </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      <button
-        onClick={handleSave}
-        disabled={!dirty || saving}
-        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
-      >
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
-        {saved ? 'Saved' : 'Save Intervals'}
-      </button>
-    </div>
-  )
-}
-
 // ── Step 3: Domain Detection ───────────────────────────────────────────────────
 
 interface InferredDomain {
@@ -1359,23 +846,54 @@ interface InferredDomain {
 function Step3DomainDetection({ onSaved }: { onSaved: () => void }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [results, setResults] = useState<InferredDomain[]>([])
+  const [needsReview, setNeedsReview] = useState<InferredDomain[]>([])
+  const [autoResolvedCount, setAutoResolvedCount] = useState(0)
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
+  const [autoSaved, setAutoSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const saveDomains = async (domains: { name: string; domain: string }[]) => {
+    const r = await fetch('/api/setup/save-domains', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domains }),
+    })
+    const d = await r.json()
+    if (!d.ok) throw new Error(d.error ?? 'Save failed')
+  }
 
   useEffect(() => {
     fetch('/api/setup/infer-domains', { method: 'POST' })
       .then((r) => r.json())
-      .then((d) => {
+      .then(async (d) => {
         const res: InferredDomain[] = d.results ?? []
-        setResults(res)
-        // Pre-fill edits with top candidate or existing domain
-        const initial: Record<string, string> = {}
+
+        // Split: any candidate = auto-resolved, no candidates at all = needs review
+        const auto: InferredDomain[] = []
+        const gaps: InferredDomain[] = []
         for (const r of res) {
+          if (r.candidates.length > 0) auto.push(r)
+          else gaps.push(r)
+        }
+
+        // Pre-fill edits for gap rows
+        const initial: Record<string, string> = {}
+        for (const r of gaps) {
           initial[r.customerName] = r.currentDomain || r.candidates[0]?.domain || ''
         }
+
+        setAutoResolvedCount(auto.length)
+        setNeedsReview(gaps)
         setEdits(initial)
+
+        // All resolved from Supportable — auto-save and done
+        if (gaps.length === 0 && auto.length > 0) {
+          const domains = auto.map(r => ({ name: r.customerName, domain: r.candidates[0].domain }))
+          await saveDomains(domains).catch(() => {})
+          setAutoSaved(true)
+          onSaved()
+        }
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
@@ -1385,13 +903,7 @@ function Step3DomainDetection({ onSaved }: { onSaved: () => void }) {
     setSaving(true)
     try {
       const domains = Object.entries(edits).map(([name, domain]) => ({ name, domain }))
-      const r = await fetch('/api/setup/save-domains', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domains }),
-      })
-      const d = await r.json()
-      if (!d.ok) throw new Error(d.error ?? 'Save failed')
+      await saveDomains(domains)
       setSaved(true)
       onSaved()
     } catch (e: any) {
@@ -1406,72 +918,89 @@ function Step3DomainDetection({ onSaved }: { onSaved: () => void }) {
       <div>
         <h2 className="text-2xl font-bold text-white mb-1">Auto-Detect Domains</h2>
         <p className="text-slate-400 text-sm">
-          Scanning your Gmail and Calendar for signals to infer each customer's email domain.
-          Review and edit before saving — domains improve email and meeting matching.
+          Extracting email domains from your Supportable files — the fastest and most accurate source.
         </p>
       </div>
 
       {loading && (
         <div className="flex items-center gap-3 py-8 justify-center text-slate-400">
           <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">Scanning Gmail, Calendar, and web…</span>
+          <span className="text-sm">Scanning Supportable files, web, and email signals…</span>
         </div>
       )}
 
       {error && (
         <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4 text-red-300 text-sm">
           {error.includes('No customers') || error.includes('not configured')
-            ? 'No accounts found — complete Step 1 (Sheets import) first.'
+            ? 'No accounts found — complete Step 1 (Accounts) first.'
             : error.includes('Token') || error.includes('token') || error.includes('auth') || error.includes('OAuth')
             ? 'Google Auth error — complete Step 2 first, then return here.'
-            : `Network error scanning for domains: ${error}`}
+            : `Error scanning for domains: ${error}`}
         </div>
       )}
 
-      {!loading && results.length > 0 && (
-        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-          {results.map((r) => (
-            <div key={r.customerName} className="bg-slate-700/50 rounded-lg px-4 py-3 flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-200 truncate">{r.customerName}</p>
-                {r.candidates.length > 0 && (
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {r.candidates[0].count} signal{r.candidates[0].count !== 1 ? 's' : ''} from {r.candidates[0].sources.join(' + ')}
-                    {r.candidates.length > 1 && ` · also: ${r.candidates.slice(1, 3).map(c => c.domain).join(', ')}`}
-                  </p>
-                )}
-                {r.candidates.length === 0 && (
-                  <p className="text-xs text-slate-500 mt-0.5 italic">No signal found — enter manually</p>
-                )}
-              </div>
-              <input
-                type="text"
-                value={edits[r.customerName] ?? ''}
-                onChange={(e) => setEdits((prev) => ({ ...prev, [r.customerName]: e.target.value }))}
-                placeholder="domain.com"
-                className="w-44 bg-slate-600 border border-slate-500 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!loading && !error && (
-        <div className="flex items-center gap-3 pt-2">
-          {saved ? (
-            <span className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
-              <CheckCircle className="w-4 h-4" /> Domains saved
+      {/* All resolved automatically */}
+      {!loading && !error && autoSaved && (
+        <div className="bg-emerald-950/50 border border-emerald-700 rounded-xl p-5 space-y-1">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span className="text-sm font-semibold text-white">
+              {autoResolvedCount} domains detected and saved automatically
             </span>
-          ) : (
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              {saving ? 'Saving…' : 'Confirm & Save Domains'}
-            </button>
+          </div>
+          <p className="text-xs text-slate-400 pl-7">All domains resolved from contact emails in your Supportable files. Hit Next to continue.</p>
+        </div>
+      )}
+
+      {/* Gaps need review */}
+      {!loading && !error && needsReview.length > 0 && (
+        <div className="space-y-4">
+          {autoResolvedCount > 0 && (
+            <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/30 border border-emerald-800/40 rounded-lg px-3 py-2">
+              <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+              {autoResolvedCount} domain{autoResolvedCount !== 1 ? 's' : ''} auto-resolved from Supportable — {needsReview.length} need{needsReview.length === 1 ? 's' : ''} review below
+            </div>
           )}
+          <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+            {needsReview.map((r) => (
+              <div key={r.customerName} className="bg-slate-700/50 rounded-lg px-4 py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-200 truncate">{r.customerName}</p>
+                  {r.candidates.length > 0 && (
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      best guess: {r.candidates[0].domain} via {r.candidates[0].sources.join(' + ')}
+                    </p>
+                  )}
+                  {r.candidates.length === 0 && (
+                    <p className="text-xs text-slate-500 mt-0.5 italic">No signal found — enter manually</p>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={edits[r.customerName] ?? ''}
+                  onChange={(e) => setEdits((prev) => ({ ...prev, [r.customerName]: e.target.value }))}
+                  placeholder="domain.com"
+                  className="w-44 bg-slate-600 border border-slate-500 rounded-lg px-3 py-1.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            {saved ? (
+              <span className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
+                <CheckCircle className="w-4 h-4" /> Domains saved
+              </span>
+            ) : (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                {saving ? 'Saving…' : `Save ${needsReview.length} Domain${needsReview.length !== 1 ? 's' : ''}`}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1561,9 +1090,134 @@ function Step5Launch({ status }: { status: StepStatus }) {
   )
 }
 
+// ── Step 0: OAuth Keys upload ──────────────────────────────────────────────────
+
+const GDRIVE_KEYS_URL = import.meta.env.VITE_OAUTH_KEYS_DRIVE_URL ?? 'https://drive.google.com/file/d/1W8JXPuk3a3I_L2q65H8d7fhe0xcuNGGC/view?usp=drive_link'
+
+function Step0OAuthKeys({ onReady }: { onReady: () => void }) {
+  const [exists, setExists] = useState<boolean | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<'upload' | 'paste'>('paste')
+  const [pasteText, setPasteText] = useState('')
+
+  useEffect(() => {
+    fetch('/api/setup/oauth-keys-status')
+      .then((r) => r.json())
+      .then((d) => { setExists(d.exists); if (d.exists) onReady() })
+      .catch(() => setExists(false))
+  }, [])
+
+  const submit = async (jsonText: string) => {
+    setError(null)
+    setUploading(true)
+    try {
+      const json = JSON.parse(jsonText)
+      const res = await fetch('/api/setup/upload-oauth-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(json),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Upload failed')
+      setExists(true)
+      onReady()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    submit(await file.text())
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-semibold text-white mb-1">Google OAuth Credentials</h2>
+        <p className="text-sm text-slate-400">
+          This app needs a GCP OAuth keys file to authenticate with Google. Your admin has shared this file internally.
+        </p>
+      </div>
+
+      {exists === true ? (
+        <div className="flex items-center gap-2 text-emerald-400 text-sm">
+          <CheckCircle className="w-4 h-4" />
+          OAuth keys already configured — you're good to go.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {GDRIVE_KEYS_URL && (
+            <a
+              href={GDRIVE_KEYS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors w-fit"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open OAuth Keys in Google Drive
+            </a>
+          )}
+
+          {/* Mode toggle */}
+          <div className="flex gap-1 bg-slate-900 rounded-lg p-1 w-fit">
+            {(['paste', 'upload'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  mode === m ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {m === 'paste' ? 'Paste JSON' : 'Upload file'}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'paste' ? (
+            <div className="space-y-2">
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder='Paste the contents of gcp-oauth.keys.json here…'
+                rows={6}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 font-mono text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500 resize-none"
+              />
+              <button
+                onClick={() => submit(pasteText)}
+                disabled={!pasteText.trim() || uploading}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {uploading ? 'Saving…' : 'Save Keys'}
+              </button>
+            </div>
+          ) : (
+            <label className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer w-fit">
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {uploading ? 'Uploading…' : 'Upload gcp-oauth.keys.json'}
+              <input type="file" accept=".json,application/json" className="hidden" onChange={handleFile} disabled={uploading} />
+            </label>
+          )}
+
+          {error && (
+            <p className="text-sm text-red-400 flex items-center gap-1.5">
+              <XCircle className="w-4 h-4" /> {error}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main wizard ────────────────────────────────────────────────────────────────
 
-const OPTIONAL_STEPS = new Set([2, 3])
+const OPTIONAL_STEPS = new Set([3, 4])
 
 const LS_STEP_KEY = 'pai-setup-step'
 
@@ -1571,9 +1225,9 @@ export function SetupPage() {
   const [step, setStepRaw] = useState(() => {
     // URL param takes priority (e.g. OAuth redirect back), then localStorage, then 0
     const urlStep = parseInt(new URLSearchParams(window.location.search).get('step') ?? '', 10)
-    if (!isNaN(urlStep)) return Math.min(Math.max(urlStep, 0), 4)
+    if (!isNaN(urlStep)) return Math.min(Math.max(urlStep, 0), 5)
     const saved = parseInt(localStorage.getItem(LS_STEP_KEY) ?? '', 10)
-    return isNaN(saved) ? 0 : Math.min(Math.max(saved, 0), 4)
+    return isNaN(saved) ? 0 : Math.min(Math.max(saved, 0), 5)
   })
 
   const setStep = (fn: number | ((s: number) => number)) => {
@@ -1607,9 +1261,11 @@ export function SetupPage() {
       .catch(() => {})
   }, [])
 
-  // Re-check auth when entering step 1 (0-indexed)
+  const [oauthKeysOk, setOauthKeysOk] = useState(false)
+
+  // Re-check auth when entering step 2 (0-indexed, Google Auth is now step 2)
   useEffect(() => {
-    if (step === 1) checkAuth()
+    if (step === 2) checkAuth()
   }, [step])
 
   const handleTest = async (_provider: string) => {
@@ -1624,18 +1280,21 @@ export function SetupPage() {
 
   const [resetting, setResetting] = useState(false)
 
-  const handleReset = async () => {
-    if (!confirm('Clear all cached data, customers, and auth tokens? This resets to a clean slate.')) return
+  const doReset = async (full: boolean) => {
+    const msg = full
+      ? 'Full reset: clears everything including OAuth keys. You will need to re-upload the keys file. Continue?'
+      : 'Clear all cached data, customers, and auth tokens? OAuth keys will be kept.'
+    if (!confirm(msg)) return
     setResetting(true)
     try {
-      await fetch('/api/setup/reset', { method: 'POST' })
+      await fetch(`/api/setup/reset${full ? '?full=true' : ''}`, { method: 'POST' })
     } catch {}
     setResetting(false)
     localStorage.removeItem(LS_STEP_KEY)
     window.location.href = '/dashboard/setup'
   }
 
-  const canGoNext = step < 4 && (step !== 0 || status.customersOk === true)
+  const canGoNext = step < 5 && (step !== 0 || oauthKeysOk) && (step !== 1 || status.customersOk === true)
   const canGoBack = step > 0
 
   return (
@@ -1647,15 +1306,25 @@ export function SetupPage() {
             <span className="text-xl">🗂️</span>
           </div>
           <h1 className="text-3xl font-bold text-white">Daily Brief Dashboard</h1>
-          <p className="text-slate-400 mt-1 text-sm">Setup wizard — 5 steps to get started</p>
-          <button
-            onClick={handleReset}
-            disabled={resetting}
-            className="absolute top-0 right-0 text-xs text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"
-            title="Clear all data and start over"
-          >
-            {resetting ? 'Clearing…' : 'Reset & Start Over'}
-          </button>
+          <p className="text-slate-400 mt-1 text-sm">Setup wizard — 6 steps to get started</p>
+          <div className="absolute top-0 right-0 flex flex-col items-end gap-1">
+            <button
+              onClick={() => doReset(true)}
+              disabled={resetting}
+              className="text-xs text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"
+              title="Clear everything including OAuth keys — simulate brand new user"
+            >
+              {resetting ? 'Clearing…' : 'Full Reset (new user)'}
+            </button>
+            <button
+              onClick={() => doReset(false)}
+              disabled={resetting}
+              className="text-xs text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-50"
+              title="Clear data but keep OAuth keys"
+            >
+              Reset Data Only
+            </button>
+          </div>
         </div>
 
         <StepIndicator current={step} />
@@ -1663,24 +1332,27 @@ export function SetupPage() {
         {/* Card */}
         <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-6">
           {step === 0 && (
-            <Step1Sheets onImported={() => setStatus((s) => ({ ...s, customersOk: true }))} />
+            <Step0OAuthKeys onReady={() => setOauthKeysOk(true)} />
           )}
           {step === 1 && (
-            <Step2GoogleAuth />
+            <Step1Sheets onImported={() => setStatus((s) => ({ ...s, customersOk: true }))} />
           )}
           {step === 2 && (
-            <Step3DomainDetection onSaved={() => {}} />
+            <Step2GoogleAuth />
           )}
           {step === 3 && (
-            <Step3AIProvider status={status.testResult} onTest={handleTest} />
+            <Step3DomainDetection onSaved={() => {}} />
           )}
           {step === 4 && (
+            <Step3AIProvider status={status.testResult} onTest={handleTest} />
+          )}
+          {step === 5 && (
             <Step5Launch status={status} />
           )}
         </div>
 
         {/* Navigation */}
-        {step < 4 && (
+        {step < 5 && (
           <div className="flex items-center justify-between">
             <button
               onClick={() => setStep((s) => s - 1)}
@@ -1692,12 +1364,15 @@ export function SetupPage() {
             </button>
 
             <div className="flex items-center gap-3">
-              {step === 1 && status.authTokens && (status.authTokens.valid === false || status.authTokens.expired) && (
+              {step === 2 && status.authTokens && (status.authTokens.valid === false || status.authTokens.expired) && (
                 <span className="text-xs text-amber-400">
                   {status.authTokens.expired ? 'Token expired — re-authenticate' : 'Auth incomplete — connect Google first'}
                 </span>
               )}
-              {step === 0 && status.customersOk !== true && (
+              {step === 0 && !oauthKeysOk && (
+                <span className="text-xs text-amber-400">Upload OAuth keys to continue</span>
+              )}
+              {step === 1 && status.customersOk !== true && (
                 <span className="text-xs text-amber-400">Import accounts to continue</span>
               )}
               {OPTIONAL_STEPS.has(step) && (

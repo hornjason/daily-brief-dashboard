@@ -18,6 +18,10 @@ config/.gdrive-server-credentials.json
 config/.calendar-token.json
 config/gcp-oauth.keys.json
 
+# Runtime state — user-specific, not source
+config/data-sources.json
+config/drive-watcher-state.json
+
 # Environment variables
 .env
 .env.local

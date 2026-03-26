@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import {
   LayoutDashboard,
   Calendar,
@@ -16,11 +15,14 @@ const navItems = [
   { icon: Users,           label: 'Accounts',        sectionId: 'section-accounts' },
 ]
 
-export function Sidebar() {
-  const [active, setActive] = useState('Command Center')
+interface SidebarProps {
+  active: string
+  onActiveChange: (label: string) => void
+}
 
+export function Sidebar({ active, onActiveChange }: SidebarProps) {
   function scrollTo(item: typeof navItems[0]) {
-    setActive(item.label)
+    onActiveChange(item.label)
     const el = document.getElementById(item.sectionId)
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -61,7 +63,7 @@ export function Sidebar() {
 
         {/* Settings — bottom of nav, no scroll target */}
         <button
-          onClick={() => setActive('Settings')}
+          onClick={() => onActiveChange('Settings')}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors mt-4 ${
             active === 'Settings'
               ? 'bg-accent/10 text-accent'

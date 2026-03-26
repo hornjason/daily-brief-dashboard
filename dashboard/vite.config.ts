@@ -1,7 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
 export default defineConfig({
+  envDir: resolve(__dirname, '..'),  // load .env from project root
   plugins: [react()],
   base: '/dashboard/',
   server: {

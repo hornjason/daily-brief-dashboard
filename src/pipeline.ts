@@ -130,7 +130,7 @@ async function discoverPipelineFileIds(drive: ReturnType<typeof google.drive>): 
 
 // ── Main fetch ────────────────────────────────────────────────────────────────
 
-export async function fetchPipelineData(): Promise<PipelineRecord[]> {
+export async function fetchPipelineData(): Promise<{ records: PipelineRecord[]; fileIds: string[] }> {
   const auth   = makeAuth(GDRIVE_TOKEN_PATH)
   const drive  = google.drive({ version: 'v3', auth })
   const sheets = google.sheets({ version: 'v4', auth })
@@ -140,7 +140,7 @@ export async function fetchPipelineData(): Promise<PipelineRecord[]> {
   const manualId = process.env.PIPELINE_FILE_ID
   const allIds = [...new Set([...autoIds, ...(manualId ? [manualId] : [])])]
 
-  if (!allIds.length) return []
+  if (!allIds.length) return { records: [], fileIds: [] }
 
   const allRecords: PipelineRecord[] = []
 
@@ -157,7 +157,7 @@ export async function fetchPipelineData(): Promise<PipelineRecord[]> {
     }
   }
 
-  return allRecords
+  return { records: allRecords, fileIds: allIds }
 }
 
 // ── Summary builder ───────────────────────────────────────────────────────────

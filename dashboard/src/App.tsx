@@ -8,6 +8,7 @@ import { CalendarStrip } from './components/CalendarStrip'
 import { AccountPortfolioGrid } from './components/AccountPortfolioGrid'
 import { CloudSpendSection } from './components/CloudSpendSection'
 import { PipelineSection } from './components/PipelineSection'
+import { RefreshTimerSettings } from './components/RefreshTimerSettings'
 import { CustomerDetailPage } from './pages/CustomerDetailPage'
 import { SetupPage } from './pages/SetupPage'
 import { formatRelTime } from './lib/format'
@@ -15,6 +16,7 @@ import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, Pipeli
 
 function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0)
+  const [active, setActive] = useState('Command Center')
 
   const kpisApi = useApi<KPIs>(`/api/kpis?_=${refreshKey}`)
   const calendarApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&_=${refreshKey}`)
@@ -37,46 +39,55 @@ function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar />
+      <Sidebar active={active} onActiveChange={setActive} />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* KPI Cards */}
-          <section id="section-command">
-            <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={accountsApi.data?.customers ?? []} loading={kpisApi.loading} />
-          </section>
+        {active === 'Settings' ? (
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-lg">
+              <h2 className="text-lg font-semibold text-text-primary mb-4">Settings</h2>
+              <RefreshTimerSettings />
+            </div>
+          </main>
+        ) : (
+          <main className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* KPI Cards */}
+            <section id="section-command">
+              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={accountsApi.data?.customers ?? []} loading={kpisApi.loading} />
+            </section>
 
-          {/* Pipeline */}
-          <section id="section-pipeline">
-            <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} />
-          </section>
+            {/* Pipeline */}
+            <section id="section-pipeline">
+              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} />
+            </section>
 
-          {/* Cloud Spend */}
-          <section id="section-cloudspend">
-            <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} />
-          </section>
+            {/* Cloud Spend */}
+            <section id="section-cloudspend">
+              <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} />
+            </section>
 
-          {/* Calendar + Meeting Prep */}
-          <section id="section-calendar">
-            <CalendarStrip
-              events={calendarApi.data?.events ?? []}
-              allEvents={calendarAllApi.data?.events ?? []}
-              cases={casesApi.data?.cases ?? []}
-              accounts={accountsApi.data?.customers ?? []}
-              loading={calendarApi.loading || calendarAllApi.loading}
-            />
-          </section>
+            {/* Calendar + Meeting Prep */}
+            <section id="section-calendar">
+              <CalendarStrip
+                events={calendarApi.data?.events ?? []}
+                allEvents={calendarAllApi.data?.events ?? []}
+                cases={casesApi.data?.cases ?? []}
+                accounts={accountsApi.data?.customers ?? []}
+                loading={calendarApi.loading || calendarAllApi.loading}
+              />
+            </section>
 
-          {/* Account Portfolio Grid */}
-          <section id="section-accounts">
-            <AccountPortfolioGrid
-              accounts={accountsApi.data?.customers ?? []}
-              cases={casesApi.data?.cases ?? []}
-              events={calendarApi.data?.events ?? []}
-              loading={accountsApi.loading}
-            />
-          </section>
-        </main>
+            {/* Account Portfolio Grid */}
+            <section id="section-accounts">
+              <AccountPortfolioGrid
+                accounts={accountsApi.data?.customers ?? []}
+                cases={casesApi.data?.cases ?? []}
+                events={calendarApi.data?.events ?? []}
+                loading={accountsApi.loading}
+              />
+            </section>
+          </main>
+        )}
       </div>
     </div>
   )

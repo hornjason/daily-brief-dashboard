@@ -260,9 +260,9 @@ function normalizePartner(raw: string): string {
   return 'Other'
 }
 
-export async function fetchCCSPData(): Promise<CCSPRecord[]> {
+export async function fetchCCSPData(): Promise<{ records: CCSPRecord[]; fileIds: string[] }> {
   const rootIds = getParentFolderIds()
-  if (!rootIds.length) return []
+  if (!rootIds.length) return { records: [], fileIds: [] }
 
   const driveAuth  = makeAuth(GDRIVE_TOKEN_PATH)
   const sheetsAuth = makeAuth(SHEETS_TOKEN_PATH)
@@ -270,6 +270,7 @@ export async function fetchCCSPData(): Promise<CCSPRecord[]> {
   const sheets = google.sheets({ version: 'v4', auth: sheetsAuth })
 
   const allRecords: CCSPRecord[] = []
+  const ccspFileIds: string[] = []
 
   // Collect all spreadsheets under each root (recursive, cached)
   const spreadsheetIds: string[] = []
@@ -294,6 +295,7 @@ export async function fetchCCSPData(): Promise<CCSPRecord[]> {
     const ccspTab = titles.find((t) => t.toLowerCase().includes('ccsp'))
       ?? (fileName.includes('ccsp') ? (titles[0] ?? null) : null)
     if (!ccspTab) continue
+    ccspFileIds.push(spreadsheetId)
 
     const dataRes = await sheets.spreadsheets.values.get({
       spreadsheetId,
@@ -328,7 +330,7 @@ export async function fetchCCSPData(): Promise<CCSPRecord[]> {
     }
   }
 
-  return allRecords
+  return { records: allRecords, fileIds: ccspFileIds }
 }
 
 export async function fetchCustomerSheetData(customer: Customer): Promise<ProductSubscription[]> {

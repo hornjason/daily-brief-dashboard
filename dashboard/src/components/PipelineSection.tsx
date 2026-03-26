@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, Calendar, Users, X } from 'lucide-react'
 import type { PipelineSummary, PipelineOpp, PipelineByQuarterStage } from '../types'
+import { formatRelTime } from '../lib/format'
 
 function fmt(val: number): string {
   if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
@@ -185,9 +186,9 @@ export function PipelineSection({ data, loading }: Props) {
         <h2 className="text-sm font-semibold text-text-primary">Open Pipeline</h2>
         <span className="text-xs text-text-secondary">Opportunities 2026</span>
         {loading && <span className="text-xs text-text-secondary animate-pulse">Loading…</span>}
-        {data?.cachedAt && !loading && (
+        {!loading && (
           <span className="text-xs text-text-secondary ml-auto">
-            {new Date(data.cachedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {data?.cachedAt ? `synced ${formatRelTime(data.cachedAt)}` : 'Live'}
           </span>
         )}
       </div>

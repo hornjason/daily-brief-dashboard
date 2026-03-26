@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CCSPSummary, CCSPCustomer } from '../types'
+import { formatRelTime } from '../lib/format'
 import {
   PieChart,
   Pie,
@@ -128,9 +129,9 @@ export function CloudSpendSection({ data, loading }: Props) {
         <h2 className="text-sm font-semibold text-text-primary">Cloud Spend (CCSP)</h2>
         <span className="text-xs text-text-secondary">2025 Marketplace Revenue</span>
         {loading && <span className="text-xs text-text-secondary animate-pulse">Loading…</span>}
-        {data?.cachedAt && !loading && (
+        {!loading && (
           <span className="text-xs text-text-secondary ml-auto">
-            {new Date(data.cachedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            {data?.cachedAt ? `synced ${formatRelTime(data.cachedAt)}` : 'Live'}
           </span>
         )}
       </div>

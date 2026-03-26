@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { AccountInfo, SupportCase, CalendarEvent, ProductSubscription } from '../types'
 import { Building2, Shield, Package, Key, Calendar, X, ChevronUp, ChevronDown } from 'lucide-react'
-import { formatDate } from '../lib/format'
+import { formatDate, formatRelTime } from '../lib/format'
 
 interface AccountPortfolioGridProps {
   accounts: AccountInfo[]
@@ -281,6 +281,13 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
   const [modalAccount, setModalAccount] = useState<AccountInfo | null>(null)
   const [groupByAE, setGroupByAE] = useState(false)
 
+  // Oldest cachedAt across all accounts — reflects how stale the subscription data is
+  const oldestCachedAt = (() => {
+    const timestamps = accounts.map(a => a.cachedAt).filter(Boolean) as string[]
+    if (!timestamps.length) return null
+    return timestamps.reduce((oldest, t) => t < oldest ? t : oldest)
+  })()
+
   // Group accounts by AE
   const aeGroups = (() => {
     if (!groupByAE) return null
@@ -321,6 +328,9 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
           <Building2 className="w-4 h-4 text-accent" />
           <h2 className="text-sm font-semibold text-text-primary">Account Portfolio</h2>
           <span className="text-xs text-text-secondary">{accounts.length} accounts</span>
+          {oldestCachedAt && (
+            <span className="text-xs text-text-secondary">· synced {formatRelTime(oldestCachedAt)}</span>
+          )}
           <div className="ml-auto flex items-center gap-0.5 bg-border/30 rounded-md p-0.5">
             <button
               onClick={() => setGroupByAE(false)}

@@ -15,15 +15,16 @@ export async function fetchCustomerMeetings(customer: Customer): Promise<Calenda
   const auth = makeAuth(GCAL_TOKEN_PATH)
   const calendar = google.calendar({ version: 'v3', auth })
   const now = new Date()
-  const monthOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const monthBack = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+  const monthOut  = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
 
   const res = await calendar.events.list({
     calendarId: 'primary',
-    timeMin: now.toISOString(),
+    timeMin: monthBack.toISOString(),
     timeMax: monthOut.toISOString(),
     singleEvents: true,
     orderBy: 'startTime',
-    maxResults: 50,
+    maxResults: 100,
   })
 
   const items = res.data.items ?? []
