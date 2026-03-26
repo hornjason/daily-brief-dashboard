@@ -112,12 +112,15 @@ export async function inferCustomerDomain(
     if (webDomains.length >= 3) break
   }
 
-  // ── 2. Gmail — From domain only, Subject must contain customer name ──────────
-  try {
+  // ── 2. Gmail — skip if Supportable already found a confident domain ──────────
+  // Supportable emails are highest-quality signal — skip Gmail + Calendar when found.
+  const skipSignalSearch = supportableCounts.size > 0
+
+  if (!skipSignalSearch) try {
     const gmail = google.gmail({ version: 'v1', auth })
     const nameTermsQuoted = [name, ...(customer.aliases ?? [])].map((n) => `"${n}"`).join(' OR ')
     const q = `(${nameTermsQuoted}) after:${afterStr}`
-    const list = await gmail.users.messages.list({ userId: 'me', q, maxResults: 50 })
+    const list = await gmail.users.messages.list({ userId: 'me', q, maxResults: 15 })
     const msgs = list.data.messages ?? []
 
     if (msgs.length > 0) {
@@ -146,7 +149,7 @@ export async function inferCustomerDomain(
   } catch {}
 
   // ── 3. Calendar — attendee domains ───────────────────────────────────────────
-  try {
+  if (!skipSignalSearch) try {
     const calendar = google.calendar({ version: 'v3', auth })
     const res = await calendar.events.list({
       calendarId: 'primary',

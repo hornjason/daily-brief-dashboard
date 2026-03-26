@@ -575,16 +575,23 @@ app.post('/api/setup/reset', (c) => {
 app.post('/api/setup/infer-domains', async (c) => {
   if (customers.length === 0) return c.json({ error: 'No customers configured' }, 400)
   try {
-    const results = await Promise.all(
-      customers.map((cu) =>
-        inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e) => ({
-          customerName: cu.name,
-          candidates: [],
-          currentDomain: cu.domain,
-          error: e.message,
-        }))
+    // Process in batches of 3 to avoid overwhelming Google API rate limits
+    // (naive Promise.all on 19 customers fires ~950 concurrent Gmail calls)
+    const results = []
+    for (let i = 0; i < customers.length; i += 3) {
+      const batch = customers.slice(i, i + 3)
+      const batchResults = await Promise.all(
+        batch.map((cu) =>
+          inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e) => ({
+            customerName: cu.name,
+            candidates: [],
+            currentDomain: cu.domain,
+            error: e.message,
+          }))
+        )
       )
-    )
+      results.push(...batchResults)
+    }
     return c.json({ results })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
