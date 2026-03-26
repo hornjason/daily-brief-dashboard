@@ -1,6 +1,6 @@
 services:
   dashboard:
-    image: ghcr.io/hornjason/asaCommandCenter:latest
+    image: ghcr.io/hornjason/asacommandcenter:latest
     container_name: pai-dashboard
     restart: unless-stopped
     ports:

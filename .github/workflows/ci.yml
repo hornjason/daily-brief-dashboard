@@ -58,8 +58,8 @@ jobs:
           file: Containerfile
           push: true
           tags: |
-            ghcr.io/hornjason/asaCommandCenter:latest
-            ghcr.io/hornjason/asaCommandCenter:${{ github.sha }}
+            ghcr.io/hornjason/asacommandcenter:latest
+            ghcr.io/hornjason/asacommandcenter:${{ github.sha }}
 
   e2e:
     name: Wizard E2E tests
