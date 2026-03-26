@@ -27,7 +27,7 @@ jobs:
         run: cd dashboard && bunx tsc --noEmit
 
       - name: Run unit tests
-        run: bun test ./src/**/*.test.ts
+        run: bun test src/
 
       - name: Build dashboard
         run: cd dashboard && bun run build
