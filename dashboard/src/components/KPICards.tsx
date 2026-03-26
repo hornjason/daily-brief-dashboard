@@ -178,6 +178,7 @@ function rhTimeAgo(isoString: string): string {
 
 export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession }: KPICardsProps) {
   const [casesOpen, setCasesOpen] = useState(false)
+  const [sev1Open, setSev1Open] = useState(false)
   const [redOpen, setRedOpen] = useState(false)
   const [amberOpen, setAmberOpen] = useState(false)
   const [techWinsOpen, setTechWinsOpen] = useState(false)
@@ -244,7 +245,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
           icon={<AlertTriangle className="w-5 h-5" />}
           accent="#F85149"
           loading={loading}
-          onClick={() => setCasesOpen(true)}
+          onClick={() => setSev1Open(true)}
         />
         <KPICard
           label="Meetings Today"
@@ -306,6 +307,30 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
           </div>
         </div>
       )}
+
+      {/* Sev 1 cases modal */}
+      {sev1Open && (() => {
+        const sev1Cases = cases.filter((c) => String(c.severity) === '1')
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSev1Open(false)}>
+            <div className="bg-surface border border-border rounded-2xl w-full max-w-4xl max-h-[80vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-critical" />
+                  <h2 className="text-sm font-semibold text-text-primary">Severity 1 Cases</h2>
+                  <span className="text-xs text-text-secondary">{sev1Cases.length} open</span>
+                </div>
+                <button onClick={() => setSev1Open(false)} className="text-text-secondary hover:text-text-primary transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1">
+                <SupportCasesTable cases={sev1Cases} loading={false} />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Red renewals modal — expired + <30d */}
       {redOpen && (

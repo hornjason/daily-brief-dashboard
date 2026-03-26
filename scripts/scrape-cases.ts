@@ -88,25 +88,22 @@ for (const accountNum of accountNumbers) {
   try {
     await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
 
-    // Detect expired session
-    const currentUrl = page.url()
-    if (currentUrl.includes('sso.redhat.com') || currentUrl.includes('/login')) {
+    // Detect expired session — wait for portal URL; transparent SSO renewal is allowed
+    if (!page.url().includes('access.redhat.com/support')) {
+      await page.waitForURL('**/access.redhat.com/support/**', { timeout: 20_000 }).catch(() => {})
+    }
+    if (!page.url().includes('access.redhat.com/support')) {
       await browser.close()
       console.error('\n❌  Session expired. Run:  bun scripts/login-rh.ts')
       process.exit(2)
     }
 
-    // Wait for the Angular table to render
-    await page.waitForTimeout(2000)
+    // Wait for Angular table to fully render (partial row appears quickly, rest loads over ~6-7s)
+    await page.waitForSelector('table tbody tr', { timeout: 15_000 }).catch(() => {})
+    await page.waitForTimeout(7000)
 
-    // Try to find any case rows
     const rowCount = await page.locator('table tbody tr').count()
     console.log(`   Found ${rowCount} table rows`)
-
-    if (rowCount === 0) {
-      // Try waiting a bit longer for dynamic render
-      await page.waitForSelector('table tbody tr', { timeout: 10_000 }).catch(() => {})
-    }
 
     const cases = await page.evaluate((acctNum: string) => {
       const results: Array<{

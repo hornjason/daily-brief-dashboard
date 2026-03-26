@@ -1,7 +1,9 @@
 import { google } from 'googleapis'
 import { makeAuth } from '../src/google.ts'
 
-const CI_CONFIG = '/Users/jhorn/.claude/PAI/Projects/DailyBriefDashboard/config'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const CI_CONFIG = process.env.CONFIG_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../config')
 const driveAuth = makeAuth(`${CI_CONFIG}/.gdrive-server-credentials.json`)
 const sheetsAuth = makeAuth(`${CI_CONFIG}/.sheets-token.json`)
 const drive = google.drive({ version: 'v3', auth: driveAuth })

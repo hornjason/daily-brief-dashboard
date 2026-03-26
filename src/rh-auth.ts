@@ -1,12 +1,14 @@
 /**
  * src/rh-auth.ts
  * Red Hat Portal browser session state machine.
- * Manages headed Playwright login, session polling, and status tracking.
+ * Uses a persistent Chromium profile (launchPersistentContext) so cookies
+ * survive browser restarts the same way a regular Chrome profile does.
  */
 
 import { chromium } from '@playwright/test'
-import type { Browser, Page } from '@playwright/test'
+import type { BrowserContext, Page } from '@playwright/test'
 import { writeFileSync, existsSync } from 'node:fs'
+import { closeScrapeContext, initScrapeContext } from './rh-scraper.ts'
 
 const RH_PORTAL_URL = 'https://access.redhat.com/support/cases/#/case/list'
 const LOGIN_POLL_INTERVAL_MS = 2_000
@@ -14,7 +16,7 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 // ── Module-level state ────────────────────────────────────────────────────────
 
-let activeBrowser: Browser | null = null
+let activeContext: BrowserContext | null = null
 let activePage: Page | null = null
 let loginInProgress = false
 let loginTimedOut = false
@@ -38,12 +40,12 @@ function isPortalUrl(url: string): boolean {
 }
 
 async function cleanupBrowser(): Promise<void> {
-  const b = activeBrowser
-  activeBrowser = null
+  const ctx = activeContext
+  activeContext = null
   activePage = null
   loginInProgress = false
-  if (b) {
-    try { await b.close() } catch { /* already closed */ }
+  if (ctx) {
+    try { await ctx.close() } catch { /* already closed */ }
   }
 }
 
@@ -61,32 +63,35 @@ export function getRhStatus(sessionPath: string): RhStatus {
 }
 
 /**
- * Launch a headed browser to the RH portal.
+ * Launch a headed persistent-context browser to the RH portal.
  * Polls page URL every 2s to auto-detect login completion.
- * On login: saves storageState to sessionPath, closes browser.
+ * On login: writes a marker file to sessionPath, closes browser.
+ * Cookies persist in profileDir across restarts — same as Chrome.
  */
-export async function startLoginBrowser(sessionPath: string): Promise<void> {
+export async function startLoginBrowser(sessionPath: string, profileDir: string, onComplete?: () => void): Promise<void> {
   if (loginInProgress) {
     throw new Error('Login already in progress')
   }
 
-  // Clean up any stale session
   await cleanupBrowser()
+
+  // Release profile dir lock so the headed login browser can use it
+  await closeScrapeContext()
 
   loginInProgress = true
   loginTimedOut = false
 
-  const browser = await chromium.launch({ headless: false })
-  const context = await browser.newContext()
+  // launchPersistentContext creates profileDir if it doesn't exist
+  const context = await chromium.launchPersistentContext(profileDir, { headless: false })
   const page = await context.newPage()
 
-  activeBrowser = browser
+  activeContext = context
   activePage = page
 
   // Navigate to portal (non-blocking — login happens async)
   page.goto(RH_PORTAL_URL).catch(() => {})
 
-  // Background polling loop — auto-saves session on login detection
+  // Background polling loop — auto-saves marker on login detection
   ;(async () => {
     const deadline = Date.now() + LOGIN_TIMEOUT_MS
 
@@ -100,12 +105,14 @@ export async function startLoginBrowser(sessionPath: string): Promise<void> {
         const url = page.url()
 
         if (isPortalUrl(url)) {
-          // Logged in — save session
-          const state = await context.storageState()
-          writeFileSync(sessionPath, JSON.stringify(state, null, 2))
-          console.log('[rh-auth] Session saved to', sessionPath)
+          // Logged in — write marker file (cookies live in profileDir automatically)
+          writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }))
+          console.log('[rh-auth] Login confirmed — profile:', profileDir)
           rhSessionExpired = false
           await cleanupBrowser()
+          // Reopen headless scrape context with the fresh session cookies
+          await initScrapeContext(profileDir)
+          onComplete?.()
           return
         }
       } catch {

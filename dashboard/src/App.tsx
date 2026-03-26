@@ -36,7 +36,7 @@ function timeAgo(isoString: string): string {
 function RhSessionBanner({ status, onReconnect }: { status: RhStatus; onReconnect: () => void }) {
   const [reconnecting, setReconnecting] = useState(false)
 
-  if (!status.sessionExpired) return null
+  if (!status.sessionExpired && status.hasSession) return null
 
   const handleReconnect = async () => {
     setReconnecting(true)
@@ -50,7 +50,9 @@ function RhSessionBanner({ status, onReconnect }: { status: RhStatus; onReconnec
 
   return (
     <div className="bg-amber-900/40 border-b border-amber-700/50 px-6 py-2.5 flex items-center gap-3 text-sm">
-      <span className="text-amber-400 font-medium shrink-0">⚠ Red Hat session expired</span>
+      <span className="text-amber-400 font-medium shrink-0">
+        {status.hasSession ? '⚠ Red Hat session expired' : '⚠ Red Hat Portal not connected'}
+      </span>
       {status.lastScraped && (
         <span className="text-amber-300/70">— cases last synced {timeAgo(status.lastScraped)}</span>
       )}
@@ -62,7 +64,7 @@ function RhSessionBanner({ status, onReconnect }: { status: RhStatus; onReconnec
           onClick={handleReconnect}
           className="bg-amber-700 hover:bg-amber-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors shrink-0"
         >
-          Reconnect
+          {status.hasSession ? 'Reconnect' : 'Connect'}
         </button>
       )}
     </div>

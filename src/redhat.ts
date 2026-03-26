@@ -156,3 +156,29 @@ export async function fetchRenewals(customers: Customer[] = []): Promise<Renewal
     })
     .sort((a, b) => a.daysLeft - b.daysLeft)
 }
+
+export interface CaseComment {
+  author: string
+  body: string
+  createdAt: string
+}
+
+export async function fetchCaseLatestComment(caseNumber: string): Promise<CaseComment | null> {
+  try {
+    const data = await rhGet(`${SUPPORT_API}/cases/${caseNumber}/comments`)
+    const comments: any[] = Array.isArray(data) ? data : (data.comments ?? [])
+    if (comments.length === 0) return null
+    // Sort descending by creation date, take newest
+    const sorted = [...comments].sort(
+      (a, b) => new Date(b.createdAt ?? b.created ?? 0).getTime() - new Date(a.createdAt ?? a.created ?? 0).getTime()
+    )
+    const latest = sorted[0]
+    return {
+      author: latest.createdBy ?? latest.author ?? '',
+      body: latest.body ?? latest.comment ?? '',
+      createdAt: latest.createdAt ?? latest.created ?? '',
+    }
+  } catch {
+    return null
+  }
+}

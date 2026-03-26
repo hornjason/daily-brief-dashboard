@@ -1,12 +1,18 @@
 /**
  * src/rh-scraper.ts
  * Headless Playwright scraper for Red Hat support cases.
- * Called by the server scheduler and can be imported by scripts/scrape-cases.ts.
+ *
+ * Uses a persistent Chromium profile and keeps the context alive between scrape
+ * runs — the same way a regular Chrome profile stays logged in. Short-lived
+ * portal cookies (TAsessionID, ~30-90 min) are renewed transparently by the RH
+ * SSO layer as long as the longer-lived rh_sso_session cookie (~14 h) is valid.
+ * Closing the context between scrapes discards in-memory cookies and breaks that
+ * renewal flow, so we keep one context open for the server's lifetime.
  */
 
 import { chromium } from '@playwright/test'
+import type { BrowserContext } from '@playwright/test'
 import { writeFile, mkdir } from 'node:fs/promises'
-import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import type { SupportCase } from './types.ts'
 
@@ -19,21 +25,57 @@ export class SessionExpiredError extends Error {
 
 export interface ScrapeOptions {
   accountNumbers: string[]
-  sessionPath: string
+  profileDir: string
   cachePath: string
 }
 
-export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]> {
-  const { accountNumbers, sessionPath, cachePath } = options
+// ── Long-lived context ────────────────────────────────────────────────────────
 
-  if (!existsSync(sessionPath)) {
+let _context: BrowserContext | null = null
+
+export async function initScrapeContext(profileDir: string): Promise<void> {
+  if (_context) return // already open
+  console.log('[rh-scraper] opening persistent context…')
+  _context = await chromium.launchPersistentContext(profileDir, { headless: true })
+}
+
+export async function closeScrapeContext(): Promise<void> {
+  const ctx = _context
+  _context = null
+  if (ctx) {
+    try { await ctx.close() } catch { /* already closed */ }
+  }
+}
+
+// ── Session expiry detection ──────────────────────────────────────────────────
+//
+// RH portal transparently renews TAsessionID via SSO when it expires — the
+// browser is briefly at sso.redhat.com before redirecting back.  We must NOT
+// treat that redirect as a login requirement.  Only throw SessionExpiredError
+// when the SSO page actually requires user interaction (login form visible).
+
+async function checkForSessionExpiry(page: { url(): string; waitForURL(p: string, o?: any): Promise<void> }): Promise<void> {
+  const url = page.url()
+  // If already on the portal, nothing to do
+  if (url.includes('access.redhat.com/support')) return
+
+  // May be mid-redirect (login page or SSO) — wait up to 20 s for the portal to appear.
+  // Transparent SSO renewal resolves here; a true expired session stays on SSO/login.
+  await page.waitForURL('**/access.redhat.com/support/**', { timeout: 20_000 }).catch(() => {})
+
+  if (!page.url().includes('access.redhat.com/support')) {
     throw new SessionExpiredError()
   }
+}
 
-  const sessionState = JSON.parse(readFileSync(sessionPath, 'utf-8'))
+// ── Main scrape function ──────────────────────────────────────────────────────
 
-  const browser = await chromium.launch({ headless: true })
-  const context = await browser.newContext({ storageState: sessionState })
+export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]> {
+  const { accountNumbers, profileDir, cachePath } = options
+
+  // Ensure long-lived context is open
+  await initScrapeContext(profileDir)
+  const context = _context!
   const page = await context.newPage()
 
   const allCases: SupportCase[] = []
@@ -47,19 +89,13 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
 
       await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
 
-      // Detect expired session
-      const currentUrl = page.url()
-      if (currentUrl.includes('sso.redhat.com') || currentUrl.includes('/login')) {
-        await browser.close()
-        throw new SessionExpiredError()
-      }
+      // Allow transparent SSO renewal; throw only if login form appears
+      await checkForSessionExpiry(page)
 
-      await page.waitForTimeout(2000)
-
-      const rowCount = await page.locator('table tbody tr').count()
-      if (rowCount === 0) {
-        await page.waitForSelector('table tbody tr', { timeout: 10_000 }).catch(() => {})
-      }
+      // Wait for Angular table to fully render.
+      // The portal renders a partial row quickly then loads the rest over ~6-7s.
+      await page.waitForSelector('table tbody tr', { timeout: 15_000 }).catch(() => {})
+      await page.waitForTimeout(7000)
 
       const cases = await page.evaluate((acctNum: string) => {
         const results: Array<{
@@ -114,7 +150,8 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
       console.log(`[rh-scraper] account ${accountNum}: ${cases.length} cases`)
     }
   } finally {
-    await browser.close()
+    // Close the page but NOT the context — keep it alive for session renewal
+    await page.close().catch(() => {})
   }
 
   // Write cache

@@ -5,7 +5,7 @@ import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { fetchEmail, fetchDrive, fetchCalendar, makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './src/google.ts'
-import { fetchCases, fetchCustomerCases, fetchCustomerSubscriptions } from './src/redhat.ts'
+import { fetchCases, fetchCustomerCases, fetchCustomerSubscriptions, fetchCaseLatestComment } from './src/redhat.ts'
 import { fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief, getBriefProvider, isBriefConfigured } from './src/customer.ts'
 import { fetchCustomerSheetData, fetchCustomerSheetRaw, fetchCCSPData, fetchCustomerAccountNumbers } from './src/sheets.ts'
 import type { CCSPRecord } from './src/sheets.ts'
@@ -15,7 +15,7 @@ import type { Customer, ProductSubscription } from './src/types.ts'
 import { inferCustomerDomain } from './src/domains.ts'
 import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState, checkFilesModified } from './src/drive-watcher.ts'
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired } from './src/rh-auth.ts'
-import { runRhScrape, SessionExpiredError } from './src/rh-scraper.ts'
+import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext } from './src/rh-scraper.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -63,7 +63,10 @@ const GOOGLE_OAUTH_KEYS_PATH = process.env.GOOGLE_OAUTH_KEYS
 
 const RH_SESSION_PATH = process.env.RH_SESSION
   ?? resolve(SRV_CONFIG_DIR, '.rh-session.json')
+const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR
+  ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const RH_CASES_CACHE_PATH = resolve(CACHE_DIR, 'cases.json')
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'your-admin@example.com'
 
 let oauthState = '' // CSRF state token for browser OAuth flow
 
@@ -175,9 +178,9 @@ app.get('/oauth/callback', async (c) => {
         <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9;max-width:600px;margin:0 auto">
           <h2 style="color:#fbbf24">Access Denied</h2>
           <p style="color:#94a3b8">Your Google account hasn't been added as a test user yet.</p>
-          <p style="color:#94a3b8">Email <strong style="color:#f1f5f9">jhorn@redhat.com</strong> and ask to be added, then try again.</p>
+          <p style="color:#94a3b8">Email <strong style="color:#f1f5f9">${ADMIN_EMAIL}</strong> and ask to be added, then try again.</p>
           <p style="margin-top:1.5rem">
-            <a href="mailto:jhorn@redhat.com?subject=Dashboard%20Access%20Request&body=Hi%20Jason%2C%0A%0APlease%20add%20my%20Google%20account%20as%20a%20test%20user%20for%20the%20PAI%20Dashboard.%0A%0AMy%20email%3A%20%5Byour%40redhat.com%5D%0A%0AThanks"
+            <a href="mailto:${ADMIN_EMAIL}?subject=Dashboard%20Access%20Request&body=Please%20add%20my%20Google%20account%20as%20a%20test%20user.%0A%0AMy%20email%3A%20%5Byour%40email.com%5D"
                style="background:#4f46e5;color:white;padding:.75rem 1.5rem;border-radius:.5rem;text-decoration:none;display:inline-block">
               Request Access via Email
             </a>
@@ -256,7 +259,9 @@ app.get('/api/auth/redhat/status', (c) => {
 // POST /api/auth/redhat/start — Launch headed browser for RH portal login
 app.post('/api/auth/redhat/start', async (c) => {
   try {
-    await startLoginBrowser(RH_SESSION_PATH)
+    await startLoginBrowser(RH_SESSION_PATH, RH_PROFILE_DIR, () => {
+      runRhScrapeWithState().catch(() => {})
+    })
     return c.json({ started: true })
   } catch (e: any) {
     return c.json({ error: e.message }, 409)
@@ -681,6 +686,13 @@ app.get('/api/cases/all', async (c) => {
   } catch (e: any) {
     return c.json({ cases: [], totalCount: 0, error: e.message }, 500)
   }
+})
+
+// GET /api/cases/:caseNumber/latest-comment — most recent comment for a case
+app.get('/api/cases/:caseNumber/latest-comment', async (c) => {
+  const caseNumber = c.req.param('caseNumber')
+  const comment = await fetchCaseLatestComment(caseNumber).catch(() => null)
+  return c.json({ comment })
 })
 
 // ── Brief helpers ────────────────────────────────────────────────────────────
@@ -1950,7 +1962,7 @@ async function runRhScrapeWithState(): Promise<void> {
     console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
     const cases = await runRhScrape({
       accountNumbers,
-      sessionPath: RH_SESSION_PATH,
+      profileDir: RH_PROFILE_DIR,
       cachePath: RH_CASES_CACHE_PATH,
     })
     recordScrapeSuccess(cases.length)
@@ -1958,6 +1970,7 @@ async function runRhScrapeWithState(): Promise<void> {
   } catch (e: any) {
     if (e instanceof SessionExpiredError) {
       recordScrapeExpired()
+      await closeScrapeContext() // discard expired context so next login gets a clean one
       console.warn('[rh-scraper] session expired — reconnect via dashboard')
     } else {
       console.warn('[rh-scraper]', e.message)
@@ -2000,9 +2013,12 @@ if (customers.length > 0) {
   rescheduleRefreshTimers(getRefreshIntervals())
 }
 
-// On startup: run initial RH case scrape if session exists, then schedule 4-hour interval
+// On startup: open persistent scrape context and run initial scrape if session exists
 if (existsSync(RH_SESSION_PATH)) {
-  setTimeout(() => runRhScrapeWithState().catch(() => {}), 5_000)
+  setTimeout(async () => {
+    await initScrapeContext(RH_PROFILE_DIR)
+    runRhScrapeWithState().catch(() => {})
+  }, 5_000)
 }
 setInterval(() => runRhScrapeWithState().catch(() => {}), RH_SCRAPE_INTERVAL_MS)
 
@@ -2037,5 +2053,14 @@ setInterval(async () => {
     console.warn('[drive-watcher] interval check failed:', e.message)
   }
 }, DRIVE_WATCHER_INTERVAL_MS)
+
+// Graceful shutdown — close Chromium so it doesn't orphan in containers
+async function shutdown() {
+  console.log('[shutdown] closing browser context…')
+  await closeScrapeContext().catch(() => {})
+  process.exit(0)
+}
+process.on('SIGTERM', shutdown)
+process.on('SIGINT',  shutdown)
 
 export default { port, fetch: app.fetch, idleTimeout: 120 }

@@ -20,6 +20,7 @@ config/.sheets-token.json
 config/.google-token.json
 config/gcp-oauth.keys.json
 config/.rh-session.json
+config/.rh-chrome-profile/
 
 # Runtime state — user-specific, not source
 config/data-sources.json
