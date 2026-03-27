@@ -1,7 +1,8 @@
 import { google } from 'googleapis'
 // PAI inference — optional, only available when running with PAI installed locally
 import { resolve } from 'path'
-import { makeAuth } from './google.ts'
+import { existsSync } from 'node:fs'
+import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer, CalendarEvent, EmailHighlight, DriveFile, SupportCase, CustomerSubscription, ProductSubscription } from './types.ts'
 
 const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -167,7 +168,7 @@ export function isBriefConfigured(): boolean {
   if (p === 'openai')      return !!process.env.OPENAI_API_KEY
   if (p === 'anthropic')   return !!process.env.ANTHROPIC_API_KEY
   if (p === 'claude-code') return Bun.which('claude') !== null
-  if (p === 'gemini')      return false  // manual only — no API integration
+  if (p === 'gemini')      return !!process.env.GOOGLE_CLOUD_PROJECT && (!!process.env.GEMINI_SERVICE_ACCOUNT_KEY || existsSync(GOOGLE_UNIFIED_TOKEN_PATH))
   if (p === 'ollama')      return true   // Ollama assumed local, no key needed
   return false
 }
@@ -219,7 +220,45 @@ async function callLLM(systemPrompt: string, userPrompt: string): Promise<string
   }
 
   if (provider === 'gemini') {
-    throw new Error('Gemini is configured as manual-only. Use the sample prompt from Setup → Step 3 to generate briefs in Gemini.')
+    const project  = process.env.GOOGLE_CLOUD_PROJECT
+    const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+    const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+    if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
+
+    // Prefer service account key (works for any user, no cloud-platform OAuth scope needed).
+    // Fall back to user OAuth token (requires cloud-platform scope on the user's token).
+    let token: string | null | undefined
+    const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+    if (saKeyB64) {
+      const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+      const jwtAuth = new google.auth.JWT({
+        email: keyData.client_email,
+        key:   keyData.private_key,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      })
+      token = (await jwtAuth.getAccessToken()).token
+    } else {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      token = (await auth.getAccessToken()).token
+    }
+    if (!token) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
+
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1200 },
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`Gemini API error ${res.status} (project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
+    }
+    const json = await res.json() as any
+    return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
   }
 
   if (provider === 'anthropic') {

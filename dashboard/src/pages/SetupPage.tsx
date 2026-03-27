@@ -29,8 +29,6 @@ interface AuthTokens {
 interface StepStatus {
   customersOk: boolean | null
   authTokens: AuthTokens | null
-  provider: string
-  testResult: { ok: boolean; error?: string } | null
 }
 
 // ── Small helpers ──────────────────────────────────────────────────────────────
@@ -80,7 +78,7 @@ function CodeBlock({ code, copyable = true }: { code: string; copyable?: boolean
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
-const STEP_LABELS = ['OAuth Keys', 'Google Auth', 'Accounts', 'Domains', 'AI Provider', 'Red Hat Portal', 'Launch']
+const STEP_LABELS = ['OAuth Keys', 'Google Auth', 'Accounts', 'Domains', 'Red Hat Portal', 'Launch']
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -1027,10 +1025,6 @@ function Step5Launch({ status }: { status: StepStatus }) {
       label: 'Calendar token',
       ok: status.authTokens?.calendar ?? null,
     },
-    {
-      label: 'AI provider tested',
-      ok: status.testResult?.ok ?? null,
-    },
   ]
 
   const requiredOk = status.customersOk === true &&
@@ -1356,7 +1350,7 @@ function Step5RedHat({ onConnected }: { onConnected: () => void }) {
 
 // ── Main wizard ────────────────────────────────────────────────────────────────
 
-const OPTIONAL_STEPS = new Set([3, 4, 5])
+const OPTIONAL_STEPS = new Set([3, 4])
 
 const LS_STEP_KEY = 'pai-setup-step'
 
@@ -1364,9 +1358,9 @@ export function SetupPage() {
   const [step, setStepRaw] = useState(() => {
     // URL param takes priority (e.g. OAuth redirect back), then localStorage, then 0
     const urlStep = parseInt(new URLSearchParams(window.location.search).get('step') ?? '', 10)
-    if (!isNaN(urlStep)) return Math.min(Math.max(urlStep, 0), 6)
+    if (!isNaN(urlStep)) return Math.min(Math.max(urlStep, 0), 5)
     const saved = parseInt(localStorage.getItem(LS_STEP_KEY) ?? '', 10)
-    return isNaN(saved) ? 0 : Math.min(Math.max(saved, 0), 6)
+    return isNaN(saved) ? 0 : Math.min(Math.max(saved, 0), 5)
   })
 
   const setStep = (fn: number | ((s: number) => number)) => {
@@ -1379,8 +1373,6 @@ export function SetupPage() {
   const [status, setStatus] = useState<StepStatus>({
     customersOk: null,
     authTokens: null,
-    provider: 'pai',
-    testResult: null,
   })
 
   // Check auth tokens
@@ -1407,16 +1399,6 @@ export function SetupPage() {
     if (step === 1) checkAuth()
   }, [step])
 
-  const handleTest = async (_provider: string) => {
-    try {
-      const r = await fetch('/api/config/test')
-      const d = await r.json()
-      setStatus((s) => ({ ...s, testResult: d }))
-    } catch {
-      setStatus((s) => ({ ...s, testResult: { ok: false, error: 'Could not reach server' } }))
-    }
-  }
-
   const [resetting, setResetting] = useState(false)
 
   const doReset = async (full: boolean) => {
@@ -1433,7 +1415,7 @@ export function SetupPage() {
     window.location.href = '/dashboard/setup'
   }
 
-  const canGoNext = step < 6 && (step !== 0 || oauthKeysOk) && (step !== 2 || status.customersOk === true)
+  const canGoNext = step < 5 && (step !== 0 || oauthKeysOk) && (step !== 2 || status.customersOk === true)
   const canGoBack = step > 0
 
   return (
@@ -1445,7 +1427,7 @@ export function SetupPage() {
             <span className="text-xl">🗂️</span>
           </div>
           <h1 className="text-3xl font-bold text-white">Daily Brief Dashboard</h1>
-          <p className="text-slate-400 mt-1 text-sm">Setup wizard — 7 steps to get started</p>
+          <p className="text-slate-400 mt-1 text-sm">Setup wizard — 6 steps to get started</p>
           <div className="absolute top-0 right-0 flex flex-col items-end gap-1">
             <button
               onClick={() => doReset(true)}
@@ -1483,18 +1465,15 @@ export function SetupPage() {
             <Step3DomainDetection onSaved={() => {}} />
           )}
           {step === 4 && (
-            <Step3AIProvider status={status.testResult} onTest={handleTest} />
-          )}
-          {step === 5 && (
             <Step5RedHat onConnected={() => setStep((s) => s + 1)} />
           )}
-          {step === 6 && (
+          {step === 5 && (
             <Step5Launch status={status} />
           )}
         </div>
 
         {/* Navigation */}
-        {step < 6 && (
+        {step < 5 && (
           <div className="flex items-center justify-between">
             <button
               onClick={() => setStep((s) => s - 1)}
