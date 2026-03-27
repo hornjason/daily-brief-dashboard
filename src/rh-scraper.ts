@@ -22,8 +22,8 @@
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
-import { writeFile, mkdir, readFile } from 'node:fs/promises'
-import { resolve, dirname } from 'node:path'
+import { writeFile, mkdir, readFile, unlink } from 'node:fs/promises'
+import { resolve, dirname, join } from 'node:path'
 import type { SupportCase } from './types.ts'
 
 export class SessionExpiredError extends Error {
@@ -56,9 +56,18 @@ export function setSessionExpiredCallback(cb: () => void): void {
 const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000 // 8 minutes — well before SSO 30-min idle timeout
 const SESSION_STATE_FILE = 'session-state.json'
 
+/** Remove Chromium's SingletonLock/Socket/Cookie files left by a previous (crashed or killed) container. */
+async function clearProfileLocks(profileDir: string): Promise<void> {
+  const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie']
+  for (const name of lockFiles) {
+    await unlink(join(profileDir, name)).catch(() => {})
+  }
+}
+
 export async function initScrapeContext(profileDir: string): Promise<void> {
   if (_context) return // already open
   _profileDir = profileDir
+  await clearProfileLocks(profileDir)
   console.log('[rh-scraper] opening persistent context…')
   _context = await chromium.launchPersistentContext(profileDir, {
     headless: false,

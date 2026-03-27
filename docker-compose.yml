@@ -1,10 +1,11 @@
 services:
   dashboard:
-    image: ghcr.io/hornjason/asacommandcenter:latest
+    image: ghcr.io/hornjason/daily-brief-dashboard:latest
     container_name: pai-dashboard
     restart: unless-stopped
     ports:
       - "7777:7777"
+      - "127.0.0.1:6080:6080"
     volumes:
       # Single persistent volume — covers config, cache, and RH browser profile.
       # First-time setup:
