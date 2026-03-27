@@ -83,8 +83,15 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
   loginTimedOut = false
 
   // launchPersistentContext creates profileDir if it doesn't exist
-  const context = await chromium.launchPersistentContext(profileDir, { headless: false })
-  const page = await context.newPage()
+  let context: BrowserContext
+  let page: Page
+  try {
+    context = await chromium.launchPersistentContext(profileDir, { headless: false })
+    page = await context.newPage()
+  } catch (e) {
+    loginInProgress = false
+    throw e
+  }
 
   activeContext = context
   activePage = page

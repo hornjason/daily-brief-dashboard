@@ -25,7 +25,7 @@ FROM oven/bun:1-slim AS runtime
 
 WORKDIR /app
 
-# Install Chromium system dependencies (Debian-based)
+# Install Chromium system dependencies + noVNC stack for container login UI
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     fonts-liberation \
@@ -63,6 +63,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lsb-release \
     wget \
     xdg-utils \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy built frontend and server source from builder
@@ -88,5 +92,10 @@ ENV CACHE_DIR=/data/cache
 ENV RH_PROFILE_DIR=/data/rh-profile
 
 EXPOSE 7777
+# noVNC VNC viewer — only needed for RH Portal login in headless deployments
+EXPOSE 6080
 
-CMD ["bun", "run", "server.ts"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]

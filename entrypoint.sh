@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# entrypoint.sh — Container startup script
+#
+# Starts the noVNC display stack so the RH Portal login browser can render
+# in a browser tab at http://localhost:6080/vnc.html (for headless deployments).
+# The dashboard's "Reconnect" button opens this URL automatically.
+#
+# Stack: Xvfb (virtual display) → x11vnc (VNC server) → websockify (WebSocket bridge)
+# Chromium (Playwright headless:false) renders into :99 — noVNC makes it accessible.
+
+set -e
+
+# ── Virtual display ────────────────────────────────────────────────────────────
+Xvfb :99 -screen 0 1280x900x24 -nolisten tcp &
+export DISPLAY=:99
+
+# Give Xvfb a moment to initialise before anything tries to use the display
+sleep 1
+
+# ── VNC server (reads the Xvfb display, streams over VNC protocol) ─────────────
+# -nopw       : no VNC password — port is bound to localhost only (see below)
+# -localhost  : only accept connections from 127.0.0.1 (websockify proxies in)
+# -forever    : keep running after the first client disconnects
+x11vnc -display :99 -nopw -localhost -rfbport 5900 -forever -quiet &
+
+# ── noVNC / websockify (bridges VNC TCP → WebSocket for browser access) ────────
+# Serves the HTML5 noVNC viewer at http://localhost:6080/vnc.html
+# --web path serves the noVNC static files; proxies WebSocket → VNC :5900
+websockify --web /usr/share/novnc 6080 localhost:5900 &
+
+# ── Application server ────────────────────────────────────────────────────────
+exec bun run server.ts

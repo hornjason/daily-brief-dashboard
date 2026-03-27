@@ -44,6 +44,8 @@ function RhSessionBanner({ status, onReconnect }: { status: RhStatus; onReconnec
     try {
       await fetch('/api/auth/redhat/start', { method: 'POST' })
       onReconnect()
+      // Open the noVNC viewer so the user can complete the login in their browser
+      window.open('http://localhost:6080/vnc.html?autoconnect=true&reconnect=true', '_blank')
     } catch {
       setReconnecting(false)
     }
@@ -59,7 +61,7 @@ function RhSessionBanner({ status, onReconnect }: { status: RhStatus; onReconnec
       )}
       <div className="flex-1" />
       {reconnecting ? (
-        <span className="text-amber-300 text-xs">Browser window opened — log in and return here…</span>
+        <span className="text-amber-300 text-xs">Login browser opened — complete sign-in in the new tab, then return here…</span>
       ) : (
         <button
           onClick={handleReconnect}
