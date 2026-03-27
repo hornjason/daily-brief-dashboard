@@ -1,6 +1,6 @@
 # ── Stage 1: Builder ──────────────────────────────────────────────────────────
 # Installs all dependencies and builds the React/Vite frontend
-FROM oven/bun:1 AS builder
+FROM oven/bun:1-slim AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN cd dashboard && bun run build
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 # Includes Playwright Chromium for RH portal scraping
-FROM oven/bun:1 AS runtime
+FROM oven/bun:1-slim AS runtime
 
 WORKDIR /app
 
@@ -73,7 +73,7 @@ COPY --from=builder /app/node_modules ./node_modules
 
 # Install Playwright Chromium browser binary
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN bunx playwright install chromium
+RUN bunx playwright install chromium --no-shell
 
 # ── Runtime paths ──────────────────────────────────────────────────────────────
 # All persistent state lives under /data so a single volume mount covers
