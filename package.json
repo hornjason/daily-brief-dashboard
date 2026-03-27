@@ -9,7 +9,8 @@
     "login:rh": "bun scripts/login-rh.ts",
     "scrape:cases": "bun scripts/scrape-cases.ts",
     "test": "bun test src/**/*.test.ts",
-    "test:e2e": "bunx playwright test"
+    "test:e2e": "bunx playwright test",
+    "test:smoke": "bun scripts/smoke-test.ts"
   },
   "dependencies": {
     "googleapis": "^144.0.0",
