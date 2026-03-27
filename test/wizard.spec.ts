@@ -202,3 +202,105 @@ test.describe('Setup Wizard step 2 — Accounts gating', () => {
     await expect(page.getByText(/Import accounts to continue/i)).toBeVisible()
   })
 })
+
+// ── Step 5: Red Hat Portal ─────────────────────────────────────────────────────
+
+test.describe('Setup Wizard step 5 — Red Hat Portal', () => {
+  test('Connect Red Hat Portal button visible when not connected', async ({ page }) => {
+    await page.route('**/api/auth/redhat/status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        hasSession: false, sessionExpired: false, lastScraped: null,
+        caseCount: 0, loginInProgress: false, loginTimedOut: false,
+      }) })
+    )
+    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await expect(page.getByRole('button', { name: /Connect Red Hat Portal/i })).toBeVisible()
+  })
+
+  test('clicking Connect fires POST /api/auth/redhat/start and shows waiting state', async ({ page }) => {
+    await page.route('**/api/auth/redhat/status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        hasSession: false, sessionExpired: false, lastScraped: null,
+        caseCount: 0, loginInProgress: false, loginTimedOut: false,
+      }) })
+    )
+    let startCalled = false
+    await page.route('**/api/auth/redhat/start', route => {
+      startCalled = true
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
+    })
+    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
+    // Waiting state shows "Browser window opened"
+    await expect(page.getByText(/Browser window opened/i)).toBeVisible()
+    expect(startCalled).toBe(true)
+  })
+
+  test('loginTimedOut status shows timeout warning', async ({ page }) => {
+    // Initial status: connecting state (loginInProgress)
+    await page.route('**/api/auth/redhat/status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        hasSession: false, sessionExpired: false, lastScraped: null,
+        caseCount: 0, loginInProgress: true, loginTimedOut: true,
+      }) })
+    )
+    await page.route('**/api/auth/redhat/start', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
+    )
+    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    // Trigger connecting state first
+    await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
+    await expect(page.getByText(/Login timed out/i)).toBeVisible()
+  })
+
+  test('error from start API shows inline error message', async ({ page }) => {
+    await page.route('**/api/auth/redhat/status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        hasSession: false, sessionExpired: false, lastScraped: null,
+        caseCount: 0, loginInProgress: false, loginTimedOut: false,
+      }) })
+    )
+    await page.route('**/api/auth/redhat/start', route =>
+      route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Login already in progress' }),
+      })
+    )
+    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
+    await expect(page.getByText(/Login already in progress/i)).toBeVisible()
+  })
+
+  test('connected state shows "Red Hat Portal Connected"', async ({ page }) => {
+    await page.route('**/api/auth/redhat/status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        hasSession: true, sessionExpired: false, lastScraped: null,
+        caseCount: 0, loginInProgress: false, loginTimedOut: false,
+      }) })
+    )
+    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await expect(page.getByText(/Red Hat Portal Connected/i)).toBeVisible()
+  })
+
+  test('Cancel button appears while connecting and clears state', async ({ page }) => {
+    await page.route('**/api/auth/redhat/status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+        hasSession: false, sessionExpired: false, lastScraped: null,
+        caseCount: 0, loginInProgress: false, loginTimedOut: false,
+      }) })
+    )
+    await page.route('**/api/auth/redhat/start', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
+    )
+    await page.route('**/api/auth/redhat/session', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
+    )
+    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
+    await expect(page.getByRole('button', { name: /Cancel/i })).toBeVisible()
+    await page.getByRole('button', { name: /Cancel/i }).click()
+    // After cancel, Connect button is back
+    await expect(page.getByRole('button', { name: /Connect Red Hat Portal/i })).toBeVisible()
+  })
+})

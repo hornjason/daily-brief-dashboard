@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
 import { Sidebar } from './components/Sidebar'
@@ -34,7 +34,7 @@ function timeAgo(isoString: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-function RhSessionBanner({ status, onReconnect }: { status: RhStatus; onReconnect: () => void }) {
+function RhSessionBanner({ status, onReconnect, onVncOpen }: { status: RhStatus; onReconnect: () => void; onVncOpen: (win: Window | null) => void }) {
   const [reconnecting, setReconnecting] = useState(false)
 
   if (!status.sessionExpired && status.hasSession) return null
@@ -45,7 +45,8 @@ function RhSessionBanner({ status, onReconnect }: { status: RhStatus; onReconnec
       await fetch('/api/auth/redhat/start', { method: 'POST' })
       onReconnect()
       // Open the noVNC viewer so the user can complete the login in their browser
-      window.open('http://localhost:6080/vnc.html?autoconnect=true&reconnect=true', '_blank')
+      const win = window.open('http://localhost:6080/vnc.html?autoconnect=true&reconnect=true', '_blank')
+      onVncOpen(win)
     } catch {
       setReconnecting(false)
     }
@@ -79,6 +80,7 @@ function Dashboard() {
   const [active, setActive] = useState('Command Center')
   const [rhStatus, setRhStatus] = useState<RhStatus | null>(null)
   const [rhReconnecting, setRhReconnecting] = useState(false)
+  const vncWindowRef = useRef<Window | null>(null)
 
   const kpisApi = useApi<KPIs>(`/api/kpis?_=${refreshKey}`)
   const calendarApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&_=${refreshKey}`)
@@ -101,6 +103,8 @@ function Dashboard() {
       setRhStatus(d)
       if (rhReconnecting && d.hasSession && !d.loginInProgress) {
         setRhReconnecting(false)
+        vncWindowRef.current?.close()
+        vncWindowRef.current = null
       }
     } catch {}
   }, [rhReconnecting])
@@ -122,7 +126,7 @@ function Dashboard() {
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
         {rhStatus && (
-          <RhSessionBanner status={rhStatus} onReconnect={() => setRhReconnecting(true)} />
+          <RhSessionBanner status={rhStatus} onReconnect={() => setRhReconnecting(true)} onVncOpen={(win) => { vncWindowRef.current = win }} />
         )}
         {active === 'Settings' ? (
           <main className="flex-1 overflow-y-auto p-6">
