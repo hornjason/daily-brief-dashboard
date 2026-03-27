@@ -57,6 +57,7 @@ export interface DriveFile {
   modifiedTime?: string
   webViewLink?: string
   customer?: string   // folder name the file lives under
+  content?: string    // plain-text export of Google Docs/Slides (capped at 3000 chars)
 }
 
 export interface SheetRow {

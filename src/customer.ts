@@ -108,52 +108,163 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
 
 // ── Drive: docs in this customer's folder ───────────────────────────────────
 
-export async function fetchCustomerDocs(customer: Customer): Promise<DriveFile[]> {
+// MIME types that Drive can export as plain text
+const EXPORTABLE_MIME_TYPES = new Set([
+  'application/vnd.google-apps.document',
+  'application/vnd.google-apps.presentation',
+])
+const DOC_CONTENT_CAP   = 3_000   // chars per document
+const TOTAL_CONTENT_CAP = 20_000  // chars per customer across all docs
+const MAX_FILES_PER_CUSTOMER = 50
+const DRIVE_SUBFOLDER_DEPTH  = 5
+
+async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> {
   const auth = makeAuth(GDRIVE_TOKEN_PATH)
   const drive = google.drive({ version: 'v3', auth })
 
   const parentId = process.env.AE_PARENT_FOLDER_ID
   if (!parentId) return []
 
-  // Find the AE folder for this customer using customer.ae
+  // Find the AE folder — check direct children first, then one level deeper.
+  // Handles structures like: root → 2026 → Carolanne Farrell → [customer folders]
   const aeName = customer.ae
-  const aeFoldersRes = await drive.files.list({
+  const matchesAe = (name: string) => {
+    if (!aeName) return true
+    const n = name.toLowerCase()
+    const first = aeName.split(' ')[0]?.toLowerCase() ?? ''
+    const last  = (aeName.split(' ')[1] ?? '').toLowerCase()
+    return n.includes(first) && (!last || n.includes(last))
+  }
+
+  const level1Res = await drive.files.list({
     q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
     fields: 'files(id,name)', pageSize: 50,
   })
-  const aeFolder = aeName
-    ? (aeFoldersRes.data.files ?? []).find((f) => f.name?.toLowerCase().includes(aeName.split(' ')[0]?.toLowerCase() ?? aeName.toLowerCase()))
-    : aeFoldersRes.data.files?.[0]
+  const level1 = level1Res.data.files ?? []
+
+  let aeFolder = aeName ? level1.find((f) => matchesAe(f.name ?? '')) : level1[0]
+
+  if (!aeFolder) {
+    // Check one level deeper (e.g., root → 2026 → AE Name)
+    for (const subFolder of level1) {
+      if (!subFolder.id) continue
+      const level2Res = await drive.files.list({
+        q: `'${subFolder.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id,name)', pageSize: 50,
+      })
+      aeFolder = aeName
+        ? (level2Res.data.files ?? []).find((f) => matchesAe(f.name ?? ''))
+        : (level2Res.data.files ?? [])[0]
+      if (aeFolder) break
+    }
+  }
   if (!aeFolder?.id) return []
 
-  // Find this customer's subfolder — case-insensitive match
-  const allFoldersRes = await drive.files.list({
+  // Find the customer's subfolder — check direct children then one level deeper
+  // (handles: AE folder → Accounts → Customer, or AE folder → Customer directly)
+  const matchesCust = (name: string) => {
+    const n = name.toLowerCase()
+    const c = customer.name.toLowerCase()
+    return n.includes(c) || c.includes(n)
+  }
+
+  const custLevel1Res = await drive.files.list({
     q: `'${aeFolder.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
     fields: 'files(id,name)', pageSize: 100,
   })
-  const customerFolder = (allFoldersRes.data.files ?? []).find((f) => {
-    const folderName = f.name?.toLowerCase() ?? ''
-    const custName = customer.name.toLowerCase()
-    return folderName.includes(custName) || custName.includes(folderName)
-  })
+  const custLevel1 = custLevel1Res.data.files ?? []
+  let customerFolder = custLevel1.find((f) => matchesCust(f.name ?? ''))
+
+  if (!customerFolder) {
+    for (const sub of custLevel1) {
+      if (!sub.id) continue
+      const custLevel2Res = await drive.files.list({
+        q: `'${sub.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id,name)', pageSize: 100,
+      })
+      customerFolder = (custLevel2Res.data.files ?? []).find((f) => matchesCust(f.name ?? ''))
+      if (customerFolder) break
+    }
+  }
   if (!customerFolder?.id) return []
 
-  // All files in this customer's folder (last 90 days)
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
-  const res = await drive.files.list({
-    q: `'${customerFolder.id}' in parents and mimeType != 'application/vnd.google-apps.folder' and modifiedTime > '${ninetyDaysAgo}' and trashed = false`,
-    fields: 'files(id,name,mimeType,modifiedTime,webViewLink)',
-    orderBy: 'modifiedTime desc',
-    pageSize: 20,
-  })
+  // BFS: collect all files from customer folder + all subfolders (depth-limited)
+  const allFiles: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string }> = []
+  const queue: Array<{ id: string; depth: number }> = [{ id: customerFolder.id, depth: 0 }]
 
-  return (res.data.files ?? []).map((f) => ({
-    name: f.name ?? '',
-    mimeType: f.mimeType ?? '',
-    modifiedTime: f.modifiedTime ?? undefined,
-    webViewLink: f.webViewLink ?? undefined,
-    customer: customer.name,
-  }))
+  while (queue.length > 0 && allFiles.length < MAX_FILES_PER_CUSTOMER) {
+    const { id: folderId, depth } = queue.shift()!
+
+    // List files in this folder
+    const filesRes = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: 'files(id,name,mimeType,modifiedTime,webViewLink)',
+      orderBy: 'modifiedTime desc',
+      pageSize: Math.min(50, MAX_FILES_PER_CUSTOMER - allFiles.length),
+    })
+    for (const f of filesRes.data.files ?? []) {
+      allFiles.push({
+        id: f.id ?? '',
+        name: f.name ?? '',
+        mimeType: f.mimeType ?? '',
+        modifiedTime: f.modifiedTime ?? undefined,
+        webViewLink: f.webViewLink ?? undefined,
+      })
+    }
+
+    // Queue subfolders if within depth limit
+    if (depth < DRIVE_SUBFOLDER_DEPTH) {
+      const subRes = await drive.files.list({
+        q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id,name)', pageSize: 20,
+      })
+      for (const sub of subRes.data.files ?? []) {
+        if (sub.id) queue.push({ id: sub.id, depth: depth + 1 })
+      }
+    }
+  }
+
+  // Export text content for Google Docs/Slides; cap per-doc and total
+  let totalChars = 0
+  const results: DriveFile[] = []
+
+  for (const f of allFiles) {
+    const file: DriveFile = {
+      name: f.name,
+      mimeType: f.mimeType,
+      modifiedTime: f.modifiedTime,
+      webViewLink: f.webViewLink,
+      customer: customer.name,
+    }
+
+    if (EXPORTABLE_MIME_TYPES.has(f.mimeType) && totalChars < TOTAL_CONTENT_CAP && f.id) {
+      try {
+        const exportRes = await drive.files.export(
+          { fileId: f.id, mimeType: 'text/plain' },
+          { responseType: 'text' },
+        )
+        const raw = String(exportRes.data ?? '').replace(/\s+/g, ' ').trim()
+        const capped = raw.slice(0, DOC_CONTENT_CAP)
+        if (capped.length > 50) {  // skip near-empty docs
+          file.content = capped
+          totalChars += capped.length
+        }
+      } catch {
+        // Export failed (permissions, unsupported format) — use name only
+      }
+    }
+
+    results.push(file)
+  }
+
+  return results
+}
+
+export async function fetchCustomerDocs(customer: Customer): Promise<DriveFile[]> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Drive fetch timed out after 30s')), 30_000)
+  )
+  return Promise.race([_fetchCustomerDocsImpl(customer), timeout])
 }
 
 // ── LLM provider routing ──────────────────────────────────────────────────────
@@ -250,7 +361,7 @@ async function callLLM(systemPrompt: string, userPrompt: string): Promise<string
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1200 },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
       }),
     })
     if (!res.ok) {
@@ -312,16 +423,23 @@ export async function generateBrief(
     catch { return iso }
   }
 
-  const meetingLines = meetings.length
-    ? meetings.map((m) => `- ${m.title} on ${fmt(m.start)}${m.attendees?.length ? ` (${m.attendees.slice(0, 3).join(', ')})` : ''}`).join('\n')
-    : 'No upcoming meetings in the next 30 days.'
+  // Upcoming meetings (next 14 days for per-meeting prep, next 30 days for awareness)
+  const upcomingMeetings = meetings.filter((m) => new Date(m.start) >= new Date())
+  const meetingPrepList = upcomingMeetings.slice(0, 5)  // up to 5 meetings get individual prep
+  const futureMeetingLines = upcomingMeetings.length
+    ? upcomingMeetings.map((m) => `- ${m.title} on ${fmt(m.start)}${m.attendees?.length ? ` (${m.attendees.slice(0, 3).join(', ')})` : ''}`).join('\n')
+    : 'No upcoming meetings.'
 
   const emailLines = emails.length
-    ? emails.slice(0, 10).map((e) => `- [${fmt(e.date)}] ${e.subject}${e.actionRequired ? ' ⚡action needed' : ''}`).join('\n')
+    ? emails.slice(0, 10).map((e) => `- [${fmt(e.date)}] ${e.subject}${e.snippet ? ` — ${e.snippet.slice(0, 120)}` : ''}${e.actionRequired ? ' ⚡action needed' : ''}`).join('\n')
     : 'No recent emails.'
 
+  // Documents: include content if available, otherwise just name
   const docLines = docs.length
-    ? docs.slice(0, 15).map((d) => `- ${d.name}${d.modifiedTime ? ` (${fmt(d.modifiedTime)})` : ''}`).join('\n')
+    ? docs.map((d) => {
+        const header = `- ${d.name}${d.modifiedTime ? ` (${fmt(d.modifiedTime)})` : ''}`
+        return d.content ? `${header}\n  Content excerpt: ${d.content.slice(0, 400)}` : header
+      }).join('\n')
     : 'No account documents found.'
 
   const caseLines = cases.length
@@ -339,55 +457,94 @@ export async function generateBrief(
       ).join('\n')
     : null
 
-  const prompt = `You are a Red Hat Account Solution Architect's AI assistant. Generate a comprehensive customer intelligence brief for:
+  const meetingPrepInstructions = meetingPrepList.length
+    ? `For each upcoming meeting below, write a "### [Meeting Title] — [Date]" subsection with 2-3 specific talking points drawn from the documents and emails above. Reference document names when relevant.
+
+Meetings to prep:
+${meetingPrepList.map((m) => `- "${m.title}" on ${fmt(m.start)}`).join('\n')}`
+    : 'No upcoming meetings — omit the Upcoming Meetings section.'
+
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+  const prompt = `You are a Red Hat Account Solution Architect's AI assistant. Generate a customer intelligence brief for the following account. Use ONLY information present in the data below — do not invent details.
 
 Customer: ${customer.name}
 AE: ${customer.ae ?? 'Unknown'} | Segment: ${customer.segment ?? 'Unknown'} | Region: ${customer.region ?? 'Unknown'}
+Brief date: ${today}
 
-══ DATA SOURCES ══
+══ DATA ══
 
-ACTIVE RED HAT SUBSCRIPTIONS (products currently in use):
+SUBSCRIPTIONS (active Red Hat products):
 ${subLines}
-${sheetLines ? `\nDETAILED SUBSCRIPTION DATA (from AE spreadsheet — authoritative product/count data):\n${sheetLines}` : ''}
+${sheetLines ? `\nDETAILED PRODUCT DATA (AE spreadsheet — authoritative):\n${sheetLines}` : ''}
 
 OPEN SUPPORT CASES:
 ${caseLines}
 
-UPCOMING MEETINGS (next 30 days):
-${meetingLines}
+UPCOMING MEETINGS:
+${futureMeetingLines}
 
 RECENT EMAILS (last 30 days):
 ${emailLines}
 
-ACCOUNT DOCUMENTS (last 90 days — titles reveal priorities, proposals, account plans):
+ACCOUNT DOCUMENTS (Drive — titles + content excerpts):
 ${docLines}
 
 ══ BRIEF FORMAT ══
 
-Write a structured customer intelligence brief using exactly these sections. Be specific — use real names, products, and dates from the data. Do not invent information not present in the data above.
+Write the brief using EXACTLY these section headers (## markdown). Be specific — names, products, dates. Each section tight and scannable.
 
-**Account Overview**
-2-3 sentences: who this customer is, their Red Hat relationship, and current account health.
+## Account Overview
+2-3 sentences: who this customer is, their Red Hat relationship, and current account health. Flag any renewals within 120 days.
 
-**Red Hat Products & Solutions in Use**
-Bullet list of active subscriptions/products. If subscription data is unavailable, infer from support cases and document titles.
+## Company Profile
+Extract from the documents and emails: approximate revenue band or company size, headcount if mentioned, industry vertical, recent acquisitions or funding rounds, fiscal year (if known), and current strategic priorities or digital transformation programs. 4-6 bullets. Omit entirely if no data is available in the documents/emails.
 
-**Customer Objectives & Priorities**
-What this customer is trying to achieve based on meeting topics, email subjects, document names, and support case products. 3-5 bullets.
+## Technology Landscape
+Scan the documents and emails for any IT environment signals. Organize by category, prefix each confirmed item with ✓:
+- Virtualization/Hypervisors: (VMware vSphere/ESXi, Hyper-V, Nutanix, KVM, etc.)
+- Operating Systems: (RHEL, CentOS, Ubuntu, Windows Server, mix ratios)
+- Containers/Kubernetes: (OpenShift, EKS, AKS, Docker, Rancher, adoption stage)
+- Cloud: (AWS, Azure, GCP, hybrid, on-prem only)
+- Automation/Config Mgmt: (Ansible, Puppet, Chef, SaltStack, scripts, none)
+- Patch Management: (Satellite, SCCM, manual, Tanium, etc.)
+- CI/CD: (Jenkins, GitHub Actions, GitLab CI, ArgoCD, etc.)
+- Monitoring: (Datadog, Dynatrace, Splunk, Prometheus, SolarWinds, etc.)
+- Security Tools: (CrowdStrike, Tanium, Qualys, CyberArk, etc.)
+- Storage: (NetApp, Pure, Dell EMC, HPE, Ceph, etc.)
+Omit any category for which no signals are found. Omit this section entirely if no IT environment signals are detected.
 
-**Current Opportunities**
-Active deals, proposals, POCs, or expansion conversations inferred from emails, docs (look for CBV, proposal, roadmap titles), and meeting patterns. Be specific if evidence exists.
+## Pipeline Opportunities
+Based on the Technology Landscape and Company Profile above, identify 2-4 specific Red Hat product opportunities. Use this signal-to-product mapping as a guide:
+- VMware/Broadcom cost shock or EoGS risk → OpenShift Virtualization (migration from VMware)
+- CentOS/CentOS 7 EOL or Oracle Linux → RHEL + Convert2RHEL (in-place migration)
+- Manual patching or no Linux patch mgmt → Red Hat Satellite + Ansible
+- Puppet/Chef/SaltStack in use → Ansible Automation Platform (YAML-based migration)
+- DIY Kubernetes or Docker Swarm → OpenShift (enterprise K8s platform)
+- No automation / heavy scripting → Ansible Automation Platform + Event-Driven Ansible
+- WebLogic/WebSphere app servers → JBoss EAP + Quarkus (modernization)
+- Multi-cloud chaos or no governance → OpenShift + Advanced Cluster Management
+- AI/ML workload growth or private LLM need → OpenShift AI + RHEL AI
+- App modernization initiative → OpenShift + Migration Toolkit for Applications
+Format each opportunity as: "**[Detected signal]** → [Red Hat product]: [1-sentence pitch]"
+Only include opportunities with evidence in the data above. Omit if no signals detected.
 
-**Open Support Cases**
-List open cases with severity, days open, and product. Flag Sev1/Sev2 explicitly. If none, say so.
+## Key Insights from Documents
+2-4 bullets synthesizing what the Drive documents reveal about this customer's priorities, initiatives, and strategic direction. Reference document names. Omit if no documents available.
 
-**Talking Points & Prep**
-4-6 specific, actionable bullets for your next interaction based on all data above. Include renewal timing if within 120 days.
+## Upcoming Meetings
+${meetingPrepInstructions}
 
-Keep each section tight and scannable. Total brief under 500 words.`
+## Open Support Cases
+List cases with severity, days open, and product. Flag Sev1/Sev2 urgently. If none: "✅ No open support cases."
+
+## Talking Points & Prep
+4-6 account-level bullets for your next interaction. Include renewal timing, open risks, and strategic opportunities from Pipeline Opportunities above.
+
+Keep total brief under 900 words.`
 
   return callLLM(
-    'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable.',
+    'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable. Always use ## markdown headers exactly as instructed.',
     prompt,
   )
 }

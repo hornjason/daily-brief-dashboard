@@ -315,10 +315,11 @@ function BriefSection({ name }: { name: string }) {
     return result
   }, [data?.text])
 
-  // Header names may include date suffix e.g. "Talking Points & Prep (Mar 24, 2026)"
   const overview = Object.entries(sections).find(([k]) => k.startsWith('Account Overview'))?.[1]?.trim() ?? ''
-  const talkingPoints = Object.entries(sections).find(([k]) => k.startsWith('Talking Points'))?.[1]?.trim() ?? ''
-  const casesNote = Object.entries(sections).find(([k]) => k.startsWith('Open Support Cases'))?.[1]?.trim() ?? ''
+  // Sections rendered in order when expanded (skip Account Overview and Products & Subscriptions — shown in side tile)
+  const expandedSections = Object.entries(sections).filter(([k]) =>
+    !k.startsWith('Account Overview') && !k.startsWith('Products')
+  )
 
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden">
@@ -363,25 +364,69 @@ function BriefSection({ name }: { name: string }) {
               </p>
             )}
 
-            {talkingPoints && expanded && (
-              <div>
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">Talking Points</p>
-                <ul className="space-y-1.5">
-                  {talkingPoints.split('\n').filter((l) => /^[-*]|\d+\./.test(l.trim())).map((line, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-text-primary">
-                      <span className="text-accent mt-0.5 shrink-0">·</span>
-                      <span>{line.replace(/^[-*\d.]+\s*\*{0,2}/, '').replace(/\*{0,2}$/, '').trim()}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {expanded && expandedSections.map(([title, content]) => {
+              const isCases    = title.startsWith('Open Support Cases')
+              const isPipeline = title.startsWith('Pipeline Opportunities')
+              const isTech     = title.startsWith('Technology Landscape')
+              const lines = content.split('\n').filter((l) => l.trim())
 
-            {casesNote && casesNote !== 'No open support cases.' && expanded && (
-              <div className="bg-critical/10 border border-critical/30 rounded-lg px-3 py-2.5">
-                <p className="text-xs text-critical font-medium">{casesNote.split('\n')[0]}</p>
-              </div>
-            )}
+              return (
+                <div key={title}>
+                  <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${isPipeline ? 'text-accent' : 'text-text-secondary'}`}>
+                    {title}
+                  </p>
+
+                  {isCases && content.includes('✅') ? (
+                    <p className="text-sm text-text-secondary italic">✅ No open support cases.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {lines.map((line, i) => {
+                        const isSub    = line.match(/^###\s+(.+)$/)
+                        const isBullet = /^[-*✓]|\d+\./.test(line.trim())
+
+                        if (isSub) {
+                          return <li key={i} className="text-sm font-semibold text-text-primary pt-1">{isSub[1]}</li>
+                        }
+
+                        if (isBullet) {
+                          // Pipeline: bold signal → product: pitch  (format: **signal** → product: pitch)
+                          const pipelineMatch = isPipeline && line.match(/\*\*(.+?)\*\*\s*→\s*(.+)/)
+                          if (pipelineMatch) {
+                            return (
+                              <li key={i} className="text-sm">
+                                <span className="font-semibold text-accent">{pipelineMatch[1]}</span>
+                                <span className="text-text-primary"> → {pipelineMatch[2]}</span>
+                              </li>
+                            )
+                          }
+
+                          // Tech landscape: ✓ Category: value
+                          const techMatch = isTech && line.match(/^[✓-]\s*(.+)$/)
+                          if (techMatch) {
+                            return (
+                              <li key={i} className="flex gap-2 text-sm text-text-primary">
+                                <span className="text-green-500 mt-0.5 shrink-0">✓</span>
+                                <span>{techMatch[1].replace(/^\*{0,2}/, '').replace(/\*{0,2}$/, '').trim()}</span>
+                              </li>
+                            )
+                          }
+
+                          // Standard bullet
+                          return (
+                            <li key={i} className="flex gap-2 text-sm text-text-primary">
+                              <span className="text-accent mt-0.5 shrink-0">·</span>
+                              <span>{line.replace(/^[-*✓\d.]+\s*\*{0,2}/, '').replace(/\*{0,2}$/, '').trim()}</span>
+                            </li>
+                          )
+                        }
+
+                        return <li key={i} className="text-sm text-text-primary">{line}</li>
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
 
             <button
               onClick={() => setExpanded((v) => !v)}

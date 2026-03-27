@@ -22,7 +22,7 @@
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
-import { writeFile, mkdir, readFile, unlink } from 'node:fs/promises'
+import { writeFile, mkdir, readFile, unlink, rename } from 'node:fs/promises'
 import { resolve, dirname, join } from 'node:path'
 import type { SupportCase } from './types.ts'
 
@@ -283,10 +283,24 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
       await checkForSessionExpiry(page)
 
       // Wait for Angular table to fully render.
-      // The portal renders a partial row quickly then loads the rest over ~6-7s.
+      // waitForSelector fires on the first row (may be a skeleton/loading row).
+      // The content sentinel then waits for a real case number link to appear,
+      // which means Angular has finished populating that row's cells.
+      // Closed cases also have valid case links, so the sentinel fires quickly
+      // for any account with cases — open or closed.
       await page.waitForSelector('table tbody tr', { timeout: 15_000 }).catch(() => {})
-      await page.waitForTimeout(7000)
+      await page.waitForFunction(
+        () => {
+          const link = document.querySelector('a[href*="/case/"]')
+          return link !== null && /^\d{7,10}$/.test(link.textContent?.trim() ?? '')
+        },
+        { timeout: 12_000 },
+      ).catch(() => {
+        // Timed out — no case number links appeared (genuinely empty portal or very slow).
+        // Fall through with whatever the DOM has.
+      })
 
+      // DEBUG: log what the page sees
       const cases = await page.evaluate((acctNum: string) => {
         const results: Array<{
           caseNumber: string
@@ -341,6 +355,20 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
       }
 
       console.log(`[rh-scraper] account ${accountNum}: ${cases.length} cases`)
+
+      // Warn if the table had rows but all were skipped — helps distinguish
+      // "all cases legitimately Closed" from "parser broken / column drift"
+      if (cases.length === 0) {
+        const rowCount = await page.evaluate(() =>
+          document.querySelectorAll('table tbody tr').length
+        ).catch(() => 0)
+        if (rowCount > 0) {
+          console.warn(
+            `[rh-scraper] account ${accountNum}: ${rowCount} table rows found but 0 kept ` +
+            `— all may be Closed, or column indices may have drifted`,
+          )
+        }
+      }
     }
   } finally {
     // If we created a new page (not the live page), close it.
@@ -351,16 +379,19 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
   // Persist session state after a successful scrape
   await persistSessionState()
 
-  // Write cache
+  // Write cache atomically — write to .tmp first then rename so a crash mid-write
+  // never produces a corrupt cache file that reads as 0 cases.
   await mkdir(dirname(cachePath), { recursive: true })
+  const tmpPath = cachePath + '.tmp'
   await writeFile(
-    cachePath,
+    tmpPath,
     JSON.stringify({
       scrapedAt: new Date().toISOString(),
       accounts: accountNumbers,
       cases: allCases,
-    }, null, 2)
+    }, null, 2),
   )
+  await rename(tmpPath, cachePath)
 
   return allCases
 }

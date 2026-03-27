@@ -2267,6 +2267,38 @@ setInterval(async () => {
   }
 }, DRIVE_WATCHER_INTERVAL_MS)
 
+// On startup: background pre-generation of today's briefs for customers missing cache
+// Rate-limited to 1 customer per 10 seconds to avoid Drive API quota exhaustion
+;(async () => {
+  if (!customers.length || !isBriefConfigured()) return
+  const missing = customers.filter((c) => !readBriefCache(c.name))
+  if (!missing.length) return
+  console.log(`[brief-pregen] starting background generation for ${missing.length} customers…`)
+  for (const customer of missing) {
+    // Re-check in case a user request already generated this brief while we were waiting
+    if (readBriefCache(customer.name)) continue
+    try {
+      const cachedSheet = readSheetCache(customer.name)
+      const [meetings, emails, docs, cases, subscriptions, products] = await Promise.all([
+        fetchCustomerMeetings(customer).catch(() => []),
+        fetchCustomerEmails(customer).catch(() => []),
+        fetchCustomerDocs(customer).catch(() => []),
+        fetchCustomerCases(customer).catch(() => []),
+        fetchCustomerSubscriptions(customer).catch(() => []),
+        cachedSheet ? Promise.resolve(cachedSheet.rows) : fetchCustomerSheetData(customer).catch(() => []),
+      ])
+      const text = await generateBrief(customer, meetings, emails, docs, cases, subscriptions, products)
+      writeBriefCache(customer.name, text)
+      console.log(`[brief-pregen] ${customer.name}: done`)
+    } catch (e: any) {
+      console.warn(`[brief-pregen] ${customer.name}: ${e.message}`)
+    }
+    // 10-second gap between customers to stay within Drive API quota
+    await new Promise((r) => setTimeout(r, 10_000))
+  }
+  console.log('[brief-pregen] complete')
+})()
+
 // Graceful shutdown — close Chromium so it doesn't orphan in containers
 async function shutdown() {
   console.log('[shutdown] closing browser context…')
