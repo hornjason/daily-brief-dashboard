@@ -17,5 +17,4 @@ services:
       CACHE_DIR: /data/cache
       RH_PROFILE_DIR: /data/rh-profile
     env_file:
-      - path: .env
-        required: false
+      - .env
