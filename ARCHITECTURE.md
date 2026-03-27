@@ -52,10 +52,6 @@ graph TB
         Sheets["Google Sheets\n(Supportable list,\nCCSP pipeline)"]
     end
 
-    subgraph Notion["Notion (not yet integrated — see note)"]
-        NotionDB["Customer knowledge base\n(meeting notes, win wires)\n⚠ Outside Red Hat ecosystem"]
-    end
-
     subgraph AI["AI / LLM"]
         LLM["Claude API or Gemini API\n(brief generation)\nGemini = Red Hat approved tool"]
     end
@@ -69,7 +65,6 @@ graph TB
     Server <-->|"OAuth2"| Gmail
     Server <-->|"OAuth2"| GCal
     Server <-->|"OAuth2"| Sheets
-    Server -.->|"Notion API\n(not yet integrated)"| NotionDB
     Server -->|"Prompt + context"| LLM
     Server <-->|"read/write"| Cache
     Server <-->|"read"| Config
@@ -224,44 +219,6 @@ surfaced automatically in the dashboard.
 internal BI system via an approved service account or partner API would replace the
 Google Sheets intermediary entirely. The Sheets dependency — and the manual effort required
 to keep those sheets up to date — would be eliminated.
-
----
-
-### Notion — Deferred Pending Ecosystem Decision
-
-**Current status: Not integrated.** Notion appears in the system diagram as a planned
-data source but has zero implementation in the codebase today — no `@notionhq/client`
-dependency, no API calls, no configuration options.
-
-**What it would provide:** Notion was considered as a home for customer knowledge base
-content — win wires, QBR notes, account history — that an ASA accumulates over time but
-that doesn't live in Google Drive. The Notion API is straightforward and the `@notionhq/client`
-SDK is mature.
-
-**Why it's deferred — ecosystem concern:**
-
-Notion is a third-party US SaaS platform. Customer-related content stored in Notion sits
-outside Red Hat's managed infrastructure:
-
-| Concern | Detail |
-|---------|--------|
-| **Data residency** | Notion stores data on its own US cloud servers — not within Red Hat's GCP tenancy or any Red Hat-managed environment |
-| **No IT governance** | No Red Hat DLP enforcement, no managed retention policy, no audit trail through Red Hat security tooling |
-| **SSO/access control** | Notion workspaces used by individuals may not be enterprise-managed — offboarding gaps possible |
-| **Not an approved Red Hat tool** | Unlike Google Workspace (company-standard), Notion has no documented approval status in Red Hat's AI/tooling catalogue |
-
-**Preferred alternative:** If customer knowledge base content needs to be surfaced in the
-dashboard, the preferred approach within Red Hat's ecosystem would be:
-
-- **Google Drive** — already integrated, IT-managed, SSO via Red Hat Google Workspace
-- **Confluence** — if the team uses it; lives within Red Hat's Atlassian instance
-- **Google Docs / Slides** — meeting notes and account plans stored in the existing Drive
-  folder structure already monitored by the Drive watcher
-
-**Decision needed:** Before Notion integration is built, a determination should be made
-about whether customer data stored there is appropriate given Red Hat's data handling
-policies. The dashboard can integrate Notion quickly if approved, but should not do so
-without explicit sign-off.
 
 ---
 
@@ -530,7 +487,6 @@ verification against the actual portal after any scraper changes.
 | RH session cookies | `/data/rh-profile/session-state.json` | Restored to Playwright context on startup |
 | Anthropic API key | `.env` file (host-only) | Passed as Authorization header to Claude API (optional) |
 | Google Gemini API key | `.env` file (host-only) | Passed as Authorization header to Gemini API (Red Hat approved) |
-| Notion token | `.env` file (host-only) | Reserved for future Notion integration — not currently used |
 
 All secrets are injected at runtime via environment variables — none are baked into the
 container image.
@@ -544,9 +500,6 @@ persists to disk and is restored on container restart.
 **Google Workspace:** Standard OAuth2 authorization code flow. Refresh tokens are stored
 in `/data/config/` on the container volume. Access tokens are refreshed automatically by
 the googleapis SDK.
-
-**Notion:** Not currently integrated. If approved, a personal integration token would be
-used for read-only access. See the Notion ecosystem discussion in the API Limitations section.
 
 ### Network Exposure
 
@@ -584,7 +537,6 @@ the callback corresponds to the originating flow.
 | Gmail | Customer emails (last 14 days) | On brief generation |
 | Google Calendar | Upcoming + recent meetings | On brief generation |
 | Google Sheets | Supportable customer list, CCSP pipeline | Daily / 2-hourly |
-| Notion | Customer knowledge base, win wires | *(Not yet integrated — pending ecosystem approval)* |
 | Gemini API *(preferred)* | Brief synthesis from all above | On-demand, cached daily — Red Hat approved AI tool |
 | Claude API *(optional)* | Brief synthesis from all above | On-demand, cached daily — development fallback |
 
@@ -612,7 +564,6 @@ the callback corresponds to the originating flow.
 | googleapis | 148.x | Google API client |
 | @google/generative-ai | 0.x | Gemini API client (Red Hat approved AI) |
 | @anthropic-ai/sdk | 0.x | Claude API client (optional fallback) |
-| @notionhq/client | 3.x | Notion API client *(not yet installed — deferred pending approval)* |
 
 **Runtime base image:** `oven/bun:1-slim` (Debian bookworm-slim + Bun binary)
 
