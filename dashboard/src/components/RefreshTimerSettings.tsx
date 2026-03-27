@@ -5,6 +5,7 @@ interface RefreshIntervals {
   subscriptions: number
   ccsp: number
   pipeline: number
+  rhScrape: number
 }
 
 export function RefreshTimerSettings() {
@@ -50,9 +51,10 @@ export function RefreshTimerSettings() {
   const dirty = JSON.stringify(draft) !== JSON.stringify(intervals)
 
   const fields: Array<{ key: keyof RefreshIntervals; label: string; hint: string }> = [
-    { key: 'subscriptions', label: 'Subscriptions', hint: 'How often to sync product data from Supportable sheets' },
-    { key: 'ccsp',          label: 'CCSP Spend',    hint: 'How often to refresh cloud spend data' },
-    { key: 'pipeline',      label: 'Pipeline',      hint: 'How often to pull pipeline records' },
+    { key: 'rhScrape',      label: 'RH Support Cases', hint: 'How often to scrape open cases from Red Hat portal' },
+    { key: 'subscriptions', label: 'Subscriptions',    hint: 'How often to sync product data from Supportable sheets' },
+    { key: 'ccsp',          label: 'CCSP Spend',       hint: 'How often to refresh cloud spend data' },
+    { key: 'pipeline',      label: 'Pipeline',         hint: 'How often to pull pipeline records' },
   ]
 
   return (

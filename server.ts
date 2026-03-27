@@ -14,7 +14,7 @@ import type { PipelineRecord } from './src/pipeline.ts'
 import type { Customer, ProductSubscription } from './src/types.ts'
 import { inferCustomerDomain } from './src/domains.ts'
 import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState, checkFilesModified } from './src/drive-watcher.ts'
-import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired } from './src/rh-auth.ts'
+import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './src/rh-auth.ts'
 import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
 import { discoverAccountNumbers } from './src/rh-account-discovery.ts'
 
@@ -1703,6 +1703,7 @@ const DEFAULT_REFRESH_INTERVALS = {
   subscriptions: 4 * 60,   // minutes
   ccsp:          60 * 24,  // daily
   pipeline:      60 * 2,   // every 2 hours
+  rhScrape:      4 * 60,   // RH portal support case scrape — every 4 hours
 }
 
 function getRefreshIntervals(): typeof DEFAULT_REFRESH_INTERVALS {
@@ -2108,9 +2109,8 @@ let _rhScrapeRunning = false
 async function runRhScrapeWithState(): Promise<void> {
   if (_rhScrapeRunning) { console.log('[rh-scraper] already running — skipping'); return }
   if (!existsSync(RH_SESSION_PATH)) return
-  _rhScrapeRunning = true
 
-  // Collect account numbers from customers config
+  // Collect account numbers from customers config — check before setting flag to avoid leak
   const accountNumbers = customers
     .flatMap((c) => (c.accountNumbers ?? []).map(String))
     .filter(Boolean)
@@ -2119,6 +2119,8 @@ async function runRhScrapeWithState(): Promise<void> {
     console.log('[rh-scraper] no account numbers configured — skipping')
     return
   }
+
+  _rhScrapeRunning = true
 
   try {
     console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
@@ -2142,7 +2144,7 @@ async function runRhScrapeWithState(): Promise<void> {
   }
 }
 
-const RH_SCRAPE_INTERVAL_MS = 4 * 60 * 60 * 1000 // 4 hours
+const RH_SCRAPE_TICK_MS = 15 * 60 * 1000  // tick interval — short intervals are reliable in Bun
 
 // ── Configurable timer management ─────────────────────────────────────────────
 
@@ -2217,7 +2219,20 @@ if (existsSync(RH_SESSION_PATH)) {
     runRhScrapeWithState().catch(() => {})
   }, 5_000)
 }
-setInterval(() => runRhScrapeWithState().catch(() => {}), RH_SCRAPE_INTERVAL_MS)
+// Use a short 15-min tick rather than a single 4-hour setInterval.
+// Bun's runtime does not reliably fire setIntervals with intervals >~1h.
+// Each tick checks elapsed time since last successful scrape and runs when due.
+setInterval(() => {
+  const intervalMs = getRefreshIntervals().rhScrape * 60 * 1000
+  const lastMs = lastScraped ? new Date(lastScraped).getTime() : 0
+  const elapsed = Date.now() - lastMs
+  if (elapsed >= intervalMs) {
+    console.log(`[rh-scraper] tick: ${Math.round(elapsed / 60_000)}m since last scrape — triggering`)
+    runRhScrapeWithState().catch(() => {})
+  } else {
+    console.log(`[rh-scraper] tick: next scrape in ${Math.round((intervalMs - elapsed) / 60_000)}m`)
+  }
+}, RH_SCRAPE_TICK_MS)
 
 // ── Drive watcher — init and background polling ────────────────────────────────
 
