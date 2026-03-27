@@ -203,11 +203,11 @@ async function keepAlive(): Promise<void> {
   if (!page) return
   try {
     await page.goto('https://access.redhat.com/support/cases/#/case/list', {
-      waitUntil: 'domcontentloaded',
-      timeout: 15_000,
+      waitUntil: 'load',
+      timeout: 30_000,
     })
     if (!page.url().includes('access.redhat.com/support')) {
-      await page.waitForURL('**/access.redhat.com/support/**', { timeout: 10_000 }).catch(() => {})
+      await page.waitForURL('**/access.redhat.com/support/**', { timeout: 20_000 }).catch(() => {})
     }
     if (page.url().includes('access.redhat.com/support')) {
       console.log('[rh-scraper] keep-alive: session active (page nav)')
@@ -216,8 +216,8 @@ async function keepAlive(): Promise<void> {
       console.warn('[rh-scraper] keep-alive: session expired — reconnect via dashboard')
       _onSessionExpired?.()
     }
-  } catch {
-    // Non-fatal — next scrape will detect expiry via checkForSessionExpiry
+  } catch (e: any) {
+    console.warn('[rh-scraper] keep-alive: page nav failed —', e?.message ?? e)
   } finally {
     if (!usingLivePage) await page.close().catch(() => {})
   }
