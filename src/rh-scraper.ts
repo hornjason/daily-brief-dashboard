@@ -265,7 +265,7 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
     for (const accountNum of accountNumbers) {
       const url =
         `https://access.redhat.com/support/cases/#/case/list` +
-        `?query=accountNumber%3A%20(%22${accountNum}%22)%20orderBy%20severity%20asc` +
+        `?query=accountNumber%3A%20(%22${accountNum}%22)%20AND%20NOT%20status%3AClosed%20orderBy%20severity%20asc` +
         `&p=1&size=100&searchType=basic`
 
       await page.goto(url, { waitUntil: 'load', timeout: 30_000 })

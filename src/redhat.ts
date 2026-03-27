@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import type { SupportCase, Renewal, Customer, CustomerSubscription } from './types.ts'
 
 const SSO_URL = 'https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token'
-const CASES_CACHE_PATH = resolve(import.meta.dir, '../cache/cases.json')
+const CASES_CACHE_PATH = resolve(process.env.CACHE_DIR ?? resolve(import.meta.dir, '../cache'), 'cases.json')
 const SUPPORT_API = 'https://api.access.redhat.com/support/v1'
 const MGMT_API = 'https://api.access.redhat.com/management/v1'
 
