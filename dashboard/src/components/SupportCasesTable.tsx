@@ -186,7 +186,7 @@ export function SupportCasesTable({ cases, loading }: SupportCasesTableProps) {
                       </td>
                     ))}
                     <td className="px-3 py-3 w-6">
-                      <ExternalLink className="w-3.5 h-3.5 text-text-secondary/30 group-hover:text-accent transition-colors" />
+                      <ExternalLink className="w-3.5 h-3.5 text-text-secondary/80 group-hover:text-accent transition-colors" />
                     </td>
                   </tr>
                 )

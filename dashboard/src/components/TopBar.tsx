@@ -54,7 +54,7 @@ export function TopBar({ lastSynced, loading, onRefresh }: TopBarProps) {
             <span>{weatherEmoji(weather.condition ?? '')}</span>
             <span>{weather.tempF}°F</span>
             {weather.condition && (
-              <span className="text-text-secondary/60 hidden sm:inline">· {weather.condition}</span>
+              <span className="text-text-secondary/80 hidden sm:inline">· {weather.condition}</span>
             )}
           </span>
         )}

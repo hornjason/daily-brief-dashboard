@@ -24,7 +24,8 @@
       "aliases": [
         "bespin"
       ],
-      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY",
+      "skipAccountDiscovery": true
     },
     {
       "name": "BITRISE",
@@ -44,7 +45,8 @@
       "segment": "Commercial",
       "region": "",
       "accountNumbers": [],
-      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
+      "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY",
+      "skipAccountDiscovery": true
     },
     {
       "name": "CROWDSTRIKE",
@@ -230,6 +232,7 @@
         "913977"
       ],
       "aliases": [
+        "Uber Technologies",
         "uber freight",
         "Transplace",
         "Transplace Texas"
@@ -242,7 +245,9 @@
       "domain": "workdaystore.eu",
       "segment": "Commercial",
       "region": "",
-      "accountNumbers": [],
+      "accountNumbers": [
+        "5350212"
+      ],
       "supportableFileId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY"
     }
   ]

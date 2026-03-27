@@ -12,14 +12,17 @@
  * required for transparent session renewal. New pages in the same context lack
  * this sessionStorage and trigger a full re-authentication redirect.
  *
- * A keep-alive loop navigates the live page every 12 minutes to refresh
- * TAsessionID before it expires. Storage state is persisted to disk after
- * each successful visit so container restarts can restore session state.
+ * A keep-alive loop fires every 8 minutes. It first attempts a lightweight hybrid
+ * path — calling keycloak.updateToken() via page.evaluate to reset the SSO session
+ * idle timer, then verifying with a cheap hydra API ping (no full page navigation).
+ * If the Keycloak adapter is unavailable, it falls back to a full page navigation.
+ * Storage state is persisted to disk after each successful keep-alive so container
+ * restarts can restore session state without a fresh login.
  */
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
-import { writeFile, mkdir } from 'node:fs/promises'
+import { writeFile, mkdir, readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import type { SupportCase } from './types.ts'
 
@@ -42,16 +45,32 @@ let _context: BrowserContext | null = null
 let _livePage: Page | null = null   // the authenticated page — reused to keep sessionStorage alive
 let _profileDir: string | null = null
 let _keepAliveTimer: ReturnType<typeof setInterval> | null = null
+let _onSessionExpired: (() => void) | null = null
+let _cachedToken: string | null = null   // captured Bearer JWT from intercepted page requests
 
-const KEEP_ALIVE_INTERVAL_MS = 12 * 60 * 1000 // 12 minutes — before TAsessionID expires
+/** Register a callback to invoke when the keep-alive detects session expiry. */
+export function setSessionExpiredCallback(cb: () => void): void {
+  _onSessionExpired = cb
+}
+
+const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000 // 8 minutes — well before SSO 30-min idle timeout
 const SESSION_STATE_FILE = 'session-state.json'
 
 export async function initScrapeContext(profileDir: string): Promise<void> {
   if (_context) return // already open
   _profileDir = profileDir
   console.log('[rh-scraper] opening persistent context…')
-  _context = await chromium.launchPersistentContext(profileDir, { headless: true })
-  _keepAliveTimer = setInterval(() => keepAlive().catch(() => {}), KEEP_ALIVE_INTERVAL_MS)
+  _context = await chromium.launchPersistentContext(profileDir, {
+    headless: false,
+    args: ['--headless=new', '--disable-blink-features=AutomationControlled'],
+    ignoreDefaultArgs: ['--enable-automation'],
+  })
+  // Restore session cookies persisted from a previous run
+  await restoreSessionCookies()
+  _keepAliveTimer = setInterval(
+    () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),
+    KEEP_ALIVE_INTERVAL_MS,
+  )
 }
 
 /**
@@ -67,9 +86,23 @@ export function adoptScrapeContext(context: BrowserContext, profileDir: string, 
   _context = context
   _livePage = livePage
   _profileDir = profileDir
-  _keepAliveTimer = setInterval(() => keepAlive().catch(() => {}), KEEP_ALIVE_INTERVAL_MS)
+  // Capture Bearer tokens from outgoing requests — used by keepAlive() hybrid path
+  livePage.on('request', req => {
+    const auth = req.headers()['authorization']
+    if (auth?.startsWith('Bearer ')) { _cachedToken = auth.slice(7) }
+  })
+  _keepAliveTimer = setInterval(
+    () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),
+    KEEP_ALIVE_INTERVAL_MS,
+  )
   console.log('[rh-scraper] adopted login context — live page session preserved')
 }
+
+/** Returns the active context, or null if no session is open. */
+export function getScrapeContext() { return _context }
+
+/** Returns the live authenticated page, or null if no session is open. */
+export function getLivePage() { return _livePage }
 
 export async function closeScrapeContext(): Promise<void> {
   if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
@@ -77,6 +110,7 @@ export async function closeScrapeContext(): Promise<void> {
   _context = null
   _livePage = null
   _profileDir = null
+  _cachedToken = null
   if (ctx) {
     try { await ctx.close() } catch { /* already closed */ }
   }
@@ -92,14 +126,78 @@ async function persistSessionState(): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
+/**
+ * Restore session cookies from the persisted state file into the active context.
+ * Called on startup so container restarts can resume an existing authenticated session
+ * without requiring a fresh login.
+ */
+async function restoreSessionCookies(): Promise<void> {
+  if (!_context || !_profileDir) return
+  const statePath = resolve(_profileDir, SESSION_STATE_FILE)
+  try {
+    const raw = await readFile(statePath, 'utf-8')
+    const state = JSON.parse(raw)
+    if (Array.isArray(state?.cookies) && state.cookies.length > 0) {
+      await _context.addCookies(state.cookies)
+      console.log(`[rh-scraper] restored ${state.cookies.length} session cookies from disk`)
+    }
+  } catch {
+    // No state file yet (first run) or parse error — non-fatal, proceed without cookies
+  }
+}
+
 // ── Keep-alive loop ───────────────────────────────────────────────────────────
 //
-// Navigates the live page every 12 minutes to refresh TAsessionID and keep
-// sessionStorage tokens current. Reuses _livePage if available so session
-// storage is preserved; falls back to a new page if no live page exists.
+// Fires every 8 minutes. Attempts a hybrid lightweight path first: calls
+// keycloak.updateToken() in the live page to reset the SSO idle timer without
+// a full page navigation, then verifies with a cheap hydra API ping.
+// Falls back to full page navigation if the Keycloak adapter is unavailable.
 
 async function keepAlive(): Promise<void> {
   if (!_context) return
+
+  // ── Attempt 1: Hybrid lightweight path (no page navigation) ─────────────────
+  // Ask the Keycloak JS adapter to refresh its token — this resets the SSO session
+  // idle timer server-side without a full page load. Extracts the fresh token so
+  // the hydra ping can include it in an Authorization header for stronger auth.
+  if (_livePage) {
+    try {
+      const { refreshed, token } = await _livePage.evaluate<{ refreshed: boolean; token: string | null }>(async () => {
+        const kc = (window as any).keycloak ?? (window as any).__keycloak
+        if (!kc?.updateToken) return { refreshed: false, token: null }
+        try {
+          await kc.updateToken(60)
+          return { refreshed: true, token: (kc.token as string | null) ?? null }
+        } catch {
+          return { refreshed: false, token: null }
+        }
+      }).catch(() => ({ refreshed: false, token: null }))
+
+      if (refreshed) {
+        if (token) _cachedToken = token  // keep module-level token current
+
+        const alive = await _livePage.evaluate<boolean>(async (bearerToken: string | null) => {
+          try {
+            const init: RequestInit = { credentials: 'include' }
+            if (bearerToken) init.headers = { Authorization: `Bearer ${bearerToken}` }
+            const res = await fetch(
+              'https://access.redhat.com/hydra/rest/accounts/?fields=accountNumber&limit=1',
+              init,
+            )
+            return res.ok || res.status === 400
+          } catch { return false }
+        }, _cachedToken).catch(() => false)
+
+        if (alive) {
+          console.log('[rh-scraper] keep-alive: token refreshed via Keycloak adapter')
+          await persistSessionState()
+          return
+        }
+      }
+    } catch { /* fall through to page nav */ }
+  }
+
+  // ── Attempt 2: Full page navigation fallback ─────────────────────────────────
   const usingLivePage = !!_livePage
   const page = _livePage ?? await _context.newPage().catch(() => null)
   if (!page) return
@@ -112,10 +210,11 @@ async function keepAlive(): Promise<void> {
       await page.waitForURL('**/access.redhat.com/support/**', { timeout: 10_000 }).catch(() => {})
     }
     if (page.url().includes('access.redhat.com/support')) {
-      console.log('[rh-scraper] keep-alive: session active')
+      console.log('[rh-scraper] keep-alive: session active (page nav)')
       await persistSessionState()
     } else {
       console.warn('[rh-scraper] keep-alive: session expired — reconnect via dashboard')
+      _onSessionExpired?.()
     }
   } catch {
     // Non-fatal — next scrape will detect expiry via checkForSessionExpiry
@@ -152,7 +251,8 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
 
   // Ensure long-lived context is open
   await initScrapeContext(profileDir)
-  const context = _context!
+  if (!_context) throw new Error('[rh-scraper] failed to open browser context')
+  const context = _context
 
   // Reuse the live authenticated page if available — it retains sessionStorage
   // (PKCE state) that new pages lack. Only create a new page as fallback.

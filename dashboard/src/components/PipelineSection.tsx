@@ -120,7 +120,7 @@ export function OppDetail({ opp, onClose }: { opp: PipelineOpp; onClose: () => v
           </div>
         )}
 
-        <p className="text-xs text-text-secondary/40">Opp #{opp.oppNumber}</p>
+        <p className="text-xs text-text-secondary/65">Opp #{opp.oppNumber}</p>
       </div>
     </div>
   )
@@ -302,10 +302,10 @@ export function PipelineSection({ data, loading }: Props) {
               {byQuarterStage.map(({ quarter, commit, bestCase, pipeline, closed }) => (
                 <div key={quarter} className="grid grid-cols-5 gap-x-1 py-0.5 hover:bg-border/20 rounded px-1 -mx-1">
                   <span className="text-xs text-text-secondary font-medium">{quarter}</span>
-                  <span className="text-xs text-text-primary text-center font-mono">{commit > 0 ? fmt(commit) : <span className="text-text-secondary/40">—</span>}</span>
-                  <span className="text-xs text-text-primary text-center font-mono">{bestCase > 0 ? fmt(bestCase) : <span className="text-text-secondary/40">—</span>}</span>
-                  <span className="text-xs text-text-primary text-center font-mono">{pipeline > 0 ? fmt(pipeline) : <span className="text-text-secondary/40">—</span>}</span>
-                  <span className="text-xs text-text-primary text-center font-mono">{closed > 0 ? fmt(closed) : <span className="text-text-secondary/40">—</span>}</span>
+                  <span className="text-xs text-text-primary text-center font-mono">{commit > 0 ? fmt(commit) : <span className="text-text-secondary/65">—</span>}</span>
+                  <span className="text-xs text-text-primary text-center font-mono">{bestCase > 0 ? fmt(bestCase) : <span className="text-text-secondary/65">—</span>}</span>
+                  <span className="text-xs text-text-primary text-center font-mono">{pipeline > 0 ? fmt(pipeline) : <span className="text-text-secondary/65">—</span>}</span>
+                  <span className="text-xs text-text-primary text-center font-mono">{closed > 0 ? fmt(closed) : <span className="text-text-secondary/65">—</span>}</span>
                 </div>
               ))}
             </div>
@@ -351,7 +351,7 @@ export function PipelineSection({ data, loading }: Props) {
                     <span className="text-xs text-text-primary truncate flex-1 min-w-0">{opp.accountName}</span>
                     <span className={`text-xs shrink-0 ${URGENCY_COLORS[urgency]}`}>{fmtDate(opp.closeDate)}</span>
                     <span className="text-xs font-mono text-text-primary shrink-0">{fmt(opp.acv)}</span>
-                    {opp.renewal && <span className="text-xs text-text-secondary/50 shrink-0">↻</span>}
+                    {opp.renewal && <span className="text-xs text-text-secondary/75 shrink-0">↻</span>}
                   </div>
                 )
               })}

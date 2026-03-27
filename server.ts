@@ -15,7 +15,8 @@ import type { Customer, ProductSubscription } from './src/types.ts'
 import { inferCustomerDomain } from './src/domains.ts'
 import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState, checkFilesModified } from './src/drive-watcher.ts'
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired } from './src/rh-auth.ts'
-import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext } from './src/rh-scraper.ts'
+import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
+import { discoverAccountNumbers } from './src/rh-account-discovery.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -260,7 +261,7 @@ app.get('/api/auth/redhat/status', (c) => {
 app.post('/api/auth/redhat/start', async (c) => {
   try {
     await startLoginBrowser(RH_SESSION_PATH, RH_PROFILE_DIR, () => {
-      runRhScrapeWithState().catch(() => {})
+      runPortalAccountDiscovery().catch(() => {}).finally(() => runRhScrapeWithState().catch(() => {}))
     })
     return c.json({ started: true })
   } catch (e: any) {
@@ -277,6 +278,12 @@ app.delete('/api/auth/redhat/session', async (c) => {
 // POST /api/auth/redhat/sync — Trigger immediate scrape
 app.post('/api/auth/redhat/sync', async (c) => {
   runRhScrapeWithState().catch(() => {})
+  return c.json({ started: true })
+})
+
+// POST /api/auth/redhat/discover — Trigger account number portal discovery
+app.post('/api/auth/redhat/discover', async (c) => {
+  runPortalAccountDiscovery().catch(() => {})
   return c.json({ started: true })
 })
 
@@ -2004,6 +2011,96 @@ async function refreshPipeline(): Promise<void> {
   }
 }
 
+// ── Portal account number discovery ──────────────────────────────────────────
+//
+// Runs once after each successful login for customers with no account numbers.
+// Uses a fresh page from the active context (shares cookies, not sessionStorage)
+// so the live page's PKCE state is preserved.
+
+let _discoveryRunning = false
+
+async function runPortalAccountDiscovery(): Promise<void> {
+  if (_discoveryRunning) return
+
+  const missing = customers.filter((c) => !c.accountNumbers?.length && !c.skipAccountDiscovery)
+  if (!missing.length) {
+    console.log('[account-discovery] all customers have account numbers — skipping portal discovery')
+    return
+  }
+
+  _discoveryRunning = true
+  console.log(`[account-discovery] portal discovery starting for ${missing.length} customer(s)…`)
+
+  let discoveredCount = 0
+  // Prefer the live authenticated page; fall back to a new page from the
+  // active context (stored cookies are sufficient for portal browsing).
+  const livePage = getLivePage()
+  const ctx = getScrapeContext()
+  const page = livePage ?? (ctx ? await ctx.newPage() : null)
+  const ownedPage = !livePage && !!page  // true if we opened it (must close after)
+  if (!page) {
+    console.warn('[account-discovery] no active context — skipping portal discovery')
+    _discoveryRunning = false
+    return
+  }
+
+  // First: dump filter DOM to diagnose selectors (only on first run)
+  try {
+    await page.goto('https://access.redhat.com/support/cases/#/case/list', {
+      waitUntil: 'domcontentloaded', timeout: 30_000
+    })
+    await page.waitForTimeout(5_000)
+    const domDump = await page.evaluate(() => {
+      const inputs = Array.from(document.querySelectorAll('input')).map(el => ({
+        type: (el as HTMLInputElement).type,
+        placeholder: (el as HTMLInputElement).placeholder,
+        ariaLabel: el.getAttribute('aria-label'),
+        id: el.id,
+        className: el.className.slice(0, 60),
+      }))
+      const toolbarHtml = document.querySelector('[class*="toolbar"], [class*="filter-toolbar"], rh-filters')
+        ?.outerHTML?.slice(0, 1500) ?? 'no toolbar found'
+      return { inputs, toolbarHtml }
+    })
+    console.log('[account-discovery] DOM inputs:', JSON.stringify(domDump.inputs))
+    console.log('[account-discovery] toolbar HTML:', domDump.toolbarHtml.slice(0, 500))
+  } catch (e: any) {
+    console.warn('[account-discovery] DOM dump failed:', e.message)
+  }
+
+  try {
+    for (const customer of missing) {
+      const result = await discoverAccountNumbers(page, customer.name, customer.aliases ?? [])
+
+      if (result.accountNumbers.length === 0) continue
+
+      // Merge into customers array and persist
+      customer.accountNumbers = result.accountNumbers
+      const updated = customers.map((c) =>
+        c.name === customer.name ? { ...c, accountNumbers: result.accountNumbers } : c
+      )
+      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
+      renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+      customers.splice(0, customers.length, ...updated)
+      discoveredCount++
+    }
+  } catch (e: any) {
+    console.warn('[account-discovery] portal discovery error:', e.message)
+  } finally {
+    if (ownedPage) await page.close().catch(() => {})
+    _discoveryRunning = false
+  }
+
+  console.log(`[account-discovery] portal discovery done — ${discoveredCount} customer(s) updated`)
+  if (discoveredCount > 0) runRhScrapeWithState().catch(() => {})
+}
+
+// Register keep-alive expiry → surface reconnect banner in dashboard
+setSessionExpiredCallback(() => {
+  recordScrapeExpired()
+  closeScrapeContext().catch(() => {})
+})
+
 // ── Red Hat support case scraper ──────────────────────────────────────────────
 
 let _rhScrapeRunning = false
@@ -2080,7 +2177,7 @@ if (customers.length > 0) {
 
 // On startup: discover account numbers from Supportable sheets for any customer missing them
 ;(async () => {
-  const missing = customers.filter((c) => !c.accountNumbers?.length)
+  const missing = customers.filter((c) => !c.accountNumbers?.length && !c.skipAccountDiscovery)
   if (!missing.length) return
 
   console.log(`[account-discovery] discovering account numbers for ${missing.length} customers…`)

@@ -9,7 +9,7 @@ export default {
         border: '#30363D',
         accent: '#00BCD4',
         'text-primary': '#E6EDF3',
-        'text-secondary': '#8B949E',
+        'text-secondary': '#A8B5C2',
         critical: '#F85149',
         warning: '#D29922',
         success: '#3FB950',
@@ -20,6 +20,9 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      fontSize: {
+        xs: ['0.8125rem', { lineHeight: '1.25rem' }],
       },
     },
   },

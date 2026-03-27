@@ -9,6 +9,7 @@ export interface Customer {
   aliases?: string[]     // known subsidiaries / former names that map to this account
   aliasDomains?: string[] // email domains for aliases (e.g. ["lifetouch.com"] for Shutterfly)
   supportableFileId?: string  // Google Sheets file ID of the AE's Supportable file
+  skipAccountDiscovery?: boolean  // true = no RH account, skip portal discovery
 }
 
 export interface CustomerSubscription {

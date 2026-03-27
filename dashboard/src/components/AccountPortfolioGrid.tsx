@@ -268,7 +268,7 @@ function AccountCard({
           <span className="font-medium truncate">{formatDate(nextMeeting.start)} · {nextMeeting.title}</span>
         </div>
       ) : (
-        <div className="flex items-center gap-1.5 text-xs text-text-secondary/50">
+        <div className="flex items-center gap-1.5 text-xs text-text-secondary/75">
           <Calendar className="w-3 h-3 shrink-0" />
           <span>No upcoming meetings</span>
         </div>

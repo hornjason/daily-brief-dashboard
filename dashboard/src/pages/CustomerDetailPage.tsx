@@ -679,10 +679,10 @@ function CaseDetailModal({ c, onClose }: { c: CaseItem; onClose: () => void }) {
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-medium text-text-secondary">Latest update</span>
                 {comment.createdAt && (
-                  <span className="text-xs text-text-secondary/50">· {fmtCommentDate(comment.createdAt)}</span>
+                  <span className="text-xs text-text-secondary/75">· {fmtCommentDate(comment.createdAt)}</span>
                 )}
                 {comment.author && (
-                  <span className="text-xs text-text-secondary/50">· {comment.author}</span>
+                  <span className="text-xs text-text-secondary/75">· {comment.author}</span>
                 )}
               </div>
               <p className="text-xs text-text-primary/80 leading-relaxed line-clamp-4 bg-bg/40 rounded-lg px-3 py-2.5">
@@ -767,7 +767,7 @@ function CasesSection({ cases, loading }: { cases: CaseItem[]; loading: boolean 
                   <div className="text-right shrink-0">
                     <div className={`text-xs font-medium ${statusColor(c.status)}`}>{c.status}</div>
                     <div className="text-xs text-text-secondary mt-0.5">{c.daysOpen}d open</div>
-                    <ExternalLink className="w-3 h-3 text-text-secondary/30 group-hover:text-accent mt-1 ml-auto transition-colors" />
+                    <ExternalLink className="w-3 h-3 text-text-secondary/80 group-hover:text-accent mt-1 ml-auto transition-colors" />
                   </div>
                 </div>
               </div>
@@ -1204,7 +1204,7 @@ function PipelineCard({ customerName }: { customerName: string }) {
                 <span className="text-xs text-text-primary truncate flex-1 min-w-0">{opp.oppName}</span>
                 <span className={`text-xs shrink-0 ${PIPE_URGENCY_COLORS[urgency]}`}>{pipeDate(opp.closeDate)}</span>
                 <span className="text-xs font-mono text-text-primary shrink-0">{fmtAcv(opp.acv)}</span>
-                {opp.renewal && <span className="text-xs text-text-secondary/50 shrink-0">↻</span>}
+                {opp.renewal && <span className="text-xs text-text-secondary/75 shrink-0">↻</span>}
               </div>
             )
           })}

@@ -45,7 +45,7 @@ function KPICard({ label, value, icon, accent, loading, onClick, subtitle }: KPI
           <div className="text-2xl font-bold text-text-primary">{value}</div>
         )}
         <div className="text-xs text-text-secondary leading-tight">{label}</div>
-        {subtitle && <div className="text-xs text-text-secondary/60 leading-tight mt-0.5">{subtitle}</div>}
+        {subtitle && <div className="text-xs text-text-secondary/80 leading-tight mt-0.5">{subtitle}</div>}
       </div>
     </div>
   )
@@ -410,7 +410,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
                         <p className="text-xs font-mono font-semibold text-text-primary">{fmtAcv(opp.acv)}</p>
                         <p className={`text-xs ${twUrgencyClass(opp.closeDate)}`}>{fmtDateShort(opp.closeDate)}</p>
                       </div>
-                      <ExternalLink className="w-3.5 h-3.5 text-text-secondary/40 group-hover:text-accent transition-colors shrink-0" />
+                      <ExternalLink className="w-3.5 h-3.5 text-text-secondary/65 group-hover:text-accent transition-colors shrink-0" />
                     </a>
                   )
                 })}
