@@ -21,6 +21,7 @@ import { runSfPipelineSync, createPipelineSheet, SfSessionExpiredError, setSfSes
 import { startSfLoginBrowser, cancelSfLoginBrowser, getSfAuthStatus } from './src/sf-auth.ts'
 import { runSupportableScrape, writeSupportableSheet, adoptSupportableContext, lastSupportableScrape, lastSupportableError, supportableScrapeRunning } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
+import { adoptCcspContext, runCcspScrape, writeCcspSheet, ccspScrapeRunning, lastCcspScrape, lastCcspError } from './src/ccsp-scraper.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -464,6 +465,46 @@ app.post('/api/bootstrap/supportable', async (c) => {
   })()
 
   return c.json({ started: true })
+})
+
+// ── CCSP bootstrap endpoints ──────────────────────────────────────────────────
+
+// GET /api/bootstrap/ccsp/status
+app.get('/api/bootstrap/ccsp/status', (c) => {
+  return c.json({
+    running:    ccspScrapeRunning,
+    lastScrape: lastCcspScrape,
+    lastError:  lastCcspError,
+  })
+})
+
+// POST /api/bootstrap/ccsp — scrape CCSP Tableau dashboards for each AE that
+// has a tableauUrl and driveFolderId configured, then write results to Google
+// Sheets. Body: {} (uses aes.json; no body params required)
+// On success, writes ccspSheetId back to aes.json for each AE processed.
+app.post('/api/bootstrap/ccsp', async (c) => {
+  if (ccspScrapeRunning) return c.json({ error: 'CCSP scrape already in progress' }, 409)
+
+  const eligibleAes = aes.filter(a => a.tableauUrl && a.driveFolderId)
+  if (!eligibleAes.length) return c.json({ error: 'No AEs with tableauUrl and driveFolderId configured' }, 400)
+
+  // Run async — client polls /status
+  ;(async () => {
+    try {
+      const results = await runCcspScrape(eligibleAes)
+      for (const ae of eligibleAes) {
+        const aeResults = results.filter(r => r.aeName === ae.name)
+        const spreadsheetId = await writeCcspSheet(aeResults, ae.name, ae.driveFolderId, ae.ccspSheetId || undefined)
+        const updatedAes = aes.map(a => a.name === ae.name ? { ...a, ccspSheetId: spreadsheetId } : a)
+        saveAes(updatedAes)
+        console.log(`[bootstrap] CCSP sheet ready for ${ae.name}: ${spreadsheetId}`)
+      }
+    } catch (e: any) {
+      console.error('[bootstrap] CCSP scrape failed:', e.message)
+    }
+  })()
+
+  return c.json({ started: true, aeCount: eligibleAes.length })
 })
 
 // GET /api/data-sources/status — List connected AE folders
@@ -2466,7 +2507,7 @@ if (existsSync(RH_SESSION_PATH)) {
     await initScrapeContext(RH_PROFILE_DIR)
     // Share the same browser context with SF and Supportable scrapers
     const ctx = getScrapeContext()
-    if (ctx) { adoptSfContext(ctx, RH_PROFILE_DIR); adoptSupportableContext(ctx) }
+    if (ctx) { adoptSfContext(ctx, RH_PROFILE_DIR); adoptSupportableContext(ctx); adoptCcspContext(ctx) }
     runRhScrapeWithState().catch(() => {})
   }, 5_000)
 }

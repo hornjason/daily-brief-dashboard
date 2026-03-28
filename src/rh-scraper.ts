@@ -71,7 +71,7 @@ export async function initScrapeContext(profileDir: string): Promise<void> {
   console.log('[rh-scraper] opening persistent context…')
   _context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
-    args: ['--headless=new', '--disable-blink-features=AutomationControlled'],
+    args: ['--headless=new', '--disable-blink-features=AutomationControlled', '--ignore-certificate-errors'],
     ignoreDefaultArgs: ['--enable-automation'],
   })
   // Restore session cookies persisted from a previous run

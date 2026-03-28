@@ -87,7 +87,7 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
   let context: BrowserContext
   let page: Page
   try {
-    context = await chromium.launchPersistentContext(profileDir, { headless: false })
+    context = await chromium.launchPersistentContext(profileDir, { headless: false, args: ['--ignore-certificate-errors'] })
     page = await context.newPage()
   } catch (e) {
     loginInProgress = false
