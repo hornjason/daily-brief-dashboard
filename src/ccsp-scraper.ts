@@ -418,6 +418,21 @@ export async function writeCcspSheet(
     })
     spreadsheetId = created.data.id!
     console.log(`[ccsp] created spreadsheet: ${spreadsheetId} in folder ${driveFolderId}`)
+
+    // Rename "Sheet1" → "CCSP Data" immediately so all subsequent writes use the correct name
+    const meta0 = await sheets.spreadsheets.get({ spreadsheetId })
+    const firstSheet0 = meta0.data.sheets?.[0]
+    if (firstSheet0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{ updateSheetProperties: {
+            properties: { sheetId: firstSheet0.properties!.sheetId, title: 'CCSP Data' },
+            fields: 'title',
+          }}],
+        },
+      })
+    }
   }
 
   // Combine all results into a single data set
@@ -449,25 +464,6 @@ export async function writeCcspSheet(
     headers,
     ...allRows.map(row => headers.map(h => row[h] ?? '')),
   ]
-
-  // Rename first sheet to "CCSP Data" if creating new (drive.files.create gives "Sheet1")
-  if (!existingSheetId) {
-    const meta = await sheets.spreadsheets.get({ spreadsheetId })
-    const firstSheet = meta.data.sheets?.[0]
-    if (firstSheet) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          requests: [{
-            updateSheetProperties: {
-              properties: { sheetId: firstSheet.properties!.sheetId, title: 'CCSP Data' },
-              fields: 'title',
-            },
-          }],
-        },
-      })
-    }
-  }
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,

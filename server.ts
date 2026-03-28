@@ -619,7 +619,7 @@ app.post('/api/bootstrap/auto', async (c) => {
         for (const name of customerNames) {
           setStep(1, 'running', `Discovering: ${name}`)
           const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Timed out after 45s`)), 45_000)
+            setTimeout(() => reject(new Error(`Timed out after 90s`)), 90_000)
           )
           const result = await Promise.race([discoverAccountNumbers(page, name), timeout])
           const existing = customers.find(cx => cx.name === name)
