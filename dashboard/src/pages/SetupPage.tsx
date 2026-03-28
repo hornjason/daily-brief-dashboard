@@ -845,6 +845,9 @@ function RedHatPortalSection() {
       if (d.error) {
         setError(d.error)
         setConnecting(false)
+      } else {
+        // Open VNC viewer as a popup so the login browser appears as a native-feeling window
+        window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', 'rh-login', 'width=1280,height=900')
       }
     } catch (e: any) {
       setError(e.message)
