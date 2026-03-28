@@ -19,6 +19,8 @@ import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext
 import { discoverAccountNumbers } from './src/rh-account-discovery.ts'
 import { runSfPipelineSync, SfSessionExpiredError, setSfSessionExpiredCallback, adoptSfContext, lastSfSync, lastSfRowCount, sfSyncError } from './src/sf-scraper.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser, getSfAuthStatus } from './src/sf-auth.ts'
+import { runSupportableScrape, writeSupportableSheet, adoptSupportableContext, lastSupportableScrape, lastSupportableError, supportableScrapeRunning } from './src/supportable-scraper.ts'
+import type { SupportableCustomer } from './src/supportable-scraper.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -341,6 +343,61 @@ app.post('/api/auth/salesforce/sync', async (c) => {
       console.error('[server] SF pipeline sync error:', e?.message ?? e)
     }
   })
+  return c.json({ started: true })
+})
+
+// ── Supportable bootstrap endpoints ──────────────────────────────────────────
+
+// GET /api/bootstrap/supportable/status
+app.get('/api/bootstrap/supportable/status', (c) => {
+  return c.json({
+    running:   supportableScrapeRunning,
+    lastScrape: lastSupportableScrape,
+    lastError:  lastSupportableError,
+  })
+})
+
+// POST /api/bootstrap/supportable — scrape Supportable for given customers and
+// write results to a new Google Sheet. Body:
+//   { aeName: string, customers: [{ name, accountNumbers }] }
+// On success, stores the sheet ID in each customer's supportableFileId in customers.json.
+app.post('/api/bootstrap/supportable', async (c) => {
+  if (supportableScrapeRunning) return c.json({ error: 'Scrape already in progress' }, 409)
+
+  const body = await c.req.json<{ aeName?: string; customers?: SupportableCustomer[] }>().catch(() => ({}))
+  const aeName = (body.aeName ?? '').trim()
+  const scrapeCustomers = body.customers ?? []
+
+  if (!aeName)              return c.json({ error: 'aeName is required' }, 400)
+  if (!scrapeCustomers.length) return c.json({ error: 'customers array is required' }, 400)
+
+  // Validate each entry has at least one account number
+  for (const c of scrapeCustomers) {
+    if (!c.name?.trim())          return c.json({ error: `customer name missing` }, 400)
+    if (!c.accountNumbers?.length) return c.json({ error: `no accountNumbers for "${c.name}"` }, 400)
+  }
+
+  // Run async — client polls /status
+  ;(async () => {
+    try {
+      const results = await runSupportableScrape(scrapeCustomers)
+      const spreadsheetId = await writeSupportableSheet(results, aeName)
+
+      // Write supportableFileId back into customers.json for each matched customer
+      const updated = customers.map(cu => {
+        const match = results.find(r => r.customerName === cu.name)
+        return match ? { ...cu, supportableFileId: spreadsheetId } : cu
+      })
+      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
+      renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+      customers.splice(0, customers.length, ...updated)
+
+      console.log(`[bootstrap] Supportable sheet created: ${spreadsheetId}`)
+    } catch (e: any) {
+      console.error('[bootstrap] Supportable scrape failed:', e.message)
+    }
+  })()
+
   return c.json({ started: true })
 })
 
@@ -2300,9 +2357,9 @@ schedulePipelineSync()
 if (existsSync(RH_SESSION_PATH)) {
   setTimeout(async () => {
     await initScrapeContext(RH_PROFILE_DIR)
-    // Share the same browser context with SF scraper — SSO session covers both
+    // Share the same browser context with SF and Supportable scrapers
     const ctx = getScrapeContext()
-    if (ctx) adoptSfContext(ctx, RH_PROFILE_DIR)
+    if (ctx) { adoptSfContext(ctx, RH_PROFILE_DIR); adoptSupportableContext(ctx) }
     runRhScrapeWithState().catch(() => {})
   }, 5_000)
 }
