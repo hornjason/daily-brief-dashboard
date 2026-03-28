@@ -479,14 +479,14 @@ app.get('/api/bootstrap/ccsp/status', (c) => {
 })
 
 // POST /api/bootstrap/ccsp — scrape CCSP Tableau dashboards for each AE that
-// has a tableauUrl and driveFolderId configured, then write results to Google
-// Sheets. Body: {} (uses aes.json; no body params required)
+// has tableauTerritories and driveFolderId configured, then write results to
+// Google Sheets. Body: {} (uses aes.json; no body params required)
 // On success, writes ccspSheetId back to aes.json for each AE processed.
 app.post('/api/bootstrap/ccsp', async (c) => {
   if (ccspScrapeRunning) return c.json({ error: 'CCSP scrape already in progress' }, 409)
 
-  const eligibleAes = aes.filter(a => a.tableauUrl && a.driveFolderId)
-  if (!eligibleAes.length) return c.json({ error: 'No AEs with tableauUrl and driveFolderId configured' }, 400)
+  const eligibleAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
+  if (!eligibleAes.length) return c.json({ error: 'No AEs with tableauTerritories and driveFolderId configured' }, 400)
 
   // Run async — client polls /status
   ;(async () => {
