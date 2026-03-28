@@ -450,44 +450,68 @@ interface AutoBootstrapState {
   completedAt: string | null
 }
 
-function AutoBootstrapProgress({ state }: { state: AutoBootstrapState }) {
+function AutoBootstrapProgress({ state, onReset }: { state: AutoBootstrapState; onReset?: () => void }) {
+  const hasError = state.steps.some(s => s.status === 'error')
+
   const statusIcon = (s: AutoBootstrapStep['status']) => {
     switch (s) {
-      case 'pending': return <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-600" />
-      case 'running': return <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-      case 'done':    return <CheckCircle className="w-4 h-4 text-emerald-400" />
-      case 'error':   return <XCircle className="w-4 h-4 text-red-400" />
+      case 'pending': return <span className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-slate-600 bg-slate-900 items-center justify-center" />
+      case 'running': return <span className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-indigo-500 bg-slate-900 items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" /></span>
+      case 'done':    return <span className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-emerald-500 bg-slate-900 items-center justify-center"><CheckCircle className="w-3.5 h-3.5 text-emerald-400" /></span>
+      case 'error':   return <span className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-red-500 bg-slate-900 items-center justify-center"><XCircle className="w-3.5 h-3.5 text-red-400" /></span>
     }
   }
 
   return (
-    <div className="space-y-2 mt-4">
+    <div className="mt-4 space-y-4" aria-live="polite">
       <p className="text-sm font-semibold text-slate-300">
-        Setting up {state.aeName}...
+        {state.completedAt ? `Setup ${hasError ? 'finished with errors' : 'complete'} — ${state.aeName}` : `Setting up ${state.aeName}…`}
       </p>
-      {state.steps.map((step, i) => (
-        <div key={i} className="flex items-center gap-2.5 text-sm">
-          {statusIcon(step.status)}
-          <span className={step.status === 'error' ? 'text-red-400' : step.status === 'done' ? 'text-emerald-400' : 'text-slate-400'}>
-            {step.name}
-          </span>
-          {step.detail && (
-            <span className="text-xs text-slate-500 ml-1 truncate max-w-xs">
-              {step.detail}
-            </span>
-          )}
-        </div>
-      ))}
+
+      {/* Step list with connector lines */}
+      <div className="relative">
+        {state.steps.map((step, i) => (
+          <div key={i} className="relative flex gap-3">
+            {/* Vertical connector line */}
+            {i < state.steps.length - 1 && (
+              <div className="absolute left-3 top-6 bottom-0 w-px bg-slate-700" />
+            )}
+            {/* Icon */}
+            <div className="flex-shrink-0 mt-0.5">{statusIcon(step.status)}</div>
+            {/* Content row — highlight running step */}
+            <div className={`flex-1 mb-2 rounded px-2 py-1 text-sm ${step.status === 'running' ? 'bg-slate-800/60' : ''}`}>
+              <span className={
+                step.status === 'error'   ? 'text-red-400' :
+                step.status === 'done'    ? 'text-emerald-300' :
+                step.status === 'running' ? 'text-white font-medium' :
+                'text-slate-500'
+              }>
+                {step.name}
+              </span>
+              {step.detail && (
+                <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{step.detail}</p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Completion card */}
       {state.completedAt && !state.running && (
-        <div className="mt-3 pt-3 border-t border-slate-700">
-          {state.error ? (
-            <p className="text-sm text-amber-400">
-              Completed with errors. Some steps may have succeeded.
-            </p>
-          ) : (
-            <p className="text-sm text-emerald-400">
-              Setup complete! All data sources are ready.
-            </p>
+        <div className={`rounded-lg border p-3 text-sm ${hasError ? 'border-amber-700 bg-amber-950/30' : 'border-emerald-700 bg-emerald-950/30'}`}>
+          <p className={`font-medium mb-2 ${hasError ? 'text-amber-400' : 'text-emerald-400'}`}>
+            {hasError ? 'Completed with errors — some steps may need retry' : 'All done! Resources are ready.'}
+          </p>
+          {/* Resource links from step details */}
+          <div className="grid grid-cols-2 gap-1.5">
+            {state.steps.filter(s => s.status === 'done' && s.detail).map((s, i) => (
+              <span key={i} className="text-xs text-slate-400 truncate">{s.name}: <span className="text-slate-300">{s.detail}</span></span>
+            ))}
+          </div>
+          {onReset && (
+            <button onClick={onReset} className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 underline">
+              Add another AE
+            </button>
           )}
         </div>
       )}
@@ -584,10 +608,11 @@ function AutoBootstrapForm() {
         setBootstrapState(d)
         if (!d.running) clearInterval(interval)
       } catch {}
-    }, 3_000)
+    }, 2_000)
     return () => clearInterval(interval)
   }, [bootstrapState?.running, starting])
 
+  const resetForm = () => { setBootstrapState(null); setAeName(''); setSfReportId(''); setCustomerText(''); setSelectedTerritories([]) }
   const customerNames = customerText.split('\n').map(s => s.trim()).filter(Boolean)
   const territories = discoveredTerritories ? selectedTerritories : territoryInput.split(',').map(s => s.trim()).filter(Boolean)
   const canStart = aeName.trim() && sfReportId.trim() && territories.length > 0 && customerNames.length > 0
@@ -595,11 +620,11 @@ function AutoBootstrapForm() {
   if (bootstrapState && (bootstrapState.running || bootstrapState.completedAt)) {
     return (
       <div>
-        <AutoBootstrapProgress state={bootstrapState} />
+        <AutoBootstrapProgress state={bootstrapState} onReset={bootstrapState.completedAt && !bootstrapState.running ? resetForm : undefined} />
         {bootstrapState.completedAt && !bootstrapState.running && (
           <button
-            onClick={() => { setBootstrapState(null); setAeName(''); setSfReportId(''); setCustomerText(''); setSelectedTerritories([]) }}
-            className="mt-3 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+            onClick={resetForm}
+            className="hidden" // handled by onReset inside AutoBootstrapProgress
           >
             Set up another AE
           </button>
