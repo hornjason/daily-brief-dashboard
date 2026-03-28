@@ -386,18 +386,19 @@ const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? GOOGLE_UNIFIED_TOKEN_PATH
 
 /**
  * Write the scraped report rows to the pipeline Google Sheet.
- * Each sync writes to a tab named with today's date (e.g. "2026-03-27"),
- * creating the tab if it doesn't exist. This preserves history across syncs.
+ * Clears and rewrites the "Pipeline" tab on each sync.
  *
- * Requires PIPELINE_FILE_ID env var to identify the target spreadsheet.
+ * @param data         Scraped report data
+ * @param spreadsheetId  Target sheet ID (from aes.json pipelineSheetId or PIPELINE_FILE_ID env fallback)
  */
-export async function writePipelineSheet(data: SfReportRow): Promise<void> {
-  const spreadsheetId = process.env.PIPELINE_FILE_ID
-  if (!spreadsheetId) throw new Error('[sf-scraper] PIPELINE_FILE_ID env var not set — cannot write pipeline sheet')
+export async function writePipelineSheet(data: SfReportRow, spreadsheetId?: string): Promise<void> {
+  const sheetId = spreadsheetId ?? process.env.PIPELINE_FILE_ID
+  if (!sheetId) throw new Error('[sf-scraper] No pipeline sheet ID — set pipelineSheetId in aes.json or PIPELINE_FILE_ID env')
   if (data.headers.length === 0) throw new Error('[sf-scraper] No headers in scraped data — aborting sheet write')
 
   const auth   = makeAuth(GDRIVE_TOKEN_PATH)
   const sheets = google.sheets({ version: 'v4', auth })
+  const spreadsheetId = sheetId
 
   const TAB_NAME = 'Pipeline'
 
@@ -434,6 +435,27 @@ export async function writePipelineSheet(data: SfReportRow): Promise<void> {
   console.log(`[sf-scraper] wrote ${data.rows.length} rows + headers to pipeline sheet ${spreadsheetId} tab "${TAB_NAME}"`)
 }
 
+/**
+ * Create a new pipeline Google Sheet in the AE's Drive folder.
+ * Used on first run when no pipelineSheetId exists in aes.json.
+ * Returns the new spreadsheet ID.
+ */
+export async function createPipelineSheet(aeName: string, driveFolderId: string): Promise<string> {
+  const auth  = makeAuth(GDRIVE_TOKEN_PATH)
+  const drive = google.drive({ version: 'v3', auth })
+  const created = await drive.files.create({
+    requestBody: {
+      name: `${aeName} Pipeline`,
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+      parents: [driveFolderId],
+    },
+    supportsAllDrives: true,
+    fields: 'id',
+  })
+  console.log(`[sf-scraper] created pipeline sheet for ${aeName}: ${created.data.id}`)
+  return created.data.id!
+}
+
 // ── Combined sync ─────────────────────────────────────────────────────────────
 
 export let lastSfSync: string | null = null
@@ -442,13 +464,15 @@ export let sfSyncError: string | null = null
 
 /**
  * Full pipeline sync: scrape SF report → write to Google Sheet.
- * This is what the server's refresh cycle calls.
+ * @param reportId    Salesforce report ID (from aes.json sfReportId or SF_REPORT_ID env fallback)
+ * @param profileDir  Chromium profile directory
+ * @param sheetId     Target pipeline sheet ID (from aes.json pipelineSheetId or PIPELINE_FILE_ID env fallback)
  */
-export async function runSfPipelineSync(reportId: string, profileDir: string): Promise<number> {
+export async function runSfPipelineSync(reportId: string, profileDir: string, sheetId?: string): Promise<number> {
   sfSyncError = null
   try {
     const data = await scrapeSfReport(reportId, profileDir)
-    await writePipelineSheet(data)
+    await writePipelineSheet(data, sheetId)
     lastSfSync = new Date().toISOString()
     lastSfRowCount = data.rows.length
     return data.rows.length

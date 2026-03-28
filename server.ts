@@ -17,7 +17,7 @@ import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState,
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './src/rh-auth.ts'
 import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
 import { discoverAccountNumbers } from './src/rh-account-discovery.ts'
-import { runSfPipelineSync, SfSessionExpiredError, setSfSessionExpiredCallback, adoptSfContext, lastSfSync, lastSfRowCount, sfSyncError } from './src/sf-scraper.ts'
+import { runSfPipelineSync, createPipelineSheet, SfSessionExpiredError, setSfSessionExpiredCallback, adoptSfContext, lastSfSync, lastSfRowCount, sfSyncError } from './src/sf-scraper.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser, getSfAuthStatus } from './src/sf-auth.ts'
 import { runSupportableScrape, writeSupportableSheet, adoptSupportableContext, lastSupportableScrape, lastSupportableError, supportableScrapeRunning } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
@@ -343,9 +343,26 @@ app.get('/api/auth/salesforce/status', (c) => {
 app.post('/api/auth/salesforce/start', async (c) => {
   try {
     await startSfLoginBrowser(SF_SESSION_PATH, RH_PROFILE_DIR, () => {
-      // Auto-trigger a pipeline sync after login
-      if (SF_REPORT_ID && process.env.PIPELINE_FILE_ID) {
-        runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR).catch(() => {})
+      // Auto-trigger a pipeline sync for each configured AE after login
+      const aesWithSf = aes.filter(a => a.sfReportId && a.driveFolderId)
+      if (aesWithSf.length) {
+        ;(async () => {
+          for (const ae of aesWithSf) {
+            try {
+              let sheetId = ae.pipelineSheetId
+              if (!sheetId) {
+                sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
+                saveAes(aes.map(a => a.name === ae.name ? { ...a, pipelineSheetId: sheetId } : a))
+              }
+              await runSfPipelineSync(ae.sfReportId!, RH_PROFILE_DIR, sheetId)
+            } catch (e: any) {
+              console.warn(`[server] SF sync failed for ${ae.name}:`, e?.message)
+            }
+          }
+        })().catch(() => {})
+      } else if (SF_REPORT_ID && process.env.PIPELINE_FILE_ID) {
+        // Fallback to env vars for backwards compatibility
+        runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR, process.env.PIPELINE_FILE_ID).catch(() => {})
       }
     })
     return c.json({ started: true })
@@ -360,18 +377,33 @@ app.delete('/api/auth/salesforce/session', async (c) => {
   return c.json({ cancelled: true })
 })
 
-// POST /api/auth/salesforce/sync — trigger pipeline sync (scrape SF → write sheet)
+// POST /api/auth/salesforce/sync — trigger pipeline sync for all configured AEs
 app.post('/api/auth/salesforce/sync', async (c) => {
-  if (!SF_REPORT_ID) return c.json({ error: 'SF_REPORT_ID env var not set' }, 400)
-  if (!process.env.PIPELINE_FILE_ID) return c.json({ error: 'PIPELINE_FILE_ID env var not set' }, 400)
-  runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR).catch(e => {
-    if (e instanceof SfSessionExpiredError) {
-      console.warn('[server] SF session expired during sync')
-    } else {
-      console.error('[server] SF pipeline sync error:', e?.message ?? e)
+  const aesWithSf = aes.filter(a => a.sfReportId && a.driveFolderId)
+  if (!aesWithSf.length && !SF_REPORT_ID) return c.json({ error: 'No AEs with sfReportId configured' }, 400)
+  ;(async () => {
+    for (const ae of aesWithSf) {
+      try {
+        let sheetId = ae.pipelineSheetId
+        if (!sheetId) {
+          sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
+          saveAes(aes.map(a => a.name === ae.name ? { ...a, pipelineSheetId: sheetId } : a))
+        }
+        await runSfPipelineSync(ae.sfReportId!, RH_PROFILE_DIR, sheetId)
+      } catch (e: any) {
+        if (e instanceof SfSessionExpiredError) {
+          console.warn('[server] SF session expired during sync')
+        } else {
+          console.error(`[server] SF sync error for ${ae.name}:`, e?.message ?? e)
+        }
+      }
     }
-  })
-  return c.json({ started: true })
+    // Fallback: env vars for backwards compatibility
+    if (!aesWithSf.length && SF_REPORT_ID && process.env.PIPELINE_FILE_ID) {
+      runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR, process.env.PIPELINE_FILE_ID).catch(() => {})
+    }
+  })().catch(() => {})
+  return c.json({ started: true, aes: aesWithSf.map(a => a.name) })
 })
 
 // ── Supportable bootstrap endpoints ──────────────────────────────────────────
@@ -405,22 +437,27 @@ app.post('/api/bootstrap/supportable', async (c) => {
     if (!c.accountNumbers?.length) return c.json({ error: `no accountNumbers for "${c.name}"` }, 400)
   }
 
+  // Look up AE config for driveFolderId and existing sheet ID
+  const aeConfig = aes.find(a => a.name === aeName)
+
   // Run async — client polls /status
   ;(async () => {
     try {
       const results = await runSupportableScrape(scrapeCustomers)
-      const spreadsheetId = await writeSupportableSheet(results, aeName)
+      const spreadsheetId = await writeSupportableSheet(
+        results,
+        aeName,
+        aeConfig?.driveFolderId || undefined,
+        aeConfig?.supportableSheetId || undefined,
+      )
 
-      // Write supportableFileId back into customers.json for each matched customer
-      const updated = customers.map(cu => {
-        const match = results.find(r => r.customerName === cu.name)
-        return match ? { ...cu, supportableFileId: spreadsheetId } : cu
-      })
-      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
-      renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
-      customers.splice(0, customers.length, ...updated)
+      // Write supportableSheetId back to aes.json
+      if (aeConfig) {
+        const updatedAes = aes.map(a => a.name === aeName ? { ...a, supportableSheetId: spreadsheetId } : a)
+        saveAes(updatedAes)
+      }
 
-      console.log(`[bootstrap] Supportable sheet created: ${spreadsheetId}`)
+      console.log(`[bootstrap] Supportable sheet ready: ${spreadsheetId}`)
     } catch (e: any) {
       console.error('[bootstrap] Supportable scrape failed:', e.message)
     }
