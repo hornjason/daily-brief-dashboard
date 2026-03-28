@@ -917,6 +917,21 @@ app.post('/api/setup/save-domains', async (c) => {
   }
 })
 
+// POST /api/setup/save-customers — replace entire customer list from Setup UI
+app.post('/api/setup/save-customers', async (c) => {
+  try {
+    const body = await c.req.json<{ customers: Customer[] }>()
+    if (!Array.isArray(body.customers)) return c.json({ error: 'customers must be an array' }, 400)
+
+    writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: body.customers }, null, 2))
+    renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+    customers.splice(0, customers.length, ...body.customers)
+    return c.json({ ok: true, count: body.customers.length })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 // GET /api/cases/all — Support cases across ALL accounts
 // ?includeAll=true returns closed/resolved cases too (default: open only)
 // ?account=NNNN filters to a specific account number
