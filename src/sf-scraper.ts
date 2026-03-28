@@ -391,14 +391,13 @@ const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? GOOGLE_UNIFIED_TOKEN_PATH
  * @param data         Scraped report data
  * @param spreadsheetId  Target sheet ID (from aes.json pipelineSheetId or PIPELINE_FILE_ID env fallback)
  */
-export async function writePipelineSheet(data: SfReportRow, spreadsheetId?: string): Promise<void> {
-  const sheetId = spreadsheetId ?? process.env.PIPELINE_FILE_ID
-  if (!sheetId) throw new Error('[sf-scraper] No pipeline sheet ID — set pipelineSheetId in aes.json or PIPELINE_FILE_ID env')
+export async function writePipelineSheet(data: SfReportRow, sheetIdParam?: string): Promise<void> {
+  const spreadsheetId = sheetIdParam ?? process.env.PIPELINE_FILE_ID
+  if (!spreadsheetId) throw new Error('[sf-scraper] No pipeline sheet ID — set pipelineSheetId in aes.json or PIPELINE_FILE_ID env')
   if (data.headers.length === 0) throw new Error('[sf-scraper] No headers in scraped data — aborting sheet write')
 
   const auth   = makeAuth(GDRIVE_TOKEN_PATH)
   const sheets = google.sheets({ version: 'v4', auth })
-  const spreadsheetId = sheetId
 
   const TAB_NAME = 'Pipeline'
 
