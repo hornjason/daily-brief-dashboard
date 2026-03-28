@@ -17,6 +17,8 @@ import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState,
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './src/rh-auth.ts'
 import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
 import { discoverAccountNumbers } from './src/rh-account-discovery.ts'
+import { runSfPipelineSync, SfSessionExpiredError, setSfSessionExpiredCallback, adoptSfContext, lastSfSync, lastSfRowCount, sfSyncError } from './src/sf-scraper.ts'
+import { startSfLoginBrowser, cancelSfLoginBrowser, getSfAuthStatus } from './src/sf-auth.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -68,6 +70,9 @@ const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR
   ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const RH_CASES_CACHE_PATH = resolve(CACHE_DIR, 'cases.json')
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'your-admin@example.com'
+const SF_REPORT_ID   = process.env.SF_REPORT_ID ?? ''
+const SF_SESSION_PATH = process.env.SF_SESSION
+  ?? resolve(SRV_CONFIG_DIR, '.sf-session.json')
 
 let oauthState = '' // CSRF state token for browser OAuth flow
 
@@ -152,7 +157,7 @@ app.get('/oauth/start', (c) => {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/drive.readonly',
       'https://www.googleapis.com/auth/calendar.readonly',
-      'https://www.googleapis.com/auth/spreadsheets.readonly',
+      'https://www.googleapis.com/auth/spreadsheets',
       'https://www.googleapis.com/auth/cloud-platform',
     ],
   })
@@ -285,6 +290,57 @@ app.post('/api/auth/redhat/sync', async (c) => {
 // POST /api/auth/redhat/discover — Trigger account number portal discovery
 app.post('/api/auth/redhat/discover', async (c) => {
   runPortalAccountDiscovery().catch(() => {})
+  return c.json({ started: true })
+})
+
+// ── Salesforce pipeline sync endpoints ───────────────────────────────────────
+
+// GET /api/auth/salesforce/status — session + last sync info
+app.get('/api/auth/salesforce/status', (c) => {
+  return c.json({
+    ...getSfAuthStatus(SF_SESSION_PATH),
+    lastSync: lastSfSync,
+    rowCount: lastSfRowCount,
+    syncError: sfSyncError,
+    reportConfigured: !!SF_REPORT_ID,
+    sheetConfigured: !!process.env.PIPELINE_FILE_ID,
+  })
+})
+
+// POST /api/auth/salesforce/start — launch headed browser for SF login
+// The SSO button auto-clicks; the SAML flow completes without user interaction
+// as long as the RH SSO session is active in the profile.
+app.post('/api/auth/salesforce/start', async (c) => {
+  try {
+    await startSfLoginBrowser(SF_SESSION_PATH, RH_PROFILE_DIR, () => {
+      // Auto-trigger a pipeline sync after login
+      if (SF_REPORT_ID && process.env.PIPELINE_FILE_ID) {
+        runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR).catch(() => {})
+      }
+    })
+    return c.json({ started: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 409)
+  }
+})
+
+// DELETE /api/auth/salesforce/session — cancel in-progress login
+app.delete('/api/auth/salesforce/session', async (c) => {
+  await cancelSfLoginBrowser()
+  return c.json({ cancelled: true })
+})
+
+// POST /api/auth/salesforce/sync — trigger pipeline sync (scrape SF → write sheet)
+app.post('/api/auth/salesforce/sync', async (c) => {
+  if (!SF_REPORT_ID) return c.json({ error: 'SF_REPORT_ID env var not set' }, 400)
+  if (!process.env.PIPELINE_FILE_ID) return c.json({ error: 'PIPELINE_FILE_ID env var not set' }, 400)
+  runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR).catch(e => {
+    if (e instanceof SfSessionExpiredError) {
+      console.warn('[server] SF session expired during sync')
+    } else {
+      console.error('[server] SF pipeline sync error:', e?.message ?? e)
+    }
+  })
   return c.json({ started: true })
 })
 
@@ -1703,7 +1759,6 @@ app.get('/customer/:name/brief', async (c) => {
 const DEFAULT_REFRESH_INTERVALS = {
   subscriptions: 4 * 60,   // minutes
   ccsp:          60 * 24,  // daily
-  pipeline:      60 * 2,   // every 2 hours
   rhScrape:      4 * 60,   // RH portal support case scrape — every 4 hours
 }
 
@@ -1830,7 +1885,7 @@ app.post('/api/drive-watcher/rebuild', async (c) => {
 
 // ── Full data refresh ─────────────────────────────────────────────────────────
 
-async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; pipeline: boolean; errors: string[] }> {
+async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; errors: string[] }> {
   const errors: string[] = []
   let sheetsRefreshed = 0
 
@@ -1853,16 +1908,8 @@ async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; pipeline: 
     ccspOk = true
   } catch (e: any) { errors.push(`ccsp: ${e.message}`) }
 
-  // 3. Pipeline
-  let pipelineOk = false
-  try {
-    const { records, fileIds } = await fetchPipelineData()
-    writePipelineCache(records, fileIds)
-    pipelineOk = true
-  } catch (e: any) { errors.push(`pipeline: ${e.message}`) }
-
-  console.log(`[refresh] sheets=${sheetsRefreshed}/${customers.length} ccsp=${ccspOk} pipeline=${pipelineOk} errors=${errors.length}`)
-  return { sheets: sheetsRefreshed, ccsp: ccspOk, pipeline: pipelineOk, errors }
+  console.log(`[refresh] sheets=${sheetsRefreshed}/${customers.length} ccsp=${ccspOk} errors=${errors.length}`)
+  return { sheets: sheetsRefreshed, ccsp: ccspOk, errors }
 }
 
 app.post('/api/refresh', async (c) => {
@@ -2151,20 +2198,65 @@ const RH_SCRAPE_TICK_MS = 15 * 60 * 1000  // tick interval — short intervals a
 
 let _subscriptionsTimer: ReturnType<typeof setInterval> | null = null
 let _ccspTimer: ReturnType<typeof setInterval> | null = null
-let _pipelineTimer: ReturnType<typeof setInterval> | null = null
 
 function rescheduleRefreshTimers(intervals: typeof DEFAULT_REFRESH_INTERVALS): void {
   if (_subscriptionsTimer) { clearInterval(_subscriptionsTimer); _subscriptionsTimer = null }
   if (_ccspTimer)          { clearInterval(_ccspTimer);          _ccspTimer = null }
-  if (_pipelineTimer)      { clearInterval(_pipelineTimer);      _pipelineTimer = null }
 
   if (customers.length === 0) return
 
   _subscriptionsTimer = setInterval(() => refreshSubscriptions().catch(() => {}), intervals.subscriptions * 60 * 1000)
   _ccspTimer          = setInterval(() => refreshCCSP().catch(() => {}),          intervals.ccsp * 60 * 1000)
-  _pipelineTimer      = setInterval(() => refreshPipeline().catch(() => {}),      intervals.pipeline * 60 * 1000)
 
-  console.log(`[timers] subscriptions=${intervals.subscriptions}m ccsp=${intervals.ccsp}m pipeline=${intervals.pipeline}m`)
+  console.log(`[timers] subscriptions=${intervals.subscriptions}m ccsp=${intervals.ccsp}m`)
+}
+
+// ── Pipeline daily sync at 2am ET ─────────────────────────────────────────────
+// SF report is generated at 1am ET daily; we sync at 2am ET to ensure it's ready.
+// Uses setTimeout + reschedule loop (container-safe — no system cron available).
+
+function nextEt2amUtc(): Date {
+  const now = new Date()
+  // Derive ET UTC offset by comparing actual UTC ms with "ET time treated as UTC" ms.
+  // This correctly handles EST vs EDT without hardcoding the offset.
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  })
+  const p: Record<string, number> = {}
+  for (const part of fmt.formatToParts(now)) {
+    if (part.type !== 'literal') p[part.type] = Number(part.value)
+  }
+  // etOffsetMs = how many ms ahead UTC is vs ET local time
+  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
+  const etOffsetMs  = now.getTime() - etAsIfUtcMs   // e.g. 4*3600*1000 during EDT
+
+  // "Today at 2am ET" expressed as UTC
+  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, 2, 0, 0) + etOffsetMs)
+  // If already past, roll to tomorrow
+  if (target.getTime() <= now.getTime()) {
+    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
+  }
+  return target
+}
+
+function schedulePipelineSync(): void {
+  const next   = nextEt2amUtc()
+  const now    = new Date()
+  const msUntil = next.getTime() - now.getTime()
+  const hUntil  = Math.round(msUntil / 1000 / 60 / 60 * 10) / 10
+  console.log(`[pipeline-sync] next run at ${next.toISOString()} (${hUntil}h from now)`)
+
+  setTimeout(async () => {
+    try {
+      console.log('[pipeline-sync] starting daily 2am ET sync')
+      await refreshPipeline()
+    } catch (e: any) {
+      console.warn(`[pipeline-sync] error: ${e.message}`)
+    }
+    schedulePipelineSync()  // reschedule for next day
+  }, msUntil)
 }
 
 const port = Number(process.env.PORT ?? 7777)
@@ -2177,6 +2269,9 @@ if (customers.length > 0) {
   refreshAll().catch(() => {})
   rescheduleRefreshTimers(getRefreshIntervals())
 }
+
+// Pipeline syncs daily at 2am ET (SF report generated at 1am ET)
+schedulePipelineSync()
 
 // On startup: discover account numbers from Supportable sheets for any customer missing them
 ;(async () => {
@@ -2217,6 +2312,9 @@ if (customers.length > 0) {
 if (existsSync(RH_SESSION_PATH)) {
   setTimeout(async () => {
     await initScrapeContext(RH_PROFILE_DIR)
+    // Share the same browser context with SF scraper — SSO session covers both
+    const ctx = getScrapeContext()
+    if (ctx) adoptSfContext(ctx, RH_PROFILE_DIR)
     runRhScrapeWithState().catch(() => {})
   }, 5_000)
 }

@@ -70,6 +70,7 @@ export interface CCSPSummary {
 
 export interface PipelineOpp {
   oppNumber: string
+  oppId?: string
   accountName: string
   oppName: string
   acv: number

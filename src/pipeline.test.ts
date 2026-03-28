@@ -73,6 +73,19 @@ describe('parsePipelineRows', () => {
     expect(parsePipelineRows(rows2)[0].renewal).toBe(false)
   })
 
+  test('parses SF "feature included"/"feature not included" renewal strings', () => {
+    const yes = [HEADERS, makeRow({ 'Renewal': 'feature included' })]
+    expect(parsePipelineRows(yes)[0].renewal).toBe(true)
+
+    const no = [HEADERS, makeRow({ 'Renewal': 'feature not included' })]
+    expect(parsePipelineRows(no)[0].renewal).toBe(false)
+  })
+
+  test('parses ACV with currency prefix and commas (SF format)', () => {
+    const rows = [HEADERS, makeRow({ 'ACV Opportunity': 'USD 1,050,000.00' })]
+    expect(parsePipelineRows(rows)[0].acv).toBe(1_050_000)
+  })
+
   test('skips fully empty rows', () => {
     const emptyRow = HEADERS.map(() => '')
     const rows = [HEADERS, makeRow(), emptyRow, makeRow({ 'Opportunity Number': 'OPP-002' })]
@@ -112,6 +125,20 @@ describe('buildPipelineSummary', () => {
     const summary = buildPipelineSummary(records, null)
     expect(summary.totalAcv).toBe(175_000)
     expect(summary.openCount).toBe(3)
+  })
+
+  test('openCount and totalAcv exclude closed records', () => {
+    const withClosed = [
+      ...records,
+      {
+        oppNumber: 'OPP-004', accountName: 'Closed Co', oppName: 'Closed Deal',
+        acv: 999_000, closeDate: '2026-01-31', forecastCategory: 'Closed',
+        owner: 'Alice', renewal: false, offeringGroup: 'RHEL', probability: 0, products: [],
+      },
+    ]
+    const summary = buildPipelineSummary(withClosed, null)
+    expect(summary.openCount).toBe(3)        // closed opp excluded
+    expect(summary.totalAcv).toBe(175_000)   // closed ACV excluded
   })
 
   test('surfaces top opportunities sorted by ACV descending', () => {

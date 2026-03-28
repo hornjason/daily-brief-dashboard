@@ -7,6 +7,7 @@ const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '
 
 export interface PipelineRecord {
   oppNumber:        string
+  oppId?:           string   // 18-char SF record ID — enables direct opp link
   accountName:      string
   oppName:          string
   acv:              number
@@ -56,21 +57,28 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
     seen.add(oppNumber)
 
     const fc = String(col(row, 'Forecast Category') ?? '').trim()
-    const acv = Number(col(row, 'ACV Opportunity') ?? 0)
+    const rawAcv = String(col(row, 'ACV Opportunity') ?? '').replace(/[^0-9.-]/g, '')
+    const acv = rawAcv ? Number(rawAcv) : 0
     const rawDate = col(row, 'Close Date')
     const closeDate = rawDate instanceof Date
       ? rawDate.toISOString().slice(0, 10)
       : String(rawDate ?? '').slice(0, 10)
 
+    const rawOppId = String(col(row, 'Opportunity ID') ?? '').trim()
+
     records.push({
       oppNumber,
+      oppId:            rawOppId || undefined,
       accountName:      String(col(row, 'Account Name') ?? '').trim(),
       oppName:          String(col(row, 'Opportunity Name') ?? '').trim(),
       acv,
       closeDate,
       forecastCategory: fc,
       owner:            String(col(row, 'Opportunity Owner') ?? '').trim(),
-      renewal:          col(row, 'Renewal') === 1 || col(row, 'Renewal') === '1' || String(col(row, 'Renewal') ?? '').toLowerCase() === 'true',
+      renewal:          (() => {
+        const r = String(col(row, 'Renewal') ?? '').toLowerCase().trim()
+        return r === '1' || r === 'true' || r === 'yes' || (r.includes('included') && !r.includes('not'))
+      })(),
       offeringGroup:    String(col(row, 'Offering Group') ?? '').trim(),
       probability:      Number(col(row, 'Probability (%)') ?? 0),
       products:         productsByOpp.get(oppNumber) ?? [],
@@ -146,9 +154,11 @@ export async function fetchPipelineData(): Promise<{ records: PipelineRecord[]; 
 
   for (const fileId of allIds) {
     try {
+      // PIPELINE_FILE_ID is written by the SF scraper into a "Pipeline" tab
+      const range = fileId === manualId ? 'Pipeline!A1:Z5000' : 'A1:Z5000'
       const res = await sheets.spreadsheets.values.get({
         spreadsheetId: fileId,
-        range: 'A1:Z5000',
+        range,
       })
       const rows = (res.data.values ?? []) as string[][]
       allRecords.push(...parsePipelineRows(rows))
@@ -211,5 +221,5 @@ export function buildPipelineSummary(records: PipelineRecord[], cachedAt: string
   }
   const byQuarterStage = [...qMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([quarter, v]) => ({ quarter, ...v }))
 
-  return { totalAcv, openCount: records.length, renewalAcv, newAcv, byStage, byOwner, byQuarterStage, topOpps, closedOpps, techWinsNeeded, cachedAt }
+  return { totalAcv, openCount: open.length, renewalAcv, newAcv, byStage, byOwner, byQuarterStage, topOpps, closedOpps, techWinsNeeded, cachedAt }
 }

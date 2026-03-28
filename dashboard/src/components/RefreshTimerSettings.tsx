@@ -4,7 +4,6 @@ import { Loader2, Check, RefreshCw } from 'lucide-react'
 interface RefreshIntervals {
   subscriptions: number
   ccsp: number
-  pipeline: number
   rhScrape: number
 }
 
@@ -54,7 +53,6 @@ export function RefreshTimerSettings() {
     { key: 'rhScrape',      label: 'RH Support Cases', hint: 'How often to scrape open cases from Red Hat portal' },
     { key: 'subscriptions', label: 'Subscriptions',    hint: 'How often to sync product data from Supportable sheets' },
     { key: 'ccsp',          label: 'CCSP Spend',       hint: 'How often to refresh cloud spend data' },
-    { key: 'pipeline',      label: 'Pipeline',         hint: 'How often to pull pipeline records' },
   ]
 
   return (

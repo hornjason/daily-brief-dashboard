@@ -9,7 +9,7 @@ import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
 import { writeFileSync, existsSync } from 'node:fs'
 import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
-import type { Page } from '@playwright/test'
+import { adoptSfContext } from './sf-scraper.ts'
 
 const RH_PORTAL_URL = 'https://access.redhat.com/support/cases/#/case/list'
 const LOGIN_POLL_INTERVAL_MS = 2_000
@@ -129,6 +129,9 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
           loginInProgress = false
 
           adoptScrapeContext(ctx, profileDir, livePage)
+          // SF uses the same SSO session — adopt the shared context so SF
+          // scraping auto-authenticates via the existing SSO cookies.
+          adoptSfContext(ctx, profileDir)
           onComplete?.()
           return
         }

@@ -64,7 +64,18 @@ export function OppDetail({ opp, onClose }: { opp: PipelineOpp; onClose: () => v
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <p className="text-xs text-text-secondary mb-0.5">{opp.accountName}</p>
-            <p className="text-sm font-semibold text-text-primary leading-snug">{opp.oppName}</p>
+            {opp.oppId ? (
+              <a
+                href={`https://redhatcrm.lightning.force.com/lightning/r/Opportunity/${opp.oppId}/view`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-semibold text-blue-400 hover:text-blue-300 leading-snug hover:underline"
+              >
+                {opp.oppName}
+              </a>
+            ) : (
+              <p className="text-sm font-semibold text-text-primary leading-snug">{opp.oppName}</p>
+            )}
           </div>
           <button onClick={onClose} className="shrink-0 text-text-secondary hover:text-text-primary transition-colors mt-0.5">
             <X className="w-4 h-4" />
