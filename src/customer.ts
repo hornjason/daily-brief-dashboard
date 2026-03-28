@@ -1,5 +1,4 @@
 import { google } from 'googleapis'
-// PAI inference — optional, only available when running with PAI installed locally
 import { resolve } from 'path'
 import { existsSync } from 'node:fs'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
@@ -267,144 +266,55 @@ export async function fetchCustomerDocs(customer: Customer): Promise<DriveFile[]
   return Promise.race([_fetchCustomerDocsImpl(customer), timeout])
 }
 
-// ── LLM provider routing ──────────────────────────────────────────────────────
+// ── LLM — Gemini via Vertex AI ────────────────────────────────────────────────
 
-export function getBriefProvider(): string {
-  return (process.env.LLM_PROVIDER ?? 'pai').toLowerCase()
-}
+export function getBriefProvider(): string { return 'gemini' }
 
 export function isBriefConfigured(): boolean {
-  const p = getBriefProvider()
-  if (p === 'pai')       return true  // PAI inference always available
-  if (p === 'openai')      return !!process.env.OPENAI_API_KEY
-  if (p === 'anthropic')   return !!process.env.ANTHROPIC_API_KEY
-  if (p === 'claude-code') return Bun.which('claude') !== null
-  if (p === 'gemini')      return !!process.env.GOOGLE_CLOUD_PROJECT && (!!process.env.GEMINI_SERVICE_ACCOUNT_KEY || existsSync(GOOGLE_UNIFIED_TOKEN_PATH))
-  if (p === 'ollama')      return true   // Ollama assumed local, no key needed
-  return false
+  return !!process.env.GOOGLE_CLOUD_PROJECT &&
+    (!!process.env.GEMINI_SERVICE_ACCOUNT_KEY || existsSync(GOOGLE_UNIFIED_TOKEN_PATH))
 }
 
 async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
-  const provider = getBriefProvider()
+  const project  = process.env.GOOGLE_CLOUD_PROJECT
+  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
-  if (provider === 'openai' || provider === 'ollama') {
-    const baseUrl = provider === 'ollama'
-      ? (process.env.OLLAMA_URL ?? 'http://localhost:11434') + '/v1'
-      : 'https://api.openai.com/v1'
-    const model = provider === 'ollama'
-      ? (process.env.OLLAMA_MODEL ?? 'llama3')
-      : (process.env.OPENAI_MODEL ?? 'gpt-4o')
-    const apiKey = provider === 'ollama' ? 'ollama' : process.env.OPENAI_API_KEY
-    if (provider === 'openai' && !apiKey) throw new Error('OPENAI_API_KEY not set in .env')
-
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
-        max_tokens: 1200,
-      }),
+  // Prefer service account key (works without cloud-platform OAuth scope on the user token).
+  // Fall back to user OAuth token (requires cloud-platform scope).
+  let token: string | null | undefined
+  const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+  if (saKeyB64) {
+    const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+    const jwtAuth = new google.auth.JWT({
+      email: keyData.client_email,
+      key:   keyData.private_key,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
     })
-    if (!res.ok) {
-      const err = await res.text()
-      throw new Error(`${provider} API error ${res.status}: ${err.slice(0, 200)}`)
-    }
-    const json = await res.json() as any
-    return json.choices?.[0]?.message?.content ?? ''
+    token = (await jwtAuth.getAccessToken()).token
+  } else {
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    token = (await auth.getAccessToken()).token
   }
+  if (!token) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
 
-  if (provider === 'claude-code') {
-    const claudeBin = Bun.which('claude')
-    if (!claudeBin) throw new Error('claude CLI not found. Install Claude Code from claude.ai/code and run `claude login`.')
-    const proc = Bun.spawn([claudeBin, '-p', `${systemPrompt}\n\n${userPrompt}`], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-    const output = await new Response(proc.stdout).text()
-    const exitCode = await proc.exited
-    if (exitCode !== 0) {
-      const err = await new Response(proc.stderr).text()
-      throw new Error(`claude CLI error (exit ${exitCode}): ${err.slice(0, 200)}`)
-    }
-    return output.trim()
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Gemini API error ${res.status} (project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
   }
-
-  if (provider === 'gemini') {
-    const project  = process.env.GOOGLE_CLOUD_PROJECT
-    const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-    const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
-    if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
-
-    // Prefer service account key (works for any user, no cloud-platform OAuth scope needed).
-    // Fall back to user OAuth token (requires cloud-platform scope on the user's token).
-    let token: string | null | undefined
-    const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-    if (saKeyB64) {
-      const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-      const jwtAuth = new google.auth.JWT({
-        email: keyData.client_email,
-        key:   keyData.private_key,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      })
-      token = (await jwtAuth.getAccessToken()).token
-    } else {
-      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-      token = (await auth.getAccessToken()).token
-    }
-    if (!token) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
-
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
-      }),
-    })
-    if (!res.ok) {
-      const err = await res.text()
-      throw new Error(`Gemini API error ${res.status} (project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
-    }
-    const json = await res.json() as any
-    return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  }
-
-  if (provider === 'anthropic') {
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not set in .env')
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6',
-        max_tokens: 1200,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    })
-    if (!res.ok) throw new Error(`Anthropic API error ${res.status}`)
-    const json = await res.json() as any
-    return json.content?.[0]?.text ?? ''
-  }
-
-  // Default: PAI inference (dynamic import — graceful fail if PAI not installed)
-  try {
-    const { inference } = await import('../../../Tools/Inference.ts')
-    const result = await inference({ systemPrompt, userPrompt, level: 'standard', timeout: 60000 })
-    if (!result.success) throw new Error(result.error ?? 'PAI inference failed')
-    return result.output
-  } catch (e: any) {
-    if (e.code === 'MODULE_NOT_FOUND' || e.message?.includes('Cannot find module')) {
-      throw new Error('PAI inference not available. Set LLM_PROVIDER=anthropic, openai, or ollama in your .env file.')
-    }
-    throw e
-  }
+  const json = await res.json() as any
+  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 }
 
 // ── Brief generation ──────────────────────────────────────────────────────────

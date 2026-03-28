@@ -534,22 +534,10 @@ app.delete('/api/data-sources/remove-folder', async (c) => {
 // ── Dashboard API endpoints ──────────────────────────────────────────────────
 
 // GET /api/config — Dashboard configuration and provider status
-const PROVIDER_INSTRUCTIONS: Record<string, { vars: string[]; snippet: string; description: string }> = {
-  pai:          { vars: ['LLM_PROVIDER=pai'],          snippet: 'LLM_PROVIDER=pai',                                   description: 'PAI Inference (default for PAI users)' },
-  'claude-code':{ vars: ['LLM_PROVIDER=claude-code'], snippet: 'LLM_PROVIDER=claude-code',                           description: 'Claude Code CLI auth (no API key needed)' },
-  gemini:       { vars: ['LLM_PROVIDER=gemini'],       snippet: 'LLM_PROVIDER=gemini\n# Uses your existing Google OAuth token + GOOGLE_CLOUD_PROJECT — no API key needed\n# Optional: GEMINI_MODEL=gemini-2.5-flash', description: 'Gemini via Vertex AI (uses Google OAuth — no API key needed)' },
-  openai:       { vars: ['LLM_PROVIDER=openai', 'OPENAI_API_KEY=sk-...'],    snippet: 'LLM_PROVIDER=openai\nOPENAI_API_KEY=sk-your-key-here',    description: 'OpenAI GPT-4o' },
-  anthropic:    { vars: ['LLM_PROVIDER=anthropic', 'ANTHROPIC_API_KEY=sk-ant-...'], snippet: 'LLM_PROVIDER=anthropic\nANTHROPIC_API_KEY=sk-ant-your-key', description: 'Anthropic Claude (direct)' },
-  ollama:       { vars: ['LLM_PROVIDER=ollama'],       snippet: 'LLM_PROVIDER=ollama\n# Optional: OLLAMA_MODEL=llama3\n# Optional: OLLAMA_URL=http://localhost:11434', description: 'Ollama (local, no API key needed)' },
-}
-
 app.get('/api/config', (c) => {
-  const provider = getBriefProvider()
-  const configured = isBriefConfigured()
   return c.json({
-    briefProvider: provider,
-    briefConfigured: configured,
-    providers: PROVIDER_INSTRUCTIONS,
+    briefProvider: getBriefProvider(),
+    briefConfigured: isBriefConfigured(),
   })
 })
 

@@ -54,8 +54,10 @@ Playwright scrapes `access.redhat.com/support/cases` for open support cases. Req
 ### 4. Red Hat Subscription API (`src/redhat.ts`)
 Direct API calls to `api.access.redhat.com` using an offline token (`REDHAT_OFFLINE_TOKEN`) for subscription and case data that doesn't require browser auth.
 
-### 5. Gmail + Calendar (`src/customer.ts`, `src/google.ts`)
+### 5. Gmail + Calendar + AI Brief (`src/customer.ts`, `src/google.ts`)
 Google OAuth token used to fetch recent customer emails and upcoming calendar events for the daily brief. Filtered to customer domain/name to exclude internal Red Hat noise.
+
+**AI Brief:** Generated on-demand per customer via **Gemini on Vertex AI** (`gemini-2.5-flash` by default). Auth uses a service account key (`GEMINI_SERVICE_ACCOUNT_KEY`) — no separate API key or LLM provider selection. Result cached daily per customer in `data/cache/{customer}-{date}.json`.
 
 ---
 
@@ -186,9 +188,10 @@ The `data/` directory is mounted as a volume so config, credentials, cache, and 
 | `PIPELINE_FILE_ID` | Google Sheet ID where SF scraper writes the `Pipeline` tab |
 | `SF_REPORT_ID` | Salesforce report ID to scrape |
 | `REDHAT_OFFLINE_TOKEN` | Red Hat API offline token |
-| `LLM_PROVIDER` | AI brief provider (`gemini`, `anthropic`, `openai`, `ollama`, `pai`) |
-| `GOOGLE_CLOUD_PROJECT` | GCP project for Vertex AI / Gemini |
+| `GOOGLE_CLOUD_PROJECT` | GCP project for Vertex AI (Gemini brief generation) |
+| `GOOGLE_CLOUD_LOCATION` | Vertex AI region (default `us-central1`) |
 | `GEMINI_SERVICE_ACCOUNT_KEY` | Base64-encoded service account JSON for Vertex AI |
+| `GEMINI_MODEL` | Gemini model override (default `gemini-2.5-flash`) |
 | `GITHUB_TOKEN` | GHCR push credentials |
 | `CONFIG_DIR` | Path to config inside container (default `/data/config`) |
 | `CACHE_DIR` | Path to cache inside container (default `/data/cache`) |
