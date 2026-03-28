@@ -11,7 +11,7 @@ import { fetchCustomerSheetData, fetchCustomerSheetRaw, fetchCCSPData, fetchCust
 import type { CCSPRecord } from './src/sheets.ts'
 import { fetchPipelineData, buildPipelineSummary } from './src/pipeline.ts'
 import type { PipelineRecord } from './src/pipeline.ts'
-import type { Customer, ProductSubscription } from './src/types.ts'
+import type { Customer, AE, ProductSubscription } from './src/types.ts'
 import { inferCustomerDomain } from './src/domains.ts'
 import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState, checkFilesModified } from './src/drive-watcher.ts'
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './src/rh-auth.ts'
@@ -31,6 +31,33 @@ try {
   customers = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8')).customers ?? []
 } catch {
   console.warn('[warn] config/customers.json not found — customer filtering disabled')
+}
+
+// Load AE config
+const AES_PATH = process.env.CONFIG_DIR
+  ? resolve(process.env.CONFIG_DIR, 'aes.json')
+  : resolve(import.meta.dir, 'config/aes.json')
+let aes: AE[] = []
+try {
+  aes = JSON.parse(readFileSync(AES_PATH, 'utf-8')).aes ?? []
+  console.log(`[config] loaded ${aes.length} AEs from aes.json`)
+} catch {
+  console.warn('[warn] config/aes.json not found — AE config unavailable')
+}
+
+/** Persist aes[] back to aes.json atomically. */
+function saveAes(updated: AE[]): void {
+  const tmp = AES_PATH + '.tmp'
+  writeFileSync(tmp, JSON.stringify({ aes: updated }, null, 2))
+  renameSync(tmp, AES_PATH)
+  aes = updated
+}
+
+/** Extract Tableau territory segment from a full Tableau dashboard URL. */
+function extractTableauTerritory(url: string): string | null {
+  // URL form: .../CloudConsumption/{guid}/{territory}?...
+  const match = url.match(/\/CloudConsumption\/[^/]+\/([^?#]+)/)
+  return match?.[1] ?? null
 }
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────
@@ -158,6 +185,7 @@ app.get('/oauth/start', (c) => {
     scope: [
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.file',
       'https://www.googleapis.com/auth/calendar.readonly',
       'https://www.googleapis.com/auth/spreadsheets',
       'https://www.googleapis.com/auth/cloud-platform',
@@ -591,6 +619,48 @@ app.delete('/api/data-sources/remove-folder', async (c) => {
 // ── Dashboard API endpoints ──────────────────────────────────────────────────
 
 // GET /api/config — Dashboard configuration and provider status
+// ── AE Config API ─────────────────────────────────────────────────────────────
+
+app.get('/api/aes', (c) => c.json({ aes }))
+
+app.post('/api/aes', async (c) => {
+  try {
+    const body = await c.req.json() as { aes: AE[] }
+    if (!Array.isArray(body.aes)) return c.json({ error: 'aes must be an array' }, 400)
+    saveAes(body.aes)
+    // Rebuild flat customer list with denormalized ae names
+    try {
+      const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
+      customers = raw.customers ?? []
+    } catch {}
+    return c.json({ ok: true, count: aes.length })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+app.post('/api/aes/validate-folder', async (c) => {
+  try {
+    const { folderUrl } = await c.req.json() as { folderUrl: string }
+    const match = folderUrl?.match(/\/folders\/([\w-]+)/)
+    if (!match) return c.json({ error: 'Could not extract folder ID from URL' }, 400)
+    const folderId = match[1]
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+    const res = await drive.files.get({
+      fileId: folderId,
+      supportsAllDrives: true,
+      fields: 'id,name,mimeType',
+    })
+    if (res.data.mimeType !== 'application/vnd.google-apps.folder') {
+      return c.json({ error: 'URL does not point to a folder' }, 400)
+    }
+    return c.json({ folderId, folderName: res.data.name ?? folderId })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 400)
+  }
+})
+
 app.get('/api/config', (c) => {
   return c.json({
     briefProvider: getBriefProvider(),

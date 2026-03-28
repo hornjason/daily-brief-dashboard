@@ -1,3 +1,18 @@
+/**
+ * Per-AE configuration — stored in data/config/aes.json.
+ * tableauUrl: full Tableau dashboard URL; territory extracted automatically.
+ * Sheet IDs are written back by scrapers after first creation.
+ */
+export interface AE {
+  name: string
+  driveFolderId: string         // Google Drive folder where AE sheets live
+  sfReportId?: string           // Salesforce report ID for pipeline scrape
+  tableauUrl?: string           // Full Tableau CCSP dashboard URL for this AE
+  supportableSheetId?: string   // Written back after first Supportable scrape
+  pipelineSheetId?: string      // Written back after first SF pipeline scrape
+  ccspSheetId?: string          // Written back after first CCSP scrape
+}
+
 export interface Customer {
   name: string
   domain?: string
@@ -8,7 +23,6 @@ export interface Customer {
   sheetTab?: string      // override when customer name doesn't match sheet tab (e.g. REI → "RECREATIONAL EQUIPMENT")
   aliases?: string[]     // known subsidiaries / former names that map to this account
   aliasDomains?: string[] // email domains for aliases (e.g. ["lifetouch.com"] for Shutterfly)
-  supportableFileId?: string  // Google Sheets file ID of the AE's Supportable file
   skipAccountDiscovery?: boolean  // true = no RH account, skip portal discovery
 }
 
