@@ -507,6 +507,286 @@ app.post('/api/bootstrap/ccsp', async (c) => {
   return c.json({ started: true, aeCount: eligibleAes.length })
 })
 
+// ── Auto-bootstrap endpoints ─────────────────────────────────────────────────
+
+interface AutoBootstrapStep {
+  name: string
+  status: 'pending' | 'running' | 'done' | 'error'
+  detail?: string
+}
+
+interface AutoBootstrapState {
+  running: boolean
+  aeName: string | null
+  steps: AutoBootstrapStep[]
+  error: string | null
+  completedAt: string | null
+}
+
+let autoBootstrapState: AutoBootstrapState = {
+  running: false, aeName: null, steps: [], error: null, completedAt: null
+}
+
+app.get('/api/bootstrap/auto/status', (c) => {
+  return c.json(autoBootstrapState)
+})
+
+app.post('/api/bootstrap/auto', async (c) => {
+  if (autoBootstrapState.running) return c.json({ error: 'Auto-bootstrap already in progress' }, 409)
+
+  const body = await c.req.json<{
+    aeName?: string
+    sfReportId?: string
+    tableauTerritories?: string[]
+    customerNames?: string[]
+    parentFolderId?: string
+  }>().catch(() => ({}))
+
+  const aeName = (body.aeName ?? '').trim()
+  const sfReportId = (body.sfReportId ?? '').trim()
+  const tableauTerritories = body.tableauTerritories ?? []
+  const customerNames = (body.customerNames ?? []).map(n => n.trim()).filter(Boolean)
+  const parentFolderId = (body.parentFolderId ?? '').trim() || undefined
+
+  if (!aeName) return c.json({ error: 'aeName is required' }, 400)
+  if (!sfReportId) return c.json({ error: 'sfReportId is required' }, 400)
+  if (!tableauTerritories.length) return c.json({ error: 'tableauTerritories is required' }, 400)
+  if (!customerNames.length) return c.json({ error: 'customerNames is required' }, 400)
+
+  // Upsert AE into aes.json immediately with basic fields
+  let aeConfig = aes.find(a => a.name === aeName)
+  if (!aeConfig) {
+    aeConfig = { name: aeName, driveFolderId: '', sfReportId, tableauTerritories }
+    saveAes([...aes, aeConfig])
+  } else {
+    const updated = aes.map(a => a.name === aeName ? { ...a, sfReportId, tableauTerritories } : a)
+    saveAes(updated)
+    aeConfig = aes.find(a => a.name === aeName)!
+  }
+
+  autoBootstrapState = {
+    running: true,
+    aeName,
+    steps: [
+      { name: 'Create Drive Folder', status: 'pending' },
+      { name: 'Discover Account Numbers', status: 'pending' },
+      { name: 'Create Supportable Sheet', status: 'pending' },
+      { name: 'Create CCSP Sheet', status: 'pending' },
+      { name: 'Sync Pipeline Sheet', status: 'pending' },
+    ],
+    error: null,
+    completedAt: null,
+  }
+
+  const setStep = (idx: number, status: AutoBootstrapStep['status'], detail?: string) => {
+    autoBootstrapState.steps[idx] = { ...autoBootstrapState.steps[idx], status, detail }
+  }
+
+  // Run async — client polls /api/bootstrap/auto/status
+  ;(async () => {
+    let driveFolderId = ''
+
+    // Step 1 — Create Drive Folder
+    try {
+      setStep(0, 'running')
+      const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
+      const folder = await drive.files.create({
+        requestBody: {
+          name: aeName,
+          mimeType: 'application/vnd.google-apps.folder',
+          ...(parentFolderId ? { parents: [parentFolderId] } : {}),
+        },
+        supportsAllDrives: true,
+        fields: 'id,webViewLink',
+      })
+      driveFolderId = folder.data.id!
+      const updated = aes.map(a => a.name === aeName ? { ...a, driveFolderId } : a)
+      saveAes(updated)
+      setStep(0, 'done', `Folder: ${driveFolderId}`)
+      console.log(`[auto-bootstrap] Drive folder created: ${driveFolderId}`)
+    } catch (e: any) {
+      setStep(0, 'error', e.message)
+      autoBootstrapState.error = `Drive folder creation failed: ${e.message}`
+      console.error('[auto-bootstrap] Drive folder creation failed:', e.message)
+    }
+
+    // Step 2 — Discover Account Numbers
+    try {
+      setStep(1, 'running')
+      const ctx = getScrapeContext()
+      if (!ctx) throw new Error('No RH browser session — connect Red Hat Portal first')
+      const page = await ctx.newPage()
+      try {
+        for (const name of customerNames) {
+          setStep(1, 'running', `Discovering: ${name}`)
+          const result = await discoverAccountNumbers(page, name)
+          const existing = customers.find(cx => cx.name === name)
+          if (existing) {
+            const merged = new Set([...(existing.accountNumbers ?? []), ...result.accountNumbers])
+            existing.accountNumbers = [...merged]
+          } else {
+            customers.push({ name, ae: aeName, accountNumbers: result.accountNumbers })
+          }
+        }
+        // Save customers.json atomically
+        const tmpPath = CUSTOMERS_PATH + '.tmp'
+        writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
+        renameSync(tmpPath, CUSTOMERS_PATH)
+        setStep(1, 'done', `Discovered accounts for ${customerNames.length} customers`)
+        console.log(`[auto-bootstrap] Account discovery complete for ${customerNames.length} customers`)
+      } finally {
+        await page.close()
+      }
+    } catch (e: any) {
+      setStep(1, 'error', e.message)
+      autoBootstrapState.error = `Account discovery failed: ${e.message}`
+      console.error('[auto-bootstrap] Account discovery failed:', e.message)
+    }
+
+    // Step 3 — Create Supportable Sheet
+    try {
+      setStep(2, 'running')
+      const supportableCustomers = customerNames.map(name => {
+        const cx = customers.find(x => x.name === name)
+        return { name, accountNumbers: cx?.accountNumbers ?? [] }
+      }).filter(cx => cx.accountNumbers.length > 0)
+      if (supportableCustomers.length === 0) throw new Error('No customers with account numbers')
+      const results = await runSupportableScrape(supportableCustomers)
+      const sheetId = await writeSupportableSheet(results, aeName, driveFolderId || undefined)
+      const updated = aes.map(a => a.name === aeName ? { ...a, supportableSheetId: sheetId } : a)
+      saveAes(updated)
+      setStep(2, 'done', `Sheet: ${sheetId}`)
+      console.log(`[auto-bootstrap] Supportable sheet created: ${sheetId}`)
+    } catch (e: any) {
+      setStep(2, 'error', e.message)
+      autoBootstrapState.error = `Supportable sheet failed: ${e.message}`
+      console.error('[auto-bootstrap] Supportable sheet failed:', e.message)
+    }
+
+    // Step 4 — Create CCSP Sheet
+    try {
+      setStep(3, 'running')
+      const currentAe = aes.find(a => a.name === aeName)!
+      const ccspAe = { ...currentAe, tableauTerritories, driveFolderId: driveFolderId || currentAe.driveFolderId } as AE
+      const ccspResults = await runCcspScrape([ccspAe])
+      const sheetId = await writeCcspSheet(ccspResults, aeName, ccspAe.driveFolderId)
+      const updated = aes.map(a => a.name === aeName ? { ...a, ccspSheetId: sheetId } : a)
+      saveAes(updated)
+      setStep(3, 'done', `Sheet: ${sheetId}`)
+      console.log(`[auto-bootstrap] CCSP sheet created: ${sheetId}`)
+    } catch (e: any) {
+      setStep(3, 'error', e.message)
+      autoBootstrapState.error = `CCSP sheet failed: ${e.message}`
+      console.error('[auto-bootstrap] CCSP sheet failed:', e.message)
+    }
+
+    // Step 5 — Sync Pipeline Sheet
+    try {
+      setStep(4, 'running')
+      const pipelineSheetId = await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
+      await runSfPipelineSync(sfReportId, RH_PROFILE_DIR, pipelineSheetId)
+      const updated = aes.map(a => a.name === aeName ? { ...a, pipelineSheetId } : a)
+      saveAes(updated)
+      setStep(4, 'done', `Sheet: ${pipelineSheetId}`)
+      console.log(`[auto-bootstrap] Pipeline sheet synced: ${pipelineSheetId}`)
+    } catch (e: any) {
+      setStep(4, 'error', e.message)
+      autoBootstrapState.error = `Pipeline sync failed: ${e.message}`
+      console.error('[auto-bootstrap] Pipeline sync failed:', e.message)
+    }
+
+    autoBootstrapState.running = false
+    autoBootstrapState.completedAt = new Date().toISOString()
+    console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
+  })()
+
+  return c.json({ started: true })
+})
+
+// ── Tableau territory discovery ──────────────────────────────────────────────
+
+app.get('/api/bootstrap/tableau/territories', async (c) => {
+  const ctx = getScrapeContext()
+  if (!ctx) return c.json({ error: 'No RH session — connect Red Hat Portal first' }, 400)
+
+  let page: Awaited<ReturnType<typeof ctx.newPage>> | null = null
+  try {
+    page = await ctx.newPage()
+    const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumptionSummary'
+    await page.goto(TABLEAU_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {
+      console.warn('[territories] networkidle timed out — continuing anyway')
+    })
+
+    // Inline applyFilter helper for territory discovery
+    const applyFilterLocal = async (label: string, values: string[]) => {
+      const trigger = await page!.$(`[aria-label="${label}"], select[title*="${label}"]`)
+      if (!trigger) {
+        const byText = await page!.$(`text="${label}"`)
+        if (!byText) { console.warn(`[territories] filter "${label}" not found`); return }
+        const parent = await byText.$('xpath=ancestor::div[contains(@class,"filter") or contains(@class,"dropdown")][1]')
+        if (!parent) { console.warn(`[territories] filter "${label}" parent not found`); return }
+        await parent.click()
+      } else {
+        await trigger.click()
+      }
+      await page!.waitForTimeout(800)
+
+      const allOption = await page!.$('text="(All)"')
+      if (allOption) {
+        const checkbox = await allOption.$('xpath=preceding-sibling::input[@type="checkbox"] | ancestor::label/input')
+        const checked = await checkbox?.isChecked()
+        if (checked) await allOption.click()
+        await page!.waitForTimeout(300)
+      }
+
+      for (const val of values) {
+        const opt = await page!.$(`text="${val}"`)
+        if (opt) { await opt.click(); await page!.waitForTimeout(300) }
+      }
+
+      const applyBtn = await page!.$('button:has-text("Apply"), input[value="Apply"]')
+      if (applyBtn) await applyBtn.click()
+      await page!.waitForTimeout(1_500)
+    }
+
+    // Apply prerequisite filters
+    await applyFilterLocal('Super Geo', ['AMERICAS'])
+    await applyFilterLocal('Geo', ['NA_COMM'])
+    await applyFilterLocal('Region', ['NA_COMM_COMMERCIAL'])
+    await applyFilterLocal('Segment', ['Commercial'])
+
+    // Open the Account Territory filter dropdown
+    const trigger = await page.$(`[aria-label="Account Territory"], select[title*="Account Territory"]`)
+    if (!trigger) {
+      const byText = await page.$('text="Account Territory"')
+      if (byText) {
+        const parent = await byText.$('xpath=ancestor::div[contains(@class,"filter") or contains(@class,"dropdown")][1]')
+        if (parent) await parent.click()
+      }
+    } else {
+      await trigger.click()
+    }
+    await page.waitForTimeout(800)
+
+    // Scrape all option text values
+    const options = await page.$$eval(
+      '[role="option"], [role="listbox"] label, .FICheckRadio label, [class*="filter"] label',
+      (els: Element[]) => els.map(el => el.textContent?.trim() ?? '').filter(t => t && t !== '(All)')
+    )
+
+    // Dedupe and sort
+    const territories = [...new Set(options)].sort()
+
+    return c.json({ territories })
+  } catch (e: any) {
+    console.error('[territories] Discovery failed:', e.message)
+    return c.json({ error: `Territory discovery failed: ${e.message}` }, 500)
+  } finally {
+    if (page) await page.close().catch(() => {})
+  }
+})
+
 // GET /api/data-sources/status — List connected AE folders
 app.get('/api/data-sources/status', (c) => {
   try {

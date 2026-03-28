@@ -434,7 +434,304 @@ function makeBlankAE(): WizardAE {
   }
 }
 
+// ── Auto-Bootstrap types & components ────────────────────────────────────────
+
+interface AutoBootstrapStep {
+  name: string
+  status: 'pending' | 'running' | 'done' | 'error'
+  detail?: string
+}
+
+interface AutoBootstrapState {
+  running: boolean
+  aeName: string | null
+  steps: AutoBootstrapStep[]
+  error: string | null
+  completedAt: string | null
+}
+
+function AutoBootstrapProgress({ state }: { state: AutoBootstrapState }) {
+  const statusIcon = (s: AutoBootstrapStep['status']) => {
+    switch (s) {
+      case 'pending': return <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-600" />
+      case 'running': return <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+      case 'done':    return <CheckCircle className="w-4 h-4 text-emerald-400" />
+      case 'error':   return <XCircle className="w-4 h-4 text-red-400" />
+    }
+  }
+
+  return (
+    <div className="space-y-2 mt-4">
+      <p className="text-sm font-semibold text-slate-300">
+        Setting up {state.aeName}...
+      </p>
+      {state.steps.map((step, i) => (
+        <div key={i} className="flex items-center gap-2.5 text-sm">
+          {statusIcon(step.status)}
+          <span className={step.status === 'error' ? 'text-red-400' : step.status === 'done' ? 'text-emerald-400' : 'text-slate-400'}>
+            {step.name}
+          </span>
+          {step.detail && (
+            <span className="text-xs text-slate-500 ml-1 truncate max-w-xs">
+              {step.detail}
+            </span>
+          )}
+        </div>
+      ))}
+      {state.completedAt && !state.running && (
+        <div className="mt-3 pt-3 border-t border-slate-700">
+          {state.error ? (
+            <p className="text-sm text-amber-400">
+              Completed with errors. Some steps may have succeeded.
+            </p>
+          ) : (
+            <p className="text-sm text-emerald-400">
+              Setup complete! All data sources are ready.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AutoBootstrapForm() {
+  const [aeName, setAeName] = useState('')
+  const [sfReportId, setSfReportId] = useState('')
+  const [customerText, setCustomerText] = useState('')
+  const [parentFolderId, setParentFolderId] = useState('')
+
+  // Territory picker state
+  const [territoryInput, setTerritoryInput] = useState('')
+  const [discoveredTerritories, setDiscoveredTerritories] = useState<string[] | null>(null)
+  const [selectedTerritories, setSelectedTerritories] = useState<string[]>([])
+  const [discoveringTerritories, setDiscoveringTerritories] = useState(false)
+  const [territoryError, setTerritoryError] = useState<string | null>(null)
+
+  // Bootstrap state
+  const [bootstrapState, setBootstrapState] = useState<AutoBootstrapState | null>(null)
+  const [starting, setStarting] = useState(false)
+
+  // Discover territories
+  const discoverTerritories = async () => {
+    setDiscoveringTerritories(true)
+    setTerritoryError(null)
+    try {
+      const r = await fetch('/api/bootstrap/tableau/territories')
+      const d = await r.json()
+      if (d.error) {
+        setTerritoryError(d.error)
+      } else {
+        setDiscoveredTerritories(d.territories ?? [])
+      }
+    } catch (e: any) {
+      setTerritoryError(e.message || 'Failed to discover territories')
+    } finally {
+      setDiscoveringTerritories(false)
+    }
+  }
+
+  // Toggle territory selection
+  const toggleTerritory = (t: string) => {
+    setSelectedTerritories(prev =>
+      prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
+    )
+  }
+
+  // Start auto-bootstrap
+  const startBootstrap = async () => {
+    const customerNames = customerText.split('\n').map(s => s.trim()).filter(Boolean)
+    const territories = discoveredTerritories
+      ? selectedTerritories
+      : territoryInput.split(',').map(s => s.trim()).filter(Boolean)
+
+    if (!aeName.trim() || !sfReportId.trim() || !territories.length || !customerNames.length) return
+
+    setStarting(true)
+    try {
+      const r = await fetch('/api/bootstrap/auto', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aeName: aeName.trim(),
+          sfReportId: sfReportId.trim(),
+          tableauTerritories: territories,
+          customerNames,
+          parentFolderId: parentFolderId.trim() || undefined,
+        }),
+      })
+      const d = await r.json()
+      if (d.error) {
+        setTerritoryError(d.error)
+        return
+      }
+      // Start polling
+      setBootstrapState({ running: true, aeName: aeName.trim(), steps: [], error: null, completedAt: null })
+    } catch (e: any) {
+      setTerritoryError(e.message)
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  // Poll bootstrap status
+  useEffect(() => {
+    if (!bootstrapState?.running && !starting) return
+    const interval = setInterval(async () => {
+      try {
+        const r = await fetch('/api/bootstrap/auto/status')
+        const d: AutoBootstrapState = await r.json()
+        setBootstrapState(d)
+        if (!d.running) clearInterval(interval)
+      } catch {}
+    }, 3_000)
+    return () => clearInterval(interval)
+  }, [bootstrapState?.running, starting])
+
+  const customerNames = customerText.split('\n').map(s => s.trim()).filter(Boolean)
+  const territories = discoveredTerritories ? selectedTerritories : territoryInput.split(',').map(s => s.trim()).filter(Boolean)
+  const canStart = aeName.trim() && sfReportId.trim() && territories.length > 0 && customerNames.length > 0
+
+  if (bootstrapState && (bootstrapState.running || bootstrapState.completedAt)) {
+    return (
+      <div>
+        <AutoBootstrapProgress state={bootstrapState} />
+        {bootstrapState.completedAt && !bootstrapState.running && (
+          <button
+            onClick={() => { setBootstrapState(null); setAeName(''); setSfReportId(''); setCustomerText(''); setSelectedTerritories([]) }}
+            className="mt-3 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            Set up another AE
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-400">
+        Automatically create a Drive folder, discover account numbers, and generate all data sheets for a new AE.
+      </p>
+
+      <div className="grid grid-cols-1 gap-3">
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">AE Name *</label>
+          <input
+            type="text"
+            value={aeName}
+            onChange={e => setAeName(e.target.value)}
+            placeholder="Jane Smith"
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">SF Report ID *</label>
+          <input
+            type="text"
+            value={sfReportId}
+            onChange={e => setSfReportId(e.target.value)}
+            placeholder="00OPe..."
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Account Territories *</label>
+          {discoveredTerritories ? (
+            <div className="space-y-2">
+              <div className="max-h-48 overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg p-2 space-y-1">
+                {discoveredTerritories.map(t => (
+                  <label key={t} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:bg-slate-700/50 px-2 py-1 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedTerritories.includes(t)}
+                      onChange={() => toggleTerritory(t)}
+                      className="rounded border-slate-600"
+                    />
+                    {t}
+                  </label>
+                ))}
+              </div>
+              {selectedTerritories.length > 0 && (
+                <p className="text-xs text-emerald-400">{selectedTerritories.length} selected</p>
+              )}
+              <button
+                onClick={() => { setDiscoveredTerritories(null); setSelectedTerritories([]) }}
+                className="text-xs text-slate-500 hover:text-slate-400 transition-colors"
+              >
+                Switch to manual input
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={territoryInput}
+                  onChange={e => setTerritoryInput(e.target.value)}
+                  placeholder="WEST_COMM_CORP_NORTHWEST_TERR01 (comma-separated)"
+                  className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  onClick={discoverTerritories}
+                  disabled={discoveringTerritories}
+                  className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors shrink-0"
+                >
+                  {discoveringTerritories ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                  Discover
+                </button>
+              </div>
+              {territoryError && (
+                <p className="text-xs text-red-400">{territoryError}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Customer Names * (one per line)</label>
+          <textarea
+            value={customerText}
+            onChange={e => setCustomerText(e.target.value)}
+            placeholder={"Acme Corp\nGlobex Industries\nStark Enterprises"}
+            rows={5}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-y"
+          />
+          {customerNames.length > 0 && (
+            <p className="text-xs text-slate-500 mt-1">{customerNames.length} customer(s)</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Parent Drive Folder ID (optional)</label>
+          <input
+            type="text"
+            value={parentFolderId}
+            onChange={e => setParentFolderId(e.target.value)}
+            placeholder="Leave blank to create in My Drive root"
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <button
+          onClick={startBootstrap}
+          disabled={!canStart || starting}
+          className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+        >
+          {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+          {starting ? 'Starting...' : 'Set Up AE'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function AEsCustomersSection() {
+  const [mode, setMode] = useState<'auto' | 'manual'>('auto')
   const [aes, setAes] = useState<WizardAE[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -467,6 +764,8 @@ function AEsCustomersSection() {
         if (serverAes.length === 0) {
           setAes([makeBlankAE()])
         } else {
+          // If any AE already has a driveFolderId, default to manual mode
+          if (serverAes.some(ae => ae.driveFolderId)) setMode('manual')
           setAes(serverAes.map(ae => ({
             id: crypto.randomUUID(),
             name: ae.name,
@@ -619,6 +918,34 @@ function AEsCustomersSection() {
 
   return (
     <div className="space-y-5">
+      {/* Mode toggle */}
+      <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setMode('auto')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            mode === 'auto'
+              ? 'bg-indigo-600 text-white'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Auto Setup
+        </button>
+        <button
+          onClick={() => setMode('manual')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            mode === 'manual'
+              ? 'bg-indigo-600 text-white'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Manual / Existing
+        </button>
+      </div>
+
+      {mode === 'auto' ? (
+        <AutoBootstrapForm />
+      ) : (
+      <>
       <p className="text-sm text-slate-400">
         Configure your Account Executives and their customers. Each AE can have a Drive folder, Salesforce report, and Tableau dashboard.
       </p>
@@ -795,6 +1122,8 @@ function AEsCustomersSection() {
           </button>
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }
