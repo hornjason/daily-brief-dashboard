@@ -532,9 +532,16 @@ function AutoBootstrapForm() {
   const [discoveringTerritories, setDiscoveringTerritories] = useState(false)
   const [territoryError, setTerritoryError] = useState<string | null>(null)
 
-  // Bootstrap state
+  // Bootstrap state — check on mount so progress survives page reloads
   const [bootstrapState, setBootstrapState] = useState<AutoBootstrapState | null>(null)
   const [starting, setStarting] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/bootstrap/auto/status')
+      .then(r => r.json())
+      .then((d: AutoBootstrapState) => { if (d.running || d.completedAt) setBootstrapState(d) })
+      .catch(() => {})
+  }, [])
 
   // Discover territories
   const discoverTerritories = async () => {
