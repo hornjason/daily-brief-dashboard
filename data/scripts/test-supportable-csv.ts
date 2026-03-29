@@ -250,7 +250,7 @@ async function discoverAccountNumbers(page: Page, searchTerm: string): Promise<s
       const label = (cells[i].textContent ?? '').trim()
       if (/^account\s*number:?$/i.test(label)) {
         const val = (cells[i + 1]?.textContent ?? '').trim()
-        if (/^\d{4,12}$/.test(val)) return val
+        if (/^\d{5,10}$/.test(val)) return val
       }
     }
     return ''

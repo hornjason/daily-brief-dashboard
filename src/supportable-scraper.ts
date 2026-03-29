@@ -30,6 +30,19 @@ const SUPPORTABLE_URL = 'https://supportable.corp.redhat.com:4443/pls/rhapplicat
 export let lastSupportableScrape: string | null = null
 export let lastSupportableError:  string | null = null
 export let supportableScrapeRunning = false
+let supportableScrapeStartedAt: number | null = null
+
+// A run that has been stuck for this long is assumed crashed — mutex auto-resets
+const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
+
+// Number of parallel Playwright pages used for the scrape phase
+// APEX shares one SSO session across all parallel pages. At 2+ pages, concurrent
+// requests trigger APEX server-side contention (error dialogs, closed pages).
+// Set to 1 for reliable serial scraping. Increase only if APEX session isolation improves.
+const PARALLEL_PAGES = 1
+
+// Wall-clock limit per account — fires before the 30s download timeout can accumulate
+const PER_ACCOUNT_TIMEOUT_MS = 90_000  // 90 seconds
 
 let _ctx: BrowserContext | null = null
 
@@ -107,7 +120,10 @@ function parseCsvRow(line: string): string[] {
 
 /** Parse full CSV text into an array of objects keyed by the header row values. */
 function parseCsvToObjects(text: string): Record<string, string>[] {
-  const lines = splitCsvLines(text)
+  // Strip UTF-8 BOM that Oracle APEX sometimes prepends — without this the first
+  // header becomes "\uFEFFName" instead of "Name", breaking all column lookups.
+  const clean = text.startsWith('\uFEFF') ? text.slice(1) : text
+  const lines = splitCsvLines(clean)
   if (lines.length < 2) return []
   const headers = parseCsvRow(lines[0])
   const rows: Record<string, string>[] = []
@@ -153,8 +169,22 @@ async function selectCsvFormat(page: Page): Promise<boolean> {
   }
 
   const anyCSV = await page.$('text=CSV')
-  if (anyCSV) { await anyCSV.click(); await page.waitForTimeout(500); return true }
+  if (anyCSV) { await anyCSV.click(); await page.waitForTimeout(500) }
 
+  // Verify something was actually selected — APEX may have rendered CSV element
+  // but not registered the click (e.g. overlays, animation in progress)
+  const csvVerified = await page.evaluate(() => {
+    const radios = Array.from(document.querySelectorAll('input[type="radio"]:checked'))
+    if (radios.some(r => (r as HTMLInputElement).value.toLowerCase().includes('csv'))) return true
+    const selects = Array.from(document.querySelectorAll('select'))
+    if (selects.some(s => s.value.toLowerCase().includes('csv'))) return true
+    const active = document.querySelector('.a-IRR-dlg-dlType--active')
+    if (active?.textContent?.toLowerCase().includes('csv')) return true
+    return false
+  }).catch(() => false)
+
+  if (csvVerified) return true
+  console.warn('[supportable] selectCsvFormat: no CSV format confirmed selected — proceeding anyway')
   return false
 }
 
@@ -222,6 +252,17 @@ async function scrapeOneAccount(
   await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
   await page.waitForTimeout(2_000)
 
+  // ── Dismiss APEX error dialog if present (Go triggered server error) ──────
+  // Under parallel load APEX may surface an error overlay. Dismiss and throw
+  // so the retry loop opens a fresh page rather than proceeding in bad state.
+  const apexErrAfterGo = await page.$('button.a-Error-button').catch(() => null)
+  if (apexErrAfterGo) {
+    console.warn(`[supportable] account ${accountNumber}: APEX error after Go — dismissing and retrying`)
+    await apexErrAfterGo.click().catch(() => {})
+    await page.waitForTimeout(500)
+    throw new Error(`APEX error dialog after Go on account ${accountNumber}`)
+  }
+
   // APEX does JS redirects after Go — probe evaluate before touching DOM
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -268,95 +309,22 @@ async function scrapeOneAccount(
     }
   }
 
-  // ── Actions → Filter → Status = Active ────────────────────────────────────
-  // Apply the filter BEFORE downloading so the CSV only contains Active rows.
-  // This is more efficient than downloading all rows and filtering in code.
-  // Non-fatal: if filter fails we still download all rows and filter in code.
-  const filterActionsBtn = await page.$('button.a-IRR-button--actions')
-  if (filterActionsBtn) {
-    await filterActionsBtn.click()
-    const filterLink = await page.waitForSelector(
-      '.a-Menu a:has-text("Filter"), li a:has-text("Filter"), [role="menuitem"]:has-text("Filter")',
-      { timeout: 5_000 }
-    ).catch(() => null)
-    if (filterLink) {
-      await filterLink.click()
-      await page.waitForTimeout(1_500)
-
-      // Set column = Status
-      const selects = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('select'))
-          .filter((el: any) => el.offsetParent !== null)
-          .map((el: any) => ({
-            id: el.id,
-            options: Array.from((el as HTMLSelectElement).options).map((o: any) => ({ value: o.value, text: o.text.trim() })),
-          }))
-      )
-      const colSel = selects.find(s => s.options.some((o: any) => o.text.toLowerCase() === 'status'))
-      if (colSel) {
-        const statusOpt = colSel.options.find((o: any) => o.text.toLowerCase() === 'status')
-        if (statusOpt) {
-          await page.selectOption(`select[id="${colSel.id}"]`, statusOpt.value)
-          await page.waitForTimeout(800)
-        }
-      }
-
-      // Set operator = "="
-      const updatedSelects = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('select'))
-          .filter((el: any) => el.offsetParent !== null)
-          .map((el: any) => ({
-            id: el.id,
-            options: Array.from((el as HTMLSelectElement).options).map((o: any) => ({ value: o.value, text: o.text.trim() })),
-          }))
-      )
-      const opSel = updatedSelects.find(s => s.options.some((o: any) => o.text === '=' || o.value === 'eq'))
-      if (opSel) {
-        const eqOpt = opSel.options.find((o: any) => o.text === '=' || o.value === 'eq')
-        if (eqOpt) {
-          await page.selectOption(`select[id="${opSel.id}"]`, eqOpt.value)
-          await page.waitForTimeout(800)
-        }
-      }
-
-      // Set expression = Active
-      const exprSelects = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('select'))
-          .filter((el: any) => el.offsetParent !== null)
-          .map((el: any) => ({
-            id: el.id,
-            options: Array.from((el as HTMLSelectElement).options).map((o: any) => ({ value: o.value, text: o.text.trim() })),
-          }))
-      )
-      const exprSel = exprSelects.find(s => s.options.some((o: any) => o.text.toLowerCase() === 'active'))
-      if (exprSel) {
-        const activeOpt = exprSel.options.find((o: any) => o.text.toLowerCase() === 'active')
-        if (activeOpt) {
-          await page.selectOption(`select[id="${exprSel.id}"]`, activeOpt.value)
-          await page.waitForTimeout(500)
-        }
-      }
-
-      // Apply filter — APEX fires an AJAX refresh; wait for it before proceeding to download
-      const applyBtn = await page.$('button:has-text("Apply"), input[value="Apply"]')
-      if (applyBtn) {
-        await applyBtn.click()
-        await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
-        await page.waitForTimeout(3_000)  // extra buffer for APEX AJAX re-render
-        console.log(`[supportable] account ${accountNumber}: Status=Active filter applied`)
-      }
-    } else {
-      console.warn(`[supportable] account ${accountNumber}: Filter menu item not found — will filter in code`)
-    }
-  } else {
-    console.warn(`[supportable] account ${accountNumber}: Actions button not found for filter — will filter in code`)
+  // ── Dismiss APEX error dialog if present (Export tab or report select triggered it)
+  const apexErrBeforeDownload = await page.$('button.a-Error-button').catch(() => null)
+  if (apexErrBeforeDownload) {
+    console.warn(`[supportable] account ${accountNumber}: APEX error before download — dismissing and retrying`)
+    await apexErrBeforeDownload.click().catch(() => {})
+    await page.waitForTimeout(500)
+    throw new Error(`APEX error dialog before download on account ${accountNumber}`)
   }
 
   // ── Download Active rows as CSV via Actions → Download ────────────────────
+  // APEX filter step removed: the dialog it opens intercepts pointer events and
+  // blocks the subsequent Actions button click, causing 120s timeouts at scale.
+  // Status=Active filtering is applied in code after download (line ~430).
   // Register the download listener BEFORE clicking Actions — APEX may fire
   // the download event immediately when the CSV format icon is clicked.
-  // 120s budget: UI navigation takes ~10-15s, leaving ~105s for the actual download.
-  const downloadPromise = page.waitForEvent('download', { timeout: 120_000 })
+  const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
 
   const actionsBtn = await page.$('button.a-IRR-button--actions')
   if (!actionsBtn) {
@@ -575,10 +543,19 @@ export interface SupportableResult {
 export async function runSupportableScrape(
   customers: SupportableCustomer[],
 ): Promise<SupportableResult[]> {
-  if (supportableScrapeRunning) throw new Error('Supportable scrape already in progress')
+  if (supportableScrapeRunning) {
+    if (supportableScrapeStartedAt && (Date.now() - supportableScrapeStartedAt > STALE_MUTEX_MS)) {
+      console.warn(`[supportable] stale mutex (${Math.round((Date.now() - supportableScrapeStartedAt) / 60_000)}m) — resetting`)
+      supportableScrapeRunning = false
+      supportableScrapeStartedAt = null
+    } else {
+      throw new Error('Supportable scrape already in progress')
+    }
+  }
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
 
   supportableScrapeRunning = true
+  supportableScrapeStartedAt = Date.now()
   lastSupportableError = null
 
   let page = await _ctx.newPage()
@@ -613,6 +590,7 @@ export async function runSupportableScrape(
   } finally {
     await page.close().catch(() => {})
     supportableScrapeRunning = false
+    supportableScrapeStartedAt = null
   }
 }
 
@@ -631,93 +609,165 @@ export async function runSupportableDiscoverAndScrape(
   customers: Array<{ name: string; supportableName?: string }>,
   onProgress?: (done: number, total: number, name: string, accountNumbers: string[], rowCount: number) => void,
 ): Promise<SupportableResult[]> {
-  if (supportableScrapeRunning) throw new Error('Supportable scrape already in progress')
+  if (supportableScrapeRunning) {
+    if (supportableScrapeStartedAt && (Date.now() - supportableScrapeStartedAt > STALE_MUTEX_MS)) {
+      console.warn(`[supportable] stale mutex (${Math.round((Date.now() - supportableScrapeStartedAt) / 60_000)}m) — resetting`)
+      supportableScrapeRunning = false
+      supportableScrapeStartedAt = null
+    } else {
+      throw new Error('Supportable scrape already in progress')
+    }
+  }
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
 
   supportableScrapeRunning = true
+  supportableScrapeStartedAt = Date.now()
   lastSupportableError = null
 
-  let page = await _ctx.newPage()
   const results: SupportableResult[] = []
+  let discoveryPage = await _ctx.newPage()
 
   try {
-    // ── First navigation: go to Supportable landing, handle SSO ──────────────
+    // ── Phase 1: SSO + serial name-search discovery ───────────────────────────
+    // Name searches are stateful APEX navigation — cannot be parallelized.
     console.log(`[supportable] discover+scrape: navigating to portal…`)
-    await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    await page.waitForTimeout(3_000)
+    await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await discoveryPage.waitForTimeout(3_000)
 
-    if (!page.url().includes('supportable.corp.redhat.com')) {
+    if (!discoveryPage.url().includes('supportable.corp.redhat.com')) {
       let pageClosedByApex = false
-      const closePromise = new Promise<void>(resolve => { page.once('close', () => { pageClosedByApex = true; resolve() }) })
+      const closePromise = new Promise<void>(resolve => { discoveryPage.once('close', () => { pageClosedByApex = true; resolve() }) })
       await Promise.race([
-        page.waitForURL(/supportable\.corp\.redhat\.com/, { timeout: 300_000 }).catch(() => {}),
+        discoveryPage.waitForURL(/supportable\.corp\.redhat\.com/, { timeout: 300_000 }).catch(() => {}),
         closePromise,
       ])
-      if (pageClosedByApex) page = await _ctx.newPage()
-      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await page.waitForTimeout(3_000)
+      if (pageClosedByApex) discoveryPage = await _ctx.newPage()
+      await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await discoveryPage.waitForTimeout(3_000)
     }
 
-    if (!page.url().includes('supportable.corp.redhat.com')) {
-      throw new Error(`SSO login did not complete — still at ${page.url()}`)
+    if (!discoveryPage.url().includes('supportable.corp.redhat.com')) {
+      throw new Error(`SSO login did not complete — still at ${discoveryPage.url()}`)
     }
 
-    console.log(`[supportable] discover+scrape: session active, processing ${customers.length} customers`)
+    console.log(`[supportable] discover+scrape: session active — discovering ${customers.length} customers`)
 
-    for (let i = 0; i < customers.length; i++) {
-      const { name: customerName, supportableName } = customers[i]
+    interface DiscoveredCustomer { customerName: string; accountNumbers: string[] }
+    const discovered: DiscoveredCustomer[] = []
 
-      // ── 0. Ensure we're on the landing page before each customer ──────────
-      // Prevents page state corruption from a prior failed account scrape
-      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
-        console.warn(`[supportable] discover+scrape: pre-customer nav failed for "${customerName}": ${e.message}`)
+    for (const { name: customerName, supportableName } of customers) {
+      await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
+        console.warn(`[supportable] discover: pre-nav failed for "${customerName}": ${e.message}`)
       })
-      await page.waitForTimeout(1_500)
+      await discoveryPage.waitForTimeout(1_500)
 
-      // ── 1. Discover account numbers via name search ───────────────────────
       let accountNumbers: string[] = []
       try {
-        accountNumbers = await discoverAccountNumbersByName(page, customerName, supportableName)
+        accountNumbers = await discoverAccountNumbersByName(discoveryPage, customerName, supportableName)
       } catch (e: any) {
-        console.warn(`[supportable] discover+scrape: name search failed for "${customerName}": ${e.message}`)
-        results.push({ customerName, accountNumbers: [], rows: [] })
-        onProgress?.(i + 1, customers.length, customerName, [], 0)
-        continue
+        console.warn(`[supportable] discover: name search failed for "${customerName}": ${e.message}`)
       }
+      discovered.push({ customerName, accountNumbers })
+    }
 
-      if (accountNumbers.length === 0) {
-        console.log(`[supportable] discover+scrape: "${customerName}" — no matching accounts`)
-        results.push({ customerName, accountNumbers: [], rows: [] })
-        onProgress?.(i + 1, customers.length, customerName, [], 0)
-        // Navigate back to landing for next customer
-        await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-        await page.waitForTimeout(1_500)
-        continue
+    await discoveryPage.close().catch(() => {})
+
+    // ── Phase 2: Build flat job queue ─────────────────────────────────────────
+    interface ScrapeJob { customerName: string; accountNumber: string; customerIndex: number }
+    const jobs: ScrapeJob[] = []
+    for (let ci = 0; ci < discovered.length; ci++) {
+      for (const acct of discovered[ci].accountNumbers) {
+        jobs.push({ customerName: discovered[ci].customerName, accountNumber: acct, customerIndex: ci })
       }
+    }
 
-      // ── 2. Navigate back to landing for account number entry ─────────────
-      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await page.waitForTimeout(1_500)
+    const customerRows: Record<string, string>[][] = discovered.map(() => [])
+    // Tracks how many accounts have finished (pass or fail) per customer.
+    // When all accounts for a customer are done, onProgress fires immediately
+    // so the UI updates incrementally rather than in a burst at the end.
+    const accountsDone: number[] = discovered.map(() => 0)
+    let customersDone = 0
 
-      // ── 3. Scrape subscriptions for each account number ───────────────────
-      const allRows: Record<string, string>[] = []
-      let isFirstScrape = false  // SSO already handled above — never re-trigger it
-      for (const accountNumber of accountNumbers) {
-        try {
-          const result = await scrapeOneAccount(page, accountNumber, isFirstScrape)
-          allRows.push(...result.rows)
-          page = result.page
-        } catch (e: any) {
-          console.warn(`[supportable] discover+scrape: ${customerName}/${accountNumber}: ${e.message}`)
-          // Recovery: navigate back to landing so the next account starts clean
-          await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
-          await page.waitForTimeout(1_500)
+    console.log(`[supportable] scrape: ${jobs.length} account(s) across ${discovered.length} customers — ${PARALLEL_PAGES} parallel pages`)
+
+    // ── Phase 3: Parallel scrape — PARALLEL_PAGES workers share SSO context ──
+    // jobIndex is incremented inside a synchronous tick — safe without a mutex.
+    let jobIndex = 0
+
+    async function worker(workerId: number): Promise<void> {
+      let workerPage = await _ctx!.newPage()
+      await workerPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await workerPage.waitForTimeout(1_500)
+      try { while (jobIndex < jobs.length) {
+          const job = jobs[jobIndex++]
+          console.log(`[supportable] worker-${workerId}: ${job.customerName}/${job.accountNumber} (${jobIndex}/${jobs.length})`)
+          let succeeded = false
+          for (let attempt = 1; attempt <= 2 && !succeeded; attempt++) {
+            try {
+              if (attempt > 1) {
+                console.log(`[supportable] worker-${workerId}: retry ${job.accountNumber} (attempt ${attempt})`)
+                await workerPage.close().catch(() => {})
+                workerPage = await _ctx!.newPage()
+                await workerPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+                await workerPage.waitForTimeout(2_000)
+              }
+              // Wall-clock timeout prevents any single account from blocking a worker indefinitely.
+              // Attach .catch() to scrapePromise BEFORE the race so that if the timeout wins
+              // and the worker closes the page, the orphaned promise's rejection is silently
+              // consumed rather than crashing Bun as an unhandled rejection.
+              const scrapePromise = scrapeOneAccount(workerPage, job.accountNumber, false)
+              scrapePromise.catch(() => {})
+              const result = await Promise.race([
+                scrapePromise,
+                new Promise<never>((_, reject) =>
+                  setTimeout(() => reject(new Error(`wall-clock timeout (${PER_ACCOUNT_TIMEOUT_MS / 1000}s)`)), PER_ACCOUNT_TIMEOUT_MS)
+                ),
+              ])
+              customerRows[job.customerIndex].push(...result.rows)
+              workerPage = result.page
+              succeeded = true
+            } catch (e: any) {
+              console.warn(`[supportable] worker-${workerId}: ${job.customerName}/${job.accountNumber} attempt ${attempt}: ${e.message}`)
+              const alive = await workerPage.evaluate(() => true).catch(() => false)
+              if (!alive) {
+                await workerPage.close().catch(() => {})
+                workerPage = await _ctx!.newPage()
+              }
+              await workerPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+              await workerPage.waitForTimeout(1_500)
+            }
+          }
+          // Fire onProgress as soon as all accounts for this customer are done
+          accountsDone[job.customerIndex]++
+          if (accountsDone[job.customerIndex] === discovered[job.customerIndex].accountNumbers.length) {
+            customersDone++
+            const { customerName, accountNumbers } = discovered[job.customerIndex]
+            const rows = customerRows[job.customerIndex]
+            console.log(`[supportable] discover+scrape: ✓ "${customerName}": ${accountNumbers.length} acct(s), ${rows.length} subscription rows`)
+            onProgress?.(customersDone, customers.length, customerName, accountNumbers, rows.length)
+          }
         }
+      } catch (e: any) {
+        // Top-level worker catch: prevents unexpected errors from escaping as
+        // unhandled rejections in Promise.all. Per-job recovery happens above.
+        console.warn(`[supportable] worker-${workerId}: unexpected exit — ${e.message}`)
+      } finally {
+        await workerPage.close().catch(() => {})
       }
+    }
 
-      console.log(`[supportable] discover+scrape: ✓ "${customerName}": ${accountNumbers.length} acct(s), ${allRows.length} subscription rows`)
-      results.push({ customerName, accountNumbers, rows: allRows })
-      onProgress?.(i + 1, customers.length, customerName, accountNumbers, allRows.length)
+    await Promise.all(Array.from({ length: Math.min(PARALLEL_PAGES, jobs.length || 1) }, (_, i) => worker(i)))
+
+    // ── Phase 4: Assemble results in original customer order ──────────────────
+    // Fire onProgress for any customers that had 0 accounts (skipped the worker loop)
+    for (let ci = 0; ci < discovered.length; ci++) {
+      const { customerName, accountNumbers } = discovered[ci]
+      const rows = customerRows[ci]
+      results.push({ customerName, accountNumbers, rows })
+      if (accountNumbers.length === 0) {
+        customersDone++
+        onProgress?.(customersDone, customers.length, customerName, [], 0)
+      }
     }
 
     lastSupportableScrape = new Date().toISOString()
@@ -727,8 +777,8 @@ export async function runSupportableDiscoverAndScrape(
     lastSupportableError = e.message
     throw e
   } finally {
-    await page.close().catch(() => {})
     supportableScrapeRunning = false
+    supportableScrapeStartedAt = null
   }
 }
 
