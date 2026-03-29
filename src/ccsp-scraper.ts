@@ -214,6 +214,16 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
   })
   await page.waitForTimeout(5_000)
 
+  // Detect login wall — Tableau redirects to SSO/login when session is invalid
+  const currentUrl = page.url()
+  const isLoginPage = !currentUrl.includes('10ay.online.tableau.com') ||
+    currentUrl.includes('/auth') || currentUrl.includes('/login') ||
+    await page.$('input[type="password"], #username, [data-testid="login"]').then(el => !!el).catch(() => false)
+  if (isLoginPage) {
+    console.warn(`[ccsp] ${ae.name}: Tableau session not active (on login page: ${currentUrl}) — skipping scrape`)
+    throw new Error('Tableau session required — log in via the VNC window and retry')
+  }
+
   console.log(`[ccsp] ${ae.name}: page loaded, applying filters...`)
   await dumpDom(page, `${ae.name}-loaded`)
 
