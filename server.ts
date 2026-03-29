@@ -222,6 +222,15 @@ app.use('*', async (c, next) => {
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
 })
 
+// Health check — used by container health probes and smoke tests
+app.get('/health', (c) => c.json({
+  status: 'ok',
+  timestamp: new Date().toISOString(),
+  aes: aes.length,
+  customers: customers.length,
+  session: !!getScrapeContext(),
+}))
+
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
 
