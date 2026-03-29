@@ -1190,10 +1190,18 @@ function AEsCustomersSection() {
     setSaving(true)
     setSaveMsg(null)
     try {
-      // Build AE objects for the server
+      // Fetch current server AEs so we can preserve server-managed fields
+      // (tableauTerritories, accounts, etc.) that the Edit/View form doesn't expose
+      const serverState = await fetch('/api/aes').then(r => r.json()).catch(() => ({ aes: [] }))
+      const serverAeMap = new Map<string, Record<string, unknown>>(
+        (serverState.aes ?? []).map((a: Record<string, unknown>) => [a.name as string, a])
+      )
+
+      // Build AE objects for the server — merge wizard fields over server state
       const serverAes = aes
         .filter(a => a.name.trim())
         .map(a => ({
+          ...(serverAeMap.get(a.name.trim()) ?? {}),  // preserve server-only fields
           name: a.name.trim(),
           driveFolderId: a.folderId,
           ...(a.sfReportId.trim() ? { sfReportId: a.sfReportId.trim() } : {}),
