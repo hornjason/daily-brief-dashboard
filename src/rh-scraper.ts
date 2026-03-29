@@ -300,7 +300,9 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
         // Fall through with whatever the DOM has.
       })
 
-      // DEBUG: log what the page sees
+      // Resolve column indices from the header row, then extract cell data.
+      // Header-based lookup is resilient to portal layout changes.
+      // Falls back to hardcoded indices if the header row is absent.
       const cases = await page.evaluate((acctNum: string) => {
         const results: Array<{
           caseNumber: string
@@ -309,8 +311,48 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           severity: string
           accountNumber: string
           product: string
+          columnSource: 'header' | 'fallback'
         }> = []
 
+        // -- Resolve column indices from header row --------------------------
+        // Known header text variants (portal uses title-case or mixed):
+        const HEADER_MAP: Record<string, string[]> = {
+          summary:  ['Summary', 'Case Summary', 'Subject'],
+          status:   ['Status', 'Case Status'],
+          severity: ['Severity'],
+          product:  ['Product', 'Product Name'],
+        }
+
+        function buildIndexMap(): Map<string, number> | null {
+          const headerRow = document.querySelector('table thead tr, table tr:first-child')
+          if (!headerRow) return null
+          const ths = Array.from(headerRow.querySelectorAll('th, td'))
+          if (ths.length < 4) return null
+
+          const indexMap = new Map<string, number>()
+          for (const [key, candidates] of Object.entries(HEADER_MAP)) {
+            for (let i = 0; i < ths.length; i++) {
+              const text = ths[i].textContent?.trim() ?? ''
+              if (candidates.some(c => text.toLowerCase().includes(c.toLowerCase()))) {
+                indexMap.set(key, i)
+                break
+              }
+            }
+          }
+          return indexMap.size >= 2 ? indexMap : null   // need at least status + one other
+        }
+
+        const headerIndexMap = buildIndexMap()
+
+        // Hardcoded fallback indices (verified portal layout, 14 columns):
+        // [0]=checkbox [1]=case# [2]=summary [3]=opened-by [4]=modified [5]=severity [6]=status [8]=product
+        const FALLBACK: Record<string, number> = { summary: 2, status: 6, severity: 5, product: 8 }
+
+        const columnSource: 'header' | 'fallback' = headerIndexMap ? 'header' : 'fallback'
+        const col = (key: string): number =>
+          headerIndexMap?.get(key) ?? FALLBACK[key] ?? -1
+
+        // -- Extract rows ---------------------------------------------------
         const rows = document.querySelectorAll('table tbody tr')
         for (const row of rows) {
           const caseLink = row.querySelector('a[href*="/case/"]') as HTMLAnchorElement | null
@@ -323,23 +365,25 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
             (td) => td.textContent?.trim() ?? ''
           )
 
-          // Portal columns (verified, 14 total):
-          // [0]=checkbox [1]=case# [2]=summary [3]=opened-by [4]=modified [5]=severity [6]=status [8]=product
-          const status = cells[6] ?? ''
+          const status = cells[col('status')] ?? ''
           if (status.toLowerCase() === 'closed') continue  // skip closed cases
 
           results.push({
             caseNumber,
-            summary: cells[2] ?? '',
+            summary:  cells[col('summary')]   ?? '',
             status,
-            severity: cells[5] ?? '',
-            product: cells[8] ?? '',
+            severity: cells[col('severity')]  ?? '',
+            product:  cells[col('product')]   ?? '',
             accountNumber: acctNum,
+            columnSource,
           })
         }
 
         return results
       }, accountNum)
+
+      const columnSource = cases[0]?.columnSource ?? 'fallback'
+      console.log(`[rh-scraper] account ${accountNum}: ${cases.length} cases (columns via ${columnSource})`)
 
       for (const c of cases) {
         const severityNum = String(c.severity).match(/^(\d)/)?.[1] ?? c.severity
@@ -353,8 +397,6 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           product: c.product || undefined,
         } satisfies SupportCase)
       }
-
-      console.log(`[rh-scraper] account ${accountNum}: ${cases.length} cases`)
 
       // Warn if the table had rows but all were skipped — helps distinguish
       // "all cases legitimately Closed" from "parser broken / column drift"
