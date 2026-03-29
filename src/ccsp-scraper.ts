@@ -6,9 +6,9 @@
  *
  * Flow per AE:
  *   1. Navigate to the base Cloud Consumption Summary dashboard
- *   2. Apply hardcoded filters: Super Geo=AMERICAS, Geo=NA_COMM,
+ *   2. Apply filters: Super Geo=AMERICAS, Geo=NA_COMM,
  *      Region=NA_COMM_COMMERCIAL, Segment=Commercial,
- *      Year=FY2025+FY2026, Quarter=2025-Q1 through 2026-Q1
+ *      Year + Quarter = dynamic rolling 1-year window (previous FY + current FY)
  *   3. Apply per-AE Account Territory filter (derived: POD and
  *      Subregion are parsed from the territory string)
  *   4. Navigate to Raw Data tab
@@ -50,7 +50,7 @@ export function adoptCcspContext(ctx: BrowserContext): void {
 export interface CcspResult {
   aeName:       string
   rows:         Record<string, string>[]
-  accountPeriod: string   // e.g. "2025 Q1 - 2026 Q1"
+  accountPeriod: string   // e.g. "2025-Q1 – 2026-Q4" (dynamic rolling window)
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -135,6 +135,51 @@ async function dumpDom(page: Page, label: string): Promise<void> {
 // -- Filter helpers -----------------------------------------------------------
 
 /**
+ * Calculate the Year and Quarter filter values for a rolling 1-year window.
+ *
+ * Red Hat fiscal year starts March 1:
+ *   FY N = March (N-1) through February N
+ *
+ * Strategy: include all 4 quarters of the previous complete FY and all
+ * 4 quarters of the current FY (Tableau ignores future quarters with no data).
+ * This always covers the previous full fiscal year plus the current year-to-date.
+ *
+ * Example (today = March 29, 2026 = FY2027 Q1):
+ *   years    = ['FY2026', 'FY2027']
+ *   quarters = ['2025-Q1','2025-Q2','2025-Q3','2025-Q4',
+ *               '2026-Q1','2026-Q2','2026-Q3','2026-Q4']
+ *   → Tableau shows data for 2025-Q1 through 2026-Q1 (5 quarters with data)
+ */
+export function getRollingFyWindow(): {
+  years: string[]
+  quarters: string[]
+  label: string
+} {
+  const now = new Date()
+  const calYear  = now.getFullYear()
+  const calMonth = now.getMonth() + 1  // 1–12
+
+  // RH FY N starts March 1 of calendar year N-1
+  const currentFy  = calMonth >= 3 ? calYear + 1 : calYear
+  const previousFy = currentFy - 1
+
+  // All 4 Tableau quarter labels for a given RH fiscal year
+  // Tableau uses the calendar year when the quarter STARTS as the label year
+  function fyQuarters(fy: number): string[] {
+    const y = fy - 1  // FY N starts in calendar year N-1
+    return [`${y}-Q1`, `${y}-Q2`, `${y}-Q3`, `${y}-Q4`]
+  }
+
+  const years    = [`FY${previousFy}`, `FY${currentFy}`]
+  const quarters = [...fyQuarters(previousFy), ...fyQuarters(currentFy)]
+  const label    = `${fyQuarters(previousFy)[0]} – ${fyQuarters(currentFy)[3]}`
+
+  console.log(`[ccsp] rolling FY window: years=[${years.join(', ')}] quarters=[${quarters.join(', ')}]`)
+
+  return { years, quarters, label }
+}
+
+/**
  * Derive POD and Subregion from a territory string.
  * "WEST_COMM_CORP_NORTHWEST_TERR01" → pod="WEST_COMM_CORP_NORTHWEST", sub="WEST_COMM_CORP"
  */
@@ -164,12 +209,15 @@ async function applyFilter(
     // Try finding by nearby text
     const byText = await page.$(`text="${label}"`)
     if (!byText) {
-      console.warn(`[ccsp] ${aeName}: filter "${label}" not found — skipping`)
-      return
+      // Filter not found = dashboard has changed or filters aren't loaded yet.
+      // Throw so the caller aborts instead of continuing with wrong/unfiltered data.
+      throw new Error(`filter "${label}" not found on Tableau dashboard — dashboard may have changed`)
     }
     // Click the parent dropdown
     const parent = await byText.$('xpath=ancestor::div[contains(@class,"filter") or contains(@class,"dropdown")][1]')
-    if (!parent) { console.warn(`[ccsp] ${aeName}: filter "${label}" parent not found`); return }
+    if (!parent) {
+      throw new Error(`filter "${label}" found by text but parent dropdown container not found`)
+    }
     await parent.click()
   } else {
     await trigger.click()
@@ -227,13 +275,16 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
   console.log(`[ccsp] ${ae.name}: page loaded, applying filters...`)
   await dumpDom(page, `${ae.name}-loaded`)
 
-  // -- Apply hardcoded global filters -----------------------------------------
+  // -- Calculate rolling 1-year window (dynamic — never stale) ----------------
+  const { years, quarters, label } = getRollingFyWindow()
+
+  // -- Apply global filters ---------------------------------------------------
   await applyFilter(page, 'Super Geo', ['AMERICAS'], ae.name)
   await applyFilter(page, 'Geo', ['NA_COMM'], ae.name)
   await applyFilter(page, 'Region', ['NA_COMM_COMMERCIAL'], ae.name)
   await applyFilter(page, 'Segment', ['Commercial'], ae.name)
-  await applyFilter(page, 'Year', ['FY2025', 'FY2026'], ae.name)
-  await applyFilter(page, 'Quarter', ['2025-Q1', '2025-Q2', '2025-Q3', '2025-Q4', '2026-Q1'], ae.name)
+  await applyFilter(page, 'Year', years, ae.name)
+  await applyFilter(page, 'Quarter', quarters, ae.name)
 
   // -- Apply per-AE filters derived from territories --------------------------
   if (territories.length > 0) {
@@ -305,13 +356,13 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
   if (csvText) {
     const rows = parseCsv(csvText)
     console.log(`[ccsp] ${ae.name}: parsed ${rows.length} rows from CSV`)
-    return { aeName: ae.name, rows, accountPeriod: '2025 Q1 - 2026 Q1' }
+    return { aeName: ae.name, rows, accountPeriod: label }
   }
 
   // If all strategies fail, return empty with warning
   await dumpDom(page, `${ae.name}-no-data`)
   console.warn(`[ccsp] ${ae.name}: could not extract data — returning empty result`)
-  return { aeName: ae.name, rows: [], accountPeriod: '2025 Q1 - 2026 Q1' }
+  return { aeName: ae.name, rows: [], accountPeriod: label }
 }
 
 // -- Public scrape entry point ------------------------------------------------
@@ -342,7 +393,7 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
         results.push(result)
       } catch (e: any) {
         console.warn(`[ccsp] ${ae.name}: scrape failed: ${e.message}`)
-        results.push({ aeName: ae.name, rows: [], accountPeriod: '2025 Q1 - 2026 Q1' })
+        results.push({ aeName: ae.name, rows: [], accountPeriod: getRollingFyWindow().label })
       } finally {
         await page.close().catch(() => {})
       }

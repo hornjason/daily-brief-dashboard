@@ -407,12 +407,12 @@ app.post('/api/auth/redhat/start', async (c) => {
             // Navigate the live portal page to blank — hides the VNC window after login
             getLivePage()?.goto('about:blank').catch(() => {})
           }
-        })().catch(() => {})
+        })().catch((e: any) => console.error('[supportable] pre-warm block error:', e?.message ?? e))
       } else {
         // No Supportable pre-warm needed — still hide the VNC window
         getLivePage()?.goto('about:blank').catch(() => {})
       }
-      runPortalAccountDiscovery().catch(() => {}).finally(() => runRhScrapeWithState().catch(() => {}))
+      runPortalAccountDiscovery().catch((e: any) => console.error('[discovery] unhandled error:', e?.message ?? e)).finally(() => runRhScrapeWithState().catch((e: any) => console.error('[rh-scraper] unhandled error:', e?.message ?? e)))
     })
     return c.json({ started: true })
   } catch (e: any) {
@@ -428,13 +428,13 @@ app.delete('/api/auth/redhat/session', async (c) => {
 
 // POST /api/auth/redhat/sync — Trigger immediate scrape
 app.post('/api/auth/redhat/sync', async (c) => {
-  runRhScrapeWithState().catch(() => {})
+  runRhScrapeWithState().catch((e: any) => console.error('[rh-scraper] sync trigger failed:', e?.message ?? e))
   return c.json({ started: true })
 })
 
 // POST /api/auth/redhat/discover — Trigger account number portal discovery
 app.post('/api/auth/redhat/discover', async (c) => {
-  runPortalAccountDiscovery().catch(() => {})
+  runPortalAccountDiscovery().catch((e: any) => console.error('[discovery] discover trigger failed:', e?.message ?? e))
   return c.json({ started: true })
 })
 
@@ -693,10 +693,10 @@ app.post('/api/auth/salesforce/start', async (c) => {
               console.warn(`[server] SF sync failed for ${ae.name}:`, e?.message)
             }
           }
-        })().catch(() => {})
+        })().catch((e: any) => console.error('[server] SF login callback error:', e?.message ?? e))
       } else if (SF_REPORT_ID && process.env.PIPELINE_FILE_ID) {
         // Fallback to env vars for backwards compatibility
-        runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR, process.env.PIPELINE_FILE_ID).catch(() => {})
+        runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR, process.env.PIPELINE_FILE_ID).catch((e: any) => console.error('[sf-sync] env fallback failed:', e?.message ?? e))
       }
     })
     return c.json({ started: true })
@@ -734,9 +734,9 @@ app.post('/api/auth/salesforce/sync', async (c) => {
     }
     // Fallback: env vars for backwards compatibility
     if (!aesWithSf.length && SF_REPORT_ID && process.env.PIPELINE_FILE_ID) {
-      runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR, process.env.PIPELINE_FILE_ID).catch(() => {})
+      runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR, process.env.PIPELINE_FILE_ID).catch((e: any) => console.error('[sf-sync] env fallback failed:', e?.message ?? e))
     }
-  })().catch(() => {})
+  })().catch((e: any) => console.error('[server] SF sync block error:', e?.message ?? e))
   return c.json({ started: true, aes: aesWithSf.map(a => a.name) })
 })
 
@@ -3357,7 +3357,7 @@ async function runPortalAccountDiscovery(): Promise<void> {
   }
 
   console.log(`[account-discovery] portal discovery done — ${discoveredCount} customer(s) updated`)
-  if (discoveredCount > 0) runRhScrapeWithState().catch(() => {})
+  if (discoveredCount > 0) runRhScrapeWithState().catch((e: any) => console.error('[rh-scraper] post-discovery scrape failed:', e?.message ?? e))
 }
 
 // Register keep-alive expiry → surface reconnect banner in dashboard
@@ -3421,8 +3421,8 @@ function rescheduleRefreshTimers(intervals: typeof DEFAULT_REFRESH_INTERVALS): v
 
   if (customers.length === 0) return
 
-  _subscriptionsTimer = setInterval(() => refreshSubscriptions().catch(() => {}), intervals.subscriptions * 60 * 1000)
-  _ccspTimer          = setInterval(() => refreshCCSP().catch(() => {}),          intervals.ccsp * 60 * 1000)
+  _subscriptionsTimer = setInterval(() => refreshSubscriptions().catch((e: any) => console.error('[refresh] subscriptions failed:', e?.message ?? e)), intervals.subscriptions * 60 * 1000)
+  _ccspTimer          = setInterval(() => refreshCCSP().catch((e: any) => console.error('[refresh] CCSP failed:', e?.message ?? e)),                   intervals.ccsp * 60 * 1000)
 
   console.log(`[timers] subscriptions=${intervals.subscriptions}m ccsp=${intervals.ccsp}m`)
 }
@@ -3482,7 +3482,7 @@ console.log(`   http://localhost:${port}/dashboard\n`)
 
 // On startup: run a full refresh, then schedule per-source timers
 if (customers.length > 0) {
-  refreshAll().catch(() => {})
+  refreshAll().catch((e: any) => console.error('[refresh] startup refresh failed:', e?.message ?? e))
   rescheduleRefreshTimers(getRefreshIntervals())
 }
 
@@ -3518,7 +3518,7 @@ schedulePipelineSync()
   if (discovered > 0) {
     console.log(`[account-discovery] done — ${discovered} customers updated`)
     // Trigger a fresh scrape now that more account numbers are available
-    runRhScrapeWithState().catch(() => {})
+    runRhScrapeWithState().catch((e: any) => console.error("[rh-scraper] unhandled error:", e?.message ?? e))
   } else {
     console.log('[account-discovery] no new account numbers found')
   }
@@ -3531,7 +3531,7 @@ if (existsSync(RH_SESSION_PATH)) {
     // Share the same browser context with SF and Supportable scrapers
     const ctx = getScrapeContext()
     if (ctx) { adoptSfContext(ctx, RH_PROFILE_DIR); adoptSupportableContext(ctx); adoptCcspContext(ctx) }
-    runRhScrapeWithState().catch(() => {})
+    runRhScrapeWithState().catch((e: any) => console.error("[rh-scraper] unhandled error:", e?.message ?? e))
   }, 5_000)
 }
 // Use a short 15-min tick rather than a single 4-hour setInterval.
@@ -3543,7 +3543,7 @@ setInterval(() => {
   const elapsed = Date.now() - lastMs
   if (elapsed >= intervalMs) {
     console.log(`[rh-scraper] tick: ${Math.round(elapsed / 60_000)}m since last scrape — triggering`)
-    runRhScrapeWithState().catch(() => {})
+    runRhScrapeWithState().catch((e: any) => console.error("[rh-scraper] unhandled error:", e?.message ?? e))
   } else {
     console.log(`[rh-scraper] tick: next scrape in ${Math.round((intervalMs - elapsed) / 60_000)}m`)
   }
