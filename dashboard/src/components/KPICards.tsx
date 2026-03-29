@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { fmtCurrency as fmtAcv } from '../lib/format'
 import type { KPIs, SupportCase, AccountInfo, PipelineOpp } from '../types'
 import { SupportCasesTable } from './SupportCasesTable'
 import {
@@ -132,11 +133,6 @@ function RenewalsModal({ title, accentClass, rows, byCustomer, onClose }: {
   )
 }
 
-function fmtAcv(val: number): string {
-  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
-  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`
-  return `$${val.toFixed(0)}`
-}
 
 function fmtDateShort(iso: string): string {
   if (!iso) return '—'

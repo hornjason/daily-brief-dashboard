@@ -28,7 +28,7 @@ import {
 } from 'lucide-react'
 import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCustomerSSE } from '../hooks/useCustomerSSE'
-import { formatDate, formatTime, formatRelTime } from '../lib/format'
+import { formatDate, formatTime, formatRelTime, fmtCurrency as fmtAcv } from '../lib/format'
 import { OppDetail } from '../components/PipelineSection'
 import type { PipelineOpp } from '../types'
 
@@ -1073,11 +1073,6 @@ const PARTNER_COLORS: Record<string, string> = {
   AWS: '#FF9900', Google: '#4285F4', Microsoft: '#00A4EF', Other: '#6B7280',
 }
 
-function fmtAcv(val: number): string {
-  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
-  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`
-  return `$${val.toFixed(0)}`
-}
 
 function CloudSpendCard({ customerName }: { customerName: string }) {
   const data = useCCSP(customerName)
