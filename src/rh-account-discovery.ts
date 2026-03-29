@@ -1,115 +1,102 @@
 /**
  * src/rh-account-discovery.ts
  *
- * Discovers Red Hat account numbers by calling the portal's internal
- * accounts API (the same endpoint the case filter typeahead uses).
+ * Discovers Red Hat account numbers using the portal's SOLR cases search API.
  *
- * Uses page.evaluate() + fetch() so the browser's session cookies are
- * automatically included — no UI interaction or selector fragility.
+ * Strategy (per customer):
+ *   POST /hydra/rest/search/v2/cases with:
+ *     q = 'account_name: "CustomerName" AND NOT case_status: Closed'
+ *   Extract unique case_accountNumber values from all returned docs.
  *
- * Strategy per customer:
- *   1. Search the API with customer name (and aliases as fallback).
- *   2. For each candidate account number returned, check if it has ≥ 1
- *      open support case by navigating to the filtered cases URL.
- *   3. Record every account number that has cases.
+ *   No portal page navigation — a single API call per name/alias.
+ *   If the primary name returns 0 results, aliases are tried in order.
  */
 
 import type { Page } from '@playwright/test'
 
-const CASES_BASE = 'https://access.redhat.com/support/cases/#/case/list'
-const ACCOUNTS_API = 'https://access.redhat.com/hydra/rest/accounts/'
+const CASES_BASE   = 'https://access.redhat.com/support/cases/#/case/list'
+const CASES_SEARCH = 'https://access.redhat.com/hydra/rest/search/v2/cases'
+const RH_CLIENT    = 'Portal%20Case%20Management%202.44.57'
+
+// Minimal SOLR expression: only the fields we need, no heavy facets
+const DISCOVERY_EXPRESSION =
+  'sort=case_lastModifiedDate%20desc' +
+  '&fl=case_accountNumber%2Ccase_account_name%2Ccase_status' +
+  '&fq=%7B!tag%3Dc_product%7D*%3A*'
 
 export interface DiscoveryResult {
   customerName: string
   searchTerm: string
-  accountNumbers: string[]   // numbers with ≥ 1 case
+  accountNumbers: string[]   // unique account numbers with ≥ 1 open case
   allCandidates: Array<{ name: string; accountNumber: string }>
 }
 
-interface AccountItem {
-  accountNumber: string
-  name: string
-}
-
 /**
- * Search the portal accounts API for accounts matching `nameLike`.
- * Uses the active browser session cookies via fetch() inside page.evaluate().
+ * Call the SOLR cases API to find cases matching the given account name.
+ * Returns all unique case_accountNumber values in the first 200 results.
+ * Includes all statuses — open and closed — so we find every account number
+ * the customer has ever used. The scraper filters by status later.
  */
-async function fetchAccountCandidates(
+async function searchOpenCasesByAccountName(
   page: Page,
-  nameLike: string,
-): Promise<AccountItem[]> {
-  const params = new URLSearchParams({
-    fields: 'accountNumber,name',
-    limit: '60',
-    accountNumberNotNull: 'true',
-    nameLike,
-  })
-  const url = `${ACCOUNTS_API}?${params}`
+  accountName: string,
+): Promise<{ accountNumbers: string[]; numFound: number }> {
+  // SOLR phrase query — exact account name match, all case statuses
+  const escaped = accountName.replace(/"/g, '\\"')
+  const q = `account_name: "${escaped}"`
 
-  const data = await page.evaluate(async (apiUrl: string) => {
-    const res = await fetch(apiUrl, { credentials: 'include' })
-    if (!res.ok) return null
-    return res.json()
-  }, url)
+  const apiResult = await page.evaluate(
+    async ({
+      q,
+      expression,
+      url,
+    }: { q: string; expression: string; url: string }) => {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            q,
+            start: 0,
+            rows: 200,
+            partnerSearch: false,
+            expression,
+          }),
+        })
+        if (!res.ok) return { error: `HTTP ${res.status}` }
+        return { data: await res.json() }
+      } catch (e: any) {
+        return { error: String(e?.message ?? e) }
+      }
+    },
+    {
+      q,
+      expression: DISCOVERY_EXPRESSION,
+      url: `${CASES_SEARCH}?redhat_client=${RH_CLIENT}`,
+    },
+  )
 
-  if (!data?.items) return []
-  return (data.items as AccountItem[]).map(item => ({
-    name: String(item.name ?? ''),
-    accountNumber: String(item.accountNumber ?? ''),
-  })).filter(item => item.accountNumber)
-}
+  if ('error' in apiResult) throw new Error(apiResult.error as string)
 
-/**
- * Navigate to the cases URL filtered by account number and count rows.
- * Returns the case count (0 if none or error).
- */
-async function countCasesForAccount(page: Page, accountNumber: string): Promise<number> {
-  const url =
-    `${CASES_BASE}` +
-    `?query=accountNumber%3A%20(%22${accountNumber}%22)%20orderBy%20severity%20asc` +
-    `&p=1&size=100&searchType=basic`
+  const docs: any[] = (apiResult as any).data?.response?.docs ?? []
+  const numFound: number = (apiResult as any).data?.response?.numFound ?? 0
+  const accountNumbers = [
+    ...new Set(
+      docs
+        .map((d: any) => String(d.case_accountNumber ?? ''))
+        .filter(Boolean),
+    ),
+  ]
 
-  await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
-
-  // Allow SSO transparent renewal
-  if (!page.url().includes('access.redhat.com/support')) {
-    await page.waitForURL('**/access.redhat.com/support/**', { timeout: 15_000 }).catch(() => {})
-  }
-  if (!page.url().includes('access.redhat.com/support')) {
-    throw new Error('Session expired during discovery')
-  }
-
-  await page.waitForSelector('table tbody tr', { timeout: 12_000 }).catch(() => {})
-  await page.waitForTimeout(5_000)
-
-  return page.evaluate(() => {
-    let valid = 0
-    for (const row of document.querySelectorAll('table tbody tr')) {
-      if (row.querySelector('a[href*="/case/"]')) valid++
-    }
-    return valid
-  })
-}
-
-/**
- * Build ordered search terms: full name first, then first significant word,
- * then aliases.
- */
-function searchTerms(name: string, aliases: string[]): string[] {
-  const terms: string[] = []
-  const candidates = [name, ...aliases]
-  for (const c of candidates) {
-    const clean = c.trim()
-    if (!terms.includes(clean)) terms.push(clean)
-    const firstWord = clean.split(/\s+/)[0]
-    if (firstWord.length >= 4 && !terms.includes(firstWord)) terms.push(firstWord)
-  }
-  return terms
+  return { accountNumbers, numFound }
 }
 
 /**
  * Discover account numbers for a single customer using an authenticated page.
+ *
+ * Tries the primary name first; if 0 results, falls back to aliases in order.
+ * Collects ALL unique account numbers found (no early exit within a name).
  */
 export async function discoverAccountNumbers(
   page: Page,
@@ -118,12 +105,12 @@ export async function discoverAccountNumbers(
 ): Promise<DiscoveryResult> {
   const result: DiscoveryResult = {
     customerName,
-    searchTerm: '',
+    searchTerm: customerName,
     accountNumbers: [],
     allCandidates: [],
   }
 
-  // Ensure we're on the portal (session cookies active)
+  // Ensure session cookies are active by being on the portal domain
   if (!page.url().includes('access.redhat.com')) {
     await page.goto(CASES_BASE, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await page.waitForTimeout(3_000)
@@ -133,52 +120,43 @@ export async function discoverAccountNumbers(
     }
   }
 
-  const terms = searchTerms(customerName, aliases)
+  const namesToTry = [customerName, ...aliases]
 
-  for (const term of terms) {
-    console.log(`[account-discovery] ${customerName}: searching API for "${term}"`)
-    result.searchTerm = term
+  for (const name of namesToTry) {
+    result.searchTerm = name
+    console.log(`[account-discovery] ${customerName}: searching SOLR for "${name}"`)
 
-    let candidates: AccountItem[] = []
+    let accountNumbers: string[] = []
+    let numFound = 0
     try {
-      candidates = await fetchAccountCandidates(page, term)
+      ;({ accountNumbers, numFound } = await searchOpenCasesByAccountName(page, name))
     } catch (e: any) {
-      console.warn(`[account-discovery] ${customerName}: API error — ${e.message}`)
+      console.warn(`[account-discovery] ${customerName}: SOLR error for "${name}" — ${e.message}`)
       continue
     }
 
-    if (candidates.length === 0) {
-      console.log(`[account-discovery] ${customerName}: no accounts found for "${term}"`)
-      continue
-    }
+    console.log(
+      `[account-discovery] ${customerName}: "${name}" → numFound=${numFound}, ` +
+      `accounts=[${accountNumbers.join(', ') || 'none'}]`,
+    )
 
-    result.allCandidates = candidates.map(c => ({ name: c.name, accountNumber: c.accountNumber }))
-    console.log(`[account-discovery] ${customerName}: ${candidates.length} candidate(s) from API`)
-
-    for (const candidate of candidates) {
-      if (result.accountNumbers.includes(candidate.accountNumber)) continue
-
-      let caseCount = 0
-      try {
-        caseCount = await countCasesForAccount(page, candidate.accountNumber)
-      } catch (e: any) {
-        console.warn(`[account-discovery] ${customerName}: error checking ${candidate.accountNumber} — ${e.message}`)
-        continue
-      }
-
-      if (caseCount >= 1) {
-        console.log(`[account-discovery] ✓ ${customerName}: ${candidate.accountNumber} (${candidate.name}) — ${caseCount} case(s)`)
-        result.accountNumbers.push(candidate.accountNumber)
-      } else {
-        console.log(`[account-discovery] ✗ ${customerName}: ${candidate.accountNumber} (${candidate.name}) — 0 cases`)
+    for (const acct of accountNumbers) {
+      if (!result.accountNumbers.includes(acct)) {
+        result.accountNumbers.push(acct)
+        result.allCandidates.push({ name, accountNumber: acct })
       }
     }
 
-    if (result.accountNumbers.length > 0) break
+    // Primary name found results — no need to try aliases
+    if (result.accountNumbers.length > 0 && name === customerName) break
   }
 
   if (result.accountNumbers.length === 0) {
-    console.log(`[account-discovery] ${customerName}: no accounts with cases found`)
+    console.log(`[account-discovery] ${customerName}: no open cases found`)
+  } else {
+    console.log(
+      `[account-discovery] ✓ ${customerName}: accounts [${result.accountNumbers.join(', ')}]`,
+    )
   }
 
   return result
