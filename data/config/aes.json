@@ -2,39 +2,12 @@
   "aes": [
     {
       "name": "Carolanne Farrell",
-      "driveFolderId": "",
+      "driveFolderId": "1PmZt71VoXPvvBJ4OJj4SbrvDLE4Re5eA",
       "sfReportId": "00OPe00000isU2zMAE",
       "tableauTerritories": ["WEST_COMM_CORP_NORTHWEST_TERR01"],
-      "supportableSheetId": "14UxPm6m-oMGjOzMITEuNmwr6-YauFWOzhxg03cj0JYM",
-      "pipelineSheetId": "138i4FYEewBBFJLShIW6_ggUu5qZEmFyci0xk6fo-5QA",
-      "ccspSheetId": ""
-    },
-    {
-      "name": "Elmer Alvarez",
-      "driveFolderId": "",
-      "sfReportId": "",
-      "tableauTerritories": ["WEST_COMM_CORP_NORTHWEST_TERR06"],
-      "supportableSheetId": "1xcmizV1LU7XL27OsV68QqRCjwnCUtyHlhfx883qfgrY",
-      "pipelineSheetId": "",
-      "ccspSheetId": ""
-    },
-    {
-      "name": "Alex Rivera",
-      "driveFolderId": "",
-      "sfReportId": "00OPe00000isU2zMAE",
-      "tableauTerritories": ["WEST_COMM_CORP_NORTHWEST_TERR01"],
-      "supportableSheetId": "",
-      "pipelineSheetId": "",
-      "ccspSheetId": ""
-    },
-    {
-      "name": "Sam Chen",
-      "driveFolderId": "",
-      "sfReportId": "",
-      "tableauTerritories": ["WEST_COMM_CORP_NORTHWEST_TERR06"],
-      "supportableSheetId": "",
-      "pipelineSheetId": "",
-      "ccspSheetId": ""
+      "supportableSheetId": "1kjg2I0v7m7P5iZTCWo0YfIPXMDJ_EwS1XnGt6PK8Y2k",
+      "pipelineSheetId": "1vL3cJvpajuTn1cW0AbU0OW5xmKygRQwe1cWUyyHndR0",
+      "ccspSheetId": "1SkfeSI8j0E-uf-X8V4dMt7kb4LncWawja0_GHcuKg7Y"
     }
   ]
 }

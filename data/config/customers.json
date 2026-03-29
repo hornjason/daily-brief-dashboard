@@ -1,466 +1,77 @@
 {
   "customers": [
     {
-      "name": "A10 NETWORKS, INC.",
-      "ae": "Carolanne Farrell",
-      "domain": "a10networks.com",
-      "segment": "Commercial",
-      "region": "",
+      "name": "A10 Networks",
       "accountNumbers": [
-        "5929071"
+        "5929071",
+        "916824",
+        "12238100"
       ],
-      "aliases": [
-        "A10 Networks"
-      ]
+      "ae": "Carolanne Farrell"
     },
     {
-      "name": "BESPIN GLOBAL U.S.",
-      "ae": "Elmer Alvarez",
-      "domain": "bespinglobal.us",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [],
-      "aliases": [
-        "bespin"
-      ],
-      "skipAccountDiscovery": true
-    },
-    {
-      "name": "BITRISE",
-      "ae": "Elmer Alvarez",
-      "domain": "bitrise.io",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "11416649"
-      ]
-    },
-    {
-      "name": "CONFLUENT",
-      "ae": "Elmer Alvarez",
-      "domain": "confluent.io",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [],
-      "skipAccountDiscovery": true
-    },
-    {
-      "name": "CROWDSTRIKE",
-      "ae": "Carolanne Farrell",
-      "domain": "crowdstrike.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5311018",
-        "5857069"
-      ]
-    },
-    {
-      "name": "DROPBOX, INC.",
-      "ae": "Carolanne Farrell",
-      "domain": "dropbox.com",
-      "segment": "Commercial",
-      "region": "",
+      "name": "Dropbox",
       "accountNumbers": [
         "10375220"
       ],
-      "aliases": [
-        "dropbox"
-      ]
+      "ae": "Carolanne Farrell"
     },
     {
-      "name": "FRED HUTCH",
-      "ae": "Carolanne Farrell",
-      "domain": "fredhutch.org",
-      "segment": "Commercial",
-      "region": "",
+      "name": "Fred Hutchinson Cancer Center",
+      "supportableName": "Seattle Cancer Care",
       "accountNumbers": [
         "5456785"
       ],
-      "aliases": [
-        "fred hutchinson",
-        "fred hutchinson cancer center",
-        "fred hutch cancer center",
-        "Seattle Cancer Care Alliance"
-      ]
+      "ae": "Carolanne Farrell"
     },
     {
-      "name": "ILLUMIO",
-      "ae": "Carolanne Farrell",
-      "domain": "illumio.com",
-      "segment": "Commercial",
-      "region": "",
+      "name": "Illumio",
       "accountNumbers": [
+        "9162122",
+        "11390719",
         "5963272",
+        "6033587",
+        "11980107",
         "12550526"
-      ]
-    },
-    {
-      "name": "INTRADO CORPORATION",
-      "ae": "Elmer Alvarez",
-      "domain": "intrado.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "11823554",
-        "11607015"
       ],
-      "aliases": [
-        "intrado"
-      ]
+      "ae": "Carolanne Farrell"
     },
     {
-      "name": "LIFETOUCH",
-      "ae": "Carolanne Farrell",
-      "domain": "lifetouch.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "1368936"
-      ]
-    },
-    {
-      "name": "LYNDEN LOGISTICS",
-      "ae": "Carolanne Farrell",
-      "domain": "lynden.com",
-      "segment": "Commercial",
-      "region": "",
+      "name": "Lynden Logistics",
       "accountNumbers": [
         "5242436"
       ],
-      "aliases": [
-        "Lynden Incorporated"
-      ]
+      "ae": "Carolanne Farrell"
     },
     {
-      "name": "MCAFEE",
-      "ae": "Elmer Alvarez",
-      "domain": "mcafee.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "1264530"
-      ]
-    },
-    {
-      "name": "OMNIVISION TECHNOLOGIES",
-      "ae": "Elmer Alvarez",
-      "domain": "ovt.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "1207290"
-      ],
-      "aliases": [
-        "Omnivision"
-      ]
-    },
-    {
-      "name": "RECREATIONAL EQUIPMENT",
-      "ae": "Carolanne Farrell",
-      "domain": "rei.com",
-      "segment": "Commercial",
-      "region": "",
+      "name": "Recreational Equipment",
+      "supportableName": "Recreational Equipment, Inc.",
       "accountNumbers": [
         "627962"
       ],
-      "aliases": [
-        "REI"
-      ]
+      "ae": "Carolanne Farrell"
     },
     {
-      "name": "ROBERT HALF INTERNATIONAL",
-      "ae": "Elmer Alvarez",
-      "domain": "roberthalf.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5308452"
-      ],
-      "aliases": [
-        "robert half"
-      ]
-    },
-    {
-      "name": "SHUTTERFLY",
-      "ae": "Carolanne Farrell",
-      "domain": "shutterfly.com",
-      "segment": "Commercial",
-      "region": "",
+      "name": "Shutterfly",
       "accountNumbers": [
         "565461"
-      ]
-    },
-    {
-      "name": "TAYLOR FRESH FOODS",
-      "ae": "Elmer Alvarez",
-      "domain": "taylorfarms.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "11823554"
       ],
-      "aliases": [
-        "Taylor Farms",
-        "Taylor Fresh"
-      ]
+      "ae": "Carolanne Farrell"
     },
     {
-      "name": "UBER",
-      "ae": "Elmer Alvarez",
-      "domain": "uber.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "913977"
-      ],
-      "aliases": [
-        "Uber Technologies",
-        "uber freight",
-        "Transplace",
-        "Transplace Texas"
-      ]
-    },
-    {
-      "name": "WORKDAY",
-      "ae": "Elmer Alvarez",
-      "domain": "workdaystore.eu",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5350212"
-      ]
-    },
-    {
-      "name": "A10 NETWORKS, INC.",
-      "ae": "Alex Rivera",
-      "domain": "a10networks.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5929071"
-      ],
-      "aliases": [
-        "A10 Networks"
-      ]
-    },
-    {
-      "name": "CROWDSTRIKE",
-      "ae": "Alex Rivera",
-      "domain": "crowdstrike.com",
-      "segment": "Commercial",
-      "region": "",
+      "name": "Crowdstrike",
       "accountNumbers": [
         "5311018",
         "5857069"
-      ]
-    },
-    {
-      "name": "DROPBOX, INC.",
-      "ae": "Alex Rivera",
-      "domain": "dropbox.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "10375220"
       ],
-      "aliases": [
-        "dropbox"
-      ]
+      "ae": "Carolanne Farrell"
     },
     {
-      "name": "FRED HUTCH",
-      "ae": "Alex Rivera",
-      "domain": "fredhutch.org",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5456785"
-      ],
-      "aliases": [
-        "fred hutchinson",
-        "fred hutchinson cancer center",
-        "fred hutch cancer center",
-        "Seattle Cancer Care Alliance"
-      ]
-    },
-    {
-      "name": "ILLUMIO",
-      "ae": "Alex Rivera",
-      "domain": "illumio.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5963272",
-        "12550526"
-      ]
-    },
-    {
-      "name": "LIFETOUCH",
-      "ae": "Alex Rivera",
-      "domain": "lifetouch.com",
-      "segment": "Commercial",
-      "region": "",
+      "name": "Lifetouch",
       "accountNumbers": [
         "1368936"
-      ]
-    },
-    {
-      "name": "LYNDEN LOGISTICS",
-      "ae": "Alex Rivera",
-      "domain": "lynden.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5242436"
       ],
-      "aliases": [
-        "Lynden Incorporated"
-      ]
-    },
-    {
-      "name": "RECREATIONAL EQUIPMENT",
-      "ae": "Alex Rivera",
-      "domain": "rei.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "627962"
-      ],
-      "aliases": [
-        "REI"
-      ]
-    },
-    {
-      "name": "SHUTTERFLY",
-      "ae": "Alex Rivera",
-      "domain": "shutterfly.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "565461"
-      ]
-    },
-    {
-      "name": "BESPIN GLOBAL U.S.",
-      "ae": "Sam Chen",
-      "domain": "bespinglobal.us",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [],
-      "aliases": [
-        "bespin"
-      ],
-      "skipAccountDiscovery": true
-    },
-    {
-      "name": "BITRISE",
-      "ae": "Sam Chen",
-      "domain": "bitrise.io",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "11416649"
-      ]
-    },
-    {
-      "name": "CONFLUENT",
-      "ae": "Sam Chen",
-      "domain": "confluent.io",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [],
-      "skipAccountDiscovery": true
-    },
-    {
-      "name": "INTRADO CORPORATION",
-      "ae": "Sam Chen",
-      "domain": "intrado.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "11823554",
-        "11607015"
-      ],
-      "aliases": [
-        "intrado"
-      ]
-    },
-    {
-      "name": "MCAFEE",
-      "ae": "Sam Chen",
-      "domain": "mcafee.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "1264530"
-      ]
-    },
-    {
-      "name": "OMNIVISION TECHNOLOGIES",
-      "ae": "Sam Chen",
-      "domain": "ovt.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "1207290"
-      ],
-      "aliases": [
-        "Omnivision"
-      ]
-    },
-    {
-      "name": "ROBERT HALF INTERNATIONAL",
-      "ae": "Sam Chen",
-      "domain": "roberthalf.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5308452"
-      ],
-      "aliases": [
-        "robert half"
-      ]
-    },
-    {
-      "name": "TAYLOR FRESH FOODS",
-      "ae": "Sam Chen",
-      "domain": "taylorfarms.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "11823554"
-      ],
-      "aliases": [
-        "Taylor Farms",
-        "Taylor Fresh"
-      ]
-    },
-    {
-      "name": "UBER",
-      "ae": "Sam Chen",
-      "domain": "uber.com",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "913977"
-      ],
-      "aliases": [
-        "Uber Technologies",
-        "uber freight",
-        "Transplace",
-        "Transplace Texas"
-      ]
-    },
-    {
-      "name": "WORKDAY",
-      "ae": "Sam Chen",
-      "domain": "workdaystore.eu",
-      "segment": "Commercial",
-      "region": "",
-      "accountNumbers": [
-        "5350212"
-      ]
+      "ae": "Carolanne Farrell"
     }
   ]
 }
