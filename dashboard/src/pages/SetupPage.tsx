@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { RefreshTimerSettings } from '../components/RefreshTimerSettings'
 import {
   CheckCircle,
@@ -42,6 +42,7 @@ interface WizardAE {
 interface WizardCustomer {
   id: string
   name: string
+  supportableName: string
   domain: string
   accountNumbers: string
 }
@@ -371,29 +372,6 @@ function GoogleAuthSection() {
         </div>
       </div>
 
-      {/* Internal mode recommendation */}
-      <div className="bg-amber-950/40 border border-amber-700/50 rounded-xl p-4 space-y-2">
-        <div className="flex items-start gap-2">
-          <span className="text-amber-400 text-lg leading-none">&#x1f4a1;</span>
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-amber-200">For Red Hat teams: skip test-user approvals</p>
-            <p className="text-sm text-slate-400">
-              In the GCP Console &rarr; APIs &amp; Services &rarr; OAuth consent screen, switch the app from
-              <strong className="text-slate-200"> External</strong> to
-              <strong className="text-slate-200"> Internal</strong>. Any @redhat.com user can then
-              connect without needing to be added individually.
-            </p>
-            <a
-              href="https://console.cloud.google.com/apis/credentials/consent"
-              target="_blank"
-              rel="noreferrer"
-              className="text-xs text-amber-400 hover:text-amber-300 underline inline-flex items-center gap-1"
-            >
-              Open GCP OAuth Consent Screen <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        </div>
-      </div>
 
       {/* Not a test user fallback */}
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-2">
@@ -415,7 +393,7 @@ function GoogleAuthSection() {
 // ── AEs & Customers ────────────────────────────────────────────────────────────
 
 function makeBlankCustomer(): WizardCustomer {
-  return { id: crypto.randomUUID(), name: '', domain: '', accountNumbers: '' }
+  return { id: crypto.randomUUID(), name: '', supportableName: '', domain: '', accountNumbers: '' }
 }
 
 function makeBlankAE(): WizardAE {
@@ -450,7 +428,7 @@ interface AutoBootstrapState {
   completedAt: string | null
 }
 
-function AutoBootstrapProgress({ state, onReset }: { state: AutoBootstrapState; onReset?: () => void }) {
+function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state: AutoBootstrapState; onReset?: () => void; tableauSessionNeeded?: boolean | null }) {
   const hasError = state.steps.some(s => s.status === 'error')
 
   const statusIcon = (s: AutoBootstrapStep['status']) => {
@@ -489,7 +467,22 @@ function AutoBootstrapProgress({ state, onReset }: { state: AutoBootstrapState; 
                 {step.name}
               </span>
               {step.detail && (
-                <p className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">{step.detail}</p>
+                <p className="text-xs text-slate-500 mt-0.5 truncate max-w-lg">{step.detail}</p>
+              )}
+              {/* Tableau login prompt — only shown when reachable but session invalid */}
+              {step.name === 'Create CCSP Sheet' && step.status === 'done' && tableauSessionNeeded === true && (
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span className="text-xs text-amber-400">Tableau session required to populate CCSP data</span>
+                  <button
+                    onClick={async () => {
+                      await fetch('/api/bootstrap/tableau/open-login', { method: 'POST' })
+                      window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', 'tableau-login', 'width=1280,height=900')
+                    }}
+                    className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-0.5 rounded"
+                  >
+                    Open Tableau
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -508,11 +501,44 @@ function AutoBootstrapProgress({ state, onReset }: { state: AutoBootstrapState; 
               <span key={i} className="text-xs text-slate-400 truncate">{s.name}: <span className="text-slate-300">{s.detail}</span></span>
             ))}
           </div>
-          {onReset && (
-            <button onClick={onReset} className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 underline">
-              Add another AE
-            </button>
-          )}
+          {/* Surface customers with 0 accounts discovered */}
+          {(() => {
+            const discoverStep = state.steps.find(s => s.name === 'Discover Account Numbers' || s.name?.includes('Discover'))
+            const zeroMatches = discoverStep?.detail?.match(/(\d+)\/(\d+)/)
+            const matched = zeroMatches ? parseInt(zeroMatches[1]) : null
+            const total = zeroMatches ? parseInt(zeroMatches[2]) : null
+            if (matched !== null && total !== null && matched < total) {
+              return (
+                <div className="mt-2 bg-amber-950/40 border border-amber-700/50 rounded-lg px-3 py-2">
+                  <p className="text-xs text-amber-300 font-medium">{total - matched} customer{total - matched !== 1 ? 's' : ''} had no Supportable matches</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Check that the customer name in the list exactly matches the name in Supportable. Edit the customer list and re-run to correct.</p>
+                </div>
+              )
+            }
+            return null
+          })()}
+          <div className="mt-3 flex items-center gap-3">
+            <a
+              href="#aes"
+              onClick={() => document.getElementById('aes')?.scrollIntoView({ behavior: 'smooth' })}
+              className="text-xs text-indigo-400 hover:text-indigo-300 underline"
+            >
+              Edit AE / customers
+            </a>
+            {onReset && (
+              <button onClick={onReset} className="text-xs text-slate-400 hover:text-slate-300 underline">
+                Add another AE
+              </button>
+            )}
+            {hasError && (
+              <button
+                onClick={() => fetch('/api/bootstrap/auto/reset', { method: 'POST' })}
+                className="text-xs text-slate-400 hover:text-slate-300 underline"
+              >
+                Clear stuck state
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -522,61 +548,230 @@ function AutoBootstrapProgress({ state, onReset }: { state: AutoBootstrapState; 
 function AutoBootstrapForm() {
   const [aeName, setAeName] = useState('')
   const [sfReportId, setSfReportId] = useState('')
+  const [sfReportIdError, setSfReportIdError] = useState<string | null>(null)
   const [customerText, setCustomerText] = useState('')
   const [parentFolderId, setParentFolderId] = useState('')
+  const [folderName, setFolderName] = useState<string | null>(null)
+  const [folderError, setFolderError] = useState<string | null>(null)
+  const [knownAes, setKnownAes] = useState<Array<{ name: string; tableauTerritories?: string[]; accounts?: string[] }>>([])
+  const bootstrapStartingRef = useRef(false)
 
-  // Territory picker state
-  const [territoryInput, setTerritoryInput] = useState('')
-  const [discoveredTerritories, setDiscoveredTerritories] = useState<string[] | null>(null)
-  const [selectedTerritories, setSelectedTerritories] = useState<string[]>([])
-  const [discoveringTerritories, setDiscoveringTerritories] = useState(false)
+  // Territory picker state — pod + terrNum are source of truth; territoryInput is derived
+  const [pod, setPod] = useState('')
+  const [terrNum, setTerrNum] = useState('')
   const [territoryError, setTerritoryError] = useState<string | null>(null)
+  const [territoryLoading, setTerritoryLoading] = useState(false)
+  const [podTerritoryNames, setPodTerritoryNames] = useState<{ num: string; aeName: string }[]>([])
+  const [podNamesError, setPodNamesError] = useState<string | null>(null)
+  const [preflightError, setPreflightError] = useState<string | null>(null)
 
   // Bootstrap state — check on mount so progress survives page reloads
   const [bootstrapState, setBootstrapState] = useState<AutoBootstrapState | null>(null)
   const [starting, setStarting] = useState(false)
+  const [tableauSessionNeeded, setTableauSessionNeeded] = useState<boolean | null>(null)
+  // Pending auto-start after OAuth return — fires once territory auto-fill has populated all fields
+  const [autoStartPending, setAutoStartPending] = useState(false)
+
+  const PENDING_KEY = 'pai_pending_bootstrap'
 
   useEffect(() => {
     fetch('/api/bootstrap/auto/status')
       .then(r => r.json())
       .then((d: AutoBootstrapState) => { if (d.running || d.completedAt) setBootstrapState(d) })
       .catch(() => {})
+    fetch('/api/aes')
+      .then(r => r.json())
+      .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[] }> }) => setKnownAes(d.aes ?? []))
+      .catch(() => {})
+
+    // Restore form state after OAuth redirect — check sessionStorage directly (no URL guard).
+    // The key is set just before the OAuth redirect and consumed here on first mount.
+    // No URL dependency needed; the key is ephemeral and removed immediately after reading.
+    const saved = sessionStorage.getItem(PENDING_KEY)
+    if (saved) {
+      try {
+        const { sfReportId: savedSf, parentFolderId: savedPf, pod: savedPod, terrNum: savedTn } = JSON.parse(saved)
+        if (savedSf) setSfReportId(savedSf)
+        if (savedPf) setParentFolderId(savedPf)
+        if (savedPod) setPod(savedPod)
+        if (savedTn) setTerrNum(savedTn)
+        setAutoStartPending(true)
+        sessionStorage.removeItem(PENDING_KEY)
+      } catch {}
+    }
   }, [])
 
-  // Discover territories
-  const discoverTerritories = async () => {
-    setDiscoveringTerritories(true)
-    setTerritoryError(null)
-    try {
-      const r = await fetch('/api/bootstrap/tableau/territories')
-      const d = await r.json()
-      if (d.error) {
-        setTerritoryError(d.error)
-      } else {
-        setDiscoveredTerritories(d.territories ?? [])
-      }
-    } catch (e: any) {
-      setTerritoryError(e.message || 'Failed to discover territories')
-    } finally {
-      setDiscoveringTerritories(false)
-    }
-  }
+  // Derive full territory string(s) from pod + terrNum — no reverse-parsing needed
+  const territoryInput = useMemo(() => {
+    if (!pod || !terrNum.trim()) return ''
+    return terrNum.split(/[,\s]+/).map(s => s.trim()).filter(Boolean)
+      .map(n => `${pod}_TERR${n.padStart(2, '0')}`).join(', ')
+  }, [pod, terrNum])
 
-  // Toggle territory selection
-  const toggleTerritory = (t: string) => {
-    setSelectedTerritories(prev =>
-      prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
-    )
+  // Fetch territory names from sheet whenever POD changes
+  useEffect(() => {
+    if (!pod) { setPodTerritoryNames([]); setPodNamesError(null); return }
+    setPodNamesError(null)
+    fetch(`/api/territory-names?pod=${encodeURIComponent(pod)}`)
+      .then(r => r.json())
+      .then((d: { territories?: { num: string; aeName: string }[] }) => {
+        setPodTerritoryNames(d.territories ?? [])
+        if (!d.territories?.length) setPodNamesError('Could not load territory names from sheet — showing generic list')
+      })
+      .catch(() => { setPodTerritoryNames([]); setPodNamesError('Could not load territory names from sheet — showing generic list') })
+  }, [pod])
+
+  // Territory options for the selected POD — AE name in label if known from sheet or aes, else generic 01–20
+  const podTerritoryOptions = useMemo(() => {
+    if (!pod) return []
+    // Prefer live sheet data
+    if (podTerritoryNames.length > 0) {
+      return podTerritoryNames.map(({ num, aeName }) => ({ num, label: `${num} — ${aeName}` }))
+    }
+    // Fall back to knownAes (populated aes.json)
+    const knownForPod = knownAes
+      .filter(ae => ae.tableauTerritories?.some(t => t.startsWith(pod + '_TERR')))
+      .map(ae => {
+        const num = ae.tableauTerritories!.find(t => t.startsWith(pod + '_TERR'))!
+          .replace(pod + '_TERR', '')
+        return { num, label: `${num} — ${ae.name}` }
+      })
+      .sort((a, b) => a.num.localeCompare(b.num))
+    if (knownForPod.length > 0) return knownForPod
+    return Array.from({ length: 20 }, (_, i) => {
+      const num = String(i + 1).padStart(2, '0')
+      return { num, label: num }
+    })
+  }, [pod, knownAes, podTerritoryNames])
+
+  // Reverse map: territory string → AE
+  const territoryAeMap = useMemo(() => {
+    const map = new Map<string, typeof knownAes[0]>()
+    for (const ae of knownAes) {
+      for (const t of ae.tableauTerritories ?? []) map.set(t, ae)
+    }
+    return map
+  }, [knownAes])
+
+  // AE matched by the current territory input (first match wins)
+  const matchedAe = useMemo(() => {
+    const terrs = territoryInput.split(',').map(s => s.trim()).filter(Boolean)
+    for (const t of terrs) {
+      const ae = territoryAeMap.get(t)
+      if (ae) return ae
+    }
+    return null
+  }, [territoryInput, territoryAeMap])
+
+  // Auto-fill AE name + accounts whenever territory resolves to a known AE (always overwrite)
+  useEffect(() => {
+    if (!matchedAe) return
+    setAeName(matchedAe.name)
+    if (matchedAe.accounts?.length) setCustomerText(matchedAe.accounts.join('\n'))
+  }, [matchedAe])
+
+  // Live territory lookup — fires when territoryInput changes and no match in knownAes
+  useEffect(() => {
+    if (!territoryInput || matchedAe) return
+    // territoryInput may be comma-separated; look up the first one
+    const firstTerritory = territoryInput.split(',')[0].trim()
+    if (!firstTerritory) return
+    let cancelled = false
+    setTerritoryLoading(true)
+    setTerritoryError(null)
+    fetch(`/api/territory-lookup?territory=${encodeURIComponent(firstTerritory)}`)
+      .then(r => r.json())
+      .then((d: { aeName?: string; accounts?: string[]; error?: string }) => {
+        if (cancelled) return
+        if (d.error) {
+          setTerritoryError(d.error.includes('not found') ? null : d.error)
+          return
+        }
+        if (d.aeName) setAeName(d.aeName)
+        if (d.accounts?.length) setCustomerText(d.accounts.join('\n'))
+      })
+      .catch((e) => { if (!cancelled) setTerritoryError(e.message) })
+      .finally(() => { if (!cancelled) setTerritoryLoading(false) })
+    return () => { cancelled = true }
+  }, [territoryInput, matchedAe])
+
+  // Auto-start bootstrap once all fields are populated after OAuth return redirect
+  useEffect(() => {
+    if (!autoStartPending) return
+    if (!aeName.trim() || !sfReportId.trim() || !territoryInput || !customerText.trim()) return
+    setAutoStartPending(false)
+    startBootstrap()
+  }, [autoStartPending, aeName, sfReportId, territoryInput, customerText])
+
+  function handleAeNameBlur() {
+    if (!customerText.trim()) {
+      const match = knownAes.find(a => a.name.toLowerCase() === aeName.trim().toLowerCase())
+      if (match?.accounts?.length) {
+        setCustomerText(match.accounts.join('\n'))
+      }
+    }
   }
 
   // Start auto-bootstrap
   const startBootstrap = async () => {
-    const customerNames = customerText.split('\n').map(s => s.trim()).filter(Boolean)
-    const territories = discoveredTerritories
-      ? selectedTerritories
-      : territoryInput.split(',').map(s => s.trim()).filter(Boolean)
+    // E2: prevent double-trigger from autoStartPending or rapid clicks
+    if (bootstrapStartingRef.current) return
+    bootstrapStartingRef.current = true
 
-    if (!aeName.trim() || !sfReportId.trim() || !territories.length || !customerNames.length) return
+    const customerNames = customerText.split('\n').map(s => s.trim()).filter(Boolean)
+    const territories = territoryInput.split(',').map(s => s.trim()).filter(Boolean)
+
+    if (!aeName.trim() || !sfReportId.trim() || !territories.length || !customerNames.length) {
+      bootstrapStartingRef.current = false
+      return
+    }
+
+    // Q11: SF Report ID format check
+    if (!/^00O[a-zA-Z0-9]{12,15}$/.test(sfReportId.trim())) {
+      setSfReportIdError('Must start with 00O and be 15–18 characters (e.g. 00OPe000001abcDEF)')
+      bootstrapStartingRef.current = false
+      return
+    }
+
+    setPreflightError(null)
+    setSfReportIdError(null)
+
+    // Pre-check: RH Portal must be connected (needed for account discovery)
+    try {
+      const rhStatus = await fetch('/api/auth/redhat/status').then(r => r.json())
+      if (!rhStatus.hasSession || rhStatus.sessionExpired) {
+        setPreflightError('Red Hat Portal must be connected before running bootstrap — scroll up to connect it.')
+        bootstrapStartingRef.current = false
+        return
+      }
+    } catch {
+      // E1: network failure on status check — do not proceed silently
+      setPreflightError('Could not verify Red Hat Portal connection — check server status and try again.')
+      bootstrapStartingRef.current = false
+      return
+    }
+
+    // Pre-check: validate parent folder exists if provided
+    if (parentFolderId.trim()) {
+      try {
+        const vr = await fetch('/api/aes/validate-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderUrl: parentFolderId.trim() }),
+        })
+        const vd = await vr.json()
+        if (vd.error) {
+          setPreflightError(`Drive folder not found — check the URL and try again.`)
+          bootstrapStartingRef.current = false
+          return
+        }
+      } catch {
+        // E9: network failure on folder validation — do not proceed silently
+        setPreflightError('Could not validate Drive folder — check your connection and try again.')
+        bootstrapStartingRef.current = false
+        return
+      }
+    }
 
     setStarting(true)
     try {
@@ -593,15 +788,28 @@ function AutoBootstrapForm() {
       })
       const d = await r.json()
       if (d.error) {
-        setTerritoryError(d.error)
+        if (d.action === 'redirect' && d.url) {
+          // Need elevated Google permissions — save form state, then redirect to bootstrap OAuth
+          sessionStorage.setItem(PENDING_KEY, JSON.stringify({
+            sfReportId: sfReportId.trim(),
+            parentFolderId: parentFolderId.trim(),
+            pod,
+            terrNum,
+          }))
+          setPreflightError('Bootstrap requires elevated Drive permissions. Re-authorizing…')
+          setTimeout(() => { window.location.href = d.url }, 1200)
+          return
+        }
+        setPreflightError(d.error)
         return
       }
       // Start polling
       setBootstrapState({ running: true, aeName: aeName.trim(), steps: [], error: null, completedAt: null })
     } catch (e: any) {
-      setTerritoryError(e.message)
+      setPreflightError(e.message) // E3: was incorrectly setTerritoryError
     } finally {
       setStarting(false)
+      bootstrapStartingRef.current = false // E2: release re-entry guard
     }
   }
 
@@ -613,21 +821,44 @@ function AutoBootstrapForm() {
         const r = await fetch('/api/bootstrap/auto/status')
         const d: AutoBootstrapState = await r.json()
         setBootstrapState(d)
+        // When CCSP step completes, check if Tableau login is actually needed
+        const ccspStep = d.steps.find(s => s.name === 'Create CCSP Sheet')
+        if (ccspStep?.status === 'done' && tableauSessionNeeded === null) {
+          fetch('/api/bootstrap/tableau/session-status')
+            .then(r => r.json())
+            .then(({ reachable, sessionValid }: { reachable: boolean; sessionValid: boolean }) => {
+              setTableauSessionNeeded(reachable && !sessionValid)
+            })
+            .catch(() => {})
+        }
         if (!d.running) clearInterval(interval)
       } catch {}
     }, 2_000)
     return () => clearInterval(interval)
-  }, [bootstrapState?.running, starting])
+  }, [bootstrapState?.running, starting, tableauSessionNeeded])
 
-  const resetForm = () => { setBootstrapState(null); setAeName(''); setSfReportId(''); setCustomerText(''); setSelectedTerritories([]) }
+  const resetForm = () => {
+    setBootstrapState(null); setAeName(''); setSfReportId(''); setCustomerText(''); setPod(''); setTerrNum('')
+    setTableauSessionNeeded(null)
+    bootstrapStartingRef.current = false
+  }
   const customerNames = customerText.split('\n').map(s => s.trim()).filter(Boolean)
-  const territories = discoveredTerritories ? selectedTerritories : territoryInput.split(',').map(s => s.trim()).filter(Boolean)
+  const territories = territoryInput.split(',').map(s => s.trim()).filter(Boolean)
   const canStart = aeName.trim() && sfReportId.trim() && territories.length > 0 && customerNames.length > 0
+
+  if (autoStartPending) {
+    return (
+      <div className="flex items-center gap-3 py-6 text-slate-400 text-sm">
+        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+        Resuming your setup — loading territory data…
+      </div>
+    )
+  }
 
   if (bootstrapState && (bootstrapState.running || bootstrapState.completedAt)) {
     return (
       <div>
-        <AutoBootstrapProgress state={bootstrapState} onReset={bootstrapState.completedAt && !bootstrapState.running ? resetForm : undefined} />
+        <AutoBootstrapProgress state={bootstrapState} onReset={bootstrapState.completedAt && !bootstrapState.running ? resetForm : undefined} tableauSessionNeeded={tableauSessionNeeded} />
         {bootstrapState.completedAt && !bootstrapState.running && (
           <button
             onClick={resetForm}
@@ -642,9 +873,13 @@ function AutoBootstrapForm() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-400">
-        Automatically create a Drive folder, discover account numbers, and generate all data sheets for a new AE.
-      </p>
+      <div className="bg-indigo-950/50 border border-indigo-700/40 rounded-xl px-4 py-3 space-y-1.5">
+        <p className="text-sm font-medium text-indigo-200">Automated AE setup — one click to fully configured</p>
+        <p className="text-xs text-indigo-300/80 leading-relaxed">
+          Creates a Drive folder, discovers RH Portal account numbers, and generates all data sheets automatically.
+          Setup requires temporary full Drive access — you'll be prompted to downgrade to read-only once complete.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 gap-3">
         <div>
@@ -653,6 +888,7 @@ function AutoBootstrapForm() {
             type="text"
             value={aeName}
             onChange={e => setAeName(e.target.value)}
+            onBlur={handleAeNameBlur}
             placeholder="Jane Smith"
             className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
           />
@@ -663,67 +899,87 @@ function AutoBootstrapForm() {
           <input
             type="text"
             value={sfReportId}
-            onChange={e => setSfReportId(e.target.value)}
-            placeholder="00OPe..."
-            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            onChange={e => { setSfReportId(e.target.value); setSfReportIdError(null) }}
+            onBlur={() => {
+              const val = sfReportId.trim()
+              if (val && !/^00O[a-zA-Z0-9]{12,15}$/.test(val)) {
+                setSfReportIdError('Must start with 00O and be 15–18 characters (e.g. 00OPe000001abcDEF)')
+              }
+            }}
+            placeholder="00OPe000001abcDEF"
+            className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 ${sfReportIdError ? 'border-red-500' : 'border-slate-600'}`}
           />
+          {sfReportIdError && <p className="text-xs text-red-400 mt-1">{sfReportIdError}</p>}
         </div>
 
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Account Territories *</label>
-          {discoveredTerritories ? (
-            <div className="space-y-2">
-              <div className="max-h-48 overflow-y-auto bg-slate-800 border border-slate-600 rounded-lg p-2 space-y-1">
-                {discoveredTerritories.map(t => (
-                  <label key={t} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:bg-slate-700/50 px-2 py-1 rounded">
-                    <input
-                      type="checkbox"
-                      checked={selectedTerritories.includes(t)}
-                      onChange={() => toggleTerritory(t)}
-                      className="rounded border-slate-600"
-                    />
-                    {t}
-                  </label>
-                ))}
-              </div>
-              {selectedTerritories.length > 0 && (
-                <p className="text-xs text-emerald-400">{selectedTerritories.length} selected</p>
-              )}
-              <button
-                onClick={() => { setDiscoveredTerritories(null); setSelectedTerritories([]) }}
-                className="text-xs text-slate-500 hover:text-slate-400 transition-colors"
-              >
-                Switch to manual input
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={territoryInput}
-                  onChange={e => setTerritoryInput(e.target.value)}
-                  placeholder="WEST_COMM_CORP_NORTHWEST_TERR01 (comma-separated)"
-                  className="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                />
-                <button
-                  onClick={discoverTerritories}
-                  disabled={discoveringTerritories}
-                  className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors shrink-0"
+          <label className="block text-xs text-slate-400 mb-0.5">Account Territories *</label>
+          <p className="text-xs text-slate-500 mb-2">Selects your territory for CCSP scoping and auto-fills AE name + customer list from the territory sheet. Select your POD then the territory number.</p>
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <p className="text-xs text-slate-500 mb-1">POD / Region</p>
+                <select
+                  value={pod}
+                  onChange={e => { setPod(e.target.value); setTerrNum('') }}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
                 >
-                  {discoveringTerritories ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                  Discover
-                </button>
+                  <option value="">Select POD…</option>
+                  <option value="WEST_COMM_CORP_NORTHWEST">Northwest Corp</option>
+                  <option value="WEST_COMM_CORP_SOUTHWEST">Southwest Corp</option>
+                  <option value="WEST_COMM_CORP_NORTHCENTRAL">North Central Corp</option>
+                  <option value="WEST_COMM_CORP_SOUTHCENTRAL">South Central Corp</option>
+                </select>
               </div>
-              {territoryError && (
-                <p className="text-xs text-red-400">{territoryError}</p>
-              )}
+              <div className="w-48">
+                <p className="text-xs text-slate-500 mb-1">Territory</p>
+                <select
+                  value={terrNum}
+                  onChange={e => setTerrNum(e.target.value)}
+                  disabled={!pod}
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 disabled:opacity-40"
+                >
+                  <option value="">Select…</option>
+                  {podTerritoryOptions.map(opt => (
+                    <option key={opt.num} value={opt.num}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-          )}
+            {territoryInput && (
+              <p className="text-xs text-slate-500 font-mono">{territoryInput}</p>
+            )}
+            {matchedAe ? (
+              <p className="text-xs text-emerald-400">→ {matchedAe.name}{matchedAe.accounts?.length ? ` · ${matchedAe.accounts.length} accounts pre-loaded` : ''}</p>
+            ) : territoryLoading ? (
+              <p className="text-xs text-slate-400 flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Loading territory data from sheet…</p>
+            ) : territoryInput && !aeName ? (
+              <p className="text-xs text-amber-400">No AE data for this territory — enter AE name and accounts manually below</p>
+            ) : territoryInput && aeName ? (
+              <p className="text-xs text-emerald-400">→ {aeName} · loaded from territory sheet</p>
+            ) : null}
+            {podNamesError && (
+              <p className="text-xs text-amber-400">{podNamesError}</p>
+            )}
+            {territoryError && (
+              <p className="text-xs text-red-400">{territoryError}</p>
+            )}
+          </div>
         </div>
 
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Customer Names * (one per line)</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-slate-400">Customer Names * (one per line)</label>
+            <a
+              href="https://docs.google.com/spreadsheets/d/1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8/edit?gid=294606982#gid=294606982"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Account name reference
+            </a>
+          </div>
           <textarea
             value={customerText}
             onChange={e => setCustomerText(e.target.value)}
@@ -732,21 +988,55 @@ function AutoBootstrapForm() {
             className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-y"
           />
           {customerNames.length > 0 && (
-            <p className="text-xs text-slate-500 mt-1">{customerNames.length} customer(s)</p>
+            <p className="text-xs text-slate-500 mt-1">{customerNames.length} customer(s) — names must match Supportable exactly. Edit before starting if needed.</p>
           )}
         </div>
 
         <div>
-          <label className="block text-xs text-slate-400 mb-1">Parent Drive Folder ID (optional)</label>
+          <label className="block text-xs text-slate-400 mb-1">Parent Drive Folder (optional)</label>
           <input
             type="text"
             value={parentFolderId}
-            onChange={e => setParentFolderId(e.target.value)}
-            placeholder="Leave blank to create in My Drive root"
-            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            onChange={e => { setParentFolderId(e.target.value); setFolderName(null); setFolderError(null) }}
+            onBlur={async () => {
+              const val = parentFolderId.trim()
+              if (!val) { setFolderName(null); setFolderError(null); return }
+              try {
+                const r = await fetch('/api/aes/validate-folder', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ folderUrl: val }),
+                })
+                const d = await r.json()
+                if (d.error) { setFolderError('Folder not found — check the URL'); setFolderName(null) }
+                else { setFolderName(d.folderName); setFolderError(null) }
+              } catch { setFolderError('Could not reach Drive API'); setFolderName(null) }
+            }}
+            placeholder="Paste Google Drive folder URL or leave blank for My Drive root"
+            className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 ${folderError ? 'border-red-500' : folderName ? 'border-emerald-500' : 'border-slate-600'}`}
           />
+          {folderName && <p className="text-xs text-emerald-400 mt-1">✓ {folderName}</p>}
+          {folderError && <p className="text-xs text-red-400 mt-1">✗ {folderError}</p>}
         </div>
       </div>
+
+      {/* Hierarchy preview — shows exactly what bootstrap creates (D2: no per-customer subfolders) */}
+      {aeName.trim() && (
+        <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs font-mono space-y-0.5">
+          <p className="text-slate-400 mb-1 font-sans text-xs font-medium">What will be created:</p>
+          <p className="text-slate-300">
+            📁 {folderName ? <span className="text-emerald-300">{folderName}</span> : parentFolderId.trim() ? <span className="text-indigo-300">parent folder</span> : 'My Drive'}/
+          </p>
+          <p className="text-slate-300 pl-4">└── 📁 {aeName.trim()}/</p>
+          <p className="text-slate-500 pl-8">├── 📊 Supportable Sheet</p>
+          <p className="text-slate-500 pl-8">├── 📊 CCSP Sheet</p>
+          <p className="text-slate-500 pl-8">└── 📊 Pipeline Sheet</p>
+        </div>
+      )}
+
+      {preflightError && (
+        <p className="text-xs text-red-400 bg-red-950/30 border border-red-800/50 rounded px-3 py-2">{preflightError}</p>
+      )}
 
       <div className="flex justify-end pt-1">
         <button
@@ -769,6 +1059,9 @@ function AEsCustomersSection() {
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const [validatingFolder, setValidatingFolder] = useState<string | null>(null)
+  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null)
+  const [folderValidateError, setFolderValidateError] = useState<string | null>(null)
+  const [scrapeError, setScrapeError] = useState<string | null>(null)
 
   // Load AEs and customers from server
   useEffect(() => {
@@ -788,17 +1081,19 @@ function AEsCustomersSection() {
         }> = aeData.aes ?? []
         const serverCustomers: Array<{
           name: string
+          supportableName?: string
           domain?: string
           accountNumbers?: string[]
           ae?: string
         }> = Array.isArray(customerList) ? customerList : []
 
-        if (serverAes.length === 0) {
+        // Manual mode only shows AEs that have been fully bootstrapped (have a Drive folder)
+        const configuredAes = serverAes.filter(ae => ae.driveFolderId)
+        if (configuredAes.length > 0) setMode('manual') // auto-switch to edit view when AEs exist
+        if (configuredAes.length === 0) {
           setAes([makeBlankAE()])
         } else {
-          // If any AE already has a driveFolderId, default to manual mode
-          if (serverAes.some(ae => ae.driveFolderId)) setMode('manual')
-          setAes(serverAes.map(ae => ({
+          setAes(configuredAes.map(ae => ({
             id: crypto.randomUUID(),
             name: ae.name,
             folderUrl: '',
@@ -814,6 +1109,7 @@ function AEsCustomersSection() {
               .map(c => ({
                 id: crypto.randomUUID(),
                 name: c.name,
+                supportableName: c.supportableName ?? '',
                 domain: c.domain ?? '',
                 accountNumbers: (c.accountNumbers ?? []).join(', '),
               })),
@@ -858,8 +1154,12 @@ function AEsCustomersSection() {
   }
 
   const removeAE = (aeId: string) => {
-    if (!confirm('Remove this AE and all its customers?')) return
+    setRemoveConfirmId(aeId)
+  }
+
+  const confirmRemoveAE = (aeId: string) => {
     setAes(prev => prev.filter(a => a.id !== aeId))
+    setRemoveConfirmId(null)
   }
 
   const validateFolder = async (aeId: string) => {
@@ -874,12 +1174,13 @@ function AEsCustomersSection() {
       })
       const d = await r.json()
       if (d.error) {
-        alert(d.error)
+        setFolderValidateError(d.error)
       } else {
+        setFolderValidateError(null)
         updateAE(aeId, { folderId: d.folderId, folderName: d.folderName })
       }
     } catch {
-      alert('Failed to validate folder — ensure Google Auth is complete')
+      setFolderValidateError('Failed to validate folder — ensure Google Auth is complete')
     } finally {
       setValidatingFolder(null)
     }
@@ -916,6 +1217,7 @@ function AEsCustomersSection() {
           .filter(c => c.name.trim())
           .map(c => ({
             name: c.name.trim(),
+            supportableName: c.supportableName.trim() || undefined,
             domain: c.domain.trim() || undefined,
             accountNumbers: c.accountNumbers
               .split(',')
@@ -970,7 +1272,7 @@ function AEsCustomersSection() {
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          Manual / Existing
+          Edit / View
         </button>
       </div>
 
@@ -986,13 +1288,21 @@ function AEsCustomersSection() {
         <div key={ae.id} className="bg-slate-900 rounded-xl p-5 border border-slate-700 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-300">AE #{aeIdx + 1}</span>
-            <button
-              onClick={() => removeAE(ae.id)}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Remove AE
-            </button>
+            {removeConfirmId === ae.id ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-red-400">Remove this AE and all customers?</span>
+                <button onClick={() => confirmRemoveAE(ae.id)} className="text-xs bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded">Remove</button>
+                <button onClick={() => setRemoveConfirmId(null)} className="text-xs text-slate-400 hover:text-white">Cancel</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => removeAE(ae.id)}
+                className="flex items-center gap-1 text-xs text-slate-500 hover:text-red-400 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Remove AE
+              </button>
+            )}
           </div>
 
           {/* AE fields */}
@@ -1069,6 +1379,7 @@ function AEsCustomersSection() {
                 <thead>
                   <tr className="text-xs text-slate-500 uppercase tracking-wide border-b border-slate-700">
                     <th className="text-left py-2 pr-2 font-medium">Customer Name</th>
+                    <th className="text-left py-2 pr-2 font-medium">Supportable Name</th>
                     <th className="text-left py-2 pr-2 font-medium">Domain</th>
                     <th className="text-left py-2 pr-2 font-medium">Account Numbers</th>
                     <th className="w-8"></th>
@@ -1083,6 +1394,15 @@ function AEsCustomersSection() {
                           value={c.name}
                           onChange={e => updateCustomer(ae.id, c.id, { name: e.target.value })}
                           placeholder="Acme Corp"
+                          className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          value={c.supportableName}
+                          onChange={e => updateCustomer(ae.id, c.id, { supportableName: e.target.value })}
+                          placeholder="If different in Supportable"
                           className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                         />
                       </td>
@@ -1128,6 +1448,10 @@ function AEsCustomersSection() {
           </div>
         </div>
       ))}
+
+      {folderValidateError && (
+        <p className="text-xs text-red-400 bg-red-950/30 border border-red-800/50 rounded px-3 py-2">{folderValidateError}</p>
+      )}
 
       <div className="flex items-center justify-between pt-2">
         <button
@@ -1175,6 +1499,7 @@ function RedHatPortalSection() {
   const [status, setStatus] = useState<RhStatus | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const popupRef = useRef<Window | null>(null)
 
   const fetchStatus = async () => {
     try {
@@ -1182,6 +1507,8 @@ function RedHatPortalSection() {
       setStatus(d)
       if (d.hasSession && !d.loginInProgress && connecting) {
         setConnecting(false)
+        popupRef.current?.close()
+        popupRef.current = null
         fetch('/api/auth/redhat/sync', { method: 'POST' }).catch(() => {})
       }
     } catch {}
@@ -1207,8 +1534,8 @@ function RedHatPortalSection() {
         setError(d.error)
         setConnecting(false)
       } else {
-        // Open VNC viewer as a popup so the login browser appears as a native-feeling window
-        window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', 'rh-login', 'width=1280,height=900')
+        // Open VNC viewer as a popup — store reference so we can close it when login completes
+        popupRef.current = window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', 'rh-login', 'width=1280,height=900')
       }
     } catch (e: any) {
       setError(e.message)
@@ -1218,6 +1545,8 @@ function RedHatPortalSection() {
 
   const handleCancel = async () => {
     await fetch('/api/auth/redhat/session', { method: 'DELETE' }).catch(() => {})
+    popupRef.current?.close()
+    popupRef.current = null
     setConnecting(false)
     fetchStatus()
   }
@@ -1309,29 +1638,87 @@ function DataSourcesSection() {
     lastSync: string | null
     rowCount: number
     syncError: string | null
+    reportConfigured: boolean
+  } | null>(null)
+  const [rhStatus, setRhStatus] = useState<{
+    hasSession: boolean
+    lastScraped: string | null
+    caseCount: number
+  } | null>(null)
+
+  const [ccspStatus, setCcspStatus] = useState<{
+    running: boolean
+    lastScrape: string | null
+    lastError: string | null
   } | null>(null)
   const [scraping, setScraping] = useState(false)
+  const [scrapeError, setScrapeError] = useState<string | null>(null)
+  const [ccspScraping, setCcspScraping] = useState(false)
+  const [ccspScrapeError, setCcspScrapeError] = useState<string | null>(null)
+  const [sfSyncing, setSfSyncing] = useState(false)
+  const [sfSyncError, setSfSyncError] = useState<string | null>(null)
+  const [rhSyncing, setRhSyncing] = useState(false)
+  const [rhSyncError, setRhSyncError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetch('/api/bootstrap/supportable/status')
-      .then(r => r.json())
-      .then(setSupportableStatus)
-      .catch(() => {})
+  const refreshAll = () => {
+    fetch('/api/bootstrap/supportable/status').then(r => r.json()).then(setSupportableStatus).catch(() => {})
+    fetch('/api/bootstrap/ccsp/status').then(r => r.json()).then(setCcspStatus).catch(() => {})
+    fetch('/api/auth/salesforce/status').then(r => r.json()).then(setSfStatus).catch(() => {})
+    fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {})
+  }
 
-    fetch('/api/auth/salesforce/status')
-      .then(r => r.json())
-      .then(setSfStatus)
-      .catch(() => {})
-  }, [])
+  useEffect(() => { refreshAll() }, [])
+
+  const handleRhSync = async () => {
+    setRhSyncError(null)
+    setRhSyncing(true)
+    try {
+      if (!rhStatus?.hasSession) {
+        setRhSyncError('No active session — connect in the RH Portal section above first.')
+        return
+      }
+      await fetch('/api/auth/redhat/sync', { method: 'POST' })
+      setTimeout(() => fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {}), 3_000)
+    } catch (e: any) {
+      setRhSyncError(`Sync failed: ${e.message}`)
+    } finally {
+      setRhSyncing(false)
+    }
+  }
+
+  const handleSfSync = async () => {
+    setSfSyncError(null)
+    setSfSyncing(true)
+    try {
+      if (!sfStatus?.hasSession) {
+        setSfSyncError('No active session — connect Salesforce first.')
+        return
+      }
+      const res = await fetch('/api/auth/salesforce/sync', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) { setSfSyncError(d.error); return }
+      setTimeout(() => fetch('/api/auth/salesforce/status').then(r => r.json()).then(setSfStatus).catch(() => {}), 3_000)
+    } catch (e: any) {
+      setSfSyncError(`Sync failed: ${e.message}`)
+    } finally {
+      setSfSyncing(false)
+    }
+  }
 
   const handleRunScrape = async () => {
+    setScrapeError(null)
     setScraping(true)
     try {
-      // Fetch current AEs to send with the scrape
+      // Pre-check: Red Hat Portal session required (needs VPN + active browser session)
+      const rhCheck = await fetch('/api/auth/redhat/status').then(r => r.json()).catch(() => ({ hasSession: false }))
+      if (!rhCheck.hasSession) {
+        setScrapeError('Red Hat Portal session required — connect in the RH Portal section above, then retry.')
+        return
+      }
       const aeData = await fetch('/api/aes').then(r => r.json())
       const aes = aeData.aes ?? []
       if (aes.length === 0) {
-        alert('No AEs configured — add AEs first.')
+        setScrapeError('No AEs configured — add AEs first in the AEs & Customers section.')
         return
       }
       await fetch('/api/bootstrap/supportable', {
@@ -1339,15 +1726,46 @@ function DataSourcesSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aes }),
       })
-      // Refresh status
       const newStatus = await fetch('/api/bootstrap/supportable/status').then(r => r.json())
       setSupportableStatus(newStatus)
     } catch (e: any) {
-      alert(`Scrape failed: ${e.message}`)
+      setScrapeError(`Scrape failed: ${e.message}`)
     } finally {
       setScraping(false)
     }
   }
+
+  const handleRunCcspScrape = async () => {
+    setCcspScrapeError(null)
+    setCcspScraping(true)
+    try {
+      const rhCheck = await fetch('/api/auth/redhat/status').then(r => r.json()).catch(() => ({ hasSession: false }))
+      if (!rhCheck.hasSession) {
+        setCcspScrapeError('Red Hat Portal session required — connect in the RH Portal section above, then retry.')
+        return
+      }
+      const res = await fetch('/api/bootstrap/ccsp', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) { setCcspScrapeError(d.error); return }
+      const newStatus = await fetch('/api/bootstrap/ccsp/status').then(r => r.json())
+      setCcspStatus(newStatus)
+    } catch (e: any) {
+      setCcspScrapeError(`Scrape failed: ${e.message}`)
+    } finally {
+      setCcspScraping(false)
+    }
+  }
+
+  const SyncButton = ({ onClick, loading, disabled, label }: { onClick: () => void; loading: boolean; disabled: boolean; label: string }) => (
+    <button
+      onClick={onClick}
+      disabled={loading || disabled}
+      className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+    >
+      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+      {label}
+    </button>
+  )
 
   return (
     <div className="space-y-4">
@@ -1358,11 +1776,24 @@ function DataSourcesSection() {
         <div className="bg-slate-900 rounded-lg p-4 border border-slate-700 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-white">Red Hat Portal</span>
-            <a href="#rh-portal" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
-              Configure above
-            </a>
+            {rhStatus?.hasSession
+              ? <StatusBadge ok={true} label="Connected" />
+              : <StatusBadge ok={false} label="Not connected" />}
           </div>
-          <p className="text-xs text-slate-500">Support cases are pulled via browser session.</p>
+          {rhStatus?.lastScraped && (
+            <p className="text-xs text-slate-500">Last sync: {timeAgo(rhStatus.lastScraped)} — {rhStatus.caseCount} cases</p>
+          )}
+          {!rhStatus?.hasSession && (
+            <p className="text-xs text-slate-500">
+              <a href="#rh-portal" className="text-indigo-400 hover:text-indigo-300">Connect above</a> to sync support cases and run Supportable scrapes.
+            </p>
+          )}
+          {rhStatus?.hasSession && (
+            <div className="flex items-center gap-3 pt-1">
+              <SyncButton onClick={handleRhSync} loading={rhSyncing} disabled={false} label="Sync Cases" />
+            </div>
+          )}
+          {rhSyncError && <p className="text-xs text-red-400">{rhSyncError}</p>}
         </div>
 
         {/* Salesforce */}
@@ -1374,13 +1805,18 @@ function DataSourcesSection() {
               : <StatusBadge ok={false} label="Not connected" />}
           </div>
           {sfStatus?.lastSync && (
-            <p className="text-xs text-slate-500">
-              Last sync: {timeAgo(sfStatus.lastSync)} — {sfStatus.rowCount} rows
-            </p>
+            <p className="text-xs text-slate-500">Last sync: {timeAgo(sfStatus.lastSync)} — {sfStatus.rowCount} rows</p>
           )}
-          {sfStatus?.syncError && (
-            <p className="text-xs text-red-400">{sfStatus.syncError}</p>
+          {sfStatus?.syncError && <p className="text-xs text-red-400">{sfStatus.syncError}</p>}
+          {sfStatus?.hasSession && sfStatus?.reportConfigured && (
+            <div className="flex items-center gap-3 pt-1">
+              <SyncButton onClick={handleSfSync} loading={sfSyncing} disabled={false} label="Sync Pipeline" />
+            </div>
           )}
+          {!sfStatus?.reportConfigured && (
+            <p className="text-xs text-slate-500">SF Report ID required — configure in AEs & Customers above.</p>
+          )}
+          {sfSyncError && <p className="text-xs text-red-400">{sfSyncError}</p>}
         </div>
 
         {/* Supportable */}
@@ -1396,222 +1832,45 @@ function DataSourcesSection() {
           {supportableStatus?.lastError && (
             <p className="text-xs text-red-400">{supportableStatus.lastError}</p>
           )}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleRunScrape}
-              disabled={scraping || (supportableStatus?.running ?? false)}
-              className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-            >
-              {scraping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-              Run Scrape
-            </button>
-            <span className="text-xs text-slate-500">Requires VPN connection</span>
+          <div className="flex items-center gap-3 pt-1">
+            <SyncButton onClick={handleRunScrape} loading={scraping} disabled={supportableStatus?.running ?? false} label="Run Scrape" />
+            {!rhStatus?.hasSession && (
+              <span className="text-xs text-slate-500">Requires VPN + RH Portal session</span>
+            )}
           </div>
+          {scrapeError && <p className="text-xs text-red-400 mt-1">{scrapeError}</p>}
         </div>
 
-        {/* CCSP / Tableau */}
+        {/* CCSP (Tableau) */}
         <div className="bg-slate-900 rounded-lg p-4 border border-slate-700 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-white">CCSP (Tableau)</span>
-            <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">Coming soon</span>
+            {ccspStatus?.running
+              ? <span className="flex items-center gap-1 text-xs text-amber-400"><Loader2 className="w-3 h-3 animate-spin" /> Running</span>
+              : ccspStatus?.lastScrape
+                ? <StatusBadge ok={true} label={`Last: ${timeAgo(ccspStatus.lastScrape)}`} />
+                : <StatusBadge ok={false} label="Not scraped" />}
           </div>
-          <p className="text-xs text-slate-500">Cloud consumption data via Tableau will be supported in a future release.</p>
+          {ccspStatus?.lastError && (
+            <p className="text-xs text-red-400">{ccspStatus.lastError}</p>
+          )}
+          <div className="flex items-center gap-3 pt-1">
+            <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping} disabled={ccspStatus?.running ?? false} label="Run Scrape" />
+            {!rhStatus?.hasSession && (
+              <span className="text-xs text-slate-500">Requires VPN + RH Portal session</span>
+            )}
+          </div>
+          {ccspScrapeError && <p className="text-xs text-red-400 mt-1">{ccspScrapeError}</p>}
         </div>
+
       </div>
-    </div>
-  )
-}
-
-// ── AI Provider ────────────────────────────────────────────────────────────────
-
-const GEMINI_SAMPLE_PROMPT = `You are a Red Hat Account Solution Architect's AI assistant. Generate a customer intelligence brief for:
-
-Customer: [ACCOUNT NAME]
-AE: [YOUR NAME] | Segment: [Commercial/Enterprise/Public Sector] | Region: [Region]
-
-Context from your account Drive folder:
-[Paste relevant notes, emails, or document excerpts for this account]
-
-Write a structured brief with these sections:
-
-**Account Overview** — 2-3 sentences on who they are and account health.
-
-**Products & Subscriptions in Use** — List active Red Hat products and quantities.
-
-**Customer Objectives & Priorities** — 3-5 bullets on what they're trying to achieve.
-
-**Current Opportunities** — Active deals, renewals, or expansion conversations.
-
-**Open Support Cases** — List open cases with severity and days open.
-
-**Talking Points & Prep** — 4-6 specific, actionable bullets for your next interaction.
-
-Keep each section tight and scannable. Total brief under 400 words.`
-
-const DRIVE_FOLDER_STRUCTURE = `My Drive/
-\u2514\u2500\u2500 [Your AE Accounts Folder]/        \u2190 set AE_PARENT_FOLDER_ID to this
-    \u251c\u2500\u2500 Acme Corporation/
-    \u2502   \u251c\u2500\u2500 Account Plan 2025.docx
-    \u2502   \u251c\u2500\u2500 Meeting Notes/
-    \u2502   \u2502   \u251c\u2500\u2500 2025-03-15 QBR Notes.docx
-    \u2502   \u2502   \u2514\u2500\u2500 2025-02-10 Kickoff.docx
-    \u2502   \u2514\u2500\u2500 Renewal Proposal Q2.docx
-    \u251c\u2500\u2500 Contoso Ltd/
-    \u2502   \u2514\u2500\u2500 ...
-    \u2514\u2500\u2500 [Next Account]/`
-
-const PROVIDERS: Record<string, { label: string; snippet: string; description: string; recommended?: boolean; manual?: boolean }> = {
-  gemini: {
-    label: 'Google Gemini',
-    snippet: '',
-    description: 'Manual prompt — no API key. Copy prompt and run in Gemini.',
-    recommended: true,
-    manual: true,
-  },
-  'claude-code': {
-    label: 'Claude Code',
-    snippet: 'LLM_PROVIDER=claude-code',
-    description: 'Uses your Claude Code login. No API key needed.',
-  },
-  pai: {
-    label: 'PAI (default)',
-    snippet: 'LLM_PROVIDER=pai',
-    description: 'Uses your local PAI infrastructure. No API key needed.',
-  },
-  openai: {
-    label: 'OpenAI',
-    snippet: 'LLM_PROVIDER=openai\nOPENAI_API_KEY=sk-...',
-    description: 'GPT-4o via the OpenAI API. Requires an API key.',
-  },
-  anthropic: {
-    label: 'Anthropic',
-    snippet: 'LLM_PROVIDER=anthropic\nANTHROPIC_API_KEY=sk-ant-...',
-    description: 'Claude via the Anthropic API. Requires an API key.',
-  },
-  ollama: {
-    label: 'Ollama',
-    snippet: 'LLM_PROVIDER=ollama\nOLLAMA_MODEL=llama3\nOLLAMA_BASE_URL=http://localhost:11434',
-    description: 'Local models via Ollama. No API key needed.',
-  },
-}
-
-function AIProviderSection() {
-  const [selected, setSelected] = useState('gemini')
-  const [testing, setTesting] = useState(false)
-  const [testStatus, setTestStatus] = useState<{ ok: boolean; error?: string } | null>(null)
-
-  const provider = PROVIDERS[selected]
-
-  async function handleTest() {
-    setTesting(true)
-    try {
-      const r = await fetch('/api/llm/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: selected }),
-      })
-      const d = await r.json()
-      setTestStatus(d.ok ? { ok: true } : { ok: false, error: d.error ?? 'Test failed' })
-    } catch (e: any) {
-      setTestStatus({ ok: false, error: e.message })
-    } finally {
-      setTesting(false)
-    }
-  }
-
-  return (
-    <div className="space-y-5">
-      <p className="text-slate-400 text-sm">
-        Choose an AI provider to generate account briefs. Add the shown variables to your <code className="bg-slate-700 px-1.5 py-0.5 rounded text-sm text-slate-200">.env</code> file and restart the server.
-      </p>
-
-      <div className="grid grid-cols-2 gap-2">
-        {Object.entries(PROVIDERS).map(([key, p]) => (
-          <button
-            key={key}
-            onClick={() => setSelected(key)}
-            className={`text-left p-3 rounded-xl border transition-colors ${
-              selected === key
-                ? 'border-indigo-500 bg-indigo-950/40'
-                : 'border-slate-700 bg-slate-900 hover:border-slate-500'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <div
-                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  selected === key ? 'border-indigo-500 bg-indigo-500' : 'border-slate-500'
-                }`}
-              >
-                {selected === key && <div className="w-2 h-2 rounded-full bg-white" />}
-              </div>
-              <span className="text-sm font-medium text-white">{p.label}</span>
-              {p.recommended && (
-                <span className="text-xs bg-emerald-900/60 text-emerald-400 border border-emerald-700/50 px-1.5 py-0.5 rounded font-medium">Recommended</span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 mt-1 ml-6">{p.description}</p>
-          </button>
-        ))}
-      </div>
-
-      {provider.manual ? (
-        <>
-          <div className="bg-slate-900/50 rounded-xl p-5 border border-slate-700 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-300">Sample brief prompt — copy into Gemini</p>
-              <CopyButton text={GEMINI_SAMPLE_PROMPT} />
-            </div>
-            <pre className="text-xs text-slate-400 whitespace-pre-wrap font-mono bg-slate-900 rounded-lg p-3 border border-slate-700 max-h-52 overflow-y-auto">{GEMINI_SAMPLE_PROMPT}</pre>
-          </div>
-
-          <div className="bg-slate-900/50 rounded-xl p-5 border border-slate-700 space-y-3">
-            <p className="text-sm font-medium text-slate-300">Recommended Google Drive folder structure</p>
-            <pre className="text-xs text-slate-400 font-mono bg-slate-900 rounded-lg p-3 border border-slate-700">{DRIVE_FOLDER_STRUCTURE}</pre>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="bg-slate-900 rounded-xl p-5 border border-slate-700 space-y-3">
-            <p className="text-sm font-medium text-slate-300">Add to your <code className="bg-slate-700 px-1 rounded">.env</code> file:</p>
-            <CodeBlock code={provider.snippet} />
-            {selected === 'claude-code' && (
-              <p className="text-xs text-slate-500">
-                Requires the <code className="bg-slate-700 px-1 rounded">claude</code> CLI installed and logged in.
-                Install at{' '}
-                <a href="https://claude.ai/code" target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 underline">
-                  claude.ai/code
-                </a>
-                {' '}then run <code className="bg-slate-700 px-1 rounded">claude login</code>.
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleTest}
-              disabled={testing}
-              className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
-            >
-              {testing ? 'Testing...' : 'Test Connection'}
-            </button>
-            {testStatus && (
-              <span className={`flex items-center gap-1.5 text-sm ${testStatus.ok ? 'text-emerald-400' : 'text-red-400'}`}>
-                {testStatus.ok
-                  ? <><CheckCircle className="w-4 h-4" /> Connection successful</>
-                  : <><XCircle className="w-4 h-4" /> {testStatus.error ?? 'Connection failed'}</>
-                }
-              </span>
-            )}
-          </div>
-        </>
-      )}
     </div>
   )
 }
 
 // ── Main Setup Page ────────────────────────────────────────────────────────────
 
-type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'ai-provider' | 'settings'
+type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings'
 
 export default function SetupPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>(null)
@@ -1620,6 +1879,9 @@ export default function SetupPage() {
   const [aeCount, setAeCount] = useState<number | null>(null)
   const [rhOk, setRhOk] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
+  const [pendingDowngrade, setPendingDowngrade] = useState(false)
+  const [dismissingDowngrade, setDismissingDowngrade] = useState(false)
 
   // Check initial states to determine auto-expand and badge data
   useEffect(() => {
@@ -1629,10 +1891,13 @@ export default function SetupPage() {
       .then(d => { if (d.exists) setOauthKeysOk(true) })
       .catch(() => {})
 
-    // Check Google auth
+    // Check Google auth + pending downgrade
     fetch('/api/oauth/status')
       .then(r => r.json())
-      .then((d: OAuthStatus) => { if (d.authorized && !d.expired) setGoogleAuthOk(true) })
+      .then((d: OAuthStatus & { pendingDowngrade?: boolean }) => {
+        if (d.authorized && !d.expired) setGoogleAuthOk(true)
+        if (d.pendingDowngrade) setPendingDowngrade(true)
+      })
       .catch(() => {})
 
     // Check AE count
@@ -1646,6 +1911,13 @@ export default function SetupPage() {
       .then(r => r.json())
       .then(d => { if (d.hasSession) setRhOk(true) })
       .catch(() => {})
+
+    // OAuth return: open AEs section and clean URL so the child AutoBootstrapForm can restore state
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('step') === '2') {
+      setOpenSection('aes')
+      window.history.replaceState({}, '', '/dashboard/setup')
+    }
   }, [])
 
   // First-run auto-expand logic
@@ -1665,11 +1937,8 @@ export default function SetupPage() {
   }
 
   const doReset = async (full: boolean) => {
-    const msg = full
-      ? 'Full reset: clears everything including OAuth keys. You will need to re-upload the keys file. Continue?'
-      : 'Clear all cached data, customers, and auth tokens? OAuth keys will be kept.'
-    if (!confirm(msg)) return
     setResetting(true)
+    setResetConfirm(null)
     try {
       await fetch(`/api/setup/reset${full ? '?full=true' : ''}`, { method: 'POST' })
     } catch {}
@@ -1688,24 +1957,67 @@ export default function SetupPage() {
           <h1 className="text-3xl font-bold text-white">Daily Brief Dashboard</h1>
           <p className="text-slate-400 mt-1 text-sm">Settings — configure each section independently</p>
           <div className="absolute top-0 right-0 flex flex-col items-end gap-1">
-            <button
-              onClick={() => doReset(true)}
-              disabled={resetting}
-              className="text-xs text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"
-              title="Clear everything including OAuth keys"
-            >
-              {resetting ? 'Clearing...' : 'Full Reset'}
-            </button>
-            <button
-              onClick={() => doReset(false)}
-              disabled={resetting}
-              className="text-xs text-slate-600 hover:text-slate-400 transition-colors disabled:opacity-50"
-              title="Clear data but keep OAuth keys"
-            >
-              Reset Data Only
-            </button>
+            {resetConfirm ? (
+              <div className="flex items-center gap-2 bg-red-950/60 border border-red-700/60 rounded-lg px-3 py-1.5">
+                <span className="text-xs text-red-300">
+                  {resetConfirm === 'full' ? 'Clears everything including OAuth keys.' : 'Clears data, keeps OAuth keys.'}
+                </span>
+                <button onClick={() => doReset(resetConfirm === 'full')} disabled={resetting} className="text-xs bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded disabled:opacity-50">
+                  {resetting ? 'Clearing…' : 'Confirm'}
+                </button>
+                <button onClick={() => setResetConfirm(null)} className="text-xs text-slate-400 hover:text-white">Cancel</button>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => setResetConfirm('full')}
+                  className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+                  title="Clear everything including OAuth keys"
+                >
+                  Full Reset
+                </button>
+                <button
+                  onClick={() => setResetConfirm('data')}
+                  className="text-xs text-slate-600 hover:text-slate-400 transition-colors"
+                  title="Clear data but keep OAuth keys"
+                >
+                  Reset Data Only
+                </button>
+              </>
+            )}
           </div>
         </div>
+
+        {/* Reduce Permissions banner — shown after bootstrap completes */}
+        {pendingDowngrade && (
+          <div className="mb-6 flex items-start gap-3 bg-amber-950/40 border border-amber-700/50 rounded-xl px-4 py-3">
+            <span className="text-amber-400 mt-0.5 shrink-0">&#x1f512;</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-200">Setup complete — reduce Drive permissions</p>
+              <p className="text-xs text-slate-400 mt-0.5">Bootstrap used full Drive access to create folders and sheets. You can now downgrade to read-only Drive for day-to-day use.</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="/oauth/start?mode=normal"
+                className="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+              >
+                Reduce Permissions
+              </a>
+              <button
+                onClick={async () => {
+                  setDismissingDowngrade(true)
+                  await fetch('/api/oauth/dismiss-downgrade', { method: 'POST' }).catch(() => {})
+                  setPendingDowngrade(false)
+                  setDismissingDowngrade(false)
+                }}
+                disabled={dismissingDowngrade}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors disabled:opacity-50"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Accordion sections */}
         <div className="space-y-3">
@@ -1738,6 +2050,20 @@ export default function SetupPage() {
           </AccordionSection>
 
           <AccordionSection
+            id="rh-portal"
+            title="Red Hat Portal"
+            badge={
+              rhOk
+                ? <StatusBadge ok={true} label="Connected" />
+                : <StatusBadge ok={null} label="Optional" />
+            }
+            isOpen={openSection === 'rh-portal'}
+            onToggle={() => toggleSection('rh-portal')}
+          >
+            <RedHatPortalSection />
+          </AccordionSection>
+
+          <AccordionSection
             id="aes"
             title="AEs & Customers"
             badge={
@@ -1754,20 +2080,6 @@ export default function SetupPage() {
           </AccordionSection>
 
           <AccordionSection
-            id="rh-portal"
-            title="Red Hat Portal"
-            badge={
-              rhOk
-                ? <StatusBadge ok={true} label="Connected" />
-                : <StatusBadge ok={null} label="Optional" />
-            }
-            isOpen={openSection === 'rh-portal'}
-            onToggle={() => toggleSection('rh-portal')}
-          >
-            <RedHatPortalSection />
-          </AccordionSection>
-
-          <AccordionSection
             id="data-sources"
             title="Data Sources"
             badge={<span className="text-xs text-slate-500">Status</span>}
@@ -1775,16 +2087,6 @@ export default function SetupPage() {
             onToggle={() => toggleSection('data-sources')}
           >
             <DataSourcesSection />
-          </AccordionSection>
-
-          <AccordionSection
-            id="ai-provider"
-            title="AI Provider"
-            badge={<span className="text-xs text-slate-500">Optional</span>}
-            isOpen={openSection === 'ai-provider'}
-            onToggle={() => toggleSection('ai-provider')}
-          >
-            <AIProviderSection />
           </AccordionSection>
 
           <AccordionSection
