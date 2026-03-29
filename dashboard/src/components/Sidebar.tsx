@@ -6,6 +6,7 @@ import {
   Cloud,
   TrendingUp,
   Settings,
+  Wrench,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
@@ -106,6 +107,15 @@ export function Sidebar({ active, onActiveChange }: SidebarProps) {
           <Settings className="w-4 h-4 shrink-0" />
           {!collapsed && <span className="whitespace-nowrap">Settings</span>}
         </button>
+
+        <a
+          href="/dashboard/setup"
+          title={collapsed ? 'Setup' : undefined}
+          className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
+        >
+          <Wrench className="w-4 h-4 shrink-0" />
+          {!collapsed && <span className="whitespace-nowrap">Setup</span>}
+        </a>
       </nav>
 
       {/* Footer */}

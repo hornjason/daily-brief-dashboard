@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { bodyLimit } from 'hono/body-limit'
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync } from 'fs'
 import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import { resolve } from 'path'
@@ -23,6 +24,20 @@ import { runSupportableScrape, runSupportableDiscoverAndScrape, writeSupportable
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
 import { adoptCcspContext, runCcspScrape, writeCcspSheet, ccspScrapeRunning, lastCcspScrape, lastCcspError } from './src/ccsp-scraper.ts'
 import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, hasBootstrapScopes, getScopeLevel, type StoredToken } from './src/oauth-scopes.ts'
+
+// ── ntfy.sh push notification helper ─────────────────────────────────────────
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'pai-notifications'
+async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
+  try {
+    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+      method: 'POST',
+      headers: { 'Title': title, 'Priority': priority, 'Content-Type': 'text/plain' },
+      body: message,
+    })
+  } catch (e: any) {
+    console.warn('[ntfy] notification failed:', e?.message ?? e)
+  }
+}
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -128,9 +143,11 @@ const SF_REPORT_ID   = process.env.SF_REPORT_ID ?? ''
 const SF_SESSION_PATH = process.env.SF_SESSION
   ?? resolve(SRV_CONFIG_DIR, '.sf-session.json')
 
-let oauthState = '' // CSRF state token for browser OAuth flow
+// CSRF state tokens — Map keyed by token, with mode + expiry (replaces single-slot variable)
+const pendingOAuthStates = new Map<string, { mode: string; createdAt: number }>()
 
-const toSlug = (name: string) => name.toLowerCase().replace(/\s+/g, '-')
+const toSlug = (name: string) =>
+  name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
 
 function briefCachePath(customerName: string): string {
   const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local time
@@ -234,6 +251,11 @@ function isValidSfId(value: unknown): boolean {
   return /^[A-Za-z0-9]{15,18}$/.test(value)
 }
 
+// ── Request body size limit ───────────────────────────────────────────────────
+// Uses actual stream measurement — not spoofable via missing Content-Length header
+
+app.use('*', bodyLimit({ maxSize: 1024 * 1024, onError: (c) => c.json({ error: 'Request body too large' }, 413) }))
+
 // ── Security headers middleware ───────────────────────────────────────────────
 
 app.use('*', async (c, next) => {
@@ -241,6 +263,7 @@ app.use('*', async (c, next) => {
   c.header('X-Frame-Options', 'DENY')
   c.header('X-Content-Type-Options', 'nosniff')
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+  c.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'")
 })
 
 // Health check — used by container health probes and smoke tests
@@ -266,7 +289,7 @@ app.get('/oauth/start', (c) => {
     return c.html(`<html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
       <h2 style="color:#f1f5f9">OAuth Keys Not Found</h2>
       <p style="color:#94a3b8">Place your GCP OAuth credentials file at:</p>
-      <code style="background:#1e293b;padding:.5rem 1rem;border-radius:.5rem;display:block;margin:1rem 0;color:#e2e8f0">${GOOGLE_OAUTH_KEYS_PATH}</code>
+      <code style="background:#1e293b;padding:.5rem 1rem;border-radius:.5rem;display:block;margin:1rem 0;color:#e2e8f0">gcp-oauth.keys.json</code>
       <p style="color:#94a3b8">Or set the <code>GOOGLE_OAUTH_KEYS</code> environment variable.</p>
       <p><a href="/dashboard/setup" style="color:#818cf8">← Back to Setup</a></p>
     </body></html>`, 400)
@@ -282,13 +305,16 @@ app.get('/oauth/start', (c) => {
   const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri)
 
   // Encode mode into state so callback knows which scopeLevel to write
-  const csrfToken = Math.random().toString(36).slice(2) + Date.now().toString(36)
-  oauthState = `${csrfToken}:${mode}`
+  const csrfToken = crypto.randomUUID().replace(/-/g, '')
+  pendingOAuthStates.set(csrfToken, { mode, createdAt: Date.now() })
+  // Expire tokens older than 10 minutes
+  const cutoff = Date.now() - 10 * 60 * 1000
+  for (const [k, v] of pendingOAuthStates) { if (v.createdAt < cutoff) pendingOAuthStates.delete(k) }
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
-    state: oauthState,
+    state: `${csrfToken}:${mode}`,
     scope: [...scopes],
   })
 
@@ -301,11 +327,12 @@ app.get('/oauth/callback', async (c) => {
   const state = c.req.query('state')
   const error = c.req.query('error')
 
+  const escHtml = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
   const errorPage = (msg: string, detail?: string) => c.html(`
     <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
       <h2 style="color:#f87171">Authentication Failed</h2>
-      <p style="color:#94a3b8">${msg}</p>
-      ${detail ? `<code style="background:#1e293b;padding:.5rem 1rem;border-radius:.5rem;display:block;margin:1rem 0;color:#fca5a5">${detail}</code>` : ''}
+      <p style="color:#94a3b8">${escHtml(msg)}</p>
+      ${detail ? `<code style="background:#1e293b;padding:.5rem 1rem;border-radius:.5rem;display:block;margin:1rem 0;color:#fca5a5">${escHtml(detail)}</code>` : ''}
       <p><a href="/dashboard/setup" style="color:#818cf8">← Back to Setup</a></p>
     </body></html>`, 400)
 
@@ -315,9 +342,9 @@ app.get('/oauth/callback', async (c) => {
         <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9;max-width:600px;margin:0 auto">
           <h2 style="color:#fbbf24">Access Denied</h2>
           <p style="color:#94a3b8">Your Google account hasn't been added as a test user yet.</p>
-          <p style="color:#94a3b8">Email <strong style="color:#f1f5f9">${ADMIN_EMAIL}</strong> and ask to be added, then try again.</p>
+          <p style="color:#94a3b8">Email <strong style="color:#f1f5f9">${escHtml(ADMIN_EMAIL)}</strong> and ask to be added, then try again.</p>
           <p style="margin-top:1.5rem">
-            <a href="mailto:${ADMIN_EMAIL}?subject=Dashboard%20Access%20Request&body=Please%20add%20my%20Google%20account%20as%20a%20test%20user.%0A%0AMy%20email%3A%20%5Byour%40email.com%5D"
+            <a href="mailto:${escHtml(ADMIN_EMAIL)}?subject=Dashboard%20Access%20Request&body=Please%20add%20my%20Google%20account%20as%20a%20test%20user.%0A%0AMy%20email%3A%20%5Byour%40email.com%5D"
                style="background:#4f46e5;color:white;padding:.75rem 1.5rem;border-radius:.5rem;text-decoration:none;display:inline-block">
               Request Access via Email
             </a>
@@ -335,7 +362,11 @@ app.get('/oauth/callback', async (c) => {
   }
 
   if (!code) return errorPage('No authorization code received')
-  if (state !== oauthState) return errorPage('Invalid state parameter — please try again')
+  const [stateToken] = (state ?? '').split(':')
+  const pendingState = pendingOAuthStates.get(stateToken)
+  if (!pendingState) return errorPage('Invalid or expired state parameter — please try authorizing again')
+  pendingOAuthStates.delete(stateToken)
+  const scopeMode = pendingState.mode === 'bootstrap' ? 'bootstrap' : 'normal'
 
   try {
     const keys = JSON.parse(readFileSync(GOOGLE_OAUTH_KEYS_PATH, 'utf-8'))
@@ -344,21 +375,18 @@ app.get('/oauth/callback', async (c) => {
     const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri)
 
     const { tokens } = await oauth2Client.getToken(code)
-    // Parse mode from state param (format: "csrfToken:mode")
-    const scopeMode = state?.split(':')[1] === 'bootstrap' ? 'bootstrap' : 'normal'
     const tokenData = { ...tokens, configuredAt: new Date().toISOString(), scopeLevel: scopeMode }
 
     // Save to config dir (works both locally and in container via volume mount)
     const tokenPath = GOOGLE_UNIFIED_TOKEN_PATH
     writeFileSyncRaw(tokenPath, JSON.stringify(tokenData, null, 2))
-    oauthState = '' // consume state
 
     return c.html(`
       <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9;max-width:600px;margin:0 auto">
         <h2 style="color:#34d399">✓ Google Workspace Connected</h2>
         <p style="color:#94a3b8">Calendar, Gmail, Drive, and Sheets access authorized.</p>
         <p style="color:#94a3b8">Redirecting to setup wizard…</p>
-        <script>setTimeout(() => window.location.href = '/dashboard/setup?step=2', 1500)</script>
+        <meta http-equiv="refresh" content="1;url=/dashboard/setup?step=2">
         <p><a href="/dashboard/setup?step=2" style="color:#818cf8">Continue →</a></p>
       </body></html>`)
   } catch (e: any) {
@@ -462,6 +490,7 @@ app.post('/api/auth/redhat/discover', async (c) => {
 // POST /api/test/accountname-search — Call search/v2/cases API directly with accountName SOLR query
 // Body: { customers: string[] }
 app.post('/api/test/accountname-search', async (c) => {
+  if (process.env.NODE_ENV === 'production') return c.json({ error: 'Not available' }, 404)
   const body = await c.req.json().catch(() => ({}))
   const customers: string[] = body.customers ?? ['A10 Networks', 'Dropbox', 'Crowdstrike']
   const ctx = getScrapeContext()
@@ -543,6 +572,7 @@ app.post('/api/test/accountname-search', async (c) => {
 // POST /api/test/supportable-customer-search — Search Supportable by customer name, return account numbers
 // Body: { customerName: string }  e.g. { customerName: "Dropbox" }
 app.post('/api/test/supportable-customer-search', async (c) => {
+  if (process.env.NODE_ENV === 'production') return c.json({ error: 'Not available' }, 404)
   const body = await c.req.json().catch(() => ({}))
   const customerName: string = body.customerName ?? 'Dropbox'
   const ctx = getScrapeContext()
@@ -945,6 +975,7 @@ app.post('/api/bootstrap/auto', async (c) => {
   if (aeName.length > 200) return c.json({ error: 'aeName exceeds 200 characters' }, 400)
   if (/<[^>]*>/.test(aeName)) return c.json({ error: 'aeName contains invalid characters' }, 400)
   if (!sfReportId) return c.json({ error: 'sfReportId is required' }, 400)
+  if (!isValidSfId(sfReportId)) return c.json({ error: 'sfReportId must be 15-18 alphanumeric characters' }, 400)
   if (!tableauTerritories.length) return c.json({ error: 'tableauTerritories is required' }, 400)
   if (!customerNames.length) return c.json({ error: 'customerNames is required' }, 400)
 
@@ -986,6 +1017,7 @@ app.post('/api/bootstrap/auto', async (c) => {
       const stuck = autoBootstrapState.steps.findIndex(s => s.status === 'running')
       if (stuck >= 0) autoBootstrapState.steps[stuck] = { ...autoBootstrapState.steps[stuck], status: 'error', detail: 'Timed out' }
       console.error('[auto-bootstrap] Hard timeout reached — unsticking')
+      notify('Bootstrap Timed Out', 'Bootstrap did not complete within 60 minutes — check dashboard', 'urgent').catch(() => {})
     }
   }, 60 * 60 * 1_000)
 
@@ -1155,6 +1187,7 @@ app.post('/api/bootstrap/auto', async (c) => {
     autoBootstrapState.completedAt = new Date().toISOString()
     clearTimeout(bootstrapTimeoutId)
     console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
+    notify('Bootstrap Complete', `All steps complete for ${aeName}`, 'high').catch(() => {})
 
     // Signal that bootstrap is done — prompt user to downgrade Drive permissions
     try {
@@ -1426,6 +1459,7 @@ app.post('/api/data-sources/add-folder', async (c) => {
   const m = folderUrl.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)
   const folderId = m ? m[1] : folderUrl.trim()
   if (!folderId) return c.json({ error: 'Could not extract folder ID from URL' }, 400)
+  if (!m && !/^[a-zA-Z0-9_-]{10,}$/.test(folderId)) return c.json({ error: 'Invalid folder ID or URL format' }, 400)
 
   try {
     const auth = makeAuth(GDRIVE_TOKEN_PATH_SRV)
@@ -1717,8 +1751,23 @@ app.post('/api/aes', async (c) => {
           if (typeof t !== 'string' || t.length > 100) return c.json({ error: `aes[${i}].tableauTerritories entry exceeds 100 characters` }, 400)
         }
       }
-      // Write sanitized name back
-      body.aes[i] = { ...ae, name }
+      // Extract folder ID from full Google Drive URL if provided
+      const rawFolderId = ae.driveFolderId ?? ''
+      const folderIdMatch = rawFolderId.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)
+      const driveFolderId = folderIdMatch ? folderIdMatch[1] : rawFolderId.trim()
+      // Write whitelisted fields only — drop anything not in the schema
+      body.aes[i] = {
+        name,
+        driveFolderId,
+        sfReportId:           ae.sfReportId           ?? '',
+        tableauTerritories:   ae.tableauTerritories   ?? [],
+        tableauUrl:           ae.tableauUrl           ?? undefined,
+        supportableSheetId:   ae.supportableSheetId   ?? undefined,
+        pipelineSheetId:      ae.pipelineSheetId      ?? undefined,
+        ccspSheetId:          ae.ccspSheetId          ?? undefined,
+      }
+      // Strip undefined values to keep JSON clean
+      Object.keys(body.aes[i]).forEach(k => (body.aes[i] as any)[k] === undefined && delete (body.aes[i] as any)[k])
     }
 
     saveAes(body.aes)
@@ -1845,11 +1894,19 @@ app.post('/api/setup/upload-oauth-keys', async (c) => {
   try {
     const body = await c.req.json()
     if (!body || typeof body !== 'object') return c.json({ error: 'Invalid JSON' }, 400)
-    const { client_id, client_secret } = (body.installed ?? body.web ?? {})
+    const credType = body.installed ? 'installed' : body.web ? 'web' : null
+    if (!credType) return c.json({ error: 'Keys file must have an "installed" or "web" key' }, 400)
+    const raw = body[credType]
+    const { client_id, client_secret } = raw ?? {}
     if (!client_id || !client_secret) return c.json({ error: 'Missing client_id or client_secret' }, 400)
+    // Sanitize: only write known OAuth fields — never persist arbitrary keys
+    const sanitized: Record<string, unknown> = { client_id, client_secret }
+    for (const f of ['project_id','auth_uri','token_uri','auth_provider_x509_cert_url','client_x509_cert_url','redirect_uris','javascript_origins']) {
+      if (raw[f] !== undefined) sanitized[f] = raw[f]
+    }
     const dir = resolve(GOOGLE_OAUTH_KEYS_PATH, '..')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    writeFileSyncRaw(GOOGLE_OAUTH_KEYS_PATH, JSON.stringify(body, null, 2))
+    writeFileSyncRaw(GOOGLE_OAUTH_KEYS_PATH, JSON.stringify({ [credType]: sanitized }, null, 2))
     return c.json({ ok: true })
   } catch (e: any) {
     return c.json({ error: e.message }, 500)
@@ -1859,6 +1916,10 @@ app.post('/api/setup/upload-oauth-keys', async (c) => {
 // POST /api/setup/reset — Clear all config and cache for a clean setup
 // ?full=true also removes the OAuth keys file (simulate brand new user)
 app.post('/api/setup/reset', (c) => {
+  console.warn('[reset] Factory reset triggered at', new Date().toISOString())
+  if (c.req.query('confirm') !== 'true') {
+    return c.json({ error: 'Destructive operation requires ?confirm=true' }, 400)
+  }
   const full = c.req.query('full') === 'true'
   const deleted: string[] = []
   const tryDelete = (p: string) => { try { if (existsSync(p)) { unlinkSync(p); deleted.push(p) } } catch {} }
@@ -1877,7 +1938,9 @@ app.post('/api/setup/reset', (c) => {
 
   // Reset in-memory state
   customers.splice(0, customers.length)
-  oauthState = ''
+  aes.splice(0, aes.length)
+  saveAes([])
+  pendingOAuthStates.clear()
   if (process.env.AE_PARENT_FOLDER_ID) delete process.env.AE_PARENT_FOLDER_ID
   if (process.env.AE_PARENT_FOLDER_IDS) delete process.env.AE_PARENT_FOLDER_IDS
 
@@ -1916,6 +1979,10 @@ app.post('/api/setup/save-domains', async (c) => {
   const body = await c.req.json<{ domains: { name: string; domain: string }[] }>()
   if (!body.domains?.length) return c.json({ error: 'No domains provided' }, 400)
 
+  for (const d of body.domains) {
+    if (!isValidDomain(d.domain)) return c.json({ error: `Invalid domain: ${d.domain}` }, 400)
+  }
+
   const domainMap = new Map(body.domains.map((d) => [d.name, d.domain]))
   const updated = customers.map((cu) => {
     const inferred = domainMap.get(cu.name)
@@ -1946,7 +2013,24 @@ app.post('/api/setup/save-customers', async (c) => {
       const name = sanitizeText(cx.name)
       if (!name) return c.json({ error: `customers[${i}].name is invalid or contains disallowed characters` }, 400)
       if (cx.domain !== undefined && !isValidDomain(cx.domain)) return c.json({ error: `customers[${i}].domain is not a valid domain` }, 400)
-      body.customers[i] = { ...cx, name }
+      // Write whitelisted fields only — drop anything not in the Customer schema
+      const cleaned: Record<string, unknown> = { name }
+      if (cx.domain          != null) cleaned.domain          = cx.domain
+      if (cx.accountNumbers  != null) {
+        if (!Array.isArray(cx.accountNumbers) || cx.accountNumbers.some((n: unknown) => typeof n !== 'string' || !/^\d{4,12}$/.test(n))) {
+          return c.json({ error: `customers[${i}].accountNumbers must be an array of 4-12 digit strings` }, 400)
+        }
+        cleaned.accountNumbers  = cx.accountNumbers
+      }
+      if (cx.ae              != null) cleaned.ae              = cx.ae
+      if (cx.segment         != null) cleaned.segment         = cx.segment
+      if (cx.region          != null) cleaned.region          = cx.region
+      if (cx.sheetTab        != null) cleaned.sheetTab        = cx.sheetTab
+      if (cx.supportableName != null) cleaned.supportableName = cx.supportableName
+      if (cx.aliases         != null) cleaned.aliases         = cx.aliases
+      if (cx.aliasDomains    != null) cleaned.aliasDomains    = cx.aliasDomains
+      if (cx.skipAccountDiscovery != null) cleaned.skipAccountDiscovery = cx.skipAccountDiscovery
+      body.customers[i] = cleaned as Customer
     }
 
     writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: body.customers }, null, 2))
@@ -1989,6 +2073,7 @@ app.get('/api/cases/all', async (c) => {
 // GET /api/cases/:caseNumber/latest-comment — most recent comment for a case
 app.get('/api/cases/:caseNumber/latest-comment', async (c) => {
   const caseNumber = c.req.param('caseNumber')
+  if (!/^\d{8}$/.test(caseNumber)) return c.json({ error: 'Invalid case number — must be 8 digits' }, 400)
   const comment = await fetchCaseLatestComment(caseNumber).catch(() => null)
   return c.json({ comment })
 })
@@ -2166,11 +2251,10 @@ function writePipelineCache(records: PipelineRecord[], fileIds: string[] = []): 
 }
 
 // GET /api/pipeline — Open opportunity pipeline from Drive XLS
-const aeNames = [...new Set(customers.map(c => c.ae).filter(Boolean))] as string[]
-
 function filterToAEs(records: PipelineRecord[]): PipelineRecord[] {
-  if (!aeNames.length) return records
-  return records.filter(r => aeNames.some(ae => ae.toLowerCase() === r.owner.toLowerCase()))
+  if (!aes.length) return records
+  const names = new Set(aes.map(a => a.name.toLowerCase()))
+  return records.filter(r => names.has(r.owner.toLowerCase()))
 }
 
 app.get('/api/pipeline', async (c) => {
@@ -2197,10 +2281,18 @@ app.get('/api/pipeline', async (c) => {
 app.get('/api/calendar', async (c) => {
   const range = (c.req.query('range') ?? 'week') as 'today' | 'week'
   const includeAll = c.req.query('all') === 'true'
+  // Short-circuit if Google OAuth token doesn't exist yet
+  if (!existsSync(GOOGLE_UNIFIED_TOKEN_PATH)) {
+    return c.json({ events: [], range, error: 'not_configured' })
+  }
   try {
     const events = await fetchCalendar(customers, includeAll)
     return c.json({ events, range })
   } catch (e: any) {
+    const msg = e.message ?? ''
+    if (msg.includes('invalid_client') || msg.includes('invalid_grant') || msg.includes('No refresh token') || msg.includes('ENOENT')) {
+      return c.json({ events: [], range, error: 'not_configured' })
+    }
     return c.json({ events: [], range, error: e.message }, 500)
   }
 })
@@ -2295,6 +2387,11 @@ app.get('/dashboard/*', async (c) => {
   let path = c.req.path.replace('/dashboard', '')
   if (!path || path === '/') path = '/index.html'
   const filePath = resolve(DASHBOARD_DIST, path.startsWith('/') ? path.slice(1) : path)
+
+  // Path containment — ensure resolved path stays within DASHBOARD_DIST
+  if (!filePath.startsWith(DASHBOARD_DIST + '/') && filePath !== DASHBOARD_DIST) {
+    return c.text('Not found', 404)
+  }
 
   // Try to serve the file, fall back to index.html for SPA routing
   try {
@@ -2829,6 +2926,7 @@ app.get('/api/sheets/list', async (c) => {
 app.get('/api/sheets/headers', async (c) => {
   const fileId = c.req.query('fileId')
   if (!fileId) return c.json({ error: 'fileId required' }, 400)
+  if (!/^[a-zA-Z0-9_-]{10,60}$/.test(fileId)) return c.json({ error: 'Invalid file ID' }, 400)
   try {
     const auth = makeAuth(SHEETS_TOKEN_PATH_SRV)
     const sheets = google.sheets({ version: 'v4', auth })
@@ -2848,6 +2946,7 @@ app.post('/api/sheets/import', async (c) => {
   const body = await c.req.json() as { fileId: string; fileName: string; columnMap: Record<string, number | string | null> }
   const { fileId, fileName, columnMap } = body
   if (!fileId || !columnMap) return c.json({ error: 'fileId and columnMap required' }, 400)
+  if (!/^[a-zA-Z0-9_-]{10,60}$/.test(fileId)) return c.json({ error: 'Invalid file ID' }, 400)
   try {
     const { customers: imported, syncedAt } = await importSheetRows(fileId, fileName, columnMap)
     customers.splice(0, customers.length, ...imported)
@@ -3010,9 +3109,14 @@ app.get('/api/settings/refresh', (c) => {
 
 // POST /api/settings/refresh — update refresh intervals
 app.post('/api/settings/refresh', async (c) => {
-  const body = await c.req.json<Partial<typeof DEFAULT_REFRESH_INTERVALS>>().catch(() => ({}))
+  const body = await c.req.json<Record<string, unknown>>().catch(() => ({}))
+  const ALLOWED_KEYS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_REFRESH_INTERVALS))
+  const filtered: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(body)) {
+    if (ALLOWED_KEYS.has(k)) filtered[k] = v
+  }
   const current = getRefreshIntervals()
-  const updated = { ...current, ...body }
+  const updated = { ...current, ...filtered }
   // Validate: all values must be positive numbers
   for (const [k, v] of Object.entries(updated)) {
     if (typeof v !== 'number' || v < 1) return c.json({ error: `${k} must be a positive number of minutes` }, 400)
@@ -3045,9 +3149,13 @@ app.get('/api/settings/weather', (c) => c.json(getWeatherSettings()))
 app.post('/api/settings/weather', async (c) => {
   const body = await c.req.json<Partial<WeatherSettings>>().catch(() => ({}))
   const current = getWeatherSettings()
+  const rawZip = typeof body.zipCode === 'string' ? body.zipCode.trim() : current.zipCode
+  if (rawZip && !/^[A-Za-z0-9\s\-]{2,10}$/.test(rawZip)) {
+    return c.json({ error: 'Invalid zip/postal code' }, 400)
+  }
   const updated: WeatherSettings = {
     enabled: typeof body.enabled === 'boolean' ? body.enabled : current.enabled,
-    zipCode: typeof body.zipCode === 'string' ? body.zipCode.trim() : current.zipCode,
+    zipCode: rawZip,
   }
   try {
     const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
@@ -3175,6 +3283,7 @@ app.get('/customer/:name/sheetdata', async (c) => {
 
 // ── Debug: raw sheet rows before normalization ────────────────────────────────
 app.get('/customer/:name/sheetdebug', async (c) => {
+  if (process.env.NODE_ENV === 'production') return c.json({ error: 'Not available' }, 404)
   const rawName = decodeURIComponent(c.req.param('name'))
   const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
   if (!customer) return c.json({ error: 'Customer not found' }, 404)
@@ -3187,7 +3296,9 @@ app.get('/customer/:name/sheetdebug', async (c) => {
 })
 
 app.get('/debug/sheet-tabs/:fileId', async (c) => {
+  if (process.env.NODE_ENV === 'production') return c.json({ error: 'Not available' }, 404)
   const fileId = c.req.param('fileId')
+  if (!/^[a-zA-Z0-9_-]{10,60}$/.test(fileId ?? '')) return c.json({ error: 'Invalid file ID' }, 400)
   const { makeAuth } = await import('./src/google.ts')
   const { google } = await import('googleapis')
   const auth = makeAuth(SHEETS_TOKEN_PATH_SRV)
@@ -3382,6 +3493,7 @@ async function runPortalAccountDiscovery(): Promise<void> {
 setSessionExpiredCallback(() => {
   recordScrapeExpired()
   closeScrapeContext().catch(() => {})
+  notify('Red Hat Session Expired', 'RH Portal session expired — reconnect via dashboard', 'high').catch(() => {})
 })
 
 // ── Red Hat support case scraper ──────────────────────────────────────────────
@@ -3413,11 +3525,13 @@ async function runRhScrapeWithState(): Promise<void> {
     })
     recordScrapeSuccess(cases.length)
     console.log(`[rh-scraper] done — ${cases.length} cases cached`)
+    notify('RH Cases Synced', `${cases.length} support cases cached`).catch(() => {})
   } catch (e: any) {
     if (e instanceof SessionExpiredError) {
       recordScrapeExpired()
       await closeScrapeContext() // discard expired context so next login gets a clean one
       console.warn('[rh-scraper] session expired — reconnect via dashboard')
+      notify('Red Hat Session Expired', 'Session expired during case scrape — reconnect via dashboard', 'high').catch(() => {})
     } else {
       console.warn('[rh-scraper]', e.message)
     }

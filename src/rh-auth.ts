@@ -7,7 +7,8 @@
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
-import { writeFileSync, existsSync } from 'node:fs'
+import { writeFileSync, existsSync, unlinkSync } from 'node:fs'
+import { join } from 'node:path'
 import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
 import { adoptSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext } from './supportable-scraper.ts'
@@ -82,6 +83,10 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
 
   loginInProgress = true
   loginTimedOut = false
+
+  // Remove stale SingletonLock before launching — prevents "profile locked by another process"
+  // error if a previous Chromium was killed uncleanly or the scrape context was force-closed.
+  try { unlinkSync(join(profileDir, 'SingletonLock')) } catch { /* file doesn't exist — fine */ }
 
   // launchPersistentContext creates profileDir if it doesn't exist
   let context: BrowserContext

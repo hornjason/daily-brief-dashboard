@@ -37,6 +37,7 @@ interface WizardAE {
   supportableSheetId: string
   pipelineSheetId: string
   ccspSheetId: string
+  tableauTerritories: string
   customers: WizardCustomer[]
 }
 
@@ -95,7 +96,6 @@ function CodeBlock({ code, copyable = true }: { code: string; copyable?: boolean
 
 // timeAgo is an alias for formatRelTime — use the shared implementation
 const timeAgo = (iso: string) => formatRelTime(iso)
-}
 
 // ── Accordion Section ──────────────────────────────────────────────────────────
 
@@ -194,9 +194,17 @@ function Step0OAuthKeys({ onReady }: { onReady: () => void }) {
       </div>
 
       {exists === true ? (
-        <div className="flex items-center gap-2 text-emerald-400 text-sm">
-          <CheckCircle className="w-4 h-4" />
-          OAuth keys already configured — you're good to go.
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-emerald-400 text-sm">
+            <CheckCircle className="w-4 h-4" />
+            OAuth keys already configured — you're good to go.
+          </div>
+          <button
+            onClick={() => setExists(false)}
+            className="text-xs text-slate-500 hover:text-slate-300 underline"
+          >
+            Replace keys file
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -407,6 +415,7 @@ function makeBlankAE(): WizardAE {
     supportableSheetId: '',
     pipelineSheetId: '',
     ccspSheetId: '',
+    tableauTerritories: '',
     customers: [makeBlankCustomer()],
   }
 }
@@ -615,12 +624,12 @@ function AutoBootstrapForm() {
     const controller = new AbortController()
     setPodNamesError(null)
     fetch(`/api/territory-names?pod=${encodeURIComponent(pod)}`, { signal: controller.signal })
-      .then(r => r.json())
+      .then(r => r.json().catch(() => ({ territories: [] })))
       .then((d: { territories?: { num: string; aeName: string }[] }) => {
         setPodTerritoryNames(d.territories ?? [])
-        if (!d.territories?.length) setPodNamesError('Could not load territory names from sheet — showing generic list')
+        if (!d.territories?.length) setPodNamesError('Could not load territories — check your Google connection')
       })
-      .catch((e) => { if (e.name !== 'AbortError') { setPodTerritoryNames([]); setPodNamesError('Could not load territory names from sheet — showing generic list') } })
+      .catch((e) => { if (e.name !== 'AbortError') { setPodTerritoryNames([]); setPodNamesError('Could not load territories — check your Google connection') } })
     return () => controller.abort()
   }, [pod])
 
@@ -683,7 +692,7 @@ function AutoBootstrapForm() {
     setTerritoryLoading(true)
     setTerritoryError(null)
     fetch(`/api/territory-lookup?territory=${encodeURIComponent(firstTerritory)}`, { signal: controller.signal })
-      .then(r => r.json())
+      .then(r => r.json().catch(() => ({ error: 'Could not load territory data — check your Google connection' })))
       .then((d: { aeName?: string; accounts?: string[]; error?: string }) => {
         if (d.error) {
           setTerritoryError(d.error.includes('not found') ? null : d.error)
@@ -692,7 +701,7 @@ function AutoBootstrapForm() {
         if (d.aeName) setAeName(d.aeName)
         if (d.accounts?.length) setCustomerText(d.accounts.join('\n'))
       })
-      .catch((e) => { if (e.name !== 'AbortError') setTerritoryError(e.message) })
+      .catch((e) => { if (e.name !== 'AbortError') setTerritoryError('Could not load territory data — check your Google connection') })
       .finally(() => { if (!controller.signal.aborted) setTerritoryLoading(false) })
     return () => controller.abort()
   }, [territoryInput, matchedAe])
@@ -1055,7 +1064,7 @@ function AutoBootstrapForm() {
   )
 }
 
-function AEsCustomersSection() {
+function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: number) => void }) {
   const [mode, setMode] = useState<'auto' | 'manual'>('auto')
   const [aes, setAes] = useState<WizardAE[]>([])
   const [loading, setLoading] = useState(true)
@@ -1082,6 +1091,7 @@ function AEsCustomersSection() {
           supportableSheetId?: string
           pipelineSheetId?: string
           ccspSheetId?: string
+          tableauTerritories?: string[]
         }> = aeData.aes ?? []
         const serverCustomers: Array<{
           name: string
@@ -1108,6 +1118,7 @@ function AEsCustomersSection() {
             supportableSheetId: ae.supportableSheetId ?? '',
             pipelineSheetId: ae.pipelineSheetId ?? '',
             ccspSheetId: ae.ccspSheetId ?? '',
+            tableauTerritories: (ae.tableauTerritories ?? []).join(', '),
             customers: serverCustomers
               .filter(c => c.ae === ae.name)
               .map(c => ({
@@ -1192,6 +1203,13 @@ function AEsCustomersSection() {
   }
 
   const handleSave = async () => {
+    // Client-side validation: every AE must have a non-empty name
+    const blankIdx = aes.findIndex(a => !a.name.trim())
+    if (blankIdx !== -1) {
+      setSaveMsg(`Error: AE #${blankIdx + 1} has an empty name — please enter a name before saving`)
+      return
+    }
+
     setSaving(true)
     setSaveMsg(null)
     try {
@@ -1202,18 +1220,29 @@ function AEsCustomersSection() {
         (serverState.aes ?? []).map((a: Record<string, unknown>) => [a.name as string, a])
       )
 
+      // Extract folder/report IDs from URLs if user pasted full URLs
+      const extractFolderId = (input: string): string => {
+        const match = input.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)
+        return match ? match[1] : input.trim()
+      }
+      const extractReportId = (input: string): string => {
+        // Strip any Salesforce URL prefix, keep bare alphanumeric ID
+        const match = input.match(/([a-zA-Z0-9]{15,18})(?:\s*$|\?)/)
+        return match ? match[1] : input.trim()
+      }
+
       // Build AE objects for the server — merge wizard fields over server state
       const serverAes = aes
-        .filter(a => a.name.trim())
         .map(a => ({
           ...(serverAeMap.get(a.name.trim()) ?? {}),  // preserve server-only fields
           name: a.name.trim(),
-          driveFolderId: a.folderId,
-          ...(a.sfReportId.trim() ? { sfReportId: a.sfReportId.trim() } : {}),
+          driveFolderId: a.folderId || extractFolderId(a.folderUrl),
+          ...(a.sfReportId.trim() ? { sfReportId: extractReportId(a.sfReportId) } : {}),
           ...(a.tableauUrl.trim() ? { tableauUrl: a.tableauUrl.trim() } : {}),
           ...(a.supportableSheetId ? { supportableSheetId: a.supportableSheetId } : {}),
           ...(a.pipelineSheetId ? { pipelineSheetId: a.pipelineSheetId } : {}),
           ...(a.ccspSheetId ? { ccspSheetId: a.ccspSheetId } : {}),
+          ...(a.tableauTerritories.trim() ? { tableauTerritories: a.tableauTerritories.split(',').map(s => s.trim()).filter(Boolean) } : {}),
         }))
 
       const res = await fetch('/api/aes', {
@@ -1247,6 +1276,7 @@ function AEsCustomersSection() {
       })
 
       setSaveMsg(`Saved ${serverAes.length} AE(s) and ${allCustomers.length} customer(s)`)
+      onAeCountChange?.(serverAes.length)
     } catch (e: any) {
       setSaveMsg(`Error: ${e.message}`)
     } finally {
@@ -1300,7 +1330,7 @@ function AEsCustomersSection() {
       {aes.map((ae, aeIdx) => (
         <div key={ae.id} className="bg-slate-900 rounded-xl p-5 border border-slate-700 space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-300">AE #{aeIdx + 1}</span>
+            <span className="text-sm font-semibold text-slate-300">{ae.name.trim() || `AE #${aeIdx + 1}`}</span>
             {removeConfirmId === ae.id ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-red-400">Remove this AE and all customers?</span>
@@ -1327,8 +1357,13 @@ function AEsCustomersSection() {
                 value={ae.name}
                 onChange={e => updateAE(ae.id, { name: e.target.value })}
                 placeholder="Jane Smith"
-                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className={`w-full bg-slate-800 border rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 ${
+                  saveMsg?.includes(`AE #${aeIdx + 1}`) ? 'border-red-500' : 'border-slate-600'
+                }`}
               />
+              {saveMsg?.includes(`AE #${aeIdx + 1}`) && (
+                <p className="text-xs text-red-400 mt-1">AE name is required</p>
+              )}
             </div>
 
             <div>
@@ -1378,6 +1413,53 @@ function AEsCustomersSection() {
                   value={ae.tableauUrl}
                   onChange={e => updateAE(ae.id, { tableauUrl: e.target.value })}
                   placeholder="Paste your Tableau dashboard URL"
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            {/* Territory */}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Territory (optional)</label>
+              <input
+                type="text"
+                value={ae.tableauTerritories}
+                onChange={e => updateAE(ae.id, { tableauTerritories: e.target.value })}
+                placeholder="WEST_COMM_CORP_NORTHWEST_TERR01"
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+              <p className="text-xs text-slate-500 mt-1">Tableau territory code for CCSP scoping. Comma-separate for multiple.</p>
+            </div>
+
+            {/* Sheet IDs */}
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Supportable Sheet ID</label>
+                <input
+                  type="text"
+                  value={ae.supportableSheetId}
+                  onChange={e => updateAE(ae.id, { supportableSheetId: e.target.value })}
+                  placeholder="Google Sheet ID"
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Pipeline Sheet ID</label>
+                <input
+                  type="text"
+                  value={ae.pipelineSheetId}
+                  onChange={e => updateAE(ae.id, { pipelineSheetId: e.target.value })}
+                  placeholder="Google Sheet ID"
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">CCSP Sheet ID</label>
+                <input
+                  type="text"
+                  value={ae.ccspSheetId}
+                  onChange={e => updateAE(ae.id, { ccspSheetId: e.target.value })}
+                  placeholder="Google Sheet ID"
                   className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 />
               </div>
@@ -1508,7 +1590,7 @@ interface RhStatus {
   loginTimedOut: boolean
 }
 
-function RedHatPortalSection() {
+function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
   const [status, setStatus] = useState<RhStatus | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1518,6 +1600,7 @@ function RedHatPortalSection() {
     try {
       const d: RhStatus = await fetch('/api/auth/redhat/status', { signal }).then((r) => r.json())
       setStatus(d)
+      if (d.hasSession) onConnected?.()
       if (d.hasSession && !d.loginInProgress && connecting) {
         setConnecting(false)
         popupRef.current?.close()
@@ -1547,7 +1630,20 @@ function RedHatPortalSection() {
       const res = await fetch('/api/auth/redhat/start', { method: 'POST' })
       const d = await res.json()
       if (d.error) {
-        setError(d.error)
+        // Sanitize raw Playwright/Chromium errors into user-readable messages
+        const raw: string = d.error
+        let msg: string
+        if (raw.includes('locked the profile') || raw.includes('in use by another') || raw.includes('SingletonLock')) {
+          msg = 'Browser profile was locked by a stale process. The lock has been cleared — try connecting again.'
+        } else if (raw.includes('has been closed') || raw.includes('Target page')) {
+          msg = 'Browser session closed unexpectedly — try connecting again.'
+        } else if (raw.includes('Login already in progress')) {
+          msg = 'Login already in progress — cancel first or wait.'
+        } else {
+          msg = raw.split(/\n|Browser logs:/)[0].trim()
+          if (msg.length > 140) msg = msg.slice(0, 140) + '…'
+        }
+        setError(msg)
         setConnecting(false)
       } else {
         // Open VNC viewer as a popup — store reference so we can close it when login completes
@@ -1895,9 +1991,9 @@ type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sour
 export default function SetupPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>(null)
   const [oauthKeysOk, setOauthKeysOk] = useState(false)
-  const [googleAuthOk, setGoogleAuthOk] = useState(false)
+  const [googleAuthOk, setGoogleAuthOk] = useState<boolean | null>(null) // null = still checking
   const [aeCount, setAeCount] = useState<number | null>(null)
-  const [rhOk, setRhOk] = useState(false)
+  const [rhOk, setRhOk] = useState<boolean | null>(null)
   const [resetting, setResetting] = useState(false)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
   const [pendingDowngrade, setPendingDowngrade] = useState(false)
@@ -1918,10 +2014,10 @@ export default function SetupPage() {
     fetch('/api/oauth/status', { signal })
       .then(r => r.json())
       .then((d: OAuthStatus & { pendingDowngrade?: boolean }) => {
-        if (d.authorized && !d.expired) setGoogleAuthOk(true)
+        setGoogleAuthOk(d.authorized && !d.expired)
         if (d.pendingDowngrade) setPendingDowngrade(true)
       })
-      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
+      .catch((e) => { if (e.name !== 'AbortError') setGoogleAuthOk(false) })
 
     // Check AE count
     fetch('/api/aes', { signal })
@@ -1932,8 +2028,8 @@ export default function SetupPage() {
     // Check RH Portal
     fetch('/api/auth/redhat/status', { signal })
       .then(r => r.json())
-      .then(d => { if (d.hasSession) setRhOk(true) })
-      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
+      .then(d => { setRhOk(d.hasSession ?? false) })
+      .catch((e) => { if (e.name !== 'AbortError') setRhOk(false) })
 
     // OAuth return: open AEs section and clean URL so the child AutoBootstrapForm can restore state
     const params = new URLSearchParams(window.location.search)
@@ -1949,9 +2045,9 @@ export default function SetupPage() {
     if (openSection !== null) return // user already toggled something
     if (!oauthKeysOk && aeCount !== null) {
       setOpenSection('oauth-keys')
-    } else if (oauthKeysOk && !googleAuthOk && aeCount !== null) {
+    } else if (oauthKeysOk && googleAuthOk === false && aeCount !== null) {
       setOpenSection('google-auth')
-    } else if (oauthKeysOk && googleAuthOk && aeCount === 0) {
+    } else if (oauthKeysOk && googleAuthOk === true && aeCount === 0) {
       setOpenSection('aes')
     }
   }, [oauthKeysOk, googleAuthOk, aeCount, openSection])
@@ -1964,7 +2060,7 @@ export default function SetupPage() {
     setResetting(true)
     setResetConfirm(null)
     try {
-      await fetch(`/api/setup/reset${full ? '?full=true' : ''}`, { method: 'POST' })
+      await fetch(`/api/setup/reset?confirm=true${full ? '&full=true' : ''}`, { method: 'POST' })
     } catch {}
     setResetting(false)
     window.location.href = '/dashboard/setup'
@@ -2063,9 +2159,11 @@ export default function SetupPage() {
             id="google-auth"
             title="Google Auth"
             badge={
-              googleAuthOk
-                ? <StatusBadge ok={true} label="Connected" />
-                : <StatusBadge ok={false} label="Not connected" />
+              googleAuthOk === null
+                ? <StatusBadge ok={null} label="Checking..." />
+                : googleAuthOk
+                  ? <StatusBadge ok={true} label="Connected" />
+                  : <StatusBadge ok={false} label="Not connected" />
             }
             isOpen={openSection === 'google-auth'}
             onToggle={() => toggleSection('google-auth')}
@@ -2077,14 +2175,16 @@ export default function SetupPage() {
             id="rh-portal"
             title="Red Hat Portal"
             badge={
-              rhOk
-                ? <StatusBadge ok={true} label="Connected" />
-                : <StatusBadge ok={null} label="Optional" />
+              rhOk === null
+                ? <StatusBadge ok={null} label="Checking..." />
+                : rhOk
+                  ? <StatusBadge ok={true} label="Connected" />
+                  : <StatusBadge ok={false} label="Optional" />
             }
             isOpen={openSection === 'rh-portal'}
             onToggle={() => toggleSection('rh-portal')}
           >
-            <RedHatPortalSection />
+            <RedHatPortalSection onConnected={() => setRhOk(true)} />
           </AccordionSection>
 
           <AccordionSection
@@ -2100,7 +2200,7 @@ export default function SetupPage() {
             isOpen={openSection === 'aes'}
             onToggle={() => toggleSection('aes')}
           >
-            <AEsCustomersSection />
+            <AEsCustomersSection onAeCountChange={setAeCount} />
           </AccordionSection>
 
           <AccordionSection

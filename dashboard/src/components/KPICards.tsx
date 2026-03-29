@@ -283,6 +283,11 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
         />
       </div>
 
+      {/* Hint when RH Portal not connected */}
+      {rhHasSession === false && (kpis?.openCasesTotal ?? 0) === 0 && (
+        <p className="text-xs text-text-secondary/50 mt-1 ml-1">Connect Red Hat Portal in Settings to sync support cases</p>
+      )}
+
       {/* Cases modal */}
       {casesOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setCasesOpen(false)}>

@@ -34,7 +34,14 @@ function RhSessionBanner({ status, onReconnect, onVncOpen }: { status: RhStatus;
   const handleReconnect = async () => {
     setReconnecting(true)
     try {
-      await fetch('/api/auth/redhat/start', { method: 'POST' })
+      const res = await fetch('/api/auth/redhat/start', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) {
+        // Show a concise error — don't open VNC if the browser never started
+        console.error('[rh-banner] start failed:', d.error)
+        setReconnecting(false)
+        return
+      }
       onReconnect()
       // Open the noVNC viewer so the user can complete the login in their browser
       const win = window.open('http://localhost:6080/vnc.html?autoconnect=true&reconnect=true', '_blank')
@@ -67,11 +74,25 @@ function RhSessionBanner({ status, onReconnect, onVncOpen }: { status: RhStatus;
   )
 }
 
+function NoAEsBanner({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="bg-blue-900/40 border-b border-blue-700/50 px-6 py-2.5 flex items-center gap-3 text-sm">
+      <span className="text-blue-300 font-medium">No AEs configured</span>
+      <span className="text-blue-300/70">&mdash; visit Setup to get started</span>
+      <a href="/dashboard/setup" className="bg-blue-700 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs font-medium transition-colors shrink-0">Go to Setup</a>
+      <div className="flex-1" />
+      <button onClick={onDismiss} className="text-blue-400 hover:text-blue-300 text-xs">Dismiss</button>
+    </div>
+  )
+}
+
 function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [active, setActive] = useState('Command Center')
   const [rhStatus, setRhStatus] = useState<RhStatus | null>(null)
   const [rhReconnecting, setRhReconnecting] = useState(false)
+  const [noAesDismissed, setNoAesDismissed] = useState(false)
+  const [aeCount, setAeCount] = useState<number | null>(null)
   const vncWindowRef = useRef<Window | null>(null)
 
   const kpisApi = useApi<KPIs>(`/api/kpis?_=${refreshKey}`)
@@ -107,6 +128,11 @@ function Dashboard() {
     return () => clearInterval(interval)
   }, [fetchRhStatus, rhReconnecting])
 
+  // Fetch AE count from health endpoint once on mount
+  useEffect(() => {
+    fetch('/health').then(r => r.json()).then(d => setAeCount(d.aes ?? 0)).catch(() => {})
+  }, [refreshKey])
+
   const lastSynced =
     !anyLoading && kpisApi.data
       ? formatRelTime(new Date().toISOString())
@@ -119,6 +145,9 @@ function Dashboard() {
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
         {rhStatus && (
           <RhSessionBanner status={rhStatus} onReconnect={() => setRhReconnecting(true)} onVncOpen={(win) => { vncWindowRef.current = win }} />
+        )}
+        {aeCount === 0 && !noAesDismissed && (
+          <NoAEsBanner onDismiss={() => setNoAesDismissed(true)} />
         )}
         {active === 'Settings' ? (
           <main className="flex-1 overflow-y-auto p-6">

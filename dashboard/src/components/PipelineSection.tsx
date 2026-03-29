@@ -161,6 +161,7 @@ export function PipelineSection({ data, loading }: Props) {
     for (const o of [...ownerOpps, ...ownerClosed]) {
       if (!o.closeDate) continue
       const d = new Date(o.closeDate)
+      if (d.getFullYear() !== new Date().getFullYear()) continue
       const q = `Q${Math.ceil((d.getMonth() + 1) / 3)} ${d.getFullYear()}`
       const slot = qMap.get(q) ?? { commit: 0, bestCase: 0, pipeline: 0, closed: 0 }
       if (o.forecastCategory === 'Commit')         slot.commit   += o.acv

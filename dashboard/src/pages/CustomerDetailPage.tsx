@@ -179,6 +179,7 @@ function useBrief(name: string) {
         `/customer/${encodeURIComponent(name)}/brief${force ? '?force=true' : ''}`,
         { signal: controller.signal }
       )
+      if (res.status === 404) throw new Error('NOT_FOUND')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -352,7 +353,21 @@ function BriefSection({ name }: { name: string }) {
           </div>
         )}
 
-        {error && !loading && (
+        {error && !loading && error === 'NOT_FOUND' && (
+          <div className="text-center py-6 space-y-3">
+            <p className="text-base font-semibold text-text-primary">Customer not found</p>
+            <p className="text-sm text-text-secondary">No data found for "{name}". This customer may not exist or hasn't been configured yet.</p>
+            <a
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to Dashboard
+            </a>
+          </div>
+        )}
+
+        {error && !loading && error !== 'NOT_FOUND' && (
           <p className="text-sm text-critical italic">{error}</p>
         )}
 
@@ -1364,8 +1379,8 @@ export function CustomerDetailPage() {
         </div>
       </header>
 
-      {/* Error banner */}
-      {sse.error && (
+      {/* Error banner — suppress when customer doesn't exist (meta never received = 404) */}
+      {sse.error && sse.meta !== null && (
         <div className="bg-warning/10 border-b border-warning/30 px-6 py-2 flex items-center gap-2 text-sm text-warning shrink-0">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {sse.error}
