@@ -400,11 +400,12 @@ async function discoverAccountNumbersByName(
     const el = await page.$(`input#${candidate}`).catch(() => null)
     if (el) { fieldId = candidate; break }
   }
-  // Use supportableName override when set — it matches how Supportable indexes the account
-  const nameForSearch = (supportableName?.trim()) || customerName
-  const searchTerm = nameForSearch.split(/\s+/).slice(0, 2).join(' ')
+  // Use supportableName override when set — it matches how Supportable indexes the account.
+  // Use the full name (not just the first 2 words) — truncating caused false positives and
+  // missed matches when the distinguishing word was the 3rd+ word (e.g. "A10 Networks Inc").
+  const searchTerm = (supportableName?.trim()) || customerName
   await page.fill(`input#${fieldId}`, `${searchTerm}%`)
-  console.log(`[supportable] name-search: filled #${fieldId} with "${searchTerm}%" (from "${supportableName ? `supportableName="${supportableName}"` : `customerName="${customerName}"`}")`)
+  console.log(`[supportable] name-search: filled #${fieldId} with "${searchTerm}%" (source: ${supportableName ? `supportableName override` : `customerName`})`)
 
   await page.click('button.button-alt1')
   await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
