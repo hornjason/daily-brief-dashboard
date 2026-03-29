@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react'
 import { TrendingUp, Calendar, Users, X } from 'lucide-react'
 import type { PipelineSummary, PipelineOpp, PipelineByQuarterStage } from '../types'
-import { formatRelTime } from '../lib/format'
-
-function fmt(val: number): string {
-  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
-  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`
-  return `$${val.toFixed(0)}`
-}
+import { formatRelTime, fmtCurrency as fmt } from '../lib/format'
 
 function fmtDate(iso: string): string {
   if (!iso) return '—'

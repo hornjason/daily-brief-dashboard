@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CCSPSummary, CCSPCustomer } from '../types'
-import { formatRelTime } from '../lib/format'
+import { formatRelTime, fmtCurrency as fmt } from '../lib/format'
 import {
   PieChart,
   Pie,
@@ -11,11 +11,6 @@ import {
 import { Cloud, Building2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-function fmt(val: number): string {
-  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
-  if (val >= 1_000) return `$${(val / 1_000).toFixed(1)}K`
-  return `$${val.toFixed(0)}`
-}
 
 function fmtFull(val: number): string {
   return `$${val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`

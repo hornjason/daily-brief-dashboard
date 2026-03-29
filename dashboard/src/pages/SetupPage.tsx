@@ -154,10 +154,12 @@ function Step0OAuthKeys({ onReady }: { onReady: () => void }) {
   const [pasteText, setPasteText] = useState('')
 
   useEffect(() => {
-    fetch('/api/setup/oauth-keys-status')
+    const controller = new AbortController()
+    fetch('/api/setup/oauth-keys-status', { signal: controller.signal })
       .then((r) => r.json())
       .then((d) => { setExists(d.exists); if (d.exists) onReady() })
-      .catch(() => setExists(false))
+      .catch((e) => { if (e.name !== 'AbortError') setExists(false) })
+    return () => controller.abort()
   }, [])
 
   const submit = async (jsonText: string) => {
@@ -281,11 +283,13 @@ function GoogleAuthSection() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    fetch('/api/oauth/status')
+    const controller = new AbortController()
+    fetch('/api/oauth/status', { signal: controller.signal })
       .then(r => r.json())
       .then((d: OAuthStatus) => setOauthStatus(d))
-      .catch(() => setOauthStatus({ authorized: false, configuredAt: null }))
+      .catch((e) => { if (e.name !== 'AbortError') setOauthStatus({ authorized: false, configuredAt: null }) })
       .finally(() => setChecking(false))
+    return () => controller.abort()
   }, [])
 
   if (checking) {
@@ -575,14 +579,15 @@ function AutoBootstrapForm() {
   const PENDING_KEY = 'pai_pending_bootstrap'
 
   useEffect(() => {
-    fetch('/api/bootstrap/auto/status')
+    const controller = new AbortController()
+    fetch('/api/bootstrap/auto/status', { signal: controller.signal })
       .then(r => r.json())
       .then((d: AutoBootstrapState) => { if (d.running || d.completedAt) setBootstrapState(d) })
-      .catch(() => {})
-    fetch('/api/aes')
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
+    fetch('/api/aes', { signal: controller.signal })
       .then(r => r.json())
       .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[] }> }) => setKnownAes(d.aes ?? []))
-      .catch(() => {})
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
 
     // Restore form state after OAuth redirect — check sessionStorage directly (no URL guard).
     // The key is set just before the OAuth redirect and consumed here on first mount.
@@ -599,6 +604,7 @@ function AutoBootstrapForm() {
         sessionStorage.removeItem(PENDING_KEY)
       } catch {}
     }
+    return () => controller.abort()
   }, [])
 
   // Derive full territory string(s) from pod + terrNum — no reverse-parsing needed
@@ -611,14 +617,16 @@ function AutoBootstrapForm() {
   // Fetch territory names from sheet whenever POD changes
   useEffect(() => {
     if (!pod) { setPodTerritoryNames([]); setPodNamesError(null); return }
+    const controller = new AbortController()
     setPodNamesError(null)
-    fetch(`/api/territory-names?pod=${encodeURIComponent(pod)}`)
+    fetch(`/api/territory-names?pod=${encodeURIComponent(pod)}`, { signal: controller.signal })
       .then(r => r.json())
       .then((d: { territories?: { num: string; aeName: string }[] }) => {
         setPodTerritoryNames(d.territories ?? [])
         if (!d.territories?.length) setPodNamesError('Could not load territory names from sheet — showing generic list')
       })
-      .catch(() => { setPodTerritoryNames([]); setPodNamesError('Could not load territory names from sheet — showing generic list') })
+      .catch((e) => { if (e.name !== 'AbortError') { setPodTerritoryNames([]); setPodNamesError('Could not load territory names from sheet — showing generic list') } })
+    return () => controller.abort()
   }, [pod])
 
   // Territory options for the selected POD — AE name in label if known from sheet or aes, else generic 01–20
@@ -676,13 +684,12 @@ function AutoBootstrapForm() {
     // territoryInput may be comma-separated; look up the first one
     const firstTerritory = territoryInput.split(',')[0].trim()
     if (!firstTerritory) return
-    let cancelled = false
+    const controller = new AbortController()
     setTerritoryLoading(true)
     setTerritoryError(null)
-    fetch(`/api/territory-lookup?territory=${encodeURIComponent(firstTerritory)}`)
+    fetch(`/api/territory-lookup?territory=${encodeURIComponent(firstTerritory)}`, { signal: controller.signal })
       .then(r => r.json())
       .then((d: { aeName?: string; accounts?: string[]; error?: string }) => {
-        if (cancelled) return
         if (d.error) {
           setTerritoryError(d.error.includes('not found') ? null : d.error)
           return
@@ -690,9 +697,9 @@ function AutoBootstrapForm() {
         if (d.aeName) setAeName(d.aeName)
         if (d.accounts?.length) setCustomerText(d.accounts.join('\n'))
       })
-      .catch((e) => { if (!cancelled) setTerritoryError(e.message) })
-      .finally(() => { if (!cancelled) setTerritoryLoading(false) })
-    return () => { cancelled = true }
+      .catch((e) => { if (e.name !== 'AbortError') setTerritoryError(e.message) })
+      .finally(() => { if (!controller.signal.aborted) setTerritoryLoading(false) })
+    return () => controller.abort()
   }, [territoryInput, matchedAe])
 
   // Auto-start bootstrap once all fields are populated after OAuth return redirect
@@ -816,25 +823,26 @@ function AutoBootstrapForm() {
   // Poll bootstrap status
   useEffect(() => {
     if (!bootstrapState?.running && !starting) return
+    const controller = new AbortController()
     const interval = setInterval(async () => {
       try {
-        const r = await fetch('/api/bootstrap/auto/status')
+        const r = await fetch('/api/bootstrap/auto/status', { signal: controller.signal })
         const d: AutoBootstrapState = await r.json()
         setBootstrapState(d)
         // When CCSP step completes, check if Tableau login is actually needed
         const ccspStep = d.steps.find(s => s.name === 'Create CCSP Sheet')
         if (ccspStep?.status === 'done' && tableauSessionNeeded === null) {
-          fetch('/api/bootstrap/tableau/session-status')
+          fetch('/api/bootstrap/tableau/session-status', { signal: controller.signal })
             .then(r => r.json())
             .then(({ reachable, sessionValid }: { reachable: boolean; sessionValid: boolean }) => {
               setTableauSessionNeeded(reachable && !sessionValid)
             })
-            .catch(() => {})
+            .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
         }
         if (!d.running) clearInterval(interval)
-      } catch {}
+      } catch (e: any) { if (e.name !== 'AbortError') { /* ignore */ } }
     }, 2_000)
-    return () => clearInterval(interval)
+    return () => { controller.abort(); clearInterval(interval) }
   }, [bootstrapState?.running, starting, tableauSessionNeeded])
 
   const resetForm = () => {
@@ -1065,9 +1073,10 @@ function AEsCustomersSection() {
 
   // Load AEs and customers from server
   useEffect(() => {
+    const controller = new AbortController()
     Promise.all([
-      fetch('/api/aes').then(r => r.json()),
-      fetch('/customers').then(r => r.json()),
+      fetch('/api/aes', { signal: controller.signal }).then(r => r.json()),
+      fetch('/customers', { signal: controller.signal }).then(r => r.json()),
     ])
       .then(([aeData, customerList]) => {
         const serverAes: Array<{
@@ -1119,8 +1128,9 @@ function AEsCustomersSection() {
           })))
         }
       })
-      .catch(() => setAes([makeBlankAE()]))
+      .catch((e) => { if (e.name !== 'AbortError') setAes([makeBlankAE()]) })
       .finally(() => setLoading(false))
+    return () => controller.abort()
   }, [])
 
   const updateAE = useCallback((aeId: string, patch: Partial<WizardAE>) => {
@@ -1509,27 +1519,30 @@ function RedHatPortalSection() {
   const [error, setError] = useState<string | null>(null)
   const popupRef = useRef<Window | null>(null)
 
-  const fetchStatus = async () => {
+  const fetchStatus = async (signal?: AbortSignal) => {
     try {
-      const d: RhStatus = await fetch('/api/auth/redhat/status').then((r) => r.json())
+      const d: RhStatus = await fetch('/api/auth/redhat/status', { signal }).then((r) => r.json())
       setStatus(d)
       if (d.hasSession && !d.loginInProgress && connecting) {
         setConnecting(false)
         popupRef.current?.close()
         popupRef.current = null
-        fetch('/api/auth/redhat/sync', { method: 'POST' }).catch(() => {})
+        fetch('/api/auth/redhat/sync', { method: 'POST', signal }).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
       }
-    } catch {}
+    } catch (e: any) { if (e.name !== 'AbortError') { /* ignore */ } }
   }
 
   useEffect(() => {
-    fetchStatus()
+    const controller = new AbortController()
+    fetchStatus(controller.signal)
+    return () => controller.abort()
   }, [])
 
   useEffect(() => {
     if (!connecting) return
-    const interval = setInterval(fetchStatus, 2_000)
-    return () => clearInterval(interval)
+    const controller = new AbortController()
+    const interval = setInterval(() => fetchStatus(controller.signal), 2_000)
+    return () => { controller.abort(); clearInterval(interval) }
   }, [connecting])
 
   const handleConnect = async () => {
@@ -1668,14 +1681,18 @@ function DataSourcesSection() {
   const [rhSyncing, setRhSyncing] = useState(false)
   const [rhSyncError, setRhSyncError] = useState<string | null>(null)
 
-  const refreshAll = () => {
-    fetch('/api/bootstrap/supportable/status').then(r => r.json()).then(setSupportableStatus).catch(() => {})
-    fetch('/api/bootstrap/ccsp/status').then(r => r.json()).then(setCcspStatus).catch(() => {})
-    fetch('/api/auth/salesforce/status').then(r => r.json()).then(setSfStatus).catch(() => {})
-    fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {})
+  const refreshAll = (signal?: AbortSignal) => {
+    fetch('/api/bootstrap/supportable/status', { signal }).then(r => r.json()).then(setSupportableStatus).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
+    fetch('/api/bootstrap/ccsp/status', { signal }).then(r => r.json()).then(setCcspStatus).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
+    fetch('/api/auth/salesforce/status', { signal }).then(r => r.json()).then(setSfStatus).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
+    fetch('/api/auth/redhat/status', { signal }).then(r => r.json()).then(setRhStatus).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
   }
 
-  useEffect(() => { refreshAll() }, [])
+  useEffect(() => {
+    const controller = new AbortController()
+    refreshAll(controller.signal)
+    return () => controller.abort()
+  }, [])
 
   const handleRhSync = async () => {
     setRhSyncError(null)
@@ -1893,32 +1910,35 @@ export default function SetupPage() {
 
   // Check initial states to determine auto-expand and badge data
   useEffect(() => {
+    const controller = new AbortController()
+    const { signal } = controller
+
     // Check OAuth keys
-    fetch('/api/setup/oauth-keys-status')
+    fetch('/api/setup/oauth-keys-status', { signal })
       .then(r => r.json())
       .then(d => { if (d.exists) setOauthKeysOk(true) })
-      .catch(() => {})
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
 
     // Check Google auth + pending downgrade
-    fetch('/api/oauth/status')
+    fetch('/api/oauth/status', { signal })
       .then(r => r.json())
       .then((d: OAuthStatus & { pendingDowngrade?: boolean }) => {
         if (d.authorized && !d.expired) setGoogleAuthOk(true)
         if (d.pendingDowngrade) setPendingDowngrade(true)
       })
-      .catch(() => {})
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
 
     // Check AE count
-    fetch('/api/aes')
+    fetch('/api/aes', { signal })
       .then(r => r.json())
       .then(d => { setAeCount((d.aes ?? []).length) })
-      .catch(() => {})
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
 
     // Check RH Portal
-    fetch('/api/auth/redhat/status')
+    fetch('/api/auth/redhat/status', { signal })
       .then(r => r.json())
       .then(d => { if (d.hasSession) setRhOk(true) })
-      .catch(() => {})
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
 
     // OAuth return: open AEs section and clean URL so the child AutoBootstrapForm can restore state
     const params = new URLSearchParams(window.location.search)
@@ -1926,6 +1946,7 @@ export default function SetupPage() {
       setOpenSection('aes')
       window.history.replaceState({}, '', '/dashboard/setup')
     }
+    return () => controller.abort()
   }, [])
 
   // First-run auto-expand logic
