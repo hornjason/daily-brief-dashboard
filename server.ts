@@ -19,9 +19,10 @@ import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext
 import { discoverAccountNumbers } from './src/rh-account-discovery.ts'
 import { runSfPipelineSync, createPipelineSheet, SfSessionExpiredError, setSfSessionExpiredCallback, adoptSfContext, lastSfSync, lastSfRowCount, sfSyncError } from './src/sf-scraper.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser, getSfAuthStatus } from './src/sf-auth.ts'
-import { runSupportableScrape, writeSupportableSheet, adoptSupportableContext, lastSupportableScrape, lastSupportableError, supportableScrapeRunning } from './src/supportable-scraper.ts'
+import { runSupportableScrape, runSupportableDiscoverAndScrape, writeSupportableSheet, adoptSupportableContext, lastSupportableScrape, lastSupportableError, supportableScrapeRunning } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
 import { adoptCcspContext, runCcspScrape, writeCcspSheet, ccspScrapeRunning, lastCcspScrape, lastCcspError } from './src/ccsp-scraper.ts'
+import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, hasBootstrapScopes, getScopeLevel, type StoredToken } from './src/oauth-scopes.ts'
 
 // Load customer config
 const CUSTOMERS_PATH = process.env.CONFIG_DIR
@@ -94,6 +95,8 @@ const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
 const GOOGLE_OAUTH_KEYS_PATH = process.env.GOOGLE_OAUTH_KEYS
   ?? resolve(SRV_CONFIG_DIR, 'gcp-oauth.keys.json')
 
+const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
+
 const RH_SESSION_PATH = process.env.RH_SESSION
   ?? resolve(SRV_CONFIG_DIR, '.rh-session.json')
 const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR
@@ -151,6 +154,74 @@ function writeSheetCache(customerName: string, rows: ProductSubscription[]): voi
 
 const app = new Hono()
 
+// ── Security helpers ──────────────────────────────────────────────────────────
+
+/** Strip HTML tags, trim, and enforce max length. Returns sanitized string or null if invalid. */
+function sanitizeText(value: unknown, maxLen = 200): string | null {
+  if (typeof value !== 'string') return null
+  const stripped = value.replace(/<[^>]*>/g, '').trim()
+  if (stripped.length === 0 || stripped.length > maxLen) return null
+  return stripped
+}
+
+/**
+ * Normalize a customer name for use as a Drive folder name and search key.
+ * Strips state suffixes, legal entity suffixes, and parentheticals; applies title case.
+ * Input:  "DROPBOX, INC. - CA"  →  Output: "Dropbox"
+ * Input:  "FRED HUTCHINSON CANCER CENTER"  →  Output: "Fred Hutchinson Cancer Center"
+ * Input:  "A10 NETWORKS, INC."  →  Output: "A10 Networks"
+ */
+function normalizeCustomerName(raw: string): string {
+  let name = raw.trim()
+  // Strip state suffix " - XX" or " - XX/XX"
+  name = name.replace(/\s+-\s+[A-Z]{2}(\/[A-Z]{2})?$/, '')
+  // Strip parentheticals like "(REI)" or "(HostGator)"
+  name = name.replace(/\s*\([^)]*\)\s*$/, '')
+  // Strip legal entity suffixes (with or without leading comma)
+  const legalSuffixes = [
+    /,?\s+L\.?L\.?P\.?$/i,
+    /,?\s+P\.?T\.?Y\.?\s+LTD\.?$/i,
+    /,?\s+L\.?P\.?$/i,
+    /,?\s+INC\.?$/i,
+    /,?\s+LLC\.?$/i,
+    /,?\s+LTD\.?$/i,
+    /,?\s+CORP\.?$/i,
+    /,?\s+CO\.?$/i,
+    /,?\s+PLC\.?$/i,
+  ]
+  for (const re of legalSuffixes) name = name.replace(re, '')
+  name = name.trim().replace(/,+$/, '').trim()
+  // Title case: preserve words with digits (A10, H2O) or internal dots (U.S.) or already mixed case
+  name = name.split(/\s+/).map(word => {
+    if (/\d/.test(word) || /[a-z]/.test(word) || /\.[a-zA-Z]/.test(word)) return word
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  }).join(' ')
+  return name
+}
+
+/** Loose domain validation — allows subdomains, TLDs, IP-like strings, localhost. Rejects HTML. */
+function isValidDomain(value: unknown): boolean {
+  if (typeof value !== 'string') return true // optional field — absent is OK
+  if (value === '') return true
+  return /^[a-zA-Z0-9]([a-zA-Z0-9\-._]{0,251}[a-zA-Z0-9])?$/.test(value)
+}
+
+/** Salesforce report/object ID — alphanumeric only, 15–18 chars. */
+function isValidSfId(value: unknown): boolean {
+  if (typeof value !== 'string') return true
+  if (value === '') return true
+  return /^[A-Za-z0-9]{15,18}$/.test(value)
+}
+
+// ── Security headers middleware ───────────────────────────────────────────────
+
+app.use('*', async (c, next) => {
+  await next()
+  c.header('X-Frame-Options', 'DENY')
+  c.header('X-Content-Type-Options', 'nosniff')
+  c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+})
+
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
 
@@ -171,25 +242,24 @@ app.get('/oauth/start', (c) => {
     </body></html>`, 400)
   }
 
+  const mode = c.req.query('mode') === 'bootstrap' ? 'bootstrap' : 'normal'
+  const scopes = mode === 'bootstrap' ? BOOTSTRAP_SCOPES : NORMAL_SCOPES
+
   const keys = JSON.parse(readFileSync(GOOGLE_OAUTH_KEYS_PATH, 'utf-8'))
   const { client_id, client_secret } = keys.installed ?? keys.web
   const redirectUri = `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
 
   const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri)
 
-  oauthState = Math.random().toString(36).slice(2) + Date.now().toString(36)
+  // Encode mode into state so callback knows which scopeLevel to write
+  const csrfToken = Math.random().toString(36).slice(2) + Date.now().toString(36)
+  oauthState = `${csrfToken}:${mode}`
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     state: oauthState,
-    scope: [
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/drive',
-      'https://www.googleapis.com/auth/calendar.readonly',
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/cloud-platform',
-    ],
+    scope: [...scopes],
   })
 
   return c.redirect(authUrl)
@@ -244,7 +314,9 @@ app.get('/oauth/callback', async (c) => {
     const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri)
 
     const { tokens } = await oauth2Client.getToken(code)
-    const tokenData = { ...tokens, configuredAt: new Date().toISOString() }
+    // Parse mode from state param (format: "csrfToken:mode")
+    const scopeMode = state?.split(':')[1] === 'bootstrap' ? 'bootstrap' : 'normal'
+    const tokenData = { ...tokens, configuredAt: new Date().toISOString(), scopeLevel: scopeMode }
 
     // Save to config dir (works both locally and in container via volume mount)
     const tokenPath = GOOGLE_UNIFIED_TOKEN_PATH
@@ -280,7 +352,11 @@ app.get('/api/oauth/status', async (c) => {
     } catch (e: any) {
       expired = e.message?.includes('invalid_grant') || e.message?.includes('Token has been expired') || e.message?.includes('invalid_token')
     }
-    return c.json({ authorized: !expired, expired, email, configuredAt: token.configuredAt ?? null })
+    const scopeLevel = getScopeLevel(token as StoredToken)
+    const pendingDowngrade = (() => {
+      try { return JSON.parse(readFileSync(OAUTH_STATE_PATH, 'utf-8')).pendingDowngrade ?? false } catch { return false }
+    })()
+    return c.json({ authorized: !expired, expired, email, configuredAt: token.configuredAt ?? null, scopeLevel, pendingDowngrade })
   } catch {
     return c.json({ authorized: false })
   }
@@ -290,13 +366,43 @@ app.get('/api/oauth/status', async (c) => {
 
 // GET /api/auth/redhat/status — Session health, scrape timestamps, login state
 app.get('/api/auth/redhat/status', (c) => {
-  return c.json(getRhStatus(RH_SESSION_PATH))
+  const status = getRhStatus(RH_SESSION_PATH)
+  // hasSession requires both a session file AND a live browser context —
+  // the file persists across restarts but the context must be active to scrape
+  return c.json({ ...status, hasSession: status.hasSession && getScrapeContext() !== null })
 })
 
 // POST /api/auth/redhat/start — Launch headed browser for RH portal login
 app.post('/api/auth/redhat/start', async (c) => {
   try {
     await startLoginBrowser(RH_SESSION_PATH, RH_PROFILE_DIR, () => {
+      // Pre-warm Supportable session in background immediately after RH login.
+      // The auth.redhat.com SSO session is fresh — navigating to Supportable now
+      // auto-completes SSO and saves the Supportable session cookie to the profile,
+      // so subsequent headless bootstrap runs can access Supportable without re-auth.
+      const ctx = getScrapeContext()
+      if (ctx) {
+        const SUPPORTABLE_PREWARM_URL = 'https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1'
+        ;(async () => {
+          const p = await ctx.newPage()
+          try {
+            await p.goto(SUPPORTABLE_PREWARM_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+            if (!p.url().includes('supportable.corp.redhat.com')) {
+              await p.waitForURL(/supportable\.corp\.redhat\.com/, { timeout: 120_000 }).catch(() => {})
+            }
+            console.log(`[supportable] pre-warm complete — session established (${p.url().includes('supportable') ? 'ok' : 'may need manual login'})`)
+          } catch (e: any) {
+            console.warn('[supportable] pre-warm failed:', e.message)
+          } finally {
+            await p.close().catch(() => {})
+            // Navigate the live portal page to blank — hides the VNC window after login
+            getLivePage()?.goto('about:blank').catch(() => {})
+          }
+        })().catch(() => {})
+      } else {
+        // No Supportable pre-warm needed — still hide the VNC window
+        getLivePage()?.goto('about:blank').catch(() => {})
+      }
       runPortalAccountDiscovery().catch(() => {}).finally(() => runRhScrapeWithState().catch(() => {}))
     })
     return c.json({ started: true })
@@ -321,6 +427,225 @@ app.post('/api/auth/redhat/sync', async (c) => {
 app.post('/api/auth/redhat/discover', async (c) => {
   runPortalAccountDiscovery().catch(() => {})
   return c.json({ started: true })
+})
+
+// POST /api/test/accountname-search — Call search/v2/cases API directly with accountName SOLR query
+// Body: { customers: string[] }
+app.post('/api/test/accountname-search', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const customers: string[] = body.customers ?? ['A10 Networks', 'Dropbox', 'Crowdstrike']
+  const ctx = getScrapeContext()
+  if (!ctx) return c.json({ error: 'No active RH session' }, 409)
+  const page = getLivePage() ?? await ctx.newPage()
+
+  // Ensure we're on the portal so cookies are active
+  if (!page.url().includes('access.redhat.com')) {
+    await page.goto('https://access.redhat.com/support/cases/#/case/list', {
+      waitUntil: 'domcontentloaded', timeout: 30_000,
+    }).catch(() => {})
+    await page.waitForTimeout(3_000)
+  }
+
+  const results: Record<string, any> = {}
+
+  // Use the exact expression captured from portal network traffic
+  const EXPRESSION = 'sort=case_lastModifiedDate%20desc&facet=true&facet.mincount=0&facet.pivot.mincount=0&facet.sort=index&f.case_product.facet.limit=-1&f.case_version.facet.pivot.limit=-1&f.case_version.facet.pivot.mincount=1&fl=case_createdByName%2Ccase_createdDate%2Ccase_lastModifiedDate%2Ccase_lastModifiedByName%2Cid%2Curi%2Ccase_summary%2Ccase_status%2Ccase_product%2Ccase_version%2Ccase_accountNumber%2Ccase_number%2Ccase_contactName%2Ccase_owner%2Ccase_severity%2Ccase_last_public_update_date%2Ccase_last_public_update_by%2Ccase_customer_escalation%2Ccase_folderName%2Ccase_alternate_id%2Ccase_type%2Ccase_closedDate&facet.field=%7B!ex%3Dc_product%7Dcase_product&facet.field=%7B!ex%3Dc_severity%7Dcase_severity&facet.field=%7B!ex%3Dc_status%7Dcase_status&facet.field=%7B!ex%3Dc_type%7Dcase_type&facet.pivot=%7B!ex%3Dc_product%7Dcase_product%2Ccase_version&fq=%7B!tag%3Dc_product%7D*%3A*'
+
+  // Test queries: get all fields to discover the account name field name, then try variants
+  const testQueries = customers.flatMap(name => [
+    { label: `${name} [all-fields sample]`, q: '*:*', fl: '*' },
+    { label: `${name} [accountName]`, q: `accountName: "${name}"`, fl: null },
+    { label: `${name} [case_accountName]`, q: `case_accountName: "${name}"`, fl: null },
+    { label: `${name} [account_name]`, q: `account_name: "${name}"`, fl: null },
+    { label: `${name} [contactName]`, q: `contactName: "${name}"`, fl: null },
+  ])
+
+  for (const { label, q, fl } of testQueries) {
+    const apiResult = await page.evaluate(async ({ q, fl, expression }: { q: string; fl: string | null; expression: string }) => {
+      try {
+        // Build expression: if fl override provided, replace the fl= portion
+        let expr = expression
+        if (fl) {
+          expr = expr.replace(/fl=[^&]+/, `fl=${encodeURIComponent(fl)}`)
+        }
+        const res = await fetch(
+          `https://access.redhat.com/hydra/rest/search/v2/cases?redhat_client=Portal%20Case%20Management%202.44.57&account_number=901532`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ q, start: 0, rows: 2, partnerSearch: false, expression: expr }),
+          }
+        )
+        const text = await res.text()
+        if (!res.ok) return { error: `HTTP ${res.status}: ${text.slice(0, 200)}` }
+        return { data: JSON.parse(text) }
+      } catch (e: any) {
+        return { error: e.message }
+      }
+    }, { q, fl: fl ?? null, expression: EXPRESSION })
+
+    if (apiResult.error) { results[label] = { error: apiResult.error }; continue }
+
+    const data = apiResult.data
+    const docs: any[] = data?.response?.docs ?? []
+    const numFound: number = data?.response?.numFound ?? 0
+    const accountNumbers = [...new Set(docs.map((d: any) => d.case_accountNumber).filter(Boolean))]
+
+    results[label] = {
+      numFound,
+      docCount: docs.length,
+      accountNumbers,
+      // For wildcard/all-fields queries: show sorted field names for discovery
+      allFieldNames: fl ? docs.flatMap((d: any) => Object.keys(d)).filter((v, i, a) => a.indexOf(v) === i).sort() : undefined,
+      sampleDoc: fl ? docs[0] ?? null : undefined,
+    }
+
+    // Skip wildcard for remaining customers (only needed once to confirm API works)
+    if (q === '*:*' && Object.keys(results).length >= 1) {
+      // Continue testing accountName/case_accountName queries for all customers
+    }
+  }
+
+  return c.json(results)
+})
+
+// POST /api/test/supportable-customer-search — Search Supportable by customer name, return account numbers
+// Body: { customerName: string }  e.g. { customerName: "Dropbox" }
+app.post('/api/test/supportable-customer-search', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const customerName: string = body.customerName ?? 'Dropbox'
+  const ctx = getScrapeContext()
+  if (!ctx) return c.json({ error: 'No active RH session' }, 409)
+
+  const SUPPORTABLE_URL = 'https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1'
+  let page = await ctx.newPage()
+
+  try {
+    // Mirror the existing Supportable scraper's navigation + SSO handling exactly
+    await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.waitForTimeout(3_000)
+
+    if (!page.url().includes('supportable.corp.redhat.com')) {
+      // SSO redirect — page will navigate back or close
+      let pageClosedByApex = false
+      const closePromise = new Promise<void>(resolve => { page.once('close', () => { pageClosedByApex = true; resolve() }) })
+      await Promise.race([
+        page.waitForURL(/supportable\.corp\.redhat\.com/, { timeout: 120_000 }).catch(() => {}),
+        closePromise,
+      ])
+      if (pageClosedByApex) page = await ctx.newPage()
+      // Fresh navigation after SSO
+      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.waitForTimeout(3_000)
+    }
+
+    if (!page.url().includes('supportable.corp.redhat.com')) {
+      await page.close()
+      return c.json({ error: 'Supportable SSO failed', url: page.url() }, 409)
+    }
+
+    // Fill Customer Name field — APEX naming convention: P0_CUSTOMER_NAME
+    // Wildcard % matches any suffix (standard Oracle LIKE syntax)
+    let fieldId = 'P0_CUSTOMER_NAME'
+    let filled = false
+    for (const candidate of ['P0_CUSTOMER_NAME', 'P0_CUST_NAME', 'P0_CUSTOMER']) {
+      const el = await page.$(`input#${candidate}`).catch(() => null)
+      if (el) { fieldId = candidate; filled = true; break }
+    }
+    if (!filled) {
+      // Dump visible inputs to help identify the right field
+      const inputDump = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('input')).map(el => ({
+          id: el.id, name: (el as HTMLInputElement).name,
+          label: document.querySelector(`label[for="${el.id}"]`)?.textContent?.trim() ?? '',
+        })).filter(f => f.id || f.name)
+      ).catch(() => [])
+      await page.close()
+      return c.json({ error: 'Customer Name input not found — try one of these IDs', inputDump })
+    }
+
+    await page.fill(`input#${fieldId}`, `${customerName}%`)
+    console.log(`[test/supportable] Filled #${fieldId} with "${customerName}%"`)
+    await page.click('button.button-alt1')
+    // APEX does a server-side POST + redirect chain — wait for full settle
+    await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
+    await page.waitForTimeout(5_000)
+
+    // Scrape the results table — retry if APEX is still navigating
+    let tableData: any = null
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        tableData = await page.evaluate(() => { return 'PROBE_OK' })
+        break
+      } catch {
+        console.log(`[test/supportable] results page still navigating (attempt ${attempt + 1}) — waiting…`)
+        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+        await page.waitForTimeout(3_000)
+      }
+    }
+    if (!tableData) { await page.close(); return c.json({ error: 'Results page never settled after 4 attempts' }) }
+
+    tableData = await page.evaluate(() => {
+      const tables = Array.from(document.querySelectorAll('table'))
+      // APEX IR result tables use <th> headers — search for party/customer/entl headers
+      for (const t of tables) {
+        const ths = Array.from(t.querySelectorAll('th'))
+          .map(el => el.textContent?.trim().replace(/\s+/g, ' ') ?? '')
+        if (ths.some(h => /party.?number|customer.?number|entl/i.test(h))) {
+          const rownumIdx = ths.indexOf('Rownum')
+          const rows = Array.from(t.querySelectorAll('tr')).slice(1).flatMap(tr => {
+            const cells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent?.trim().replace(/\s+/g, ' ') ?? '')
+            // Skip APEX count rows and empty rows — data rows have a numeric Rownum cell
+            if (!cells.some(c => c)) return []
+            if (rownumIdx >= 0 && !/^\d+$/.test(cells[rownumIdx] ?? '')) return []
+            if (cells.length < ths.length - 2) return []  // too few cells
+            const obj: Record<string, string> = {}
+            ths.forEach((h, i) => { obj[h] = cells[i] ?? '' })
+            return [obj]
+          })
+          return { headers: ths, rows }
+        }
+      }
+      // Debug: show what tables exist and their header structures
+      return {
+        error: `No results table found (${tables.length} tables)`,
+        tableCount: tables.length,
+        tableDebug: tables.slice(0, 8).map(t => ({
+          cls: t.className.slice(0, 60),
+          ths: Array.from(t.querySelectorAll('th')).slice(0, 6).map(th => th.textContent?.trim().slice(0, 30) ?? ''),
+        })),
+      }
+    })
+
+    await page.close()
+
+    if ('error' in tableData) return c.json({ customerName, fieldId, inputFields, tableData })
+
+    // Filter: Country = Web or USA, Entl Active Cnt > 0
+    const filtered = (tableData.rows as Record<string, string>[]).filter(row => {
+      const country = (row['Country'] ?? '').trim()
+      const entlActive = parseInt(row['Entl Active Cnt'] ?? row['Entl\nActive\nCnt'] ?? '0', 10)
+      return (country === 'Web' || country === 'USA') && entlActive > 0
+    })
+
+    const accountNumbers = [...new Set(
+      filtered.map(r => r['Customer Number'] ?? r['CustomerNumber'] ?? '').filter(Boolean)
+    )]
+
+    return c.json({
+      customerName,
+      fieldId,
+      totalRows: (tableData.rows as any[]).length,
+      filteredRows: filtered.length,
+      accountNumbers,
+      headers: tableData.headers,
+      allRows: (tableData.rows as any[]).slice(0, 10),
+    })
+  } catch (e: any) {
+    await page.close().catch(() => {})
+    return c.json({ error: e.message }, 500)
+  }
 })
 
 // ── Salesforce pipeline sync endpoints ───────────────────────────────────────
@@ -484,6 +809,16 @@ app.get('/api/bootstrap/ccsp/status', (c) => {
 app.post('/api/bootstrap/ccsp', async (c) => {
   if (ccspScrapeRunning) return c.json({ error: 'CCSP scrape already in progress' }, 409)
 
+  // Verify bootstrap-level Google permissions
+  try {
+    const token = JSON.parse(readFileSync(GOOGLE_UNIFIED_TOKEN_PATH, 'utf-8')) as StoredToken
+    if (!hasBootstrapScopes(token)) {
+      return c.json({ error: 'Bootstrap requires elevated Google Drive permissions', action: 'redirect', url: '/oauth/start?mode=bootstrap' }, 403)
+    }
+  } catch {
+    return c.json({ error: 'Google not connected — authorize via Setup first' }, 401)
+  }
+
   const eligibleAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
   if (!eligibleAes.length) return c.json({ error: 'No AEs with tableauTerritories and driveFolderId configured' }, 400)
 
@@ -510,7 +845,7 @@ app.post('/api/bootstrap/ccsp', async (c) => {
 
 interface AutoBootstrapStep {
   name: string
-  status: 'pending' | 'running' | 'done' | 'error'
+  status: 'pending' | 'running' | 'done' | 'error' | 'skipped'
   detail?: string
 }
 
@@ -530,8 +865,33 @@ app.get('/api/bootstrap/auto/status', (c) => {
   return c.json(autoBootstrapState)
 })
 
+// POST /api/bootstrap/auto/reset — clear a stuck bootstrap state
+app.post('/api/bootstrap/auto/reset', (c) => {
+  autoBootstrapState = { running: false, steps: [], aeName: '', completedAt: null, error: null }
+  console.log('[auto-bootstrap] State reset by user request')
+  return c.json({ ok: true })
+})
+
+// POST /api/oauth/dismiss-downgrade — user has seen the reduce-permissions banner
+app.post('/api/oauth/dismiss-downgrade', (c) => {
+  try {
+    writeFileSyncRaw(OAUTH_STATE_PATH, JSON.stringify({ pendingDowngrade: false, dismissedAt: new Date().toISOString() }, null, 2))
+  } catch {}
+  return c.json({ ok: true })
+})
+
 app.post('/api/bootstrap/auto', async (c) => {
   if (autoBootstrapState.running) return c.json({ error: 'Auto-bootstrap already in progress' }, 409)
+
+  // Verify bootstrap-level Google permissions
+  try {
+    const token = JSON.parse(readFileSync(GOOGLE_UNIFIED_TOKEN_PATH, 'utf-8')) as StoredToken
+    if (!hasBootstrapScopes(token)) {
+      return c.json({ error: 'Bootstrap requires elevated Google Drive permissions', action: 'redirect', url: '/oauth/start?mode=bootstrap' }, 403)
+    }
+  } catch {
+    return c.json({ error: 'Google not connected — authorize via Setup first' }, 401)
+  }
 
   const body = await c.req.json<{
     aeName?: string
@@ -544,10 +904,16 @@ app.post('/api/bootstrap/auto', async (c) => {
   const aeName = (body.aeName ?? '').trim()
   const sfReportId = (body.sfReportId ?? '').trim()
   const tableauTerritories = body.tableauTerritories ?? []
-  const customerNames = (body.customerNames ?? []).map(n => n.trim()).filter(Boolean)
-  const parentFolderId = (body.parentFolderId ?? '').trim() || undefined
+  const customerNames = (body.customerNames ?? []).map(n => normalizeCustomerName(n)).filter(Boolean)
+  // Accept full Drive URL or bare folder ID — extract ID from URL if needed
+  const rawParent = (body.parentFolderId ?? '').trim()
+  const parentFolderId = rawParent
+    ? (rawParent.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)?.[1] ?? rawParent)
+    : undefined
 
   if (!aeName) return c.json({ error: 'aeName is required' }, 400)
+  if (aeName.length > 200) return c.json({ error: 'aeName exceeds 200 characters' }, 400)
+  if (/<[^>]*>/.test(aeName)) return c.json({ error: 'aeName contains invalid characters' }, 400)
   if (!sfReportId) return c.json({ error: 'sfReportId is required' }, 400)
   if (!tableauTerritories.length) return c.json({ error: 'tableauTerritories is required' }, 400)
   if (!customerNames.length) return c.json({ error: 'customerNames is required' }, 400)
@@ -581,128 +947,241 @@ app.post('/api/bootstrap/auto', async (c) => {
     autoBootstrapState.steps[idx] = { ...autoBootstrapState.steps[idx], status, detail }
   }
 
+  // Hard timeout: if bootstrap is still running after 60 minutes, unstick it
+  const bootstrapTimeoutId = setTimeout(() => {
+    if (autoBootstrapState.running) {
+      autoBootstrapState.running = false
+      autoBootstrapState.completedAt = new Date().toISOString()
+      autoBootstrapState.error = 'Bootstrap timed out after 60 minutes'
+      const stuck = autoBootstrapState.steps.findIndex(s => s.status === 'running')
+      if (stuck >= 0) autoBootstrapState.steps[stuck] = { ...autoBootstrapState.steps[stuck], status: 'error', detail: 'Timed out' }
+      console.error('[auto-bootstrap] Hard timeout reached — unsticking')
+    }
+  }, 60 * 60 * 1_000)
+
   // Run async — client polls /api/bootstrap/auto/status
   ;(async () => {
-    let driveFolderId = ''
+    // Check if AE already has a Drive folder from a previous run — skip creation if so
+    const existingAe = aes.find(a => a.name === aeName)
+    let driveFolderId = existingAe?.driveFolderId ?? ''
 
-    // Step 1 — Create Drive Folder
+    // Step 1 — Create Drive Folder (skip if already exists)
     try {
       setStep(0, 'running')
-      const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
-      const folder = await drive.files.create({
-        requestBody: {
-          name: aeName,
-          mimeType: 'application/vnd.google-apps.folder',
-          ...(parentFolderId ? { parents: [parentFolderId] } : {}),
-        },
-        supportsAllDrives: true,
-        fields: 'id,webViewLink',
-      })
-      driveFolderId = folder.data.id!
-      const updated = aes.map(a => a.name === aeName ? { ...a, driveFolderId } : a)
-      saveAes(updated)
-      setStep(0, 'done', `Folder: ${driveFolderId}`)
-      console.log(`[auto-bootstrap] Drive folder created: ${driveFolderId}`)
+      if (driveFolderId) {
+        setStep(0, 'done', `Folder: ${driveFolderId}`)
+        console.log(`[auto-bootstrap] Drive folder already exists, reusing: ${driveFolderId}`)
+      } else {
+        const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
+        const folder = await drive.files.create({
+          requestBody: {
+            name: aeName,
+            mimeType: 'application/vnd.google-apps.folder',
+            ...(parentFolderId ? { parents: [parentFolderId] } : {}),
+          },
+          supportsAllDrives: true,
+          fields: 'id,webViewLink',
+        })
+        driveFolderId = folder.data.id!
+        const updated = aes.map(a => a.name === aeName ? { ...a, driveFolderId } : a)
+        saveAes(updated)
+        setStep(0, 'done', `Folder: ${driveFolderId}`)
+        console.log(`[auto-bootstrap] Drive folder created: ${driveFolderId}`)
+      }
     } catch (e: any) {
       setStep(0, 'error', e.message)
       autoBootstrapState.error = `Drive folder creation failed: ${e.message}`
       console.error('[auto-bootstrap] Drive folder creation failed:', e.message)
     }
 
-    // Step 2 — Discover Account Numbers
+    // Steps 2 + 3 — Discover Account Numbers via Supportable name search, then
+    // immediately scrape subscriptions for each account in the same session.
+    // Account numbers are saved to customers.json after each customer completes.
+    // Scraped subscription data is held in memory and written to sheet in Step 3.
+    let supportableScrapeResults: Awaited<ReturnType<typeof runSupportableDiscoverAndScrape>> = []
     try {
-      setStep(1, 'running')
-      const ctx = getScrapeContext()
-      if (!ctx) throw new Error('No RH browser session — connect Red Hat Portal first')
-      const page = await ctx.newPage()
-      try {
-        for (const name of customerNames) {
-          setStep(1, 'running', `Discovering: ${name}`)
-          const timeout = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Timed out after 90s`)), 90_000)
-          )
-          const result = await Promise.race([discoverAccountNumbers(page, name), timeout])
+      setStep(1, 'running', `0/${customerNames.length} — starting Supportable…`)
+      setStep(2, 'running', 'waiting for discovery…')
+
+      // Build customer objects — include supportableName override from customers.json if present
+      const discoverCustomers = customerNames.map(name => {
+        const existing = customers.find(cx => cx.name === name)
+        return { name, supportableName: existing?.supportableName }
+      })
+      supportableScrapeResults = await runSupportableDiscoverAndScrape(
+        discoverCustomers,
+        (done, total, name, accountNumbers, rowCount) => {
+          // Save account numbers to customers array immediately after each customer
           const existing = customers.find(cx => cx.name === name)
           if (existing) {
-            const merged = new Set([...(existing.accountNumbers ?? []), ...result.accountNumbers])
+            const merged = new Set([...(existing.accountNumbers ?? []), ...accountNumbers])
             existing.accountNumbers = [...merged]
           } else {
-            customers.push({ name, ae: aeName, accountNumbers: result.accountNumbers })
+            customers.push({ name, ae: aeName, accountNumbers })
           }
+          // Persist to disk after each customer so progress survives a hard timeout
+          try {
+            const tmpPath = CUSTOMERS_PATH + '.tmp'
+            writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
+            renameSync(tmpPath, CUSTOMERS_PATH)
+          } catch {}
+          const acctCount = accountNumbers.length
+          const summary = acctCount > 0
+            ? `✓ ${acctCount} acct${acctCount !== 1 ? 's' : ''}, ${rowCount} rows`
+            : 'no match'
+          setStep(1, 'running', `${done}/${total} — ${name}: ${summary}`)
+          setStep(2, 'running', `${done}/${total} — ${name}: ${summary}`)
+          console.log(`[auto-bootstrap] ${done}/${total} ${name}: ${acctCount} accounts, ${rowCount} rows`)
+        },
+      )
+
+      // Sync any remaining customers to customers.json (handles customers with 0 accounts)
+      for (const r of supportableScrapeResults) {
+        if (!customers.find(cx => cx.name === r.customerName)) {
+          customers.push({ name: r.customerName, ae: aeName, accountNumbers: r.accountNumbers })
         }
-        // Save customers.json atomically
-        const tmpPath = CUSTOMERS_PATH + '.tmp'
-        writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
-        renameSync(tmpPath, CUSTOMERS_PATH)
-        setStep(1, 'done', `Discovered accounts for ${customerNames.length} customers`)
-        console.log(`[auto-bootstrap] Account discovery complete for ${customerNames.length} customers`)
-      } finally {
-        await page.close()
       }
+      const tmpPath = CUSTOMERS_PATH + '.tmp'
+      writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
+      renameSync(tmpPath, CUSTOMERS_PATH)
+
+      const withAccounts = supportableScrapeResults.filter(r => r.accountNumbers.length > 0).length
+      setStep(1, 'done', `${withAccounts}/${customerNames.length} customers matched`)
+      console.log(`[auto-bootstrap] Supportable discovery complete: ${withAccounts}/${customerNames.length} matched`)
     } catch (e: any) {
-      setStep(1, 'error', e.message)
-      autoBootstrapState.error = `Account discovery failed: ${e.message}`
-      console.error('[auto-bootstrap] Account discovery failed:', e.message)
+      // Non-fatal: partial results may have been saved to customers.json via the progress callback.
+      // Rebuild supportableScrapeResults from whatever customers were persisted so Step 3 can still write them.
+      const partialCustomers = customers.filter(cx => cx.ae === aeName && (cx.accountNumbers?.length ?? 0) > 0)
+      if (partialCustomers.length > 0) {
+        setStep(1, 'error', `${e.message} (${partialCustomers.length} partial results saved)`)
+        console.error(`[auto-bootstrap] Supportable discovery+scrape failed midway: ${e.message} — ${partialCustomers.length} customers already saved`)
+      } else {
+        setStep(1, 'error', e.message)
+        setStep(2, 'error', 'discovery failed — no results to write')
+        console.error('[auto-bootstrap] Supportable discovery+scrape failed:', e.message)
+      }
+      autoBootstrapState.error = `Supportable discovery failed: ${e.message}`
     }
 
-    // Step 3 — Create Supportable Sheet
-    try {
-      setStep(2, 'running')
-      const supportableCustomers = customerNames.map(name => {
-        const cx = customers.find(x => x.name === name)
-        return { name, accountNumbers: cx?.accountNumbers ?? [] }
-      }).filter(cx => cx.accountNumbers.length > 0)
-      if (supportableCustomers.length === 0) throw new Error('No customers with account numbers')
-      const results = await runSupportableScrape(supportableCustomers)
-      const sheetId = await writeSupportableSheet(results, aeName, driveFolderId || undefined)
-      const updated = aes.map(a => a.name === aeName ? { ...a, supportableSheetId: sheetId } : a)
-      saveAes(updated)
-      setStep(2, 'done', `Sheet: ${sheetId}`)
-      console.log(`[auto-bootstrap] Supportable sheet created: ${sheetId}`)
-    } catch (e: any) {
-      setStep(2, 'error', e.message)
-      autoBootstrapState.error = `Supportable sheet failed: ${e.message}`
-      console.error('[auto-bootstrap] Supportable sheet failed:', e.message)
+    // Step 3 — Write Supportable Sheet (data already scraped in Step 2)
+    if (!driveFolderId) {
+      setStep(2, 'skipped', 'Skipped: Drive folder creation failed')
+      console.log('[auto-bootstrap] Skipping Supportable sheet — no Drive folder')
+    } else if (supportableScrapeResults.length > 0 && supportableScrapeResults.some(r => r.accountNumbers.length > 0)) {
+      try {
+        setStep(2, 'running', 'writing to Google Sheet…')
+        const sheetId = await writeSupportableSheet(supportableScrapeResults, aeName, driveFolderId || undefined)
+        const updated = aes.map(a => a.name === aeName ? { ...a, supportableSheetId: sheetId } : a)
+        saveAes(updated)
+        setStep(2, 'done', `Sheet: ${sheetId}`)
+        console.log(`[auto-bootstrap] Supportable sheet created: ${sheetId}`)
+      } catch (e: any) {
+        setStep(2, 'error', e.message)
+        autoBootstrapState.error = `Supportable sheet failed: ${e.message}`
+        console.error('[auto-bootstrap] Supportable sheet write failed:', e.message)
+      }
     }
 
     // Step 4 — Create CCSP Sheet
-    try {
-      setStep(3, 'running')
-      const currentAe = aes.find(a => a.name === aeName)!
-      const ccspAe = { ...currentAe, tableauTerritories, driveFolderId: driveFolderId || currentAe.driveFolderId } as AE
-      const ccspResults = await runCcspScrape([ccspAe])
-      const sheetId = await writeCcspSheet(ccspResults, aeName, ccspAe.driveFolderId)
-      const updated = aes.map(a => a.name === aeName ? { ...a, ccspSheetId: sheetId } : a)
-      saveAes(updated)
-      setStep(3, 'done', `Sheet: ${sheetId}`)
-      console.log(`[auto-bootstrap] CCSP sheet created: ${sheetId}`)
-    } catch (e: any) {
-      setStep(3, 'error', e.message)
-      autoBootstrapState.error = `CCSP sheet failed: ${e.message}`
-      console.error('[auto-bootstrap] CCSP sheet failed:', e.message)
+    if (!driveFolderId) {
+      setStep(3, 'skipped', 'Skipped: Drive folder creation failed')
+      console.log('[auto-bootstrap] Skipping CCSP sheet — no Drive folder')
+    } else {
+      try {
+        setStep(3, 'running')
+        const currentAe = aes.find(a => a.name === aeName)!
+        const ccspAe = { ...currentAe, tableauTerritories, driveFolderId: driveFolderId || currentAe.driveFolderId } as AE
+        const ccspResults = await runCcspScrape([ccspAe])
+        const sheetId = await writeCcspSheet(ccspResults, aeName, ccspAe.driveFolderId)
+        const updated = aes.map(a => a.name === aeName ? { ...a, ccspSheetId: sheetId } : a)
+        saveAes(updated)
+        setStep(3, 'done', `Sheet: ${sheetId}`)
+        console.log(`[auto-bootstrap] CCSP sheet created: ${sheetId}`)
+      } catch (e: any) {
+        setStep(3, 'error', e.message)
+        autoBootstrapState.error = `CCSP sheet failed: ${e.message}`
+        console.error('[auto-bootstrap] CCSP sheet failed:', e.message)
+      }
     }
 
     // Step 5 — Sync Pipeline Sheet
-    try {
-      setStep(4, 'running')
-      const pipelineSheetId = await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
-      await runSfPipelineSync(sfReportId, RH_PROFILE_DIR, pipelineSheetId)
-      const updated = aes.map(a => a.name === aeName ? { ...a, pipelineSheetId } : a)
-      saveAes(updated)
-      setStep(4, 'done', `Sheet: ${pipelineSheetId}`)
-      console.log(`[auto-bootstrap] Pipeline sheet synced: ${pipelineSheetId}`)
-    } catch (e: any) {
-      setStep(4, 'error', e.message)
-      autoBootstrapState.error = `Pipeline sync failed: ${e.message}`
-      console.error('[auto-bootstrap] Pipeline sync failed:', e.message)
+    if (!driveFolderId) {
+      setStep(4, 'skipped', 'Skipped: Drive folder creation failed')
+      console.log('[auto-bootstrap] Skipping Pipeline sheet — no Drive folder')
+    } else {
+      try {
+        setStep(4, 'running')
+        const pipelineSheetId = await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
+        await runSfPipelineSync(sfReportId, RH_PROFILE_DIR, pipelineSheetId)
+        const updated = aes.map(a => a.name === aeName ? { ...a, pipelineSheetId } : a)
+        saveAes(updated)
+        setStep(4, 'done', `Sheet: ${pipelineSheetId}`)
+        console.log(`[auto-bootstrap] Pipeline sheet synced: ${pipelineSheetId}`)
+      } catch (e: any) {
+        setStep(4, 'error', e.message)
+        autoBootstrapState.error = `Pipeline sync failed: ${e.message}`
+        console.error('[auto-bootstrap] Pipeline sync failed:', e.message)
+      }
     }
 
     autoBootstrapState.running = false
     autoBootstrapState.completedAt = new Date().toISOString()
+    clearTimeout(bootstrapTimeoutId)
     console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
+
+    // Signal that bootstrap is done — prompt user to downgrade Drive permissions
+    try {
+      writeFileSyncRaw(OAUTH_STATE_PATH, JSON.stringify({ pendingDowngrade: true, bootstrapCompletedAt: new Date().toISOString() }, null, 2))
+    } catch {}
   })()
 
   return c.json({ started: true })
+})
+
+// ── Tableau login helper ──────────────────────────────────────────────────────
+
+const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumptionSummary'
+
+// GET /api/bootstrap/tableau/session-status — probe Tableau reachability + session validity
+// Returns { reachable: boolean, sessionValid: boolean }
+// reachable=false → not on VPN or Tableau is down — don't show login prompt
+// reachable=true, sessionValid=false → on VPN but needs login — show prompt
+// reachable=true, sessionValid=true → already logged in — no action needed
+app.get('/api/bootstrap/tableau/session-status', async (c) => {
+  const ctx = getScrapeContext()
+  if (!ctx) return c.json({ reachable: false, sessionValid: false })
+  let page: Awaited<ReturnType<typeof ctx.newPage>> | null = null
+  try {
+    page = await ctx.newPage()
+    await page.goto(TABLEAU_URL, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+    await page.waitForTimeout(2_000)
+    const url = page.url()
+    const onLoginPage = !url.includes('10ay.online.tableau.com') ||
+      url.includes('/auth') || url.includes('/login') ||
+      !!(await page.$('input[type="password"], #username, [data-testid="login"]').catch(() => null))
+    return c.json({ reachable: true, sessionValid: !onLoginPage })
+  } catch {
+    return c.json({ reachable: false, sessionValid: false })
+  } finally {
+    await page?.close().catch(() => {})
+  }
+})
+
+// POST /api/bootstrap/tableau/open-login — opens a Playwright browser page to
+// Tableau Cloud so the user can log in via the VNC viewer at localhost:6080
+app.post('/api/bootstrap/tableau/open-login', async (c) => {
+  const ctx = getScrapeContext()
+  if (!ctx) return c.json({ error: 'No RH session — connect Red Hat Portal first' }, 400)
+  try {
+    // Navigate the live VNC-visible page so the user can actually see Tableau in the VNC window
+    const livePage = getLivePage()
+    const page = livePage ?? await ctx.newPage()
+    await page.goto(TABLEAU_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    console.log('[tableau] opened Tableau in live VNC page — visible at localhost:6080')
+    return c.json({ ok: true })
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500)
+  }
 })
 
 // ── Tableau territory discovery ──────────────────────────────────────────────
@@ -979,6 +1458,217 @@ app.delete('/api/data-sources/remove-folder', async (c) => {
 // ── Dashboard API endpoints ──────────────────────────────────────────────────
 
 // GET /api/config — Dashboard configuration and provider status
+// ── Territory live lookup ──────────────────────────────────────────────────────
+// GET /api/territory-lookup?territory=WEST_COMM_CORP_NORTHWEST_TERR01
+// Reads the territory Google Sheet live and returns { aeName, accounts } for
+// the requested territory. Does not require aes.json to be populated.
+
+const TERRITORY_SHEET_ID = '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
+
+function normalizeTerritoryCustomerName(raw: string): string {
+  let name = raw.trim()
+  if (!name) return ''
+  name = name.replace(/\s*-\s*[A-Z]{2}(\/[A-Z]{2})?$/, '')
+  name = name.replace(/\s*\([^)]*\)\s*$/, '')
+  const legalSuffixes = [
+    /,?\s+L\.?L\.?P\.?$/i, /,?\s+P\.?T\.?Y\.?\s+LTD\.?$/i,
+    /,?\s+L\.?P\.?$/i,     /,?\s+INC\.?$/i, /,?\s+LLC\.?$/i,
+    /,?\s+LTD\.?$/i,       /,?\s+CORP\.?$/i, /,?\s+CO\.?$/i,
+    /,?\s+PLC\.?$/i,
+  ]
+  for (const re of legalSuffixes) name = name.replace(re, '')
+  name = name.trim().replace(/,+$/, '').trim()
+  name = name.split(/\s+/).map(word => {
+    if (/\d/.test(word) || /[a-z]/.test(word) || /\.[a-zA-Z]/.test(word)) return word
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  }).join(' ')
+  return name
+}
+
+function podPrefixFromTabTitle(tabTitle: string): string {
+  const t = tabTitle.toLowerCase()
+  if (t.includes('northwest') || t.includes('nw')) return 'WEST_COMM_CORP_NORTHWEST'
+  if (t.includes('southwest') || t.includes('sw')) return 'WEST_COMM_CORP_SOUTHWEST'
+  if (t.includes('north central') || t.includes('nc corp')) return 'WEST_COMM_CORP_NORTHCENTRAL'
+  if (t.includes('south central') || t.includes('sc corp')) return 'WEST_COMM_CORP_SOUTHCENTRAL'
+  return ''
+}
+
+// GET /api/territory-names?pod=WEST_COMM_CORP_NORTHWEST
+// Returns all territories for a POD with AE names — used to populate the territory dropdown.
+app.get('/api/territory-names', async (c) => {
+  const pod = c.req.query('pod')?.trim()
+  if (!pod) return c.json({ error: 'pod query param required' }, 400)
+
+  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+  if (!auth) return c.json({ error: 'Google auth not configured' }, 401)
+
+  try {
+    const sheetsClient = google.sheets({ version: 'v4', auth })
+    const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: TERRITORY_SHEET_ID })
+    const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
+    const corpTabs = tabNames.filter(t => {
+      const lower = t.toLowerCase()
+      return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
+             !lower.includes('accounts a')
+    })
+
+    const territories: { num: string; aeName: string }[] = []
+
+    for (const tabTitle of corpTabs) {
+      const podPrefix = podPrefixFromTabTitle(tabTitle)
+      if (podPrefix !== pod) continue
+
+      const resp = await sheetsClient.spreadsheets.values.get({
+        spreadsheetId: TERRITORY_SHEET_ID,
+        range: `'${tabTitle}'!A1:Z60`,
+      })
+      const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>
+        r.map((c: any) => String(c ?? '').trim())
+      )
+
+      let headerRowIdx = -1
+      for (let r = 0; r < rows.length; r++) {
+        if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
+      }
+      if (headerRowIdx === -1) continue
+
+      const aeNameRowIdx = headerRowIdx + 1
+      const headerRow = rows[headerRowIdx] ?? []
+      const aeNameRow = rows[aeNameRowIdx] ?? []
+      const aeCols = headerRow.map((cell, idx) => ({ cell, idx }))
+        .filter(({ cell }) => cell === 'Account Executive').map(({ idx }) => idx)
+
+      for (const col of aeCols) {
+        const aeCell = aeNameRow[col] ?? ''
+        if (!aeCell) continue
+        let aeName = aeCell; let terrCode = ''
+        if (aeCell.includes('\n')) {
+          const parts = aeCell.split('\n'); aeName = parts[0].trim(); terrCode = parts[1].trim()
+        } else {
+          const terrMatch = aeCell.match(/\bTerr(\d+)\b/i)
+          if (terrMatch) { aeName = aeCell.replace(/\s*Terr\d+\s*/i, '').trim(); terrCode = terrMatch[0] }
+        }
+        if (!aeName || /^TBH$/i.test(aeName.trim())) continue
+        const terrNumMatch = terrCode.match(/(\d+)/)
+        if (!terrNumMatch) continue
+        const num = terrNumMatch[1].padStart(2, '0')
+        territories.push({ num, aeName })
+      }
+      break  // Found the matching tab, no need to check others
+    }
+
+    territories.sort((a, b) => a.num.localeCompare(b.num))
+    console.log(`[territory-names] ${pod}: ${territories.length} territories`)
+    return c.json({ territories })
+  } catch (e: any) {
+    console.error('[territory-names] error:', e.message)
+    return c.json({ error: e.message }, 500)
+  }
+})
+
+app.get('/api/territory-lookup', async (c) => {
+  const requestedTerritory = c.req.query('territory')?.trim()
+  if (!requestedTerritory) return c.json({ error: 'territory query param required' }, 400)
+
+  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+  if (!auth) return c.json({ error: 'Google auth not configured' }, 401)
+
+  try {
+    const sheetsClient = google.sheets({ version: 'v4', auth })
+
+    // Get all tab names
+    const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: TERRITORY_SHEET_ID })
+    const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
+    const corpTabs = tabNames.filter(t => {
+      const lower = t.toLowerCase()
+      return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
+             !lower.includes('accounts a')
+    })
+
+    for (const tabTitle of corpTabs) {
+      const podPrefix = podPrefixFromTabTitle(tabTitle)
+      if (!podPrefix) continue
+      // Quick skip: if requested territory doesn't start with this pod prefix, skip tab
+      if (!requestedTerritory.startsWith(podPrefix)) continue
+
+      const resp = await sheetsClient.spreadsheets.values.get({
+        spreadsheetId: TERRITORY_SHEET_ID,
+        range: `'${tabTitle}'!A1:Z60`,
+      })
+      const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>
+        r.map((c: any) => String(c ?? '').trim())
+      )
+
+      // Find "Account Executive" header row
+      let headerRowIdx = -1
+      for (let r = 0; r < rows.length; r++) {
+        if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
+      }
+      if (headerRowIdx === -1) continue
+
+      const aeNameRowIdx = headerRowIdx + 1
+      const accountsStartIdx = aeNameRowIdx + 1
+      const headerRow = rows[headerRowIdx] ?? []
+      const aeNameRow = rows[aeNameRowIdx] ?? []
+
+      const aeCols = headerRow
+        .map((cell, idx) => ({ cell, idx }))
+        .filter(({ cell }) => cell === 'Account Executive')
+        .map(({ idx }) => idx)
+
+      for (const col of aeCols) {
+        const aeCell = aeNameRow[col] ?? ''
+        if (!aeCell) continue
+
+        let aeName = aeCell
+        let terrCode = ''
+        if (aeCell.includes('\n')) {
+          const parts = aeCell.split('\n')
+          aeName = parts[0].trim()
+          terrCode = parts[1].trim()
+        } else {
+          const terrMatch = aeCell.match(/\bTerr(\d+)\b/i)
+          if (terrMatch) {
+            aeName = aeCell.replace(/\s*Terr\d+\s*/i, '').trim()
+            terrCode = terrMatch[0]
+          }
+        }
+
+        if (!aeName || /^TBH$/i.test(aeName.trim())) continue
+
+        const terrNumMatch = terrCode.match(/(\d+)/)
+        if (!terrNumMatch) continue
+        const terrNum = terrNumMatch[1].padStart(2, '0')
+        const tableauTerritory = `${podPrefix}_TERR${terrNum}`
+
+        if (tableauTerritory !== requestedTerritory) continue
+
+        // Found the matching AE — extract accounts
+        const accounts: string[] = []
+        for (let r = accountsStartIdx; r < rows.length; r++) {
+          const cell = rows[r][col] ?? ''
+          if (!cell) continue
+          if (/^\d{1,3}$/.test(cell)) break
+          if (/^Account\s+S[Aa]/i.test(cell)) break
+          if (/^(Support|Partner Sales|\d+ of \d+)$/i.test(cell)) break
+          if (/^(Openshift|Ansible|Rhel|Ai)\s+(SSP|SSA)/i.test(cell)) break
+          const normalized = normalizeTerritoryCustomerName(cell)
+          if (normalized) accounts.push(normalized)
+        }
+
+        console.log(`[territory-lookup] ${requestedTerritory}: ${aeName}, ${accounts.length} accounts`)
+        return c.json({ aeName, accounts, tableauTerritory })
+      }
+    }
+
+    return c.json({ error: `Territory ${requestedTerritory} not found in sheet` }, 404)
+  } catch (e: any) {
+    console.error('[territory-lookup] error:', e.message)
+    return c.json({ error: e.message }, 500)
+  }
+})
+
 // ── AE Config API ─────────────────────────────────────────────────────────────
 
 app.get('/api/aes', (c) => c.json({ aes }))
@@ -987,6 +1677,23 @@ app.post('/api/aes', async (c) => {
   try {
     const body = await c.req.json() as { aes: AE[] }
     if (!Array.isArray(body.aes)) return c.json({ error: 'aes must be an array' }, 400)
+    if (body.aes.length > 50) return c.json({ error: 'aes array exceeds maximum of 50 entries' }, 400)
+
+    // Validate each AE entry
+    for (let i = 0; i < body.aes.length; i++) {
+      const ae = body.aes[i]
+      const name = sanitizeText(ae.name)
+      if (!name) return c.json({ error: `aes[${i}].name is invalid or contains disallowed characters` }, 400)
+      if (ae.sfReportId && !isValidSfId(ae.sfReportId)) return c.json({ error: `aes[${i}].sfReportId must be 15-18 alphanumeric characters` }, 400)
+      if (Array.isArray(ae.tableauTerritories)) {
+        for (const t of ae.tableauTerritories) {
+          if (typeof t !== 'string' || t.length > 100) return c.json({ error: `aes[${i}].tableauTerritories entry exceeds 100 characters` }, 400)
+        }
+      }
+      // Write sanitized name back
+      body.aes[i] = { ...ae, name }
+    }
+
     saveAes(body.aes)
     // Rebuild flat customer list with denormalized ae names
     try {
@@ -1204,6 +1911,16 @@ app.post('/api/setup/save-customers', async (c) => {
   try {
     const body = await c.req.json<{ customers: Customer[] }>()
     if (!Array.isArray(body.customers)) return c.json({ error: 'customers must be an array' }, 400)
+    if (body.customers.length > 200) return c.json({ error: 'customers array exceeds maximum of 200 entries' }, 400)
+
+    // Validate each customer
+    for (let i = 0; i < body.customers.length; i++) {
+      const cx = body.customers[i]
+      const name = sanitizeText(cx.name)
+      if (!name) return c.json({ error: `customers[${i}].name is invalid or contains disallowed characters` }, 400)
+      if (cx.domain !== undefined && !isValidDomain(cx.domain)) return c.json({ error: `customers[${i}].domain is not a valid domain` }, 400)
+      body.customers[i] = { ...cx, name }
+    }
 
     writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: body.customers }, null, 2))
     renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
