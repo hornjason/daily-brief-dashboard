@@ -122,8 +122,20 @@ async function scrapeOneAccount(
 
   // ── Click Go ──────────────────────────────────────────────────────────────
   await page.click('button.button-alt1')
-  await page.waitForLoadState('networkidle', { timeout: 30_000 })
+  await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
   await page.waitForTimeout(2_000)
+
+  // APEX does JS redirects after Go — probe evaluate before touching DOM
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      await page.evaluate(() => 'PROBE_OK')
+      break
+    } catch {
+      console.log(`[supportable] account Go: page still navigating (attempt ${attempt + 1}) — waiting…`)
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+      await page.waitForTimeout(3_000)
+    }
+  }
   console.log(`[supportable] Go clicked — on ${page.url()}`)
 
   // ── Click Export tab → navigates to page 22 (SalesReport layout) ──────────
@@ -232,7 +244,7 @@ async function scrapeOneAccount(
       if (applyBtn) {
         await applyBtn.click()
         await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
-        await page.waitForTimeout(2_000)
+        await page.waitForTimeout(5_000)  // extra wait — APEX AJAX refresh after filter
         console.log(`[supportable] applied Status=Active filter`)
       }
     } else {
@@ -243,48 +255,54 @@ async function scrapeOneAccount(
   }
 
   // ── Actions → Rows Per Page → All ─────────────────────────────────────────
-  const actionsBtn2 = await page.$('button.a-IRR-button--actions')
-  if (actionsBtn2) {
-    await actionsBtn2.click()
-    const rowsPerPageLink = await page.waitForSelector(
-      'li a:has-text("Rows Per Page"), [role="menuitem"]:has-text("Rows Per Page"), li:has-text("Rows Per Page") > a',
-      { timeout: 5_000 }
-    ).catch(() => null)
-    if (rowsPerPageLink) {
-      await rowsPerPageLink.hover()
-      await page.waitForTimeout(800)
-      const allLink = await page.waitForSelector(
-        'li a:has-text("All"), [role="menuitem"]:has-text("All")',
-        { timeout: 3_000 }
+  // Non-fatal: if this fails we scrape whatever is visible on the current page
+  try {
+    const actionsBtn2 = await page.$('button.a-IRR-button--actions')
+    if (actionsBtn2) {
+      // Use page.click() with 60s timeout — APEX may still be loading after filter apply
+      await page.click('button.a-IRR-button--actions', { timeout: 60_000 })
+      const rowsPerPageLink = await page.waitForSelector(
+        'li a:has-text("Rows Per Page"), [role="menuitem"]:has-text("Rows Per Page"), li:has-text("Rows Per Page") > a',
+        { timeout: 5_000 }
       ).catch(() => null)
-      if (allLink) {
-        await allLink.click()
-        await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
-        await page.waitForTimeout(2_000)
-        console.log(`[supportable] set rows per page to All`)
-      } else {
-        console.warn(`[supportable] All submenu item not found`)
-      }
-    } else {
-      // Fallback: use the row select element directly
-      const rowSelId = await page.evaluate(() => {
-        const sel = document.querySelector('select[id*="_row_select"]') as HTMLSelectElement | null
-        return sel?.id ?? null
-      })
-      if (rowSelId) {
-        const allVal = await page.evaluate((id: string) => {
-          const sel = document.querySelector(`select#${id}`) as HTMLSelectElement | null
-          const opt = Array.from(sel?.options ?? []).find(o => o.text.trim().toLowerCase() === 'all')
-          return opt?.value ?? null
-        }, rowSelId)
-        if (allVal) {
-          await page.selectOption(`select#${rowSelId}`, allVal)
+      if (rowsPerPageLink) {
+        await rowsPerPageLink.hover()
+        await page.waitForTimeout(800)
+        const allLink = await page.waitForSelector(
+          'li a:has-text("All"), [role="menuitem"]:has-text("All")',
+          { timeout: 3_000 }
+        ).catch(() => null)
+        if (allLink) {
+          await allLink.click()
           await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
           await page.waitForTimeout(2_000)
-          console.log(`[supportable] set rows per page to All (via select fallback)`)
+          console.log(`[supportable] set rows per page to All`)
+        } else {
+          console.warn(`[supportable] All submenu item not found`)
+        }
+      } else {
+        // Fallback: use the row select element directly
+        const rowSelId = await page.evaluate(() => {
+          const sel = document.querySelector('select[id*="_row_select"]') as HTMLSelectElement | null
+          return sel?.id ?? null
+        })
+        if (rowSelId) {
+          const allVal = await page.evaluate((id: string) => {
+            const sel = document.querySelector(`select#${id}`) as HTMLSelectElement | null
+            const opt = Array.from(sel?.options ?? []).find(o => o.text.trim().toLowerCase() === 'all')
+            return opt?.value ?? null
+          }, rowSelId)
+          if (allVal) {
+            await page.selectOption(`select#${rowSelId}`, allVal)
+            await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+            await page.waitForTimeout(2_000)
+            console.log(`[supportable] set rows per page to All (via select fallback)`)
+          }
         }
       }
     }
+  } catch (e: any) {
+    console.warn(`[supportable] Rows Per Page → All failed (non-fatal, will scrape visible rows): ${e.message}`)
   }
 
   // ── Scrape table rows ──────────────────────────────────────────────────────
@@ -296,20 +314,28 @@ async function scrapeOneAccount(
     let dataTable: HTMLTableElement | null = null
 
     for (const t of tables) {
-      // Only consider tables where the first row uses <th> elements (not layout tables)
-      const firstRowThs = Array.from(t.querySelectorAll('tr:first-child > th'))
-        .map(th => th.textContent?.trim() ?? '')
+      // Use :scope to match only THIS table's own first row — not nested tables
+      const firstRowThs = Array.from(
+        t.querySelectorAll(':scope > tr:first-child > th, :scope > thead > tr:first-child > th, :scope > tbody > tr:first-child > th')
+      ).map(th => th.textContent?.trim() ?? '')
       if (REQUIRED.every(h => firstRowThs.includes(h))) {
         dataTable = t; break
       }
     }
     if (!dataTable) return { error: 'data table not found', tableCount: tables.length }
 
-    const headerCols = Array.from(dataTable.querySelectorAll('tr:first-child > th'))
-      .map(th => th.textContent?.trim() ?? '')
+    // Get headers from only THIS table's own header row (not nested tables)
+    const headerCols = Array.from(
+      dataTable.querySelectorAll(':scope > tr:first-child > th, :scope > thead > tr:first-child > th, :scope > tbody > tr:first-child > th')
+    ).map(th => th.textContent?.trim() ?? '')
 
-    const dataRows = Array.from(dataTable.querySelectorAll('tr')).slice(1).map(tr => {
-      const cells = Array.from(tr.querySelectorAll('td')).map(c => c.textContent?.trim() ?? '')
+    // Get data rows from only THIS table's own rows (not nested tables)
+    const allRows = Array.from(
+      dataTable.querySelectorAll(':scope > tr, :scope > tbody > tr')
+    ).slice(1)
+
+    const dataRows = allRows.map(tr => {
+      const cells = Array.from(tr.querySelectorAll(':scope > td')).map(c => c.textContent?.trim() ?? '')
       if (!cells.some(c => c)) return null
       const obj: Record<string, string> = {}
       headerCols.forEach((h, i) => { obj[h] = cells[i] ?? '' })
@@ -328,12 +354,108 @@ async function scrapeOneAccount(
   const activeRows = rows.rows.filter(r => (r['Status'] ?? '').toLowerCase() === 'active')
   console.log(`[supportable] account ${accountNumber}: ${activeRows.length} active rows (${rows.rows.length} total)`)
 
+  // ── Click Reset (top search form) to clear account state ─────────────────
+  // The Reset button (red, next to Go) clears the account number and resets
+  // the session to a clean state before we navigate for the next account
+  try {
+    const resetBtn = await page.$('input[value="Reset"], button:has-text("Reset")')
+    if (resetBtn) {
+      await resetBtn.click({ timeout: 8_000 })
+      await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {})
+      await page.waitForTimeout(1_000)
+      console.log(`[supportable] Reset button clicked for account ${accountNumber}`)
+    } else {
+      console.warn(`[supportable] Reset button not found for account ${accountNumber} — skipping`)
+    }
+  } catch (e: any) {
+    console.warn(`[supportable] Reset button click skipped: ${e.message}`)
+  }
+
   // ── Reset for next account ────────────────────────────────────────────────
   // Navigate back to the landing page so next account starts fresh
   await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
   await page.waitForTimeout(1_500)
 
   return { rows: activeRows, page }
+}
+
+// ── Customer name search (account discovery via P0_CUSTOMER_NAME) ─────────────
+
+/**
+ * Search Supportable by customer name using the P0_CUSTOMER_NAME wildcard field.
+ * Appends % to the name for LIKE matching. Filters results to rows where
+ * Country = USA or Web AND Entl Active Cnt > 0.
+ *
+ * Assumes page is already on the Supportable landing page (SSO already resolved).
+ * Returns unique Customer Number values (RH account numbers).
+ */
+async function discoverAccountNumbersByName(
+  page: Page,
+  customerName: string,
+  supportableName?: string,
+): Promise<string[]> {
+  // Fill Customer Name with wildcard — try known field IDs
+  let fieldId = 'P0_CUSTOMER_NAME'
+  for (const candidate of ['P0_CUSTOMER_NAME', 'P0_CUST_NAME', 'P0_CUSTOMER']) {
+    const el = await page.$(`input#${candidate}`).catch(() => null)
+    if (el) { fieldId = candidate; break }
+  }
+  // Use supportableName override when set — it matches how Supportable indexes the account
+  const nameForSearch = (supportableName?.trim()) || customerName
+  const searchTerm = nameForSearch.split(/\s+/).slice(0, 2).join(' ')
+  await page.fill(`input#${fieldId}`, `${searchTerm}%`)
+  console.log(`[supportable] name-search: filled #${fieldId} with "${searchTerm}%" (from "${supportableName ? `supportableName="${supportableName}"` : `customerName="${customerName}"`}")`)
+
+  await page.click('button.button-alt1')
+  await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
+  await page.waitForTimeout(5_000)
+
+  // APEX does multiple JS redirects after submit — probe evaluate before scraping
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      await page.evaluate(() => 'PROBE_OK')
+      break
+    } catch {
+      console.log(`[supportable] name-search: results page still navigating (attempt ${attempt + 1}) — waiting…`)
+      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+      await page.waitForTimeout(3_000)
+    }
+  }
+
+  const tableData = await page.evaluate(() => {
+    const tables = Array.from(document.querySelectorAll('table'))
+    for (const t of tables) {
+      const ths = Array.from(t.querySelectorAll('th'))
+        .map(el => el.textContent?.trim().replace(/\s+/g, ' ') ?? '')
+      if (ths.some(h => /party.?number|customer.?number|entl/i.test(h))) {
+        const rownumIdx = ths.indexOf('Rownum')
+        const rows = Array.from(t.querySelectorAll('tr')).slice(1).flatMap(tr => {
+          const cells = Array.from(tr.querySelectorAll('td'))
+            .map(td => td.textContent?.trim().replace(/\s+/g, ' ') ?? '')
+          if (!cells.some(c => c)) return []
+          if (rownumIdx >= 0 && !/^\d+$/.test(cells[rownumIdx] ?? '')) return []
+          if (cells.length < ths.length - 2) return []
+          const obj: Record<string, string> = {}
+          ths.forEach((h, i) => { obj[h] = cells[i] ?? '' })
+          return [obj]
+        })
+        return { rows }
+      }
+    }
+    return { rows: [] }
+  })
+
+  const filtered = tableData.rows.filter(row => {
+    const country = (row['Country'] ?? '').trim()
+    const entlActive = parseInt(row['Entl Active Cnt'] ?? '0', 10)
+    return (country === 'Web' || country === 'USA') && entlActive > 0
+  })
+
+  const accountNumbers = [
+    ...new Set(filtered.map(r => r['Customer Number'] ?? '').filter(Boolean)),
+  ]
+  console.log(`[supportable] name-search: "${searchTerm}%" → ${accountNumbers.length} account(s): [${accountNumbers.join(', ')}]`)
+  return accountNumbers
 }
 
 // ── Public scrape entry point ─────────────────────────────────────────────────
@@ -379,6 +501,122 @@ export async function runSupportableScrape(
 
       console.log(`[supportable] ${customer.name}: ${allRows.length} total rows across ${customer.accountNumbers.length} account(s)`)
       results.push({ customerName: customer.name, accountNumbers: customer.accountNumbers, rows: allRows })
+    }
+
+    lastSupportableScrape = new Date().toISOString()
+    return results
+
+  } catch (e: any) {
+    lastSupportableError = e.message
+    throw e
+  } finally {
+    await page.close().catch(() => {})
+    supportableScrapeRunning = false
+  }
+}
+
+/**
+ * Combined bootstrap flow: for each customer name, discover account numbers via
+ * P0_CUSTOMER_NAME wildcard search, then immediately scrape subscriptions for
+ * those accounts — all in a single Supportable session.
+ *
+ * Returns SupportableResult[] with both accountNumbers and subscription rows populated.
+ * The caller can write account numbers to customers.json and pass results directly
+ * to writeSupportableSheet() without a second Supportable visit.
+ *
+ * onProgress callback fires after each customer completes.
+ */
+export async function runSupportableDiscoverAndScrape(
+  customers: Array<{ name: string; supportableName?: string }>,
+  onProgress?: (done: number, total: number, name: string, accountNumbers: string[], rowCount: number) => void,
+): Promise<SupportableResult[]> {
+  if (supportableScrapeRunning) throw new Error('Supportable scrape already in progress')
+  if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
+
+  supportableScrapeRunning = true
+  lastSupportableError = null
+
+  let page = await _ctx.newPage()
+  const results: SupportableResult[] = []
+
+  try {
+    // ── First navigation: go to Supportable landing, handle SSO ──────────────
+    console.log(`[supportable] discover+scrape: navigating to portal…`)
+    await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.waitForTimeout(3_000)
+
+    if (!page.url().includes('supportable.corp.redhat.com')) {
+      let pageClosedByApex = false
+      const closePromise = new Promise<void>(resolve => { page.once('close', () => { pageClosedByApex = true; resolve() }) })
+      await Promise.race([
+        page.waitForURL(/supportable\.corp\.redhat\.com/, { timeout: 300_000 }).catch(() => {}),
+        closePromise,
+      ])
+      if (pageClosedByApex) page = await _ctx.newPage()
+      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.waitForTimeout(3_000)
+    }
+
+    if (!page.url().includes('supportable.corp.redhat.com')) {
+      throw new Error(`SSO login did not complete — still at ${page.url()}`)
+    }
+
+    console.log(`[supportable] discover+scrape: session active, processing ${customers.length} customers`)
+
+    for (let i = 0; i < customers.length; i++) {
+      const { name: customerName, supportableName } = customers[i]
+
+      // ── 0. Ensure we're on the landing page before each customer ──────────
+      // Prevents page state corruption from a prior failed account scrape
+      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
+        console.warn(`[supportable] discover+scrape: pre-customer nav failed for "${customerName}": ${e.message}`)
+      })
+      await page.waitForTimeout(1_500)
+
+      // ── 1. Discover account numbers via name search ───────────────────────
+      let accountNumbers: string[] = []
+      try {
+        accountNumbers = await discoverAccountNumbersByName(page, customerName, supportableName)
+      } catch (e: any) {
+        console.warn(`[supportable] discover+scrape: name search failed for "${customerName}": ${e.message}`)
+        results.push({ customerName, accountNumbers: [], rows: [] })
+        onProgress?.(i + 1, customers.length, customerName, [], 0)
+        continue
+      }
+
+      if (accountNumbers.length === 0) {
+        console.log(`[supportable] discover+scrape: "${customerName}" — no matching accounts`)
+        results.push({ customerName, accountNumbers: [], rows: [] })
+        onProgress?.(i + 1, customers.length, customerName, [], 0)
+        // Navigate back to landing for next customer
+        await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+        await page.waitForTimeout(1_500)
+        continue
+      }
+
+      // ── 2. Navigate back to landing for account number entry ─────────────
+      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.waitForTimeout(1_500)
+
+      // ── 3. Scrape subscriptions for each account number ───────────────────
+      const allRows: Record<string, string>[] = []
+      let isFirstScrape = false  // SSO already handled above — never re-trigger it
+      for (const accountNumber of accountNumbers) {
+        try {
+          const result = await scrapeOneAccount(page, accountNumber, isFirstScrape)
+          allRows.push(...result.rows)
+          page = result.page
+        } catch (e: any) {
+          console.warn(`[supportable] discover+scrape: ${customerName}/${accountNumber}: ${e.message}`)
+          // Recovery: navigate back to landing so the next account starts clean
+          await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+          await page.waitForTimeout(1_500)
+        }
+      }
+
+      console.log(`[supportable] discover+scrape: ✓ "${customerName}": ${accountNumbers.length} acct(s), ${allRows.length} subscription rows`)
+      results.push({ customerName, accountNumbers, rows: allRows })
+      onProgress?.(i + 1, customers.length, customerName, accountNumbers, allRows.length)
     }
 
     lastSupportableScrape = new Date().toISOString()

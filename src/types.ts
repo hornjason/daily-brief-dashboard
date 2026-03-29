@@ -11,10 +11,12 @@ export interface AE {
   supportableSheetId?: string   // Written back after first Supportable scrape
   pipelineSheetId?: string      // Written back after first SF pipeline scrape
   ccspSheetId?: string          // Written back after first CCSP scrape
+  accounts?: string[]           // Pre-loaded account baseline from territory mapping sheet
 }
 
 export interface Customer {
   name: string
+  supportableName?: string  // override search name when Supportable uses a different name than the territory sheet
   domain?: string
   accountNumbers?: string[]
   ae?: string
