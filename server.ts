@@ -55,6 +55,27 @@ function saveAes(updated: AE[]): void {
   aes = updated
 }
 
+/**
+ * Atomically patch a single AE's fields.
+ *
+ * Reads fresh from disk before merging — prevents a common race where two
+ * async call chains each snapshot `aes`, yield to the event loop, then both
+ * write back, with the second write silently clobbering the first's changes.
+ *
+ * Use this instead of `saveAes(aes.map(a => a.name === n ? {...a, f} : a))`
+ * whenever there is an `await` between reading `aes` and calling `saveAes`.
+ */
+function patchAe(name: string, fields: Partial<AE>): void {
+  let fresh: AE[]
+  try {
+    fresh = JSON.parse(readFileSync(AES_PATH, 'utf-8')).aes ?? []
+  } catch {
+    fresh = [...aes]  // fallback to in-memory if disk read fails
+  }
+  const updated = fresh.map(a => a.name === name ? { ...a, ...fields } : a)
+  saveAes(updated)
+}
+
 /** Extract Tableau territory segment from a full Tableau dashboard URL. */
 function extractTableauTerritory(url: string): string | null {
   // URL form: .../CloudConsumption/{guid}/{territory}?...
@@ -686,7 +707,7 @@ app.post('/api/auth/salesforce/start', async (c) => {
               let sheetId = ae.pipelineSheetId
               if (!sheetId) {
                 sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
-                saveAes(aes.map(a => a.name === ae.name ? { ...a, pipelineSheetId: sheetId } : a))
+                patchAe(ae.name, { pipelineSheetId: sheetId })
               }
               await runSfPipelineSync(ae.sfReportId!, RH_PROFILE_DIR, sheetId)
             } catch (e: any) {
@@ -721,7 +742,7 @@ app.post('/api/auth/salesforce/sync', async (c) => {
         let sheetId = ae.pipelineSheetId
         if (!sheetId) {
           sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
-          saveAes(aes.map(a => a.name === ae.name ? { ...a, pipelineSheetId: sheetId } : a))
+          patchAe(ae.name, { pipelineSheetId: sheetId })
         }
         await runSfPipelineSync(ae.sfReportId!, RH_PROFILE_DIR, sheetId)
       } catch (e: any) {
@@ -1080,8 +1101,7 @@ app.post('/api/bootstrap/auto', async (c) => {
       try {
         setStep(2, 'running', 'writing to Google Sheet…')
         const sheetId = await writeSupportableSheet(supportableScrapeResults, aeName, driveFolderId || undefined)
-        const updated = aes.map(a => a.name === aeName ? { ...a, supportableSheetId: sheetId } : a)
-        saveAes(updated)
+        patchAe(aeName, { supportableSheetId: sheetId })
         setStep(2, 'done', `Sheet: ${sheetId}`)
         console.log(`[auto-bootstrap] Supportable sheet created: ${sheetId}`)
       } catch (e: any) {
@@ -1102,8 +1122,7 @@ app.post('/api/bootstrap/auto', async (c) => {
         const ccspAe = { ...currentAe, tableauTerritories, driveFolderId: driveFolderId || currentAe.driveFolderId } as AE
         const ccspResults = await runCcspScrape([ccspAe])
         const sheetId = await writeCcspSheet(ccspResults, aeName, ccspAe.driveFolderId)
-        const updated = aes.map(a => a.name === aeName ? { ...a, ccspSheetId: sheetId } : a)
-        saveAes(updated)
+        patchAe(aeName, { ccspSheetId: sheetId })
         setStep(3, 'done', `Sheet: ${sheetId}`)
         console.log(`[auto-bootstrap] CCSP sheet created: ${sheetId}`)
       } catch (e: any) {
@@ -1122,8 +1141,7 @@ app.post('/api/bootstrap/auto', async (c) => {
         setStep(4, 'running')
         const pipelineSheetId = await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
         await runSfPipelineSync(sfReportId, RH_PROFILE_DIR, pipelineSheetId)
-        const updated = aes.map(a => a.name === aeName ? { ...a, pipelineSheetId } : a)
-        saveAes(updated)
+        patchAe(aeName, { pipelineSheetId })
         setStep(4, 'done', `Sheet: ${pipelineSheetId}`)
         console.log(`[auto-bootstrap] Pipeline sheet synced: ${pipelineSheetId}`)
       } catch (e: any) {
