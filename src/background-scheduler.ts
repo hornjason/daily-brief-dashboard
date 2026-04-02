@@ -2,7 +2,7 @@ import { existsSync, unlinkSync, readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 import { customers } from './server-state.ts'
 import { refreshAll, refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
-import { runRhScrapeWithState, runSfSyncForAes, _rhScrapeRunning, _sfSyncRunning, ccspInFlight } from './scraper-manager.ts'
+import { runRhScrapeWithState, runSfSyncForAes, _rhScrapeRunning, _sfSyncRunning, ccspInFlight, setLastSkipReason } from './scraper-manager.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
 import { lastScraped } from './rh-auth.ts'
@@ -337,13 +337,17 @@ export function scheduleCcspSync(): void {
           if (probe.status >= 300 && probe.status < 400) {
             const loc = probe.headers.get('location') ?? ''
             if (loc.includes('signin') || loc.includes('auth')) {
-              console.warn('[ccsp-sync] Tableau session dead (redirect to auth) — skipping scheduled scrape')
+              const reason = 'Tableau session expired. Reconnect via dashboard.'
+              console.warn(`[scheduler] SKIPPED: CCSP sync — ${reason}`)
+              setLastSkipReason('ccsp', reason)
               scheduleCcspSync()
               return
             }
           }
         } catch {
-          console.warn('[ccsp-sync] Tableau probe failed — skipping scheduled scrape')
+          const reason = 'Tableau probe failed (unreachable). Reconnect via dashboard.'
+          console.warn(`[scheduler] SKIPPED: CCSP sync — ${reason}`)
+          setLastSkipReason('ccsp', reason)
           scheduleCcspSync()
           return
         }
@@ -437,7 +441,9 @@ export function scheduleSupportableSync(): void {
       vpnOk = await probeVpn()
     }
     if (!vpnOk) {
-      console.error('[supportable-sync] VPN unreachable by 9am ET — skipping today\'s batch')
+      const reason = 'VPN unreachable by 9am ET. Connect VPN and trigger manual sync.'
+      console.error(`[scheduler] SKIPPED: Supportable sync — ${reason}`)
+      setLastSkipReason('supportable', reason)
       scheduleSupportableSync()
       return
     }
@@ -603,7 +609,9 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
         ? getSfAuthStatus(_sfSessionPathForScheduler)
         : { hasSession: false }
       if (!sfStatus.hasSession) {
-        console.warn('[pipeline-sync] no SF session — skipping source scrape, cache refresh only')
+        const reason = 'Salesforce session expired. Reconnect via dashboard.'
+        console.warn(`[scheduler] SKIPPED: Pipeline sync — ${reason}`)
+        setLastSkipReason('salesforce', reason)
         await refreshPipeline()
       } else {
         // BKL-T06: Lightweight pre-flight — verify SF Lightning is reachable (session alive != report accessible)
