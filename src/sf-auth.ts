@@ -82,7 +82,10 @@ export async function startSfLoginBrowser(
 
   let context: BrowserContext
   try {
-    context = await chromium.launchPersistentContext(profileDir, { headless: false })
+    context = await chromium.launchPersistentContext(profileDir, {
+      headless: false,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    })
   } catch (e) {
     loginInProgress = false
     throw e
@@ -131,7 +134,7 @@ export async function startSfLoginBrowser(
 
           if (rhPage.url().includes('access.redhat.com/support')) {
             console.log('[sf-auth] RH portal confirmed — adopting shared context for both scrapers')
-            writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }))
+            writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }), { mode: 0o600 })
 
             const ctx = activeContext!
             activeContext = null
@@ -146,7 +149,7 @@ export async function startSfLoginBrowser(
           } else {
             // RH portal didn't load — still adopt for SF only
             console.warn('[sf-auth] RH portal did not load after SF login — SF only')
-            writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }))
+            writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }), { mode: 0o600 })
             const ctx = activeContext!
             activeContext = null
             loginInProgress = false

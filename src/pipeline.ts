@@ -97,6 +97,13 @@ async function discoverPipelineFileIds(drive: ReturnType<typeof google.drive>): 
   const rootIds = raw.split(',').map(s => s.trim()).filter(Boolean)
   if (!rootIds.length) return []
 
+  // BKL-S16: validate folder IDs before interpolating into Drive queries
+  for (const id of rootIds) {
+    if (!/^[a-zA-Z0-9_-]{10,}$/.test(id)) {
+      throw new Error(`[pipeline] invalid folder ID from AE_PARENT_FOLDER_IDS: "${id}"`)
+    }
+  }
+
   const fileIds: string[] = []
 
   for (const rootId of rootIds) {
@@ -138,15 +145,22 @@ async function discoverPipelineFileIds(drive: ReturnType<typeof google.drive>): 
 
 // ── Main fetch ────────────────────────────────────────────────────────────────
 
-export async function fetchPipelineData(): Promise<{ records: PipelineRecord[]; fileIds: string[] }> {
+export async function fetchPipelineData(knownSheetIds?: string[]): Promise<{ records: PipelineRecord[]; fileIds: string[] }> {
   const auth   = makeAuth(GDRIVE_TOKEN_PATH)
   const drive  = google.drive({ version: 'v3', auth })
   const sheets = google.sheets({ version: 'v4', auth })
 
-  // Collect file IDs: auto-discovered first, then PIPELINE_FILE_ID fallback
-  const autoIds = await discoverPipelineFileIds(drive)
+  // Fast path: use caller-supplied IDs (from aes.pipelineSheetId) — avoids Drive discovery + quota burn
+  // PIPELINE_FILE_ID env var is a legacy fallback for pre-AE-config setups only — never mix with aes-sourced IDs
   const manualId = process.env.PIPELINE_FILE_ID
-  const allIds = [...new Set([...autoIds, ...(manualId ? [manualId] : [])])]
+  let allIds: string[]
+  if (knownSheetIds?.length) {
+    // When aes.pipelineSheetId values are provided, use ONLY those — do not append env var (causes duplicates)
+    allIds = [...new Set(knownSheetIds)]
+  } else {
+    const autoIds = await discoverPipelineFileIds(drive)
+    allIds = [...new Set([...autoIds, ...(manualId ? [manualId] : [])])]
+  }
 
   if (!allIds.length) return { records: [], fileIds: [] }
 
@@ -154,8 +168,8 @@ export async function fetchPipelineData(): Promise<{ records: PipelineRecord[]; 
 
   for (const fileId of allIds) {
     try {
-      // PIPELINE_FILE_ID is written by the SF scraper into a "Pipeline" tab
-      const range = fileId === manualId ? 'Pipeline!A1:Z5000' : 'A1:Z5000'
+      // SF scraper always writes to a "Pipeline" tab — use that range for all IDs
+      const range = 'Pipeline!A1:Z5000'
       const res = await sheets.spreadsheets.values.get({
         spreadsheetId: fileId,
         range,
@@ -167,7 +181,17 @@ export async function fetchPipelineData(): Promise<{ records: PipelineRecord[]; 
     }
   }
 
-  return { records: allRecords, fileIds: allIds }
+  // Deduplicate by oppNumber — multiple AEs sharing the same SF report produce identical
+  // records across separate pipeline sheets. Keep first occurrence (sheets are identical).
+  const seen = new Set<string>()
+  const dedupedRecords = allRecords.filter(r => {
+    const key = r.oppNumber || `${r.accountName}|${r.oppName}|${r.closeDate}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  return { records: dedupedRecords, fileIds: allIds }
 }
 
 // ── Summary builder ───────────────────────────────────────────────────────────

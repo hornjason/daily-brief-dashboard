@@ -2,6 +2,7 @@ import { google } from 'googleapis'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { aes } from './server-state.ts'
 import type { Customer } from './types.ts'
 
 const STATE_PATH = process.env.CONFIG_DIR
@@ -27,7 +28,7 @@ function loadState(): WatcherState | null {
 }
 
 function saveState(state: WatcherState): void {
-  try { writeFileSync(STATE_PATH, JSON.stringify(state, null, 2)) }
+  try { writeFileSync(STATE_PATH, JSON.stringify(state, null, 2), { mode: 0o600 }) }
   catch (e: any) { console.warn('[drive-watcher] failed to save state:', e.message) }
 }
 
@@ -73,46 +74,57 @@ async function listSubfolders(drive: ReturnType<typeof google.drive>, parentId: 
 }
 
 export async function buildFolderMap(customers: Customer[], parentIds: string[]): Promise<FolderEntry[]> {
-  if (!parentIds.length || !existsSync(GOOGLE_UNIFIED_TOKEN_PATH)) return []
+  if (!existsSync(GOOGLE_UNIFIED_TOKEN_PATH)) return []
 
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const drive = google.drive({ version: 'v3', auth })
   const entries: FolderEntry[] = []
+  const mapped = new Set<string>()  // track already-mapped customer names
 
   function tryMatch(folder: { id: string; name: string }) {
     let bestScore = 0
     let bestCustomer = ''
     for (const cu of customers) {
+      if (mapped.has(cu.name)) continue
       const score = matchScore(folder.name, cu.name)
       if (score > bestScore) { bestScore = score; bestCustomer = cu.name }
     }
     if (bestScore >= 0.5) {
       entries.push({ folderId: folder.id, customerName: bestCustomer, folderName: folder.name })
+      mapped.add(bestCustomer)
       return true
     }
     return false
   }
 
-  for (const parentId of parentIds) {
-    const level1 = await listSubfolders(drive, parentId)
-    for (const folder of level1) {
-      const matched = tryMatch(folder)
-      if (!matched) {
-        // Level 2 — likely AE org subfolders (e.g. "Accounts", "Other")
-        const level2 = await listSubfolders(drive, folder.id)
-        for (const sub of level2) {
-          const matched2 = tryMatch(sub)
-          if (!matched2) {
-            // Level 3 — scan inside org folders like "Accounts" for actual customer folders
-            const level3 = await listSubfolders(drive, sub.id)
-            for (const leaf of level3) tryMatch(leaf)
+  // ── Priority 1: Use per-AE driveFolderIds to find customer subfolders ──────
+  const aeFolderIds = aes.map(a => a.driveFolderId).filter(Boolean)
+  for (const aeFolderId of aeFolderIds) {
+    const subfolders = await listSubfolders(drive, aeFolderId)
+    for (const folder of subfolders) tryMatch(folder)
+  }
+
+  // ── Priority 2: Fall back to global parent folder scan for unmatched ────────
+  if (parentIds.length && mapped.size < customers.length) {
+    for (const parentId of parentIds) {
+      const level1 = await listSubfolders(drive, parentId)
+      for (const folder of level1) {
+        const matched = tryMatch(folder)
+        if (!matched) {
+          const level2 = await listSubfolders(drive, folder.id)
+          for (const sub of level2) {
+            const matched2 = tryMatch(sub)
+            if (!matched2) {
+              const level3 = await listSubfolders(drive, sub.id)
+              for (const leaf of level3) tryMatch(leaf)
+            }
           }
         }
       }
     }
   }
 
-  console.log(`[drive-watcher] folder map built: ${entries.length} folders matched to customers`)
+  console.log(`[drive-watcher] folder map built: ${entries.length} folders matched to ${customers.length} customers`)
   return entries
 }
 

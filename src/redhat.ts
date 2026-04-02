@@ -26,7 +26,7 @@ async function getToken(): Promise<string> {
       refresh_token: offline,
     }),
   })
-  if (!res.ok) throw new Error(`RH SSO ${res.status}: ${await res.text()}`)
+  if (!res.ok) throw new Error(`RH SSO token refresh failed (${res.status})`)
 
   const data = await res.json() as { access_token: string; expires_in: number }
   cachedToken = data.access_token
@@ -36,20 +36,33 @@ async function getToken(): Promise<string> {
 
 async function rhGet(url: string): Promise<any> {
   const token = await getToken()
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) throw new Error(`RH API ${res.status}: ${await res.text()}`)
-  return res.json()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15_000)
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
+    if (!res.ok) throw new Error(`RH API ${res.status}: ${await res.text()}`)
+    return res.json()
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function rhPost(url: string, body: object): Promise<any> {
   const token = await getToken()
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`RH API ${res.status}: ${await res.text()}`)
-  return res.json()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 15_000)
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    if (!res.ok) throw new Error(`RH API ${res.status}: ${await res.text()}`)
+    return res.json()
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export async function fetchCases(opts: { includeAll?: boolean } = {}): Promise<SupportCase[]> {

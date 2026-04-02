@@ -20,20 +20,31 @@
 
 import type { BrowserContext, Page } from '@playwright/test'
 import { google } from 'googleapis'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import type { AE } from './types.ts'
 
 const SUPPORTABLE_URL = 'https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1'
+const SUPPORTABLE_DEBUG = process.env.SUPPORTABLE_DEBUG === 'true'
+
+function sanitizeCell(value: string): string {
+  if (typeof value !== 'string') return value
+  if (/^[=+\-@]/.test(value) && !/^-?\d/.test(value)) return `'${value}`
+  return value
+}
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
 export let lastSupportableScrape: string | null = null
 export let lastSupportableError:  string | null = null
 export let supportableScrapeRunning = false
+export let supportableStatusMessage: string | null = null
 let supportableScrapeStartedAt: number | null = null
 
 // A run that has been stuck for this long is assumed crashed — mutex auto-resets
 const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
+
+const sanitizeErr = (e: any): string =>
+  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 
 // Number of parallel Playwright pages used for the scrape phase
 // APEX shares one SSO session across all parallel pages. At 2+ pages, concurrent
@@ -200,7 +211,7 @@ async function scrapeOneAccount(
     console.log(`[supportable] navigating to portal…`)
     await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await page.waitForTimeout(3_000)
-    await dumpDom(page, 'landing')
+    if (SUPPORTABLE_DEBUG) await dumpDom(page, 'landing')
 
     const onSso = !page.url().includes('supportable.corp.redhat.com')
     if (onSso) {
@@ -222,7 +233,7 @@ async function scrapeOneAccount(
       console.log('[supportable] navigating fresh to portal after SSO')
       await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
       await page.waitForTimeout(3_000)
-      await dumpDom(page, 'post-sso-fresh')
+      if (SUPPORTABLE_DEBUG) await dumpDom(page, 'post-sso-fresh')
     } else {
       // SSO popup (legacy path)
       const popup = await page.waitForEvent('popup', { timeout: 3_000 }).catch(() => null)
@@ -232,7 +243,7 @@ async function scrapeOneAccount(
         console.log('[supportable] SSO popup closed — navigating fresh to portal')
         await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
         await page.waitForTimeout(3_000)
-        await dumpDom(page, 'post-sso-fresh')
+        if (SUPPORTABLE_DEBUG) await dumpDom(page, 'post-sso-fresh')
       } else {
         console.log('[supportable] no SSO — session active')
       }
@@ -277,11 +288,21 @@ async function scrapeOneAccount(
   console.log(`[supportable] Go clicked — on ${page.url()}`)
 
   // ── Click Export tab → navigates to page 22 (SalesReport layout) ──────────
-  // The Export tab link is the last "Export" anchor in the page navigation
+  // After Go, APEX async-renders account detail content on page 1. For most
+  // accounts this is < 2s (already covered by the waitForTimeout above). For
+  // slow accounts (or inline Customer Info panel accounts like REI/Shutterfly),
+  // it can take 5–12s more. Wait up to 12s for any Export anchor to appear.
+  //
+  // Inline accounts show TWO Export anchors on page 1:
+  //   (1) product family table's inline "Export" link (appears first in DOM)
+  //   (2) tab row "Export" tab → navigates to page 22  ← correct target
+  // Always take the LAST Export anchor — for normal accounts there's only one;
+  // for inline accounts this skips the product-table anchor and gets the tab.
+  await page.waitForSelector('a:has-text("Export")', { timeout: 12_000 }).catch(() => null)
   const exportLinks = await page.$$('a:has-text("Export")')
   if (exportLinks.length === 0) {
-    await dumpDom(page, 'no-export-tab')
-    throw new Error('Export tab not found')
+    if (SUPPORTABLE_DEBUG) await dumpDom(page, 'no-export-tab')
+    throw new Error(`Account ${accountNumber} not found in APEX (no Export tab after 12s)`)
   }
   await exportLinks[exportLinks.length - 1].click()
   await page.waitForLoadState('networkidle', { timeout: 20_000 })
@@ -328,7 +349,7 @@ async function scrapeOneAccount(
 
   const actionsBtn = await page.$('button.a-IRR-button--actions')
   if (!actionsBtn) {
-    await dumpDom(page, 'no-actions-btn')
+    if (SUPPORTABLE_DEBUG) await dumpDom(page, 'no-actions-btn')
     throw new Error(`Actions button not found for account ${accountNumber}`)
   }
   await actionsBtn.click()
@@ -339,7 +360,7 @@ async function scrapeOneAccount(
     { timeout: 5_000 }
   ).catch(() => null)
   if (!downloadLink) {
-    await dumpDom(page, 'no-download-menuitem')
+    if (SUPPORTABLE_DEBUG) await dumpDom(page, 'no-download-menuitem')
     throw new Error(`Download menu item not found for account ${accountNumber}`)
   }
   await downloadLink.click()
@@ -347,7 +368,7 @@ async function scrapeOneAccount(
 
   const csvFormatSelected = await selectCsvFormat(page)
   if (!csvFormatSelected) {
-    await dumpDom(page, 'csv-format-selection')
+    if (SUPPORTABLE_DEBUG) await dumpDom(page, 'csv-format-selection')
     throw new Error(`Could not select CSV format for account ${accountNumber}`)
   }
 
@@ -368,7 +389,7 @@ async function scrapeOneAccount(
       { timeout: 5_000 }
     ).catch(() => null)
     if (!dlButton) {
-      await dumpDom(page, 'no-download-button')
+      if (SUPPORTABLE_DEBUG) await dumpDom(page, 'no-download-button')
       throw new Error(`Download dialog button not found for account ${accountNumber}`)
     }
     await dlButton.click()
@@ -419,6 +440,39 @@ function stripLegalSuffix(name: string): string {
     .trim()
 }
 
+// Build a deduplicated list of fallback search terms for Supportable name-search.
+// Handles cases where the customer name uses punctuation Supportable strips:
+//   "Bespin Global U.S." → tries "Bespin Global US" (dots stripped from abbreviations)
+//   "Omnivision Technologies" → tries "Omnivision" (first word only, as last resort)
+function buildNameCandidates(customerName: string, supportableName?: string): string[] {
+  const candidates: string[] = []
+  const add = (t: string) => { const s = t.trim(); if (s && !candidates.includes(s)) candidates.push(s) }
+
+  // Base terms: use supportableName override if set, otherwise derive from customerName
+  const baseName = supportableName?.trim() || stripLegalSuffix(customerName)
+
+  // Normalize abbreviation dots: "U.S." → "US", "U.K." → "UK"
+  const normalized = baseName.replace(/\b([A-Za-z])\.([A-Za-z])\.?/g, '$1$2').replace(/\b([A-Za-z])\.\B/g, '$1').trim()
+  add(normalized)
+
+  // Progressive word-stripping fallback: remove one word at a time from the right
+  // "Intrado Life & Safety" → "Intrado Life &" → "Intrado Life" → "Intrado"
+  // Stops when fewer than 2 words remain or word length < 4 chars
+  const words = normalized.split(/\s+/)
+  for (let end = words.length - 1; end >= 1; end--) {
+    const shorter = words.slice(0, end).join(' ').trim()
+    if (shorter.length >= 4) add(shorter)
+  }
+
+  // If using customerName (no override), also include the un-normalized base
+  if (!supportableName?.trim()) {
+    const base = stripLegalSuffix(customerName)
+    add(base)
+  }
+
+  return candidates
+}
+
 /**
  * Search Supportable by customer name using the P0_CUSTOMER_NAME wildcard field.
  * Appends % to the name for LIKE matching. Filters results to rows where
@@ -438,93 +492,106 @@ async function discoverAccountNumbersByName(
     const el = await page.$(`input#${candidate}`).catch(() => null)
     if (el) { fieldId = candidate; break }
   }
-  // Use supportableName override when set — it matches exactly how Supportable indexes the account.
-  // Otherwise strip trailing legal suffixes (Inc., LLC, etc.) so "Recreational Equipment, Inc."
-  // becomes "Recreational Equipment%" — Supportable often omits suffixes from indexed names.
-  const searchTerm = supportableName?.trim()
-    ? supportableName.trim()
-    : stripLegalSuffix(customerName)
-  await page.fill(`input#${fieldId}`, `${searchTerm}%`)
-  console.log(`[supportable] name-search: filled #${fieldId} with "${searchTerm}%" (source: ${supportableName ? `supportableName override` : `customerName → stripped suffix`})`)
 
-  await page.click('button.button-alt1')
-  await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
-  await page.waitForTimeout(5_000)
+  // Build ordered list of search terms to try. First hit wins.
+  // Handles punctuation mismatches: "Bespin Global U.S." → "Bespin Global US"
+  const candidates = buildNameCandidates(customerName, supportableName)
 
-  // APEX does multiple JS redirects after submit — probe evaluate before scraping
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      await page.evaluate(() => 'PROBE_OK')
-      break
-    } catch {
-      console.log(`[supportable] name-search: results page still navigating (attempt ${attempt + 1}) — waiting…`)
-      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-      await page.waitForTimeout(3_000)
+  for (let ci = 0; ci < candidates.length; ci++) {
+    const searchTerm = candidates[ci]
+    const isRetry = ci > 0
+
+    // Navigate back to landing page for retries (APEX resets state on page load)
+    if (isRetry) {
+      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+      await page.waitForTimeout(1_500)
     }
-  }
 
-  const tableData = await page.evaluate(() => {
-    const tables = Array.from(document.querySelectorAll('table'))
-    for (const t of tables) {
-      const ths = Array.from(t.querySelectorAll('th'))
-        .map(el => el.textContent?.trim().replace(/\s+/g, ' ') ?? '')
-      if (!ths.some(h => /party.?number|customer.?number|entl/i.test(h))) continue
+    await page.fill(`input#${fieldId}`, `${searchTerm}%`)
+    console.log(`[supportable] name-search: filled #${fieldId} with "${searchTerm}%" (candidate ${ci + 1}/${candidates.length}${isRetry ? ' — retry' : ''})`)
 
-      // Find column indices by regex so header capitalisation/spacing variations don't break us
-      const custNumIdx  = ths.findIndex(h => /customer.?number/i.test(h))
-      const countryIdx  = ths.findIndex(h => /^country$/i.test(h))
-      const entlIdx     = ths.findIndex(h => /entl.*active/i.test(h))
-      const rownumIdx   = ths.findIndex(h => /^rownum$/i.test(h))
-      if (custNumIdx < 0) continue
+    await page.click('button.button-alt1')
+    await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
+    await page.waitForTimeout(5_000)
 
-      const accountNumbers: string[] = []
-      Array.from(t.querySelectorAll('tr')).slice(1).forEach(tr => {
-        const cells = Array.from(tr.querySelectorAll('td'))
-          .map(td => td.textContent?.trim().replace(/\s+/g, ' ') ?? '')
-        if (!cells.some(c => c)) return
-        if (rownumIdx >= 0 && !/^\d+$/.test(cells[rownumIdx] ?? '')) return
-        if (cells.length < ths.length - 2) return
-        const country    = countryIdx >= 0 ? cells[countryIdx] : ''
-        const entlActive = entlIdx    >= 0 ? parseInt(cells[entlIdx] ?? '0', 10) : 1
-        if (country && country !== 'Web' && country !== 'USA') return
-        if (entlIdx >= 0 && entlActive === 0) return
-        const acct = cells[custNumIdx]
-        if (acct && /^\d{4,12}$/.test(acct) && !accountNumbers.includes(acct)) {
-          accountNumbers.push(acct)
-        }
-      })
-      return { accountNumbers }
-    }
-    return { accountNumbers: [] }
-  })
-
-  const accountNumbers = [...new Set(tableData.accountNumbers ?? [])]
-
-  // Direct-match fallback: when the name matches exactly one record Supportable
-  // renders the Customer Information panel inline on the same page (URL stays at
-  // page 1) instead of showing a results list. The subscription table has different
-  // headers so accountNumbers is empty. Scan for the "Account Number:" label cell.
-  if (accountNumbers.length === 0) {
-    const directAccountNumber = await page.evaluate(() => {
-      const cells = Array.from(document.querySelectorAll('td'))
-      for (let i = 0; i < cells.length; i++) {
-        const label = (cells[i].textContent ?? '').trim()
-        if (/^account\s*number:?$/i.test(label)) {
-          const val = (cells[i + 1]?.textContent ?? '').trim()
-          if (/^\d{5,10}$/.test(val)) return val
-        }
+    // APEX does multiple JS redirects after submit — probe evaluate before scraping
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        await page.evaluate(() => 'PROBE_OK')
+        break
+      } catch {
+        console.log(`[supportable] name-search: results page still navigating (attempt ${attempt + 1}) — waiting…`)
+        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+        await page.waitForTimeout(3_000)
       }
-      return ''
-    }).catch(() => '')
-
-    if (directAccountNumber) {
-      console.log(`[supportable] name-search: "${searchTerm}%" → direct match, account# ${directAccountNumber}`)
-      return [directAccountNumber]
     }
+
+    const tableData = await page.evaluate(() => {
+      const tables = Array.from(document.querySelectorAll('table'))
+      for (const t of tables) {
+        const ths = Array.from(t.querySelectorAll('th'))
+          .map(el => el.textContent?.trim().replace(/\s+/g, ' ') ?? '')
+        if (!ths.some(h => /party.?number|customer.?number|entl/i.test(h))) continue
+
+        // Find column indices by regex so header capitalisation/spacing variations don't break us
+        const custNumIdx  = ths.findIndex(h => /customer.?number/i.test(h))
+        const countryIdx  = ths.findIndex(h => /^country$/i.test(h))
+        const entlIdx     = ths.findIndex(h => /entl.*active/i.test(h))
+        const rownumIdx   = ths.findIndex(h => /^rownum$/i.test(h))
+        if (custNumIdx < 0) continue
+
+        const accountNumbers: string[] = []
+        Array.from(t.querySelectorAll('tr')).slice(1).forEach(tr => {
+          const cells = Array.from(tr.querySelectorAll('td'))
+            .map(td => td.textContent?.trim().replace(/\s+/g, ' ') ?? '')
+          if (!cells.some(c => c)) return
+          if (rownumIdx >= 0 && !/^\d+$/.test(cells[rownumIdx] ?? '')) return
+          if (cells.length < ths.length - 2) return
+          const country    = countryIdx >= 0 ? cells[countryIdx] : ''
+          const entlActive = entlIdx    >= 0 ? parseInt(cells[entlIdx] ?? '0', 10) : 1
+          if (country && country !== 'Web' && country !== 'USA') return
+          if (entlIdx >= 0 && entlActive === 0) return
+          const acct = cells[custNumIdx]
+          if (acct && /^\d{4,12}$/.test(acct) && !accountNumbers.includes(acct)) {
+            accountNumbers.push(acct)
+          }
+        })
+        return { accountNumbers }
+      }
+      return { accountNumbers: [] }
+    })
+
+    const accountNumbers = [...new Set(tableData.accountNumbers ?? [])]
+
+    // Direct-match fallback: when the name matches exactly one record Supportable
+    // renders the Customer Information panel inline on the same page (URL stays at
+    // page 1) instead of showing a results list. The subscription table has different
+    // headers so accountNumbers is empty. Scan for the "Account Number:" label cell.
+    if (accountNumbers.length === 0) {
+      const directAccountNumber = await page.evaluate(() => {
+        const cells = Array.from(document.querySelectorAll('td'))
+        for (let i = 0; i < cells.length; i++) {
+          const label = (cells[i].textContent ?? '').trim()
+          if (/^account\s*number:?$/i.test(label)) {
+            const val = (cells[i + 1]?.textContent ?? '').trim()
+            if (/^\d{5,10}$/.test(val)) return val
+          }
+        }
+        return ''
+      }).catch(() => '')
+
+      if (directAccountNumber) {
+        console.log(`[supportable] name-search: "${searchTerm}%" → direct match, account# ${directAccountNumber}`)
+        return [directAccountNumber]
+      }
+    }
+
+    console.log(`[supportable] name-search: "${searchTerm}%" → ${accountNumbers.length} account(s): [${accountNumbers.join(', ')}]`)
+    if (accountNumbers.length > 0) return accountNumbers
+    // 0 results — try next candidate
   }
 
-  console.log(`[supportable] name-search: "${searchTerm}%" → ${accountNumbers.length} account(s): [${accountNumbers.join(', ')}]`)
-  return accountNumbers
+  return []
 }
 
 // ── Public scrape entry point ─────────────────────────────────────────────────
@@ -557,13 +624,16 @@ export async function runSupportableScrape(
   supportableScrapeRunning = true
   supportableScrapeStartedAt = Date.now()
   lastSupportableError = null
+  supportableStatusMessage = 'Connecting to Supportable…'
 
   let page = await _ctx.newPage()
   const results: SupportableResult[] = []
   let isFirst = true
 
   try {
-    for (const customer of customers) {
+    for (let i = 0; i < customers.length; i++) {
+      const customer = customers[i]
+      supportableStatusMessage = `Scraping ${customer.name} (${i + 1}/${customers.length})…`
       const allRows: Record<string, string>[] = []
 
       for (const accountNumber of customer.accountNumbers) {
@@ -582,10 +652,12 @@ export async function runSupportableScrape(
     }
 
     lastSupportableScrape = new Date().toISOString()
+    supportableStatusMessage = null
     return results
 
   } catch (e: any) {
-    lastSupportableError = e.message
+    lastSupportableError = sanitizeErr(e)
+    supportableStatusMessage = null
     throw e
   } finally {
     await page.close().catch(() => {})
@@ -608,6 +680,7 @@ export async function runSupportableScrape(
 export async function runSupportableDiscoverAndScrape(
   customers: Array<{ name: string; supportableName?: string }>,
   onProgress?: (done: number, total: number, name: string, accountNumbers: string[], rowCount: number) => void,
+  onStatus?: (msg: string) => void,
 ): Promise<SupportableResult[]> {
   if (supportableScrapeRunning) {
     if (supportableScrapeStartedAt && (Date.now() - supportableScrapeStartedAt > STALE_MUTEX_MS)) {
@@ -623,6 +696,12 @@ export async function runSupportableDiscoverAndScrape(
   supportableScrapeRunning = true
   supportableScrapeStartedAt = Date.now()
   lastSupportableError = null
+  supportableStatusMessage = 'Connecting to Supportable…'
+
+  const _onStatus = (msg: string) => {
+    supportableStatusMessage = msg
+    onStatus?.(msg)
+  }
 
   const results: SupportableResult[] = []
   let discoveryPage = await _ctx.newPage()
@@ -631,10 +710,17 @@ export async function runSupportableDiscoverAndScrape(
     // ── Phase 1: SSO + serial name-search discovery ───────────────────────────
     // Name searches are stateful APEX navigation — cannot be parallelized.
     console.log(`[supportable] discover+scrape: navigating to portal…`)
+    _onStatus('connecting to Supportable…')
     await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    await discoveryPage.waitForTimeout(3_000)
+    // Wait for APEX search input rather than a hard timeout — exits early on warm sessions
+    await discoveryPage.waitForSelector('input#P0_CUSTOMER_NAME, input#P0_ACCOUNT_NUMBER', { timeout: 5_000 }).catch(() => {
+      // APEX not ready yet — fall back to a shorter fixed wait
+      return discoveryPage.waitForTimeout(2_000)
+    })
 
     if (!discoveryPage.url().includes('supportable.corp.redhat.com')) {
+      console.log(`[supportable] SSO redirect detected — waiting for authentication (up to 5 min)…`)
+      _onStatus('SSO authentication — complete login in VNC if prompted…')
       let pageClosedByApex = false
       const closePromise = new Promise<void>(resolve => { discoveryPage.once('close', () => { pageClosedByApex = true; resolve() }) })
       await Promise.race([
@@ -642,8 +728,11 @@ export async function runSupportableDiscoverAndScrape(
         closePromise,
       ])
       if (pageClosedByApex) discoveryPage = await _ctx.newPage()
+      _onStatus('SSO complete — loading Supportable…')
       await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await discoveryPage.waitForTimeout(3_000)
+      await discoveryPage.waitForSelector('input#P0_CUSTOMER_NAME, input#P0_ACCOUNT_NUMBER', { timeout: 5_000 }).catch(() => {
+        return discoveryPage.waitForTimeout(2_000)
+      })
     }
 
     if (!discoveryPage.url().includes('supportable.corp.redhat.com')) {
@@ -651,11 +740,14 @@ export async function runSupportableDiscoverAndScrape(
     }
 
     console.log(`[supportable] discover+scrape: session active — discovering ${customers.length} customers`)
+    _onStatus(`session active — discovering ${customers.length} customers…`)
 
     interface DiscoveredCustomer { customerName: string; accountNumbers: string[] }
     const discovered: DiscoveredCustomer[] = []
 
-    for (const { name: customerName, supportableName } of customers) {
+    for (let di = 0; di < customers.length; di++) {
+      const { name: customerName, supportableName } = customers[di]
+      _onStatus(`Discovering: ${customerName} (${di + 1}/${customers.length})…`)
       await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
         console.warn(`[supportable] discover: pre-nav failed for "${customerName}": ${e.message}`)
       })
@@ -700,6 +792,7 @@ export async function runSupportableDiscoverAndScrape(
       await workerPage.waitForTimeout(1_500)
       try { while (jobIndex < jobs.length) {
           const job = jobs[jobIndex++]
+          supportableStatusMessage = `Scraping ${job.customerName} (${jobIndex}/${jobs.length})…`
           console.log(`[supportable] worker-${workerId}: ${job.customerName}/${job.accountNumber} (${jobIndex}/${jobs.length})`)
           let succeeded = false
           for (let attempt = 1; attempt <= 2 && !succeeded; attempt++) {
@@ -771,10 +864,12 @@ export async function runSupportableDiscoverAndScrape(
     }
 
     lastSupportableScrape = new Date().toISOString()
+    supportableStatusMessage = null
     return results
 
   } catch (e: any) {
-    lastSupportableError = e.message
+    lastSupportableError = sanitizeErr(e)
+    supportableStatusMessage = null
     throw e
   } finally {
     supportableScrapeRunning = false
@@ -812,6 +907,17 @@ export async function writeSupportableSheet(
   const auth   = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const sheets = google.sheets({ version: 'v4', auth })
 
+  if (!driveFolderId || !/^[a-zA-Z0-9_-]{10,}$/.test(driveFolderId)) {
+    throw new Error(`[supportable] invalid driveFolderId: "${driveFolderId}"`)
+  }
+
+  // BKL-S17: never overwrite an existing sheet with empty scrape results
+  const hasAnyData = results.some(r => r.accountNumbers.length > 0)
+  if (!hasAnyData && existingSheetId) {
+    console.warn(`[supportable] ${aeName}: 0 subscription rows returned — skipping write to protect existing sheet data (BKL-S17)`)
+    return existingSheetId
+  }
+
   let spreadsheetId: string
 
   if (existingSheetId) {
@@ -819,8 +925,18 @@ export async function writeSupportableSheet(
     spreadsheetId = existingSheetId
     console.log(`[supportable] reusing existing sheet ${spreadsheetId}`)
 
-    // Get current sheet tabs to diff against results
-    const metaRes = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' })
+    // Get current sheet tabs to diff against results.
+    // If the sheet was manually deleted, fall through to creating a new one.
+    let metaRes: Awaited<ReturnType<typeof sheets.spreadsheets.get>>
+    try {
+      metaRes = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' })
+    } catch (e: any) {
+      if (e.code === 404 || e.status === 404 || (e.message ?? '').toLowerCase().includes('not found')) {
+        console.warn(`[supportable] sheet ${existingSheetId} not found — creating new one`)
+        return writeSupportableSheet(results, aeName, driveFolderId, undefined)
+      }
+      throw e
+    }
     const existingTabs = (metaRes.data.sheets ?? []).map(s => s.properties?.title ?? '')
     const requiredTabs = ['Accounts', ...results.map(r => r.customerName.slice(0, 100))]
 
@@ -847,10 +963,10 @@ export async function writeSupportableSheet(
 
     // Clear all data tabs (keep header rows)
     for (const tab of requiredTabs) {
-      await sheets.spreadsheets.values.clear({
-        spreadsheetId,
-        range: `'${tab}'!A1:ZZ`,
-      }).catch(() => {})
+      await withQuotaRetry(
+        () => sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${tab}'!A1:ZZ` }),
+        `clear ${tab}`,
+      ).catch(() => {})
     }
   } else {
     // ── First run: create sheet via Drive API with correct parent folder ───────
@@ -885,14 +1001,17 @@ export async function writeSupportableSheet(
   // ── Write Accounts summary tab ─────────────────────────────────────────────
   const accountRows: string[][] = [
     ['Account Name', 'Account ID(s)', 'Alias'],
-    ...results.map(r => [r.customerName, r.accountNumbers.join(', '), '']),
+    ...results.map(r => [sanitizeCell(r.customerName), sanitizeCell(r.accountNumbers.join(', ')), '']),
   ]
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: 'Accounts!A1',
-    valueInputOption: 'RAW',
-    requestBody: { values: accountRows },
-  })
+  await withQuotaRetry(
+    () => sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: 'Accounts!A1',
+      valueInputOption: 'RAW',
+      requestBody: { values: accountRows },
+    }),
+    'Accounts tab',
+  )
   console.log(`[supportable] wrote Accounts tab (${results.length} customers)`)
 
   // ── Write per-customer subscription tabs ───────────────────────────────────
@@ -900,14 +1019,17 @@ export async function writeSupportableSheet(
     const tab = result.customerName.slice(0, 100)
     const dataRows: string[][] = [
       CSV_HEADERS,
-      ...result.rows.map(row => CSV_HEADERS.map(h => row[h] ?? '')),
+      ...result.rows.map(row => CSV_HEADERS.map(h => sanitizeCell(row[h] ?? ''))),
     ]
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `'${tab}'!A1`,
-      valueInputOption: 'RAW',
-      requestBody: { values: dataRows },
-    })
+    await withQuotaRetry(
+      () => sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${tab}'!A1`,
+        valueInputOption: 'RAW',
+        requestBody: { values: dataRows },
+      }),
+      tab,
+    )
     console.log(`[supportable] wrote ${result.rows.length} rows → "${tab}"`)
   }
 

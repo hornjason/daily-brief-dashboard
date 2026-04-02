@@ -24,19 +24,68 @@
  * Tableau's SSO passthrough works without re-authentication.
  */
 
-// Base URL — same for all AEs; filters applied programmatically
-const TABLEAU_BASE_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumptionSummary'
+// Portal URL (for reference / manual navigation)
+// View: OverallCloudConsumptionDashboard / CloudConsumption tab
+// Note: Tableau appends ?:iid=N to session URLs — strip it; the base path is what matters
+const TABLEAU_BASE_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 
-import type { BrowserContext, Page } from '@playwright/test'
+// Direct embed URL — used for URL-based filtering (filter params must precede any hash fragment).
+// Tableau Cloud processes ?FilterName=Value on /t/site/views/... URLs server-side.
+// This renders the viz without the outer portal shell and applies all filters before the viz loads.
+const TABLEAU_EMBED_BASE = 'https://10ay.online.tableau.com/t/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
+
+import type { BrowserContext, Page, ElementHandle } from '@playwright/test'
 import { google } from 'googleapis'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import type { AE } from './types.ts'
+
+/**
+ * Search for a VISIBLE element across all frames in the page.
+ * Tableau renders viz filters inside the "Data Visualization" iframe — page.$()
+ * only searches the main document. Also checks isVisible() to avoid returning
+ * hidden/loading elements that cause click() timeouts.
+ */
+async function findEl(page: Page, selector: string): Promise<ElementHandle<Element> | null> {
+  for (const frame of page.frames()) {
+    try {
+      const el = await frame.$(selector)
+      if (el && await el.isVisible().catch(() => false)) return el
+    } catch { /* frame may have navigated away */ }
+  }
+  return null
+}
+
+/**
+ * Wait for the Tableau viz to render (Raw Data tab visible = viz is ready).
+ * Polls every 1s up to maxWaitMs. Returns true when ready.
+ */
+async function waitForVizReady(page: Page, aeName: string, maxWaitMs = 45_000): Promise<boolean> {
+  const start = Date.now()
+  while (Date.now() - start < maxWaitMs) {
+    const el = await findEl(page, 'text="Raw Data"')
+    if (el) {
+      console.log(`[ccsp] ${aeName}: viz ready — Raw Data tab visible (${Math.round((Date.now() - start) / 1000)}s)`)
+      return true
+    }
+    await page.waitForTimeout(1_000)
+  }
+  console.warn(`[ccsp] ${aeName}: viz not ready after ${maxWaitMs / 1000}s — proceeding anyway`)
+  return false
+}
 
 // -- Module state -------------------------------------------------------------
 
 export let lastCcspScrape: string | null = null
 export let lastCcspError:  string | null = null
 export let ccspScrapeRunning = false
+let ccspScrapeStartedAt: number | null = null
+const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
+
+const CCSP_DEBUG = process.env.CCSP_DEBUG === 'true'
+
+const sanitizeErr = (e: any): string =>
+  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
+const PER_AE_TIMEOUT_MS = 120_000  // 2 minutes
 
 let _ctx: BrowserContext | null = null
 
@@ -64,9 +113,17 @@ async function streamToText(stream: NodeJS.ReadableStream): Promise<string> {
   return Buffer.concat(chunks).toString('utf-8')
 }
 
+/** Prefix formula-trigger characters with apostrophe to prevent injection */
+function sanitizeCell(value: string): string {
+  if (typeof value !== 'string') return value
+  if (/^[=+\-@]/.test(value) && !/^-?\d/.test(value)) return `'${value}`
+  return value
+}
+
 /** Parse CSV text into array of header-keyed objects */
 function parseCsv(csvText: string): Record<string, string>[] {
-  const lines = csvText.trim().split('\n')
+  const clean = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText
+  const lines = clean.trim().split('\n')
   if (lines.length < 2) return []
 
   // Handle quoted CSV fields properly
@@ -112,23 +169,34 @@ function parseCsv(csvText: string): Record<string, string>[] {
 
 /** Dump DOM info for debugging Tableau page state */
 async function dumpDom(page: Page, label: string): Promise<void> {
-  try {
-    const info = await page.evaluate(() => {
-      const els = Array.from(document.querySelectorAll('button, a, [role="button"], iframe, [class*="download"], [class*="toolbar"]'))
-        .slice(0, 40)
-        .map(el => ({
-          tag:   el.tagName.toLowerCase(),
-          id:    el.id ?? '',
-          title: el.getAttribute('title') ?? '',
-          text:  (el.textContent ?? '').trim().slice(0, 60),
-          cls:   el.className.toString().slice(0, 80),
-        }))
-      return { url: location.href, els }
-    })
-    console.log(`[ccsp:dom] ${label} -- ${info.url}\n` +
-      info.els.map(e => `  <${e.tag}> id="${e.id}" title="${e.title}" text="${e.text}" class="${e.cls}"`).join('\n'))
-  } catch (e: any) {
-    console.warn(`[ccsp:dom] dump failed (${label}): ${e.message}`)
+  const dumpFrame = async (frameUrl: string, frameLabel: string, evaluate: (fn: () => any) => Promise<any>) => {
+    try {
+      const info = await evaluate(() => {
+        const els = Array.from(document.querySelectorAll('button, a, [role="button"], iframe, [class*="download"], [class*="toolbar"], [class*="filter"], [aria-label]'))
+          .slice(0, 50)
+          .map((el: any) => ({
+            tag:   el.tagName.toLowerCase(),
+            id:    el.id ?? '',
+            title: el.getAttribute('title') ?? '',
+            aria:  el.getAttribute('aria-label') ?? '',
+            text:  (el.textContent ?? '').trim().slice(0, 60),
+            cls:   el.className?.toString().slice(0, 80) ?? '',
+          }))
+        return { url: location.href, els }
+      })
+      console.log(`[ccsp:dom] ${frameLabel} -- ${info.url}\n` +
+        info.els.map((e: any) => `  <${e.tag}> id="${e.id}" title="${e.title}" aria="${e.aria}" text="${e.text}" class="${e.cls}"`).join('\n'))
+    } catch (e: any) {
+      console.warn(`[ccsp:dom] dump failed (${frameLabel}): ${e.message}`)
+    }
+  }
+
+  await dumpFrame(page.url(), `${label}:main`, (fn) => page.evaluate(fn))
+
+  const frames = page.frames().filter(f => f !== page.mainFrame())
+  for (let i = 0; i < Math.min(frames.length, 3); i++) {
+    const frame = frames[i]
+    await dumpFrame(frame.url(), `${label}:frame${i}`, (fn) => frame.evaluate(fn))
   }
 }
 
@@ -211,21 +279,21 @@ async function applyFilter(
   label: string,
   values: string[],
   aeName: string,
-): Promise<void> {
-  // Tableau filter dropdowns are identified by their label text
-  const trigger = await page.$(`[aria-label="${label}"], select[title*="${label}"]`)
+): Promise<boolean> {
+  // Tableau filter dropdowns are identified by their label text.
+  // Use findEl() so we search all frames — Tableau renders filters inside an iframe.
+  const trigger = await findEl(page, `[aria-label="${label}"], select[title*="${label}"]`)
   if (!trigger) {
     // Try finding by nearby text
-    const byText = await page.$(`text="${label}"`)
+    const byText = await findEl(page, `text="${label}"`)
     if (!byText) {
       // Filter not found = dashboard has changed or filters aren't loaded yet.
-      // Throw so the caller aborts instead of continuing with wrong/unfiltered data.
-      throw new Error(`filter "${label}" not found on Tableau dashboard — dashboard may have changed`)
+      return false
     }
     // Click the parent dropdown
     const parent = await byText.$('xpath=ancestor::div[contains(@class,"filter") or contains(@class,"dropdown")][1]')
     if (!parent) {
-      throw new Error(`filter "${label}" found by text but parent dropdown container not found`)
+      return false
     }
     await parent.click()
   } else {
@@ -234,7 +302,7 @@ async function applyFilter(
   await page.waitForTimeout(800)
 
   // Deselect (All) first if checked
-  const allOption = await page.$('text="(All)"')
+  const allOption = await findEl(page, 'text="(All)"')
   if (allOption) {
     const checkbox = await allOption.$('xpath=preceding-sibling::input[@type="checkbox"] | ancestor::label/input')
     const checked = await checkbox?.isChecked()
@@ -244,7 +312,7 @@ async function applyFilter(
 
   // Select each target value
   for (const val of values) {
-    const opt = await page.$(`text="${val}"`)
+    const opt = await findEl(page, `text="${val}"`)
     if (opt) {
       await opt.click()
       await page.waitForTimeout(300)
@@ -254,22 +322,52 @@ async function applyFilter(
   }
 
   // Click Apply
-  const applyBtn = await page.$('button:has-text("Apply"), input[value="Apply"]')
+  const applyBtn = await findEl(page, 'button:has-text("Apply"), input[value="Apply"]')
   if (applyBtn) await applyBtn.click()
   await page.waitForTimeout(1_500)
+  return true
 }
 
 // -- Per-AE scrape ------------------------------------------------------------
 
 async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
   const territories = ae.tableauTerritories ?? []
-  console.log(`[ccsp] ${ae.name}: navigating to base Tableau dashboard...`)
+  const validTerritories = territories.filter(t => {
+    if (!/^[A-Z0-9_]+$/.test(t)) {
+      console.warn(`[ccsp] skipping invalid territory string: "${t}"`)
+      return false
+    }
+    return true
+  })
 
-  await page.goto(TABLEAU_BASE_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  // -- Build URL with filters pre-applied -------------------------------------
+  // Tableau Cloud supports URL-based filtering (?FilterName=Value) — this is
+  // far more reliable than clicking UI filter dropdowns inside deeply-nested
+  // iframes (Main page → Data Visualization iframe → primaryContent iframe).
+  const { years, quarters, label } = getRollingFyWindow()
+  const filterParams = new URLSearchParams()
+  filterParams.set('Super Geo', 'AMERICAS')
+  filterParams.set('Geo', 'NA_COMM')
+  filterParams.set('Region', 'NA_COMM_COMMERCIAL')
+  filterParams.set('Segment', 'Commercial')
+  filterParams.set('Year', years.join(','))
+  filterParams.set('Quarter', quarters.join(','))
+  if (validTerritories.length > 0) {
+    const { pod, subregion } = parseTerritoryParts(validTerritories[0])
+    filterParams.set('Subregion', subregion)
+    filterParams.set('POD', pod)
+    filterParams.set('Account Territory', validTerritories.join(','))
+  }
+  // Direct embed URL — filter params MUST be on /t/site/views/... (not on the #/site/... hash URL,
+  // where ?params would be inside the hash fragment and ignored by the server).
+  const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams}`
+  console.log(`[ccsp] ${ae.name}: navigating with pre-applied filters...`)
+
+  await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {
     console.warn(`[ccsp] ${ae.name}: networkidle timed out — continuing anyway`)
   })
-  await page.waitForTimeout(5_000)
+  await page.waitForTimeout(3_000)
 
   // Detect login wall — Tableau redirects to SSO/login when session is invalid
   const currentUrl = page.url()
@@ -281,31 +379,15 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
     throw new Error('Tableau session required — log in via the VNC window and retry')
   }
 
-  console.log(`[ccsp] ${ae.name}: page loaded, applying filters...`)
-  await dumpDom(page, `${ae.name}-loaded`)
+  console.log(`[ccsp] ${ae.name}: page loaded, waiting for viz to render...`)
+  if (CCSP_DEBUG) await dumpDom(page, `${ae.name}-loaded`)
 
-  // -- Calculate rolling 1-year window (dynamic — never stale) ----------------
-  const { years, quarters, label } = getRollingFyWindow()
-
-  // -- Apply global filters ---------------------------------------------------
-  await applyFilter(page, 'Super Geo', ['AMERICAS'], ae.name)
-  await applyFilter(page, 'Geo', ['NA_COMM'], ae.name)
-  await applyFilter(page, 'Region', ['NA_COMM_COMMERCIAL'], ae.name)
-  await applyFilter(page, 'Segment', ['Commercial'], ae.name)
-  await applyFilter(page, 'Year', years, ae.name)
-  await applyFilter(page, 'Quarter', quarters, ae.name)
-
-  // -- Apply per-AE filters derived from territories --------------------------
-  if (territories.length > 0) {
-    const { pod, subregion } = parseTerritoryParts(territories[0])
-    await applyFilter(page, 'Subregion', [subregion], ae.name)
-    await applyFilter(page, 'POD', [pod], ae.name)
-    await applyFilter(page, 'Account Territory', territories, ae.name)
-  }
+  // Wait for Raw Data tab to appear — indicates viz has fully rendered
+  await waitForVizReady(page, ae.name)
 
   // -- Navigate to Raw Data tab -----------------------------------------------
   await page.waitForTimeout(2_000)
-  const rawDataTab = await page.$('text="Raw Data"')
+  const rawDataTab = await findEl(page, 'text="Raw Data"')
   if (rawDataTab) {
     console.log(`[ccsp] ${ae.name}: clicking Raw Data tab`)
     await rawDataTab.click()
@@ -315,72 +397,148 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
     console.warn(`[ccsp] ${ae.name}: Raw Data tab not found — attempting download from current view`)
   }
 
-  // -- Download CSV -----------------------------------------------------------
-  let csvText: string | null = null
+  // Log URL after tab click
+  const postTabUrl = page.url()
+  console.log(`[ccsp] ${ae.name}: URL after tab: ${postTabUrl}`)
 
+  // -- Extract data -----------------------------------------------------------
+  let rows: Record<string, string>[] = []
+
+  // Strategy 1: direct .csv URL — Tableau Cloud serves CSV when you navigate to
+  // /t/site/views/workbook/view.csv?FilterName=Value (server-side, no UI dialog).
+  // Handles both hash (#/site/...) and direct (/t/site/...) URL formats.
   try {
-    const downloadBtn = await page.$(
-      'button[aria-label*="Download"], button[title*="Download"], ' +
-      'button:has-text("Download"), [data-tb-test-id="download-ToolbarButton"]'
-    )
+    let viewBase: string | null = null
+    if (postTabUrl.match(/\/t\/[^/]+\/views\//)) {
+      // Direct /t/ format: https://10ay.../t/site/views/workbook/view?...
+      viewBase = postTabUrl.split('?')[0]
+    } else {
+      // Hash format: https://10ay.../#/site/site/views/workbook/view — convert to /t/ format
+      const m = postTabUrl.match(/#\/site\/([^/]+)\/views\/([^?#]+)/)
+      if (m) viewBase = `https://10ay.online.tableau.com/t/${m[1]}/views/${m[2]}`
+    }
+    if (viewBase && !viewBase.endsWith('.csv')) {
+      const csvUrl = `${viewBase}.csv?${filterParams}`
+      console.log(`[ccsp] ${ae.name}: trying direct CSV URL...`)
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 30_000 }),
+        page.goto(csvUrl, { waitUntil: 'commit', timeout: 30_000 }).catch(() => {}),
+      ])
+      const csvText = await streamToText(await download.createReadStream())
+      rows = parseCsv(csvText)
+      console.log(`[ccsp] ${ae.name}: direct CSV: ${rows.length} rows (unfiltered)`)
 
-    if (downloadBtn) {
-      console.log(`[ccsp] ${ae.name}: clicking Download button`)
-      await downloadBtn.click()
-      await page.waitForTimeout(2_000)
-
-      const dataOption = await page.$(
-        'button:has-text("Data"), button:has-text("Crosstab"), ' +
-        '[data-tb-test-id*="data"], [data-tb-test-id*="crosstab"]'
-      )
-      if (dataOption) {
-        const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30_000 }),
-          dataOption.click(),
-        ])
-        const readStream = await download.createReadStream()
-        if (readStream) {
-          csvText = await streamToText(readStream)
-          console.log(`[ccsp] ${ae.name}: downloaded ${csvText.length} bytes`)
-        }
-      } else {
-        const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 15_000 }),
-          Promise.resolve(),
-        ]).catch(() => [null])
-        if (download) {
-          const readStream = await (download as any).createReadStream()
-          if (readStream) {
-            csvText = await streamToText(readStream)
-            console.log(`[ccsp] ${ae.name}: downloaded ${csvText.length} bytes (direct)`)
+      // Post-filter by territory and quarter — Tableau's .csv endpoint ignores URL filter params
+      // and returns the full pod/subregion + all-time data set.
+      if (rows.length > 0) {
+        // Territory filter — column "Account Territory Name"
+        if (validTerritories.length > 0) {
+          const terrColName = Object.keys(rows[0]).find(k => {
+            const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+            return norm === 'account territory name' || norm === 'account territory'
+          })
+          if (terrColName) {
+            const terrSet = new Set(validTerritories)
+            const before = rows.length
+            rows = rows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
+            console.log(`[ccsp] ${ae.name}: territory filter: ${before} → ${rows.length} rows`)
+          } else {
+            console.warn(`[ccsp] ${ae.name}: no territory column found — skipping territory filter. Columns: ${Object.keys(rows[0]).join(', ')}`)
           }
+        }
+
+        // Quarter filter — column "Opportunity fiscal Year Quarter" (format: "2026-Q1")
+        const qtrColName = Object.keys(rows[0]).find(k =>
+          k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
+        )
+        if (qtrColName) {
+          const qtrSet = new Set(quarters)
+          const before = rows.length
+          rows = rows.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
+          console.log(`[ccsp] ${ae.name}: quarter filter (${quarters.join(',')}): ${before} → ${rows.length} rows`)
+        } else {
+          console.warn(`[ccsp] ${ae.name}: no quarter column found — skipping quarter filter`)
         }
       }
     }
   } catch (e: any) {
-    console.warn(`[ccsp] ${ae.name}: download failed: ${e.message}`)
+    console.warn(`[ccsp] ${ae.name}: direct CSV failed: ${e.message} — scraping table`)
   }
 
-  // If we got CSV text, parse it
-  if (csvText) {
-    const rows = parseCsv(csvText)
-    console.log(`[ccsp] ${ae.name}: parsed ${rows.length} rows from CSV`)
-    return { aeName: ae.name, rows, accountPeriod: label }
+  // Strategy 2: DOM table scraping — extract the visible data table directly
+  // from the viz iframe. Works for all rows visible in the viewport; Tableau
+  // renders data tables as ARIA grids ([role="grid"] / [role="row"]) in the
+  // primaryContent iframe. This is the reliable fallback.
+  if (rows.length === 0) {
+    try {
+      // Re-navigate if we left the view for the .csv attempt
+      if (!page.url().includes('OverallCloudConsumptionDashboard')) {
+        await page.goto(`${TABLEAU_EMBED_BASE}?${filterParams}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+        await page.waitForTimeout(5_000)
+        await waitForVizReady(page, ae.name, 30_000)
+        const tab2 = await findEl(page, 'text="Raw Data"')
+        if (tab2) { await tab2.click(); await page.waitForTimeout(3_000) }
+      }
+
+      for (const frame of page.frames()) {
+        const extracted = await frame.evaluate(() => {
+          // Tableau uses ARIA grid roles for data tables
+          const grids = Array.from(document.querySelectorAll('[role="grid"], table'))
+          for (const grid of grids) {
+            const headerCells = Array.from(grid.querySelectorAll('[role="columnheader"], th'))
+            if (headerCells.length === 0) continue
+            const headers = headerCells.map(h => h.textContent?.trim() ?? '')
+
+            const dataRows: Record<string, string>[] = []
+            const rowEls = Array.from(grid.querySelectorAll('[role="row"]:not(:has([role="columnheader"])), tr'))
+            for (const row of rowEls) {
+              const cells = Array.from(row.querySelectorAll('[role="gridcell"], td'))
+              if (cells.length === 0) continue
+              const obj: Record<string, string> = {}
+              cells.forEach((cell, i) => { obj[headers[i] ?? `col${i}`] = cell.textContent?.trim() ?? '' })
+              dataRows.push(obj)
+            }
+            if (dataRows.length > 0) return dataRows
+          }
+          return null
+        }).catch(() => null)
+
+        if (extracted?.length) {
+          rows = extracted
+          console.log(`[ccsp] ${ae.name}: DOM scrape: ${rows.length} rows from table`)
+          break
+        }
+      }
+
+      if (rows.length === 0) console.warn(`[ccsp] ${ae.name}: DOM table scrape found no rows`)
+    } catch (e: any) {
+      console.warn(`[ccsp] ${ae.name}: DOM scrape failed: ${e.message}`)
+    }
   }
 
-  // If all strategies fail, return empty with warning
-  await dumpDom(page, `${ae.name}-no-data`)
-  console.warn(`[ccsp] ${ae.name}: could not extract data — returning empty result`)
-  return { aeName: ae.name, rows: [], accountPeriod: label }
+  if (rows.length === 0) {
+    if (CCSP_DEBUG) await dumpDom(page, `${ae.name}-no-data`)
+    console.warn(`[ccsp] ${ae.name}: could not extract data — returning empty result`)
+  }
+  return { aeName: ae.name, rows, accountPeriod: label }
 }
 
 // -- Public scrape entry point ------------------------------------------------
 
 export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
-  if (ccspScrapeRunning) throw new Error('CCSP scrape already in progress')
+  if (ccspScrapeRunning) {
+    if (ccspScrapeStartedAt && (Date.now() - ccspScrapeStartedAt > STALE_MUTEX_MS)) {
+      console.warn(`[ccsp] stale mutex detected (${Math.round((Date.now() - ccspScrapeStartedAt) / 60000)}min) — auto-releasing`)
+      ccspScrapeRunning = false
+      ccspScrapeStartedAt = null
+    } else {
+      throw new Error('CCSP scrape already in progress')
+    }
+  }
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
 
   ccspScrapeRunning = true
+  ccspScrapeStartedAt = Date.now()
   lastCcspError = null
 
   const results: CcspResult[] = []
@@ -397,11 +555,18 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
       }
 
       const page = await _ctx!.newPage()
+      const scrapePromise = scrapeOneAe(page, ae)
+      scrapePromise.catch(() => {})  // suppress orphaned rejection if timeout fires first
       try {
-        const result = await scrapeOneAe(page, ae)
+        const result = await Promise.race([
+          scrapePromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`AE scrape timed out after ${PER_AE_TIMEOUT_MS / 1000}s`)), PER_AE_TIMEOUT_MS)
+          ),
+        ])
         results.push(result)
       } catch (e: any) {
-        console.warn(`[ccsp] ${ae.name}: scrape failed: ${e.message}`)
+        console.warn(`[ccsp] ${ae.name}: ${e.message}`)
         results.push({ aeName: ae.name, rows: [], accountPeriod: getRollingFyWindow().label })
       } finally {
         await page.close().catch(() => {})
@@ -412,10 +577,11 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
     return results
 
   } catch (e: any) {
-    lastCcspError = e.message
+    lastCcspError = sanitizeErr(e)
     throw e
   } finally {
     ccspScrapeRunning = false
+    ccspScrapeStartedAt = null
   }
 }
 
@@ -436,6 +602,10 @@ export async function writeCcspSheet(
   const sheets = google.sheets({ version: 'v4', auth })
   const drive  = google.drive({ version: 'v3', auth })
 
+  if (!driveFolderId || !/^[a-zA-Z0-9_-]{10,}$/.test(driveFolderId)) {
+    throw new Error(`[ccsp] invalid driveFolderId: "${driveFolderId}"`)
+  }
+
   let spreadsheetId: string
 
   if (existingSheetId) {
@@ -443,8 +613,20 @@ export async function writeCcspSheet(
     spreadsheetId = existingSheetId
     console.log(`[ccsp] reusing existing sheet: ${spreadsheetId}`)
 
+    let meta
+    try {
+      meta = await sheets.spreadsheets.get({ spreadsheetId })
+    } catch (err: any) {
+      const code = err?.code ?? err?.response?.status
+      const msg = (err?.message ?? '').toLowerCase()
+      if (code === 404 || msg.includes('not found') || msg.includes('404')) {
+        console.warn(`[ccsp] existing sheet ${spreadsheetId} not found (404) — creating new`)
+        return writeCcspSheet(results, aeName, driveFolderId, undefined)
+      }
+      throw err
+    }
+
     // Get existing sheet tabs so we can clear them
-    const meta = await sheets.spreadsheets.get({ spreadsheetId })
     const existingSheets = meta.data.sheets ?? []
 
     // Delete all tabs except the first, then rename/clear the first
@@ -458,23 +640,24 @@ export async function writeCcspSheet(
 
     // Clear the first sheet
     const firstTab = existingSheets[0]?.properties?.title ?? 'Sheet1'
-    await sheets.spreadsheets.values.clear({
-      spreadsheetId,
-      range: `'${firstTab}'!A:ZZ`,
-    })
+    await withQuotaRetry(
+      () => sheets.spreadsheets.values.clear({ spreadsheetId, range: `'${firstTab}'!A:ZZ` }),
+      'clear CCSP',
+    ).catch(() => {})
 
     // Rename first sheet to "CCSP Data"
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: [{
-          updateSheetProperties: {
-            properties: { sheetId: existingSheets[0].properties!.sheetId, title: 'CCSP Data' },
+    const firstSheetId = existingSheets[0]?.properties?.sheetId
+    if (firstSheetId != null) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [{ updateSheetProperties: {
+            properties: { sheetId: firstSheetId, title: 'CCSP Data' },
             fields: 'title',
-          },
-        }],
-      },
-    })
+          }}],
+        },
+      })
+    }
   } else {
     // Create new spreadsheet in AE's Drive folder
     const created = await drive.files.create({
@@ -509,13 +692,21 @@ export async function writeCcspSheet(
   const allRows = results.flatMap(r => r.rows)
 
   if (allRows.length === 0) {
-    // Write a placeholder so the sheet isn't empty
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: 'CCSP Data!A1',
-      valueInputOption: 'RAW',
-      requestBody: { values: [['No CCSP data available', '', `Scraped: ${new Date().toISOString()}`]] },
-    })
+    // BKL-S17: never overwrite an existing sheet with empty scrape results
+    if (existingSheetId) {
+      console.warn(`[ccsp] ${aeName}: 0 rows returned — skipping write to protect existing sheet data (BKL-S17)`)
+      return spreadsheetId
+    }
+    // First-run / genuinely empty — write placeholder
+    await withQuotaRetry(
+      () => sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: 'CCSP Data!A1',
+        valueInputOption: 'RAW',
+        requestBody: { values: [['No CCSP data available', '', `Scraped: ${new Date().toISOString()}`]] },
+      }),
+      'CCSP placeholder',
+    )
     console.log(`[ccsp] ${aeName}: no data — wrote placeholder`)
     return spreadsheetId
   }
@@ -529,18 +720,21 @@ export async function writeCcspSheet(
   }
   const headers = Array.from(headerSet)
 
-  // Build sheet data: headers + rows
+  // Build sheet data: headers + rows (sanitize data rows to prevent formula injection)
   const sheetData: string[][] = [
     headers,
-    ...allRows.map(row => headers.map(h => row[h] ?? '')),
+    ...allRows.map(row => headers.map(h => sanitizeCell(row[h] ?? ''))),
   ]
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `'CCSP Data'!A1`,
-    valueInputOption: 'RAW',
-    requestBody: { values: sheetData },
-  })
+  await withQuotaRetry(
+    () => sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'CCSP Data'!A1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: sheetData },
+    }),
+    'CCSP Data tab',
+  )
   console.log(`[ccsp] ${aeName}: wrote ${allRows.length} rows (${headers.length} columns) to CCSP Data tab`)
 
   return spreadsheetId

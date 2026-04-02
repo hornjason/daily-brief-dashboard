@@ -1,4 +1,6 @@
 // src/oauth-scopes.ts
+// Default auth always uses full (bootstrap) scopes.
+// NORMAL_SCOPES exists only for the manual "Reduce Permissions" flow.
 
 export const NORMAL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -24,17 +26,12 @@ export interface StoredToken {
   scopeLevel?: 'normal' | 'bootstrap'
 }
 
-/** Returns true if the token was granted full drive (not drive.readonly) */
-export function hasBootstrapScopes(token: StoredToken): boolean {
-  if (!token.scope) return false
-  const granted = token.scope.split(' ')
-  return granted.includes('https://www.googleapis.com/auth/drive') &&
-    !granted.includes('https://www.googleapis.com/auth/drive.readonly')
-}
-
-/** Returns the scope level, falling back to checking the actual granted scopes */
+/** Returns the scope level for display purposes */
 export function getScopeLevel(token: StoredToken): 'normal' | 'bootstrap' | 'unknown' {
   if (token.scopeLevel) return token.scopeLevel
   if (!token.scope) return 'unknown'
-  return hasBootstrapScopes(token) ? 'bootstrap' : 'normal'
+  const granted = token.scope.split(' ')
+  return granted.includes('https://www.googleapis.com/auth/drive') &&
+    !granted.includes('https://www.googleapis.com/auth/drive.readonly')
+    ? 'bootstrap' : 'normal'
 }

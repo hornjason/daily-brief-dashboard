@@ -1,6 +1,6 @@
 import { google } from 'googleapis'
 import { resolve } from 'path'
-import { makeAuth } from './google.ts'
+import { makeAuth, withQuotaRetry } from './google.ts'
 import type { Customer, SheetRow, ProductSubscription } from './types.ts'
 
 const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -82,11 +82,19 @@ export function normalizeForMatch(name: string): string {
 }
 
 // True if tabName and customerName refer to the same entity.
-// Bidirectional: tab⊆customer OR customer⊆tab (after normalization).
+// Bidirectional substring for names > 4 chars; word-boundary for short names to prevent
+// "EBS" from matching "Webster" or similar mid-word substring collisions.
 export function tabMatchesCustomer(tabName: string, customerName: string): boolean {
   const normTab  = normalizeForMatch(tabName)
   const normCust = normalizeForMatch(customerName)
   if (!normTab || !normCust) return false
+  if (normTab === normCust) return true
+  // Short names (≤ 4 chars): require whole-word match inside the other string
+  if (normCust.length <= 4 || normTab.length <= 4) {
+    const shorter = normCust.length <= normTab.length ? normCust : normTab
+    const longer  = normCust.length <= normTab.length ? normTab  : normCust
+    return new RegExp(`(^|\\s)${shorter}(\\s|$)`).test(longer)
+  }
   return normTab.includes(normCust) || normCust.includes(normTab)
 }
 
@@ -260,50 +268,89 @@ function normalizePartner(raw: string): string {
   return 'Other'
 }
 
-export async function fetchCCSPData(): Promise<{ records: CCSPRecord[]; fileIds: string[] }> {
-  const rootIds = getParentFolderIds()
-  if (!rootIds.length) return { records: [], fileIds: [] }
-
-  const driveAuth  = makeAuth(GDRIVE_TOKEN_PATH)
+export async function fetchCCSPData(
+  knownSheetIds?: string[],
+): Promise<{ records: CCSPRecord[]; fileIds: string[] }> {
   const sheetsAuth = makeAuth(SHEETS_TOKEN_PATH)
-  const drive  = google.drive({ version: 'v3', auth: driveAuth })
   const sheets = google.sheets({ version: 'v4', auth: sheetsAuth })
 
   const allRecords: CCSPRecord[] = []
   const ccspFileIds: string[] = []
 
-  // Collect all spreadsheets under each root (recursive, cached)
-  const spreadsheetIds: string[] = []
-  for (const rootId of rootIds) {
-    spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(drive, rootId))
+  // Fast path: use known sheet IDs directly (avoids expensive Drive BFS traversal
+  // which silently returns empty when Sheets API quota is hit).
+  let spreadsheetIdTabPairs: { spreadsheetId: string; ccspTab: string }[]
+
+  if (knownSheetIds?.length) {
+    spreadsheetIdTabPairs = knownSheetIds.map(id => ({ spreadsheetId: id, ccspTab: 'CCSP Data' }))
+  } else {
+    // Fallback: BFS scan of parent folder (expensive, quota-sensitive)
+    const rootIds = getParentFolderIds()
+    if (!rootIds.length) return { records: [], fileIds: [] }
+
+    const driveAuth = makeAuth(GDRIVE_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth: driveAuth })
+
+    const spreadsheetIds: string[] = []
+    for (const rootId of rootIds) {
+      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(drive, rootId))
+    }
+
+    const allMeta = await Promise.all(
+      spreadsheetIds.map((id) =>
+        sheets.spreadsheets.get({ spreadsheetId: id, fields: 'properties.title,sheets.properties.title' })
+          .then((res) => ({
+            id,
+            fileName: (res.data.properties?.title ?? '').toLowerCase(),
+            titles: (res.data.sheets ?? []).map((s) => s.properties?.title ?? ''),
+          }))
+          .catch(() => ({ id, fileName: '', titles: [] as string[] }))
+      )
+    )
+
+    spreadsheetIdTabPairs = []
+    for (const { id, fileName, titles } of allMeta) {
+      const ccspTab = titles.find((t) => t.toLowerCase().includes('ccsp'))
+        ?? (fileName.includes('ccsp') ? (titles[0] ?? null) : null)
+      if (ccspTab) spreadsheetIdTabPairs.push({ spreadsheetId: id, ccspTab })
+    }
   }
 
-  const allMeta = await Promise.all(
-    spreadsheetIds.map((id) =>
-      sheets.spreadsheets.get({ spreadsheetId: id, fields: 'properties.title,sheets.properties.title' })
-        .then((res) => ({
-          id,
-          fileName: (res.data.properties?.title ?? '').toLowerCase(),
-          titles: (res.data.sheets ?? []).map((s) => s.properties?.title ?? ''),
-        }))
-        .catch(() => ({ id, fileName: '', titles: [] as string[] }))
-    )
-  )
-
-  for (const { id: spreadsheetId, fileName, titles } of allMeta) {
-    // Match if any tab is named "ccsp..." OR the spreadsheet file itself is named "ccsp..."
-    const ccspTab = titles.find((t) => t.toLowerCase().includes('ccsp'))
-      ?? (fileName.includes('ccsp') ? (titles[0] ?? null) : null)
-    if (!ccspTab) continue
+  for (const { spreadsheetId, ccspTab } of spreadsheetIdTabPairs) {
     ccspFileIds.push(spreadsheetId)
 
-    const dataRes = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${ccspTab}'!A:Z`,
-    }).catch(() => null)
+    const dataRes = await withQuotaRetry(
+      () => sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${ccspTab}'!A:AM`,  // A:AM = 39 cols — covers 32-col Tableau CSV with room to spare
+      }),
+      `ccsp-read ${spreadsheetId}`,
+    ).catch((e: any) => { console.warn(`[ccsp-read] sheet ${spreadsheetId} read failed: ${e?.message}`); return null })
     if (!dataRes) continue
 
-    const rows = dataRes.data.values ?? []
+    let rows = dataRes.data.values ?? []
+    if (rows.length < 2 && knownSheetIds?.length) {
+      // Fast-path tab miss — discover actual CCSP tab name and retry once
+      console.warn(`[ccsp-read] fast-path sheet ${spreadsheetId} tab '${ccspTab}' returned <2 rows — attempting tab discovery`)
+      try {
+        const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties.title' })
+        const actualTab = (meta.data.sheets ?? [])
+          .map(s => s.properties?.title ?? '')
+          .find(t => t.toLowerCase().includes('ccsp'))
+        if (actualTab && actualTab !== ccspTab) {
+          const safeTab = actualTab.replace(/'/g, "''")  // Sheets A1 notation: escape single-quotes
+          const retryRes = await withQuotaRetry(
+            () => sheets.spreadsheets.values.get({ spreadsheetId, range: `'${safeTab}'!A:AM` }),
+            `ccsp-read retry ${spreadsheetId}`,
+          ).catch(() => null)
+          const retryRows = retryRes?.data.values ?? []
+          if (retryRows.length >= 2) {
+            console.log(`[ccsp-read] tab discovery succeeded with '${actualTab}'`)
+            rows = retryRows
+          }
+        }
+      } catch { /* best effort — fall through to skip */ }
+    }
     if (rows.length < 2) continue
 
     const headers = (rows[0] ?? []).map((h: unknown) => String(h ?? '').trim())
@@ -313,7 +360,7 @@ export async function fetchCCSPData(): Promise<{ records: CCSPRecord[]; fileIds:
     const partnerCol   = headers.findIndex((h) => h.toLowerCase().includes('financial partner'))
     const acvCol       = headers.findIndex((h) => h.toLowerCase() === 'acv plus')
 
-    if (acctCol < 0 || acvCol < 0) continue
+    if (acctCol < 0 || acvCol < 0) { console.warn(`[ccsp] missing required columns in sheet ${spreadsheetId} — headers: ${headers.join(', ')}`); continue }
 
     for (const row of rows.slice(1)) {
       const acvStr = String(row[acvCol] ?? '').replace(/[$,]/g, '').trim()
@@ -333,14 +380,18 @@ export async function fetchCCSPData(): Promise<{ records: CCSPRecord[]; fileIds:
   return { records: allRecords, fileIds: ccspFileIds }
 }
 
-export async function fetchCustomerSheetData(customer: Customer): Promise<ProductSubscription[]> {
+export async function fetchCustomerSheetData(customer: Customer, knownSheetIds?: string[]): Promise<ProductSubscription[]> {
   const sheetsAuth = makeAuth(SHEETS_TOKEN_PATH)
   const sheets = google.sheets({ version: 'v4', auth: sheetsAuth })
 
-  // Use the known Supportable file ID directly if stored — avoids scanning all files
+  // Priority: per-customer override > AE-level known IDs > Drive BFS
   let spreadsheetIds: string[]
   if (customer.supportableFileId) {
+    // Most specific: per-customer pinned file ID (overrides everything)
     spreadsheetIds = [customer.supportableFileId]
+  } else if (knownSheetIds?.length) {
+    // AE-level fast path: use known sheet IDs directly (avoids BFS + all-sheet quota burn)
+    spreadsheetIds = knownSheetIds
   } else {
     const rootIds = getParentFolderIds()
     if (!rootIds.length) return []
@@ -398,13 +449,16 @@ export async function fetchCustomerSheetData(customer: Customer): Promise<Produc
 
 // Reads the customer's subscription tab and returns unique account numbers found
 // in any column whose header contains "accountnumber" (case-insensitive, spaces/dashes ignored).
-export async function fetchCustomerAccountNumbers(customer: Customer): Promise<string[]> {
+export async function fetchCustomerAccountNumbers(customer: Customer, knownSheetIds?: string[]): Promise<string[]> {
   const sheetsAuth = makeAuth(SHEETS_TOKEN_PATH)
   const sheets = google.sheets({ version: 'v4', auth: sheetsAuth })
 
+  // Same priority as fetchCustomerSheetData: per-customer override > AE-level fast path > BFS
   let spreadsheetIds: string[]
   if (customer.supportableFileId) {
     spreadsheetIds = [customer.supportableFileId]
+  } else if (knownSheetIds?.length) {
+    spreadsheetIds = knownSheetIds
   } else {
     const rootIds = getParentFolderIds()
     if (!rootIds.length) return []

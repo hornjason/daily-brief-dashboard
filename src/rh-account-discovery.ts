@@ -1,6 +1,10 @@
 /**
  * src/rh-account-discovery.ts
  *
+ * ⚠️  DEPRECATED — NOT IMPORTED ANYWHERE. Do not import or recreate.
+ * Account discovery uses Supportable APEX only (POST /api/scrape/supportable/discover).
+ * See CLAUDE.md §Supportable Discovery Rules.
+ *
  * Discovers Red Hat account numbers using the portal's SOLR cases search API.
  *
  * Strategy (per customer):

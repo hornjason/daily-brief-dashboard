@@ -92,7 +92,10 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
   let context: BrowserContext
   let page: Page
   try {
-    context = await chromium.launchPersistentContext(profileDir, { headless: false, args: ['--ignore-certificate-errors'] })
+    context = await chromium.launchPersistentContext(profileDir, {
+      headless: false,
+      args: ['--ignore-certificate-errors', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    })
     page = await context.newPage()
   } catch (e) {
     loginInProgress = false
@@ -120,7 +123,7 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
 
         if (isPortalUrl(url)) {
           // Logged in — write marker file (cookies live in profileDir automatically)
-          writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }))
+          writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }), { mode: 0o600 })
           console.log('[rh-auth] Login confirmed — profile:', profileDir)
           rhSessionExpired = false
 

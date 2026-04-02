@@ -14,6 +14,27 @@ const GOOGLE_UNIFIED_TOKEN_PATH = resolve(CONFIG_DIR_PATH, '.google-token.json')
 
 export { GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH }
 
+function is429(e: any): boolean {
+  return e?.code === 429 || e?.status === 429 ||
+    (e?.message ?? '').includes('RESOURCE_EXHAUSTED') ||
+    (e?.message ?? '').includes('rateLimitExceeded')
+}
+
+/**
+ * Wrap a Sheets/Drive API call with one quota-429 retry after 61 seconds.
+ * Non-429 errors are rethrown immediately without waiting.
+ */
+export async function withQuotaRetry<T>(fn: () => Promise<T>, label?: string): Promise<T> {
+  try {
+    return await fn()
+  } catch (e: any) {
+    if (!is429(e)) throw e
+    console.warn(`[sheets] quota 429 — waiting 61s before retry${label ? ` (${label})` : ''}`)
+    await new Promise<void>((res) => setTimeout(res, 61_000))
+    return fn()
+  }
+}
+
 export function makeAuth(tokenPath: string) {
   if (!existsSync(OAUTH_KEYS_PATH)) throw new Error(`OAuth keys not found: ${OAUTH_KEYS_PATH}`)
   // Use unified browser-OAuth token if available, fall back to individual token file

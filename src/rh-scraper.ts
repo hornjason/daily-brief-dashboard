@@ -37,6 +37,8 @@ export interface ScrapeOptions {
   accountNumbers: string[]
   profileDir: string
   cachePath: string
+  /** Optional callback checked between accounts — return true to abort early */
+  shouldCancel?: () => boolean
 }
 
 // ── Long-lived context + page ─────────────────────────────────────────────────
@@ -47,11 +49,20 @@ let _profileDir: string | null = null
 let _keepAliveTimer: ReturnType<typeof setInterval> | null = null
 let _onSessionExpired: (() => void) | null = null
 let _cachedToken: string | null = null   // captured Bearer JWT from intercepted page requests
+let _livePageBusy = false  // set true while external flows (e.g. Tableau login) use the live page
+let _livePageBusyAt = 0    // timestamp when busy flag was set — auto-clears after 3 minutes
 
 /** Register a callback to invoke when the keep-alive detects session expiry. */
 export function setSessionExpiredCallback(cb: () => void): void {
   _onSessionExpired = cb
 }
+
+/**
+ * Mark the live page as busy (used by another flow like Tableau login).
+ * While busy, the keep-alive will skip full-page navigation to avoid
+ * stealing the page from the user.
+ */
+export function setLivePageBusy(busy: boolean): void { _livePageBusy = busy }
 
 const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000 // 8 minutes — well before SSO 30-min idle timeout
 const SESSION_STATE_FILE = 'session-state.json'
@@ -71,7 +82,13 @@ export async function initScrapeContext(profileDir: string): Promise<void> {
   console.log('[rh-scraper] opening persistent context…')
   _context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
-    args: ['--headless=new', '--disable-blink-features=AutomationControlled', '--ignore-certificate-errors'],
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--ignore-certificate-errors',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+    ],
     ignoreDefaultArgs: ['--enable-automation'],
   })
   // Restore session cookies persisted from a previous run
@@ -131,7 +148,7 @@ async function persistSessionState(): Promise<void> {
   if (!_context || !_profileDir) return
   try {
     const state = await _context.storageState()
-    await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state))
+    await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
   } catch { /* non-fatal */ }
 }
 
@@ -164,6 +181,14 @@ async function restoreSessionCookies(): Promise<void> {
 
 async function keepAlive(): Promise<void> {
   if (!_context) return
+
+  // Skip keep-alive entirely while another flow (e.g. Tableau login) is using the
+  // live page. Navigating or evaluating JS on the live page would steal it away
+  // from the user mid-interaction. The keep-alive will fire again on its next tick.
+  if (_livePageBusy) {
+    console.log('[rh-scraper] keep-alive: skipped — live page busy (external login flow)')
+    return
+  }
 
   // ── Attempt 1: Hybrid lightweight path (no page navigation) ─────────────────
   // Ask the Keycloak JS adapter to refresh its token — this resets the SSO session
@@ -256,7 +281,7 @@ async function checkForSessionExpiry(page: { url(): string; waitForURL(p: string
 // ── Main scrape function ──────────────────────────────────────────────────────
 
 export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]> {
-  const { accountNumbers, profileDir, cachePath } = options
+  const { accountNumbers, profileDir, cachePath, shouldCancel } = options
 
   // Ensure long-lived context is open
   await initScrapeContext(profileDir)
@@ -272,6 +297,10 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
 
   try {
     for (const accountNum of accountNumbers) {
+      if (shouldCancel?.()) {
+        console.log(`[rh-scraper] cancel requested — returning ${allCases.length} cases scraped so far`)
+        break
+      }
       const url =
         `https://access.redhat.com/support/cases/#/case/list` +
         `?query=accountNumber%3A%20(%22${accountNum}%22)%20orderBy%20severity%20asc` +
@@ -432,6 +461,7 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
       accounts: accountNumbers,
       cases: allCases,
     }, null, 2),
+    { mode: 0o600 },
   )
   await rename(tmpPath, cachePath)
 

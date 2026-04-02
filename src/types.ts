@@ -26,6 +26,9 @@ export interface Customer {
   aliases?: string[]     // known subsidiaries / former names that map to this account
   aliasDomains?: string[] // email domains for aliases (e.g. ["lifetouch.com"] for Shutterfly)
   skipAccountDiscovery?: boolean  // true = no RH account, skip portal discovery
+  driveFolderId?: string  // Google Drive subfolder for this customer under the AE folder
+  domainOverride?: string  // BKL-F05: customer-specific domain that bypasses the global blocklist (e.g. workday.com for Workday Inc)
+  supportableFileId?: string  // Supportable Google Sheet file ID for this customer
 }
 
 export interface CustomerSubscription {

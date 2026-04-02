@@ -20,7 +20,7 @@ import type { BrowserContext } from '@playwright/test'
 import { writeFile, readFile, unlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { google } from 'googleapis'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 
 export class SfSessionExpiredError extends Error {
   constructor() {
@@ -32,7 +32,7 @@ export class SfSessionExpiredError extends Error {
 const SF_BASE_URL       = 'https://redhatcrm.lightning.force.com'
 const REPORT_VIEW_URL   = (reportId: string) => `${SF_BASE_URL}/lightning/r/Report/${reportId}/view?queryScope=userFolders`
 const KEEPALIVE_URL     = `${SF_BASE_URL}/lightning/n/Home`
-const KEEP_ALIVE_INTERVAL_MS = 60 * 60 * 1000  // 60 minutes — SF default session is 2h
+const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000  // 10 minutes — more aggressive to prevent session drops
 const SESSION_STATE_FILE = 'sf-session-state.json'
 
 // ── Long-lived context ────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ export async function initSfContext(profileDir: string): Promise<void> {
   console.log('[sf-scraper] opening persistent context…')
   _context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
-    args: ['--headless=new', '--disable-blink-features=AutomationControlled'],
+    args: ['--headless=new', '--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     ignoreDefaultArgs: ['--enable-automation'],
   })
   _keepAliveTimer = setInterval(
@@ -105,7 +105,7 @@ async function persistSessionState(): Promise<void> {
   if (!_context || !_profileDir) return
   try {
     const state = await _context.storageState()
-    await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state))
+    await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
   } catch { /* non-fatal */ }
 }
 
@@ -137,6 +137,7 @@ async function keepAlive(): Promise<void> {
 export interface SfReportRow {
   headers: string[]
   rows: string[][]
+  droppedColumns?: string[]
 }
 
 /**
@@ -362,7 +363,15 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
     const finalHeaders = keepIdx.length >= 3 ? keepIdx.map(i => headers[i]) : headers
     const finalRows    = keepIdx.length >= 3 ? dataRows.map(row => keepIdx.map(i => row[i] ?? '')) : dataRows
 
-    const result = { headers: finalHeaders, rows: finalRows }
+    const keptHeaders = new Set(keepIdx.map(i => headers[i]))
+    const droppedColumns = keepIdx.length >= 3
+      ? headers.filter(h => !keptHeaders.has(h))
+      : []
+    if (droppedColumns.length > 0) {
+      console.warn(`[sf-scraper] dropped ${droppedColumns.length} column(s) not in KEEP_COLS: ${droppedColumns.join(', ')}`)
+    }
+
+    const result = { headers: finalHeaders, rows: finalRows, droppedColumns }
     console.log(`[sf-scraper] report ${reportId}: ${result.headers.length} columns, ${result.rows.length} data rows (${rows.length} raw)`)
 
     if (result.rows.length === 0) {
@@ -415,21 +424,35 @@ export async function writePipelineSheet(data: SfReportRow, sheetIdParam?: strin
     console.log(`[sf-scraper] created tab "${TAB_NAME}"`)
   }
 
-  const values = [data.headers, ...data.rows]
+  // BKL-S17: never clear + overwrite with 0 data rows
+  if (data.rows.length === 0) {
+    console.warn(`[sf-scraper] 0 pipeline rows returned — skipping clear+write to protect existing sheet data (BKL-S17)`)
+    return
+  }
+
+  const sanitizeCell = (v: string): string => {
+    if (typeof v !== 'string') return v
+    if (/^[=+\-@]/.test(v) && !/^-?\d/.test(v)) return `'${v}`
+    return v
+  }
+  const values = [data.headers, ...data.rows.map(row => row.map(sanitizeCell))]
 
   // Clear then rewrite — use a wide range (A1:AZ) to cover any previous syncs
   // that may have written more columns than the current report has.
-  await sheets.spreadsheets.values.clear({
-    spreadsheetId,
-    range: `${TAB_NAME}!A1:AZ10000`,
-  })
+  await withQuotaRetry(
+    () => sheets.spreadsheets.values.clear({ spreadsheetId, range: `${TAB_NAME}!A1:AZ10000` }),
+    'clear pipeline',
+  ).catch(() => {})
 
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `${TAB_NAME}!A1`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values },
-  })
+  await withQuotaRetry(
+    () => sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${TAB_NAME}!A1`,
+      valueInputOption: 'RAW',
+      requestBody: { values },
+    }),
+    'pipeline tab',
+  )
 
   console.log(`[sf-scraper] wrote ${data.rows.length} rows + headers to pipeline sheet ${spreadsheetId} tab "${TAB_NAME}"`)
 }
@@ -440,6 +463,9 @@ export async function writePipelineSheet(data: SfReportRow, sheetIdParam?: strin
  * Returns the new spreadsheet ID.
  */
 export async function createPipelineSheet(aeName: string, driveFolderId: string): Promise<string> {
+  if (!driveFolderId || !/^[a-zA-Z0-9_-]{10,}$/.test(driveFolderId)) {
+    throw new Error(`[sf-scraper] invalid driveFolderId: "${driveFolderId}"`)
+  }
   const auth  = makeAuth(GDRIVE_TOKEN_PATH)
   const drive = google.drive({ version: 'v3', auth })
   const created = await drive.files.create({
@@ -476,7 +502,50 @@ export async function runSfPipelineSync(reportId: string, profileDir: string, sh
     lastSfRowCount = data.rows.length
     return data.rows.length
   } catch (e: any) {
-    sfSyncError = e?.message ?? String(e)
+    sfSyncError = 'SF sync failed'
     throw e
   }
+}
+
+export interface SfReportItem {
+  id: string
+  name: string
+  url: string
+}
+
+/**
+ * List available Salesforce reports using the Analytics REST API.
+ * Requires an active SF browser context.
+ * Returns reports sorted alphabetically by name, capped at 50.
+ */
+export async function listSfReports(): Promise<SfReportItem[]> {
+  if (!_context) throw new Error('SF session not active — log in via Setup first')
+
+  const BASE = 'https://redhatcrm.lightning.force.com'
+  const API_VERSION = 'v59.0'
+
+  const tryFetch = async (listType: string): Promise<SfReportItem[]> => {
+    const url = `${BASE}/services/data/${API_VERSION}/analytics/reports?listtype=${listType}`
+    const res = await _context!.request.get(url, {
+      headers: { 'Accept': 'application/json' },
+    })
+    if (!res.ok()) return []
+    const json = await res.json() as any[]
+    if (!Array.isArray(json)) return []
+    return json
+      .filter(r => r.id && r.name && (!r.reportFormat || r.reportFormat === 'SUMMARY' || r.reportFormat === 'TABULAR'))
+      .map(r => ({
+        id: r.id as string,
+        name: r.name as string,
+        url: `${BASE}/lightning/r/Report/${r.id}/view`,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 50)
+  }
+
+  let reports = await tryFetch('recentlyViewed')
+  if (reports.length === 0) {
+    reports = await tryFetch('owned')
+  }
+  return reports
 }

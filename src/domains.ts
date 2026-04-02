@@ -23,15 +23,22 @@ export const BLOCKLIST = new Set([
   'salesforce.com', 'zoom.us', 'slack.com', 'dropboxmail.com',
   // Known false-positive tooling/partner domains
   'tableau.com', 'cisco.com', 'gdt.com', 'concursolutions.com', 'insight.com',
-  'workday.com', 'servicenow.com', 'docusign.com', 'box.com', 'okta.com',
+  'servicenow.com', 'docusign.com', 'box.com', 'okta.com',
   'qualtrics.com', 'coupa.com', 'ariba.com', 'oracle.com', 'sap.com',
 ])
 
-export function extractDomain(email: string): string | null {
+export function extractDomain(email: string, domainOverride?: string): string | null {
   const m = email.match(/@([\w.-]+\.[a-z]{2,})$/i)
   if (!m) return null
   const d = m[1].toLowerCase()
+  // BKL-F05: customer-level override bypasses blocklist (e.g. workday.com for Workday Inc)
+  if (domainOverride && d === domainOverride.toLowerCase()) return d
   return BLOCKLIST.has(d) ? null : d
+}
+
+/** BKL-F05: Whether a DomainCandidate is high-confidence (auto-save eligible). */
+export function isHighConfidenceDomain(c: DomainCandidate): boolean {
+  return c.sources.includes('web') && (c.sources.includes('calendar') || c.sources.includes('gmail') || c.sources.includes('supportable'))
 }
 
 export interface DomainCandidate {
@@ -142,7 +149,7 @@ export async function inferCustomerDomain(
         // Only count if subject actually references the customer
         if (!nameTerms.some((t) => subject.includes(t))) continue
 
-        const d = extractDomain(from)
+        const d = extractDomain(from, customer.domainOverride)
         if (d) gmailCounts.set(d, (gmailCounts.get(d) ?? 0) + 1)
       }
     }
@@ -170,7 +177,7 @@ export async function inferCustomerDomain(
         .map((a) => a.email ?? '')
         .filter((e) => !e.endsWith('@redhat.com') && !e.includes('resource.calendar'))
       for (const email of attendees) {
-        const d = extractDomain(email)
+        const d = extractDomain(email, customer.domainOverride)
         if (d) calCounts.set(d, (calCounts.get(d) ?? 0) + 1)
       }
     }
