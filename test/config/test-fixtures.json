@@ -1,0 +1,14 @@
+{
+  "bootstrap": {
+    "parentDriveFolderUrl": "https://drive.google.com/drive/folders/1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq",
+    "aes": [
+      {
+        "name": "Carolanne Farrell",
+        "pod": "WEST_COMM_CORP_NORTHWEST",
+        "territory": "01",
+        "sfReportId": "00OPe00000isU2zMAE",
+        "tableauTerritories": ["WEST_COMM_CORP_NORTHWEST_TERR01"]
+      }
+    ]
+  }
+}

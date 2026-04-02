@@ -109,19 +109,19 @@ test.describe('AE config API', () => {
 // ── Bootstrap pre-checks ─────────────────────────────────────────────────────
 
 test.describe('Bootstrap pre-checks', () => {
-  test('POST /api/bootstrap/supportable without RH session returns 400 or 409', async () => {
+  test('POST /api/scrape/supportable without RH session returns 400 or 409', async () => {
     // This test is only meaningful when there is no active RH session.
     // If a real session exists, the endpoint may return 200 — skip in that case.
     const rhStatus = await getJSON('/api/auth/redhat/status')
     test.skip(rhStatus.body.hasSession === true, 'RH session is active — cannot test no-session path')
 
-    const res = await postJSON('/api/bootstrap/supportable', {})
+    const res = await postJSON('/api/scrape/supportable', {})
     expect([400, 401, 403, 409]).toContain(res.status)
     expect(res.body).toHaveProperty('error')
   })
 
-  test('GET /api/bootstrap/ccsp/status returns correct shape', async () => {
-    const { status, body } = await getJSON('/api/bootstrap/ccsp/status')
+  test('GET /api/scrape/ccsp/status returns correct shape', async () => {
+    const { status, body } = await getJSON('/api/scrape/ccsp/status')
     expect(status).toBe(200)
     expect(body).toHaveProperty('running')
     expect(typeof body.running).toBe('boolean')

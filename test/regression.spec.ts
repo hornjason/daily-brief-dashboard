@@ -73,18 +73,18 @@ test.describe('REG-001: tableauTerritories preserved after POST /api/aes', () =>
   })
 })
 
-// ── REG-002: POST /api/bootstrap/ccsp returns 400 when no territories ────────
+// ── REG-002: POST /api/scrape/ccsp returns 400 when no territories ────────
 
-test.describe('REG-002: POST /api/bootstrap/ccsp rejects AEs without territories', () => {
+test.describe('REG-002: POST /api/scrape/ccsp rejects AEs without territories', () => {
   test('returns 400 when no AEs have tableauTerritories configured', async () => {
     // Save an AE with NO tableauTerritories
     const aeWithoutTerritories = { name: 'No Territory AE' }
     await postJSON('/api/aes', { aes: [aeWithoutTerritories] })
 
-    const res = await postJSON('/api/bootstrap/ccsp', {})
+    const res = await postJSON('/api/scrape/ccsp', {})
     // Should be 400 (or 401/403 if no Google auth) — but NOT 200 with silent skip
-    // Accept 400 (no territories), 401 (no Google auth), or 403 (missing scopes)
-    expect([400, 401, 403]).toContain(res.status)
+    // Accept 400 (no territories), 401 (no Google auth), 403 (missing scopes), 409 (scrape in flight from parallel tests)
+    expect([400, 401, 403, 409]).toContain(res.status)
     expect(res.body.error).toBeTruthy()
   })
 })
