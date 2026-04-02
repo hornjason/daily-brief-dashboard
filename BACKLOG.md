@@ -1936,14 +1936,26 @@ Size: XS (1 hour)
 Files: entrypoint.sh
 Description: Replace `sleep 1` with xdpyinfo probe loop. Add --memory=2g to Makefile. Consider process supervisor (tini/dumb-init).
 
-### BKL-M50h | Evaluate SF REST API to replace Lightning DOM scraping
+### BKL-M50h | API migration — SF, Tableau, RH to replace browser scraping
 Status: 🔴 OPEN
-Priority: P2
-Size: M (research + prototype)
-Depends on: BKL-M50b (research recommendations)
-Files: src/sf-scraper.ts
-Description: SF pipeline scraper parses Lightning UI DOM (684 rows, fragile selectors, 7+ min stalls). Evaluate switching to Salesforce REST API for report data. Needs: API credentials, connected app setup, report API endpoint discovery.
-Observations: 2026-04-02 SF scrape stalled 7+ min on second AE despite identical report. 684-row allTextContents() loop may be bottleneck.
+Priority: P1
+Size: L (multi-service migration)
+Depends on: BKL-M50b (research complete)
+Files: src/sf-scraper.ts, src/ccsp-scraper.ts, src/redhat.ts
+Description: Research confirmed 4 services can partially or fully migrate to REST APIs. Tested 2026-04-02:
+  **RH Subscriptions API** ✅ WORKS NOW — offline token returns subscription data. Can implement immediately.
+  **RH Cases API** ❌ 404 at /support/v1/cases and /support/v2/cases — needs different endpoint or permissions. Investigate.
+  **Tableau REST API** ⚠️ API exists (got 401, not connection refused). PAT token tested but "invalid". Jason checking with Tableau admin if PAT API is enabled for site.
+  **Salesforce REST API** ⚠️ Not tested — needs Connected App with JWT Bearer flow from SF admin.
+Action items for Jason:
+  1. Check with SF admin: can they create a Connected App for JWT Bearer API access?
+  2. Check with Tableau admin: is PAT API enabled? Was the token name/secret format correct?
+  3. Check RH API docs: correct cases endpoint URL + required permissions
+Implementation order (once access confirmed):
+  1. RH Subscriptions via API (already works — biggest quick win)
+  2. Tableau via REST API + PAT (eliminates SSO passthrough fragility)
+  3. Salesforce via REST API + JWT (eliminates 7+ min DOM scraping stalls)
+  4. RH Cases via API (if endpoint found — eliminates browser scraping for cases)
 Related: BKL-F11 (shared report dedup), ADR-001
 
 ---
