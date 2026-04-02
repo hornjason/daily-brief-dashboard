@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-02 (BKL-F08 added: VNC flash-close regression; BKL-F07: accept full SF URL; BKL-G01–G16: Quinn visual audit gaps; BKL-E01–E06: email delivery)
+Last update: 2026-04-02 (BKL-AI01–AI08: account intelligence pipeline from 3-agent research; BKL-F08: VNC flash-close; BKL-F07: SF URL; BKL-G01–G16: UI gaps; BKL-E01–E06: email)
 
 ---
 
@@ -833,6 +833,34 @@ Files: src/pipeline.ts, dashboard/src/components/PipelineSection.tsx
 Description: Pipeline sheet doesn't include Opportunity ID column yet. When SF report is updated to include it, wire up direct opp links in the UI.
 Decision: DEFERRED until SF report includes Opportunity ID column. When ready: (1) add oppId to PipelineRecord type, (2) capture col(row, 'Opportunity ID') in parsePipelineRows, (3) wrap oppName in <a href> when oppId present.
 
+### BKL-F10 | Research: improve morning brief effectiveness — actionable next steps per signal
+Status: 🔴 OPEN
+Priority: P2
+Size: M (research + design)
+Source: Jason 2026-04-02 — briefs need next steps next to each opportunity/signal to drive action
+Files: src/customer.ts (brief generation prompts), dashboard/src/components/MorningSummary.tsx, docs/GEMINI-BRIEF-ARCHITECTURE.md
+Description: Research ways to make the morning brief and morning summary more actionable. Current briefs surface signals (renewals, cases, pipeline) but don't tell the SA what to DO about each one. Wants next steps alongside each flagged opportunity or signal — e.g., "Renewal expiring in 30d → Schedule renewal review with AE" or "New Sev1 case → Check case status, prep customer call." Research should cover: (1) How best-in-class sales intelligence tools present actionable next steps alongside signals, (2) AI-generated vs rule-based next steps, (3) Scannable in <30 seconds while including actions, (4) Clickable actions (open calendar, draft email, link to case), (5) Other effectiveness improvements — priority ordering, severity badges, time-sensitivity, "if you do one thing today" highlight.
+Fix:
+  1. Research: extensive research on actionable intelligence brief patterns
+  2. Design: Aditi designs next-step UI patterns for morning summary + per-customer brief
+  3. Update Gemini brief prompt to generate specific next-step recommendations per signal
+  4. Update morning summary to include recommended action per signal row
+  5. Consider: rule-based for common patterns (renewal → schedule review) + AI-generated for novel situations
+
+### BKL-F09 | Setup page Sync status may not reflect API/scheduler-triggered scrapes
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-02 — observed CCSP sync possibly not showing as running on Setup page
+Files: dashboard/src/pages/SetupPage.tsx (CCSP status polling), src/scrape-api.ts (status endpoints)
+Description: When a scrape is triggered from the Admin page or background scheduler (POST /api/scrape/ccsp), the Setup Data Sources page should show it as running. The Setup page polls GET /api/scrape/ccsp/status which returns server-side ccspScrapeRunning || ccspInFlight. However, the Setup page "Sync Now" button calls /api/refresh/ccsp (cache-only, no server flag) — so there may be confusion between the two endpoints. Additionally, the polling interval may be too slow to catch short scrapes. Investigate: (1) confirm Setup page polling picks up Admin-triggered scrapes, (2) ensure all 4 sync types (RH Cases, Supportable, CCSP, SF Pipeline) show running state regardless of trigger source, (3) consider adding SSE or faster polling for sync status.
+Fix:
+  1. Verify Setup page polls /api/scrape/ccsp/status (not just local state)
+  2. Test: trigger scrape from Admin, observe Setup page — does it show running?
+  3. If not: ensure Setup page uses server-side running flag, not just local ccspScraping state
+  4. Consider unifying "Sync Now" on Setup page to call the full scrape endpoint (with confirmation) instead of cache-only refresh
+  5. Check polling interval — may need to be shorter during active scrapes
+
 ### BKL-F08 | VNC window flash-closes on Connect — BKL-F04 close() too aggressive
 Status: 🔴 OPEN
 Priority: P1
@@ -862,6 +890,122 @@ Fix:
   4. Update placeholder text: "Paste Salesforce report URL or ID"
   5. Show parsed report ID as confirmation after paste (e.g., "Report ID: 00OPQ000001abc ✓")
   6. Validate format before saving — reject obviously invalid strings
+
+## Account Intelligence Pipeline (from 2026-04-02 research synthesis)
+
+### BKL-AI01 | Web search to identify industry/segment per customer + cache
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-02 — account intelligence prompt pipeline; 3-agent extensive research
+Files: src/account-intelligence.ts (new), data/config/customers.json
+Description: For each customer, use Gemini with Google Search grounding to determine industry and segment. Cache the result in customers.json so we don't re-search every run. This is the foundation for templating both intelligence prompts.
+Fix:
+  1. Create src/account-intelligence.ts with determineIndustry(customerName) function
+  2. Use Gemini with tools: [{ googleSearch: {} }] to identify industry + segment
+  3. Cache industry/segment in customers.json per customer
+  4. Skip search if customer already has industry cached
+  5. Expose via GET /api/customer/:name/industry for frontend use
+
+### BKL-AI02 | Gemini generation — Company Intelligence brief with grounding
+Status: 🔴 OPEN
+Priority: P2
+Size: M (1-2 days)
+Source: Jason 2026-04-02 — improved Prompt 1 from 3-agent research synthesis
+Files: src/account-intelligence.ts
+Depends on: BKL-AI01 (needs industry/segment)
+Description: Run improved Company Intelligence prompt through Gemini with Google Search grounding (40% hallucination reduction). Uses PTCF structure, thinkingLevel HIGH, atomic claim citations, anti-pattern guardrails, "earned recommendation" pattern for Red Hat product fit, and PESTLE→SWOT ordering. Multi-pass: generate → verify → finalize.
+Research: Prompt template at ~/.claude/MEMORY/RESEARCH/2026-04/improved-account-intelligence-prompts.md
+Fix:
+  1. Template Prompt 1 with customer name, industry, AE name, relationship notes
+  2. Call Gemini with tools: [{ googleSearch: {} }], thinkingLevel: "HIGH"
+  3. Post-generation verification pass (financial claims, leadership names, source freshness)
+  4. Return structured markdown ready for Google Docs
+
+### BKL-AI03 | Gemini generation — Industry Technology Analysis with grounding
+Status: 🔴 OPEN
+Priority: P2
+Size: M (1-2 days)
+Source: Jason 2026-04-02 — improved Prompt 2 from 3-agent research synthesis
+Files: src/account-intelligence.ts
+Depends on: BKL-AI01 (needs industry/segment)
+Description: Run improved Industry Technology Analysis prompt through Gemini with grounding. Auto-selects all subsegments. Includes regional parity rules, emerging tech deep-dive (6 categories), technology adoption chain, vendor ecosystem mapping. Per-customer doc even if customers share industry. Geographic balance enforced with gap disclosure.
+Research: Prompt template at ~/.claude/MEMORY/RESEARCH/2026-04/improved-account-intelligence-prompts.md
+Fix:
+  1. Template Prompt 2 with customer name, industry, date
+  2. Single-pass generation (subsegment identification + full report in one call)
+  3. Call Gemini with tools: [{ googleSearch: {} }], thinkingLevel: "HIGH"
+  4. Post-generation verification pass for geographic balance and citation quality
+  5. Return structured markdown ready for Google Docs
+
+### BKL-AI04 | Create Account Intelligence subfolder + Google Docs via Drive API
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-02 — docs in {customer_folder}/Account Intelligence/
+Files: src/account-intelligence.ts, src/google.ts (Drive API)
+Depends on: BKL-AI02, BKL-AI03 (needs generated content)
+Description: For each customer, create "Account Intelligence" subfolder in their Drive folder. Write two Google Docs: "{Customer} - Company Intelligence" and "{Customer} - Industry Analysis". Update existing docs on re-run. Use Docs API batchUpdate for proper heading/table formatting.
+Fix:
+  1. Find customer's Drive folder from customers.json or aes.json driveFolderId
+  2. Check for existing "Account Intelligence" subfolder; create via Drive API if missing
+  3. Check for existing docs by name; update content if found, create if not
+  4. Use Docs API batchUpdate with markdown-to-Docs formatting (## headings, tables, [text](url) citations)
+  5. Return Google Doc URLs for dashboard linking
+
+### BKL-AI05 | Dashboard UI — per-customer Generate Intelligence button + doc links
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-02 — button placement decided by Aditi + Quinn
+Files: dashboard/src/pages/CustomerDetailPage.tsx, server.ts (new endpoints)
+Depends on: BKL-AI04 (needs Drive write capability)
+Description: Add UI to Customer Detail Page for generating and viewing account intelligence docs. Aditi (design) and Quinn (QA) decide placement. Show doc status (exists/generating/missing), last generated date, and direct Google Doc links.
+Fix:
+  1. POST /api/customer/:name/generate-intelligence — triggers async generation pipeline
+  2. GET /api/customer/:name/intelligence-status — returns doc URLs, dates, generation status
+  3. Frontend: button to trigger, loading state, links to Google Docs when ready
+  4. Show progress (industry lookup → company brief → industry analysis → Drive write)
+
+### BKL-AI06 | Batch "Generate All" from Admin/Settings page
+Status: 🔴 OPEN
+Priority: P3
+Size: S (half day)
+Source: Jason 2026-04-02 — batch generation for full portfolio
+Files: dashboard/src/pages/SetupPage.tsx or Admin page, server.ts
+Depends on: BKL-AI05 (needs per-customer generation working)
+Description: "Generate All Account Intelligence" button on Admin or Settings page. Sequential execution with rate-limit delays. Progress indicator. Skip customers with recent docs (< 30 days) unless force=true.
+Fix:
+  1. POST /api/intelligence/generate-all — triggers batch generation
+  2. GET /api/intelligence/batch-status — returns progress (completed/total/current/errors)
+  3. Sequential execution with 2-second delay between customers (Gemini rate limits)
+  4. Frontend: progress bar, current customer name, error count, cancel button
+
+### BKL-AI07 | Auto-generate intelligence docs during bootstrap
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Jason 2026-04-02 — new users should get this automatically during setup
+Files: src/bootstrap-orchestrator.ts
+Depends on: BKL-AI06 (needs batch generation)
+Description: After bootstrap customer discovery (Step 3), auto-trigger account intelligence generation for all discovered customers as a background non-blocking task. New users get intelligence docs without manual steps.
+Fix:
+  1. After bootstrap step 3 (Supportable discovery), fire POST /api/intelligence/generate-all internally
+  2. Non-blocking — bootstrap completes immediately, generation runs in background
+  3. Show generation progress on bootstrap completion card if still running
+
+### BKL-AI08 | Wire Account Intelligence docs into brief generation pipeline
+Status: 🔴 OPEN
+Priority: P2
+Size: XS (30 min)
+Source: Jason 2026-04-02 — current code should leverage the intelligence data
+Files: src/doc-extraction.ts (classifyDocs prompt)
+Description: The existing Drive doc fetcher already crawls subfolders (customer.ts:246-277, depth=5) and feeds docs into classifyDocs(). Update classifyDocs() to recognize Account Intelligence docs as high-value strategic context and score them highly. This ensures SWOT findings, competitive positioning, trigger events, and product-fit insights flow into daily briefs automatically.
+Fix:
+  1. Update classifyDocs() prompt in doc-extraction.ts to recognize Account Intelligence doc types
+  2. Add classification categories: "company_intelligence" and "industry_analysis"
+  3. Score these doc types highly in the ranking step
+  4. Ensure key signals (SWOT items, trigger events, product fit) are extracted into brief XML
 
 ### BKL-E01 | Add gmail.send scope to OAuth + reauth flow
 Status: ✅ DONE 2026-04-02
@@ -1681,6 +1825,64 @@ Source: Rook Blackburn Wave 6 scan 2026-04-01
 Files: src/territory-sync.ts:136-156
 Description: Customer names from the territory Google Sheet are normalized via `normalizeTerritoryCustomerName()` (strips legal suffixes, title-cases) but leading formula-injection prefixes (`=`, `+`, `-`, `@`) are not stripped. A malicious tab in the territory sheet could write `=IMPORTRANGE(...)` as a customer name; this would flow into customers.json. Mitigated: downstream Sheets writers apply `sanitizeCell()` at write time — so the injection would be caught before hitting Google Sheets. However, customers.json itself could contain the unsanitized prefix.
 Fix: In `normalizeTerritoryCustomerName()`, add leading-prefix strip after trimming: `name = name.replace(/^[=+\-@]/, '')`. One-line fix, zero functional impact on real customer names.
+
+---
+
+### BKL-M50 | Deep audit: auth + scraper architecture — enterprise readiness assessment
+Status: 🟡 IN PROGRESS
+Priority: P0
+Size: L (research + report)
+Source: Jason 2026-04-02 — "core fundamental pieces, need to be best in class / stable / enterprise ready for onboarding others"
+Files: src/rh-scraper.ts, src/rh-auth.ts, src/sf-scraper.ts, src/sf-auth.ts, src/ccsp-scraper.ts, src/supportable-scraper.ts, src/scraper-manager.ts, src/background-scheduler.ts, entrypoint.sh, ARCHITECTURE.md
+Description: Comprehensive investigation of ALL auth flows and scraper systems to assess enterprise readiness. This is the foundation — if scrapers and auth aren't rock solid, the entire application loses credibility when onboarding new users.
+  Scope:
+  1. Auth flows: RH SSO (browser-based), SF OAuth, Google OAuth, Tableau SSO passthrough — document every flow, failure mode, and recovery path
+  2. Session lifecycle: how each session starts, expires, detects expiry, recovers. What happens on container restart?
+  3. Shared browser context: why it exists, what depends on it, failure modes, can it be made more resilient?
+  4. Scraper reliability: which scrapers fail silently? Which retry? Which corrupt data on failure?
+  5. Startup sequencing: race conditions, dependency order, what must happen before what
+  6. Error reporting: can a new user diagnose what's wrong from the dashboard alone, or do they need server logs?
+  7. Graceful degradation: what happens when each external service is down? Does the dashboard still function?
+  8. Scale: what happens with 50 customers? 200? Where are the bottlenecks?
+  9. Recommendations: prioritized list of fixes to reach enterprise-grade stability
+Related: BKL-M49 (startup sequencing), ADR-001 (session architecture), ARCHITECTURE.md §3-4
+
+---
+
+### BKL-M49 | Scraper startup sequencing — prevent race conditions on container restart
+Status: 🔴 OPEN
+Priority: P1
+Size: M (1-2 days)
+Source: Jason 2026-04-02 — CCSP scraper failed repeatedly because RH scraper held shared browser context on startup
+Files: src/background-scheduler.ts, src/rh-scraper.ts, src/ccsp-scraper.ts, src/supportable-scraper.ts, entrypoint.sh
+Description: On container start (or rebuild), multiple scrapers try to use the shared browser context simultaneously. The RH case scraper starts immediately and holds pages open for 5-10 min while iterating ~50 accounts. Any other scraper (CCSP, Supportable) that runs during this window gets "Target page, context or browser has been closed" — they compete for the same BrowserContext.
+  Current: all scheduled scrapers start independently on boot with no coordination. First one grabs the context, others fail silently.
+  Observed 2026-04-02: CCSP scrape triggered via Admin page failed 3 times because RH was running. Required waiting for RH to finish then manually retrying.
+  Needs research: scraper queue/lock patterns, startup sequencing, retry-after-busy, separate contexts (breaks Tableau SSO?), persisting lastSync across restarts.
+Related: ADR-001 (session architecture), CCSP two-phase mutex, PARALLEL_PAGES=1 constraint
+
+---
+
+### BKL-G17 | Cloud Spend section redesign — quarterly breakdown, reporting period context, better visualization
+Status: 🔴 OPEN
+Priority: P2
+Size: M (1-2 days)
+Source: Jason 2026-04-02 — "research a better design, break down by quarter, show which quarters we're reporting"
+Files: dashboard/src/components/CloudSpendSection.tsx, server.ts (/api/ccsp)
+Description: Current Cloud Spend "Spend by Account" panel shows a donut chart + legend but provides no temporal context. Issues:
+  - No quarter breakdown — total spend lumped together with no visibility into Q1/Q2/Q3/Q4 trends
+  - No reporting period indicator — user doesn't know which quarters the data covers
+  - Account names truncated in legend ("Crow...", "McAf...", "Confl...")
+  - Donut chart takes up space but doesn't convey much beyond relative proportions
+  - No quarter-over-quarter trend (is spend growing, shrinking?)
+Desired:
+  1. Show which quarters are being reported (e.g., "CY26 Q1-Q2" header badge)
+  2. Break down spend by quarter — stacked bar or grouped bar showing per-account per-quarter spend
+  3. Show quarter-over-quarter trend (up/down arrows or sparklines)
+  4. Full account names visible (no truncation)
+  5. Keep total spend hero number ($914K)
+  6. Research best-in-class cloud spend dashboard designs for inspiration
+Related: CCSP data already has byQuarter in the API response
 
 ---
 
