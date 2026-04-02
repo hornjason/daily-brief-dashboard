@@ -52,12 +52,14 @@ export default function HealthDot({ score, size = 'sm', showScore = false, break
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <span className={`inline-block ${sizeClass} rounded-full ${color}`} />
+      <span className={`inline-block ${sizeClass} rounded-full ${color}`} title={breakdown ? undefined : `Health: ${score}/100 — ${label}`} />
       {showScore && <span className={`text-xs tabular-nums ${textColor}`}>{score}</span>}
 
       {/* Tooltip with score breakdown (BKL-G12) */}
       {showTooltip && breakdown && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 pointer-events-none">
+          {/* Arrow */}
+          <div className="w-2 h-2 bg-surface border-t border-l border-border rotate-45 absolute left-1/2 -translate-x-1/2 -top-1" />
           <div role="tooltip" className="bg-surface border border-border rounded-lg shadow-lg px-3 py-2.5 min-w-[180px]">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-text-primary">Health Score</span>
@@ -84,8 +86,6 @@ export default function HealthDot({ score, size = 'sm', showScore = false, break
               })}
             </div>
           </div>
-          {/* Arrow */}
-          <div className="w-2 h-2 bg-surface border-b border-r border-border rotate-45 absolute left-1/2 -translate-x-1/2 -bottom-1" />
         </div>
       )}
 

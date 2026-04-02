@@ -274,7 +274,7 @@ function AccountCard({
               {account.ae.split(' ')[0]}
             </span>
           )}
-          <span className="text-xs text-text-secondary">{account.segment}</span>
+          <span className="text-xs text-text-secondary truncate max-w-[120px]" title={account.segment}>{account.segment}</span>
         </div>
       </a>
 

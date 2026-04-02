@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { KPIs, SupportCase, AccountInfo, PipelineOpp } from '../types'
 import KPICasesModal from './KPICasesModal'
 import KPISev1Modal from './KPISev1Modal'
-import KPIRenewalsModal, { type RenewalRow } from './KPIRenewalsModal'
+import KPIRenewalsModal, { type RenewalRow, isFreeOrTrialRow } from './KPIRenewalsModal'
 import KPITechWinsModal from './KPITechWinsModal'
 import SparklineKPI from './SparklineKPI'
 import {
@@ -171,6 +171,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
             endDate: p.endDate,
             daysLeft,
             ae: acct.ae,
+            sku: p.sku,
           })
         }
       }
@@ -178,8 +179,14 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
     return rows.sort((a, b) => a.daysLeft - b.daysLeft)
   }, [accounts])
 
-  const redRows = renewalRows.filter((r) => r.daysLeft < 30)
-  const amberRows = renewalRows.filter((r) => r.daysLeft >= 30)
+  // BKL-M45: Split into paid and free/trial rows
+  const paidRows = useMemo(() => renewalRows.filter(r => !isFreeOrTrialRow(r)), [renewalRows])
+  const freeTrialRows = useMemo(() => renewalRows.filter(r => isFreeOrTrialRow(r)), [renewalRows])
+
+  const redRows = paidRows.filter((r) => r.daysLeft < 30)
+  const amberRows = paidRows.filter((r) => r.daysLeft >= 30)
+  const redFreeTrialRows = freeTrialRows.filter((r) => r.daysLeft < 30)
+  const amberFreeTrialRows = freeTrialRows.filter((r) => r.daysLeft >= 30)
   const redCount = redRows.length
   const amberCount = amberRows.length
 
@@ -276,9 +283,10 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
         icon={<Package className="w-5 h-5" />}
         accent={redCount > 0 ? '#F85149' : '#3FB950'}
         loading={loading}
-        onClick={redCount > 0 ? () => setRedOpen(true) : undefined}
+        onClick={redCount > 0 || redFreeTrialRows.length > 0 ? () => setRedOpen(true) : undefined}
         sparklineData={sparklineHistory?.expiringWithin30}
         invertTrend
+        subtitle={redFreeTrialRows.length > 0 ? `(${redFreeTrialRows.length} free/trial excluded)` : undefined}
       />
     ),
     renewals30to90: (
@@ -289,8 +297,9 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
         icon={<Key className="w-5 h-5" />}
         accent={amberCount > 0 ? '#D29922' : '#3FB950'}
         loading={loading}
-        onClick={amberCount > 0 ? () => setAmberOpen(true) : undefined}
+        onClick={amberCount > 0 || amberFreeTrialRows.length > 0 ? () => setAmberOpen(true) : undefined}
         sparklineData={sparklineHistory?.renewals30to90}
+        subtitle={amberFreeTrialRows.length > 0 ? `(${amberFreeTrialRows.length} free/trial excluded)` : undefined}
       />
     ),
     techWinsNeeded: (
@@ -335,6 +344,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
           rows={redRows}
           byCustomer={redByCustomer}
           onClose={() => setRedOpen(false)}
+          freeTrialRows={redFreeTrialRows}
         />
       )}
 
@@ -345,6 +355,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
           rows={amberRows}
           byCustomer={amberByCustomer}
           onClose={() => setAmberOpen(false)}
+          freeTrialRows={amberFreeTrialRows}
         />
       )}
 
