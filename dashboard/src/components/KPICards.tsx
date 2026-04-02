@@ -68,9 +68,10 @@ interface KPICardProps {
   onClick?: () => void
   subtitle?: React.ReactNode
   sparklineData?: number[]
+  invertTrend?: boolean
 }
 
-function KPICard({ label, value, icon, accent, loading, onClick, subtitle, sparklineData }: KPICardProps) {
+function KPICard({ label, value, icon, accent, loading, onClick, subtitle, sparklineData, invertTrend }: KPICardProps) {
   return (
     <div
       className={`bg-surface border border-border rounded-xl p-5 min-w-[180px] flex-1 flex items-center gap-4 ${
@@ -92,7 +93,7 @@ function KPICard({ label, value, icon, accent, loading, onClick, subtitle, spark
             <div className="text-2xl font-bold text-text-primary tabular-nums">{value}</div>
           )}
           {sparklineData && sparklineData.length >= 2 && (
-            <SparklineKPI data={sparklineData} color={accent ?? '#00BCD4'} />
+            <SparklineKPI data={sparklineData} invertTrend={invertTrend} />
           )}
         </div>
         <div className="text-xs text-text-secondary leading-tight">{label}</div>
@@ -214,6 +215,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
         loading={loading}
         onClick={() => setCasesOpen(true)}
         sparklineData={sparklineHistory?.openCases}
+        invertTrend
         subtitle={
           rhHasSession === false
             ? 'No RH session'
@@ -233,6 +235,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
         loading={loading}
         onClick={() => setSev1Open(true)}
         sparklineData={sparklineHistory?.sev1Cases}
+        invertTrend
       />
     ),
     meetingsToday: (
@@ -247,6 +250,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
           const el = document.getElementById('section-calendar')
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }}
+        sparklineData={sparklineHistory?.meetingsToday}
       />
     ),
     meetingsThisWeek: (
@@ -261,6 +265,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
           const el = document.getElementById('section-calendar')
           if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }}
+        sparklineData={sparklineHistory?.meetingsThisWeek}
       />
     ),
     expiringWithin30: (
@@ -273,6 +278,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
         loading={loading}
         onClick={redCount > 0 ? () => setRedOpen(true) : undefined}
         sparklineData={sparklineHistory?.expiringWithin30}
+        invertTrend
       />
     ),
     renewals30to90: (

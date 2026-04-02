@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Sun, AlertTriangle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface Signal {
@@ -15,6 +16,7 @@ interface MorningSummaryData {
 }
 
 export default function MorningSummary() {
+  const navigate = useNavigate()
   const [data, setData] = useState<MorningSummaryData | null>(null)
   const [collapsed, setCollapsed] = useState(false)
 
@@ -39,7 +41,7 @@ export default function MorningSummary() {
   }
 
   return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
+    <div id="section-morning" data-section="section-morning" className="bg-surface border border-border rounded-xl overflow-hidden">
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="w-full px-5 py-3.5 flex items-center justify-between border-b border-border hover:bg-surface-hover transition-colors"
@@ -67,7 +69,11 @@ export default function MorningSummary() {
               {data.signals.map((s, i) => {
                 const Icon = severityIcon[s.severity]
                 return (
-                  <div key={i} className="flex items-start gap-3">
+                  <button
+                    key={i}
+                    onClick={() => navigate(`/dashboard/customer/${encodeURIComponent(s.customer)}`)}
+                    className="w-full flex items-start gap-3 text-left rounded-lg px-2 py-1.5 -mx-2 cursor-pointer hover:bg-border/20 transition-colors"
+                  >
                     <div className={`w-0.5 self-stretch rounded-full ${severityBar[s.severity]}`} />
                     <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
                       s.severity === 'critical' ? 'text-health-red'
@@ -78,7 +84,7 @@ export default function MorningSummary() {
                       <span className="text-sm font-medium text-text-primary">{s.customer}</span>
                       <span className="text-sm text-text-secondary"> &mdash; {s.text}</span>
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>

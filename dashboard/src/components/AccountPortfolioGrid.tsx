@@ -33,13 +33,13 @@ function getHealthStatusFromCases(account: AccountInfo, accountCases: SupportCas
 function getHealthStatus(
   account: AccountInfo,
   accountCases: SupportCase[],
-  healthScores: Record<string, { score: number; status: string }>
-): { color: string; label: string; score: number } {
+  healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
+): { color: string; label: string; score: number; breakdown?: Record<string, { score: number; signal: string }> } {
   const composite = healthScores[account.name]
   if (composite) {
     const color = composite.status === 'green' ? '#3FB950' : composite.status === 'yellow' ? '#D29922' : '#F85149'
     const label = composite.status === 'green' ? 'Healthy' : composite.status === 'yellow' ? 'Attention' : 'Critical'
-    return { color, label, score: composite.score }
+    return { color, label, score: composite.score, breakdown: composite.breakdown }
   }
   // Fallback to case-only triage with synthetic scores
   const old = getHealthStatusFromCases(account, accountCases)
@@ -248,7 +248,7 @@ function AccountCard({
   events: CalendarEvent[]
   showAE: boolean
   onProductClick: (a: AccountInfo) => void
-  healthScores: Record<string, { score: number; status: string }>
+  healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
   priorityAction?: string
 }) {
   const health = getHealthStatus(account, accountCases, healthScores)
@@ -263,7 +263,7 @@ function AccountCard({
         className="flex items-center justify-between mb-3"
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <HealthDot score={health.score} />
+          <HealthDot score={health.score} breakdown={health.breakdown as any} />
           <span className="text-sm font-semibold text-text-primary group-hover:text-accent transition-colors truncate">
             {account.name}
           </span>
@@ -354,7 +354,7 @@ function CardGrid({
   events: CalendarEvent[]
   showAE: boolean
   onProductClick: (a: AccountInfo) => void
-  healthScores: Record<string, { score: number; status: string }>
+  healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
   priorityActions: Record<string, string>
 }) {
   return (
@@ -385,15 +385,15 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
   const [viewMode, setViewMode] = useState<ViewMode>('byAE')
   const [search, setSearch] = useState('')
   const [aeFilter, setAeFilter] = useState('')
-  const [healthScores, setHealthScores] = useState<Record<string, { score: number; status: string }>>({})
+  const [healthScores, setHealthScores] = useState<Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>>({})
   const [priorityActions, setPriorityActions] = useState<Record<string, string>>({})
 
   useEffect(() => {
     fetch('/api/health-scores')
       .then(r => r.json())
-      .then((scores: { name: string; score: number; status: string }[]) => {
-        const map: Record<string, { score: number; status: string }> = {}
-        for (const s of scores) map[s.name] = { score: s.score, status: s.status }
+      .then((scores: { name: string; score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }[]) => {
+        const map: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }> = {}
+        for (const s of scores) map[s.name] = { score: s.score, status: s.status, breakdown: s.breakdown }
         setHealthScores(map)
       })
       .catch(() => {})
@@ -698,7 +698,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
                       <td className="py-2 px-3 font-medium text-text-primary">{account.name}</td>
                       <td className="py-2 px-3 text-text-secondary">{account.ae}</td>
                       <td className="py-2 px-3 text-center">
-                        <HealthDot score={health.score} />
+                        <HealthDot score={health.score} breakdown={health.breakdown as any} />
                       </td>
                       <td className="py-2 px-3 text-right tabular-nums">{acctCases.length}</td>
                       <td className="py-2 px-3 text-text-secondary">

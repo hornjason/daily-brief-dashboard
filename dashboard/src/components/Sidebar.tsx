@@ -10,10 +10,12 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Sun,
 } from 'lucide-react'
 
 const navItems = [
-  { icon: LayoutDashboard, label: 'Command Center', sectionId: 'section-command' },
+  { icon: Sun,             label: 'Morning Summary', sectionId: 'section-morning' },
+  { icon: LayoutDashboard, label: 'Command Center',  sectionId: 'section-command' },
   { icon: TrendingUp,      label: 'Pipeline',        sectionId: 'section-pipeline' },
   { icon: Cloud,           label: 'Cloud Spend',     sectionId: 'section-cloudspend' },
   { icon: Calendar,        label: 'Calendar',        sectionId: 'section-calendar' },

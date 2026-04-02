@@ -139,6 +139,8 @@ function Dashboard() {
         totalSubscriptions: number
         pipelineCount: number
         customerCount: number
+        meetingsToday?: number
+        meetingsThisWeek?: number
       }
     }>
   }>('/api/kpis/history')
@@ -152,6 +154,8 @@ function Dashboard() {
       expiringWithin30: snapshots.map(s => s.metrics.openRenewals),
       renewals30to90: snapshots.map(s => s.metrics.totalSubscriptions),
       techWinsNeeded: snapshots.map(s => s.metrics.pipelineCount),
+      meetingsToday: snapshots.map(s => s.metrics.meetingsToday ?? 0),
+      meetingsThisWeek: snapshots.map(s => s.metrics.meetingsThisWeek ?? 0),
     }
   }, [kpiHistoryApi.data])
 
