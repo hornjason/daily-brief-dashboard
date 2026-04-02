@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi'
 interface DeltaChange {
   section: string
   summary: string
+  details: string[]
 }
 
 interface DeltaResponse {
@@ -11,6 +12,20 @@ interface DeltaResponse {
   message?: string
   lastBriefDate?: string
   changes?: DeltaChange[]
+}
+
+/** Classify a detail line for coloring the triangle marker */
+function detailSentiment(text: string): 'positive' | 'negative' | 'neutral' {
+  const lower = text.toLowerCase()
+  if (/sev\s*[12]|critical|expired|declined|lost|risk|churn/i.test(lower)) return 'negative'
+  if (/increased|grew|won|closed.*won|upgrade|new meeting|scheduled/i.test(lower)) return 'positive'
+  return 'neutral'
+}
+
+const SENTIMENT_COLORS = {
+  positive: 'text-health-green',
+  negative: 'text-health-red',
+  neutral: 'text-health-amber',
 }
 
 export default function TemporalDeltaSection({ customerName }: { customerName: string }) {
@@ -67,9 +82,24 @@ export default function TemporalDeltaSection({ customerName }: { customerName: s
       </div>
       <ul className="divide-y divide-border-primary/40">
         {data.changes.map((ch, i) => (
-          <li key={i} className="px-4 py-2 flex items-baseline gap-2">
-            <span className="text-xs font-medium text-text-primary">{ch.section}</span>
-            <span className="text-[11px] text-text-secondary">{ch.summary}</span>
+          <li key={i} className="px-4 py-2">
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-medium text-text-primary">{ch.section}</span>
+              <span className="text-[11px] text-text-secondary">{ch.summary}</span>
+            </div>
+            {ch.details && ch.details.length > 0 && (
+              <ul className="mt-1 space-y-0.5 pl-1">
+                {ch.details.map((detail, j) => {
+                  const sentiment = detailSentiment(detail)
+                  return (
+                    <li key={j} className="flex items-start gap-1.5 text-[11px] text-text-primary/80">
+                      <span className={`${SENTIMENT_COLORS[sentiment]} shrink-0 leading-none mt-px`} aria-hidden="true">&#x25B2;</span>
+                      <span>{detail}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </li>
         ))}
       </ul>

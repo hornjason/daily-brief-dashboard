@@ -291,6 +291,38 @@ function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`bg-border/40 rounded animate-pulse-slow ${className}`} />
 }
 
+// ── Inline Sparkline (BKL-G05) ───────────────────────────────────────────────
+
+function InlineSparkline({ values }: { values: number[] }) {
+  if (values.length < 2) return null
+  const w = 32
+  const h = 12
+  const max = Math.max(...values, 1)
+  const min = Math.min(...values, 0)
+  const range = max - min || 1
+  const points = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * w
+    const y = h - ((v - min) / range) * (h - 2) - 1
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+
+  // Trend coloring
+  const trend = values[values.length - 1] >= values[0] ? '#3FB950' : '#F85149'
+
+  return (
+    <svg width={w} height={h} className="shrink-0" aria-hidden="true">
+      <polyline
+        points={points}
+        fill="none"
+        stroke={trend}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 // ── Brief text helpers (R07/R14) ──────────────────────────────────────────────
 
 function renderBriefWithCitations(text: string) {
@@ -344,10 +376,37 @@ function BriefSection({ name }: { name: string }) {
   }, [data?.text])
 
   const overview = Object.entries(sections).find(([k]) => k.startsWith('Account Overview'))?.[1]?.trim() ?? ''
-  // Sections rendered in order when expanded (skip Account Overview and Products & Subscriptions — shown in side tile)
-  const expandedSections = Object.entries(sections).filter(([k]) =>
-    !k.startsWith('Account Overview') && !k.startsWith('Products')
-  )
+
+  // BKL-G16: Reorder brief sections by spec hierarchy
+  // Priority Action > What Changed > Key Risks > Competitive Signals > Meetings > Pipeline > Cases > Subscriptions
+  // Skip Account Overview (shown above) and Products (shown in side tile)
+  const SECTION_ORDER: string[] = [
+    'Priority Action',
+    'What Changed',
+    'Key Risks',
+    'Competitive Signal',
+    'Talking Points',
+    'Meeting',
+    'Pipeline',
+    'Open Support Cases',
+    'Cases',
+    'Subscription',
+    'Technology Landscape',
+  ]
+
+  const expandedSections = useMemo(() => {
+    const entries = Object.entries(sections).filter(([k]) =>
+      !k.startsWith('Account Overview') && !k.startsWith('Products')
+    )
+    // Sort: known sections by spec order, unknown sections appended at end
+    return entries.sort(([a], [b]) => {
+      const aIdx = SECTION_ORDER.findIndex(prefix => a.toLowerCase().startsWith(prefix.toLowerCase()))
+      const bIdx = SECTION_ORDER.findIndex(prefix => b.toLowerCase().startsWith(prefix.toLowerCase()))
+      const aOrder = aIdx >= 0 ? aIdx : SECTION_ORDER.length + 1
+      const bOrder = bIdx >= 0 ? bIdx : SECTION_ORDER.length + 1
+      return aOrder - bOrder
+    })
+  }, [sections])
 
   // Parse competitive signals from brief "## Competitive Signals" section
   const competitiveSignals = useMemo(() => {
@@ -1357,11 +1416,27 @@ export function CustomerDetailPage() {
   }, [customerName])
 
   // Stakeholder Engagement (R31)
-  const stakeholderApi = useApi<{ contacts: { name: string; email?: string; lastContact?: string; frequency?: string; daysSilent?: number }[] }>(
+  const stakeholderApi = useApi<{ contacts: { name: string; email?: string; lastContact?: string; frequency?: string; daysSilent?: number; emailCount30d?: number; emailCount60d?: number; emailCount90d?: number }[] }>(
     `/api/customer/${encodeURIComponent(customerName ?? '')}/stakeholder-engagement`,
     { enabled: !!customerName }
   )
   const stakeholderContacts = stakeholderApi.data?.contacts ?? []
+
+  // Header stat data: CCSP + Pipeline (BKL-G05)
+  const [headerCcsp, setHeaderCcsp] = useState<{ totalAcv: number; byQuarter: { quarter: string; acv: number }[] } | null>(null)
+  const [headerPipeline, setHeaderPipeline] = useState<{ totalAcv: number; opps: { acv: number }[] } | null>(null)
+  useEffect(() => {
+    if (customerName) {
+      fetch(`/customer/${encodeURIComponent(customerName)}/ccsp`)
+        .then(r => r.json())
+        .then(d => setHeaderCcsp(d))
+        .catch(() => {})
+      fetch(`/customer/${encodeURIComponent(customerName)}/pipeline`)
+        .then(r => r.json())
+        .then(d => setHeaderPipeline(d))
+        .catch(() => {})
+    }
+  }, [customerName])
 
   // Health Score Hero (R12)
   const [healthScore, setHealthScore] = useState<{ score: number; status: 'red' | 'yellow' | 'green'; breakdown: Record<string, { score: number; signal: string }> } | null>(null)
@@ -1468,15 +1543,20 @@ export function CustomerDetailPage() {
         </div>
 
         {/* Row 2: hero name + stat badges */}
-        <div className="py-4 px-6 bg-surface/60 border-b border-border/40">
+        <div className="py-4 px-6 bg-surface/60 border-b border-border/40 min-h-[4rem]">
           <div className="flex items-center gap-4 flex-wrap">
-            {/* Health dot */}
+            {/* Health dot + numeric score (BKL-G13) */}
             {(sectionLoading || sse.meta !== null) && (
-              <div
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: health.color }}
-                title={health.label}
-              />
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: health.color }}
+                  title={health.label}
+                />
+                {healthScore && (
+                  <span className="text-xs font-semibold text-text-primary tabular-nums">{healthScore.score}/100</span>
+                )}
+              </div>
             )}
             {/* Customer not found indicator */}
             {!sectionLoading && sse.meta === null && (
@@ -1511,6 +1591,34 @@ export function CustomerDetailPage() {
                   value={accountInfo?.totalLicenses?.toLocaleString() ?? '0'}
                   label="Licenses"
                   loading={!accountInfo}
+                />
+                {/* BKL-G05: Cloud$ stat badge with sparkline */}
+                <StatBadge
+                  icon={
+                    <div className="flex items-center gap-1">
+                      <Cloud className="w-3.5 h-3.5 text-text-secondary" />
+                      {headerCcsp?.byQuarter && headerCcsp.byQuarter.length >= 2 && (
+                        <InlineSparkline values={headerCcsp.byQuarter.map(q => q.acv)} />
+                      )}
+                    </div>
+                  }
+                  value={headerCcsp ? fmtCurrency(headerCcsp.totalAcv) : '$0'}
+                  label="Cloud$"
+                  loading={!headerCcsp}
+                />
+                {/* BKL-G05: Pipeline ACV stat badge with sparkline */}
+                <StatBadge
+                  icon={
+                    <div className="flex items-center gap-1">
+                      <TrendingUp className="w-3.5 h-3.5 text-text-secondary" />
+                      {headerPipeline?.opps && headerPipeline.opps.length >= 2 && (
+                        <InlineSparkline values={headerPipeline.opps.map(o => o.acv)} />
+                      )}
+                    </div>
+                  }
+                  value={headerPipeline ? fmtCurrency(headerPipeline.totalAcv) : '$0'}
+                  label="Pipeline"
+                  loading={!headerPipeline}
                 />
               </>
             )}
@@ -1555,10 +1663,10 @@ export function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Priority Action Banner (R13) */}
+      {/* Priority Action Banner (R13 + BKL-G03) */}
       {priorityAction && (
         <div className="px-6 pt-4">
-          <PriorityActionBanner action={priorityAction} />
+          <PriorityActionBanner action={priorityAction} customerName={customerName} />
         </div>
       )}
 
@@ -1569,13 +1677,12 @@ export function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Two-column body */}
+      {/* Two-column body (65/35 — BKL-G14) */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left column — 65% */}
         <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
           <TemporalDeltaSection customerName={customerName} />
           <BriefSection name={customerName} />
-          <StakeholderEngagementPanel contacts={stakeholderContacts} />
           <CloudSpendCard customerName={customerName} />
           <PipelineCard customerName={customerName} />
           <ActivityTimeline
@@ -1588,6 +1695,12 @@ export function CustomerDetailPage() {
 
         {/* Right column — 35%, sticky scroll */}
         <aside className="hidden lg:block w-[35%] overflow-y-auto p-6 pl-3 space-y-4 border-l border-border/40">
+          {/* BKL-G14: StakeholderEngagementPanel moved to right column, below HealthScoreHero */}
+          {stakeholderContacts.length > 0 && (
+            <div className="bg-surface border border-border rounded-xl p-5">
+              <StakeholderEngagementPanel contacts={stakeholderContacts} />
+            </div>
+          )}
           <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} />
           <CasesSection cases={sse.cases} loading={sectionLoading} />
           <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
