@@ -1,0 +1,6 @@
+data/
+.env
+*.md
+.git/
+.claude/
+test/
