@@ -568,6 +568,9 @@ function buildXmlSources(
   }
 
   // Documents (enriched with classification when available)
+  // BKL-AI08: Account Intelligence docs (company brief, industry analysis) in the
+  // "Account Intelligence" subfolder are automatically picked up here by fetchCustomerDocs()
+  // which uses BFS with DRIVE_SUBFOLDER_DEPTH=5. No explicit wiring needed — done by design.
   if (docs.length) {
     xml += `<source type="documents" synced="${today}" count="${docs.length}">\n`
     for (const d of docs) {

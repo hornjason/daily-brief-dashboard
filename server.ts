@@ -205,11 +205,36 @@ function isValidDomain(value: unknown): boolean {
   return true
 }
 
-/** Salesforce report/object ID — alphanumeric only, 15–18 chars. */
+/** Salesforce report/object ID — alphanumeric only, 15-18 chars. */
 function isValidSfId(value: unknown): boolean {
   if (typeof value !== 'string') return true
   if (value === '') return true
   return /^[A-Za-z0-9]{15,18}$/.test(value)
+}
+
+/**
+ * BKL-F07: Extract a bare SF report ID from a full Salesforce URL or return as-is if already bare.
+ * Handles Lightning URLs (/lightning/r/Report/ID/view), Classic (/ID), and path variants.
+ * Returns the extracted ID or the original string if no URL pattern matched.
+ */
+function extractSfReportId(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  // Already a bare ID — return as-is
+  if (/^[A-Za-z0-9]{15,18}$/.test(trimmed)) return trimmed
+  // URL pattern — extract last path segment that looks like a SF ID
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed)
+      const segments = url.pathname.split('/').filter(Boolean)
+      // Walk segments in reverse to find the ID (handles /view suffix, etc.)
+      for (let i = segments.length - 1; i >= 0; i--) {
+        if (/^[A-Za-z0-9]{15,18}$/.test(segments[i])) return segments[i]
+      }
+    } catch { /* not a valid URL — fall through */ }
+  }
+  // Not a URL and not a bare ID — return as-is (will fail validation downstream)
+  return trimmed
 }
 
 // ── Request body size limit ───────────────────────────────────────────────────
@@ -1328,7 +1353,9 @@ app.post('/api/aes', async (c) => {
       const ae = body.aes[i]
       const name = sanitizeText(ae.name)
       if (!name) return c.json({ error: `aes[${i}].name is invalid or contains disallowed characters` }, 400)
-      if (ae.sfReportId && !isValidSfId(ae.sfReportId)) return c.json({ error: `aes[${i}].sfReportId must be 15-18 alphanumeric characters` }, 400)
+      // BKL-F07: Accept full Salesforce URLs — extract bare ID before validation
+      if (ae.sfReportId) ae.sfReportId = extractSfReportId(ae.sfReportId)
+      if (ae.sfReportId && !isValidSfId(ae.sfReportId)) return c.json({ error: `aes[${i}].sfReportId must be a valid Salesforce report URL or 15-18 character ID` }, 400)
       if (Array.isArray(ae.tableauTerritories)) {
         for (const t of ae.tableauTerritories) {
           if (typeof t !== 'string' || t.length > 100) return c.json({ error: `aes[${i}].tableauTerritories entry exceeds 100 characters` }, 400)

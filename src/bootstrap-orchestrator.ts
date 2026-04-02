@@ -70,11 +70,30 @@ function normalizeCustomerName(raw: string): string {
   return name
 }
 
-/** Salesforce report/object ID — alphanumeric only, 15–18 chars. */
+/** Salesforce report/object ID — alphanumeric only, 15-18 chars. */
 function isValidSfId(value: unknown): boolean {
   if (typeof value !== 'string') return true
   if (value === '') return true
   return /^[A-Za-z0-9]{15,18}$/.test(value)
+}
+
+/**
+ * BKL-F07: Extract a bare SF report ID from a full Salesforce URL or return as-is if already bare.
+ */
+function extractSfReportId(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  if (/^[A-Za-z0-9]{15,18}$/.test(trimmed)) return trimmed
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed)
+      const segments = url.pathname.split('/').filter(Boolean)
+      for (let i = segments.length - 1; i >= 0; i--) {
+        if (/^[A-Za-z0-9]{15,18}$/.test(segments[i])) return segments[i]
+      }
+    } catch { /* not a valid URL */ }
+  }
+  return trimmed
 }
 
 /**
@@ -220,7 +239,8 @@ export function registerBootstrapRoutes(app: Hono): void {
     }>().catch(() => ({}))
 
     const aeName = (body.aeName ?? '').trim()
-    const sfReportId = (body.sfReportId ?? '').trim()
+    // BKL-F07: Accept full Salesforce URLs — extract bare ID
+    const sfReportId = extractSfReportId(body.sfReportId ?? '')
     const tableauTerritories = body.tableauTerritories ?? []
     const allCustomerNames = (body.customerNames ?? []).map(n => normalizeCustomerName(n)).filter(Boolean)
     const junkFiltered = allCustomerNames.filter(n => isJunkCustomerName(n))
@@ -238,7 +258,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     if (aeName.length > 200) return c.json({ error: 'aeName exceeds 200 characters' }, 400)
     if (/<[^>]*>/.test(aeName)) return c.json({ error: 'aeName contains invalid characters' }, 400)
     if (!sfReportId) return c.json({ error: 'sfReportId is required' }, 400)
-    if (!isValidSfId(sfReportId)) return c.json({ error: 'sfReportId must be 15-18 alphanumeric characters' }, 400)
+    if (!isValidSfId(sfReportId)) return c.json({ error: 'sfReportId must be a valid Salesforce report URL or 15-18 character ID' }, 400)
     if (!tableauTerritories.length) return c.json({ error: 'tableauTerritories is required' }, 400)
     if (!customerNames.length) return c.json({ error: 'customerNames is required' }, 400)
     if (customerNames.some(n => /<[^>]*>/.test(n))) return c.json({ error: 'customerNames contains invalid characters' }, 400)
