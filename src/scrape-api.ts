@@ -22,9 +22,15 @@ import {
   setSfSyncStartedAt,
   setSfSyncCancelRequested,
   setSfSyncLastError,
+  // BKL-M50e: Telemetry
+  recordScrapeResult,
+  getTelemetryLog,
+  getTelemetrySummary,
 } from './scraper-manager.ts'
 import {
   runSfPipelineSync,
+  scrapeSfReport,
+  writePipelineSheet,
   createPipelineSheet,
   SfSessionExpiredError,
   lastSfSync,
@@ -158,23 +164,47 @@ export function registerScrapeRoutes(app: Hono): void {
     enqueueScraperTask({
       name: 'supportable',
       run: async () => {
-        const results = await runSupportableScrape(scrapeCustomers)
+        const _supTelemetryStart = Date.now()
+        let recordCount = 0
+        try {
+          const results = await runSupportableScrape(scrapeCustomers)
+          recordCount = results.reduce((sum, r) => sum + (r.subscriptions?.length ?? 0), 0)
 
-        const spreadsheetId = await writeSupportableSheet(
-          results,
-          aeName,
-          aeConfig?.driveFolderId || undefined,
-          aeConfig?.supportableSheetId || undefined,
-        )
+          const spreadsheetId = await writeSupportableSheet(
+            results,
+            aeName,
+            aeConfig?.driveFolderId || undefined,
+            aeConfig?.supportableSheetId || undefined,
+          )
 
-        if (aeConfig) {
-          patchAe(aeName, { supportableSheetId: spreadsheetId })
+          if (aeConfig) {
+            patchAe(aeName, { supportableSheetId: spreadsheetId })
+          }
+
+          // Stage 2: refresh local cache from the sheet we just wrote
+          await refreshSubscriptions().catch(e => console.warn('[scrape:supportable] cache refresh failed:', sanitizeErr(e)))
+
+          console.log(`[scrape:supportable] sheet ready: ${spreadsheetId}`)
+
+          // BKL-M50e: Record telemetry
+          recordScrapeResult({
+            timestamp: new Date().toISOString(),
+            service: 'supportable',
+            durationMs: Date.now() - _supTelemetryStart,
+            recordCount,
+            status: 'success',
+          })
+        } catch (e: any) {
+          recordScrapeResult({
+            timestamp: new Date().toISOString(),
+            service: 'supportable',
+            durationMs: Date.now() - _supTelemetryStart,
+            recordCount: 0,
+            status: 'failure',
+            error: sanitizeErr(e),
+          })
+          throw e
         }
-
-        // Stage 2: refresh local cache from the sheet we just wrote
-        await refreshSubscriptions().catch(e => console.warn('[scrape:supportable] cache refresh failed:', sanitizeErr(e)))
-
-        console.log(`[scrape:supportable] sheet ready: ${spreadsheetId}`)
       },
       source: 'manual',
       enqueuedAt: Date.now(),
@@ -290,8 +320,11 @@ export function registerScrapeRoutes(app: Hono): void {
       name: 'ccsp',
       run: async () => {
         setCcspInFlight(true)
+        const _ccspTelemetryStart = Date.now()
+        let recordCount = 0
         try {
           const results = await runCcspScrape(eligibleAes)
+          recordCount = results.length
           for (const ae of eligibleAes) {
             const aeResults = results.filter(r => r.aeName === ae.name)
             const spreadsheetId = await writeCcspSheet(aeResults, ae.name, ae.driveFolderId, ae.ccspSheetId || undefined)
@@ -300,6 +333,25 @@ export function registerScrapeRoutes(app: Hono): void {
           }
           // Stage 2: refresh local cache from the sheets we just wrote
           await refreshCCSP().catch(e => console.warn('[scrape:ccsp] cache refresh failed:', sanitizeErr(e)))
+
+          // BKL-M50e: Record telemetry
+          recordScrapeResult({
+            timestamp: new Date().toISOString(),
+            service: 'ccsp',
+            durationMs: Date.now() - _ccspTelemetryStart,
+            recordCount,
+            status: 'success',
+          })
+        } catch (e: any) {
+          recordScrapeResult({
+            timestamp: new Date().toISOString(),
+            service: 'ccsp',
+            durationMs: Date.now() - _ccspTelemetryStart,
+            recordCount: 0,
+            status: 'failure',
+            error: sanitizeErr(e),
+          })
+          throw e
         } finally {
           setCcspInFlight(false)
         }
@@ -345,30 +397,68 @@ export function registerScrapeRoutes(app: Hono): void {
         setSfSyncStartedAt(Date.now())
         setSfSyncCancelRequested(false)
         setSfSyncLastError(null)
+        const _sfTelemetryStart = Date.now()
+        let totalRows = 0
 
         try {
+          // BKL-F11: Group AEs by sfReportId — scrape each unique report once
+          const reportToAes = new Map<string, typeof aesWithSf>()
           for (const ae of aesWithSf) {
+            const reportId = ae.sfReportId!
+            if (!reportToAes.has(reportId)) reportToAes.set(reportId, [])
+            reportToAes.get(reportId)!.push(ae)
+          }
+
+          for (const [reportId, reportAes] of reportToAes) {
             if (_sfSyncCancelRequested) {
-              console.log(`[scrape:salesforce] cancel requested — stopping before ${ae.name}`)
+              console.log(`[scrape:salesforce] cancel requested — stopping before report ${reportId}`)
               break
             }
+
+            if (reportAes.length > 1) {
+              console.log(`[scrape:salesforce] Report ${reportId} shared by ${reportAes.length} AEs — scraping once, writing to ${reportAes.length} sheets`)
+            }
+
             try {
-              let sheetId = ae.pipelineSheetId
-              if (!sheetId) {
-                sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
-                patchAe(ae.name, { pipelineSheetId: sheetId })
+              // Scrape once per unique report
+              const data = await scrapeSfReport(reportId, RH_PROFILE_DIR)
+
+              // Fan out: write to each AE's pipeline sheet
+              for (const ae of reportAes) {
+                if (_sfSyncCancelRequested) {
+                  console.log(`[scrape:salesforce] cancel requested — stopping before writing for ${ae.name}`)
+                  break
+                }
+                try {
+                  let sheetId = ae.pipelineSheetId
+                  if (!sheetId) {
+                    sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
+                    patchAe(ae.name, { pipelineSheetId: sheetId })
+                  }
+                  await writePipelineSheet(data, sheetId)
+                  totalRows += data.rows.length
+                  console.log(`[scrape:salesforce] wrote ${data.rows.length} rows to ${ae.name}'s pipeline sheet`)
+                } catch (e: any) {
+                  if (e instanceof SfSessionExpiredError) {
+                    console.warn('[scrape:salesforce] SF session expired during sync')
+                    setSfSyncLastError('SF session expired during sync')
+                  } else {
+                    console.error(`[scrape:salesforce] error writing for ${ae.name}:`, sanitizeErr(e))
+                    setSfSyncLastError(sanitizeErr(e))
+                  }
+                }
               }
-              await runSfPipelineSync(ae.sfReportId!, RH_PROFILE_DIR, sheetId)
             } catch (e: any) {
               if (e instanceof SfSessionExpiredError) {
                 console.warn('[scrape:salesforce] SF session expired during sync')
                 setSfSyncLastError('SF session expired during sync')
               } else {
-                console.error(`[scrape:salesforce] error for ${ae.name}:`, sanitizeErr(e))
+                console.error(`[scrape:salesforce] scrape failed for report ${reportId}:`, sanitizeErr(e))
                 setSfSyncLastError(sanitizeErr(e))
               }
             }
           }
+
           // Fallback: env vars for backwards compatibility
           const envSheetId = process.env.PIPELINE_FILE_ID ?? ''
           if (!_sfSyncCancelRequested && !aesWithSf.length && SF_REPORT_ID && envSheetId) {
@@ -382,6 +472,17 @@ export function registerScrapeRoutes(app: Hono): void {
           setSfSyncRunning(false)
           setSfSyncStartedAt(null)
           setSfSyncCancelRequested(false)
+
+          // BKL-M50e: Record telemetry
+          recordScrapeResult({
+            timestamp: new Date().toISOString(),
+            service: 'salesforce',
+            durationMs: Date.now() - _sfTelemetryStart,
+            recordCount: totalRows,
+            status: _sfSyncLastError ? 'failure' : 'success',
+            error: _sfSyncLastError ?? undefined,
+          })
+
           // Stage 2: refresh local cache from the sheets we just wrote (BKL-M18)
           await refreshPipeline().catch(e => console.warn('[scrape:salesforce] post-sync cache refresh failed:', sanitizeErr(e)))
         }
@@ -435,17 +536,39 @@ export function registerScrapeRoutes(app: Hono): void {
               if (supportableScrapeRunning) { console.log('[scrape:all] supportable: busy — skipping'); return }
               const { customers } = await import('./server-state.ts')
               if (!customers.length) { console.log('[scrape:all] supportable: no customers — skipping'); return }
-              for (const ae of aes) {
-                const aeCustomers = customers.filter(cu => cu.ae === ae.name && cu.accountNumbers?.length)
-                if (!aeCustomers.length) continue
-                try {
-                  const scrapeResults = await runSupportableScrape(aeCustomers as SupportableCustomer[])
-                  await writeSupportableSheet(scrapeResults, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
-                } catch (e: any) {
-                  console.warn(`[scrape:all:supportable] ${ae.name} failed:`, sanitizeErr(e))
+              const _supTelemetryStart = Date.now()
+              let totalRecords = 0
+              try {
+                for (const ae of aes) {
+                  const aeCustomers = customers.filter(cu => cu.ae === ae.name && cu.accountNumbers?.length)
+                  if (!aeCustomers.length) continue
+                  try {
+                    const scrapeResults = await runSupportableScrape(aeCustomers as SupportableCustomer[])
+                    totalRecords += scrapeResults.reduce((sum, r) => sum + (r.subscriptions?.length ?? 0), 0)
+                    await writeSupportableSheet(scrapeResults, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
+                  } catch (e: any) {
+                    console.warn(`[scrape:all:supportable] ${ae.name} failed:`, sanitizeErr(e))
+                  }
                 }
+                await refreshSubscriptions().catch(() => {})
+                recordScrapeResult({
+                  timestamp: new Date().toISOString(),
+                  service: 'supportable',
+                  durationMs: Date.now() - _supTelemetryStart,
+                  recordCount: totalRecords,
+                  status: 'success',
+                })
+              } catch (e: any) {
+                recordScrapeResult({
+                  timestamp: new Date().toISOString(),
+                  service: 'supportable',
+                  durationMs: Date.now() - _supTelemetryStart,
+                  recordCount: 0,
+                  status: 'failure',
+                  error: sanitizeErr(e),
+                })
+                throw e
               }
-              await refreshSubscriptions().catch(() => {})
             },
           },
           {
@@ -455,14 +578,34 @@ export function registerScrapeRoutes(app: Hono): void {
               const eligibleAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
               if (!eligibleAes.length) { console.log('[scrape:all] ccsp: no eligible AEs — skipping'); return }
               setCcspInFlight(true)
+              const _ccspTelemetryStart = Date.now()
+              let recordCount = 0
               try {
                 const ccspResults = await runCcspScrape(eligibleAes)
+                recordCount = ccspResults.length
                 for (const ae of eligibleAes) {
                   const aeResults = ccspResults.filter(r => r.aeName === ae.name)
                   const sheetId = await writeCcspSheet(aeResults, ae.name, ae.driveFolderId, ae.ccspSheetId || undefined)
                   patchAe(ae.name, { ccspSheetId: sheetId })
                 }
                 await refreshCCSP().catch(() => {})
+                recordScrapeResult({
+                  timestamp: new Date().toISOString(),
+                  service: 'ccsp',
+                  durationMs: Date.now() - _ccspTelemetryStart,
+                  recordCount,
+                  status: 'success',
+                })
+              } catch (e: any) {
+                recordScrapeResult({
+                  timestamp: new Date().toISOString(),
+                  service: 'ccsp',
+                  durationMs: Date.now() - _ccspTelemetryStart,
+                  recordCount: 0,
+                  status: 'failure',
+                  error: sanitizeErr(e),
+                })
+                throw e
               } finally {
                 setCcspInFlight(false)
               }
@@ -476,16 +619,52 @@ export function registerScrapeRoutes(app: Hono): void {
               if (!aesWithSf.length) { console.log('[scrape:all] salesforce: no AEs — skipping'); return }
               setSfSyncRunning(true)
               setSfSyncStartedAt(Date.now())
+              const _sfTelemetryStart = Date.now()
+              let totalRows = 0
               try {
+                // BKL-F11: Group AEs by sfReportId — scrape each unique report once
+                const reportToAes = new Map<string, typeof aesWithSf>()
                 for (const ae of aesWithSf) {
-                  let sheetId = ae.pipelineSheetId
-                  if (!sheetId) {
-                    sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
-                    patchAe(ae.name, { pipelineSheetId: sheetId })
+                  const reportId = ae.sfReportId!
+                  if (!reportToAes.has(reportId)) reportToAes.set(reportId, [])
+                  reportToAes.get(reportId)!.push(ae)
+                }
+
+                for (const [reportId, reportAes] of reportToAes) {
+                  if (reportAes.length > 1) {
+                    console.log(`[scrape:all:salesforce] Report ${reportId} shared by ${reportAes.length} AEs — scraping once`)
                   }
-                  await runSfPipelineSync(ae.sfReportId!, RH_PROFILE_DIR, sheetId)
+                  const data = await scrapeSfReport(reportId, RH_PROFILE_DIR)
+                  for (const ae of reportAes) {
+                    let sheetId = ae.pipelineSheetId
+                    if (!sheetId) {
+                      sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
+                      patchAe(ae.name, { pipelineSheetId: sheetId })
+                    }
+                    await writePipelineSheet(data, sheetId)
+                    totalRows += data.rows.length
+                  }
                 }
                 await refreshPipeline().catch(() => {})
+
+                // BKL-M50e: Record telemetry
+                recordScrapeResult({
+                  timestamp: new Date().toISOString(),
+                  service: 'salesforce',
+                  durationMs: Date.now() - _sfTelemetryStart,
+                  recordCount: totalRows,
+                  status: 'success',
+                })
+              } catch (e: any) {
+                recordScrapeResult({
+                  timestamp: new Date().toISOString(),
+                  service: 'salesforce',
+                  durationMs: Date.now() - _sfTelemetryStart,
+                  recordCount: totalRows,
+                  status: 'failure',
+                  error: sanitizeErr(e),
+                })
+                throw e
               } finally {
                 setSfSyncRunning(false)
                 setSfSyncStartedAt(null)
@@ -515,5 +694,17 @@ export function registerScrapeRoutes(app: Hono): void {
   // GET /api/scrape/queue — queue status for admin visibility (BKL-M49)
   app.get('/api/scrape/queue', (c) => {
     return c.json(getScraperQueueStatus())
+  })
+
+  // ╭──────────────────────────────────────────────────────────────────────────╮
+  // │  BKL-M50e: Scraper telemetry                                           │
+  // ╰──────────────────────────────────────────────────────────────────────────╯
+
+  // GET /api/scrape/telemetry — full scrape history log with summary stats
+  app.get('/api/scrape/telemetry', (c) => {
+    return c.json({
+      log: getTelemetryLog(),
+      summary: getTelemetrySummary(),
+    })
   })
 }

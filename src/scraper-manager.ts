@@ -1,14 +1,119 @@
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
+import { writeFile, rename } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
 import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason } from './rh-scraper.ts'
-import { runSfPipelineSync, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount } from './sf-scraper.ts'
+import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount } from './sf-scraper.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
 import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper.ts'
 import { getRefreshIntervals } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
+
+// ── BKL-M50e: Scraper telemetry + history ──────────────────────────────────
+
+export interface ScrapeLogEntry {
+  timestamp: string
+  service: 'rh' | 'ccsp' | 'supportable' | 'salesforce'
+  durationMs: number
+  recordCount: number
+  status: 'success' | 'failure' | 'skipped' | 'timeout'
+  error?: string
+}
+
+const SCRAPE_LOG_PATH = resolve('data/cache/scrape-log.json')
+const MAX_ENTRIES_PER_SERVICE = 100
+
+/** In-memory telemetry log, keyed by service for fast lookups. */
+const _telemetryLog: Map<string, ScrapeLogEntry[]> = new Map()
+
+/** Load telemetry from disk on startup. */
+function loadTelemetryLog(): void {
+  try {
+    if (!existsSync(SCRAPE_LOG_PATH)) return
+    const raw = readFileSync(SCRAPE_LOG_PATH, 'utf-8')
+    const parsed = JSON.parse(raw) as Record<string, ScrapeLogEntry[]>
+    for (const [service, entries] of Object.entries(parsed)) {
+      if (Array.isArray(entries)) {
+        _telemetryLog.set(service, entries.slice(-MAX_ENTRIES_PER_SERVICE))
+      }
+    }
+    console.log('[telemetry] loaded scrape log from disk')
+  } catch (e: any) {
+    console.warn('[telemetry] failed to load scrape log:', e?.message)
+  }
+}
+
+// Load on module init
+loadTelemetryLog()
+
+/** Persist telemetry to disk atomically with mode 0o600. */
+async function persistTelemetryLog(): Promise<void> {
+  try {
+    const obj: Record<string, ScrapeLogEntry[]> = {}
+    for (const [service, entries] of _telemetryLog) {
+      obj[service] = entries
+    }
+    const tmpPath = SCRAPE_LOG_PATH + '.tmp'
+    await writeFile(tmpPath, JSON.stringify(obj, null, 2), { mode: 0o600 })
+    await rename(tmpPath, SCRAPE_LOG_PATH)
+  } catch (e: any) {
+    console.warn('[telemetry] failed to persist scrape log:', e?.message)
+  }
+}
+
+/** Record a scrape result — appends to in-memory log and writes to disk. */
+export function recordScrapeResult(entry: ScrapeLogEntry): void {
+  const key = entry.service
+  if (!_telemetryLog.has(key)) _telemetryLog.set(key, [])
+  const list = _telemetryLog.get(key)!
+  list.push(entry)
+  // Rolling window: trim to last MAX_ENTRIES_PER_SERVICE
+  if (list.length > MAX_ENTRIES_PER_SERVICE) {
+    _telemetryLog.set(key, list.slice(-MAX_ENTRIES_PER_SERVICE))
+  }
+  // Fire-and-forget disk write
+  persistTelemetryLog().catch(() => {})
+}
+
+/** Get all telemetry entries for the API endpoint. */
+export function getTelemetryLog(): Record<string, ScrapeLogEntry[]> {
+  const obj: Record<string, ScrapeLogEntry[]> = {}
+  for (const [service, entries] of _telemetryLog) {
+    obj[service] = entries
+  }
+  return obj
+}
+
+/** Get summary stats per service. */
+export function getTelemetrySummary(): Record<string, {
+  totalRuns: number
+  avgDurationMs: number
+  successRate: number
+  lastRun: ScrapeLogEntry | null
+  last5: ScrapeLogEntry[]
+}> {
+  const summary: Record<string, any> = {}
+  for (const service of ['rh', 'ccsp', 'supportable', 'salesforce']) {
+    const entries = _telemetryLog.get(service) ?? []
+    const successEntries = entries.filter(e => e.status === 'success')
+    const avgDuration = successEntries.length > 0
+      ? Math.round(successEntries.reduce((sum, e) => sum + e.durationMs, 0) / successEntries.length)
+      : 0
+    summary[service] = {
+      totalRuns: entries.length,
+      avgDurationMs: avgDuration,
+      successRate: entries.length > 0
+        ? Math.round((successEntries.length / entries.length) * 100) / 100
+        : 0,
+      lastRun: entries.length > 0 ? entries[entries.length - 1] : null,
+      last5: entries.slice(-5),
+    }
+  }
+  return summary
+}
 
 // ── BKL-M50c: Circuit breaker per service ────────────────────────────────────
 
@@ -247,6 +352,7 @@ export async function runRhScrapeWithState(): Promise<void> {
   _rhScrapeStartedAt = Date.now()
   _rhScrapeCancelRequested = false
 
+  const _rhTelemetryStart = Date.now()
   try {
     console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
     // BKL-M50c: Wrap with wall-clock timeout to prevent 7+ min stalls
@@ -264,6 +370,15 @@ export async function runRhScrapeWithState(): Promise<void> {
     recordScrapeSuccess(cases.length)
     circuitBreakers.rh.recordSuccess()
 
+    // BKL-M50e: Record telemetry
+    recordScrapeResult({
+      timestamp: new Date().toISOString(),
+      service: 'rh',
+      durationMs: Date.now() - _rhTelemetryStart,
+      recordCount: cases.length,
+      status: 'success',
+    })
+
     // BKL-M21: Post-scrape account count validation — warn if results seem partial
     const expectedAccounts = accountNumbers.length
     const scrapedAccounts = new Set(cases.map(c => c.accountNumber)).size
@@ -274,6 +389,17 @@ export async function runRhScrapeWithState(): Promise<void> {
     console.log(`[rh-scraper] done — ${cases.length} cases cached`)
     notify('RH Cases Synced', `${cases.length} support cases cached`).catch(() => {})
   } catch (e: any) {
+    // BKL-M50e: Record failure telemetry
+    const isTimeout = e?.message?.includes('[timeout]')
+    recordScrapeResult({
+      timestamp: new Date().toISOString(),
+      service: 'rh',
+      durationMs: Date.now() - _rhTelemetryStart,
+      recordCount: 0,
+      status: isTimeout ? 'timeout' : 'failure',
+      error: sanitizeErr(e),
+    })
+
     if (e instanceof SessionExpiredError) {
       _rhScrapeLastError = 'Session expired — reconnect via dashboard'
       recordScrapeExpired()
@@ -307,23 +433,66 @@ function runSfSyncForAes(aesWithSf: typeof aes): void {
   _sfSyncCancelRequested = false
   _sfSyncLastError = null
   ;(async () => {
+    const _sfTelemetryStart = Date.now()
+    let totalRows = 0
+
+    // BKL-F11: Group AEs by sfReportId to avoid scraping the same report multiple times
+    const reportToAes = new Map<string, typeof aesWithSf>()
     for (const ae of aesWithSf) {
+      const reportId = ae.sfReportId!
+      if (!reportToAes.has(reportId)) reportToAes.set(reportId, [])
+      reportToAes.get(reportId)!.push(ae)
+    }
+
+    for (const [reportId, reportAes] of reportToAes) {
       if (_sfSyncCancelRequested) {
-        console.log(`[sf-sync] cancel requested — stopping before ${ae.name}`)
+        console.log(`[sf-sync] cancel requested — stopping before report ${reportId}`)
         break
       }
+
+      if (reportAes.length > 1) {
+        console.log(`[sf-sync] Report ${reportId} shared by ${reportAes.length} AEs — scraping once, writing to ${reportAes.length} sheets`)
+      }
+
       try {
-        let sheetId = ae.pipelineSheetId
-        if (!sheetId) {
-          sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
-          patchAe(ae.name, { pipelineSheetId: sheetId })
+        // Scrape once per unique report
+        const data = await scrapeSfReport(reportId, RH_PROFILE_DIR)
+
+        // Fan out: write the same data to each AE's pipeline sheet
+        for (const ae of reportAes) {
+          if (_sfSyncCancelRequested) {
+            console.log(`[sf-sync] cancel requested — stopping before writing for ${ae.name}`)
+            break
+          }
+          try {
+            let sheetId = ae.pipelineSheetId
+            if (!sheetId) {
+              sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
+              patchAe(ae.name, { pipelineSheetId: sheetId })
+            }
+            await writePipelineSheet(data, sheetId)
+            totalRows += data.rows.length
+            console.log(`[sf-sync] wrote ${data.rows.length} rows to ${ae.name}'s pipeline sheet`)
+          } catch (e: any) {
+            console.warn(`[sf-sync] sheet write failed for ${ae.name}:`, sanitizeErr(e))
+            _sfSyncLastError = sanitizeErr(e)
+          }
         }
-        await runSfPipelineSync(ae.sfReportId!, RH_PROFILE_DIR, sheetId)
       } catch (e: any) {
-        console.warn(`[server] SF sync failed for ${ae.name}:`, sanitizeErr(e))
+        console.warn(`[sf-sync] SF scrape failed for report ${reportId}:`, sanitizeErr(e))
         _sfSyncLastError = sanitizeErr(e)
       }
     }
+
+    // BKL-M50e: Record telemetry for SF sync
+    recordScrapeResult({
+      timestamp: new Date().toISOString(),
+      service: 'salesforce',
+      durationMs: Date.now() - _sfTelemetryStart,
+      recordCount: totalRows,
+      status: _sfSyncLastError ? 'failure' : 'success',
+      error: _sfSyncLastError ?? undefined,
+    })
   })().catch((e: any) => {
     console.error('[server] SF login callback error:', sanitizeErr(e))
     _sfSyncLastError = sanitizeErr(e)
