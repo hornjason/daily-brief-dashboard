@@ -1,3 +1,4 @@
+import { setLivePageBusy } from "./rh-scraper.ts"
 /**
  * src/ccsp-scraper.ts
  *
@@ -529,7 +530,7 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
   if (ccspScrapeRunning) {
     if (ccspScrapeStartedAt && (Date.now() - ccspScrapeStartedAt > STALE_MUTEX_MS)) {
       console.warn(`[ccsp] stale mutex detected (${Math.round((Date.now() - ccspScrapeStartedAt) / 60000)}min) — auto-releasing`)
-      ccspScrapeRunning = false
+      ccspScrapeRunning = false; setLivePageBusy(false)
       ccspScrapeStartedAt = null
     } else {
       throw new Error('CCSP scrape already in progress')
@@ -537,7 +538,7 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
   }
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
 
-  ccspScrapeRunning = true
+  ccspScrapeRunning = true; setLivePageBusy(true)
   ccspScrapeStartedAt = Date.now()
   lastCcspError = null
 
@@ -580,7 +581,7 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
     lastCcspError = sanitizeErr(e)
     throw e
   } finally {
-    ccspScrapeRunning = false
+    ccspScrapeRunning = false; setLivePageBusy(false)
     ccspScrapeStartedAt = null
   }
 }

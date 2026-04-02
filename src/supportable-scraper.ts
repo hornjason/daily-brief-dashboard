@@ -26,6 +26,8 @@ import type { AE } from './types.ts'
 const SUPPORTABLE_URL = 'https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1'
 const SUPPORTABLE_DEBUG = process.env.SUPPORTABLE_DEBUG === 'true'
 
+import { setLivePageBusy } from './rh-scraper.ts'
+
 function sanitizeCell(value: string): string {
   if (typeof value !== 'string') return value
   if (/^[=+\-@]/.test(value) && !/^-?\d/.test(value)) return `'${value}`
@@ -651,7 +653,7 @@ export async function runSupportableScrape(
   if (supportableScrapeRunning) {
     if (supportableScrapeStartedAt && (Date.now() - supportableScrapeStartedAt > STALE_MUTEX_MS)) {
       console.warn(`[supportable] stale mutex (${Math.round((Date.now() - supportableScrapeStartedAt) / 60_000)}m) — resetting`)
-      supportableScrapeRunning = false
+      supportableScrapeRunning = false; setLivePageBusy(false)
       supportableScrapeStartedAt = null
     } else {
       throw new Error('Supportable scrape already in progress')
@@ -699,7 +701,7 @@ export async function runSupportableScrape(
     throw e
   } finally {
     await page.close().catch(() => {})
-    supportableScrapeRunning = false
+    supportableScrapeRunning = false; setLivePageBusy(false)
     supportableScrapeStartedAt = null
   }
 }
@@ -723,7 +725,7 @@ export async function runSupportableDiscoverAndScrape(
   if (supportableScrapeRunning) {
     if (supportableScrapeStartedAt && (Date.now() - supportableScrapeStartedAt > STALE_MUTEX_MS)) {
       console.warn(`[supportable] stale mutex (${Math.round((Date.now() - supportableScrapeStartedAt) / 60_000)}m) — resetting`)
-      supportableScrapeRunning = false
+      supportableScrapeRunning = false; setLivePageBusy(false)
       supportableScrapeStartedAt = null
     } else {
       throw new Error('Supportable scrape already in progress')
@@ -778,6 +780,8 @@ export async function runSupportableDiscoverAndScrape(
       throw new Error(`SSO login did not complete — still at ${discoveryPage.url()}`)
     }
 
+    // Tell RH keep-alive to skip page navigation while we're scraping
+    setLivePageBusy(true)
     console.log(`[supportable] discover+scrape: session active — discovering ${customers.length} customers`)
     _onStatus(`session active — discovering ${customers.length} customers…`)
 
@@ -923,7 +927,7 @@ export async function runSupportableDiscoverAndScrape(
     supportableStatusMessage = null
     throw e
   } finally {
-    supportableScrapeRunning = false
+    supportableScrapeRunning = false; setLivePageBusy(false)
     supportableScrapeStartedAt = null
   }
 }
