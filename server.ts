@@ -334,6 +334,8 @@ app.get('/api/morning-summary', (c) => {
       const today = new Date()
       for (const opp of custPipeline) {
         if (!opp.closeDate) continue
+        // Skip CCSP usage/royalty reports — these are consumption entries, not sales opportunities
+        if (/ccsp|royalty|usage.period/i.test(opp.oppName ?? '')) continue
         const closeDate = new Date(opp.closeDate)
         const daysPast = Math.floor((today.getTime() - closeDate.getTime()) / 86_400_000)
         if (daysPast > 30) {

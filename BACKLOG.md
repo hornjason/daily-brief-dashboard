@@ -1685,7 +1685,7 @@ Fix: In `normalizeTerritoryCustomerName()`, add leading-prefix strip after trimm
 ---
 
 ### BKL-M48 | Morning Summary pipeline-stuck signal uses CCSP usage reports instead of SF pipeline
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Severity: High
 Source: Jason 2026-04-02 — "CCSP opps are usage reports not opportunities, use PIPELINE data from SF scrape"
 Files: server.ts (/api/morning-summary pipeline-stuck signal block)
