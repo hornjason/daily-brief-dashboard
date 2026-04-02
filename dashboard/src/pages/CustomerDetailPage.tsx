@@ -358,11 +358,6 @@ function BriefSection({ name }: { name: string }) {
   const config = useDashboardConfig()
   const [configDismissed, setConfigDismissed] = useState(false)
 
-  // Show setup card if provider not configured and brief hasn't loaded
-  if (config && !config.briefConfigured && !data && !configDismissed) {
-    return <BriefSetupCard config={config} onTestDone={() => { setConfigDismissed(true); refresh() }} />
-  }
-
   const sections = useMemo(() => {
     if (!data?.text) return {} as Record<string, string>
     const result: Record<string, string> = {}
@@ -424,6 +419,12 @@ function BriefSection({ name }: { name: string }) {
       })
       .filter(s => s.competitor.length > 0)
   }, [sections])
+
+  // Show setup card if provider not configured and brief hasn't loaded
+  // NOTE: Moved after all hooks to comply with React Rules of Hooks (BKL-G16)
+  if (config && !config.briefConfigured && !data && !configDismissed) {
+    return <BriefSetupCard config={config} onTestDone={() => { setConfigDismissed(true); refresh() }} />
+  }
 
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden">

@@ -422,6 +422,20 @@ app.get('/api/customer/:name/priority-action', (c) => {
       action = { text: `Pipeline attention: ${hs.breakdown.pipeline.signal}`, severity: 'medium', source: 'pipeline' }
     }
 
+    // BKL-G03: Fallback to brief's "## Priority Action" section when health-score thresholds don't trigger
+    if (!action) {
+      const briefCache = readLatestBriefCache(customerName)
+      if (briefCache?.text) {
+        const match = briefCache.text.match(/^## Priority Action\n(.+)/m)
+        if (match) {
+          const text = match[1].replace(/^[-*]\s*/, '').trim()
+          if (text) {
+            action = { text, severity: 'medium', source: 'brief' }
+          }
+        }
+      }
+    }
+
     return c.json({ action })
   } catch (e) {
     return c.json({ error: sanitizeErr(e) }, 500)
