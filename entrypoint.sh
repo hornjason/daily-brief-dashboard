@@ -14,8 +14,18 @@ set -e
 Xvfb :99 -screen 0 1280x900x24 -nolisten tcp &
 export DISPLAY=:99
 
-# Give Xvfb a moment to initialise before anything tries to use the display
-sleep 1
+# BKL-M50g: Readiness probe — wait for Xvfb to be ready instead of fixed sleep
+XVFB_ATTEMPTS=0
+XVFB_MAX=50  # 50 × 0.2s = 10s timeout
+while ! xdpyinfo -display :99 >/dev/null 2>&1; do
+  sleep 0.2
+  XVFB_ATTEMPTS=$((XVFB_ATTEMPTS + 1))
+  if [ "$XVFB_ATTEMPTS" -ge "$XVFB_MAX" ]; then
+    echo "[entrypoint] WARNING: Xvfb not ready after 10s — proceeding anyway"
+    break
+  fi
+done
+echo "[entrypoint] Xvfb ready (${XVFB_ATTEMPTS} probes)"
 
 # ── VNC server (reads the Xvfb display, streams over VNC protocol) ─────────────
 # -nopw       : no VNC password — port is bound to localhost only (see below)

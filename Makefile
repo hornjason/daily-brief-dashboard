@@ -28,7 +28,8 @@ up: down
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
-	  --shm-size=256m \
+	  --shm-size=2g \
+	  --memory=4g \
 	  --name pai-dashboard \
 	  $(IMAGE)
 

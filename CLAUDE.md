@@ -42,7 +42,7 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - CCSP two-phase mutex: `ccspScrapeRunning || ccspInFlight` — both required
 - Supportable is the ONLY account discovery source — never use RH Portal SOLR
 - Chrome needs `--no-sandbox` + `--disable-dev-shm-usage` at all 4 `launchPersistentContext` sites
-- `--shm-size=256m` in Makefile — do not remove
+- `--shm-size=2g` + `--memory=4g` in Makefile — do not remove (Chromium stability)
 
 ## Data Rules (do not regress)
 

@@ -1936,7 +1936,7 @@ Size: XS (1 hour)
 Files: entrypoint.sh
 Description: Replace `sleep 1` with xdpyinfo probe loop. Add --memory=2g to Makefile. Consider process supervisor (tini/dumb-init).
 
-### BKL-M50h | API migration — SF, Tableau, RH to replace browser scraping
+### BKL-M50h | API migration research — Tableau confirmed, SF/RH limited (KEEP CURRENT SCRAPERS)
 Status: 🔴 OPEN
 Priority: P1
 Size: L (multi-service migration)
