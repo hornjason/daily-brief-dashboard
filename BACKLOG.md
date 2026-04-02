@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-02 (BKL-E01–E06 added: daily brief email delivery integration; BKL-M45+M46 added; .env cleaned from 13 to 5 vars; Drive folder fix; thinkingConfig fix)
+Last update: 2026-04-02 (BKL-F07 added: accept full SF report URL; BKL-G01–G16: Quinn visual audit gaps; BKL-E01–E06: email delivery integration)
 
 ---
 
@@ -833,6 +833,21 @@ Files: src/pipeline.ts, dashboard/src/components/PipelineSection.tsx
 Description: Pipeline sheet doesn't include Opportunity ID column yet. When SF report is updated to include it, wire up direct opp links in the UI.
 Decision: DEFERRED until SF report includes Opportunity ID column. When ready: (1) add oppId to PipelineRecord type, (2) capture col(row, 'Opportunity ID') in parsePipelineRows, (3) wrap oppName in <a href> when oppId present.
 
+### BKL-F07 | Accept full Salesforce report URL instead of requiring bare report ID
+Status: 🔴 OPEN
+Priority: P1
+Size: S (half day)
+Source: Jason 2026-04-02 — cumbersome for new users, doesn't present as quality product
+Files: dashboard/src/pages/SetupPage.tsx (SF report field), server.ts (SF report endpoints), src/sf-scraper.ts
+Description: Currently users must find a Salesforce report, copy the URL, then manually extract the report ID from the URL before pasting it. This is a bad UX — users should be able to paste the full SF report URL (e.g., https://redhat.lightning.force.com/lightning/r/Report/00OPQ000001abc/view) and the system extracts the report ID automatically. The SF Report Browser (BKL-F01) helps when SF is connected, but for initial setup or when pasting a shared link, accepting a full URL is the natural flow.
+Fix:
+  1. Research: identify all SF report URL formats (Lightning, Classic, embedded, with/without /view suffix)
+  2. Add URL parser that extracts report ID from any valid SF report URL format
+  3. Accept BOTH full URLs and bare report IDs in the input field
+  4. Update placeholder text: "Paste Salesforce report URL or ID"
+  5. Show parsed report ID as confirmation after paste (e.g., "Report ID: 00OPQ000001abc ✓")
+  6. Validate format before saving — reject obviously invalid strings
+
 ### BKL-E01 | Add gmail.send scope to OAuth + reauth flow
 Status: 🔴 OPEN
 Priority: P2
@@ -915,6 +930,207 @@ Fix:
   3. At scheduled time: aggregate cached briefs → renderBriefHtml() → sendBriefEmail()
   4. Log success/failure, surface last-send status via /api/settings/email response
   5. Re-read config on each cycle (supports live changes from settings UI without restart)
+
+## UI Spec Compliance Gaps (from 2026-04-02 Quinn visual audit)
+
+### BKL-G01 | Morning Summary signals not clickable — no navigation to customer detail
+Status: 🔴 OPEN
+Priority: P1
+Size: S (half day)
+Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
+Files: dashboard/src/components/MorningSummary.tsx
+Description: Morning Summary signal rows display but are not clickable. Spec requires each signal to navigate to the relevant customer detail page. This is the core morning review workflow — scan signals, click to investigate. Currently a dead end.
+Fix:
+  1. Wrap each signal row in a clickable link/button that navigates to /customer/:name
+  2. Add hover state and cursor-pointer
+  3. Pass customer name from signal data to navigation
+
+### BKL-G02 | Morning Summary only generates renewal signals — 8 of 9 signal types missing
+Status: 🔴 OPEN
+Priority: P1
+Size: M (2-3 days)
+Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
+Files: server.ts (/api/morning-summary), src/morning-summary.ts or equivalent
+Related: BKL-R06 (initial morning summary — DONE, but only renewal signals implemented)
+Description: The morning summary endpoint only generates renewal-type signals. Missing: Sev1/Sev2 new cases, gone-silent contacts, competitor mentions, pipeline deal stuck >30d, engagement drops, cloud spend anomalies, meeting prep needed, subscription expiring <60d with no renewal opp. The spec and research (BKL-R06) defined 9 signal types; only 1 is live.
+Fix:
+  1. Add Sev1/Sev2 case signals from cached case data
+  2. Add gone-silent signals from detectGoneSilent() (already exists in email-extraction.ts)
+  3. Add competitor mention signals from brief competitive signals parsing
+  4. Add pipeline stuck signals from pipeline cache (closeDate >30d past)
+  5. Add meeting-today-with-prep-needed signals from calendar data
+  6. Add subscription expiring signals from subscription cache
+  7. Rank all signals by priority per BKL-R06 spec
+
+### BKL-G03 | PriorityActionBanner has no action buttons (Schedule/View/Dismiss)
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md, DESIGN-SPEC-AccountDetailPage.md
+Files: dashboard/src/components/PriorityActionBanner.tsx
+Description: Banner shows the priority action text and source but provides no way to act on it. Spec requires Schedule, View, and Dismiss buttons. Without them the banner is informational only — the user must manually find the relevant email, case, or meeting.
+Fix:
+  1. Add action buttons row: Schedule (opens calendar), View (navigates to source), Dismiss (hides until next brief)
+  2. Dismiss state persisted in localStorage or via API
+  3. View button links to source (email, case URL, meeting) when available
+
+### BKL-G04 | StakeholderEngagementPanel missing frequency bar visualization
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md, VISUAL-DESIGN-SPEC.md
+Files: dashboard/src/components/StakeholderEngagementPanel.tsx
+Description: Panel shows contacts with tiny color dots and "Silent Xd" badges, but no frequency bar visualization showing engagement trend over time. The spec calls for horizontal bars showing email/meeting frequency per contact. Without them, "gone silent" is a binary badge instead of a visible trend.
+Fix:
+  1. Add horizontal frequency bars per contact (last 30/60/90d email + meeting count)
+  2. Color gradient from healthy (green) to silent (red/gray)
+  3. Data already available from buildContactHistory() — just needs visualization
+
+### BKL-G05 | Customer detail header stat row missing Cloud$ and Pipeline ACV + sparklines
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
+Files: dashboard/src/pages/CustomerDetailPage.tsx (header section)
+Description: Header stat row shows Cases, Products, Licenses but omits Cloud$ and Pipeline ACV per spec. Also no sparklines in stat badges. Spec calls for 5 stat badges with inline trend sparklines for at-a-glance directional context.
+Fix:
+  1. Add Cloud$ stat from CCSP cache data
+  2. Add Pipeline ACV stat from pipeline cache data
+  3. Add 32x12px inline SVG sparklines per stat badge using historical data
+  4. Header height to h-16 per spec (currently h-12)
+
+### BKL-G06 | Sidebar missing Morning Summary nav item + wrong order
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn visual audit 2026-04-02 — compared against INFORMATION-ARCHITECTURE-V2.md
+Files: dashboard/src/components/Sidebar.tsx
+Description: Sidebar has no "Morning Summary" nav item. Spec requires it as first item for scroll-anchor navigation. Current order (Command Center → Pipeline → Cloud → Calendar → Accounts) differs from spec which puts Morning Summary first.
+Fix:
+  1. Add Morning Summary nav item at top of sidebar
+  2. Wire click to scroll to MorningSummary section on dashboard home
+  3. Reorder nav items to match spec hierarchy
+
+### BKL-G07 | TemporalDeltaSection shows section names only, not content-level diffs
+Status: 🔴 OPEN
+Priority: P2
+Size: M (1-2 days)
+Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
+Files: server.ts (/api/customer/:name/temporal-delta), dashboard/src/components/TemporalDeltaSection.tsx
+Related: BKL-R07 (delta detection — DONE, but section-level only)
+Description: Current implementation compares section headers between briefs and reports "Priority Action — New section added." Spec wants content-level deltas: "▲ New Sev2 case opened for Satellite," "▲ Pipeline ACV increased $50K." The section-level granularity provides low signal value.
+Fix:
+  1. Enhance temporal-delta endpoint to diff within sections, not just detect section presence
+  2. Extract key facts (case count changes, dollar amounts, new names) from section text
+  3. Add ▲ triangle markers on changed items per spec
+  4. Return structured change objects with type (new/changed/removed) and summary text
+
+### BKL-G08 | Brief generation HTTP 500 on some customers
+Status: 🔴 OPEN
+Priority: P1
+Size: S (1 day)
+Source: Quinn visual audit 2026-04-02 — observed during customer detail page testing
+Files: src/customer.ts (generateBrief), server.ts (/api/customer/:name/brief)
+Description: Brief generation fails with HTTP 500 for some customers, blocking source citations and competitive signals from rendering. Root cause unknown — may be Gemini API errors, missing data, or edge cases in sub-pipeline processing.
+Fix:
+  1. Add structured error logging to identify which customers fail and why
+  2. Check if failures are Gemini quota/rate-limit, missing data fields, or sub-pipeline errors
+  3. Ensure graceful degradation — partial brief with available data instead of full 500
+
+### BKL-G09 | KPI sparklines use static color instead of trend-direction coloring
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn visual audit 2026-04-02 — compared against VISUAL-DESIGN-SPEC.md
+Files: dashboard/src/components/KPICards.tsx
+Related: BKL-UX47 (sparkline type — DONE, but color is static)
+Description: Sparkline polylines use the card's static accent color. Spec calls for dynamic trend-direction coloring: green (spark-up) for improving metrics, red (spark-down) for worsening. Currently no visual distinction between a metric trending better vs worse.
+Fix:
+  1. Compute trend direction from sparkline data (last N points slope)
+  2. Apply spark-up (green) or spark-down (red) color to polyline stroke
+  3. Neutral color for flat trends
+
+### BKL-G10 | Bootstrap CompletionCard lacks clickable resource links
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn visual audit 2026-04-02 — compared against auto-bootstrap-ui-spec.md
+Files: dashboard/src/pages/SetupPage.tsx (CompletionCard section)
+Description: CompletionCard shows step detail text (e.g., "Google Sheet created: [sheet name]") as plain text spans. Spec requires clickable `<a href>` links to the created Google Sheets, Drive folders, and other resources so the user can verify what was set up.
+Fix:
+  1. Wrap resource references in CompletionCard with `<a href>` to actual Google Sheet/Drive URLs
+  2. URLs already available from bootstrap response data — just need rendering as links
+  3. Add target="_blank" rel="noopener" for external links
+
+### BKL-G11 | KPI sparklines missing on Meetings Today and Meetings This Week cards
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
+Files: dashboard/src/components/KPICards.tsx, server.ts (/api/kpis/history)
+Description: Sparklines render on 5 KPI cards (Open Cases, Sev1, Expiring, Renewals, Tech Wins) but not on Meetings Today and Meetings This Week. These meeting counts also benefit from trend visibility (is meeting load increasing?).
+Fix:
+  1. Add meetingsToday and meetingsThisWeek to KPI history snapshots
+  2. Pass sparklineData to meeting KPI cards
+  3. Render sparkline polyline same as other cards
+
+### BKL-G12 | HealthDot hover tooltip does not show score breakdown
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
+Files: dashboard/src/components/AccountPortfolioGrid.tsx (HealthDot)
+Description: HealthDot shows a color-coded dot on account cards but hovering does not reveal the composite score breakdown (which of the 6 signals contributed, individual scores). Spec requires a tooltip showing score/100 and signal breakdown on hover.
+Fix:
+  1. Add hover tooltip (or popover) to HealthDot
+  2. Show composite score (e.g., "78/100") and per-signal scores
+  3. Data already available from /api/health-scores — pass breakdown to tooltip
+
+### BKL-G13 | Customer detail header missing numeric health score
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
+Files: dashboard/src/pages/CustomerDetailPage.tsx (header)
+Description: Customer detail header shows health color dot but no numeric score (e.g., "78/100"). Spec calls for the score displayed alongside the dot in the header for quick reference.
+Fix:
+  1. Display health score number next to HealthDot in customer detail header
+  2. Score already fetched via HealthScoreHero — reuse data in header
+
+### BKL-G14 | StakeholderEngagementPanel in wrong column — LEFT instead of spec RIGHT
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
+Files: dashboard/src/pages/CustomerDetailPage.tsx
+Description: Two-column layout is 65%/35%. StakeholderEngagementPanel is in the left (main content) column. Spec places it in the right (sticky sidebar) column alongside HealthScoreHero for persistent visibility during scroll.
+Fix:
+  1. Move StakeholderEngagementPanel from left column to right column
+  2. Ensure it scrolls naturally within the sticky right column below HealthScoreHero
+
+### BKL-G15 | Setup page missing accessibility: elapsed timer, aria-labels, role="alert"
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn visual audit 2026-04-02 — compared against auto-bootstrap-ui-spec.md
+Files: dashboard/src/pages/SetupPage.tsx
+Description: Three accessibility gaps: (1) No elapsed time timer during bootstrap running state, (2) No aria-label on step status icons, (3) No role="alert" on error messages. Spec requires all three for accessibility compliance.
+Fix:
+  1. Add elapsed time counter (mm:ss) visible during bootstrap execution
+  2. Add aria-label to each step icon (e.g., "Step 3: Complete")
+  3. Add role="alert" to error message containers
+
+### BKL-G16 | Brief section order follows AI output, not spec-mandated hierarchy
+Status: 🔴 OPEN
+Priority: P3
+Size: S (half day)
+Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
+Files: dashboard/src/pages/CustomerDetailPage.tsx (BriefSection rendering)
+Description: Brief sections render in whatever order Gemini outputs them. Spec defines a fixed hierarchy: Priority Action → What Changed → Key Risks → Competitive Signals → Meetings → Pipeline → Cases → Subscriptions. Consistent order builds muscle memory for scanning.
+Fix:
+  1. Parse brief sections by heading (## markers)
+  2. Reorder parsed sections to match spec hierarchy
+  3. Unknown sections appended at end
 
 ---
 
@@ -1450,6 +1666,22 @@ Source: Rook Blackburn Wave 6 scan 2026-04-01
 Files: src/territory-sync.ts:136-156
 Description: Customer names from the territory Google Sheet are normalized via `normalizeTerritoryCustomerName()` (strips legal suffixes, title-cases) but leading formula-injection prefixes (`=`, `+`, `-`, `@`) are not stripped. A malicious tab in the territory sheet could write `=IMPORTRANGE(...)` as a customer name; this would flow into customers.json. Mitigated: downstream Sheets writers apply `sanitizeCell()` at write time — so the injection would be caught before hitting Google Sheets. However, customers.json itself could contain the unsanitized prefix.
 Fix: In `normalizeTerritoryCustomerName()`, add leading-prefix strip after trimming: `name = name.replace(/^[=+\-@]/, '')`. One-line fix, zero functional impact on real customer names.
+
+---
+
+### BKL-M47 | Drive watcher should auto-invalidate brief cache on doc changes
+Status: 🔴 OPEN
+Severity: Medium
+Source: Jason 2026-04-02 — Drive docs now flow into briefs but changes don't trigger re-generation
+Files: src/drive-watcher.ts, src/cache-layer.ts, src/background-scheduler.ts, server.ts
+Description: The drive-watcher already detects file modifications via Google Drive Changes API (polls with pageToken). But it does NOT invalidate brief caches when customer docs change. Currently, brief auto-regeneration only triggers when sheet data (Supportable) is newer than the cached brief. Drive doc changes, email changes, and calendar changes require manual Regenerate click.
+Fix:
+  1. When `checkDriveChanges()` returns customer names with modified files, invalidate those customers' brief caches (delete or mark stale)
+  2. Optionally: trigger background brief regeneration for affected customers (cost is ~$0.006/brief, negligible)
+  3. Add brief cache staleness check against drive-watcher's last-modified timestamp per customer
+  4. Consider: also invalidate when emails/calendar data is newer (check Gmail/Calendar API modified timestamps vs brief cachedAt)
+Cost analysis: At $0.006/brief and 20 customers, even daily full regen is $0.11/day ($3.42/month). Auto-regen on doc changes is well within budget.
+Related: BKL-R24 (content caps), drive-watcher.ts (already has the detection logic)
 
 ---
 
