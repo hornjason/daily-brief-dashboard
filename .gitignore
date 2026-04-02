@@ -21,10 +21,14 @@ config/.google-token.json
 config/gcp-oauth.keys.json
 config/.rh-session.json
 config/.rh-chrome-profile/
+data/config/
+data/cache/
+data/rh-profile/
 
 # Runtime state — user-specific, not source
 config/data-sources.json
 config/drive-watcher-state.json
+config/oauth-state.json
 
 # Environment variables
 .env
@@ -44,3 +48,11 @@ config/drive-watcher-state.json
 
 # PAI MEMORY/WORK — project tracking, not source
 MEMORY/
+
+# Test results & Playwright state
+test-results/
+.playwright-cli/
+dashboard/.playwright-cli/
+
+# Claude worktrees
+.claude/

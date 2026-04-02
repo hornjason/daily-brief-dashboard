@@ -1,3 +1,5 @@
+> **DEPRECATED** — This file is superseded by `ARCHITECTURE.md` in the project root. Do not use this as an authoritative source. It is kept for historical reference only.
+
 # ASA Command Center — Architecture
 
 ## Overview
