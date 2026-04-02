@@ -846,6 +846,11 @@ Fix:
   3. Update Gemini brief prompt to generate specific next-step recommendations per signal
   4. Update morning summary to include recommended action per signal row
   5. Consider: rule-based for common patterns (renewal → schedule review) + AI-generated for novel situations
+  6. SF pipeline data: investigate adding Next Steps, Stage, Activity Notes columns to SF report. If available, pipeline-stuck signals can show the actual next step from Salesforce instead of generic "review pipeline"
+  7. Jason confirmed "Meeting Notes" column added to SF report (2026-04-02). This is free-text from AE meeting recaps — rich signal but needs summarization.
+  8. UX design needed (Aditi): how to surface meeting notes without overwhelming the UI. Options: truncated preview with expand, Gemini-summarized to 1-2 sentences, tooltip on hover, dedicated "Recent Activity" tab on customer detail. Meeting notes + next steps together = the SA prep workflow.
+  9. Scraper change needed: add "Meeting Notes" and "Industry" columns to SF scraper column extraction in src/sf-scraper.ts. Parse and store alongside existing pipeline fields.
+  10. Jason confirmed "Industry" column added to SF report (2026-04-02). This enables automatic industry-per-customer detection from live SF data — supplements or replaces AI01's web search approach. Industry from SF is authoritative (CRM-maintained) vs AI-inferred.
 
 ### BKL-F09 | Setup page Sync status may not reflect API/scheduler-triggered scrapes
 Status: 🔴 OPEN
