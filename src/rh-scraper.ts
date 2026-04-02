@@ -450,6 +450,24 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
   // Persist session state after a successful scrape
   await persistSessionState()
 
+  // BKL-M50 G5: Stale-overwrite guard — don't overwrite good cached cases with
+  // empty results (e.g. session expired silently mid-scrape). Same pattern used
+  // by Supportable, CCSP, and Pipeline scrapers in refresh-engine.ts.
+  if (allCases.length === 0) {
+    try {
+      const existing = JSON.parse(await readFile(cachePath, 'utf-8'))
+      if (Array.isArray(existing?.cases) && existing.cases.length > 0) {
+        console.warn(
+          `[rh-scraper] stale-overwrite guard: scraped 0 cases but cache has ${existing.cases.length}` +
+          ` — keeping existing cache (possible silent session expiry)`,
+        )
+        return allCases
+      }
+    } catch {
+      // No existing cache or parse error — safe to write empty results
+    }
+  }
+
   // Write cache atomically — write to .tmp first then rename so a crash mid-write
   // never produces a corrupt cache file that reads as 0 cases.
   await mkdir(dirname(cachePath), { recursive: true })

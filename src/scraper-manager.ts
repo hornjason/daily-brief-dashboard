@@ -224,7 +224,7 @@ export function registerScraperRoutes(app: Hono): void {
       lastSync: lastSfSync,
       rowCount: lastSfRowCount,
       syncError: _sfSyncLastError,
-      reportConfigured: !!SF_REPORT_ID,
+      reportConfigured: !!SF_REPORT_ID || aes.some(a => !!a.sfReportId),
       sheetConfigured: !!process.env.PIPELINE_FILE_ID,
       liveReachable,
     })

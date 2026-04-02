@@ -2,14 +2,14 @@ import { existsSync, unlinkSync, readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 import { customers } from './server-state.ts'
 import { refreshAll, refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
-import { runRhScrapeWithState, runSfSyncForAes } from './scraper-manager.ts'
+import { runRhScrapeWithState, runSfSyncForAes, _rhScrapeRunning, _sfSyncRunning, ccspInFlight } from './scraper-manager.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
 import { lastScraped } from './rh-auth.ts'
 import { initScrapeContext, getScrapeContext, closeScrapeContext } from './rh-scraper.ts'
 import { adoptSfContext } from './sf-scraper.ts'
-import { adoptSupportableContext, runSupportableDiscoverAndScrape } from './supportable-scraper.ts'
-import { adoptCcspContext, runCcspScrape } from './ccsp-scraper.ts'
+import { adoptSupportableContext, runSupportableDiscoverAndScrape, supportableScrapeRunning } from './supportable-scraper.ts'
+import { adoptCcspContext, runCcspScrape, ccspScrapeRunning } from './ccsp-scraper.ts'
 import { syncTerritorySheet } from './territory-sync.ts'
 import { initDriveWatcher, checkDriveChanges } from './drive-watcher.ts'
 import { captureSnapshot, writeSnapshot } from './kpi-history.ts'
@@ -17,6 +17,81 @@ import { briefCachePath, readBriefCache, readSheetCache, readPipelineCache, read
 import { isBriefConfigured, fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief } from './customer.ts'
 import { fetchCustomerCases, fetchCustomerSubscriptions } from './redhat.ts'
 import { fetchCustomerSheetData } from './sheets.ts'
+
+// ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
+// All scrapers share one BrowserContext (SSO constraint). Running them
+// concurrently causes "Target page, context or browser has been closed" errors.
+// The queue ensures at most one browser-consuming scraper runs at a time.
+
+export interface ScraperTask {
+  name: string             // human-readable label for logging
+  run: () => Promise<void> // the actual scraper function
+  source: 'startup' | 'scheduled' | 'heartbeat' | 'manual'
+  enqueuedAt: number       // Date.now() when enqueued
+}
+
+const _scraperQueue: ScraperTask[] = []
+let _scraperQueueRunning = false  // true while a task from the queue is executing
+
+/** Check all four scraper mutex flags — returns true if ANY browser scraper is active. */
+function isAnyScraperRunning(): boolean {
+  return _rhScrapeRunning || _sfSyncRunning || ccspScrapeRunning || ccspInFlight || supportableScrapeRunning
+}
+
+/**
+ * Enqueue a scraper task. If nothing is running, it starts immediately.
+ * Duplicate tasks (same name) are coalesced — if the same scraper is already
+ * queued, the new request is dropped to avoid piling up.
+ */
+export function enqueueScraperTask(task: ScraperTask): void {
+  // Coalesce: skip if same scraper name is already pending in queue
+  if (_scraperQueue.some(t => t.name === task.name)) {
+    console.log(`[scraper-queue] ${task.name} already queued — skipping duplicate (source: ${task.source})`)
+    return
+  }
+  _scraperQueue.push(task)
+  const position = _scraperQueue.length
+  console.log(`[scraper-queue] ${task.name} queued (source: ${task.source}), position ${position}`)
+  runNextInQueue()
+}
+
+/** Pop the next task off the queue and run it, if nothing else is running. */
+function runNextInQueue(): void {
+  if (_scraperQueueRunning) return
+  if (isAnyScraperRunning()) {
+    // A scraper started outside the queue (e.g. legacy direct call) is still running.
+    // We'll retry on the next heartbeat tick or when the current task finishes.
+    if (_scraperQueue.length > 0) {
+      console.log(`[scraper-queue] waiting — a scraper is still running (${_scraperQueue.length} tasks pending)`)
+    }
+    return
+  }
+  const task = _scraperQueue.shift()
+  if (!task) return
+
+  const waitMs = Date.now() - task.enqueuedAt
+  console.log(`[scraper-queue] starting ${task.name} (waited ${Math.round(waitMs / 1000)}s, ${_scraperQueue.length} remaining)`)
+  _scraperQueueRunning = true
+
+  task.run()
+    .catch(e => console.error(`[scraper-queue] ${task.name} failed:`, e?.message ?? e))
+    .finally(() => {
+      _scraperQueueRunning = false
+      console.log(`[scraper-queue] ${task.name} finished (${_scraperQueue.length} remaining)`)
+      // Process next task after a brief yield to let mutex flags settle
+      setTimeout(() => runNextInQueue(), 500)
+    })
+}
+
+/** Get current queue state — exposed for status endpoints and admin visibility. */
+export function getScraperQueueStatus(): { running: string | null; pending: string[]; isAnyRunning: boolean } {
+  const runningTask = _scraperQueueRunning ? 'active' : null
+  return {
+    running: runningTask,
+    pending: _scraperQueue.map(t => t.name),
+    isAnyRunning: isAnyScraperRunning(),
+  }
+}
 
 // ── Configurable timer management (BKL-M19: heartbeat pattern) ──────────────
 // Bun's setInterval is unreliable for intervals > ~1h (see ADR-007).
@@ -281,9 +356,18 @@ export function scheduleCcspSync(): void {
         return
       }
 
-      await runCcspScrapeWithDelta(aes)
-      updateSchedulerField('ccspLastRun', new Date().toISOString())
-      console.log('[ccsp-sync] CCSP scrape complete')
+      // BKL-M49: Enqueue through scraper queue instead of running directly
+      const capturedAes = aes
+      enqueueScraperTask({
+        name: 'ccsp',
+        run: async () => {
+          await runCcspScrapeWithDelta(capturedAes)
+          updateSchedulerField('ccspLastRun', new Date().toISOString())
+          console.log('[ccsp-sync] CCSP scrape complete')
+        },
+        source: 'scheduled',
+        enqueuedAt: Date.now(),
+      })
     } catch (e: any) {
       console.error('[ccsp-sync] error:', e?.message ?? e)
     }
@@ -371,20 +455,32 @@ export function scheduleSupportableSync(): void {
       const batch = currentCustomers.filter((_: any, i: number) => i % 3 === batchIdx)
       console.log(`[supportable-sync] batch ${batchIdx}: ${batch.length} customers`)
 
+      // BKL-M49: Enqueue through scraper queue instead of running directly
       if (batch.length > 0) {
-        await runSupportableDiscoverAndScrape(batch)
+        const capturedBatch = batch
+        const capturedBatchIdx = batchIdx
+        enqueueScraperTask({
+          name: 'supportable',
+          run: async () => {
+            await runSupportableDiscoverAndScrape(capturedBatch)
 
-        // BKL-M21: Post-scrape validation — warn if batch results seem partial
-        const customersWithAccounts = batch.filter((c: any) => c.accountNumbers?.length > 0).length
-        const expectedWithAccounts = batch.length
-        if (customersWithAccounts < expectedWithAccounts * 0.5 && expectedWithAccounts > 0) {
-          console.warn(`[scraper-validation] WARNING: Supportable batch discovered accounts for ${customersWithAccounts}/${expectedWithAccounts} customers — possible partial scrape`)
-        }
+            // BKL-M21: Post-scrape validation — warn if batch results seem partial
+            const customersWithAccounts = capturedBatch.filter((c: any) => c.accountNumbers?.length > 0).length
+            const expectedWithAccounts = capturedBatch.length
+            if (customersWithAccounts < expectedWithAccounts * 0.5 && expectedWithAccounts > 0) {
+              console.warn(`[scraper-validation] WARNING: Supportable batch discovered accounts for ${customersWithAccounts}/${expectedWithAccounts} customers — possible partial scrape`)
+            }
+
+            writeBatchState({ batchIndex: (capturedBatchIdx + 1) % 3, lastBatchRun: new Date().toISOString() })
+            updateSchedulerField('supportableLastRun', new Date().toISOString())
+            console.log(`[supportable-sync] batch ${capturedBatchIdx} complete — next batch: ${(capturedBatchIdx + 1) % 3}`)
+          },
+          source: 'scheduled',
+          enqueuedAt: Date.now(),
+        })
+      } else {
+        writeBatchState({ batchIndex: (batchIdx + 1) % 3, lastBatchRun: new Date().toISOString() })
       }
-
-      writeBatchState({ batchIndex: (batchIdx + 1) % 3, lastBatchRun: new Date().toISOString() })
-      updateSchedulerField('supportableLastRun', new Date().toISOString())
-      console.log(`[supportable-sync] batch ${batchIdx} complete — next batch: ${(batchIdx + 1) % 3}`)
     } catch (e: any) {
       console.error('[supportable-sync] error:', e?.message ?? e)
       // Still increment batch index on error so we don't retry same batch indefinitely
@@ -525,10 +621,19 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
           console.warn('[pipeline-sync] SF pre-flight probe failed:', e?.message ?? e)
         }
 
-        // Full chain: SF → GSheet → local cache
-        import('./server-state.ts').then(({ aes }) => runSfSyncForAes(aes))
-        // Refresh cache from GSheet after a brief delay for the scrape to start writing
-        setTimeout(() => refreshPipeline().catch((e: any) => console.warn('[pipeline-sync] cache refresh error:', e.message)), 60_000)
+        // BKL-M49: Enqueue SF pipeline sync through scraper queue
+        const { aes: capturedAes } = await import('./server-state.ts')
+        enqueueScraperTask({
+          name: 'sf-pipeline',
+          run: async () => {
+            runSfSyncForAes(capturedAes)
+            // Refresh cache from GSheet after a brief delay for the scrape to start writing
+            await new Promise(r => setTimeout(r, 60_000))
+            await refreshPipeline().catch((e: any) => console.warn('[pipeline-sync] cache refresh error:', e.message))
+          },
+          source: 'scheduled',
+          enqueuedAt: Date.now(),
+        })
       }
       updateSchedulerField('sfPipelineLastRun', new Date().toISOString())
     } catch (e: any) {
@@ -570,15 +675,22 @@ export function initBackgroundScheduler(opts: {
   // KPI daily snapshot at 8am ET (R05 — after all morning syncs complete)
   scheduleKpiSnapshot()
 
-  // On startup: open persistent scrape context and run initial scrape if session exists
+  // BKL-M49: On startup, wait 10s for Xvfb + Chrome to stabilise, then init
+  // context and enqueue the initial RH scrape through the queue.
   if (existsSync(opts.rhSessionPath)) {
     setTimeout(async () => {
+      console.log('[scraper-queue] startup: initialising browser context…')
       await initScrapeContext(opts.rhProfileDir)
       // Share the same browser context with SF and Supportable scrapers
       const ctx = getScrapeContext()
       if (ctx) { adoptSfContext(ctx, opts.rhProfileDir); adoptSupportableContext(ctx); adoptCcspContext(ctx) }
-      runRhScrapeWithState().catch((e: any) => console.error("[rh-scraper] unhandled error:", e?.message ?? e))
-    }, 5_000)
+      enqueueScraperTask({
+        name: 'rh-cases',
+        run: () => runRhScrapeWithState(),
+        source: 'startup',
+        enqueuedAt: Date.now(),
+      })
+    }, 10_000)  // 10s startup delay (was 5s) — let Xvfb + Chrome stabilise
   }
 
   // ── Unified 15-min heartbeat tick (BKL-M19) ──────────────────────────────
@@ -594,7 +706,7 @@ export function initBackgroundScheduler(opts: {
       const schedulerCfg = getSchedulerConfig()
       const now = Date.now()
 
-      // Timer 3: RH scraper
+      // Timer 3: RH scraper — enqueue through scraper queue (BKL-M49)
       if (!schedulerCfg.rhEnabled) {
         console.log('[rh-scraper] tick: RH Cases disabled — skipping')
       } else {
@@ -602,16 +714,24 @@ export function initBackgroundScheduler(opts: {
         const rhLastMs = lastScraped ? new Date(lastScraped).getTime() : 0
         const rhElapsed = now - rhLastMs
         if (rhElapsed >= rhIntervalMs) {
-          console.log(`[rh-scraper] tick: ${Math.round(rhElapsed / 60_000)}m since last scrape — triggering`)
-          runRhScrapeWithState().catch((e: any) => {
-            console.error("[rh-scraper] unhandled error:", e?.message ?? e)
-          }).then(() => {
-            updateSchedulerField('rhLastRun', new Date().toISOString())
+          console.log(`[rh-scraper] tick: ${Math.round(rhElapsed / 60_000)}m since last scrape — enqueueing`)
+          enqueueScraperTask({
+            name: 'rh-cases',
+            run: async () => {
+              await runRhScrapeWithState()
+              updateSchedulerField('rhLastRun', new Date().toISOString())
+            },
+            source: 'heartbeat',
+            enqueuedAt: Date.now(),
           })
         } else {
           console.log(`[rh-scraper] tick: next scrape in ${Math.round((rhIntervalMs - rhElapsed) / 60_000)}m`)
         }
       }
+
+      // BKL-M49: Drain queue on each heartbeat tick — if a scraper finished
+      // between ticks and there are pending tasks, kick off the next one.
+      runNextInQueue()
 
       // Timer 1: Subscriptions refresh
       if (customers.length > 0) {
