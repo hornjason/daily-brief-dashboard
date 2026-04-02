@@ -420,44 +420,53 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
 
   const allCases: SupportCase[] = []
 
-  try {
-    for (const accountNum of accountNumbers) {
-      if (shouldCancel?.()) {
-        console.log(`[rh-scraper] cancel requested — returning ${allCases.length} cases scraped so far`)
-        break
-      }
-      const url =
-        `https://access.redhat.com/support/cases/#/case/list` +
-        `?query=accountNumber%3A%20(%22${accountNum}%22)%20orderBy%20severity%20asc` +
-        `&p=1&size=100&searchType=basic`
+  // ── Batch query helpers ───────────────────────────────────────────────────
+  const BATCH_CHUNK_SIZE = 25   // accounts per OR-query (keeps URL under ~4 KB)
+  const BATCH_PAGE_SIZE = 500   // max rows per portal page
 
-      await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
+  function chunkArray<T>(arr: T[], size: number): T[][] {
+    const chunks: T[][] = []
+    for (let i = 0; i < arr.length; i += size) {
+      chunks.push(arr.slice(i, i + size))
+    }
+    return chunks
+  }
 
-      // Allow transparent SSO renewal; throw only if login form appears
-      await checkForSessionExpiry(page)
+  /** Wait for Angular table to render real case number links. */
+  async function waitForTable(p: Page): Promise<void> {
+    await p.waitForSelector('table tbody tr', { timeout: 15_000 }).catch(() => {})
+    await p.waitForFunction(
+      () => {
+        const link = document.querySelector('a[href*="/case/"]')
+        return link !== null && /^\d{7,10}$/.test(link.textContent?.trim() ?? '')
+      },
+      { timeout: 12_000 },
+    ).catch(() => {
+      // Timed out — genuinely empty or very slow. Fall through.
+    })
+  }
 
-      // Wait for Angular table to fully render.
-      // waitForSelector fires on the first row (may be a skeleton/loading row).
-      // The content sentinel then waits for a real case number link to appear,
-      // which means Angular has finished populating that row's cells.
-      // Closed cases also have valid case links, so the sentinel fires quickly
-      // for any account with cases — open or closed.
-      await page.waitForSelector('table tbody tr', { timeout: 15_000 }).catch(() => {})
-      await page.waitForFunction(
-        () => {
-          const link = document.querySelector('a[href*="/case/"]')
-          return link !== null && /^\d{7,10}$/.test(link.textContent?.trim() ?? '')
-        },
-        { timeout: 12_000 },
-      ).catch(() => {
-        // Timed out — no case number links appeared (genuinely empty portal or very slow).
-        // Fall through with whatever the DOM has.
-      })
-
-      // Resolve column indices from the header row, then extract cell data.
-      // Header-based lookup is resilient to portal layout changes.
-      // Falls back to hardcoded indices if the header row is absent.
-      const cases = await page.evaluate((acctNum: string) => {
+  /**
+   * Extract all cases from the current portal page DOM.
+   * When chunkAccountNums is provided, the account number is resolved from the
+   * table's Account Number column. When acctNumOverride is provided (single-
+   * account fallback), that value is stamped on every row.
+   */
+  async function extractCasesFromPage(
+    p: Page,
+    chunkAccountNums: string[] | null,
+    acctNumOverride: string | null,
+  ): Promise<Array<{
+    caseNumber: string
+    summary: string
+    status: string
+    severity: string
+    accountNumber: string
+    product: string
+    columnSource: 'header' | 'fallback'
+  }>> {
+    return p.evaluate(
+      (args: { chunkAccountNums: string[] | null; acctNumOverride: string | null }) => {
         const results: Array<{
           caseNumber: string
           summary: string
@@ -469,12 +478,12 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
         }> = []
 
         // -- Resolve column indices from header row --------------------------
-        // Known header text variants (portal uses title-case or mixed):
         const HEADER_MAP: Record<string, string[]> = {
-          summary:  ['Summary', 'Case Summary', 'Subject'],
-          status:   ['Status', 'Case Status'],
-          severity: ['Severity'],
-          product:  ['Product', 'Product Name'],
+          summary:       ['Summary', 'Case Summary', 'Subject'],
+          status:        ['Status', 'Case Status'],
+          severity:      ['Severity'],
+          product:       ['Product', 'Product Name'],
+          accountNumber: ['Account', 'Account Number', 'Account #'],
         }
 
         function buildIndexMap(): Map<string, number> | null {
@@ -493,18 +502,24 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
               }
             }
           }
-          return indexMap.size >= 2 ? indexMap : null   // need at least status + one other
+          return indexMap.size >= 2 ? indexMap : null
         }
 
         const headerIndexMap = buildIndexMap()
 
         // Hardcoded fallback indices (verified portal layout, 14 columns):
-        // [0]=checkbox [1]=case# [2]=summary [3]=opened-by [4]=modified [5]=severity [6]=status [8]=product
-        const FALLBACK: Record<string, number> = { summary: 2, status: 6, severity: 5, product: 8 }
+        // [0]=checkbox [1]=case# [2]=summary [3]=opened-by [4]=modified [5]=severity [6]=status [7]=account [8]=product
+        const FALLBACK: Record<string, number> = { summary: 2, status: 6, severity: 5, accountNumber: 7, product: 8 }
 
         const columnSource: 'header' | 'fallback' = headerIndexMap ? 'header' : 'fallback'
         const col = (key: string): number =>
           headerIndexMap?.get(key) ?? FALLBACK[key] ?? -1
+
+        // Build a Set of valid account numbers for batch queries so we can
+        // validate the extracted account number against the chunk.
+        const validAccounts = args.chunkAccountNums
+          ? new Set(args.chunkAccountNums)
+          : null
 
         // -- Extract rows ---------------------------------------------------
         const rows = document.querySelectorAll('table tbody tr')
@@ -520,7 +535,15 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           )
 
           const status = cells[col('status')] ?? ''
-          if (status.toLowerCase() === 'closed') continue  // skip closed cases
+          if (status.toLowerCase() === 'closed') continue
+
+          // Resolve account number: from column if batch, from override if single
+          let accountNumber = args.acctNumOverride ?? ''
+          if (!accountNumber) {
+            const acctCol = col('accountNumber')
+            const rawAcct = acctCol >= 0 ? (cells[acctCol] ?? '').replace(/\D/g, '') : ''
+            accountNumber = rawAcct
+          }
 
           results.push({
             caseNumber,
@@ -528,41 +551,152 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
             status,
             severity: cells[col('severity')]  ?? '',
             product:  cells[col('product')]   ?? '',
-            accountNumber: acctNum,
+            accountNumber,
             columnSource,
           })
         }
 
         return results
-      }, accountNum)
+      },
+      { chunkAccountNums, acctNumOverride },
+    )
+  }
 
-      const columnSource = cases[0]?.columnSource ?? 'fallback'
-      console.log(`[rh-scraper] account ${accountNum}: ${cases.length} cases (columns via ${columnSource})`)
+  /** Push extracted cases into allCases with severity normalization. */
+  function pushCases(
+    cases: Array<{
+      caseNumber: string; summary: string; status: string
+      severity: string; accountNumber: string; product: string
+    }>,
+  ): void {
+    for (const c of cases) {
+      const severityNum = String(c.severity).match(/^(\d)/)?.[1] ?? c.severity
+      allCases.push({
+        caseNumber: c.caseNumber,
+        summary: c.summary,
+        status: c.status,
+        severity: severityNum,
+        accountNumber: c.accountNumber,
+        daysOpen: 0,
+        product: c.product || undefined,
+      } satisfies SupportCase)
+    }
+  }
 
-      for (const c of cases) {
-        const severityNum = String(c.severity).match(/^(\d)/)?.[1] ?? c.severity
-        allCases.push({
-          caseNumber: c.caseNumber,
-          summary: c.summary,
-          status: c.status,
-          severity: severityNum,
-          accountNumber: c.accountNumber,
-          daysOpen: 0,
-          product: c.product || undefined,
-        } satisfies SupportCase)
+  // ── Batch scrape (primary path) with per-account fallback ──────────────
+  try {
+    let batchSucceeded = false
+    try {
+      const chunks = chunkArray(accountNumbers, BATCH_CHUNK_SIZE)
+      console.log(
+        `[rh-scraper] batch query: ${accountNumbers.length} accounts in ${chunks.length} chunk(s) ` +
+        `(${BATCH_CHUNK_SIZE} per chunk)`,
+      )
+
+      for (let ci = 0; ci < chunks.length; ci++) {
+        if (shouldCancel?.()) {
+          console.log(`[rh-scraper] cancel requested — returning ${allCases.length} cases scraped so far`)
+          break
+        }
+
+        const chunk = chunks[ci]
+        const orClause = chunk.map(n => `"${n}"`).join(' OR ')
+        const query = `accountNumber: (${orClause}) orderBy severity asc`
+        const encodedQuery = encodeURIComponent(query)
+        const batchStartMs = Date.now()
+
+        // Page through results — portal may cap rows per page
+        let pageNum = 1
+        let chunkCaseCount = 0
+
+        while (true) {
+          const url =
+            `https://access.redhat.com/support/cases/#/case/list` +
+            `?query=${encodedQuery}` +
+            `&p=${pageNum}&size=${BATCH_PAGE_SIZE}&searchType=basic`
+
+          await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
+          await checkForSessionExpiry(page)
+          await waitForTable(page)
+
+          const cases = await extractCasesFromPage(page, chunk, null)
+          chunkCaseCount += cases.length
+          pushCases(cases)
+
+          // Check total DOM rows to decide if there's another page
+          const totalRowsOnPage = await page.evaluate(() =>
+            document.querySelectorAll('table tbody tr').length
+          ).catch(() => 0)
+
+          // If less than BATCH_PAGE_SIZE rows rendered, we've seen all results
+          if (totalRowsOnPage < BATCH_PAGE_SIZE) break
+
+          // Safety: don't paginate indefinitely
+          if (pageNum >= 10) {
+            console.warn(`[rh-scraper] batch chunk ${ci + 1}: hit pagination limit (10 pages)`)
+            break
+          }
+
+          pageNum++
+        }
+
+        const elapsedSec = ((Date.now() - batchStartMs) / 1000).toFixed(1)
+        // Count unique accounts that returned cases in this chunk
+        const accountsWithCases = new Set(
+          allCases.slice(allCases.length - chunkCaseCount).map(c => c.accountNumber)
+        ).size
+        console.log(
+          `[rh-scraper] batch chunk ${ci + 1}/${chunks.length}: ${chunkCaseCount} cases ` +
+          `across ${accountsWithCases} accounts (${elapsedSec}s, ${pageNum} page(s))`,
+        )
       }
 
-      // Warn if the table had rows but all were skipped — helps distinguish
-      // "all cases legitimately Closed" from "parser broken / column drift"
-      if (cases.length === 0) {
-        const rowCount = await page.evaluate(() =>
-          document.querySelectorAll('table tbody tr').length
-        ).catch(() => 0)
-        if (rowCount > 0) {
-          console.warn(
-            `[rh-scraper] account ${accountNum}: ${rowCount} table rows found but 0 kept ` +
-            `— all may be Closed, or column indices may have drifted`,
-          )
+      batchSucceeded = true
+    } catch (batchErr: any) {
+      // If session expired, re-throw — don't fall back
+      if (batchErr instanceof SessionExpiredError) throw batchErr
+
+      console.warn(
+        `[rh-scraper] batch query failed — falling back to per-account loop:`,
+        batchErr?.message ?? batchErr,
+      )
+    }
+
+    // ── Per-account fallback (if batch failed) ──────────────────────────────
+    if (!batchSucceeded) {
+      allCases.length = 0  // clear any partial batch results
+
+      for (const accountNum of accountNumbers) {
+        if (shouldCancel?.()) {
+          console.log(`[rh-scraper] cancel requested — returning ${allCases.length} cases scraped so far`)
+          break
+        }
+        const url =
+          `https://access.redhat.com/support/cases/#/case/list` +
+          `?query=accountNumber%3A%20(%22${accountNum}%22)%20orderBy%20severity%20asc` +
+          `&p=1&size=100&searchType=basic`
+
+        await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
+        await checkForSessionExpiry(page)
+        await waitForTable(page)
+
+        const cases = await extractCasesFromPage(page, null, accountNum)
+
+        const columnSource = cases[0]?.columnSource ?? 'fallback'
+        console.log(`[rh-scraper] account ${accountNum}: ${cases.length} cases (columns via ${columnSource})`)
+
+        pushCases(cases)
+
+        if (cases.length === 0) {
+          const rowCount = await page.evaluate(() =>
+            document.querySelectorAll('table tbody tr').length
+          ).catch(() => 0)
+          if (rowCount > 0) {
+            console.warn(
+              `[rh-scraper] account ${accountNum}: ${rowCount} table rows found but 0 kept ` +
+              `— all may be Closed, or column indices may have drifted`,
+            )
+          }
         }
       }
     }

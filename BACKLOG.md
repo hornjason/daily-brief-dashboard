@@ -833,6 +833,20 @@ Files: src/pipeline.ts, dashboard/src/components/PipelineSection.tsx
 Description: Pipeline sheet doesn't include Opportunity ID column yet. When SF report is updated to include it, wire up direct opp links in the UI.
 Decision: DEFERRED until SF report includes Opportunity ID column. When ready: (1) add oppId to PipelineRecord type, (2) capture col(row, 'Opportunity ID') in parsePipelineRows, (3) wrap oppName in <a href> when oppId present.
 
+### BKL-M56 | SF Pipeline scraper — try CSV export instead of DOM scroll+parse
+Status: 🔴 OPEN
+Priority: P1
+Size: S (half day)
+Source: Jason 2026-04-02 — "report shows all 341 rows in one continuous page, just do CSV"
+Files: src/sf-scraper.ts
+Description: SF Pipeline scraper takes 11+ minutes because it clicks "Show More", scrolls the treegrid, and parses 341+ DOM rows via allTextContents(). The SF report already exists pre-built and shows all rows on one page.
+  Optimization: Try clicking the SF report's Export/Download button → CSV file download → parse CSV. Same pattern as Supportable scraper's CSV download. Should take 5-10 seconds instead of 11 minutes.
+  Approach: Add CSV export as primary path, keep current DOM parsing as fallback if export fails. Don't remove anything that works.
+  Baseline: 11+ min (timed out in baseline test at 660s)
+Related: BKL-F11 (SF dedup — also implemented)
+
+---
+
 ### BKL-F11 | Shared SF report dedup — scrape once, fan out to multiple AE sheets + UI toggle
 Status: 🔴 OPEN
 Priority: P2

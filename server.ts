@@ -2141,6 +2141,7 @@ app.get('/api/customer/:name/intelligence-status', (c) => {
   return c.json(status)
 })
 
+
 // ── Customer brief — cached, separate endpoint so subprocess doesn't block SSE ──
 app.get('/customer/:name/brief', async (c) => {
   const rawName = decodeURIComponent(c.req.param('name'))
