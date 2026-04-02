@@ -16,7 +16,7 @@
  */
 
 import { chromium } from '@playwright/test'
-import type { BrowserContext } from '@playwright/test'
+import type { BrowserContext, Page, Frame, Download } from '@playwright/test'
 import { writeFile, readFile, unlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { google } from 'googleapis'
@@ -34,6 +34,340 @@ const REPORT_VIEW_URL   = (reportId: string) => `${SF_BASE_URL}/lightning/r/Repo
 const KEEPALIVE_URL     = `${SF_BASE_URL}/lightning/n/Home`
 const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000  // 10 minutes — more aggressive to prevent session drops
 const SESSION_STATE_FILE = 'sf-session-state.json'
+
+// ── CSV helpers (same pattern as supportable-scraper.ts) ─────────────────────
+
+/**
+ * Split CSV text into logical lines, keeping quoted fields that contain
+ * embedded newlines intact (RFC 4180 multi-line field support).
+ */
+function splitCsvLines(text: string): string[] {
+  const lines: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (const ch of text) {
+    if (ch === '"') inQuotes = !inQuotes
+    if (ch === '\n' && !inQuotes) {
+      if (current.trim()) lines.push(current)
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  if (current.trim()) lines.push(current)
+  return lines
+}
+
+/** Parse one CSV line into field values, handling double-quoted fields and escaped quotes (""). */
+function parseCsvRow(line: string): string[] {
+  const fields: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
+      else inQuotes = !inQuotes
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(current.trim())
+      current = ''
+    } else {
+      current += ch
+    }
+  }
+  fields.push(current.trim())
+  return fields
+}
+
+/** Parse full CSV text into { headers, rows } matching SfReportRow shape. */
+function parseCsvToSfReport(text: string): { headers: string[]; rows: string[][] } {
+  // Strip UTF-8 BOM
+  const clean = text.startsWith('\uFEFF') ? text.slice(1) : text
+  const lines = splitCsvLines(clean)
+  if (lines.length === 0) return { headers: [], rows: [] }
+
+  const headers = parseCsvRow(lines[0])
+  const rows: string[][] = []
+  for (let i = 1; i < lines.length; i++) {
+    const row = parseCsvRow(lines[i])
+    // Skip empty rows and SF summary/footer rows (fewer fields than headers)
+    if (row.length >= headers.length - 1 && row.some(c => c.length > 0)) {
+      // Pad short rows to match header length
+      while (row.length < headers.length) row.push('')
+      rows.push(row)
+    }
+  }
+  return { headers, rows }
+}
+
+/**
+ * Attempt CSV export from a Salesforce Lightning report page.
+ * Tries multiple UI paths to find and click the Export button.
+ * Returns the parsed CSV data or null if export fails.
+ *
+ * SF Lightning report export UI (as of Spring '26):
+ *   - Kebab/dropdown menu near report header → "Export" → format modal → "Export" button
+ *   - The format modal lets you pick "Formatted Report" or "Details Only" and format (xlsx/csv)
+ */
+async function tryCSVExport(page: Page): Promise<{ headers: string[]; rows: string[][] } | null> {
+  const t0 = Date.now()
+  console.log('[sf-scraper] CSV export: attempting SF report export…')
+
+  try {
+    // Strategy 1: Look for the dropdown/kebab menu button in the report header area
+    // SF Lightning reports have a dropdown arrow or kebab (⋮) near the report actions
+    const menuSelectors = [
+      // Lightning report action dropdown — the primary "Export" button in newer SF
+      'button[title="Export"]',
+      'a[title="Export"]',
+      // Kebab menu / more actions in the report header
+      'lightning-button-menu button',
+      'button[title="Show more actions"]',
+      'button[title="More Actions"]',
+      // Report header actions area dropdown
+      'lightning-primitive-icon[iconname="utility:down"]',
+      'button.slds-button_icon-border-filled',
+      // Generic dropdown triggers near report controls
+      'div.reportHeader button.slds-button',
+    ]
+
+    let exportClicked = false
+
+    // First try direct Export button (some SF orgs show it directly)
+    for (const sel of menuSelectors.slice(0, 2)) {
+      const btn = page.locator(sel).first()
+      if (await btn.count().catch(() => 0) > 0) {
+        console.log(`[sf-scraper] CSV export: found direct export button via "${sel}"`)
+        // Register download listener BEFORE clicking (SF may trigger download immediately)
+        const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+        await btn.click()
+        // If this was a direct CSV download link, we might get the download now
+        const quickDl = await Promise.race([
+          downloadPromise.then(d => d),
+          page.waitForTimeout(2_000).then(() => null),
+        ])
+        if (quickDl) {
+          const csvText = await readDownloadToString(quickDl)
+          if (csvText && csvText.includes(',')) {
+            const result = parseCsvToSfReport(csvText)
+            console.log(`[sf-scraper] CSV export: direct download — ${result.rows.length} rows in ${((Date.now() - t0) / 1000).toFixed(1)}s`)
+            return result
+          }
+        }
+        exportClicked = true
+        break
+      }
+    }
+
+    // Try opening the kebab/dropdown menu to find Export option inside
+    if (!exportClicked) {
+      for (const sel of menuSelectors.slice(2)) {
+        const btn = page.locator(sel).first()
+        if (await btn.count().catch(() => 0) > 0) {
+          console.log(`[sf-scraper] CSV export: opening menu via "${sel}"`)
+          await btn.click()
+          await page.waitForTimeout(1_000)
+
+          // Look for "Export" menu item in the dropdown
+          const exportItem = page.locator([
+            'lightning-menu-item[value="export"]',
+            'a[role="menuitem"]:has-text("Export")',
+            'span[role="menuitem"]:has-text("Export")',
+            'lightning-menu-item:has-text("Export")',
+            '[role="menuitem"]:has-text("Export")',
+            'a:has-text("Export")',
+          ].join(', ')).first()
+
+          if (await exportItem.count().catch(() => 0) > 0) {
+            console.log('[sf-scraper] CSV export: found Export menu item — clicking')
+            await exportItem.click()
+            await page.waitForTimeout(1_500)
+            exportClicked = true
+            break
+          } else {
+            // Close menu and try next selector
+            await page.keyboard.press('Escape')
+            await page.waitForTimeout(500)
+          }
+        }
+      }
+    }
+
+    // Also try: in the report iframe (SF reports can be in an iframe)
+    if (!exportClicked) {
+      const frames = page.frames()
+      for (const frame of frames) {
+        if (!frame.url().includes('lightningReportApp') && !frame.url().includes('report')) continue
+        for (const sel of menuSelectors) {
+          const btn = frame.locator(sel).first()
+          if (await btn.count().catch(() => 0) > 0) {
+            console.log(`[sf-scraper] CSV export: found button in iframe via "${sel}"`)
+            await btn.click()
+            await page.waitForTimeout(1_000)
+
+            const exportItem = frame.locator('[role="menuitem"]:has-text("Export"), a:has-text("Export")').first()
+            if (await exportItem.count().catch(() => 0) > 0) {
+              await exportItem.click()
+              await page.waitForTimeout(1_500)
+              exportClicked = true
+              break
+            }
+          }
+        }
+        if (exportClicked) break
+      }
+    }
+
+    if (!exportClicked) {
+      console.log('[sf-scraper] CSV export: no export button/menu found — skipping CSV path')
+      return null
+    }
+
+    // ── Export modal: select format and trigger download ─────────────────────
+    // SF export modal has: "Formatted Report" vs "Details Only" radio, and format dropdown (xlsx/csv)
+    // We want "Details Only" + CSV format
+
+    // Select "Details Only" if available (gives raw data without grouping/subtotals)
+    const detailsOnly = page.locator([
+      'input[value="details"]',
+      'label:has-text("Details Only")',
+      'span:has-text("Details Only")',
+    ].join(', ')).first()
+    if (await detailsOnly.count().catch(() => 0) > 0) {
+      console.log('[sf-scraper] CSV export: selecting "Details Only"')
+      await detailsOnly.click()
+      await page.waitForTimeout(500)
+    }
+
+    // Select CSV format — try dropdown/radio/select
+    let csvSelected = false
+
+    // Try format dropdown (SF Lightning uses a combobox or select)
+    const formatDropdown = page.locator([
+      'select:has(option[value*="csv"])',
+      'select:has(option[value*="CSV"])',
+      'lightning-combobox',
+      'select[name*="format"]',
+      'select[name*="encoding"]',
+    ].join(', ')).first()
+
+    if (await formatDropdown.count().catch(() => 0) > 0) {
+      // Try selecting CSV option
+      const tag = await formatDropdown.evaluate(el => el.tagName.toLowerCase()).catch(() => '')
+      if (tag === 'select') {
+        const csvOptValue = await formatDropdown.evaluate(el => {
+          const select = el as HTMLSelectElement
+          const opt = Array.from(select.options).find(o =>
+            o.text.toLowerCase().includes('csv') || o.value.toLowerCase().includes('csv')
+          )
+          return opt?.value ?? null
+        }).catch(() => null)
+
+        if (csvOptValue) {
+          await formatDropdown.selectOption(csvOptValue)
+          csvSelected = true
+          console.log('[sf-scraper] CSV export: selected CSV from dropdown')
+        }
+      }
+    }
+
+    // Try clicking a CSV label/radio directly
+    if (!csvSelected) {
+      const csvLabel = page.locator([
+        'label:has-text("CSV")',
+        'span:has-text(".csv")',
+        'input[value*="csv"]',
+        'input[value*="CSV"]',
+      ].join(', ')).first()
+      if (await csvLabel.count().catch(() => 0) > 0) {
+        await csvLabel.click()
+        csvSelected = true
+        console.log('[sf-scraper] CSV export: selected CSV format via label/radio')
+      }
+    }
+
+    // If we couldn't explicitly select CSV, proceed anyway — SF default might be xlsx
+    // which we can't parse, but it's worth trying
+    if (!csvSelected) {
+      console.log('[sf-scraper] CSV export: could not explicitly select CSV format — proceeding with default')
+    }
+
+    // Register download listener and click the modal's Export/Download button
+    const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+
+    const exportBtn = page.locator([
+      'button:has-text("Export")',
+      'button:has-text("Download")',
+      'input[type="submit"][value*="Export"]',
+      'button.slds-button_brand',
+    ].join(', ')).first()
+
+    if (await exportBtn.count().catch(() => 0) > 0) {
+      console.log('[sf-scraper] CSV export: clicking final Export/Download button')
+      await exportBtn.click()
+    } else {
+      console.log('[sf-scraper] CSV export: no Export/Download button in modal — aborting CSV path')
+      return null
+    }
+
+    // Wait for download
+    const download = await downloadPromise.catch(() => null)
+    if (!download) {
+      console.log('[sf-scraper] CSV export: download event not received within 30s — aborting CSV path')
+      return null
+    }
+
+    const dlFailure = await download.failure()
+    if (dlFailure) {
+      console.warn(`[sf-scraper] CSV export: download failed — ${dlFailure}`)
+      return null
+    }
+
+    const filename = download.suggestedFilename()
+    console.log(`[sf-scraper] CSV export: download received — ${filename}`)
+
+    // Check it's actually CSV (not xlsx)
+    if (filename.endsWith('.xlsx') || filename.endsWith('.xls')) {
+      console.warn('[sf-scraper] CSV export: got Excel format instead of CSV — falling back to DOM')
+      return null
+    }
+
+    const csvText = await readDownloadToString(download)
+    if (!csvText || csvText.length < 10) {
+      console.warn('[sf-scraper] CSV export: empty or too-small download — aborting CSV path')
+      return null
+    }
+
+    const result = parseCsvToSfReport(csvText)
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
+    console.log(`[sf-scraper] CSV export: parsed ${result.rows.length} rows, ${result.headers.length} columns in ${elapsed}s`)
+
+    if (result.rows.length === 0) {
+      console.warn('[sf-scraper] CSV export: 0 rows parsed from CSV — falling back to DOM')
+      return null
+    }
+
+    return result
+  } catch (e: any) {
+    console.warn(`[sf-scraper] CSV export: failed — ${e?.message ?? e}`)
+    return null
+  }
+}
+
+/** Read a Playwright Download into a UTF-8 string. */
+async function readDownloadToString(download: Download): Promise<string | null> {
+  try {
+    const readable = await download.createReadStream()
+    if (!readable) return null
+    const chunks: Buffer[] = []
+    for await (const chunk of readable) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    }
+    return Buffer.concat(chunks).toString('utf-8')
+  } catch {
+    return null
+  }
+}
 
 // ── Long-lived context ────────────────────────────────────────────────────────
 
@@ -153,7 +487,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
   // SF Lightning treegrid uses IntersectionObserver for virtual rendering — a taller viewport
   // increases the number of rows rendered without scrolling. 20000px ≈ 400 rows at ~50px each.
   const page = await _context.newPage()
-  await page.setViewportSize({ width: 1920, height: 20000 })
+  await page.setViewportSize({ width: 3840, height: 20000 })  // Extra wide to capture all report columns without horizontal scroll
 
   try {
     // Use 'load' not 'networkidle' — SF Lightning keeps making background API calls
@@ -198,13 +532,48 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
       await runBtn.first().click().catch(() => {})
     }
 
-    // ── SF Analytics REST API — fetch all report rows directly ──────────────────
-    // context.request shares the browser context's cookies (including the SF sid),
-    // bypasses CORS, and targets my.salesforce.com where the REST API lives.
-    // This avoids all DOM virtualization, viewport limits, collapsed groups, and lazy-loading.
-    //
-    // API: GET /services/data/v59.0/analytics/reports/{id}?includeDetails=true
-    // Returns: { reportMetadata, factMap, groupingsDown, ... }
+    // ── PRIMARY PATH: CSV Export (BKL-M56) ────────────────────────────────────
+    // Try the SF report's built-in Export button first — downloads CSV in seconds
+    // instead of the 11+ minute DOM scroll+parse approach.
+    // Falls back to DOM parsing if CSV export fails for any reason.
+
+    const scrapeT0 = Date.now()
+    const csvResult = await tryCSVExport(page)
+
+    if (csvResult && csvResult.rows.length > 0) {
+      // CSV export succeeded — apply the same KEEP_COLS filter as DOM path
+      let { headers, rows: dataRows } = csvResult
+
+      const KEEP_COLS = new Set([
+        'Opportunity ID', 'Opportunity Number', 'Account Name', 'Opportunity Name',
+        'ACV Opportunity', 'ACV Opportunity Product', 'Close Date', 'Forecast Category',
+        'Opportunity Owner', 'Offering Group', 'Product Code', 'Opportunity Pod',
+        'Product Description', 'Renewal',
+      ])
+      const keepIdx = headers.reduce<number[]>((acc, h, i) => {
+        if (KEEP_COLS.has(h)) acc.push(i)
+        return acc
+      }, [])
+      const finalHeaders = keepIdx.length >= 3 ? keepIdx.map(i => headers[i]) : headers
+      const finalRows    = keepIdx.length >= 3 ? dataRows.map(row => keepIdx.map(i => row[i] ?? '')) : dataRows
+
+      const keptHeaders = new Set(keepIdx.map(i => headers[i]))
+      const droppedColumns = keepIdx.length >= 3
+        ? headers.filter(h => !keptHeaders.has(h))
+        : []
+      if (droppedColumns.length > 0) {
+        console.warn(`[sf-scraper] CSV path: dropped ${droppedColumns.length} column(s) not in KEEP_COLS: ${droppedColumns.join(', ')}`)
+      }
+
+      const elapsed = ((Date.now() - scrapeT0) / 1000).toFixed(1)
+      console.log(`[sf-scraper] CSV export: downloaded ${finalRows.length} rows in ${elapsed}s (report ${reportId})`)
+
+      await persistSessionState()
+      return { headers: finalHeaders, rows: finalRows, droppedColumns }
+    }
+
+    // ── FALLBACK: DOM scroll+parse ──────────────────────────────────────────────
+    console.log('[sf-scraper] CSV export path did not succeed — falling back to DOM scroll+parse')
 
     const TABLE_SELECTOR = 'table[role="treegrid"], table[role="grid"]'
 
@@ -221,7 +590,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
       console.warn(`[sf-scraper] frame URLs: ${frameUrls.join(' | ')}`)
       throw new Error('Report table not found — screenshot at /data/cache/sf-debug.png')
     }
-    console.log('[sf-scraper] table found in lightningReportApp frame')
+    console.log('[sf-scraper] DOM fallback: table found in lightningReportApp frame')
 
     const targetFrame = page.frames().find(f => f.url().includes('lightningReportApp')) ?? page.mainFrame()
 
@@ -300,16 +669,15 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
       }
     }
 
-    // ── Extract rows from the DOM ─────────────────────────────────────────────
-    const rowCount = await targetFrame.locator(ROW_SEL).count().catch(() => 0)
-    const rows: string[][] = []
-    const rowLoc = targetFrame.locator(ROW_SEL)
-    for (let i = 0; i < rowCount; i++) {
-      const cellTexts = await rowLoc.nth(i).locator('td, th[scope="row"]').allTextContents()
-        .then(ts => ts.map(t => t.trim()))
-        .catch(() => [] as string[])
-      if (cellTexts.some(c => c.length > 0)) rows.push(cellTexts)
-    }
+    // ── Extract rows from the DOM (single evaluate call for speed) ────────────
+    // Previous approach: 686 individual Playwright calls (1-2s each = 10+ min)
+    // New approach: one page.evaluate() extracting all rows at once (~1-2s total)
+    const rows: string[][] = await targetFrame.evaluate((sel: string) => {
+      const trs = Array.from(document.querySelectorAll(sel))
+      return trs
+        .map(tr => Array.from(tr.querySelectorAll('td, th[scope="row"]')).map(cell => (cell.textContent ?? '').trim()))
+        .filter(cells => cells.some(c => c.length > 0))
+    }, ROW_SEL).catch(() => [] as string[][])
 
     // ── Post-processing ────────────────────────────────────────────────────────
     // 1. Clean header text — strip "Column Actions" and sort-state descriptions
@@ -372,7 +740,8 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
     }
 
     const result = { headers: finalHeaders, rows: finalRows, droppedColumns }
-    console.log(`[sf-scraper] report ${reportId}: ${result.headers.length} columns, ${result.rows.length} data rows (${rows.length} raw)`)
+    const domElapsed = ((Date.now() - scrapeT0) / 1000).toFixed(1)
+    console.log(`[sf-scraper] DOM fallback: report ${reportId}: ${result.headers.length} columns, ${result.rows.length} data rows (${rows.length} raw) in ${domElapsed}s`)
 
     if (result.rows.length === 0) {
       const domCount = await page.evaluate(
