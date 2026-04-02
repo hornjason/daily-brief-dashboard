@@ -26,6 +26,21 @@ import { writeFile, mkdir, readFile, unlink, rename } from 'node:fs/promises'
 import { resolve, dirname, join } from 'node:path'
 import type { SupportCase } from './types.ts'
 
+// ── BKL-M50c: Auto-recovery state ───────────────────────────────────────────
+let _recoveryInProgress = false
+let _recoveryAttempts = 0
+const MAX_RECOVERY_ATTEMPTS = 5
+const RECOVERY_BACKOFF_BASE_MS = 1_000  // 1s, 2s, 4s, 8s, 16s
+
+/** Flag set when auto-recovery fails after max attempts — dashboard can surface degraded state */
+export let browserDegraded = false
+export let browserDegradedReason: string | null = null
+
+// ── BKL-M50c context recycling state ─────────────────────────────────────────
+let _scrapesSinceRecycle = 0
+const RECYCLE_AFTER_SCRAPES = 50
+const RECYCLE_HEAP_THRESHOLD_BYTES = 1.5 * 1024 * 1024 * 1024  // 1.5 GB
+
 export class SessionExpiredError extends Error {
   constructor() {
     super('Red Hat session expired — please reconnect via the dashboard')
@@ -93,10 +108,111 @@ export async function initScrapeContext(profileDir: string): Promise<void> {
   })
   // Restore session cookies persisted from a previous run
   await restoreSessionCookies()
+
+  // BKL-M50c: Attach browser disconnected handler for auto-recovery
+  _attachDisconnectedHandler(_context, profileDir)
+
+  // Reset degraded state on successful context init
+  browserDegraded = false
+  browserDegradedReason = null
+  _recoveryAttempts = 0
+  _scrapesSinceRecycle = 0
+
   _keepAliveTimer = setInterval(
     () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),
     KEEP_ALIVE_INTERVAL_MS,
   )
+}
+
+// ── BKL-M50c: Auto-recovery on browser disconnect ──────────────────────────
+
+function _attachDisconnectedHandler(ctx: BrowserContext, profileDir: string): void {
+  const browser = ctx.browser()
+  if (browser) {
+    browser.on('disconnected', () => {
+      console.warn('[rh-scraper] browser disconnected — initiating auto-recovery')
+      _autoRecover(profileDir).catch(e =>
+        console.error('[rh-scraper] auto-recovery failed:', e?.message ?? e)
+      )
+    })
+  }
+}
+
+function _attachPageCrashHandler(page: Page): void {
+  page.on('crash', () => {
+    console.error('[rh-scraper] page crashed (renderer process killed) — will recover on next scrape')
+  })
+}
+
+async function _autoRecover(profileDir: string): Promise<void> {
+  if (_recoveryInProgress) {
+    console.log('[rh-scraper] recovery already in progress — skipping')
+    return
+  }
+  _recoveryInProgress = true
+
+  try {
+    // Save storage state before closing if context is still accessible
+    await persistSessionState().catch(() => {})
+
+    // Clear stale references
+    if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
+    _context = null
+    _livePage = null
+
+    while (_recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+      const backoffMs = RECOVERY_BACKOFF_BASE_MS * Math.pow(2, _recoveryAttempts)
+      _recoveryAttempts++
+      console.log(`[rh-scraper] recovery attempt ${_recoveryAttempts}/${MAX_RECOVERY_ATTEMPTS} (backoff: ${backoffMs}ms)`)
+
+      await new Promise(r => setTimeout(r, backoffMs))
+
+      try {
+        await clearProfileLocks(profileDir)
+        const ctx = await chromium.launchPersistentContext(profileDir, {
+          headless: false,
+          args: [
+            '--disable-blink-features=AutomationControlled',
+            '--ignore-certificate-errors',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+          ],
+          ignoreDefaultArgs: ['--enable-automation'],
+        })
+
+        _context = ctx
+        _profileDir = profileDir
+
+        // Restore cookies from persisted state
+        await restoreSessionCookies()
+
+        // Re-attach disconnect handler
+        _attachDisconnectedHandler(ctx, profileDir)
+
+        // Restart keep-alive timer
+        _keepAliveTimer = setInterval(
+          () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),
+          KEEP_ALIVE_INTERVAL_MS,
+        )
+
+        browserDegraded = false
+        browserDegradedReason = null
+        _recoveryAttempts = 0
+        console.log('[rh-scraper] auto-recovery succeeded — browser context restored')
+        return
+      } catch (e: any) {
+        console.warn(`[rh-scraper] recovery attempt ${_recoveryAttempts} failed:`, e?.message ?? e)
+      }
+    }
+
+    // All attempts exhausted
+    browserDegraded = true
+    browserDegradedReason = `Auto-recovery failed after ${MAX_RECOVERY_ATTEMPTS} attempts — reconnect manually via dashboard`
+    console.error(`[rh-scraper] ${browserDegradedReason}`)
+  } finally {
+    _recoveryInProgress = false
+  }
 }
 
 /**
@@ -117,6 +233,15 @@ export function adoptScrapeContext(context: BrowserContext, profileDir: string, 
     const auth = req.headers()['authorization']
     if (auth?.startsWith('Bearer ')) { _cachedToken = auth.slice(7) }
   })
+
+  // BKL-M50c: Attach crash/disconnect handlers
+  _attachPageCrashHandler(livePage)
+  _attachDisconnectedHandler(context, profileDir)
+  browserDegraded = false
+  browserDegradedReason = null
+  _recoveryAttempts = 0
+  _scrapesSinceRecycle = 0
+
   _keepAliveTimer = setInterval(
     () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),
     KEEP_ALIVE_INTERVAL_MS,
@@ -449,6 +574,47 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
 
   // Persist session state after a successful scrape
   await persistSessionState()
+
+  // BKL-M50c: Context recycling — prevent memory leaks from long-running contexts
+  _scrapesSinceRecycle++
+  const heapUsed = process.memoryUsage().heapUsed
+  if (_scrapesSinceRecycle >= RECYCLE_AFTER_SCRAPES || heapUsed > RECYCLE_HEAP_THRESHOLD_BYTES) {
+    const heapMB = Math.round(heapUsed / 1024 / 1024)
+    console.log(`[browser] Context recycling after ${_scrapesSinceRecycle} scrapes (heap: ${heapMB}MB)`)
+    try {
+      await persistSessionState()
+      const oldCtx = _context
+      _context = null
+      _livePage = null
+      if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
+      if (oldCtx) await oldCtx.close().catch(() => {})
+      // Reopen with saved state
+      if (_profileDir) {
+        await clearProfileLocks(_profileDir)
+        _context = await chromium.launchPersistentContext(_profileDir, {
+          headless: false,
+          args: [
+            '--disable-blink-features=AutomationControlled',
+            '--ignore-certificate-errors',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+          ],
+          ignoreDefaultArgs: ['--enable-automation'],
+        })
+        await restoreSessionCookies()
+        _attachDisconnectedHandler(_context, _profileDir)
+        _keepAliveTimer = setInterval(
+          () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),
+          KEEP_ALIVE_INTERVAL_MS,
+        )
+        _scrapesSinceRecycle = 0
+        console.log(`[browser] Context recycled successfully (heap was ${heapMB}MB)`)
+      }
+    } catch (e: any) {
+      console.error('[browser] Context recycling failed:', e?.message ?? e)
+    }
+  }
 
   // BKL-M50 G5: Stale-overwrite guard — don't overwrite good cached cases with
   // empty results (e.g. session expired silently mid-scrape). Same pattern used

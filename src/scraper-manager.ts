@@ -2,13 +2,109 @@ import { existsSync } from 'fs'
 import type { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
-import { runRhScrape, SessionExpiredError, closeScrapeContext } from './rh-scraper.ts'
+import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason } from './rh-scraper.ts'
 import { runSfPipelineSync, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount } from './sf-scraper.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
 import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper.ts'
 import { getRefreshIntervals } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
+
+// ── BKL-M50c: Circuit breaker per service ────────────────────────────────────
+
+class CircuitBreaker {
+  private _failureCount = 0
+  private _openedAt: number | null = null
+  private _lastFailure: string | null = null
+  readonly name: string
+  readonly threshold: number
+  readonly cooldownMs: number
+
+  constructor(name: string, threshold = 3, cooldownMs = 5 * 60 * 1000) {
+    this.name = name
+    this.threshold = threshold
+    this.cooldownMs = cooldownMs
+  }
+
+  /** Returns true if the circuit is open (service should be skipped). */
+  isOpen(): boolean {
+    if (this._failureCount < this.threshold) return false
+    // Check if cooldown has elapsed — if so, allow a retry (half-open)
+    if (this._openedAt && (Date.now() - this._openedAt) >= this.cooldownMs) {
+      console.log(`[circuit-breaker] ${this.name}: cooldown elapsed — allowing retry (half-open)`)
+      return false
+    }
+    return true
+  }
+
+  recordSuccess(): void {
+    if (this._failureCount > 0) {
+      console.log(`[circuit-breaker] ${this.name}: success — resetting (was at ${this._failureCount} failures)`)
+    }
+    this._failureCount = 0
+    this._openedAt = null
+    this._lastFailure = null
+  }
+
+  recordFailure(reason: string): void {
+    this._failureCount++
+    this._lastFailure = reason
+    if (this._failureCount >= this.threshold) {
+      this._openedAt = Date.now()
+      console.warn(`[circuit-breaker] ${this.name}: OPEN after ${this._failureCount} failures — cooldown ${this.cooldownMs / 1000}s (last: ${reason})`)
+    } else {
+      console.warn(`[circuit-breaker] ${this.name}: failure ${this._failureCount}/${this.threshold} (${reason})`)
+    }
+  }
+
+  getState(): { name: string; state: 'closed' | 'open' | 'half-open'; failures: number; lastFailure: string | null } {
+    let state: 'closed' | 'open' | 'half-open' = 'closed'
+    if (this._failureCount >= this.threshold) {
+      state = (this._openedAt && (Date.now() - this._openedAt) >= this.cooldownMs) ? 'half-open' : 'open'
+    }
+    return { name: this.name, state, failures: this._failureCount, lastFailure: this._lastFailure }
+  }
+}
+
+const circuitBreakers = {
+  rh: new CircuitBreaker('rh'),
+  ccsp: new CircuitBreaker('ccsp'),
+  supportable: new CircuitBreaker('supportable'),
+  salesforce: new CircuitBreaker('salesforce'),
+}
+
+/** Get circuit breaker states for all services — exposed for /api/status endpoint. */
+export function getCircuitBreakerStates(): Record<string, ReturnType<CircuitBreaker['getState']>> {
+  return {
+    rh: circuitBreakers.rh.getState(),
+    ccsp: circuitBreakers.ccsp.getState(),
+    supportable: circuitBreakers.supportable.getState(),
+    salesforce: circuitBreakers.salesforce.getState(),
+  }
+}
+
+// ── BKL-M50c: Wall-clock timeout wrapper ─────────────────────────────────────
+
+const DEFAULT_SCRAPE_TIMEOUT_MS = 3 * 60 * 1000  // 3 minutes
+
+/**
+ * Wrap a promise with a wall-clock timeout. If the timeout fires, the promise
+ * is abandoned (not cancelled — Playwright operations don't support AbortSignal)
+ * and a descriptive error is thrown.
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`[timeout] ${label} exceeded ${ms / 1000}s wall-clock limit`))
+    }, ms)
+  })
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 // ── Shared helpers (duplicated from server.ts to avoid circular dep) ────────
 
@@ -48,6 +144,22 @@ async function sfLiveProbe(): Promise<boolean> {
   } catch {
     _probeCache.set(key, { result: false, at: Date.now() })
     return false
+  }
+}
+
+// ── BKL-M50f: Last skip reason per service ───────────────────────────────────
+const _lastSkipReasons = new Map<string, { reason: string; at: string }>()
+
+export function setLastSkipReason(service: string, reason: string): void {
+  _lastSkipReasons.set(service, { reason, at: new Date().toISOString() })
+}
+
+export function getLastSkipReasons(): Record<string, { reason: string; at: string } | null> {
+  return {
+    rh: _lastSkipReasons.get('rh') ?? null,
+    ccsp: _lastSkipReasons.get('ccsp') ?? null,
+    supportable: _lastSkipReasons.get('supportable') ?? null,
+    salesforce: _lastSkipReasons.get('salesforce') ?? null,
   }
 }
 
@@ -102,6 +214,13 @@ export function setSfSyncLastError(v: string | null): void { _sfSyncLastError = 
 // ── RH scrape orchestration ─────────────────────────────────────────────────
 
 export async function runRhScrapeWithState(): Promise<void> {
+  // BKL-M50c: Circuit breaker check
+  if (circuitBreakers.rh.isOpen()) {
+    const state = circuitBreakers.rh.getState()
+    console.warn(`[rh-scraper] circuit breaker OPEN (${state.failures} failures) — skipping scrape`)
+    return
+  }
+
   if (_rhScrapeRunning) {
     if (_rhScrapeStartedAt && (Date.now() - _rhScrapeStartedAt) > RH_STALE_MUTEX_MS) {
       console.warn(`[rh-scraper] stale mutex detected (${Math.round((Date.now() - _rhScrapeStartedAt) / 60000)}min) — auto-releasing`)
@@ -130,14 +249,20 @@ export async function runRhScrapeWithState(): Promise<void> {
 
   try {
     console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
-    const cases = await runRhScrape({
-      accountNumbers,
-      profileDir: RH_PROFILE_DIR,
-      cachePath: RH_CASES_CACHE_PATH,
-      shouldCancel: () => _rhScrapeCancelRequested,
-    })
+    // BKL-M50c: Wrap with wall-clock timeout to prevent 7+ min stalls
+    const cases = await withTimeout(
+      runRhScrape({
+        accountNumbers,
+        profileDir: RH_PROFILE_DIR,
+        cachePath: RH_CASES_CACHE_PATH,
+        shouldCancel: () => _rhScrapeCancelRequested,
+      }),
+      DEFAULT_SCRAPE_TIMEOUT_MS,
+      'RH case scrape',
+    )
     _rhScrapeLastError = null
     recordScrapeSuccess(cases.length)
+    circuitBreakers.rh.recordSuccess()
 
     // BKL-M21: Post-scrape account count validation — warn if results seem partial
     const expectedAccounts = accountNumbers.length
@@ -152,11 +277,13 @@ export async function runRhScrapeWithState(): Promise<void> {
     if (e instanceof SessionExpiredError) {
       _rhScrapeLastError = 'Session expired — reconnect via dashboard'
       recordScrapeExpired()
+      circuitBreakers.rh.recordFailure('session expired')
       await closeScrapeContext() // discard expired context so next login gets a clean one
       console.warn('[rh-scraper] session expired — reconnect via dashboard')
       notify('Red Hat Session Expired', 'Session expired during case scrape — reconnect via dashboard', 'high').catch(() => {})
     } else {
       _rhScrapeLastError = sanitizeErr(e)
+      circuitBreakers.rh.recordFailure(sanitizeErr(e))
       console.warn('[rh-scraper]', sanitizeErr(e))
     }
   } finally {
@@ -296,6 +423,13 @@ export function registerScraperRoutes(app: Hono): void {
         isRunning: _sfSyncRunning,
         isStale:   isStale(lastSfSync, intervals.subscriptions),
       },
+      // BKL-M50c: Circuit breaker states per service
+      circuitBreakers: getCircuitBreakerStates(),
+      // BKL-M50c: Browser degraded state
+      browserDegraded,
+      browserDegradedReason,
+      // BKL-M50f: Last skip reasons per service
+      lastSkipReasons: getLastSkipReasons(),
     })
   })
 }
