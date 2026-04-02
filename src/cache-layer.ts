@@ -41,6 +41,22 @@ export function writeBriefCache(customerName: string, text: string): void {
   }
 }
 
+// ── Brief cache invalidation (BKL-M47) ─────────────────────────────────────
+// Called by drive-watcher when customer documents change — deletes today's
+// brief cache so the next request triggers fresh generation.
+
+export function invalidateBriefCaches(customerNames: string[]): void {
+  for (const name of customerNames) {
+    try {
+      const path = briefCachePath(name)
+      unlinkSync(path)
+      console.log(`[cache] invalidated brief cache for ${name}`)
+    } catch {
+      // Cache file may not exist — that's fine
+    }
+  }
+}
+
 // ── Sheet data cache — permanent (no date), stays until force-refreshed ────────
 export function sheetCachePath(customerName: string): string {
   return `${CACHE_DIR}/${toSlug(customerName)}-sheets.json`

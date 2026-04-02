@@ -62,6 +62,16 @@ function scoreCases(
   return { score: 60, signal: `${matched.length} open case${matched.length > 1 ? 's' : ''} (Sev3/4)` }
 }
 
+// ── Free / Beta / Trial filter (BKL-M45) ────────────────────────────────────
+// Pattern-match on productDescription and sku keywords to identify non-paid
+// subscriptions that should not trigger renewal alarms or health score penalties.
+
+const FREE_TRIAL_RE = /\b(free|beta|trial|eval|evaluation|developer|self-support|no-support)\b/i
+
+export function isFreeOrTrial(sub: ProductSubscription): boolean {
+  return FREE_TRIAL_RE.test(sub.productDescription) || FREE_TRIAL_RE.test(sub.sku)
+}
+
 // ── Subscore: Subscriptions ──────────────────────────────────────────────────
 
 function parseSubscriptionDate(raw: string): Date | null {
@@ -94,6 +104,8 @@ function scoreSubscriptions(
   for (const sub of subscriptions) {
     if (sub.status?.toLowerCase() !== 'active') continue
     if (!sub.endDate) continue
+    // BKL-M45: skip free/trial subs from expiration penalty (still counted in total)
+    if (isFreeOrTrial(sub)) continue
 
     const end = parseSubscriptionDate(sub.endDate)
     if (!end) continue

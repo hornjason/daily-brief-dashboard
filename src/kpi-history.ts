@@ -21,6 +21,8 @@ export interface DailySnapshot {
     pipelineTotal: number  // total pipeline ACV
     pipelineCount: number  // number of pipeline opportunities
     customerCount: number
+    meetingsToday?: number     // BKL-G11: daily meeting count
+    meetingsThisWeek?: number  // BKL-G11: weekly meeting count
   }
 }
 
@@ -42,7 +44,7 @@ export function readHistory(): KPIHistory {
  * Reads directly from cache files rather than taking parameters —
  * this keeps the caller simple and ensures we always snapshot what's actually cached.
  */
-export function captureSnapshot(customerCount: number): DailySnapshot {
+export function captureSnapshot(customerCount: number, meetingsToday?: number, meetingsThisWeek?: number): DailySnapshot {
   const today = new Date().toISOString().slice(0, 10)
 
   // ── Cases (cases.json) ──────────────────────────────────────────────────
@@ -113,6 +115,8 @@ export function captureSnapshot(customerCount: number): DailySnapshot {
       pipelineTotal: Math.round(pipelineTotal * 100) / 100,
       pipelineCount,
       customerCount,
+      meetingsToday: meetingsToday ?? 0,
+      meetingsThisWeek: meetingsThisWeek ?? 0,
     },
   }
 }
