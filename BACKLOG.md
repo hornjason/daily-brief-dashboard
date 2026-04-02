@@ -1880,7 +1880,7 @@ Source: Jason 2026-04-02
 Decision: DONE — Serena produced docs/AUTH-SCRAPER-AUDIT.md. 17 gaps identified (3 P0, 6 P1, 8 P2). Reframed for single-user-per-container architecture (G2/G3 dropped).
 
 ### BKL-M50b | Auth/scraper research — enterprise patterns + architecture recommendations
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-04-02
 Priority: P0
 Size: M (research)
 Source: Jason 2026-04-02 — "do we keep using playwright vs something else?"
