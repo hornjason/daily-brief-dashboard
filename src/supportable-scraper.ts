@@ -350,9 +350,11 @@ async function scrapeOneAccount(
       await page.selectOption(`select[id="${reportSelId}"]`, salesVal)
       // Race networkidle vs Actions button appearing — Actions means report loaded
       await Promise.race([
-        page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {}),
-        page.waitForSelector('button.a-IRR-button--actions', { timeout: 5_000 }).catch(() => {}),
+        page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {}),
+        page.waitForSelector('button.a-IRR-button--actions', { timeout: 8_000 }).catch(() => {}),
       ])
+      // Extra settle for APEX to finish rendering report data (parallel sessions may be slower)
+      await page.waitForTimeout(2_000)
       console.log(`[supportable] selected Sales Export Format report`)
     }
   }
@@ -374,17 +376,20 @@ async function scrapeOneAccount(
   // the download event immediately when the CSV format icon is clicked.
   const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
 
-  const actionsBtn = await page.$('button.a-IRR-button--actions')
+  // Wait for Actions button to be fully interactive (not just present in DOM)
+  const actionsBtn = await page.waitForSelector('button.a-IRR-button--actions', { timeout: 10_000 }).catch(() => null)
   if (!actionsBtn) {
     if (SUPPORTABLE_DEBUG) await dumpDom(page, 'no-actions-btn')
     throw new Error(`Actions button not found for account ${accountNumber}`)
   }
+  // Small settle — APEX may still be attaching event handlers
+  await page.waitForTimeout(1_500)
   await actionsBtn.click()
-  await page.waitForTimeout(1_000)
+  await page.waitForTimeout(1_500)
 
   const downloadLink = await page.waitForSelector(
     'li a:has-text("Download"), [role="menuitem"]:has-text("Download")',
-    { timeout: 5_000 }
+    { timeout: 8_000 }
   ).catch(() => null)
   if (!downloadLink) {
     if (SUPPORTABLE_DEBUG) await dumpDom(page, 'no-download-menuitem')
