@@ -68,7 +68,7 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions): Promise<string> 
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: opts.systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
-      tools: [{ googleSearchRetrieval: {} }],
+      tools: [{ google_search: {} }],
       generationConfig: {
         temperature: opts.temperature ?? 1.0,
         maxOutputTokens: opts.maxOutputTokens ?? 16384,
@@ -101,7 +101,7 @@ async function callGeminiGroundedStructured(opts: GeminiGroundedOptions & { resp
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: opts.systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
-      tools: [{ googleSearchRetrieval: {} }],
+      tools: [{ google_search: {} }],
       generationConfig: {
         temperature: opts.temperature ?? 0.7,
         maxOutputTokens: opts.maxOutputTokens ?? 4096,
