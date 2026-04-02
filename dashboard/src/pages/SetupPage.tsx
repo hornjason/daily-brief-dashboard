@@ -460,6 +460,11 @@ interface AutoBootstrapState {
   error: string | null
   completedAt: string | null
   resources?: {
+    driveFolder?: { id: string; url: string }
+    customerFolders?: Record<string, { id: string; url: string }>
+    supportableSheet?: { id: string; url: string }
+    ccspSheet?: { id: string; url: string }
+    pipelineSheet?: { id: string; url: string }
     unmatchedCustomers?: string[]
     junkFiltered?: string[]
     domainInference?: { customerName: string; domain: string; confidence: 'high' | 'low'; sources: string[] }[]
@@ -509,20 +514,45 @@ function SaveAeButton() {
 function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state: AutoBootstrapState; onReset?: () => void; tableauSessionNeeded?: boolean | null }) {
   const hasError = state.steps.some(s => s.status === 'error')
 
-  const statusIcon = (s: AutoBootstrapStep['status']) => {
+  // BKL-G15: Elapsed time counter (mm:ss) during bootstrap execution
+  const [elapsed, setElapsed] = useState('')
+  useEffect(() => {
+    if (!state.running) {
+      setElapsed('')
+      return
+    }
+    const startTime = Date.now()
+    const tick = () => {
+      const totalSec = Math.floor((Date.now() - startTime) / 1000)
+      const mm = String(Math.floor(totalSec / 60)).padStart(2, '0')
+      const ss = String(totalSec % 60).padStart(2, '0')
+      setElapsed(`${mm}:${ss}`)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [state.running])
+
+  const statusIcon = (s: AutoBootstrapStep['status'], stepIndex: number, stepName: string) => {
+    const label = `Step ${stepIndex + 1}: ${s === 'done' ? 'Complete' : s === 'running' ? 'Running' : s === 'error' ? 'Failed' : 'Pending'} — ${stepName}`
     switch (s) {
-      case 'pending': return <span className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-border bg-bg items-center justify-center" />
-      case 'running': return <span className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-accent bg-bg items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /></span>
-      case 'done':    return <span className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-success bg-bg items-center justify-center"><CheckCircle className="w-3.5 h-3.5 text-success" /></span>
-      case 'error':   return <span className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-critical bg-bg items-center justify-center"><XCircle className="w-3.5 h-3.5 text-critical" /></span>
+      case 'pending': return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-border bg-bg items-center justify-center" />
+      case 'running': return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-accent bg-bg items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /></span>
+      case 'done':    return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-success bg-bg items-center justify-center"><CheckCircle className="w-3.5 h-3.5 text-success" /></span>
+      case 'error':   return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-critical bg-bg items-center justify-center"><XCircle className="w-3.5 h-3.5 text-critical" /></span>
     }
   }
 
   return (
     <div className="mt-4 space-y-4" aria-live="polite">
-      <p className="text-sm font-semibold text-text-primary">
-        {state.completedAt ? `Setup ${hasError ? 'finished with errors' : 'complete'} — ${state.aeName}` : `Setting up ${state.aeName}…`}
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-text-primary">
+          {state.completedAt ? `Setup ${hasError ? 'finished with errors' : 'complete'} — ${state.aeName}` : `Setting up ${state.aeName}…`}
+        </p>
+        {state.running && elapsed && (
+          <p className="text-xs text-text-secondary">{elapsed}</p>
+        )}
+      </div>
 
       {/* Step list with connector lines */}
       <div className="relative">
@@ -533,7 +563,7 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
               <div className="absolute left-3 top-6 bottom-0 w-px bg-surface-hover" />
             )}
             {/* Icon */}
-            <div className="flex-shrink-0 mt-0.5">{statusIcon(step.status)}</div>
+            <div className="flex-shrink-0 mt-0.5">{statusIcon(step.status, i, step.name)}</div>
             {/* Content row — highlight running step */}
             <div className={`flex-1 mb-2 rounded px-2 py-1 text-sm ${step.status === 'running' ? 'bg-surface/60' : ''}`}>
               <span className={
@@ -545,7 +575,7 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
                 {step.name}
               </span>
               {step.detail && (
-                <p className="text-xs text-text-secondary mt-0.5 truncate max-w-lg">{step.detail}</p>
+                <p className={`text-xs mt-0.5 truncate max-w-lg ${step.status === 'error' ? 'text-critical/80' : 'text-text-secondary'}`} {...(step.status === 'error' ? { role: 'alert' } : {})}>{step.detail}</p>
               )}
               {/* Tableau login prompt — only shown when reachable but session invalid */}
               {step.name === 'Create CCSP Sheet' && step.status === 'done' && tableauSessionNeeded === true && (
@@ -570,15 +600,46 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
       {/* Completion card */}
       {state.completedAt && !state.running && (
         <div className={`rounded-lg border p-3 text-sm ${hasError ? 'border-warning/30 bg-warning/10' : 'border-success/30 bg-success/10'}`}>
-          <p className={`font-medium mb-2 ${hasError ? 'text-warning' : 'text-success'}`}>
+          <p className={`font-medium mb-2 ${hasError ? 'text-warning' : 'text-success'}`} {...(hasError ? { role: 'alert' } : {})}>
             {hasError ? 'Completed with errors — some steps may need retry' : 'All done! Resources are ready.'}
           </p>
-          {/* Resource links from step details */}
-          <div className="grid grid-cols-2 gap-1.5">
-            {state.steps.filter(s => s.status === 'done' && s.detail).map((s, i) => (
-              <span key={i} className="text-xs text-text-secondary truncate">{s.name}: <span className="text-text-primary">{s.detail}</span></span>
-            ))}
-          </div>
+          {/* BKL-G10: Clickable resource links from bootstrap result */}
+          {(() => {
+            const r = state.resources
+            const links: { label: string; url: string }[] = []
+            if (r?.driveFolder?.url) links.push({ label: 'Drive Folder', url: r.driveFolder.url })
+            if (r?.supportableSheet?.url) links.push({ label: 'Supportable Sheet', url: r.supportableSheet.url })
+            if (r?.ccspSheet?.url) links.push({ label: 'CCSP Sheet', url: r.ccspSheet.url })
+            if (r?.pipelineSheet?.url) links.push({ label: 'Pipeline Sheet', url: r.pipelineSheet.url })
+            if (links.length > 0) {
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {links.map((link, i) => (
+                    <a
+                      key={i}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 bg-surface hover:bg-surface-hover border border-border rounded-lg px-3 py-2 text-xs text-text-secondary transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+              )
+            }
+            // Fallback: plain text from step details if no resource URLs available
+            const doneSteps = state.steps.filter(s => s.status === 'done' && s.detail)
+            if (doneSteps.length === 0) return null
+            return (
+              <div className="grid grid-cols-2 gap-1.5">
+                {doneSteps.map((s, i) => (
+                  <span key={i} className="text-xs text-text-secondary truncate">{s.name}: <span className="text-text-primary">{s.detail}</span></span>
+                ))}
+              </div>
+            )
+          })()}
           {/* Surface junk names filtered from territory sheet */}
           {(() => {
             const junk = state.resources?.junkFiltered ?? []
