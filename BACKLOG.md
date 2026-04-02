@@ -1938,19 +1938,31 @@ Fix:
 
 ---
 
-### BKL-AI12 | Dashboard UI — NotebookLM link + "Create Notebook" button per customer
+### BKL-AI12 | UX research + design — NotebookLM integration into dashboard
 Status: 🔴 OPEN
 Priority: P2
-Size: XS (30 min)
-Source: AI09 research — UI surface for notebook access
-Files: dashboard/src/pages/CustomerDetailPage.tsx
+Size: M (research + design + implementation)
+Source: Jason 2026-04-02 — "will this include researching how to architect and design the UI for adding notebookLM?"
+Files: dashboard/src/pages/CustomerDetailPage.tsx, dashboard/src/components/AccountPortfolioGrid.tsx, docs/DESIGN-SPEC-NotebookLM.md (new)
 Depends on: BKL-AI11 (notebook creation)
-Description: Add "Open Notebook" link on customer detail page (visible when notebookUrl exists) and "Create Notebook" button (when no notebook exists). Button triggers POST /api/customer/:name/notebook which calls createOrUpdateNotebook().
+Description: Research and design how NotebookLM integrates into the dashboard UX. Not just a link — think about how the notebook fits the SA workflow. Questions to answer:
+  1. Where does the notebook link/button live? (header? sidebar? dedicated section?)
+  2. Should we embed NotebookLM inline (iframe) or always external link?
+  3. How does the notebook relate to the Account Brief? (complementary? replaces brief for deep dives?)
+  4. Should the Account Portfolio Grid show a notebook icon/status per customer?
+  5. How to surface "Notebook has N sources" and "Last updated" context?
+  6. Should there be a "Refresh Sources" button that syncs Drive docs into the notebook?
+  7. How does this integrate with the AI Intelligence docs (AI02-AI04)?
+  8. What about the NotebookLM audio overview feature — surface the podcast-style summary?
 Fix:
-  1. Add notebook section to customer detail header or sidebar
-  2. If notebookUrl exists: show "Open in NotebookLM" link (external, target="_blank")
-  3. If no notebook: show "Create Notebook" button → POST /api/customer/:name/notebook
-  4. Loading state while creating (takes ~10s for notebook + source batch)
+  1. Aditi designs the UX (wireframes, placement, interaction patterns)
+  2. Quinn reviews accessibility and workflow fit
+  3. Produce docs/DESIGN-SPEC-NotebookLM.md with mockups and decisions
+  4. Implement: customer detail page notebook section, portfolio grid notebook indicator
+  5. "Open Notebook" link (external, target="_blank") when notebook exists
+  6. "Create Notebook" button when no notebook → POST /api/customer/:name/notebook
+  7. Loading state while creating (~10s)
+  8. "Refresh Sources" button to sync latest Drive docs into existing notebook
 
 ---
 
@@ -1973,6 +1985,29 @@ Source: AI09 research — automation
 Files: src/bootstrap-orchestrator.ts, src/background-scheduler.ts
 Depends on: BKL-AI11 (notebook creation), BKL-M47 (drive watcher)
 Description: Automatically create NotebookLM notebook as part of bootstrap Step 2 (after customer folders created). Also: when drive-watcher detects doc changes for a customer, sync their notebook sources to pick up new/modified docs.
+
+---
+
+### BKL-AI15 | Research: Product roadmap/feature intelligence for AAP, OCP, RHEL
+Status: 🔴 OPEN
+Priority: P2
+Size: Research
+Source: Jason 2026-04-02 — "bring product features/tech preview/roadmaps for our top 3 platforms"
+Files: TBD
+Description: Research how to surface Red Hat product features, tech preview items, and roadmap data for the three core platforms (Ansible Automation Platform, OpenShift Container Platform, Red Hat Enterprise Linux) in customer briefs and the dashboard.
+  Use cases:
+  1. When preparing for a customer meeting, SA sees "OCP 4.17 adds X feature relevant to customer's Kubernetes workloads"
+  2. Brief mentions "RHEL 10 tech preview includes Y — potential upsell for customers on RHEL 9"
+  3. Dashboard shows upcoming GA dates, tech preview features, and deprecations per platform
+  Research needed:
+  1. Where does Red Hat publish structured roadmap/feature data? (docs.redhat.com, access.redhat.com, release notes, errata)
+  2. Is there an API for release notes / feature lists? (Red Hat API catalog, Hydra, etc.)
+  3. Can we scrape release notes pages for structured feature data?
+  4. How to match product features to customer tech stack? (customer uses OCP 4.15 → show upgrade path features)
+  5. How to keep data fresh? (release cadence: RHEL every 6mo, OCP every 4mo, AAP every 3mo)
+  6. How to integrate into briefs? (new XML source type? separate dashboard section?)
+  7. Consider: Gemini with Google Search grounding on "Red Hat {product} latest features" as a quick prototype
+Related: BKL-AI02 (company intelligence uses product fit assessment)
 
 ---
 

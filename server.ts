@@ -40,6 +40,7 @@ import { registerBootstrapRoutes, startAccountDiscovery } from './src/bootstrap-
 // ── M04 extracted modules ───────────────────────────────────────────────────
 import { registerSheetImportRoutes } from './src/sheet-import.ts'
 import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
+import { runIntelligencePipeline, getJobStatus } from './src/account-intelligence.ts'
 
 // ── ntfy.sh push notification helper ─────────────────────────────────────────
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'pai-notifications'
@@ -792,7 +793,7 @@ app.post('/api/test/accountname-search', async (c) => {
         if (!res.ok) return { error: `HTTP ${res.status}: ${text.slice(0, 200)}` }
         return { data: JSON.parse(text) }
       } catch (e: any) {
-        return { error: e.message }
+        return { error: sanitizeErr(e) }
       }
     }, { q, fl: fl ?? null, expression: EXPRESSION })
 
@@ -1712,6 +1713,12 @@ app.get('/api/ccsp', async (c) => {
   }
   try {
     const { records, fileIds } = await fetchCCSPData(aes.map(a => a.ccspSheetId).filter(Boolean) as string[])
+    // Stale-overwrite guard: don't replace populated cache with empty results
+    // (empty usually means Tableau scraper wrote summary-view data without Account Name column)
+    if (records.length === 0 && (cached?.records?.length ?? 0) > 0) {
+      console.warn(`[ccsp] force-refresh returned 0 records but cache has ${cached!.records.length} — keeping existing cache`)
+      return c.json(buildCCSPSummary(cached!.records, cached!.cachedAt, true))
+    }
     writeCCSPCache(records, fileIds)
     return c.json(buildCCSPSummary(records, new Date().toISOString(), false))
   } catch (e: any) {
@@ -2068,6 +2075,31 @@ app.get('/customer/:name/events', (c) => {
   })
 })
 
+// ── Account Intelligence (BKL-AI01–AI04) ────────────────────────────────────
+
+app.post('/api/customer/:name/generate-intelligence', async (c) => {
+  const rawName = decodeURIComponent(c.req.param('name'))
+  const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+  if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+  try {
+    const jobId = await runIntelligencePipeline(customer.name)
+    return c.json({ jobId, status: 'running', message: `Intelligence generation started for ${customer.name}` })
+  } catch (e: any) {
+    return c.json({ error: sanitizeErr(e) }, 500)
+  }
+})
+
+app.get('/api/customer/:name/intelligence-status', (c) => {
+  const rawName = decodeURIComponent(c.req.param('name'))
+  const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+  if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+  const status = getJobStatus(customer.name)
+  if (!status) return c.json({ status: 'none', message: 'No intelligence generation job found for this customer' })
+  return c.json(status)
+})
+
 // ── Customer brief — cached, separate endpoint so subprocess doesn't block SSE ──
 app.get('/customer/:name/brief', async (c) => {
   const rawName = decodeURIComponent(c.req.param('name'))
@@ -2104,7 +2136,7 @@ app.get('/customer/:name/brief', async (c) => {
     writeBriefCache(customer.name, text)
     return c.json({ text, fromCache: false })
   } catch (e: any) {
-    return c.json({ error: e.message }, 500)
+    return c.json({ error: sanitizeErr(e) }, 500)
   }
 })
 
@@ -2222,7 +2254,7 @@ app.post('/api/drive-watcher/rebuild', async (c) => {
     const folderMap = await rebuildFolderMap(customers, parentIds)
     return c.json({ rebuilt: true, folders: folderMap.length, map: folderMap })
   } catch (e: any) {
-    return c.json({ error: e.message }, 500)
+    return c.json({ error: sanitizeErr(e) }, 500)
   }
 })
 
@@ -2281,7 +2313,7 @@ app.get('/customer/:name/sheetdebug', async (c) => {
     const result = await fetchCustomerSheetRaw(customer)
     return c.json(result)
   } catch (e: any) {
-    return c.json({ error: e.message }, 500)
+    return c.json({ error: sanitizeErr(e) }, 500)
   }
 })
 
@@ -2298,7 +2330,7 @@ app.get('/debug/sheet-tabs/:fileId', async (c) => {
     const tabs = (res.data.sheets ?? []).map(s => s.properties?.title ?? '')
     return c.json({ fileId, tabs })
   } catch (e: any) {
-    return c.json({ error: e.message }, 500)
+    return c.json({ error: sanitizeErr(e) }, 500)
   }
 })
 

@@ -2146,18 +2146,14 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       .then(status => {
         if (status.sessionValid) {
           setTableauStatus({ reachable: true, sessionValid: true })
+          // Only close VNC on successful login — let user retry if failed
+          setTimeout(() => { tableauVncRef.current?.close(); tableauVncRef.current = null }, 3000)
         }
-        // Close VNC window on completion — whether login succeeded or
-        // wait-for-login returned sessionValid:false (timeout / URL check
-        // failure).  The user can retry via the Connect button.
         setTableauConnecting(false)
-        tableauVncRef.current?.close()
-        tableauVncRef.current = null
       })
       .catch(() => {
         setTableauConnecting(false)
-        tableauVncRef.current?.close()
-        tableauVncRef.current = null
+        // Don't close VNC on error — user may need to complete login manually
       })
   }
 
