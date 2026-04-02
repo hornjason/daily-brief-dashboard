@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-02 (BKL-AI01–AI08: account intelligence pipeline from 3-agent research; BKL-F08: VNC flash-close; BKL-F07: SF URL; BKL-G01–G16: UI gaps; BKL-E01–E06: email)
+Last update: 2026-04-02 (BKL-AI16: interactive product Q&A; BKL-F11: shared SF report dedup; BKL-AI01–AI08: account intelligence pipeline from 3-agent research; BKL-F08: VNC flash-close; BKL-F07: SF URL; BKL-G01–G16: UI gaps; BKL-E01–E06: email)
 
 ---
 
@@ -833,6 +833,25 @@ Files: src/pipeline.ts, dashboard/src/components/PipelineSection.tsx
 Description: Pipeline sheet doesn't include Opportunity ID column yet. When SF report is updated to include it, wire up direct opp links in the UI.
 Decision: DEFERRED until SF report includes Opportunity ID column. When ready: (1) add oppId to PipelineRecord type, (2) capture col(row, 'Opportunity ID') in parsePipelineRows, (3) wrap oppName in <a href> when oppId present.
 
+### BKL-F11 | Shared SF report dedup — scrape once, fan out to multiple AE sheets + UI toggle
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-02 — observed same report 00OPe00000isU2zMAE scraped twice for two AEs
+Files: src/sf-scraper.ts, src/scraper-manager.ts (runSfSyncForAes), dashboard/src/pages/SetupPage.tsx (AE config)
+Description: When multiple AEs share the same sfReportId, the SF sync scrapes the report once per AE — identical Playwright navigation, DOM parsing, and wait times repeated unnecessarily. Three changes needed:
+  (1) Backend dedup: Group AEs by sfReportId before syncing. Scrape each unique report once to get the full result set.
+  (2) Backend filter: After scraping, filter rows by AE name (match on Opportunity Owner or equivalent column) so each AE's Google Sheet only contains their own opportunities — not the full shared report.
+  (3) UI: During AE setup, add a "Share pipeline report from [dropdown of existing AEs]" toggle. When selected, auto-populate sfReportId from the selected AE instead of requiring a new report ID. Show a visual indicator (e.g., link icon) on AEs using a shared report.
+Fix:
+  1. In runSfSyncForAes(), group aes by sfReportId before the loop
+  2. For each unique reportId: scrape once, get full parsed rows
+  3. For each AE sharing that reportId: filter rows where Opportunity Owner matches AE name, write filtered rows to that AE's sheet
+  4. Identify the owner column dynamically (check for "Opportunity Owner", "Owner Full Name", or similar headers)
+  5. In AE setup UI: add "Share report from" dropdown that appears when other AEs already have a report configured
+  6. When shared, sfReportId is copied from source AE; show "(shared with {AE name})" label
+  7. If source AE's report changes, prompt whether to update linked AEs
+
 ### BKL-F10 | Research: improve morning brief effectiveness — actionable next steps per signal
 Status: 🔴 OPEN
 Priority: P2
@@ -1128,7 +1147,7 @@ Fix:
   7. Rank all signals by priority per BKL-R06 spec
 
 ### BKL-G03 | PriorityActionBanner has no action buttons (Schedule/View/Dismiss)
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md, DESIGN-SPEC-AccountDetailPage.md
@@ -1140,7 +1159,7 @@ Fix:
   3. View button links to source (email, case URL, meeting) when available
 
 ### BKL-G04 | StakeholderEngagementPanel missing frequency bar visualization
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md, VISUAL-DESIGN-SPEC.md
@@ -1152,7 +1171,7 @@ Fix:
   3. Data already available from buildContactHistory() — just needs visualization
 
 ### BKL-G05 | Customer detail header stat row missing Cloud$ and Pipeline ACV + sparklines
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1165,7 +1184,7 @@ Fix:
   4. Header height to h-16 per spec (currently h-12)
 
 ### BKL-G06 | Sidebar missing Morning Summary nav item + wrong order
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against INFORMATION-ARCHITECTURE-V2.md
@@ -1177,7 +1196,7 @@ Fix:
   3. Reorder nav items to match spec hierarchy
 
 ### BKL-G07 | TemporalDeltaSection shows section names only, not content-level diffs
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P2
 Size: M (1-2 days)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1191,7 +1210,7 @@ Fix:
   4. Return structured change objects with type (new/changed/removed) and summary text
 
 ### BKL-G08 | Brief generation HTTP 500 on some customers
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P1
 Size: S (1 day)
 Source: Quinn visual audit 2026-04-02 — observed during customer detail page testing
@@ -1203,7 +1222,7 @@ Fix:
   3. Ensure graceful degradation — partial brief with available data instead of full 500
 
 ### BKL-G09 | KPI sparklines use static color instead of trend-direction coloring
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against VISUAL-DESIGN-SPEC.md
@@ -1216,7 +1235,7 @@ Fix:
   3. Neutral color for flat trends
 
 ### BKL-G10 | Bootstrap CompletionCard lacks clickable resource links
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against auto-bootstrap-ui-spec.md
@@ -1228,7 +1247,7 @@ Fix:
   3. Add target="_blank" rel="noopener" for external links
 
 ### BKL-G11 | KPI sparklines missing on Meetings Today and Meetings This Week cards
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1240,7 +1259,7 @@ Fix:
   3. Render sparkline polyline same as other cards
 
 ### BKL-G12 | HealthDot hover tooltip does not show score breakdown
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1252,7 +1271,7 @@ Fix:
   3. Data already available from /api/health-scores — pass breakdown to tooltip
 
 ### BKL-G13 | Customer detail header missing numeric health score
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1263,7 +1282,7 @@ Fix:
   2. Score already fetched via HealthScoreHero — reuse data in header
 
 ### BKL-G14 | StakeholderEngagementPanel in wrong column — LEFT instead of spec RIGHT
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1274,7 +1293,7 @@ Fix:
   2. Ensure it scrolls naturally within the sticky right column below HealthScoreHero
 
 ### BKL-G15 | Setup page missing accessibility: elapsed timer, aria-labels, role="alert"
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against auto-bootstrap-ui-spec.md
@@ -1286,7 +1305,7 @@ Fix:
   3. Add role="alert" to error message containers
 
 ### BKL-G16 | Brief section order follows AI output, not spec-mandated hierarchy
-Status: 🔴 OPEN
+Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
 Priority: P3
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1853,24 +1872,79 @@ Fix: In `normalizeTerritoryCustomerName()`, add leading-prefix strip after trimm
 
 ---
 
-### BKL-M50 | Deep audit: auth + scraper architecture — enterprise readiness assessment
+### BKL-M50a | Auth/scraper audit — gap identification (Serena)
+Status: ✅ DONE 2026-04-02
+Priority: P0
+Size: L
+Source: Jason 2026-04-02
+Decision: DONE — Serena produced docs/AUTH-SCRAPER-AUDIT.md. 17 gaps identified (3 P0, 6 P1, 8 P2). Reframed for single-user-per-container architecture (G2/G3 dropped).
+
+### BKL-M50b | Auth/scraper research — enterprise patterns + architecture recommendations
+Status: 🟡 IN PROGRESS
+Priority: P0
+Size: M (research)
+Source: Jason 2026-04-02 — "do we keep using playwright vs something else?"
+Description: Deep research on enterprise-grade solutions for each gap. Covers:
+  1. Auto browser recovery patterns (watchdog, health check, crash detection, cookie persistence)
+  2. Session lifecycle management (TTL estimation, proactive refresh, circuit breaker)
+  3. Playwright vs alternatives (Puppeteer, browser-use, headless options)
+  4. API-first assessment per service: can we use REST APIs instead of browser scraping?
+     - RH Portal: Hydra API (ADR-001 says 401s — reconfirm)
+     - Salesforce: REST API for reports/pipeline (avoid Lightning DOM scraping)
+     - Tableau: REST API for CCSP data (avoid SSO passthrough)
+     - Supportable: APEX app, likely browser-only
+  5. Scraper queue patterns (priority queue, dead letter, retry backoff, rate limiting)
+  6. Container resilience (process supervisor, memory management, graceful shutdown)
+  7. Observability (scraper health dashboard, alert thresholds, telemetry)
+Output: docs/research-enterprise-scraper-patterns.md with specific recommendations per service
+
+### BKL-M50c | Auto browser context recovery
 Status: 🔴 OPEN
 Priority: P0
-Size: L (research + report)
-Source: Jason 2026-04-02 — "core fundamental pieces, need to be best in class / stable / enterprise ready for onboarding others"
-Files: src/rh-scraper.ts, src/rh-auth.ts, src/sf-scraper.ts, src/sf-auth.ts, src/ccsp-scraper.ts, src/supportable-scraper.ts, src/scraper-manager.ts, src/background-scheduler.ts, entrypoint.sh, ARCHITECTURE.md
-Description: Comprehensive investigation of ALL auth flows and scraper systems to assess enterprise readiness. This is the foundation — if scrapers and auth aren't rock solid, the entire application loses credibility when onboarding new users.
-  Scope:
-  1. Auth flows: RH SSO (browser-based), SF OAuth, Google OAuth, Tableau SSO passthrough — document every flow, failure mode, and recovery path
-  2. Session lifecycle: how each session starts, expires, detects expiry, recovers. What happens on container restart?
-  3. Shared browser context: why it exists, what depends on it, failure modes, can it be made more resilient?
-  4. Scraper reliability: which scrapers fail silently? Which retry? Which corrupt data on failure?
-  5. Startup sequencing: race conditions, dependency order, what must happen before what
-  6. Error reporting: can a new user diagnose what's wrong from the dashboard alone, or do they need server logs?
-  7. Graceful degradation: what happens when each external service is down? Does the dashboard still function?
-  8. Scale: what happens with 50 customers? 200? Where are the bottlenecks?
-  9. Recommendations: prioritized list of fixes to reach enterprise-grade stability
-Related: BKL-M49 (startup sequencing), ADR-001 (session architecture), ARCHITECTURE.md §3-4
+Size: M (3-4 days)
+Depends on: BKL-M50b (research recommendations)
+Files: src/rh-scraper.ts, src/rh-auth.ts, src/scraper-manager.ts, entrypoint.sh
+Description: If Chromium crashes or RH session expires overnight, the system stays degraded until manual reconnect. Must auto-recover.
+  Implementation (pending research): browser.on('disconnected') handler, auto-relaunch persistent context, restore cookies from session-state.json, re-verify session, notify user only if auto-recovery fails.
+
+### BKL-M50d | Session health dashboard panel
+Status: 🔴 OPEN
+Priority: P1
+Size: M (3-4 days)
+Depends on: BKL-M50b (research recommendations)
+Files: server.ts, dashboard/src/components/SessionHealthPanel.tsx (new)
+Description: Users cannot see session status at a glance. Build a panel showing per-source: session status (active/expired/unknown), estimated TTL, last successful scrape, staleness indicator, one-click reconnect. Visible on Admin page and optionally on dashboard home.
+
+### BKL-M50e | Scraper telemetry + history
+Status: 🔴 OPEN
+Priority: P1
+Size: S (2-3 days)
+Files: src/scraper-manager.ts, data/cache/scrape-log.json, server.ts, dashboard/src/pages/AdminPage.tsx
+Description: No record of past scrape runs. Only last run's status stored in memory, lost on restart. Write append-only scrape log with: timestamp, scraper name, duration, records extracted, success/failure, error message. Show in Admin as "Scrape History" table.
+
+### BKL-M50f | Push notification on scrape skip
+Status: 🔴 OPEN
+Priority: P1
+Size: XS (2 hours)
+Files: src/background-scheduler.ts
+Description: Scheduled scrapes at 6:30am/7am skip silently when session is expired. User doesn't know data wasn't refreshed. Add notification (console log + dashboard status update) when a scheduled scrape is skipped due to expired session.
+
+### BKL-M50g | Xvfb readiness check + container hardening
+Status: 🔴 OPEN
+Priority: P2
+Size: XS (1 hour)
+Files: entrypoint.sh
+Description: Replace `sleep 1` with xdpyinfo probe loop. Add --memory=2g to Makefile. Consider process supervisor (tini/dumb-init).
+
+### BKL-M50h | Evaluate SF REST API to replace Lightning DOM scraping
+Status: 🔴 OPEN
+Priority: P2
+Size: M (research + prototype)
+Depends on: BKL-M50b (research recommendations)
+Files: src/sf-scraper.ts
+Description: SF pipeline scraper parses Lightning UI DOM (684 rows, fragile selectors, 7+ min stalls). Evaluate switching to Salesforce REST API for report data. Needs: API credentials, connected app setup, report API endpoint discovery.
+Observations: 2026-04-02 SF scrape stalled 7+ min on second AE despite identical report. 684-row allTextContents() loop may be bottleneck.
+Related: BKL-F11 (shared report dedup), ADR-001
 
 ---
 
@@ -2012,7 +2086,31 @@ Description: Research how to surface Red Hat product features, tech preview item
   **Key API:** `https://access.redhat.com/product-life-cycles/api/v1/products` — JSON, free, all RH products
   **Limitation:** docs.redhat.com uses client-side rendering — can't HTTP fetch content directly. Gemini grounding sidesteps this.
   Implementation items to add: Life Cycle API client, `<source type="product_features">` XML schema, Gemini feature extraction, sitemap monitoring, Product Health Card component.
-Related: BKL-AI02 (company intelligence uses product fit assessment)
+Related: BKL-AI02 (company intelligence uses product fit assessment), BKL-AI16 (interactive product Q&A)
+
+### BKL-AI16 | Interactive product Q&A — Gemini-powered query interface for AAP, OCP, RHEL
+Status: 🔴 OPEN
+Priority: P2
+Size: M (1-2 days)
+Source: Jason 2026-04-02 — "a way to query this information directly like a gemini query to ask questions toward each product"
+Files: dashboard/src/pages/CustomerDetailPage.tsx (or new ProductIntelligencePage), server.ts (new endpoint), src/product-intelligence.ts (new)
+Depends on: BKL-AI15 (needs product data sources identified and wired)
+Description: Conversational query interface in the dashboard where an SA can ask product-specific questions and get grounded answers. Example queries:
+  - "What's new in OCP 4.17 that helps with multi-cluster management?"
+  - "When does RHEL 8 go EOL? What migration path should I recommend?"
+  - "Does AAP support event-driven automation for this customer's use case?"
+  - "What tech preview features in RHEL 10 are relevant to a financial services customer?"
+  Gemini with Google Search grounding answers using Red Hat docs, release notes, and product lifecycle data. Responses cite specific docs/release notes URLs.
+Fix:
+  1. POST /api/product-query — accepts { product: "OCP"|"AAP"|"RHEL", question: string, customerName?: string }
+  2. Build system prompt with product context from AI15 data sources (lifecycle dates, recent release notes, known features)
+  3. Call Gemini with tools: [{ googleSearch: {} }] to ground answers in current Red Hat documentation
+  4. If customerName provided, include customer context (industry, current subscriptions) for tailored answers
+  5. Return structured response: { answer: string, sources: [{title, url}], confidence: "HIGH"|"MEDIUM"|"LOW" }
+  6. Dashboard UI: chat-style input per product (or single input with product selector dropdown), response card with source links
+  7. Consider conversation history for follow-up questions within a session
+Related: BKL-AI15 (product data sources), BKL-AI02 (company intelligence)
+
 
 ---
 
@@ -2063,6 +2161,18 @@ Description: On container start (or rebuild), multiple scrapers try to use the s
   Observed 2026-04-02: CCSP scrape triggered via Admin page failed 3 times because RH was running. Required waiting for RH to finish then manually retrying.
   Needs research: scraper queue/lock patterns, startup sequencing, retry-after-busy, separate contexts (breaks Tableau SSO?), persisting lastSync across restarts.
 Related: ADR-001 (session architecture), CCSP two-phase mutex, PARALLEL_PAGES=1 constraint
+
+---
+
+### BKL-G18 | Account card shows industry segment instead of customer name
+Status: 🔴 OPEN
+Priority: P1
+Size: XS (10 min)
+Source: Jason 2026-04-02 — A10 Networks card shows "Network Security and Application Delivery (including DDo..." instead of "A10 Networks"
+Files: dashboard/src/components/AccountPortfolioGrid.tsx
+Description: After AI01 wrote industry/segment data to customers.json, the Account Portfolio Grid card title shows customer.segment instead of customer.name. The segment field previously held short values like "Commercial" so the bug was invisible. Now AI01 writes long industry descriptions, making the card title wrong.
+Fix: Find where the card renders the customer name and ensure it uses customer.name, not customer.segment. One-line fix.
+Related: BKL-AI01 (identifyIndustry writes segment to customers.json)
 
 ---
 
