@@ -867,7 +867,7 @@ Fix:
   5. Check polling interval — may need to be shorter during active scrapes
 
 ### BKL-F08 | VNC window flash-closes on Connect — BKL-F04 close() too aggressive
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P1
 Size: XS (30 min)
 Source: Jason 2026-04-02 — VNC flashes and goes away on Tableau/any connect; Quinn + Marcus confirmed root cause
@@ -882,7 +882,7 @@ Fix:
   5. Test: click Connect, confirm VNC stays open until login completes or user closes manually
 
 ### BKL-F07 | Accept full Salesforce report URL instead of requiring bare report ID
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P1
 Size: S (half day)
 Source: Jason 2026-04-02 — cumbersome for new users, doesn't present as quality product
@@ -899,7 +899,7 @@ Fix:
 ## Account Intelligence Pipeline (from 2026-04-02 research synthesis)
 
 ### BKL-AI01 | Web search to identify industry/segment per customer + cache
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-02 — account intelligence prompt pipeline; 3-agent extensive research
@@ -913,7 +913,7 @@ Fix:
   5. Expose via GET /api/customer/:name/industry for frontend use
 
 ### BKL-AI02 | Gemini generation — Company Intelligence brief with grounding
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P2
 Size: M (1-2 days)
 Source: Jason 2026-04-02 — improved Prompt 1 from 3-agent research synthesis
@@ -928,7 +928,7 @@ Fix:
   4. Return structured markdown ready for Google Docs
 
 ### BKL-AI03 | Gemini generation — Industry Technology Analysis with grounding
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P2
 Size: M (1-2 days)
 Source: Jason 2026-04-02 — improved Prompt 2 from 3-agent research synthesis
@@ -944,7 +944,7 @@ Fix:
   5. Return structured markdown ready for Google Docs
 
 ### BKL-AI04 | Create Account Intelligence subfolder + Google Docs via Drive API
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-02 — docs in {customer_folder}/Account Intelligence/
@@ -960,7 +960,7 @@ Fix:
   6. Never skip generation because files exist — always run the Gemini prompts and overwrite with fresh content
 
 ### BKL-AI05 | Dashboard UI — per-customer Generate Intelligence button + doc links
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-02 — button placement decided by Aditi + Quinn
@@ -974,7 +974,7 @@ Fix:
   4. Show progress (industry lookup → company brief → industry analysis → Drive write)
 
 ### BKL-AI06 | Batch "Generate All" from Admin/Settings page
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P3
 Size: S (half day)
 Source: Jason 2026-04-02 — batch generation for full portfolio
@@ -988,7 +988,7 @@ Fix:
   4. Frontend: progress bar, current customer name, error count, cancel button
 
 ### BKL-AI07 | Auto-generate intelligence docs during bootstrap
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P3
 Size: XS (30 min)
 Source: Jason 2026-04-02 — new users should get this automatically during setup
@@ -1001,7 +1001,7 @@ Fix:
   3. Show generation progress on bootstrap completion card if still running
 
 ### BKL-AI08 | Wire Account Intelligence docs into brief generation pipeline
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P2
 Size: XS (30 min)
 Source: Jason 2026-04-02 — current code should leverage the intelligence data
@@ -1825,7 +1825,7 @@ Related: BKL-M36 (✅ DONE — Option B batch rotation for ongoing daily mainten
 ---
 
 ### BKL-M51 | CCSP data investigation — stale quarters + missing customer names
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P1
 Size: M (research + fix)
 Source: Jason 2026-04-02 — CCSP scrape succeeds but data is stale (Q3-Q4 2025 only) and customer names show as "?"
@@ -2053,7 +2053,7 @@ Fix:
 ---
 
 ### BKL-M49 | Scraper startup sequencing — prevent race conditions on container restart
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-02
 Priority: P1
 Size: M (1-2 days)
 Source: Jason 2026-04-02 — CCSP scraper failed repeatedly because RH scraper held shared browser context on startup
