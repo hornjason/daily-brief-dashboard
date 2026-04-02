@@ -163,7 +163,25 @@ export function scheduleKpiSnapshot(): void {
   setTimeout(async () => {
     try {
       const { customers: currentCustomers } = await import('./server-state.ts')
-      const snapshot = captureSnapshot(currentCustomers.length)
+      // BKL-G11: Fetch calendar for meeting counts
+      let meetingsToday = 0
+      let meetingsThisWeek = 0
+      try {
+        const { fetchCalendar } = await import('./google.ts')
+        const events = await fetchCalendar(currentCustomers)
+        const customerEvents = events.filter((ev: any) => ev.customers && ev.customers.length > 0)
+        const todayStr = new Date().toDateString()
+        const now = new Date()
+        const dayOfWeek = now.getDay()
+        const monday = new Date(now)
+        monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+        monday.setHours(0, 0, 0, 0)
+        const sunday = new Date(monday)
+        sunday.setDate(monday.getDate() + 7)
+        meetingsToday = customerEvents.filter((ev: any) => new Date(ev.start).toDateString() === todayStr).length
+        meetingsThisWeek = customerEvents.filter((ev: any) => { const d = new Date(ev.start); return d >= monday && d < sunday }).length
+      } catch { /* calendar not configured or unavailable */ }
+      const snapshot = captureSnapshot(currentCustomers.length, meetingsToday, meetingsThisWeek)
       writeSnapshot(snapshot)
       console.log(`[kpi-snapshot] daily snapshot captured: ${snapshot.date} — ${snapshot.metrics.totalCases} cases, ${snapshot.metrics.customerCount} customers`)
     } catch (e: any) {

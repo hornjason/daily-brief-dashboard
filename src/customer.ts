@@ -806,7 +806,13 @@ export async function generateBrief(
 
     return brief
   } catch (e: any) {
-    console.warn(`[brief] Three-step pipeline failed for ${customer.name}, falling back to single-pass:`, e.message)
+    // BKL-G08: Structured error logging — identify which pipeline step failed
+    const step = e.message?.includes('extract') ? 'extract'
+      : e.message?.includes('rank') ? 'rank'
+      : e.message?.includes('synth') ? 'synthesize'
+      : 'unknown'
+    console.error(`[brief] Three-step pipeline failed for ${customer.name} at step=${step}: ${e.message?.slice(0, 300)}`)
+    console.warn(`[brief] Falling back to single-pass for ${customer.name}`)
   }
 
   // ── Single-pass synthesis (existing logic — serves as fallback, and primary synthesis until R18) ──
@@ -917,8 +923,33 @@ List cases with severity, days open, and product. Flag Sev1/Sev2 urgently. If no
 
 Keep total brief under 250 words.`
 
-  return callLLM(
-    'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable. Always use ## markdown headers exactly as instructed.',
-    prompt,
-  )
+  try {
+    return await callLLM(
+      'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable. Always use ## markdown headers exactly as instructed.',
+      prompt,
+    )
+  } catch (fallbackErr: any) {
+    // BKL-G08: Both three-step pipeline AND single-pass fallback failed.
+    // Return a minimal brief with available raw data instead of throwing HTTP 500.
+    console.error(`[brief] Single-pass fallback also failed for ${customer.name}: ${fallbackErr.message?.slice(0, 300)}`)
+    console.error(`[brief] Returning minimal brief with raw data for ${customer.name}`)
+
+    const sections: string[] = []
+    sections.push(`## Account Overview\n\n*Brief generation failed — showing available raw data for ${customer.name}.*\n`)
+
+    if (cases.length) {
+      sections.push(`## Open Support Cases\n\n${cases.map(c => `- Sev${c.severity} | ${c.caseNumber}: ${c.summary} — ${c.daysOpen}d open${c.product ? ` [${c.product}]` : ''}`).join('\n')}\n`)
+    }
+
+    if (subscriptions.length) {
+      sections.push(`## Active Subscriptions\n\n${subscriptions.map(s => `- ${s.productName} (qty: ${s.quantity}, expires: ${fmt(s.endDate)})`).join('\n')}\n`)
+    }
+
+    const upcoming = meetings.filter(m => new Date(m.start) >= new Date())
+    if (upcoming.length) {
+      sections.push(`## Upcoming Meetings\n\n${upcoming.map(m => `- ${m.title} on ${fmt(m.start)}`).join('\n')}\n`)
+    }
+
+    return sections.join('\n') || `## Account Overview\n\n*Brief generation is temporarily unavailable for ${customer.name}. Please retry later.*`
+  }
 }

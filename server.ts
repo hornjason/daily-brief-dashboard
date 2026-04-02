@@ -13,24 +13,23 @@ import { fetchCustomerSheetData, fetchCustomerSheetRaw, fetchCCSPData, fetchCust
 import type { CCSPRecord } from './src/sheets.ts'
 import { fetchPipelineData, buildPipelineSummary } from './src/pipeline.ts'
 import type { PipelineRecord } from './src/pipeline.ts'
-import type { Customer, AE, ProductSubscription } from './src/types.ts'
+import type { Customer, AE } from './src/types.ts'
 import { inferCustomerDomain } from './src/domains.ts'
-import { initDriveWatcher, checkDriveChanges, rebuildFolderMap, getWatcherState, checkFilesModified } from './src/drive-watcher.ts'
-import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './src/rh-auth.ts'
-import { runRhScrape, SessionExpiredError, initScrapeContext, closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
+import { rebuildFolderMap, getWatcherState } from './src/drive-watcher.ts'
+import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeExpired, lastScraped } from './src/rh-auth.ts'
+import { runRhScrape, SessionExpiredError, closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
 
-import { runSfPipelineSync, createPipelineSheet, SfSessionExpiredError, setSfSessionExpiredCallback, adoptSfContext, getSfContext, listSfReports, lastSfSync, lastSfRowCount, sfSyncError } from './src/sf-scraper.ts'
-import { startSfLoginBrowser, cancelSfLoginBrowser, getSfAuthStatus } from './src/sf-auth.ts'
-import { runSupportableScrape, runSupportableDiscoverAndScrape, writeSupportableSheet, adoptSupportableContext, lastSupportableScrape, lastSupportableError, supportableScrapeRunning } from './src/supportable-scraper.ts'
-import type { SupportableCustomer } from './src/supportable-scraper.ts'
-import { adoptCcspContext, runCcspScrape, writeCcspSheet, ccspScrapeRunning, lastCcspScrape, lastCcspError } from './src/ccsp-scraper.ts'
+import { runSfPipelineSync, getSfContext, sfSyncError } from './src/sf-scraper.ts'
+import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
+import { runSupportableDiscoverAndScrape, supportableScrapeRunning } from './src/supportable-scraper.ts'
+import { ccspScrapeRunning, lastCcspError } from './src/ccsp-scraper.ts'
 import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, getScopeLevel, type StoredToken } from './src/oauth-scopes.ts'
-import { initCacheLayer, registerCacheRoutes, briefCachePath, readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, toSlug } from './src/cache-layer.ts'
-import { initSettingsApi, registerSettingsRoutes, getRefreshIntervals, DEFAULT_REFRESH_INTERVALS } from './src/settings-api.ts'
+import { initCacheLayer, registerCacheRoutes, readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, toSlug } from './src/cache-layer.ts'
+import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
-import { loadServerState, aes, customers, saveAes, patchAe, setAes, setCustomers, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
+import { loadServerState, aes, customers, saveAes, setAes, setCustomers, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
 import { initRefreshEngine, registerRefreshRoutes } from './src/refresh-engine.ts'
-import { computeAllHealthScores } from './src/health-score.ts'
+import { computeAllHealthScores, isFreeOrTrial } from './src/health-score.ts'
 import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { buildContactHistory, detectGoneSilent } from './src/email-extraction.ts'
@@ -38,7 +37,6 @@ import { rescheduleRefreshTimers, initBackgroundScheduler } from './src/backgrou
 import { getRecentHistory } from './src/kpi-history.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
 import { registerBootstrapRoutes, startAccountDiscovery } from './src/bootstrap-orchestrator.ts'
-import { discoverAccountsFromFolders } from './src/account-discovery.ts'
 // ── M04 extracted modules ───────────────────────────────────────────────────
 import { registerSheetImportRoutes } from './src/sheet-import.ts'
 import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
@@ -278,15 +276,84 @@ app.get('/api/morning-summary', (c) => {
 
     const signals: { customer: string; type: string; severity: 'critical' | 'high' | 'medium'; text: string }[] = []
 
+    // Read cached data sources synchronously for expanded signal types
+    let allCases: { caseNumber: string; severity: string; summary: string; accountNumber: string; daysOpen: number }[] = []
+    try {
+      const raw = JSON.parse(readFileSync(RH_CASES_CACHE_PATH, 'utf-8'))
+      allCases = raw.cases ?? []
+    } catch { /* no cached cases */ }
+
+    const pipelineData = readPipelineCache()
+    const pipelineRecords = pipelineData?.records ?? []
+
+    // Build customer account-number lookup
+    const customerAccountNums = new Map<string, Set<string>>()
+    for (const cu of customers) {
+      const slug = toSlug(cu.name)
+      try {
+        const sheetData = JSON.parse(readFileSync(resolve(CACHE_DIR, `${slug}-sheets.json`), 'utf-8'))
+        const nums = new Set<string>()
+        for (const row of sheetData.rows ?? []) {
+          if (row.accountNumber) nums.add(String(row.accountNumber))
+        }
+        customerAccountNums.set(cu.name, nums)
+      } catch { /* no sheet data */ }
+    }
+
     for (const hs of healthScores) {
-      if (hs.breakdown.cases.score === 0) {
-        signals.push({ customer: hs.name, type: 'case', severity: 'critical', text: hs.breakdown.cases.signal })
+      // 1. Sev1/Sev2 cases (critical/high)
+      const acctNums = customerAccountNums.get(hs.name) ?? new Set()
+      const customerCases = allCases.filter(ca => acctNums.has(ca.accountNumber))
+      for (const ca of customerCases.filter(ca => ca.severity === '1')) {
+        signals.push({ customer: hs.name, type: 'case-sev1', severity: 'critical', text: `Sev1 case #${ca.caseNumber}: ${ca.summary}` })
       }
-      if (hs.breakdown.subscriptions.score <= 20) {
+      for (const ca of customerCases.filter(ca => ca.severity === '2')) {
+        signals.push({ customer: hs.name, type: 'case-sev2', severity: 'high', text: `Sev2 case #${ca.caseNumber}: ${ca.summary}` })
+      }
+
+      // 2. Subscription expiring <60d (high)
+      if (hs.breakdown.subscriptions.score <= 40) {
         signals.push({ customer: hs.name, type: 'renewal', severity: 'high', text: hs.breakdown.subscriptions.signal })
       }
+
+      // 3. Gone-silent contacts (medium)
+      if (hs.breakdown.emails.score <= 10) {
+        signals.push({ customer: hs.name, type: 'gone-silent', severity: 'medium', text: hs.breakdown.emails.signal })
+      }
+
+      // 4. No meetings in >30d (medium)
       if (hs.breakdown.meetings.score <= 10) {
         signals.push({ customer: hs.name, type: 'engagement', severity: 'medium', text: hs.breakdown.meetings.signal })
+      }
+
+      // 5. Pipeline deal stuck >30d past close date (high)
+      const custPipeline = pipelineRecords.filter(p =>
+        p.accountName.toLowerCase().includes(hs.name.toLowerCase()) ||
+        hs.name.toLowerCase().includes(p.accountName.toLowerCase())
+      )
+      const today = new Date()
+      for (const opp of custPipeline) {
+        if (!opp.closeDate) continue
+        const closeDate = new Date(opp.closeDate)
+        const daysPast = Math.floor((today.getTime() - closeDate.getTime()) / 86_400_000)
+        if (daysPast > 30) {
+          signals.push({ customer: hs.name, type: 'pipeline-stuck', severity: 'high', text: `Pipeline deal "${opp.oppName}" stuck ${daysPast}d past close date` })
+        }
+      }
+
+      // 6. Competitor mentions (medium) — from latest brief cache
+      const briefCache = readLatestBriefCache(hs.name)
+      if (briefCache?.text) {
+        const competitorPattern = /competitor|competitive|vmware|aws|azure|microsoft|oracle|ibm/i
+        if (competitorPattern.test(briefCache.text)) {
+          const match = briefCache.text.match(/competitive[^.]*\./i)?.[0] ?? 'Competitive signals detected in latest brief'
+          signals.push({ customer: hs.name, type: 'competitor', severity: 'medium', text: match.slice(0, 120) })
+        }
+      }
+
+      // 7. Cloud spend anomaly (medium)
+      if (hs.breakdown.cloudSpend.score <= 30) {
+        signals.push({ customer: hs.name, type: 'cloud-anomaly', severity: 'medium', text: hs.breakdown.cloudSpend.signal })
       }
     }
 
@@ -346,16 +413,34 @@ app.get('/api/customer/:name/stakeholder-engagement', async (c) => {
     const silent = detectGoneSilent(history)
     const silentMap = new Map(silent.map(s => [s.email, s]))
 
+    // Compute per-contact 30/60/90d email counts from raw emails
+    const emailsByContact = new Map<string, Date[]>()
+    for (const e of rawEmails) {
+      const addr = (e.from.match(/<([^>]+)>/)?.[1] ?? e.from).toLowerCase().trim()
+      if (!addr.includes('@')) continue
+      const arr = emailsByContact.get(addr) ?? []
+      arr.push(new Date(e.date))
+      emailsByContact.set(addr, arr)
+    }
+    const now = Date.now()
+
     const contacts = history.map(h => {
       const s = silentMap.get(h.email)
-      const daysSilent = s?.daysSilent ?? Math.floor((Date.now() - new Date(h.lastEmailDate).getTime()) / (1000 * 60 * 60 * 24))
+      const daysSilent = s?.daysSilent ?? Math.floor((now - new Date(h.lastEmailDate).getTime()) / (1000 * 60 * 60 * 24))
       const frequency = daysSilent <= 7 ? 'weekly' : daysSilent <= 30 ? 'monthly' : 'silent'
+      const dates = emailsByContact.get(h.email) ?? []
+      const d30 = 30 * 86_400_000
+      const d60 = 60 * 86_400_000
+      const d90 = 90 * 86_400_000
       return {
         name: h.name ?? h.email,
         email: h.email,
         lastContact: h.lastEmailDate,
         frequency,
         daysSilent,
+        emailCount30d: dates.filter(d => now - d.getTime() <= d30).length,
+        emailCount60d: dates.filter(d => now - d.getTime() <= d60).length,
+        emailCount90d: dates.filter(d => now - d.getTime() <= d90).length,
       }
     })
 
@@ -402,22 +487,43 @@ app.get('/api/customer/:name/temporal-delta', async (c) => {
 
     const currentSections = parseHeadings(currentText)
     const previousSections = parseHeadings(previousText)
-    const changes: { section: string; summary: string }[] = []
+    const changes: { section: string; summary: string; details: string[] }[] = []
+
+    // Extract key facts from section text for content-level diffs
+    const extractFacts = (text: string): string[] => {
+      const facts: string[] = []
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+      for (const line of lines) {
+        const clean = line.replace(/^[-*•]\s*/, '').replace(/^\d+\.\s*/, '').replace(/\*{1,2}/g, '')
+        if (!clean || clean === '---') continue
+        if (clean.match(/(?:case|sev\s*\d|severity\s*\d).{0,80}/i)) { facts.push(clean.slice(0, 100)); continue }
+        if (clean.match(/\$[\d,.]+[KMB]?/i)) { facts.push(clean.slice(0, 100)); continue }
+        if (clean.match(/(?:contact|meeting|spoke|scheduled|attendee|stakeholder).{0,60}/i)) { facts.push(clean.slice(0, 100)); continue }
+        if (clean.match(/(?:renew|expir|pipeline|opportunity|close date|forecast).{0,60}/i)) { facts.push(clean.slice(0, 100)); continue }
+        if (line.match(/^[-*•]/) && clean.length > 10) { facts.push(clean.slice(0, 100)) }
+      }
+      return facts.slice(0, 5)
+    }
 
     // Check for new or changed sections
     for (const [heading, body] of currentSections) {
       const prevBody = previousSections.get(heading)
       if (prevBody === undefined) {
-        changes.push({ section: heading, summary: 'New section added' })
+        const details = extractFacts(body)
+        changes.push({ section: heading, summary: 'New section added', details })
       } else if (prevBody !== body) {
-        changes.push({ section: heading, summary: 'Content updated' })
+        const prevLines = new Set(prevBody.split('\n').map(l => l.trim()).filter(Boolean))
+        const newLines = body.split('\n').map(l => l.trim()).filter(Boolean).filter(l => !prevLines.has(l))
+        const details = extractFacts(newLines.join('\n'))
+        if (details.length === 0) details.push('Minor content update')
+        changes.push({ section: heading, summary: 'Content updated', details })
       }
     }
 
     // Check for removed sections
     for (const heading of previousSections.keys()) {
       if (!currentSections.has(heading)) {
-        changes.push({ section: heading, summary: 'Section removed' })
+        changes.push({ section: heading, summary: 'Section removed', details: [] })
       }
     }
 
@@ -1781,6 +1887,8 @@ app.get('/api/kpis', async (c) => {
           allProductDescriptions.add(p.productDescription)
           totalLicenses += p.quantity
           if (p.endDate) {
+            // BKL-M45: exclude free/trial from renewalsWithin90Days
+            if (isFreeOrTrial(p)) continue
             const daysLeft = Math.ceil((new Date(p.endDate).getTime() - nowMs) / 86_400_000)
             if (daysLeft <= 90) renewalsWithin90Days++
           }
@@ -1999,6 +2107,99 @@ app.get('/customer/:name/brief', async (c) => {
 })
 
 registerSettingsRoutes(app, { rescheduleRefreshTimers })
+
+// ── Email delivery settings (BKL-E05) ────────────────────────────────────────
+
+const EMAIL_SETTINGS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'config', 'email-settings.json')
+
+interface EmailSettings {
+  enabled: boolean
+  deliveryTime: string
+  timezone: string
+  schedule: string
+  recipientEmail: string
+  sections: {
+    meetings: boolean
+    emails: boolean
+    cases: boolean
+    pipeline: boolean
+    brief: boolean
+  }
+}
+
+const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
+  enabled: false,
+  deliveryTime: '07:00',
+  timezone: 'America/New_York',
+  schedule: 'weekdays',
+  recipientEmail: '',
+  sections: { meetings: true, emails: true, cases: true, pipeline: true, brief: true },
+}
+
+function readEmailSettings(): EmailSettings {
+  try {
+    if (existsSync(EMAIL_SETTINGS_PATH)) {
+      return { ...DEFAULT_EMAIL_SETTINGS, ...JSON.parse(readFileSync(EMAIL_SETTINGS_PATH, 'utf-8')) }
+    }
+  } catch {}
+  return { ...DEFAULT_EMAIL_SETTINGS }
+}
+
+app.get('/api/settings/email', (c) => {
+  return c.json(readEmailSettings())
+})
+
+app.put('/api/settings/email', async (c) => {
+  try {
+    const body = await c.req.json<Partial<EmailSettings>>().catch(() => ({}))
+    const current = readEmailSettings()
+
+    // Validate deliveryTime
+    if (body.deliveryTime != null) {
+      if (typeof body.deliveryTime !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.deliveryTime)) {
+        return c.json({ error: 'deliveryTime must be HH:MM format' }, 400)
+      }
+    }
+    // Validate timezone
+    if (body.timezone != null) {
+      if (typeof body.timezone !== 'string' || body.timezone.length < 2 || body.timezone.length > 50) {
+        return c.json({ error: 'Invalid timezone' }, 400)
+      }
+      try { Intl.DateTimeFormat(undefined, { timeZone: body.timezone }) }
+      catch { return c.json({ error: 'Invalid timezone identifier' }, 400) }
+    }
+    // Validate schedule
+    if (body.schedule != null) {
+      if (!['daily', 'weekdays'].includes(body.schedule as string)) {
+        return c.json({ error: 'schedule must be "daily" or "weekdays"' }, 400)
+      }
+    }
+    // Validate email
+    if (body.recipientEmail != null) {
+      if (typeof body.recipientEmail !== 'string' || (body.recipientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.recipientEmail))) {
+        return c.json({ error: 'Invalid email address format' }, 400)
+      }
+    }
+
+    const updated: EmailSettings = {
+      enabled: typeof body.enabled === 'boolean' ? body.enabled : current.enabled,
+      deliveryTime: body.deliveryTime ?? current.deliveryTime,
+      timezone: body.timezone ?? current.timezone,
+      schedule: (body.schedule as string) ?? current.schedule,
+      recipientEmail: body.recipientEmail ?? current.recipientEmail,
+      sections: body.sections ? { ...current.sections, ...body.sections } : current.sections,
+    }
+
+    // Ensure config dir exists
+    mkdirSync(resolve(process.env.DATA_DIR ?? 'data', 'config'), { recursive: true })
+    const tmpPath = EMAIL_SETTINGS_PATH + '.tmp'
+    writeFileSync(tmpPath, JSON.stringify(updated, null, 2), { mode: 0o600 })
+    renameSync(tmpPath, EMAIL_SETTINGS_PATH)
+    return c.json(updated)
+  } catch (e: any) {
+    return c.json({ error: sanitizeErr(e) }, 500)
+  }
+})
 
 // ── Drive watcher endpoints ───────────────────────────────────────────────────
 
