@@ -67,7 +67,7 @@ async function sessionHeartbeat(page: Page): Promise<void> {
 // APEX shares one SSO session across all parallel pages. At 2+ pages, concurrent
 // requests trigger APEX server-side contention (error dialogs, closed pages).
 // Set to 1 for reliable serial scraping. Increase only if APEX session isolation improves.
-const PARALLEL_PAGES = 1
+const PARALLEL_PAGES = 3  // Tested 2026-04-02: APEX creates independent sessions per page — safe to parallelize
 
 // Wall-clock limit per account — fires before the 30s download timeout can accumulate
 const PER_ACCOUNT_TIMEOUT_MS = 90_000  // 90 seconds

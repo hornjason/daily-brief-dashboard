@@ -1975,6 +1975,28 @@ Related: BKL-F11 (shared report dedup), ADR-001
 
 ---
 
+### BKL-M57 | Research: Supportable parallel sessions — "New Session" button for concurrent scraping
+Status: 🔴 OPEN
+Priority: P1
+Size: Research + prototype
+Source: Jason 2026-04-02 — "can we do a few new sessions, theres a new session button that spawns another window"
+Files: src/supportable-scraper.ts
+Description: Supportable has a "New Session" button that opens a separate APEX session window. Currently PARALLEL_PAGES=1 because APEX session contention causes errors with concurrent operations in the same session.
+  If "New Session" creates truly independent APEX sessions, we could:
+  1. Open 2-3 parallel sessions at scrape start
+  2. Distribute customers across sessions (round-robin)
+  3. Scrape 2-3 customers concurrently instead of sequentially
+  4. Potential 2-3x speedup (from ~5 min → ~2 min for 21 customers)
+  Research needed:
+  1. Does "New Session" create a separate APEX session cookie? Or does it share the same session?
+  2. Can two separate session windows query different accounts simultaneously without errors?
+  3. What happens if both sessions try to export CSV at the same time?
+  4. Is there a max session limit?
+  5. Test: open 2 sessions in VNC, search different accounts in each simultaneously, verify both work
+  If parallel sessions work, update PARALLEL_PAGES from 1 to 2-3 and modify the scraper to use multiple pages.
+
+---
+
 ### BKL-M54 | Supportable scraper optimization — skip discovery + faster waits
 Status: 🔴 OPEN
 Priority: P1
