@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   Calendar,
@@ -9,6 +9,7 @@ import {
   Wrench,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-react'
 
 const navItems = [
@@ -22,13 +23,43 @@ const navItems = [
 interface SidebarProps {
   active: string
   onActiveChange: (label: string) => void
+  aes?: { name: string; customerCount: number }[]
 }
 
-export function Sidebar({ active, onActiveChange }: SidebarProps) {
+export function Sidebar({ active, onActiveChange, aes }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
     return stored === null ? true : stored === 'true'
   })
+
+  // Scroll-spy via IntersectionObserver (BKL-UX40)
+  const [activeSection, setActiveSection] = useState<string | null>(null)
+
+  useEffect(() => {
+    const sections = document.querySelectorAll('[data-section]')
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.getAttribute('data-section'))
+          }
+        }
+      },
+      { rootMargin: '-20% 0px -60% 0px', threshold: 0 }
+    )
+    sections.forEach((s) => observer.observe(s))
+    return () => observer.disconnect()
+  }, [])
+
+  // Sync scroll-spy with active state
+  useEffect(() => {
+    if (activeSection) {
+      const item = navItems.find((n) => n.sectionId === activeSection)
+      if (item && item.label !== active) {
+        onActiveChange(item.label)
+      }
+    }
+  }, [activeSection])
 
   function toggle() {
     setCollapsed(prev => {
@@ -48,6 +79,18 @@ export function Sidebar({ active, onActiveChange }: SidebarProps) {
     collapsed ? 'justify-center px-2' : 'gap-3 px-3'
   }`
 
+  const [accountsExpanded, setAccountsExpanded] = useState(false)
+
+  function scrollToAeGroup(aeName: string) {
+    document.querySelector(`[data-ae-group="${CSS.escape(aeName)}"]`)?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  function isActive(label: string, sectionId?: string): boolean {
+    if (active === label) return true
+    if (sectionId && activeSection === sectionId) return true
+    return false
+  }
+
   return (
     <aside
       className={`relative ${collapsed ? 'w-14' : 'w-52'} transition-[width] duration-200 ease-in-out min-h-screen bg-surface border-r border-border flex flex-col shrink-0 overflow-visible`}
@@ -56,6 +99,7 @@ export function Sidebar({ active, onActiveChange }: SidebarProps) {
       <button
         onClick={toggle}
         title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         className="absolute top-6 -right-3 z-20 w-6 h-6 rounded-full bg-surface border border-border shadow-sm flex items-center justify-center text-text-secondary hover:text-accent hover:border-accent transition-colors"
       >
         {collapsed
@@ -80,42 +124,84 @@ export function Sidebar({ active, onActiveChange }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-hidden">
         {navItems.map((item) => (
+          <div key={item.label} className="relative group">
+            <button
+              onClick={() => {
+                scrollTo(item)
+                if (item.label === 'Accounts') setAccountsExpanded((v) => !v)
+              }}
+              aria-label={item.label}
+              className={`${btnBase} ${
+                isActive(item.label, item.sectionId)
+                  ? 'bg-accent/10 text-accent'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
+              }`}
+            >
+              <item.icon className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+              {!collapsed && item.label === 'Accounts' && aes && aes.length > 0 && (
+                <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${accountsExpanded ? 'rotate-180' : ''}`} />
+              )}
+            </button>
+            {collapsed && (
+              <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
+                {item.label}
+              </span>
+            )}
+            {/* AE sub-navigation under Accounts (BKL-UX48) */}
+            {!collapsed && item.label === 'Accounts' && accountsExpanded && aes && aes.length > 0 && (
+              <div className="mt-1 mb-1">
+                {aes.map((ae) => (
+                  <button
+                    key={ae.name}
+                    onClick={() => scrollToAeGroup(ae.name)}
+                    className="w-full flex items-center gap-2 pl-10 pr-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-colors"
+                    aria-label={`${ae.name} - ${ae.customerCount} customers`}
+                  >
+                    <span className="truncate">{ae.name}</span>
+                    <span className="ml-auto text-text-secondary/60 tabular-nums">{ae.customerCount}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+
+        <div className="relative group mt-4">
           <button
-            key={item.label}
-            onClick={() => scrollTo(item)}
-            title={collapsed ? item.label : undefined}
+            onClick={() => onActiveChange('Settings')}
+            aria-label="Settings"
             className={`${btnBase} ${
-              active === item.label
+              active === 'Settings'
                 ? 'bg-accent/10 text-accent'
                 : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
             }`}
           >
-            <item.icon className="w-4 h-4 shrink-0" />
-            {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+            <Settings className="w-4 h-4 shrink-0" />
+            {!collapsed && <span className="whitespace-nowrap">Settings</span>}
           </button>
-        ))}
+          {collapsed && (
+            <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
+              Settings
+            </span>
+          )}
+        </div>
 
-        <button
-          onClick={() => onActiveChange('Settings')}
-          title={collapsed ? 'Settings' : undefined}
-          className={`${btnBase} mt-4 ${
-            active === 'Settings'
-              ? 'bg-accent/10 text-accent'
-              : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
-          }`}
-        >
-          <Settings className="w-4 h-4 shrink-0" />
-          {!collapsed && <span className="whitespace-nowrap">Settings</span>}
-        </button>
-
-        <a
-          href="/dashboard/setup"
-          title={collapsed ? 'Setup' : undefined}
-          className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
-        >
-          <Wrench className="w-4 h-4 shrink-0" />
-          {!collapsed && <span className="whitespace-nowrap">Setup</span>}
-        </a>
+        <div className="relative group">
+          <a
+            href="/dashboard/setup"
+            aria-label="Setup"
+            className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
+          >
+            <Wrench className="w-4 h-4 shrink-0" />
+            {!collapsed && <span className="whitespace-nowrap">Setup</span>}
+          </a>
+          {collapsed && (
+            <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
+              Setup
+            </span>
+          )}
+        </div>
       </nav>
 
       {/* Footer */}

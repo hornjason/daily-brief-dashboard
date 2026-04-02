@@ -22,7 +22,6 @@ interface SupportCasesTableProps {
 export function SupportCasesTable({ cases, loading }: SupportCasesTableProps) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'severity', desc: false },
-    { id: 'daysOpen', desc: true },
   ])
 
   const columns = useMemo(
@@ -90,19 +89,6 @@ export function SupportCasesTable({ cases, loading }: SupportCasesTableProps) {
           return (
             <span className={`px-2 py-0.5 rounded text-xs border ${colorClass}`}>
               {status}
-            </span>
-          )
-        },
-      }),
-      columnHelper.accessor('daysOpen', {
-        header: 'Days Open',
-        cell: (info) => {
-          const days = info.getValue()
-          const sev = info.row.original.severity
-          const isOld = (sev === '1' && days > 3) || (sev === '2' && days > 7)
-          return (
-            <span className={`font-mono text-sm ${isOld ? 'text-critical font-bold' : 'text-text-secondary'}`}>
-              {days}d
             </span>
           )
         },

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
 import { Sidebar } from './components/Sidebar'
@@ -7,12 +7,15 @@ import { KPICards } from './components/KPICards'
 import { CalendarStrip } from './components/CalendarStrip'
 import { AccountPortfolioGrid } from './components/AccountPortfolioGrid'
 import { CloudSpendSection } from './components/CloudSpendSection'
+import MorningSummary from './components/MorningSummary'
 import { PipelineSection } from './components/PipelineSection'
 import { RefreshTimerSettings } from './components/RefreshTimerSettings'
 import { WeatherSettings } from './components/WeatherSettings'
 import { CustomerDetailPage } from './pages/CustomerDetailPage'
 import { SetupPage } from './pages/SetupPage'
+import { AdminPage } from './pages/AdminPage'
 import { formatRelTime } from './lib/format'
+import { ChevronUp } from 'lucide-react'
 import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, PipelineSummary } from './types'
 
 interface RhStatus {
@@ -89,19 +92,68 @@ function NoAEsBanner({ onDismiss }: { onDismiss: () => void }) {
 function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [active, setActive] = useState('Command Center')
+
+  // Dynamic page title based on active sidebar section
+  useEffect(() => {
+    document.title = active === 'Command Center'
+      ? 'ASA Command Center'
+      : `${active} | ASA Command Center`
+  }, [active])
   const [rhStatus, setRhStatus] = useState<RhStatus | null>(null)
   const [rhReconnecting, setRhReconnecting] = useState(false)
   const [noAesDismissed, setNoAesDismissed] = useState(false)
   const [aeCount, setAeCount] = useState<number | null>(null)
   const vncWindowRef = useRef<Window | null>(null)
 
+  // Back to top button (BKL-UX23)
+  const [showBackToTop, setShowBackToTop] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > window.innerHeight)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   const kpisApi = useApi<KPIs>(`/api/kpis?_=${refreshKey}`)
   const calendarApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&_=${refreshKey}`)
   const calendarAllApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&all=true&_=${refreshKey}`)
   const casesApi = useApi<{ cases: SupportCase[]; totalCount: number }>(`/api/cases/all?_=${refreshKey}`)
   const accountsApi = useApi<{ customers: AccountInfo[] }>(`/api/accounts?_=${refreshKey}`)
-  const ccspApi     = useApi<CCSPSummary>(`/api/ccsp`)
-  const pipelineApi = useApi<PipelineSummary>(`/api/pipeline`)
+  const ccspApi      = useApi<CCSPSummary>(`/api/ccsp`)
+  const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline`)
+  const scrapeStatus = useApi<{
+    supportable: { lastSync: string | null; lastError: string | null; isRunning: boolean; isStale: boolean }
+    ccsp:        { lastSync: string | null; lastError: string | null; isRunning: boolean; isStale: boolean }
+    rh:          { lastSync: string | null; lastError: string | null; isRunning: boolean; isStale: boolean }
+    salesforce:  { lastSync: string | null; lastError: string | null; isRunning: boolean; isStale: boolean }
+  }>('/api/status/scrapes')
+
+  // ── KPI history for sparklines (BKL-R30) ─────────────────────────────────
+  const kpiHistoryApi = useApi<{
+    snapshots: Array<{
+      date: string
+      metrics: {
+        totalCases: number
+        sev1Cases: number
+        openRenewals: number
+        totalSubscriptions: number
+        pipelineCount: number
+        customerCount: number
+      }
+    }>
+  }>('/api/kpis/history')
+
+  const sparklineHistory = useMemo<Record<string, number[]> | undefined>(() => {
+    const snapshots = kpiHistoryApi.data?.snapshots
+    if (!snapshots || snapshots.length < 2) return undefined
+    return {
+      openCases: snapshots.map(s => s.metrics.totalCases),
+      sev1Cases: snapshots.map(s => s.metrics.sev1Cases),
+      expiringWithin30: snapshots.map(s => s.metrics.openRenewals),
+      renewals30to90: snapshots.map(s => s.metrics.totalSubscriptions),
+      techWinsNeeded: snapshots.map(s => s.metrics.pipelineCount),
+    }
+  }, [kpiHistoryApi.data])
 
   const anyLoading = kpisApi.loading || calendarApi.loading || calendarAllApi.loading || casesApi.loading || accountsApi.loading
 
@@ -133,14 +185,32 @@ function Dashboard() {
     fetch('/health').then(r => r.json()).then(d => setAeCount(d.aes ?? 0)).catch(() => {})
   }, [refreshKey])
 
-  const lastSynced =
-    !anyLoading && kpisApi.data
-      ? formatRelTime(new Date().toISOString())
-      : null
+  // Derive lastSynced from the most recent cachedAt across data sources
+  const lastSynced = (() => {
+    if (anyLoading || !kpisApi.data) return null
+    const timestamps = [
+      accountsApi.data?.customers?.map(c => c.cachedAt).filter(Boolean) ?? [],
+      ccspApi.data?.cachedAt ? [ccspApi.data.cachedAt] : [],
+      pipelineApi.data?.cachedAt ? [pipelineApi.data.cachedAt] : [],
+    ].flat() as string[]
+    if (timestamps.length === 0) return null
+    const newest = timestamps.reduce((a, b) => (a > b ? a : b))
+    return formatRelTime(newest)
+  })()
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <Sidebar active={active} onActiveChange={setActive} />
+      <Sidebar
+        active={active}
+        onActiveChange={setActive}
+        aes={accountsApi.data?.customers
+          ? [...new Set(accountsApi.data.customers.map((c) => c.ae).filter(Boolean))].sort().map((ae) => ({
+              name: ae,
+              customerCount: accountsApi.data!.customers.filter((c) => c.ae === ae).length,
+            }))
+          : undefined
+        }
+      />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
         {rhStatus && (
@@ -161,23 +231,44 @@ function Dashboard() {
           </main>
         ) : (
           <main className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Scrape staleness indicators */}
+            {scrapeStatus.data && (
+              <div className="flex items-center gap-3 flex-wrap text-xs text-text-secondary">
+                {(['rh', 'ccsp', 'supportable', 'salesforce'] as const).map(key => {
+                  const s = scrapeStatus.data![key]
+                  const color = s.isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : s.isStale ? 'bg-warning' : 'bg-green-500'
+                  const label = key === 'rh' ? 'RH Cases' : key === 'ccsp' ? 'CCSP' : key === 'supportable' ? 'Supportable' : 'Salesforce'
+                  const tooltip = s.isRunning ? 'Currently running' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSync ? `Last sync: ${new Date(s.lastSync).toLocaleString()}` : 'Not yet synced'
+                  return (
+                    <span key={key} className="flex items-center gap-1" title={tooltip}>
+                      <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
+                      {label}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Morning Summary (R06) */}
+            <MorningSummary />
+
             {/* KPI Cards */}
-            <section id="section-command">
-              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={accountsApi.data?.customers ?? []} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={rhStatus?.hasSession} />
+            <section id="section-command" data-section="section-command">
+              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={accountsApi.data?.customers ?? []} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={rhStatus?.hasSession} sparklineHistory={sparklineHistory} />
             </section>
 
             {/* Pipeline */}
-            <section id="section-pipeline">
-              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} />
+            <section id="section-pipeline" data-section="section-pipeline">
+              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} />
             </section>
 
             {/* Cloud Spend */}
-            <section id="section-cloudspend">
-              <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} />
+            <section id="section-cloudspend" data-section="section-cloudspend">
+              <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
             </section>
 
             {/* Calendar + Meeting Prep */}
-            <section id="section-calendar">
+            <section id="section-calendar" data-section="section-calendar">
               <CalendarStrip
                 events={calendarApi.data?.events ?? []}
                 allEvents={calendarAllApi.data?.events ?? []}
@@ -188,7 +279,7 @@ function Dashboard() {
             </section>
 
             {/* Account Portfolio Grid */}
-            <section id="section-accounts">
+            <section id="section-accounts" data-section="section-accounts">
               <AccountPortfolioGrid
                 accounts={accountsApi.data?.customers ?? []}
                 cases={casesApi.data?.cases ?? []}
@@ -199,6 +290,17 @@ function Dashboard() {
           </main>
         )}
       </div>
+
+      {/* Back to top button (BKL-UX23) */}
+      {showBackToTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 z-40 p-2.5 bg-surface border border-border rounded-full shadow-lg text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-all"
+          aria-label="Back to top"
+        >
+          <ChevronUp className="w-4 h-4" />
+        </button>
+      )}
     </div>
   )
 }
@@ -208,6 +310,7 @@ function App() {
     <Routes>
       <Route path="/dashboard/customer/:name" element={<CustomerDetailPage />} />
       <Route path="/dashboard/setup" element={<SetupPage />} />
+      <Route path="/admin" element={<AdminPage />} />
       <Route path="*" element={<Dashboard />} />
     </Routes>
   )

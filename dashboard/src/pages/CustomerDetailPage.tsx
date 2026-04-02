@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useApi } from '../hooks/useApi'
 import {
-  ArrowLeft,
   RefreshCw,
   Shield,
   Calendar,
@@ -12,24 +12,35 @@ import {
   ExternalLink,
   Video,
   AlertTriangle,
+  AlertCircle,
   CheckCircle,
   Clock,
   Users,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   Sparkles,
   Cloud,
   TrendingUp,
   Settings,
-  Copy,
-  Check,
   Zap,
   X,
 } from 'lucide-react'
 import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCustomerSSE } from '../hooks/useCustomerSSE'
-import { formatDate, formatTime, formatRelTime, fmtCurrency as fmtAcv } from '../lib/format'
+import { formatDate, formatTime, formatRelTime, fmtCurrency } from '../lib/format'
 import { OppDetail } from '../components/PipelineSection'
+import CopyButton from '../components/CopyButton'
+import { AccountCountPill } from '../components/AccountCountPill'
+import BriefAgePill from '../components/BriefAgePill'
+import PriorityActionBanner from '../components/PriorityActionBanner'
+import HealthScoreHero from '../components/HealthScoreHero'
+import CitationTooltip from '../components/CitationTooltip'
+import BriefDeltaMarker from '../components/BriefDeltaMarker'
+import TemporalDeltaSection from '../components/TemporalDeltaSection'
+import CompetitiveSignalBadge from '../components/CompetitiveSignalBadge'
+import StakeholderEngagementPanel from '../components/StakeholderEngagementPanel'
+import { StatBadge } from '../components/StatBadge'
 import type { PipelineOpp } from '../types'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
@@ -50,19 +61,6 @@ function useDashboardConfig() {
     fetch('/api/config').then(r => r.json()).then(d => { _configCache = d; setConfig(d) }).catch(() => {})
   }, [])
   return config
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-      className="shrink-0 p-1 rounded hover:bg-border/40 transition-colors text-text-secondary hover:text-text-primary"
-      title="Copy to clipboard"
-    >
-      {copied ? <Check className="w-3 h-3 text-success" /> : <Copy className="w-3 h-3" />}
-    </button>
-  )
 }
 
 function BriefSetupCard({ config, onTestDone }: { config: DashboardConfig; onTestDone: () => void }) {
@@ -91,7 +89,7 @@ function BriefSetupCard({ config, onTestDone }: { config: DashboardConfig; onTes
     <div className="bg-surface border border-border rounded-xl overflow-hidden">
       <div className="px-5 py-4 border-b border-border/60 flex items-center gap-2">
         <Settings className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text-primary">AI Brief Setup Required</h2>
+        <h2 className="text-base font-semibold text-text-primary">AI Brief Setup Required</h2>
       </div>
       <div className="px-5 py-4 space-y-4">
         <p className="text-xs text-text-secondary leading-relaxed">
@@ -179,7 +177,6 @@ function useBrief(name: string) {
         `/customer/${encodeURIComponent(name)}/brief${force ? '?force=true' : ''}`,
         { signal: controller.signal }
       )
-      if (res.status === 404) throw new Error('NOT_FOUND')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -276,9 +273,12 @@ function nextMeetingLabel(meetings: any[]): string {
   const next = meetings[0]
   if (!next) return ''
   const diff = new Date(next.start).getTime() - Date.now()
-  const hours = Math.floor(diff / 3_600_000)
-  if (hours <= 0) return 'Starting now'
-  if (hours < 1) return 'In < 1h'
+  const mins = Math.floor(diff / 60_000)
+  if (mins < -60) return 'In progress'
+  if (mins < 0) return 'In progress'
+  if (mins < 5) return 'Starting soon'
+  if (mins < 60) return `In ${mins}m`
+  const hours = Math.floor(mins / 60)
   if (hours < 24) return `In ${hours}h`
   const days = Math.floor(hours / 24)
   if (days === 1) return 'Tomorrow'
@@ -289,6 +289,33 @@ function nextMeetingLabel(meetings: any[]): string {
 
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`bg-border/40 rounded animate-pulse-slow ${className}`} />
+}
+
+// ── Brief text helpers (R07/R14) ──────────────────────────────────────────────
+
+function renderBriefWithCitations(text: string) {
+  const parts = text.split(/(\[Source: [^\]]+\])/g)
+  let citationIndex = 0
+  return parts.map((part, i) => {
+    const match = part.match(/^\[Source: (.+)\]$/)
+    if (match) {
+      citationIndex++
+      return <CitationTooltip key={i} index={citationIndex} source={match[1]} />
+    }
+    return <span key={i}>{part}</span>
+  })
+}
+
+function renderLineWithDelta(line: string) {
+  if (line.startsWith('\u25B2 ')) {
+    return (
+      <>
+        <BriefDeltaMarker />
+        <span>{line.slice(2)}</span>
+      </>
+    )
+  }
+  return <>{renderBriefWithCitations(line)}</>
 }
 
 // ── Brief section ─────────────────────────────────────────────────────────────
@@ -322,17 +349,30 @@ function BriefSection({ name }: { name: string }) {
     !k.startsWith('Account Overview') && !k.startsWith('Products')
   )
 
+  // Parse competitive signals from brief "## Competitive Signals" section
+  const competitiveSignals = useMemo(() => {
+    const csSection = Object.entries(sections).find(([k]) => k.startsWith('Competitive Signal'))?.[1]
+    if (!csSection) return []
+    return csSection.split('\n')
+      .map(l => l.trim())
+      .filter(l => /^[-*]/.test(l))
+      .map(line => {
+        const clean = line.replace(/^[-*]\s*/, '')
+        // Try to extract competitor name before "mentioned" or first word(s) before context
+        const mentionMatch = clean.match(/^(.+?)\s+(?:mentioned|evaluation|migration|replacement|competing)/i)
+        const competitor = mentionMatch ? mentionMatch[1].replace(/\*+/g, '').trim() : clean.split(/\s+/).slice(0, 2).join(' ').replace(/\*+/g, '')
+        return { competitor, context: clean }
+      })
+      .filter(s => s.competitor.length > 0)
+  }, [sections])
+
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden">
       <div className="px-5 py-4 flex items-center justify-between border-b border-border/60">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" />
-          <h2 className="text-sm font-semibold text-text-primary">Account Brief</h2>
-          {data?.fromCache && (
-            <span className="text-xs text-text-secondary bg-border/40 px-2 py-0.5 rounded-full">
-              {data.cachedAt ? formatRelTime(data.cachedAt) : 'cached'}
-            </span>
-          )}
+          <h2 className="text-base font-semibold text-text-primary">Account Brief</h2>
+          <BriefAgePill generatedAt={data?.cachedAt} />
         </div>
         <button
           onClick={refresh}
@@ -353,21 +393,7 @@ function BriefSection({ name }: { name: string }) {
           </div>
         )}
 
-        {error && !loading && error === 'NOT_FOUND' && (
-          <div className="text-center py-6 space-y-3">
-            <p className="text-base font-semibold text-text-primary">Customer not found</p>
-            <p className="text-sm text-text-secondary">No data found for "{name}". This customer may not exist or hasn't been configured yet.</p>
-            <a
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back to Dashboard
-            </a>
-          </div>
-        )}
-
-        {error && !loading && error !== 'NOT_FOUND' && (
+        {error && !loading && (
           <p className="text-sm text-critical italic">{error}</p>
         )}
 
@@ -375,8 +401,17 @@ function BriefSection({ name }: { name: string }) {
           <div className="space-y-4">
             {overview && (
               <p className={`text-sm text-text-primary leading-relaxed ${!expanded ? 'line-clamp-3' : ''}`}>
-                {overview}
+                {renderBriefWithCitations(overview)}
               </p>
+            )}
+
+            {competitiveSignals.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-text-secondary font-medium">Competitive:</span>
+                {competitiveSignals.map((s, i) => (
+                  <CompetitiveSignalBadge key={i} competitor={s.competitor} context={s.context} />
+                ))}
+              </div>
             )}
 
             {expanded && expandedSections.map(([title, content]) => {
@@ -420,7 +455,7 @@ function BriefSection({ name }: { name: string }) {
                           if (techMatch) {
                             return (
                               <li key={i} className="flex gap-2 text-sm text-text-primary">
-                                <span className="text-green-500 mt-0.5 shrink-0">✓</span>
+                                <span className="text-success mt-0.5 shrink-0">✓</span>
                                 <span>{techMatch[1].replace(/^\*{0,2}/, '').replace(/\*{0,2}$/, '').trim()}</span>
                               </li>
                             )
@@ -430,12 +465,12 @@ function BriefSection({ name }: { name: string }) {
                           return (
                             <li key={i} className="flex gap-2 text-sm text-text-primary">
                               <span className="text-accent mt-0.5 shrink-0">·</span>
-                              <span>{line.replace(/^[-*✓\d.]+\s*\*{0,2}/, '').replace(/\*{0,2}$/, '').trim()}</span>
+                              <span>{renderLineWithDelta(line.replace(/^[-*✓\d.]+\s*\*{0,2}/, '').replace(/\*{0,2}$/, '').trim())}</span>
                             </li>
                           )
                         }
 
-                        return <li key={i} className="text-sm text-text-primary">{line}</li>
+                        return <li key={i} className="text-sm text-text-primary">{renderLineWithDelta(line)}</li>
                       })}
                     </ul>
                   )}
@@ -551,7 +586,7 @@ function ActivityTimeline({
       <div className="px-5 py-4 border-b border-border/60 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-accent" />
-          <h2 className="text-sm font-semibold text-text-primary">Activity</h2>
+          <h2 className="text-base font-semibold text-text-primary">Activity</h2>
           {!loading && (
             <span className="text-xs text-text-secondary">{items.length} items</span>
           )}
@@ -664,7 +699,7 @@ type CaseItem = { caseNumber: string; summary: string; status: string; severity:
 const SEV_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
   '1': { label: 'Sev 1 — Critical', color: 'text-critical',      bg: 'bg-critical/15', border: 'border-critical/30' },
   '2': { label: 'Sev 2 — High',     color: 'text-warning',       bg: 'bg-warning/15',  border: 'border-warning/30' },
-  '3': { label: 'Sev 3 — Normal',   color: 'text-yellow-400',    bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+  '3': { label: 'Sev 3 — Normal',   color: 'text-warning',       bg: 'bg-warning/10',    border: 'border-warning/20' },
   '4': { label: 'Sev 4 — Low',      color: 'text-text-secondary', bg: 'bg-border/30',  border: 'border-border' },
 }
 
@@ -689,6 +724,13 @@ function CaseDetailModal({ c, onClose }: { c: CaseItem; onClose: () => void }) {
       .catch(() => setComment(null))
   }, [c.caseNumber])
 
+  // Escape key closes modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-surface border border-border rounded-2xl w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -701,7 +743,7 @@ function CaseDetailModal({ c, onClose }: { c: CaseItem; onClose: () => void }) {
               {sev.label}
             </span>
           </div>
-          <button onClick={onClose} className="text-text-secondary hover:text-text-primary transition-colors">
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary transition-colors" role="button" aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -788,7 +830,7 @@ function CasesSection({ cases, loading }: { cases: CaseItem[]; loading: boolean 
       <div className="bg-surface border border-border rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
           <Shield className="w-4 h-4 text-accent" />
-          <h2 className="text-sm font-semibold text-text-primary">Support Cases</h2>
+          <h2 className="text-base font-semibold text-text-primary">Support Cases</h2>
           {!loading && <span className="text-xs text-text-secondary">{cases.length} open</span>}
         </div>
 
@@ -808,10 +850,10 @@ function CasesSection({ cases, loading }: { cases: CaseItem[]; loading: boolean 
         {!loading && cases.length > 0 && (
           <div className="space-y-1">
             {cases.map((c) => (
-              <div
+              <button
                 key={c.caseNumber}
                 onClick={() => setSelected(c)}
-                className={`px-3 py-2.5 rounded-lg cursor-pointer hover:brightness-125 transition-all group ${severityBg(c.severity)}`}
+                className={`w-full text-left px-3 py-2.5 rounded-lg cursor-pointer hover:brightness-125 transition-all group ${severityBg(c.severity)}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -830,7 +872,7 @@ function CasesSection({ cases, loading }: { cases: CaseItem[]; loading: boolean 
                     <ExternalLink className="w-3 h-3 text-text-secondary/80 group-hover:text-accent mt-1 ml-auto transition-colors" />
                   </div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -859,7 +901,7 @@ function SubscriptionsSection({ products, loading }: { products: SheetProduct[];
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="flex items-center gap-2 mb-4">
         <Package className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text-primary">Products</h2>
+        <h2 className="text-base font-semibold text-text-primary">Products</h2>
         {!loading && <span className="text-xs text-text-secondary">{products.length}</span>}
       </div>
 
@@ -970,7 +1012,7 @@ function KeyContacts({ meetings, emails, loading }: { meetings: any[]; emails: a
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text-primary">Key Contacts</h2>
+        <h2 className="text-base font-semibold text-text-primary">Key Contacts</h2>
         {!loading && <span className="text-xs text-text-secondary">{contacts.length}</span>}
       </div>
 
@@ -1017,7 +1059,7 @@ function DriveSection({ files, loading }: { files: any[]; loading: boolean }) {
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="flex items-center gap-2 mb-4">
         <FileText className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text-primary">Drive Documents</h2>
+        <h2 className="text-base font-semibold text-text-primary">Drive Documents</h2>
         {!loading && <span className="text-xs text-text-secondary">{files.length} recent</span>}
       </div>
 
@@ -1088,24 +1130,36 @@ const PARTNER_COLORS: Record<string, string> = {
   AWS: '#FF9900', Google: '#4285F4', Microsoft: '#00A4EF', Other: '#6B7280',
 }
 
-
 function CloudSpendCard({ customerName }: { customerName: string }) {
   const data = useCCSP(customerName)
 
-  // Don't render until loaded, and hide entirely if no spend
-  if (!data || data.totalAcv === 0) return null
+  // Don't render until loaded
+  if (!data) return null
+
+  // Zero spend — show minimal indicator instead of hiding entirely
+  if (data.totalAcv === 0) {
+    return (
+      <div className="bg-surface border border-border rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Cloud className="w-4 h-4 text-text-secondary" />
+          <h2 className="text-base font-semibold text-text-primary">Cloud Spend (CCSP)</h2>
+        </div>
+        <p className="text-xs text-text-secondary">No cloud spend data found for this customer.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="flex items-center gap-2 mb-4">
         <Cloud className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text-primary">Cloud Spend (CCSP)</h2>
+        <h2 className="text-base font-semibold text-text-primary">Cloud Spend (CCSP)</h2>
         <span className="text-xs text-text-secondary">2025</span>
       </div>
 
       {/* Total */}
       <div className="mb-4">
-        <div className="text-2xl font-bold text-text-primary">{fmtAcv(data.totalAcv)}</div>
+        <div className="text-2xl font-bold text-text-primary tabular-nums">{fmtCurrency(data.totalAcv)}</div>
         <div className="text-xs text-text-secondary">marketplace revenue</div>
       </div>
 
@@ -1119,7 +1173,7 @@ function CloudSpendCard({ customerName }: { customerName: string }) {
               <div key={partner}>
                 <div className="flex justify-between text-xs mb-0.5">
                   <span className="text-text-primary font-medium">{partner}</span>
-                  <span className="text-text-secondary">{fmtAcv(acv)} · {pct.toFixed(0)}%</span>
+                  <span className="text-text-secondary">{fmtCurrency(acv)} · {pct.toFixed(0)}%</span>
                 </div>
                 <div className="h-1.5 bg-border rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
@@ -1142,7 +1196,7 @@ function CloudSpendCard({ customerName }: { customerName: string }) {
                   active && payload?.length ? (
                     <div className="bg-surface border border-border rounded px-2 py-1 text-xs shadow">
                       <div className="text-text-secondary">{label}</div>
-                      <div className="text-text-primary font-semibold">{fmtAcv(payload[0].value as number)}</div>
+                      <div className="text-text-primary font-semibold">{fmtCurrency(payload[0].value as number)}</div>
                     </div>
                   ) : null
                 }
@@ -1226,7 +1280,7 @@ function PipelineCard({ customerName }: { customerName: string }) {
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
         <TrendingUp className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text-primary">Open Pipeline</h2>
+        <h2 className="text-base font-semibold text-text-primary">Open Pipeline</h2>
         {data.openCount > 0 && (
           <span className="text-xs text-text-secondary">{data.openCount} open</span>
         )}
@@ -1235,7 +1289,7 @@ function PipelineCard({ customerName }: { customerName: string }) {
       {/* Total ACV */}
       {data.openCount > 0 && (
         <div className="mb-4">
-          <div className="text-2xl font-bold text-text-primary">{fmtAcv(data.totalAcv)}</div>
+          <div className="text-2xl font-bold text-text-primary tabular-nums">{fmtCurrency(data.totalAcv)}</div>
           <div className="text-xs text-text-secondary">open ACV</div>
         </div>
       )}
@@ -1247,10 +1301,11 @@ function PipelineCard({ customerName }: { customerName: string }) {
             const urgency = pipeUrgency(opp.closeDate)
             const stageColor = PIPE_STAGE_COLORS[opp.forecastCategory] ?? PIPE_STAGE_COLORS.Omitted
             return (
-              <div
+              <button
                 key={opp.oppNumber}
                 onClick={() => setSelectedOpp(opp)}
-                className="flex items-center gap-2 py-1.5 px-1 -mx-1 hover:bg-border/20 rounded cursor-pointer"
+                className="w-full text-left flex items-center gap-2 py-1.5 px-1 -mx-1 hover:bg-border/20 rounded cursor-pointer"
+                tabIndex={0}
               >
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: stageColor }} />
                 <span className="text-xs font-medium shrink-0 w-10" style={{ color: stageColor }}>
@@ -1258,9 +1313,9 @@ function PipelineCard({ customerName }: { customerName: string }) {
                 </span>
                 <span className="text-xs text-text-primary truncate flex-1 min-w-0">{opp.oppName}</span>
                 <span className={`text-xs shrink-0 ${PIPE_URGENCY_COLORS[urgency]}`}>{pipeDate(opp.closeDate)}</span>
-                <span className="text-xs font-mono text-text-primary shrink-0">{fmtAcv(opp.acv)}</span>
+                <span className="text-xs font-mono text-text-primary shrink-0">{fmtCurrency(opp.acv)}</span>
                 {opp.renewal && <span className="text-xs text-text-secondary/75 shrink-0">↻</span>}
-              </div>
+              </button>
             )
           })}
         </div>
@@ -1270,7 +1325,7 @@ function PipelineCard({ customerName }: { customerName: string }) {
       {data.closedOpps.length > 0 && (
         <div className="pt-2 border-t border-border/40">
           <span className="text-xs text-text-secondary">
-            Closed: {data.closedOpps.length} {data.closedOpps.length === 1 ? 'opp' : 'opps'} · {fmtAcv(closedAcv)}
+            Closed: {data.closedOpps.length} {data.closedOpps.length === 1 ? 'opp' : 'opps'} · {fmtCurrency(closedAcv)}
           </span>
         </div>
       )}
@@ -1289,101 +1344,228 @@ export function CustomerDetailPage() {
 
   const sse = useCustomerSSE(customerName)
   const accountInfo = useAccountInfo(customerName)
+
+  // Priority Action (R13)
+  const [priorityAction, setPriorityAction] = useState<{ text: string; severity: 'critical' | 'high' | 'medium'; source: string } | null>(null)
+  useEffect(() => {
+    if (customerName) {
+      fetch(`/api/customer/${encodeURIComponent(customerName)}/priority-action`)
+        .then(r => r.json())
+        .then(d => setPriorityAction(d.action ?? null))
+        .catch(() => {})
+    }
+  }, [customerName])
+
+  // Stakeholder Engagement (R31)
+  const stakeholderApi = useApi<{ contacts: { name: string; email?: string; lastContact?: string; frequency?: string; daysSilent?: number }[] }>(
+    `/api/customer/${encodeURIComponent(customerName ?? '')}/stakeholder-engagement`,
+    { enabled: !!customerName }
+  )
+  const stakeholderContacts = stakeholderApi.data?.contacts ?? []
+
+  // Health Score Hero (R12)
+  const [healthScore, setHealthScore] = useState<{ score: number; status: 'red' | 'yellow' | 'green'; breakdown: Record<string, { score: number; signal: string }> } | null>(null)
+  useEffect(() => {
+    if (customerName) {
+      fetch(`/api/health-scores/${encodeURIComponent(customerName)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d ? setHealthScore(d) : null)
+        .catch(() => {})
+    }
+  }, [customerName])
+
   const health = getHealth(sse.cases)
 
   const sectionLoading = sse.loading
   const meta = sse.meta
   const nextLabel = nextMeetingLabel(sse.meetings)
 
-  return (
-    <div className="min-h-screen bg-bg flex flex-col">
-      {/* Header */}
-      <header className="bg-surface border-b border-border px-6 h-16 flex items-center justify-between shrink-0 sticky top-0 z-10">
-        {/* Left: nav + identity */}
-        <div className="flex items-center gap-4 min-w-0">
+  // SSE progress tracking (BKL-UX30)
+  const sseProgress = useMemo(() => {
+    const sections = [
+      { key: 'meta', arrived: sse.meta !== null },
+      { key: 'cases', arrived: sse.cases.length > 0 || (!sse.loading && sse.meta !== null) },
+      { key: 'meetings', arrived: sse.meetings.length > 0 || (!sse.loading && sse.meta !== null) },
+      { key: 'emails', arrived: sse.emails.length > 0 || (!sse.loading && sse.meta !== null) },
+      { key: 'drive', arrived: sse.drive.length > 0 || (!sse.loading && sse.meta !== null) },
+      { key: 'subscriptions', arrived: sse.subscriptions.length > 0 || (!sse.loading && sse.meta !== null) },
+    ]
+    const arrived = sections.filter(s => s.arrived).length
+    return arrived / sections.length
+  }, [sse.meta, sse.cases, sse.meetings, sse.emails, sse.drive, sse.subscriptions, sse.loading])
+
+  // Detect customer not found: SSE finished loading, no meta received, and error present
+  const customerNotFound = !sectionLoading && meta === null && sse.error !== null
+
+  // Scroll to top on customer change
+  useEffect(() => { window.scrollTo(0, 0) }, [customerName])
+
+  // Set document title
+  useEffect(() => {
+    document.title = customerName
+      ? `${customerName} | ASA Command Center`
+      : 'ASA Command Center'
+    const metaDesc = document.querySelector('meta[name="description"]')
+    if (metaDesc) {
+      metaDesc.setAttribute('content', customerName
+        ? `Account detail for ${customerName} — ASA Command Center`
+        : 'ASA Command Center')
+    }
+    return () => { document.title = 'ASA Command Center' }
+  }, [customerName])
+
+  // Customer not found — render a clean error state
+  if (customerNotFound) {
+    return (
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6">
+        <div className="bg-surface border border-border rounded-xl p-8 max-w-md w-full text-center space-y-4">
+          <AlertTriangle className="w-10 h-10 text-warning mx-auto" />
+          <h1 className="text-lg font-semibold text-text-primary">Customer not found</h1>
+          <p className="text-sm text-text-secondary">
+            No customer matching <span className="font-mono text-text-primary">"{customerName}"</span> was found in the configured accounts.
+          </p>
           <button
             onClick={() => navigate('/dashboard')}
-            className="text-text-secondary hover:text-text-primary transition-colors shrink-0"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
+            Back to Dashboard
           </button>
-
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className="w-3 h-3 rounded-full shrink-0"
-              style={{ backgroundColor: health.color }}
-              title={health.label}
-            />
-            <h1 className="text-base font-bold text-text-primary truncate">{customerName}</h1>
-          </div>
-
-          <div className="hidden md:flex items-center gap-2 flex-wrap">
-            {meta?.accountNumbers && meta.accountNumbers.length > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded bg-border/40 text-text-secondary font-mono">
-                #{meta.accountNumbers.join(' · #')}
-              </span>
-            )}
-            {meta?.segment && (
-              <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 font-medium">
-                {meta.segment}
-              </span>
-            )}
-            {meta?.ae && (
-              <span className="text-xs px-2 py-0.5 rounded bg-border/50 text-text-secondary">{meta.ae}</span>
-            )}
-          </div>
         </div>
+      </div>
+    )
+  }
 
-        {/* Right: stats + sync */}
-        <div className="flex items-center gap-6">
-          {/* Inline KPIs */}
-          <div className="hidden lg:flex items-center gap-5 text-xs">
-            <div className="flex items-center gap-1.5">
-              <Shield className={`w-3.5 h-3.5 ${sse.cases.some((c) => c.severity === '1') ? 'text-critical' : sse.cases.length > 0 ? 'text-warning' : 'text-success'}`} />
-              <span className="font-semibold text-text-primary">{sectionLoading ? '—' : sse.cases.length}</span>
-              <span className="text-text-secondary">cases</span>
-            </div>
-            {accountInfo && (
-              <>
-                <div className="flex items-center gap-1.5">
-                  <Package className="w-3.5 h-3.5 text-text-secondary" />
-                  <span className="font-semibold text-text-primary">{accountInfo.productCount}</span>
-                  <span className="text-text-secondary">products</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-text-secondary" />
-                  <span className="font-semibold text-text-primary">{accountInfo.totalLicenses.toLocaleString()}</span>
-                  <span className="text-text-secondary">licenses</span>
-                </div>
-              </>
-            )}
-            {nextLabel && (
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-accent" />
-                <span className="font-semibold text-accent">{nextLabel}</span>
-              </div>
-            )}
-          </div>
+  return (
+    <div className="min-h-screen bg-bg flex flex-col">
+      {/* Header — Row 1: breadcrumb nav */}
+      <header className="sticky top-0 z-10 shrink-0">
+        <div className="bg-surface border-b border-border px-6 h-12 flex items-center justify-between">
+          {/* Left: breadcrumb with back arrow */}
+          <nav className="flex items-center gap-1.5 text-xs text-text-secondary min-w-0">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="hover:text-text-primary transition-colors shrink-0 flex items-center gap-1"
+              aria-label="Back to accounts"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              Accounts
+            </button>
+            <span className="text-text-secondary/50 shrink-0">/</span>
+            <span className="text-text-primary font-medium truncate">{customerName}</span>
+          </nav>
 
-          {/* Sync state */}
+          {/* Right: sync state */}
           <div className="text-xs text-text-secondary">
             {sse.completedAt ? (
               <span>Synced {formatRelTime(sse.completedAt)}</span>
             ) : sectionLoading ? (
               <span className="flex items-center gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                Loading…
+                Loading...
               </span>
             ) : null}
           </div>
         </div>
+
+        {/* Row 2: hero name + stat badges */}
+        <div className="py-4 px-6 bg-surface/60 border-b border-border/40">
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Health dot */}
+            {(sectionLoading || sse.meta !== null) && (
+              <div
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: health.color }}
+                title={health.label}
+              />
+            )}
+            {/* Customer not found indicator */}
+            {!sectionLoading && sse.meta === null && (
+              <div className="flex items-center gap-2 text-warning text-sm">
+                <AlertTriangle className="w-4 h-4" />
+                Customer not found
+              </div>
+            )}
+            <h1 className="text-xl font-bold text-text-primary">{customerName}</h1>
+
+            {meta?.accountNumbers && meta.accountNumbers.length > 0 && (
+              <AccountCountPill accountNumbers={meta.accountNumbers.map(String)} />
+            )}
+
+            {/* Stat badges */}
+            {(sectionLoading || sse.meta !== null) && (
+              <>
+                <StatBadge
+                  icon={<AlertCircle className={`w-3.5 h-3.5 ${sse.cases.some((c) => c.severity === '1') ? 'text-critical' : sse.cases.length > 0 ? 'text-warning' : 'text-success'}`} />}
+                  value={sse.cases.length}
+                  label="Cases"
+                  loading={sectionLoading}
+                />
+                <StatBadge
+                  icon={<Package className="w-3.5 h-3.5 text-text-secondary" />}
+                  value={accountInfo?.productCount ?? 0}
+                  label="Products"
+                  loading={!accountInfo}
+                />
+                <StatBadge
+                  icon={<Key className="w-3.5 h-3.5 text-text-secondary" />}
+                  value={accountInfo?.totalLicenses?.toLocaleString() ?? '0'}
+                  label="Licenses"
+                  loading={!accountInfo}
+                />
+              </>
+            )}
+
+            {meta?.segment && (
+              <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 font-medium">
+                {meta.segment}
+              </span>
+            )}
+
+            {/* Right-aligned: next meeting + AE */}
+            <div className="ml-auto flex items-center gap-4">
+              {nextLabel && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <Calendar className="w-3.5 h-3.5 text-accent" />
+                  <span className="font-semibold text-accent">{nextLabel}</span>
+                </div>
+              )}
+              {meta?.ae && (
+                <span className="text-sm text-text-secondary">{meta.ae}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* SSE progress bar (BKL-UX30) */}
+        {sectionLoading && sseProgress < 1 && (
+          <div className="h-0.5 bg-border">
+            <div
+              className="h-full bg-accent transition-all duration-300"
+              style={{ width: `${sseProgress * 100}%` }}
+            />
+          </div>
+        )}
       </header>
 
-      {/* Error banner — suppress when customer doesn't exist (meta never received = 404) */}
-      {sse.error && sse.meta !== null && (
+      {/* Error banner */}
+      {sse.error && (
         <div className="bg-warning/10 border-b border-warning/30 px-6 py-2 flex items-center gap-2 text-sm text-warning shrink-0">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {sse.error}
+        </div>
+      )}
+
+      {/* Priority Action Banner (R13) */}
+      {priorityAction && (
+        <div className="px-6 pt-4">
+          <PriorityActionBanner action={priorityAction} />
+        </div>
+      )}
+
+      {/* Health Score Hero (R12) */}
+      {healthScore && (
+        <div className="px-6 pt-4">
+          <HealthScoreHero score={healthScore.score} status={healthScore.status} breakdown={healthScore.breakdown as any} />
         </div>
       )}
 
@@ -1391,7 +1573,9 @@ export function CustomerDetailPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left column — 65% */}
         <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
+          <TemporalDeltaSection customerName={customerName} />
           <BriefSection name={customerName} />
+          <StakeholderEngagementPanel contacts={stakeholderContacts} />
           <CloudSpendCard customerName={customerName} />
           <PipelineCard customerName={customerName} />
           <ActivityTimeline

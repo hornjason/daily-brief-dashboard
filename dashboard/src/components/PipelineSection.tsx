@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Calendar, Users, X } from 'lucide-react'
+import { TrendingUp, Calendar, Users, X, RefreshCw, AlertCircle } from 'lucide-react'
 import type { PipelineSummary, PipelineOpp, PipelineByQuarterStage } from '../types'
 import { formatRelTime, fmtCurrency as fmt } from '../lib/format'
+import RelTime from './RelTime'
+import Modal from './Modal'
 
 function fmtDate(iso: string): string {
   if (!iso) return '—'
@@ -71,13 +73,13 @@ export function OppDetail({ opp, onClose }: { opp: PipelineOpp; onClose: () => v
               <p className="text-sm font-semibold text-text-primary leading-snug">{opp.oppName}</p>
             )}
           </div>
-          <button onClick={onClose} className="shrink-0 text-text-secondary hover:text-text-primary transition-colors mt-0.5">
+          <button onClick={onClose} className="shrink-0 text-text-secondary hover:text-text-primary transition-colors mt-0.5" role="button" aria-label="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* ACV */}
-        <div className="text-3xl font-bold text-text-primary">{fmt(opp.acv)}</div>
+        <div className="text-3xl font-bold text-text-primary tabular-nums">{fmt(opp.acv)}</div>
 
         {/* Key fields grid */}
         <div className="grid grid-cols-2 gap-2">
@@ -134,9 +136,11 @@ export function OppDetail({ opp, onClose }: { opp: PipelineOpp; onClose: () => v
 interface Props {
   data: PipelineSummary | null
   loading: boolean
+  error?: string | null
+  onRefresh?: () => void
 }
 
-export function PipelineSection({ data, loading }: Props) {
+export function PipelineSection({ data, loading, error, onRefresh }: Props) {
   const [activeOwner, setActiveOwner] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'acv' | 'date' | 'stage'>('acv')
   const [selectedOpp, setSelectedOpp] = useState<PipelineOpp | null>(null)
@@ -161,7 +165,6 @@ export function PipelineSection({ data, loading }: Props) {
     for (const o of [...ownerOpps, ...ownerClosed]) {
       if (!o.closeDate) continue
       const d = new Date(o.closeDate)
-      if (d.getFullYear() !== new Date().getFullYear()) continue
       const q = `Q${Math.ceil((d.getMonth() + 1) / 3)} ${d.getFullYear()}`
       const slot = qMap.get(q) ?? { commit: 0, bestCase: 0, pipeline: 0, closed: 0 }
       if (o.forecastCategory === 'Commit')         slot.commit   += o.acv
@@ -184,21 +187,32 @@ export function PipelineSection({ data, loading }: Props) {
   const filteredOpps: PipelineOpp[] = sortedOwnerOpps
 
   return (
-    <div className="space-y-4">
+    <div className="bg-surface border border-border rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2">
+      <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text-primary">Open Pipeline</h2>
+        <h2 className="text-base font-semibold text-text-primary">Open Pipeline</h2>
         <span className="text-xs text-text-secondary">Opportunities 2026</span>
         {loading && <span className="text-xs text-text-secondary animate-pulse">Loading…</span>}
         {!loading && (
           <span className="text-xs text-text-secondary ml-auto">
-            {data?.cachedAt ? `synced ${formatRelTime(data.cachedAt)}` : 'Live'}
+            {data?.cachedAt ? <RelTime iso={data.cachedAt} className="text-xs text-text-secondary" /> : 'Live'}
           </span>
         )}
+        {onRefresh && (
+          <button onClick={onRefresh} className="ml-auto text-text-secondary hover:text-text-primary transition-colors shrink-0" title="Refresh" aria-label="Refresh pipeline data">
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
+      {error && !loading && (
+        <div className="flex items-center gap-2 text-xs text-critical px-5 py-2">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span>Failed to load pipeline data. {onRefresh && <button onClick={onRefresh} className="underline hover:no-underline">Retry</button>}</span>
+        </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Left: totals + stage breakdown */}
         <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-4">
@@ -208,7 +222,7 @@ export function PipelineSection({ data, loading }: Props) {
             {loading ? (
               <div className="h-8 w-28 bg-border rounded animate-pulse-slow" />
             ) : (
-              <div className="text-3xl font-bold text-text-primary">{fmt(totalAcv)}</div>
+              <div className="text-3xl font-bold text-text-primary tabular-nums">{fmt(totalAcv)}</div>
             )}
             <div className="text-xs text-text-secondary">{openCount} opportunities</div>
           </div>
@@ -257,7 +271,7 @@ export function PipelineSection({ data, loading }: Props) {
             <Users className="w-3.5 h-3.5 text-accent" />
             <span className="text-xs font-medium text-text-secondary">By Owner</span>
             {activeOwner && (
-              <button onClick={() => setActiveOwner(null)} className="ml-auto text-xs text-text-secondary hover:text-text-primary transition-colors">
+              <button onClick={() => setActiveOwner(null)} className="ml-auto text-xs text-text-secondary hover:text-text-primary transition-colors" aria-label="Clear owner filter">
                 clear
               </button>
             )}
@@ -349,7 +363,7 @@ export function PipelineSection({ data, loading }: Props) {
                 const urgency = closeDateUrgency(opp.closeDate)
                 const stageColor = STAGE_COLORS[opp.forecastCategory] ?? STAGE_COLORS.Omitted
                 return (
-                  <div key={opp.oppNumber} onClick={() => setSelectedOpp(opp)} className="flex items-center gap-2 py-1 px-1 -mx-1 hover:bg-border/20 rounded group cursor-pointer">
+                  <button key={opp.oppNumber} onClick={() => setSelectedOpp(opp)} className="w-full text-left flex items-center gap-2 py-1 px-1 -mx-1 hover:bg-border/20 rounded group cursor-pointer" tabIndex={0}>
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: stageColor }} />
                     <span className="text-xs font-medium shrink-0 w-10" style={{ color: stageColor }}>
                       {opp.forecastCategory === 'Best Case' ? 'Best' : opp.forecastCategory}
@@ -358,7 +372,7 @@ export function PipelineSection({ data, loading }: Props) {
                     <span className={`text-xs shrink-0 ${URGENCY_COLORS[urgency]}`}>{fmtDate(opp.closeDate)}</span>
                     <span className="text-xs font-mono text-text-primary shrink-0">{fmt(opp.acv)}</span>
                     {opp.renewal && <span className="text-xs text-text-secondary/75 shrink-0">↻</span>}
-                  </div>
+                  </button>
                 )
               })}
             </div>

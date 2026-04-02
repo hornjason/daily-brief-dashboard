@@ -5,6 +5,7 @@ interface TopBarProps {
   lastSynced: string | null
   loading: boolean
   onRefresh: () => void
+  activeAe?: string | null
 }
 
 interface WeatherData {
@@ -27,7 +28,7 @@ function weatherEmoji(condition: string): string {
   return '🌤'
 }
 
-export function TopBar({ lastSynced, loading, onRefresh }: TopBarProps) {
+export function TopBar({ lastSynced, loading, onRefresh, activeAe }: TopBarProps) {
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -49,6 +50,9 @@ export function TopBar({ lastSynced, loading, onRefresh }: TopBarProps) {
       <div className="flex items-center gap-4">
         <h1 className="text-lg font-semibold text-text-primary">Command Center</h1>
         <span className="text-sm text-text-secondary">{today}</span>
+        {activeAe && (
+          <span className="text-xs text-accent px-2 py-0.5 bg-accent-muted rounded-badge">{activeAe}</span>
+        )}
         {weather && !weather.error && weather.tempF && (
           <span className="text-sm text-text-secondary flex items-center gap-1">
             <span>{weatherEmoji(weather.condition ?? '')}</span>
@@ -66,10 +70,11 @@ export function TopBar({ lastSynced, loading, onRefresh }: TopBarProps) {
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-text-secondary text-sm hover:border-text-secondary hover:text-text-primary disabled:opacity-40 transition-all"
+          aria-label={loading ? 'Dashboard is refreshing' : 'Refresh dashboard'}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-text-secondary text-sm hover:border-text-secondary hover:text-text-primary disabled:opacity-40 transition-all ${loading ? 'pointer-events-none' : ''}`}
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {loading ? 'Refreshing\u2026' : 'Refresh'}
         </button>
       </div>
     </header>

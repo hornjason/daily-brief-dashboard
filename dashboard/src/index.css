@@ -8,7 +8,7 @@ html {
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: #0D1117;
+  background: radial-gradient(ellipse at top, #161B22 0%, #0D1117 60%);
   color: #E6EDF3;
 }
 
@@ -37,4 +37,62 @@ body {
 
 .animate-pulse-slow {
   animation: pulse-slow 2s ease-in-out infinite;
+}
+
+/* BKL-UX12 — focus-visible rings */
+*:focus-visible {
+  outline: 2px solid #00BCD4;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* BKL-UX18 + BKL-UX38 — interactive element transitions and touch targets */
+button, a, [role="button"] {
+  transition-property: color, background-color, border-color, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease-in-out;
+  min-height: 32px;
+  min-width: 32px;
+}
+
+/* BKL-UX07 — modal animations */
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-enter {
+  animation: modal-in 200ms ease-out;
+}
+@keyframes backdrop-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.backdrop-enter {
+  animation: backdrop-enter 150ms ease-out;
+}
+
+/* BKL-UX17 — card-in animation (staggered grid cards) */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* BKL-UX14 — hover shadow on clickable cards */
+.card-hover {
+  transition: all 150ms ease-in-out;
+}
+.card-hover:hover {
+  box-shadow: 0 2px 12px rgba(0, 188, 212, 0.08);
+}
+
+/* BKL-UX32 — prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react'
 import { useApi } from '../hooks/useApi'
 import type { CalendarEvent, SupportCase, AccountInfo } from '../types'
 import { formatTime, formatDay, formatDate, isToday, isThisWeek } from '../lib/format'
+import Modal from './Modal'
+import EmptyState from './EmptyState'
 import {
   Calendar,
   Clock,
@@ -88,10 +90,17 @@ function FullCalendarGrid({ events }: { events: CalendarEvent[] }) {
   const weekDays = getWeekDays()
   const hours = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i)
   const todayStr = new Date().toDateString()
+  const gridHeight = (HOUR_END - HOUR_START) * HOUR_HEIGHT
+
+  // Group events by day column index
+  const eventsByCol = weekDays.map((day) =>
+    events.filter((ev) => isSameDay(ev.start, day))
+  )
 
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[700px]">
+        {/* Day headers */}
         <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-border">
           <div />
           {weekDays.map((day) => {
@@ -108,70 +117,81 @@ function FullCalendarGrid({ events }: { events: CalendarEvent[] }) {
             )
           })}
         </div>
-        <div className="grid grid-cols-[48px_repeat(7,1fr)] relative" style={{ height: `${(HOUR_END - HOUR_START) * HOUR_HEIGHT}px` }}>
-          {hours.map((hour) => (
-            <div key={hour} className="contents">
+
+        {/* Grid body: time gutter + 7 day columns via CSS Grid */}
+        <div className="grid grid-cols-[48px_repeat(7,1fr)]" style={{ height: `${gridHeight}px` }}>
+          {/* Time gutter */}
+          <div className="relative">
+            {hours.map((hour) => (
               <div
-                className="text-right pr-2 text-xs text-text-secondary select-none"
-                style={{ position: 'absolute', top: `${(hour - HOUR_START) * HOUR_HEIGHT - 7}px`, width: '44px' }}
+                key={hour}
+                className="text-right pr-2 text-xs text-text-secondary select-none absolute w-full"
+                style={{ top: `${(hour - HOUR_START) * HOUR_HEIGHT - 7}px` }}
               >
                 {hour % 12 === 0 ? '12' : hour % 12}{hour < 12 ? 'a' : 'p'}
               </div>
-              {weekDays.map((day) => (
-                <div
-                  key={day.toISOString()}
-                  className="border-l border-t border-border/40"
-                  style={{
-                    position: 'absolute',
-                    left: `${48 + weekDays.indexOf(day) * (100 / 7)}%`,
-                    width: `${100 / 7}%`,
-                    top: `${(hour - HOUR_START) * HOUR_HEIGHT}px`,
-                    height: `${HOUR_HEIGHT}px`,
-                  }}
-                />
-              ))}
-            </div>
-          ))}
-          {events.map((ev, i) => {
-            const colIndex = weekDays.findIndex((day) => isSameDay(ev.start, day))
-            if (colIndex === -1) return null
-            const isCustomer = ev.customers && ev.customers.length > 0
+            ))}
+          </div>
+
+          {/* Day columns */}
+          {weekDays.map((day, colIndex) => {
+            const isCurrentDay = day.toDateString() === todayStr
+            const colEvents = eventsByCol[colIndex]
+
             return (
               <div
-                key={`${ev.title}-${ev.start}-${i}`}
-                className={`absolute rounded px-1.5 py-1 overflow-hidden cursor-pointer transition-opacity hover:opacity-90 ${
-                  isCustomer ? 'bg-accent/20 border border-accent/40 text-accent' : 'bg-border/60 border border-border text-text-secondary'
-                }`}
-                style={{
-                  top: `${eventTop(ev.start)}px`,
-                  height: `${eventHeight(ev.start, ev.end ?? ev.start)}px`,
-                  left: `calc(48px + ${colIndex} * ((100% - 48px) / 7) + 2px)`,
-                  width: `calc((100% - 48px) / 7 - 4px)`,
-                  zIndex: 10,
-                }}
-                title={`${ev.title}\n${formatTime(ev.start)}${ev.customers?.length ? '\n' + ev.customers.join(', ') : ''}`}
+                key={day.toISOString()}
+                className={`relative border-l border-border/40 ${isCurrentDay ? 'bg-accent/3' : ''}`}
               >
-                <div className="text-xs font-medium leading-tight truncate">{ev.title}</div>
-                {eventHeight(ev.start, ev.end ?? ev.start) > 30 && (
-                  <div className="text-xs opacity-75 leading-tight truncate">{formatTime(ev.start)}</div>
-                )}
+                {/* Hour grid lines */}
+                {hours.map((hour) => (
+                  <div
+                    key={hour}
+                    className="absolute w-full border-t border-border/40"
+                    style={{ top: `${(hour - HOUR_START) * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
+                  />
+                ))}
+
+                {/* Events positioned absolutely within their day column */}
+                {colEvents.map((ev, i) => {
+                  const isCustomer = ev.customers && ev.customers.length > 0
+                  return (
+                    <div
+                      key={`${ev.title}-${ev.start}-${i}`}
+                      className={`absolute left-0.5 right-0.5 rounded px-1.5 py-1 overflow-hidden cursor-pointer transition-opacity hover:opacity-90 ${
+                        isCustomer ? 'bg-accent/20 border border-accent/40 text-accent' : 'bg-border/60 border border-border text-text-secondary'
+                      }`}
+                      style={{
+                        top: `${eventTop(ev.start)}px`,
+                        height: `${eventHeight(ev.start, ev.end ?? ev.start)}px`,
+                        zIndex: 10,
+                      }}
+                      title={`${ev.title}\n${formatTime(ev.start)}${ev.customers?.length ? '\n' + ev.customers.join(', ') : ''}`}
+                    >
+                      <div className="text-xs font-medium leading-tight truncate">{ev.title}</div>
+                      {eventHeight(ev.start, ev.end ?? ev.start) > 30 && (
+                        <div className="text-xs opacity-75 leading-tight truncate">{formatTime(ev.start)}</div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* Current-time indicator (red line) */}
+                {isCurrentDay && (() => {
+                  const now = new Date()
+                  const h = now.getHours() + now.getMinutes() / 60
+                  if (h < HOUR_START || h > HOUR_END) return null
+                  const top = (h - HOUR_START) * HOUR_HEIGHT
+                  return (
+                    <div className="absolute left-0 right-0 z-20 flex items-center pointer-events-none" style={{ top: `${top}px`, transform: 'translateY(-1px)' }}>
+                      <div className="w-2 h-2 rounded-full bg-critical shrink-0" />
+                      <div className="h-px bg-critical flex-1" />
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}
-          {(() => {
-            const now = new Date()
-            const h = now.getHours() + now.getMinutes() / 60
-            if (h < HOUR_START || h > HOUR_END) return null
-            const top = (h - HOUR_START) * HOUR_HEIGHT
-            const todayCol = weekDays.findIndex((d) => d.toDateString() === todayStr)
-            if (todayCol === -1) return null
-            return (
-              <div className="absolute z-20 flex items-center pointer-events-none" style={{ top: `${top}px`, left: '44px', right: 0, transform: 'translateY(-1px)' }}>
-                <div className="w-2 h-2 rounded-full bg-critical shrink-0 ml-1" />
-                <div className="h-px bg-critical" style={{ marginLeft: `calc(${todayCol} * ((100% - 12px) / 7))`, width: `calc((100% - 12px) / 7)`, flex: 'none' }} />
-              </div>
-            )
-          })()}
         </div>
       </div>
     </div>
@@ -182,54 +202,39 @@ function FullCalendarGrid({ events }: { events: CalendarEvent[] }) {
 
 function AgendaModal({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-lg shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="w-3.5 h-3.5 text-accent" />
-              <span className="text-xs font-mono text-accent">{formatTime(event.start)}</span>
-              <span className="text-xs text-text-secondary">{formatDay(event.start)}</span>
-            </div>
-            <h3 className="text-sm font-semibold text-text-primary">{event.title}</h3>
-            {event.customers?.length ? (
-              <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                {event.customers.map((c) => (
-                  <a key={c} href={`/dashboard/customer/${encodeURIComponent(c)}`} className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent hover:bg-accent/25 transition-colors">{c}</a>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <button onClick={onClose} className="text-text-secondary hover:text-text-primary transition-colors mt-0.5 shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+    <Modal open={true} onClose={onClose} title={event.title} icon={Clock} subtitle={`${formatTime(event.start)} · ${formatDay(event.start)}`}>
+      {event.customers?.length ? (
+        <div className="flex gap-1.5 mb-4 flex-wrap">
+          {event.customers.map((c) => (
+            <a key={c} href={`/dashboard/customer/${encodeURIComponent(c)}`} className="text-xs px-2 py-0.5 rounded bg-accent/15 text-accent hover:bg-accent/25 transition-colors">{c}</a>
+          ))}
         </div>
-        <div className="px-5 py-4 max-h-80 overflow-y-auto">
-          {event.description ? (
-            <>
-              <div className="text-xs text-text-secondary uppercase tracking-wide mb-2">Agenda / Notes</div>
-              <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{event.description}</p>
-            </>
-          ) : (
-            <p className="text-sm text-text-secondary italic">No agenda or notes in this event.</p>
-          )}
-        </div>
-        {(event.joinUrl || event.notesUrl) && (
-          <div className="px-5 py-3.5 border-t border-border flex items-center gap-3">
-            {event.joinUrl && (
-              <a href={event.joinUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-accent text-bg font-medium hover:bg-accent/80 transition-colors">
-                <Video className="w-4 h-4" />Join Meeting
-              </a>
-            )}
-            {event.notesUrl && (
-              <a href={event.notesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-accent/50 transition-colors">
-                <FileText className="w-4 h-4" />Open Notes
-              </a>
-            )}
-          </div>
+      ) : null}
+      <div className="max-h-80 overflow-y-auto">
+        {event.description ? (
+          <>
+            <div className="text-xs text-text-secondary uppercase tracking-wide mb-2">Agenda / Notes</div>
+            <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{event.description}</p>
+          </>
+        ) : (
+          <p className="text-sm text-text-secondary italic">No agenda or notes in this event.</p>
         )}
       </div>
-    </div>
+      {(event.joinUrl || event.notesUrl) && (
+        <div className="flex items-center gap-3 mt-4 pt-4 border-t border-border">
+          {event.joinUrl && (
+            <a href={event.joinUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-accent text-bg font-medium hover:bg-accent/80 transition-colors">
+              <Video className="w-4 h-4" />Join Meeting
+            </a>
+          )}
+          {event.notesUrl && (
+            <a href={event.notesUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:border-accent/50 transition-colors">
+              <FileText className="w-4 h-4" />Open Notes
+            </a>
+          )}
+        </div>
+      )}
+    </Modal>
   )
 }
 
@@ -437,7 +442,7 @@ function InternalMeetingCard({ ev, onAgendaOpen }: { ev: CalendarEvent; onAgenda
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {ev.description && (
-          <button onClick={() => onAgendaOpen(ev)} className="text-xs text-text-secondary hover:text-accent transition-colors">
+          <button onClick={() => onAgendaOpen(ev)} className="text-xs text-text-secondary hover:text-accent transition-colors" aria-label="View agenda">
             <ChevronRight className="w-4 h-4" />
           </button>
         )}
@@ -549,7 +554,7 @@ export function CalendarStrip({ events, allEvents, cases, accounts, loading }: C
         <div className="px-5 py-3.5 border-b border-border flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Calendar className="w-4 h-4 text-accent shrink-0" />
-            <h2 className="text-sm font-semibold text-text-primary">{titleMap[range]}</h2>
+            <h2 className="text-base font-semibold text-text-primary">{titleMap[range]}</h2>
             {!loading && <span className="text-xs text-text-secondary truncate">{countLabel}</span>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -592,7 +597,7 @@ export function CalendarStrip({ events, allEvents, cases, accounts, loading }: C
             <FullCalendarGrid events={fullSorted} />
           ) : range === 'week' ? (
             weekSorted.length === 0 ? (
-              <p className="text-text-secondary text-sm text-center py-6">No meetings this week</p>
+              <EmptyState icon={Calendar} title="No meetings this week" />
             ) : (
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {weekSorted.map((ev, i) => (
@@ -603,7 +608,7 @@ export function CalendarStrip({ events, allEvents, cases, accounts, loading }: C
           ) : (
             // Today mode
             todayCustomer.length === 0 && todayInternal.length === 0 ? (
-              <p className="text-text-secondary text-sm text-center py-6">No meetings today</p>
+              <EmptyState icon={Calendar} title="No meetings today" />
             ) : (
               <div className="space-y-4">
                 {/* Customer meetings — full prep cards */}

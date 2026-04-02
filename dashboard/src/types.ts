@@ -63,6 +63,7 @@ export interface CCSPPartner {
 export interface CCSPSummary {
   totalAcv: number
   cachedAt: string | null
+  sourceWarning?: boolean
   byCustomer: CCSPCustomer[]
   byQuarter: CCSPQuarter[]
   byPartner: CCSPPartner[]
@@ -114,6 +115,7 @@ export interface PipelineSummary {
   closedOpps: PipelineOpp[]
   techWinsNeeded: PipelineOpp[]
   cachedAt: string | null
+  sourceWarning?: boolean
 }
 
 export interface KPIs {

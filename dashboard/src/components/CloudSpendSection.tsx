@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { CCSPSummary, CCSPCustomer } from '../types'
-import { formatRelTime, fmtCurrency as fmt } from '../lib/format'
+import { formatRelTime, fmtCurrency as fmt, fmtCurrencyFull as fmtFull } from '../lib/format'
+import RelTime from './RelTime'
 import {
   PieChart,
   Pie,
@@ -8,13 +9,9 @@ import {
   ResponsiveContainer,
   Sector,
 } from 'recharts'
-import { Cloud, Building2 } from 'lucide-react'
+import { Cloud, Building2, RefreshCw, AlertCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-
-function fmtFull(val: number): string {
-  return `$${val.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-}
 
 function shortName(name: string): string {
   return name
@@ -99,9 +96,11 @@ function DonutCenter({ cx, cy, selected, totalAcv }: DonutCenterProps) {
 interface Props {
   data: CCSPSummary | null
   loading: boolean
+  error?: string | null
+  onRefresh?: () => void
 }
 
-export function CloudSpendSection({ data, loading }: Props) {
+export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
 
@@ -117,21 +116,48 @@ export function CloudSpendSection({ data, loading }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="bg-surface border border-border rounded-xl overflow-hidden">
       {/* Section header */}
-      <div className="flex items-center gap-2">
+      <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
         <Cloud className="w-4 h-4 text-accent" />
-        <h2 className="text-sm font-semibold text-text-primary">Cloud Spend (CCSP)</h2>
+        <h2 className="text-base font-semibold text-text-primary">Cloud Spend (CCSP)</h2>
         <span className="text-xs text-text-secondary">2025 Marketplace Revenue</span>
+        {data?.sourceWarning && !loading && (
+          <span className="text-xs text-warning flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" /> stale data
+          </span>
+        )}
         {loading && <span className="text-xs text-text-secondary animate-pulse">Loading…</span>}
         {!loading && (
-          <span className="text-xs text-text-secondary ml-auto">
-            {data?.cachedAt ? `synced ${formatRelTime(data.cachedAt)}` : 'Live'}
+          <span className="text-xs text-text-secondary ml-auto flex items-center gap-2">
+            {data?.cachedAt ? <RelTime iso={data.cachedAt} className="text-xs text-text-secondary" /> : 'Live'}
+            {onRefresh && (
+              <button onClick={onRefresh} className="text-text-secondary hover:text-text-primary transition-colors" title="Refresh" aria-label="Refresh cloud spend data">
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            )}
           </span>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Error state */}
+      {error && !loading && (
+        <div className="flex items-center gap-2 text-xs text-critical bg-critical/10 border border-critical/20 rounded-lg mx-5 mt-4 px-3 py-2">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span>Failed to load cloud spend data. {onRefresh && <button onClick={onRefresh} className="underline hover:no-underline">Retry</button>}</span>
+        </div>
+      )}
+
+      {/* Empty state — not loading, no error, but no data yet */}
+      {!loading && !error && !data && (
+        <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
+          <Cloud className="w-8 h-8 text-text-secondary opacity-40" />
+          <p className="text-sm text-text-secondary">No cloud spend data yet.</p>
+          <p className="text-xs text-text-secondary">Run a CCSP scrape in Setup to populate.</p>
+        </div>
+      )}
+
+      <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Left: Total + Partner breakdown */}
         <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-4">
@@ -140,7 +166,7 @@ export function CloudSpendSection({ data, loading }: Props) {
             {loading ? (
               <div className="h-8 w-28 bg-border rounded animate-pulse-slow" />
             ) : (
-              <div className="text-3xl font-bold text-text-primary">{fmt(totalAcv)}</div>
+              <div className="text-3xl font-bold text-text-primary tabular-nums">{fmt(totalAcv)}</div>
             )}
             <div className="text-xs text-text-secondary">{customers.length} accounts</div>
           </div>
@@ -179,6 +205,7 @@ export function CloudSpendSection({ data, loading }: Props) {
               <button
                 onClick={() => setSelectedIndex(null)}
                 className="ml-auto text-xs text-text-secondary hover:text-text-primary transition-colors"
+                aria-label="Clear selection"
               >
                 clear
               </button>
@@ -192,7 +219,7 @@ export function CloudSpendSection({ data, loading }: Props) {
           ) : (
             <div className="flex gap-3">
               {/* Donut */}
-              <div className="shrink-0" style={{ width: 160, height: 160 }}>
+              <div className="shrink-0" style={{ width: 180, height: 180 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -226,7 +253,7 @@ export function CloudSpendSection({ data, loading }: Props) {
               </div>
 
               {/* Legend */}
-              <div className="flex-1 overflow-y-auto max-h-40 space-y-1 pr-1">
+              <div className="flex-1 overflow-y-auto max-h-48 space-y-1 pr-1">
                 {customers.map(({ name, acv }, i) => (
                   <button
                     key={name}
