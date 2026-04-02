@@ -86,38 +86,17 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions): Promise<string> 
 
 // ── Structured Gemini call with grounding (for industry identification) ──────
 
+// Grounded + structured: Vertex AI doesn't allow google_search + responseSchema together.
+// So we use grounding for search, ask for JSON in the prompt, and parse the text response.
 async function callGeminiGroundedStructured(opts: GeminiGroundedOptions & { responseSchema: object }): Promise<any> {
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
-
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: opts.systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
-      tools: [{ google_search: {} }],
-      generationConfig: {
-        temperature: opts.temperature ?? 0.7,
-        maxOutputTokens: opts.maxOutputTokens ?? 4096,
-        responseMimeType: 'application/json',
-        responseSchema: opts.responseSchema,
-      },
-    }),
+  const text = await callGeminiGrounded({
+    ...opts,
+    systemPrompt: opts.systemPrompt + '\n\nIMPORTANT: Return your response as valid JSON matching this schema: ' + JSON.stringify(opts.responseSchema),
   })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini structured grounded API error ${res.status}: ${err.slice(0, 300)}`)
-  }
-  const json = await res.json() as any
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  return JSON.parse(text)
+  // Extract JSON from the response (may be wrapped in ```json blocks)
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)
+  if (!jsonMatch) throw new Error('Gemini grounded response did not contain valid JSON')
+  return JSON.parse(jsonMatch[1] ?? jsonMatch[0])
 }
 
 // ── BKL-AI01: Identify industry/segment per customer ─────────────────────────
