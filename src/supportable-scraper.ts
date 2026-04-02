@@ -46,6 +46,23 @@ const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
 const sanitizeErr = (e: any): string =>
   String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 
+// Session heartbeat: APEX sessions expire after ~30 min of inactivity.
+// Track last navigation time and periodically touch the portal to keep alive.
+const SESSION_HEARTBEAT_MS = 25 * 60 * 1000  // 25 minutes
+let lastNavigationTime = 0
+
+/**
+ * If more than SESSION_HEARTBEAT_MS has elapsed since last Supportable navigation,
+ * briefly navigate to the portal landing page to keep the APEX session alive.
+ */
+async function sessionHeartbeat(page: Page): Promise<void> {
+  if (Date.now() - lastNavigationTime < SESSION_HEARTBEAT_MS) return
+  console.log(`[supportable] session heartbeat — refreshing APEX session`)
+  await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+  await page.waitForTimeout(1_000)
+  lastNavigationTime = Date.now()
+}
+
 // Number of parallel Playwright pages used for the scrape phase
 // APEX shares one SSO session across all parallel pages. At 2+ pages, concurrent
 // requests trigger APEX server-side contention (error dialogs, closed pages).
@@ -209,6 +226,7 @@ async function scrapeOneAccount(
 
   if (isFirst) {
     console.log(`[supportable] navigating to portal…`)
+    lastNavigationTime = Date.now()
     await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await page.waitForTimeout(3_000)
     if (SUPPORTABLE_DEBUG) await dumpDom(page, 'landing')
@@ -260,8 +278,11 @@ async function scrapeOneAccount(
 
   // ── Click Go ──────────────────────────────────────────────────────────────
   await page.click('button.button-alt1')
-  await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
-  await page.waitForTimeout(2_000)
+  // Race networkidle vs Export tab appearing — Export tab means page is ready
+  await Promise.race([
+    page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {}),
+    page.waitForSelector('a:has-text("Export")', { timeout: 8_000 }).catch(() => {}),
+  ])
 
   // ── Dismiss APEX error dialog if present (Go triggered server error) ──────
   // Under parallel load APEX may surface an error overlay. Dismiss and throw
@@ -305,8 +326,11 @@ async function scrapeOneAccount(
     throw new Error(`Account ${accountNumber} not found in APEX (no Export tab after 12s)`)
   }
   await exportLinks[exportLinks.length - 1].click()
-  await page.waitForLoadState('networkidle', { timeout: 20_000 })
-  await page.waitForTimeout(2_000)
+  // Race networkidle vs saved_reports dropdown appearing — dropdown means Export page loaded
+  await Promise.race([
+    page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {}),
+    page.waitForSelector('select[id*="_saved_reports"]', { timeout: 5_000 }).catch(() => {}),
+  ])
   console.log(`[supportable] Export tab clicked — on ${page.url()}`)
 
   // ── Select "Sales Export Format" saved report ─────────────────────────────
@@ -324,8 +348,11 @@ async function scrapeOneAccount(
     }, reportSelId)
     if (salesVal) {
       await page.selectOption(`select[id="${reportSelId}"]`, salesVal)
-      await page.waitForLoadState('networkidle', { timeout: 20_000 })
-      await page.waitForTimeout(2_000)
+      // Race networkidle vs Actions button appearing — Actions means report loaded
+      await Promise.race([
+        page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {}),
+        page.waitForSelector('button.a-IRR-button--actions', { timeout: 5_000 }).catch(() => {}),
+      ])
       console.log(`[supportable] selected Sales Export Format report`)
     }
   }
@@ -422,6 +449,7 @@ async function scrapeOneAccount(
   // Full navigation clears all APEX state — no need to click the Reset button first.
   await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
   await page.waitForTimeout(1_500)
+  lastNavigationTime = Date.now()
 
   return { rows: activeRows, page }
 }
@@ -711,6 +739,7 @@ export async function runSupportableDiscoverAndScrape(
     // Name searches are stateful APEX navigation — cannot be parallelized.
     console.log(`[supportable] discover+scrape: navigating to portal…`)
     _onStatus('connecting to Supportable…')
+    lastNavigationTime = Date.now()
     await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     // Wait for APEX search input rather than a hard timeout — exits early on warm sessions
     await discoveryPage.waitForSelector('input#P0_CUSTOMER_NAME, input#P0_ACCOUNT_NUMBER', { timeout: 5_000 }).catch(() => {
@@ -748,6 +777,15 @@ export async function runSupportableDiscoverAndScrape(
     for (let di = 0; di < customers.length; di++) {
       const { name: customerName, supportableName } = customers[di]
       _onStatus(`Discovering: ${customerName} (${di + 1}/${customers.length})…`)
+
+      // Skip discovery for customers with cached account numbers
+      const cached = (customers[di] as any).accountNumbers
+      if (Array.isArray(cached) && cached.length > 0) {
+        console.log(`[supportable] ${customerName}: using ${cached.length} cached account numbers (skipping discovery)`)
+        discovered.push({ customerName, accountNumbers: cached })
+        continue
+      }
+
       await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
         console.warn(`[supportable] discover: pre-nav failed for "${customerName}": ${e.message}`)
       })
@@ -790,10 +828,13 @@ export async function runSupportableDiscoverAndScrape(
       let workerPage = await _ctx!.newPage()
       await workerPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
       await workerPage.waitForTimeout(1_500)
+      lastNavigationTime = Date.now()
       try { while (jobIndex < jobs.length) {
           const job = jobs[jobIndex++]
           supportableStatusMessage = `Scraping ${job.customerName} (${jobIndex}/${jobs.length})…`
           console.log(`[supportable] worker-${workerId}: ${job.customerName}/${job.accountNumber} (${jobIndex}/${jobs.length})`)
+          // Keep APEX session alive during long batch runs
+          await sessionHeartbeat(workerPage)
           let succeeded = false
           for (let attempt = 1; attempt <= 2 && !succeeded; attempt++) {
             try {
