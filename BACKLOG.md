@@ -945,13 +945,14 @@ Size: S (half day)
 Source: Jason 2026-04-02 — docs in {customer_folder}/Account Intelligence/
 Files: src/account-intelligence.ts, src/google.ts (Drive API)
 Depends on: BKL-AI02, BKL-AI03 (needs generated content)
-Description: For each customer, create "Account Intelligence" subfolder in their Drive folder. Write two Google Docs: "{Customer} - Company Intelligence" and "{Customer} - Industry Analysis". Update existing docs on re-run. Use Docs API batchUpdate for proper heading/table formatting.
+Description: For each customer, create "Account Intelligence" subfolder in their Drive folder. Write two Google Docs: "{Customer} - Company Intelligence" and "{Customer} - Industry Analysis". **Always regenerate content regardless of whether folder/docs already exist** — this is a "refresh" operation, not "create once". The same files get updated with fresh intelligence on every run.
 Fix:
   1. Find customer's Drive folder from customers.json or aes.json driveFolderId
   2. Check for existing "Account Intelligence" subfolder; create via Drive API if missing
-  3. Check for existing docs by name; update content if found, create if not
+  3. Check for existing docs by name; **update content in place if found** (clear + rewrite), create if not
   4. Use Docs API batchUpdate with markdown-to-Docs formatting (## headings, tables, [text](url) citations)
   5. Return Google Doc URLs for dashboard linking
+  6. Never skip generation because files exist — always run the Gemini prompts and overwrite with fresh content
 
 ### BKL-AI05 | Dashboard UI — per-customer Generate Intelligence button + doc links
 Status: 🔴 OPEN
@@ -1818,6 +1819,25 @@ Related: BKL-M36 (✅ DONE — Option B batch rotation for ongoing daily mainten
 
 ---
 
+### BKL-M51 | CCSP data investigation — stale quarters + missing customer names
+Status: 🔴 OPEN
+Priority: P1
+Size: M (research + fix)
+Source: Jason 2026-04-02 — CCSP scrape succeeds but data is stale (Q3-Q4 2025 only) and customer names show as "?"
+Files: src/ccsp-scraper.ts, src/sheets.ts (fetchCCSPData), server.ts (/api/ccsp), data/cache/ccsp-data.json
+Description: Two issues discovered after successful CCSP Tableau scrape:
+  1. **Stale quarters**: Only Q3 2025 ($464K) and Q4 2025 ($450K) returned. Today is April 2026 — should have Q1-Q2 2026 data. Either Tableau source doesn't have newer quarters, or the scraper's rolling window filter is excluding them, or the Google Sheet only has old data.
+  2. **Customer names "?"**: API returns `{customer: "?"}` for all 14 accounts. The cache file has proper names (Crowdstrike, McAfee, etc.) but `fetchCCSPData()` in sheets.ts may not be reading the Account Name column correctly — column header mismatch, missing column index, or the sheet tab structure changed.
+Investigation needed:
+  1. Read the actual CCSP Google Sheet for Carolanne Farrell (sheetId in aes.json) — what columns exist? What quarters? What account names?
+  2. Trace fetchCCSPData() column detection logic — does `h.toLowerCase() === 'account name'` match the actual header?
+  3. Check getRollingFyWindow() output — what quarters does it compute for April 2026?
+  4. Check if the Tableau dashboard itself has 2026 data (may need VNC inspection)
+  5. Fix both issues
+Related: BKL-G17 (Cloud Spend UI redesign depends on correct quarter data)
+
+---
+
 ### BKL-S20 | territory-sync.ts — formula prefix not stripped from sheet customer names
 Status: ✅ DONE 2026-04-02
 Severity: Medium (mitigated)
@@ -1829,7 +1849,7 @@ Fix: In `normalizeTerritoryCustomerName()`, add leading-prefix strip after trimm
 ---
 
 ### BKL-M50 | Deep audit: auth + scraper architecture — enterprise readiness assessment
-Status: 🟡 IN PROGRESS
+Status: 🔴 OPEN
 Priority: P0
 Size: L (research + report)
 Source: Jason 2026-04-02 — "core fundamental pieces, need to be best in class / stable / enterprise ready for onboarding others"
@@ -1846,6 +1866,113 @@ Description: Comprehensive investigation of ALL auth flows and scraper systems t
   8. Scale: what happens with 50 customers? 200? Where are the bottlenecks?
   9. Recommendations: prioritized list of fixes to reach enterprise-grade stability
 Related: BKL-M49 (startup sequencing), ADR-001 (session architecture), ARCHITECTURE.md §3-4
+
+---
+
+### BKL-AI09 | Research: Auto-create NotebookLM per customer with Drive sources
+Status: 🔴 OPEN
+Priority: P2
+Size: Research
+Source: Jason 2026-04-02 — "is there a way to create a notebookLM for each customer that pulls in notes/docs/pdfs from the account folder"
+Files: TBD
+Description: Investigate whether Google NotebookLM can be programmatically created and populated with sources per customer. Each customer already has a Drive folder with meeting notes, account plans, POVs, research docs, PDFs. Goal: one-click "Create Notebook" that spins up a NotebookLM pre-loaded with all the customer's Drive docs as sources.
+Research complete (2026-04-02):
+  **Option A — NotebookLM Enterprise API (recommended):**
+  - Official v1alpha API via Discovery Engine: POST /notebooks + sources:batchCreate
+  - Supports Google Docs, Slides, text, web, YouTube as source types
+  - Requires: GCP project + Discovery Engine API + NotebookLM Enterprise licensing
+  - IAM roles: Cloud NotebookLM Admin or User
+  - ~200 lines of code to implement per-customer notebook creation
+  - Constraint: 50 sources per notebook (sufficient for most accounts)
+  - **CONFIRMED: Red Hat Google Workspace includes NotebookLM Enterprise (Jason 2026-04-02)**
+  **Option B — notebooklm-mcp (quick prototype):**
+  - Unofficial MCP server: `claude mcp add notebooklm`
+  - Cookie-based auth, reverse-engineered APIs, unreliable for production
+  - Good for proof-of-concept only
+  **Option C — Skip NotebookLM, build Gemini RAG directly:**
+  - Use Gemini API with Drive docs as grounding sources
+  - Full control, no extra licensing, same underlying model
+  - Loses NotebookLM's polished UI and audio overview feature
+  **Decision needed:** Check Red Hat's Google Workspace tier for NotebookLM Enterprise access. If available, implement Option A. If not, evaluate Option C.
+  Sources: docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks
+Related: BKL-AI04 (Account Intelligence subfolder — same Drive sources)
+
+---
+
+### BKL-AI10 | Enable Discovery Engine API + NotebookLM Enterprise IAM roles
+Status: 🔴 OPEN
+Priority: P2
+Size: XS (30 min)
+Source: AI09 research — prerequisite for programmatic notebook creation
+Files: GCP Console (not code)
+Description: Enable the Discovery Engine API in the jhorn-pai GCP project and grant the service account (or user) the Cloud NotebookLM Admin IAM role. One-time setup.
+Fix:
+  1. GCP Console → APIs & Services → Enable "Discovery Engine API"
+  2. IAM → grant `roles/discoveryengine.notebooklmAdmin` to the SA or user account
+  3. Verify with a test API call: `POST /v1alpha/projects/{PROJECT}/locations/us/notebooks` with title "Test"
+  4. Delete test notebook after verification
+
+---
+
+### BKL-AI11 | Create NotebookLM per customer — batch notebook + source provisioning
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: AI09 research — core implementation using Enterprise API v1alpha
+Files: src/notebooklm.ts (new), server.ts (API routes)
+Depends on: BKL-AI10 (API enabled + IAM)
+Description: For each customer, create a NotebookLM notebook and batch-add all Google Drive docs from their folder as sources. Always regenerate — if notebook exists, update sources (add new, remove stale). Store notebook ID + URL in customers.json for dashboard linking.
+Fix:
+  1. Create src/notebooklm.ts with:
+     - `createOrUpdateNotebook(customer)` — finds existing by title or creates new
+     - `syncNotebookSources(notebookId, customerFolderId)` — lists Drive docs, batch-adds as sources, removes stale
+  2. API: Discovery Engine v1alpha endpoints:
+     - POST `/notebooks` (create)
+     - POST `/notebooks/{id}/sources:batchCreate` (add sources)
+     - GET `/notebooks/{id}/sources` (list current)
+     - DELETE `/notebooks/{id}/sources/{sourceId}` (remove stale)
+  3. Source types: Google Docs + Slides (via Drive file reference), PDFs (if supported)
+  4. Add `notebookUrl` field to Customer type in types.ts
+  5. Store notebook ID in customers.json per customer
+  6. 50-source limit: prioritize by recency (most recently modified first)
+
+---
+
+### BKL-AI12 | Dashboard UI — NotebookLM link + "Create Notebook" button per customer
+Status: 🔴 OPEN
+Priority: P2
+Size: XS (30 min)
+Source: AI09 research — UI surface for notebook access
+Files: dashboard/src/pages/CustomerDetailPage.tsx
+Depends on: BKL-AI11 (notebook creation)
+Description: Add "Open Notebook" link on customer detail page (visible when notebookUrl exists) and "Create Notebook" button (when no notebook exists). Button triggers POST /api/customer/:name/notebook which calls createOrUpdateNotebook().
+Fix:
+  1. Add notebook section to customer detail header or sidebar
+  2. If notebookUrl exists: show "Open in NotebookLM" link (external, target="_blank")
+  3. If no notebook: show "Create Notebook" button → POST /api/customer/:name/notebook
+  4. Loading state while creating (takes ~10s for notebook + source batch)
+
+---
+
+### BKL-AI13 | Batch "Create All Notebooks" from Admin page
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: AI09 research — bulk provisioning
+Files: dashboard/src/pages/AdminPage.tsx, server.ts
+Depends on: BKL-AI11 (notebook creation)
+Description: Add "Create All Notebooks" button on Admin page that iterates all customers and creates/updates their NotebookLM notebooks. Shows progress (N of M complete). Sequential to avoid API rate limits.
+
+---
+
+### BKL-AI14 | Auto-create notebook during bootstrap + refresh on Drive doc changes
+Status: 🔴 OPEN
+Priority: P3
+Size: S (half day)
+Source: AI09 research — automation
+Files: src/bootstrap-orchestrator.ts, src/background-scheduler.ts
+Depends on: BKL-AI11 (notebook creation), BKL-M47 (drive watcher)
+Description: Automatically create NotebookLM notebook as part of bootstrap Step 2 (after customer folders created). Also: when drive-watcher detects doc changes for a customer, sync their notebook sources to pick up new/modified docs.
 
 ---
 
