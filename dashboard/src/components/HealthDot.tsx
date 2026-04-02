@@ -58,7 +58,7 @@ export default function HealthDot({ score, size = 'sm', showScore = false, break
       {/* Tooltip with score breakdown (BKL-G12) */}
       {showTooltip && breakdown && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
-          <div className="bg-surface border border-border rounded-lg shadow-lg px-3 py-2.5 min-w-[180px]">
+          <div role="tooltip" className="bg-surface border border-border rounded-lg shadow-lg px-3 py-2.5 min-w-[180px]">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-text-primary">Health Score</span>
               <span className={`text-sm font-bold tabular-nums ${textColor}`}>{score}/100</span>

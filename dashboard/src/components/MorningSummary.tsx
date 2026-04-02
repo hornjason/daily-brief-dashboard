@@ -44,10 +44,11 @@ export default function MorningSummary() {
     <div id="section-morning" data-section="section-morning" className="bg-surface border border-border rounded-xl overflow-hidden">
       <button
         onClick={() => setCollapsed(!collapsed)}
+        aria-expanded={!collapsed}
         className="w-full px-5 py-3.5 flex items-center justify-between border-b border-border hover:bg-surface-hover transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Sun className="w-4 h-4 text-accent" />
+          <Sun className="w-4 h-4 text-accent" aria-hidden="true" />
           <h3 className="text-base font-semibold text-text-primary">Morning Summary</h3>
         </div>
         <div className="flex items-center gap-2">

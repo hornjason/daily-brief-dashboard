@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-02 (BKL-F07 added: accept full SF report URL; BKL-G01–G16: Quinn visual audit gaps; BKL-E01–E06: email delivery integration)
+Last update: 2026-04-02 (BKL-F08 added: VNC flash-close regression; BKL-F07: accept full SF URL; BKL-G01–G16: Quinn visual audit gaps; BKL-E01–E06: email delivery)
 
 ---
 
@@ -832,6 +832,21 @@ Source: Memory: reference_salesforce.md
 Files: src/pipeline.ts, dashboard/src/components/PipelineSection.tsx
 Description: Pipeline sheet doesn't include Opportunity ID column yet. When SF report is updated to include it, wire up direct opp links in the UI.
 Decision: DEFERRED until SF report includes Opportunity ID column. When ready: (1) add oppId to PipelineRecord type, (2) capture col(row, 'Opportunity ID') in parsePipelineRows, (3) wrap oppName in <a href> when oppId present.
+
+### BKL-F08 | VNC window flash-closes on Connect — BKL-F04 close() too aggressive
+Status: 🔴 OPEN
+Priority: P1
+Size: XS (30 min)
+Source: Jason 2026-04-02 — VNC flashes and goes away on Tableau/any connect; Quinn + Marcus confirmed root cause
+Files: dashboard/src/pages/SetupPage.tsx (handleTableauConnect, lines 2116-2162)
+Regression from: BKL-F04 (added .close() on all branches — success, failure, and catch)
+Description: BKL-F04 added tableauVncRef.current?.close() on every response from wait-for-login — not just on successful login. The wait-for-login endpoint returns in ~8 seconds (or instantly if no live page exists), then .then() fires .close() before the user can interact with the VNC window. The VNC window opens and closes within seconds regardless of outcome. Same issue likely affects SF and RH Portal VNC flows if they share the pattern.
+Fix:
+  1. Only call .close() when sessionValid is true (line 2154) — successful login confirmed
+  2. Remove .close() from the else branch (sessionValid: false) — leave window open for user to retry
+  3. Remove .close() from .catch() handler (line 2159) — leave window open on network error
+  4. Verify SF login pattern (lines 2087-2101) doesn't have the same issue — SF uses polling loop, may be fine
+  5. Test: click Connect, confirm VNC stays open until login completes or user closes manually
 
 ### BKL-F07 | Accept full Salesforce report URL instead of requiring bare report ID
 Status: 🔴 OPEN
@@ -1666,6 +1681,21 @@ Source: Rook Blackburn Wave 6 scan 2026-04-01
 Files: src/territory-sync.ts:136-156
 Description: Customer names from the territory Google Sheet are normalized via `normalizeTerritoryCustomerName()` (strips legal suffixes, title-cases) but leading formula-injection prefixes (`=`, `+`, `-`, `@`) are not stripped. A malicious tab in the territory sheet could write `=IMPORTRANGE(...)` as a customer name; this would flow into customers.json. Mitigated: downstream Sheets writers apply `sanitizeCell()` at write time — so the injection would be caught before hitting Google Sheets. However, customers.json itself could contain the unsanitized prefix.
 Fix: In `normalizeTerritoryCustomerName()`, add leading-prefix strip after trimming: `name = name.replace(/^[=+\-@]/, '')`. One-line fix, zero functional impact on real customer names.
+
+---
+
+### BKL-M48 | Morning Summary pipeline-stuck signal uses CCSP usage reports instead of SF pipeline
+Status: 🔴 OPEN
+Severity: High
+Source: Jason 2026-04-02 — "CCSP opps are usage reports not opportunities, use PIPELINE data from SF scrape"
+Files: server.ts (/api/morning-summary pipeline-stuck signal block)
+Description: The pipeline-stuck signal in morning summary reads from `readPipelineCache()` which returns ALL pipeline records — including CCSP usage/royalty reports from Tableau (e.g., "Global Royalty-CCSP-AWS ROSA-CY26Q1M1-US-Dropbox"). These are consumption tracking entries, NOT sales opportunities. They have close dates in the past because they represent completed billing periods, not stalled deals.
+  The signal should ONLY use actual Salesforce pipeline opportunities — identifiable by their SF report source (pipelineSheetId from aes.json) and real opportunity structure (oppNumber, stage, ACV).
+Fix:
+  1. Filter pipeline records: exclude any record where oppName contains "CCSP", "Royalty", or "Usage Period" — these are CCSP consumption entries
+  2. OR better: tag records at scrape time with source (sf-pipeline vs ccsp) and only use sf-pipeline for stuck-deal signals
+  3. Same filter should apply to the PipelineSection dashboard component — CCSP records should only appear in CloudSpendSection, never in Pipeline
+Related: BKL-G02 (morning summary signal types)
 
 ---
 

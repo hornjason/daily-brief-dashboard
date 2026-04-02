@@ -27,12 +27,16 @@ export async function sendBriefEmail(to: string, subject: string, htmlBody: stri
   const { token } = await auth.getAccessToken()
   if (!token) throw new Error('Failed to obtain Gmail access token — check OAuth setup')
 
+  // Sanitize headers to prevent CRLF injection
+  const safeTo = to.replace(/[\r\n]/g, '')
+  const safeSubject = subject.replace(/[\r\n]/g, '')
+
   // Build RFC 2822 MIME message
   const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`
   const mimeMessage = [
     `MIME-Version: 1.0`,
-    `To: ${to}`,
-    `Subject: ${subject}`,
+    `To: ${safeTo}`,
+    `Subject: ${safeSubject}`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     ``,
     `--${boundary}`,

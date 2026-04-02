@@ -637,7 +637,7 @@ app.get('/oauth/callback', async (c) => {
 
     // Save to config dir (works both locally and in container via volume mount)
     const tokenPath = GOOGLE_UNIFIED_TOKEN_PATH
-    writeFileSyncRaw(tokenPath, JSON.stringify(tokenData, null, 2))
+    writeFileSyncRaw(tokenPath, JSON.stringify(tokenData, null, 2), { mode: 0o600 })
 
     return c.html(`
       <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9;max-width:600px;margin:0 auto">
@@ -648,7 +648,7 @@ app.get('/oauth/callback', async (c) => {
         <p><a href="/dashboard/setup?step=2" style="color:#818cf8">Continue →</a></p>
       </body></html>`)
   } catch (e: any) {
-    return errorPage('Token exchange failed', e.message)
+    return errorPage('Token exchange failed', sanitizeErr(e))
   }
 })
 
@@ -1486,7 +1486,7 @@ app.post('/api/setup/upload-oauth-keys', async (c) => {
     }
     const dir = resolve(GOOGLE_OAUTH_KEYS_PATH, '..')
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    writeFileSyncRaw(GOOGLE_OAUTH_KEYS_PATH, JSON.stringify({ [credType]: sanitized }, null, 2))
+    writeFileSyncRaw(GOOGLE_OAUTH_KEYS_PATH, JSON.stringify({ [credType]: sanitized }, null, 2), { mode: 0o600 })
     return c.json({ ok: true })
   } catch (_e: any) {
     return c.json({ error: 'Failed to save OAuth keys — check file permissions' }, 500)
@@ -2239,7 +2239,7 @@ app.get('/api/drive/ls/:folderId', async (c) => {
     })
     return c.json({ folderId, items: res.data.files ?? [] })
   } catch (e: any) {
-    return c.json({ error: e.message }, 500)
+    return c.json({ error: sanitizeErr(e) }, 500)
   }
 })
 
