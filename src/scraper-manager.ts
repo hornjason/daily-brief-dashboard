@@ -190,7 +190,8 @@ export function getCircuitBreakerStates(): Record<string, ReturnType<CircuitBrea
 
 // ── BKL-M50c: Wall-clock timeout wrapper ─────────────────────────────────────
 
-const DEFAULT_SCRAPE_TIMEOUT_MS = 3 * 60 * 1000  // 3 minutes
+const DEFAULT_SCRAPE_TIMEOUT_MS = 5 * 60 * 1000  // 5 minutes (CCSP, Supportable, SF)
+const RH_SCRAPE_TIMEOUT_MS = 10 * 60 * 1000      // 10 minutes (RH iterates 50+ accounts at 3-5s each)
 
 /**
  * Wrap a promise with a wall-clock timeout. If the timeout fires, the promise
@@ -363,7 +364,7 @@ export async function runRhScrapeWithState(): Promise<void> {
         cachePath: RH_CASES_CACHE_PATH,
         shouldCancel: () => _rhScrapeCancelRequested,
       }),
-      DEFAULT_SCRAPE_TIMEOUT_MS,
+      RH_SCRAPE_TIMEOUT_MS,
       'RH case scrape',
     )
     _rhScrapeLastError = null
