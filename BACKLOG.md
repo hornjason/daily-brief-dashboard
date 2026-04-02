@@ -1961,6 +1961,38 @@ Related: BKL-F11 (shared report dedup), ADR-001
 
 ---
 
+### BKL-M54 | Supportable scraper optimization — skip discovery + faster waits
+Status: 🔴 OPEN
+Priority: P1
+Size: S (half day)
+Source: Supportable 360 User Guide analysis 2026-04-02
+Files: src/supportable-scraper.ts
+Description: Three optimizations from user guide analysis:
+  1. **Skip name-search discovery for cached accounts** (biggest win — 40-60s per customer). If customers.json already has accountNumbers, go straight to account number lookup + export. Don't run discoverAccountNumbersByName(). Already partially noted in BKL-M44.
+  2. **Replace networkidle waits with selector waits** (10-15s per account). After Go button: wait for Export tab selector, not networkidle. After Export tab: wait for CSV format selector. After report select: wait for data table.
+  3. **Session keep-alive heartbeat** during long batch runs. Every 30 min, navigate to landing page to prevent APEX idle timeout.
+  Guide references: Account Number field (line 166), 13 search fields available (lines 163-236), no rate limits documented, 5-year max date range only constraint.
+
+---
+
+### BKL-M55 | Investigate RH internal APIs — one.redhat.com + compass.redhat.com catalogs
+Status: 🔴 OPEN
+Priority: P2
+Size: Research (Jason action)
+Source: Jason 2026-04-02 — shared two internal API catalog links
+Files: N/A (research only)
+Description: Jason identified two Red Hat internal API catalogs that may contain APIs replacing browser scraping:
+  1. **one.redhat.com/developers/api-catalog** — internal developer portal with Redoc API docs. Specific API: Bj_4Ht (unknown, behind SSO)
+  2. **compass.redhat.com/catalog** — Backstage-based service catalog showing APIs
+  3. **Public Support Cases API confirmed**: `https://api.access.redhat.com/support/v1/cases/filter` — documented at developers.redhat.com. Needs testing: does it return CUSTOMER cases or only your org's cases?
+  Action items for Jason:
+  1. Browse compass.redhat.com API catalog — look for Supportable, Subscription, or Customer Data APIs
+  2. Check the Bj_4Ht API at one.redhat.com — what does it expose?
+  3. Test the public Cases API with your offline token — does /support/v1/cases/filter return customer case data?
+  4. Ask internal teams: does an API exist for Supportable 360 data?
+
+---
+
 ### BKL-AI09 | Research: Auto-create NotebookLM per customer with Drive sources
 Status: 🔴 OPEN
 Priority: P2
