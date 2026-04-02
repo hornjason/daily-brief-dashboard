@@ -2016,6 +2016,42 @@ Related: BKL-AI02 (company intelligence uses product fit assessment)
 
 ---
 
+### BKL-M52 | Gemini API cost tracking — per-call token usage + estimated cost dashboard
+Status: 🔴 OPEN
+Priority: P1
+Size: M (1-2 days)
+Source: Jason 2026-04-02 — "I need a way to figure out costs as we go further"
+Files: src/customer.ts (callLLM, callLLMStructured), src/account-intelligence.ts, src/doc-extraction.ts, server.ts (new /api/costs endpoint), dashboard (cost display)
+Description: As we add more Gemini calls (briefs, intelligence docs, extraction, grounding), costs will grow. Need visibility into what each feature costs.
+Fix:
+  1. Instrument all Gemini API calls to log input/output token counts from response `usageMetadata` field
+  2. Store per-call metrics: timestamp, call type (brief-extract/brief-synthesize/intelligence-industry/intelligence-company/intelligence-analysis/doc-classify), customer name, input tokens, output tokens
+  3. Compute estimated cost per call using Gemini 2.5 Flash pricing ($0.15/1M input, $0.60/1M output)
+  4. Append to data/cache/gemini-usage.json (rolling 30-day window)
+  5. Add GET /api/costs endpoint: total today, total this month, breakdown by call type, breakdown by customer
+  6. Admin page: cost summary card showing daily/monthly spend and per-feature breakdown
+  7. Consider: budget alerts (warn if daily cost exceeds threshold)
+Related: Brief generation (~$0.006/brief), intelligence docs (TBD — grounding calls are more expensive)
+
+---
+
+### BKL-M53 | Estimated time tracking for long-running operations
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-02 — "capture estimated time so we know what to expect"
+Files: src/account-intelligence.ts, src/background-scheduler.ts, server.ts
+Description: Long-running operations (intelligence generation, brief generation, scraper runs) provide no time estimate. User sees "Running..." with no idea if it's 10 seconds or 5 minutes.
+Fix:
+  1. Track elapsed time on each intelligence pipeline step + total
+  2. Store historical durations per operation type in cache
+  3. Use rolling average to estimate remaining time for in-progress operations
+  4. Return estimated_time_remaining in intelligence-status and scrape-queue responses
+  5. Dashboard shows "~2 min remaining" instead of just "Running..."
+  6. Log completion times: "[intelligence] A10 Networks: industry 12s + company 45s + analysis 38s + docs 8s = 103s total"
+
+---
+
 ### BKL-M49 | Scraper startup sequencing — prevent race conditions on container restart
 Status: 🔴 OPEN
 Priority: P1
@@ -2573,17 +2609,22 @@ We are using less than half a percent of the model's capacity. Even at 10x the c
 Effort: 1 day total. Items 1-4 + 7 in first hour, items 5-6 in remaining time.
 Phase: 1 (Foundation) — should be done BEFORE R19. R19's document extraction sub-pipeline can only be as good as the raw content it receives.
 
-### BKL-R25 | PDF/docx content extraction for briefs
-Status: ⏸ DEFERRED
-Priority: P3
-Size: M (2-3 days)
-Source: Spun off from BKL-R24 item 5 after Serena + Marcus impact analysis 2026-04-01
-Files: src/customer.ts (_fetchCustomerDocsImpl), package.json
-Description: PDF and docx files already appear in Drive file listings with metadata (name, mimeType, modifiedTime, webViewLink). The only missing capability is text content extraction. Currently these files show in briefs as name-only (no excerpt). Three options were evaluated:
-  (A) `drive.files.get({ alt: 'media' })` + parsing library — DOCX via `mammoth` (pure JS, safe) or PDF via `pdf-parse` (native deps, container build changes, memory pressure risk)
-  (B) Gemini multimodal — upload raw bytes as `inlineData`, ask Gemini to extract text. No multimodal code exists in codebase today. Doubles LLM cost per brief.
-  (C) Do nothing — files already listed, brief handles missing content gracefully.
-Decision: DEFERRED — Option C (do nothing) is the current state and works fine. When content extraction becomes a priority: start with DOCX-only via mammoth (zero native deps), defer PDF to a separate item due to container/native dependency complexity. Gemini multimodal is the cleanest long-term path but needs cost analysis first.
+### BKL-R25 | PDF content extraction for briefs via Gemini multimodal
+Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-02 — "yes but limit it to just pdf"
+Files: src/customer.ts (_fetchCustomerDocsImpl)
+Description: PDF files in customer Drive folders appear in file listings but their content is not extracted — briefs only see the filename. Use Gemini multimodal to extract text from PDFs.
+  Scope: PDF only (not docx — keep scope tight).
+  Approach: Gemini multimodal (Option B from original analysis). For each PDF in the customer folder:
+  1. Download raw bytes via `drive.files.get({ alt: 'media' })`
+  2. Send to Gemini as `inlineData` with mimeType `application/pdf`
+  3. Prompt: "Extract the text content from this PDF document. Return only the text, no commentary."
+  4. Store extracted text as `file.content` alongside existing Google Doc content
+  5. Cap at DOC_CONTENT_CAP (8K chars) per PDF, same as other docs
+  Cost: ~$0.01-0.02 per PDF (multimodal input pricing). With ~5 PDFs per customer avg, adds ~$0.10 per customer brief refresh.
+  No native deps needed — pure API call to Gemini.
 
 ---
 
