@@ -2004,14 +2004,14 @@ Description: Research how to surface Red Hat product features, tech preview item
   1. When preparing for a customer meeting, SA sees "OCP 4.17 adds X feature relevant to customer's Kubernetes workloads"
   2. Brief mentions "RHEL 10 tech preview includes Y — potential upsell for customers on RHEL 9"
   3. Dashboard shows upcoming GA dates, tech preview features, and deprecations per platform
-  Research needed:
-  1. Where does Red Hat publish structured roadmap/feature data? (docs.redhat.com, access.redhat.com, release notes, errata)
-  2. Is there an API for release notes / feature lists? (Red Hat API catalog, Hydra, etc.)
-  3. Can we scrape release notes pages for structured feature data?
-  4. How to match product features to customer tech stack? (customer uses OCP 4.15 → show upgrade path features)
-  5. How to keep data fresh? (release cadence: RHEL every 6mo, OCP every 4mo, AAP every 3mo)
-  6. How to integrate into briefs? (new XML source type? separate dashboard section?)
-  7. Consider: Gemini with Google Search grounding on "Red Hat {product} latest features" as a quick prototype
+  Research complete (2026-04-02). Full report: docs/research-redhat-product-data-apis.md
+  **Confirmed data sources:**
+  - Tier 1 (free, no auth): Product Life Cycle API (233 products, versions, GA/EOL dates), AAP Atom feed, docs.redhat.com sitemap monitoring
+  - Tier 2 (~$1/mo): Gemini + Google Search grounding for feature extraction from indexed release notes
+  - Tier 3 (auth required): console.redhat.com APIs for customer installed versions
+  **Key API:** `https://access.redhat.com/product-life-cycles/api/v1/products` — JSON, free, all RH products
+  **Limitation:** docs.redhat.com uses client-side rendering — can't HTTP fetch content directly. Gemini grounding sidesteps this.
+  Implementation items to add: Life Cycle API client, `<source type="product_features">` XML schema, Gemini feature extraction, sitemap monitoring, Product Health Card component.
 Related: BKL-AI02 (company intelligence uses product fit assessment)
 
 ---
