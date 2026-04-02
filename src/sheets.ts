@@ -354,13 +354,27 @@ export async function fetchCCSPData(
     if (rows.length < 2) continue
 
     const headers = (rows[0] ?? []).map((h: unknown) => String(h ?? '').trim())
-    const acctCol      = headers.findIndex((h) => h.toLowerCase() === 'account name')
+    // Flexible column detection — Tableau CSV headers vary between Raw Data and summary views.
+    // Raw Data: "Account Name", summary: may be "Account" or missing entirely.
+    const acctCol      = headers.findIndex((h) => {
+      const lower = h.toLowerCase()
+      return lower === 'account name' || lower === 'account' || lower === 'customer name' || lower === 'company'
+    })
     const qtrCol       = headers.findIndex((h) => h.toLowerCase().includes('fiscal year quarter'))
     const closeDateCol = headers.findIndex((h) => h.toLowerCase() === 'opportunity close date')
     const partnerCol   = headers.findIndex((h) => h.toLowerCase().includes('financial partner'))
-    const acvCol       = headers.findIndex((h) => h.toLowerCase() === 'acv plus')
+    const acvCol       = headers.findIndex((h) => {
+      const lower = h.toLowerCase()
+      return lower === 'acv plus' || lower === 'acv+' || lower === 'acvplus'
+    })
 
-    if (acctCol < 0 || acvCol < 0) { console.warn(`[ccsp] missing required columns in sheet ${spreadsheetId} — headers: ${headers.join(', ')}`); continue }
+    if (acctCol < 0) {
+      console.warn(`[ccsp] sheet ${spreadsheetId}: no account name column found (tried: account name, account, customer name, company). Headers: [${headers.join(', ')}]. This usually means the Tableau scraper downloaded the summary view instead of Raw Data.`)
+    }
+    if (acvCol < 0) {
+      console.warn(`[ccsp] sheet ${spreadsheetId}: no ACV column found (tried: acv plus, acv+, acvplus). Headers: [${headers.join(', ')}]`)
+    }
+    if (acctCol < 0 || acvCol < 0) continue
 
     for (const row of rows.slice(1)) {
       const acvStr = String(row[acvCol] ?? '').replace(/[$,]/g, '').trim()
