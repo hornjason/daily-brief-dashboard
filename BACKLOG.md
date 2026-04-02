@@ -974,7 +974,7 @@ Fix:
   4. Show progress (industry lookup → company brief → industry analysis → Drive write)
 
 ### BKL-AI06 | Batch "Generate All" from Admin/Settings page
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: S (half day)
 Source: Jason 2026-04-02 — batch generation for full portfolio
@@ -988,7 +988,7 @@ Fix:
   4. Frontend: progress bar, current customer name, error count, cancel button
 
 ### BKL-AI07 | Auto-generate intelligence docs during bootstrap
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Jason 2026-04-02 — new users should get this automatically during setup
@@ -1001,7 +1001,7 @@ Fix:
   3. Show generation progress on bootstrap completion card if still running
 
 ### BKL-AI08 | Wire Account Intelligence docs into brief generation pipeline
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: XS (30 min)
 Source: Jason 2026-04-02 — current code should leverage the intelligence data
@@ -1014,7 +1014,7 @@ Fix:
   4. Ensure key signals (SWOT items, trigger events, product fit) are extracted into brief XML
 
 ### BKL-E01 | Add gmail.send scope to OAuth + reauth flow
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: XS (30 min)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1026,7 +1026,7 @@ Fix:
   3. Verify token includes gmail.send after reauth
 
 ### BKL-E02 | sendBriefEmail() function — MIME build + Gmail API POST
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: S (half day)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1040,7 +1040,7 @@ Fix:
   4. Error handling with sanitizeErr() — never leak raw Gmail errors to client
 
 ### BKL-E03 | Port HTML email template from Python to TypeScript
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: M (1 day)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1055,7 +1055,7 @@ Fix:
   5. Graceful empty states per section
 
 ### BKL-E04 | Email settings UI on Settings page
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: S (half day)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1069,7 +1069,7 @@ Fix:
   4. Match existing settings page design patterns (design tokens, spacing)
 
 ### BKL-E05 | Email settings API — GET/PUT /api/settings/email
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: XS (30 min)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1082,7 +1082,7 @@ Fix:
   4. sanitizeErr() on all error responses
 
 ### BKL-E06 | Wire background-scheduler to trigger email delivery
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: S (half day)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1099,7 +1099,7 @@ Fix:
 ## UI Spec Compliance Gaps (from 2026-04-02 Quinn visual audit)
 
 ### BKL-G01 | Morning Summary signals not clickable — no navigation to customer detail
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P1
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1111,7 +1111,7 @@ Fix:
   3. Pass customer name from signal data to navigation
 
 ### BKL-G02 | Morning Summary only generates renewal signals — 8 of 9 signal types missing
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P1
 Size: M (2-3 days)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1128,7 +1128,7 @@ Fix:
   7. Rank all signals by priority per BKL-R06 spec
 
 ### BKL-G03 | PriorityActionBanner has no action buttons (Schedule/View/Dismiss)
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md, DESIGN-SPEC-AccountDetailPage.md
@@ -1140,7 +1140,7 @@ Fix:
   3. View button links to source (email, case URL, meeting) when available
 
 ### BKL-G04 | StakeholderEngagementPanel missing frequency bar visualization
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md, VISUAL-DESIGN-SPEC.md
@@ -1152,7 +1152,7 @@ Fix:
   3. Data already available from buildContactHistory() — just needs visualization
 
 ### BKL-G05 | Customer detail header stat row missing Cloud$ and Pipeline ACV + sparklines
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1165,7 +1165,7 @@ Fix:
   4. Header height to h-16 per spec (currently h-12)
 
 ### BKL-G06 | Sidebar missing Morning Summary nav item + wrong order
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against INFORMATION-ARCHITECTURE-V2.md
@@ -1177,7 +1177,7 @@ Fix:
   3. Reorder nav items to match spec hierarchy
 
 ### BKL-G07 | TemporalDeltaSection shows section names only, not content-level diffs
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P2
 Size: M (1-2 days)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1191,7 +1191,7 @@ Fix:
   4. Return structured change objects with type (new/changed/removed) and summary text
 
 ### BKL-G08 | Brief generation HTTP 500 on some customers
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P1
 Size: S (1 day)
 Source: Quinn visual audit 2026-04-02 — observed during customer detail page testing
@@ -1203,7 +1203,7 @@ Fix:
   3. Ensure graceful degradation — partial brief with available data instead of full 500
 
 ### BKL-G09 | KPI sparklines use static color instead of trend-direction coloring
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against VISUAL-DESIGN-SPEC.md
@@ -1216,7 +1216,7 @@ Fix:
   3. Neutral color for flat trends
 
 ### BKL-G10 | Bootstrap CompletionCard lacks clickable resource links
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against auto-bootstrap-ui-spec.md
@@ -1228,7 +1228,7 @@ Fix:
   3. Add target="_blank" rel="noopener" for external links
 
 ### BKL-G11 | KPI sparklines missing on Meetings Today and Meetings This Week cards
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1240,7 +1240,7 @@ Fix:
   3. Render sparkline polyline same as other cards
 
 ### BKL-G12 | HealthDot hover tooltip does not show score breakdown
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1252,7 +1252,7 @@ Fix:
   3. Data already available from /api/health-scores — pass breakdown to tooltip
 
 ### BKL-G13 | Customer detail header missing numeric health score
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1263,7 +1263,7 @@ Fix:
   2. Score already fetched via HealthScoreHero — reuse data in header
 
 ### BKL-G14 | StakeholderEngagementPanel in wrong column — LEFT instead of spec RIGHT
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1274,7 +1274,7 @@ Fix:
   2. Ensure it scrolls naturally within the sticky right column below HealthScoreHero
 
 ### BKL-G15 | Setup page missing accessibility: elapsed timer, aria-labels, role="alert"
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against auto-bootstrap-ui-spec.md
@@ -1286,7 +1286,7 @@ Fix:
   3. Add role="alert" to error message containers
 
 ### BKL-G16 | Brief section order follows AI output, not spec-mandated hierarchy
-Status: ✅ DONE 2026-04-02
+Status: 🔴 OPEN
 Priority: P3
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -2150,8 +2150,8 @@ Detection scripts for ongoing use:
 
 ---
 
-### BKL-M45 | Free/Beta/Trial subscriptions should not trigger renewal alarms
-Status: ✅ DONE 2026-04-02
+### BKL-M45 | Free/Beta/Trial subscriptions — frontend display in KPI modal + brief tagging
+Status: 🔴 OPEN (backend done, frontend remaining)
 Severity: Medium
 Source: Jason 2026-04-01 — "free or Beta or Trial shouldn't count as a worry if expiring"
 Files: src/health-score.ts, src/kpi-history.ts, server.ts (/api/kpis, /api/morning-summary), src/customer.ts (buildXmlSources), dashboard/src/components/KPIRenewalsModal.tsx, dashboard/src/components/KPICards.tsx
@@ -2171,8 +2171,16 @@ Fix:
   6. `server.ts` `/api/morning-summary`: Exclude free/trial from renewal signals
   7. `dashboard/src/components/KPIRenewalsModal.tsx`: Show free/trial subs with muted styling (gray badge, no red/amber urgency)
   8. `dashboard/src/components/KPICards.tsx`: Exclude free/trial from renewal count in KPI card
-Intent: Still display free/trial subs for awareness — just don't alarm. Muted badge/styling, excluded from health penalties and KPI counts.
-Depends on: Verify actual SKU/description patterns from Supportable exports to build accurate keyword list
+Backend DONE (2026-04-02): Steps 1-4, 6 implemented. isFreeOrTrial() filters health scores, /api/kpis count, morning summary signals.
+Frontend NOT DONE: Steps 5, 7, 8 — KPIRenewalsModal still shows all subs unfiltered (including Free Tier, Beta Access, Trials). KPICards count may still include free/trial. Brief XML not yet tagging free/trial.
+**Aditi UX recommendation (2026-04-02): Option E — Filtered Default with Collapsible Disclosure**
+  Full spec: docs/DESIGN-SPEC-SubscriptionTiers.md
+  - KPI card count shows paid-only (3, not 15)
+  - Modal opens with paid subs only (clean triage)
+  - Collapsible footer: "12 free/trial hidden" — click to expand
+  - Expanded rows: muted gray + FREE/TRIAL/BETA pill badges, no urgency colors
+  - Toggle resets on each open
+  Implementation: add `sku` field to RenewalRow, filter with `isFreeOrTrial()` in KPICards.tsx + KPIRenewalsModal.tsx collapsible section. ~4 files, no new deps.
 Related: BKL-R04 (health score), BKL-R05 (KPI history), BKL-R17 (XML sources)
 
 ---
