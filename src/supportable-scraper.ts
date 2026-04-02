@@ -539,18 +539,23 @@ async function discoverAccountNumbersByName(
     console.log(`[supportable] name-search: filled #${fieldId} with "${searchTerm}%" (candidate ${ci + 1}/${candidates.length}${isRetry ? ' — retry' : ''})`)
 
     await page.click('button.button-alt1')
-    await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
-    await page.waitForTimeout(5_000)
+    // Race: results table appearing (fast) vs networkidle (slow fallback)
+    await Promise.race([
+      page.waitForSelector('table th', { timeout: 10_000 }).catch(() => {}),
+      page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}),
+    ])
+    // Short settle — APEX may still be rendering, but table header means data is coming
+    await page.waitForTimeout(1_500)
 
     // APEX does multiple JS redirects after submit — probe evaluate before scraping
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await page.evaluate(() => 'PROBE_OK')
         break
       } catch {
         console.log(`[supportable] name-search: results page still navigating (attempt ${attempt + 1}) — waiting…`)
-        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-        await page.waitForTimeout(3_000)
+        await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {})
+        await page.waitForTimeout(1_500)
       }
     }
 
