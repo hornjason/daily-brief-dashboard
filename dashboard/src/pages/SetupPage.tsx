@@ -629,9 +629,39 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
                 </div>
               )
             }
-            // Fallback: plain text from step details if no resource URLs available
+            // Fallback: generate clickable links from step details when resource URLs aren't available
             const doneSteps = state.steps.filter(s => s.status === 'done' && s.detail)
             if (doneSteps.length === 0) return null
+            const fallbackLinks: { label: string; url: string }[] = []
+            for (const s of doneSteps) {
+              const idMatch = s.detail?.match(/(?:Folder|Sheet):\s*([a-zA-Z0-9_-]{10,})/)
+              if (idMatch) {
+                const id = idMatch[1]
+                const isFolder = s.name.toLowerCase().includes('folder')
+                const url = isFolder
+                  ? `https://drive.google.com/drive/folders/${id}`
+                  : `https://docs.google.com/spreadsheets/d/${id}/edit`
+                fallbackLinks.push({ label: s.name, url })
+              }
+            }
+            if (fallbackLinks.length > 0) {
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {fallbackLinks.map((link, i) => (
+                    <a
+                      key={i}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 bg-surface hover:bg-surface-hover border border-border rounded-lg px-3 py-2 text-xs text-text-secondary transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                      {link.label}
+                    </a>
+                  ))}
+                </div>
+              )
+            }
             return (
               <div className="grid grid-cols-2 gap-1.5">
                 {doneSteps.map((s, i) => (
