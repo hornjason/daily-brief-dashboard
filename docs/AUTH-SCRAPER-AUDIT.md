@@ -2,7 +2,8 @@
 
 **Date:** 2026-04-01
 **Author:** Serena Blackwood (Architect Agent)
-**Scope:** Comprehensive assessment of authentication flows, browser session management, scraper reliability, startup sequencing, error visibility, and scale readiness for multi-user onboarding.
+**Scope:** Comprehensive assessment of authentication flows, browser session management, scraper reliability, startup sequencing, error visibility, and scale readiness.
+**Architecture:** Single-user, single-container deployment. Each AE runs their own container instance with their own credentials. "Onboarding others" means distributing the container image — not sharing a single instance. Multi-user isolation (G2, G3 below) is NOT required.
 
 ---
 
@@ -331,42 +332,45 @@ The system is well-engineered for a single-user deployment:
 - Atomic writes prevent cache corruption
 - The test suite (260 tests) provides confidence
 
-### Multi-User Onboarding: NOT Ready
+### Onboarding Other AEs: Ready After Phase 1
 
-Three P0 blockers must be resolved:
-1. **GCP OAuth mode** (G1) -- tokens will silently expire for new users
-2. **Single-user config** (G2) -- no per-user isolation
-3. **Single browser context** (G3) -- users' sessions conflict
+**Clarification:** This is a single-user-per-container architecture. Each AE runs their own container with their own credentials. G2 (per-user config isolation) and G3 (per-user browser profiles) are NOT required — they were assessed for a multi-user shared instance which is not the deployment model.
 
-### Recommended Sequence
+**What IS needed for onboarding:**
+1. **G1** — GCP OAuth "Testing" mode limits token lifetime to 7 days. Switch to "Internal" so refresh tokens last indefinitely. Each new AE sets up their own GCP project or you share OAuth keys.
+2. **G16** — Onboarding documentation. Step-by-step guide for a new AE: GCP setup, container run, first-run wizard, connecting each data source.
+3. **Stability fixes (G4, G5, G6)** — The container must run reliably overnight without manual intervention.
+
+### Recommended Sequence (Single-User Stability Focus)
 
 ```
-Phase 1 (Week 1): Quick wins
-  G1  - Switch GCP OAuth to Internal mode             (1 hour)
+Phase 1 (Week 1): Critical stability — must fix before sharing
   G5  - Add RH cases stale-overwrite guard             (1 hour)
+  G4  - Automatic browser context recovery             (3-4 days)
   G7  - Push notifications on scheduled scrape skip    (2 hours)
   G10 - Xvfb readiness check in entrypoint.sh          (1 hour)
-  G11 - Surface scraper validation warnings in UI      (2 hours)
+  BKL-M49 - Scraper startup sequencing / queue         (2-3 days)
 
-Phase 2 (Week 2-3): Multi-user foundation
-  G2  - Per-user config directory architecture         (5-8 days)
-  G3  - Per-user profile directories + queue           (5-8 days)
-
-Phase 3 (Week 3-4): Reliability
-  G4  - Automatic browser context recovery             (3-4 days)
+Phase 2 (Week 2): Operational visibility
   G6  - Session health dashboard panel                 (3-4 days)
+  G11 - Surface scraper validation warnings in UI      (2 hours)
+  G14 - Scraper telemetry / history                    (2-3 days)
   G9  - Container memory limits                        (1 day)
 
-Phase 4 (Week 5+): Scale
+Phase 3 (Week 3): Onboarding enablement
+  G1  - Switch GCP OAuth to Internal mode              (1 hour)
+  G16 - Onboarding documentation (ONBOARDING.md)       (1-2 days)
+  G13 - Configurable Tableau filters per geo           (2-3 days)
+
+Phase 4 (Week 4+): Scale
   G8  - RH case pagination                            (2-3 days)
-  G13 - Configurable Tableau filters                   (2-3 days)
-  G14 - Scraper telemetry                             (2-3 days)
   G15 - Sheets quota optimization                     (3-5 days)
-  G16 - Onboarding documentation                      (1-2 days)
 ```
+
+**G2 and G3 are NOT on the roadmap** — single-user-per-container is the correct architecture.
 
 ### The Fundamental Constraint
 
 The deepest architectural constraint in this system is the shared browser context. It exists because Red Hat's SSO binds authentication to a browser session, and four downstream services (Portal, SF, Tableau, Supportable) all authenticate through that same SSO. This is not a design flaw -- it is the only viable approach given the vendor constraint (confirmed by the 401s from hydra API with Bearer tokens per ADR-001).
 
-Multi-user support must work within this constraint. The realistic path is serialized browser access with per-user profile directories -- not parallel browser contexts. This means one user's scrapes run at a time, which is acceptable for a morning-sync workload but limits real-time capability.
+For a single-user container, this constraint is manageable — the scraper queue (BKL-M49) ensures one scraper runs at a time within the same context. The key reliability gap is automatic recovery when the context crashes (G4).
