@@ -21,7 +21,12 @@ sleep 1
 # -nopw       : no VNC password — port is bound to localhost only (see below)
 # -localhost  : only accept connections from 127.0.0.1 (websockify proxies in)
 # -forever    : keep running after the first client disconnects
-x11vnc -display :99 -nopw -localhost -rfbport 5900 -forever -quiet &
+# Auto-respawn x11vnc if killed mid-session (BKL-I01)
+(while true; do
+  x11vnc -display :99 -nopw -localhost -rfbport 5900 -forever -quiet 2>/dev/null
+  echo "[entrypoint] x11vnc exited — restarting in 2s..."
+  sleep 2
+done) &
 
 # ── noVNC / websockify (bridges VNC TCP → WebSocket for browser access) ────────
 # Serves the HTML5 noVNC viewer at http://localhost:6080/vnc.html
