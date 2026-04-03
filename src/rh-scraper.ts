@@ -715,41 +715,17 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
 
       batchSucceeded = true
 
-      // ── Post-batch: resolve missing account numbers ──────────────────────
-      // Batch queries may not expose which account each case belongs to.
-      // For cases with empty accountNumber, do quick per-account lookups.
+      // ── Post-batch: log any unresolved account numbers ──────────────────
+      // The cell scanner (above) should resolve most/all accounts.
+      // If any remain unresolved, log them but don't do per-account queries
+      // (that would take 35 × 5s = 175s, defeating the batch purpose).
       const unresolved = allCases.filter(c => !c.accountNumber)
       if (unresolved.length > 0) {
-        console.log(`[rh-scraper] resolving ${unresolved.length} cases with missing account numbers…`)
-        const caseNumberSet = new Set(unresolved.map(c => c.caseNumber))
-        // Query each account that has cases — deduplicated
-        for (const accountNum of accountNumbers) {
-          if (caseNumberSet.size === 0) break
-          if (shouldCancel?.()) break
-          const singleUrl =
-            `https://access.redhat.com/support/cases/#/case/list` +
-            `?query=accountNumber%3A%20(%22${accountNum}%22)%20orderBy%20severity%20asc` +
-            `&p=1&size=100&searchType=basic`
-          try {
-            await page.goto(singleUrl, { waitUntil: 'load', timeout: 15_000 })
-            await waitForTable(page, 5_000)
-            const singleCases = await extractCasesFromPage(page, null, accountNum)
-            for (const sc of singleCases) {
-              if (caseNumberSet.has(sc.caseNumber)) {
-                // Found the account for this case — update it
-                const target = allCases.find(c => c.caseNumber === sc.caseNumber && !c.accountNumber)
-                if (target) {
-                  target.accountNumber = accountNum
-                  caseNumberSet.delete(sc.caseNumber)
-                }
-              }
-            }
-          } catch { /* skip this account, try next */ }
+        console.warn(`[rh-scraper] ${unresolved.length} cases have no account number after batch (cell scan didn't match)`)
+        for (const c of unresolved) {
+          console.warn(`[rh-scraper]   case ${c.caseNumber}: no matching account in chunk`)
         }
-        const stillUnresolved = allCases.filter(c => !c.accountNumber).length
-        if (stillUnresolved > 0) {
-          console.warn(`[rh-scraper] ${stillUnresolved} cases still have no account number`)
-        } else {
+      } else {
           console.log(`[rh-scraper] all cases resolved to accounts`)
         }
       }
