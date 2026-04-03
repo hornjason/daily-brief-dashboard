@@ -771,6 +771,11 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // GET /api/scraper-status — centralized status map from ScraperStatusStore
-  // Returns ScraperStatusMap with staleness applied per scraper threshold.
-  app.get('/api/scraper-status', (c) => c.json(getStatus()))
+  // Returns ScraperStatusMap with staleness applied per scraper threshold,
+  // plus circuit breaker states and scheduler queue state.
+  app.get('/api/scraper-status', (c) => c.json({
+    scrapers: getStatus(),
+    circuitBreakers: getCircuitBreakerStates(),
+    queue: getScraperQueueStatus(),
+  }))
 }

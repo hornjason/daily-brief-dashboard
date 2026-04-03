@@ -378,8 +378,34 @@ export function AdminPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const d = await fetch('/api/status/scrapes').then(r => r.json())
-      setStatus(d)
+      const d = await fetch('/api/scraper-status').then(r => r.json())
+      // Map unified /api/scraper-status response shape to AllScrapeStatus
+      const scrapers = d.scrapers ?? {}
+      const mapped: AllScrapeStatus = {
+        rh: {
+          isRunning: scrapers['rh-cases']?.state === 'running',
+          lastSync:  scrapers['rh-cases']?.lastSuccess ?? null,
+          lastError: scrapers['rh-cases']?.lastError ?? null,
+        },
+        supportable: {
+          isRunning: scrapers['supportable']?.state === 'running',
+          lastSync:  scrapers['supportable']?.lastSuccess ?? null,
+          lastError: scrapers['supportable']?.lastError ?? null,
+        },
+        ccsp: {
+          isRunning: scrapers['ccsp']?.state === 'running',
+          lastSync:  scrapers['ccsp']?.lastSuccess ?? null,
+          lastError: scrapers['ccsp']?.lastError ?? null,
+        },
+        salesforce: {
+          isRunning: scrapers['sf-pipeline']?.state === 'running',
+          lastSync:  scrapers['sf-pipeline']?.lastSuccess ?? null,
+          lastError: scrapers['sf-pipeline']?.lastError ?? null,
+        },
+        circuitBreakers: d.circuitBreakers,
+        queue: d.queue,
+      }
+      setStatus(mapped)
     } catch {}
   }, [])
 

@@ -123,11 +123,13 @@ function Dashboard() {
   const ccspApi      = useApi<CCSPSummary>(`/api/ccsp`)
   const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline`)
   const scrapeStatus = useApi<{
-    supportable: { lastSync: string | null; lastError: string | null; isRunning: boolean; isStale: boolean }
-    ccsp:        { lastSync: string | null; lastError: string | null; isRunning: boolean; isStale: boolean }
-    rh:          { lastSync: string | null; lastError: string | null; isRunning: boolean; isStale: boolean }
-    salesforce:  { lastSync: string | null; lastError: string | null; isRunning: boolean; isStale: boolean }
-  }>('/api/status/scrapes')
+    scrapers: {
+      'rh-cases':    { state: string; lastSuccess: string | null; lastError: string | null }
+      'ccsp':        { state: string; lastSuccess: string | null; lastError: string | null }
+      'supportable': { state: string; lastSuccess: string | null; lastError: string | null }
+      'sf-pipeline': { state: string; lastSuccess: string | null; lastError: string | null }
+    }
+  }>('/api/scraper-status')
 
   // ── KPI history for sparklines (BKL-R30) ─────────────────────────────────
   const kpiHistoryApi = useApi<{
@@ -240,13 +242,19 @@ function Dashboard() {
             {/* Scrape staleness indicators */}
             {scrapeStatus.data && (
               <div className="flex items-center gap-3 flex-wrap text-xs text-text-secondary">
-                {(['rh', 'ccsp', 'supportable', 'salesforce'] as const).map(key => {
-                  const s = scrapeStatus.data![key]
-                  const color = s.isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : s.isStale ? 'bg-warning' : 'bg-green-500'
-                  const label = key === 'rh' ? 'RH Cases' : key === 'ccsp' ? 'CCSP' : key === 'supportable' ? 'Supportable' : 'Salesforce'
-                  const tooltip = s.isRunning ? 'Currently running' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSync ? `Last sync: ${new Date(s.lastSync).toLocaleString()}` : 'Not yet synced'
+                {([
+                  { storeKey: 'rh-cases' as const,    label: 'RH Cases',    displayKey: 'rh' },
+                  { storeKey: 'ccsp' as const,         label: 'CCSP',        displayKey: 'ccsp' },
+                  { storeKey: 'supportable' as const,  label: 'Supportable', displayKey: 'supportable' },
+                  { storeKey: 'sf-pipeline' as const,  label: 'Salesforce',  displayKey: 'salesforce' },
+                ] as const).map(({ storeKey, label, displayKey }) => {
+                  const s = scrapeStatus.data!.scrapers[storeKey]
+                  const isRunning = s.state === 'running'
+                  const isStale = s.state === 'stale'
+                  const color = isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : isStale ? 'bg-warning' : 'bg-green-500'
+                  const tooltip = isRunning ? 'Currently running' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSuccess ? `Last sync: ${new Date(s.lastSuccess).toLocaleString()}` : 'Not yet synced'
                   return (
-                    <span key={key} className="flex items-center gap-1" title={tooltip}>
+                    <span key={displayKey} className="flex items-center gap-1" title={tooltip}>
                       <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
                       {label}
                     </span>
