@@ -42,20 +42,7 @@ import { registerBootstrapRoutes, startAccountDiscovery } from './src/bootstrap-
 import { registerSheetImportRoutes } from './src/sheet-import.ts'
 import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
 import { runIntelligencePipeline, getJobStatus } from './src/account-intelligence.ts'
-
-// ── ntfy.sh push notification helper ─────────────────────────────────────────
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
-async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
-  try {
-    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
-      method: 'POST',
-      headers: { 'Title': title, 'Priority': priority, 'Content-Type': 'text/plain' },
-      body: message,
-    })
-  } catch (e: any) {
-    console.warn('[ntfy] notification failed:', e?.message ?? e)
-  }
-}
+import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } from './src/utils.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -63,34 +50,8 @@ process.on('unhandledRejection', (reason: any) => {
   console.error('[server] unhandled rejection:', reason?.message ?? reason)
 })
 
-// ── BKL-T04: Live session probe with 30s cache ──────────────────────────────
-const _probeCache = new Map<string, { result: boolean; at: number }>()
-const PROBE_TTL_MS = 30_000
-
-async function liveProbe(url: string, key: string, timeoutMs = 5000): Promise<boolean> {
-  const cached = _probeCache.get(key)
-  if (cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.result
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-      redirect: 'manual',
-    })
-    // 2xx or 3xx redirect = alive; 401/403 = session expired
-    const alive = res.status < 400
-    _probeCache.set(key, { result: alive, at: Date.now() })
-    return alive
-  } catch {
-    _probeCache.set(key, { result: false, at: Date.now() })
-    return false
-  }
-}
-
 // ── Load shared state from server-state.ts ──────────────────────────────────
 loadServerState()
-
-function isValidDriveFolderId(id: string): boolean {
-  return /^[a-zA-Z0-9_-]{10,}$/.test(id)
-}
 
 /** Extract Tableau territory segment from a full Tableau dashboard URL. */
 function extractTableauTerritory(url: string): string | null {
@@ -150,21 +111,6 @@ const SF_SESSION_PATH = process.env.SF_SESSION
 const pendingOAuthStates = new Map<string, { mode: string; createdAt: number }>()
 
 const app = new Hono()
-
-// ── Security helpers ──────────────────────────────────────────────────────────
-
-/** Validate and trim a plain-text string. Rejects HTML tags, empty strings, and values over maxLen. */
-/** Strip internal file paths and cap length before returning error strings to clients. */
-const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
-
-function sanitizeText(value: unknown, maxLen = 200): string | null {
-  if (typeof value !== 'string') return null
-  if (/<[^>]*>/.test(value)) return null
-  const trimmed = value.trim()
-  if (trimmed.length === 0 || trimmed.length > maxLen) return null
-  return trimmed
-}
 
 // BKL-M05: Display-oriented normalizer — differs from normalizeForMatch by stripping state codes, parentheticals, and applying title case (needed for Drive folder names).
 /**

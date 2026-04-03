@@ -10,3 +10,56 @@ export function sanitizeCell(value: string): string {
   if (/^[=+\-@]/.test(value) && !/^-?\d/.test(value)) return `'${value}`
   return value
 }
+
+/** Validate and trim a plain-text string. Rejects HTML tags, empty strings, and values over maxLen. */
+export function sanitizeText(value: unknown, maxLen = 200): string | null {
+  if (typeof value !== 'string') return null
+  if (/<[^>]*>/.test(value)) return null
+  const trimmed = value.trim()
+  if (trimmed.length === 0 || trimmed.length > maxLen) return null
+  return trimmed
+}
+
+/** Validate a Google Drive folder ID (alphanumeric + dash/underscore, min 10 chars). */
+export function isValidDriveFolderId(id: string): boolean {
+  return /^[a-zA-Z0-9_-]{10,}$/.test(id)
+}
+
+// ── ntfy.sh push notification helper ─────────────────────────────────────────
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
+
+/** Send a push notification via ntfy.sh. Silently swallows network errors. */
+export async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
+  try {
+    await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
+      method: 'POST',
+      headers: { 'Title': title, 'Priority': priority, 'Content-Type': 'text/plain' },
+      body: message,
+    })
+  } catch (e: any) {
+    console.warn('[ntfy] notification failed:', e?.message ?? e)
+  }
+}
+
+// ── BKL-T04: Live session probe with 30s cache ──────────────────────────────
+const _probeCache = new Map<string, { result: boolean; at: number }>()
+const PROBE_TTL_MS = 30_000
+
+/** Probe a URL and return true if reachable (status < 400). Results cached for PROBE_TTL_MS. */
+export async function liveProbe(url: string, key: string, timeoutMs = 5000): Promise<boolean> {
+  const cached = _probeCache.get(key)
+  if (cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.result
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+      redirect: 'manual',
+    })
+    // 2xx or 3xx redirect = alive; 401/403 = session expired
+    const alive = res.status < 400
+    _probeCache.set(key, { result: alive, at: Date.now() })
+    return alive
+  } catch {
+    _probeCache.set(key, { result: false, at: Date.now() })
+    return false
+  }
+}
