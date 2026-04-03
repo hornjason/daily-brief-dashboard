@@ -193,15 +193,19 @@ app.use('*', async (c, next) => {
 })
 
 // Health check — used by container health probes and smoke tests
-app.get('/health', (c) => c.json({
-  status: 'ok',
-  timestamp: new Date().toISOString(),
-  aes: aes.length,
-  customers: customers.length,
-  session: !!getScrapeContext(),
-  sfSession: !!getSfContext(),
-  ccspSession: !!getScrapeContext(),   // ccsp shares RH SSO context
-}))
+app.get('/health', (c) => {
+  const pkg = JSON.parse(readFileSync(resolve(import.meta.dir, 'package.json'), 'utf-8'))
+  return c.json({
+    status: 'ok',
+    version: pkg.version ?? '0.0.0',
+    timestamp: new Date().toISOString(),
+    aes: aes.length,
+    customers: customers.length,
+    session: !!getScrapeContext(),
+    sfSession: !!getSfContext(),
+    ccspSession: !!getScrapeContext(),   // ccsp shares RH SSO context
+  })
+})
 
 registerCacheRoutes(app)
 registerDashboardRoutes(app)

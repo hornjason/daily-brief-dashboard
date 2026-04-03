@@ -16,7 +16,7 @@ IMAGE  := localhost/daily-brief-dashboard:latest
 REMOTE := ghcr.io/hornjason/daily-brief-dashboard:latest
 DATA   := $(CURDIR)/data
 
-.PHONY: up down logs build push rebuild ps setup
+.PHONY: up down logs build push rebuild ps setup release-patch release-minor release-major version
 
 up: down
 	podman run -d \
@@ -50,6 +50,25 @@ rebuild: build push up
 
 ps:
 	podman ps --filter name=pai-dashboard --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# ── Release Management ────────────────────────────────────────────────────────
+# Bumps package.json, commits, tags, and pushes — triggers release.yml in CI.
+# Use patch for bug fixes, minor for new features, major for breaking changes.
+
+version:
+	@node -p "require('./package.json').version"
+
+release-patch:
+	npm version patch -m "chore: release v%s"
+	git push && git push --tags
+
+release-minor:
+	npm version minor -m "chore: release v%s"
+	git push && git push --tags
+
+release-major:
+	npm version major -m "chore: release v%s"
+	git push && git push --tags
 
 setup:
 	@mkdir -p data/config data/cache data/rh-profile

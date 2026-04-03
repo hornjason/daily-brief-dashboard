@@ -1,0 +1,5 @@
+# All files require review from the repo owner by default.
+# As the team grows, add named reviewers per area:
+#   /src/scrapers/ @hornjason @teammate
+
+* @hornjason
