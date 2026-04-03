@@ -16,7 +16,7 @@ IMAGE  := localhost/daily-brief-dashboard:latest
 REMOTE := ghcr.io/hornjason/daily-brief-dashboard:latest
 DATA   := $(CURDIR)/data
 
-.PHONY: up down logs build push rebuild ps
+.PHONY: up down logs build push rebuild ps setup
 
 up: down
 	podman run -d \
@@ -50,3 +50,14 @@ rebuild: build push up
 
 ps:
 	podman ps --filter name=pai-dashboard --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+setup:
+	@mkdir -p data/config data/cache data/rh-profile
+	@if [ ! -f .env ]; then \
+	  cp .env.example .env; \
+	  echo "Created .env from template — edit it with your REDHAT_OFFLINE_TOKEN"; \
+	fi
+	@if grep -q 'your_offline_token_here' .env 2>/dev/null; then \
+	  echo "⚠️  WARNING: REDHAT_OFFLINE_TOKEN is still the placeholder — edit .env before running"; \
+	fi
+	@echo "Next steps: Run 'make rebuild' then open http://localhost:7777 to complete setup"

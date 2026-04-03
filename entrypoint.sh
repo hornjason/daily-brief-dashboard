@@ -58,4 +58,5 @@ done) &
 websockify --web /usr/share/novnc 6080 localhost:5900 &
 
 # ── Application server ────────────────────────────────────────────────────────
+bun run scripts/preflight.ts
 exec bun run server.ts

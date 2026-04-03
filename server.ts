@@ -1578,6 +1578,18 @@ app.get('/api/setup/oauth-keys-status', (c) => {
   return c.json({ exists: existsSync(GOOGLE_OAUTH_KEYS_PATH) })
 })
 
+// GET /api/setup/preflight — Return onboarding readiness checks
+app.get('/api/setup/preflight', (c) => {
+  const checks = [
+    { name: 'Environment file',  ok: existsSync('.env') || existsSync('/data/.env'),                         detail: '.env file present' },
+    { name: 'RH Portal token',   ok: !!process.env.REDHAT_OFFLINE_TOKEN,                                    detail: 'REDHAT_OFFLINE_TOKEN configured' },
+    { name: 'OAuth keys',        ok: existsSync(resolve(SRV_CONFIG_DIR, 'gcp-oauth.keys.json')),            detail: 'Google OAuth keys uploaded' },
+    { name: 'Config directory',  ok: existsSync(SRV_CONFIG_DIR),                                            detail: 'Config storage ready' },
+    { name: 'Cache directory',   ok: existsSync(CACHE_DIR),                                                 detail: 'Cache storage ready' },
+  ]
+  return c.json({ checks, allPassed: checks.every(ch => ch.ok) })
+})
+
 // POST /api/setup/upload-oauth-keys — Save uploaded GCP OAuth keys JSON
 app.post('/api/setup/upload-oauth-keys', async (c) => {
   try {
