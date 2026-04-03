@@ -548,26 +548,23 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           // Resolve account number
           let accountNumber = args.acctNumOverride ?? ''
           if (!accountNumber) {
-            // Try 1: header-detected Account column (only if found by name, not fallback index)
-            if (headerIndexMap?.has('accountNumber')) {
+            // Primary: scan ALL cells for a value matching one of the chunk's known account numbers.
+            // The Portal has hidden columns — account number is in the cells but not in visible headers.
+            if (args.chunkAccountNums) {
+              for (const cell of cells) {
+                const cleaned = cell.replace(/\D/g, '')
+                if (cleaned && args.chunkAccountNums.has(cleaned)) {
+                  accountNumber = cleaned
+                  break
+                }
+              }
+            }
+            // Fallback: header-detected Account column
+            if (!accountNumber && headerIndexMap?.has('accountNumber')) {
               const acctCol = headerIndexMap.get('accountNumber')!
               const rawAcct = (cells[acctCol] ?? '').replace(/\D/g, '')
-              if (/^\d{5,12}$/.test(rawAcct) && (args.chunkAccountNums?.has(rawAcct) ?? true)) {
+              if (/^\d{5,12}$/.test(rawAcct)) {
                 accountNumber = rawAcct
-              }
-            }
-            // Try 2: extract from case link href (e.g., /case/04350178?accountNumber=916824)
-            if (!accountNumber && caseLink.href) {
-              const hrefAcct = caseLink.href.match(/accountNumber[=:](\d{4,12})/)?.[1]
-              if (hrefAcct && (args.chunkAccountNums?.has(hrefAcct) ?? true)) {
-                accountNumber = hrefAcct
-              }
-            }
-            // Try 3: extract from row's data attributes
-            if (!accountNumber) {
-              const rowAcct = row.getAttribute('data-account') ?? row.getAttribute('data-account-number') ?? ''
-              if (/^\d{5,12}$/.test(rowAcct) && (args.chunkAccountNums?.has(rowAcct) ?? true)) {
-                accountNumber = rowAcct
               }
             }
           }
@@ -583,13 +580,17 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           })
         }
 
-        // Attach diagnostic info to first result for logging
+        // Attach diagnostic info for server-side logging
         if (results.length > 0) {
-          (results as any)._diag = {
+          const firstRow = document.querySelector('table tbody tr')
+          const firstLink = firstRow?.querySelector('a[href*="/case/"]') as HTMLAnchorElement | null
+          ;(results as any)._diag = {
             columnSource,
             headers: headerTexts,
             indexMap: headerIndexMap ? Object.fromEntries(headerIndexMap) : null,
-            firstRowCells: Array.from(document.querySelector('table tbody tr')?.querySelectorAll('td') ?? []).map(td => td.textContent?.trim()?.slice(0, 30)),
+            firstRowCells: Array.from(firstRow?.querySelectorAll('td') ?? []).map(td => td.textContent?.trim()?.slice(0, 30)),
+            firstCaseHref: firstLink?.href ?? 'NO LINK',
+            firstCaseHrefAttr: firstLink?.getAttribute('href') ?? 'NO ATTR',
           }
         }
         return results
@@ -608,9 +609,12 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
     // Log diagnostic from first chunk
     const diag = (cases as any)?._diag
     if (diag) {
-      console.log(`[rh-scraper] column source: ${diag.columnSource}, headers: ${diag.headers?.join(' | ')}`)
+      console.log(`[rh-scraper] column source: ${diag.columnSource}`)
+      console.log(`[rh-scraper] headers: ${diag.headers?.join(' | ')}`)
       console.log(`[rh-scraper] index map: ${JSON.stringify(diag.indexMap)}`)
       console.log(`[rh-scraper] first row cells: ${diag.firstRowCells?.join(' | ')}`)
+      console.log(`[rh-scraper] first case href: ${diag.firstCaseHref}`)
+      console.log(`[rh-scraper] first case href attr: ${diag.firstCaseHrefAttr}`)
     }
     for (const c of cases) {
       const severityNum = String(c.severity).match(/^(\d)/)?.[1] ?? c.severity
@@ -661,6 +665,21 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
           await checkForSessionExpiry(page)
           await waitForTable(page)
+
+          // Diagnostic: dump first row's structure before extraction
+          if (ci === 0 && pageNum === 1) {
+            const domDiag = await page.evaluate(() => {
+              const headerRow = document.querySelector('table thead tr, table tr:first-child')
+              const headers = headerRow ? Array.from(headerRow.querySelectorAll('th, td')).map(h => h.textContent?.trim()?.slice(0, 25)) : []
+              const firstRow = document.querySelector('table tbody tr')
+              const cells = firstRow ? Array.from(firstRow.querySelectorAll('td')).map(td => td.textContent?.trim()?.slice(0, 25)) : []
+              const firstLink = firstRow?.querySelector('a[href*="/case/"]') as HTMLAnchorElement | null
+              return { headers, cells, href: firstLink?.getAttribute('href') ?? 'NO LINK', cellCount: cells.length }
+            }).catch(() => ({ headers: [], cells: [], href: 'ERROR', cellCount: 0 }))
+            console.log(`[rh-scraper] DIAG headers (${domDiag.headers.length}): ${domDiag.headers.join(' | ')}`)
+            console.log(`[rh-scraper] DIAG cells (${domDiag.cellCount}): ${domDiag.cells.join(' | ')}`)
+            console.log(`[rh-scraper] DIAG first case href: ${domDiag.href}`)
+          }
 
           const cases = await extractCasesFromPage(page, chunk, null)
           chunkCaseCount += cases.length
