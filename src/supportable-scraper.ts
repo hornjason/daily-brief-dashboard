@@ -978,6 +978,8 @@ export async function runSupportableDiscoverAndScrape(
 
     async function worker(workerId: number, initialPage: Page): Promise<void> {
       let workerPage = initialPage
+      // Stagger worker starts by 2s each to avoid all 5 hitting APEX simultaneously
+      if (workerId > 0) await new Promise(r => setTimeout(r, workerId * 2000))
       lastNavigationTime = Date.now()
       try { while (jobIndex < jobs.length) {
           const job = jobs[jobIndex++]
