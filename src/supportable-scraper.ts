@@ -83,6 +83,9 @@ const DISCOVERY_PARALLEL = 3
 // Wall-clock limit per account — fires before the 30s download timeout can accumulate
 const PER_ACCOUNT_TIMEOUT_MS = 90_000  // 90 seconds
 
+// Fresh page every N accounts to prevent V8 heap growth from detached DOM nodes
+const ACCOUNTS_PER_PAGE_CYCLE = 10
+
 let _ctx: BrowserContext | null = null
 
 export function adoptSupportableContext(ctx: BrowserContext): void {
@@ -980,8 +983,6 @@ export async function runSupportableScrape(
   supportableScrapeStartedAt = Date.now()
   lastSupportableError = null
   supportableStatusMessage = 'Connecting to Supportable…'
-
-  if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
   let page = await _ctx.newPage()
   const results: SupportableResult[] = []
   let isFirst = true
@@ -1193,7 +1194,6 @@ export async function runSupportableDiscoverAndScrape(
 
     if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
 
-    const ACCOUNTS_PER_PAGE_CYCLE = 10
     let scrapePage = await _ctx.newPage()
     let accountsOnCurrentPage = 0
 
@@ -1227,12 +1227,14 @@ export async function runSupportableDiscoverAndScrape(
 
           const scrapePromise = scrapeOneAccount(scrapePage, job.accountNumber, ji === 0 && attempt === 1)
           scrapePromise.catch(() => {})  // prevent unhandled rejection if timeout wins
+          let timeoutId: ReturnType<typeof setTimeout>
           const result = await Promise.race([
             scrapePromise,
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error(`wall-clock timeout (${PER_ACCOUNT_TIMEOUT_MS / 1000}s)`)), PER_ACCOUNT_TIMEOUT_MS)
-            ),
+            new Promise<never>((_, reject) => {
+              timeoutId = setTimeout(() => reject(new Error(`wall-clock timeout (${PER_ACCOUNT_TIMEOUT_MS / 1000}s)`)), PER_ACCOUNT_TIMEOUT_MS)
+            }),
           ])
+          clearTimeout(timeoutId!)
           customerRows[job.customerIndex].push(...result.rows)
           scrapePage = result.page
           succeeded = true

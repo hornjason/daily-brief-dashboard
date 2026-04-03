@@ -768,7 +768,6 @@ app.post('/api/auth/redhat/start', async (c) => {
         }
         // Pre-warm complete (or skipped/timed out) — now safe to hide the VNC window
         getLivePage()?.goto('about:blank').catch(() => {})
-        // Auth restored — enqueue all scrapers through queue (cold-start recovery)
         console.log('[rh-auth] onComplete: enqueueing all scrapers after re-auth')
         enqueueScraperTask({
           name: 'rh-cases',
@@ -776,7 +775,6 @@ app.post('/api/auth/redhat/start', async (c) => {
           source: 'manual',
           enqueuedAt: Date.now(),
         })
-        // SF Pipeline — only AEs with sfReportId configured
         const sfAes = aes.filter(a => a.sfReportId)
         if (sfAes.length) {
           enqueueScraperTask({
@@ -786,7 +784,6 @@ app.post('/api/auth/redhat/start', async (c) => {
             enqueuedAt: Date.now(),
           })
         }
-        // Supportable — iterate AEs, scrape customers with account numbers, write sheets
         enqueueScraperTask({
           name: 'supportable',
           run: async () => {
@@ -807,7 +804,6 @@ app.post('/api/auth/redhat/start', async (c) => {
           source: 'manual',
           enqueuedAt: Date.now(),
         })
-        // CCSP — AEs with Tableau territories configured
         const ccspAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
         if (ccspAes.length) {
           enqueueScraperTask({
