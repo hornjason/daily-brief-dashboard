@@ -69,7 +69,7 @@ async function sessionHeartbeat(page: Page): Promise<void> {
 // APEX shares one SSO session across all parallel pages. At 2+ pages, concurrent
 // requests trigger APEX server-side contention (error dialogs, closed pages).
 // Set to 1 for reliable serial scraping. Increase only if APEX session isolation improves.
-const PARALLEL_PAGES = 1  // Parallel crashes even at 2 (APEX server-side state conflicts). Using "New Session" button approach needs M57 research.
+const PARALLEL_PAGES = 5  // Using APEX "New Session" button for proper session isolation (each click spawns app 305, 306, …)
 
 // Wall-clock limit per account — fires before the 30s download timeout can accumulate
 const PER_ACCOUNT_TIMEOUT_MS = 90_000  // 90 seconds
@@ -79,6 +79,72 @@ let _ctx: BrowserContext | null = null
 export function adoptSupportableContext(ctx: BrowserContext): void {
   _ctx = ctx
   console.log('[supportable] adopted shared browser context')
+}
+
+// ── Parallel APEX session creation via "New Session" button ──────────────────
+
+/**
+ * Create multiple isolated APEX sessions by clicking the "New Session" link.
+ * Each click opens a popup with a new APEX application instance (app 304 → 305 → 306 …),
+ * giving each session its own server-side state — no contention.
+ *
+ * The first page navigates normally to get app 304.
+ * Subsequent pages are created by clicking "New Session" on the first page,
+ * which opens a popup with a new app instance.
+ *
+ * Falls back gracefully: if a "New Session" click fails, returns fewer pages.
+ */
+async function createParallelSessions(count: number): Promise<Page[]> {
+  if (!_ctx) throw new Error('No browser context')
+  if (count <= 0) return []
+
+  const pages: Page[] = []
+
+  // First page: navigate normally (gets app 304)
+  const page1 = await _ctx.newPage()
+  await page1.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+  await page1.waitForTimeout(2000)
+  pages.push(page1)
+
+  const firstApp = page1.url().match(/f\?p=(\d+)/)?.[1] ?? '304'
+  console.log(`[supportable] session 1: app=${firstApp} (primary)`)
+
+  // Additional pages: click "New Session" on page1 to spawn isolated APEX apps
+  for (let i = 1; i < count; i++) {
+    try {
+      // Verify "New Session" link exists before clicking
+      const newSessionLink = await page1.$('a:has-text("New Session")')
+      if (!newSessionLink) {
+        console.warn(`[supportable] "New Session" link not found — stopping at ${pages.length} sessions`)
+        break
+      }
+
+      const popupPromise = _ctx.waitForEvent('page', { timeout: 10_000 })
+      await newSessionLink.click()
+      const newPage = await popupPromise
+      await newPage.waitForLoadState('domcontentloaded', { timeout: 15_000 })
+      await newPage.waitForTimeout(1500)
+
+      const appId = newPage.url().match(/f\?p=(\d+)/)?.[1] ?? '?'
+      console.log(`[supportable] session ${i + 1}: app=${appId}`)
+      pages.push(newPage)
+    } catch (e: any) {
+      console.warn(`[supportable] failed to create session ${i + 1}: ${e.message} — stopping at ${pages.length} sessions`)
+      break
+    }
+  }
+
+  console.log(`[supportable] created ${pages.length} parallel APEX sessions (apps ${firstApp}-${parseInt(firstApp) + pages.length - 1})`)
+  return pages
+}
+
+/**
+ * Close all pages in a session list, swallowing errors.
+ */
+async function closeParallelSessions(pages: Page[]): Promise<void> {
+  for (const p of pages) {
+    await p.close().catch(() => {})
+  }
 }
 
 // ── DOM diagnostics ───────────────────────────────────────────────────────────
@@ -744,77 +810,111 @@ export async function runSupportableDiscoverAndScrape(
   }
 
   const results: SupportableResult[] = []
-  let discoveryPage = await _ctx.newPage()
+  let ssoPage = await _ctx.newPage()
 
   try {
-    // ── Phase 1: SSO + serial name-search discovery ───────────────────────────
-    // Name searches are stateful APEX navigation — cannot be parallelized.
+    // ── Phase 0: SSO authentication ───────────────────────────────────────────
     console.log(`[supportable] discover+scrape: navigating to portal…`)
     _onStatus('connecting to Supportable…')
     lastNavigationTime = Date.now()
-    await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    // Wait for APEX search input rather than a hard timeout — exits early on warm sessions
-    await discoveryPage.waitForSelector('input#P0_CUSTOMER_NAME, input#P0_ACCOUNT_NUMBER', { timeout: 5_000 }).catch(() => {
-      // APEX not ready yet — fall back to a shorter fixed wait
-      return discoveryPage.waitForTimeout(2_000)
+    await ssoPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await ssoPage.waitForSelector('input#P0_CUSTOMER_NAME, input#P0_ACCOUNT_NUMBER', { timeout: 5_000 }).catch(() => {
+      return ssoPage.waitForTimeout(2_000)
     })
 
-    if (!discoveryPage.url().includes('supportable.corp.redhat.com')) {
+    if (!ssoPage.url().includes('supportable.corp.redhat.com')) {
       console.log(`[supportable] SSO redirect detected — waiting for authentication (up to 5 min)…`)
       _onStatus('SSO authentication — complete login in VNC if prompted…')
       let pageClosedByApex = false
-      const closePromise = new Promise<void>(resolve => { discoveryPage.once('close', () => { pageClosedByApex = true; resolve() }) })
+      const closePromise = new Promise<void>(resolve => { ssoPage.once('close', () => { pageClosedByApex = true; resolve() }) })
       await Promise.race([
-        discoveryPage.waitForURL(/supportable\.corp\.redhat\.com/, { timeout: 300_000 }).catch(() => {}),
+        ssoPage.waitForURL(/supportable\.corp\.redhat\.com/, { timeout: 300_000 }).catch(() => {}),
         closePromise,
       ])
-      if (pageClosedByApex) discoveryPage = await _ctx.newPage()
+      if (pageClosedByApex) ssoPage = await _ctx.newPage()
       _onStatus('SSO complete — loading Supportable…')
-      await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await discoveryPage.waitForSelector('input#P0_CUSTOMER_NAME, input#P0_ACCOUNT_NUMBER', { timeout: 5_000 }).catch(() => {
-        return discoveryPage.waitForTimeout(2_000)
+      await ssoPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await ssoPage.waitForSelector('input#P0_CUSTOMER_NAME, input#P0_ACCOUNT_NUMBER', { timeout: 5_000 }).catch(() => {
+        return ssoPage.waitForTimeout(2_000)
       })
     }
 
-    if (!discoveryPage.url().includes('supportable.corp.redhat.com')) {
-      throw new Error(`SSO login did not complete — still at ${discoveryPage.url()}`)
+    if (!ssoPage.url().includes('supportable.corp.redhat.com')) {
+      throw new Error(`SSO login did not complete — still at ${ssoPage.url()}`)
     }
+
+    // Close the SSO page — we'll create isolated sessions for actual work
+    await ssoPage.close().catch(() => {})
 
     // Tell RH keep-alive to skip page navigation while we're scraping
     setLivePageBusy(true)
+
+    // ── Phase 1: Parallel discovery using "New Session" isolation ─────────────
+    // Split customers needing discovery across parallel APEX sessions.
     console.log(`[supportable] discover+scrape: session active — discovering ${customers.length} customers`)
     _onStatus(`session active — discovering ${customers.length} customers…`)
 
     interface DiscoveredCustomer { customerName: string; accountNumbers: string[] }
-    const discovered: DiscoveredCustomer[] = []
+    const discovered: DiscoveredCustomer[] = new Array(customers.length)
 
+    // Separate cached vs needs-discovery customers
+    interface DiscoveryJob { originalIndex: number; name: string; supportableName?: string }
+    const discoveryJobs: DiscoveryJob[] = []
     for (let di = 0; di < customers.length; di++) {
-      const { name: customerName, supportableName } = customers[di]
-      _onStatus(`Discovering: ${customerName} (${di + 1}/${customers.length})…`)
-
-      // Skip discovery for customers with cached account numbers
       const cached = (customers[di] as any).accountNumbers
       if (Array.isArray(cached) && cached.length > 0) {
-        console.log(`[supportable] ${customerName}: using ${cached.length} cached account numbers (skipping discovery)`)
-        discovered.push({ customerName, accountNumbers: cached })
-        continue
+        console.log(`[supportable] ${customers[di].name}: using ${cached.length} cached account numbers (skipping discovery)`)
+        discovered[di] = { customerName: customers[di].name, accountNumbers: cached }
+      } else {
+        discoveryJobs.push({ originalIndex: di, name: customers[di].name, supportableName: customers[di].supportableName })
       }
-
-      await discoveryPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
-        console.warn(`[supportable] discover: pre-nav failed for "${customerName}": ${e.message}`)
-      })
-      await discoveryPage.waitForTimeout(1_500)
-
-      let accountNumbers: string[] = []
-      try {
-        accountNumbers = await discoverAccountNumbersByName(discoveryPage, customerName, supportableName)
-      } catch (e: any) {
-        console.warn(`[supportable] discover: name search failed for "${customerName}": ${e.message}`)
-      }
-      discovered.push({ customerName, accountNumbers })
     }
 
-    await discoveryPage.close().catch(() => {})
+    if (discoveryJobs.length > 0) {
+      // Create parallel sessions for discovery — cap at discoveryJobs.length
+      const discoverySessionCount = Math.min(PARALLEL_PAGES, discoveryJobs.length)
+      _onStatus(`creating ${discoverySessionCount} parallel discovery sessions…`)
+      const discoveryPages = await createParallelSessions(discoverySessionCount)
+
+      // Distribute discovery jobs across sessions
+      let discoveryJobIndex = 0
+      async function discoveryWorker(workerId: number, page: Page): Promise<void> {
+        try {
+          while (discoveryJobIndex < discoveryJobs.length) {
+            const job = discoveryJobs[discoveryJobIndex++]
+            _onStatus(`Discovering: ${job.name} (${discoveryJobIndex}/${discoveryJobs.length})…`)
+
+            // Navigate to landing page before each search
+            await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
+              console.warn(`[supportable] discover-worker-${workerId}: pre-nav failed for "${job.name}": ${e.message}`)
+            })
+            await page.waitForTimeout(1_500)
+
+            let accountNumbers: string[] = []
+            try {
+              accountNumbers = await discoverAccountNumbersByName(page, job.name, job.supportableName)
+            } catch (e: any) {
+              console.warn(`[supportable] discover-worker-${workerId}: name search failed for "${job.name}": ${e.message}`)
+            }
+            discovered[job.originalIndex] = { customerName: job.name, accountNumbers }
+            console.log(`[supportable] discover-worker-${workerId}: "${job.name}" → ${accountNumbers.length} account(s)`)
+          }
+        } catch (e: any) {
+          console.warn(`[supportable] discover-worker-${workerId}: unexpected exit — ${e.message}`)
+        }
+      }
+
+      await Promise.all(discoveryPages.map((page, i) => discoveryWorker(i, page)))
+      await closeParallelSessions(discoveryPages)
+      console.log(`[supportable] discovery phase complete — all ${customers.length} customers resolved`)
+    }
+
+    // Fill in any gaps (should not happen, but defensive)
+    for (let di = 0; di < customers.length; di++) {
+      if (!discovered[di]) {
+        discovered[di] = { customerName: customers[di].name, accountNumbers: [] }
+      }
+    }
 
     // ── Phase 2: Build flat job queue ─────────────────────────────────────────
     interface ScrapeJob { customerName: string; accountNumber: string; customerIndex: number }
@@ -834,14 +934,26 @@ export async function runSupportableDiscoverAndScrape(
 
     console.log(`[supportable] scrape: ${jobs.length} account(s) across ${discovered.length} customers — ${PARALLEL_PAGES} parallel pages`)
 
-    // ── Phase 3: Parallel scrape — PARALLEL_PAGES workers share SSO context ──
+    // ── Phase 3: Parallel scrape using "New Session" isolated APEX apps ──────
+    // Pre-create all worker pages with isolated APEX sessions.
+    const workerCount = Math.min(PARALLEL_PAGES, jobs.length || 1)
+    _onStatus(`creating ${workerCount} parallel scrape sessions…`)
+    const scrapePages = await createParallelSessions(workerCount)
+    const actualWorkers = scrapePages.length  // may be fewer if "New Session" clicks failed
+
+    if (actualWorkers === 0) {
+      throw new Error('Failed to create any APEX sessions for scraping')
+    }
+
+    if (actualWorkers < workerCount) {
+      console.warn(`[supportable] only ${actualWorkers}/${workerCount} sessions created — proceeding with reduced parallelism`)
+    }
+
     // jobIndex is incremented inside a synchronous tick — safe without a mutex.
     let jobIndex = 0
 
-    async function worker(workerId: number): Promise<void> {
-      let workerPage = await _ctx!.newPage()
-      await workerPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await workerPage.waitForTimeout(1_500)
+    async function worker(workerId: number, initialPage: Page): Promise<void> {
+      let workerPage = initialPage
       lastNavigationTime = Date.now()
       try { while (jobIndex < jobs.length) {
           const job = jobs[jobIndex++]
@@ -854,8 +966,7 @@ export async function runSupportableDiscoverAndScrape(
             try {
               if (attempt > 1) {
                 console.log(`[supportable] worker-${workerId}: retry ${job.accountNumber} (attempt ${attempt})`)
-                await workerPage.close().catch(() => {})
-                workerPage = await _ctx!.newPage()
+                // On retry, navigate back to landing on the SAME isolated page (don't create new page — that would lose session isolation)
                 await workerPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
                 await workerPage.waitForTimeout(2_000)
               }
@@ -876,8 +987,11 @@ export async function runSupportableDiscoverAndScrape(
               succeeded = true
             } catch (e: any) {
               console.warn(`[supportable] worker-${workerId}: ${job.customerName}/${job.accountNumber} attempt ${attempt}: ${e.message}`)
+              // Check if page is still alive — if not, navigate fresh on same page URL
               const alive = await workerPage.evaluate(() => true).catch(() => false)
               if (!alive) {
+                // Page died — create a new page (loses session isolation, but better than crashing)
+                console.warn(`[supportable] worker-${workerId}: page died — creating replacement page`)
                 await workerPage.close().catch(() => {})
                 workerPage = await _ctx!.newPage()
               }
@@ -904,7 +1018,7 @@ export async function runSupportableDiscoverAndScrape(
       }
     }
 
-    await Promise.all(Array.from({ length: Math.min(PARALLEL_PAGES, jobs.length || 1) }, (_, i) => worker(i)))
+    await Promise.all(scrapePages.map((page, i) => worker(i, page)))
 
     // ── Phase 4: Assemble results in original customer order ──────────────────
     // Fire onProgress for any customers that had 0 accounts (skipped the worker loop)
