@@ -24,6 +24,11 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts
 import type { AE } from './types.ts'
 
 const SUPPORTABLE_URL = 'https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1'
+/** Get this page's own Supportable landing URL (respects app 305, 306, etc from New Session) */
+function getPageLandingUrl(page: Page): string {
+  const appNum = page.url().match(/f\?p=(\d+)/)?.[1] ?? '304'
+  return SUPPORTABLE_URL.replace('f?p=304:', `f?p=${appNum}:`)
+}
 const SUPPORTABLE_DEBUG = process.env.SUPPORTABLE_DEBUG === 'true'
 
 import { setLivePageBusy } from './rh-scraper.ts'
@@ -60,7 +65,7 @@ let lastNavigationTime = 0
 async function sessionHeartbeat(page: Page): Promise<void> {
   if (Date.now() - lastNavigationTime < SESSION_HEARTBEAT_MS) return
   console.log(`[supportable] session heartbeat — refreshing APEX session`)
-  await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+  await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
   await page.waitForTimeout(1_000)
   lastNavigationTime = Date.now()
 }
@@ -295,7 +300,7 @@ async function scrapeOneAccount(
   if (isFirst) {
     console.log(`[supportable] navigating to portal…`)
     lastNavigationTime = Date.now()
-    await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await page.waitForTimeout(3_000)
     if (SUPPORTABLE_DEBUG) await dumpDom(page, 'landing')
 
@@ -317,7 +322,7 @@ async function scrapeOneAccount(
 
       // Navigate fresh to the Supportable landing page (session is now in profile)
       console.log('[supportable] navigating fresh to portal after SSO')
-      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 30_000 })
       await page.waitForTimeout(3_000)
       if (SUPPORTABLE_DEBUG) await dumpDom(page, 'post-sso-fresh')
     } else {
@@ -327,7 +332,7 @@ async function scrapeOneAccount(
         console.log(`[supportable] SSO popup detected — waiting for user to complete via VNC at :6080`)
         await popup.waitForEvent('close', { timeout: 300_000 }).catch(() => {})
         console.log('[supportable] SSO popup closed — navigating fresh to portal')
-        await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+        await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 30_000 })
         await page.waitForTimeout(3_000)
         if (SUPPORTABLE_DEBUG) await dumpDom(page, 'post-sso-fresh')
       } else {
@@ -520,7 +525,7 @@ async function scrapeOneAccount(
 
   // ── Navigate back to landing for next account ────────────────────────────
   // Full navigation clears all APEX state — no need to click the Reset button first.
-  await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+  await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 30_000 })
   await page.waitForTimeout(1_500)
   lastNavigationTime = Date.now()
 
@@ -602,9 +607,12 @@ async function discoverAccountNumbersByName(
     const searchTerm = candidates[ci]
     const isRetry = ci > 0
 
-    // Navigate back to landing page for retries (APEX resets state on page load)
+    // Navigate back to this page's OWN app landing page for retries
+    // (apps 305-308 from "New Session" must not go back to 304)
     if (isRetry) {
-      await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+      const appNum = page.url().match(/f\?p=(\d+)/)?.[1] ?? '304'
+      const landingUrl = SUPPORTABLE_URL.replace('f?p=304:', `f?p=${appNum}:`)
+      await page.goto(landingUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
       await page.waitForTimeout(1_500)
     }
 
@@ -612,6 +620,7 @@ async function discoverAccountNumbersByName(
     console.log(`[supportable] name-search: filled #${fieldId} with "${searchTerm}%" (candidate ${ci + 1}/${candidates.length}${isRetry ? ' — retry' : ''})`)
 
     await page.click('button.button-alt1')
+    console.log(`[supportable] name-search: Go clicked — on ${page.url().slice(0, 80)}`)
     // Race: results table appearing (fast) vs networkidle (slow fallback)
     await Promise.race([
       page.waitForSelector('table th', { timeout: 10_000 }).catch(() => {}),
@@ -885,7 +894,7 @@ export async function runSupportableDiscoverAndScrape(
             _onStatus(`Discovering: ${job.name} (${discoveryJobIndex}/${discoveryJobs.length})…`)
 
             // Navigate to landing page before each search
-            await page.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
+            await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch((e: any) => {
               console.warn(`[supportable] discover-worker-${workerId}: pre-nav failed for "${job.name}": ${e.message}`)
             })
             await page.waitForTimeout(1_500)
@@ -967,7 +976,7 @@ export async function runSupportableDiscoverAndScrape(
               if (attempt > 1) {
                 console.log(`[supportable] worker-${workerId}: retry ${job.accountNumber} (attempt ${attempt})`)
                 // On retry, navigate back to landing on the SAME isolated page (don't create new page — that would lose session isolation)
-                await workerPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+                await workerPage.goto(getPageLandingUrl(workerPage), { waitUntil: 'domcontentloaded', timeout: 30_000 })
                 await workerPage.waitForTimeout(2_000)
               }
               // Wall-clock timeout prevents any single account from blocking a worker indefinitely.
@@ -995,7 +1004,7 @@ export async function runSupportableDiscoverAndScrape(
                 await workerPage.close().catch(() => {})
                 workerPage = await _ctx!.newPage()
               }
-              await workerPage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+              await workerPage.goto(getPageLandingUrl(workerPage), { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
               await workerPage.waitForTimeout(1_500)
             }
           }
