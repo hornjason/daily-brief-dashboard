@@ -5,7 +5,7 @@ import type { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
 import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason } from './rh-scraper.ts'
-import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount } from './sf-scraper.ts'
+import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess } from './sf-scraper.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
 import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper.ts'
@@ -496,6 +496,9 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
         _sfSyncLastError = sanitizeErr(e)
       }
     }
+
+    // Update exported status so /api/scrape/salesforce/status reflects the run
+    if (!_sfSyncLastError && totalRows > 0) recordSfSyncSuccess(totalRows)
 
     // BKL-M50e: Record telemetry for SF sync
     recordScrapeResult({

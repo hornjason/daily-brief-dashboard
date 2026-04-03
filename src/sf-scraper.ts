@@ -853,6 +853,13 @@ export let lastSfSync: string | null = null
 export let lastSfRowCount = 0
 export let sfSyncError: string | null = null
 
+/** Update SF sync status from external callers (e.g. scraper-manager) */
+export function recordSfSyncSuccess(rowCount: number): void {
+  lastSfSync = new Date().toISOString()
+  lastSfRowCount = rowCount
+  sfSyncError = null
+}
+
 /**
  * Full pipeline sync: scrape SF report → write to Google Sheet.
  * @param reportId    Salesforce report ID (from aes.json sfReportId or SF_REPORT_ID env fallback)
