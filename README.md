@@ -86,15 +86,17 @@ podman run -d \
 
 Go to **http://localhost:7777/dashboard/setup**. The wizard walks you through:
 
-1. **OAuth Keys** — Download the shared `gcp-oauth.keys.json` from the link in the wizard, then paste or upload it. This file identifies the app to Google — it's safe to use and shared read-only by jhorn@redhat.com.
+1. **OAuth Keys** — Download the shared `gcp-oauth.keys.json` from the link in the wizard, then paste or upload it
 2. **Connect Google Workspace** — Authorizes access to Gmail, Calendar, Drive, and Sheets
-3. **Connect Red Hat Portal** — Log in at `http://localhost:6080` (this opens a browser running inside the container where you complete SSO login)
+3. **Connect Red Hat Portal** — Click "Connect" and log in via the browser window that opens automatically
 4. **AEs & Customers** — Connect your Google Drive AE folder(s) to import customer lists
-5. **Data Sources & Refresh** — Review connected data sources and refresh intervals
+5. **Data Sources & Refresh** — Connect Supportable, Salesforce, and Tableau via one-click buttons, then sync data
 
 After setup, your dashboard is at **http://localhost:7777/dashboard**. Data sources refresh on first load — the initial scrape may take 3-5 minutes before data appears.
 
 > **Google OAuth error?** The shared GCP project (`jhorn-pai`) uses Internal consent mode — any `@redhat.com` Google Workspace account can authorize. If you see errors, email **jhorn@redhat.com**.
+
+For detailed setup instructions, Drive folder naming conventions, advanced configuration, and troubleshooting, see **[SETUP.md](SETUP.md)**.
 
 ## Stopping and Restarting
 
@@ -144,7 +146,7 @@ Check logs: `podman logs pai-dashboard`
 Verify the container is running: `podman ps`
 
 **Red Hat Portal session expired (data stops refreshing)**
-Visit `http://localhost:6080` and log in again through the browser window.
+Go to the setup wizard and click "Reconnect" on the Red Hat Portal card to re-authenticate.
 
 **Google auth errors**
 Re-run the setup wizard at `http://localhost:7777/dashboard/setup` and re-do the Google OAuth step.

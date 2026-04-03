@@ -114,7 +114,7 @@ The shared GCP project (`jhorn-pai`) uses **Internal** consent mode — any `@re
 
 #### Connect Red Hat Portal
 
-Visit **http://localhost:6080** in your browser. This opens a noVNC window into the container's headless Chromium browser. Log into the Red Hat Customer Portal using your SSO credentials.
+Click **Connect Red Hat Portal** in the wizard. A browser window opens automatically showing the container's headless Chromium — log into the Red Hat Customer Portal using your SSO credentials and return to the wizard. The session is detected automatically.
 
 Your session is saved to `./data/rh-profile/` and persists across container restarts. You only need to re-login when your session expires.
 
@@ -138,16 +138,27 @@ After connecting folders, click **Preview** to auto-discover the pipeline spread
 
 #### Data Sources & Refresh
 
-Review connected data sources and configure refresh intervals. Default intervals:
+This section has two parts:
+
+**Connections** — One-click connect buttons for each data source. Click each to authenticate:
+
+| Source | What Happens |
+|---|---|
+| **Red Hat Portal** | Scrolls to the RH Portal section above |
+| **Supportable 360** | Checks VPN reachability (requires Red Hat VPN) |
+| **Salesforce** | Opens a browser window for SSO login, auto-detects when done |
+| **Tableau** | Opens a browser window for SSO login, auto-detects when done |
+
+**Sync** — Manual sync buttons and last-sync timestamps for each data source. Default refresh intervals:
 
 | Data Source | Default Refresh |
 |---|---|
 | Red Hat support cases | Every 4 hours |
-| Subscriptions (from Sheets) | Every 4 hours |
+| Supportable subscriptions | Every 4 hours |
 | CCSP cloud spend | Every 24 hours |
 | Salesforce pipeline | Daily at 2am ET |
 
-Intervals can be changed at any time without restarting the container.
+You can trigger a manual sync any time without restarting the container.
 
 ---
 
@@ -157,48 +168,47 @@ After completing all sections, navigate to **http://localhost:7777/dashboard**. 
 
 ## Google Drive Folder Structure
 
-The dashboard searches your entire folder tree recursively — you can connect at any level and it finds everything beneath it automatically. Your existing structure works as-is.
+### What Bootstrap Creates
 
-**Connect at the highest useful level** — the dashboard will find files at any depth below it:
+When you run the setup wizard's bootstrap step, it automatically creates this folder structure on Google Drive:
 
 ```
-/Sales/                                   <- connect this (or any level below)
-  └── Northwest/
-        └── 2026/
-              └── Jason/                  <- or connect individual AE folder here
-                    ├── Pipeline Q1 2026.xlsx   <- found by "pipeline" in filename
-                    ├── Territory Data.xlsx     <- found by CCSP tab name
-                    ├── Acme Corporation/       <- or: Accounts/Acme Corporation/
-                    │     └── Account Plan.docx
-                    └── Accounts/               <- subfolder is fine too
-                          ├── Contoso Ltd/
-                          └── GlobalTech/
+Your Parent Folder/                          <- you choose where (or let it create at root)
+  └── Jason Horn/                            <- AE folder (one per AE)
+        ├── Supportable — Jason Horn         <- Google Sheet: subscription data per customer tab
+        ├── Jason Horn CCSP                  <- Google Sheet: cloud consumption data
+        ├── Jason Horn Pipeline              <- Google Sheet: Salesforce pipeline opportunities
+        ├── Acme Corporation/                <- customer folder (one per customer)
+        │     └── Account Intelligence/      <- auto-created subfolder
+        │           ├── Account Brief.gdoc   <- AI-generated customer brief
+        │           └── SWOT Analysis.gdoc   <- AI-generated SWOT
+        ├── Contoso Ltd/
+        │     └── Account Intelligence/
+        │           └── ...
+        └── GlobalTech Inc/
+              └── Account Intelligence/
+                    └── ...
 ```
 
-### Naming Guidelines
+| Resource | Created By | Purpose |
+|---|---|---|
+| **AE folder** | Bootstrap Step 1 | Top-level folder for all AE data |
+| **Customer folders** | Bootstrap Step 2 | One subfolder per customer from your territory list |
+| **Supportable — {AE}** sheet | Bootstrap Step 4 | Subscription data scraped from Supportable 360 (one tab per customer) |
+| **{AE} CCSP** sheet | Bootstrap Step 5 | Cloud consumption data scraped from Tableau CCSP |
+| **{AE} Pipeline** sheet | Bootstrap Step 6 | Salesforce pipeline opportunities synced from your SF report |
+| **Account Intelligence/** | On-demand | Created inside each customer folder when you generate AI briefs |
 
-The dashboard auto-discovers data using fuzzy filename and tab-name matching:
+### Connecting an Existing Folder
 
-#### Pipeline File
-- Include **"pipeline"** in the filename
-- Good: `FY26 Q1 Pipeline.xlsx`, `Jason Pipeline`, `West Pipeline Data`
-- Bad: `AE Opportunities Q1.xlsx` (no "pipeline" in the name)
+If you already have an AE folder structure on Drive, you can connect it instead of creating a new one. The dashboard searches recursively — connect at any level and it finds everything beneath it.
 
-#### Territory / Customer Data Spreadsheet (CCSP + Subscriptions)
+Auto-discovery uses fuzzy matching on filenames and tab names:
 
-**CCSP tab:**
-- Tab name must include **"ccsp"** (case-insensitive)
-- Good: `CCSP Raw Data`, `CCSP Report`, `Q1 CCSP`, `ccsp`
-- Bad: `Cloud Consumption`, `AWS Spend` (no "ccsp" in the name)
-
-**Customer subscription tabs:**
-- Tab name must include the **customer name** (case-insensitive, partial match is fine)
-- Good: `Acme Corp`, `ACME CORPORATION`, `Acme - Q1 Subs`
-- Bad: `Account_001`, `CustomerA` (no customer name in the tab)
-
-#### Customer Folders on Drive
-- Folder name should include the customer name
-- The dashboard searches document titles for the customer name to find relevant account docs
+- **Pipeline:** filename must include **"pipeline"** (e.g., `FY26 Q1 Pipeline.xlsx`)
+- **CCSP:** tab name must include **"ccsp"** (e.g., `CCSP Raw Data`)
+- **Subscriptions:** tab name must include the **customer name** (case-insensitive, partial match OK)
+- **Customer folders:** folder name should include the customer name
 
 ---
 
