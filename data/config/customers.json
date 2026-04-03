@@ -2,30 +2,60 @@
   "customers": [
     {
       "name": "A10 Networks",
+      "domain": "a10networks.com",
       "accountNumbers": [
         "5929071",
         "916824",
         "12238100"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Technology",
+      "segment": "Network Security and Application Delivery (including DDoS Protection, Application Delivery Controllers, and Multi-Cloud Security)",
+      "industryDescription": "A10 Networks provides secure application services and solutions, including advanced load balancing, DDoS protection, and firewalls, to ensure application availability, performance, and security across multi-cloud and on-premises environments.",
+      "industryCompetitors": [
+        "F5",
+        "Fortinet",
+        "Cisco Systems"
+      ],
+      "industryUpdatedAt": "2026-04-02T17:01:30.883Z"
     },
     {
       "name": "Dropbox",
+      "domain": "dropbox.com",
       "accountNumbers": [
         "10375220"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Technology",
+      "segment": "Cloud Storage and Collaboration Software",
+      "industryDescription": "Dropbox provides a cloud-based service that allows users to store, synchronize, share, and access files from any device, evolving into a work-focused platform with collaboration, e-signature, and automation features.",
+      "industryCompetitors": [
+        "Google Drive",
+        "Microsoft OneDrive",
+        "Box"
+      ],
+      "industryUpdatedAt": "2026-04-03T00:18:59.397Z"
     },
     {
-      "name": "Fred Hutchinson Cancer Center",
-      "supportableName": "Seattle Cancer Care",
+      "name": "Seattle Cancer Care",
+      "domain": "fredhutch.org",
       "accountNumbers": [
         "5456785"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Healthcare",
+      "segment": "Oncology / Cancer Treatment and Research",
+      "industryDescription": "Fred Hutchinson Cancer Center (formerly Seattle Cancer Care Alliance) is a world-renowned cancer treatment and research institution that combines comprehensive patient care with cutting-edge scientific discoveries to prevent, diagnose, and treat cancer.",
+      "industryCompetitors": [
+        "Swedish Cancer Institute",
+        "Virginia Mason Medical Center",
+        "Kaiser Permanente Washington"
+      ],
+      "industryUpdatedAt": "2026-04-03T01:19:56.148Z"
     },
     {
       "name": "Illumio",
+      "domain": "illumio.com",
       "accountNumbers": [
         "9162122",
         "11390719",
@@ -38,14 +68,16 @@
     },
     {
       "name": "Lynden Logistics",
+      "domain": "lynden.com",
       "accountNumbers": [
-        "5242436"
+        "5242436",
+        "10752341"
       ],
       "ae": "Carolanne Farrell"
     },
     {
       "name": "Recreational Equipment",
-      "supportableName": "Recreational Equipment, Inc.",
+      "domain": "rei.com",
       "accountNumbers": [
         "627962"
       ],
@@ -53,6 +85,7 @@
     },
     {
       "name": "Shutterfly",
+      "domain": "shutterfly.com",
       "accountNumbers": [
         "565461"
       ],
@@ -60,6 +93,7 @@
     },
     {
       "name": "Crowdstrike",
+      "domain": "crowdstrike.com",
       "accountNumbers": [
         "5311018",
         "5857069"
@@ -68,10 +102,112 @@
     },
     {
       "name": "Lifetouch",
+      "domain": "lifetouch.com",
       "accountNumbers": [
         "1368936"
       ],
       "ae": "Carolanne Farrell"
+    },
+    {
+      "name": "Bespin Global U.S.",
+      "domain": "bespinglobal.us",
+      "accountNumbers": [
+        "9510919"
+      ],
+      "ae": "Elmer Alvarez"
+    },
+    {
+      "name": "Bitrise",
+      "domain": "bitrise.io",
+      "accountNumbers": [
+        "11416649"
+      ],
+      "ae": "Elmer Alvarez"
+    },
+    {
+      "name": "Confluent",
+      "domain": "confluent.io",
+      "accountNumbers": [
+        "6390417",
+        "6084814",
+        "12091277",
+        "12849784"
+      ],
+      "ae": "Elmer Alvarez"
+    },
+    {
+      "name": "Intrado Corporation",
+      "domain": "intrado.com",
+      "accountNumbers": [
+        "11504906",
+        "11607015"
+      ],
+      "ae": "Elmer Alvarez",
+      "supportableName": "Intrado Life & Safety"
+    },
+    {
+      "name": "Mcafee",
+      "domain": "mcafee.com",
+      "accountNumbers": [
+        "1264530",
+        "7018642"
+      ],
+      "ae": "Elmer Alvarez"
+    },
+    {
+      "name": "Omnivision Technologies",
+      "domain": "ovt.com",
+      "accountNumbers": [
+        "1207290"
+      ],
+      "ae": "Elmer Alvarez"
+    },
+    {
+      "name": "Robert Half International",
+      "domain": "roberthalf.com",
+      "accountNumbers": [
+        "5308452"
+      ],
+      "ae": "Elmer Alvarez"
+    },
+    {
+      "name": "Taylor Fresh Foods",
+      "domain": "taylorfarms.com",
+      "accountNumbers": [
+        "11823554"
+      ],
+      "ae": "Elmer Alvarez"
+    },
+    {
+      "name": "Uber Technologies",
+      "domain": "uber.com",
+      "accountNumbers": [
+        "913977",
+        "6943734"
+      ],
+      "ae": "Elmer Alvarez"
+    },
+    {
+      "name": "Workday",
+      "domain": "workday.com",
+      "accountNumbers": [
+        "5350212"
+      ],
+      "ae": "Elmer Alvarez",
+      "driveFolderId": "18iRflkJtGM9BL-JAKS_27m2x3M9hCXxh"
+    },
+    {
+      "name": "Real Customer",
+      "ae": "Test AE",
+      "driveFolderId": "12GvvRh4e_qGkmIsO5CMeEN1oZahYmIGM"
+    },
+    {
+      "name": "Fred Hutchinson Cancer Center",
+      "ae": "Carolanne Farrell",
+      "accountNumbers": [
+        "12763660"
+      ],
+      "supportableName": "Fred Hutch"
     }
   ]
 }
