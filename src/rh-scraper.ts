@@ -550,10 +550,10 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           if (!accountNumber) {
             // Primary: scan ALL cells for a value matching one of the chunk's known account numbers.
             // The Portal has hidden columns — account number is in the cells but not in visible headers.
-            if (args.chunkAccountNums) {
+            if (validAccounts) {
               for (const cell of cells) {
                 const cleaned = cell.replace(/\D/g, '')
-                if (cleaned && args.chunkAccountNums.has(cleaned)) {
+                if (cleaned && validAccounts.has(cleaned)) {
                   accountNumber = cleaned
                   break
                 }
@@ -713,8 +713,6 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
         )
       }
 
-      batchSucceeded = true
-
       // ── Post-batch: log any unresolved account numbers ──────────────────
       // The cell scanner (above) should resolve most/all accounts.
       // If any remain unresolved, log them but don't do per-account queries
@@ -726,10 +724,10 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           console.warn(`[rh-scraper]   case ${c.caseNumber}: no matching account in chunk`)
         }
       } else {
-          console.log(`[rh-scraper] all cases resolved to accounts`)
-        }
+        console.log(`[rh-scraper] all cases resolved to accounts`)
       }
 
+      batchSucceeded = true
     } catch (batchErr: any) {
       // If session expired, re-throw — don't fall back
       if (batchErr instanceof SessionExpiredError) throw batchErr
