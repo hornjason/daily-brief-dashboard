@@ -653,7 +653,7 @@ export function registerBootstrapRoutes(app: Hono): void {
       const url = page.url()
       // Only flag as login page if we didn't land on the Tableau domain,
       // or if there's actually a password/login form visible (not just /auth in the URL)
-      const hasLoginForm = !!(await page.$('input[type="password"], #username, [data-testid="login"]').catch(() => null))
+      const hasLoginForm = !!(await page.$('input[type="password"], input#username, [data-testid="login"]').catch(() => null))
       const onLoginPage = !url.startsWith('https://10ay.online.tableau.com') || hasLoginForm
       return c.json({ reachable: true, sessionValid: !onLoginPage })
     } catch {
@@ -671,29 +671,28 @@ export function registerBootstrapRoutes(app: Hono): void {
   // to the login form — causing a false-positive that closes the VNC window immediately.
   app.get('/api/bootstrap/tableau/wait-for-login', async (c) => {
     const livePage = getLivePage()
-    if (!livePage) return c.json({ sessionValid: false })
+    if (!livePage) {
+      console.log('[tableau] wait-for-login: no live page available')
+      return c.json({ sessionValid: false })
+    }
 
-    // ── Initial settle delay ────────────────────────────────────────────────
-    // open-login navigates the live page to Tableau. The initial domcontentloaded
-    // fires on 10ay.online.tableau.com BEFORE the SSO redirect chain completes.
-    // Without this delay, checkTableauLoggedIn sees the Tableau hostname with no
-    // login form (not rendered yet) and returns a false-positive — which causes
-    // the frontend to close the VNC window before the user can interact.
-    // Wait 8s for the SSO redirect chain to fully settle before starting to watch.
     await livePage.waitForTimeout(8_000)
 
-    // After settling, check current state — if already on Tableau with no login
-    // form, SSO auto-completed (valid shared-context cookies) and we're done.
+    const settledUrl = livePage.url()
+    console.log(`[tableau] wait-for-login: settled on ${settledUrl}`)
+
     const alreadyValid = await livePage.evaluate(() => {
       const onTableau = window.location.hostname.includes('10ay.online.tableau.com')
-      const noLoginForm = !document.querySelector('input[type="password"], #username, [data-testid="login"]')
+      const noLoginForm = !document.querySelector('input[type="password"], input#username, [data-testid="login"]')
       return onTableau && noLoginForm
     }).catch(() => false)
 
     if (alreadyValid) {
+      console.log('[tableau] wait-for-login: already valid after settle')
       setLivePageBusy(false)
       return c.json({ sessionValid: true })
     }
+    console.log('[tableau] wait-for-login: not yet valid — watching for login completion (120s timeout)')
 
     // Not yet logged in — wait for the user to complete login in the VNC window.
     // At this point we know the SSO redirect has happened and a login form is
@@ -701,7 +700,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     // back on Tableau with no login form — that signals successful login.
     const checkTableauLoggedIn = () => {
       const onTableau = window.location.hostname.includes('10ay.online.tableau.com')
-      const noLoginForm = !document.querySelector('input[type="password"], #username, [data-testid="login"]')
+      const noLoginForm = !document.querySelector('input[type="password"], input#username, [data-testid="login"]')
       return onTableau && noLoginForm
     }
 
@@ -714,13 +713,15 @@ export function registerBootstrapRoutes(app: Hono): void {
       await livePage.waitForTimeout(6_000)
       const finalValid = await livePage.evaluate(() => {
         const onTableau = window.location.hostname.includes('10ay.online.tableau.com')
-        const noLoginForm = !document.querySelector('input[type="password"], #username, [data-testid="login"]')
+        const noLoginForm = !document.querySelector('input[type="password"], input#username, [data-testid="login"]')
         return onTableau && noLoginForm
       }).catch(() => false)
 
+      console.log(`[tableau] wait-for-login: login detected, finalValid=${finalValid}`)
       setLivePageBusy(false)
       return c.json({ sessionValid: finalValid })
-    } catch {
+    } catch (e: any) {
+      console.warn(`[tableau] wait-for-login: timed out or failed — ${e?.message ?? e}`)
       setLivePageBusy(false)
       return c.json({ sessionValid: false })
     }
