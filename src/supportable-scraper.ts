@@ -74,7 +74,7 @@ async function sessionHeartbeat(page: Page): Promise<void> {
 // APEX shares one SSO session across all parallel pages. Path B (HTML extraction)
 // avoids DOM clicks for download, eliminating element-detached errors in parallel.
 // CSV fallback still does DOM clicks, but only fires when HTML extraction fails.
-const PARALLEL_PAGES = 3  // HTML extraction (Path B) avoids DOM clicks for download — parallel is stable.
+const PARALLEL_PAGES = 5  // HTML extraction (Path B) avoids DOM clicks for download — parallel is stable.
 
 // Wall-clock limit per account — fires before the 30s download timeout can accumulate
 const PER_ACCOUNT_TIMEOUT_MS = 90_000  // 90 seconds
