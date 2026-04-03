@@ -774,59 +774,42 @@ async function discoverAccountNumbersByName(
       }
     }
 
-    const tableData = await page.evaluate(() => {
-      const tables = Array.from(document.querySelectorAll('table'))
-      for (const t of tables) {
-        const ths = Array.from(t.querySelectorAll('th'))
-          .map(el => el.textContent?.trim().replace(/\s+/g, ' ') ?? '')
-        if (!ths.some(h => /party.?number|customer.?number|entl/i.test(h))) continue
+    // Path B for discovery: parse account numbers from page.content() HTML
+    // instead of page.evaluate() DOM interaction — safe for parallel execution
+    const html = await page.content().catch(() => '')
+    const accountNumbers: string[] = []
 
-        // Find column indices by regex so header capitalisation/spacing variations don't break us
-        const custNumIdx  = ths.findIndex(h => /customer.?number/i.test(h))
-        const countryIdx  = ths.findIndex(h => /^country$/i.test(h))
-        const entlIdx     = ths.findIndex(h => /entl.*active/i.test(h))
-        const rownumIdx   = ths.findIndex(h => /^rownum$/i.test(h))
-        if (custNumIdx < 0) continue
+    // Try 1: find the results table with Customer Number column
+    const tableMatches = html.match(/<table[\s\S]*?<\/table>/gi) ?? []
+    for (const tableHtml of tableMatches) {
+      const thMatch = tableHtml.match(/<th[^>]*>([\s\S]*?)<\/th>/gi) ?? []
+      const headers = thMatch.map(h => h.replace(/<[^>]+>/g, '').trim())
+      const custNumIdx = headers.findIndex(h => /customer.?number/i.test(h))
+      if (custNumIdx < 0) continue
+      const countryIdx = headers.findIndex(h => /^country$/i.test(h))
+      const entlIdx = headers.findIndex(h => /entl.*active/i.test(h))
 
-        const accountNumbers: string[] = []
-        Array.from(t.querySelectorAll('tr')).slice(1).forEach(tr => {
-          const cells = Array.from(tr.querySelectorAll('td'))
-            .map(td => td.textContent?.trim().replace(/\s+/g, ' ') ?? '')
-          if (!cells.some(c => c)) return
-          if (rownumIdx >= 0 && !/^\d+$/.test(cells[rownumIdx] ?? '')) return
-          if (cells.length < ths.length - 2) return
-          const country    = countryIdx >= 0 ? cells[countryIdx] : ''
-          const entlActive = entlIdx    >= 0 ? parseInt(cells[entlIdx] ?? '0', 10) : 1
-          if (country && country !== 'Web' && country !== 'USA') return
-          if (entlIdx >= 0 && entlActive === 0) return
-          const acct = cells[custNumIdx]
-          if (acct && /^\d{4,12}$/.test(acct) && !accountNumbers.includes(acct)) {
-            accountNumbers.push(acct)
-          }
-        })
-        return { accountNumbers }
-      }
-      return { accountNumbers: [] }
-    })
-
-    const accountNumbers = [...new Set(tableData.accountNumbers ?? [])]
-
-    // Direct-match fallback: when the name matches exactly one record Supportable
-    // renders the Customer Information panel inline on the same page (URL stays at
-    // page 1) instead of showing a results list. The subscription table has different
-    // headers so accountNumbers is empty. Scan for the "Account Number:" label cell.
-    if (accountNumbers.length === 0) {
-      const directAccountNumber = await page.evaluate(() => {
-        const cells = Array.from(document.querySelectorAll('td'))
-        for (let i = 0; i < cells.length; i++) {
-          const label = (cells[i].textContent ?? '').trim()
-          if (/^account\s*number:?$/i.test(label)) {
-            const val = (cells[i + 1]?.textContent ?? '').trim()
-            if (/^\d{5,10}$/.test(val)) return val
-          }
+      const rowMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) ?? []
+      for (const rowHtml of rowMatches.slice(1)) {
+        const tdMatch = rowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) ?? []
+        const cells = tdMatch.map(td => td.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim())
+        if (cells.length < headers.length - 2) continue
+        const country = countryIdx >= 0 ? cells[countryIdx] : ''
+        const entlActive = entlIdx >= 0 ? parseInt(cells[entlIdx] ?? '0', 10) : 1
+        if (country && country !== 'Web' && country !== 'USA') continue
+        if (entlIdx >= 0 && entlActive === 0) continue
+        const acct = cells[custNumIdx]?.replace(/\s/g, '')
+        if (acct && /^\d{4,12}$/.test(acct) && !accountNumbers.includes(acct)) {
+          accountNumbers.push(acct)
         }
-        return ''
-      }).catch(() => '')
+      }
+      if (accountNumbers.length > 0) break
+    }
+
+    // Try 2: direct-match fallback — scan for "Account Number:" label in HTML
+    if (accountNumbers.length === 0) {
+      const directMatch = html.match(/Account\s*Number:?\s*<\/td>\s*<td[^>]*>\s*(\d{5,10})\s*</i)
+      const directAccountNumber = directMatch?.[1] ?? ''
 
       if (directAccountNumber) {
         console.log(`[supportable] name-search: "${searchTerm}%" → direct match, account# ${directAccountNumber}`)
