@@ -71,10 +71,10 @@ async function sessionHeartbeat(page: Page): Promise<void> {
 }
 
 // Number of parallel Playwright pages used for the scrape phase
-// APEX shares one SSO session across all parallel pages. At 2+ pages, concurrent
-// requests trigger APEX server-side contention (error dialogs, closed pages).
-// Set to 1 for reliable serial scraping. Increase only if APEX session isolation improves.
-const PARALLEL_PAGES = 1  // Parallel requires multi-context refactor (M57). Single context = reliable, all data correct.
+// APEX shares one SSO session across all parallel pages. Path B (HTML extraction)
+// avoids DOM clicks for download, eliminating element-detached errors in parallel.
+// CSV fallback still does DOM clicks, but only fires when HTML extraction fails.
+const PARALLEL_PAGES = 3  // HTML extraction (Path B) avoids DOM clicks for download — parallel is stable.
 
 // Wall-clock limit per account — fires before the 30s download timeout can accumulate
 const PER_ACCOUNT_TIMEOUT_MS = 90_000  // 90 seconds
@@ -235,6 +235,115 @@ function parseCsvToObjects(text: string): Record<string, string>[] {
     headers.forEach((h, idx) => { obj[h] = cells[idx] ?? '' })
     rows.push(obj)
   }
+  return rows
+}
+
+// ── HTML table parser (Path B — avoids DOM interaction for download) ──────────
+
+/**
+ * Regex-based column patterns that identify the subscription data table.
+ * At least 3 must match the table's header row for it to be the target table.
+ */
+const SUBSCRIPTION_COLUMN_PATTERNS = [
+  /\bsku\b/i,
+  /\bordered\s*item\b/i,
+  /\bproduct\s*description\b/i,
+  /\bquantity\b/i,
+  /\bstatus\b/i,
+  /\bstart\s*date\b/i,
+  /\bend\s*date\b/i,
+  /\bcontract/i,
+  /\bcustomer\s*number\b/i,
+  /\baccount\s*number\b/i,
+  /\binternal\s*sku\b/i,
+]
+
+/**
+ * Parse subscription data from raw HTML string using regex.
+ * Finds the APEX Interactive Report table by matching column headers,
+ * then extracts rows into Record<string, string>[] — same format as parseCsvToObjects.
+ *
+ * This avoids all DOM interaction (no clicks, no element attachment),
+ * making it safe for parallel page scraping.
+ */
+function parseHtmlTable(html: string): Record<string, string>[] {
+  // Find all <table ...>...</table> blocks
+  const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi
+  let bestHeaders: string[] = []
+  let bestBodyHtml = ''
+  let bestMatchCount = 0
+
+  let tableMatch: RegExpExecArray | null
+  while ((tableMatch = tableRegex.exec(html)) !== null) {
+    const tableHtml = tableMatch[1]
+
+    // Extract header cells from <th> elements
+    const thRegex = /<th[^>]*>([\s\S]*?)<\/th>/gi
+    const headers: string[] = []
+    let thMatch: RegExpExecArray | null
+    while ((thMatch = thRegex.exec(tableHtml)) !== null) {
+      // Strip HTML tags from header content
+      const headerText = thMatch[1].replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, ' ').trim()
+      headers.push(headerText)
+    }
+
+    if (headers.length === 0) continue
+
+    // Count how many subscription column patterns match this table's headers
+    const matchCount = SUBSCRIPTION_COLUMN_PATTERNS.filter(pat =>
+      headers.some(h => pat.test(h))
+    ).length
+
+    if (matchCount > bestMatchCount) {
+      bestMatchCount = matchCount
+      bestHeaders = headers
+
+      // Extract the tbody content (or full table content if no tbody)
+      const tbodyMatch = tableHtml.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i)
+      bestBodyHtml = tbodyMatch ? tbodyMatch[1] : tableHtml
+    }
+  }
+
+  // Need at least 3 matching columns to be confident this is the subscription table
+  if (bestMatchCount < 3 || bestHeaders.length === 0) {
+    return []
+  }
+
+  // Extract rows from the body
+  const rows: Record<string, string>[] = []
+  const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
+  let trMatch: RegExpExecArray | null
+  while ((trMatch = trRegex.exec(bestBodyHtml)) !== null) {
+    const rowHtml = trMatch[1]
+
+    // Extract <td> cells
+    const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi
+    const cells: string[] = []
+    let tdMatch: RegExpExecArray | null
+    while ((tdMatch = tdRegex.exec(rowHtml)) !== null) {
+      const cellText = tdMatch[1]
+        .replace(/<[^>]*>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&nbsp;/g, ' ')
+        .trim()
+      cells.push(cellText)
+    }
+
+    // Skip empty rows or rows that are all empty strings
+    if (cells.length === 0 || cells.every(c => !c)) continue
+
+    // Skip rows with fewer cells than headers (layout/spacer rows)
+    if (cells.length < bestHeaders.length - 2) continue
+
+    const obj: Record<string, string> = {}
+    bestHeaders.forEach((h, idx) => { obj[h] = cells[idx] ?? '' })
+    rows.push(obj)
+  }
+
   return rows
 }
 
@@ -441,10 +550,34 @@ async function scrapeOneAccount(
     throw new Error(`APEX error dialog before download on account ${accountNumber}`)
   }
 
-  // ── Download Active rows as CSV via Actions → Download ────────────────────
+  // ── Path B: Extract subscription data from page HTML (no DOM interaction) ──
+  // page.content() returns a string — no element clicks, no attachment issues.
+  // This is the primary extraction path; CSV download is the fallback.
+  try {
+    const html = await page.content()
+    const htmlRows = parseHtmlTable(html)
+    if (htmlRows.length > 0) {
+      // Apply same Status=Active filter as the CSV path
+      const statusKey = Object.keys(htmlRows[0]).find(k => k.toLowerCase() === 'status') ?? 'Status'
+      const activeRows = htmlRows.filter(r => (r[statusKey] ?? '').toLowerCase() === 'active')
+      console.log(`[supportable] account ${accountNumber}: HTML extraction: ${activeRows.length} active rows (${htmlRows.length} total)`)
+
+      // Navigate back to landing for next account
+      await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.waitForTimeout(1_500)
+      lastNavigationTime = Date.now()
+
+      return { rows: activeRows, page }
+    }
+    console.log(`[supportable] account ${accountNumber}: HTML extraction found 0 rows — falling back to CSV download`)
+  } catch (htmlErr: any) {
+    console.warn(`[supportable] account ${accountNumber}: HTML extraction failed (${htmlErr.message}) — falling back to CSV download`)
+  }
+
+  // ── Fallback: Download Active rows as CSV via Actions → Download ──────────
   // APEX filter step removed: the dialog it opens intercepts pointer events and
   // blocks the subsequent Actions button click, causing 120s timeouts at scale.
-  // Status=Active filtering is applied in code after download (line ~430).
+  // Status=Active filtering is applied in code after download.
   // Register the download listener BEFORE clicking Actions — APEX may fire
   // the download event immediately when the CSV format icon is clicked.
   const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
