@@ -58,6 +58,7 @@ function createMockContext(addCookiesMock = mockAddCookies) {
     storageState: mockStorageState,
     close: mockContextClose,
     newPage: mockNewPage,
+    browser: () => null,  // persistent contexts may have no associated Browser instance
   }
 }
 
@@ -110,9 +111,9 @@ describe('Chromium launch options', () => {
     expect(capturedLaunchOptions?.headless).toBe(false)
   })
 
-  test('passes --headless=new in args', async () => {
+  test('passes --no-sandbox in args', async () => {
     await initScrapeContext(tmpDir)
-    expect(capturedLaunchOptions?.args).toContain('--headless=new')
+    expect(capturedLaunchOptions?.args).toContain('--no-sandbox')
   })
 
   test('passes --disable-blink-features=AutomationControlled in args', async () => {
