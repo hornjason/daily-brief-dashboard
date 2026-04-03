@@ -1011,13 +1011,11 @@ export async function runSupportableDiscoverAndScrape(
               succeeded = true
             } catch (e: any) {
               console.warn(`[supportable] worker-${workerId}: ${job.customerName}/${job.accountNumber} attempt ${attempt}: ${e.message}`)
-              // Check if page is still alive — if not, navigate fresh on same page URL
+              // Check if page is still alive — if not, try to navigate it back
               const alive = await workerPage.evaluate(() => true).catch(() => false)
               if (!alive) {
-                // Page died — create a new page (loses session isolation, but better than crashing)
-                console.warn(`[supportable] worker-${workerId}: page died — creating replacement page`)
-                await workerPage.close().catch(() => {})
-                workerPage = await _ctx!.newPage()
+                console.warn(`[supportable] worker-${workerId}: page context lost — skipping remaining retries`)
+                break  // Don't create new page (loses session isolation). Skip this account.
               }
               await workerPage.goto(getPageLandingUrl(workerPage), { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
               await workerPage.waitForTimeout(1_500)
@@ -1038,11 +1036,17 @@ export async function runSupportableDiscoverAndScrape(
         // unhandled rejections in Promise.all. Per-job recovery happens above.
         console.warn(`[supportable] worker-${workerId}: unexpected exit — ${e.message}`)
       } finally {
-        await workerPage.close().catch(() => {})
+        // DON'T close the page here — other workers may still be running.
+        // Closing one page can destabilize the browser context for others.
+        // All pages are closed together after Promise.all completes.
+        console.log(`[supportable] worker-${workerId}: finished`)
       }
     }
 
     await Promise.all(scrapePages.map((page, i) => worker(i, page)))
+
+    // Close all worker pages now that ALL workers are done
+    await closeParallelSessions(scrapePages)
 
     // ── Phase 4: Assemble results in original customer order ──────────────────
     // Fire onProgress for any customers that had 0 accounts (skipped the worker loop)
