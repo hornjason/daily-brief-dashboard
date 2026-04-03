@@ -879,11 +879,13 @@ export async function runSupportableDiscoverAndScrape(
       }
     }
 
+    let discoveryPages: Page[] = []
+
     if (discoveryJobs.length > 0) {
       // Create parallel sessions for discovery — cap at discoveryJobs.length
       const discoverySessionCount = Math.min(PARALLEL_PAGES, discoveryJobs.length)
       _onStatus(`creating ${discoverySessionCount} parallel discovery sessions…`)
-      const discoveryPages = await createParallelSessions(discoverySessionCount)
+      discoveryPages = await createParallelSessions(discoverySessionCount)
 
       // Distribute discovery jobs across sessions
       let discoveryJobIndex = 0
@@ -914,8 +916,13 @@ export async function runSupportableDiscoverAndScrape(
       }
 
       await Promise.all(discoveryPages.map((page, i) => discoveryWorker(i, page)))
-      await closeParallelSessions(discoveryPages)
-      console.log(`[supportable] discovery phase complete — all ${customers.length} customers resolved`)
+      // DON'T close discovery pages — reuse them for scrape phase
+      // Navigate each back to their own landing page so they're ready for scraping
+      await Promise.all(discoveryPages.map(async (page) => {
+        await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+        await page.waitForTimeout(1_000)
+      }))
+      console.log(`[supportable] discovery phase complete — all ${customers.length} customers resolved, ${discoveryPages.length} sessions reused for scraping`)
     }
 
     // Fill in any gaps (should not happen, but defensive)
@@ -943,19 +950,27 @@ export async function runSupportableDiscoverAndScrape(
 
     console.log(`[supportable] scrape: ${jobs.length} account(s) across ${discovered.length} customers — ${PARALLEL_PAGES} parallel pages`)
 
-    // ── Phase 3: Parallel scrape using "New Session" isolated APEX apps ──────
-    // Pre-create all worker pages with isolated APEX sessions.
-    const workerCount = Math.min(PARALLEL_PAGES, jobs.length || 1)
-    _onStatus(`creating ${workerCount} parallel scrape sessions…`)
-    const scrapePages = await createParallelSessions(workerCount)
-    const actualWorkers = scrapePages.length  // may be fewer if "New Session" clicks failed
+    // ── Phase 3: Parallel scrape using reused discovery session pages ─────────
+    // Reuse the discovery pages (already on isolated APEX apps 304-308).
+    // If no discovery pages exist (all customers had cached accounts), create fresh ones.
+    let scrapePages: Page[]
+    if (discoveryPages.length > 0) {
+      scrapePages = discoveryPages.slice(0, Math.min(PARALLEL_PAGES, jobs.length || 1))
+      console.log(`[supportable] reusing ${scrapePages.length} discovery sessions for scraping`)
+    } else {
+      const workerCount = Math.min(PARALLEL_PAGES, jobs.length || 1)
+      _onStatus(`creating ${workerCount} parallel scrape sessions…`)
+      scrapePages = await createParallelSessions(workerCount)
+      console.log(`[supportable] created ${scrapePages.length} fresh sessions for scraping`)
+    }
+    const actualWorkers = scrapePages.length
 
     if (actualWorkers === 0) {
       throw new Error('Failed to create any APEX sessions for scraping')
     }
 
-    if (actualWorkers < workerCount) {
-      console.warn(`[supportable] only ${actualWorkers}/${workerCount} sessions created — proceeding with reduced parallelism`)
+    if (actualWorkers < PARALLEL_PAGES) {
+      console.warn(`[supportable] only ${actualWorkers}/${PARALLEL_PAGES} sessions available — proceeding with reduced parallelism`)
     }
 
     // jobIndex is incremented inside a synchronous tick — safe without a mutex.
