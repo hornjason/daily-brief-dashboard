@@ -41,6 +41,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts
 import type { AE } from './types.ts'
 import { sanitizeErr, sanitizeCell } from './utils.ts'
 import { markRunning, recordOutcome } from './scraper-status-store.ts'
+import { parseCsvToObjects } from './csv-parse.ts'
 
 /**
  * Search for a VISIBLE element across all frames in the page.
@@ -117,53 +118,6 @@ async function streamToText(stream: NodeJS.ReadableStream): Promise<string> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   }
   return Buffer.concat(chunks).toString('utf-8')
-}
-
-/** Parse CSV text into array of header-keyed objects */
-function parseCsv(csvText: string): Record<string, string>[] {
-  const clean = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText
-  const lines = clean.trim().split('\n')
-  if (lines.length < 2) return []
-
-  // Handle quoted CSV fields properly
-  const parseRow = (line: string): string[] => {
-    const fields: string[] = []
-    let current = ''
-    let inQuote = false
-
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i]
-      if (inQuote) {
-        if (ch === '"' && line[i + 1] === '"') {
-          current += '"'
-          i++ // skip escaped quote
-        } else if (ch === '"') {
-          inQuote = false
-        } else {
-          current += ch
-        }
-      } else {
-        if (ch === '"') {
-          inQuote = true
-        } else if (ch === ',') {
-          fields.push(current.trim())
-          current = ''
-        } else {
-          current += ch
-        }
-      }
-    }
-    fields.push(current.trim())
-    return fields
-  }
-
-  const headers = parseRow(lines[0])
-  return lines.slice(1).map(line => {
-    const values = parseRow(line)
-    const obj: Record<string, string> = {}
-    headers.forEach((h, i) => { obj[h] = values[i] ?? '' })
-    return obj
-  }).filter(row => Object.values(row).some(v => v !== ''))
 }
 
 /** Dump DOM info for debugging Tableau page state */
@@ -430,7 +384,7 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
         page.goto(csvUrl, { waitUntil: 'commit', timeout: 30_000 }).catch(() => {}),
       ])
       const csvText = await streamToText(await download.createReadStream())
-      rows = parseCsv(csvText)
+      rows = parseCsvToObjects(csvText)
       console.log(`[ccsp] ${ae.name}: direct CSV: ${rows.length} rows (unfiltered)`)
 
       // Post-filter by territory and quarter — Tableau's .csv endpoint ignores URL filter params

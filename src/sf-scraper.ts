@@ -23,6 +23,7 @@ import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import { sanitizeCell } from './utils.ts'
 import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
+import { parseCsvToSfReport } from './csv-parse.ts'
 
 export class SfSessionExpiredError extends Error {
   constructor() {
@@ -36,71 +37,6 @@ const REPORT_VIEW_URL   = (reportId: string) => `${SF_BASE_URL}/lightning/r/Repo
 const KEEPALIVE_URL     = `${SF_BASE_URL}/lightning/n/Home`
 const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000  // 10 minutes — more aggressive to prevent session drops
 const SESSION_STATE_FILE = 'sf-session-state.json'
-
-// ── CSV helpers (same pattern as supportable-scraper.ts) ─────────────────────
-
-/**
- * Split CSV text into logical lines, keeping quoted fields that contain
- * embedded newlines intact (RFC 4180 multi-line field support).
- */
-function splitCsvLines(text: string): string[] {
-  const lines: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (const ch of text) {
-    if (ch === '"') inQuotes = !inQuotes
-    if (ch === '\n' && !inQuotes) {
-      if (current.trim()) lines.push(current)
-      current = ''
-    } else {
-      current += ch
-    }
-  }
-  if (current.trim()) lines.push(current)
-  return lines
-}
-
-/** Parse one CSV line into field values, handling double-quoted fields and escaped quotes (""). */
-function parseCsvRow(line: string): string[] {
-  const fields: string[] = []
-  let current = ''
-  let inQuotes = false
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i]
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
-      else inQuotes = !inQuotes
-    } else if (ch === ',' && !inQuotes) {
-      fields.push(current.trim())
-      current = ''
-    } else {
-      current += ch
-    }
-  }
-  fields.push(current.trim())
-  return fields
-}
-
-/** Parse full CSV text into { headers, rows } matching SfReportRow shape. */
-function parseCsvToSfReport(text: string): { headers: string[]; rows: string[][] } {
-  // Strip UTF-8 BOM
-  const clean = text.startsWith('\uFEFF') ? text.slice(1) : text
-  const lines = splitCsvLines(clean)
-  if (lines.length === 0) return { headers: [], rows: [] }
-
-  const headers = parseCsvRow(lines[0])
-  const rows: string[][] = []
-  for (let i = 1; i < lines.length; i++) {
-    const row = parseCsvRow(lines[i])
-    // Skip empty rows and SF summary/footer rows (fewer fields than headers)
-    if (row.length >= headers.length - 1 && row.some(c => c.length > 0)) {
-      // Pad short rows to match header length
-      while (row.length < headers.length) row.push('')
-      rows.push(row)
-    }
-  }
-  return { headers, rows }
-}
 
 /**
  * Attempt CSV export from a Salesforce Lightning report page.
