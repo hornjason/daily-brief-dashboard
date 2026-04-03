@@ -1,30 +1,24 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { bodyLimit } from 'hono/body-limit'
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
-import { fetchEmail, fetchDrive, fetchCalendar, makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './src/google.ts'
-import { fetchCases, fetchCustomerCases, fetchCustomerSubscriptions, fetchCaseLatestComment } from './src/redhat.ts'
-import { fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief, getBriefProvider, isBriefConfigured } from './src/customer.ts'
-import { fetchCustomerSheetData, fetchCustomerSheetRaw, fetchCCSPData, fetchCustomerAccountNumbers, normalizeForMatch } from './src/sheets.ts'
-import type { CCSPRecord } from './src/sheets.ts'
-import { fetchPipelineData, buildPipelineSummary } from './src/pipeline.ts'
-import type { PipelineRecord } from './src/pipeline.ts'
-import type { Customer, AE } from './src/types.ts'
-import { inferCustomerDomain } from './src/domains.ts'
+import { fetchEmail, fetchDrive, fetchCalendar, makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './src/google.ts'
+import { fetchCases } from './src/redhat.ts'
+import { generateBrief, getBriefProvider, isBriefConfigured } from './src/customer.ts'
+import type { AE } from './src/types.ts'
 import { rebuildFolderMap, getWatcherState } from './src/drive-watcher.ts'
-import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeExpired, lastScraped } from './src/rh-auth.ts'
-import { runRhScrape, SessionExpiredError, closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
+import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeExpired } from './src/rh-auth.ts'
+import { closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
 
-import { runSfPipelineSync, getSfContext, sfSyncError } from './src/sf-scraper.ts'
+import { runSfPipelineSync, getSfContext } from './src/sf-scraper.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
-import { runSupportableScrape, runSupportableDiscoverAndScrape, writeSupportableSheet, supportableScrapeRunning } from './src/supportable-scraper.ts'
+import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
-import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, lastCcspError } from './src/ccsp-scraper.ts'
-import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, getScopeLevel, type StoredToken } from './src/oauth-scopes.ts'
-import { initCacheLayer, registerCacheRoutes, readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, toSlug } from './src/cache-layer.ts'
+import { runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './src/ccsp-scraper.ts'
+import { initCacheLayer, registerCacheRoutes, readSheetCache } from './src/cache-layer.ts'
 import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
 import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
@@ -38,8 +32,10 @@ import { registerBootstrapRoutes, startAccountDiscovery } from './src/bootstrap-
 // ── M04 extracted modules ───────────────────────────────────────────────────
 import { registerSheetImportRoutes } from './src/sheet-import.ts'
 import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
-import { runIntelligencePipeline, getJobStatus } from './src/account-intelligence.ts'
 import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } from './src/utils.ts'
+// ── M05 extracted modules ───────────────────────────────────────────────────
+import { initSetupRoutes, registerSetupRoutes } from './src/setup-routes.ts'
+import { initCustomerRoutes, registerCustomerRoutes } from './src/customer-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -87,10 +83,6 @@ const SHEETS_TOKEN_PATH_SRV = process.env.SHEETS_TOKEN
 const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
   ?? resolve(SRV_CONFIG_DIR, '.gdrive-server-credentials.json')
 
-const GOOGLE_OAUTH_KEYS_PATH = process.env.GOOGLE_OAUTH_KEYS
-  ?? resolve(SRV_CONFIG_DIR, 'gcp-oauth.keys.json')
-
-const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
 
 const RH_SESSION_PATH = process.env.RH_SESSION
   ?? resolve(SRV_CONFIG_DIR, '.rh-session.json')
@@ -104,9 +96,15 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'your-admin@example.com'
 const SF_REPORT_ID   = process.env.SF_REPORT_ID ?? ''
 const SF_SESSION_PATH = process.env.SF_SESSION
   ?? resolve(SRV_CONFIG_DIR, '.sf-session.json')
-
-// CSRF state tokens — Map keyed by token, with mode + expiry (replaces single-slot variable)
-const pendingOAuthStates = new Map<string, { mode: string; createdAt: number }>()
+initSetupRoutes({
+  srvConfigDir: SRV_CONFIG_DIR,
+  cacheDir: CACHE_DIR,
+  customersPath: CUSTOMERS_PATH,
+  sheetsSyncPath: SHEETS_SYNC_PATH,
+  dataSourcesPath: DATA_SOURCES_PATH,
+  adminEmail: ADMIN_EMAIL,
+})
+initCustomerRoutes({ cacheDir: CACHE_DIR, customersPath: CUSTOMERS_PATH })
 
 const app = new Hono()
 
@@ -146,15 +144,6 @@ function normalizeCustomerName(raw: string): string {
   return name
 }
 
-/** Loose domain validation — allows subdomains, TLDs, IP-like strings, localhost. Rejects HTML. */
-function isValidDomain(value: unknown): boolean {
-  if (typeof value !== 'string') return true // optional field — absent is OK
-  if (value === '') return true
-  if (!/^[a-zA-Z0-9]([a-zA-Z0-9\-._]{0,251}[a-zA-Z0-9])?$/.test(value)) return false
-  const parts = value.split('.')
-  if (parts.length > 4) return false
-  return true
-}
 
 /** Salesforce report/object ID — alphanumeric only, 15-18 chars. */
 function isValidSfId(value: unknown): boolean {
@@ -216,6 +205,8 @@ app.get('/health', (c) => c.json({
 
 registerCacheRoutes(app)
 registerDashboardRoutes(app)
+registerSetupRoutes(app)
+registerCustomerRoutes(app)
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
@@ -223,141 +214,7 @@ app.get('/', (c) => c.redirect('/dashboard'))
 // Customer list for landing page
 app.get('/customers', (c) => c.json(customers))
 
-// ── Google OAuth browser flow ─────────────────────────────────────────────────
-
-// GET /oauth/start — Redirect browser to Google consent screen
-app.get('/oauth/start', (c) => {
-  if (!existsSync(GOOGLE_OAUTH_KEYS_PATH)) {
-    return c.html(`<html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
-      <h2 style="color:#f1f5f9">OAuth Keys Not Found</h2>
-      <p style="color:#94a3b8">Place your GCP OAuth credentials file at:</p>
-      <code style="background:#1e293b;padding:.5rem 1rem;border-radius:.5rem;display:block;margin:1rem 0;color:#e2e8f0">gcp-oauth.keys.json</code>
-      <p style="color:#94a3b8">Or set the <code>GOOGLE_OAUTH_KEYS</code> environment variable.</p>
-      <p><a href="/dashboard/setup" style="color:#818cf8">← Back to Setup</a></p>
-    </body></html>`, 400)
-  }
-
-  // Default to bootstrap (full) scopes; only use normal (read-only) scopes if user explicitly requests downgrade
-  const mode = c.req.query('mode') === 'normal' ? 'normal' : 'bootstrap'
-  const scopes = mode === 'normal' ? NORMAL_SCOPES : BOOTSTRAP_SCOPES
-
-  const keys = JSON.parse(readFileSync(GOOGLE_OAUTH_KEYS_PATH, 'utf-8'))
-  const { client_id, client_secret } = keys.installed ?? keys.web
-  const redirectUri = `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
-
-  const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri)
-
-  const csrfToken = crypto.randomUUID().replace(/-/g, '')
-  pendingOAuthStates.set(csrfToken, { mode, createdAt: Date.now() })
-  // Expire tokens older than 10 minutes
-  const cutoff = Date.now() - 10 * 60 * 1000
-  for (const [k, v] of pendingOAuthStates) { if (v.createdAt < cutoff) pendingOAuthStates.delete(k) }
-
-  const authUrl = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    prompt: 'consent',
-    state: `${csrfToken}:${mode}`,
-    scope: [...scopes],
-  })
-
-  return c.redirect(authUrl)
-})
-
-// GET /oauth/callback — Handle Google redirect, exchange code for tokens
-app.get('/oauth/callback', async (c) => {
-  const code  = c.req.query('code')
-  const state = c.req.query('state')
-  const error = c.req.query('error')
-
-  const escHtml = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-  const errorPage = (msg: string, detail?: string) => c.html(`
-    <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
-      <h2 style="color:#f87171">Authentication Failed</h2>
-      <p style="color:#94a3b8">${escHtml(msg)}</p>
-      ${detail ? `<code style="background:#1e293b;padding:.5rem 1rem;border-radius:.5rem;display:block;margin:1rem 0;color:#fca5a5">${escHtml(detail)}</code>` : ''}
-      <p><a href="/dashboard/setup" style="color:#818cf8">← Back to Setup</a></p>
-    </body></html>`, 400)
-
-  if (error) {
-    if (error === 'access_denied') {
-      return c.html(`
-        <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9;max-width:600px;margin:0 auto">
-          <h2 style="color:#fbbf24">Access Denied</h2>
-          <p style="color:#94a3b8">Your Google account hasn't been added as a test user yet.</p>
-          <p style="color:#94a3b8">Email <strong style="color:#f1f5f9">${escHtml(ADMIN_EMAIL)}</strong> and ask to be added, then try again.</p>
-          <p style="margin-top:1.5rem">
-            <a href="mailto:${escHtml(ADMIN_EMAIL)}?subject=Dashboard%20Access%20Request&body=Please%20add%20my%20Google%20account%20as%20a%20test%20user.%0A%0AMy%20email%3A%20%5Byour%40email.com%5D"
-               style="background:#4f46e5;color:white;padding:.75rem 1.5rem;border-radius:.5rem;text-decoration:none;display:inline-block">
-              Request Access via Email
-            </a>
-            &nbsp;
-            <a href="/dashboard/setup" style="color:#818cf8;margin-left:1rem">← Back to Setup</a>
-          </p>
-          <hr style="border-color:#1e293b;margin:2rem 0">
-          <p style="color:#64748b;font-size:.875rem">
-            💡 If you're the admin: switching the GCP OAuth consent screen from <strong style="color:#94a3b8">External → Internal</strong>
-            means any @redhat.com user can connect without being added individually.
-          </p>
-        </body></html>`, 403)
-    }
-    return errorPage('Google returned an error', error)
-  }
-
-  if (!code) return errorPage('No authorization code received')
-  const [stateToken] = (state ?? '').split(':')
-  const pendingState = pendingOAuthStates.get(stateToken)
-  if (!pendingState) return errorPage('Invalid or expired state parameter — please try authorizing again')
-  pendingOAuthStates.delete(stateToken)
-  const scopeMode = pendingState.mode === 'bootstrap' ? 'bootstrap' : 'normal'
-
-  try {
-    const keys = JSON.parse(readFileSync(GOOGLE_OAUTH_KEYS_PATH, 'utf-8'))
-    const { client_id, client_secret } = keys.installed ?? keys.web
-    const redirectUri = `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
-    const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri)
-
-    const { tokens } = await oauth2Client.getToken(code)
-    const tokenData = { ...tokens, configuredAt: new Date().toISOString(), scopeLevel: scopeMode }
-
-    // Save to config dir (works both locally and in container via volume mount)
-    const tokenPath = GOOGLE_UNIFIED_TOKEN_PATH
-    writeFileSyncRaw(tokenPath, JSON.stringify(tokenData, null, 2), { mode: 0o600 })
-
-    return c.html(`
-      <html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9;max-width:600px;margin:0 auto">
-        <h2 style="color:#34d399">✓ Google Workspace Connected</h2>
-        <p style="color:#94a3b8">Calendar, Gmail, Drive, and Sheets access authorized.</p>
-        <p style="color:#94a3b8">Redirecting to setup wizard…</p>
-        <meta http-equiv="refresh" content="1;url=/dashboard/setup?step=2">
-        <p><a href="/dashboard/setup?step=2" style="color:#818cf8">Continue →</a></p>
-      </body></html>`)
-  } catch (e: any) {
-    return errorPage('Token exchange failed', sanitizeErr(e))
-  }
-})
-
-// GET /api/oauth/status — Check if unified Google token exists
-app.get('/api/oauth/status', async (c) => {
-  if (!existsSync(GOOGLE_UNIFIED_TOKEN_PATH)) return c.json({ authorized: false })
-  try {
-    const token = JSON.parse(readFileSync(GOOGLE_UNIFIED_TOKEN_PATH, 'utf-8'))
-    // Validate token is actually live
-    let email: string | undefined
-    let expired = false
-    try {
-      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-      const gmail = google.gmail({ version: 'v1', auth })
-      const profile = await gmail.users.getProfile({ userId: 'me' })
-      email = profile.data.emailAddress ?? undefined
-    } catch (e: any) {
-      expired = e.message?.includes('invalid_grant') || e.message?.includes('Token has been expired') || e.message?.includes('invalid_token')
-    }
-    const scopeLevel = getScopeLevel(token as StoredToken)
-    return c.json({ authorized: !expired, expired, email, configuredAt: token.configuredAt ?? null, scopeLevel })
-  } catch {
-    return c.json({ authorized: false })
-  }
-})
+// ── Google OAuth + Setup wizard routes (extracted to src/setup-routes.ts) ──
 
 // ── Red Hat Portal auth endpoints ────────────────────────────────────────────
 
@@ -891,438 +748,9 @@ app.get('/api/accounts', (c) => {
   return c.json({ customers: result })
 })
 
-// GET /api/setup/check-auth — Check Google OAuth token availability
-app.get('/api/setup/check-auth', async (c) => {
-  const check = (filename: string) => existsSync(resolve(SRV_CONFIG_DIR, filename))
-  const unified = check('.google-token.json')
-  const hasFile = {
-    gmail:    unified || check('.gmail-token.json'),
-    drive:    unified || check('.gdrive-server-credentials.json'),
-    calendar: unified || check('.calendar-token.json'),
-  }
+// ── Setup wizard routes (extracted to src/setup-routes.ts) ───────────────────
 
-  // Validate token is actually live with a lightweight Gmail profile call
-  let valid = false
-  let expired = false
-  let email: string | undefined
-  if (hasFile.gmail) {
-    try {
-      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-      const gmail = google.gmail({ version: 'v1', auth })
-      const profile = await gmail.users.getProfile({ userId: 'me' })
-      email = profile.data.emailAddress ?? undefined
-      valid = true
-    } catch (e: any) {
-      expired = e.message?.includes('invalid_grant') || e.message?.includes('Token has been expired')
-    }
-  }
-
-  const tokens = {
-    gmail:    hasFile.gmail,
-    drive:    hasFile.drive,
-    calendar: hasFile.calendar,
-    allConfigured: Object.values(hasFile).every(Boolean),
-  }
-  return c.json({ tokens, valid, expired, email })
-})
-
-// GET /api/setup/oauth-keys-status — Check if OAuth keys file exists
-app.get('/api/setup/oauth-keys-status', (c) => {
-  return c.json({ exists: existsSync(GOOGLE_OAUTH_KEYS_PATH) })
-})
-
-// GET /api/setup/preflight — Return onboarding readiness checks
-app.get('/api/setup/preflight', (c) => {
-  const checks = [
-    { name: 'Environment file',  ok: existsSync('.env') || existsSync('/data/.env'),                         detail: '.env file present' },
-    { name: 'RH Portal token',   ok: !!process.env.REDHAT_OFFLINE_TOKEN,                                    detail: 'REDHAT_OFFLINE_TOKEN configured' },
-    { name: 'OAuth keys',        ok: existsSync(resolve(SRV_CONFIG_DIR, 'gcp-oauth.keys.json')),            detail: 'Google OAuth keys uploaded' },
-    { name: 'Config directory',  ok: existsSync(SRV_CONFIG_DIR),                                            detail: 'Config storage ready' },
-    { name: 'Cache directory',   ok: existsSync(CACHE_DIR),                                                 detail: 'Cache storage ready' },
-  ]
-  return c.json({ checks, allPassed: checks.every(ch => ch.ok) })
-})
-
-// POST /api/setup/upload-oauth-keys — Save uploaded GCP OAuth keys JSON
-app.post('/api/setup/upload-oauth-keys', async (c) => {
-  try {
-    const body = await c.req.json()
-    if (!body || typeof body !== 'object') return c.json({ error: 'Invalid JSON' }, 400)
-    const credType = body.installed ? 'installed' : body.web ? 'web' : null
-    if (!credType) return c.json({ error: 'Keys file must have an "installed" or "web" key' }, 400)
-    const raw = body[credType]
-    const { client_id, client_secret } = raw ?? {}
-    if (!client_id || !client_secret) return c.json({ error: 'Missing client_id or client_secret' }, 400)
-    // Sanitize: only write known OAuth fields — never persist arbitrary keys
-    const sanitized: Record<string, unknown> = { client_id, client_secret }
-    for (const f of ['project_id','auth_uri','token_uri','auth_provider_x509_cert_url','client_x509_cert_url','redirect_uris','javascript_origins']) {
-      if (raw[f] !== undefined) sanitized[f] = raw[f]
-    }
-    const dir = resolve(GOOGLE_OAUTH_KEYS_PATH, '..')
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    writeFileSyncRaw(GOOGLE_OAUTH_KEYS_PATH, JSON.stringify({ [credType]: sanitized }, null, 2), { mode: 0o600 })
-    return c.json({ ok: true })
-  } catch (_e: any) {
-    return c.json({ error: 'Failed to save OAuth keys — check file permissions' }, 500)
-  }
-})
-
-// POST /api/setup/reset — Clear all config and cache for a clean setup
-// ?full=true also removes the OAuth keys file (simulate brand new user)
-app.post('/api/setup/reset', (c) => {
-  console.warn('[reset] Factory reset triggered at', new Date().toISOString())
-  if (c.req.query('confirm') !== 'true') {
-    return c.json({ error: 'Destructive operation requires ?confirm=true' }, 400)
-  }
-  if (supportableScrapeRunning || ccspScrapeRunning || _rhScrapeRunning) {
-    return c.json({ error: 'Cannot reset while scrape is in progress' }, 409)
-  }
-  const full = c.req.query('full') === 'true'
-  const deleted: string[] = []
-  const tryDelete = (p: string) => { try { if (existsSync(p)) { unlinkSync(p); deleted.push(p) } } catch {} }
-
-  // Config files
-  tryDelete(CUSTOMERS_PATH)
-  tryDelete(SHEETS_SYNC_PATH)
-  tryDelete(DATA_SOURCES_PATH)
-  if (full) {
-    tryDelete(GOOGLE_UNIFIED_TOKEN_PATH)
-    tryDelete(GOOGLE_OAUTH_KEYS_PATH)
-  }
-
-  // All cache files
-  try {
-    readdirSync(CACHE_DIR).filter(f => f.endsWith('.json')).forEach(f => tryDelete(resolve(CACHE_DIR, f)))
-  } catch {}
-
-  // Reset in-memory state
-  customers.splice(0, customers.length)
-  aes.splice(0, aes.length)
-  saveAes([])
-  pendingOAuthStates.clear()
-  if (process.env.AE_PARENT_FOLDER_ID) delete process.env.AE_PARENT_FOLDER_ID
-  if (process.env.AE_PARENT_FOLDER_IDS) delete process.env.AE_PARENT_FOLDER_IDS
-
-  return c.json({ ok: true, deleted: deleted.length })
-})
-
-// POST /api/setup/infer-domains — infer customer domains from Gmail + Calendar signal
-app.post('/api/setup/infer-domains', async (c) => {
-  if (customers.length === 0) return c.json({ error: 'No customers configured' }, 400)
-  try {
-    // Process in batches of 3 to avoid overwhelming Google API rate limits
-    // (naive Promise.all on 19 customers fires ~950 concurrent Gmail calls)
-    const results = []
-    for (let i = 0; i < customers.length; i += 3) {
-      const batch = customers.slice(i, i + 3)
-      const batchResults = await Promise.all(
-        batch.map((cu) =>
-          inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e) => ({
-            customerName: cu.name,
-            candidates: [],
-            currentDomain: cu.domain,
-            error: sanitizeErr(e),
-          }))
-        )
-      )
-      results.push(...batchResults)
-    }
-    return c.json({ results })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-// POST /api/setup/save-domains — persist inferred/edited domains to customers.json
-// Accepts optional domainOverride per customer (bypasses BLOCKLIST for that domain)
-app.post('/api/setup/save-domains', async (c) => {
-  const body = await c.req.json<{ domains: { name: string; domain: string; domainOverride?: string }[] }>()
-  if (!body.domains?.length) return c.json({ error: 'No domains provided' }, 400)
-
-  for (const d of body.domains) {
-    if (!isValidDomain(d.domain)) return c.json({ error: `Invalid domain: ${d.domain}` }, 400)
-    if (d.domainOverride !== undefined && d.domainOverride !== '' && !isValidDomain(d.domainOverride)) {
-      return c.json({ error: `Invalid domainOverride: ${d.domainOverride}` }, 400)
-    }
-  }
-
-  const domainMap = new Map(body.domains.map((d) => [d.name, d]))
-  const updated = customers.map((cu) => {
-    const entry = domainMap.get(cu.name)
-    if (entry === undefined) return cu
-    const patch: Record<string, unknown> = { domain: entry.domain }
-    if (entry.domainOverride !== undefined) patch.domainOverride = entry.domainOverride || undefined
-    return { ...cu, ...patch }
-  })
-
-  try {
-    writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
-    renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
-    customers.splice(0, customers.length, ...updated)
-    return c.json({ ok: true, updated: body.domains.length })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-// POST /api/setup/save-customers — replace entire customer list from Setup UI
-app.post('/api/setup/save-customers', async (c) => {
-  try {
-    const body = await c.req.json<{ customers: Customer[] }>()
-    if (!Array.isArray(body.customers)) return c.json({ error: 'customers must be an array' }, 400)
-    if (body.customers.length > 200) return c.json({ error: 'customers array exceeds maximum of 200 entries' }, 400)
-
-    // Validate each customer
-    for (let i = 0; i < body.customers.length; i++) {
-      const cx = body.customers[i]
-      const name = sanitizeText(cx.name)
-      if (!name) return c.json({ error: `customers[${i}].name is invalid or contains disallowed characters` }, 400)
-      if (cx.domain !== undefined && !isValidDomain(cx.domain)) return c.json({ error: `customers[${i}].domain is not a valid domain` }, 400)
-      // Write whitelisted fields only — drop anything not in the Customer schema
-      const cleaned: Record<string, unknown> = { name }
-      if (cx.domain          != null) cleaned.domain          = cx.domain
-      if (cx.accountNumbers  != null) {
-        if (!Array.isArray(cx.accountNumbers) || cx.accountNumbers.some((n: unknown) => typeof n !== 'string' || !/^\d{4,12}$/.test(n))) {
-          return c.json({ error: `customers[${i}].accountNumbers must be an array of 4-12 digit strings` }, 400)
-        }
-        cleaned.accountNumbers  = cx.accountNumbers
-      }
-      if (cx.ae              != null) cleaned.ae              = cx.ae
-      if (cx.segment         != null) cleaned.segment         = cx.segment
-      if (cx.region          != null) cleaned.region          = cx.region
-      if (cx.sheetTab        != null) cleaned.sheetTab        = cx.sheetTab
-      if (cx.supportableName != null) cleaned.supportableName = cx.supportableName
-      if (cx.aliases         != null) cleaned.aliases         = cx.aliases
-      if (cx.aliasDomains    != null) cleaned.aliasDomains    = cx.aliasDomains
-      if (cx.skipAccountDiscovery != null) cleaned.skipAccountDiscovery = cx.skipAccountDiscovery
-      body.customers[i] = cleaned as Customer
-    }
-
-    writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: body.customers }, null, 2))
-    renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
-    customers.splice(0, customers.length, ...body.customers)
-    return c.json({ ok: true, count: body.customers.length })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-// GET /api/cases/all — Support cases across ALL accounts
-// ?includeAll=true returns closed/resolved cases too (default: open only)
-// ?account=NNNN filters to a specific account number
-app.get('/api/cases/all', async (c) => {
-  try {
-    const includeAll = c.req.query('includeAll') === 'true'
-    const accountFilter = c.req.query('account')
-
-    let allCases = await fetchCases({ includeAll }).catch(() => [])
-
-    if (accountFilter) {
-      allCases = allCases.filter((sc) => String(sc.accountNumber) === accountFilter)
-    }
-
-    // Enrich with customer name by matching accountNumber
-    const enriched = allCases.map((sc) => {
-      const matched = customers.find((cu) =>
-        (cu.accountNumbers ?? []).map(String).includes(String(sc.accountNumber))
-      )
-      return { ...sc, customerName: matched?.name ?? 'Unknown' }
-    })
-
-    return c.json({ cases: enriched, totalCount: enriched.length })
-  } catch (e: any) {
-    return c.json({ cases: [], totalCount: 0, error: sanitizeErr(e) }, 500)
-  }
-})
-
-// GET /api/cases/:caseNumber/latest-comment — most recent comment for a case
-app.get('/api/cases/:caseNumber/latest-comment', async (c) => {
-  const caseNumber = c.req.param('caseNumber')
-  if (!/^\d{8}$/.test(caseNumber)) return c.json({ error: 'Invalid case number — must be 8 digits' }, 400)
-  const comment = await fetchCaseLatestComment(caseNumber).catch(() => null)
-  return c.json({ comment })
-})
-
-// ── Brief helpers ────────────────────────────────────────────────────────────
-function extractBriefSummary(text: string): { overview: string; talkingPoints: string[]; openCasesNote: string } {
-  // Account Overview section
-  const overviewMatch = text.match(/## Account Overview\n([\s\S]*?)(?=\n##)/)
-  const overview = overviewMatch ? overviewMatch[1].trim().slice(0, 400) : ''
-
-  // Talking Points bullets — header varies e.g. "## Talking Points & Prep (Mar 24 ...)"
-  const talkingMatch = text.match(/## Talking Points[^\n]*\n([\s\S]*?)(?=\n##|$)/)
-  const talkingPoints = talkingMatch
-    ? talkingMatch[1].split('\n').filter((l) => /^[-*]|\d+\./.test(l.trim())).map((l) => l.replace(/^[-*\d.]+\s*\*{0,2}/, '').replace(/\*{0,2}$/, '').trim().slice(0, 120)).filter(Boolean).slice(0, 4)
-    : []
-
-  // Open cases note
-  const casesMatch = text.match(/## Open Support Cases\n([\s\S]*?)(?=\n##)/)
-  const openCasesNote = casesMatch ? casesMatch[1].trim().slice(0, 200) : ''
-
-  return { overview, talkingPoints, openCasesNote }
-}
-
-// GET /api/briefs — Brief summaries for all customers (from cache)
-app.get('/api/briefs', (c) => {
-  const result: Record<string, { overview: string; talkingPoints: string[]; openCasesNote: string; cachedAt: string; date: string }> = {}
-  for (const customer of customers) {
-    const cached = readLatestBriefCache(customer.name)
-    if (cached?.text) {
-      result[customer.name] = { ...extractBriefSummary(cached.text), cachedAt: cached.cachedAt, date: cached.date }
-    }
-  }
-  return c.json(result)
-})
-
-// GET /api/ccsp — Cloud spend data aggregated from CCSP Raw Data tabs
-app.get('/api/ccsp', async (c) => {
-  const force = c.req.query('force') === 'true'
-  const cached = readCCSPCache()
-  // Use cache if available and not forced (data doesn't change hourly)
-  if (cached && !force) {
-    return c.json(buildCCSPSummary(cached.records, cached.cachedAt, !!lastCcspError))
-  }
-  try {
-    const { records, fileIds } = await fetchCCSPData(aes.map(a => a.ccspSheetId).filter(Boolean) as string[])
-    // Stale-overwrite guard: don't replace populated cache with empty results
-    // (empty usually means Tableau scraper wrote summary-view data without Account Name column)
-    if (records.length === 0 && (cached?.records?.length ?? 0) > 0) {
-      console.warn(`[ccsp] force-refresh returned 0 records but cache has ${cached!.records.length} — keeping existing cache`)
-      return c.json(buildCCSPSummary(cached!.records, cached!.cachedAt, true))
-    }
-    writeCCSPCache(records, fileIds)
-    return c.json(buildCCSPSummary(records, new Date().toISOString(), false))
-  } catch (e: any) {
-    console.error('[ccsp] fetchCCSPData failed:', e.message)
-    if (cached) return c.json(buildCCSPSummary(cached.records, cached.cachedAt, true))
-    return c.json({ error: 'CCSP data fetch failed', byCustomer: [], byQuarter: [], byPartner: [], totalAcv: 0, cachedAt: null, sourceWarning: true }, 500)
-  }
-})
-
-function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, sourceWarning: boolean) {
-  const byCustomer    = new Map<string, number>()
-  const byQuarter     = new Map<string, number>()
-  const byPartner     = new Map<string, number>()
-  const custPartner   = new Map<string, Map<string, number>>()
-  let totalAcv = 0
-
-  for (const r of records) {
-    byCustomer.set(r.accountName, (byCustomer.get(r.accountName) ?? 0) + r.acvPlus)
-    if (r.quarter) byQuarter.set(r.quarter, (byQuarter.get(r.quarter) ?? 0) + r.acvPlus)
-    byPartner.set(r.cloudPartner, (byPartner.get(r.cloudPartner) ?? 0) + r.acvPlus)
-    totalAcv += r.acvPlus
-    // Per-account partner breakdown
-    if (!custPartner.has(r.accountName)) custPartner.set(r.accountName, new Map())
-    const pm = custPartner.get(r.accountName)!
-    pm.set(r.cloudPartner, (pm.get(r.cloudPartner) ?? 0) + r.acvPlus)
-  }
-
-  const sortedCustomers = [...byCustomer.entries()].sort((a, b) => b[1] - a[1])
-
-  return {
-    totalAcv,
-    cachedAt,
-    sourceWarning,
-    byCustomer: sortedCustomers.map(([name, acv]) => ({
-      name,
-      acv,
-      partners: [...(custPartner.get(name)?.entries() ?? [])]
-        .sort((a, b) => b[1] - a[1])
-        .map(([partner, acv]) => ({ partner, acv })),
-    })),
-    byQuarter: [...byQuarter.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([quarter, acv]) => ({ quarter, acv })),
-    byPartner: [...byPartner.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([partner, acv]) => ({ partner, acv })),
-  }
-}
-
-// BKL-M05: Query-oriented normalizer — differs from normalizeForMatch by also stripping long business-line phrases (life and safety, digital media) for substring overlap matching against cached CCSP/pipeline records.
-// Shared fuzzy name normalizer for customer URL-param queries against cached records.
-// Strips common legal suffixes and punctuation for substring overlap matching.
-function normalizeForQuery(s: string): string {
-  return s.toLowerCase()
-    .replace(/,?\s*(inc\.|llc|inc|corp|ltd|lp|co\.|u\.s\..*|life and safety.*|life & safety.*|digital media.*)$/i, '')
-    .replace(/[,.]/g, '').trim()
-}
-
-// GET /customer/:name/ccsp — CCSP cloud spend for a single customer (from cache)
-app.get('/customer/:name/ccsp', (c) => {
-  const rawName = decodeURIComponent(c.req.param('name')).toLowerCase()
-  const cached = readCCSPCache()
-  if (!cached) return c.json({ totalAcv: 0, byQuarter: [], byPartner: [] })
-
-  // Fuzzy match: strip legal suffixes, check substring overlap
-  const needle = normalizeForQuery(rawName)
-
-  const byQuarter  = new Map<string, number>()
-  const byPartner  = new Map<string, number>()
-  let totalAcv = 0
-
-  for (const r of cached.records) {
-    const hay = normalizeForQuery(r.accountName)
-    if (!hay.includes(needle) && !needle.includes(hay)) continue
-    totalAcv += r.acvPlus
-    if (r.quarter) byQuarter.set(r.quarter, (byQuarter.get(r.quarter) ?? 0) + r.acvPlus)
-    byPartner.set(r.cloudPartner, (byPartner.get(r.cloudPartner) ?? 0) + r.acvPlus)
-  }
-
-  return c.json({
-    totalAcv,
-    cachedAt: cached.cachedAt,
-    byQuarter: [...byQuarter.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([quarter, acv]) => ({ quarter, acv })),
-    byPartner: [...byPartner.entries()].sort((a, b) => b[1] - a[1]).map(([partner, acv]) => ({ partner, acv })),
-  })
-})
-
-// GET /api/pipeline — Open opportunity pipeline from Drive XLS
-function filterToAEs(records: PipelineRecord[]): PipelineRecord[] {
-  if (!aes.length) return records
-  const names = new Set(aes.map(a => a.name.toLowerCase()))
-  return records.filter(r => names.has(r.owner.toLowerCase()))
-}
-
-app.get('/api/pipeline', async (c) => {
-  const force = c.req.query('force') === 'true'
-  const cached = readPipelineCache()
-  // Serve from cache if available and not forced — no env var needed for cache hits
-  if (cached && !force) {
-    return c.json({ ...buildPipelineSummary(filterToAEs(cached.records), cached.cachedAt), sourceWarning: !!sfSyncError })
-  }
-  if (!process.env.PIPELINE_FILE_ID) {
-    return c.json({ totalAcv: 0, openCount: 0, renewalAcv: 0, newAcv: 0, byStage: [], byOwner: [], topOpps: [], cachedAt: null, sourceWarning: false })
-  }
-  try {
-    const { records, fileIds } = await fetchPipelineData()
-    writePipelineCache(records, fileIds)
-    return c.json({ ...buildPipelineSummary(filterToAEs(records), new Date().toISOString()), sourceWarning: false })
-  } catch (e: any) {
-    if (cached) return c.json({ ...buildPipelineSummary(filterToAEs(cached.records), cached.cachedAt), sourceWarning: true })
-    return c.json({ error: sanitizeErr(e), totalAcv: 0, openCount: 0, renewalAcv: 0, newAcv: 0, byStage: [], byOwner: [], topOpps: [], cachedAt: null, sourceWarning: true }, 500)
-  }
-})
-
-// GET /api/calendar — Calendar events with range filter; ?all=true returns every event
-app.get('/api/calendar', async (c) => {
-  const range = (c.req.query('range') ?? 'week') as 'today' | 'week'
-  const includeAll = c.req.query('all') === 'true'
-  // Short-circuit if Google OAuth token doesn't exist yet
-  if (!existsSync(GOOGLE_UNIFIED_TOKEN_PATH)) {
-    return c.json({ events: [], range, error: 'not_configured' })
-  }
-  try {
-    const events = await fetchCalendar(customers, includeAll)
-    return c.json({ events, range })
-  } catch (e: any) {
-    const msg = e.message ?? ''
-    if (msg.includes('invalid_client') || msg.includes('invalid_grant') || msg.includes('No refresh token') || msg.includes('ENOENT')) {
-      return c.json({ events: [], range, error: 'not_configured' })
-    }
-    return c.json({ events: [], range, error: sanitizeErr(e) }, 500)
-  }
-})
+// ── Customer data routes (extracted to src/customer-routes.ts) ───────────────
 
 // ── Serve React dashboard SPA ────────────────────────────────────────────────
 const DASHBOARD_DIST = resolve(import.meta.dir, 'dashboard/dist')
@@ -1388,154 +816,7 @@ app.get('/admin', async (c) => {
   return c.text('Dashboard not built. Run: cd dashboard && bun run build', 404)
 })
 
-// GET /customer/:name/pipeline — Pipeline opps for a single customer (from cache)
-app.get('/customer/:name/pipeline', (c) => {
-  const rawName = decodeURIComponent(c.req.param('name')).toLowerCase()
-  const cached = readPipelineCache()
-  if (!cached) return c.json({ totalAcv: 0, openCount: 0, opps: [], closedOpps: [], cachedAt: null })
-
-  const needle = normalizeForQuery(rawName)
-
-  const open: typeof cached.records = []
-  const closed: typeof cached.records = []
-
-  for (const r of cached.records) {
-    const hay = normalizeForQuery(r.accountName)
-    if (!hay.includes(needle) && !needle.includes(hay)) continue
-    if (r.forecastCategory.toLowerCase() === 'closed') closed.push(r)
-    else open.push(r)
-  }
-
-  const totalAcv = open.reduce((s, r) => s + r.acv, 0)
-
-  return c.json({
-    totalAcv,
-    openCount: open.length,
-    opps: open.sort((a, b) => b.acv - a.acv),
-    closedOpps: closed.sort((a, b) => b.closeDate.localeCompare(a.closeDate)),
-    cachedAt: cached.cachedAt,
-  })
-})
-
-// ── Customer intelligence pages ───────────────────────────────────────────────
-app.get('/customer/:name/events', (c) => {
-  const rawName = decodeURIComponent(c.req.param('name'))
-  const customer = customers.find(
-    (cu) => cu.name.toLowerCase() === rawName.toLowerCase()
-  )
-  if (!customer) return c.text('Customer not found', 404)
-
-  return streamSSE(c, async (stream) => {
-    // Ensure account numbers are populated before fetching cases/subscriptions
-    if (!customer.accountNumbers?.length) {
-      // Scope sheet IDs to the customer's own AE — prevents cross-AE tab name collisions
-      const aeMatch = customer.ae ? aes.find(a => a.name === customer.ae) : undefined
-      const supportableIds = aeMatch?.supportableSheetId
-        ? [aeMatch.supportableSheetId]
-        : aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
-      const discovered = await fetchCustomerAccountNumbers(customer, supportableIds.length ? supportableIds : undefined).catch(() => [] as string[])
-      if (discovered.length) {
-        customer.accountNumbers = discovered
-        // Persist back to customers.json so future loads don't need to re-fetch
-        try {
-          const updated = customers.map((cu) =>
-            cu.name === customer.name ? { ...cu, accountNumbers: discovered } : cu
-          )
-          writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
-          renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
-          customers.splice(0, customers.length, ...updated)
-        } catch (e: any) { console.warn('[discovery] account numbers persist failed:', e.message) }
-      }
-    }
-
-    // Meta (send after account numbers are resolved so client gets the latest)
-    await stream.writeSSE({ event: 'meta', data: JSON.stringify(customer) })
-
-    // Fetch all sections in parallel
-    const [meetings, emails, docs, cases, subscriptions] = await Promise.all([
-      fetchCustomerMeetings(customer).catch(() => []),
-      fetchCustomerEmails(customer).catch(() => []),
-      fetchCustomerDocs(customer).catch(() => []),
-      fetchCustomerCases(customer).catch(() => []),
-      fetchCustomerSubscriptions(customer).catch(() => []),
-    ])
-
-    await stream.writeSSE({ event: 'meetings',      data: JSON.stringify(meetings) })
-    await stream.writeSSE({ event: 'emails',        data: JSON.stringify(emails) })
-    await stream.writeSSE({ event: 'drive',         data: JSON.stringify(docs) })
-    await stream.writeSSE({ event: 'cases',         data: JSON.stringify(cases) })
-    await stream.writeSSE({ event: 'subscriptions', data: JSON.stringify(subscriptions) })
-
-    await stream.writeSSE({ event: 'complete', data: JSON.stringify({ timestamp: new Date().toISOString() }) })
-  })
-})
-
-// ── Account Intelligence (BKL-AI01–AI04) ────────────────────────────────────
-
-app.post('/api/customer/:name/generate-intelligence', async (c) => {
-  const rawName = decodeURIComponent(c.req.param('name'))
-  const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
-  if (!customer) return c.json({ error: 'Customer not found' }, 404)
-
-  try {
-    const jobId = await runIntelligencePipeline(customer.name)
-    return c.json({ jobId, status: 'running', message: `Intelligence generation started for ${customer.name}` })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-app.get('/api/customer/:name/intelligence-status', (c) => {
-  const rawName = decodeURIComponent(c.req.param('name'))
-  const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
-  if (!customer) return c.json({ error: 'Customer not found' }, 404)
-
-  const status = getJobStatus(customer.name)
-  if (!status) return c.json({ status: 'none', message: 'No intelligence generation job found for this customer' })
-  return c.json(status)
-})
-
-
-
-// ── Customer brief — cached, separate endpoint so subprocess doesn't block SSE ──
-app.get('/customer/:name/brief', async (c) => {
-  const rawName = decodeURIComponent(c.req.param('name'))
-  const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
-  if (!customer) return c.json({ error: 'Customer not found' }, 404)
-
-  const force = c.req.query('force') === 'true'
-
-  // Check cache unless force refresh — auto-invalidate if underlying data is newer
-  if (!force) {
-    const cached = readBriefCache(customer.name)
-    if (cached) {
-      const sheetData = readSheetCache(customer.name)
-      const briefTs = new Date(cached.cachedAt).getTime()
-      const sheetTs = sheetData ? new Date(sheetData.cachedAt).getTime() : 0
-      if (sheetTs <= briefTs) {
-        return c.json({ text: cached.text, cachedAt: cached.cachedAt, fromCache: true })
-      }
-      // Brief is stale (sheet data is newer) — fall through to regenerate
-    }
-  }
-
-  try {
-    const cachedSheet = readSheetCache(customer.name)
-    const [meetings, emails, docs, cases, subscriptions, products] = await Promise.all([
-      fetchCustomerMeetings(customer).catch(() => []),
-      fetchCustomerEmails(customer).catch(() => []),
-      fetchCustomerDocs(customer).catch(() => []),
-      fetchCustomerCases(customer).catch(() => []),
-      fetchCustomerSubscriptions(customer).catch(() => []),
-      cachedSheet ? Promise.resolve(cachedSheet.rows) : fetchCustomerSheetData(customer).catch(() => []),
-    ])
-    const text = await generateBrief(customer, meetings, emails, docs, cases, subscriptions, products)
-    writeBriefCache(customer.name, text)
-    return c.json({ text, fromCache: false })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
+// ── Customer detail routes (extracted to src/customer-routes.ts) ─────────────
 
 registerSettingsRoutes(app, { rescheduleRefreshTimers })
 
@@ -1677,42 +958,7 @@ app.get('/api/drive/ls/:folderId', async (c) => {
 // ── Refresh routes (M02 — registered from refresh-engine.ts) ────────────────
 registerRefreshRoutes(app)
 
-// ── Sheet data — permanent cache, force-refresh via ?force=true ───────────────
-app.get('/customer/:name/sheetdata', async (c) => {
-  const rawName = decodeURIComponent(c.req.param('name'))
-  const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
-  if (!customer) return c.json({ error: 'Customer not found' }, 404)
-
-  const force = c.req.query('force') === 'true'
-
-  if (!force) {
-    const cached = readSheetCache(customer.name)
-    if (cached) return c.json({ rows: cached.rows, cachedAt: cached.cachedAt, fromCache: true })
-  }
-
-  try {
-    const supportableIds = aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
-    const rows = await fetchCustomerSheetData(customer, supportableIds.length ? supportableIds : undefined)
-    writeSheetCache(customer.name, rows)
-    return c.json({ rows, fromCache: false })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-// ── Debug: raw sheet rows before normalization ────────────────────────────────
-app.get('/customer/:name/sheetdebug', async (c) => {
-  if (process.env.NODE_ENV === 'production') return c.json({ error: 'Not available' }, 404)
-  const rawName = decodeURIComponent(c.req.param('name'))
-  const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
-  if (!customer) return c.json({ error: 'Customer not found' }, 404)
-  try {
-    const result = await fetchCustomerSheetRaw(customer)
-    return c.json(result)
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
+// ── Sheet data + debug routes (extracted to src/customer-routes.ts) ──────────
 
 app.get('/debug/sheet-tabs/:fileId', async (c) => {
   if (process.env.NODE_ENV === 'production') return c.json({ error: 'Not available' }, 404)
