@@ -1917,7 +1917,7 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
     fetchStatus()
   }
 
-  if (status?.hasSession && !connecting) {
+  if (status?.hasSession && !status?.sessionExpired && !connecting) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
@@ -2008,6 +2008,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   } | null>(null)
   const [rhStatus, setRhStatus] = useState<{
     hasSession: boolean
+    sessionExpired: boolean
     lastScraped: string | null
     caseCount: number
   } | null>(null)
@@ -2049,7 +2050,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     fetch('/api/scrape/supportable/status', { signal }).then(r => r.json()).then(setSupportableStatus).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/scrape/ccsp/status', { signal }).then(r => r.json()).then(setCcspStatus).catch((e) => { if (e.name !== 'AbortError') setCcspStatus({ running: false, lastScrape: null, lastError: 'Unreachable' }) })
     fetch('/api/auth/salesforce/status', { signal }).then(r => r.json()).then(setSfStatus).catch((e) => { if (e.name !== 'AbortError') setSfStatus({ hasSession: false, lastSync: null, rowCount: 0, syncError: 'Unreachable', reportConfigured: false }) })
-    fetch('/api/auth/redhat/status', { signal }).then(r => r.json()).then(setRhStatus).catch((e) => { if (e.name !== 'AbortError') setRhStatus({ hasSession: false, lastScraped: null, caseCount: 0 }) })
+    fetch('/api/auth/redhat/status', { signal }).then(r => r.json()).then(setRhStatus).catch((e) => { if (e.name !== 'AbortError') setRhStatus({ hasSession: false, sessionExpired: false, lastScraped: null, caseCount: 0 }) })
     fetch('/api/bootstrap/tableau/session-status', { signal }).then(r => r.json()).then(setTableauStatus).catch((e) => { if (e.name !== 'AbortError') setTableauStatus({ reachable: false, sessionValid: false }) })
   }
 
@@ -2146,18 +2147,17 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const handleTableauConnect = async () => {
     setTableauConnecting(true)
 
-    // Pre-check: if already connected (not a reconnect), skip VNC entirely
-    if (!tableauConnected) {
-      try {
-        const res = await fetch('/api/bootstrap/tableau/session-status')
-        const status = await res.json()
-        setTableauStatus(status)
-        if (status.sessionValid) {
-          setTableauConnecting(false)
-          return
-        }
-      } catch { /* fall through to VNC flow */ }
-    }
+    // Always re-probe live session status — cached tableauStatus may be stale
+    // (Tableau SSO sessions expire faster than RH Portal sessions)
+    try {
+      const res = await fetch('/api/bootstrap/tableau/session-status')
+      const status = await res.json()
+      setTableauStatus(status)
+      if (status.sessionValid) {
+        setTableauConnecting(false)
+        return
+      }
+    } catch { /* fall through to VNC flow */ }
 
     // Not logged in — open VNC so user can log in
     tableauVncRef.current = window.open(VNC_URL, 'tableau-vnc', 'width=1280,height=900')
@@ -2263,7 +2263,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   )
 
   // Derived statuses for card border accents
-  const rhConnected = rhStatus?.hasSession ?? false
+  const rhConnected = (rhStatus?.hasSession && !rhStatus?.sessionExpired) ?? false
   const sfExpired = sfStatus?.syncError?.toLowerCase().includes('session expired')
   const sfConnected = sfStatus?.hasSession && !sfExpired
   const supportableConnected = supportableReachable === true
@@ -2605,7 +2605,7 @@ export default function SetupPage() {
     // Check RH Portal
     fetch('/api/auth/redhat/status', { signal })
       .then(r => r.json())
-      .then(d => { setRhOk(d.hasSession ?? false) })
+      .then(d => { setRhOk((d.hasSession && !d.sessionExpired) ?? false) })
       .catch((e) => { if (e.name !== 'AbortError') setRhOk(false) })
 
     // Eagerly resolve Data Sources badge without waiting for accordion to open
@@ -2615,7 +2615,7 @@ export default function SetupPage() {
       fetch('/api/scrape/ccsp/status',              { signal }).then(r => r.json()).catch(() => ({ lastError: 'Unreachable' })),
       fetch('/api/bootstrap/tableau/session-status', { signal }).then(r => r.json()).catch(() => ({ reachable: false, sessionValid: false })),
     ]).then(([rh, sf, ccsp, tableau]) => {
-      const anyErrors = !(rh.hasSession) || !(sf.hasSession) || !!(ccsp.lastError) || !(tableau.sessionValid)
+      const anyErrors = !(rh.hasSession) || !!(rh.sessionExpired) || !(sf.hasSession) || !!(ccsp.lastError) || !(tableau.sessionValid)
       setDataSourcesHealth(anyErrors ? 'issues' : 'healthy')
     }).catch(() => { /* aborted — ignore */ })
 
