@@ -11,7 +11,9 @@ import { writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
 import { adoptSfContext } from './sf-scraper.ts'
-import { adoptSupportableContext } from './supportable-scraper.ts'
+import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
+import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
+import { resetAllCircuitBreakers } from './scraper-manager.ts'
 
 const RH_PORTAL_URL = 'https://access.redhat.com/support/cases/#/case/list'
 const LOGIN_POLL_INTERVAL_MS = 2_000
@@ -80,6 +82,10 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
 
   // Release profile dir lock so the headed login browser can use it
   await closeScrapeContext()
+  // Null out CCSP/Supportable context refs so "Run Now" during auth gets a clear error
+  // instead of crashing with "Target page, context or browser has been closed"
+  closeSupportableContext()
+  closeCcspContext()
 
   loginInProgress = true
   loginTimedOut = false
@@ -94,7 +100,7 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
   try {
     context = await chromium.launchPersistentContext(profileDir, {
       headless: false,
-      args: ['--ignore-certificate-errors', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      args: ['--ignore-certificate-errors', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--renderer-process-limit=2', '--disable-gpu-compositing'],
     })
     page = await context.newPage()
   } catch (e) {
@@ -138,9 +144,16 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
           loginInProgress = false
 
           adoptScrapeContext(ctx, profileDir, livePage)
-          // SF and Supportable share the same SSO session via the Chromium profile
+          // SF, Supportable, and CCSP share the same SSO session via the Chromium profile
           adoptSfContext(ctx, profileDir)
           adoptSupportableContext(ctx)
+          adoptCcspContext(ctx)
+
+          // Cold-start recovery: reset all circuit breakers that accumulated
+          // failures while auth was stale (e.g. overnight laptop sleep)
+          resetAllCircuitBreakers()
+          console.log('[rh-auth] auth restored — circuit breakers reset, all scrapers re-adopted')
+
           onComplete?.()
           return
         }

@@ -838,7 +838,7 @@ export function registerBootstrapRoutes(app: Hono): void {
 
   // ── Initial Load (BKL-M44) ────────────────────────────────────────────────
   // Crash-safe, resume-capable full Supportable load for new instances.
-  // Runs sequentially (PARALLEL_PAGES=1 constraint), writes incrementally.
+  // Runs sequentially (sequential constraint (council decision 2026-04-03)), writes incrementally.
 
   const initialLoadState = {
     running: false,

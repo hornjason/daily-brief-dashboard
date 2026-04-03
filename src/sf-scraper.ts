@@ -396,7 +396,7 @@ export async function initSfContext(profileDir: string): Promise<void> {
   console.log('[sf-scraper] opening persistent context…')
   _context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
-    args: ['--headless=new', '--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    args: ['--headless=new', '--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--renderer-process-limit=2', '--disable-gpu-compositing'],
     ignoreDefaultArgs: ['--enable-automation'],
   })
   _keepAliveTimer = setInterval(

@@ -16,6 +16,12 @@
  * All account numbers for a customer are aggregated into a single tab.
  * The final Google Sheet has an "Accounts" summary tab (first) followed
  * by one tab per customer containing their aggregated subscription rows.
+ *
+ * Architecture (council decision 2026-04-03):
+ *   - Discovery: up to 3 parallel pages (read-only HTML parsing, no downloads)
+ *   - Subscription scraping: strictly sequential (one page, one account)
+ *   - Parallel APEX tabs crash Chromium under container memory constraints
+ *     (2GB shm, 8GB mem). Sequential is the only reliable architecture.
  */
 
 import type { BrowserContext, Page } from '@playwright/test'
@@ -45,7 +51,7 @@ export let lastSupportableScrape: string | null = null
 export let lastSupportableError:  string | null = null
 export let supportableScrapeRunning = false
 export let supportableStatusMessage: string | null = null
-let supportableScrapeStartedAt: number | null = null
+export let supportableScrapeStartedAt: number | null = null
 
 // A run that has been stuck for this long is assumed crashed — mutex auto-resets
 const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
@@ -70,11 +76,9 @@ async function sessionHeartbeat(page: Page): Promise<void> {
   lastNavigationTime = Date.now()
 }
 
-// Number of parallel Playwright pages used for the scrape phase
-// APEX shares one SSO session across all parallel pages. Path B (HTML extraction)
-// avoids DOM clicks for download, eliminating element-detached errors in parallel.
-// CSV fallback still does DOM clicks, but only fires when HTML extraction fails.
-const PARALLEL_PAGES = 5  // HTML extraction (Path B) avoids DOM clicks for download — parallel is stable.
+// Max parallel pages for discovery only (read-only HTML parsing, no downloads).
+// Subscription scraping is strictly sequential — see file header comment.
+const DISCOVERY_PARALLEL = 3
 
 // Wall-clock limit per account — fires before the 30s download timeout can accumulate
 const PER_ACCOUNT_TIMEOUT_MS = 90_000  // 90 seconds
@@ -86,21 +90,22 @@ export function adoptSupportableContext(ctx: BrowserContext): void {
   console.log('[supportable] adopted shared browser context')
 }
 
-// ── Parallel APEX session creation via "New Session" button ──────────────────
+export function closeSupportableContext(): void {
+  _ctx = null
+  console.log('[supportable] browser context released')
+}
+
+// ── Discovery session creation via "New Session" button ──────────────────────
 
 /**
- * Create multiple isolated APEX sessions by clicking the "New Session" link.
- * Each click opens a popup with a new APEX application instance (app 304 → 305 → 306 …),
- * giving each session its own server-side state — no contention.
- *
- * The first page navigates normally to get app 304.
- * Subsequent pages are created by clicking "New Session" on the first page,
- * which opens a popup with a new app instance.
- *
- * Falls back gracefully: if a "New Session" click fails, returns fewer pages.
+ * Create isolated APEX sessions for parallel discovery (name search only).
+ * Each "New Session" click opens a popup with a new app instance (304 → 305 → 306),
+ * giving each session its own server-side state — no contention on P0_CUSTOMER_NAME.
+ * Capped at DISCOVERY_PARALLEL (3) to stay within container memory limits.
  */
-async function createParallelSessions(count: number): Promise<Page[]> {
-  if (!_ctx) throw new Error('No browser context')
+async function createDiscoverySessions(count: number): Promise<Page[]> {
+  count = Math.min(count, DISCOVERY_PARALLEL)
+  if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
   if (count <= 0) return []
 
   const pages: Page[] = []
@@ -146,7 +151,7 @@ async function createParallelSessions(count: number): Promise<Page[]> {
 /**
  * Close all pages in a session list, swallowing errors.
  */
-async function closeParallelSessions(pages: Page[]): Promise<void> {
+async function closeDiscoveryPages(pages: Page[]): Promise<void> {
   for (const p of pages) {
     await p.close().catch(() => {})
   }
@@ -580,7 +585,8 @@ async function scrapeOneAccount(
   // Status=Active filtering is applied in code after download.
   // Register the download listener BEFORE clicking Actions — APEX may fire
   // the download event immediately when the CSV format icon is clicked.
-  const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
+  // Promise containment: .catch at creation prevents unhandled rejection if page dies mid-download
+  const downloadPromise = page.waitForEvent('download', { timeout: 30_000 }).catch(() => null)
 
   // Wait for Actions button to be fully interactive (not just present in DOM)
   const actionsBtn = await page.waitForSelector('button.a-IRR-button--actions', { timeout: 10_000 }).catch(() => null)
@@ -611,10 +617,10 @@ async function scrapeOneAccount(
   }
 
   // APEX sometimes fires the download immediately on CSV icon click — check quickly
-  let download
+  let download: Awaited<typeof downloadPromise>
   const quickCheck = await Promise.race([
-    downloadPromise.then(d => ({ d, fired: true as const })),
-    page.waitForTimeout(500).then(() => ({ d: null as null, fired: false as const })),
+    downloadPromise.then(d => ({ d, fired: d !== null })),
+    page.waitForTimeout(500).then(() => ({ d: null as null, fired: false })),
   ])
   if (quickCheck.fired && quickCheck.d) {
     download = quickCheck.d
@@ -633,6 +639,7 @@ async function scrapeOneAccount(
     await dlButton.click()
     download = await downloadPromise
   }
+  if (!download) throw new Error(`CSV download failed for account ${accountNumber} — page may have died`)
   console.log(`[supportable] account ${accountNumber}: CSV download — ${download.suggestedFilename()}`)
 
   // Check for server-side download failure before attempting to stream
@@ -776,34 +783,130 @@ async function discoverAccountNumbersByName(
 
     // Path B for discovery: parse account numbers from page.content() HTML
     // instead of page.evaluate() DOM interaction — safe for parallel execution
-    const html = await page.content().catch(() => '')
+    let html = await page.content().catch(() => '')
     const accountNumbers: string[] = []
+
+    // DIAG: log HTML size and whether key patterns are present
+    const hasCustomerInfo = html.includes('Customer Information')
+    const hasTableTh = (html.match(/<th/gi) ?? []).length
+    const tableCount = (html.match(/<table/gi) ?? []).length
+    console.log(`[supportable] name-search: HTML diag for "${searchTerm}%": ${html.length} chars, ${tableCount} tables, ${hasTableTh} <th> elements, customerInfo=${hasCustomerInfo}`)
+
+    // Try 0: detect detail page (APEX auto-navigated to single customer view)
+    // When a search matches exactly one customer, APEX skips the results list
+    // and goes directly to the Customer Information detail page.
+    // APEX renders the panel structure (labels) before populating values via AJAX,
+    // so we must wait for digit data to appear near "Account Number" before extracting.
+    if (hasCustomerInfo) {
+      // Wait for account number data to populate (APEX loads values async)
+      const DATA_WAIT_MS = 8_000
+      const dataLoaded = await page.waitForFunction(
+        () => {
+          // Look for any digit sequence (5+ digits) in the page body — indicates data populated
+          const body = document.body?.innerText ?? ''
+          return /\b\d{5,12}\b/.test(body) && body.includes('Account Number')
+        },
+        { timeout: DATA_WAIT_MS },
+      ).then(() => true).catch(() => false)
+
+      if (dataLoaded) {
+        html = await page.content().catch(() => '')
+        console.log(`[supportable] name-search: detail page data loaded after wait — re-read ${html.length} chars`)
+      } else {
+        console.warn(`[supportable] name-search: detail page data did NOT load within ${DATA_WAIT_MS}ms`)
+      }
+
+      // Extract account number from detail page — flexible patterns for APEX HTML
+      // Pattern 1: Account Number label in td/th, value in adjacent td (handles spans/whitespace)
+      const detailAcct = html.match(/Account\s*Number:?\s*<\/(?:td|th|span|b|label)[^>]*>[\s\S]{0,200}?(\d{5,12})/i)
+      if (detailAcct?.[1]) {
+        console.log(`[supportable] name-search: "${searchTerm}%" → detail page (single match), account# ${detailAcct[1]}`)
+        return [detailAcct[1]]
+      }
+      // Pattern 2: Account Number as plain text label followed by digits (no HTML tag between)
+      const plainAcct = html.match(/Account\s*Number:?\s*(\d{5,12})/i)
+      if (plainAcct?.[1]) {
+        console.log(`[supportable] name-search: "${searchTerm}%" → detail page plain match, account# ${plainAcct[1]}`)
+        return [plainAcct[1]]
+      }
+      // Pattern 3: use page.evaluate to extract from the live DOM (safe read-only operation)
+      const domAcct = await page.evaluate(() => {
+        const allTds = Array.from(document.querySelectorAll('td, th'))
+        for (const td of allTds) {
+          if (/Account\s*Number/i.test(td.textContent ?? '')) {
+            // Check next sibling cell or next element for a digit value
+            const next = td.nextElementSibling
+            const val = next?.textContent?.trim() ?? ''
+            const m = val.match(/(\d{5,12})/)
+            if (m) return m[1]
+            // Check parent row for any digit cell after this one
+            const row = td.closest('tr')
+            if (row) {
+              const cells = Array.from(row.querySelectorAll('td'))
+              const idx = cells.indexOf(td as HTMLTableCellElement)
+              for (let j = idx + 1; j < cells.length; j++) {
+                const cm = cells[j].textContent?.trim().match(/(\d{5,12})/)
+                if (cm) return cm[1]
+              }
+            }
+          }
+        }
+        return null
+      }).catch(() => null)
+      if (domAcct) {
+        console.log(`[supportable] name-search: "${searchTerm}%" → detail page DOM extract, account# ${domAcct}`)
+        return [domAcct]
+      }
+    }
 
     // Try 1: find the results table with Customer Number column
     const tableMatches = html.match(/<table[\s\S]*?<\/table>/gi) ?? []
+    let foundCustNumTable = false
     for (const tableHtml of tableMatches) {
       const thMatch = tableHtml.match(/<th[^>]*>([\s\S]*?)<\/th>/gi) ?? []
-      const headers = thMatch.map(h => h.replace(/<[^>]+>/g, '').trim())
-      const custNumIdx = headers.findIndex(h => /customer.?number/i.test(h))
+      const headers = thMatch.map(h => h.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
+      const custNumIdx = headers.findIndex(h => /customer\s*number/i.test(h))
       if (custNumIdx < 0) continue
+      foundCustNumTable = true
       const countryIdx = headers.findIndex(h => /^country$/i.test(h))
       const entlIdx = headers.findIndex(h => /entl.*active/i.test(h))
 
+      let filteredByCountry = 0
+      let filteredByEntl = 0
+      let totalDataRows = 0
       const rowMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) ?? []
       for (const rowHtml of rowMatches.slice(1)) {
         const tdMatch = rowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) ?? []
         const cells = tdMatch.map(td => td.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim())
         if (cells.length < headers.length - 2) continue
+        totalDataRows++
         const country = countryIdx >= 0 ? cells[countryIdx] : ''
         const entlActive = entlIdx >= 0 ? parseInt(cells[entlIdx] ?? '0', 10) : 1
-        if (country && country !== 'Web' && country !== 'USA') continue
-        if (entlIdx >= 0 && entlActive === 0) continue
+        if (country && country !== 'Web' && country !== 'USA') { filteredByCountry++; continue }
+        if (entlIdx >= 0 && entlActive === 0) { filteredByEntl++; continue }
         const acct = cells[custNumIdx]?.replace(/\s/g, '')
         if (acct && /^\d{4,12}$/.test(acct) && !accountNumbers.includes(acct)) {
           accountNumbers.push(acct)
         }
       }
+      if (totalDataRows > 0 && accountNumbers.length === 0) {
+        console.log(`[supportable] name-search: "${searchTerm}%" table had ${totalDataRows} rows but all filtered: ${filteredByCountry} by country, ${filteredByEntl} by entl`)
+      }
       if (accountNumbers.length > 0) break
+    }
+
+    // Log headers when no Customer Number column found in any table
+    // (reuse headers already extracted in the loop above to avoid re-parsing)
+    if (!foundCustNumTable && accountNumbers.length === 0 && !hasCustomerInfo && tableMatches.length > 0) {
+      // Extract headers only from the first table with <th> elements (likely the data table)
+      for (const t of tableMatches) {
+        const ths = t.match(/<th[^>]*>([\s\S]*?)<\/th>/gi) ?? []
+        const hdrs = ths.map(h => h.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()).filter(h => h.length > 0)
+        if (hdrs.length > 0) {
+          console.log(`[supportable] name-search: "${searchTerm}%" no Customer Number column found. Headers: [${hdrs.slice(0, 20).join(', ')}]`)
+          break
+        }
+      }
     }
 
     // Try 2: direct-match fallback — scan for "Account Number:" label in HTML
@@ -815,6 +918,27 @@ async function discoverAccountNumbersByName(
         console.log(`[supportable] name-search: "${searchTerm}%" → direct match, account# ${directAccountNumber}`)
         return [directAccountNumber]
       }
+    }
+
+    // Debug: dump HTML to file on failure for post-mortem analysis
+    if (accountNumbers.length === 0 && process.env.SUPPORTABLE_DEBUG) {
+      const debugDir = `${process.env.CACHE_DIR ?? '/tmp'}/debug`
+      const debugFile = `${debugDir}/supportable-${searchTerm.replace(/[^a-zA-Z0-9]/g, '_')}-${Date.now()}.html`
+      try {
+        const { mkdirSync, writeFileSync } = await import('fs')
+        mkdirSync(debugDir, { recursive: true })
+        writeFileSync(debugFile, html, { mode: 0o600 })
+        console.log(`[supportable] name-search: debug HTML dumped to ${debugFile}`)
+      } catch {}
+    }
+
+    // Sanity cap: if a broad search returns too many accounts, it's a false positive
+    // (e.g. "Taylor%" matching every company with "Taylor" in the name).
+    // Reject and try the next candidate instead.
+    const MAX_ACCOUNTS_PER_CUSTOMER = 20
+    if (accountNumbers.length > MAX_ACCOUNTS_PER_CUSTOMER) {
+      console.warn(`[supportable] name-search: "${searchTerm}%" → ${accountNumbers.length} accounts (exceeds ${MAX_ACCOUNTS_PER_CUSTOMER} cap) — likely false positive, skipping`)
+      continue  // try next candidate
     }
 
     console.log(`[supportable] name-search: "${searchTerm}%" → ${accountNumbers.length} account(s): [${accountNumbers.join(', ')}]`)
@@ -857,6 +981,7 @@ export async function runSupportableScrape(
   lastSupportableError = null
   supportableStatusMessage = 'Connecting to Supportable…'
 
+  if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
   let page = await _ctx.newPage()
   const results: SupportableResult[] = []
   let isFirst = true
@@ -935,6 +1060,7 @@ export async function runSupportableDiscoverAndScrape(
   }
 
   const results: SupportableResult[] = []
+  if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
   let ssoPage = await _ctx.newPage()
 
   try {
@@ -999,9 +1125,9 @@ export async function runSupportableDiscoverAndScrape(
 
     if (discoveryJobs.length > 0) {
       // Create parallel sessions for discovery — cap at discoveryJobs.length
-      const discoverySessionCount = Math.min(PARALLEL_PAGES, discoveryJobs.length)
+      const discoverySessionCount = Math.min(DISCOVERY_PARALLEL, discoveryJobs.length)
       _onStatus(`creating ${discoverySessionCount} parallel discovery sessions…`)
-      discoveryPages = await createParallelSessions(discoverySessionCount)
+      discoveryPages = await createDiscoverySessions(discoverySessionCount)
 
       // Distribute discovery jobs across sessions
       let discoveryJobIndex = 0
@@ -1058,113 +1184,88 @@ export async function runSupportableDiscoverAndScrape(
     }
 
     const customerRows: Record<string, string>[][] = discovered.map(() => [])
-    // Tracks how many accounts have finished (pass or fail) per customer.
-    // When all accounts for a customer are done, onProgress fires immediately
-    // so the UI updates incrementally rather than in a burst at the end.
     const accountsDone: number[] = discovered.map(() => 0)
     let customersDone = 0
 
-    console.log(`[supportable] scrape: ${jobs.length} account(s) across ${discovered.length} customers — ${PARALLEL_PAGES} parallel pages`)
+    // ── Phase 3: Sequential subscription scrape (one page, one account) ──────
+    // Close discovery pages — subscription scrape uses its own page lifecycle
+    await closeDiscoveryPages(discoveryPages)
 
-    // ── Phase 3: Parallel scrape using reused discovery session pages ─────────
-    // Reuse the discovery pages (already on isolated APEX apps 304-308).
-    // If no discovery pages exist (all customers had cached accounts), create fresh ones.
-    let scrapePages: Page[]
-    if (discoveryPages.length > 0) {
-      scrapePages = discoveryPages.slice(0, Math.min(PARALLEL_PAGES, jobs.length || 1))
-      console.log(`[supportable] reusing ${scrapePages.length} discovery sessions for scraping`)
-    } else {
-      const workerCount = Math.min(PARALLEL_PAGES, jobs.length || 1)
-      _onStatus(`creating ${workerCount} parallel scrape sessions…`)
-      scrapePages = await createParallelSessions(workerCount)
-      console.log(`[supportable] created ${scrapePages.length} fresh sessions for scraping`)
-    }
-    const actualWorkers = scrapePages.length
+    if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
 
-    if (actualWorkers === 0) {
-      throw new Error('Failed to create any APEX sessions for scraping')
-    }
+    const ACCOUNTS_PER_PAGE_CYCLE = 10
+    let scrapePage = await _ctx.newPage()
+    let accountsOnCurrentPage = 0
 
-    if (actualWorkers < PARALLEL_PAGES) {
-      console.warn(`[supportable] only ${actualWorkers}/${PARALLEL_PAGES} sessions available — proceeding with reduced parallelism`)
-    }
+    console.log(`[supportable] scrape: ${jobs.length} account(s) across ${discovered.length} customers — sequential mode`)
 
-    // jobIndex is incremented inside a synchronous tick — safe without a mutex.
-    let jobIndex = 0
+    for (let ji = 0; ji < jobs.length; ji++) {
+      const job = jobs[ji]
+      supportableStatusMessage = `Scraping ${job.customerName} (${ji + 1}/${jobs.length})…`
+      console.log(`[supportable] scrape: ${job.customerName}/${job.accountNumber} (${ji + 1}/${jobs.length})`)
 
-    async function worker(workerId: number, initialPage: Page): Promise<void> {
-      let workerPage = initialPage
-      // Stagger worker starts by 3s each to avoid simultaneous APEX requests
-      if (workerId > 0) await new Promise(r => setTimeout(r, workerId * 3000))
-      lastNavigationTime = Date.now()
-      try { while (jobIndex < jobs.length) {
-          const job = jobs[jobIndex++]
-          supportableStatusMessage = `Scraping ${job.customerName} (${jobIndex}/${jobs.length})…`
-          console.log(`[supportable] worker-${workerId}: ${job.customerName}/${job.accountNumber} (${jobIndex}/${jobs.length})`)
-          // Keep APEX session alive during long batch runs
-          await sessionHeartbeat(workerPage)
-          let succeeded = false
-          for (let attempt = 1; attempt <= 2 && !succeeded; attempt++) {
-            try {
-              if (attempt > 1) {
-                console.log(`[supportable] worker-${workerId}: retry ${job.accountNumber} (attempt ${attempt})`)
-                // On retry, navigate back to landing on the SAME isolated page (don't create new page — that would lose session isolation)
-                await workerPage.goto(getPageLandingUrl(workerPage), { waitUntil: 'domcontentloaded', timeout: 30_000 })
-                await workerPage.waitForTimeout(2_000)
-              }
-              // Wall-clock timeout prevents any single account from blocking a worker indefinitely.
-              // Attach .catch() to scrapePromise BEFORE the race so that if the timeout wins
-              // and the worker closes the page, the orphaned promise's rejection is silently
-              // consumed rather than crashing Bun as an unhandled rejection.
-              const scrapePromise = scrapeOneAccount(workerPage, job.accountNumber, false)
-              scrapePromise.catch(() => {})
-              const result = await Promise.race([
-                scrapePromise,
-                new Promise<never>((_, reject) =>
-                  setTimeout(() => reject(new Error(`wall-clock timeout (${PER_ACCOUNT_TIMEOUT_MS / 1000}s)`)), PER_ACCOUNT_TIMEOUT_MS)
-                ),
-              ])
-              customerRows[job.customerIndex].push(...result.rows)
-              workerPage = result.page
-              succeeded = true
-            } catch (e: any) {
-              console.warn(`[supportable] worker-${workerId}: ${job.customerName}/${job.accountNumber} attempt ${attempt}: ${e.message}`)
-              // Check if page is still alive — if not, try to navigate it back
-              const alive = await workerPage.evaluate(() => true).catch(() => false)
-              if (!alive) {
-                console.warn(`[supportable] worker-${workerId}: page context lost — skipping remaining retries`)
-                break  // Don't create new page (loses session isolation). Skip this account.
-              }
-              await workerPage.goto(getPageLandingUrl(workerPage), { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
-              await workerPage.waitForTimeout(1_500)
-            }
+      // Fresh page every N accounts to prevent V8 heap growth from detached DOM nodes
+      if (accountsOnCurrentPage >= ACCOUNTS_PER_PAGE_CYCLE) {
+        console.log(`[supportable] page lifecycle: recycling after ${accountsOnCurrentPage} accounts`)
+        await scrapePage.goto('about:blank').catch(() => {})
+        await scrapePage.close().catch(() => {})
+        if (!_ctx) { console.warn('[supportable] scrape: context gone — aborting'); break }
+        scrapePage = await _ctx.newPage()
+        accountsOnCurrentPage = 0
+      }
+
+      await sessionHeartbeat(scrapePage)
+
+      let succeeded = false
+      for (let attempt = 1; attempt <= 2 && !succeeded; attempt++) {
+        try {
+          if (attempt > 1) {
+            console.log(`[supportable] scrape: retry ${job.accountNumber} (attempt ${attempt})`)
+            await scrapePage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+            await scrapePage.waitForTimeout(2_000)
           }
-          // Fire onProgress as soon as all accounts for this customer are done
-          accountsDone[job.customerIndex]++
-          if (accountsDone[job.customerIndex] === discovered[job.customerIndex].accountNumbers.length) {
-            customersDone++
-            const { customerName, accountNumbers } = discovered[job.customerIndex]
-            const rows = customerRows[job.customerIndex]
-            console.log(`[supportable] discover+scrape: ✓ "${customerName}": ${accountNumbers.length} acct(s), ${rows.length} subscription rows`)
-            onProgress?.(customersDone, customers.length, customerName, accountNumbers, rows.length)
+
+          const scrapePromise = scrapeOneAccount(scrapePage, job.accountNumber, ji === 0 && attempt === 1)
+          scrapePromise.catch(() => {})  // prevent unhandled rejection if timeout wins
+          const result = await Promise.race([
+            scrapePromise,
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error(`wall-clock timeout (${PER_ACCOUNT_TIMEOUT_MS / 1000}s)`)), PER_ACCOUNT_TIMEOUT_MS)
+            ),
+          ])
+          customerRows[job.customerIndex].push(...result.rows)
+          scrapePage = result.page
+          succeeded = true
+        } catch (e: any) {
+          console.warn(`[supportable] scrape: ${job.customerName}/${job.accountNumber} attempt ${attempt}: ${e.message}`)
+          const alive = await scrapePage.evaluate(() => true).catch(() => false)
+          if (!alive) {
+            console.warn(`[supportable] scrape: page died — creating fresh page`)
+            await scrapePage.close().catch(() => {})
+            if (!_ctx) { console.warn('[supportable] scrape: context gone — aborting'); break }
+            scrapePage = await _ctx.newPage()
+            accountsOnCurrentPage = 0
+          } else {
+            await scrapePage.goto(SUPPORTABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+            await scrapePage.waitForTimeout(1_500)
           }
         }
-      } catch (e: any) {
-        // Top-level worker catch: prevents unexpected errors from escaping as
-        // unhandled rejections in Promise.all. Per-job recovery happens above.
-        console.warn(`[supportable] worker-${workerId}: unexpected exit — ${e.message}`)
-      } finally {
-        // DON'T close the page here — other workers may still be running.
-        // Closing one page can destabilize the browser context for others.
-        // All pages are closed together after Promise.all completes.
-        console.log(`[supportable] worker-${workerId}: finished`)
+      }
+
+      accountsOnCurrentPage++
+      accountsDone[job.customerIndex]++
+      if (accountsDone[job.customerIndex] === discovered[job.customerIndex].accountNumbers.length) {
+        customersDone++
+        const { customerName, accountNumbers } = discovered[job.customerIndex]
+        const rows = customerRows[job.customerIndex]
+        console.log(`[supportable] discover+scrape: ✓ "${customerName}": ${accountNumbers.length} acct(s), ${rows.length} subscription rows`)
+        onProgress?.(customersDone, customers.length, customerName, accountNumbers, rows.length)
       }
     }
 
-    await Promise.all(scrapePages.map((page, i) => worker(i, page)))
-
-    // Close all worker pages now that ALL workers are done
-    await closeParallelSessions(scrapePages)
+    // Clean up scrape page
+    await scrapePage.goto('about:blank').catch(() => {})
+    await scrapePage.close().catch(() => {})
 
     // ── Phase 4: Assemble results in original customer order ──────────────────
     // Fire onProgress for any customers that had 0 accounts (skipped the worker loop)

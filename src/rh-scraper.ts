@@ -103,6 +103,8 @@ export async function initScrapeContext(profileDir: string): Promise<void> {
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
+      '--renderer-process-limit=2',
+      '--disable-gpu-compositing',
     ],
     ignoreDefaultArgs: ['--enable-automation'],
   })
@@ -177,6 +179,8 @@ async function _autoRecover(profileDir: string): Promise<void> {
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
+            '--renderer-process-limit=2',
+            '--disable-gpu-compositing',
           ],
           ignoreDefaultArgs: ['--enable-automation'],
         })
@@ -413,10 +417,13 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
   if (!_context) throw new Error('[rh-scraper] failed to open browser context')
   const context = _context
 
-  // Reuse the live authenticated page if available — it retains sessionStorage
-  // (PKCE state) that new pages lack. Only create a new page as fallback.
-  const usingLivePage = !!_livePage
-  const page = _livePage ?? await context.newPage()
+  // Always use a fresh page for scraping — _livePage is reserved for auth flows.
+  // Using _livePage caused a race: auth cleanup navigates it to about:blank while
+  // the batch query tries to load, interrupting the navigation.
+  // Fresh pages inherit cookies from the shared BrowserContext (SSO session),
+  // so PKCE sessionStorage is not needed for cases API queries.
+  const page = await context.newPage()
+  const usingLivePage = false
 
   const allCases: SupportCase[] = []
 
@@ -809,6 +816,8 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
+            '--renderer-process-limit=2',
+            '--disable-gpu-compositing',
           ],
           ignoreDefaultArgs: ['--enable-automation'],
         })

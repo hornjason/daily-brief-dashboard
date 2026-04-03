@@ -21,19 +21,20 @@ import { runRhScrape, SessionExpiredError, closeScrapeContext, getScrapeContext,
 
 import { runSfPipelineSync, getSfContext, sfSyncError } from './src/sf-scraper.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
-import { runSupportableDiscoverAndScrape, supportableScrapeRunning } from './src/supportable-scraper.ts'
-import { ccspScrapeRunning, lastCcspError } from './src/ccsp-scraper.ts'
+import { runSupportableScrape, runSupportableDiscoverAndScrape, writeSupportableSheet, supportableScrapeRunning } from './src/supportable-scraper.ts'
+import type { SupportableCustomer } from './src/supportable-scraper.ts'
+import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, lastCcspError } from './src/ccsp-scraper.ts'
 import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, getScopeLevel, type StoredToken } from './src/oauth-scopes.ts'
 import { initCacheLayer, registerCacheRoutes, readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, toSlug } from './src/cache-layer.ts'
 import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
-import { loadServerState, aes, customers, saveAes, setAes, setCustomers, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
-import { initRefreshEngine, registerRefreshRoutes } from './src/refresh-engine.ts'
+import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
+import { initRefreshEngine, registerRefreshRoutes, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { computeAllHealthScores, isFreeOrTrial } from './src/health-score.ts'
-import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes } from './src/scraper-manager.ts'
+import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { buildContactHistory, detectGoneSilent } from './src/email-extraction.ts'
-import { rescheduleRefreshTimers, initBackgroundScheduler } from './src/background-scheduler.ts'
+import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask } from './src/background-scheduler.ts'
 import { getRecentHistory } from './src/kpi-history.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
 import { registerBootstrapRoutes, startAccountDiscovery } from './src/bootstrap-orchestrator.ts'
@@ -55,6 +56,12 @@ async function notify(title: string, message: string, priority: 'default' | 'hig
     console.warn('[ntfy] notification failed:', e?.message ?? e)
   }
 }
+
+// Safety net: log unhandled promise rejections instead of crashing Bun
+// (council decision 2026-04-03 — Playwright download promises can reject after page death)
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[server] unhandled rejection:', reason?.message ?? reason)
+})
 
 // ── BKL-T04: Live session probe with 30s cache ──────────────────────────────
 const _probeCache = new Map<string, { result: boolean; at: number }>()
@@ -761,7 +768,69 @@ app.post('/api/auth/redhat/start', async (c) => {
         }
         // Pre-warm complete (or skipped/timed out) — now safe to hide the VNC window
         getLivePage()?.goto('about:blank').catch(() => {})
-        runRhScrapeWithState().catch((e: any) => console.error('[rh-scraper] unhandled error:', e?.message ?? e))
+        // Auth restored — enqueue all scrapers through queue (cold-start recovery)
+        console.log('[rh-auth] onComplete: enqueueing all scrapers after re-auth')
+        enqueueScraperTask({
+          name: 'rh-cases',
+          run: () => runRhScrapeWithState(),
+          source: 'manual',
+          enqueuedAt: Date.now(),
+        })
+        // SF Pipeline — only AEs with sfReportId configured
+        const sfAes = aes.filter(a => a.sfReportId)
+        if (sfAes.length) {
+          enqueueScraperTask({
+            name: 'sf-pipeline',
+            run: async () => { await runSfSyncForAes(sfAes) },
+            source: 'manual',
+            enqueuedAt: Date.now(),
+          })
+        }
+        // Supportable — iterate AEs, scrape customers with account numbers, write sheets
+        enqueueScraperTask({
+          name: 'supportable',
+          run: async () => {
+            if (supportableScrapeRunning) { console.log('[rh-auth] supportable: busy — skipping'); return }
+            for (const ae of aes) {
+              const aeCustomers = customers.filter(cu => cu.ae === ae.name && cu.accountNumbers?.length)
+              if (!aeCustomers.length) continue
+              try {
+                const results = await runSupportableScrape(aeCustomers as SupportableCustomer[])
+                const sheetId = await writeSupportableSheet(results, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
+                if (sheetId) patchAe(ae.name, { supportableSheetId: sheetId })
+              } catch (e: any) {
+                console.warn(`[rh-auth:supportable] ${ae.name} failed:`, e?.message ?? e)
+              }
+            }
+            await refreshSubscriptions().catch(() => {})
+          },
+          source: 'manual',
+          enqueuedAt: Date.now(),
+        })
+        // CCSP — AEs with Tableau territories configured
+        const ccspAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
+        if (ccspAes.length) {
+          enqueueScraperTask({
+            name: 'ccsp',
+            run: async () => {
+              if (ccspScrapeRunning || ccspInFlight) { console.log('[rh-auth] ccsp: busy — skipping'); return }
+              setCcspInFlight(true)
+              try {
+                const results = await runCcspScrape(ccspAes)
+                for (const ae of ccspAes) {
+                  const aeResults = results.filter(r => r.aeName === ae.name)
+                  const sheetId = await writeCcspSheet(aeResults, ae.name, ae.driveFolderId, ae.ccspSheetId || undefined)
+                  patchAe(ae.name, { ccspSheetId: sheetId })
+                }
+                await refreshCCSP().catch(() => {})
+              } finally {
+                setCcspInFlight(false)
+              }
+            },
+            source: 'manual',
+            enqueuedAt: Date.now(),
+          })
+        }
       })().catch((e: any) => console.error('[supportable] pre-warm block error:', e?.message ?? e))
     })
     return c.json({ started: true })

@@ -182,6 +182,52 @@ Supportable 360 is an APEX Oracle app. After entering an account number and clic
 
 ---
 
+### 10a. Supportable Sequential Architecture (Council Decision 2026-04-03)
+
+Subscription scraping is strictly sequential: one page processes one account at a time. Parallel APEX tabs crash Chromium under container memory constraints (2GB shm, 8GB mem) due to Oracle APEX's single-cookie session model causing DOM context collisions between tabs.
+
+**Discovery** stays parallel (up to 3 pages via `DISCOVERY_PARALLEL`) because it only reads `page.content()` — no downloads, no DOM mutation, no export clicks. Discovery sessions are created via "New Session" button which spawns isolated APEX app instances (304→305→306).
+
+**Page lifecycle:** Fresh page every 10 accounts (`ACCOUNTS_PER_PAGE_CYCLE`). Old page navigates to `about:blank` before close (flushes DOM). Session heartbeat keeps APEX alive across long scrape runs.
+
+**Promise containment:** All `page.waitForEvent('download')` calls have `.catch(() => null)` at creation to prevent unhandled rejections if the page dies mid-download. `process.on('unhandledRejection')` in server.ts is a safety net.
+
+---
+
+### 12. Cold-Start Auth-Gate and Circuit Breaker Reset
+
+**Pattern:** On container startup, the server performs an auth pre-flight check before firing any scrapers. If the RH session is stale (expired cookies from overnight), the initial scrape is skipped entirely — no circuit breaker penalty — and the system waits for manual re-authentication via VNC.
+
+**Cold-start lifecycle:**
+```
+Container starts
+  → Auth pre-flight: open test page, check RH session validity
+  → Session valid?
+      YES → enqueue initial scrape immediately
+      NO  → skip scrape (no CB penalty), wait for manual auth via VNC
+```
+
+**Why it's intentional:** Before this change, startup used a blind 10-second delay then fired all scrapers. If the container had been stopped overnight, cookies were always expired — scrapers would accumulate 15+ failures, tripping circuit breakers into OPEN state. Even after the user VNC-logged in and re-authenticated, the circuit breakers stayed open for their cooldown period. The auth pre-flight eliminates this false-failure accumulation entirely.
+
+**Circuit breaker reset on re-authentication:** When a user completes RH Portal or Salesforce SSO login (via VNC), all circuit breakers are reset to CLOSED state. This ensures that re-authentication immediately restores full scraper capability without waiting for cooldown timers.
+
+**Re-auth adopts ALL scrapers:** Both `rh-auth.ts` and `sf-auth.ts` call all four adoption functions on successful login:
+```
+Re-auth (RH or SF SSO)
+  → adoptRhContext(ctx)
+  → adoptSupportableContext(ctx)
+  → adoptCcspContext(ctx)
+  → adoptSfContext(ctx)
+  → Reset all circuit breakers to CLOSED
+  → Enqueue immediate scrape
+```
+
+**Manual "Run Now" overrides circuit breakers:** The admin page "Run Now" buttons reset the relevant circuit breaker before enqueueing the scrape. When a user explicitly clicks "Run Now", it always executes a real attempt regardless of breaker state. The button text changes to "Force Run" when the breaker is OPEN, and each scraper card shows BREAKER OPEN/HALF-OPEN badges with failure count.
+
+**What looks wrong:** "Resetting circuit breakers defeats the purpose." In a multi-tenant system, yes. Here, a circuit breaker trip from expired cookies is not a real failure signal — it's an auth problem. Once auth is restored, the failure condition is resolved. The breaker reset is semantically correct: the underlying cause has been addressed.
+
+---
+
 ## What IS Worth Flagging
 
 These are genuine concerns where security/quality recommendations are appropriate:
@@ -193,6 +239,7 @@ These are genuine concerns where security/quality recommendations are appropriat
 - **Cache file permissions** — `mode: 0o600` on all cache writes (fixed 2026-03-29)
 - **Silent catch blocks** — 9 previously-silent write catches now log `console.warn` (fixed 2026-03-29)
 - **Race conditions on async AE updates** — `patchAe()` used instead of `aes.map()` after `await` in bootstrap steps (fixed 2026-03-29)
+- **Telemetry ENOENT** — `SCRAPE_LOG_PATH` now uses `process.env.CACHE_DIR` instead of hardcoded relative path (fixed 2026-04-03)
 
 ---
 
@@ -236,7 +283,8 @@ setSessionExpiredCallback(() => {
 | `src/sf-scraper.ts` | Salesforce pipeline scraper (Playwright) |
 | `src/sheets.ts` | Google Sheets reader (cache layer feed) |
 | `src/google.ts` | Google OAuth + unified token management |
-| `src/rh-auth.ts` | Red Hat Portal SSO login browser management |
+| `src/rh-auth.ts` | Red Hat Portal SSO login browser management + full scraper adoption |
+| `src/sf-auth.ts` | Salesforce SSO login + full scraper adoption + CB reset |
 | `data/config/aes.json` | AE configuration: territories, Drive folder IDs, sheet IDs |
 | `data/config/customers.json` | Customer list: names, account numbers |
 | `data/cache/` | JSON caches for CCSP, pipeline, subscriptions |

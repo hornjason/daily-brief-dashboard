@@ -17,6 +17,9 @@ import type { BrowserContext } from '@playwright/test'
 import { writeFileSync, existsSync } from 'node:fs'
 import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
 import { closeSfContext, adoptSfContext } from './sf-scraper.ts'
+import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
+import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
+import { resetAllCircuitBreakers } from './scraper-manager.ts'
 
 const SF_LOGIN_URL   = 'https://redhatcrm.my.salesforce.com'
 const RH_PORTAL_URL  = 'https://access.redhat.com/support/cases/#/case/list'
@@ -76,6 +79,9 @@ export async function startSfLoginBrowser(
   // Release profile lock so the headed browser can open the same profile
   closeSfContext()         // clear SF keep-alive timer
   await closeScrapeContext()  // close RH headless context, clear profile lock
+  // Null out CCSP/Supportable context refs so "Run Now" during auth gets a clear error
+  closeSupportableContext()
+  closeCcspContext()
 
   loginInProgress = true
   loginTimedOut = false
@@ -84,7 +90,7 @@ export async function startSfLoginBrowser(
   try {
     context = await chromium.launchPersistentContext(profileDir, {
       headless: false,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--renderer-process-limit=2', '--disable-gpu-compositing'],
     })
   } catch (e) {
     loginInProgress = false
@@ -140,10 +146,16 @@ export async function startSfLoginBrowser(
             activeContext = null
             loginInProgress = false
 
-            // Re-adopt for both scrapers. adoptScrapeContext also calls adoptSfContext
-            // internally (wired in rh-auth.ts), but we call both explicitly here.
+            // Re-adopt for all scrapers sharing this SSO context
             adoptScrapeContext(ctx, profileDir, rhPage)
             adoptSfContext(ctx, profileDir)
+            adoptSupportableContext(ctx)
+            adoptCcspContext(ctx)
+
+            // Cold-start recovery: reset circuit breakers accumulated during stale auth
+            resetAllCircuitBreakers()
+            console.log('[sf-auth] auth restored — circuit breakers reset, all scrapers re-adopted')
+
             onComplete?.()
             return
           } else {
@@ -154,6 +166,8 @@ export async function startSfLoginBrowser(
             activeContext = null
             loginInProgress = false
             adoptSfContext(ctx, profileDir)
+            // Still reset SF circuit breaker even if RH portal didn't load
+            resetAllCircuitBreakers()
             onComplete?.()
             return
           }
