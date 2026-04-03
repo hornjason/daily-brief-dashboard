@@ -8,7 +8,7 @@ A containerized customer intelligence dashboard for Red Hat Account Executives a
 - **Subscriptions** — Active subscription data from Supportable 360, organized by customer
 - **Cloud Spend (CCSP)** — Tableau CCSP cloud consumption data per account
 - **Pipeline** — Salesforce pipeline opportunities per AE
-- **AI Briefs** — On-demand customer intelligence briefs (Gemini, Claude, OpenAI, Ollama)
+- **AI Briefs** — On-demand customer intelligence briefs powered by Google Gemini via Vertex AI (Google Cloud's AI platform)
 - **Google Workspace** — Gmail and Calendar context for meeting prep
 - **Setup Wizard** — Browser-based wizard connects all data sources in ~15 minutes
 
@@ -20,15 +20,22 @@ All data is cached locally. Nothing leaves your machine except API calls to serv
 - **Podman** (or Docker)
   - Mac: `brew install podman && podman machine init && podman machine start`
   - RHEL/Fedora: `sudo dnf install podman`
-- **Red Hat Customer Portal access** (your existing SSO credentials)
+  - If Podman installation is blocked by corporate IT, contact your IT helpdesk or email jhorn@redhat.com
+- **GitHub account** — to pull the container image from GHCR (private registry)
 - **Red Hat Google Workspace account** (for Gmail, Calendar, and Drive)
+- **Red Hat Customer Portal access** (your existing SSO credentials)
 
 ## Quick Start
 
-### 1. Pull the container image
+### 1. Log in to the container registry and pull the image
+
+The container image is hosted on GitHub Container Registry (private). You need a GitHub Personal Access Token (PAT) with the `read:packages` scope.
+
+Create a PAT at [github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token (classic)** → check `read:packages`.
 
 ```bash
 podman login ghcr.io -u YOUR_GITHUB_USERNAME
+# paste your PAT when prompted for password
 podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
 ```
 
@@ -38,22 +45,21 @@ podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
 mkdir -p ./data/config ./data/cache ./data/rh-profile
 ```
 
-Create a `.env` file with your settings:
+Create a `.env` file with your settings (you can also create this in a text editor and save it as `.env`):
 
 ```bash
 cat > .env << 'EOF'
-# Required
+# Required — Red Hat Customer Portal API token
+# Get yours at: https://access.redhat.com/management/api
 REDHAT_OFFLINE_TOKEN=your_offline_token_here
-AE_FOLDER_NAME=Your Name
 
-# Optional — AI brief provider (default: gemini, which needs no key)
-# LLM_PROVIDER=gemini
-# ANTHROPIC_API_KEY=sk-ant-...
-# OPENAI_API_KEY=sk-...
+# Optional — override any container default (see Environment Variables below)
+# PORT=7777
+# NTFY_TOPIC=pai-notifications
 EOF
 ```
 
-Get your Red Hat offline token at [access.redhat.com/management/api](https://access.redhat.com/management/api). Set `AE_FOLDER_NAME` to your name as it appears on your Google Drive folder.
+> **AI briefs work out of the box.** The container ships with a shared GCP project (`jhorn-pai`) and Gemini config baked in — no Gemini/Vertex AI setup required. To use your own GCP project instead, add `GOOGLE_CLOUD_PROJECT` and optionally `GEMINI_SERVICE_ACCOUNT_KEY` to your `.env`. See [Environment Variables](#environment-variables) for the full list.
 
 ### 3. Run the container
 
@@ -78,9 +84,17 @@ podman run -d \
 
 ### 4. Open the setup wizard
 
-Go to **http://localhost:7777/dashboard/setup**. The wizard walks you through connecting Google Workspace, Red Hat Portal, and your AI provider.
+Go to **http://localhost:7777/dashboard/setup**. The wizard walks you through:
+
+1. **OAuth Keys** — Download the shared `gcp-oauth.keys.json` from the link in the wizard, then paste or upload it. This file identifies the app to Google — it's safe to use and shared read-only by jhorn@redhat.com.
+2. **Connect Google Workspace** — Authorizes access to Gmail, Calendar, Drive, and Sheets
+3. **Connect Red Hat Portal** — Log in at `http://localhost:6080` (this opens a browser running inside the container where you complete SSO login)
+4. **AEs & Customers** — Connect your Google Drive AE folder(s) to import customer lists
+5. **Data Sources & Refresh** — Review connected data sources and refresh intervals
 
 After setup, your dashboard is at **http://localhost:7777/dashboard**. Data sources refresh on first load — the initial scrape may take 3-5 minutes before data appears.
+
+> **Google OAuth "not a test user" error?** The shared GCP project uses External consent mode. Email **jhorn@redhat.com** with your Red Hat Google email to be added as a test user.
 
 ## Stopping and Restarting
 
@@ -99,26 +113,27 @@ Your data in `./data/` is preserved across stops, starts, and container removal.
 | **7777** | Dashboard UI and API |
 | **6080** | Browser window for Red Hat Portal login (localhost only) |
 
-Port 6080 lets you log into the Red Hat Customer Portal from your browser via a window into the container's headless Chromium. You use this once during setup and occasionally when your session expires.
+Port 6080 opens a browser view into the container's headless Chromium. You use this during setup to log into the Red Hat Customer Portal, and occasionally when your session expires.
 
 ## Environment Variables
 
-Only two variables are required. Everything else is configured through the setup wizard or has sensible defaults.
+The container ships with sensible defaults for all variables except `REDHAT_OFFLINE_TOKEN`. To override any default, add the variable to your `.env` file — your values always take precedence.
 
-| Variable | Required | Description |
+| Variable | Default | Description |
 |---|---|---|
-| `REDHAT_OFFLINE_TOKEN` | **Yes** | Red Hat Customer Portal API token |
-| `AE_FOLDER_NAME` | **Yes** | Your name as it appears on your Google Drive folder |
-| `LLM_PROVIDER` | No | AI provider: `gemini` (default), `anthropic`, `openai`, `ollama`, `claude-code` |
-| `ANTHROPIC_API_KEY` | If using Claude | Anthropic API key |
-| `OPENAI_API_KEY` | If using OpenAI | OpenAI API key |
-| `NTFY_TOPIC` | No | Push notification topic via ntfy.sh |
+| `REDHAT_OFFLINE_TOKEN` | — | **Required.** Red Hat Customer Portal API token ([get one here](https://access.redhat.com/management/api)) |
+| `GOOGLE_CLOUD_PROJECT` | `jhorn-pai` | GCP project ID with Vertex AI API enabled |
+| `GEMINI_SERVICE_ACCOUNT_KEY` | *(shared key)* | Base64-encoded GCP service account JSON key (falls back to OAuth token from wizard) |
+| `GOOGLE_CLOUD_LOCATION` | `us-east1` | Vertex AI region |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model for brief generation |
+| `NTFY_TOPIC` | `pai-notifications` | Push notification topic via ntfy.sh |
+| `PORT` | `7777` | Server port |
 
-Google OAuth tokens are configured through the setup wizard — no manual env vars needed.
+Google OAuth tokens, AE folder configuration, and data source settings are all managed through the setup wizard — no manual env vars needed for those. For the complete variable reference including path overrides and advanced options, see [SETUP.md — Environment Variables](SETUP.md#environment-variables-reference).
 
 ## Data Persistence
 
-All persistent state lives in `./data/`, mounted at `/data` inside the container. This includes your configuration, cached scrape data, and browser session cookies. Back up this directory to preserve your setup across machines.
+All persistent state lives in `./data/`, mounted at `/data` inside the container. This includes your configuration, cached scrape data, Google OAuth tokens, and browser session cookies. Back up this directory to preserve your setup across machines.
 
 ## Troubleshooting
 
@@ -132,13 +147,22 @@ Verify the container is running: `podman ps`
 Visit `http://localhost:6080` and log in again through the browser window.
 
 **Google auth errors**
-Re-run the setup wizard at `http://localhost:7777/dashboard/setup` — Step 2 re-does the OAuth flow.
+Re-run the setup wizard at `http://localhost:7777/dashboard/setup` and re-do the Google OAuth step.
 
-For detailed troubleshooting, Drive folder naming conventions, and advanced configuration, see **[SETUP.md](SETUP.md)**.
+**AI briefs failing or empty**
+AI briefs should work out of the box with the container's built-in Gemini config. If you're using your own GCP project, verify `GOOGLE_CLOUD_PROJECT` is set in your `.env` and that either `GEMINI_SERVICE_ACCOUNT_KEY` is set or you've completed Google OAuth via the wizard. Check `podman logs pai-dashboard` for errors.
+
+**SELinux permission errors on RHEL/Fedora**
+Make sure you're using the `:Z` suffix on volume mounts (included in the run command above). Docker users should remove `:Z`.
+
+**Port 7777 already in use**
+Set `PORT=7778` in `.env` and change `-p 7777:7777` to `-p 7778:7778` in the run command.
+
+For detailed troubleshooting, Drive folder naming conventions, and advanced configuration, see **[SETUP.md](SETUP.md)**. Still stuck? Email **jhorn@redhat.com**.
 
 ## Building from Source
 
-If you have the source code and `make` installed:
+> This section is for contributors with access to the source code. If you're running the pre-built container, you can skip this.
 
 ```bash
 cd DailyBriefDashboard
@@ -153,6 +177,8 @@ make rebuild    # builds the image, pushes to GHCR, and starts the container
 | `make logs` | Tail container logs |
 | `make ps` | Show container status |
 
+For developer setup, testing, PR guidelines, and project structure, see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
 ## Architecture
 
-For technical details on data flow, scraper design, background timers, and module inventory, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+For technical details on data flow, scraper design, background timers, and module inventory, see **[ARCHITECTURE.md](ARCHITECTURE.md)** (for contributors).

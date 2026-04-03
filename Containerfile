@@ -84,7 +84,7 @@ RUN bunx playwright install chromium --no-shell
 # config, cache, and the RH browser profile.
 #
 #   podman/docker run -v /host/pai-data:/data:Z ...
-#   or use the docker-compose.yml in this directory
+#   or use: make up
 #
 ENV PORT=7777
 ENV CONFIG_DIR=/data/config
@@ -94,6 +94,9 @@ ENV RH_PROFILE_DIR=/data/rh-profile
 EXPOSE 7777
 # noVNC VNC viewer — only needed for RH Portal login in headless deployments
 EXPOSE 6080
+
+# Default environment — loaded by entrypoint.sh, overridden by user's --env-file
+COPY defaults.env /app/defaults.env
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

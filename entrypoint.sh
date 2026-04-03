@@ -10,6 +10,20 @@
 
 set -e
 
+# ── Load default env vars (user's --env-file values take precedence) ──────────
+# defaults.env ships inside the image with working Gemini config, etc.
+# Any variable already set (via --env-file .env or -e flags) is NOT overwritten.
+if [ -f /app/defaults.env ]; then
+  while IFS='=' read -r key value; do
+    # Skip comments and blank lines
+    [[ -z "$key" || "$key" == \#* || "$key" == " "* ]] && continue
+    # Only export if not already set
+    if [ -z "${!key+x}" ]; then
+      export "$key=$value"
+    fi
+  done < /app/defaults.env
+fi
+
 # ── Virtual display ────────────────────────────────────────────────────────────
 Xvfb :99 -screen 0 1280x900x24 -nolisten tcp &
 export DISPLAY=:99

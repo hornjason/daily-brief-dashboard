@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-02 (BKL-RES01–RES03: red team research investigations; BKL-AI16: interactive product Q&A; BKL-F11: shared SF report dedup; BKL-AI01–AI08: account intelligence pipeline from 3-agent research; BKL-F08: VNC flash-close; BKL-F07: SF URL; BKL-G01–G16: UI gaps; BKL-E01–E06: email)
+Last update: 2026-04-02 (BKL-AI17: CustomerIntelligence skill + NotebookLM pipeline; BKL-RES01–RES03: red team research investigations; BKL-AI16: interactive product Q&A; BKL-F11: shared SF report dedup; BKL-AI01–AI08: account intelligence pipeline from 3-agent research; BKL-F08: VNC flash-close; BKL-F07: SF URL; BKL-G01–G16: UI gaps; BKL-E01–E06: email)
 
 ---
 
@@ -3035,3 +3035,113 @@ Source: Red team 2026-04-02 — 5/8 agents flagged VNC-based auth as major adopt
 Vault: `~/.claude/MEMORY/RESEARCH/2026-04/browser-auth-persistence/`
 Description: Investigate patterns for persisting browser auth state across container restarts: cookie export/import, storageState persistence in Playwright, token extraction from SSO flows, headless re-auth strategies. RH SSO uses SAML — can we persist the session without VNC on subsequent runs? Initial setup may still need VNC, but day-2 operations should not.
 Deliverable: Feasible approach to eliminate VNC for recurring auth, or confirmation that VNC is unavoidable with rationale.
+
+---
+
+## Customer Intelligence Pipeline (2026-04-02)
+
+### BKL-AI17 | CustomerIntelligence PAI skill — Gemini doc generation + NotebookLM sync
+Status: 🟡 IN PROGRESS
+Priority: P1
+Size: M (2-3 days)
+Source: Jason 2026-04-02 — wants per-customer intelligence docs synced to NotebookLM notebooks
+Skill: `~/.claude/skills/CustomerIntelligence/`
+Description: PAI skill that generates Company Intelligence Briefs and Industry Technology Analyses per customer using improved Gemini prompt templates (from 3-agent research vault), then syncs to Google Drive and NotebookLM. Uses `gws` CLI (Google Workspace) + `nlm` CLI (NotebookLM). Three workflows: GenerateIntelligence, SyncNotebookLM, FullPipeline.
+Dependencies:
+  - `npm install -g @googleworkspace/cli` (replaces 3 existing Google MCPs)
+  - `pip install notebooklm-mcp-cli` (NotebookLM CLI)
+  - DailyBriefDashboard running at localhost:7777 (customer data source)
+Status detail:
+  - [x] Skill structure created (SKILL.md, 3 workflows, setup guide, prompt templates ref)
+  - [ ] Install gws + nlm CLIs and authenticate
+  - [ ] Test single-customer generation end-to-end
+  - [ ] Test NotebookLM sync end-to-end
+  - [ ] Batch run for all customers
+  - [ ] Optional: Add as MCP servers in settings.json
+  - [ ] Optional: Schedule monthly auto-generation
+
+---
+
+### BKL-G19 | Admin page: rename Supportable buttons for clarity
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (15 min)
+Source: Jason 2026-04-03 — confusion between the two Supportable buttons on admin page
+Files: dashboard/src/pages/AdminPage.tsx
+Description: Admin page has two Supportable-related buttons that are unclear:
+  1. "Supportable 360" (Run Now) — calls `/api/scrape/supportable/discover`, does full discovery+scrape from source for all AEs
+  2. "Supportable Initial Load" (Run) — calls `/api/bootstrap/initial-load`, crash-safe sequential bootstrap
+  Rename to make the distinction obvious:
+  - "Supportable 360" → "Supportable Sync" (or "Supportable Discovery + Sync")
+  - "Supportable Initial Load" → "Supportable Full Bootstrap"
+  Add subtitle text to the Supportable 360 card explaining what it does (similar to how Initial Load already has "Crash-safe full load — resumes from last completed customer").
+
+---
+
+### BKL-M58 | Supportable discovery: per-search timeout + detail-page detection
+Status: 🔴 OPEN
+Priority: P1
+Size: S (1-2 hours)
+Source: Jason 2026-04-03 — discovery hung on "Taylor%" search that auto-navigated to detail page instead of result list
+Files: src/supportable-scraper.ts (name-search function)
+Description: Two bugs in Supportable discovery name-search:
+  1. **No per-search timeout:** If a name search hangs (slow APEX response, network stall), the worker blocks forever. The wall-clock timeout in scraper-manager.ts does NOT wrap the discover endpoint — only RH scrape. Need a 30-60s timeout per individual name search attempt.
+  2. **Detail-page auto-navigation not detected:** When a broad search like "Taylor%" matches exactly one customer, APEX auto-navigates to the customer detail page (URL pattern `f?p=304:1:SESSION:`) instead of showing the results list. The worker waits for the results list pattern that never appears. Need to detect the detail page URL/content and either extract the account number from it or skip and move on.
+  3. **No wall-clock timeout on Supportable discover task:** The `/api/scrape/supportable/discover` endpoint enqueues a task without `withTimeout()` wrapping. Add a 10-min wall-clock timeout to prevent infinite hangs.
+Fix:
+  - Add 45s timeout to each `page.waitForURL` / `page.waitForSelector` in the name-search loop
+  - Detect detail-page pattern (URL has account detail indicators, or "Customer Information" heading visible) and extract account number from it
+  - Wrap the Supportable discover task in `withTimeout(promise, 10 * 60 * 1000, 'Supportable discover')` in scrape-api.ts
+Workaround: If discovery hangs, manually stop the spinning tab in VNC (localhost:6080) — the worker unblocks and continues immediately.
+
+---
+
+### BKL-G20 | Cases modal: status badge overflows frame on narrow widths
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (15 min)
+Source: Jason 2026-04-03 — "Waiting on Customer" badge wraps awkwardly in the Open Support Cases modal
+Files: dashboard/src/components/ (Cases modal component)
+Description: In the Open Support Cases KPI modal, the Status column badge (e.g. "Waiting on Customer", "Waiting on Red Hat") wraps to two lines and doesn't fit the cell cleanly. Either:
+  - Use `whitespace-nowrap` + smaller text on the badge
+  - Abbreviate: "Waiting on RH" / "Waiting on Cust"
+  - Make the status column wider
+
+---
+
+### BKL-G21 | Admin "Run Now" gives no feedback when scrape is queued behind another
+Status: 🔴 OPEN
+Priority: P2
+Size: S (30 min)
+Source: Jason 2026-04-03 — button snaps back to "Run Now" with no indication the scrape is queued
+Files: dashboard/src/pages/AdminPage.tsx, src/scrape-api.ts
+Description: When a user clicks "Run Now" on a scraper in the admin page while another scraper is running, the API returns `{ started: true, queued: true }` but the UI just shows "Running..." briefly then snaps back to "Run Now" with no explanation. The queue status endpoint already exists (`/api/scrape/queue`) and the admin page already polls `/api/status/scrapes` which includes queue data. Fix:
+  1. After POST returns, if response has `queued: true`, show "Queued" state on the button instead of snapping back
+  2. Show which scraper it's waiting behind (e.g. "Queued — waiting on supportable")
+  3. The `queuePending` prop already exists on ScrapeSection but only shows when polling detects it — should also show immediately after the POST response
+  4. If the queue reports `isAnyRunning: true` but no scraper shows `isRunning`, display a "Scraper busy" indicator so the user knows why nothing is starting
+
+---
+
+### BKL-H01 | Remove unneeded files from repo (cleanup)
+Status: 🔴 OPEN
+Priority: P3
+Size: S (30 min)
+Source: Jason 2026-04-03 — repo has accumulated files that shouldn't be tracked
+Files: docker-compose.yml, read-ccsp-full.ts, read-ccsp.ts, and any other dead files
+Description: Audit the repo for files that are no longer needed and remove them:
+  - `docker-compose.yml` — not the sanctioned deploy method (`make rebuild` is)
+  - `read-ccsp-full.ts` and `read-ccsp.ts` — already deleted in working tree
+  - Any other dead scripts, temp files, or unused config
+  - Update .gitignore if needed to prevent re-adding
+
+
+---
+
+### BKL-G22 | Setup page Sync section shows no running state when scraper is active
+Status: 🔴 OPEN
+Priority: P2
+Size: S (30 min)
+Source: Jason 2026-04-03 — admin page shows "Running..." for RH Cases but setup page Sync section shows static "Sync Now" buttons with no activity indicator
+Files: dashboard/src/pages/SetupPage.tsx
+Description: The Setup page Sync section (Red Hat Cases, Supportable Subscriptions, CCSP, Pipeline) does not reflect when a scraper is actively running. The admin page correctly shows "Running..." and "In progress" indicators because it polls `/api/status/scrapes` and checks `isRunning`. The Setup page Sync buttons need the same polling — show a spinner or "Syncing..." state when `isRunning=true` for that source, and disable the button to prevent duplicate triggers.

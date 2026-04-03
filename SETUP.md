@@ -1,27 +1,16 @@
 # Daily Brief Dashboard — Setup Guide
 
-## What This Is
+Detailed setup instructions for the Daily Brief Dashboard. See [README.md](README.md) for an overview of what the dashboard does.
 
-The Daily Brief Dashboard is an AI-powered customer intelligence tool built specifically for Red Hat Account Executives and Solution Architects. It pulls together everything you need to walk into a customer conversation prepared: upcoming meetings from your Google Calendar, recent emails from your Gmail, open support cases from the Red Hat Customer Portal, pipeline opportunities, and cloud consumption data — all in one place, filtered to your specific accounts.
-
-The dashboard generates AI-written customer briefs on demand. Before a QBR or exec meeting, you can hit a button and get a structured summary of what's happening with that account: active cases, recent communications, upcoming renewals, and any open risks. The AI can use Google Gemini (recommended, Red Hat enterprise standard), Claude Code CLI, Anthropic Claude API, OpenAI GPT-4o, Ollama, or PAI.
-
-Everything runs locally in a Podman container on your laptop. Your data never leaves your machine except to call the APIs you already have access to (Google Workspace, Red Hat Portal). Setup takes about 15-20 minutes the first time using the built-in setup wizard.
+Setup takes about 15-20 minutes the first time using the built-in setup wizard.
 
 ---
 
 ## Prerequisites
 
-- **macOS** or **RHEL/Fedora Linux**
-- **Podman** — container runtime (replaces Docker)
-  - Mac: `brew install podman`
-  - RHEL/Fedora: `sudo dnf install podman`
-- **Bun runtime** — only needed if running without a container, or for running auth scripts from your host
-  ```bash
-  curl -fsSL https://bun.sh/install | bash
-  ```
-- **Red Hat Google Workspace account** — for Gmail, Calendar, and Drive access
-- **Red Hat Customer Portal access** — for support case data
+See [README.md — Prerequisites](README.md#prerequisites) for the full list. In short: Podman (or Docker), a GitHub account for pulling the container image, and your Red Hat Google Workspace + Customer Portal credentials.
+
+> **Bun runtime** is only needed if running without a container (development mode). Container users do not need Bun installed.
 
 ---
 
@@ -29,49 +18,114 @@ Everything runs locally in a Podman container on your laptop. Your data never le
 
 This is the easiest path. The container packages everything — no need to install Node, Bun, or any dependencies on your machine.
 
-### Step 1: Get the Dashboard Files
+### Step 1: Pull the Container Image
 
-Copy the `DailyBriefDashboard` folder from a colleague, or download it from the shared drive. No git required. The folder should contain:
+The image is hosted on GitHub Container Registry (private). You need a GitHub Personal Access Token (PAT) with `read:packages` scope.
 
-```
-DailyBriefDashboard/
-  Containerfile
-  server.ts
-  src/
-  scripts/
-  config/
-  dashboard/
-  package.json
-```
-
-### Step 2: Build the Container
+Create a PAT at [github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token (classic)** → check `read:packages`.
 
 ```bash
-cd DailyBriefDashboard
-podman build -t pai-dashboard .
+podman login ghcr.io -u YOUR_GITHUB_USERNAME
+# paste your PAT when prompted for password
+podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
 ```
 
-This takes 2-5 minutes the first time. It installs all dependencies inside the container image.
+### Step 2: Set Up Your Data Directory
 
-### Step 3: Set Up Your Config Directory
-
-The container reads all configuration and tokens from `~/.pai-dashboard/` on your machine, so your settings persist across container restarts and rebuilds.
+The container stores all configuration, tokens, and cached data in a single `./data/` directory on your machine. This directory persists across container restarts and rebuilds.
 
 ```bash
-mkdir -p ~/.pai-dashboard
-cp .env ~/.pai-dashboard/.env
-cp config/customers.json ~/.pai-dashboard/customers.json
+mkdir -p ./data/config ./data/cache ./data/rh-profile
 ```
 
-### Step 4: Run the Setup Wizard
+### Step 3: Create Your Environment File
 
-Open the dashboard in your browser at **http://localhost:7777/dashboard/setup**. The wizard walks you through everything — no manual config file editing required.
+The container ships with built-in defaults for AI briefs (Gemini config, GCP project). The only required variable is your Red Hat token. To override any default, add it to your `.env` — your values always take precedence.
 
-The wizard has 5 steps:
+```bash
+cat > .env << 'EOF'
+# Required — Red Hat Customer Portal API token
+# Get yours at: https://access.redhat.com/management/api
+REDHAT_OFFLINE_TOKEN=your_offline_token_here
+
+# Optional — override any container default (see Environment Variables Reference below)
+# GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+# GEMINI_SERVICE_ACCOUNT_KEY=your-base64-key
+# GEMINI_MODEL=gemini-2.5-flash
+# GOOGLE_CLOUD_LOCATION=us-east1
+# NTFY_TOPIC=pai-notifications
+EOF
+```
+
+### Step 4: Run the Container
+
+```bash
+podman run -d \
+  -p 7777:7777 \
+  -p 127.0.0.1:6080:6080 \
+  -v ./data:/data:Z \
+  --env-file .env \
+  -e PORT=7777 \
+  -e CONFIG_DIR=/data/config \
+  -e CACHE_DIR=/data/cache \
+  -e RH_PROFILE_DIR=/data/rh-profile \
+  --shm-size=2g \
+  --memory=8g \
+  --name pai-dashboard \
+  ghcr.io/hornjason/daily-brief-dashboard:latest
+```
+
+> **Docker users:** Replace `podman` with `docker` and remove the `:Z` volume suffix.
+> **Do not reduce** `--shm-size` or `--memory` — Chromium requires these for stable operation.
+
+### Step 5: Run the Setup Wizard
+
+Open your browser to **http://localhost:7777/dashboard/setup**. The wizard walks you through everything — no manual config file editing required.
+
+The setup wizard is an accordion-style page with these sections:
 
 ---
 
-#### Step 1: Connect Account Data (Google Sheets)
+#### OAuth Keys
+
+Before connecting Google Workspace, the dashboard needs a `gcp-oauth.keys.json` file. This is a standard GCP (Google Cloud Platform) OAuth credential file that identifies the app to Google — it does not contain any personal data and is safe to use. It was created by jhorn@redhat.com and shared read-only.
+
+1. Click the link in the wizard to download the shared `gcp-oauth.keys.json` from Google Drive
+2. Either paste the JSON contents or upload the file
+3. The wizard confirms the keys are loaded and advances
+
+> **Want to use your own GCP project instead?** See [Creating Your Own GCP Project](#creating-your-own-gcp-project) below.
+
+---
+
+#### Connect Google Workspace
+
+Click **Connect Google Workspace** to authorize the dashboard to access your Gmail, Google Calendar, Google Drive, and Google Sheets. This opens a Google consent screen in your browser.
+
+The dashboard requests these permissions:
+- **Gmail** — read-only + send (for email context in briefs)
+- **Calendar** — read-only (for meeting prep)
+- **Drive** — full access during setup (to create template sheets); the wizard offers a "Reduce Permissions" button after bootstrap to switch to read-only
+- **Sheets** — read/write (to sync subscription and pipeline data)
+
+**If you see "This app isn't verified" or "not a test user":**
+- The shared GCP project (`jhorn-pai`) uses External consent mode
+- Email **jhorn@redhat.com** with your Red Hat Google email to be added as a test user
+- Once added, return and click Connect again
+
+**Internal mode (recommended for teams):** If your GCP admin switches the OAuth consent screen to "Internal," any `@redhat.com` user can connect with no test-user approval needed.
+
+---
+
+#### Connect Red Hat Portal
+
+Visit **http://localhost:6080** in your browser. This opens a noVNC window into the container's headless Chromium browser. Log into the Red Hat Customer Portal using your SSO credentials.
+
+Your session is saved to `./data/rh-profile/` and persists across container restarts. You only need to re-login when your session expires.
+
+---
+
+#### AEs & Customers
 
 Connect your AE's Google Drive folder(s). This is where the dashboard discovers your customer data, pipeline, CCSP cloud spend, and subscription information.
 
@@ -85,134 +139,71 @@ Once folders are connected, click **Preview Discovery** to see what the dashboar
 **Import customers from pipeline:**
 After connecting folders, click **Preview** to auto-discover the pipeline spreadsheet, review the detected columns, then click **Import**. Your customer list is built automatically from the pipeline data.
 
-##### Google Drive Folder Structure Requirements
+---
+
+#### Data Sources & Refresh
+
+Review connected data sources and configure refresh intervals. Default intervals:
+
+| Data Source | Default Refresh |
+|---|---|
+| Red Hat support cases | Every 4 hours |
+| Subscriptions (from Sheets) | Every 4 hours |
+| CCSP cloud spend | Every 24 hours |
+| Salesforce pipeline | Daily at 2am ET |
+
+Intervals can be changed at any time without restarting the container.
+
+---
+
+After completing all sections, navigate to **http://localhost:7777/dashboard**. Data sources refresh on first load — the initial scrape may take 3-5 minutes before data appears.
+
+---
+
+## Google Drive Folder Structure
 
 The dashboard searches your entire folder tree recursively — you can connect at any level and it finds everything beneath it automatically. Your existing structure works as-is.
 
 **Connect at the highest useful level** — the dashboard will find files at any depth below it:
 
 ```
-/Sales/                                   ← connect this (or any level below)
+/Sales/                                   <- connect this (or any level below)
   └── Northwest/
         └── 2026/
-              └── Jason/                  ← or connect individual AE folder here
-                    ├── Pipeline Q1 2026.xlsx   ← found by "pipeline" in filename
-                    ├── Territory Data.xlsx     ← found by CCSP tab name
-                    ├── Acme Corporation/       ← or: Accounts/Acme Corporation/
+              └── Jason/                  <- or connect individual AE folder here
+                    ├── Pipeline Q1 2026.xlsx   <- found by "pipeline" in filename
+                    ├── Territory Data.xlsx     <- found by CCSP tab name
+                    ├── Acme Corporation/       <- or: Accounts/Acme Corporation/
                     │     └── Account Plan.docx
-                    └── Accounts/               ← subfolder is fine too
+                    └── Accounts/               <- subfolder is fine too
                           ├── Contoso Ltd/
                           └── GlobalTech/
 ```
 
-**Works with any subfolder structure** — whether your accounts are direct children of the AE folder or nested inside an `Accounts/` subfolder (or any other folder), the dashboard finds them.
+### Naming Guidelines
 
-**Territory data spreadsheet** (CCSP + subscription data) can live anywhere under the connected root. It must contain:
-- A tab with **"CCSP"** somewhere in the tab name (e.g., `CCSP Raw Data`, `Q1 CCSP`, `CCSP Report`)
-- One tab per customer with the **customer name** somewhere in the tab name (e.g., `Acme Corp`, `ACME CORPORATION Subs`)
-
-**Pipeline spreadsheet** — any Google Sheet with **"pipeline"** in the filename, anywhere under the connected root (e.g., `Pipeline Q1 2026`, `Jason Pipeline`, `West Pipeline Data`).
-
-> **Naming tip:** The dashboard uses flexible matching — it doesn't need exact names. Just make sure "CCSP" appears in the cloud spend tab name, the customer name appears in their subscription tab name, and "pipeline" appears in the pipeline filename.
-
----
-
-#### Step 2: Connect Google Workspace
-
-Click **Connect Google Workspace** to authorize the dashboard to read your Gmail, Google Calendar, and Google Drive. This opens a Google consent screen in your browser.
-
-The dashboard requests read-only access only — it cannot send emails, create events, or modify any files.
-
-**If you see "This app isn't verified" or you're not a test user:**
-- Click "Request Access" in the wizard to send a pre-filled email to jhorn@redhat.com
-- Once added, return to Step 2 and click Connect again
-
-**Internal mode (recommended for teams):** If your GCP admin switches the OAuth consent screen to "Internal," any `@redhat.com` user can connect with no test-user approval needed. See the callout in Step 2 for details.
-
----
-
-#### Step 3: AI Provider (Optional)
-
-Select which AI generates your customer briefs. Options:
-
-| Provider | Requires | Notes |
-|----------|----------|-------|
-| **Google Gemini** | Nothing — manual | Red Hat enterprise standard. Copy the sample prompt, paste into Gemini at gemini.google.com |
-| **Claude Code** | `claude` CLI installed | Uses your existing Claude Code login — no API key needed |
-| **Anthropic API** | `ANTHROPIC_API_KEY` in .env | Direct API access |
-| **OpenAI** | `OPENAI_API_KEY` in .env | GPT-4o |
-| **Ollama** | Ollama running locally | Free, runs on your machine |
-| **PAI** | PAI installed | If you're already a PAI user |
-
-For Gemini (recommended for most Red Hat employees): the wizard shows a pre-built sample prompt containing your account context. Copy it, open Gemini, and paste. No API key or CLI needed.
-
----
-
-#### Step 4: Pipeline (Auto-configured)
-
-If you connected AE folders in Step 1 and they contain a pipeline spreadsheet, this step is already done. The dashboard auto-discovers the pipeline file from your connected folders.
-
-If you need to manually specify a pipeline file, paste the Google Sheets URL into the field provided.
-
----
-
-#### Step 5: Launch
-
-Click **Go to Dashboard** to start using the dashboard. Your customers are loaded, data sources are connected, and you're ready to generate briefs.
-
----
-
-### Step 5: Google Authentication (Manual Path)
-
-If you prefer not to use the setup wizard, or if you're setting up on a server without a browser:
-
-Email **jhorn@redhat.com** with subject **"Dashboard Access Request"** and your Red Hat Google email address to be added as a test user on the shared GCP app.
-
-Alternatively, create your own GCP project:
-
-1. Go to [https://console.cloud.google.com](https://console.cloud.google.com) and create a new project.
-2. Enable: Calendar API, Gmail API, Drive API, Sheets API
-3. Create an **OAuth 2.0 Client ID** with type **Desktop app**
-4. Download the JSON, place it at `~/.pai-dashboard/credentials.json`
-5. Use the setup wizard's Step 2 to complete the browser OAuth flow
-
----
-
-### Naming Guidelines for Your Google Drive Data
-
-The dashboard auto-discovers data using fuzzy filename and tab-name matching. Follow these conventions to ensure reliable detection:
+The dashboard auto-discovers data using fuzzy filename and tab-name matching:
 
 #### Pipeline File
 - Include **"pipeline"** in the filename
-- ✅ `FY26 Q1 Pipeline.xlsx`, `Jason Pipeline`, `West Pipeline Data`
-- ❌ `AE Opportunities Q1.xlsx` (no "pipeline" in the name)
+- Good: `FY26 Q1 Pipeline.xlsx`, `Jason Pipeline`, `West Pipeline Data`
+- Bad: `AE Opportunities Q1.xlsx` (no "pipeline" in the name)
 
 #### Territory / Customer Data Spreadsheet (CCSP + Subscriptions)
-This is the spreadsheet with CCSP cloud consumption data and subscription details per customer.
 
 **CCSP tab:**
 - Tab name must include **"ccsp"** (case-insensitive)
-- ✅ `CCSP Raw Data`, `CCSP Report`, `Q1 CCSP`, `ccsp`
-- ❌ `Cloud Consumption`, `AWS Spend` (no "ccsp" in the name)
+- Good: `CCSP Raw Data`, `CCSP Report`, `Q1 CCSP`, `ccsp`
+- Bad: `Cloud Consumption`, `AWS Spend` (no "ccsp" in the name)
 
 **Customer subscription tabs:**
 - Tab name must include the **customer name** (case-insensitive, partial match is fine)
-- ✅ `Acme Corp`, `ACME CORPORATION`, `Acme - Q1 Subs`
-- ❌ `Account_001`, `CustomerA` (no customer name in the tab)
+- Good: `Acme Corp`, `ACME CORPORATION`, `Acme - Q1 Subs`
+- Bad: `Account_001`, `CustomerA` (no customer name in the tab)
 
 #### Customer Folders on Drive
 - Folder name should include the customer name
 - The dashboard searches document titles for the customer name to find relevant account docs
-
-### Step 8: Run the Dashboard
-
-```bash
-bash scripts/podman-run.sh
-```
-
-Then open your browser to: **http://localhost:7777/dashboard**
-
-If this is your first time, the setup wizard will walk you through any missing configuration: **http://localhost:7777/dashboard/setup**
 
 ---
 
@@ -221,9 +212,17 @@ If this is your first time, the setup wizard will walk you through any missing c
 If you want to run the app directly (useful for development or if you can't use Podman):
 
 ```bash
+# Install Bun (https://bun.sh)
+curl -fsSL https://bun.sh/install | bash
+
+# Install dependencies
 bun install
 cd dashboard && bun install && bun run build && cd ..
-cp .env.example .env   # then edit .env with your settings
+
+# Create your env file
+cp .env.example .env   # then edit with your settings
+
+# Start the server
 bun run server.ts
 ```
 
@@ -231,22 +230,103 @@ The server starts on port 7777 by default.
 
 ---
 
+## Building from Source
+
+See [README.md — Building from Source](README.md#building-from-source) for `make` commands.
+
+---
+
 ## Updating the Dashboard
 
-When a colleague sends you a newer version of the code, update like this:
+When a new version is available:
 
 ```bash
-# Stop and remove the old container
+# Pull the latest image
+podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
+
+# Restart with the new image
 podman stop pai-dashboard && podman rm pai-dashboard
-
-# Rebuild with the new code
-podman build -t pai-dashboard .
-
-# Start again (your config and tokens in ~/.pai-dashboard are untouched)
-bash scripts/podman-run.sh
+# Re-run the podman run command from Step 4 above
 ```
 
-Your `~/.pai-dashboard/` directory is mounted into the container, so all your config, tokens, and cached data are preserved across updates.
+Your `./data/` directory is preserved — all config, tokens, and cached data carry over.
+
+---
+
+## Creating Your Own GCP Project
+
+If you want to use your own GCP project instead of the shared one:
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a new project
+2. Enable these APIs: **Gmail API**, **Google Calendar API**, **Google Drive API**, **Google Sheets API**
+3. For AI briefs, also enable: **Vertex AI API**
+4. Create an **OAuth 2.0 Client ID** with type **Desktop app**
+5. Download the JSON, rename to `gcp-oauth.keys.json`, and upload it in the setup wizard's OAuth Keys step
+6. For AI briefs with a service account:
+   - Create a Service Account with the **Vertex AI User** role
+   - Download the JSON key
+   - Base64-encode it: `base64 -i your-key.json` (macOS) or `base64 -w0 your-key.json` (Linux)
+   - Set `GEMINI_SERVICE_ACCOUNT_KEY` in your `.env`
+
+---
+
+## Environment Variables Reference
+
+These live in your `.env` file in the same directory as the `podman run` command.
+
+### Required
+
+| Variable | Description |
+|---|---|
+| `REDHAT_OFFLINE_TOKEN` | Red Hat Customer Portal API token ([get one](https://access.redhat.com/management/api)) |
+
+### AI Briefs (defaults ship in container)
+
+The container includes a shared GCP project and Gemini service account key so AI briefs work out of the box. Override these only if you want to use your own GCP project.
+
+| Variable | Default | Description |
+|---|---|---|
+| `GOOGLE_CLOUD_PROJECT` | `jhorn-pai` | GCP project ID with Vertex AI API enabled |
+| `GEMINI_SERVICE_ACCOUNT_KEY` | *(shared key)* | Base64-encoded GCP service account JSON key. To create your own: `base64 -i key.json` (macOS) or `base64 -w0 key.json` (Linux). If omitted entirely, falls back to the Google OAuth token from the setup wizard. |
+
+### Optional
+
+| Variable | Default | Description |
+|---|---|---|
+| `GOOGLE_CLOUD_LOCATION` | `us-east1` | Vertex AI region |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model for brief generation |
+| `PORT` | `7777` | Server listen port |
+| `NTFY_TOPIC` | `pai-notifications` | ntfy.sh push notification topic |
+| `PIPELINE_FILE_ID` | — | Manual override: Google Sheets file ID for pipeline data |
+| `TABLEAU_BASE_URL` | — | Tableau Cloud base URL for CCSP session pre-flight |
+| `NODE_ENV` | — | Set to `production` to disable debug endpoints |
+
+### Path Overrides (set automatically in container)
+
+These are set by the `podman run` command and generally do not need manual configuration:
+
+| Variable | Container Default | Description |
+|---|---|---|
+| `CONFIG_DIR` | `/data/config` | Config and token file directory |
+| `CACHE_DIR` | `/data/cache` | Scraper cache directory |
+| `RH_PROFILE_DIR` | `/data/rh-profile` | Chromium browser profile directory |
+| `GOOGLE_OAUTH_KEYS` | `{CONFIG_DIR}/gcp-oauth.keys.json` | Path to GCP OAuth keys file |
+
+> **Note:** AE folder configuration, data source settings, and Google OAuth tokens are managed by the setup wizard and saved to `./data/config/`. You generally don't need to set these manually.
+
+---
+
+## Auth Token Files
+
+These files in `./data/config/` authenticate the dashboard to Google. They are created automatically by the setup wizard. Do not share or commit these files.
+
+| File | Purpose | How Created |
+|---|---|---|
+| `.google-token.json` | Unified token for Gmail, Calendar, Drive, and Sheets | Setup wizard → "Connect Google Workspace" |
+| `gcp-oauth.keys.json` | GCP OAuth client credentials (identifies the app) | Setup wizard → OAuth Keys step (uploaded by you) |
+| `oauth-state.json` | Tracks permission downgrade state after bootstrap | Created automatically during bootstrap |
+
+The unified `.google-token.json` covers all four Google APIs in a single token. Legacy per-service token files (`.gmail-token.json`, `.gdrive-server-credentials.json`, `.calendar-token.json`) are still supported as fallbacks but are no longer created by the wizard.
 
 ---
 
@@ -254,46 +334,47 @@ Your `~/.pai-dashboard/` directory is mounted into the container, so all your co
 
 ### Starting fresh / resetting setup
 
-In the setup wizard header, click **Reset & Start Over** to clear all cached data and configuration. This removes:
+In the setup wizard, click **Reset & Start Over** to clear all cached data and configuration. This removes:
 - Connected AE folders
 - Imported customer list
 - Google OAuth token
 - All cached API data
 
-After reset, the wizard returns to Step 1 so you can reconfigure from scratch.
+After reset, the wizard returns to the first step so you can reconfigure from scratch.
 
 ### "No customers found" or blank account list
 
-- Go to Setup Step 1 and confirm your AE folder is connected
+- Go to the setup wizard and confirm your AE folder is connected
 - Click **Preview** then **Import** to re-import customers from the pipeline
-- Check that `~/.pai-dashboard/customers.json` is valid JSON if you're editing it manually
+- Check that `./data/config/customers.json` is valid JSON if you're editing it manually
 
 ### Google authentication errors / "Token expired"
 
-- Go to **http://localhost:7777/dashboard/setup** and click through to Step 2
+- Go to **http://localhost:7777/dashboard/setup** and re-do the Google OAuth step
 - Click **Connect Google Workspace** to redo the OAuth flow — this refreshes your token
-- Tokens live in `~/.pai-dashboard/` — the container reads them from there automatically
+- Tokens live in `./data/config/` — the container reads them from there automatically
 - If you see "access denied" or "not a test user," email jhorn@redhat.com to be added
 
-### AI brief says "PAI inference failed" or brief is empty
+### AI briefs failing or empty
 
-- Check `LLM_PROVIDER` in `~/.pai-dashboard/.env`
-- For Gemini (recommended): no key needed — use the manual prompt from Setup Step 3
-- Switch to `anthropic` or `openai` as a fallback and add the corresponding API key
-- For `claude-code`: make sure Claude Code is installed and logged in (`claude login`)
+- AI briefs should work out of the box with the container's built-in Gemini config
+- If using your own GCP project: verify `GOOGLE_CLOUD_PROJECT` is set in your `.env`
+- If using your own service account: verify `GEMINI_SERVICE_ACCOUNT_KEY` is set, or complete Google OAuth via the setup wizard
+- Check `podman logs pai-dashboard` for Gemini-related errors
+- The Vertex AI API must be enabled in your GCP project (already enabled in the shared `jhorn-pai` project)
 
 ### Pipeline data not showing
 
-- In Setup Step 1, confirm an AE folder is connected and the folder contains a pipeline spreadsheet
+- In the setup wizard, confirm an AE folder is connected and the folder contains a pipeline spreadsheet
 - The pipeline file must have **"pipeline"** in the filename — see naming guidelines above
-- Click **Preview Discovery** in Step 1 to verify the dashboard is finding your pipeline file
-- If auto-discovery fails, paste the pipeline spreadsheet URL manually in Setup Step 4
+- Click **Preview Discovery** to verify the dashboard is finding your pipeline file
+- If auto-discovery fails, paste the pipeline spreadsheet URL manually
 
 ### CCSP cloud consumption data not showing
 
 - The CCSP tab name must include **"ccsp"** (case-insensitive) — e.g., `CCSP Raw Data`, not `Cloud Spend`
 - Verify the spreadsheet is inside the connected AE folder(s)
-- Click **Preview Discovery** in Step 1 to confirm the CCSP tab was detected
+- Click **Preview Discovery** to confirm the CCSP tab was detected
 
 ### Customer subscription data not showing
 
@@ -303,65 +384,25 @@ After reset, the wizard returns to Step 1 so you can reconfigure from scratch.
 
 ### Podman volume or SELinux errors on RHEL
 
-- Always use `bash scripts/podman-run.sh` — the script includes the `:Z` SELinux volume label automatically
-- Never use a bare `-v path:/config` without `:Z` on SELinux-enabled systems
-- If you see `permission denied` on volume mounts, check that `~/.pai-dashboard/` exists and your user owns it
+- Always use the `:Z` suffix on volume mounts (included in the run command in Step 4)
+- Docker users should remove `:Z`
+- If you see `permission denied` on volume mounts, check that `./data/` exists and your user owns it
 
 ### Port 7777 already in use
 
-Set a different port in `~/.pai-dashboard/.env`:
+Set a different port in `.env`:
 ```
 PORT=7778
 ```
-Then edit the `-p` flag in `scripts/podman-run.sh` to match:
-```
--p 7778:7778
-```
+Then change `-p 7777:7777` to `-p 7778:7778` in the run command.
 
 ### Container starts but dashboard shows no data
 
-- Give it 30-60 seconds on first load — it's fetching from Google APIs and Red Hat Portal
+- Give it 3-5 minutes on first load — it's fetching from Google APIs and Red Hat Portal
 - Check container logs for errors:
   ```bash
   podman logs pai-dashboard
   ```
-
----
-
-## Environment Variables Reference
-
-These live in `~/.pai-dashboard/.env`. Copy from the project's `.env` file as a starting point.
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `LLM_PROVIDER` | No | `pai` | AI provider: `pai`, `gemini`, `claude-code`, `anthropic`, `openai`, `ollama` |
-| `ANTHROPIC_API_KEY` | If `anthropic` | — | Anthropic Claude API key |
-| `OPENAI_API_KEY` | If `openai` | — | OpenAI API key |
-| `OLLAMA_MODEL` | No | `llama3` | Ollama model name |
-| `OLLAMA_URL` | No | `http://localhost:11434` | Ollama server URL |
-| `AE_PARENT_FOLDER_IDS` | No | — | Comma-separated Google Drive folder IDs for AE folders (set via setup wizard) |
-| `AE_PARENT_FOLDER_ID` | No | — | Single AE folder ID (legacy, still supported) |
-| `PIPELINE_FILE_ID` | No | — | Manual override: Google Sheets file ID for pipeline data |
-| `PORT` | No | `7777` | Port the server listens on |
-| `CONFIG_DIR` | No | `./config` | Config directory path (set automatically inside container) |
-| `CACHE_DIR` | No | `./cache` | Cache directory path (set automatically inside container) |
-
-> **Note:** `AE_PARENT_FOLDER_IDS` and the data sources configuration are managed by the setup wizard and saved to `config/data-sources.json`. You generally don't need to set these manually.
-
----
-
-## Auth Token Files
-
-These files in `~/.pai-dashboard/` authenticate the dashboard to Google. They are created automatically by the setup wizard. Do not share or commit these files.
-
-| File | Purpose | How created |
-|------|---------|-------------|
-| `.google-token.json` | Unified token for Gmail, Calendar, Drive, and Sheets | Setup wizard Step 2 → "Connect Google Workspace" button |
-| `.gmail-token.json` | Legacy Gmail token (fallback if unified token absent) | Manual auth scripts (old method) |
-| `.calendar-token.json` | Legacy Calendar token (fallback) | Manual auth scripts (old method) |
-| `.gdrive-server-credentials.json` | Legacy Drive token (fallback) | Manual auth scripts (old method) |
-
-The new setup wizard creates a single `.google-token.json` that covers all four Google APIs. The legacy individual token files still work as a fallback if you set up using the old method.
 
 ---
 
