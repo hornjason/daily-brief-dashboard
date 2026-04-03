@@ -20,7 +20,7 @@ import type { AE } from './types.ts'
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'pai-notifications'
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
 
 async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
   try {

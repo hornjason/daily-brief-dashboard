@@ -44,7 +44,7 @@ import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
 import { runIntelligencePipeline, getJobStatus } from './src/account-intelligence.ts'
 
 // ── ntfy.sh push notification helper ─────────────────────────────────────────
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'pai-notifications'
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
 async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
   try {
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {

@@ -3123,6 +3123,14 @@ Description: When a user clicks "Run Now" on a scraper in the admin page while a
 
 ---
 
+### BKL-H02 | Rename ntfy topic from pai-notifications to asa-command-center
+Status: ✅ DONE 2026-04-03
+Priority: P3
+Size: S (15 min)
+Source: Jason 2026-04-03
+Files: defaults.env, .env.example, README.md, SETUP.md, server.ts, src/bootstrap-orchestrator.ts, src/scraper-manager.ts
+Decision: Renamed all references from `pai-notifications` to `asa-command-center` across defaults.env, docs, and all 3 source fallbacks. Rebuild required to take effect in container.
+
 ### BKL-H01 | Remove unneeded files from repo (cleanup)
 Status: 🔴 OPEN
 Priority: P3

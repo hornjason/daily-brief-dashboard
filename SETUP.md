@@ -53,7 +53,7 @@ REDHAT_OFFLINE_TOKEN=your_offline_token_here
 # GEMINI_SERVICE_ACCOUNT_KEY=your-base64-key
 # GEMINI_MODEL=gemini-2.5-flash
 # GOOGLE_CLOUD_LOCATION=us-east1
-# NTFY_TOPIC=pai-notifications
+# NTFY_TOPIC=asa-command-center
 EOF
 ```
 
@@ -103,17 +103,12 @@ Before connecting Google Workspace, the dashboard needs a `gcp-oauth.keys.json` 
 Click **Connect Google Workspace** to authorize the dashboard to access your Gmail, Google Calendar, Google Drive, and Google Sheets. This opens a Google consent screen in your browser.
 
 The dashboard requests these permissions:
-- **Gmail** — read-only + send (for email context in briefs)
+- **Gmail** — read-only + send (for email context in briefs and meeting agendas)
 - **Calendar** — read-only (for meeting prep)
-- **Drive** — full access during setup (to create template sheets); the wizard offers a "Reduce Permissions" button after bootstrap to switch to read-only
-- **Sheets** — read/write (to sync subscription and pipeline data)
+- **Drive** — read/write (creates Account Intelligence folders and docs, template sheets during bootstrap)
+- **Sheets** — read/write (syncs subscription, pipeline, and CCSP data)
 
-**If you see "This app isn't verified" or "not a test user":**
-- The shared GCP project (`jhorn-pai`) uses External consent mode
-- Email **jhorn@redhat.com** with your Red Hat Google email to be added as a test user
-- Once added, return and click Connect again
-
-**Internal mode (recommended for teams):** If your GCP admin switches the OAuth consent screen to "Internal," any `@redhat.com` user can connect with no test-user approval needed.
+The shared GCP project (`jhorn-pai`) uses **Internal** consent mode — any `@redhat.com` Google Workspace user can authorize without test-user approval.
 
 ---
 
@@ -296,7 +291,7 @@ The container includes a shared GCP project and Gemini service account key so AI
 | `GOOGLE_CLOUD_LOCATION` | `us-east1` | Vertex AI region |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model for brief generation |
 | `PORT` | `7777` | Server listen port |
-| `NTFY_TOPIC` | `pai-notifications` | ntfy.sh push notification topic |
+| `NTFY_TOPIC` | `asa-command-center` | ntfy.sh push notification topic |
 | `PIPELINE_FILE_ID` | — | Manual override: Google Sheets file ID for pipeline data |
 | `TABLEAU_BASE_URL` | — | Tableau Cloud base URL for CCSP session pre-flight |
 | `NODE_ENV` | — | Set to `production` to disable debug endpoints |

@@ -23,7 +23,7 @@ export interface ScrapeLogEntry {
   error?: string
 }
 
-const SCRAPE_LOG_PATH = resolve('data/cache/scrape-log.json')
+const SCRAPE_LOG_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'scrape-log.json')
 const MAX_ENTRIES_PER_SERVICE = 100
 
 /** In-memory telemetry log, keyed by service for fast lookups. */
@@ -188,6 +188,22 @@ export function getCircuitBreakerStates(): Record<string, ReturnType<CircuitBrea
   }
 }
 
+/** Reset a single circuit breaker — used when auth is re-established. */
+export function resetCircuitBreaker(service: 'rh' | 'ccsp' | 'supportable' | 'salesforce'): void {
+  circuitBreakers[service].recordSuccess()
+  console.log(`[circuit-breaker] ${service}: reset by auth event`)
+}
+
+/** Reset ALL circuit breakers — called on re-authentication (cold-start recovery). */
+export function resetAllCircuitBreakers(): void {
+  for (const [name, cb] of Object.entries(circuitBreakers)) {
+    if (cb.getState().failures > 0) {
+      cb.recordSuccess()
+      console.log(`[circuit-breaker] ${name}: reset by auth event`)
+    }
+  }
+}
+
 // ── BKL-M50c: Wall-clock timeout wrapper ─────────────────────────────────────
 
 const DEFAULT_SCRAPE_TIMEOUT_MS = 5 * 60 * 1000  // 5 minutes (CCSP, Supportable, SF)
@@ -218,7 +234,7 @@ const sanitizeErr = (e: any): string =>
   String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 
 // ── ntfy.sh push notification helper ────────────────────────────────────────
-const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'pai-notifications'
+const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
 async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
   try {
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
@@ -422,7 +438,7 @@ export async function runRhScrapeWithState(): Promise<void> {
 
 // ── SF sync helper (shared between login callback and sync route) ───────────
 
-function runSfSyncForAes(aesWithSf: typeof aes): void {
+function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
   if (_sfSyncRunning && _sfSyncStartedAt && (Date.now() - _sfSyncStartedAt > 15 * 60 * 1000)) {
     console.warn('[sf-sync] stale mutex in login callback — auto-releasing')
     _sfSyncRunning = false
@@ -433,7 +449,7 @@ function runSfSyncForAes(aesWithSf: typeof aes): void {
   _sfSyncStartedAt = Date.now()
   _sfSyncCancelRequested = false
   _sfSyncLastError = null
-  ;(async () => {
+  return (async () => {
     const _sfTelemetryStart = Date.now()
     let totalRows = 0
 
@@ -593,7 +609,7 @@ export function registerScraperRoutes(app: Hono): void {
         isRunning: _sfSyncRunning,
         isStale:   isStale(lastSfSync, intervals.subscriptions),
       },
-      // BKL-M50c: Circuit breaker states per service
+      // Circuit breaker states per service
       circuitBreakers: getCircuitBreakerStates(),
       // BKL-M50c: Browser degraded state
       browserDegraded,

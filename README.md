@@ -55,7 +55,7 @@ REDHAT_OFFLINE_TOKEN=your_offline_token_here
 
 # Optional — override any container default (see Environment Variables below)
 # PORT=7777
-# NTFY_TOPIC=pai-notifications
+# NTFY_TOPIC=asa-command-center
 EOF
 ```
 
@@ -94,7 +94,7 @@ Go to **http://localhost:7777/dashboard/setup**. The wizard walks you through:
 
 After setup, your dashboard is at **http://localhost:7777/dashboard**. Data sources refresh on first load — the initial scrape may take 3-5 minutes before data appears.
 
-> **Google OAuth "not a test user" error?** The shared GCP project uses External consent mode. Email **jhorn@redhat.com** with your Red Hat Google email to be added as a test user.
+> **Google OAuth error?** The shared GCP project (`jhorn-pai`) uses Internal consent mode — any `@redhat.com` Google Workspace account can authorize. If you see errors, email **jhorn@redhat.com**.
 
 ## Stopping and Restarting
 
@@ -126,7 +126,7 @@ The container ships with sensible defaults for all variables except `REDHAT_OFFL
 | `GEMINI_SERVICE_ACCOUNT_KEY` | *(shared key)* | Base64-encoded GCP service account JSON key (falls back to OAuth token from wizard) |
 | `GOOGLE_CLOUD_LOCATION` | `us-east1` | Vertex AI region |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model for brief generation |
-| `NTFY_TOPIC` | `pai-notifications` | Push notification topic via ntfy.sh |
+| `NTFY_TOPIC` | `asa-command-center` | Push notification topic via ntfy.sh |
 | `PORT` | `7777` | Server port |
 
 Google OAuth tokens, AE folder configuration, and data source settings are all managed through the setup wizard — no manual env vars needed for those. For the complete variable reference including path overrides and advanced options, see [SETUP.md — Environment Variables](SETUP.md#environment-variables-reference).
