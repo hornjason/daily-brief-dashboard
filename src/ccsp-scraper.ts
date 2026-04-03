@@ -395,8 +395,14 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
     console.warn(`[ccsp] ${ae.name}: Raw Data tab not found — attempting download from current view`)
   }
 
-  // Log URL after tab click
-  const postTabUrl = page.url()
+  // Log URL after tab click — if still on CloudConsumption, force the RawData view path.
+  // Tableau's Vizql sometimes changes the viz inside the iframe without updating the
+  // top-level page URL (especially on the 2nd+ AE in the same session).
+  let postTabUrl = page.url()
+  if (postTabUrl.includes('/CloudConsumption') && rawDataTab) {
+    console.log(`[ccsp] ${ae.name}: URL still on CloudConsumption after Raw Data click — using RawData path`)
+    postTabUrl = postTabUrl.replace('/CloudConsumption', '/RawData')
+  }
   console.log(`[ccsp] ${ae.name}: URL after tab: ${postTabUrl}`)
 
   // -- Extract data -----------------------------------------------------------
