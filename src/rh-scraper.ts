@@ -512,6 +512,14 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
         const FALLBACK: Record<string, number> = { summary: 2, status: 6, severity: 5, accountNumber: 7, product: 8 }
 
         const columnSource: 'header' | 'fallback' = headerIndexMap ? 'header' : 'fallback'
+        // Diagnostic: log what columns were found
+        const headerRow = document.querySelector('table thead tr, table tr:first-child')
+        const headerTexts = headerRow ? Array.from(headerRow.querySelectorAll('th, td')).map(h => h.textContent?.trim()) : []
+        console.log(`[rh-scraper] table headers (${columnSource}): ${headerTexts.join(' | ')}`)
+        if (headerIndexMap) {
+          const entries = Array.from(headerIndexMap.entries()).map(([k,v]) => `${k}=${v}`).join(', ')
+          console.log(`[rh-scraper] column map: ${entries}`)
+        }
         const col = (key: string): number =>
           headerIndexMap?.get(key) ?? FALLBACK[key] ?? -1
 
@@ -537,12 +545,31 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           const status = cells[col('status')] ?? ''
           if (status.toLowerCase() === 'closed') continue
 
-          // Resolve account number: from column if batch, from override if single
+          // Resolve account number
           let accountNumber = args.acctNumOverride ?? ''
           if (!accountNumber) {
-            const acctCol = col('accountNumber')
-            const rawAcct = acctCol >= 0 ? (cells[acctCol] ?? '').replace(/\D/g, '') : ''
-            accountNumber = rawAcct
+            // Try 1: header-detected Account column (only if found by name, not fallback index)
+            if (headerIndexMap?.has('accountNumber')) {
+              const acctCol = headerIndexMap.get('accountNumber')!
+              const rawAcct = (cells[acctCol] ?? '').replace(/\D/g, '')
+              if (/^\d{5,12}$/.test(rawAcct) && (args.chunkAccountNums?.has(rawAcct) ?? true)) {
+                accountNumber = rawAcct
+              }
+            }
+            // Try 2: extract from case link href (e.g., /case/04350178?accountNumber=916824)
+            if (!accountNumber && caseLink.href) {
+              const hrefAcct = caseLink.href.match(/accountNumber[=:](\d{4,12})/)?.[1]
+              if (hrefAcct && (args.chunkAccountNums?.has(hrefAcct) ?? true)) {
+                accountNumber = hrefAcct
+              }
+            }
+            // Try 3: extract from row's data attributes
+            if (!accountNumber) {
+              const rowAcct = row.getAttribute('data-account') ?? row.getAttribute('data-account-number') ?? ''
+              if (/^\d{5,12}$/.test(rowAcct) && (args.chunkAccountNums?.has(rowAcct) ?? true)) {
+                accountNumber = rowAcct
+              }
+            }
           }
 
           results.push({
@@ -556,6 +583,15 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           })
         }
 
+        // Attach diagnostic info to first result for logging
+        if (results.length > 0) {
+          (results as any)._diag = {
+            columnSource,
+            headers: headerTexts,
+            indexMap: headerIndexMap ? Object.fromEntries(headerIndexMap) : null,
+            firstRowCells: Array.from(document.querySelector('table tbody tr')?.querySelectorAll('td') ?? []).map(td => td.textContent?.trim()?.slice(0, 30)),
+          }
+        }
         return results
       },
       { chunkAccountNums, acctNumOverride },
@@ -569,6 +605,13 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
       severity: string; accountNumber: string; product: string
     }>,
   ): void {
+    // Log diagnostic from first chunk
+    const diag = (cases as any)?._diag
+    if (diag) {
+      console.log(`[rh-scraper] column source: ${diag.columnSource}, headers: ${diag.headers?.join(' | ')}`)
+      console.log(`[rh-scraper] index map: ${JSON.stringify(diag.indexMap)}`)
+      console.log(`[rh-scraper] first row cells: ${diag.firstRowCells?.join(' | ')}`)
+    }
     for (const c of cases) {
       const severityNum = String(c.severity).match(/^(\d)/)?.[1] ?? c.severity
       allCases.push({
@@ -652,6 +695,46 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
       }
 
       batchSucceeded = true
+
+      // ── Post-batch: resolve missing account numbers ──────────────────────
+      // Batch queries may not expose which account each case belongs to.
+      // For cases with empty accountNumber, do quick per-account lookups.
+      const unresolved = allCases.filter(c => !c.accountNumber)
+      if (unresolved.length > 0) {
+        console.log(`[rh-scraper] resolving ${unresolved.length} cases with missing account numbers…`)
+        const caseNumberSet = new Set(unresolved.map(c => c.caseNumber))
+        // Query each account that has cases — deduplicated
+        for (const accountNum of accountNumbers) {
+          if (caseNumberSet.size === 0) break
+          if (shouldCancel?.()) break
+          const singleUrl =
+            `https://access.redhat.com/support/cases/#/case/list` +
+            `?query=accountNumber%3A%20(%22${accountNum}%22)%20orderBy%20severity%20asc` +
+            `&p=1&size=100&searchType=basic`
+          try {
+            await page.goto(singleUrl, { waitUntil: 'load', timeout: 15_000 })
+            await waitForTable(page, 5_000)
+            const singleCases = await extractCasesFromPage(page, null, accountNum)
+            for (const sc of singleCases) {
+              if (caseNumberSet.has(sc.caseNumber)) {
+                // Found the account for this case — update it
+                const target = allCases.find(c => c.caseNumber === sc.caseNumber && !c.accountNumber)
+                if (target) {
+                  target.accountNumber = accountNum
+                  caseNumberSet.delete(sc.caseNumber)
+                }
+              }
+            }
+          } catch { /* skip this account, try next */ }
+        }
+        const stillUnresolved = allCases.filter(c => !c.accountNumber).length
+        if (stillUnresolved > 0) {
+          console.warn(`[rh-scraper] ${stillUnresolved} cases still have no account number`)
+        } else {
+          console.log(`[rh-scraper] all cases resolved to accounts`)
+        }
+      }
+
     } catch (batchErr: any) {
       // If session expired, re-throw — don't fall back
       if (batchErr instanceof SessionExpiredError) throw batchErr
