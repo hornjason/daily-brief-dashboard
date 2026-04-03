@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-02 (BKL-AI16: interactive product Q&A; BKL-F11: shared SF report dedup; BKL-AI01–AI08: account intelligence pipeline from 3-agent research; BKL-F08: VNC flash-close; BKL-F07: SF URL; BKL-G01–G16: UI gaps; BKL-E01–E06: email)
+Last update: 2026-04-02 (BKL-RES01–RES03: red team research investigations; BKL-AI16: interactive product Q&A; BKL-F11: shared SF report dedup; BKL-AI01–AI08: account intelligence pipeline from 3-agent research; BKL-F08: VNC flash-close; BKL-F07: SF URL; BKL-G01–G16: UI gaps; BKL-E01–E06: email)
 
 ---
 
@@ -2970,3 +2970,39 @@ Fix:
   2. If <5% fallback rate: simplify fallback to 250-word single-pass with citation rules
   3. If <1% fallback rate: remove fallback entirely, return error message instead
 Depends on: BKL-R26 (sub-pipeline wiring must stabilize first)
+
+---
+
+## Red Team Research Investigations (2026-04-02)
+
+Source: 8-agent red team analysis of project assumptions. PRD: `~/.claude/MEMORY/WORK/20260402-133600_assumption-failure-analysis/PRD.md`
+
+### BKL-RES01 | Research: Playwright resilience patterns — self-healing selectors, DOM change survival
+Status: ✅ DONE 2026-04-02
+Decision: DONE — 4 vault files (69KB) at ~/.claude/MEMORY/RESEARCH/2026-04/playwright-resilience-patterns/. Key: zero-cost-self-healing-qa (10-tier accessibility tree), 5-phase implementation roadmap, scraper-specific recommendations for all 4 targets. Supportable APEX HTTP fast-path discovered.
+Priority: P1
+Size: Research
+Source: Red team 2026-04-02 — 6/8 agents flagged Playwright scraping of 4 enterprise apps as permanently fragile. DOM changes break scrapers with no API fallback.
+Vault: `~/.claude/MEMORY/RESEARCH/2026-04/playwright-resilience-patterns/`
+Description: Investigate best-in-class Playwright resilience: self-healing selectors, fallback selector chains, visual/AI-assisted locators, DOM diffing for change detection, retry/recovery patterns, snapshot-based regression testing. No API access available — Playwright is the permanent path. Research must produce patterns applicable to SF Lightning, RH Portal, Supportable APEX, and Tableau/CCSP.
+Deliverable: Actionable patterns to implement in our 4 scrapers + DOM snapshot testing strategy for CI.
+
+### BKL-RES02 | Research: Entity resolution / company name matching algorithms
+Status: ✅ DONE 2026-04-02
+Decision: DONE — 4 vault files (47KB) at ~/.claude/MEMORY/RESEARCH/2026-04/entity-resolution-name-matching/. Key: fuzzball library, composite scoring (tokenSetRatio*0.45 + jaroWinkler*0.35 + tokenSortRatio*0.20), 3 threshold tiers, alias table from supportableName overrides. Full TypeScript pseudocode + 3-phase migration plan.
+Priority: P1
+Size: Research
+Source: Red team 2026-04-02 — 4/8 agents flagged 3 separate name normalizers as chain-breaker. Manual `supportableName` overrides prove the current approach already fails.
+Vault: `~/.claude/MEMORY/RESEARCH/2026-04/entity-resolution-name-matching/`
+Description: Investigate state of the art in company name matching: Levenshtein, Jaro-Winkler, Soundex/Metaphone, token-set ratio, ML-based entity resolution. Which algorithms handle abbreviations (IBM vs International Business Machines), suffixes (Inc/LLC/Corp), partial names, and short names (≤4 chars) best? Must work offline (no API calls). Research must produce a recommended algorithm for our unified normalizer (BKL item to merge 3 normalizers).
+Deliverable: Recommended algorithm + test corpus of tricky name pairs from our actual customer data patterns.
+
+### BKL-RES03 | Research: Browser auth persistence — reduce/eliminate VNC dependency for day-2 ops
+Status: ✅ DONE 2026-04-02
+Decision: DONE — 4 vault files at ~/.claude/MEMORY/RESEARCH/2026-04/browser-auth-persistence/. Key: --restore-last-session flag + explicit browser.close() for session persistence (Phase 0, 1 day). TOTP automatable for headless re-auth. SF Client Credentials Flow + Tableau PAT could eliminate 2/4 browser deps. 5-phase plan, 8-12 days parallel.
+Priority: P2
+Size: Research
+Source: Red team 2026-04-02 — 5/8 agents flagged VNC-based auth as major adoption barrier for new users. Multi-step bootstrap requires manual browser interaction.
+Vault: `~/.claude/MEMORY/RESEARCH/2026-04/browser-auth-persistence/`
+Description: Investigate patterns for persisting browser auth state across container restarts: cookie export/import, storageState persistence in Playwright, token extraction from SSO flows, headless re-auth strategies. RH SSO uses SAML — can we persist the session without VNC on subsequent runs? Initial setup may still need VNC, but day-2 operations should not.
+Deliverable: Feasible approach to eliminate VNC for recurring auth, or confirmation that VNC is unavoidable with rationale.

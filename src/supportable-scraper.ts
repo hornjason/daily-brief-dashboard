@@ -74,7 +74,7 @@ async function sessionHeartbeat(page: Page): Promise<void> {
 // APEX shares one SSO session across all parallel pages. At 2+ pages, concurrent
 // requests trigger APEX server-side contention (error dialogs, closed pages).
 // Set to 1 for reliable serial scraping. Increase only if APEX session isolation improves.
-const PARALLEL_PAGES = 5  // Using APEX "New Session" button for proper session isolation (each click spawns app 305, 306, …)
+const PARALLEL_PAGES = 3  // 5 has context collisions. 3 via New Session is fast + stable.
 
 // Wall-clock limit per account — fires before the 30s download timeout can accumulate
 const PER_ACCOUNT_TIMEOUT_MS = 90_000  // 90 seconds
@@ -978,8 +978,8 @@ export async function runSupportableDiscoverAndScrape(
 
     async function worker(workerId: number, initialPage: Page): Promise<void> {
       let workerPage = initialPage
-      // Stagger worker starts by 2s each to avoid all 5 hitting APEX simultaneously
-      if (workerId > 0) await new Promise(r => setTimeout(r, workerId * 2000))
+      // Stagger worker starts by 3s each to avoid simultaneous APEX requests
+      if (workerId > 0) await new Promise(r => setTimeout(r, workerId * 3000))
       lastNavigationTime = Date.now()
       try { while (jobIndex < jobs.length) {
           const job = jobs[jobIndex++]
