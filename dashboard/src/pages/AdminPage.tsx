@@ -20,11 +20,20 @@ interface ScrapeStatus {
   lastError: string | null
 }
 
+interface CircuitBreakerState {
+  name: string
+  state: 'closed' | 'open' | 'half-open'
+  failures: number
+  lastFailure: string | null
+}
+
 interface AllScrapeStatus {
   rh: ScrapeStatus
   supportable: ScrapeStatus
   ccsp: ScrapeStatus
   salesforce: ScrapeStatus
+  circuitBreakers?: Record<string, CircuitBreakerState>
+  queue?: { running: string | null; pending: string[]; isAnyRunning: boolean }
 }
 
 interface RefreshIntervals {
@@ -57,24 +66,40 @@ function ScrapeSection({
   status,
   onRunNow,
   running,
+  circuitBreaker,
+  queuePending,
 }: {
   label: string
   status: ScrapeStatus | null
   onRunNow: () => void
   running: boolean
+  circuitBreaker?: CircuitBreakerState
+  queuePending?: boolean
 }) {
   const busy = running || status?.isRunning
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-gray-200">{label}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-200">{label}</span>
+          {circuitBreaker && circuitBreaker.state !== 'closed' && (
+            <span
+              className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+                circuitBreaker.state === 'open' ? 'bg-red-900/60 text-red-400' : 'bg-yellow-900/60 text-yellow-400'
+              }`}
+              title={circuitBreaker.lastFailure ?? undefined}
+            >
+              {circuitBreaker.state === 'open' ? `BREAKER OPEN (${circuitBreaker.failures})` : 'HALF-OPEN'}
+            </span>
+          )}
+        </div>
         <button
           onClick={onRunNow}
-          disabled={!!busy}
+          disabled={!!busy || !!queuePending}
           className="px-3 py-1.5 text-xs font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
         >
-          {busy ? 'Running…' : 'Run Now'}
+          {busy ? 'Running…' : queuePending ? 'Queued…' : circuitBreaker?.state === 'open' ? 'Force Run' : 'Run Now'}
         </button>
       </div>
       <div className="space-y-1 text-xs text-gray-400">
@@ -88,8 +113,19 @@ function ScrapeSection({
             In progress
           </div>
         )}
+        {queuePending && !status?.isRunning && (
+          <div className="flex items-center gap-1.5 text-blue-400">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+            Queued — waiting for other scraper to finish
+          </div>
+        )}
         {status?.lastError && (
           <div className="text-red-400 truncate" title={status.lastError}>Error: {status.lastError}</div>
+        )}
+        {circuitBreaker?.state === 'open' && circuitBreaker.lastFailure && (
+          <div className="text-red-400/80 truncate" title={circuitBreaker.lastFailure}>
+            Last failure: {circuitBreaker.lastFailure}
+          </div>
         )}
       </div>
     </div>
@@ -292,7 +328,7 @@ function InitialLoadSection({ scrapeRunning }: { scrapeRunning: boolean }) {
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <span className="text-sm font-medium text-gray-200">Supportable Initial Load</span>
+          <span className="text-sm font-medium text-gray-200">Scrape Subscriptions (Full Reload)</span>
           <p className="text-xs text-gray-500 mt-0.5">Crash-safe full load — resumes from last completed customer</p>
         </div>
         <button
@@ -418,24 +454,32 @@ export function AdminPage() {
               status={status?.rh ?? null}
               running={!!triggerBusy['rh']}
               onRunNow={() => runScrape('rh', '/api/scrape/rh')}
+              circuitBreaker={status?.circuitBreakers?.rh}
+              queuePending={status?.queue?.pending?.includes('rh-cases')}
             />
             <ScrapeSection
-              label="Supportable 360"
+              label="Discover & Scrape Subscriptions"
               status={status?.supportable ?? null}
               running={!!triggerBusy['supportable']}
               onRunNow={() => runScrape('supportable', '/api/scrape/supportable/discover')}
+              circuitBreaker={status?.circuitBreakers?.supportable}
+              queuePending={status?.queue?.pending?.includes('supportable')}
             />
             <ScrapeSection
               label="CCSP"
               status={status?.ccsp ?? null}
               running={!!triggerBusy['ccsp']}
               onRunNow={() => runScrape('ccsp', '/api/scrape/ccsp')}
+              circuitBreaker={status?.circuitBreakers?.ccsp}
+              queuePending={status?.queue?.pending?.includes('ccsp')}
             />
             <ScrapeSection
               label="SF Pipeline"
               status={status?.salesforce ?? null}
               running={!!triggerBusy['salesforce']}
               onRunNow={() => runScrape('salesforce', '/api/scrape/salesforce')}
+              circuitBreaker={status?.circuitBreakers?.salesforce}
+              queuePending={status?.queue?.pending?.includes('sf-pipeline')}
             />
           </div>
         </div>

@@ -11,6 +11,7 @@ import MorningSummary from './components/MorningSummary'
 import { PipelineSection } from './components/PipelineSection'
 import { RefreshTimerSettings } from './components/RefreshTimerSettings'
 import { WeatherSettings } from './components/WeatherSettings'
+import { EmailSettingsSection } from './components/EmailSettingsSection'
 import { CustomerDetailPage } from './pages/CustomerDetailPage'
 import { SetupPage } from './pages/SetupPage'
 import { AdminPage } from './pages/AdminPage'
@@ -230,6 +231,7 @@ function Dashboard() {
               <div className="space-y-4">
                 <WeatherSettings />
                 <RefreshTimerSettings />
+                <EmailSettingsSection />
               </div>
             </div>
           </main>

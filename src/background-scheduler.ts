@@ -5,7 +5,7 @@ import { refreshAll, refreshSubscriptions, refreshCCSP, refreshPipeline } from '
 import { runRhScrapeWithState, runSfSyncForAes, _rhScrapeRunning, _sfSyncRunning, ccspInFlight, setLastSkipReason } from './scraper-manager.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
-import { lastScraped } from './rh-auth.ts'
+import { lastScraped, recordScrapeExpired } from './rh-auth.ts'
 import { initScrapeContext, getScrapeContext, closeScrapeContext } from './rh-scraper.ts'
 import { adoptSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext, runSupportableDiscoverAndScrape, supportableScrapeRunning } from './supportable-scraper.ts'
@@ -634,10 +634,7 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
         enqueueScraperTask({
           name: 'sf-pipeline',
           run: async () => {
-            runSfSyncForAes(capturedAes)
-            // Refresh cache from GSheet after a brief delay for the scrape to start writing
-            await new Promise(r => setTimeout(r, 60_000))
-            await refreshPipeline().catch((e: any) => console.warn('[pipeline-sync] cache refresh error:', e.message))
+            await runSfSyncForAes(capturedAes)
           },
           source: 'scheduled',
           enqueuedAt: Date.now(),
@@ -683,22 +680,50 @@ export function initBackgroundScheduler(opts: {
   // KPI daily snapshot at 8am ET (R05 — after all morning syncs complete)
   scheduleKpiSnapshot()
 
-  // BKL-M49: On startup, wait 10s for Xvfb + Chrome to stabilise, then init
-  // context and enqueue the initial RH scrape through the queue.
+  // Cold-start auth-gate: On startup, wait 10s for Xvfb + Chrome to stabilise,
+  // then init context. Before enqueueing scrapes, verify the session is actually
+  // valid by checking if RH portal loads. If stale (overnight laptop sleep),
+  // skip the initial scrape and log clearly — user will VNC in and re-auth,
+  // which triggers circuit breaker reset + immediate scrape enqueue via rh-auth.ts.
   if (existsSync(opts.rhSessionPath)) {
     setTimeout(async () => {
       console.log('[scraper-queue] startup: initialising browser context…')
       await initScrapeContext(opts.rhProfileDir)
-      // Share the same browser context with SF and Supportable scrapers
       const ctx = getScrapeContext()
-      if (ctx) { adoptSfContext(ctx, opts.rhProfileDir); adoptSupportableContext(ctx); adoptCcspContext(ctx) }
-      enqueueScraperTask({
-        name: 'rh-cases',
-        run: () => runRhScrapeWithState(),
-        source: 'startup',
-        enqueuedAt: Date.now(),
-      })
-    }, 10_000)  // 10s startup delay (was 5s) — let Xvfb + Chrome stabilise
+      if (ctx) {
+        adoptSfContext(ctx, opts.rhProfileDir)
+        adoptSupportableContext(ctx)
+        adoptCcspContext(ctx)
+
+        // Auth pre-flight: check if the session is actually valid
+        try {
+          const testPage = await ctx.newPage()
+          const response = await testPage.goto('https://access.redhat.com/support/cases', {
+            waitUntil: 'domcontentloaded', timeout: 15_000,
+          })
+          const finalUrl = testPage.url()
+          await testPage.close()
+
+          if (finalUrl.includes('access.redhat.com/support')) {
+            // Session is valid — enqueue startup scrape
+            console.log('[scraper-queue] startup: auth pre-flight PASSED — session valid, enqueueing scrape')
+            enqueueScraperTask({
+              name: 'rh-cases',
+              run: () => runRhScrapeWithState(),
+              source: 'startup',
+              enqueuedAt: Date.now(),
+            })
+          } else {
+            // Session expired — redirected to login page
+            recordScrapeExpired()
+            console.warn('[scraper-queue] startup: auth pre-flight FAILED — session expired (redirected to login). Skipping startup scrape. VNC in to re-authenticate.')
+          }
+        } catch (e: any) {
+          recordScrapeExpired()
+          console.warn(`[scraper-queue] startup: auth pre-flight error — ${e?.message ?? e}. Skipping startup scrape.`)
+        }
+      }
+    }, 10_000)
   }
 
   // ── Unified 15-min heartbeat tick (BKL-M19) ──────────────────────────────

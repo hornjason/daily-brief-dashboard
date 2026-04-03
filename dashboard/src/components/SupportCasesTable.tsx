@@ -86,9 +86,13 @@ export function SupportCasesTable({ cases, loading }: SupportCasesTableProps) {
             : lower.includes('progress')
               ? 'bg-accent/15 text-accent border-accent/20'
               : 'bg-border text-text-secondary border-border'
+          // Abbreviate long status labels to prevent badge overflow
+          const label = status
+            .replace(/Waiting on Customer/i, 'Waiting: Cust')
+            .replace(/Waiting on Red Hat/i, 'Waiting: RH')
           return (
-            <span className={`px-2 py-0.5 rounded text-xs border ${colorClass}`}>
-              {status}
+            <span className={`px-2 py-0.5 rounded text-xs border whitespace-nowrap ${colorClass}`} title={status}>
+              {label}
             </span>
           )
         },
