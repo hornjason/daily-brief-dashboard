@@ -39,6 +39,7 @@ const SUPPORTABLE_DEBUG = process.env.SUPPORTABLE_DEBUG === 'true'
 
 import { setLivePageBusy } from './rh-scraper.ts'
 import { sanitizeErr, sanitizeCell } from './utils.ts'
+import { markRunning, recordOutcome } from './scraper-status-store.ts'
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
@@ -975,6 +976,8 @@ export async function runSupportableScrape(
   supportableScrapeStartedAt = Date.now()
   lastSupportableError = null
   supportableStatusMessage = 'Connecting to Supportable…'
+  markRunning('supportable')
+  const _supportableTelemetryStart = Date.now()
   let page = await _ctx.newPage()
   const results: SupportableResult[] = []
   let isFirst = true
@@ -1010,6 +1013,14 @@ export async function runSupportableScrape(
     throw e
   } finally {
     await page.close().catch(() => {})
+    // ScraperStatusStore: record outcome
+    const totalRows = results.reduce((sum, r) => sum + r.rows.length, 0)
+    recordOutcome('supportable', {
+      success: !lastSupportableError,
+      recordCount: totalRows,
+      durationMs: Date.now() - _supportableTelemetryStart,
+      error: lastSupportableError ?? undefined,
+    })
     supportableScrapeRunning = false; setLivePageBusy(false)
     supportableScrapeStartedAt = null
   }
@@ -1046,6 +1057,8 @@ export async function runSupportableDiscoverAndScrape(
   supportableScrapeStartedAt = Date.now()
   lastSupportableError = null
   supportableStatusMessage = 'Connecting to Supportable…'
+  markRunning('supportable')
+  const _discoverTelemetryStart = Date.now()
 
   const _onStatus = (msg: string) => {
     supportableStatusMessage = msg
@@ -1282,6 +1295,14 @@ export async function runSupportableDiscoverAndScrape(
     supportableStatusMessage = null
     throw e
   } finally {
+    // ScraperStatusStore: record outcome
+    const totalRows = results.reduce((sum, r) => sum + r.rows.length, 0)
+    recordOutcome('supportable', {
+      success: !lastSupportableError,
+      recordCount: totalRows,
+      durationMs: Date.now() - _discoverTelemetryStart,
+      error: lastSupportableError ?? undefined,
+    })
     supportableScrapeRunning = false; setLivePageBusy(false)
     supportableScrapeStartedAt = null
   }

@@ -40,6 +40,7 @@ import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import type { AE } from './types.ts'
 import { sanitizeErr, sanitizeCell } from './utils.ts'
+import { markRunning, recordOutcome } from './scraper-status-store.ts'
 
 /**
  * Search for a VISIBLE element across all frames in the page.
@@ -544,6 +545,8 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
   ccspScrapeRunning = true; setLivePageBusy(true)
   ccspScrapeStartedAt = Date.now()
   lastCcspError = null
+  markRunning('ccsp')
+  const _ccspTelemetryStart = Date.now()
 
   const results: CcspResult[] = []
 
@@ -585,6 +588,14 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
     lastCcspError = sanitizeErr(e)
     throw e
   } finally {
+    // ScraperStatusStore: record outcome
+    const totalRows = results.reduce((sum, r) => sum + r.rows.length, 0)
+    recordOutcome('ccsp', {
+      success: !lastCcspError,
+      recordCount: totalRows,
+      durationMs: Date.now() - _ccspTelemetryStart,
+      error: lastCcspError ?? undefined,
+    })
     ccspScrapeRunning = false; setLivePageBusy(false)
     ccspScrapeStartedAt = null
   }

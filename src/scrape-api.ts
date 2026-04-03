@@ -63,6 +63,7 @@ import { getRefreshIntervals } from './settings-api.ts'
 import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
+import { getStatus } from './scraper-status-store.ts'
 
 // ── Standardized response shape ─────────────────────────────────────────────
 
@@ -768,4 +769,8 @@ export function registerScrapeRoutes(app: Hono): void {
       summary: getTelemetrySummary(),
     })
   })
+
+  // GET /api/scraper-status — centralized status map from ScraperStatusStore
+  // Returns ScraperStatusMap with staleness applied per scraper threshold.
+  app.get('/api/scraper-status', (c) => c.json(getStatus()))
 }

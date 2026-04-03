@@ -17,6 +17,7 @@ import { briefCachePath, readBriefCache, readSheetCache, readPipelineCache, read
 import { isBriefConfigured, fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief } from './customer.ts'
 import { fetchCustomerCases, fetchCustomerSubscriptions } from './redhat.ts'
 import { fetchCustomerSheetData } from './sheets.ts'
+import { initStatusStore } from './scraper-status-store.ts'
 
 // ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
 // All scrapers share one BrowserContext (SSO constraint). Running them
@@ -658,6 +659,9 @@ export function initBackgroundScheduler(opts: {
   rhProfileDir: string
   sfSessionPath?: string
 }): void {
+
+  // Load persisted scraper status so state survives container restarts
+  initStatusStore()
 
   // On startup: run a full refresh, then schedule per-source timers
   if (customers.length > 0) {

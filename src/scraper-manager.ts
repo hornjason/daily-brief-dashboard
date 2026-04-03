@@ -12,6 +12,7 @@ import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper
 import { getRefreshIntervals } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
+import { markRunning, recordOutcome } from './scraper-status-store.ts'
 
 // ── BKL-M50e: Scraper telemetry + history ──────────────────────────────────
 
@@ -366,6 +367,7 @@ export async function runRhScrapeWithState(): Promise<void> {
   _rhScrapeCancelRequested = false
 
   const _rhTelemetryStart = Date.now()
+  markRunning('rh-cases')
   try {
     console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
     // BKL-M50c: Wrap with wall-clock timeout to prevent 7+ min stalls
@@ -392,6 +394,13 @@ export async function runRhScrapeWithState(): Promise<void> {
       status: 'success',
     })
 
+    // ScraperStatusStore: record success
+    recordOutcome('rh-cases', {
+      success: true,
+      recordCount: cases.length,
+      durationMs: Date.now() - _rhTelemetryStart,
+    })
+
     // BKL-M21: Post-scrape account count validation — warn if results seem partial
     const expectedAccounts = accountNumbers.length
     const scrapedAccounts = new Set(cases.map(c => c.accountNumber)).size
@@ -410,6 +419,13 @@ export async function runRhScrapeWithState(): Promise<void> {
       durationMs: Date.now() - _rhTelemetryStart,
       recordCount: 0,
       status: isTimeout ? 'timeout' : 'failure',
+      error: sanitizeErr(e),
+    })
+
+    // ScraperStatusStore: record failure
+    recordOutcome('rh-cases', {
+      success: false,
+      durationMs: Date.now() - _rhTelemetryStart,
       error: sanitizeErr(e),
     })
 
@@ -445,6 +461,7 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
   _sfSyncStartedAt = Date.now()
   _sfSyncCancelRequested = false
   _sfSyncLastError = null
+  markRunning('sf-pipeline')
   return (async () => {
     const _sfTelemetryStart = Date.now()
     let totalRows = 0
@@ -516,6 +533,12 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
     _sfSyncRunning = false
     _sfSyncStartedAt = null
     _sfSyncCancelRequested = false
+    // ScraperStatusStore: record outcome (success or failure)
+    // Note: _sfTelemetryStart is not in scope here — use updatedAt only
+    recordOutcome('sf-pipeline', {
+      success: !_sfSyncLastError,
+      error: _sfSyncLastError ?? undefined,
+    })
     // Populate local pipeline cache from the newly-written sheet (BKL-M18)
     refreshPipeline().catch(e => console.warn('[sf-sync] post-sync pipeline cache refresh failed:', sanitizeErr(e)))
   })
