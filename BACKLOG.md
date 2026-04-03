@@ -1975,25 +1975,54 @@ Related: BKL-F11 (shared report dedup), ADR-001
 
 ---
 
-### BKL-M57 | Research: Supportable parallel sessions — "New Session" button for concurrent scraping
+### BKL-M57 | Supportable parallel scraping — multi-context architecture + APEX HTTP fast-path
 Status: 🔴 OPEN
 Priority: P1
-Size: Research + prototype
-Source: Jason 2026-04-02 — "can we do a few new sessions, theres a new session button that spawns another window"
-Files: src/supportable-scraper.ts
-Description: Supportable has a "New Session" button that opens a separate APEX session window. Currently PARALLEL_PAGES=1 because APEX session contention causes errors with concurrent operations in the same session.
-  If "New Session" creates truly independent APEX sessions, we could:
-  1. Open 2-3 parallel sessions at scrape start
-  2. Distribute customers across sessions (round-robin)
-  3. Scrape 2-3 customers concurrently instead of sequentially
-  4. Potential 2-3x speedup (from ~5 min → ~2 min for 21 customers)
-  Research needed:
-  1. Does "New Session" create a separate APEX session cookie? Or does it share the same session?
-  2. Can two separate session windows query different accounts simultaneously without errors?
-  3. What happens if both sessions try to export CSV at the same time?
-  4. Is there a max session limit?
-  5. Test: open 2 sessions in VNC, search different accounts in each simultaneously, verify both work
-  If parallel sessions work, update PARALLEL_PAGES from 1 to 2-3 and modify the scraper to use multiple pages.
+Size: L (architecture + implementation)
+Source: Jason + extensive testing 2026-04-02
+
+**Research complete. Root cause confirmed. Two solution paths identified.**
+
+Root cause: Oracle APEX has documented multi-tab session collision — all pages in one BrowserContext share cookies, causing session state conflicts. Even APEX "New Session" button (creates apps 304-308) collides because cookies are shared in the single context.
+
+Testing results (2026-04-02):
+  - 5 parallel sessions: discovery worked (70s), scraping crashed (DOM context destroyed)
+  - 3 parallel + stagger: partial success (A10 got 23/26 rows, 3 customers got 0)
+  - 1 sequential: all data correct, 200s (current stable state)
+
+**Solution Path A: Multi-BrowserContext (recommended by Playwright research)**
+  Switch from `launchPersistentContext()` to `chromium.launch()` + `browser.newContext()` per worker.
+  Each context gets own cookie jar → own APEX session → no collisions. ~50-100MB per context.
+  Architecture questions for Serena:
+  1. How to authenticate each context (share storageState from RH login, or each logs in separately?)
+  2. Impact on CCSP/Tableau SSO passthrough (also uses shared context)
+  3. Impact on _livePage pattern (RH keep-alive)
+  4. SF already has own context (initSfContext) — does it conflict?
+  5. How to maintain a restore path back to single persistent context if multi-context has issues
+  References: BKL-RES01 vault, BKL-RES03 vault, Playwright docs on BrowserContext isolation
+
+**Solution Path B: APEX HTTP fast-path (from RES01 research)**
+  Extract data from `page.content()` (raw HTML string) instead of DOM interaction.
+  If APEX server-renders the data table, we can parse HTML without clicking/scrolling.
+  Eliminates "element not attached" errors entirely — no DOM interaction = no context conflicts.
+  Combined with parallel page navigation (just goto + content()), may not need multi-context at all.
+  References: BKL-RES01 vault `RECOMMENDATIONS.md` lines 329-353
+
+**Additional improvements from research vaults:**
+  - `--restore-last-session` flag for better session persistence (RES03)
+  - SelectorChain pattern for resilient element targeting (RES01)
+  - Render mode detection (server vs client) to choose extraction strategy (RES01)
+  - Entity resolution for customer name matching (RES02 — fuzzball library + composite scoring)
+
+**Implementation plan:**
+  1. Serena: design multi-context architecture incorporating RES01/RES03 findings
+  2. Marcus: implement Path B (HTTP fast-path) first — lower risk, no architecture change
+  3. If Path B solves the parallel issue, Path A becomes optional optimization
+  4. If Path B doesn't fully solve it, Marcus implements Path A per Serena's architecture
+  5. Always maintain restore path: keep PARALLEL_PAGES=1 sequential as fallback
+
+Files: src/rh-scraper.ts, src/supportable-scraper.ts, src/ccsp-scraper.ts, src/scraper-manager.ts
+Vault: ~/.claude/MEMORY/RESEARCH/2026-04/playwright-resilience-patterns/, ~/.claude/MEMORY/RESEARCH/2026-04/browser-auth-persistence/
 
 ---
 
