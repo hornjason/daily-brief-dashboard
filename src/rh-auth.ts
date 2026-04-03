@@ -14,6 +14,7 @@ import { adoptSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
+import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
 
 const RH_PORTAL_URL = 'https://access.redhat.com/support/cases/#/case/list'
 const LOGIN_POLL_INTERVAL_MS = 2_000
@@ -100,7 +101,7 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
   try {
     context = await chromium.launchPersistentContext(profileDir, {
       headless: false,
-      args: ['--ignore-certificate-errors', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--renderer-process-limit=2', '--disable-gpu-compositing'],
+      args: ['--ignore-certificate-errors', ...BASE_CHROMIUM_ARGS],
     })
     page = await context.newPage()
   } catch (e) {

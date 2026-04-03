@@ -11,6 +11,7 @@ import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError }
 import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper.ts'
 import { getRefreshIntervals } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── BKL-M50e: Scraper telemetry + history ──────────────────────────────────
 
@@ -227,11 +228,6 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
     if (timer) clearTimeout(timer)
   }
 }
-
-// ── Shared helpers (duplicated from server.ts to avoid circular dep) ────────
-
-const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 
 // ── ntfy.sh push notification helper ────────────────────────────────────────
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'

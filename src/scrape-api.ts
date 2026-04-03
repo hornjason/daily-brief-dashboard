@@ -26,6 +26,9 @@ import {
   recordScrapeResult,
   getTelemetryLog,
   getTelemetrySummary,
+  // Circuit breaker management
+  resetCircuitBreaker,
+  getCircuitBreakerStates,
 } from './scraper-manager.ts'
 import {
   runSfPipelineSync,
@@ -42,6 +45,7 @@ import {
   runSupportableDiscoverAndScrape,
   writeSupportableSheet,
   supportableScrapeRunning,
+  supportableScrapeStartedAt,
   lastSupportableScrape,
   lastSupportableError,
   supportableStatusMessage,
@@ -51,17 +55,14 @@ import {
   runCcspScrape,
   writeCcspSheet,
   ccspScrapeRunning,
+  ccspScrapeStartedAt,
   lastCcspScrape,
   lastCcspError,
 } from './ccsp-scraper.ts'
 import { getRefreshIntervals } from './settings-api.ts'
 import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
-
-// ── Shared helpers ──────────────────────────────────────────────────────────
-
-const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
+import { sanitizeErr } from './utils.ts'
 
 // ── Standardized response shape ─────────────────────────────────────────────
 
@@ -100,8 +101,10 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // POST /api/scrape/rh — full pipeline: scrape RH Portal cases → local cache
   // BKL-M49: Manual triggers go through the scraper queue
+  // Manual "Run Now" overrides circuit breaker — user is explicitly requesting a run
   app.post('/api/scrape/rh', async (c) => {
     if (_rhScrapeRunning) return c.json({ scraper: 'rh', status: 'busy', error: 'RH scrape already in progress' }, 409)
+    resetCircuitBreaker('rh')
     enqueueScraperTask({
       name: 'rh-cases',
       run: () => runRhScrapeWithState(),
@@ -137,7 +140,12 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // POST /api/scrape/supportable — full pipeline: APEX scrape → sheet → cache
   app.post('/api/scrape/supportable', async (c) => {
-    if (supportableScrapeRunning) return c.json({ scraper: 'supportable', status: 'busy', error: 'Scrape already in progress' }, 409)
+    // Stale-mutex auto-release: if the flag has been stuck for >15 min (container restart, crash),
+    // let the request through — runSupportableScrape() will reset the mutex internally.
+    const supportableStale = supportableScrapeRunning && supportableScrapeStartedAt &&
+      (Date.now() - supportableScrapeStartedAt > 15 * 60 * 1000)
+    if (supportableStale) console.warn(`[scrape:supportable] stale mutex detected (${Math.round((Date.now() - supportableScrapeStartedAt!) / 60000)}min) — allowing request through`)
+    if (supportableScrapeRunning && !supportableStale) return c.json({ scraper: 'supportable', status: 'busy', error: 'Scrape already in progress' }, 409)
 
     const body = await c.req.json<{ aeName?: string; customers?: SupportableCustomer[] }>().catch(() => ({}))
     const aeName = (body.aeName ?? '').trim()
@@ -226,14 +234,52 @@ export function registerScrapeRoutes(app: Hono): void {
   // POST /api/scrape/supportable/discover — discover account numbers for customers that
   // have none (or re-discover all), then write the sheet and refresh cache.
   // Unlike /api/scrape/supportable, this accepts customers without accountNumbers.
+  // When aeName is omitted (e.g. admin "Run Now"), runs for ALL AEs sequentially.
   app.post('/api/scrape/supportable/discover', async (c) => {
-    if (supportableScrapeRunning) return c.json({ scraper: 'supportable', status: 'busy', error: 'Scrape already in progress' }, 409)
+    // Stale-mutex auto-release (same pattern as POST /api/scrape/supportable above)
+    const supportableStale = supportableScrapeRunning && supportableScrapeStartedAt &&
+      (Date.now() - supportableScrapeStartedAt > 15 * 60 * 1000)
+    if (supportableStale) console.warn(`[scrape:supportable/discover] stale mutex detected (${Math.round((Date.now() - supportableScrapeStartedAt!) / 60000)}min) — allowing request through`)
+    if (supportableScrapeRunning && !supportableStale) return c.json({ scraper: 'supportable', status: 'busy', error: 'Scrape already in progress' }, 409)
 
     const body = await c.req.json<{ aeName?: string; customer?: string }>().catch(() => ({}))
     const aeName = (body.aeName ?? '').trim()
     const customerFilter = (body.customer ?? '').trim()
 
-    if (!aeName)               return c.json({ error: 'aeName is required' }, 400)
+    // When no aeName specified (admin "Run Now"), run for all AEs
+    if (!aeName) {
+      if (!aes.length) return c.json({ error: 'No AEs configured' }, 400)
+      resetCircuitBreaker('supportable')
+      enqueueScraperTask({
+        name: 'supportable',
+        run: async () => {
+          for (const ae of aes) {
+            const aeCustomers = customers.filter(cx => cx.ae === ae.name)
+            if (!aeCustomers.length) continue
+            const discoverList = aeCustomers.map(cx => ({ name: cx.name, supportableName: cx.supportableName }))
+            try {
+              const results = await runSupportableDiscoverAndScrape(discoverList, (done, total, name, accountNumbers) => {
+                const existing = customers.find(cx => cx.name === name && cx.ae === ae.name)
+                if (existing && accountNumbers.length > 0) {
+                  const merged = new Set([...(existing.accountNumbers ?? []), ...accountNumbers])
+                  existing.accountNumbers = [...merged]
+                  try {
+                    const tmpPath = CUSTOMERS_PATH + '.tmp'
+                    writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
+                    renameSync(tmpPath, CUSTOMERS_PATH)
+                  } catch {}
+                }
+              })
+              await writeSupportableSheet(results, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
+            } catch (e: any) { console.warn(`[scrape:discover:all] ${ae.name} failed:`, sanitizeErr(e)) }
+          }
+          await refreshSubscriptions().catch(() => {})
+        },
+        source: 'manual',
+        enqueuedAt: Date.now(),
+      })
+      return c.json({ started: true, aeCount: aes.length, queued: true })
+    }
     if (!/^[\w\s'.,&()/-]{1,80}$/.test(aeName)) return c.json({ error: 'aeName contains invalid characters' }, 400)
     if (customerFilter && !/^[\w\s'.,&()/-]{1,80}$/.test(customerFilter)) return c.json({ error: 'customer contains invalid characters' }, 400)
 
@@ -309,9 +355,16 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // POST /api/scrape/ccsp — full pipeline: Tableau scrape → sheet → cache
   // BKL-M49: Manual triggers go through the scraper queue
+  // Manual "Run Now" overrides circuit breaker
   app.post('/api/scrape/ccsp', async (c) => {
-    // ARCHITECTURE.md §9: check BOTH mutex guards
-    if (ccspScrapeRunning || ccspInFlight) return c.json({ scraper: 'ccsp', status: 'busy', error: 'CCSP scrape already in progress' }, 409)
+    // Stale-mutex auto-release: if the flag has been stuck for >15 min (container restart, crash),
+    // let the request through — runCcspScrape() will reset the mutex internally.
+    const ccspStale = ccspScrapeRunning && ccspScrapeStartedAt &&
+      (Date.now() - ccspScrapeStartedAt > 15 * 60 * 1000)
+    if (ccspStale) console.warn(`[scrape:ccsp] stale mutex detected (${Math.round((Date.now() - ccspScrapeStartedAt!) / 60000)}min) — allowing request through`)
+    // ARCHITECTURE.md §9: check BOTH mutex guards (skip if stale)
+    if ((ccspScrapeRunning || ccspInFlight) && !ccspStale) return c.json({ scraper: 'ccsp', status: 'busy', error: 'CCSP scrape already in progress' }, 409)
+    resetCircuitBreaker('ccsp')
 
     const eligibleAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
     if (!eligibleAes.length) return c.json({ error: 'No AEs with tableauTerritories and driveFolderId configured' }, 400)
@@ -378,7 +431,9 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // POST /api/scrape/salesforce — full pipeline: SF report → sheet → cache
   // BKL-M49: Manual triggers go through the scraper queue
+  // Manual "Run Now" overrides circuit breaker
   app.post('/api/scrape/salesforce', async (c) => {
+    resetCircuitBreaker('salesforce')
     const aesWithSf = aes.filter(a => a.sfReportId && a.driveFolderId)
     if (!aesWithSf.length && !SF_REPORT_ID) return c.json({ error: 'No AEs with sfReportId configured' }, 400)
 
@@ -533,7 +588,10 @@ export function registerScrapeRoutes(app: Hono): void {
           {
             name: 'supportable',
             run: async () => {
-              if (supportableScrapeRunning) { console.log('[scrape:all] supportable: busy — skipping'); return }
+              // Stale-mutex passthrough: if stuck >15 min, let runSupportableScrape() handle reset
+              const supStale = supportableScrapeRunning && supportableScrapeStartedAt &&
+                (Date.now() - supportableScrapeStartedAt > 15 * 60 * 1000)
+              if (supportableScrapeRunning && !supStale) { console.log('[scrape:all] supportable: busy — skipping'); return }
               const { customers } = await import('./server-state.ts')
               if (!customers.length) { console.log('[scrape:all] supportable: no customers — skipping'); return }
               const _supTelemetryStart = Date.now()
@@ -574,7 +632,10 @@ export function registerScrapeRoutes(app: Hono): void {
           {
             name: 'ccsp',
             run: async () => {
-              if (ccspScrapeRunning || ccspInFlight) { console.log('[scrape:all] ccsp: busy — skipping'); return }
+              // Stale-mutex passthrough: if stuck >15 min, let runCcspScrape() handle reset
+              const ccspStaleAll = ccspScrapeRunning && ccspScrapeStartedAt &&
+                (Date.now() - ccspScrapeStartedAt > 15 * 60 * 1000)
+              if ((ccspScrapeRunning || ccspInFlight) && !ccspStaleAll) { console.log('[scrape:all] ccsp: busy — skipping'); return }
               const eligibleAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
               if (!eligibleAes.length) { console.log('[scrape:all] ccsp: no eligible AEs — skipping'); return }
               setCcspInFlight(true)

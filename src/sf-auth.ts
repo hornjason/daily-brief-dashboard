@@ -20,6 +20,7 @@ import { closeSfContext, adoptSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
+import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
 
 const SF_LOGIN_URL   = 'https://redhatcrm.my.salesforce.com'
 const RH_PORTAL_URL  = 'https://access.redhat.com/support/cases/#/case/list'
@@ -90,7 +91,7 @@ export async function startSfLoginBrowser(
   try {
     context = await chromium.launchPersistentContext(profileDir, {
       headless: false,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--renderer-process-limit=2', '--disable-gpu-compositing'],
+      args: [...BASE_CHROMIUM_ARGS],
     })
   } catch (e) {
     loginInProgress = false

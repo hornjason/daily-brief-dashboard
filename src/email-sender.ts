@@ -1,16 +1,12 @@
 // src/email-sender.ts — Gmail API email sender for daily brief delivery (BKL-E02)
 
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { sanitizeErr } from './utils.ts'
 
 const GMAIL_TOKEN_PATH = process.env.GMAIL_TOKEN
   ?? (process.env.CONFIG_DIR
     ? `${process.env.CONFIG_DIR}/.gmail-token.json`
     : `${import.meta.dir}/../config/.gmail-token.json`)
-
-/** Strip internal file paths and cap length before returning error strings to clients. */
-function sanitizeErr(e: any): string {
-  return String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
-}
 
 /**
  * Send an HTML email via the Gmail API.

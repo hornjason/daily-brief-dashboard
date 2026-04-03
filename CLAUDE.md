@@ -25,38 +25,14 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - After every UI rebuild: spawn Quinn without being asked
 - After every item close: spawn Rook on changed files + pattern siblings
 
-## Security Baseline (do not regress)
+## Security Baseline
+See `docs/SECURITY-BASELINE.md` — read before touching any security-sensitive code.
 
-- `sanitizeCell()` on all Sheets writes before `valueInputOption: 'RAW'`
-- `sanitizeErr(e)` on all API error responses — never return raw `e.message`
-- `escapeXml()` on all values interpolated into brief XML sources
-- Cache/config files written with `mode: 0o600`
-- `dumpDom()` gated behind `CCSP_DEBUG=true` — never in production
-- `sanitizeText()` rejects HTML tags (returns null -> 400), does not strip
+## Scraper Rules
+See `docs/SCRAPER-RULES.md` — read before touching any scraper code.
 
-## Scraper Rules (do not regress)
-
-- All scrapers share one `BrowserContext` from RH SSO login
-- Subscription scraping is strictly sequential (one page, one account) — council decision 2026-04-03. Discovery uses up to 3 parallel pages (read-only HTML, no downloads).
-- Keep-alive expiry guard: check all 3 mutex flags before `closeScrapeContext()`
-- CCSP two-phase mutex: `ccspScrapeRunning || ccspInFlight` — both required
-- Supportable is the ONLY account discovery source — never use RH Portal SOLR
-- Chrome needs `--no-sandbox` + `--disable-dev-shm-usage` at all 4 `launchPersistentContext` sites
-- `--shm-size=2g` + `--memory=4g` in Makefile — do not remove (Chromium stability)
-- Circuit breakers reset on auth event (RH or SF SSO) — do not change this behavior
-- Manual "Run Now" overrides circuit breakers — intentional design, not a bug
-- Auth pre-flight checks RH session before startup scrape — do not remove
-- All 4 scrapers re-adopted on auth (rh-auth.ts and sf-auth.ts both adopt RH, SF, Supportable, CCSP)
-- SCRAPE_LOG_PATH uses `process.env.CACHE_DIR` — do not hardcode relative paths
-
-## Data Rules (do not regress)
-
-- Never overwrite non-empty cache with empty results (stale-overwrite guard)
-- Always pass `knownSheetIds` to bypass Drive BFS (quota protection)
-- Tab matching: word-boundary regex for names <= 4 chars (prevents "EBS" matching "Webster")
-- Pipeline dedup by `oppNumber` across shared SF reports
-- Territory sync: auto-add new customers, flag removals (never auto-delete)
-- Customer names come from territory Google Sheet — not manual entry
+## Data Rules
+See `docs/DATA-RULES.md` — read before touching cache, sheets, or territory sync code.
 
 ## Testing
 

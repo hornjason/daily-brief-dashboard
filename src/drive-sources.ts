@@ -6,6 +6,7 @@ import { google } from 'googleapis'
 import { makeAuth } from './google.ts'
 import { customers, CUSTOMERS_PATH } from './server-state.ts'
 import { discoverAccountsFromFolders } from './account-discovery.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── Path constants (module-scoped) ──────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -14,9 +15,6 @@ const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
 const DATA_SOURCES_PATH_MODULE = process.env.CONFIG_DIR
   ? resolve(process.env.CONFIG_DIR, 'data-sources.json')
   : resolve(import.meta.dir, '../config/data-sources.json')
-
-const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 
 // ── Route registration ──────────────────────────────────────────────────────
 

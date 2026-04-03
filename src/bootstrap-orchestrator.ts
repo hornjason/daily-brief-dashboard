@@ -15,6 +15,7 @@ import { getScrapeContext, getLivePage, setLivePageBusy } from './rh-scraper.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import type { AE } from './types.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -111,10 +112,6 @@ function isJunkCustomerName(name: string): boolean {
   if (/-CCSP\b/i.test(name)) return true
   return false
 }
-
-/** Strip internal file paths and cap length before returning error strings to clients. */
-const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 
 // ── Interfaces ───────────────────────────────────────────────────────────────
 

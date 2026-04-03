@@ -21,6 +21,8 @@ import { writeFile, readFile, unlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
+import { sanitizeCell } from './utils.ts'
+import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
 
 export class SfSessionExpiredError extends Error {
   constructor() {
@@ -396,7 +398,7 @@ export async function initSfContext(profileDir: string): Promise<void> {
   console.log('[sf-scraper] opening persistent context…')
   _context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
-    args: ['--headless=new', '--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--renderer-process-limit=2', '--disable-gpu-compositing'],
+    args: ['--headless=new', '--disable-blink-features=AutomationControlled', ...BASE_CHROMIUM_ARGS],
     ignoreDefaultArgs: ['--enable-automation'],
   })
   _keepAliveTimer = setInterval(
@@ -799,11 +801,6 @@ export async function writePipelineSheet(data: SfReportRow, sheetIdParam?: strin
     return
   }
 
-  const sanitizeCell = (v: string): string => {
-    if (typeof v !== 'string') return v
-    if (/^[=+\-@]/.test(v) && !/^-?\d/.test(v)) return `'${v}`
-    return v
-  }
   const values = [data.headers, ...data.rows.map(row => row.map(sanitizeCell))]
 
   // Clear then rewrite — use a wide range (A1:AZ) to cover any previous syncs

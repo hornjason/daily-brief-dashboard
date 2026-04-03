@@ -5,6 +5,7 @@ import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth } from './google.ts'
 import { customers, CUSTOMERS_PATH } from './server-state.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── Path constants (module-scoped) ──────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -15,9 +16,6 @@ const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
 const SHEETS_SYNC_PATH = process.env.CONFIG_DIR
   ? resolve(process.env.CONFIG_DIR, 'sheets-sync.json')
   : resolve(import.meta.dir, '../config/sheets-sync.json')
-
-const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 
 // ── Shared helpers ──────────────────────────────────────────────────────────
 

@@ -25,6 +25,7 @@ import type { BrowserContext, Page } from '@playwright/test'
 import { writeFile, mkdir, readFile, unlink, rename } from 'node:fs/promises'
 import { resolve, dirname, join } from 'node:path'
 import type { SupportCase } from './types.ts'
+import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
 
 // ── BKL-M50c: Auto-recovery state ───────────────────────────────────────────
 let _recoveryInProgress = false
@@ -100,11 +101,7 @@ export async function initScrapeContext(profileDir: string): Promise<void> {
     args: [
       '--disable-blink-features=AutomationControlled',
       '--ignore-certificate-errors',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--renderer-process-limit=2',
-      '--disable-gpu-compositing',
+      ...BASE_CHROMIUM_ARGS,
     ],
     ignoreDefaultArgs: ['--enable-automation'],
   })
@@ -176,11 +173,7 @@ async function _autoRecover(profileDir: string): Promise<void> {
           args: [
             '--disable-blink-features=AutomationControlled',
             '--ignore-certificate-errors',
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--renderer-process-limit=2',
-            '--disable-gpu-compositing',
+            ...BASE_CHROMIUM_ARGS,
           ],
           ignoreDefaultArgs: ['--enable-automation'],
         })
@@ -813,11 +806,7 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
           args: [
             '--disable-blink-features=AutomationControlled',
             '--ignore-certificate-errors',
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--renderer-process-limit=2',
-            '--disable-gpu-compositing',
+            ...BASE_CHROMIUM_ARGS,
           ],
           ignoreDefaultArgs: ['--enable-automation'],
         })

@@ -38,12 +38,7 @@ function getPageLandingUrl(page: Page): string {
 const SUPPORTABLE_DEBUG = process.env.SUPPORTABLE_DEBUG === 'true'
 
 import { setLivePageBusy } from './rh-scraper.ts'
-
-function sanitizeCell(value: string): string {
-  if (typeof value !== 'string') return value
-  if (/^[=+\-@]/.test(value) && !/^-?\d/.test(value)) return `'${value}`
-  return value
-}
+import { sanitizeErr, sanitizeCell } from './utils.ts'
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
@@ -55,9 +50,6 @@ export let supportableScrapeStartedAt: number | null = null
 
 // A run that has been stuck for this long is assumed crashed — mutex auto-resets
 const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
-
-const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 
 // Session heartbeat: APEX sessions expire after ~30 min of inactivity.
 // Track last navigation time and periodically touch the portal to keep alive.

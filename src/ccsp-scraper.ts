@@ -39,6 +39,7 @@ import type { BrowserContext, Page, ElementHandle } from '@playwright/test'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import type { AE } from './types.ts'
+import { sanitizeErr, sanitizeCell } from './utils.ts'
 
 /**
  * Search for a VISIBLE element across all frames in the page.
@@ -79,13 +80,11 @@ async function waitForVizReady(page: Page, aeName: string, maxWaitMs = 45_000): 
 export let lastCcspScrape: string | null = null
 export let lastCcspError:  string | null = null
 export let ccspScrapeRunning = false
-let ccspScrapeStartedAt: number | null = null
+export let ccspScrapeStartedAt: number | null = null
 const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
 
 const CCSP_DEBUG = process.env.CCSP_DEBUG === 'true'
 
-const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
 const PER_AE_TIMEOUT_MS = 120_000  // 2 minutes
 
 let _ctx: BrowserContext | null = null
@@ -93,6 +92,11 @@ let _ctx: BrowserContext | null = null
 export function adoptCcspContext(ctx: BrowserContext): void {
   _ctx = ctx
   console.log('[ccsp] adopted shared browser context')
+}
+
+export function closeCcspContext(): void {
+  _ctx = null
+  console.log('[ccsp] browser context released')
 }
 
 // -- Result type --------------------------------------------------------------
@@ -112,13 +116,6 @@ async function streamToText(stream: NodeJS.ReadableStream): Promise<string> {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
   }
   return Buffer.concat(chunks).toString('utf-8')
-}
-
-/** Prefix formula-trigger characters with apostrophe to prevent injection */
-function sanitizeCell(value: string): string {
-  if (typeof value !== 'string') return value
-  if (/^[=+\-@]/.test(value) && !/^-?\d/.test(value)) return `'${value}`
-  return value
 }
 
 /** Parse CSV text into array of header-keyed objects */
@@ -555,7 +552,8 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
         continue
       }
 
-      const page = await _ctx!.newPage()
+      if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
+      const page = await _ctx.newPage()
       const scrapePromise = scrapeOneAe(page, ae)
       scrapePromise.catch(() => {})  // suppress orphaned rejection if timeout fires first
       try {
