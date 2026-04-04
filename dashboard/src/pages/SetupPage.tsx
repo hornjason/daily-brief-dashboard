@@ -2648,7 +2648,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               {ccspStatus?.lastError && <p className="text-xs text-critical">{ccspStatus.lastError}</p>}
             </div>
             <div className="flex items-center">
-              {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires Tableau session</span>}
+              {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires active Tableau session</span>}
               <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping || scraperRunning.ccsp} disabled={ccspRunning || scraperRunning.ccsp} label="Sync Now" />
             </div>
           </div>

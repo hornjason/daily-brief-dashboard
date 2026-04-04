@@ -550,6 +550,15 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   app.get('/api/intelligence/generate-all/status', (c) => {
-    return c.json(_batchState)
+    const startedAt = _batchState.startedAt ? new Date(_batchState.startedAt).getTime() : null
+    const elapsedMs = startedAt && _batchState.running ? Date.now() - startedAt : null
+    const elapsedSeconds = elapsedMs !== null ? Math.floor(elapsedMs / 1000) : null
+    let estimatedSecondsRemaining: number | null = null
+    if (_batchState.running && _batchState.completed > 0 && elapsedMs && _batchState.total > 0) {
+      const msPerCustomer = elapsedMs / _batchState.completed
+      estimatedSecondsRemaining = Math.ceil(msPerCustomer * (_batchState.total - _batchState.completed) / 1000)
+    }
+    const percentComplete = _batchState.total > 0 ? Math.round((_batchState.completed / _batchState.total) * 100) : 0
+    return c.json({ ..._batchState, elapsedSeconds, estimatedSecondsRemaining, percentComplete })
   })
 }

@@ -3392,7 +3392,7 @@ Files: dashboard/src/pages/SetupPage.tsx
 Description: `resetForm()` now preserves `sfReportId` across AE resets so users don't have to re-enter it. All other fields (aeName, customerText, pod, terrNum) are still cleared.
 
 ### BKL-W2-24 | CCSP sync row hint and disabled state — dependency chain inconsistency
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04 — hint text updated to "Requires active Tableau session" (consistent with "active" wording in other hints). Button gating deferred — CCSP doesn't strictly require RH Portal the way Supportable does.
 Priority: P3
 Size: XS (20 min)
 Source: Quinn validation 2026-04-04
