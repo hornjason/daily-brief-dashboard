@@ -64,6 +64,7 @@ function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, sourceWarning
   const byQuarter     = new Map<string, number>()
   const byPartner     = new Map<string, number>()
   const custPartner   = new Map<string, Map<string, number>>()
+  const byAE          = new Map<string, { acv: number; byQuarter: Map<string, number>; byCustomer: Map<string, number> }>()
   let totalAcv = 0
 
   for (const r of records) {
@@ -75,6 +76,14 @@ function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, sourceWarning
     if (!custPartner.has(r.accountName)) custPartner.set(r.accountName, new Map())
     const pm = custPartner.get(r.accountName)!
     pm.set(r.cloudPartner, (pm.get(r.cloudPartner) ?? 0) + r.acvPlus)
+    // Per-AE aggregation (BKL-W2-28)
+    if (r.ae) {
+      if (!byAE.has(r.ae)) byAE.set(r.ae, { acv: 0, byQuarter: new Map(), byCustomer: new Map() })
+      const aeData = byAE.get(r.ae)!
+      aeData.acv += r.acvPlus
+      if (r.quarter) aeData.byQuarter.set(r.quarter, (aeData.byQuarter.get(r.quarter) ?? 0) + r.acvPlus)
+      aeData.byCustomer.set(r.accountName, (aeData.byCustomer.get(r.accountName) ?? 0) + r.acvPlus)
+    }
   }
 
   const sortedCustomers = [...byCustomer.entries()].sort((a, b) => b[1] - a[1])
@@ -96,6 +105,12 @@ function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, sourceWarning
     byPartner: [...byPartner.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([partner, acv]) => ({ partner, acv })),
+    byAE: [...byAE.entries()].map(([ae, data]) => ({
+      ae,
+      acv: data.acv,
+      byQuarter: [...data.byQuarter.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([quarter, acv]) => ({ quarter, acv })),
+      topAccounts: [...data.byCustomer.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, acv]) => ({ name, acv })),
+    })),
   }
 }
 
@@ -142,7 +157,7 @@ export function registerCustomerRoutes(app: Hono): void {
       return c.json(buildCCSPSummary(cached.records, cached.cachedAt, !!lastCcspError))
     }
     try {
-      const { records, fileIds } = await fetchCCSPData(aes.map(a => a.ccspSheetId).filter(Boolean) as string[])
+      const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
       // Stale-overwrite guard: don't replace populated cache with empty results
       // (empty usually means Tableau scraper wrote summary-view data without Account Name column)
       if (records.length === 0 && (cached?.records?.length ?? 0) > 0) {

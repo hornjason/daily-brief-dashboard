@@ -258,6 +258,7 @@ export interface CCSPRecord {
   closeDate: string
   cloudPartner: string  // normalized: "AWS" | "Google" | "Microsoft" | "Other"
   acvPlus: number
+  ae?: string           // AE name — set when fetched via { sheetId, aeName } pairs
 }
 
 function normalizePartner(raw: string): string {
@@ -269,7 +270,7 @@ function normalizePartner(raw: string): string {
 }
 
 export async function fetchCCSPData(
-  knownSheetIds?: string[],
+  knownSheetIds?: string[] | { sheetId: string; aeName: string }[],
 ): Promise<{ records: CCSPRecord[]; fileIds: string[] }> {
   const sheetsAuth = makeAuth(SHEETS_TOKEN_PATH)
   const sheets = google.sheets({ version: 'v4', auth: sheetsAuth })
@@ -277,12 +278,25 @@ export async function fetchCCSPData(
   const allRecords: CCSPRecord[] = []
   const ccspFileIds: string[] = []
 
+  // Detect whether caller passed AE-tagged pairs or plain string IDs
+  const aeMap = new Map<string, string>() // sheetId → aeName
+  let resolvedIds: string[] | undefined
+  if (knownSheetIds?.length) {
+    if (typeof knownSheetIds[0] === 'string') {
+      resolvedIds = knownSheetIds as string[]
+    } else {
+      const pairs = knownSheetIds as { sheetId: string; aeName: string }[]
+      resolvedIds = pairs.map(p => p.sheetId)
+      for (const p of pairs) aeMap.set(p.sheetId, p.aeName)
+    }
+  }
+
   // Fast path: use known sheet IDs directly (avoids expensive Drive BFS traversal
   // which silently returns empty when Sheets API quota is hit).
   let spreadsheetIdTabPairs: { spreadsheetId: string; ccspTab: string }[]
 
-  if (knownSheetIds?.length) {
-    spreadsheetIdTabPairs = knownSheetIds.map(id => ({ spreadsheetId: id, ccspTab: 'CCSP Data' }))
+  if (resolvedIds?.length) {
+    spreadsheetIdTabPairs = resolvedIds.map(id => ({ spreadsheetId: id, ccspTab: 'CCSP Data' }))
   } else {
     // Fallback: BFS scan of parent folder (expensive, quota-sensitive)
     const rootIds = getParentFolderIds()
@@ -329,7 +343,7 @@ export async function fetchCCSPData(
     if (!dataRes) continue
 
     let rows = dataRes.data.values ?? []
-    if (rows.length < 2 && knownSheetIds?.length) {
+    if (rows.length < 2 && resolvedIds?.length) {
       // Fast-path tab miss — discover actual CCSP tab name and retry once
       console.warn(`[ccsp-read] fast-path sheet ${spreadsheetId} tab '${ccspTab}' returned <2 rows — attempting tab discovery`)
       try {
@@ -387,6 +401,7 @@ export async function fetchCCSPData(
         closeDate:    closeDateCol >= 0 ? String(row[closeDateCol] ?? '').trim() : '',
         cloudPartner: partnerCol >= 0 ? normalizePartner(String(row[partnerCol] ?? '')) : 'Other',
         acvPlus:      acv,
+        ...(aeMap.has(spreadsheetId) ? { ae: aeMap.get(spreadsheetId)! } : {}),
       })
     }
   }

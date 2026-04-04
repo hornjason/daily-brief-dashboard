@@ -61,6 +61,13 @@ export interface CCSPPartner {
   acv: number
 }
 
+export interface CCSPByAE {
+  ae: string
+  acv: number
+  byQuarter: CCSPQuarter[]
+  topAccounts: { name: string; acv: number }[]
+}
+
 export interface CCSPSummary {
   totalAcv: number
   cachedAt: string | null
@@ -68,6 +75,7 @@ export interface CCSPSummary {
   byCustomer: CCSPCustomer[]
   byQuarter: CCSPQuarter[]
   byPartner: CCSPPartner[]
+  byAE?: CCSPByAE[]
 }
 
 export interface PipelineOpp {

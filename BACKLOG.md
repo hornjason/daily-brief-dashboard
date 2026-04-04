@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-04 (BKL-G04/G05: marked DONE — confirmed already implemented; BKL-W2-29: duplicate intelligence tiles removed; BKL-W2-30: SF setup docs done; BKL-CI01: CI timeout bumped 15→25m; BKL-AI07: bootstrap hook done; BKL-AI08: COMPANY_INTELLIGENCE + INDUSTRY_ANALYSIS doc types + strategic_signals extraction done)
+Last update: 2026-04-04 (BKL-G04/G05: marked DONE; BKL-W2-29: dup tiles removed; BKL-W2-30: SF setup docs; BKL-CI01: CI timeout; BKL-AI07: bootstrap hook; BKL-AI08: doc types; BKL-W2-16: record counts on scraper cards; BKL-W2-28: CCSP per-AE 3-tile redesign)
 
 ---
 
@@ -3506,7 +3506,7 @@ Description: Each bootstrap run creates new Sheets (pipeline, CCSP, supportable)
 Tests needed: Bootstrap idempotency — running bootstrap twice should result in 1 sheet per type, not 2.
 
 ### BKL-W2-28 | CCSP section redesign — mirror Pipeline 3-tile layout with per-AE rolling quarters
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: M (1-2 days)
 Source: Jason 2026-04-04 — current donut chart doesn't match Pipeline's actionable layout; wants spend-by-account breakdown with rolling quarters

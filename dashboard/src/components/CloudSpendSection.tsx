@@ -1,15 +1,8 @@
 import { useState } from 'react'
-import type { CCSPSummary, CCSPCustomer } from '../types'
-import { formatRelTime, fmtCurrency as fmt, fmtCurrencyFull as fmtFull } from '../lib/format'
+import type { CCSPSummary } from '../types'
+import { fmtCurrency as fmt } from '../lib/format'
 import RelTime from './RelTime'
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Sector,
-} from 'recharts'
-import { Cloud, Building2, RefreshCw, AlertCircle } from 'lucide-react'
+import { Cloud, Building2, RefreshCw, AlertCircle, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 
@@ -34,65 +27,6 @@ const PARTNER_COLORS: Record<string, string> = {
   Other:     '#6B7280',
 }
 
-// Custom active donut sector — expands outward on hover/select
-function renderActiveShape(props: any) {
-  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props
-  return (
-    <g>
-      <Sector
-        cx={cx} cy={cy}
-        innerRadius={innerRadius - 2}
-        outerRadius={outerRadius + 6}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        fill={fill}
-        opacity={1}
-      />
-    </g>
-  )
-}
-
-interface DonutCenterProps {
-  cx: number
-  cy: number
-  selected: CCSPCustomer | null
-  totalAcv: number
-}
-
-function DonutCenter({ cx, cy, selected, totalAcv }: DonutCenterProps) {
-  if (selected) {
-    const pct = totalAcv > 0 ? ((selected.acv / totalAcv) * 100).toFixed(1) : '0'
-    return (
-      <g>
-        <text x={cx} y={cy - 22} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={9}>
-          {shortName(selected.name).length > 16
-            ? shortName(selected.name).slice(0, 15) + '…'
-            : shortName(selected.name)}
-        </text>
-        <text x={cx} y={cy - 6} textAnchor="middle" fill="var(--color-text-primary)" fontSize={15} fontWeight="bold">
-          {fmt(selected.acv)}
-        </text>
-        <text x={cx} y={cy + 10} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={9}>
-          {pct}% of portfolio
-        </text>
-        {selected.partners.slice(0, 2).map((p, i) => (
-          <text key={p.partner} x={cx} y={cy + 24 + i * 12} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={8}>
-            {p.partner} {fmt(p.acv)}
-          </text>
-        ))}
-      </g>
-    )
-  }
-  return (
-    <g>
-      <text x={cx} y={cy - 8} textAnchor="middle" fill="var(--color-text-secondary)" fontSize={9}>Total Portfolio</text>
-      <text x={cx} y={cy + 10} textAnchor="middle" fill="var(--color-text-primary)" fontSize={16} fontWeight="bold">
-        {fmt(totalAcv)}
-      </text>
-    </g>
-  )
-}
-
 interface Props {
   data: CCSPSummary | null
   loading: boolean
@@ -101,19 +35,21 @@ interface Props {
 }
 
 export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [activeAE, setActiveAE] = useState<string | null>(null)
 
   const customers = data?.byCustomer ?? []
   const partners = data?.byPartner ?? []
   const totalAcv = data?.totalAcv ?? 0
 
-  const displayIndex = selectedIndex ?? activeIndex
-  const selectedCustomer = displayIndex !== null ? (customers[displayIndex] ?? null) : null
+  // Quarterly data: filter by AE when selected
+  const aeData = activeAE ? data?.byAE?.find(a => a.ae === activeAE) : null
+  const displayQuarters = aeData ? aeData.byQuarter : (data?.byQuarter ?? [])
+  const maxQuarterAcv = displayQuarters.reduce((max, q) => Math.max(max, q.acv), 0)
 
-  function handleClick(_: any, index: number) {
-    setSelectedIndex(selectedIndex === index ? null : index)
-  }
+  // Top accounts: filter by AE when selected
+  const displayedAccounts = activeAE
+    ? (aeData?.topAccounts ?? [])
+    : customers.slice(0, 10).map(c => ({ name: c.name, acv: c.acv }))
 
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden">
@@ -196,131 +132,93 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
           </div>
         </div>
 
-        {/* Middle: Account donut chart */}
-        <div className="bg-surface border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Building2 className="w-3.5 h-3.5 text-accent" />
-            <span className="text-xs font-medium text-text-secondary">Spend by Account</span>
-            {selectedIndex !== null && (
-              <button
-                onClick={() => setSelectedIndex(null)}
-                className="ml-auto text-xs text-text-secondary hover:text-text-primary transition-colors"
-                aria-label="Clear selection"
-              >
-                clear
-              </button>
+        {/* Middle: AE selector + quarterly revenue bars */}
+        <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <Users className="w-3.5 h-3.5 text-accent" />
+            <span className="text-xs font-medium text-text-secondary">Quarterly Revenue</span>
+            {activeAE && (
+              <span className="text-xs text-accent font-medium ml-1">({activeAE})</span>
             )}
           </div>
 
-          {loading ? (
-            <div className="h-48 bg-border rounded animate-pulse-slow" />
-          ) : customers.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-xs text-text-secondary">No data</div>
-          ) : (
-            <div className="flex gap-3">
-              {/* Donut */}
-              <div className="shrink-0" style={{ width: 180, height: 180 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={customers}
-                      dataKey="acv"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={48}
-                      outerRadius={72}
-                      activeIndex={displayIndex ?? undefined}
-                      activeShape={renderActiveShape}
-                      onMouseEnter={(_, index) => { if (selectedIndex === null) setActiveIndex(index) }}
-                      onMouseLeave={() => { if (selectedIndex === null) setActiveIndex(null) }}
-                      onClick={handleClick}
-                      strokeWidth={0}
-                    >
-                      {customers.map((_, i) => (
-                        <Cell
-                          key={i}
-                          fill={ACCOUNT_COLORS[i % ACCOUNT_COLORS.length]}
-                          opacity={displayIndex === null || displayIndex === i ? 1 : 0.35}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      ))}
-                    </Pie>
-                    {/* Center label via custom element */}
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Overlay center text — positioned absolute over the chart */}
-              </div>
-
-              {/* Legend */}
-              <div className="flex-1 overflow-y-auto max-h-48 space-y-1 pr-1">
-                {customers.map(({ name, acv }, i) => (
-                  <button
-                    key={name}
-                    onClick={() => setSelectedIndex(selectedIndex === i ? null : i)}
-                    className={`w-full flex items-center gap-1.5 text-left rounded px-1 py-0.5 transition-colors ${
-                      displayIndex === i ? 'bg-border/40' : 'hover:bg-border/20'
-                    }`}
-                  >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length] }}
-                    />
-                    <Link
-                      to={`/dashboard/customer/${encodeURIComponent(shortName(name))}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className={`text-xs truncate flex-1 hover:underline ${displayIndex === i ? 'text-text-primary font-medium' : 'text-text-secondary'}`}
-                    >
-                      {shortName(name)}
-                    </Link>
-                    <span className="text-xs text-text-secondary font-mono shrink-0">{fmt(acv)}</span>
-                  </button>
-                ))}
-              </div>
+          {/* AE selector row */}
+          {(data?.byAE?.length ?? 0) > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setActiveAE(null)}
+                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                  activeAE === null
+                    ? 'bg-accent text-white border-accent'
+                    : 'bg-transparent text-text-secondary border-border hover:border-text-secondary'
+                }`}
+              >
+                All
+              </button>
+              {data?.byAE?.map(({ ae }) => (
+                <button
+                  key={ae}
+                  onClick={() => setActiveAE(activeAE === ae ? null : ae)}
+                  className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                    activeAE === ae
+                      ? 'bg-accent text-white border-accent'
+                      : 'bg-transparent text-text-secondary border-border hover:border-text-secondary'
+                  }`}
+                >
+                  {ae.split(' ')[0]}
+                </button>
+              ))}
             </div>
           )}
 
-          {/* Selected account detail — partner breakdown */}
-          {selectedCustomer && (
-            <div className="mt-3 pt-3 border-t border-border/50">
-              <div className="text-xs text-text-secondary mb-1.5">{shortName(selectedCustomer.name)} — hyperscaler breakdown</div>
-              <div className="space-y-1.5">
-                {selectedCustomer.partners.map(({ partner, acv }) => {
-                  const pct = selectedCustomer.acv > 0 ? (acv / selectedCustomer.acv) * 100 : 0
-                  const color = PARTNER_COLORS[partner] ?? PARTNER_COLORS.Other
-                  return (
-                    <div key={partner}>
-                      <div className="flex justify-between text-xs mb-0.5">
-                        <span className="text-text-primary">{partner}</span>
-                        <span className="text-text-secondary">{fmtFull(acv)} · {pct.toFixed(0)}%</span>
-                      </div>
-                      <div className="h-1 bg-border rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
-                      </div>
+          {/* Quarterly bars */}
+          {loading ? (
+            <div className="space-y-2 flex-1">
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-5 bg-border rounded animate-pulse-slow" />)}
+            </div>
+          ) : displayQuarters.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-xs text-text-secondary">No quarterly data</div>
+          ) : (
+            <div className="space-y-2 flex-1">
+              {activeAE && aeData && (
+                <div className="text-lg font-bold text-text-primary tabular-nums mb-1">{fmt(aeData.acv)}</div>
+              )}
+              {displayQuarters.map(({ quarter, acv }) => {
+                const pct = maxQuarterAcv > 0 ? (acv / maxQuarterAcv) * 100 : 0
+                return (
+                  <div key={quarter}>
+                    <div className="flex items-center justify-between text-xs mb-0.5">
+                      <span className="text-text-primary font-medium">{quarter}</span>
+                      <span className="text-text-secondary font-mono">{fmt(acv)}</span>
                     </div>
-                  )
-                })}
-              </div>
+                    <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
 
-        {/* Right: Top accounts */}
+        {/* Right: Top accounts (filtered by AE when selected) */}
         <div className="bg-surface border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <Building2 className="w-3.5 h-3.5 text-accent" />
-            <span className="text-xs font-medium text-text-secondary">Top Accounts</span>
+            <span className="text-xs font-medium text-text-secondary">
+              Top Accounts{activeAE ? ` (${activeAE})` : ''}
+            </span>
           </div>
           {loading ? (
             <div className="space-y-2">
               {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-5 bg-border rounded animate-pulse-slow" />)}
             </div>
-          ) : customers.length === 0 ? (
+          ) : displayedAccounts.length === 0 ? (
             <div className="text-xs text-text-secondary">No data</div>
           ) : (
             <div className="space-y-2">
-              {customers.slice(0, 10).map(({ name, acv }, i) => {
-                const maxAcv = customers[0]?.acv ?? 1
+              {displayedAccounts.map(({ name, acv }, i) => {
+                const maxAcv = displayedAccounts[0]?.acv ?? 1
                 const pct = (acv / maxAcv) * 100
                 const color = ACCOUNT_COLORS[i % ACCOUNT_COLORS.length]
                 return (
