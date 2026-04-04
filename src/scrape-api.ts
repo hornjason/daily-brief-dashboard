@@ -546,6 +546,12 @@ export function registerScrapeRoutes(app: Hono): void {
               // Scrape once per unique report
               const data = await scrapeSfReport(reportId, RH_PROFILE_DIR)
 
+              // BKL-F11: Find "Opportunity Owner" column index for per-AE filtering
+              const ownerIdx = data.headers.findIndex(h => h === 'Opportunity Owner')
+              if (ownerIdx === -1) {
+                console.warn(`[scrape:salesforce] "Opportunity Owner" column not found in headers — writing all rows to every AE sheet (no filtering)`)
+              }
+
               // Fan out: write to each AE's pipeline sheet
               for (const ae of reportAes) {
                 if (_sfSyncCancelRequested) {
@@ -558,9 +564,15 @@ export function registerScrapeRoutes(app: Hono): void {
                     sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
                     patchAe(ae.name, { pipelineSheetId: sheetId })
                   }
-                  await writePipelineSheet(data, sheetId)
-                  totalRows += data.rows.length
-                  console.log(`[scrape:salesforce] wrote ${data.rows.length} rows to ${ae.name}'s pipeline sheet`)
+                  // BKL-F11: Filter rows to this AE's opportunities only (by first name token, case-insensitive)
+                  const aeFirstName = ae.name.split(' ')[0].toLowerCase()
+                  const filteredRows = ownerIdx !== -1
+                    ? data.rows.filter(row => (row[ownerIdx] ?? '').toLowerCase().includes(aeFirstName))
+                    : data.rows
+                  const filteredData = { headers: data.headers, rows: filteredRows, droppedColumns: data.droppedColumns }
+                  await writePipelineSheet(filteredData, sheetId)
+                  totalRows += filteredRows.length
+                  console.log(`[scrape:salesforce] wrote ${filteredRows.length} rows to ${ae.name}'s pipeline sheet${ownerIdx !== -1 ? ` (filtered from ${data.rows.length} total)` : ''}`)
                 } catch (e: any) {
                   if (e instanceof SfSessionExpiredError) {
                     console.warn('[scrape:salesforce] SF session expired during sync')
@@ -782,14 +794,25 @@ export function registerScrapeRoutes(app: Hono): void {
                     console.log(`[scrape:all:salesforce] Report ${reportId} shared by ${reportAes.length} AEs — scraping once`)
                   }
                   const data = await scrapeSfReport(reportId, RH_PROFILE_DIR)
+                  // BKL-F11: Find "Opportunity Owner" column index for per-AE filtering
+                  const ownerIdx = data.headers.findIndex(h => h === 'Opportunity Owner')
+                  if (ownerIdx === -1) {
+                    console.warn(`[scrape:all:salesforce] "Opportunity Owner" column not found in headers — writing all rows to every AE sheet (no filtering)`)
+                  }
                   for (const ae of reportAes) {
                     let sheetId = ae.pipelineSheetId
                     if (!sheetId) {
                       sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
                       patchAe(ae.name, { pipelineSheetId: sheetId })
                     }
-                    await writePipelineSheet(data, sheetId)
-                    totalRows += data.rows.length
+                    // BKL-F11: Filter rows to this AE's opportunities only (by first name token, case-insensitive)
+                    const aeFirstName = ae.name.split(' ')[0].toLowerCase()
+                    const filteredRows = ownerIdx !== -1
+                      ? data.rows.filter(row => (row[ownerIdx] ?? '').toLowerCase().includes(aeFirstName))
+                      : data.rows
+                    const filteredData = { headers: data.headers, rows: filteredRows, droppedColumns: data.droppedColumns }
+                    await writePipelineSheet(filteredData, sheetId)
+                    totalRows += filteredRows.length
                   }
                 }
                 await refreshPipeline().catch(() => {})

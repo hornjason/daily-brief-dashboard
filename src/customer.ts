@@ -1,6 +1,7 @@
 import { google } from 'googleapis'
 import { resolve } from 'path'
 import { existsSync, readFileSync } from 'node:fs'
+import { extractText as extractPdfText } from 'unpdf'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer, CalendarEvent, EmailHighlight, DriveFile, SupportCase, CustomerSubscription, ProductSubscription } from './types.ts'
 import type { PipelineRecord } from './pipeline.ts'
@@ -309,7 +310,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
         // Export failed (permissions, unsupported format) — use name only
       }
     }
-    // BKL-R25: PDF text extraction via Gemini multimodal
+    // BKL-R25b: PDF extraction — local-first, multimodal fallback
     else if (f.mimeType === 'application/pdf' && totalChars < TOTAL_CONTENT_CAP && f.id) {
       try {
         const pdfRes = await drive.files.get(
@@ -323,51 +324,117 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
           results.push(file)
           continue
         }
-        const b64 = pdfBytes.toString('base64')
 
-        const project  = process.env.GOOGLE_CLOUD_PROJECT
-        const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-        const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+        // Step 1: Attempt local text extraction with unpdf (zero token cost)
+        let localText = ''
+        try {
+          const u8 = new Uint8Array(pdfBytes.buffer, pdfBytes.byteOffset, pdfBytes.byteLength)
+          const { text } = await extractPdfText(u8, { mergePages: true })
+          localText = (text as string).replace(/\s+/g, ' ').trim()
+        } catch {
+          // Local extraction unsupported for this PDF — fall through to multimodal
+        }
 
-        if (project && b64.length > 0) {
-          let token: string | null | undefined
-          const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-          if (saKeyB64) {
-            const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-            const jwtAuth = new google.auth.JWT({
-              email: keyData.client_email,
-              key:   keyData.private_key,
-              scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-            })
-            token = (await jwtAuth.getAccessToken()).token
-          } else {
-            const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-            token = (await auth.getAccessToken()).token
+        if (localText.length >= 50) {
+          // Local extraction succeeded — send as plain text prompt (much lower token cost)
+          console.log(`[docs] PDF ${f.name}: local extraction (${localText.length} chars), using text path`)
+          const capped = localText.slice(0, DOC_CONTENT_CAP)
+
+          const project  = process.env.GOOGLE_CLOUD_PROJECT
+          const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+          const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+
+          if (project) {
+            let token: string | null | undefined
+            const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+            if (saKeyB64) {
+              const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+              const jwtAuth = new google.auth.JWT({
+                email: keyData.client_email,
+                key:   keyData.private_key,
+                scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+              })
+              token = (await jwtAuth.getAccessToken()).token
+            } else {
+              const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+              token = (await auth.getAccessToken()).token
+            }
+
+            if (token) {
+              const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+              const geminiRes = await fetch(url, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{
+                    role: 'user',
+                    parts: [
+                      { text: `Summarize this document content for an account brief: ${capped}` },
+                    ],
+                  }],
+                  generationConfig: { temperature: 0, maxOutputTokens: 4096 },
+                }),
+              })
+              if (geminiRes.ok) {
+                const json = await geminiRes.json() as any
+                const summary = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? '').replace(/\s+/g, ' ').trim()
+                if (summary.length > 50) {
+                  const summaryContent = summary.slice(0, DOC_CONTENT_CAP)
+                  file.content = summaryContent
+                  totalChars += summaryContent.length
+                }
+              }
+            }
           }
+        } else {
+          // Step 2: Local extraction failed/empty — fall back to multimodal inlineData path
+          console.log(`[docs] PDF ${f.name}: local extraction (${localText.length} chars), using multimodal fallback`)
+          const b64 = pdfBytes.toString('base64')
 
-          if (token) {
-            const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-            const geminiRes = await fetch(url, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{
-                  role: 'user',
-                  parts: [
-                    { inlineData: { mimeType: 'application/pdf', data: b64 } },
-                    { text: 'Extract the text content from this PDF document. Return only the extracted text, no commentary or formatting.' },
-                  ],
-                }],
-                generationConfig: { temperature: 0, maxOutputTokens: 4096 },
-              }),
-            })
-            if (geminiRes.ok) {
-              const json = await geminiRes.json() as any
-              const extracted = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-              const capped = extracted.replace(/\s+/g, ' ').trim().slice(0, DOC_CONTENT_CAP)
-              if (capped.length > 50) {
-                file.content = capped
-                totalChars += capped.length
+          const project  = process.env.GOOGLE_CLOUD_PROJECT
+          const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+          const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+
+          if (project && b64.length > 0) {
+            let token: string | null | undefined
+            const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+            if (saKeyB64) {
+              const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+              const jwtAuth = new google.auth.JWT({
+                email: keyData.client_email,
+                key:   keyData.private_key,
+                scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+              })
+              token = (await jwtAuth.getAccessToken()).token
+            } else {
+              const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+              token = (await auth.getAccessToken()).token
+            }
+
+            if (token) {
+              const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+              const geminiRes = await fetch(url, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{
+                    role: 'user',
+                    parts: [
+                      { inlineData: { mimeType: 'application/pdf', data: b64 } },
+                      { text: 'Extract the text content from this PDF document. Return only the extracted text, no commentary or formatting.' },
+                    ],
+                  }],
+                  generationConfig: { temperature: 0, maxOutputTokens: 4096 },
+                }),
+              })
+              if (geminiRes.ok) {
+                const json = await geminiRes.json() as any
+                const extracted = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+                const capped = extracted.replace(/\s+/g, ' ').trim().slice(0, DOC_CONTENT_CAP)
+                if (capped.length > 50) {
+                  file.content = capped
+                  totalChars += capped.length
+                }
               }
             }
           }

@@ -848,7 +848,14 @@ Related: BKL-F11 (SF dedup — also implemented)
 ---
 
 ### BKL-F11 | Shared SF report dedup — scrape once, fan out to multiple AE sheets + UI toggle
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — backend dedup + per-AE row filter implemented. Rook MEDIUM: first-name substring match (e.g. "Chris" matches "Christine") — see BKL-F11b for exact-token fix. UI "share report" toggle deferred.
+### BKL-F11b | SF report filter: exact token match for Opportunity Owner (Rook MEDIUM follow-up)
+Status: 🔲 TODO
+Priority: P3
+Size: XS (15 min)
+Source: Rook scan 2026-04-04 — MEDIUM finding on F11
+Files: src/scrape-api.ts
+Description: BKL-F11 uses `row[ownerIdx].toLowerCase().includes(aeFirstName)` — substring match can cause false positives (AE "Chris" matches "Christine"). Change to exact-token match: `row[ownerIdx].toLowerCase().split(' ').includes(aeFirstName)` to match on whole words only.
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-02 — observed same report 00OPe00000isU2zMAE scraped twice for two AEs
@@ -2848,7 +2855,7 @@ Description: PDF files in customer Drive folders appear in file listings but the
   No native deps needed — pure API call to Gemini.
 
 ### BKL-R25b | Pre-convert PDF to Markdown before Gemini extraction (token savings)
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04 — implemented with unpdf (unjs ecosystem, Bun-native). Local extraction → plain text prompt to Gemini. Falls back to multimodal inlineData if extraction returns < 50 chars. Rook PASS.
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-04 — "update the backlog item to add that i would like to have the pdf extracted to MarkDown before passing to gemini to save tokens"
