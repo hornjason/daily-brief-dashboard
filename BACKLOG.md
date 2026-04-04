@@ -3556,7 +3556,7 @@ Fix:
   4. Add note: "Your report should include at minimum: Opportunity Name, Account Name, Amount/ACV, Stage, Forecast Category, Close Date, Opportunity Owner"
 
 ### BKL-W2-25 | make rebuild from worktree can overwrite aes.json with stale state
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04 — Worktree guard added to Makefile `build` target: exits 1 with clear message if CURDIR contains `.claude/worktrees`. CLAUDE.md agent briefing updated to document the guard.
 Priority: P0
 Size: S (2 hours)
 Source: Incident 2026-04-04 — Elmer Alvarez's AE entry wiped after Marcus agent ran make rebuild from worktree

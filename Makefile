@@ -41,6 +41,12 @@ logs:
 	podman logs -f pai-dashboard
 
 build:
+	@if echo "$(CURDIR)" | grep -q '\.claude/worktrees'; then \
+	  echo "❌  make rebuild must be run from the project root, not a git worktree"; \
+	  echo "   Current dir: $(CURDIR)"; \
+	  echo "   Run from: $(shell git worktree list 2>/dev/null | head -1 | awk '{print $$1}')"; \
+	  exit 1; \
+	fi
 	podman build -t $(IMAGE) -t $(REMOTE) .
 
 push:
