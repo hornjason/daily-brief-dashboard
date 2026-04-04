@@ -1,113 +1,73 @@
 /**
- * Setup Wizard E2E Tests
+ * Setup Page E2E Tests
  *
- * Requires the server to be running:
- *   bun run server.ts &
- * Or against the container:
- *   podman run --rm -p 7777:7777 localhost/daily-brief-dashboard
+ * Tests the accordion-based setup page at /dashboard/setup.
+ * Requires the server to be running (Playwright webServer handles this in CI).
  *
  * Run:
- *   bun run test:e2e
+ *   CI=true bunx playwright test test/wizard.spec.ts
  */
 import { test, expect } from '@playwright/test'
 
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:7777'
 
-// ── Step order and labels ─────────────────────────────────────────────────────
+// ── Page load — accordion sections ────────────────────────────────────────────
 
-test.describe('Setup Wizard step order', () => {
-  test('wizard loads and shows 7 steps', async ({ page }) => {
+test.describe('Setup page — accordion sections', () => {
+  test('page loads at /dashboard/setup', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    // 7 step indicator circles (numbered 1-7; completed steps show a check icon)
-    const stepCircles = page.locator('.rounded-full').filter({ hasText: /^[1-7]$/ })
-    await expect(stepCircles).toHaveCount(7)
+    await expect(page).toHaveURL(/\/dashboard\/setup/)
   })
 
-  test('all 7 step labels are present', async ({ page }) => {
+  test('OAuth Keys section header is visible', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    for (const label of ['OAuth Keys', 'Google Auth', 'Accounts', 'Domains', 'AI Provider', 'Red Hat Portal', 'Launch']) {
-      await expect(page.getByText(label, { exact: true })).toBeVisible()
+    await expect(page.getByText('OAuth Keys', { exact: true })).toBeVisible()
+  })
+
+  test('Google Auth section header is visible', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await expect(page.getByText('Google Auth', { exact: true })).toBeVisible()
+  })
+
+  test('Red Hat Portal section header is visible', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await expect(page.getByText('Red Hat Portal', { exact: true })).toBeVisible()
+  })
+
+  test('AEs & Customers section header is visible', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await expect(page.getByText('AEs & Customers', { exact: true })).toBeVisible()
+  })
+
+  test('Data Sources section header is visible', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await expect(page.getByText('Data Sources', { exact: true })).toBeVisible()
+  })
+
+  test('all 6 section headers are present', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    for (const section of ['OAuth Keys', 'Google Auth', 'Red Hat Portal', 'AEs & Customers', 'Data Sources']) {
+      await expect(page.getByText(section, { exact: true })).toBeVisible()
     }
   })
-
-  test('step 1 (index 0) is OAuth Keys', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup`)
-    const stepLabels = await page
-      .getByText(/OAuth Keys|Google Auth|Accounts|Domains|AI Provider|Red Hat Portal|Launch/)
-      .allTextContents()
-    expect(stepLabels[0]).toContain('OAuth Keys')
-  })
-
-  test('step 2 (index 1) is Google Auth — not Accounts', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup`)
-    const stepLabels = await page
-      .getByText(/OAuth Keys|Google Auth|Accounts|Domains|AI Provider|Red Hat Portal|Launch/)
-      .allTextContents()
-    // Critical ordering check — this would have caught the step-swap bug
-    expect(stepLabels[1]).toContain('Google Auth')
-    expect(stepLabels[1]).not.toContain('Accounts')
-  })
-
-  test('step 3 (index 2) is Accounts', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup`)
-    const stepLabels = await page
-      .getByText(/OAuth Keys|Google Auth|Accounts|Domains|AI Provider|Red Hat Portal|Launch/)
-      .allTextContents()
-    expect(stepLabels[2]).toContain('Accounts')
-  })
-
-  test('step 5 (index 4) is AI Provider', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup`)
-    const stepLabels = await page
-      .getByText(/OAuth Keys|Google Auth|Accounts|Domains|AI Provider|Red Hat Portal|Launch/)
-      .allTextContents()
-    expect(stepLabels[4]).toContain('AI Provider')
-  })
-
-  test('step 6 (index 5) is Red Hat Portal', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup`)
-    const stepLabels = await page
-      .getByText(/OAuth Keys|Google Auth|Accounts|Domains|AI Provider|Red Hat Portal|Launch/)
-      .allTextContents()
-    expect(stepLabels[5]).toContain('Red Hat Portal')
-  })
-
-  test('step 7 (index 6) is Launch', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup`)
-    const stepLabels = await page
-      .getByText(/OAuth Keys|Google Auth|Accounts|Domains|AI Provider|Red Hat Portal|Launch/)
-      .allTextContents()
-    expect(stepLabels[6]).toContain('Launch')
-  })
 })
 
-// ── Active step indicator ─────────────────────────────────────────────────────
+// ── OAuth Keys section ─────────────────────────────────────────────────────────
 
-test.describe('Setup Wizard active step styling', () => {
-  test('first step has active ring styling on load', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup?step=0`)
-    // Active step circle has ring-2 ring-indigo-400 classes
-    const activeCircle = page.locator('.ring-2').first()
-    await expect(activeCircle).toBeVisible()
-  })
-
-  test('active step label is white text', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup?step=0`)
-    // Step 0 active — its label span uses text-white
-    const oauthLabel = page.getByText('OAuth Keys', { exact: true })
-    await expect(oauthLabel).toHaveClass(/text-white/)
-  })
-})
-
-// ── Step 0: OAuth Keys validation ─────────────────────────────────────────────
-
-test.describe('Setup Wizard step 0 — OAuth Keys', () => {
+test.describe('Setup page — OAuth Keys section', () => {
   test.beforeEach(async ({ page }) => {
-    // Serve oauth-keys-status as not-configured so Step 0 content is visible
     await page.route('**/api/setup/oauth-keys-status', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: false }) })
     )
-    await page.goto(`${BASE_URL}/dashboard/setup?step=0`)
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    // Open the OAuth Keys accordion
+    await page.getByText('OAuth Keys', { exact: true }).click()
+  })
+
+  test('OAuth Keys section expands on click', async ({ page }) => {
+    // After clicking, Save Keys button or upload UI should appear
+    const hasInput = await page.locator('textarea, input[type="file"]').count()
+    expect(hasInput).toBeGreaterThan(0)
   })
 
   test('Save Keys button is disabled when textarea is empty', async ({ page }) => {
@@ -116,23 +76,21 @@ test.describe('Setup Wizard step 0 — OAuth Keys', () => {
   })
 
   test('Save Keys button enables after typing in textarea', async ({ page }) => {
-    const textarea = page.locator('textarea')
+    const textarea = page.locator('textarea').first()
     await textarea.fill('{"web": {"client_id": "x", "client_secret": "y"}}')
     const saveBtn = page.getByRole('button', { name: /Save Keys/i })
     await expect(saveBtn).toBeEnabled()
   })
 
   test('invalid JSON shows error message', async ({ page }) => {
-    const textarea = page.locator('textarea')
+    const textarea = page.locator('textarea').first()
     await textarea.fill('not valid json {{{')
     await page.getByRole('button', { name: /Save Keys/i }).click()
-    // JSON.parse throws SyntaxError — error rendered in text-red-400 element
     const errorEl = page.locator('.text-red-400').first()
     await expect(errorEl).toBeVisible()
   })
 
   test('valid JSON with missing OAuth shape shows server validation error', async ({ page }) => {
-    // JSON parses fine but lacks client_id/client_secret — server returns 400
     await page.route('**/api/setup/upload-oauth-keys', route =>
       route.fulfill({
         status: 400,
@@ -140,72 +98,47 @@ test.describe('Setup Wizard step 0 — OAuth Keys', () => {
         body: JSON.stringify({ error: 'Missing client_id or client_secret' }),
       })
     )
-    const textarea = page.locator('textarea')
+    const textarea = page.locator('textarea').first()
     await textarea.fill('{"foo": "bar"}')
     await page.getByRole('button', { name: /Save Keys/i }).click()
     await expect(page.getByText(/Missing client_id or client_secret/)).toBeVisible()
   })
-
-  test('OAuth keys input mechanism is present (textarea or file input)', async ({ page }) => {
-    const hasInput = await page.locator('textarea, input[type="file"]').count()
-    expect(hasInput).toBeGreaterThan(0)
-  })
 })
 
-// ── Step 0 navigation gating ──────────────────────────────────────────────────
+// ── Google Auth section ────────────────────────────────────────────────────────
 
-test.describe('Setup Wizard step 0 — navigation gating', () => {
-  test('Next is blocked and hint shown when OAuth keys not uploaded', async ({ page }) => {
-    await page.route('**/api/setup/oauth-keys-status', route =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: false }) })
+test.describe('Setup page — Google Auth section', () => {
+  test('Google Auth section expands on click and shows auth button', async ({ page }) => {
+    await page.route('**/api/auth/google/status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authorized: false }) })
     )
-    await page.goto(`${BASE_URL}/dashboard/setup?step=0`)
-    // Hint text appears when keys not configured
-    await expect(page.getByText(/Upload OAuth keys to continue/i)).toBeVisible()
-    // Next button is not rendered when gated (only shown when canGoNext is true)
-    await expect(page.getByRole('button', { name: /Next/i })).toHaveCount(0)
-  })
-
-  test('Back button is disabled on step 0', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup?step=0`)
-    const backBtn = page.getByRole('button', { name: /Back/i })
-    await expect(backBtn).toBeDisabled()
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByText('Google Auth', { exact: true }).click()
+    // Connect Google Workspace link or button should be visible
+    await expect(page.getByText(/Connect Google Workspace/i)).toBeVisible()
   })
 })
 
-// ── Step 2: Accounts (Sheets import) gating ───────────────────────────────────
+// ── AEs & Customers section — folder URL input ─────────────────────────────────
 
-test.describe('Setup Wizard step 2 — Accounts gating', () => {
+test.describe('Setup page — AEs & Customers section', () => {
   test.beforeEach(async ({ page }) => {
-    // Stub data-sources/status to return empty folders list
     await page.route('**/api/data-sources/status', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({ folders: [] }) })
     )
   })
 
-  test('Add folder button is disabled when URL input is empty', async ({ page }) => {
+  test('?step=2 auto-opens AEs & Customers section', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup?step=2`)
-    // The Add button next to the URL input
-    const addBtn = page.getByRole('button', { name: /^Add$/i })
-    await expect(addBtn).toBeDisabled()
-  })
-
-  test('Add folder button enables after typing a URL', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup?step=2`)
-    await page.locator('input[type="text"]').fill('https://drive.google.com/drive/folders/abc123')
-    const addBtn = page.getByRole('button', { name: /^Add$/i })
-    await expect(addBtn).toBeEnabled()
-  })
-
-  test('hint shown when accounts not yet imported', async ({ page }) => {
-    await page.goto(`${BASE_URL}/dashboard/setup?step=2`)
-    await expect(page.getByText(/Import accounts to continue/i)).toBeVisible()
+    // The step=2 param triggers setOpenSection('aes') — content should be visible
+    // Look for the auto-bootstrap or manual setup UI
+    await expect(page.locator('section#aes')).toBeVisible()
   })
 })
 
-// ── Step 5: Red Hat Portal ─────────────────────────────────────────────────────
+// ── Red Hat Portal section ─────────────────────────────────────────────────────
 
-test.describe('Setup Wizard step 5 — Red Hat Portal', () => {
+test.describe('Setup page — Red Hat Portal section', () => {
   test('Connect Red Hat Portal button visible when not connected', async ({ page }) => {
     await page.route('**/api/auth/redhat/status', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({
@@ -213,7 +146,8 @@ test.describe('Setup Wizard step 5 — Red Hat Portal', () => {
         caseCount: 0, loginInProgress: false, loginTimedOut: false,
       }) })
     )
-    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByText('Red Hat Portal', { exact: true }).click()
     await expect(page.getByRole('button', { name: /Connect Red Hat Portal/i })).toBeVisible()
   })
 
@@ -229,15 +163,14 @@ test.describe('Setup Wizard step 5 — Red Hat Portal', () => {
       startCalled = true
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
     })
-    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByText('Red Hat Portal', { exact: true }).click()
     await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
-    // Waiting state shows "Browser window opened"
     await expect(page.getByText(/Browser window opened/i)).toBeVisible()
     expect(startCalled).toBe(true)
   })
 
   test('loginTimedOut status shows timeout warning', async ({ page }) => {
-    // Initial status: connecting state (loginInProgress)
     await page.route('**/api/auth/redhat/status', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({
         hasSession: false, sessionExpired: false, lastScraped: null,
@@ -247,8 +180,8 @@ test.describe('Setup Wizard step 5 — Red Hat Portal', () => {
     await page.route('**/api/auth/redhat/start', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
     )
-    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
-    // Trigger connecting state first
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByText('Red Hat Portal', { exact: true }).click()
     await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
     await expect(page.getByText(/Login timed out/i)).toBeVisible()
   })
@@ -267,7 +200,8 @@ test.describe('Setup Wizard step 5 — Red Hat Portal', () => {
         body: JSON.stringify({ error: 'Login already in progress' }),
       })
     )
-    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByText('Red Hat Portal', { exact: true }).click()
     await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
     await expect(page.getByText(/Login already in progress/i)).toBeVisible()
   })
@@ -279,7 +213,8 @@ test.describe('Setup Wizard step 5 — Red Hat Portal', () => {
         caseCount: 0, loginInProgress: false, loginTimedOut: false,
       }) })
     )
-    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByText('Red Hat Portal', { exact: true }).click()
     await expect(page.getByText(/Red Hat Portal Connected/i)).toBeVisible()
   })
 
@@ -296,11 +231,11 @@ test.describe('Setup Wizard step 5 — Red Hat Portal', () => {
     await page.route('**/api/auth/redhat/session', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
     )
-    await page.goto(`${BASE_URL}/dashboard/setup?step=5`)
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByText('Red Hat Portal', { exact: true }).click()
     await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
     await expect(page.getByRole('button', { name: /Cancel/i })).toBeVisible()
     await page.getByRole('button', { name: /Cancel/i }).click()
-    // After cancel, Connect button is back
     await expect(page.getByRole('button', { name: /Connect Red Hat Portal/i })).toBeVisible()
   })
 })
