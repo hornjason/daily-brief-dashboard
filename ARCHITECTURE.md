@@ -54,6 +54,8 @@ RH Portal SSO login → BrowserContext created
 
 **All four scrapers have stale mutex protection** (RH scraper brought into alignment 2026-03-30): `ccspScrapeRunning`, `supportableScrapeRunning`, and `_rhScrapeRunning` all auto-release after 15 minutes. Salesforce uses a fire-and-forget pattern (`isRunning: false` permanently) — it has no long-running page session to get stuck.
 
+**Bootstrap included in `isAnyScraperRunning()` guard (BKL-W2-17, 2026-04-04):** `bootstrap-orchestrator.ts` exports `isBootstrapRunning()`, which returns `autoBootstrapState.running`. `background-scheduler.ts` includes this in `isAnyScraperRunning()`. Prevents scheduled scraper ticks from firing while a full bootstrap is in progress — bootstrap can take 10-20 minutes and concurrent scrapes would corrupt in-flight sheet writes.
+
 **What looks wrong:** "Boolean mutex is not atomic." In a multi-threaded environment this would be a race condition. Node.js/Bun is single-threaded — the event loop serializes check-and-set, making this safe.
 
 **Keep-alive expiry guard (added 2026-03-30):** The RH Portal 8-minute keep-alive timer calls `setSessionExpiredCallback` when session cookies expire. The callback previously called `closeScrapeContext()` unconditionally, killing the shared browser context and aborting all in-flight scrapers simultaneously. The guard now checks all three mutex flags before closing — if any scraper is running, the context close is deferred. Scrapers complete or fail naturally on their next page operation; mutexes release normally. `closeScrapeContext()` is only called when the system is idle.
@@ -544,12 +546,22 @@ Job state (progress, status, errors) is persisted to `data/cache/intelligence-jo
 <source type="support_cases">    — from RH cases cache
 <source type="calendar">         — from Google Calendar API
 <source type="emails">           — from Gmail API
-<source type="documents">        — from Google Drive docs
+<source type="documents">        — from Google Drive docs (Google Docs + PDFs via Gemini multimodal)
 <source type="pipeline">         — from pipeline cache, filtered per customer
 <source type="cloud_spend">      — from CCSP cache, filtered per customer
 <source type="account_intelligence"> — from data/cache/intelligence/{slug}.json (if exists)
 <source type="previous_brief">   — from readLatestBriefCache() for delta detection
 ```
+
+### PDF content extraction (BKL-R25, 2026-04-04)
+
+PDFs in customer Drive folders are extracted via Gemini multimodal (`inlineData` with `mimeType: application/pdf`) in `_fetchCustomerDocsImpl()`. Two safety gates:
+- **Size gate:** PDFs > 15MB are skipped (not sent to Gemini) — prevents Vertex AI errors and runaway token cost
+- **Log injection prevention:** `f.name` is sanitized (`replace(/[\r\n]/g, ' ').slice(0, 200)`) before being interpolated into `console.warn` messages
+
+Extracted text is capped at `DOC_CONTENT_CAP` (8K chars) per file, same as Google Docs. Falls through to next file on any extraction error.
+
+**Pending (BKL-R25b):** Pre-convert PDF to Markdown locally (e.g. `pdf-parse`) before sending to Gemini. Would reduce input tokens ~60-80% by sending structured text instead of raw PDF bytes.
 
 **Free/trial subscription exclusion:** `isFreeOrTrial()` (from `health-score.ts`) filters out subscriptions matching keywords (`free`, `beta`, `trial`, `eval`, etc.) before they are included in the XML. This prevents Gemini from generating renewal urgency for non-commercial subscriptions.
 
@@ -571,6 +583,31 @@ Job state (progress, status, errors) is persisted to `data/cache/intelligence-jo
   "synthesis": "string — Gemini-generated narrative (optional, absent on failure)"
 }
 ```
+
+---
+
+## §15. Admin Page — Operational Panels (2026-04-04)
+
+### Session Health Panel (BKL-M50d)
+
+`dashboard/src/components/SessionHealthPanel.tsx` — a 4-tile status grid on the Admin page showing at-a-glance health for all data sources. Fetches three endpoints in parallel (`/api/auth/redhat/status`, `/api/auth/salesforce/status`, `/api/scraper-status`) on mount, then polls every 30 seconds.
+
+```
+RH Portal tile    — hasSession, sessionExpired, lastScraped, caseCount
+Salesforce tile   — hasSession, sessionExpired|syncError, lastSync, rowCount
+CCSP tile         — state (fresh/stale/failed/running), lastSuccess, recordCount
+Supportable tile  — state (fresh/stale/failed/running), lastSuccess, recordCount
+```
+
+**SF expired logic:** `expired = sf.sessionExpired || !!sf.syncError` — any non-null `syncError` degrades status. This covers the case where `sessionExpired` resets on container restart but `syncError` still carries the expired message from the prior failed sync.
+
+### Browser Crash Banner (BKL-W2-13)
+
+`detectBrowserCrash()` in `scrape-api.ts` scans the last 5 telemetry log entries. If any entry has a `browser_crashed` event type, returns `true`. The `/api/scraper-status` response includes `browserRestartNeeded: detectBrowserCrash()`. The Admin page shows a dismissible red banner when `browserRestartNeeded` is true, prompting the user to run `make restart` via VNC.
+
+### Wall-Clock Timeout Guard (BKL-M58 partial)
+
+`wallTimeout(ms, label)` in `scrape-api.ts` returns a `Promise<never>` that rejects after `ms` milliseconds with a labeled error. Supportable discover tasks (both per-AE and all-AE loops) are wrapped in `Promise.race([discoverPromise, wallTimeout(10 * 60 * 1000, '...')])`. Prevents a hung APEX page from blocking the scrape queue indefinitely.
 
 ---
 

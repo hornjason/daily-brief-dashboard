@@ -2847,6 +2847,22 @@ Description: PDF files in customer Drive folders appear in file listings but the
   Cost: ~$0.01-0.02 per PDF (multimodal input pricing). With ~5 PDFs per customer avg, adds ~$0.10 per customer brief refresh.
   No native deps needed — pure API call to Gemini.
 
+### BKL-R25b | Pre-convert PDF to Markdown before Gemini extraction (token savings)
+Status: 🔲 TODO
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-04 — "update the backlog item to add that i would like to have the pdf extracted to MarkDown before passing to gemini to save tokens"
+Files: src/customer.ts (_fetchCustomerDocsImpl)
+Description: Current R25 implementation sends raw PDF bytes as multimodal inlineData to Gemini. Converting to Markdown first (via a local extraction library) would reduce token cost significantly — Gemini only receives structured text instead of rendering a PDF.
+  Approach:
+  1. Use a lightweight Bun-compatible PDF-to-text/Markdown library (e.g. `pdf-parse` or `unpdf`) to extract text locally before the Gemini call
+  2. Format extracted text as Markdown (headers, bullets where detectable)
+  3. Pass Markdown string to Gemini as plain text prompt instead of inlineData PDF
+  4. Fallback: if local extraction fails/returns < 50 chars, fall back to current multimodal inlineData path
+  5. Log which path was taken per file for observability
+  Token savings estimate: ~60-80% reduction in input tokens per PDF (text vs rendered image tokens)
+  Dependency check: evaluate `pdf-parse`, `unpdf`, or `pdfjs-dist` for Bun compatibility before implementing.
+
 ---
 
 ## Spec Compliance Gaps (from 2026-04-01 deep analysis)
