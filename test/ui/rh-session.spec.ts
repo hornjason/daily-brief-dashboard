@@ -139,3 +139,75 @@ test.describe('RH session — polling after connect', () => {
     }).toPass({ timeout: 15000 })
   })
 })
+
+// ── BKL-W2-11: SF "Session Active + no lastSync" state triggers sync ──────────
+// Regression: clicking Connect when SF session is live but lastSync=null was a
+// silent no-op. Fix (handleSfConnect line ~2184): detect this state and fire
+// POST /api/scrape/salesforce instead of opening VNC.
+
+test.describe('SF session — "Session Active" triggers sync on Connect', () => {
+  test('Connect fires POST /api/scrape/salesforce when session active but never synced', async ({ page }) => {
+    const BASE = process.env.BASE_URL ?? 'http://localhost:7777'
+
+    // Mock RH portal as connected (required for Setup page to show Data Sources)
+    await page.route('**/api/auth/redhat/status', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          hasSession: true, sessionExpired: false,
+          lastScraped: new Date().toISOString(), caseCount: 0,
+          loginInProgress: false, loginTimedOut: false,
+        }),
+      })
+    )
+
+    // SF: session exists but has never synced (lastSync=null, no syncError)
+    await page.route('**/api/auth/salesforce/status', (route) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          hasSession: true,
+          sessionExpired: false,
+          lastSync: null,
+          rowCount: 0,
+          reportConfigured: true,
+          sheetConfigured: true,
+          syncError: null,
+        }),
+      })
+    )
+
+    // Track whether POST /api/scrape/salesforce was called
+    let sfScrapeCalled = false
+    await page.route('**/api/scrape/salesforce', (route) => {
+      if (route.request().method() === 'POST') sfScrapeCalled = true
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ok: true }) })
+    })
+
+    // Mock other required endpoints to prevent noise
+    await page.route('**/api/aes', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ aes: [] }) })
+    )
+    await page.route('**/api/customers', (route) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify([]) })
+    )
+
+    await page.goto(`${BASE}/dashboard/setup`)
+
+    // Open the Data Sources accordion section
+    const dataSourcesBtn = page.getByRole('button', { name: /Data Sources/i })
+    if (await dataSourcesBtn.count() > 0) {
+      await dataSourcesBtn.click()
+    }
+
+    // Find the SF Connect button (shown when sfConnected=false i.e. no lastSync)
+    const connectBtn = page.getByRole('button', { name: /^Connect$/i }).first()
+    await expect(connectBtn).toBeVisible({ timeout: 5000 })
+    await connectBtn.click()
+
+    // Verify the scrape endpoint was triggered (not a silent no-op)
+    await expect(async () => {
+      expect(sfScrapeCalled, 'POST /api/scrape/salesforce should be called when session is active but lastSync is null').toBe(true)
+    }).toPass({ timeout: 5000 })
+  })
+})

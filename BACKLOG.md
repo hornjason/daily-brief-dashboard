@@ -3278,7 +3278,7 @@ Description: After container restart, SF shows "Session Active" (amber) with "Co
 Decision: DONE — Connect button now auto-triggers a sync when session is already active. VNC flow still opens for actual expired/missing sessions.
 
 ### BKL-W2-11 | Test gap: SF "Session Active + no lastSync" state not covered
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: S (1-2 hours)
 Source: Jason identified 2026-04-04 — "would a test have caught this?"
