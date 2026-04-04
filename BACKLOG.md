@@ -2280,7 +2280,7 @@ Related: BKL-AI01 (identifyIndustry writes segment to customers.json)
 ---
 
 ### BKL-G17 | Cloud Spend section redesign — quarterly breakdown, reporting period context, better visualization
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: M (1-2 days)
 Source: Jason 2026-04-02 — "research a better design, break down by quarter, show which quarters we're reporting"
@@ -3326,7 +3326,7 @@ Files: src/bootstrap-orchestrator.ts
 Description: Bootstrap orchestrator calls `runSupportableDiscoverAndScrape`, `runCcspScrape`, and `runSfPipelineSync` directly inline, bypassing the scraper queue in background-scheduler.ts. If a scheduled timer fires mid-bootstrap (e.g. the 7am Supportable batch fires while bootstrap step 3 is running), both share the same browser context and race. Fix requires one of: (a) bootstrap waits on a queue-aware Promise wrapper (needs `enqueueScraperTask` to return a completion Promise — currently void), or (b) bootstrap checks the running flags before each step and defers, or (c) bootstrap explicitly disables scheduled scrapers while running. The inline progress-callback pattern used by bootstrap (for step-by-step UI updates) makes (a) the most correct but requires extending the ScraperTask interface with a completion Promise. Deferred from 2026-04-04 fix pass because full integration requires interface change to ScraperTask.
 
 ### BKL-W2-16 | Data Sources scraper cards should show record count alongside sync status
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: S (2 hours)
 Source: Jason requested 2026-04-04 — "can it also include how many rows or cases or accounts it found just like pipeline does"

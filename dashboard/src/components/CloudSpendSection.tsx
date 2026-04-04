@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { CCSPSummary } from '../types'
 import { fmtCurrency as fmt } from '../lib/format'
 import RelTime from './RelTime'
-import { Cloud, Building2, RefreshCw, AlertCircle, Users } from 'lucide-react'
+import { Cloud, Building2, RefreshCw, AlertCircle, Users, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 
@@ -46,6 +46,22 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
   const displayQuarters = aeData ? aeData.byQuarter : (data?.byQuarter ?? [])
   const maxQuarterAcv = displayQuarters.reduce((max, q) => Math.max(max, q.acv), 0)
 
+  // BKL-G17: reporting period range badge (e.g. "CY25 Q1–Q4")
+  const allQuarters = data?.byQuarter ?? []
+  const reportingPeriod = allQuarters.length > 0 ? (() => {
+    const sorted = [...allQuarters].sort((a, b) => a.quarter.localeCompare(b.quarter))
+    const first = sorted[0].quarter   // e.g. "CY25Q1"
+    const last  = sorted[sorted.length - 1].quarter
+    if (first === last) return first.replace(/Q(\d)/, ' Q$1')
+    const year = first.slice(0, 4)
+    const q1 = first.slice(5)
+    const q2 = last.slice(5)
+    const sameYear = first.slice(0, 4) === last.slice(0, 4)
+    return sameYear
+      ? `${year} ${q1}–${q2}`
+      : `${first.replace(/Q(\d)/, ' Q$1')} – ${last.replace(/Q(\d)/, ' Q$1')}`
+  })() : null
+
   // Top accounts: filter by AE when selected
   const displayedAccounts = activeAE
     ? (aeData?.topAccounts ?? [])
@@ -57,7 +73,11 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
       <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
         <Cloud className="w-4 h-4 text-accent" />
         <h2 className="text-base font-semibold text-text-primary">Cloud Spend (CCSP)</h2>
-        <span className="text-xs text-text-secondary">2025 Marketplace Revenue</span>
+        {reportingPeriod ? (
+          <span className="text-xs font-medium text-accent bg-accent/10 border border-accent/20 rounded-full px-2 py-0.5">{reportingPeriod}</span>
+        ) : (
+          <span className="text-xs text-text-secondary">Marketplace Revenue</span>
+        )}
         {data?.sourceWarning && !loading && (
           <span className="text-xs text-warning flex items-center gap-1">
             <AlertCircle className="w-3 h-3" /> stale data
@@ -183,13 +203,22 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
               {activeAE && aeData && (
                 <div className="text-lg font-bold text-text-primary tabular-nums mb-1">{fmt(aeData.acv)}</div>
               )}
-              {displayQuarters.map(({ quarter, acv }) => {
+              {displayQuarters.map(({ quarter, acv }, idx) => {
                 const pct = maxQuarterAcv > 0 ? (acv / maxQuarterAcv) * 100 : 0
+                const prev = displayQuarters[idx - 1]
+                const trend = prev
+                  ? acv > prev.acv * 1.02 ? 'up' : acv < prev.acv * 0.98 ? 'down' : 'flat'
+                  : null
                 return (
                   <div key={quarter}>
                     <div className="flex items-center justify-between text-xs mb-0.5">
-                      <span className="text-text-primary font-medium">{quarter}</span>
-                      <span className="text-text-secondary font-mono">{fmt(acv)}</span>
+                      <span className="text-text-primary font-medium">{quarter.replace(/Q(\d)/, ' Q$1')}</span>
+                      <span className="flex items-center gap-1 text-text-secondary font-mono">
+                        {trend === 'up'   && <TrendingUp   className="w-3 h-3 text-green-500" />}
+                        {trend === 'down' && <TrendingDown className="w-3 h-3 text-red-400" />}
+                        {trend === 'flat' && <Minus        className="w-3 h-3 text-text-secondary opacity-50" />}
+                        {fmt(acv)}
+                      </span>
                     </div>
                     <div className="h-1.5 bg-border rounded-full overflow-hidden">
                       <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
