@@ -2237,7 +2237,7 @@ Related: Brief generation (~$0.006/brief), intelligence docs (TBD — grounding 
 ---
 
 ### BKL-M53 | Estimated time tracking for long-running operations
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-02 — "capture estimated time so we know what to expect"
@@ -2831,7 +2831,7 @@ Effort: 1 day total. Items 1-4 + 7 in first hour, items 5-6 in remaining time.
 Phase: 1 (Foundation) — should be done BEFORE R19. R19's document extraction sub-pipeline can only be as good as the raw content it receives.
 
 ### BKL-R25 | PDF content extraction for briefs via Gemini multimodal
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-02 — "yes but limit it to just pdf"
@@ -3310,7 +3310,7 @@ Files: src/scraper-manager.ts (runSfSyncForAes)
 Evidence: `_sfTotalRows += data.rows.length` moved outside per-AE loop to before the fan-out write. Next SF sync will show correct unique row count, not doubled count. CI: 228 passed 2026-04-04.
 
 ### BKL-W2-13 | No banner/guidance when browser context crashes and needs container restart
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: M (4 hours)
 Source: Jason requested 2026-04-04 — "we should have a banner message or something saying to restart container button so user knows what to do"

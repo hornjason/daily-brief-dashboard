@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AlertCircle, X } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ interface AllScrapeStatus {
   salesforce: ScrapeStatus
   circuitBreakers?: Record<string, CircuitBreakerState>
   queue?: { running: string | null; pending: string[]; isAnyRunning: boolean }
+  browserRestartNeeded?: boolean
 }
 
 interface RefreshIntervals {
@@ -465,6 +467,10 @@ interface BatchIntelState {
   startedAt: string | null
   completedAt: string | null
   errors: { customer: string; error: string }[]
+  // BKL-M53: server-computed ETA fields
+  elapsedSeconds?: number | null
+  estimatedSecondsRemaining?: number | null
+  percentComplete?: number
 }
 
 function BatchIntelligenceSection() {
@@ -529,7 +535,14 @@ function BatchIntelligenceSection() {
           <>
             <div className="flex items-center gap-1.5 text-yellow-400">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
-              {batchState.completed} / {batchState.total} customers ({pct}%)
+              {batchState.completed} / {batchState.total} customers ({batchState.percentComplete ?? pct}%)
+              {batchState.estimatedSecondsRemaining != null && batchState.estimatedSecondsRemaining > 0 && (
+                <span className="ml-1 text-gray-400">
+                  ~{batchState.estimatedSecondsRemaining >= 60
+                    ? `${Math.ceil(batchState.estimatedSecondsRemaining / 60)} min`
+                    : `${batchState.estimatedSecondsRemaining}s`} remaining
+                </span>
+              )}
             </div>
             <div className="w-full bg-gray-700 rounded-full h-1.5">
               <div
@@ -649,6 +662,8 @@ export function AdminPage() {
   const [triggerBusy, setTriggerBusy] = useState<Record<string, boolean>>({})
   // BKL-G21: immediate queued state set from POST response before polling catches up
   const [localQueued, setLocalQueued] = useState<Record<string, string | true>>({})
+  // BKL-W2-13: browser crash banner dismissal
+  const [browserCrashDismissed, setBrowserCrashDismissed] = useState(false)
   // BKL-M52: Gemini cost tracking
   const [geminiUsage, setGeminiUsage] = useState<GeminiUsageSummary | null>(null)
   // Intelligence job status
@@ -683,6 +698,7 @@ export function AdminPage() {
         },
         circuitBreakers: d.circuitBreakers,
         queue: d.queue,
+        browserRestartNeeded: d.browserRestartNeeded,
       }
       setStatus(mapped)
     } catch {}
@@ -816,6 +832,24 @@ export function AdminPage() {
             <span className="font-semibold">Break-glass page.</span> Manual scrape triggers may take several minutes and require an active Red Hat Portal session. Not for normal use.
           </div>
         </div>
+
+        {/* BKL-W2-13: Browser crash banner */}
+        {status?.browserRestartNeeded && !browserCrashDismissed && (
+          <div className="flex items-start gap-3 bg-red-900/30 border border-red-700/40 rounded-lg px-4 py-3">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-red-400">Browser context crashed</p>
+              <p className="text-xs text-gray-400 mt-0.5">Scrapers cannot run. Restart the container to recover: <code className="bg-gray-700/60 px-1 py-0.5 rounded text-xs font-mono">make rebuild</code></p>
+            </div>
+            <button
+              onClick={() => setBrowserCrashDismissed(true)}
+              className="shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
+              aria-label="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Manual scrape triggers */}
         <div>

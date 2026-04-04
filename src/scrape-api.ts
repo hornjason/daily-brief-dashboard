@@ -66,6 +66,33 @@ import { enqueueScraperTask, getScraperQueueStatus } from './background-schedule
 import { sanitizeErr } from './utils.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
 
+// ── BKL-W2-13: Browser crash detection via telemetry ────────────────────────
+
+const BROWSER_CRASH_PATTERNS = [
+  'Target page',
+  'context or browser',
+  'Playwright',
+  'browser has been closed',
+]
+
+/** Returns true when the last 5 telemetry entries (across all services) are all
+ *  errors whose message matches a browser-crash pattern. This indicates the shared
+ *  Playwright browser context has died and scrapers cannot recover without restart. */
+function detectBrowserCrash(): boolean {
+  const log = getTelemetryLog()
+  // Flatten all services into a single sorted list
+  const all = Object.values(log).flat()
+  if (all.length < 3) return false
+  all.sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+  const last5 = all.slice(-5)
+  if (last5.length < 5) return false
+  return last5.every(entry => {
+    if (entry.status !== 'failure' && entry.status !== 'timeout') return false
+    if (!entry.error) return false
+    return BROWSER_CRASH_PATTERNS.some(p => entry.error!.includes(p))
+  })
+}
+
 // ── Standardized response shape ─────────────────────────────────────────────
 
 export interface ScrapeResult {
@@ -821,5 +848,6 @@ export function registerScrapeRoutes(app: Hono): void {
     scrapers: getStatus(),
     circuitBreakers: getCircuitBreakerStates(),
     queue: getScraperQueueStatus(),
+    browserRestartNeeded: detectBrowserCrash(),
   }))
 }

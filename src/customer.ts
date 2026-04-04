@@ -309,6 +309,68 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
         // Export failed (permissions, unsupported format) — use name only
       }
     }
+    // BKL-R25: PDF text extraction via Gemini multimodal
+    else if (f.mimeType === 'application/pdf' && totalChars < TOTAL_CONTENT_CAP && f.id) {
+      try {
+        const pdfRes = await drive.files.get(
+          { fileId: f.id, alt: 'media' },
+          { responseType: 'arraybuffer' },
+        )
+        const pdfBytes = Buffer.from(pdfRes.data as ArrayBuffer)
+        const b64 = pdfBytes.toString('base64')
+
+        const project  = process.env.GOOGLE_CLOUD_PROJECT
+        const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+        const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+
+        if (project && b64.length > 0) {
+          let token: string | null | undefined
+          const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+          if (saKeyB64) {
+            const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+            const jwtAuth = new google.auth.JWT({
+              email: keyData.client_email,
+              key:   keyData.private_key,
+              scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+            })
+            token = (await jwtAuth.getAccessToken()).token
+          } else {
+            const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+            token = (await auth.getAccessToken()).token
+          }
+
+          if (token) {
+            const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+            const geminiRes = await fetch(url, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  role: 'user',
+                  parts: [
+                    { inlineData: { mimeType: 'application/pdf', data: b64 } },
+                    { text: 'Extract the text content from this PDF document. Return only the extracted text, no commentary or formatting.' },
+                  ],
+                }],
+                generationConfig: { temperature: 0, maxOutputTokens: 4096 },
+              }),
+            })
+            if (geminiRes.ok) {
+              const json = await geminiRes.json() as any
+              const extracted = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+              const capped = extracted.replace(/\s+/g, ' ').trim().slice(0, DOC_CONTENT_CAP)
+              if (capped.length > 50) {
+                file.content = capped
+                totalChars += capped.length
+              }
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[docs] PDF extraction failed for ${f.name}: ${e?.message?.slice?.(0, 100) ?? 'unknown'}`)
+        // PDF stays in results with name-only — content extraction is best-effort
+      }
+    }
 
     results.push(file)
   }
