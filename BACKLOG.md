@@ -3432,7 +3432,7 @@ Files: src/customer-routes.ts:259, src/background-scheduler.ts:1241
 Description: The UI-triggered brief route calls `generateBrief(customer, meetings, emails, docs, cases, subscriptions, products)` — no pipeline records, no CCSP cloud spend passed in. The background scheduler version (line 1241) DOES include pipeline and ccsp. This means the brief Jason sees in the UI is missing two key data sources. Fix: fetch pipelineRecords and ccspRecords in the route handler (same way background-scheduler.ts does) and pass them into generateBrief.
 
 ### BKL-AI22 | Brief does not cross-reference signals against upcoming meetings
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04
 Priority: P1
 Size: M (4 hours — prompt engineering + testing)
 Source: Jason requested 2026-04-04 — "crossreference all my signals against upcoming meetings etc."

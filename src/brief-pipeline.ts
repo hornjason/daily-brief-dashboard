@@ -96,11 +96,28 @@ ITEMS TO SYNTHESIZE (pre-ranked, most important first):
 export function buildSynthesisPrompt(
   rankedItems: RankedItem[],
   lastInteractionDate: string,
-  dataGaps: string[]
+  dataGaps: string[],
+  upcomingMeetings?: { title: string; start: string; attendees?: string[] }[],
 ): string {
-  const top5 = rankedItems.slice(0, 15)
+  const top15 = rankedItems.slice(0, 15)
+
+  // BKL-AI22: Compute meetings within next 7 days for meeting-prep-first briefs
+  const now = Date.now()
+  const in7Days = now + 7 * 24 * 60 * 60 * 1000
+  const meetingsNext7Days = (upcomingMeetings ?? [])
+    .filter(m => { const t = new Date(m.start).getTime(); return t >= now && t <= in7Days })
+
+  let meetingContext = ''
+  if (meetingsNext7Days.length > 0) {
+    const meetingList = meetingsNext7Days
+      .map(m => `- ${m.title} on ${new Date(m.start).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}${m.attendees?.length ? ` (${m.attendees.slice(0, 5).join(', ')})` : ''}`)
+      .join('\n')
+    meetingContext = `\nUPCOMING MEETINGS (next 7 days):\n${meetingList}\n\nIMPORTANT: Lead with ## Meeting Prep (not ## What Changed). For each upcoming meeting, surface: open critical/high support cases to discuss, renewals expiring within 90 days, most recent email thread, at-risk or committed pipeline opportunities. Cross-reference each item from ITEMS TO SYNTHESIZE against these meetings.\n`
+  }
+
   return SYNTHESIS_PROMPT
     .replace(/\{last_interaction_date\}/g, lastInteractionDate)
     .replace('{data_gaps}', dataGaps.length ? dataGaps.join('\n') : 'All sources current.')
-    .replace('{ranked_items_json}', JSON.stringify(top5, null, 2))
+    .replace('{ranked_items_json}', JSON.stringify(top15, null, 2))
+    + meetingContext
 }

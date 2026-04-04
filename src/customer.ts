@@ -861,8 +861,12 @@ export async function generateBrief(
     const ranked = rankItems(extraction.items)
     console.log(`[brief] Step 2 RANK: top item = ${ranked[0]?.text ?? 'none'} (score: ${ranked[0]?.score ?? 0})`)
 
-    // Step 3: SYNTHESIZE
-    const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps)
+    // Step 3: SYNTHESIZE — BKL-AI22: pass upcoming meetings for meeting-prep-first briefs
+    const upcomingMeetingsFor7Days = meetings.filter(m => {
+      const t = new Date(m.start).getTime()
+      return t >= Date.now() && t <= Date.now() + 7 * 24 * 60 * 60 * 1000
+    })
+    const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days)
     const brief = await callLLM(
       'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
       synthesisPrompt,
