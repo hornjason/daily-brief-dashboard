@@ -133,6 +133,6 @@ jobs:
         run: cd dashboard && bun run build
 
       - name: Run E2E wizard tests
-        run: CI=true bun run test:e2e
-        # Server started automatically by playwright.config.ts webServer
-        # No Google credentials needed — only tests UI rendering and step labels
+        run: CI=true bunx playwright test test/wizard.spec.ts
+        # Scoped to wizard.spec.ts — UI rendering and step labels only
+        # No Google credentials needed. Full suite runs in Tier 2 (release.yml)
