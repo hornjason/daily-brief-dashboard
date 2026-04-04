@@ -3,6 +3,7 @@ import { useApi } from '../hooks/useApi'
 
 interface DeltaChange {
   section: string
+  type?: 'new' | 'changed' | 'removed'
   summary: string
   details: string[]
 }
@@ -77,7 +78,7 @@ export default function TemporalDeltaSection({ customerName }: { customerName: s
           What Changed Since {data.lastBriefDate}
         </h3>
         <span className="ml-auto text-[10px] text-text-secondary bg-border-primary/30 px-1.5 py-0.5 rounded-full">
-          {data.changes.length} {data.changes.length === 1 ? 'section' : 'sections'}
+          {data.changes.length} {data.changes.length === 1 ? 'change' : 'changes'}
         </span>
       </div>
       <ul className="divide-y divide-border-primary/40">
@@ -85,6 +86,13 @@ export default function TemporalDeltaSection({ customerName }: { customerName: s
           <li key={i} className="px-4 py-2">
             <div className="flex items-baseline gap-2">
               <span className="text-xs font-medium text-text-primary">{ch.section}</span>
+              {ch.type && (
+                <span className={`text-[10px] px-1 rounded ${
+                  ch.type === 'new' ? 'bg-health-green/10 text-health-green' :
+                  ch.type === 'removed' ? 'bg-health-red/10 text-health-red' :
+                  'bg-health-amber/10 text-health-amber'
+                }`}>{ch.type}</span>
+              )}
               <span className="text-[11px] text-text-secondary">{ch.summary}</span>
             </div>
             {ch.details && ch.details.length > 0 && (

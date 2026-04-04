@@ -436,7 +436,24 @@ export function registerDashboardRoutes(app: Hono): void {
 
       const currentSections = parseHeadings(currentText)
       const previousSections = parseHeadings(previousText)
-      const changes: { section: string; summary: string; details: string[] }[] = []
+      const changes: { section: string; type: 'new' | 'changed' | 'removed'; summary: string; details: string[] }[] = []
+
+      // Derive a human-readable summary from change type and detail facts
+      const deriveSummary = (type: 'new' | 'changed' | 'removed', details: string[]): string => {
+        if (type === 'removed') return 'Section removed'
+        if (details.length === 0) {
+          return type === 'new' ? 'New section' : 'Minor update'
+        }
+        const top = details[0].toLowerCase()
+        if (/sev\s*[12]|severity\s*[12]|critical.*case/.test(top)) return 'Critical case activity'
+        if (/sev\s*[34]|severity\s*[34]|case/.test(top)) return 'Case activity'
+        if (/\$[\d,.]+[KMB]?.*(?:pipeline|acv|opport)/i.test(details[0]) || /(?:pipeline|acv|opport).*\$[\d,.]+[KMB]?/i.test(details[0])) return 'Pipeline change'
+        if (/\$[\d,.]+[KMB]?/.test(details[0])) return 'Financial update'
+        if (/renew|expir/i.test(top)) return 'Renewal activity'
+        if (/meeting|scheduled|spoke/i.test(top)) return 'Meeting activity'
+        if (/contact|stakeholder/i.test(top)) return 'Stakeholder change'
+        return details.length === 1 ? '1 new item' : `${details.length} new items`
+      }
 
       // Extract key facts from section text for content-level diffs
       const extractFacts = (text: string): string[] => {
@@ -459,20 +476,26 @@ export function registerDashboardRoutes(app: Hono): void {
         const prevBody = previousSections.get(heading)
         if (prevBody === undefined) {
           const details = extractFacts(body)
-          changes.push({ section: heading, summary: 'New section added', details })
+          changes.push({ section: heading, type: 'new', summary: deriveSummary('new', details), details })
         } else if (prevBody !== body) {
           const prevLines = new Set(prevBody.split('\n').map(l => l.trim()).filter(Boolean))
           const newLines = body.split('\n').map(l => l.trim()).filter(Boolean).filter(l => !prevLines.has(l))
           const details = extractFacts(newLines.join('\n'))
-          if (details.length === 0) details.push('Minor content update')
-          changes.push({ section: heading, summary: 'Content updated', details })
+          if (details.length === 0 && newLines.length > 0) {
+            const fallbacks = newLines
+              .filter(l => l.length > 5)
+              .slice(0, 2)
+              .map(l => l.replace(/^[-*•]\s*/, '').replace(/\*{1,2}/g, '').slice(0, 100))
+            details.push(...fallbacks)
+          }
+          changes.push({ section: heading, type: 'changed', summary: deriveSummary('changed', details), details })
         }
       }
 
       // Check for removed sections
       for (const heading of previousSections.keys()) {
         if (!currentSections.has(heading)) {
-          changes.push({ section: heading, summary: 'Section removed', details: [] })
+          changes.push({ section: heading, type: 'removed', summary: deriveSummary('removed', []), details: [] })
         }
       }
 

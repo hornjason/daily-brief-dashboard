@@ -1203,7 +1203,7 @@ Fix:
   3. Reorder nav items to match spec hierarchy
 
 ### BKL-G07 | TemporalDeltaSection shows section names only, not content-level diffs
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: M (1-2 days)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
