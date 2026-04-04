@@ -2052,6 +2052,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     running: boolean
     lastScrape: string | null
     lastError: string | null
+    recordCount?: number | null
   } | null>(null)
   const [sfStatus, setSfStatus] = useState<{
     hasSession: boolean
@@ -2071,6 +2072,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     running: boolean
     lastScrape: string | null
     lastError: string | null
+    recordCount?: number | null
   } | null>(null)
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
@@ -2612,7 +2614,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             <div>
               <p className="text-sm text-white">Supportable Subscriptions</p>
               {supportableStatus?.lastScrape ? (
-                <p className="text-xs text-text-secondary">Last scrape: {timeAgo(supportableStatus.lastScrape)}</p>
+                <p className="text-xs text-text-secondary">Last scrape: {timeAgo(supportableStatus.lastScrape)}{supportableStatus.recordCount ? ` — ${supportableStatus.recordCount} subscriptions` : ''}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Subscription data</p>
               )}
@@ -2639,7 +2641,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             <div>
               <p className="text-sm text-white">CCSP (Tableau)</p>
               {ccspStatus?.lastScrape ? (
-                <p className="text-xs text-text-secondary">Last scrape: {timeAgo(ccspStatus.lastScrape)}</p>
+                <p className="text-xs text-text-secondary">Last scrape: {timeAgo(ccspStatus.lastScrape)}{ccspStatus.recordCount ? ` — ${ccspStatus.recordCount} records` : ''}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Cloud spend</p>
               )}
