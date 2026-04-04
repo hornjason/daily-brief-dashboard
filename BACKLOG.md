@@ -3526,6 +3526,35 @@ Description: Redesign CCSPSection to mirror the 3-tile layout already used by Pi
   - **Backend change needed**: /api/ccsp response must expose per-AE records (accountName, partnerName, spend, quarter, ae) so the middle and right tiles can filter correctly.
 Tests needed: Middle tile shows correct quarterly totals for "All" and each AE. Right tile top accounts update when AE changes. No layout regressions on existing left tile.
 
+### BKL-W2-29 | Duplicate account intelligence tiles on customer detail page
+Status: 🔲 TODO
+Priority: P1
+Size: XS (30 min)
+Source: Jason 2026-04-04 — two "Generate Intelligence" controls rendering back-to-back
+Files: dashboard/src/pages/CustomerDetailPage.tsx lines 1839–1845
+Description: CustomerDetailPage renders both `<AccountIntelligencePanel>` (new component, shows Drive doc links + progress polling) and `<AccountIntelligenceSection>` (inline older implementation with a Generate button) back-to-back. These duplicate each other. Decision needed: keep AccountIntelligencePanel (has Drive links, status polling, progress indicator) and remove AccountIntelligenceSection, or vice versa. AccountIntelligencePanel is the newer Aditi-spec component — preferred.
+Fix:
+  1. Remove AccountIntelligenceSection (lines 1410–1535 inline component + line 1845 render call)
+  2. Ensure AccountIntelligencePanel covers all functionality: generate button, progress, Drive doc links
+  3. Verify no duplicate API calls to /api/customer/:name/generate-intelligence
+
+### BKL-W2-30 | Bootstrap SF Report setup docs — expected columns, URL format, daily refresh
+Status: 🔲 TODO
+Priority: P2
+Size: S (half day)
+Source: Jason 2026-04-04 — new users don't know what SF report to configure, what columns are required, or how to set up daily refresh
+Files: dashboard/src/pages/SetupPage.tsx (AEs & Customers section, SF Report ID field), docs/ (new setup guide)
+Description: The SF Report ID field in bootstrap has no guidance. New users need to know:
+  1. How to find/create the right Salesforce report (pipeline opportunities report)
+  2. What columns the system expects (Opportunity Name, Account Name, Amount, Stage, Forecast Category, Close Date, Owner — exact column headers matter)
+  3. That the URL format works (BKL-F07 is done — paste full Lightning URL or bare ID)
+  4. How to schedule the report for daily automatic refresh in Salesforce so data is fresh every morning
+Fix:
+  1. Add info tooltip or expandable help text near the SF Report ID field in AEs & Customers section
+  2. Link to a setup guide doc (docs/SF-REPORT-SETUP.md)
+  3. Create docs/SF-REPORT-SETUP.md: required columns list, how to create the report in SF, how to subscribe to daily email delivery (which keeps the report cache fresh), recommended filters (Open opportunities, current owner = AE)
+  4. Add note: "Your report should include at minimum: Opportunity Name, Account Name, Amount/ACV, Stage, Forecast Category, Close Date, Opportunity Owner"
+
 ### BKL-W2-25 | make rebuild from worktree can overwrite aes.json with stale state
 Status: 🔲 TODO
 Priority: P0
