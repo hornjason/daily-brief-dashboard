@@ -452,7 +452,78 @@ function IntelligenceStepperSection({ jobStatus }: { jobStatus: IntelligenceJobS
   )
 }
 
-// ── Admin page ─────────────────────────────────────────────────────────────────
+// ── BKL-M50e: Scrape history section ─────────────────────────────���─────────────
+
+interface ScrapeLogEntry {
+  timestamp: string
+  service: string
+  durationMs: number
+  recordCount: number
+  status: 'success' | 'failure' | 'skipped' | 'timeout'
+  error?: string
+}
+
+function ScrapeHistorySection() {
+  const [history, setHistory] = useState<ScrapeLogEntry[]>([])
+
+  useEffect(() => {
+    fetch('/api/status/telemetry/history')
+      .then(r => r.json())
+      .then((d: Record<string, ScrapeLogEntry[]>) => {
+        const all = Object.values(d).flat()
+        all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        setHistory(all.slice(0, 50))
+      })
+      .catch(() => {})
+  }, [])
+
+  if (history.length === 0) return null
+
+  const SERVICE_LABELS: Record<string, string> = {
+    rh: 'RH Cases', ccsp: 'CCSP', supportable: 'Supportable', salesforce: 'Salesforce',
+  }
+  const STATUS_COLORS: Record<string, string> = {
+    success: 'text-green-400', failure: 'text-red-400', skipped: 'text-yellow-400', timeout: 'text-orange-400',
+  }
+
+  return (
+    <div>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Scrape History</h2>
+      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-border text-text-secondary">
+              <th className="px-4 py-2 text-left font-medium">Time</th>
+              <th className="px-4 py-2 text-left font-medium">Scraper</th>
+              <th className="px-4 py-2 text-left font-medium">Status</th>
+              <th className="px-4 py-2 text-right font-medium">Records</th>
+              <th className="px-4 py-2 text-right font-medium">Duration</th>
+              <th className="px-4 py-2 text-left font-medium">Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.map((row, i) => (
+              <tr key={i} className="border-b border-border/40 last:border-0 hover:bg-white/5">
+                <td className="px-4 py-2 text-text-secondary whitespace-nowrap">{formatRelTime(row.timestamp)}</td>
+                <td className="px-4 py-2 text-text-primary">{SERVICE_LABELS[row.service] ?? row.service}</td>
+                <td className={`px-4 py-2 font-medium ${STATUS_COLORS[row.status] ?? 'text-text-secondary'}`}>{row.status}</td>
+                <td className="px-4 py-2 text-right text-text-secondary">{row.recordCount}</td>
+                <td className="px-4 py-2 text-right text-text-secondary whitespace-nowrap">
+                  {row.durationMs >= 60000
+                    ? `${Math.round(row.durationMs / 60000)}m`
+                    : `${Math.round(row.durationMs / 1000)}s`}
+                </td>
+                <td className="px-4 py-2 text-text-secondary truncate max-w-[200px]">{row.error ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Admin page ────────────────────────────────��────────────────────────────────
 
 export function AdminPage() {
   const navigate = useNavigate()
@@ -735,6 +806,9 @@ export function AdminPage() {
             <IntelligenceStepperSection jobStatus={intelJobStatus} />
           </div>
         )}
+
+        {/* BKL-M50e: Scrape History */}
+        <ScrapeHistorySection />
 
       </div>
     </div>

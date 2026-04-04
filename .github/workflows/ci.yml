@@ -116,7 +116,7 @@ jobs:
     name: Integration & E2E tests
     runs-on: ubuntu-latest
     needs: [test]
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 

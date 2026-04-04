@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-04 (BKL-W2-28: CCSP redesign mirror Pipeline 3-tile; BKL-W2-27: bootstrap duplicate sheets; BKL-G08/AI20/AI21/AI23-AI28/M45/W2-26: P0+P1+P2 account intelligence implementation)
+Last update: 2026-04-04 (BKL-G04/G05: marked DONE — confirmed already implemented; BKL-W2-29: duplicate intelligence tiles removed; BKL-W2-30: SF setup docs done; BKL-CI01: CI timeout bumped 15→25m)
 
 ---
 
@@ -1173,7 +1173,7 @@ Fix:
   3. View button links to source (email, case URL, meeting) when available
 
 ### BKL-G04 | StakeholderEngagementPanel missing frequency bar visualization
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-04 (Marcus audit: FrequencyBar fully implemented in StakeholderEngagementPanel.tsx)
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md, VISUAL-DESIGN-SPEC.md
@@ -1185,7 +1185,7 @@ Fix:
   3. Data already available from buildContactHistory() — just needs visualization
 
 ### BKL-G05 | Customer detail header stat row missing Cloud$ and Pipeline ACV + sparklines
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-04 (Marcus audit: Cloud$ and Pipeline ACV stats confirmed at CustomerDetailPage.tsx lines 1740-1767)
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1930,7 +1930,7 @@ Files: server.ts, dashboard/src/components/SessionHealthPanel.tsx (new)
 Description: Users cannot see session status at a glance. Build a panel showing per-source: session status (active/expired/unknown), estimated TTL, last successful scrape, staleness indicator, one-click reconnect. Visible on Admin page and optionally on dashboard home.
 
 ### BKL-M50e | Scraper telemetry + history
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — GET /api/status/telemetry (summary) and GET /api/status/telemetry/history (full log) added to server.ts. ScrapeHistorySection component added to AdminPage.tsx showing last 50 runs sorted by time. docs/ added to Containerfile final stage.
 Priority: P1
 Size: S (2-3 days)
 Files: src/scraper-manager.ts, data/cache/scrape-log.json, server.ts, dashboard/src/pages/AdminPage.tsx
@@ -3504,7 +3504,7 @@ Description: `refreshPipeline()` calls `checkFilesModified(cached.fileIds, cache
 Tests needed: POST /api/refresh/pipeline with mismatched fileIds → should refresh; POST /api/refresh/pipeline with matching unchanged fileIds → should skip.
 
 ### BKL-W2-27 | Bootstrap creates duplicate sheets — old empty ones accumulate in Drive
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04 — Added existingPipelineId guard in bootstrap-orchestrator.ts matching Supportable/CCSP pattern (lines 534, 557). Reuses existing pipelineSheetId from aes.json on repeat bootstraps instead of creating a new sheet every time.
 Priority: P1
 Size: S (3 hours)
 Source: Jason 2026-04-04 — saw 4 "Elmer Alvarez Pipeline" sheets in Drive; 3 were empty orphans from prior bootstrap runs
@@ -3527,7 +3527,7 @@ Description: Redesign CCSPSection to mirror the 3-tile layout already used by Pi
 Tests needed: Middle tile shows correct quarterly totals for "All" and each AE. Right tile top accounts update when AE changes. No layout regressions on existing left tile.
 
 ### BKL-W2-29 | Duplicate account intelligence tiles on customer detail page
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04 — Removed AccountIntelligenceSection inline component (130 lines) and render call from right sidebar. AccountIntelligencePanel (left column) is the single source.
 Priority: P1
 Size: XS (30 min)
 Source: Jason 2026-04-04 — two "Generate Intelligence" controls rendering back-to-back
@@ -3539,7 +3539,7 @@ Fix:
   3. Verify no duplicate API calls to /api/customer/:name/generate-intelligence
 
 ### BKL-W2-30 | Bootstrap SF Report setup docs — expected columns, URL format, daily refresh
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04 — docs/SF-REPORT-SETUP.md created; inline help text added to both SF Report ID fields in SetupPage.tsx; /docs/:file static route added to server.ts.
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-04 — new users don't know what SF report to configure, what columns are required, or how to set up daily refresh
@@ -3562,3 +3562,11 @@ Size: S (2 hours)
 Source: Incident 2026-04-04 — Elmer Alvarez's AE entry wiped after Marcus agent ran make rebuild from worktree
 Files: Makefile, CLAUDE.md (agent briefing section)
 Description: When `make rebuild` is run from a git worktree, DATA := $(CURDIR)/data resolves to the WORKTREE's data directory, not the main project's. If the worktree has a stale aes.json (from when the worktree was created), the resulting container starts with that stale config — overwriting any AE entries added since the worktree was branched. Fix options: (1) Add a guard in Makefile that aborts if running from a worktree path (detect via `git worktree list`). (2) Always resolve DATA to the main worktree root regardless of cwd. (3) Update agent briefing in CLAUDE.md: agents must never run `make rebuild` — only Jason runs it, or it must be run from the project root only. Also: add aes.json to a backup/restore mechanism so container rebuilds can't silently lose AE configuration. Root cause of losing Elmer Alvarez's AE config today.
+
+### BKL-CI01 | CI E2E job hits 15-minute timeout — full suite cancelled
+Status: ✅ DONE 2026-04-04 — timeout-minutes bumped from 15 → 25 in .github/workflows/ci.yml as immediate fix. Long-term: profile which tests are slow and split into fast (<5s) and integration (Playwright) jobs if suite grows further.
+Priority: P1
+Size: XS (5 min)
+Source: Jason 2026-04-04 — E2E job cancelled on main branch push; all tests ran but job timed out before finishing
+Files: .github/workflows/ci.yml (e2e job, timeout-minutes)
+Description: The CI E2E job (Integration & E2E tests) had timeout-minutes: 15. With the full --project=ci suite (~260 tests, 2 workers, dashboard build included), the job took >15 minutes and was cancelled. Unit tests, build, and smoke check all passed — only the E2E job was affected. Bumped to 25 minutes; monitor next few pushes to confirm it completes.

@@ -1191,6 +1191,10 @@ function AutoBootstrapForm() {
             />
           )}
           {sfReportIdError && <p className="text-xs text-critical mt-1">{sfReportIdError}</p>}
+          <p className="text-xs text-text-secondary mt-1.5">
+            Paste your Salesforce Pipeline report ID or full Lightning URL. Required columns: Opportunity Name, Account Name, Amount, Stage, Forecast Category, Close Date, Opportunity Owner.{' '}
+            <a href="/docs/SF-REPORT-SETUP.md" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Setup guide →</a>
+          </p>
         </div>
 
         <div>
@@ -1698,10 +1702,11 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                     type="text"
                     value={ae.sfReportId}
                     onChange={e => updateAE(ae.id, { sfReportId: e.target.value })}
-                    placeholder="Salesforce report ID"
+                    placeholder="Salesforce report ID or Lightning URL"
                     className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
                   />
                 )}
+                <p className="text-[10px] text-text-secondary mt-1">Pipeline opportunities report. <a href="/docs/SF-REPORT-SETUP.md" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Setup guide →</a></p>
               </div>
               <div>
                 <label className="block text-xs text-text-secondary mb-1">Tableau URL (optional)</label>

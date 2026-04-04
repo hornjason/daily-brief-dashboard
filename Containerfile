@@ -74,6 +74,7 @@ COPY --from=builder /app/dashboard/dist ./dashboard/dist
 COPY --from=builder /app/server.ts ./server.ts
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/node_modules ./node_modules
 
 # Install Playwright Chromium browser binary

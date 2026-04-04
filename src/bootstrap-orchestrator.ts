@@ -574,7 +574,9 @@ export function registerBootstrapRoutes(app: Hono): void {
       } else {
         try {
           setStep(5, 'running')
-          const pipelineSheetId = await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
+          const existingPipelineId = aes.find(a => a.name === aeName)?.pipelineSheetId
+          const pipelineSheetId = existingPipelineId ?? await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
+          if (existingPipelineId) console.log(`[auto-bootstrap] Reusing existing pipeline sheet for ${aeName}: ${existingPipelineId}`)
           // FIX N3: Persist pipelineSheetId immediately so AE retains the sheet link even if sync fails
           patchAe(aeName, { pipelineSheetId })
           await runSfPipelineSync(sfReportId, RH_PROFILE_DIR, pipelineSheetId)

@@ -23,7 +23,7 @@ import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
 import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
 import { initRefreshEngine, registerRefreshRoutes, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
-import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight } from './src/scraper-manager.ts'
+import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask } from './src/background-scheduler.ts'
 import { initDashboardRoutes, registerDashboardRoutes } from './src/dashboard-routes.ts'
@@ -595,6 +595,14 @@ registerScraperRoutes(app)
 // ── Unified scrape API (BKL-M25 — registered from scrape-api.ts) ───────────
 registerScrapeRoutes(app)
 
+// ── BKL-M50e: Scraper telemetry routes ──────────────────────────────────────
+
+// GET /api/status/telemetry — summary stats per service (last run, success rate, avg duration)
+app.get('/api/status/telemetry', (c) => c.json(getTelemetrySummary()))
+
+// GET /api/status/telemetry/history — full per-service scrape log (last 100 per service)
+app.get('/api/status/telemetry/history', (c) => c.json(getTelemetryLog()))
+
 // ── Auto-bootstrap + Tableau routes (M03 — registered from bootstrap-orchestrator.ts) ──
 registerBootstrapRoutes(app)
 
@@ -763,6 +771,7 @@ app.get('/api/accounts', (c) => {
 
 // ── Serve React dashboard SPA ────────────────────────────────────────────────
 const DASHBOARD_DIST = resolve(import.meta.dir, 'dashboard/dist')
+const DOCS_DIR = resolve(import.meta.dir, 'docs')
 
 // Serve static assets from dashboard build
 app.get('/dashboard', async (c) => {
@@ -814,6 +823,21 @@ app.get('/dashboard/*', async (c) => {
   } catch {
     return c.text('Dashboard not built. Run: cd dashboard && bun run build', 404)
   }
+})
+
+// /docs/* — serve markdown setup guides from the docs/ directory
+app.get('/docs/:file', async (c) => {
+  const file = c.req.param('file')
+  // Only allow .md files; reject path traversal
+  if (!file.endsWith('.md') || file.includes('/') || file.includes('..')) {
+    return c.text('Not found', 404)
+  }
+  const filePath = resolve(DOCS_DIR, file)
+  if (!filePath.startsWith(DOCS_DIR + '/')) return c.text('Not found', 404)
+  if (existsSync(filePath)) {
+    return new Response(Bun.file(filePath), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+  }
+  return c.text('Not found', 404)
 })
 
 // /admin — serve SPA shell (React Router handles the route client-side)
