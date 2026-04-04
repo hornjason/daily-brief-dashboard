@@ -3224,6 +3224,24 @@ Source: Jason 2026-04-03 — admin page shows "Running..." for RH Cases but setu
 Files: dashboard/src/pages/SetupPage.tsx
 Description: The Setup page Sync section (Red Hat Cases, Supportable Subscriptions, CCSP, Pipeline) does not reflect when a scraper is actively running. The admin page correctly shows "Running..." and "In progress" indicators because it polls `/api/status/scrapes` and checks `isRunning`. The Setup page Sync buttons need the same polling — show a spinner or "Syncing..." state when `isRunning=true` for that source, and disable the button to prevent duplicate triggers.
 
+### BKL-G23 | Admin page not discoverable from sidebar nav
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (15 min)
+Source: Quinn UIReviewer 2026-04-04 — brand new user finds no Admin link in sidebar
+Files: dashboard/src/components/Sidebar.tsx (or wherever nav links live)
+Description: Admin page (/admin) is only reachable via /setup → Admin link. No entry point exists in the main sidebar nav. Add an "Admin" link to the sidebar so users can access it directly without going through Setup first.
+
+---
+
+### BKL-G24 | /api/intelligence/status returns 404 — console noise on Admin page
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Quinn UIReviewer 2026-04-04 — console shows 404 x2 on every Admin page load
+Files: src/scrape-api.ts or server.ts (whichever handles /api/intelligence/status), dashboard/src/pages/AdminPage.tsx
+Description: The Admin page polls /api/intelligence/status on load + retry. The endpoint returns 404, generating repeated console errors. Either implement the endpoint, rename the poll to the correct endpoint, or remove the polling call if the endpoint was removed. Find the AdminPage.tsx reference to determine the correct fix.
+
 ---
 
 ## Wave 2 — Security + Reliability (2026-04-03)
