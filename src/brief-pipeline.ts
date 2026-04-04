@@ -124,7 +124,11 @@ export function buildSynthesisPrompt(
   // but not the full 25K which overwhelms the model and breaks output.
   let intelContext = ''
   if (intelligenceContext?.company || intelligenceContext?.industry) {
-    intelContext = '\n\nACCOUNT INTELLIGENCE (use for Company Profile / Technology Landscape sections):'
+    // Explicitly extend the FORMAT when intelligence is present — the model follows FORMAT
+    // strictly and ignores RULES-only mentions of Company Profile / Tech Landscape.
+    intelContext = '\n\nADDITIONAL SECTIONS REQUIRED when ACCOUNT INTELLIGENCE is provided below:'
+    intelContext += '\n\n## Company Profile\n- [strategic direction, leadership changes, AI/cloud pivots from intelligence]\n- [key business pressures or opportunities relevant to Red Hat]\n\n## Technology Landscape\n- [current tech stack, Red Hat product alignment]\n- [gaps or expansion opportunities]\n'
+    intelContext += '\n\nACCOUNT INTELLIGENCE (use for the Company Profile and Technology Landscape sections above):'
     if (intelligenceContext.company) intelContext += `\n\n[Company Intelligence]\n${intelligenceContext.company.slice(0, 6000)}`
     if (intelligenceContext.industry) intelContext += `\n\n[Industry Analysis]\n${intelligenceContext.industry.slice(0, 4000)}`
   }
