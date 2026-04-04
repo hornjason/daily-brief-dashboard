@@ -3652,3 +3652,27 @@ Size: XS (5 min)
 Source: Jason 2026-04-04 — E2E job cancelled on main branch push; all tests ran but job timed out before finishing
 Files: .github/workflows/ci.yml (e2e job, timeout-minutes)
 Description: The CI E2E job (Integration & E2E tests) had timeout-minutes: 15. With the full --project=ci suite (~260 tests, 2 workers, dashboard build included), the job took >15 minutes and was cancelled. Unit tests, build, and smoke check all passed — only the E2E job was affected. Bumped to 25 minutes; monitor next few pushes to confirm it completes.
+
+### BKL-AI29 | "No brief" badge shows on freshly-generated briefs
+Status: ✅ DONE 2026-04-04 — customer-routes.ts regeneration path now reads freshCache?.cachedAt after writeBriefCache and returns it in the response. DataQualityBadge now receives cachedAt on first-load too.
+Priority: P1
+Size: XS (15 min)
+Source: Deep brief investigation 2026-04-04 — Marcus root-cause analysis
+Files: src/customer-routes.ts:299
+Description: When the brief API route regenerates a brief (non-cache path), it returned `{ text, fromCache: false }` without a `cachedAt` field. DataQualityBadge renders "No brief" when cachedAt is null, so any freshly-generated brief showed "No brief" until the next page load served it from cache. Fix: after writeBriefCache, read back freshCache and include cachedAt in the response.
+
+### BKL-AI30 | Brief truncated by race condition — second generation overwrites longer brief
+Status: ✅ DONE 2026-04-04 — writeBriefCache stale-overwrite guard: rejects incoming brief if existing is >1.5x longer AND incoming is <500 chars. callLLM logs warning on finishReason=MAX_TOKENS.
+Priority: P0
+Size: S (1 hour)
+Source: Deep brief investigation 2026-04-04 — container logs showed 2155-char brief overwritten by 289-char brief
+Files: src/cache-layer.ts:38-44, src/customer.ts:522
+Description: Container logs confirmed two synthesis runs for Dropbox — first produced 2155 chars, second produced 289 chars (truncated Gemini output). The 289-char version overwrote the complete brief. Root cause: (a) pre-gen and on-demand API both call generateBrief+writeBriefCache with no mutual exclusion; (b) callLLM didn't check finishReason, so truncated Gemini output was cached silently. Fix: stale-overwrite guard in writeBriefCache (short brief cannot replace a longer one) + finishReason=MAX_TOKENS warning in callLLM.
+
+### BKL-AI31 | Brief SECTION_ORDER missing Risks & Renewals, Company Profile, Key Insights
+Status: ✅ DONE 2026-04-04 — Added 'Risks', 'Key Insights', 'Company Profile', 'Data Freshness' to SECTION_ORDER. 'Risks' prefix matches both 'Risks & Renewals' (3-step synthesis) and 'Risks' (single-pass).
+Priority: P2
+Size: XS (15 min)
+Source: Deep brief investigation 2026-04-04 — new sections from intelligence injection had no sort order
+Files: dashboard/src/pages/CustomerDetailPage.tsx:381-395
+Description: The 3-step synthesis prompt generates ## Risks & Renewals, ## Company Profile, and ## Data Freshness sections, and the single-pass fallback generates ## Key Insights from Documents. None of these were in SECTION_ORDER, so they rendered at the bottom in random order. Fix: added prefix entries for all four missing section types.

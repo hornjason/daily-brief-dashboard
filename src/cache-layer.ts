@@ -38,6 +38,13 @@ export function readBriefCache(customerName: string): { text: string; cachedAt: 
 export function writeBriefCache(customerName: string, text: string): void {
   try {
     const path = briefCachePath(customerName)
+    // Stale-overwrite guard: don't replace a longer brief with a shorter one
+    // (truncated Gemini output or race between pre-gen and on-demand generation)
+    const existing = readBriefCache(customerName)
+    if (existing && existing.text.length > text.length * 1.5 && text.length < 500) {
+      console.warn(`[cache] writeBriefCache: rejecting shorter brief for ${customerName} (${text.length} chars vs existing ${existing.text.length} chars)`)
+      return
+    }
     writeFileSync(path, JSON.stringify({ text, cachedAt: new Date().toISOString() }), { mode: 0o600 })
   } catch {
     // Cache write failure is non-fatal

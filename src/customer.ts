@@ -519,7 +519,12 @@ async function callLLM(systemPrompt: string, userPrompt: string, callType = 'bri
       model,
     })
   }
-  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const finishReason = json.candidates?.[0]?.finishReason
+  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  if (finishReason === 'MAX_TOKENS') {
+    console.warn(`[brief] callLLM: Gemini output truncated (finishReason=MAX_TOKENS, callType=${callType}, customer=${customerName}, chars=${text.length})`)
+  }
+  return text
 }
 
 // ── Structured extraction types & constants (R17) ────────────────────────────

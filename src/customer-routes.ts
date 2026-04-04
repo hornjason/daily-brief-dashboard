@@ -296,7 +296,8 @@ export function registerCustomerRoutes(app: Hono): void {
         : []
       const text = await generateBrief(customer, meetings, emails, docs, cases, subscriptions, products, pipeline, ccsp)
       writeBriefCache(customer.name, text)
-      return c.json({ text, fromCache: false })
+      const freshCache = readBriefCache(customer.name)
+      return c.json({ text, cachedAt: freshCache?.cachedAt ?? new Date().toISOString(), fromCache: false })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }

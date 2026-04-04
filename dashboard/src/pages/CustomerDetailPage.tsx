@@ -381,6 +381,7 @@ function BriefSection({ name }: { name: string }) {
   const SECTION_ORDER: string[] = [
     'Priority Action',
     'What Changed',
+    'Risks',
     'Key Risks',
     'Competitive Signal',
     'Talking Points',
@@ -388,8 +389,11 @@ function BriefSection({ name }: { name: string }) {
     'Pipeline',
     'Open Support Cases',
     'Cases',
+    'Key Insights',
+    'Company Profile',
     'Subscription',
     'Technology Landscape',
+    'Data Freshness',
   ]
 
   const expandedSections = useMemo(() => {
