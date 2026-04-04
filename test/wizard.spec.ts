@@ -86,7 +86,7 @@ test.describe('Setup page — OAuth Keys section', () => {
     const textarea = page.locator('textarea').first()
     await textarea.fill('not valid json {{{')
     await page.getByRole('button', { name: /Save Keys/i }).click()
-    const errorEl = page.locator('.text-red-400').first()
+    const errorEl = page.locator('.text-critical').first()
     await expect(errorEl).toBeVisible()
   })
 
