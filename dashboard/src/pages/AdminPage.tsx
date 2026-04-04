@@ -474,6 +474,61 @@ interface BatchIntelState {
   percentComplete?: number
 }
 
+// ── BKL-AI13: NotebookLM Admin Section ────────────────────────────────────────
+
+function NotebookLMSection() {
+  const [status, setStatus] = useState<{ enabled: boolean } | null>(null)
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<{ created: number; failed: number } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/notebooklm/status').then(r => r.json()).then(setStatus).catch(() => {})
+  }, [])
+
+  const handleCreateAll = async () => {
+    setRunning(true)
+    setResult(null)
+    try {
+      const r = await fetch('/api/admin/notebooks/create-all', { method: 'POST' })
+      const d = await r.json()
+      setResult(d)
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <span className="text-sm font-medium text-gray-200">NotebookLM Notebooks</span>
+          <p className="text-xs text-gray-500 mt-0.5">Create or update per-customer NotebookLM notebooks from Drive sources</p>
+        </div>
+        <button
+          onClick={handleCreateAll}
+          disabled={running || !status?.enabled}
+          title={!status?.enabled ? 'Set NOTEBOOKLM_ENABLED=true in .env to enable' : undefined}
+          className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors shrink-0"
+        >
+          {running ? 'Running...' : 'Create All Notebooks'}
+        </button>
+      </div>
+      <div className="text-xs text-gray-500">
+        {status === null && 'Loading...'}
+        {status && !status.enabled && 'NotebookLM disabled — set NOTEBOOKLM_ENABLED=true in .env to enable'}
+        {status?.enabled && !result && !running && 'Ready — click to create or sync all customer notebooks'}
+        {running && <span className="text-yellow-400">Creating notebooks...</span>}
+        {result && (
+          <span>
+            Done — <span className="text-gray-300">{result.created} created/updated</span>
+            {result.failed > 0 && <span className="text-red-400 ml-1">({result.failed} failed)</span>}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function BatchIntelligenceSection() {
   const [batchState, setBatchState] = useState<BatchIntelState | null>(null)
   const [starting, setStarting] = useState(false)
@@ -965,6 +1020,12 @@ export function AdminPage() {
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Account Intelligence</h2>
           <BatchIntelligenceSection />
+        </div>
+
+        {/* BKL-AI13: NotebookLM batch create */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">NotebookLM</h2>
+          <NotebookLMSection />
         </div>
 
         {/* BKL-M50e: Scrape History */}

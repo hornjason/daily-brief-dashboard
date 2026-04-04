@@ -29,6 +29,8 @@ export interface Customer {
   driveFolderId?: string  // Google Drive subfolder for this customer under the AE folder
   domainOverride?: string  // BKL-F05: customer-specific domain that bypasses the global blocklist (e.g. workday.com for Workday Inc)
   supportableFileId?: string  // Supportable Google Sheet file ID for this customer
+  notebookId?: string    // BKL-AI11: NotebookLM notebook ID (set after notebook is created)
+  notebookUrl?: string   // BKL-AI11: NotebookLM notebook URL for dashboard linking
 }
 
 export interface CustomerSubscription {

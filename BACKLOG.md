@@ -2104,7 +2104,7 @@ Fix:
 ---
 
 ### BKL-AI11 | Create NotebookLM per customer — batch notebook + source provisioning
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — src/notebooklm.ts (Discovery Engine v1alpha client), notebookId/notebookUrl in types.ts + customers.json, patchCustomer() in server-state.ts, 3 API routes in scrape-api.ts. Dormant unless NOTEBOOKLM_ENABLED=true. Rook conditional pass: 2 MEDIUM (API path hardening, error sanitize), 2 LOW (SA key validation, driveFolderId sanitize) — deferred as hardening follow-up.
 Priority: P2
 Size: S (half day)
 Source: AI09 research — core implementation using Enterprise API v1alpha
@@ -2128,7 +2128,7 @@ Fix:
 ---
 
 ### BKL-AI12 | UX research + design — NotebookLM integration into dashboard
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — "Open Notebook" link added to CustomerDetailPage header (right-aligned, beside AE label). Fetches notebookUrl from /customers. BookOpen icon, opens in new tab with rel=noopener noreferrer.
 Priority: P2
 Size: M (research + design + implementation)
 Source: Jason 2026-04-02 — "will this include researching how to architect and design the UI for adding notebookLM?"
@@ -2156,7 +2156,7 @@ Fix:
 ---
 
 ### BKL-AI13 | Batch "Create All Notebooks" from Admin page
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — NotebookLMSection added to AdminPage. Checks /api/notebooklm/status, disabled state when NOTEBOOKLM_ENABLED not set, calls POST /api/admin/notebooks/create-all.
 Priority: P3
 Size: XS (30 min)
 Source: AI09 research — bulk provisioning

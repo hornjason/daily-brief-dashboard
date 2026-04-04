@@ -25,6 +25,7 @@ import {
   Settings,
   Zap,
   X,
+  BookOpen,
 } from 'lucide-react'
 import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCustomerSSE } from '../hooks/useCustomerSSE'
@@ -1454,6 +1455,20 @@ export function CustomerDetailPage() {
     }
   }, [customerName])
 
+  // NotebookLM URL (BKL-AI11)
+  const [notebookUrl, setNotebookUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (customerName) {
+      fetch('/customers')
+        .then(r => r.json())
+        .then((list: Array<{ name: string; notebookUrl?: string }>) => {
+          const match = list.find(c => c.name === customerName)
+          setNotebookUrl(match?.notebookUrl ?? null)
+        })
+        .catch(() => {})
+    }
+  }, [customerName])
+
   const health = getHealth(sse.cases)
 
   const sectionLoading = sse.loading
@@ -1644,6 +1659,17 @@ export function CustomerDetailPage() {
               )}
               {meta?.ae && (
                 <span className="text-sm text-text-secondary">{meta.ae}</span>
+              )}
+              {notebookUrl && (
+                <a
+                  href={notebookUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-accent hover:underline"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Notebook
+                </a>
               )}
             </div>
           </div>

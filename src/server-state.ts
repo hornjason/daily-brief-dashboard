@@ -62,6 +62,25 @@ export function patchAe(name: string, fields: Partial<AE>): void {
   saveAes(updated)
 }
 
+export function saveCustomers(updated: Customer[]): void {
+  const tmp = CUSTOMERS_PATH + '.tmp'
+  writeFileSync(tmp, JSON.stringify({ customers: updated }, null, 2), { mode: 0o600 })
+  renameSync(tmp, CUSTOMERS_PATH)
+  customers = updated
+}
+
+/** BKL-AI11: Atomically patch a single customer's fields (same pattern as patchAe). */
+export function patchCustomer(name: string, fields: Partial<Customer>): void {
+  let fresh: Customer[]
+  try {
+    fresh = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8')).customers ?? []
+  } catch {
+    fresh = [...customers]
+  }
+  const updated = fresh.map(c => c.name === name ? { ...c, ...fields } : c)
+  saveCustomers(updated)
+}
+
 // ── Direct state setters (for test restore, etc.) ───────────────────────────
 
 export function setAes(newAes: AE[]): void {

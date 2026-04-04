@@ -4,7 +4,8 @@
 // source → Google Sheets → local cache.
 import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import type { Hono } from 'hono'
-import { aes, customers, patchAe, CUSTOMERS_PATH } from './server-state.ts'
+import { aes, customers, patchAe, patchCustomer, CUSTOMERS_PATH } from './server-state.ts'
+import { createOrUpdateNotebook, isNotebookLmEnabled } from './notebooklm.ts'
 import { lastScraped } from './rh-auth.ts'
 import {
   runRhScrapeWithState,
@@ -887,4 +888,88 @@ export function registerScrapeRoutes(app: Hono): void {
     queue: getScraperQueueStatus(),
     browserRestartNeeded: detectBrowserCrash(),
   }))
+
+  // ── BKL-AI11: NotebookLM routes ─────────────────────────────────────────────
+
+  // GET /api/notebooklm/status — is the feature enabled?
+  app.get('/api/notebooklm/status', (c) => c.json({
+    enabled: isNotebookLmEnabled(),
+    message: isNotebookLmEnabled()
+      ? 'NotebookLM integration active'
+      : 'Set NOTEBOOKLM_ENABLED=true in .env and ensure Discovery Engine API is enabled in GCP',
+  }))
+
+  // POST /api/customer/:name/notebook — create or update notebook for one customer
+  app.post('/api/customer/:name/notebook', async (c) => {
+    if (!isNotebookLmEnabled()) {
+      return c.json({ error: 'NotebookLM not enabled — set NOTEBOOKLM_ENABLED=true in .env' }, 503)
+    }
+    const name = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find(cu => cu.name === name)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+    if (!customer.driveFolderId) {
+      return c.json({ error: 'Customer has no Drive folder — run bootstrap first' }, 400)
+    }
+
+    try {
+      // List Drive files in customer folder
+      const { google } = await import('googleapis')
+      const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } = await import('./google.ts')
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const drive = google.drive({ version: 'v3', auth })
+      const driveRes = await drive.files.list({
+        q: `'${customer.driveFolderId}' in parents and trashed=false`,
+        fields: 'files(id,name,mimeType,modifiedTime)',
+        pageSize: 100,
+      })
+      const driveFiles = (driveRes.data.files ?? [])
+        .filter(f => f.id && f.name)
+        .map(f => ({ id: f.id!, name: f.name!, modifiedTime: f.modifiedTime ?? undefined }))
+
+      const result = await createOrUpdateNotebook(customer, driveFiles)
+      patchCustomer(name, { notebookId: result.notebookId, notebookUrl: result.notebookUrl })
+      return c.json({ success: true, ...result })
+    } catch (e: any) {
+      console.error(`[notebooklm] create/update failed for ${name}:`, sanitizeErr(e))
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // POST /api/admin/notebooks/create-all — batch create notebooks for all customers
+  app.post('/api/admin/notebooks/create-all', async (c) => {
+    if (!isNotebookLmEnabled()) {
+      return c.json({ error: 'NotebookLM not enabled — set NOTEBOOKLM_ENABLED=true in .env' }, 503)
+    }
+
+    const eligible = customers.filter(cu => cu.driveFolderId)
+    const results: Array<{ name: string; status: 'ok' | 'error'; notebookUrl?: string; error?: string }> = []
+
+    for (const customer of eligible) {
+      try {
+        const { google } = await import('googleapis')
+        const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } = await import('./google.ts')
+        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+        const drive = google.drive({ version: 'v3', auth })
+        const driveRes = await drive.files.list({
+          q: `'${customer.driveFolderId}' in parents and trashed=false`,
+          fields: 'files(id,name,mimeType,modifiedTime)',
+          pageSize: 100,
+        })
+        const driveFiles = (driveRes.data.files ?? [])
+          .filter(f => f.id && f.name)
+          .map(f => ({ id: f.id!, name: f.name!, modifiedTime: f.modifiedTime ?? undefined }))
+
+        const result = await createOrUpdateNotebook(customer, driveFiles)
+        patchCustomer(customer.name, { notebookId: result.notebookId, notebookUrl: result.notebookUrl })
+        results.push({ name: customer.name, status: 'ok', notebookUrl: result.notebookUrl })
+      } catch (e: any) {
+        const msg = sanitizeErr(e)
+        console.error(`[notebooklm] create-all failed for ${customer.name}:`, msg)
+        results.push({ name: customer.name, status: 'error', error: msg })
+      }
+    }
+
+    const ok = results.filter(r => r.status === 'ok').length
+    return c.json({ total: eligible.length, ok, failed: eligible.length - ok, results })
+  })
 }

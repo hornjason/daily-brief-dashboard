@@ -638,6 +638,8 @@ async function discoverAccountNumbersByName(
         console.log(`[supportable] name-search: "${searchTerm}%" → detail page DOM extract, account# ${domAcct}`)
         return [domAcct]
       }
+      // All 3 detail-page patterns failed — log for post-mortem before falling through to table parse
+      console.warn(`[supportable] name-search: "${searchTerm}%" → detail page detected (hasCustomerInfo=true) but all 3 account-number extraction patterns failed (HTML regex, plain regex, DOM eval). HTML size=${html.length}`)
     }
 
     // Try 1: find the results table with Customer Number column
@@ -823,7 +825,7 @@ export async function runSupportableScrape(
  * onProgress callback fires after each customer completes.
  */
 export async function runSupportableDiscoverAndScrape(
-  customers: Array<{ name: string; supportableName?: string }>,
+  customers: Array<{ name: string; supportableName?: string; accountNumbers?: string[] }>,
   onProgress?: (done: number, total: number, name: string, accountNumbers: string[], rowCount: number) => void,
   onStatus?: (msg: string) => void,
 ): Promise<SupportableResult[]> {
@@ -903,7 +905,7 @@ export async function runSupportableDiscoverAndScrape(
     interface DiscoveryJob { originalIndex: number; name: string; supportableName?: string }
     const discoveryJobs: DiscoveryJob[] = []
     for (let di = 0; di < customers.length; di++) {
-      const cached = (customers[di] as any).accountNumbers
+      const cached = customers[di].accountNumbers
       if (Array.isArray(cached) && cached.length > 0) {
         console.log(`[supportable] ${customers[di].name}: using ${cached.length} cached account numbers (skipping discovery)`)
         discovered[di] = { customerName: customers[di].name, accountNumbers: cached }
