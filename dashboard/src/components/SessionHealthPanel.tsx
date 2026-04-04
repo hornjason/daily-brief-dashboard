@@ -110,7 +110,8 @@ function RhTile({ rh }: { rh: RhStatus }) {
 }
 
 function SfTile({ sf }: { sf: SfStatus }) {
-  const expired = sf.sessionExpired || sf.syncError?.toLowerCase().includes('session expired')
+  // Any non-null syncError degrades status — not just 'session expired' string matches
+  const expired = sf.sessionExpired || !!sf.syncError
   const variant: StatusBadgeVariant =
     !sf.hasSession ? 'no-session'
     : expired ? 'expired'

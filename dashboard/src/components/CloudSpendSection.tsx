@@ -47,9 +47,12 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
   const maxQuarterAcv = displayQuarters.reduce((max, q) => Math.max(max, q.acv), 0)
 
   // BKL-G17: reporting period range badge (e.g. "CY25 Q1–Q4")
+  const QTR_FMT = /^[A-Z]{2}\d{2}Q\d$/
   const allQuarters = data?.byQuarter ?? []
   const reportingPeriod = allQuarters.length > 0 ? (() => {
-    const sorted = [...allQuarters].sort((a, b) => a.quarter.localeCompare(b.quarter))
+    const validQ = allQuarters.filter(q => QTR_FMT.test(q.quarter))
+    if (!validQ.length) return null
+    const sorted = [...validQ].sort((a, b) => a.quarter.localeCompare(b.quarter))
     const first = sorted[0].quarter   // e.g. "CY25Q1"
     const last  = sorted[sorted.length - 1].quarter
     if (first === last) return first.replace(/Q(\d)/, ' Q$1')
