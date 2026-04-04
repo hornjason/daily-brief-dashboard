@@ -499,7 +499,7 @@ async function callLLM(systemPrompt: string, userPrompt: string, callType = 'bri
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },  // AI18-R4d: briefs use ~1K tokens; 8192 was runaway-verbosity risk
+      generationConfig: { temperature: 0.7, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },  // thinkingBudget=0: gemini-2.5-flash is a thinking model; thinking tokens consume output budget, leaving ~200 tokens for actual brief. Disable thinking for brief synthesis — creative writing task, not complex reasoning.
     }),
   })
   if (!res.ok) {
@@ -853,6 +853,7 @@ async function callLLMStructured(systemPrompt: string, userPrompt: string, respo
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 8192,
+        thinkingConfig: { thinkingBudget: 0 },  // gemini-2.5-flash thinking model: disable thinking so all 8192 tokens go to structured JSON output
         responseMimeType: 'application/json',
         responseSchema,
       },
