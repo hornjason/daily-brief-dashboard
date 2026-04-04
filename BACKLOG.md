@@ -1913,7 +1913,7 @@ Description: Deep research on enterprise-grade solutions for each gap. Covers:
 Output: docs/research-enterprise-scraper-patterns.md with specific recommendations per service
 
 ### BKL-M50c | Auto browser context recovery
-Status: ⚠️ NEEDS-REVIEW — implementation present, session re-verify after relaunch absent (see audit 2026-04-03)
+Status: ✅ DONE 2026-04-04 — Two gaps closed: (1) keepAlive() called after relaunch to verify session; (2) setContextRecoveryCallback registered in server.ts — fires adoptSfContext + adoptSupportableContext + adoptCcspContext after auto-recovery so sister scrapers don't hold dead context references.
 Priority: P0
 Size: M (3-4 days)
 Depends on: BKL-M50b (research recommendations)

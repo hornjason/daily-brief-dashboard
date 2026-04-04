@@ -11,13 +11,13 @@ import { generateBrief, getBriefProvider, isBriefConfigured } from './src/custom
 import type { AE } from './src/types.ts'
 import { rebuildFolderMap, getWatcherState } from './src/drive-watcher.ts'
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeExpired } from './src/rh-auth.ts'
-import { closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback } from './src/rh-scraper.ts'
+import { closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback, setContextRecoveryCallback } from './src/rh-scraper.ts'
 
-import { runSfPipelineSync, getSfContext } from './src/sf-scraper.ts'
+import { runSfPipelineSync, getSfContext, adoptSfContext } from './src/sf-scraper.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
-import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning } from './src/supportable-scraper.ts'
+import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning, adoptSupportableContext } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
-import { runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './src/ccsp-scraper.ts'
+import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
 import { initCacheLayer, registerCacheRoutes, readSheetCache } from './src/cache-layer.ts'
 import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
@@ -1061,6 +1061,14 @@ setSessionExpiredCallback(() => {
     return
   }
   closeScrapeContext().catch(() => {})
+})
+
+// BKL-M50c: re-adopt sister scrapers after auto-recovery restores the browser context
+setContextRecoveryCallback((ctx, profileDir) => {
+  adoptSfContext(ctx, profileDir)
+  adoptSupportableContext(ctx)
+  adoptCcspContext(ctx)
+  console.log('[server] context recovery: SF, Supportable, CCSP re-adopted')
 })
 
 // ── M02 module initialization ───────────────────────────────────────────────

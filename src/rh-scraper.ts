@@ -65,6 +65,8 @@ let _livePage: Page | null = null   // the authenticated page — reused to keep
 let _profileDir: string | null = null
 let _keepAliveTimer: ReturnType<typeof setInterval> | null = null
 let _onSessionExpired: (() => void) | null = null
+// BKL-M50c: fires after auto-recovery so sister scrapers (Supportable/CCSP/SF) can re-adopt the new context
+let _onContextRecovered: ((ctx: BrowserContext, profileDir: string) => void) | null = null
 let _cachedToken: string | null = null   // captured Bearer JWT from intercepted page requests
 let _livePageBusy = false  // set true while external flows (e.g. Tableau login) use the live page
 let _livePageBusyAt = 0    // timestamp when busy flag was set — auto-clears after 3 minutes
@@ -73,6 +75,12 @@ let _intentionalClose = false  // set before deliberate closeScrapeContext() cal
 /** Register a callback to invoke when the keep-alive detects session expiry. */
 export function setSessionExpiredCallback(cb: () => void): void {
   _onSessionExpired = cb
+}
+
+/** Register a callback invoked after auto-recovery restores the browser context.
+ *  Used by rh-auth.ts to re-adopt sister scrapers that hold stale context references. */
+export function setContextRecoveryCallback(cb: (ctx: BrowserContext, profileDir: string) => void): void {
+  _onContextRecovered = cb
 }
 
 /**
@@ -204,6 +212,16 @@ async function _autoRecover(profileDir: string): Promise<void> {
         browserDegradedReason = null
         _recoveryAttempts = 0
         console.log('[rh-scraper] auto-recovery succeeded — browser context restored')
+
+        // BKL-M50c gap 1: verify session is still valid after relaunch
+        await keepAlive().catch(e => console.warn('[rh-scraper] post-recovery session check failed:', e?.message))
+
+        // BKL-M50c gap 2: re-adopt sister scrapers that hold dead context references
+        if (_onContextRecovered && _context && _profileDir) {
+          _onContextRecovered(_context, _profileDir)
+          console.log('[rh-scraper] auto-recovery: sister scrapers re-adopted')
+        }
+
         return
       } catch (e: any) {
         console.warn(`[rh-scraper] recovery attempt ${_recoveryAttempts} failed:`, e?.message ?? e)
