@@ -119,11 +119,14 @@ export function buildSynthesisPrompt(
   // Intelligence context appended directly — bypasses extraction ranking so strategic
   // signals (company pivot, leadership changes) always reach synthesis regardless of
   // whether they ranked in the top 5 operational items.
+  // Cap intelligence for synthesis — extraction uses 3K+2K for delta signals;
+  // synthesis gets more (6K+4K) for background sections (Company Profile, Tech Landscape)
+  // but not the full 25K which overwhelms the model and breaks output.
   let intelContext = ''
   if (intelligenceContext?.company || intelligenceContext?.industry) {
     intelContext = '\n\nACCOUNT INTELLIGENCE (use for Company Profile / Technology Landscape sections):'
-    if (intelligenceContext.company) intelContext += `\n\n[Company Intelligence]\n${intelligenceContext.company}`
-    if (intelligenceContext.industry) intelContext += `\n\n[Industry Analysis]\n${intelligenceContext.industry}`
+    if (intelligenceContext.company) intelContext += `\n\n[Company Intelligence]\n${intelligenceContext.company.slice(0, 6000)}`
+    if (intelligenceContext.industry) intelContext += `\n\n[Industry Analysis]\n${intelligenceContext.industry.slice(0, 4000)}`
   }
 
   return SYNTHESIS_PROMPT

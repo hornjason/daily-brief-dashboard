@@ -804,8 +804,8 @@ function buildXmlSources(
       const intel = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
       if (intel.company || intel.industry) {
         xml += `<source type="account_intelligence" cached="${intel.cachedAt}">\n`
-        if (intel.company) xml += `[Company Intelligence]\n${escapeXml(String(intel.company))}\n`
-        if (intel.industry) xml += `\n[Industry Analysis]\n${escapeXml(String(intel.industry))}\n`
+        if (intel.company) xml += `[Company Intelligence]\n${escapeXml(String(intel.company).slice(0, 3000))}\n`
+        if (intel.industry) xml += `\n[Industry Analysis]\n${escapeXml(String(intel.industry).slice(0, 2000))}\n`
         xml += `</source>\n\n`
       }
     }
