@@ -108,22 +108,32 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) before making changes. Key things that l
 
 ### Testing
 
+Three layers — each catches different things:
+
+| Layer | Files | Runner | What it catches |
+|---|---|---|---|
+| **Unit** | `src/*.test.ts` | `bun test src/` | Scraper logic, schedulers, parsers |
+| **E2E UI** | `test/wizard.spec.ts` | Playwright | Setup page accordion, button states |
+| **E2E API** | `test/api.spec.ts`, `test/regression.spec.ts` | Playwright | Endpoint contracts, historical bug regressions |
+
+> **Rule:** UI tests verify rendering. API tests verify data correctness. Never use `page.route()` mocks to test business logic.
+
 ```bash
-# Unit tests
+# Unit tests (fast, no server needed)
 bun test src/
 
-# Full E2E suite (~260 tests)
+# E2E wizard UI tests (webServer auto-starts in CI)
+CI=true bunx playwright test test/wizard.spec.ts
+
+# Full E2E suite (requires running server)
+bun run server.ts &
 bunx playwright test
-
-# API tests only
-bunx playwright test test/api/
-
-# Bootstrap E2E (long — 10 min timeout)
-bunx playwright test test/bootstrap-e2e.spec.ts --timeout=600000
 
 # Smoke test (requires running server)
 bun scripts/smoke-test.ts
 ```
+
+**Regression test rule:** Every production bug gets a test that fails before the fix, then passes after. Commit both in the same commit. See `docs/ADR-004-testing-strategy.md`.
 
 Tests use state isolation via `POST /api/__test/snapshot` and `/restore` (disabled when `NODE_ENV=production`).
 
@@ -143,6 +153,63 @@ Tests use state isolation via `POST /api/__test/snapshot` and `/restore` (disabl
 The container ships with a `defaults.env` file that provides working defaults (including Gemini AI config). The entrypoint loads these for any variable not already set by the user's `--env-file .env`.
 
 To change a default for all users, edit `defaults.env` and rebuild the image. To override for yourself, set the variable in your `.env` file — user values always win.
+
+## CI/CD Pipeline
+
+### Tier 1 — Every push and PR (`ci.yml`)
+
+Runs automatically on every push to `main` and every PR. No real credentials needed.
+
+```
+test  →  publish (main only)  →  smoke (main only)
+                                   e2e (every push/PR)
+```
+
+| Job | What it does |
+|---|---|
+| `test` | Unit tests + TypeScript check + dashboard build |
+| `publish` | Build container → push to `ghcr.io` (needs `GHCR_TOKEN` secret) |
+| `smoke` | Pull image → start → hit `/health` → verify `{"status":"ok"}` |
+| `e2e` | Playwright wizard UI tests (credential-free, webServer auto-starts) |
+
+**If publish fails with `permission_denied: write_package`** — the `GHCR_TOKEN` secret is expired. Create a new PAT at GitHub → Settings → Developer settings → Personal access tokens (classic) with `write:packages` scope. Add it as a repo secret named `GHCR_TOKEN`.
+
+### Tier 2 — Release gate (`release.yml`)
+
+Triggered by `make release-*`. Requires **manual approval** in the `production` GitHub Environment before real credentials are used. Runs the full E2E suite with live credentials and pushes the `:stable` and `:vX.Y.Z` container tags.
+
+## Making a Release
+
+```bash
+make release-patch    # bug fix:     1.2.3 → 1.2.4
+make release-minor    # new feature: 1.2.3 → 1.3.0
+make release-major    # breaking:    1.2.3 → 2.0.0
+
+make version          # print current version
+```
+
+Each command bumps `package.json`, commits, tags, and pushes — which triggers `release.yml` in CI.
+
+| Change | Command |
+|---|---|
+| Bug fix, test update, label tweak | `release-patch` |
+| New feature, new scraper, new UI section | `release-minor` |
+| Breaking config change, renamed API endpoints | `release-major` |
+
+## Secrets & Credentials
+
+Full details in `docs/SECRETS-GUIDE.md`. Quick reference:
+
+| Credential | Where it lives | Notes |
+|---|---|---|
+| Gemini service account | `defaults.env` (committed) | Shared, baked into image — rotate every 90 days |
+| Google OAuth (personal) | `.env` (gitignored) | Each developer uses their own account |
+| Salesforce | `.env` (gitignored) | Each developer |
+| Red Hat SSO | `.env` (gitignored) | Each developer |
+| `GHCR_TOKEN` | GitHub repo secret | CI only — PAT with `write:packages` |
+| Real creds for release | GitHub `production` environment | CI only — requires manual approval gate |
+
+**Never:** commit `.env`, add personal tokens to `defaults.env`, or use a code editor / Write tool to paste long base64 keys (corrupts encoding — paste manually into `.env` instead).
 
 ## Filing Bugs
 
