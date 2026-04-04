@@ -71,6 +71,17 @@ function normalizeCustomerName(raw: string): string {
   return name
 }
 
+// BKL-W2-12: Search for an existing Google Sheet by name inside a Drive folder before creating a new one.
+async function findExistingSheet(drive: any, folderId: string, name: string): Promise<string | null> {
+  try {
+    const q = `name='${name.replace(/'/g, "\\'")}' and '${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`
+    const res = await drive.files.list({ q, fields: 'files(id,name)', pageSize: 1 })
+    return res.data.files?.[0]?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 /** Salesforce report/object ID — alphanumeric only, 15-18 chars. */
 function isValidSfId(value: unknown): boolean {
   if (typeof value !== 'string') return true
@@ -532,6 +543,9 @@ export function registerBootstrapRoutes(app: Hono): void {
         try {
           setStep(3, 'running', 'writing to Google Sheet…')
           const existingSupportableId = aes.find(a => a.name === aeName)?.supportableSheetId
+            ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `Supportable — ${aeName}`) : null)
+            ?? null
+          if (existingSupportableId) console.log(`[auto-bootstrap] Supportable sheet found/reusing: ${existingSupportableId}`)
           const sheetId = await writeSupportableSheet(supportableScrapeResults, aeName, driveFolderId || undefined, existingSupportableId || undefined)
           patchAe(aeName, { supportableSheetId: sheetId })
           autoBootstrapState.resources.supportableSheet = { id: sheetId, url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit` }
@@ -555,6 +569,9 @@ export function registerBootstrapRoutes(app: Hono): void {
           const ccspAe = { ...currentAe, tableauTerritories, driveFolderId: driveFolderId || currentAe.driveFolderId } as AE
           const ccspResults = await runCcspScrape([ccspAe])
           const existingCcspId = aes.find(a => a.name === aeName)?.ccspSheetId
+            ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `${aeName} CCSP`) : null)
+            ?? null
+          if (existingCcspId) console.log(`[auto-bootstrap] CCSP sheet found/reusing: ${existingCcspId}`)
           const sheetId = await writeCcspSheet(ccspResults, aeName, ccspAe.driveFolderId, existingCcspId || undefined)
           patchAe(aeName, { ccspSheetId: sheetId })
           autoBootstrapState.resources.ccspSheet = { id: sheetId, url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit` }
@@ -575,6 +592,9 @@ export function registerBootstrapRoutes(app: Hono): void {
         try {
           setStep(5, 'running')
           const existingPipelineId = aes.find(a => a.name === aeName)?.pipelineSheetId
+            ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `${aeName} Pipeline`) : null)
+            ?? null
+          if (existingPipelineId) console.log(`[auto-bootstrap] Pipeline sheet found/reusing: ${existingPipelineId}`)
           const pipelineSheetId = existingPipelineId ?? await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
           if (existingPipelineId) console.log(`[auto-bootstrap] Reusing existing pipeline sheet for ${aeName}: ${existingPipelineId}`)
           // FIX N3: Persist pipelineSheetId immediately so AE retains the sheet link even if sync fails

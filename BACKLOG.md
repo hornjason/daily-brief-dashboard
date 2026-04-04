@@ -3286,7 +3286,7 @@ Files: test/ui/ or test/api/
 Description: No test covers the Salesforce "Session Active but lastSync=null" state (occurs after container restart with valid OAuth session). A UI test asserting that clicking "Connect" in this state triggers a sync (not a silent no-op) would have caught BKL-W2-10. Add a test: mock SF status API returning {hasSession:true, lastSync:null}, assert clicking Connect fires POST /api/scrape/salesforce.
 
 ### BKL-W2-12 | Bootstrap wizard doesn't detect existing Supportable/CCSP/Pipeline sheets on retry
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04
 Priority: P1
 Size: S (2 hours)
 Source: Jason reported 2026-04-04 — "it should check for existing folder structure and sheets"
