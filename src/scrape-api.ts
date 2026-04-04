@@ -66,6 +66,14 @@ import { enqueueScraperTask, getScraperQueueStatus } from './background-schedule
 import { sanitizeErr } from './utils.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
 
+// ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
+/** Rejects after `ms` milliseconds with an informative error. */
+function wallTimeout(ms: number, label: string): Promise<never> {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`[scrape] ${label} exceeded ${Math.round(ms / 60000)}min wall-clock timeout`)), ms)
+  )
+}
+
 // ── BKL-W2-13: Browser crash detection via telemetry ────────────────────────
 
 const BROWSER_CRASH_PATTERNS = [
@@ -303,7 +311,8 @@ export function registerScrapeRoutes(app: Hono): void {
             if (!aeCustomers.length) continue
             const discoverList = aeCustomers.map(cx => ({ name: cx.name, supportableName: cx.supportableName }))
             try {
-              const results = await runSupportableDiscoverAndScrape(discoverList, (done, total, name, accountNumbers) => {
+              const results = await Promise.race([
+                runSupportableDiscoverAndScrape(discoverList, (done, total, name, accountNumbers) => {
                 const existing = customers.find(cx => cx.name === name && cx.ae === ae.name)
                 if (existing && accountNumbers.length > 0) {
                   const merged = new Set([...(existing.accountNumbers ?? []), ...accountNumbers])
@@ -314,7 +323,9 @@ export function registerScrapeRoutes(app: Hono): void {
                     renameSync(tmpPath, CUSTOMERS_PATH)
                   } catch {}
                 }
-              })
+              }),
+                wallTimeout(10 * 60 * 1000, 'Supportable discover (all AEs)'),
+              ])
               await writeSupportableSheet(results, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
             } catch (e: any) { console.warn(`[scrape:discover:all] ${ae.name} failed:`, sanitizeErr(e)) }
           }
@@ -345,8 +356,9 @@ export function registerScrapeRoutes(app: Hono): void {
     enqueueScraperTask({
       name: 'supportable',
       run: async () => {
-        const results = await runSupportableDiscoverAndScrape(
-          discoverList,
+        const results = await Promise.race([
+          runSupportableDiscoverAndScrape(
+            discoverList,
           (done, total, name, accountNumbers) => {
             // Merge discovered account numbers back into in-memory customers array.
             // Stale-overwrite guard: if discovery returned 0 accounts but the customer
@@ -370,7 +382,9 @@ export function registerScrapeRoutes(app: Hono): void {
             }
             console.log(`[scrape:discover] ${done}/${total} ${name}: ${accountNumbers.length} accounts found`)
           },
-        )
+          ),
+          wallTimeout(10 * 60 * 1000, 'Supportable discover'),
+        ])
 
         // Write fresh sheet with all discovered+scraped results
         const spreadsheetId = await writeSupportableSheet(

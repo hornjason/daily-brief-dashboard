@@ -3072,7 +3072,7 @@ Description: Admin page has two Supportable-related buttons that are unclear:
 ---
 
 ### BKL-M58 | Supportable discovery: per-search timeout + detail-page detection
-Status: 🔴 OPEN
+Status: 🟡 PARTIAL 2026-04-04 — Part 3 (wall-clock timeout in scrape-api.ts) done; Parts 1+2 (per-search timeout + detail-page detection in supportable-scraper.ts) require scraper rules review and Jason approval
 Priority: P1
 Size: S (1-2 hours)
 Source: Jason 2026-04-03 — discovery hung on "Taylor%" search that auto-navigated to detail page instead of result list
