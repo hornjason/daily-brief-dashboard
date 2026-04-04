@@ -15,7 +15,7 @@ import { lastCcspError } from './ccsp-scraper.ts'
 import { sfSyncError } from './sf-scraper.ts'
 import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
 import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS } from './cache-layer.ts'
-import { sanitizeErr } from './utils.ts'
+import { sanitizeErr, normalizeForQuery } from './utils.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -117,12 +117,6 @@ function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, sourceWarning
 // BKL-M05: Query-oriented normalizer — differs from normalizeForMatch by also stripping long business-line phrases (life and safety, digital media) for substring overlap matching against cached CCSP/pipeline records.
 // Shared fuzzy name normalizer for customer URL-param queries against cached records.
 // Strips common legal suffixes and punctuation for substring overlap matching.
-function normalizeForQuery(s: string): string {
-  return s.toLowerCase()
-    .replace(/,?\s*(inc\.|llc|inc|corp|ltd|lp|co\.|u\.s\..*|life and safety.*|life & safety.*|digital media.*)$/i, '')
-    .replace(/[,.]/g, '').trim()
-}
-
 // GET /api/pipeline — Open opportunity pipeline from Drive XLS
 function filterToAEs(records: PipelineRecord[]): PipelineRecord[] {
   if (!aes.length) return records

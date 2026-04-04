@@ -21,7 +21,7 @@ import { fetchCustomerSheetData } from './sheets.ts'
 import { initStatusStore, recordOutcome, getStatus } from './scraper-status-store.ts'
 import { renderBriefHtml } from './email-template.ts'
 import { sendBriefEmail } from './email-sender.ts'
-import { sanitizeErr } from './utils.ts'
+import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { isBootstrapRunning } from './bootstrap-orchestrator.ts'
 
 // ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
@@ -1238,8 +1238,10 @@ export function initBackgroundScheduler(opts: {
           fetchCustomerSubscriptions(customer).catch(() => []),
           cachedSheet ? Promise.resolve(cachedSheet.rows) : fetchCustomerSheetData(customer).catch(() => []),
         ])
-        const pipelineRecords = (readPipelineCache()?.records ?? []).filter(r => r.accountName.toLowerCase() === customer.name.toLowerCase())
-        const ccspRecords = (readCCSPCache()?.records ?? []).filter(r => r.accountName.toLowerCase() === customer.name.toLowerCase())
+        // AI18-R1d: use normalizeForQuery (same as customer-routes.ts) to match "Acme Corp" ↔ "Acme Corporation"
+        const customerNeedle = normalizeForQuery(customer.name)
+        const pipelineRecords = (readPipelineCache()?.records ?? []).filter(r => normalizeForQuery(r.accountName).includes(customerNeedle) || customerNeedle.includes(normalizeForQuery(r.accountName)))
+        const ccspRecords = (readCCSPCache()?.records ?? []).filter(r => normalizeForQuery(r.accountName).includes(customerNeedle) || customerNeedle.includes(normalizeForQuery(r.accountName)))
         const text = await generateBrief(customer, meetings, emails, docs, cases, subscriptions, products, pipelineRecords, ccspRecords)
         writeBriefCache(customer.name, text)
         console.log(`[brief-pregen] ${customer.name}: done`)

@@ -60,13 +60,13 @@ RULES:
 - Lead with what CHANGED since {last_interaction_date}. This is the most important section.
 - The FIRST SENTENCE must state the single most important action the SA should take.
 - Every factual claim must cite its source as [Source: {source_type}].
-- Maximum 7 bullet points per section. Include all material signals — do not omit important items to save space.
+- Maximum 5 bullet points per section. Include only the highest-signal items.
 - If data is stale or missing, say so: "[Source: {type}, last synced {date} — may be outdated]"
 - Do not include generic company descriptions the SA already knows.
 - Do not include information that hasn't changed since the last brief.
 - Instead of "No pipeline opportunities" — omit the section entirely.
 - Include sections for Account Overview, Company Profile, Technology Landscape, and Pipeline Opportunities when document sources contain this intelligence.
-- Brief should be thorough — 500-1000 words depending on available data. More data = longer brief.
+- Brief should be concise — 250-400 words. Delta-first. Do not expand to fill space.
 
 FORMAT:
 ## Priority Action
@@ -99,7 +99,7 @@ export function buildSynthesisPrompt(
   dataGaps: string[],
   upcomingMeetings?: { title: string; start: string; attendees?: string[] }[],
 ): string {
-  const top15 = rankedItems.slice(0, 15)
+  const top15 = rankedItems.slice(0, 5)  // AI18-R3b: top 5 only (was 15 — fed too much noise to synthesis)
 
   // BKL-AI22: Compute meetings within next 7 days for meeting-prep-first briefs
   const now = Date.now()

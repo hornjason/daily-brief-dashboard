@@ -874,7 +874,8 @@ Fix:
   7. If source AE's report changes, prompt whether to update linked AEs
 
 ### BKL-F10 | Research: improve morning brief effectiveness — actionable next steps per signal
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 (design) — Aditi completed. Variant C selected (CustomerSignalBanner for top signal + inline SignalActionChips for remaining signals). TopActionsPanel for morning summary. Five components spec'd: SignalActionChip, SignalPriorityBadge, CustomerSignalBanner, TopActionsPanel, SignalRow. Tailwind tokens + props documented. Implementation tracked in BKL-F10a.
+Original Status: 🔴 OPEN
 Priority: P2
 Size: M (research + design)
 Source: Jason 2026-04-02 — briefs need next steps next to each opportunity/signal to drive action
@@ -891,6 +892,23 @@ Fix:
   8. UX design needed (Aditi): how to surface meeting notes without overwhelming the UI. Options: truncated preview with expand, Gemini-summarized to 1-2 sentences, tooltip on hover, dedicated "Recent Activity" tab on customer detail. Meeting notes + next steps together = the SA prep workflow.
   9. Scraper change needed: add "Meeting Notes" and "Industry" columns to SF scraper column extraction in src/sf-scraper.ts. Parse and store alongside existing pipeline fields.
   10. Jason confirmed "Industry" column added to SF report (2026-04-02). This enables automatic industry-per-customer detection from live SF data — supplements or replaces AI01's web search approach. Industry from SF is authoritative (CRM-maintained) vs AI-inferred.
+
+### BKL-F10a | Implement F10 signal-action UI — Variant C + TopActionsPanel
+Status: 🔴 OPEN
+Priority: P2
+Size: M (half day)
+Source: Aditi design output 2026-04-04
+Files: dashboard/src/components/ (5 new), dashboard/src/components/MorningSummary.tsx, dashboard/src/pages/CustomerDetailPage.tsx
+Description: Implement Aditi's Variant C design from BKL-F10 research. Components to build:
+  1. SignalActionChip — inline action button (Calendar | Case | Salesforce | Email), props: label/href/variant
+  2. SignalPriorityBadge — colored dot + text (urgent=red / this-week=amber / fyi=muted), no icon
+  3. CustomerSignalBanner — "do this today" highlighted banner, amber/cyan left border, star icon, up to 3 action chips. Appears ONLY for highest-priority signal (no banner inflation).
+  4. TopActionsPanel — cross-customer top 3 ranked by: (1) days to hard deadline, (2) case severity, (3) pipeline ARR. Inserts above customer grid in MorningSummary.
+  5. SignalRow — single signal row wrapping PriorityBadge + text + optional ActionChip.
+  Tailwind tokens: bg-[#161b22], text-[#00BCD4] for accent, text-red-400/amber-400 for urgency. Dark theme only.
+  Action URLs: Calendar → Google Calendar create-event, Case → RH portal case URL, Opp → Salesforce opp URL. All open in new tab with rel=noopener.
+
+---
 
 ### BKL-F09 | Setup page Sync status may not reflect API/scheduler-triggered scrapes
 Status: ✅ DONE 2026-04-03 (fully solved by BKL-G22 — SetupPage polls /api/scraper-status every 3s, covers all 4 scrapers + all trigger sources)
@@ -3423,12 +3441,42 @@ Files: dashboard/src/pages/SetupPage.tsx
 Description: CCSP Sync Now row (line ~2644) shows hint "Requires Tableau session" and does NOT gate the Sync Now button on `!rhConnected`. This is inconsistent with the Supportable row fix (ISC-18/Q7) — CCSP requires Tableau which requires RH Portal first. Fix: (1) update hint to "Requires active Tableau session" or match Supportable wording, (2) evaluate whether CCSP Sync Now button should be disabled when Tableau is not connected (tableauConnected check). Note: CCSP does not strictly require RH Portal the way Supportable does, but the dependency chain (Portal → Tableau → CCSP) means the hint should reflect the actual prerequisite. Confirm with Jason before gating.
 
 ### BKL-AI18 | Account Intelligence full investigation — performance, gaps, quality, token efficiency
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04 — Investigation complete. XS/quick items implemented immediately (see below). S-effort items added as BKL-AI18a/b/c. Key findings: (P0) SYNTHESIS_PROMPT was "500-1000 words" — contradicts research-backed 250-word design, fixed to "250-400 words delta-first". (P1) top15→top5 in synthesis, subscriptions_detailed added to source_type enum, background pre-gen name filter uses normalizeForQuery, maxOutputTokens 8192→2048 for synthesis. Dead findPreviousBrief() removed. (P1-S) Drive BFS parallel export, doc classification parallel, Gemini context caching — deferred to BKL-AI18a/b/c. Rook: PASS.
 Priority: P1
 Size: L (8+ hours — research + audit + design)
 Source: Jason requested 2026-04-04
 Files: src/customer.ts, src/google.ts, data/cache/*-{date}.json, dashboard/src/ (AI brief display)
 Description: Comprehensive investigation of the account intelligence pipeline end-to-end. Goals: (1) Performance — latency breakdown per brief (Gmail fetch / Calendar fetch / AI call / cache write), parallelization opportunities. (2) Gaps — what data is missing (Supportable subscriptions, CCSP spend, cases cross-referenced with pipeline). (3) Quality — are prompts producing high-signal output, or too verbose/shallow? (4) Token efficiency — cost per brief, differential updates vs full regen, smaller model candidates. (5) Architecture — IMPORTANT: Gemini API is NOT approved at Red Hat. Must investigate whether the current Vertex AI service account setup is Red Hat-approved, and if not, identify an approved alternative (Claude API via PAI Inference Tool is a candidate). Do not proceed with any AI provider change without confirming Red Hat approval. Deliverable: prioritized improvement list with cost estimates and approved-provider recommendation.
+
+### BKL-AI18a | Parallelize Drive file exports + doc classification (AI18-R1a/R1b)
+Status: 🔴 OPEN
+Priority: P1
+Size: S (2-3h)
+Source: AI18 investigation 2026-04-04
+Files: src/customer.ts (lines 287-382), src/doc-extraction.ts (lines 256-263)
+Description: Two parallel serialization bottlenecks. (1) Drive BFS fetches each file export sequentially — replace the for loop at customer.ts:287 with `Promise.all()` batching all file exports at once. (2) doc classification in classifyDocs() at doc-extraction.ts:261 runs each Gemini call one at a time — replace with `Promise.allSettled(docs.map(classifyAndExtract))`. Both are P1 latency wins with minimal risk.
+
+---
+
+### BKL-AI18b | Gemini context caching for extraction system prompt (AI18-R4a / BKL-R23)
+Status: 🔴 OPEN
+Priority: P1
+Size: S (0.5 day)
+Source: AI18 investigation 2026-04-04
+Files: src/brief-pipeline.ts, src/customer.ts (callLLMStructured)
+Description: The extraction system prompt + responseSchema is identical for every customer brief. Cache it as a Gemini `cachedContent` resource at server start (24h TTL). Estimated 70-85% reduction in extraction call input tokens. See Gemini context caching docs — API: `POST /v1beta/cachedContents`.
+
+---
+
+### BKL-AI18c | Inject scraper-failure status into brief XML (AI18-R2a)
+Status: 🔴 OPEN
+Priority: P1
+Size: S (2h)
+Source: AI18 investigation 2026-04-04
+Files: src/customer.ts (buildXmlSources, line 566), src/scraper-status-store.ts (or equivalent)
+Description: When a scraper (Supportable, CCSP, Tableau) failed for a customer, inject a structured status tag into the XML: `<source type="subscriptions" status="scraper_failed" last_success="2026-04-03">`. Gives Gemini precise freshness context rather than leaving it to infer from absence. Check `lastScrapeError` state from scraper status store before building each XML block.
+
+---
 
 ### BKL-AI19 | Research best approach for Vertex AI service account distribution
 Status: ✅ DONE 2026-04-04 — Already implemented and documented in docs/SECRETS-GUIDE.md: shared key in defaults.env (zero-setup for colleagues), personal override via .env, rotation procedure documented.

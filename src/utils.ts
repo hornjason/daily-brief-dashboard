@@ -20,6 +20,17 @@ export function sanitizeText(value: unknown, maxLen = 200): string | null {
   return trimmed
 }
 
+/**
+ * Normalize an account/company name for fuzzy matching against Salesforce/pipeline records.
+ * Strips common legal suffixes (Inc., LLC, Corp., etc.) so "Acme Corp" matches "Acme Corporation".
+ * AI18-R1d: exported here so background-scheduler and customer-routes share the same logic.
+ */
+export function normalizeForQuery(s: string): string {
+  return s.toLowerCase()
+    .replace(/,?\s*(inc\.|llc|inc|corp|ltd|lp|co\.|u\.s\..*|life and safety.*|life & safety.*|digital media.*)$/i, '')
+    .replace(/[,.]/g, '').trim()
+}
+
 /** Validate a Google Drive folder ID (alphanumeric + dash/underscore, min 10 chars). */
 export function isValidDriveFolderId(id: string): boolean {
   return /^[a-zA-Z0-9_-]{10,}$/.test(id)

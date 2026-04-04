@@ -499,7 +499,7 @@ async function callLLM(systemPrompt: string, userPrompt: string, callType = 'bri
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 8192 },
+      generationConfig: { temperature: 0.7, maxOutputTokens: 2048 },  // AI18-R4d: briefs use ~1K tokens; 8192 was runaway-verbosity risk
     }),
   })
   if (!res.ok) {
@@ -573,7 +573,7 @@ const EXTRACTION_SCHEMA = {
         properties: {
           category: { type: 'string' as const, enum: ['RISK', 'CHANGE', 'OPPORTUNITY', 'ACTION', 'COMPETITIVE', 'STAKEHOLDER'] },
           text: { type: 'string' as const },
-          source_type: { type: 'string' as const, enum: ['subscriptions', 'support_cases', 'calendar', 'emails', 'documents', 'pipeline', 'cloud_spend'] },
+          source_type: { type: 'string' as const, enum: ['subscriptions', 'subscriptions_detailed', 'support_cases', 'calendar', 'emails', 'documents', 'pipeline', 'cloud_spend'] },
           source_detail: { type: 'string' as const },
           confidence: { type: 'string' as const, enum: ['HIGH', 'MEDIUM'] },
           urgency: { type: 'string' as const, enum: ['CRITICAL', 'HIGH', 'MEDIUM'] },
@@ -901,27 +901,6 @@ Rules:
 - Never include generic information the SA already knows`
 
   return callLLMStructured(systemPrompt, fullPrompt, EXTRACTION_SCHEMA, 'brief-extract', customerName) as Promise<ExtractionResult>
-}
-
-// ── Previous brief lookup (R17) ─────────────────────────────────────────────
-
-function findPreviousBrief(customerName: string): string | null {
-  // Brief cache files are date-stamped: {slug}-{YYYY-MM-DD}.json
-  // Look for yesterday's brief
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
-  const dateStr = yesterday.toLocaleDateString('en-CA') // YYYY-MM-DD
-  const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
-  const CACHE_DIR = process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')
-  const path = `${CACHE_DIR}/${slug}-${dateStr}.json`
-  try {
-    if (existsSync(path)) {
-      const data = JSON.parse(readFileSync(path, 'utf-8'))
-      return data.text ?? null
-    }
-  } catch {
-    // Previous brief not found — that's fine
-  }
-  return null
 }
 
 // ── Brief generation ──────────────────────────────────────────────────────────
