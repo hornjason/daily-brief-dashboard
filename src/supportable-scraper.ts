@@ -851,10 +851,10 @@ export async function runSupportableDiscoverAndScrape(
   }
 
   const results: SupportableResult[] = []
-  if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
-  let ssoPage = await _ctx.newPage()
 
   try {
+    if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
+    let ssoPage = await _ctx.newPage()
     // ── Phase 0: SSO authentication ───────────────────────────────────────────
     console.log(`[supportable] discover+scrape: navigating to portal…`)
     _onStatus('connecting to Supportable…')

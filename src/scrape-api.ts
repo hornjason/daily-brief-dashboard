@@ -63,7 +63,7 @@ import { getRefreshIntervals } from './settings-api.ts'
 import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
-import { getStatus } from './scraper-status-store.ts'
+import { getStatus, getScraperStatus } from './scraper-status-store.ts'
 
 // ── Standardized response shape ─────────────────────────────────────────────
 
@@ -119,11 +119,18 @@ export function registerScrapeRoutes(app: Hono): void {
   app.get('/api/scrape/rh/status', (c) => {
     const intervals = getRefreshIntervals()
     const now = Date.now()
+    const store = getScraperStatus('rh-cases')
     return c.json({
       isRunning: _rhScrapeRunning,
       lastSync:  lastScraped,
       lastError: _rhScrapeLastError,
       isStale:   !lastScraped || (now - new Date(lastScraped).getTime()) > intervals.rhScrape * 2 * 60 * 1000,
+      // ScraperStatusStore fields for unified freshness tracking
+      lastRun:       store.lastRun,
+      lastSuccess:   store.lastSuccess,
+      storeLastError: store.lastError,
+      recordCount:   store.recordCount,
+      state:         store.state,
     })
   })
 
@@ -224,11 +231,18 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // GET /api/scrape/supportable/status
   app.get('/api/scrape/supportable/status', (c) => {
+    const store = getScraperStatus('supportable')
     return c.json({
       running:       supportableScrapeRunning,
       lastScrape:    lastSupportableScrape,
       lastError:     lastSupportableError ? sanitizeErr(lastSupportableError) : null,
       statusMessage: supportableStatusMessage,
+      // ScraperStatusStore fields for unified freshness tracking
+      lastRun:       store.lastRun,
+      lastSuccess:   store.lastSuccess,
+      storeLastError: store.lastError,
+      recordCount:   store.recordCount,
+      state:         store.state,
     })
   })
 
@@ -419,10 +433,17 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // GET /api/scrape/ccsp/status
   app.get('/api/scrape/ccsp/status', (c) => {
+    const store = getScraperStatus('ccsp')
     return c.json({
       running:    ccspScrapeRunning || ccspInFlight,
       lastScrape: lastCcspScrape,
       lastError:  lastCcspError ? sanitizeErr(lastCcspError) : null,
+      // ScraperStatusStore fields for unified freshness tracking
+      lastRun:       store.lastRun,
+      lastSuccess:   store.lastSuccess,
+      storeLastError: store.lastError,
+      recordCount:   store.recordCount,
+      state:         store.state,
     })
   })
 
@@ -552,10 +573,17 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // GET /api/scrape/salesforce/status
   app.get('/api/scrape/salesforce/status', (c) => {
+    const store = getScraperStatus('sf-pipeline')
     return c.json({
       isRunning: _sfSyncRunning,
       lastSync:  lastSfSync,
       lastError: _sfSyncLastError,
+      // ScraperStatusStore fields for unified freshness tracking
+      lastRun:       store.lastRun,
+      lastSuccess:   store.lastSuccess,
+      storeLastError: store.lastError,
+      recordCount:   store.recordCount,
+      state:         store.state,
     })
   })
 
