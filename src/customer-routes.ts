@@ -20,6 +20,18 @@ import { sanitizeErr } from './utils.ts'
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
 
+// ── BKL-AI06: Batch intelligence generation state ────────────────────────────
+let _batchState: {
+  running: boolean
+  total: number
+  completed: number
+  failed: number
+  current: string | null
+  startedAt: string | null
+  completedAt: string | null
+  errors: { customer: string; error: string }[]
+} = { running: false, total: 0, completed: 0, failed: 0, current: null, startedAt: null, completedAt: null, errors: [] }
+
 export function initCustomerRoutes(opts: {
   cacheDir: string
   customersPath: string
@@ -452,5 +464,77 @@ export function registerCustomerRoutes(app: Hono): void {
     const status = getJobStatus(customer.name)
     if (!status) return c.json({ status: 'none', message: 'No intelligence generation job found for this customer' })
     return c.json(status)
+  })
+
+  // ── BKL-AI06: Batch intelligence generation ──────────────────────────────
+
+  app.post('/api/intelligence/generate-all', (c) => {
+    if (_batchState.running) {
+      return c.json({ error: 'Batch generation already running', state: _batchState }, 409)
+    }
+
+    const customerList = [...customers]
+    if (customerList.length === 0) {
+      return c.json({ error: 'No customers configured' }, 400)
+    }
+
+    // Reset state and start
+    _batchState = {
+      running: true,
+      total: customerList.length,
+      completed: 0,
+      failed: 0,
+      current: null,
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      errors: [],
+    }
+
+    // Run sequentially in background (no Promise.all — single Gemini call at a time)
+    ;(async () => {
+      for (const customer of customerList) {
+        _batchState.current = customer.name
+        try {
+          await runIntelligencePipeline(customer.name)
+          // Wait for the per-customer pipeline to finish (it runs in background via IIFE)
+          // Poll getJobStatus until it resolves to complete or error
+          let settled = false
+          for (let i = 0; i < 600; i++) { // max ~10 min per customer
+            const jobStatus = getJobStatus(customer.name)
+            if (jobStatus && (jobStatus.status === 'complete' || jobStatus.status === 'error')) {
+              if (jobStatus.status === 'error') {
+                _batchState.failed++
+                _batchState.errors.push({ customer: customer.name, error: jobStatus.error ?? 'Unknown error' })
+              }
+              settled = true
+              break
+            }
+            await new Promise(r => setTimeout(r, 1000))
+          }
+          if (!settled) {
+            _batchState.failed++
+            _batchState.errors.push({ customer: customer.name, error: 'Timed out after 10 minutes' })
+          }
+        } catch (e: any) {
+          _batchState.failed++
+          _batchState.errors.push({ customer: customer.name, error: String(e?.message ?? e).slice(0, 300) })
+        }
+        _batchState.completed++
+        // 2-second delay between customers for Gemini rate limits
+        if (_batchState.completed < _batchState.total) {
+          await new Promise(r => setTimeout(r, 2000))
+        }
+      }
+      _batchState.running = false
+      _batchState.current = null
+      _batchState.completedAt = new Date().toISOString()
+      console.log(`[acct-intel] Batch generation complete: ${_batchState.completed - _batchState.failed} succeeded, ${_batchState.failed} failed out of ${_batchState.total}`)
+    })()
+
+    return c.json({ message: 'Batch generation started', total: customerList.length })
+  })
+
+  app.get('/api/intelligence/generate-all/status', (c) => {
+    return c.json(_batchState)
   })
 }

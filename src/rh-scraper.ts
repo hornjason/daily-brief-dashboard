@@ -218,7 +218,8 @@ async function _autoRecover(profileDir: string): Promise<void> {
 
         // BKL-M50c gap 2: re-adopt sister scrapers that hold dead context references
         if (_onContextRecovered && _context && _profileDir) {
-          _onContextRecovered(_context, _profileDir)
+          try { _onContextRecovered(_context, _profileDir) }
+          catch (e: any) { console.warn('[rh-scraper] context recovery callback error:', e?.message) }
           console.log('[rh-scraper] auto-recovery: sister scrapers re-adopted')
         }
 

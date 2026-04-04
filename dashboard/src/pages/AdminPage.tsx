@@ -454,6 +454,122 @@ function IntelligenceStepperSection({ jobStatus }: { jobStatus: IntelligenceJobS
 
 // ── BKL-M50e: Scrape history section ─────────────────────────────���─────────────
 
+// ── BKL-AI06: Batch intelligence generation section ──────────────────────────
+
+interface BatchIntelState {
+  running: boolean
+  total: number
+  completed: number
+  failed: number
+  current: string | null
+  startedAt: string | null
+  completedAt: string | null
+  errors: { customer: string; error: string }[]
+}
+
+function BatchIntelligenceSection() {
+  const [batchState, setBatchState] = useState<BatchIntelState | null>(null)
+  const [starting, setStarting] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const fetchBatchStatus = useCallback(async () => {
+    try {
+      const d = await fetch('/api/intelligence/generate-all/status').then(r => r.json())
+      setBatchState(d)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    fetchBatchStatus()
+  }, [fetchBatchStatus])
+
+  useEffect(() => {
+    if (batchState?.running) {
+      if (!pollRef.current) {
+        pollRef.current = setInterval(fetchBatchStatus, 3_000)
+      }
+    } else {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    }
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
+  }, [batchState?.running, fetchBatchStatus])
+
+  const handleGenerate = async () => {
+    setStarting(true)
+    try {
+      await fetch('/api/intelligence/generate-all', { method: 'POST' })
+      await fetchBatchStatus()
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  const busy = starting || batchState?.running
+  const pct = batchState && batchState.total > 0
+    ? Math.round((batchState.completed / batchState.total) * 100)
+    : 0
+
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <span className="text-sm font-medium text-gray-200">Generate All Account Intelligence</span>
+          <p className="text-xs text-gray-500 mt-0.5">Sequential Gemini pipeline for every customer (industry + company + Drive docs)</p>
+        </div>
+        <button
+          onClick={handleGenerate}
+          disabled={!!busy}
+          className="px-3 py-1.5 text-xs font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors shrink-0"
+        >
+          {busy ? 'Running...' : 'Generate All'}
+        </button>
+      </div>
+      <div className="space-y-2 text-xs text-gray-400">
+        {batchState?.running && batchState.total > 0 && (
+          <>
+            <div className="flex items-center gap-1.5 text-yellow-400">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+              {batchState.completed} / {batchState.total} customers ({pct}%)
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-1.5">
+              <div
+                className="bg-yellow-500 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            {batchState.current && (
+              <div className="text-gray-300 truncate">Current: {batchState.current}</div>
+            )}
+          </>
+        )}
+        {!batchState?.running && batchState?.completedAt && (
+          <div>
+            Last run: <span className="text-gray-300">{formatRelTime(batchState.completedAt)}</span>
+            {' '}&mdash; {batchState.completed - batchState.failed}/{batchState.total} succeeded
+            {batchState.failed > 0 && (
+              <span className="text-red-400 ml-1">({batchState.failed} failed)</span>
+            )}
+          </div>
+        )}
+        {!batchState?.running && !batchState?.completedAt && !batchState?.startedAt && (
+          <div className="text-gray-500">Never run</div>
+        )}
+        {!batchState?.running && batchState?.errors && batchState.errors.length > 0 && (
+          <div className="mt-1 space-y-1">
+            {batchState.errors.map((err, i) => (
+              <div key={i} className="text-red-400 truncate" title={err.error}>
+                {err.customer}: {err.error}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── BKL-M50e: Scrape history section ─────────────────────────────────────────
+
 interface ScrapeLogEntry {
   timestamp: string
   service: string
@@ -806,6 +922,12 @@ export function AdminPage() {
             <IntelligenceStepperSection jobStatus={intelJobStatus} />
           </div>
         )}
+
+        {/* BKL-AI06: Batch intelligence generation */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Account Intelligence</h2>
+          <BatchIntelligenceSection />
+        </div>
 
         {/* BKL-M50e: Scrape History */}
         <ScrapeHistorySection />
