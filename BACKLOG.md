@@ -3408,7 +3408,7 @@ Files: src/customer.ts, src/google.ts, data/cache/*-{date}.json, dashboard/src/ 
 Description: Comprehensive investigation of the account intelligence pipeline end-to-end. Goals: (1) Performance — latency breakdown per brief (Gmail fetch / Calendar fetch / AI call / cache write), parallelization opportunities. (2) Gaps — what data is missing (Supportable subscriptions, CCSP spend, cases cross-referenced with pipeline). (3) Quality — are prompts producing high-signal output, or too verbose/shallow? (4) Token efficiency — cost per brief, differential updates vs full regen, smaller model candidates. (5) Architecture — IMPORTANT: Gemini API is NOT approved at Red Hat. Must investigate whether the current Vertex AI service account setup is Red Hat-approved, and if not, identify an approved alternative (Claude API via PAI Inference Tool is a candidate). Do not proceed with any AI provider change without confirming Red Hat approval. Deliverable: prioritized improvement list with cost estimates and approved-provider recommendation.
 
 ### BKL-AI19 | Research best approach for Vertex AI service account distribution
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04 — Already implemented and documented in docs/SECRETS-GUIDE.md: shared key in defaults.env (zero-setup for colleagues), personal override via .env, rotation procedure documented.
 Priority: P2
 Size: S (2 hours — research + recommendation)
 Source: Jason requested 2026-04-04
