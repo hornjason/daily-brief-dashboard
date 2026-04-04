@@ -33,6 +33,6 @@ export default defineConfig({
     command: 'bun run server.ts',
     url: 'http://localhost:7777',
     reuseExistingServer: false,
-    timeout: 15_000,
+    timeout: 30_000,
   } : undefined,
 })

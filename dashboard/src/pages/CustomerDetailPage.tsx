@@ -273,12 +273,16 @@ function mimeLabel(mimeType: string): string {
 }
 
 function nextMeetingLabel(meetings: any[]): string {
-  const next = meetings[0]
+  // meetings[] spans 30 days back → 30 days forward sorted ascending.
+  // Take the first meeting that started within the last 2h (may be in-progress)
+  // or is upcoming. Meetings older than 2h are over — show nothing.
+  const now = Date.now()
+  const twoHoursAgo = now - 2 * 60 * 60 * 1000
+  const next = meetings.find(m => new Date(m.start).getTime() >= twoHoursAgo)
   if (!next) return ''
-  const diff = new Date(next.start).getTime() - Date.now()
+  const diff = new Date(next.start).getTime() - now
   const mins = Math.floor(diff / 60_000)
-  if (mins < -60) return 'In progress'
-  if (mins < 0) return 'In progress'
+  if (mins < 0) return 'Meeting in progress'
   if (mins < 5) return 'Starting soon'
   if (mins < 60) return `In ${mins}m`
   const hours = Math.floor(mins / 60)

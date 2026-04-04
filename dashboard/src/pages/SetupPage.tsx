@@ -2080,6 +2080,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const supportablePollMsgRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [ccspScraping, setCcspScraping] = useState(false)
   const [ccspScrapeError, setCcspScrapeError] = useState<string | null>(null)
+  const [ccspSyncedAt, setCcspSyncedAt] = useState<string | null>(null)
   const [sfSyncing, setSfSyncing] = useState(false)
   const [sfSyncError, setSfSyncError] = useState<string | null>(null)
   const [rhSyncing, setRhSyncing] = useState(false)
@@ -2338,6 +2339,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
   const handleRunCcspScrape = async () => {
     setCcspScrapeError(null)
+    setCcspSyncedAt(null)
     setCcspScraping(true)
     try {
       const res = await fetch('/api/refresh/ccsp', { method: 'POST' })
@@ -2345,6 +2347,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       if (d.error) { setCcspScrapeError(d.error); return }
       const newStatus = await fetch('/api/scrape/ccsp/status').then(r => r.json()).catch(() => null)
       if (newStatus) setCcspStatus(newStatus)
+      setCcspSyncedAt(d.refreshedAt ?? new Date().toISOString())
     } catch (e: any) {
       setCcspScrapeError('Sync failed. Check server logs for details.')
     } finally {
@@ -2653,6 +2656,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             </div>
           </div>
           {ccspScrapeError && <p role="alert" className="text-xs text-critical pb-2">{ccspScrapeError}</p>}
+          {ccspSyncedAt && !ccspScrapeError && <p className="text-xs text-success pb-2">Synced at {new Date(ccspSyncedAt).toLocaleTimeString()}</p>}
 
           {/* Pipeline (Salesforce) */}
           <div className="flex items-center justify-between py-3">
@@ -2665,8 +2669,12 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               )}
             </div>
             <div className="flex items-center">
-              {!sfConnected && <span className="text-xs text-text-secondary mr-3">Requires Salesforce session</span>}
-              <SyncButton onClick={handleSfSync} loading={sfSyncing || scraperRunning.salesforce} disabled={!sfConnected || !sfStatus?.reportConfigured} label="Sync Now" />
+              {!sfConnected && (
+                <span className="text-xs text-text-secondary mr-3">
+                  {sfSessionActive ? 'Session active — sync needed to complete setup' : 'Requires Salesforce session'}
+                </span>
+              )}
+              <SyncButton onClick={handleSfSync} loading={sfSyncing || scraperRunning.salesforce} disabled={!sfSessionActive || !sfStatus?.reportConfigured} label="Sync Now" />
             </div>
           </div>
           {sfSyncError && <p role="alert" className="text-xs text-critical pb-2">{sfSyncError}</p>}

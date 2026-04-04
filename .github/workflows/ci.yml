@@ -20,6 +20,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+          cache: true
 
       - name: Install root dependencies
         run: bun install --frozen-lockfile
@@ -35,6 +36,13 @@ jobs:
 
       - name: Build dashboard
         run: cd dashboard && bun run build
+
+      - name: Upload dashboard build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-dist-${{ github.sha }}
+          path: dashboard/dist/
+          retention-days: 1
 
   publish:
     name: Build & push container image
@@ -64,6 +72,8 @@ jobs:
           tags: |
             ghcr.io/hornjason/daily-brief-dashboard:latest
             ghcr.io/hornjason/daily-brief-dashboard:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   smoke:
     name: Container smoke test
@@ -123,9 +133,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+          cache: true
 
       - name: Install root dependencies
         run: bun install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lockb') }}
 
       - name: Install Playwright browsers
         run: bunx playwright install chromium --with-deps
@@ -133,8 +150,11 @@ jobs:
       - name: Install dashboard dependencies
         run: cd dashboard && bun install --frozen-lockfile
 
-      - name: Build dashboard
-        run: cd dashboard && bun run build
+      - name: Download dashboard build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-dist-${{ github.sha }}
+          path: dashboard/dist/
 
       - name: Run tests
         run: CI=true bunx playwright test --project=ci --workers=2 --reporter=list

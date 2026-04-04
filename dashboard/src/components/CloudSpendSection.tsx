@@ -46,23 +46,22 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
   const displayQuarters = aeData ? aeData.byQuarter : (data?.byQuarter ?? [])
   const maxQuarterAcv = displayQuarters.reduce((max, q) => Math.max(max, q.acv), 0)
 
-  // BKL-G17: reporting period range badge (e.g. "CY25 Q1–Q4")
-  const QTR_FMT = /^[A-Z]{2}\d{2}Q\d$/
+  // BKL-G17: reporting period range badge (e.g. "2025 Q3–Q4")
+  // Data format: "2025-Q3" (YYYY-QN) — fixed from prior CY25Q1 assumption (BKL-W3-01)
+  const QTR_FMT = /^\d{4}-Q\d$/
   const allQuarters = data?.byQuarter ?? []
   const reportingPeriod = allQuarters.length > 0 ? (() => {
     const validQ = allQuarters.filter(q => QTR_FMT.test(q.quarter))
     if (!validQ.length) return null
     const sorted = [...validQ].sort((a, b) => a.quarter.localeCompare(b.quarter))
-    const first = sorted[0].quarter   // e.g. "CY25Q1"
+    const first = sorted[0].quarter   // e.g. "2025-Q3"
     const last  = sorted[sorted.length - 1].quarter
-    if (first === last) return first.replace(/Q(\d)/, ' Q$1')
-    const year = first.slice(0, 4)
-    const q1 = first.slice(5)
-    const q2 = last.slice(5)
-    const sameYear = first.slice(0, 4) === last.slice(0, 4)
-    return sameYear
-      ? `${year} ${q1}–${q2}`
-      : `${first.replace(/Q(\d)/, ' Q$1')} – ${last.replace(/Q(\d)/, ' Q$1')}`
+    const fy1 = first.slice(0, 4)   // "2025"
+    const q1  = first.slice(5)       // "Q3"
+    const fy2 = last.slice(0, 4)
+    const q2  = last.slice(5)
+    if (first === last) return `${fy1} ${q1}`
+    return fy1 === fy2 ? `${fy1} ${q1}–${q2}` : `${fy1} ${q1} – ${fy2} ${q2}`
   })() : null
 
   // Top accounts: filter by AE when selected

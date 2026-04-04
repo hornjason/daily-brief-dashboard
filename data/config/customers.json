@@ -9,14 +9,14 @@
       ],
       "ae": "Carolanne Farrell",
       "industry": "Technology",
-      "segment": "Network Security and Application Delivery",
-      "industryDescription": "A10 Networks provides secure application and network infrastructure solutions, including application delivery controllers, DDoS protection, and traffic management, for enterprises and service providers across on-premises, hybrid cloud, and distributed environments.",
+      "segment": "Network and Application Security",
+      "industryDescription": "A10 Networks provides secure application services and solutions, including application delivery controllers (ADCs), DDoS protection, and AI infrastructure security, for enterprises, service providers, and government entities across on-premises, hybrid cloud, and multi-cloud environments.",
       "industryCompetitors": [
         "F5 Networks",
         "Fortinet",
         "Citrix"
       ],
-      "industryUpdatedAt": "2026-04-04T16:42:20.620Z"
+      "industryUpdatedAt": "2026-04-04T18:12:16.701Z"
     },
     {
       "name": "Dropbox",
@@ -24,7 +24,16 @@
       "accountNumbers": [
         "10375220"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Technology",
+      "segment": "Cloud Storage and File Synchronization",
+      "industryDescription": "Dropbox is a secure cloud storage platform that enables users to store, share, and access files and collaborate across various devices.",
+      "industryCompetitors": [
+        "Google Drive",
+        "Microsoft OneDrive",
+        "Box"
+      ],
+      "industryUpdatedAt": "2026-04-04T18:13:52.070Z"
     },
     {
       "name": "Seattle Cancer Care",
@@ -37,7 +46,16 @@
         "609870",
         "924354"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Healthcare",
+      "segment": "Oncology Care and Cancer Research",
+      "industryDescription": "Fred Hutchinson Cancer Center, which was formed by the merger of Seattle Cancer Care Alliance and Fred Hutchinson Cancer Research Center, is a non-profit organization dedicated to providing comprehensive cancer treatment and patient care, alongside conducting innovative cancer research and clinical trials.",
+      "industryCompetitors": [
+        "University of Texas MD Anderson Cancer Center",
+        "Memorial Sloan Kettering Cancer Center",
+        "Dana-Farber Brigham Cancer Center"
+      ],
+      "industryUpdatedAt": "2026-04-04T18:16:06.516Z"
     },
     {
       "name": "Illumio",
@@ -50,7 +68,16 @@
         "12550526",
         "11980107"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Technology",
+      "segment": "Zero Trust Segmentation",
+      "industryDescription": "Illumio is a cybersecurity company that provides a Zero Trust Segmentation platform to prevent the spread of breaches by visualizing application traffic, setting granular segmentation policies, and isolating workloads across various environments.",
+      "industryCompetitors": [
+        "Akamai",
+        "Palo Alto Networks",
+        "Broadcom (VMware)"
+      ],
+      "industryUpdatedAt": "2026-04-04T18:17:54.173Z"
     },
     {
       "name": "Lynden Logistics",
@@ -59,7 +86,16 @@
         "5242436",
         "10752341"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Transportation & Logistics",
+      "segment": "Multi-modal Freight Forwarding and Supply Chain Solutions",
+      "industryDescription": "Lynden Logistics is a full-service transportation and logistics provider offering air, ocean, and ground freight forwarding, customs brokerage, and specialized supply chain services globally.",
+      "industryCompetitors": [
+        "SBA Global Logistic Services",
+        "AIT Worldwide Logistics",
+        "DHL"
+      ],
+      "industryUpdatedAt": "2026-04-04T18:20:45.029Z"
     },
     {
       "name": "Recreational Equipment",
@@ -67,7 +103,16 @@
       "accountNumbers": [
         "627962"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Retail",
+      "segment": "Outdoor Recreation Products and Services",
+      "industryDescription": "Recreational Equipment, Inc. (REI) is an American consumer co-operative retailer that sells outdoor gear, apparel, and footwear for various outdoor activities, and also offers outdoor recreation services.",
+      "industryCompetitors": [
+        "Patagonia",
+        "The North Face",
+        "L.L.Bean"
+      ],
+      "industryUpdatedAt": "2026-04-04T18:22:52.563Z"
     },
     {
       "name": "Shutterfly",
@@ -76,15 +121,15 @@
         "565461"
       ],
       "ae": "Carolanne Farrell",
-      "industry": "E-commerce and Retail",
-      "segment": "Personalized Photo Products and Gifting",
-      "industryDescription": "Shutterfly is an online platform that enables individuals to create and purchase a wide array of personalized photo products such as photo books, cards, gifts, and home decor items.",
+      "industry": "E-commerce",
+      "segment": "Personalized Photo Products & Services",
+      "industryDescription": "Shutterfly is an online platform that enables individuals and families to preserve memories by creating and purchasing personalized photo products such as photo books, cards, prints, and home decor items.",
       "industryCompetitors": [
         "Snapfish",
         "Vistaprint",
         "Mixbook"
       ],
-      "industryUpdatedAt": "2026-04-04T16:47:57.987Z"
+      "industryUpdatedAt": "2026-04-04T18:24:57.774Z"
     },
     {
       "name": "Crowdstrike",
@@ -93,7 +138,16 @@
         "5311018",
         "5857069"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Cybersecurity",
+      "segment": "Cybersecurity Platform (Endpoint Protection, EDR, Cloud Security)",
+      "industryDescription": "Crowdstrike is a cybersecurity technology company that provides cloud-native endpoint security, threat intelligence, and cyberattack response services through its AI-powered Falcon platform.",
+      "industryCompetitors": [
+        "SentinelOne",
+        "Palo Alto Networks",
+        "Microsoft Defender for Endpoint"
+      ],
+      "industryUpdatedAt": "2026-04-04T18:26:58.231Z"
     },
     {
       "name": "Lifetouch",
@@ -101,99 +155,32 @@
       "accountNumbers": [
         "1368936"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "Professional Photography",
+      "segment": "School and Event Photography",
+      "industryDescription": "Lifetouch provides professional photography services for families, schools, and organizations, capturing memories through school pictures, yearbooks, and portrait studios.",
+      "industryCompetitors": [
+        "Jostens",
+        "Herff Jones",
+        "TreeRing"
+      ],
+      "industryUpdatedAt": "2026-04-04T18:29:02.356Z"
     },
     {
       "name": "Fred Hutchinson Cancer Center",
       "accountNumbers": [
         "12763660"
       ],
-      "ae": "Carolanne Farrell"
-    },
-    {
-      "name": "Bespin Global U.S.",
-      "domain": "bespinglobal.us",
-      "accountNumbers": [
-        "9510919"
+      "ae": "Carolanne Farrell",
+      "industry": "Healthcare",
+      "segment": "Cancer Treatment and Biomedical Research",
+      "industryDescription": "Fred Hutchinson Cancer Center unites comprehensive care and advanced research to prevent, treat, and eliminate cancer and infectious diseases worldwide, functioning as an independent, nonprofit organization and serving as UW Medicine's cancer program.",
+      "industryCompetitors": [
+        "Memorial Sloan Kettering Cancer Center",
+        "Dana-Farber Cancer Institute",
+        "Scripps Health"
       ],
-      "ae": "Elmer Alvarez"
-    },
-    {
-      "name": "Bitrise",
-      "domain": "bitrise.io",
-      "accountNumbers": [
-        "11416649"
-      ],
-      "ae": "Elmer Alvarez"
-    },
-    {
-      "name": "Confluent",
-      "domain": "confluent.io",
-      "accountNumbers": [
-        "6390417",
-        "6084814",
-        "12091277",
-        "12849784"
-      ],
-      "ae": "Elmer Alvarez"
-    },
-    {
-      "name": "Intrado Corporation",
-      "domain": "intrado.com",
-      "accountNumbers": [
-        "11607015"
-      ],
-      "ae": "Elmer Alvarez",
-      "supportableName": "Intrado Life & Safety"
-    },
-    {
-      "name": "Mcafee",
-      "domain": "mcafee.com",
-      "accountNumbers": [
-        "1264530",
-        "7018642"
-      ],
-      "ae": "Elmer Alvarez"
-    },
-    {
-      "name": "Omnivision Technologies",
-      "domain": "ovt.com",
-      "accountNumbers": [
-        "1207290"
-      ],
-      "ae": "Elmer Alvarez"
-    },
-    {
-      "name": "Robert Half International",
-      "domain": "roberthalf.com",
-      "accountNumbers": [
-        "5308452"
-      ],
-      "ae": "Elmer Alvarez"
-    },
-    {
-      "name": "Taylor Fresh Foods",
-      "domain": "taylorfarms.com",
-      "accountNumbers": [
-        "11823554"
-      ],
-      "ae": "Elmer Alvarez"
-    },
-    {
-      "name": "Uber Technologies",
-      "domain": "uber.com",
-      "accountNumbers": [
-        "6943734"
-      ],
-      "ae": "Elmer Alvarez"
-    },
-    {
-      "name": "Workday",
-      "domain": "workday.com",
-      "accountNumbers": [
-        "5350212"
-      ],
-      "ae": "Elmer Alvarez"
+      "industryUpdatedAt": "2026-04-04T18:31:10.495Z"
     }
   ]
 }

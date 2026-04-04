@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-04 (BKL-G04/G05: marked DONE; BKL-W2-29: dup tiles removed; BKL-W2-30: SF setup docs; BKL-CI01: CI timeout; BKL-AI07: bootstrap hook; BKL-AI08: doc types; BKL-W2-16: record counts on scraper cards; BKL-W2-28: CCSP per-AE 3-tile redesign)
+Last update: 2026-04-05 (BKL-CI02–06: CI pipeline performance; BKL-W3-01/03/07/08/11/12/13: updated with team investigation findings)
 
 ---
 
@@ -3224,6 +3224,185 @@ Source: Jason 2026-04-03 — admin page shows "Running..." for RH Cases but setu
 Files: dashboard/src/pages/SetupPage.tsx
 Description: The Setup page Sync section (Red Hat Cases, Supportable Subscriptions, CCSP, Pipeline) does not reflect when a scraper is actively running. The admin page correctly shows "Running..." and "In progress" indicators because it polls `/api/status/scrapes` and checks `isRunning`. The Setup page Sync buttons need the same polling — show a spinner or "Syncing..." state when `isRunning=true` for that source, and disable the button to prevent duplicate triggers.
 
+### BKL-W3-14 | Dashboard Design Council — full UX audit before any UI/UX implementation
+Status: 🔴 OPEN
+Priority: P0
+Size: M (half day council + report)
+Source: Jason 2026-04-05 — "do a full council meeting on the design before any UI/UX work"
+Blocks: BKL-W3-02, BKL-W3-04, BKL-W3-05, BKL-W3-06, BKL-W3-09 (all UI items blocked until this completes)
+Files: dashboard/src/ (entire frontend)
+Description: Before implementing any UI/UX changes, convene a full council to audit the dashboard design holistically. Key concerns from Jason:
+  - Text labels improperly laid out across multiple pages
+  - Content does not scale well — things get bunched up or misaligned
+  - Need to validate all designs against 8-AE scale (current: 1-2 AEs, but system should support 8)
+  - Incorporate all W3 UI backlog comments as input to the council
+  Council inputs: W3-02 (CCSP tile), W3-04 (portfolio cards truncation), W3-05 (right column tiles), W3-06 (setup header), W3-09 (admin cards), plus Aditi's existing design specs.
+  Deliverable: A design system decision doc (docs/DESIGN-COUNCIL-W3.md) covering: (1) typography scale and hierarchy standards, (2) truncation/overflow rules, (3) grid/column width rules at 1-8 AE scale, (4) tile/card density standards, (5) label alignment rules. All subsequent UI items must conform to this doc.
+  Council composition: Aditi (design lead), Serena (architecture/scalability), Marcus (implementability review).
+
+### BKL-W3-15 | Scraper sync status — standard output format across all data sources
+Status: 🔴 OPEN
+Priority: P1
+Size: S (2-3 hours)
+Source: Jason 2026-04-05 — "standard and consistency across the app"
+Files: dashboard/src/pages/SetupPage.tsx (all 4 sync rows: RH Cases, Supportable, CCSP, Pipeline)
+Description: Each data source sync row on the Setup page currently shows different information after sync. Standardize to a consistent pattern across all four sources:
+  Standard format: "Synced [time ago] — [N] records" (e.g. "Synced just now — 250 rows" or "Synced 2h ago — 14 cases")
+  Apply consistently to: Red Hat Cases (rhStatus.lastScraped + case count), Supportable (supportableStatus.lastScrape + subscription count), CCSP (ccspStatus.lastSync + record count), Pipeline/Salesforce (sfStatus.lastSync + sfStatus.rowCount).
+  The CCSP sync success toast added in W3-07 (ccspSyncedAt → "Synced at HH:MM") is an interim fix — replace with the standard format once this item is implemented.
+  Also standardize the "last sync" display in the default (non-post-sync) state — currently each source shows the timestamp differently (some use timeAgo(), some show raw ISO, some show nothing).
+
+### BKL-W3-01 | CCSP rolling quarters bug — showing 2025 Q3/Q4 instead of current rolling 4
+Status: ✅ DONE 2026-04-05 — Fixed QTR_FMT regex in CloudSpendSection.tsx from /^[A-Z]{2}\d{2}Q\d$/ to /^\d{4}-Q\d$/. Fixed display string parsing to match 2025-Q3 format. Reporting period badge now renders correctly. Scraper backend was correct all along — 2026 data not yet in Tableau.
+Priority: P1
+Size: XS (30 min)
+Source: Jason 2026-04-04 brain dump
+Files: dashboard/src/components/CloudSpendSection.tsx:50
+Investigation: Marcus 2026-04-05 — Backend scraper is correct: getRollingFyWindow() computes 4 quarters (2026-Q2, Q1, 2025-Q4, Q3 for April 2026). Tableau genuinely has no 2026 data yet — cache only has 250 records for 2025-Q3 and 2025-Q4. NOT a scraper bug. Actual bug found: QTR_FMT regex at CloudSpendSection.tsx:50 is /^[A-Z]{2}\d{2}Q\d$/ (expects "CY25Q1" format) but actual data uses "2025-Q3" format — so the reporting period badge NEVER renders because validQ is always empty.
+Description: Fix the QTR_FMT regex from /^[A-Z]{2}\d{2}Q\d$/ to /^\d{4}-Q\d$/ so the reporting period badge renders correctly with actual data. Optional enhancement: add placeholder $0 entries for missing quarters in the rolling window so the chart always shows 4 bars, making it clear which quarters have no closed deals yet. Do not change the scraper — backend is correct.
+
+### BKL-W3-02 | CCSP middle tile redesign — mirror ACV By Owner layout
+Status: 🔴 OPEN
+Priority: P1
+Size: M (4 hours)
+Source: Jason 2026-04-04 brain dump — "I want this to look like the ACV by owner tile above"
+Files: dashboard/src/ (CCSP section, middle tile)
+Description: CCSP middle tile currently shows "Quarterly Revenue" as a simple list with bars. Jason wants it to look like the Pipeline "By Owner" tile: owner rows with total $ · count, a progress bar, then a quarterly breakdown grid (Q1/Q2/Q3/Q4 columns × Commit/Best/Pipeline/Closed rows). Redesign the CCSP middle tile to match that layout with cloud spend data. Per-AE rows, quarter columns, spend totals.
+
+### BKL-W3-03 | Duplicate AE portfolio "Elmer" showing twice on dashboard
+Status: ✅ DONE 2026-04-05 — Removed Elmer Alvarez's 10 customers from data/config/customers.json. Jason will add Elmer as a proper second AE (with aes.json entry + sheet IDs) via bootstrap when ready. Dashboard now shows 10 customers, 1 AE (Carolanne).
+Priority: P0
+Size: XS (15 min)
+Source: Jason 2026-04-04 brain dump — only 1 AE configured, Elmer appears twice
+Files: data/config/aes.json
+Investigation: Marcus 2026-04-05 — NOT a code bug. API returns 20 unique customers: 10 Carolanne, 10 Elmer. AccountPortfolioGrid correctly groups by a.ae field. Root cause: Elmer Alvarez has 10 customers in customers.json but is MISSING from aes.json (only Carolanne is configured). Both sections render legitimately — Elmer appears because his customers exist in the system.
+Description: Elmer Alvarez has customers in customers.json but no AE entry in aes.json. This means his accounts have no associated sheet IDs or scraper config. Fix: add Elmer Alvarez to aes.json with his sheet IDs and territory config. This is a config gap, not a UI bug — deduplicating in the UI would hide missing data.
+
+### BKL-W3-04 | Account Portfolio cards — Segment/Industry text truncated and unreadable
+Status: 🔴 OPEN
+Priority: P2
+Size: S (1-2 hours)
+Source: Jason 2026-04-04 brain dump
+Files: dashboard/src/components/AccountPortfolioGrid.tsx or CustomerCard
+Description: Account cards on the portfolio grid show a truncated Segment/Industry label that is hard to read. Options: (1) wrap instead of truncate, (2) show full text on hover/tooltip, (3) abbreviate intelligently rather than hard-cutting. Investigate what data populates this field and choose the approach that fits the card layout best.
+
+### BKL-W3-05 | Account Details page — right column tiles truncated, needs UX deep investigation
+Status: ⏸ DEFERRED — blocked on BKL-W3-14 (Design Council must complete first)
+Priority: P1
+Size: L (deep investigation + redesign)
+Source: Jason 2026-04-04 brain dump — "very truncated and hard to read, may be a deeper UI/UX issue"
+Files: dashboard/src/pages/CustomerDetailPage.tsx (right column: Products, Support Cases, etc.)
+Investigation: Aditi 2026-04-05 — Full design report delivered. Key findings:
+  - P0: Products tile uses `truncate` on product descriptions (often 60+ chars) at 35% column width — primary identifier cut off
+  - P0: Cases tile uses `line-clamp-2` on case summary AND `truncate` on product name — most actionable info unreadable
+  - P1: Key Contacts name+email both truncated; email is near-useless at this width
+  - P1: Drive file names truncated with MIME badge and date consuming most of the row
+  - All tiles use text-xs (12px) body text — below comfortable reading threshold for dense data
+  - Current tile order (Stakeholders > Products > Cases > Contacts > Drive) buries Cases at position 3; Sev1 should be position 1
+  Recommended redesign: Cases to position 1, remove truncate → line-clamp-2/3, bump body text to text-sm, add expand-in-place accordion, increase column width xl:w-[40%], show expiry urgency bands on Products (red <30d, amber <90d).
+Description: Implement Aditi's design recommendations from docs/W3-05-DESIGN-REPORT.md (or inline above). Priority order: (1) fix truncation on Products+Cases (remove `truncate`, allow wrap), (2) reorder tiles (Cases first), (3) bump text-xs→text-sm for primary content, (4) add expand-in-place for case details, (5) expiry urgency bands on Products.
+
+### BKL-W3-06 | Setup page — header redesign with Red Hat branding
+Status: ⏸ DEFERRED — blocked on BKL-W3-14 (Design Council must complete first)
+Priority: P2
+Size: S (2-3 hours)
+Source: Jason 2026-04-04 brain dump — "change the icon to a red hat icon/image, better header design"
+Files: dashboard/src/pages/SetupPage.tsx:2780-2817 (header section)
+Investigation: Aditi 2026-04-05 — Three concepts designed. Recommendation: Concept B "Horizontal Brand Bar." Left-aligned layout with Red Hat red square icon (bg-[#EE0000]) containing white fedora icon. Title + subtitle beside it. Gradient accent divider line below. Reset buttons moved to right of same row (removes absolute positioning fragility). Rationale: matches dashboard's left-aligned content language, compact (doesn't push accordion sections down), professional density appropriate for a settings page.
+Description: Implement Concept B from Aditi's design. Key changes to SetupPage.tsx:2780-2817: (1) change from centered to flex items-start gap-4 layout, (2) replace emoji icon with 48x48 bg-[#EE0000] rounded-xl containing white fedora SVG, (3) add "ASA Command Center" subtitle in text-accent, (4) add h-0.5 gradient divider below, (5) move reset buttons from absolute-positioned to right side of flex row. Red Hat brand color: #EE0000.
+
+### BKL-W3-07 | Setup page — CCSP "Sync Now" button does nothing
+Status: ✅ DONE 2026-04-05 — Added ccspSyncedAt state. handleRunCcspScrape now sets it from d.refreshedAt on success. "Synced at HH:MM:SS" message renders below the sync button row after completion.
+Priority: P1
+Size: XS (30 min)
+Source: Jason 2026-04-04 brain dump — "clicking CCSP Sync Now doesn't do anything"
+Files: dashboard/src/pages/SetupPage.tsx (CCSP sync row)
+Investigation: Marcus 2026-04-05 — Button IS wired correctly (calls POST /api/refresh/ccsp, returns ok:true, not disabled). Root cause: zero visible feedback. The sync completes in <100ms (cache is fresh), so the loading spinner appears and disappears too fast to notice. No success/failure message shown after completion.
+Description: CCSP Sync Now works silently. Fix: add a toast/flash message after sync completes ("CCSP data refreshed — last sync: [timestamp]") and update the last-synced timestamp display immediately. The button does not need re-wiring — only the feedback layer is missing.
+
+### BKL-W3-08 | Setup page — Salesforce shows contradictory state (Session Active + Requires session)
+Status: ✅ DONE 2026-04-05 — SetupPage.tsx:2668 now shows "Session active — sync needed to complete setup" when sfSessionActive && !sfScrapeOk, vs "Requires Salesforce session" when !sfSessionActive. Sync button also re-enabled when session is active (changed disabled from !sfConnected to !sfSessionActive) so user can trigger sync from that state.
+Priority: P1
+Size: XS (30 min)
+Source: Jason 2026-04-04 brain dump — screenshot confirms contradictory UI state
+Files: dashboard/src/pages/SetupPage.tsx:2668 (sync row disabled message)
+Investigation: Marcus 2026-04-05 — State derivation confirmed. `sfConnected = sfSessionActive && sfScrapeOk`. The contradictory state only appears transiently when `sfSessionActive=true` (OAuth token exists) but `sfScrapeOk=false` (no successful sync yet — lastSync is null or syncError set). In that state: connection card shows "Session Active" (correct), sync row shows "Requires Salesforce session" (misleading — session IS active, what's missing is a completed sync). Currently system is healthy (sfConnected=true) so the bad state isn't showing right now.
+Description: Fix the message at SetupPage.tsx:2668 to distinguish between two failure modes: (1) `!sfSessionActive` → "Requires Salesforce session" (correct as-is), (2) `sfSessionActive && !sfScrapeOk` → "Session active — click Connect to complete setup" and enable the Sync Now button so the user can trigger a sync from this state.
+
+---
+
+### BKL-W3-12 | Product Intelligence Hub — RHEL, OpenShift, AAP release radar with chat
+Status: 🔴 OPEN
+Priority: P2
+Size: XL (multi-session, 3 phases)
+Source: Jason 2026-04-04 feature request
+Architecture: Serena Blackwood 2026-04-05 — Full design at docs/W3-12-PRODUCT-INTELLIGENCE-HUB.md
+Files: New feature — src/product-intelligence.ts, dashboard/src/pages/ProductIntelligencePage.tsx
+Description: SAs need to stay current on Red Hat product releases without manually tracking docs sites. A Product Intelligence Hub for RHEL, OpenShift, and Ansible Automation Platform that:
+  - Data sources: Red Hat docs (docs.redhat.com), release notes, Tech Preview pages, What's New announcements, plus any "What's Next" decks Jason drops as Markdown into a Drive folder per product
+  - Clicking a product name shows a Gemini-synthesized summary of: latest release highlights, Tech Preview items, roadmap signals — updated on a schedule (daily or on demand)
+  - Chat box on the product page: ask Gemini questions about the product using the collected intelligence as context ("Does AAP 2.6 support XYZ?", "What changed in RHEL 9.4?")
+  - Intelligence stored in data/cache/product-intelligence/{product-slug}.json (same pattern as account intelligence)
+  - Admin trigger to refresh a product's intelligence on demand
+  Phases: (1) scrape + Gemini summary (no chat), (2) add Drive folder drop for SA-curated decks, (3) chat interface
+
+### BKL-W3-13 | Telesense integration — SF utilization data mapped to account details + briefs
+Status: 🔴 OPEN
+Priority: P2
+Size: L → XL (depends on tech stack discovery)
+Source: Jason 2026-04-04 feature request
+Investigation: Telesense feasibility agent 2026-04-05 — MEDIUM complexity, HIGH risk on approach uncertainty.
+  Verdict: PROCEED with 1-day discovery spike before building.
+  - Telesense is a proprietary internal Red Hat tool with no public documentation — tech stack unknown until VNC inspection
+  - Most likely path: Tableau embed in SF (CCSP scraper is the direct template) → fallback to DOM scraping → fallback to vision API
+  - Account number matching already solved in codebase (supportable-scraper.ts pattern, Customer.accountNumbers field)
+  - Happy path timeline (Tableau + account numbers visible): 8-11 days
+  - Vision API fallback (PDF images only): +5-7 days, reconsider priority
+  - Single blocking question: does Telesense expose account numbers in its dashboard UI?
+Files: New — src/telesense-scraper.ts, src/customer.ts (brief XML), dashboard/src/ (customer detail)
+Description: Telesense is a Salesforce dashboard with 3 product buttons (RHEL, OpenShift, AAP likely) showing customer utilization reports by AE, plus an account number view. Downloaded data is multi-page images of graphs — not structured data.
+  REQUIRED FIRST STEP (1-day spike): VNC into Telesense, determine: (1) Tableau or Lightning component? (2) Account numbers visible in UI? (3) Export options — structured data or PDF images only?
+  Decision after spike: Tableau + account numbers visible → build on CCSP template. PDFs only / no account numbers → deprioritize.
+  Build (if spike confirms feasibility):
+  - Scrape Telesense per-AE utilization data (CCSP scraper as template)
+  - Map account numbers → customers in customers.json
+  - Surface utilization signals on Customer Detail page
+  - Include utilization signals in brief XML as a new source_type
+
+### BKL-W3-11 | Account Details header — mystery "In Progress" label next to AE name
+Status: ✅ DONE 2026-04-05 — Root cause was fetchCustomerMeetings returning 30-day window sorted ascending; meetings[0] was the oldest past meeting, triggering "In progress" permanently. Fixed nextMeetingLabel() to use find() with 2h lookback window instead of index 0. Changed "In progress" → "Meeting in progress". CustomerDetailPage.tsx:275-290.
+Priority: P2
+Size: XS (15 min)
+Source: Jason 2026-04-04 brain dump — "no idea what this is or means"
+Files: dashboard/src/pages/CustomerDetailPage.tsx:275-289 (nextMeetingLabel), :1658-1662 (header render)
+Investigation: Marcus 2026-04-05 (partial) + deep trace 2026-04-05 — Marcus identified nextMeetingLabel() but missed the real root cause. fetchCustomerMeetings() fetches 30 days back → 30 days forward sorted ascending. meetings[0] is the OLDEST event in the window (potentially 3 weeks ago). mins < -60 always returned 'In progress' for any past meeting, permanently showing the label even with no upcoming meetings.
+Fix applied 2026-04-05: nextMeetingLabel() now uses Array.find() to locate the first meeting that started within the last 2 hours or is upcoming. Meetings older than 2h are skipped (meeting is over). Also: changed "In progress" → "Meeting in progress" for clarity.
+Description: FIXED — dashboard/src/pages/CustomerDetailPage.tsx:275-290. The label now only appears during an active meeting window (started <2h ago or upcoming). No more phantom "In progress" from weeks-old past events.
+
+### BKL-W3-10 | Account aliases — map accounts to alternate names for Drive/data lookup
+Status: 🔴 OPEN
+Priority: P1
+Size: M (half day)
+Source: Jason 2026-04-04 brain dump
+Files: data/config/customers.json, src/customer.ts (_fetchCustomerDocsImpl, generateBrief), dashboard/src/pages/SetupPage.tsx or CustomerDetailPage
+Description: Some accounts have subscriptions, cases, and pipeline under one name but all the Drive docs/account notes are filed under a different name (alias, parent company, or legal entity variant). Example: "Dropbox" in Salesforce/Portal but Drive folder is named "Dropbox Inc." or a subsidiary name. Without aliasing support, Drive lookups fail silently and the brief misses all document intelligence.
+Design:
+  - Add optional `aliases: string[]` field to Customer in customers.json (and types.ts)
+  - Drive folder lookup in _fetchCustomerDocsImpl: try primary name first, then each alias in order until a folder is found
+  - Brief XML / intelligence slug: use primary name for caching, but also check alias slugs when intelligence cache is missing
+  - Setup UI: add "Aliases" field to customer config (comma-separated alternate names)
+  - This is purely additive — no changes to existing matching logic, aliases only tried as fallback
+
+### BKL-W3-09 | Admin page — top cards misaligned text and labels
+Status: 🔴 OPEN
+Priority: P2
+Size: XS (30 min)
+Source: Jason 2026-04-04 brain dump
+Files: dashboard/src/pages/AdminPage.tsx (top stat cards)
+Description: The summary cards at the top of the Admin page have misaligned text and labels. Investigate the card layout, fix alignment so labels and values are correctly positioned. Likely a flex/grid alignment or padding issue.
+
+---
+
 ### BKL-G23 | Admin page not discoverable from sidebar nav
 Status: 🔴 OPEN
 Priority: P3
@@ -3676,3 +3855,47 @@ Size: XS (15 min)
 Source: Deep brief investigation 2026-04-04 — new sections from intelligence injection had no sort order
 Files: dashboard/src/pages/CustomerDetailPage.tsx:381-395
 Description: The 3-step synthesis prompt generates ## Risks & Renewals, ## Company Profile, and ## Data Freshness sections, and the single-pass fallback generates ## Key Insights from Documents. None of these were in SECTION_ORDER, so they rendered at the bottom in random order. Fix: added prefix entries for all four missing section types.
+
+---
+
+## CI / Infrastructure
+
+### BKL-CI02 | CI pipeline — no bun install caching (root + dashboard)
+Status: ✅ DONE 2026-04-05 — Added cache: true to oven-sh/setup-bun@v2 in both test and e2e jobs.
+Priority: P1
+Size: XS (30 min)
+Source: Jason 2026-04-05 CI pipeline analysis
+Files: .github/workflows/ci.yml (test job, e2e job)
+Description: Both `test` and `e2e` jobs run `bun install --frozen-lockfile` twice (root + dashboard) with zero caching. Every push downloads all packages fresh — estimated 2-4 min per job, 4-8 min total wasted. Fix: add `cache: true` to `oven-sh/setup-bun@v2` in both jobs (built-in bun cache support), or add an `actions/cache` step on `~/.bun/install/cache`.
+
+### BKL-CI03 | CI pipeline — Playwright browser downloaded on every e2e run
+Status: ✅ DONE 2026-04-05 — Added actions/cache@v4 on ~/.cache/ms-playwright keyed to package.json hash in e2e job.
+Priority: P1
+Size: XS (30 min)
+Source: Jason 2026-04-05 CI pipeline analysis
+Files: .github/workflows/ci.yml (e2e job — `bunx playwright install chromium --with-deps`)
+Description: The `e2e` job installs Chromium binary + system deps (`--with-deps`) on every run with no caching. This is an estimated 3-5 min download every push. Fix: add `actions/cache` on `~/.cache/ms-playwright` keyed to the Playwright version in `package.json`. Only re-downloads when the Playwright version changes.
+
+### BKL-CI04 | CI pipeline — Docker build has no layer cache
+Status: ✅ DONE 2026-04-05 — Added cache-from: type=gha and cache-to: type=gha,mode=max to docker/build-push-action@v6 in publish job.
+Priority: P1
+Size: XS (15 min)
+Source: Jason 2026-04-05 CI pipeline analysis
+Files: .github/workflows/ci.yml (publish job — `docker/build-push-action@v6`)
+Description: The `publish` job builds the container with no `cache-from`/`cache-to` configured. The Containerfile runs a large `apt-get install` (Playwright system deps + noVNC stack) on every push — estimated 3-5 min that is always re-executed. Fix: add `cache-from: type=gha` + `cache-to: type=gha,mode=max` to the build-push action. The apt layer almost never changes, so it will be cache-hit on nearly every run.
+
+### BKL-CI05 | CI pipeline — dashboard built twice (test job + e2e job)
+Status: ✅ DONE 2026-04-05 — test job now uploads dashboard/dist as actions artifact (dashboard-dist-{sha}). e2e job downloads it instead of rebuilding.
+Priority: P2
+Size: S (1 hour)
+Source: Jason 2026-04-05 CI pipeline analysis
+Files: .github/workflows/ci.yml (test job + e2e job both run `cd dashboard && bun run build`)
+Description: The `test` job builds the dashboard and the `e2e` job independently rebuilds it — identical work done twice. Fix: upload the `dashboard/dist` as a GitHub Actions artifact at the end of `test`, then download and use that artifact in `e2e` instead of rebuilding. Saves ~1-2 min and ensures e2e tests the same build that was type-checked.
+
+### BKL-CI06 | CI pipeline — webServer startup timeout too tight (15s)
+Status: ✅ DONE 2026-04-05 — playwright.config.ts webServer.timeout bumped from 15_000 to 30_000.
+Priority: P2
+Size: XS (15 min)
+Source: Jason 2026-04-05 CI pipeline analysis
+Files: playwright.config.ts (webServer.timeout: 15_000)
+Description: playwright.config.ts configures `webServer.timeout: 15_000` (15 seconds). Bun cold-start on a GitHub Actions runner (slower than dev machine, cold dependency resolution) can approach this limit, risking "server didn't start" failures that cancel the entire test run. Fix: bump to 30_000 or 45_000 to give the server comfortable startup room without risking test runs failing before they start.
