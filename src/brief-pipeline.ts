@@ -98,6 +98,7 @@ export function buildSynthesisPrompt(
   lastInteractionDate: string,
   dataGaps: string[],
   upcomingMeetings?: { title: string; start: string; attendees?: string[] }[],
+  intelligenceContext?: { company?: string; industry?: string },
 ): string {
   const top15 = rankedItems.slice(0, 5)  // AI18-R3b: top 5 only (was 15 — fed too much noise to synthesis)
 
@@ -115,9 +116,20 @@ export function buildSynthesisPrompt(
     meetingContext = `\nUPCOMING MEETINGS (next 7 days):\n${meetingList}\n\nIMPORTANT: Lead with ## Meeting Prep (not ## What Changed). For each upcoming meeting, surface: open critical/high support cases to discuss, renewals expiring within 90 days, most recent email thread, at-risk or committed pipeline opportunities. Cross-reference each item from ITEMS TO SYNTHESIZE against these meetings.\n`
   }
 
+  // Intelligence context appended directly — bypasses extraction ranking so strategic
+  // signals (company pivot, leadership changes) always reach synthesis regardless of
+  // whether they ranked in the top 5 operational items.
+  let intelContext = ''
+  if (intelligenceContext?.company || intelligenceContext?.industry) {
+    intelContext = '\n\nACCOUNT INTELLIGENCE (use for Company Profile / Technology Landscape sections):'
+    if (intelligenceContext.company) intelContext += `\n\n[Company Intelligence]\n${intelligenceContext.company}`
+    if (intelligenceContext.industry) intelContext += `\n\n[Industry Analysis]\n${intelligenceContext.industry}`
+  }
+
   return SYNTHESIS_PROMPT
     .replace(/\{last_interaction_date\}/g, lastInteractionDate)
     .replace('{data_gaps}', dataGaps.length ? dataGaps.join('\n') : 'All sources current.')
     .replace('{ranked_items_json}', JSON.stringify(top15, null, 2))
     + meetingContext
+    + intelContext
 }

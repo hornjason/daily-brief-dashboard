@@ -981,7 +981,22 @@ export async function generateBrief(
       const t = new Date(m.start).getTime()
       return t >= Date.now() && t <= Date.now() + 7 * 24 * 60 * 60 * 1000
     })
-    const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days)
+
+    // Pass intelligence context directly to synthesis — bypasses extraction ranking
+    // so strategic context (company pivot, leadership changes) always reaches the brief
+    let intelligenceContext: { company?: string; industry?: string } | undefined
+    try {
+      const intelligenceSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      const intelligencePath = `${process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')}/intelligence/${intelligenceSlug}.json`
+      if (existsSync(intelligencePath)) {
+        const intel = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
+        if (intel.company || intel.industry) {
+          intelligenceContext = { company: intel.company, industry: intel.industry }
+        }
+      }
+    } catch { /* intelligence cache missing — brief generates without it */ }
+
+    const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext)
     const brief = await callLLM(
       'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
       synthesisPrompt,
