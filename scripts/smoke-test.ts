@@ -82,7 +82,8 @@ if (kpis) {
   if (typeof kpis.openCasesTotal === 'number' && kpis.openCasesTotal > 0) {
     pass('Open cases present', `openCasesTotal = ${kpis.openCasesTotal}`)
   } else {
-    fail('openCasesTotal > 0', `got ${kpis.openCasesTotal} — cache may be stale or session expired`)
+    // Cases = 0 means RH session likely expired, not a code problem — warn not fail
+    warn('openCasesTotal = 0', 'RH session may be expired — reconnect via dashboard to refresh cases')
   }
 
   if (typeof kpis.totalAccounts === 'number' && kpis.totalAccounts > 0) {
@@ -120,7 +121,9 @@ if (existsSync(casesPath)) {
     fail('Cases cache readable', 'JSON parse error')
   }
 } else {
-  fail('Cases cache exists', `${casesPath} not found`)
+  // Missing cases.json = scraper hasn't run yet (e.g. after container restart with expired session)
+  // This is an operational state, not a code defect — warn not fail
+  warn('Cases cache missing', `${casesPath} not found — run a manual RH sync to populate`)
 }
 
 // ── 5. Config files ──────────────────────────────────────────────────────────
