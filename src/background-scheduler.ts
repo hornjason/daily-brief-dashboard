@@ -22,6 +22,7 @@ import { initStatusStore, recordOutcome, getStatus } from './scraper-status-stor
 import { renderBriefHtml } from './email-template.ts'
 import { sendBriefEmail } from './email-sender.ts'
 import { sanitizeErr } from './utils.ts'
+import { isBootstrapRunning } from './bootstrap-orchestrator.ts'
 
 // ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
 // All scrapers share one BrowserContext (SSO constraint). Running them
@@ -38,9 +39,10 @@ export interface ScraperTask {
 const _scraperQueue: ScraperTask[] = []
 let _scraperQueueRunning = false  // true while a task from the queue is executing
 
-/** Check all four scraper mutex flags — returns true if ANY browser scraper is active. */
+/** Check all four scraper mutex flags + bootstrap — returns true if ANY browser scraper is active.
+ *  BKL-W2-17: includes isBootstrapRunning() so scheduled scrapers wait while bootstrap runs. */
 function isAnyScraperRunning(): boolean {
-  return _rhScrapeRunning || _sfSyncRunning || ccspScrapeRunning || ccspInFlight || supportableScrapeRunning
+  return _rhScrapeRunning || _sfSyncRunning || ccspScrapeRunning || ccspInFlight || supportableScrapeRunning || isBootstrapRunning()
 }
 
 /**

@@ -3318,7 +3318,7 @@ Files: dashboard/src/pages/DataSourcesPage.tsx (or global layout), src/server.ts
 Description: When Playwright's shared browser context crashes and auto-recovery fails (multiple consecutive "Target page, context or browser has been closed" errors), the user has no indication of what's wrong or what to do. Scrapers silently fail with confusing error states. Fix: (1) Track consecutive browser-crash failures in a server-side counter; expose `browserRestartNeeded: true` on `/api/status`. (2) Frontend shows a dismissible banner in Data Sources when this flag is true: "Browser context crashed — scrapers cannot run. Restart the container to recover." with a copy-paste command or a soft-restart button if feasible. (3) Soft-restart option: add `/api/control/restart-browser` endpoint that kills the Chromium process and reinitializes the browser context (avoids need for full `make rebuild` in non-profile-corruption cases).
 
 ### BKL-W2-17 | Bootstrap bypasses scraper queue — races with scheduled/manual triggers
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: M (3 hours)
 Source: Marcus audit 2026-04-04 — identified during FIX 8 (N7)

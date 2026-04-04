@@ -156,6 +156,9 @@ export let autoBootstrapState: AutoBootstrapState = {
   running: false, aeName: null, steps: [], error: null, completedAt: null, resources: {}
 }
 
+/** BKL-W2-17: Exposed so background-scheduler can include bootstrap in isAnyScraperRunning() guard. */
+export function isBootstrapRunning(): boolean { return autoBootstrapState.running }
+
 // ── Tableau constant ─────────────────────────────────────────────────────────
 const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 
