@@ -18,6 +18,9 @@ export function initCacheLayer(cacheDir: string, rhCasesCachePath: string): void
 export const toSlug = (name: string) =>
   name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
 
+// ── Brief cache TTL (ADR-007) ────────────────────────────────────────────────
+export const BRIEF_CACHE_TTL_MS = 4 * 60 * 60 * 1000  // 4 hours
+
 // ── Brief cache (daily, date-stamped) ────────────────────────────────────────
 export function briefCachePath(customerName: string): string {
   const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local time

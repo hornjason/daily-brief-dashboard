@@ -24,6 +24,8 @@ config/.rh-chrome-profile/
 data/config/
 data/cache/
 data/rh-profile/
+**/session-state.json
+**/sf-session-state.json
 
 # Runtime state — user-specific, not source
 config/data-sources.json
@@ -56,3 +58,6 @@ dashboard/.playwright-cli/
 
 # Claude worktrees
 .claude/
+
+# Unsanctioned deploy files — make rebuild is the only sanctioned deploy method (BKL-H01)
+docker-compose.yml

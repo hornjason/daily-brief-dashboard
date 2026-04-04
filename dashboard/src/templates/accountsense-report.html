@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dropbox — AccountSense OpenShift Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1923;
+    --card: #1a2836;
+    --border: #2a3a4a;
+    --text: #e0e6ed;
+    --muted: #8899aa;
+    --accent: #00b4d8;
+    --green: #2ecc71;
+    --yellow: #f39c12;
+    --orange: #e67e22;
+    --red: #e74c3c;
+    --rosa: #00b4d8;
+    --aws: #ff9900;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+  .header {
+    background: linear-gradient(135deg, #1a2836 0%, #0f1923 100%);
+    border-bottom: 2px solid var(--accent);
+    padding: 2rem 3rem;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .header-left h1 { font-size: 1.6rem; font-weight: 700; }
+  .header-left h1 span { color: var(--accent); }
+  .header-left .subtitle { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+  .header-right { text-align: right; }
+  .header-right .account { font-size: 1.1rem; font-weight: 600; }
+  .header-right .meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+  /* Key Insights Banner */
+  .insights-banner {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .insight-card {
+    background: var(--card); border-radius: 12px; padding: 1.2rem;
+    border-left: 4px solid var(--accent); position: relative;
+  }
+  .insight-card.warn { border-left-color: var(--yellow); }
+  .insight-card.alert { border-left-color: var(--orange); }
+  .insight-card .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.4rem; }
+  .insight-card .value { font-size: 1.5rem; font-weight: 700; }
+  .insight-card .detail { font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem; }
+
+  /* Health Indicators */
+  .health-row {
+    display: flex; gap: 0.75rem; margin-bottom: 2rem; flex-wrap: wrap;
+  }
+  .health-pill {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: var(--card); border-radius: 100px; padding: 0.5rem 1rem;
+    font-size: 0.78rem; border: 1px solid var(--border);
+  }
+  .health-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+  .health-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .health-dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+  .health-dot.orange { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+
+  /* Section */
+  .section { margin-bottom: 2rem; }
+  .section-title {
+    font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .section-title .icon { font-size: 1.2rem; }
+
+  /* Chart Grid */
+  .chart-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;
+  }
+  .chart-grid.three { grid-template-columns: repeat(3, 1fr); }
+  .chart-card {
+    background: var(--card); border-radius: 12px; padding: 1.5rem;
+    border: 1px solid var(--border);
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-card h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; color: var(--muted); }
+  .chart-container { position: relative; height: 220px; }
+
+  /* Cluster Table */
+  .cluster-table {
+    width: 100%; border-collapse: collapse;
+    background: var(--card); border-radius: 12px; overflow: hidden;
+  }
+  .cluster-table th {
+    background: #0d1520; padding: 0.75rem 1rem; text-align: left;
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); border-bottom: 2px solid var(--border);
+  }
+  .cluster-table td {
+    padding: 0.75rem 1rem; font-size: 0.82rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .cluster-table code {
+    background: #0d1520; padding: 0.15rem 0.5rem; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--accent);
+  }
+  .badge {
+    display: inline-block; padding: 0.15rem 0.6rem; border-radius: 100px;
+    font-size: 0.7rem; font-weight: 600;
+  }
+  .badge-blue { background: rgba(0,180,216,0.15); color: var(--accent); }
+  .badge-orange { background: rgba(255,153,0,0.15); color: var(--aws); }
+  .badge-green { background: rgba(46,204,113,0.15); color: var(--green); }
+
+  /* Callout boxes */
+  .callout {
+    background: var(--card); border-radius: 12px; padding: 1.2rem 1.5rem;
+    border: 1px solid var(--border); margin-bottom: 1rem;
+    display: flex; gap: 1rem; align-items: flex-start;
+  }
+  .callout.warn { border-color: var(--yellow); }
+  .callout.alert { border-color: var(--orange); }
+  .callout .callout-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 0.1rem; }
+  .callout .callout-body h4 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
+  .callout .callout-body p { font-size: 0.8rem; color: var(--muted); }
+
+  /* Timeline */
+  .timeline {
+    position: relative; padding-left: 2rem; margin: 1rem 0;
+  }
+  .timeline::before {
+    content: ''; position: absolute; left: 8px; top: 0; bottom: 0;
+    width: 2px; background: var(--border);
+  }
+  .timeline-item {
+    position: relative; margin-bottom: 1.2rem; padding-left: 1.5rem;
+  }
+  .timeline-item::before {
+    content: ''; position: absolute; left: -1.55rem; top: 0.45rem;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--bg);
+  }
+  .timeline-item.event::before { background: var(--yellow); }
+  .timeline-item .time { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .timeline-item .desc { font-size: 0.85rem; margin-top: 0.2rem; }
+
+  /* Operator table */
+  .op-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+  .op-table th, .op-table td { padding: 0.6rem 1rem; text-align: left; font-size: 0.8rem; }
+  .op-table th { color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+  .op-table td { border-bottom: 1px solid rgba(42,58,74,0.5); }
+
+  @media (max-width: 900px) {
+    .insights-banner { grid-template-columns: repeat(2, 1fr); }
+    .chart-grid { grid-template-columns: 1fr; }
+    .chart-grid.three { grid-template-columns: 1fr; }
+    .header { flex-direction: column; text-align: center; gap: 1rem; }
+    .header-right { text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1><span>AccountSense</span> for OpenShift</h1>
+    <div class="subtitle">Red Hat Product Analytics and Insights Team &middot; Confidential</div>
+  </div>
+  <div class="header-right">
+    <div class="account">Dropbox</div>
+    <div class="meta">EBS 1037S220 &middot; Owner: Corsanne Farrell &middot; 180-day view</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Key Metrics -->
+  <div class="insights-banner">
+    <div class="insight-card">
+      <div class="label">Active Clusters</div>
+      <div class="value">1</div>
+      <div class="detail">ROSA on AWS &middot; 3 nodes</div>
+    </div>
+    <div class="insight-card">
+      <div class="label">Current Cores</div>
+      <div class="value">~18</div>
+      <div class="detail">6 worker cores &middot; 12 vCPUs</div>
+    </div>
+    <div class="insight-card warn">
+      <div class="label">Avg Utilization</div>
+      <div class="value">&lt;0.5%</div>
+      <div class="detail">CPU + RAM &mdash; cost optimization flag</div>
+    </div>
+    <div class="insight-card alert">
+      <div class="label">ODF Status</div>
+      <div class="value">Not Installed</div>
+      <div class="detail">Platform Plus entitled but ODF missing</div>
+    </div>
+  </div>
+
+  <!-- Health Indicators -->
+  <div class="health-row">
+    <div class="health-pill"><div class="health-dot green"></div> Account Risk/Opportunity</div>
+    <div class="health-pill"><div class="health-dot green"></div> Version Lifecycle (4.18)</div>
+    <div class="health-pill"><div class="health-dot green"></div> Offering Usage — No EKS/AKS/GKE risk</div>
+    <div class="health-pill"><div class="health-dot green"></div> Subscriptions Attached (1/1)</div>
+    <div class="health-pill"><div class="health-dot green"></div> Telemetry Connected</div>
+    <div class="health-pill"><div class="health-dot orange"></div> Cost Optimization — Idle workloads</div>
+    <div class="health-pill"><div class="health-dot orange"></div> Platform Plus — ODF not installed</div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#9888;</span> Action Items</div>
+    <div class="callout warn">
+      <div class="callout-icon">&#128200;</div>
+      <div class="callout-body">
+        <h4>Cost Optimization Opportunity</h4>
+        <p>Cluster utilization is under 0.5% for both CPU and RAM. Dropbox may be over-provisioned on AWS. Consider discussing right-sizing or consolidating idle workloads to reduce spend.</p>
+      </div>
+    </div>
+    <div class="callout alert">
+      <div class="callout-icon">&#128230;</div>
+      <div class="callout-body">
+        <h4>Platform Plus — Open Data Foundation Not Installed</h4>
+        <p>Dropbox has purchased Platform Plus with ODF entitlement, but the ODF operator is not installed. This creates a potential downstill risk and underutilized entitlement. Validate with the customer that ODF is planned.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Event Timeline -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128197;</span> Key Events Timeline</div>
+    <div class="chart-card full">
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="time">Mar 2025</div>
+          <div class="desc">Cluster created — ROSA on AWS, hyperthreading enabled</div>
+        </div>
+        <div class="timeline-item">
+          <div class="time">Oct — Dec 2025</div>
+          <div class="desc">Steady state: ~18 cores, ~200 pods, ~80 namespaces. Version reported as "Unknown"</div>
+        </div>
+        <div class="timeline-item event">
+          <div class="time">January 2026</div>
+          <div class="desc"><strong>Significant scale-down event:</strong> Cores dropped to ~4, pods fell to ~40, namespaces halved to ~40. Version migrated from Unknown to <strong>4.18</strong></div>
+        </div>
+        <div class="timeline-item">
+          <div class="time">Feb — Mar 2026</div>
+          <div class="desc">Full recovery to ~18 cores, pods back to ~120–200, namespaces restored. Now running OCP 4.18</div>
+        </div>
+        <div class="timeline-item">
+          <div class="time">Mar 10, 2026</div>
+          <div class="desc">deployment-validation-operator installed (v0.1.568)</div>
+        </div>
+        <div class="timeline-item">
+          <div class="time">Mar 31, 2026</div>
+          <div class="desc">Last active date recorded</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Core Charts -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128202;</span> Resource Trends (6 months)</div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>Estimated Cores in Use</h3>
+        <div class="chart-container"><canvas id="coresChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Cores by Version</h3>
+        <div class="chart-container"><canvas id="versionChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Cluster Size (vCPUs)</h3>
+        <div class="chart-container"><canvas id="vcpuChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Memory &amp; CPU Utilization</h3>
+        <div class="chart-container"><canvas id="utilChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Kubernetes Namespaces</h3>
+        <div class="chart-container"><canvas id="nsChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Kubernetes Pods</h3>
+        <div class="chart-container"><canvas id="podsChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cluster Details -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#9881;</span> Cluster Details</div>
+    <div class="chart-card full" style="padding:0; overflow:hidden;">
+      <table class="cluster-table">
+        <thead>
+          <tr>
+            <th>Cluster ID</th><th>Domain</th><th>EBS Account</th><th>Start</th><th>Last Active</th>
+            <th>Offering</th><th>Provider</th><th>Version</th><th>Worker vCPUs</th><th>Cores</th><th>Sockets</th><th>Infra vCPUs</th><th>Nodes</th><th>HT</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>f984bc56-8c73-4d0a-a1b8-a333c5e84782</code></td>
+            <td>dropbox.com</td>
+            <td>1037S220</td>
+            <td>2025-03-25</td>
+            <td>2026-03-31</td>
+            <td><span class="badge badge-blue">ROSA</span></td>
+            <td><span class="badge badge-orange">AWS</span></td>
+            <td><span class="badge badge-green">4.18</span></td>
+            <td>12</td><td>6</td><td>1</td><td>6</td><td>3</td>
+            <td><span class="badge badge-green">Yes</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Operators -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128268;</span> Installed Operators</div>
+    <div class="chart-card full">
+      <table class="op-table">
+        <thead><tr><th>Operator</th><th>Version</th><th>First Seen</th><th>Last Active</th><th>Cluster Footprint</th><th>7-Day Failures</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>deployment-validation-operator</td>
+            <td><code>0.1.568</code></td>
+            <td>2026-03-10</td>
+            <td>2026-03-31</td>
+            <td>1</td>
+            <td><span class="badge badge-green">0</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="color:var(--muted); font-size:0.75rem; margin-top:0.75rem; padding: 0 0.5rem;">Only 1 operator installed — minimal operator footprint. ODF operator notably absent despite Platform Plus entitlement.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const labels = ['Oct 11','Oct 21','Nov 11','Nov 21','Dec 11','Dec 21','Jan 11','Jan 21','Feb 11','Feb 21','Mar 11','Mar 21'];
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: '#8899aa', font: { size: 11 } } } },
+  scales: {
+    x: { ticks: { color: '#667788', font: { size: 10 } }, grid: { color: 'rgba(42,58,74,0.4)' } },
+    y: { ticks: { color: '#667788', font: { size: 10 } }, grid: { color: 'rgba(42,58,74,0.4)' }, beginAtZero: true }
+  }
+};
+
+// Cores in Use
+new Chart(document.getElementById('coresChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Estimated Cores',
+      data: [18, 18, 18, 18, 16, 14, 4, 4, 16, 18, 18, 18],
+      borderColor: '#00b4d8', backgroundColor: 'rgba(0,180,216,0.1)',
+      fill: true, tension: 0.3, pointRadius: 3
+    }]
+  },
+  options: chartDefaults
+});
+
+// Version
+new Chart(document.getElementById('versionChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label: 'Unknown', data: [4, 4, 14, 14, 4, 2, 0, 0, 0, 0, 0, 0], borderColor: '#e74c3c', tension: 0.3, pointRadius: 3 },
+      { label: '4.18', data: [0, 0, 0, 0, 0, 0, 4, 4, 16, 18, 18, 18], borderColor: '#00b4d8', tension: 0.3, pointRadius: 3 }
+    ]
+  },
+  options: chartDefaults
+});
+
+// vCPU
+new Chart(document.getElementById('vcpuChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label: 'Avg vCPUs', data: [18, 18, 18, 18, 16, 14, 4, 4, 16, 18, 18, 18], borderColor: '#f39c12', tension: 0.3, pointRadius: 3 },
+      { label: 'Max vCPUs', data: [20, 20, 20, 20, 18, 16, 6, 6, 18, 20, 20, 20], borderColor: '#2ecc71', tension: 0.3, pointRadius: 3 },
+      { label: 'Min vCPUs', data: [16, 16, 16, 16, 14, 12, 4, 4, 14, 16, 16, 16], borderColor: '#e74c3c', borderDash: [5,5], tension: 0.3, pointRadius: 2 }
+    ]
+  },
+  options: chartDefaults
+});
+
+// Utilization
+new Chart(document.getElementById('utilChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [
+      { label: 'Avg CPU %', data: [0.15, 0.2, 0.18, 0.15, 0.12, 0.1, 0.05, 0.08, 0.2, 0.4, 0.2, 0.15], borderColor: '#00b4d8', tension: 0.3, pointRadius: 3 },
+      { label: 'Avg RAM %', data: [0.12, 0.15, 0.14, 0.12, 0.1, 0.08, 0.04, 0.06, 0.15, 0.2, 0.15, 0.12], borderColor: '#e67e22', tension: 0.3, pointRadius: 3 }
+    ]
+  },
+  options: { ...chartDefaults, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => v + '%' } } } }
+});
+
+// Namespaces
+new Chart(document.getElementById('nsChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Namespaces',
+      data: [80, 82, 80, 78, 80, 78, 40, 42, 75, 80, 82, 80],
+      borderColor: '#9b59b6', backgroundColor: 'rgba(155,89,182,0.1)',
+      fill: true, tension: 0.3, pointRadius: 3
+    }]
+  },
+  options: chartDefaults
+});
+
+// Pods
+new Chart(document.getElementById('podsChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Pods',
+      data: [190, 200, 195, 185, 180, 175, 40, 55, 120, 180, 160, 200],
+      borderColor: '#1abc9c', backgroundColor: 'rgba(26,188,156,0.1)',
+      fill: true, tension: 0.3, pointRadius: 3
+    }]
+  },
+  options: chartDefaults
+});
+</script>
+</body>
+</html>

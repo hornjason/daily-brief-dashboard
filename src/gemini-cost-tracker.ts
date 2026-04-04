@@ -1,0 +1,75 @@
+// BKL-M52: In-memory Gemini API cost tracker.
+// Captures per-call token usage from Vertex AI usageMetadata.
+// Pricing: Gemini 2.5 Flash — $0.15/1M input tokens, $0.60/1M output tokens.
+
+export interface GeminiUsageEntry {
+  timestamp: string    // ISO-8601
+  callType: string     // e.g. 'brief-synthesize', 'brief-extract', 'intelligence-industry', 'doc-classify'
+  customerName: string
+  inputTokens: number
+  outputTokens: number
+  model: string
+}
+
+interface UsageSummary {
+  todayInputTokens: number
+  todayOutputTokens: number
+  todayCostUsd: number
+  monthInputTokens: number
+  monthOutputTokens: number
+  monthCostUsd: number
+  totalCalls: number
+  byCallType: Record<string, { inputTokens: number; outputTokens: number; calls: number; costUsd: number }>
+}
+
+// Pricing constants (Gemini 2.5 Flash, per 1M tokens)
+const INPUT_COST_PER_M  = 0.15
+const OUTPUT_COST_PER_M = 0.60
+
+function computeCost(inputTokens: number, outputTokens: number): number {
+  return (inputTokens / 1_000_000) * INPUT_COST_PER_M + (outputTokens / 1_000_000) * OUTPUT_COST_PER_M
+}
+
+// Rolling in-memory log — entries accumulate for the lifetime of the process
+const usageLog: GeminiUsageEntry[] = []
+
+export function recordGeminiUsage(entry: GeminiUsageEntry): void {
+  usageLog.push(entry)
+}
+
+export function getGeminiUsageSummary(): UsageSummary {
+  const now = new Date()
+  const todayPrefix = now.toISOString().slice(0, 10)  // YYYY-MM-DD
+  const monthPrefix = now.toISOString().slice(0, 7)   // YYYY-MM
+
+  let todayIn = 0, todayOut = 0
+  let monthIn = 0, monthOut = 0
+  const byCallType: UsageSummary['byCallType'] = {}
+
+  for (const e of usageLog) {
+    const isToday = e.timestamp.startsWith(todayPrefix)
+    const isMonth = e.timestamp.startsWith(monthPrefix)
+
+    if (isToday) { todayIn += e.inputTokens; todayOut += e.outputTokens }
+    if (isMonth) { monthIn += e.inputTokens; monthOut += e.outputTokens }
+
+    if (!byCallType[e.callType]) {
+      byCallType[e.callType] = { inputTokens: 0, outputTokens: 0, calls: 0, costUsd: 0 }
+    }
+    byCallType[e.callType].inputTokens  += e.inputTokens
+    byCallType[e.callType].outputTokens += e.outputTokens
+    byCallType[e.callType].calls        += 1
+    byCallType[e.callType].costUsd      += computeCost(e.inputTokens, e.outputTokens)
+  }
+
+  return {
+    todayInputTokens:  todayIn,
+    todayOutputTokens: todayOut,
+    todayCostUsd:      computeCost(todayIn, todayOut),
+    monthInputTokens:  monthIn,
+    monthOutputTokens: monthOut,
+    monthCostUsd:      computeCost(monthIn, monthOut),
+    totalCalls:        usageLog.length,
+    byCallType,
+  }
+}

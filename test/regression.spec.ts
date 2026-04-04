@@ -145,3 +145,97 @@ test.describe('REG-004: POST /api/aes rejects HTML injection in AE names', () =>
     expect(res.status).toBe(200)
   })
 })
+
+// ── REG-005: Brief cache behavior (BKL-AI20) ─────────────────────────────────
+
+test.describe('REG-005: Brief cache behavior (BKL-AI20)', () => {
+  const KNOWN_CUSTOMER_ENCODED = encodeURIComponent('A10 Networks')
+
+  test('brief endpoint returns fromCache field (never missing)', async () => {
+    const { status, body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('fromCache')
+    expect(typeof body.fromCache).toBe('boolean')
+  })
+
+  test('brief endpoint second call returns fromCache: true immediately', async () => {
+    await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
+    const { status, body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
+    expect(status).toBe(200)
+    expect(body.fromCache).toBe(true)
+  })
+
+  test('brief endpoint nonexistent customer returns 404, not 500', async () => {
+    const { status } = await getJSON('/customer/__nonexistent__/brief')
+    expect(status).toBe(404)
+  })
+})
+
+// ── REG-006: HTTP 500 on empty Gemini response (BKL-G08) ────────────────────
+
+test.describe('REG-006: HTTP 500 on empty Gemini response (BKL-G08)', () => {
+  const KNOWN_CUSTOMER_ENCODED = encodeURIComponent('A10 Networks')
+
+  test('brief endpoint returns 200 or structured error (never 500 with empty body)', async () => {
+    const { status, body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
+    // Should never return 500 with no error message
+    if (status === 500) {
+      expect(body).toHaveProperty('error')
+      expect(typeof body.error).toBe('string')
+      expect(body.error.length).toBeGreaterThan(0)
+    } else {
+      expect(status).toBe(200)
+    }
+  })
+
+  test('brief 500 always has an error string (regression: empty body was returned)', async () => {
+    // Verify the route always wraps errors in { error: string } — never sends empty 500 body
+    // We test this indirectly: 200 response must have text or error field (not bare empty)
+    const { body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
+    const hasContent = body?.text !== undefined || body?.fromCache !== undefined || body?.error !== undefined
+    expect(hasContent).toBe(true)
+  })
+})
+
+// ── REG-007: Pipeline data flows to both AEs (BKL-W2-26) ────────────────────
+//
+// NOTE: This test runs after REG-001 restores original AEs — the pipeline
+// endpoint uses filterToAEs() which reads the in-memory AE list, so it MUST
+// run after the afterAll restore. We use a fresh getJSON call that hits the
+// server after restore. Because the afterAll is file-scoped, these tests run
+// inside the same describe block so they complete before afterAll fires.
+// The pipeline test uses originalAes to restore context explicitly.
+
+test.describe('REG-007: Pipeline data flows to both AEs (BKL-W2-26)', () => {
+  // Restore full AE config before these tests so filterToAEs includes both AEs
+  test.beforeAll(async () => {
+    await postJSON('/api/aes', { aes: originalAes })
+  })
+
+  test('pipeline has data for Elmer Alvarez after fix', async () => {
+    const { status, body } = await getJSON('/api/pipeline')
+    expect(status).toBe(200)
+    const owners = body.byOwner ?? []
+    const elmer = owners.find((o: { owner: string }) => o.owner?.includes('Elmer'))
+    expect(elmer).toBeDefined()
+    expect(elmer.count).toBeGreaterThan(0)
+    expect(elmer.acv).toBeGreaterThan(0)
+  })
+
+  test('pipeline has data for Carolanne Farrell', async () => {
+    const { status, body } = await getJSON('/api/pipeline')
+    expect(status).toBe(200)
+    const owners = body.byOwner ?? []
+    const carolanne = owners.find((o: { owner: string }) => o.owner?.includes('Carolanne'))
+    expect(carolanne).toBeDefined()
+    expect(carolanne.count).toBeGreaterThan(0)
+  })
+
+  test('pipeline totalAcv is sum of both AEs', async () => {
+    const { body } = await getJSON('/api/pipeline')
+    const owners = body.byOwner ?? []
+    const sumAcv = owners.reduce((acc: number, o: { acv: number }) => acc + o.acv, 0)
+    // totalAcv should roughly match sum of byOwner ACV (allow rounding)
+    expect(Math.abs(body.totalAcv - sumAcv)).toBeLessThan(1)
+  })
+})

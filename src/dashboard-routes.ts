@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, statSync } from 'fs'
 import { readdir } from 'fs/promises'
 import { resolve } from 'path'
 import { google } from 'googleapis'
@@ -26,6 +26,77 @@ export function initDashboardRoutes(opts: {
   CACHE_DIR = opts.cacheDir
   RH_CASES_CACHE_PATH = opts.rhCasesCachePath
   DATA_SOURCES_PATH = opts.dataSourcesPath
+}
+
+// ── Morning synthesis cache (BKL-AI27) ────────────────────────────────────────
+
+const MORNING_SYNTHESIS_TTL_MS = 4 * 60 * 60 * 1000 // 4 hours
+
+async function synthesizeMorningSummary(signals: { customer: string; type: string; severity: string; text: string }[]): Promise<string> {
+  const synthCachePath = resolve(CACHE_DIR, 'morning-synthesis.json')
+  // Check 4h cache
+  try {
+    if (existsSync(synthCachePath)) {
+      const cached = JSON.parse(readFileSync(synthCachePath, 'utf-8'))
+      if (cached.synthesis && cached.cachedAt && (Date.now() - new Date(cached.cachedAt).getTime()) < MORNING_SYNTHESIS_TTL_MS) {
+        return cached.synthesis as string
+      }
+    }
+  } catch { /* cache miss */ }
+
+  const project  = process.env.GOOGLE_CLOUD_PROJECT
+  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for synthesis')
+
+  let token: string | null | undefined
+  const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+  if (saKeyB64) {
+    const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+    const jwtAuth = new google.auth.JWT({
+      email: keyData.client_email,
+      key:   keyData.private_key,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    })
+    token = (await jwtAuth.getAccessToken()).token
+  } else {
+    const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH: TOKEN_PATH } = await import('./google.ts')
+    const auth = makeAuth(TOKEN_PATH)
+    token = (await auth.getAccessToken()).token
+  }
+  if (!token) throw new Error('Failed to get access token for morning synthesis')
+
+  const criticalCount = signals.filter(s => s.severity === 'critical').length
+  const highCount     = signals.filter(s => s.severity === 'high').length
+  const mediumCount   = signals.filter(s => s.severity === 'medium').length
+  const signalLines   = signals.slice(0, 20).map(s => `[${s.severity.toUpperCase()}] ${s.customer}: ${s.text}`).join('\n')
+
+  const systemPrompt = `You are a Red Hat Account Solution Architect's AI assistant. Your job is to synthesize portfolio signals into a crisp daily briefing.`
+  const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}\n\nWrite a 3-5 sentence morning summary covering: (1) the most urgent issues requiring action today, (2) any patterns across customers, (3) top 3 recommended actions for the day. Be specific. No fluff.`
+
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 200)}`)
+  }
+  const json = await res.json() as any
+  const synthesis: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+
+  // Cache result
+  try {
+    writeFileSync(synthCachePath, JSON.stringify({ synthesis, cachedAt: new Date().toISOString() }), { mode: 0o600 })
+  } catch { /* non-fatal */ }
+
+  return synthesis
 }
 
 // ── Territory helpers ─────────────────────────────────────────────────────────
@@ -100,7 +171,7 @@ export function registerDashboardRoutes(app: Hono): void {
 
   // ── Morning Summary + Priority Action (R06/R13) ──────────────────────────
 
-  app.get('/api/morning-summary', (c) => {
+  app.get('/api/morning-summary', async (c) => {
     try {
       if (!customers.length) return c.json({ signals: [], summary: 'No customers configured.', customerCount: 0 })
 
@@ -200,7 +271,17 @@ export function registerDashboardRoutes(app: Hono): void {
         ? `All clear across ${customers.length} accounts`
         : `${attentionCount} account${attentionCount !== 1 ? 's' : ''} need attention${criticalCount ? `, ${criticalCount} critical` : ''}`
 
-      return c.json({ signals, summary, customerCount: customers.length })
+      // Gemini synthesis layer (BKL-AI27) — 4h cached
+      let synthesis: string | undefined
+      try {
+        synthesis = await synthesizeMorningSummary(signals)
+      } catch (e: any) {
+        console.warn('[dashboard-routes] Morning synthesis failed (non-fatal):', e.message)
+      }
+
+      const response: Record<string, unknown> = { signals, summary, customerCount: customers.length }
+      if (synthesis) response.synthesis = synthesis
+      return c.json(response)
     } catch (e) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }

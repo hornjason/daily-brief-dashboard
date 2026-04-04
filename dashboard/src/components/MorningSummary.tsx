@@ -13,6 +13,7 @@ interface MorningSummaryData {
   signals: Signal[]
   summary: string
   customerCount: number
+  synthesis?: string
 }
 
 export default function MorningSummary() {
@@ -61,6 +62,11 @@ export default function MorningSummary() {
       </button>
       {!collapsed && (
         <div className="p-5">
+          {data.synthesis && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 leading-relaxed">
+              {data.synthesis}
+            </div>
+          )}
           {data.signals.length === 0 ? (
             <p className="text-sm text-text-secondary text-center py-4">
               All clear across {data.customerCount} accounts

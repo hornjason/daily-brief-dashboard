@@ -12,10 +12,11 @@
  */
 
 import { google } from 'googleapis'
-import { readFileSync, writeFileSync, renameSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs'
 import { resolve } from 'path'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { aes, customers, CUSTOMERS_PATH } from './server-state.ts'
+import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import type { Customer } from './types.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ interface GeminiGroundedOptions {
   temperature?: number
 }
 
-async function callGeminiGrounded(opts: GeminiGroundedOptions): Promise<string> {
+async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: string; customerName?: string }): Promise<string> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
   const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
@@ -81,6 +82,18 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions): Promise<string> 
     throw new Error(`Gemini grounded API error ${res.status}: ${err.slice(0, 300)}`)
   }
   const json = await res.json() as any
+  // BKL-M52: record token usage for cost tracking
+  const usage = json.usageMetadata
+  if (usage) {
+    recordGeminiUsage({
+      timestamp: new Date().toISOString(),
+      callType:     opts.callType ?? 'intelligence-grounded',
+      customerName: opts.customerName ?? 'unknown',
+      inputTokens:  usage.promptTokenCount ?? 0,
+      outputTokens: usage.candidatesTokenCount ?? 0,
+      model,
+    })
+  }
   return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 }
 
@@ -88,7 +101,7 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions): Promise<string> 
 
 // Grounded + structured: Vertex AI doesn't allow google_search + responseSchema together.
 // So we use grounding for search, ask for JSON in the prompt, and parse the text response.
-async function callGeminiGroundedStructured(opts: GeminiGroundedOptions & { responseSchema: object }): Promise<any> {
+async function callGeminiGroundedStructured(opts: GeminiGroundedOptions & { responseSchema: object; callType?: string; customerName?: string }): Promise<any> {
   const text = await callGeminiGrounded({
     ...opts,
     systemPrompt: opts.systemPrompt + '\n\nIMPORTANT: Return your response as valid JSON matching this schema: ' + JSON.stringify(opts.responseSchema),
@@ -132,6 +145,8 @@ Return:
 - description: One sentence describing what the company does
 - competitors: Top 3 direct competitors by name`,
     responseSchema: INDUSTRY_SCHEMA,
+    callType: 'intelligence-industry',
+    customerName,
   })
 
   console.log(`[acct-intel] ${customerName} → ${result.industry} / ${result.segment}`)
@@ -361,6 +376,8 @@ export async function generateCompanyIntelligence(customer: Customer, industry: 
     userPrompt,
     maxOutputTokens: 16384,
     temperature: 1.0,
+    callType: 'intelligence-company',
+    customerName: customer.name,
   })
 
   console.log(`[acct-intel] Company intelligence generated for ${customer.name} (${brief.length} chars)`)
@@ -509,6 +526,8 @@ export async function generateIndustryAnalysis(customer: Customer, industry: str
     userPrompt,
     maxOutputTokens: 16384,
     temperature: 1.0,
+    callType: 'intelligence-analysis',
+    customerName: customer.name,
   })
 
   console.log(`[acct-intel] Industry analysis generated for ${customer.name} (${analysis.length} chars)`)
@@ -812,6 +831,32 @@ export interface IntelligenceJobStatus {
 /** In-memory job tracker keyed by customer name */
 const jobs = new Map<string, IntelligenceJobStatus>()
 
+let JOB_CACHE_PATH = ''
+
+export function initJobPersistence(cacheDir: string): void {
+  JOB_CACHE_PATH = `${cacheDir}/intelligence-jobs.json`
+  try {
+    const existing = JSON.parse(readFileSync(JOB_CACHE_PATH, 'utf-8')) as Record<string, IntelligenceJobStatus>
+    for (const [key, val] of Object.entries(existing)) {
+      if (val.status === 'running') val.status = 'error'
+      jobs.set(key, val)
+    }
+    console.log(`[acct-intel] Loaded ${jobs.size} persisted jobs`)
+  } catch { /* first run */ }
+}
+
+function persistJobs(): void {
+  if (!JOB_CACHE_PATH) return
+  try {
+    writeFileSync(JOB_CACHE_PATH, JSON.stringify(Object.fromEntries(jobs.entries())), { mode: 0o600 })
+  } catch { /* non-fatal */ }
+}
+
+function setJob(id: string, status: IntelligenceJobStatus): void {
+  jobs.set(id, status)
+  persistJobs()
+}
+
 export function getJobStatus(customerName: string): IntelligenceJobStatus | undefined {
   return jobs.get(customerName)
 }
@@ -831,29 +876,53 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
 
   // Set initial status
   const jobId = customerName
-  jobs.set(jobId, { status: 'running', step: 'identifying industry', startedAt: new Date().toISOString() })
+  setJob(jobId, { status: 'running', step: 'identifying industry', startedAt: new Date().toISOString() })
 
   // Run pipeline in background (don't await here)
   ;(async () => {
     try {
       // Step 1: Identify industry
-      jobs.set(jobId, { ...jobs.get(jobId)!, step: 'identifying industry' })
+      setJob(jobId, { ...jobs.get(jobId)!, step: 'identifying industry' })
       const industryResult = await identifyIndustry(customerName)
       cacheIndustryResult(customerName, industryResult)
 
-      // Step 2: Generate company intelligence
-      jobs.set(jobId, { ...jobs.get(jobId)!, step: 'generating company intelligence' })
-      const companyBrief = await generateCompanyIntelligence(customer, industryResult.industry)
-
-      // Step 3: Generate industry analysis
-      jobs.set(jobId, { ...jobs.get(jobId)!, step: 'generating industry analysis' })
-      const industryAnalysis = await generateIndustryAnalysis(customer, industryResult.industry)
+      // Steps 2+3: Run in parallel — independent of each other (BKL-AI24)
+      setJob(jobId, { ...jobs.get(jobId)!, step: 'generating company intelligence + industry analysis' })
+      const [companyResult, industryResult2] = await Promise.allSettled([
+        generateCompanyIntelligence(customer, industryResult.industry),
+        generateIndustryAnalysis(customer, industryResult.industry),
+      ])
+      const companyBrief = companyResult.status === 'fulfilled' ? companyResult.value : null
+      const industryAnalysis = industryResult2.status === 'fulfilled' ? industryResult2.value : null
+      if (!companyBrief && !industryAnalysis) throw new Error('Both company and industry generation failed')
+      if (companyResult.status === 'rejected') console.warn(`[acct-intel] Company intel failed for ${customerName}:`, (companyResult.reason as any)?.message)
+      if (industryResult2.status === 'rejected') console.warn(`[acct-intel] Industry analysis failed for ${customerName}:`, (industryResult2.reason as any)?.message)
 
       // Step 4: Write docs to Drive
-      jobs.set(jobId, { ...jobs.get(jobId)!, step: 'writing docs to Drive' })
-      const docUrls = await writeIntelligenceDocs(customer, companyBrief, industryAnalysis)
+      setJob(jobId, { ...jobs.get(jobId)!, step: 'writing docs to Drive' })
+      const docUrls = await writeIntelligenceDocs(customer, companyBrief ?? '', industryAnalysis ?? '')
 
-      jobs.set(jobId, {
+      // Dual-write local intelligence cache (ADR-008) — brief pipeline reads this
+      if (JOB_CACHE_PATH) {
+        try {
+          const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
+          mkdirSync(intelligenceDir, { recursive: true })
+          const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+          writeFileSync(
+            `${intelligenceDir}/${slug}.json`,
+            JSON.stringify({
+              customerName,
+              company: companyBrief ?? '',
+              industry: industryAnalysis ?? '',
+              cachedAt: new Date().toISOString(),
+            }),
+            { mode: 0o600 }
+          )
+          console.log(`[acct-intel] Intelligence cache written for ${customerName}`)
+        } catch (e: any) { console.warn('[acct-intel] Cache write failed:', e.message) }
+      }
+
+      setJob(jobId, {
         status: 'complete',
         companyDocUrl: docUrls.companyDocUrl,
         industryDocUrl: docUrls.industryDocUrl,
@@ -865,7 +934,7 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
       console.log(`[acct-intel] Pipeline complete for ${customerName}`)
     } catch (e: any) {
       console.error(`[acct-intel] Pipeline failed for ${customerName}:`, e)
-      jobs.set(jobId, {
+      setJob(jobId, {
         status: 'error',
         error: String(e?.message ?? e).slice(0, 300),
         startedAt: jobs.get(jobId)?.startedAt,

@@ -5,19 +5,18 @@
       "domain": "a10networks.com",
       "accountNumbers": [
         "5929071",
-        "916824",
-        "12238100"
+        "916824"
       ],
       "ae": "Carolanne Farrell",
       "industry": "Technology",
-      "segment": "Network Security and Application Delivery (including DDoS Protection, Application Delivery Controllers, and Multi-Cloud Security)",
-      "industryDescription": "A10 Networks provides secure application services and solutions, including advanced load balancing, DDoS protection, and firewalls, to ensure application availability, performance, and security across multi-cloud and on-premises environments.",
+      "segment": "Network Security and Application Delivery",
+      "industryDescription": "A10 Networks provides secure application and network infrastructure solutions, including application delivery controllers, DDoS protection, and traffic management, for enterprises and service providers across on-premises, hybrid cloud, and distributed environments.",
       "industryCompetitors": [
-        "F5",
+        "F5 Networks",
         "Fortinet",
-        "Cisco Systems"
+        "Citrix"
       ],
-      "industryUpdatedAt": "2026-04-02T17:01:30.883Z"
+      "industryUpdatedAt": "2026-04-04T16:42:20.620Z"
     },
     {
       "name": "Dropbox",
@@ -25,33 +24,20 @@
       "accountNumbers": [
         "10375220"
       ],
-      "ae": "Carolanne Farrell",
-      "industry": "Technology",
-      "segment": "Cloud Storage and Collaboration Software",
-      "industryDescription": "Dropbox provides a cloud-based service that allows users to store, synchronize, share, and access files from any device, evolving into a work-focused platform with collaboration, e-signature, and automation features.",
-      "industryCompetitors": [
-        "Google Drive",
-        "Microsoft OneDrive",
-        "Box"
-      ],
-      "industryUpdatedAt": "2026-04-03T00:18:59.397Z"
+      "ae": "Carolanne Farrell"
     },
     {
       "name": "Seattle Cancer Care",
       "domain": "fredhutch.org",
       "accountNumbers": [
-        "5456785"
+        "5456785",
+        "6077752",
+        "12240165",
+        "7101850",
+        "609870",
+        "924354"
       ],
-      "ae": "Carolanne Farrell",
-      "industry": "Healthcare",
-      "segment": "Oncology / Cancer Treatment and Research",
-      "industryDescription": "Fred Hutchinson Cancer Center (formerly Seattle Cancer Care Alliance) is a world-renowned cancer treatment and research institution that combines comprehensive patient care with cutting-edge scientific discoveries to prevent, diagnose, and treat cancer.",
-      "industryCompetitors": [
-        "Swedish Cancer Institute",
-        "Virginia Mason Medical Center",
-        "Kaiser Permanente Washington"
-      ],
-      "industryUpdatedAt": "2026-04-03T01:19:56.148Z"
+      "ae": "Carolanne Farrell"
     },
     {
       "name": "Illumio",
@@ -61,8 +47,8 @@
         "11390719",
         "5963272",
         "6033587",
-        "11980107",
-        "12550526"
+        "12550526",
+        "11980107"
       ],
       "ae": "Carolanne Farrell"
     },
@@ -89,7 +75,16 @@
       "accountNumbers": [
         "565461"
       ],
-      "ae": "Carolanne Farrell"
+      "ae": "Carolanne Farrell",
+      "industry": "E-commerce and Retail",
+      "segment": "Personalized Photo Products and Gifting",
+      "industryDescription": "Shutterfly is an online platform that enables individuals to create and purchase a wide array of personalized photo products such as photo books, cards, gifts, and home decor items.",
+      "industryCompetitors": [
+        "Snapfish",
+        "Vistaprint",
+        "Mixbook"
+      ],
+      "industryUpdatedAt": "2026-04-04T16:47:57.987Z"
     },
     {
       "name": "Crowdstrike",
@@ -105,6 +100,13 @@
       "domain": "lifetouch.com",
       "accountNumbers": [
         "1368936"
+      ],
+      "ae": "Carolanne Farrell"
+    },
+    {
+      "name": "Fred Hutchinson Cancer Center",
+      "accountNumbers": [
+        "12763660"
       ],
       "ae": "Carolanne Farrell"
     },
@@ -139,7 +141,6 @@
       "name": "Intrado Corporation",
       "domain": "intrado.com",
       "accountNumbers": [
-        "11504906",
         "11607015"
       ],
       "ae": "Elmer Alvarez",
@@ -182,7 +183,6 @@
       "name": "Uber Technologies",
       "domain": "uber.com",
       "accountNumbers": [
-        "913977",
         "6943734"
       ],
       "ae": "Elmer Alvarez"
@@ -193,21 +193,7 @@
       "accountNumbers": [
         "5350212"
       ],
-      "ae": "Elmer Alvarez",
-      "driveFolderId": "18iRflkJtGM9BL-JAKS_27m2x3M9hCXxh"
-    },
-    {
-      "name": "Real Customer",
-      "ae": "Test AE",
-      "driveFolderId": "12GvvRh4e_qGkmIsO5CMeEN1oZahYmIGM"
-    },
-    {
-      "name": "Fred Hutchinson Cancer Center",
-      "ae": "Carolanne Farrell",
-      "accountNumbers": [
-        "12763660"
-      ],
-      "supportableName": "Fred Hutch"
+      "ae": "Elmer Alvarez"
     }
   ]
 }

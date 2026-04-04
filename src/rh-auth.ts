@@ -41,8 +41,10 @@ export interface RhStatus {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function isPortalUrl(url: string): boolean {
-  return url.includes('access.redhat.com/support')
+export function isPortalUrl(url: string): boolean {
+  // Accept any authenticated RH page — SSO redirects may land on root or management pages
+  // before the support cases path is fully loaded. Exclude the SSO login page itself.
+  return url.includes('access.redhat.com') && !url.includes('sso.redhat.com') && !url.includes('/auth/realms')
 }
 
 async function cleanupBrowser(): Promise<void> {
@@ -156,6 +158,17 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
           console.log('[rh-auth] auth restored — circuit breakers reset, all scrapers re-adopted')
 
           onComplete?.()
+
+          // Post-auth flush: enqueue all 4 scrapers immediately instead of waiting
+          // up to 15 minutes for the next heartbeat tick.
+          // Lazy import to avoid circular dependency (background-scheduler imports rh-auth).
+          import('./background-scheduler.ts').then(({ flushScrapersAfterAuth }) => {
+            flushScrapersAfterAuth().catch((e: any) => {
+              console.warn('[rh-auth] post-auth flush error:', e?.message ?? e)
+            })
+          }).catch((e: any) => {
+            console.warn('[rh-auth] post-auth flush import error:', e?.message ?? e)
+          })
           return
         }
       } catch {

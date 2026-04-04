@@ -39,6 +39,7 @@ import {
   lastSfSync,
   lastSfRowCount,
   sfSyncError,
+  recordSfSyncSuccess,
 } from './sf-scraper.ts'
 import {
   runSupportableScrape,
@@ -63,7 +64,7 @@ import { getRefreshIntervals } from './settings-api.ts'
 import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
-import { getStatus, getScraperStatus } from './scraper-status-store.ts'
+import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
 
 // ── Standardized response shape ─────────────────────────────────────────────
 
@@ -106,6 +107,7 @@ export function registerScrapeRoutes(app: Hono): void {
   app.post('/api/scrape/rh', async (c) => {
     if (_rhScrapeRunning) return c.json({ scraper: 'rh', status: 'busy', error: 'RH scrape already in progress' }, 409)
     resetCircuitBreaker('rh')
+    markRunning('rh-cases')  // BKL-ADM01: set state synchronously before the task runs
     enqueueScraperTask({
       name: 'rh-cases',
       run: () => runRhScrapeWithState(),
@@ -177,6 +179,7 @@ export function registerScrapeRoutes(app: Hono): void {
     const aeConfig = aes.find(a => a.name === aeName)
 
     // BKL-M49: Manual triggers go through the scraper queue
+    markRunning('supportable')  // BKL-ADM01: set state synchronously before the task runs
     enqueueScraperTask({
       name: 'supportable',
       run: async () => {
@@ -384,6 +387,7 @@ export function registerScrapeRoutes(app: Hono): void {
     const eligibleAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
     if (!eligibleAes.length) return c.json({ error: 'No AEs with tableauTerritories and driveFolderId configured' }, 400)
 
+    markRunning('ccsp')  // BKL-ADM01: set state synchronously before the task runs
     enqueueScraperTask({
       name: 'ccsp',
       run: async () => {
@@ -467,6 +471,7 @@ export function registerScrapeRoutes(app: Hono): void {
     }
     if (_sfSyncRunning) return c.json({ scraper: 'salesforce', status: 'busy', error: 'SF sync already in progress' }, 409)
 
+    markRunning('sf-pipeline')  // BKL-ADM01: set state synchronously before the task runs
     enqueueScraperTask({
       name: 'sf-pipeline',
       run: async () => {
@@ -557,6 +562,17 @@ export function registerScrapeRoutes(app: Hono): void {
             durationMs: Date.now() - _sfTelemetryStart,
             recordCount: totalRows,
             status: _sfSyncLastError ? 'failure' : 'success',
+            error: _sfSyncLastError ?? undefined,
+          })
+
+          // Update legacy in-memory status (powers /api/status/scrapes isStale check)
+          if (!_sfSyncLastError && totalRows > 0) recordSfSyncSuccess(totalRows)
+
+          // ScraperStatusStore: record outcome with actual row count
+          recordOutcome('sf-pipeline', {
+            success: !_sfSyncLastError,
+            recordCount: totalRows,
+            durationMs: Date.now() - _sfTelemetryStart,
             error: _sfSyncLastError ?? undefined,
           })
 

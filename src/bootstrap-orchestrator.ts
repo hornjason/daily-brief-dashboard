@@ -257,7 +257,13 @@ export function registerBootstrapRoutes(app: Hono): void {
     if (!sfReportId) return c.json({ error: 'sfReportId is required' }, 400)
     if (!isValidSfId(sfReportId)) return c.json({ error: 'sfReportId must be a valid Salesforce report URL or 15-18 character ID' }, 400)
     if (!tableauTerritories.length) return c.json({ error: 'tableauTerritories is required' }, 400)
-    if (!customerNames.length) return c.json({ error: 'customerNames is required' }, 400)
+    if (!customerNames.length) {
+      // Distinguish between empty input and fully-filtered junk input
+      if (junkFiltered.length > 0 && allCustomerNames.length > 0) {
+        return c.json({ error: `customerNames contains invalid characters — only letters, numbers, spaces, and basic punctuation allowed (${junkFiltered.length} names filtered)` }, 400)
+      }
+      return c.json({ error: 'customerNames is required' }, 400)
+    }
     if (customerNames.some(n => /<[^>]*>/.test(n))) return c.json({ error: 'customerNames contains invalid characters' }, 400)
     if (parentFolderId && !/^[a-zA-Z0-9_-]{10,}$/.test(parentFolderId)) return c.json({ error: 'Invalid parentFolderId format' }, 400)
 
@@ -502,8 +508,10 @@ export function registerBootstrapRoutes(app: Hono): void {
         setStep(2, 'done', `${withAccounts}/${customerNames.length} customers matched`)
         console.log(`[auto-bootstrap] Supportable discovery complete: ${withAccounts}/${customerNames.length} matched`)
       } catch (e: any) {
-        // Non-fatal: partial results may have been saved to customers.json via the progress callback.
-        // Rebuild supportableScrapeResults from whatever customers were persisted so Step 4 can still write them.
+        // FIX N2: supportableScrapeResults holds whatever partial results were yielded before
+        // the throw (via onProgress). Use them as-is for the sheet write below rather than
+        // reconstructing from customers (which lack subscription rows and would write bad data).
+        // If no partial results were collected, the array stays empty and Step 4 is skipped.
         const partialCustomers = customers.filter(cx => cx.ae === aeName && (cx.accountNumbers?.length ?? 0) > 0)
         if (partialCustomers.length > 0) {
           setStep(2, 'error', `${e.message} (${partialCustomers.length} partial results saved)`)
@@ -567,8 +575,9 @@ export function registerBootstrapRoutes(app: Hono): void {
         try {
           setStep(5, 'running')
           const pipelineSheetId = await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
-          await runSfPipelineSync(sfReportId, RH_PROFILE_DIR, pipelineSheetId)
+          // FIX N3: Persist pipelineSheetId immediately so AE retains the sheet link even if sync fails
           patchAe(aeName, { pipelineSheetId })
+          await runSfPipelineSync(sfReportId, RH_PROFILE_DIR, pipelineSheetId)
           autoBootstrapState.resources.pipelineSheet = { id: pipelineSheetId, url: `https://docs.google.com/spreadsheets/d/${pipelineSheetId}/edit` }
           setStep(5, 'done', `Sheet: ${pipelineSheetId}`)
           console.log(`[auto-bootstrap] Pipeline sheet synced: ${pipelineSheetId}`)

@@ -339,6 +339,65 @@ The fixture is `auto: true` — it applies to every test without opt-in. This en
 | `GET /api/customer/:name/ccsp` | < 1000ms |
 | `GET /api/customer/:name/pipeline` | < 1000ms |
 
+### 3-Tier Test Structure (Wave 2, 2026-04-03)
+
+The test suite is organized into three tiers with different run requirements:
+
+#### Tier 1 — Unit tests (Bun native runner)
+
+```
+bun test src/
+```
+
+Fast, in-process, no server required. Covers pure logic: auth helpers, status store, scraper state mutations.
+
+Key files:
+- `src/rh-auth.test.ts` — `isPortalUrl()`, `getRhStatus()`, `recordScrapeSuccess/Expired()`
+- `src/scraper-manager.test.ts` — `CircuitBreaker` state machine, session-expiry pin behavior
+- `src/scraper-status-store.test.ts` — `recordOutcome()`, `markRunning()`, `consecutiveFailures` increment/reset
+
+#### Tier 2 — API contract tests (Playwright `ci` project)
+
+```
+npx playwright test --project=ci
+```
+
+Runs against a live server. Excludes `@live` tagged tests via `grepInvert: /@live/`. Suitable for CI (GitHub Actions `ci.yml`). Covers API endpoint contracts, auth spec, and UI flows without requiring a live scraper session.
+
+#### Tier 3 — @live scraper pipeline tests (Playwright `live-scrapers` project)
+
+```
+npx playwright test test/live-scrapers.spec.ts --project=live-scrapers
+```
+
+Runs only `@live` tagged tests. Requires:
+- Running container at `BASE_URL` (default: `http://localhost:7777`)
+- Active RH Portal session (logged in via VNC — verified by auth pre-flight)
+- VPN connectivity for Supportable tests
+- SF session active for Salesforce tests
+
+Tests:
+1. `@live RH Cases` — POST /api/scrape/rh, poll status, assert `recordCount > 0`
+2. `@live SF Pipeline` — POST /api/scrape/salesforce, poll status, assert `recordCount > 0`
+3. `@live CCSP` — POST /api/scrape/ccsp, poll status, assert `recordCount > 0`
+4. `@live Supportable` — POST /api/scrape/supportable (300s timeout), verify customer `accountNumbers` populated
+5. `@live Full pipeline` — assert all 4 scrapers `isStale: false`, `lastError: null`
+6. `@live Source-to-cache` — assert `lastSuccess` within 60 minutes for RH, SF, CCSP
+
+Timeout budgets: 120s for RH/SF/CCSP, 300s for Supportable (APEX Oracle is slow).
+
+### Session Health Watchdog (Wave 2, 2026-04-03)
+
+The 15-minute heartbeat tick in `src/background-scheduler.ts` includes a lightweight session watchdog:
+
+1. **RH session expiry alert:** Calls `getRhStatus(sessionPath)` on each tick. If `sessionExpired` transitions from false to true, fires an ntfy `high` priority alert: "Red Hat Portal session expired — log in via VNC to restore scraping". Deduplicated via `_lastWatchdogSessionExpired` flag — fires once per expiry event, not every 15 minutes.
+
+2. **Login timeout alert:** If `loginTimedOut` is true and `_lastWatchdogSessionExpired` was false, fires: "Login attempt timed out — retry via dashboard Connect button".
+
+3. **Consecutive failure alerts:** Reads `getStatus()` from scraper-status-store. Any scraper with `consecutiveFailures >= 5` fires an ntfy `high` alert. Tracked via `_alertedScrapers: Set<string>` — alert clears when failures return to 0.
+
+**Security:** All ntfy body strings are STATIC. No session tokens, cookie values, URLs, profile paths, or raw `e.message` are interpolated into notification bodies. Error strings are passed through `sanitizeErr()` before inclusion.
+
 ---
 
 ## Tab Matching Safety (BKL-M14, 2026-03-31)
@@ -428,6 +487,89 @@ Google Sheets (Supportable sheet, CCSP sheet, Pipeline sheet)
 data/cache/ (sheet-cache-*.json, ccsp-data.json, pipeline-data.json)
     ↓  Dashboard reads cache only
 Dashboard UI
+```
+
+---
+
+## §12. Brief Cache Architecture (ADR-009)
+
+### Two-Condition Invalidation
+
+Brief cache files live at `data/cache/{slug}-{date}.json`. Each file contains `{ text, cachedAt }`. The brief route regenerates the cached brief when either condition is true:
+
+```
+Condition 1 (sheet staleness): sheet.cachedAt > brief.cachedAt
+Condition 2 (TTL): Date.now() - brief.cachedAt >= BRIEF_CACHE_TTL_MS (4 hours)
+force=true: always regenerate, bypasses both conditions
+```
+
+`BRIEF_CACHE_TTL_MS = 4 * 60 * 60 * 1000` is exported from `src/cache-layer.ts`.
+
+**Why both conditions:** Sheet staleness alone caused brief regeneration on every scrape tick. TTL alone could miss important sheet changes within the 4h window. Combined, the brief regenerates at most every 4h AND on any sheet data change.
+
+**Drive-watcher invalidation** (`invalidateBriefCaches()`) still works — it deletes the cache file entirely, causing immediate regeneration on next request regardless of TTL.
+
+### lastBriefDate Delta Detection
+
+`buildXmlSources()` calls `readLatestBriefCache(customerName)` to find the most recent cached brief file (sorted by date suffix in filename). The `.date` field (e.g. `"2026-04-03"`) is passed into the XML as `<last_brief_date>`. Gemini uses this to focus the brief on changes since that date. Previously this was hardcoded to "yesterday."
+
+---
+
+## §13. Account Intelligence Pipeline — Dual-Write Cache Pattern (ADR-010)
+
+The account intelligence pipeline runs on demand per customer and produces structured intelligence about account health, stakeholder engagement, and risk signals.
+
+### Write path
+
+```
+POST /api/intelligence/:customer/generate
+  ├── Step 1: Gather signals
+  ├── Steps 2+3: Run in parallel (Promise.allSettled)
+  ├── Write → Google Drive document (source of truth)
+  └── Write → data/cache/intelligence/{slug}.json (local read cache)
+```
+
+Job state (progress, status, errors) is persisted to `data/cache/intelligence-jobs.json` via `setJob()`. `initJobPersistence(cacheDir)` is called from `server.ts` on startup.
+
+### Read path (brief generation)
+
+`buildXmlSources()` in `customer.ts` checks for `data/cache/intelligence/{slug}.json`. If present, its content is included in the brief XML as `<source type="account_intelligence" generated="{generatedAt}">`. If absent (pipeline never run), the source is silently omitted.
+
+**Why local JSON, not Drive read-back:** Drive API adds 500-2000ms latency per brief request. Local file read is <1ms. Drive remains authoritative — the local copy is a fast read cache only.
+
+### Brief XML input sources (as of 2026-04-04)
+
+```xml
+<source type="subscriptions">    — from sheet cache (active, non-free/trial subs only)
+<source type="support_cases">    — from RH cases cache
+<source type="calendar">         — from Google Calendar API
+<source type="emails">           — from Gmail API
+<source type="documents">        — from Google Drive docs
+<source type="pipeline">         — from pipeline cache, filtered per customer
+<source type="cloud_spend">      — from CCSP cache, filtered per customer
+<source type="account_intelligence"> — from data/cache/intelligence/{slug}.json (if exists)
+<source type="previous_brief">   — from readLatestBriefCache() for delta detection
+```
+
+**Free/trial subscription exclusion:** `isFreeOrTrial()` (from `health-score.ts`) filters out subscriptions matching keywords (`free`, `beta`, `trial`, `eval`, etc.) before they are included in the XML. This prevents Gemini from generating renewal urgency for non-commercial subscriptions.
+
+---
+
+## §14. Morning Summary — Gemini Synthesis Layer
+
+`GET /api/morning-summary` assembles portfolio signals (priority actions, health scores, recent cases) across all customers. A new synthesis step calls Gemini to produce a 3-5 sentence narrative covering:
+- Most urgent issues requiring action today
+- Patterns across customers
+- Top 3 recommended actions for the day
+
+**Cache:** `data/cache/morning-synthesis.json` with `MORNING_SYNTHESIS_TTL_MS` (4 hours). The synthesis is non-blocking — if Gemini fails, the summary endpoint returns without the `synthesis` field rather than erroring.
+
+**Response shape:**
+```json
+{
+  "signals": [...],
+  "synthesis": "string — Gemini-generated narrative (optional, absent on failure)"
+}
 ```
 
 ---

@@ -275,6 +275,17 @@ function AccountCard({
             </span>
           )}
           <span className="text-xs text-text-secondary truncate max-w-[120px]" title={account.segment}>{account.segment}</span>
+          {account.confidenceScore != null && (
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+              account.confidenceScore >= 80
+                ? 'bg-green-100 text-green-800'
+                : account.confidenceScore >= 60
+                ? 'bg-amber-100 text-amber-800'
+                : 'bg-red-100 text-red-800'
+            }`}>
+              {account.confidenceScore}%
+            </span>
+          )}
         </div>
       </a>
 

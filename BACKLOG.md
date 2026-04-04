@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-02 (BKL-AI17: CustomerIntelligence skill + NotebookLM pipeline; BKL-RES01–RES03: red team research investigations; BKL-AI16: interactive product Q&A; BKL-F11: shared SF report dedup; BKL-AI01–AI08: account intelligence pipeline from 3-agent research; BKL-F08: VNC flash-close; BKL-F07: SF URL; BKL-G01–G16: UI gaps; BKL-E01–E06: email)
+Last update: 2026-04-04 (BKL-W2-28: CCSP redesign mirror Pipeline 3-tile; BKL-W2-27: bootstrap duplicate sheets; BKL-G08/AI20/AI21/AI23-AI28/M45/W2-26: P0+P1+P2 account intelligence implementation)
 
 ---
 
@@ -834,7 +834,7 @@ Description: Pipeline sheet doesn't include Opportunity ID column yet. When SF r
 Decision: DEFERRED until SF report includes Opportunity ID column. When ready: (1) add oppId to PipelineRecord type, (2) capture col(row, 'Opportunity ID') in parsePipelineRows, (3) wrap oppName in <a href> when oppId present.
 
 ### BKL-M56 | SF Pipeline scraper — try CSV export instead of DOM scroll+parse
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03
 Priority: P1
 Size: S (half day)
 Source: Jason 2026-04-02 — "report shows all 341 rows in one continuous page, just do CSV"
@@ -886,7 +886,7 @@ Fix:
   10. Jason confirmed "Industry" column added to SF report (2026-04-02). This enables automatic industry-per-customer detection from live SF data — supplements or replaces AI01's web search approach. Industry from SF is authoritative (CRM-maintained) vs AI-inferred.
 
 ### BKL-F09 | Setup page Sync status may not reflect API/scheduler-triggered scrapes
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (fully solved by BKL-G22 — SetupPage polls /api/scraper-status every 3s, covers all 4 scrapers + all trigger sources)
 Priority: P2
 Size: S (half day)
 Source: Jason 2026-04-02 — observed CCSP sync possibly not showing as running on Setup page
@@ -1047,7 +1047,7 @@ Fix:
   4. Ensure key signals (SWOT items, trigger events, product fit) are extracted into brief XML
 
 ### BKL-E01 | Add gmail.send scope to OAuth + reauth flow
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Marcus: gmail.send in NORMAL_SCOPES + BOOTSTRAP_SCOPES)
 Priority: P2
 Size: XS (30 min)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1059,7 +1059,7 @@ Fix:
   3. Verify token includes gmail.send after reauth
 
 ### BKL-E02 | sendBriefEmail() function — MIME build + Gmail API POST
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Marcus: sendBriefEmail() with MIME + Gmail POST in email-sender.ts)
 Priority: P2
 Size: S (half day)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1073,7 +1073,7 @@ Fix:
   4. Error handling with sanitizeErr() — never leak raw Gmail errors to client
 
 ### BKL-E03 | Port HTML email template from Python to TypeScript
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Marcus: email-template.ts + BriefEmailData interface exists)
 Priority: P2
 Size: M (1 day)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1088,7 +1088,7 @@ Fix:
   5. Graceful empty states per section
 
 ### BKL-E04 | Email settings UI on Settings page
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Marcus: imported EmailSettingsSection into settings accordion in SetupPage.tsx)
 Priority: P2
 Size: S (half day)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1102,7 +1102,7 @@ Fix:
   4. Match existing settings page design patterns (design tokens, spacing)
 
 ### BKL-E05 | Email settings API — GET/PUT /api/settings/email
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Marcus: GET + PUT /api/settings/email handlers in server.ts)
 Priority: P2
 Size: XS (30 min)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1115,7 +1115,7 @@ Fix:
   4. sanitizeErr() on all error responses
 
 ### BKL-E06 | Wire background-scheduler to trigger email delivery
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (scheduleEmailDelivery() added to background-scheduler.ts; reads email-settings.json per cycle, renders HTML, sends via sendBriefEmail())
 Priority: P2
 Size: S (half day)
 Source: Daily brief email integration — Serena architecture review 2026-04-02
@@ -1132,7 +1132,7 @@ Fix:
 ## UI Spec Compliance Gaps (from 2026-04-02 Quinn visual audit)
 
 ### BKL-G01 | Morning Summary signals not clickable — no navigation to customer detail
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Quinn: signal clicks navigate to customer detail)
 Priority: P1
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1144,7 +1144,7 @@ Fix:
   3. Pass customer name from signal data to navigation
 
 ### BKL-G02 | Morning Summary only generates renewal signals — 8 of 9 signal types missing
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Quinn: 4+ signal types — pipeline-stuck, renewal, competitor, cloud-anomaly)
 Priority: P1
 Size: M (2-3 days)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1161,7 +1161,7 @@ Fix:
   7. Rank all signals by priority per BKL-R06 spec
 
 ### BKL-G03 | PriorityActionBanner has no action buttons (Schedule/View/Dismiss)
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (Quinn: Schedule/View/Dismiss buttons present on banner)
 Priority: P2
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md, DESIGN-SPEC-AccountDetailPage.md
@@ -1198,7 +1198,7 @@ Fix:
   4. Header height to h-16 per spec (currently h-12)
 
 ### BKL-G06 | Sidebar missing Morning Summary nav item + wrong order
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (Quinn: Morning Summary is first sidebar nav item)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against INFORMATION-ARCHITECTURE-V2.md
@@ -1224,7 +1224,7 @@ Fix:
   4. Return structured change objects with type (new/changed/removed) and summary text
 
 ### BKL-G08 | Brief generation HTTP 500 on some customers
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-04 — callLLMStructured now checks for empty text before JSON.parse; throws descriptive error with finishReason, callType, customerName
 Priority: P1
 Size: S (1 day)
 Source: Quinn visual audit 2026-04-02 — observed during customer detail page testing
@@ -1236,7 +1236,7 @@ Fix:
   3. Ensure graceful degradation — partial brief with available data instead of full 500
 
 ### BKL-G09 | KPI sparklines use static color instead of trend-direction coloring
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (SparklineKPI.tsx: computeTrend() + SPARK_UP/SPARK_DOWN/SPARK_NEUTRAL on polyline stroke; color prop ignored in favor of trendColor; invertTrend prop used on openCases/sev1Cases cards; tsc clean)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against VISUAL-DESIGN-SPEC.md
@@ -1249,7 +1249,7 @@ Fix:
   3. Neutral color for flat trends
 
 ### BKL-G10 | Bootstrap CompletionCard lacks clickable resource links
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (SetupPage.tsx lines 618-628: <a href> links with target="_blank" rel="noopener noreferrer" for driveFolder, supportableSheet, ccspSheet, pipelineSheet; fallback extracts IDs from step details; tsc clean)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against auto-bootstrap-ui-spec.md
@@ -1261,7 +1261,7 @@ Fix:
   3. Add target="_blank" rel="noopener" for external links
 
 ### BKL-G11 | KPI sparklines missing on Meetings Today and Meetings This Week cards
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (kpi-history.ts: meetingsToday/meetingsThisWeek in DailySnapshot; captureSnapshot() accepts both params; background-scheduler.ts fetches calendar counts; App.tsx sparklineHistory maps both fields; KPICards passes sparklineHistory?.meetingsToday/meetingsThisWeek; tsc clean)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1273,7 +1273,7 @@ Fix:
   3. Render sparkline polyline same as other cards
 
 ### BKL-G12 | HealthDot hover tooltip does not show score breakdown
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (hover tooltip implemented via showTooltip state; always-visible panel removed)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1285,7 +1285,7 @@ Fix:
   3. Data already available from /api/health-scores — pass breakdown to tooltip
 
 ### BKL-G13 | Customer detail header missing numeric health score
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (Quinn: numeric health score 55/100 confirmed)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1296,7 +1296,7 @@ Fix:
   2. Score already fetched via HealthScoreHero — reuse data in header
 
 ### BKL-G14 | StakeholderEngagementPanel in wrong column — LEFT instead of spec RIGHT
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (Quinn: StakeholderPanel in right column confirmed)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against DESIGN-SPEC-AccountDetailPage.md
@@ -1307,7 +1307,7 @@ Fix:
   2. Ensure it scrolls naturally within the sticky right column below HealthScoreHero
 
 ### BKL-G15 | Setup page missing accessibility: elapsed timer, aria-labels, role="alert"
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (Marcus: elapsed timer at lines 517-554, aria-labels on step icons at 537-543, role="alert" on all 4 Sync error messages in DataSourcesSection)
 Priority: P3
 Size: XS (30 min)
 Source: Quinn visual audit 2026-04-02 — compared against auto-bootstrap-ui-spec.md
@@ -1319,7 +1319,7 @@ Fix:
   3. Add role="alert" to error message containers
 
 ### BKL-G16 | Brief section order follows AI output, not spec-mandated hierarchy
-Status: 🔴 OPEN (Quinn FAIL 2026-04-02)
+Status: ✅ DONE 2026-04-03 (Quinn: fixed section order confirmed)
 Priority: P3
 Size: S (half day)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
@@ -1913,7 +1913,7 @@ Description: Deep research on enterprise-grade solutions for each gap. Covers:
 Output: docs/research-enterprise-scraper-patterns.md with specific recommendations per service
 
 ### BKL-M50c | Auto browser context recovery
-Status: 🔴 OPEN
+Status: ⚠️ NEEDS-REVIEW — implementation present, session re-verify after relaunch absent (see audit 2026-04-03)
 Priority: P0
 Size: M (3-4 days)
 Depends on: BKL-M50b (research recommendations)
@@ -1937,21 +1937,21 @@ Files: src/scraper-manager.ts, data/cache/scrape-log.json, server.ts, dashboard/
 Description: No record of past scrape runs. Only last run's status stored in memory, lost on restart. Write append-only scrape log with: timestamp, scraper name, duration, records extracted, success/failure, error message. Show in Admin as "Scrape History" table.
 
 ### BKL-M50f | Push notification on scrape skip
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (console.warn + recordOutcome with skip message added to CCSP and Supportable skip paths in background-scheduler.ts)
 Priority: P1
 Size: XS (2 hours)
 Files: src/background-scheduler.ts
 Description: Scheduled scrapes at 6:30am/7am skip silently when session is expired. User doesn't know data wasn't refreshed. Add notification (console log + dashboard status update) when a scheduled scrape is skipped due to expired session.
 
 ### BKL-M50g | Xvfb readiness check + container hardening
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03
 Priority: P2
 Size: XS (1 hour)
 Files: entrypoint.sh
 Description: Replace `sleep 1` with xdpyinfo probe loop. Add --memory=2g to Makefile. Consider process supervisor (tini/dumb-init).
 
 ### BKL-M50h | API migration research — Tableau confirmed, SF/RH limited (KEEP CURRENT SCRAPERS)
-Status: 🔴 OPEN
+Status: 🚫 WONTFIX 2026-04-03 — Jason confirmed: Tableau PAT + SF REST API both unavailable. RH APIs return wrong org data. Supportable has no API. Current browser scrapers are permanent solution, not temporary.
 Priority: P1
 Size: L (multi-service migration)
 Depends on: BKL-M50b (research complete)
@@ -1976,7 +1976,7 @@ Related: BKL-F11 (shared report dedup), ADR-001
 ---
 
 ### BKL-M57 | Supportable parallel scraping — multi-context architecture + APEX HTTP fast-path
-Status: 🔴 OPEN
+Status: 🚫 WONTFIX 2026-04-03 — Jason confirmed: do not parallelize Supportable. Sequential scraping is correct and stable. APEX multi-tab cookie collision makes parallelism unsafe. Current single-context sequential approach stays permanently.
 Priority: P1
 Size: L (architecture + implementation)
 Source: Jason + extensive testing 2026-04-02
@@ -2225,7 +2225,7 @@ Related: BKL-AI15 (product data sources), BKL-AI02 (company intelligence)
 ---
 
 ### BKL-M52 | Gemini API cost tracking — per-call token usage + estimated cost dashboard
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — src/gemini-cost-tracker.ts (in-memory tracker), instrumented callLLM/callLLMStructured/callGeminiGrounded/callGeminiStructured, GET /api/admin/gemini-usage, AdminPage cost stat card
 Priority: P1
 Size: M (1-2 days)
 Source: Jason 2026-04-02 — "I need a way to figure out costs as we go further"
@@ -2275,7 +2275,7 @@ Related: ADR-001 (session architecture), CCSP two-phase mutex, PARALLEL_PAGES=1 
 ---
 
 ### BKL-G18 | Account card shows industry segment instead of customer name
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Quinn: account cards show company names)
 Priority: P1
 Size: XS (10 min)
 Source: Jason 2026-04-02 — A10 Networks card shows "Network Security and Application Delivery (including DDo..." instead of "A10 Networks"
@@ -2371,7 +2371,7 @@ Detection scripts for ongoing use:
 ---
 
 ### BKL-M45 | Free/Beta/Trial subscriptions — frontend display in KPI modal + brief tagging
-Status: 🔴 OPEN (backend done, frontend remaining)
+Status: ✅ DONE 2026-04-04 — KPIRenewalsModal collapsible section + KPICards exclusion (already done); buildXmlSources [FREE/TRIAL] tagging → upgraded to FULL EXCLUSION 2026-04-04 (Jason: "make sure we are not using filtered subs into any intelligence")
 Severity: Medium
 Source: Jason 2026-04-01 — "free or Beta or Trial shouldn't count as a worry if expiring"
 Files: src/health-score.ts, src/kpi-history.ts, server.ts (/api/kpis, /api/morning-summary), src/customer.ts (buildXmlSources), dashboard/src/components/KPIRenewalsModal.tsx, dashboard/src/components/KPICards.tsx
@@ -3063,7 +3063,7 @@ Status detail:
 ---
 
 ### BKL-G19 | Admin page: rename Supportable buttons for clarity
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03
 Priority: P3
 Size: XS (15 min)
 Source: Jason 2026-04-03 — confusion between the two Supportable buttons on admin page
@@ -3097,7 +3097,7 @@ Workaround: If discovery hangs, manually stop the spinning tab in VNC (localhost
 ---
 
 ### BKL-G20 | Cases modal: status badge overflows frame on narrow widths
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (whitespace-nowrap + label abbreviation applied in SupportCasesTable.tsx)
 Priority: P3
 Size: XS (15 min)
 Source: Jason 2026-04-03 — "Waiting on Customer" badge wraps awkwardly in the Open Support Cases modal
@@ -3110,7 +3110,7 @@ Description: In the Open Support Cases KPI modal, the Status column badge (e.g. 
 ---
 
 ### BKL-G21 | Admin "Run Now" gives no feedback when scrape is queued behind another
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03
 Priority: P2
 Size: S (30 min)
 Source: Jason 2026-04-03 — button snaps back to "Run Now" with no indication the scrape is queued
@@ -3132,7 +3132,7 @@ Files: defaults.env, .env.example, README.md, SETUP.md, server.ts, src/bootstrap
 Decision: Renamed all references from `pai-notifications` to `asa-command-center` across defaults.env, docs, and all 3 source fallbacks. Rebuild required to take effect in container.
 
 ### BKL-H01 | Remove unneeded files from repo (cleanup)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03
 Priority: P3
 Size: S (30 min)
 Source: Jason 2026-04-03 — repo has accumulated files that shouldn't be tracked
@@ -3146,10 +3146,390 @@ Description: Audit the repo for files that are no longer needed and remove them:
 
 ---
 
+### BKL-ADM01 | SF Pipeline "Run Now" snaps back instantly — markRunning not called before enqueue
+Status: ✅ DONE 2026-04-03
+Priority: P1
+Size: XS (30 min)
+Source: Jason 2026-04-03 — button returns immediately with no status
+Files: src/scrape-api.ts
+Root cause: POST /api/scrape/salesforce enqueues the task then immediately returns {started: true, queued: true}. markRunning('sf-pipeline') is only called inside the queued task's run() function — after the queue drains. The UI's fetchStatus() fires before markRunning(), sees state='stale', clears the busy guard, and the button snaps back.
+Fix: Call markRunning('sf-pipeline') synchronously in the route handler before enqueuing. Apply same fix to all 4 scraper routes for consistency.
+Evidence: Added markRunning() call synchronously before enqueueScraperTask() in all 4 POST handlers (rh ~line 109, supportable ~line 180, ccsp ~line 387, salesforce ~line 470). Added markRunning to imports from scraper-status-store.ts.
+Acceptance: Click Run Now on SF Pipeline → button shows Running... state and holds it until scrape completes.
+
+### BKL-ADM02 | CCSP Run Now: stale non-null browser context crashes with Playwright error
+Status: ✅ DONE 2026-04-03
+Priority: P1
+Size: S (1-2 hours)
+Source: Jason 2026-04-03 — "Error: page: Target page, context or browser has been closed"
+Files: src/ccsp-scraper.ts, src/rh-scraper.ts
+Root cause: _ctx is checked for null (passes) but not for liveness. When context closes after login (crash, idle timeout), _ctx is a stale non-null object. The null check passes but _ctx.newPage() throws the Playwright closed-context error. No recovery path — only re-authenticating via Setup page re-adopts the context.
+Fix:
+  1. Add live health check before newPage(): try { _ctx.pages() } catch { _ctx = null; throw new Error('Browser session closed — reconnect via Setup page') }
+  2. Ensure closeScrapeContext() in rh-scraper also nulls out ccsp-scraper's _ctx to keep state in sync.
+  3. Surface a user-actionable error message instead of raw Playwright stack.
+Evidence: Added try/catch liveness probe via _ctx.pages() before _ctx.newPage() in runCcspScrape() (~line 518-526 ccsp-scraper.ts). On failure: nulls _ctx and throws user-actionable message. Note: cross-file null sync (rh→ccsp) skipped to avoid circular import (ccsp-scraper already imports from rh-scraper).
+Acceptance: CCSP Run Now shows "Browser session closed — reconnect via Setup" instead of raw Playwright error. Re-authenticating in Setup page clears the error.
+
+### BKL-ADM03 | Setup page shows "Connected" based on auth session, not scrape health
+Status: ✅ DONE 2026-04-03
+Priority: P1
+Size: S (1-2 hours)
+Source: Jason 2026-04-03 — all sources show Connected even when scrapers are failing
+Files: dashboard/src/pages/SetupPage.tsx
+Root cause: RH and SF connection badges check only hasSession && !sessionExpired — the session file existing on disk. Scrape failures do not invalidate the session file, so a failed scrape still shows "Connected". CCSP and Supportable use scrape health correctly. The auth/health conflation is isolated to RH and SF badge logic.
+Fix: For RH and SF badges, supplement the session check: also require lastError === null and lastSync !== null from the scraper status. If session exists but last scrape failed, show "Session Active" (amber) instead of "Connected" (green).
+Evidence: Refactored rhConnected/sfConnected (~line 2266) to split into rhSessionActive/sfSessionActive (session only) and rhScrapeOk/sfScrapeOk (requires successful scrape timestamp + no syncError). RH card gets amber "Session Active" state using border-l-warning/bg-warning/text-warning; SF card amended to show amber for both expired AND session-active-but-not-scraping cases. Dashboard tsc: 0 errors.
+Acceptance: After a scrape failure, RH/SF badges show amber "Session Active" not green "Connected". After a successful scrape, badges show green "Connected".
+
 ### BKL-G22 | Setup page Sync section shows no running state when scraper is active
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-03 (Marcus: added /api/scraper-status polling every 3s in DataSourcesSection; scraperRunning state drives loading prop on all 4 SyncButtons so external running state is reflected)
 Priority: P2
 Size: S (30 min)
 Source: Jason 2026-04-03 — admin page shows "Running..." for RH Cases but setup page Sync section shows static "Sync Now" buttons with no activity indicator
 Files: dashboard/src/pages/SetupPage.tsx
 Description: The Setup page Sync section (Red Hat Cases, Supportable Subscriptions, CCSP, Pipeline) does not reflect when a scraper is actively running. The admin page correctly shows "Running..." and "In progress" indicators because it polls `/api/status/scrapes` and checks `isRunning`. The Setup page Sync buttons need the same polling — show a spinner or "Syncing..." state when `isRunning=true` for that source, and disable the button to prevent duplicate triggers.
+
+---
+
+## Wave 2 — Security + Reliability (2026-04-03)
+
+### BKL-W2-01 | Circuit breaker session-expiry pin (Rook finding #3)
+Status: ✅ DONE 2026-04-03
+Priority: P0
+Size: S (1-2 hours)
+Source: Rook security audit Wave 2, finding #3
+Files: src/scraper-manager.ts (CircuitBreaker class)
+Description: SessionExpiredError during a scrape set failure count but cooldown window was too short (5 min default). A transient portal redirect could permanently halt scraping until manual reset. Added `_sessionExpired` + `_sessionExpiredAt` fields to CircuitBreaker. When `sessionExpired=true` is passed to `recordFailure()`, circuit stays open for 4 hours regardless of cooldown — prevents retry storm against an expired session. After 4h, pin clears and normal logic resumes. `recordSuccess()` and reset functions clear the pin on re-auth.
+Decision: DONE — `recordFailure('session expired', true)` called at the RH SessionExpiredError catch block. `resetAllCircuitBreakers()` updated to also check `_sessionExpired` flag so pin clears on re-auth even with zero failure count.
+
+### BKL-W2-02 | Post-auth queue flush — all 4 scrapers enqueued immediately after RH re-auth
+Status: ✅ DONE 2026-04-03
+Priority: P1
+Size: S (1-2 hours)
+Source: Wave 2 backlog
+Files: src/background-scheduler.ts (flushScrapersAfterAuth), src/rh-auth.ts (startLoginBrowser)
+Description: After RH re-authentication, scrapers waited up to 15 minutes for the next heartbeat tick. Added `flushScrapersAfterAuth()` exported from background-scheduler.ts that enqueues all 4 scrapers in the correct order: RH first (populates account numbers), then SF + CCSP (independent), Supportable last (depends on RH account numbers). Called via lazy import in rh-auth.ts after `onComplete?.()` to avoid circular dependency.
+Decision: DONE — lazy `import('./background-scheduler.ts')` in rh-auth.ts avoids circular import since background-scheduler already imports from rh-auth. Coalesce guard in enqueueScraperTask prevents duplicates.
+
+### BKL-W2-03 | Session health watchdog alerts (Rook finding #5)
+Status: ✅ DONE 2026-04-03
+Priority: P1
+Size: S (1-2 hours)
+Source: Rook security audit Wave 2, finding #5
+Files: src/background-scheduler.ts (heartbeat tick)
+Description: No proactive alerting when RH session expires or login times out. Added lightweight watchdog running on every 15-min heartbeat tick: checks `getRhStatus()` for `sessionExpired` and `loginTimedOut` flags; fires ntfy alerts on first detection (deduplicated via `_lastWatchdogSessionExpired`). Also alerts on consecutive scraper failures >= 5 via `getStatus()` + `_alertedScrapers` set. Security: all ntfy bodies use STATIC strings only — no interpolation of session tokens, cookie values, URLs, or raw error objects. Error interpolation uses `sanitizeErr()`.
+Decision: DONE — notify helper uses static message strings. `_alertedScrapers` Set deduplicates per-scraper alerts; cleared when `consecutiveFailures` returns to 0.
+
+### BKL-W2-04 | @live scraper pipeline test suite
+Status: ✅ DONE 2026-04-03
+Priority: P1
+Size: M (half day)
+Source: Wave 2 backlog
+Files: test/live-scrapers.spec.ts (new file)
+Description: No integration tests for live scrapers. Added 6 @live tests covering: RH Cases scrape → data returned, SF Pipeline → recordCount > 0, CCSP → records returned, Supportable → customers have accountNumbers, Full pipeline freshness check (all 4 stale=false, lastError=null), Source-to-cache data freshness (lastSuccess within 60 min for 3 scrapers). Excluded from CI via `grepInvert: /@live/` in `ci` project; run via `live-scrapers` project. Uses `pollUntil()` helper polling every 3s up to per-scraper timeouts (120s for most, 300s for Supportable).
+Decision: DONE — tests match playwright.config.ts `live-scrapers` project pattern. BASE_URL from env or localhost:7777 default.
+
+### BKL-W2-05 | .gitignore belt-and-suspenders for session-state files (Rook finding #6)
+Status: ✅ DONE 2026-04-03
+Priority: P1
+Size: XS (5 min)
+Source: Rook security audit Wave 2, finding #6
+Files: .gitignore
+Description: session-state.json and sf-session-state.json could contain OAuth session cookies if accidentally created in unexpected locations. Added glob patterns `**/session-state.json` and `**/sf-session-state.json` to ensure they're never committed regardless of directory depth.
+Decision: DONE — added in the "OAuth tokens & credentials — never commit" section alongside existing config exclusions.
+
+### BKL-W2-06 | SF pipeline recordCount fix — totalRows out of IIFE scope
+Status: ✅ DONE 2026-04-04
+Priority: P0
+Size: XS (30 min)
+Source: Overnight rock-solid pipeline session (2026-04-04)
+Files: src/scraper-manager.ts
+Description: SF pipeline `recordOutcome()` always stored `recordCount: 0` in scraper-status.json because `totalRows` was declared inside an IIFE and not accessible in the `.finally()` block on the outer promise chain. Promoted to module-level `_sfTotalRows` variable (same pattern as `_sfSyncRunning`, `_sfSyncLastError`). Reset to 0 at function entry, incremented inside IIFE, passed to `recordOutcome()` in finally block as `recordCount: _sfTotalRows`.
+Decision: DONE — scraper-status.json sf-pipeline now shows correct non-zero recordCount (700) after successful sync.
+
+### BKL-W2-07 | Supportable startup validation — auto-clear false-positive account numbers
+Status: ✅ DONE 2026-04-04
+Priority: P0
+Size: S (2 hours)
+Source: Overnight rock-solid pipeline session (2026-04-04)
+Files: src/background-scheduler.ts, data/config/customers.json
+Description: Supportable APEX name-search was storing false-positive account numbers (Taylor Fresh Foods had 103 accounts from prefix-match on unrelated RH accounts). The per-customer 20-account cap during discovery was not enforced on previously-cached values. Added `validateCachedAccountNumbers()` called at startup after `initStatusStore()`. Auto-clears customers with >50 accounts (saves atomically via .tmp rename), warns (no action) for 20-50. Cleared all accountNumbers for all 19 customers and ran fresh discover with cap active — settled to 36 total across 19 customers (max 6 per customer). Saved scraper output audit as SCRAPER-RULES addition.
+Decision: DONE — startup logs now show per-customer account count or "Account numbers OK". Taylor Fresh Foods: 1 account (down from 103).
+
+### BKL-W2-08 | @live test suite bug fixes — AE extraction, endpoint, store response shape
+Status: ✅ DONE 2026-04-04
+Priority: P1
+Size: S (1 hour)
+Source: Overnight rock-solid pipeline session (2026-04-04)
+Files: test/live-scrapers.spec.ts, playwright.config.ts
+Description: Multiple bugs found when first running @live tests end-to-end. (1) grepInvert: true crashed Node.js v25 — changed to /@live/ regex. (2) Test 4 AE extraction broke because /api/aes returns {aes:[...]} not flat array — added .aes ?? body unwrap. (3) Test 4 used /api/scrape/supportable which requires pre-populated accountNumbers — changed to /api/scrape/supportable/discover. (4) Test 5 full-pipeline assertion on store status broke because /api/scraper-status returns {scrapers:{...}} not flat — added .scrapers ?? body unwrap. (5) RH + SF poll timeouts raised 120s→300s for queue contention. All 6 @live tests now pass (2 min total runtime in serial mode).
+Decision: DONE — 6/6 @live tests passing. 237/237 CI tests passing. grepInvert fix prevents Node 25 crash.
+
+### BKL-W2-09 | Tableau VNC window never auto-closes after login
+Status: ✅ DONE 2026-04-04
+Priority: P1
+Size: XS (30 min)
+Source: Jason reported 2026-04-04 morning
+Files: dashboard/src/pages/SetupPage.tsx
+Description: After completing Tableau SSO login in the VNC window, the window never auto-closed. Root cause: `handleTableauConnect` relied exclusively on `wait-for-login` (server-side Playwright URL detection with 120s timeout). If the Tableau SSO redirect landed on a URL variation the Playwright check didn't recognize, it timed out returning false — VNC stayed open indefinitely. Fix: added `session-status` polling every 5s as a fallback alongside `wait-for-login`, both sharing a `loginResolved` flag. First detection wins and fires the close. Same pattern SF session already used.
+Decision: DONE — VNC window now closes within 5 seconds of successful login via the polling fallback.
+
+### BKL-W2-10 | Salesforce "Connect" button does nothing when Session Active but no lastSync
+Status: ✅ DONE 2026-04-04
+Priority: P1
+Size: XS (20 min)
+Source: Jason reported 2026-04-04 morning
+Files: dashboard/src/pages/SetupPage.tsx
+Description: After container restart, SF shows "Session Active" (amber) with "Connect" button. Clicking Connect silently returned without opening VNC or triggering a sync. Root cause: `handleSfConnect` had an early-return when `hasSession=true && !expired` even when `sfConnected=false` (lastSync null). The intent was to skip VNC if already fully connected, but this fired on the "session exists, no sync data yet" state (common after container restart). Fix: when hasSession && !expired but sfConnected=false, trigger a scrape instead of bailing silently. User sees immediate feedback and lastSync gets populated.
+Decision: DONE — Connect button now auto-triggers a sync when session is already active. VNC flow still opens for actual expired/missing sessions.
+
+### BKL-W2-11 | Test gap: SF "Session Active + no lastSync" state not covered
+Status: 🔲 TODO
+Priority: P2
+Size: S (1-2 hours)
+Source: Jason identified 2026-04-04 — "would a test have caught this?"
+Files: test/ui/ or test/api/
+Description: No test covers the Salesforce "Session Active but lastSync=null" state (occurs after container restart with valid OAuth session). A UI test asserting that clicking "Connect" in this state triggers a sync (not a silent no-op) would have caught BKL-W2-10. Add a test: mock SF status API returning {hasSession:true, lastSync:null}, assert clicking Connect fires POST /api/scrape/salesforce.
+
+### BKL-W2-12 | Bootstrap wizard doesn't detect existing Supportable/CCSP/Pipeline sheets on retry
+Status: 🔲 TODO
+Priority: P1
+Size: S (2 hours)
+Source: Jason reported 2026-04-04 — "it should check for existing folder structure and sheets"
+Files: src/bootstrap-orchestrator.ts
+Description: When the wizard is re-run after a partial failure (e.g. session expired mid-run), steps 4-6 (Create Supportable Sheet, Create CCSP Sheet, Sync Pipeline Sheet) don't check whether those sheets already exist in the Drive folder. Step 1 already handles this correctly (shows "reused existing" when Drive folder is found). Steps 4-6 should do the same: check if a sheet with the expected name exists in the AE's Drive folder before trying to create a new one. If found, reuse it and mark step as done. This makes the wizard safely re-runnable after any partial failure without duplicating sheets.
+
+### BKL-W2-14 | flushScrapersAfterAuth Supportable path scrapes but never writes to sheets
+Status: ✅ DONE 2026-04-04
+Priority: P0
+Size: S (1 hour)
+Source: Jason audit 2026-04-04 — 208 rows scraped after Reconnect but never written to any sheet
+Files: src/background-scheduler.ts (flushScrapersAfterAuth, scheduleSupportableSync)
+Evidence: After `runSupportableDiscoverAndScrape`, results now split by AE and `writeSupportableSheet` called per AE. `refreshSubscriptions()` called after. Account number persistence via onProgress callback added. Same fix applied to scheduled batch path. CI: 228 passed 2026-04-04.
+
+### BKL-W2-15 | SF recordCount inflated — counts per-AE writes instead of unique rows
+Status: ✅ DONE 2026-04-04
+Priority: P3
+Size: XS (30 min)
+Source: Jason audit 2026-04-04 — recordCount 700 likely = 350 rows × 2 AE writes
+Files: src/scraper-manager.ts (runSfSyncForAes)
+Evidence: `_sfTotalRows += data.rows.length` moved outside per-AE loop to before the fan-out write. Next SF sync will show correct unique row count, not doubled count. CI: 228 passed 2026-04-04.
+
+### BKL-W2-13 | No banner/guidance when browser context crashes and needs container restart
+Status: 🔲 TODO
+Priority: P2
+Size: M (4 hours)
+Source: Jason requested 2026-04-04 — "we should have a banner message or something saying to restart container button so user knows what to do"
+Files: dashboard/src/pages/DataSourcesPage.tsx (or global layout), src/server.ts (API endpoint)
+Description: When Playwright's shared browser context crashes and auto-recovery fails (multiple consecutive "Target page, context or browser has been closed" errors), the user has no indication of what's wrong or what to do. Scrapers silently fail with confusing error states. Fix: (1) Track consecutive browser-crash failures in a server-side counter; expose `browserRestartNeeded: true` on `/api/status`. (2) Frontend shows a dismissible banner in Data Sources when this flag is true: "Browser context crashed — scrapers cannot run. Restart the container to recover." with a copy-paste command or a soft-restart button if feasible. (3) Soft-restart option: add `/api/control/restart-browser` endpoint that kills the Chromium process and reinitializes the browser context (avoids need for full `make rebuild` in non-profile-corruption cases).
+
+### BKL-W2-17 | Bootstrap bypasses scraper queue — races with scheduled/manual triggers
+Status: 🔲 TODO
+Priority: P2
+Size: M (3 hours)
+Source: Marcus audit 2026-04-04 — identified during FIX 8 (N7)
+Files: src/bootstrap-orchestrator.ts
+Description: Bootstrap orchestrator calls `runSupportableDiscoverAndScrape`, `runCcspScrape`, and `runSfPipelineSync` directly inline, bypassing the scraper queue in background-scheduler.ts. If a scheduled timer fires mid-bootstrap (e.g. the 7am Supportable batch fires while bootstrap step 3 is running), both share the same browser context and race. Fix requires one of: (a) bootstrap waits on a queue-aware Promise wrapper (needs `enqueueScraperTask` to return a completion Promise — currently void), or (b) bootstrap checks the running flags before each step and defers, or (c) bootstrap explicitly disables scheduled scrapers while running. The inline progress-callback pattern used by bootstrap (for step-by-step UI updates) makes (a) the most correct but requires extending the ScraperTask interface with a completion Promise. Deferred from 2026-04-04 fix pass because full integration requires interface change to ScraperTask.
+
+### BKL-W2-16 | Data Sources scraper cards should show record count alongside sync status
+Status: 🔲 TODO
+Priority: P2
+Size: S (2 hours)
+Source: Jason requested 2026-04-04 — "can it also include how many rows or cases or accounts it found just like pipeline does"
+Files: dashboard/src/pages/DataSourcesPage.tsx, src/scraper-manager.ts (/api/status/scrapes)
+Description: Each scraper card on the Data Sources page shows last sync time and status (fresh/stale/failed) but no record count. The Pipeline card already shows row count. Fix: expose `recordCount` from `ScraperStatusStore` on `/api/status/scrapes` for each scraper (it's already stored there — just needs to be included in the API response and rendered in the card). Display labels should be context-appropriate: RH Cases → "X cases", Supportable → "X subscriptions", CCSP → "X records", SF Pipeline → "X rows" (already done).
+
+---
+
+### BKL-W2-17 | UX Audit Q1 — Drive permissions banner gated on AE configured
+Status: DONE 2026-04-04
+Priority: P2
+Size: XS (30 min)
+Source: UX audit 2026-04-04
+Files: dashboard/src/pages/SetupPage.tsx
+Description: Conditionally render the "Reduce Drive permissions" banner only when `aeCount > 0`, so new users don't see it before setup. Fixed by wrapping banner in `{aeCount !== null && aeCount > 0 && (...)}`.
+
+### BKL-W2-18 | UX Audit Q3 — Wizard step numbering + RH Portal badge fix
+Status: DONE 2026-04-04
+Priority: P2
+Size: XS (30 min)
+Source: UX audit 2026-04-04
+Files: dashboard/src/pages/SetupPage.tsx
+Description: (1) Added "Step N of 5 —" prefix to all 5 accordion section titles so new users know their progress. (2) Changed RH Portal "Optional" badge to "Required" — bootstrap is blocked without it.
+
+### BKL-W2-19 | UX Audit Q4 — Per-step retry guidance on bootstrap error completion
+Status: DONE 2026-04-04
+Priority: P2
+Size: S (1 hour)
+Source: UX audit 2026-04-04
+Files: dashboard/src/pages/SetupPage.tsx
+Description: When bootstrap completes with errors, each failed step now shows a specific action hint (e.g. "RH Portal auth failed — scroll up to Step 3 and reconnect."). Built a `hintFor(stepName)` lookup keyed on step name fragments.
+
+### BKL-W2-20 | UX Audit Q5 — Prerequisite callout before bootstrap start
+Status: DONE 2026-04-04
+Priority: P2
+Size: XS (30 min)
+Source: UX audit 2026-04-04
+Files: dashboard/src/pages/SetupPage.tsx
+Description: Added a compact info box above the "Set Up AE" button listing: 7-15 min duration, VPN required, Tableau VNC popup will appear.
+
+### BKL-W2-21 | UX Audit Q7 — Supportable hint text and disabled state fix
+Status: DONE 2026-04-04
+Priority: P2
+Size: XS (30 min)
+Source: UX audit 2026-04-04
+Files: dashboard/src/pages/SetupPage.tsx
+Description: (1) Changed "Requires VPN" hint to "Requires active RH Portal session" in both the Supportable connection card and the Sync section row. (2) Made Sync Now button also disabled when `!rhConnected` (was only gated on `supportableRunning`).
+
+### BKL-W2-22 | UX Audit Q10 — Tableau Connect button explanation when disabled
+Status: DONE 2026-04-04
+Priority: P2
+Size: XS (30 min)
+Source: UX audit 2026-04-04
+Files: dashboard/src/pages/SetupPage.tsx
+Description: When RH Portal is disconnected, Tableau Connect button now shows a hint "Connect Red Hat Portal first" above the button and a `title` tooltip attribute for pointer hover.
+
+### BKL-W2-23 | UX Audit Q13 — Preserve SF Report ID across "Add another AE"
+Status: DONE 2026-04-04
+Priority: P2
+Size: XS (30 min)
+Source: UX audit 2026-04-04
+Files: dashboard/src/pages/SetupPage.tsx
+Description: `resetForm()` now preserves `sfReportId` across AE resets so users don't have to re-enter it. All other fields (aeName, customerText, pod, terrNum) are still cleared.
+
+### BKL-W2-24 | CCSP sync row hint and disabled state — dependency chain inconsistency
+Status: 🔲 TODO
+Priority: P3
+Size: XS (20 min)
+Source: Quinn validation 2026-04-04
+Files: dashboard/src/pages/SetupPage.tsx
+Description: CCSP Sync Now row (line ~2644) shows hint "Requires Tableau session" and does NOT gate the Sync Now button on `!rhConnected`. This is inconsistent with the Supportable row fix (ISC-18/Q7) — CCSP requires Tableau which requires RH Portal first. Fix: (1) update hint to "Requires active Tableau session" or match Supportable wording, (2) evaluate whether CCSP Sync Now button should be disabled when Tableau is not connected (tableauConnected check). Note: CCSP does not strictly require RH Portal the way Supportable does, but the dependency chain (Portal → Tableau → CCSP) means the hint should reflect the actual prerequisite. Confirm with Jason before gating.
+
+### BKL-AI18 | Account Intelligence full investigation — performance, gaps, quality, token efficiency
+Status: 🔲 TODO
+Priority: P1
+Size: L (8+ hours — research + audit + design)
+Source: Jason requested 2026-04-04
+Files: src/customer.ts, src/google.ts, data/cache/*-{date}.json, dashboard/src/ (AI brief display)
+Description: Comprehensive investigation of the account intelligence pipeline end-to-end. Goals: (1) Performance — latency breakdown per brief (Gmail fetch / Calendar fetch / AI call / cache write), parallelization opportunities. (2) Gaps — what data is missing (Supportable subscriptions, CCSP spend, cases cross-referenced with pipeline). (3) Quality — are prompts producing high-signal output, or too verbose/shallow? (4) Token efficiency — cost per brief, differential updates vs full regen, smaller model candidates. (5) Architecture — IMPORTANT: Gemini API is NOT approved at Red Hat. Must investigate whether the current Vertex AI service account setup is Red Hat-approved, and if not, identify an approved alternative (Claude API via PAI Inference Tool is a candidate). Do not proceed with any AI provider change without confirming Red Hat approval. Deliverable: prioritized improvement list with cost estimates and approved-provider recommendation.
+
+### BKL-AI19 | Research best approach for Vertex AI service account distribution
+Status: 🔲 TODO
+Priority: P2
+Size: S (2 hours — research + recommendation)
+Source: Jason requested 2026-04-04
+Files: .env, docs/SETUP.md (or README), Containerfile
+Description: Jason set up Vertex AI via Red Hat GCP login with a service account key baked into the project so colleagues don't need to repeat the setup. Research the tradeoffs and recommend the best approach for this use case: (1) Baked-in key in container image — zero setup, but key exposed in GHCR image and can't be rotated without rebuild. (2) .env file injection — key stays off the image, each user sets up once, documented in README. (3) Shared service account via team vault — single key everyone uses, rotated centrally. Consider: is the GHCR image private? Who are the intended users (just Jason, or Red Hat colleagues)? Is key rotation a real concern for a localhost-only tool? Deliverable: recommendation with tradeoffs documented, plus any changes needed to setup docs if approach changes.
+
+### BKL-AI20 | Brief cache invalidates on every scrape — constant regeneration
+Status: ✅ DONE 2026-04-04 — Added BRIEF_CACHE_TTL_MS=4h to cache-layer.ts; brief route now checks `ageMs < BRIEF_CACHE_TTL_MS` alongside sheetTs check (ADR-007)
+Priority: P0
+Size: S (2 hours)
+Source: Jason reported 2026-04-04 — "everytime i pull up accounts page they want to regenerate everything again"
+Files: src/customer-routes.ts:236-246
+Description: Brief cache invalidation uses `sheetTs > briefTs` — any sheet refresh (Supportable, CCSP, etc.) marks all briefs as stale, triggering full Gemini regeneration on next page load. With scrapers running every few hours, briefs almost never serve from cache. Fix: change invalidation logic to use a fixed daily TTL (e.g. regenerate once per day max, at a set time like 6am) rather than data-driven invalidation. If the user explicitly requests a refresh (force=true), bypass the TTL. Separate "data freshness" from "brief freshness" — a new scrape should NOT immediately invalidate today's brief.
+
+### BKL-AI21 | On-demand brief missing pipeline + CCSP data
+Status: ✅ DONE 2026-04-04 — customer-routes.ts brief route now filters pipeline+CCSP by customer name and passes to generateBrief
+Priority: P0
+Size: S (1 hour)
+Source: Audit 2026-04-04 — code review finding
+Files: src/customer-routes.ts:259, src/background-scheduler.ts:1241
+Description: The UI-triggered brief route calls `generateBrief(customer, meetings, emails, docs, cases, subscriptions, products)` — no pipeline records, no CCSP cloud spend passed in. The background scheduler version (line 1241) DOES include pipeline and ccsp. This means the brief Jason sees in the UI is missing two key data sources. Fix: fetch pipelineRecords and ccspRecords in the route handler (same way background-scheduler.ts does) and pass them into generateBrief.
+
+### BKL-AI22 | Brief does not cross-reference signals against upcoming meetings
+Status: 🔲 TODO
+Priority: P1
+Size: M (4 hours — prompt engineering + testing)
+Source: Jason requested 2026-04-04 — "crossreference all my signals against upcoming meetings etc."
+Files: src/customer.ts (generateBrief, EXTRACTION_PROMPT, SYNTHESIS_PROMPT)
+Description: The brief includes calendar events as a data source but does not use upcoming meetings as an organizing lens. Jason's desired behavior: if there's a meeting with a customer in the next 7 days, the brief should lead with meeting prep — surfacing relevant open cases, expiring subscriptions, recent emails, and pipeline status as prep context. If no meeting is upcoming, fall back to the current priority-ranked output. Changes needed: (1) identify "upcoming meetings" (next 7 days) from the meetings array before brief generation, (2) add an explicit meeting-prep section to the prompt when upcoming meetings exist, (3) cross-reference each upcoming meeting against open cases, renewals, and recent emails in the synthesis step.
+
+### BKL-AI23 | lastBriefDate hardcoded as "yesterday" — breaks delta detection for older briefs
+Status: ✅ DONE 2026-04-04 — findPreviousBrief replaced with readLatestBriefCache; lastBriefDate now uses actual cached date (ADR fix from council Marcus audit)
+Priority: P0
+Size: XS (30 min)
+Source: Council review 2026-04-04 — Marcus found root cause of brief inconsistency
+Files: src/customer.ts:781-782
+Description: `lastBriefDate` was hardcoded as `new Date(Date.now() - 24h)` regardless of actual brief age. A 5-day-old brief would tell Gemini "what changed since yesterday" — missing 4 days of signals. Fix: use `readLatestBriefCache(customer.name).date` which reads the actual cached date from the filename.
+
+### BKL-AI24 | Intelligence pipeline steps 2+3 run sequentially — unnecessary latency
+Status: ✅ DONE 2026-04-04 — Promise.allSettled for steps 2+3; partial results handled
+Priority: P1
+Size: XS (30 min)
+Source: Council review 2026-04-04 — Serena architecture review
+Files: src/account-intelligence.ts (generateCompanyIntelligence + generateIndustryAnalysis calls)
+Description: Steps 2 (generateCompanyIntelligence) and 3 (generateIndustryAnalysis) are independent and run sequentially. Switching to Promise.allSettled cuts intelligence generation time ~40%. Fix: wrap both in `Promise.allSettled` with partial-result handling.
+
+### BKL-AI25 | Intelligence job state lost on container restart
+Status: ✅ DONE 2026-04-04 — initJobPersistence + setJob wrapper; intelligence-jobs.json file cache
+Priority: P1
+Size: S (2 hours)
+Source: Council review 2026-04-04 — Marcus engineering audit
+Files: src/account-intelligence.ts (jobs Map)
+Description: The `jobs` Map is in-memory only. Any container restart loses all running/completed job state — UI shows stale "running" jobs that are actually dead. Fix: add `initJobPersistence(cacheDir)` that writes job state to `data/cache/intelligence-jobs.json` on every update; on startup, mark any 'running' jobs as 'error'.
+
+### BKL-AI26 | Intelligence docs never flow into brief generation
+Status: ✅ DONE 2026-04-04 — dual-write JSON cache to data/cache/intelligence/{slug}.json; buildXmlSources reads it
+Priority: P1
+Size: M (4 hours)
+Source: Council review 2026-04-04 — Serena ADR-008
+Files: src/account-intelligence.ts, src/customer.ts (buildXmlSources), src/customer-routes.ts
+Description: Account intelligence pipeline writes PESTLE/SWOT/industry docs to Drive but never reads them back into brief generation. Brief XML has `<source type="intelligence">` placeholder but it's always empty. Fix (ADR-008): dual-write — intelligence pipeline writes to Drive (truth) + `data/cache/intelligence/{customer-slug}.json` (local cache for brief pipeline); brief route reads from local JSON cache and passes to buildXmlSources.
+
+### BKL-AI27 | Portfolio morning summary lacks Gemini synthesis layer
+Status: ✅ DONE 2026-04-04 — /api/morning-summary synthesis field with 4h cache and graceful degradation
+Priority: P1
+Size: M (4 hours)
+Source: Council review 2026-04-04 — Serena architecture proposal; Jason confirmed "Yes"
+Files: src/dashboard-routes.ts (/api/morning-summary), src/customer.ts (new synthesis function)
+Description: The existing /api/morning-summary is excellent deterministic signal collection (Sev1/Sev2, renewals, gone-silent, meetings, pipeline, competitors, cloud spend). Missing: a Gemini synthesis layer that turns these 7 signal types into a prioritized narrative for the day. Fix: after collecting all signals, pass to Gemini with a "portfolio morning briefing" prompt for a 3-5 sentence daily summary + top 3 action items. Result cached with 4h TTL. Frontend shows synthesis above the signal grid.
+
+### BKL-AI28 | Confidence Score — composite engagement health metric per customer
+Status: ✅ DONE 2026-04-04 — computeConfidenceScore in health-score.ts; exposed on /api/customers
+Priority: P2
+Size: M (4 hours)
+Source: Council review 2026-04-04 — Aditi UX design; Jason: "confidence score is fine, simple first"
+Files: src/health-score.ts, src/customer-routes.ts, dashboard/src/components/CustomerList.tsx
+Description: Per-customer 0-100 Confidence Score combining: subscription proximity to expiry (40%), last interaction recency (30%), open case severity (20%), pipeline stage (10%). Displayed as a color-coded badge on customer list rows with hover tooltip showing breakdown. Replaces "Renewal Risk" concept from ADR-009. Start simple: compute server-side in health-score.ts, expose via /api/customers endpoint, render as badge in CustomerList.
+
+### BKL-W2-26 | pipeline cache staleness check uses old sheet IDs — always skips refresh
+Status: ✅ DONE 2026-04-04 — refreshPipeline() now computes pipelineIds before staleness check; if IDs differ from cache, forces refresh (fix was written in session, confirmed in source)
+Priority: P1
+Size: XS (30 min)
+Source: Audit 2026-04-04 — pipeline-data.json stuck on April 1 data; SF scraper writes 350 rows to correct sheets but refreshPipeline() skips because cached fileIds differ from current aes.json sheet IDs
+Files: src/refresh-engine.ts (refreshPipeline function, lines ~113-132)
+Description: `refreshPipeline()` calls `checkFilesModified(cached.fileIds, cached.cachedAt)` using the fileIds stored in the old cache. After AE bootstrap creates new sheets, aes.json has new sheet IDs that differ from the cached fileIds. The staleness check compares old IDs (which haven't changed) and always returns "unchanged" → skips. Fix: move `pipelineIds` computation before the staleness check; if current sheet IDs differ from cached fileIds, skip the staleness check and force a refresh. Also: same pattern exists in refreshSubscriptions() — audit that path too.
+Tests needed: POST /api/refresh/pipeline with mismatched fileIds → should refresh; POST /api/refresh/pipeline with matching unchanged fileIds → should skip.
+
+### BKL-W2-27 | Bootstrap creates duplicate sheets — old empty ones accumulate in Drive
+Status: 🔲 TODO
+Priority: P1
+Size: S (3 hours)
+Source: Jason 2026-04-04 — saw 4 "Elmer Alvarez Pipeline" sheets in Drive; 3 were empty orphans from prior bootstrap runs
+Files: src/bootstrap-orchestrator.ts (sheet creation), src/scraper-manager.ts
+Description: Each bootstrap run creates new Sheets (pipeline, CCSP, supportable) for each AE without deleting or archiving the old ones. After multiple bootstrap runs the Drive folder becomes cluttered with N duplicate empty sheets. Jason opened an old empty one and thought the current pipeline was empty — it wasn't, the live sheet (ID in aes.json) had fresh data. Fix: at bootstrap time, before creating a new sheet, search the AE's Drive folder for sheets matching the naming pattern ("Elmer Alvarez Pipeline", "Elmer Alvarez CCSP", etc.) and either (a) reuse the existing sheet (preferred — preserves data history) or (b) delete/trash old ones after the new sheet is created and confirmed. Option A is safer and avoids data loss.
+Tests needed: Bootstrap idempotency — running bootstrap twice should result in 1 sheet per type, not 2.
+
+### BKL-W2-28 | CCSP section redesign — mirror Pipeline 3-tile layout with per-AE rolling quarters
+Status: 🔲 TODO
+Priority: P2
+Size: M (1-2 days)
+Source: Jason 2026-04-04 — current donut chart doesn't match Pipeline's actionable layout; wants spend-by-account breakdown with rolling quarters
+Files: dashboard/src/components/CCSPSection.tsx, src/dashboard-routes.ts (/api/ccsp), src/ccsp-scraper.ts (per-AE data exposure)
+Description: Redesign CCSPSection to mirror the 3-tile layout already used by PipelineSection.
+  - **Left tile**: Keep existing (Total Portfolio ACV + By Cloud Partner bars) — no change
+  - **Middle tile**: By AE selector (All / [AE names], clickable like Pipeline's By Owner) + rolling quarter $ totals below — just total $ per quarter, reactive to selected AE. No breakdown by partner in this tile.
+  - **Right tile**: Top accounts for selected AE (filtered by AE when one is selected, all AEs when "All" selected) — mirrors Pipeline's right tile.
+  - **Data note**: CCSP is AE-specific — each AE has their own separate CCSP sheet (not a shared sheet like SF Pipeline). Backend /api/ccsp currently returns aggregated data only. Needs per-AE CCSP data added so frontend can filter by selected AE.
+  - **Backend change needed**: /api/ccsp response must expose per-AE records (accountName, partnerName, spend, quarter, ae) so the middle and right tiles can filter correctly.
+Tests needed: Middle tile shows correct quarterly totals for "All" and each AE. Right tile top accounts update when AE changes. No layout regressions on existing left tile.
+
+### BKL-W2-25 | make rebuild from worktree can overwrite aes.json with stale state
+Status: 🔲 TODO
+Priority: P0
+Size: S (2 hours)
+Source: Incident 2026-04-04 — Elmer Alvarez's AE entry wiped after Marcus agent ran make rebuild from worktree
+Files: Makefile, CLAUDE.md (agent briefing section)
+Description: When `make rebuild` is run from a git worktree, DATA := $(CURDIR)/data resolves to the WORKTREE's data directory, not the main project's. If the worktree has a stale aes.json (from when the worktree was created), the resulting container starts with that stale config — overwriting any AE entries added since the worktree was branched. Fix options: (1) Add a guard in Makefile that aborts if running from a worktree path (detect via `git worktree list`). (2) Always resolve DATA to the main worktree root regardless of cwd. (3) Update agent briefing in CLAUDE.md: agents must never run `make rebuild` — only Jason runs it, or it must be run from the project root only. Also: add aes.json to a backup/restore mechanism so container rebuilds can't silently lose AE configuration. Root cause of losing Elmer Alvarez's AE config today.

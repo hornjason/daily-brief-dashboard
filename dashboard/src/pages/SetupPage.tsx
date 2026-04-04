@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatRelTime } from '../lib/format'
 import { RefreshTimerSettings } from '../components/RefreshTimerSettings'
+import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import {
   CheckCircle,
@@ -603,6 +604,35 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
           <p className={`font-medium mb-2 ${hasError ? 'text-warning' : 'text-success'}`} {...(hasError ? { role: 'alert' } : {})}>
             {hasError ? 'Completed with errors — some steps may need retry' : 'All done! Resources are ready.'}
           </p>
+          {/* Q4: Per-step retry guidance for failed steps */}
+          {hasError && (() => {
+            const failedSteps = state.steps.filter(s => s.status === 'error')
+            if (failedSteps.length === 0) return null
+            const hintFor = (stepName: string): string => {
+              if (stepName.toLowerCase().includes('rh portal') || stepName.toLowerCase().includes('red hat') || stepName.toLowerCase().includes('account'))
+                return 'RH Portal auth failed — scroll up to Step 3 and reconnect.'
+              if (stepName.toLowerCase().includes('supportable'))
+                return 'Supportable sheet failed — check VPN connection and retry.'
+              if (stepName.toLowerCase().includes('drive') || stepName.toLowerCase().includes('folder'))
+                return 'Drive folder failed — verify Google Auth is connected in Step 2.'
+              if (stepName.toLowerCase().includes('ccsp') || stepName.toLowerCase().includes('tableau'))
+                return 'CCSP sheet failed — connect Tableau in Data Sources (Step 5).'
+              if (stepName.toLowerCase().includes('pipeline') || stepName.toLowerCase().includes('salesforce'))
+                return 'Pipeline sheet failed — check Salesforce connection in Step 5.'
+              if (stepName.toLowerCase().includes('territory'))
+                return 'Territory lookup failed — verify Google Sheets access in Step 2.'
+              return 'Step failed — check server logs and click "Clear stuck state" to retry.'
+            }
+            return (
+              <div className="mb-3 space-y-1">
+                {failedSteps.map((s, i) => (
+                  <p key={i} className="text-xs text-warning bg-warning/10 border border-warning/20 rounded px-2 py-1.5">
+                    <span className="font-medium">{s.name}</span> — {hintFor(s.name)}
+                  </p>
+                ))}
+              </div>
+            )
+          })()}
           {/* BKL-G10: Clickable resource links from bootstrap result */}
           {(() => {
             const r = state.resources
@@ -1074,7 +1104,10 @@ function AutoBootstrapForm() {
   }, [bootstrapState?.running, starting, tableauSessionNeeded])
 
   const resetForm = () => {
-    setBootstrapState(null); setAeName(''); setSfReportId(''); setCustomerText(''); setPod(''); setTerrNum('')
+    // Q13: preserve sfReportId across AE resets — most AEs share the same SF report
+    const preservedSfReportId = sfReportId
+    setBootstrapState(null); setAeName(''); setCustomerText(''); setPod(''); setTerrNum('')
+    setSfReportId(preservedSfReportId)
     setTableauSessionNeeded(null)
     bootstrapStartingRef.current = false
   }
@@ -1281,6 +1314,16 @@ function AutoBootstrapForm() {
           <p className="text-text-secondary pl-8">└── 📊 Pipeline Sheet</p>
         </div>
       )}
+
+      {/* Q5: Prerequisites callout — shown before starting bootstrap */}
+      <div className="bg-accent/5 border border-accent/20 rounded-lg px-3 py-2.5 text-xs text-text-secondary space-y-1">
+        <p className="font-medium text-text-primary text-xs">Before you start:</p>
+        <ul className="space-y-0.5 list-disc list-inside">
+          <li>This takes <span className="text-white">7–15 minutes</span> to complete</li>
+          <li>You must be connected to <span className="text-white">Red Hat VPN</span></li>
+          <li>A <span className="text-white">Tableau VNC popup</span> will appear mid-run — leave it open</li>
+        </ul>
+      </div>
 
       {preflightError && (
         <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2">{preflightError}</p>
@@ -1849,13 +1892,18 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const popupRef = useRef<Window | null>(null)
+  // Guard: only close the VNC window after the backend has confirmed loginInProgress:true
+  // at least once. Without this, stale hasSession:true (dead browser, live session file)
+  // causes the first poll to immediately close the window before login even starts.
+  const loginStartedRef = useRef(false)
 
   const fetchStatus = async (signal?: AbortSignal) => {
     try {
       const d: RhStatus = await fetch('/api/auth/redhat/status', { signal }).then((r) => r.json())
       setStatus(d)
-      if (d.hasSession) onConnected?.()
-      if (d.hasSession && !d.loginInProgress && connecting) {
+      if (d.hasSession && !d.sessionExpired) onConnected?.()
+      if (d.loginInProgress) loginStartedRef.current = true
+      if (d.hasSession && !d.loginInProgress && connecting && loginStartedRef.current) {
         setConnecting(false)
         popupRef.current?.close()
         popupRef.current = null
@@ -1879,6 +1927,7 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
 
   const handleConnect = async () => {
     setError(null)
+    loginStartedRef.current = false
     setConnecting(true)
     try {
       const res = await fetch('/api/auth/redhat/start', { method: 'POST' })
@@ -2029,6 +2078,32 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const [rhSyncing, setRhSyncing] = useState(false)
   const [rhSyncError, setRhSyncError] = useState<string | null>(null)
 
+  // BKL-G22: Poll /api/scraper-status so Sync buttons reflect live running state
+  // even when a scrape was triggered externally or on page load mid-run.
+  const [scraperRunning, setScraperRunning] = useState<{
+    rh: boolean; supportable: boolean; ccsp: boolean; salesforce: boolean
+  }>({ rh: false, supportable: false, ccsp: false, salesforce: false })
+  const scraperPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => {
+    const fetchScraperStatus = () => {
+      fetch('/api/scraper-status')
+        .then(r => r.json())
+        .then(d => {
+          const s = d.scrapers ?? {}
+          setScraperRunning({
+            rh:         s['rh-cases']?.state === 'running',
+            supportable: s['supportable']?.state === 'running',
+            ccsp:        s['ccsp']?.state === 'running',
+            salesforce:  s['sf-pipeline']?.state === 'running',
+          })
+        })
+        .catch(() => {})
+    }
+    fetchScraperStatus()
+    scraperPollRef.current = setInterval(fetchScraperStatus, 3_000)
+    return () => { if (scraperPollRef.current) clearInterval(scraperPollRef.current) }
+  }, [])
+
   // Connection flow state
   const [tableauStatus, setTableauStatus] = useState<{ reachable: boolean; sessionValid: boolean } | null>(null)
   const [supportableReachable, setSupportableReachable] = useState<boolean | null>(null)
@@ -2092,7 +2167,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const handleSfConnect = async () => {
     setSfConnecting(true)
 
-    // Pre-check: if already connected and this is a first-connect (not reconnect), skip VNC
+    // Pre-check: if already fully connected (session + lastSync), skip VNC and just re-sync
     if (!sfConnected) {
       try {
         const res = await fetch('/api/auth/salesforce/status')
@@ -2100,7 +2175,10 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
         setSfStatus(status)
         const expired = status.sessionExpired || status.syncError?.toLowerCase().includes('session expired')
         if (status.hasSession && !expired) {
+          // Session exists but lastSync is missing (e.g. after container restart).
+          // Trigger a sync to populate lastSync instead of silently bailing.
           setSfConnecting(false)
+          await fetch('/api/scrape/salesforce', { method: 'POST' }).catch(() => {})
           return
         }
       } catch { /* fall through */ }
@@ -2170,21 +2248,37 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       await fetch('/api/bootstrap/tableau/open-login', { method: 'POST' })
     } catch { /* fall through — wait-for-login will handle the error state */ }
 
-    // Watch the live page — resolves the moment the logged-in Tableau URL appears
+    // Shared resolved flag — first detection wins, prevents double-close
+    let loginResolved = false
+    const resolveLogin = (valid: boolean) => {
+      if (loginResolved) return
+      loginResolved = true
+      if (tableauPollRef.current) { clearInterval(tableauPollRef.current); tableauPollRef.current = null }
+      if (valid) {
+        setTableauStatus({ reachable: true, sessionValid: true })
+        setTimeout(() => { tableauVncRef.current?.close(); tableauVncRef.current = null }, 3000)
+      }
+      setTableauConnecting(false)
+    }
+
+    // Primary: server-side Playwright URL detection
     fetch('/api/bootstrap/tableau/wait-for-login')
       .then(r => r.json())
-      .then(status => {
-        if (status.sessionValid) {
-          setTableauStatus({ reachable: true, sessionValid: true })
-          // Only close VNC on successful login — let user retry if failed
-          setTimeout(() => { tableauVncRef.current?.close(); tableauVncRef.current = null }, 3000)
-        }
-        setTableauConnecting(false)
-      })
-      .catch(() => {
-        setTableauConnecting(false)
-        // Don't close VNC on error — user may need to complete login manually
-      })
+      .then(status => resolveLogin(status.sessionValid))
+      .catch(() => resolveLogin(false))
+
+    // Fallback: poll session-status every 5s — catches cases where wait-for-login
+    // detection misses the login (SSO URL variation, slow redirect chain)
+    tableauPollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch('/api/bootstrap/tableau/session-status')
+        const status = await res.json()
+        if (status.sessionValid) resolveLogin(true)
+      } catch { /* retry next tick */ }
+    }, 5_000)
+
+    // Hard cap — stop polling after 120s regardless
+    setTimeout(() => resolveLogin(false), 120_000)
   }
 
   const handleRhSync = async () => {
@@ -2263,9 +2357,16 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   )
 
   // Derived statuses for card border accents
-  const rhConnected = (rhStatus?.hasSession && !rhStatus?.sessionExpired) ?? false
+  // BKL-ADM03: session file persists through failed scrapes, so also require
+  // that a successful scrape has completed (lastScraped timestamp exists) for RH,
+  // and that last sync completed without error for SF.
+  const rhScrapeOk = !!rhStatus?.lastScraped
+  const rhSessionActive = (rhStatus?.hasSession && !rhStatus?.sessionExpired) ?? false
+  const rhConnected = rhSessionActive && rhScrapeOk
   const sfExpired = sfStatus?.syncError?.toLowerCase().includes('session expired')
-  const sfConnected = sfStatus?.hasSession && !sfExpired
+  const sfScrapeOk = !!sfStatus?.lastSync && !sfStatus?.syncError
+  const sfSessionActive = (sfStatus?.hasSession && !sfExpired) ?? false
+  const sfConnected = sfSessionActive && sfScrapeOk
   const supportableConnected = supportableReachable === true
   const supportableRunning = supportableStatus?.running ?? false
   const supportableErrored = !!supportableStatus?.lastError || (!supportableStatus?.lastScrape && !supportableStatus?.running)
@@ -2315,16 +2416,16 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
         <div className="grid grid-cols-1 md:grid-cols-2 min-[1440px]:grid-cols-4 gap-3">
 
           {/* Red Hat Portal */}
-          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${rhConnected ? 'border-l-success' : 'border-l-border'}`}>
+          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${rhConnected ? 'border-l-success' : rhSessionActive ? 'border-l-warning' : 'border-l-border'}`}>
             <div className="flex items-center justify-between mb-1">
               <div>
                 <p className="text-sm font-medium text-white">Red Hat Portal</p>
                 <p className="text-xs text-text-secondary">Support cases</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${rhConnected ? 'bg-success' : 'bg-surface-active'}`} />
-                <span className={`text-xs ${rhConnected ? 'text-success' : 'text-text-secondary'}`}>
-                  {rhConnected ? 'Connected' : 'Not connected'}
+                <span className={`w-2 h-2 rounded-full ${rhConnected ? 'bg-success' : rhSessionActive ? 'bg-warning' : 'bg-surface-active'}`} />
+                <span className={`text-xs ${rhConnected ? 'text-success' : rhSessionActive ? 'text-warning' : 'text-text-secondary'}`}>
+                  {rhConnected ? 'Connected' : rhSessionActive ? 'Session Active' : 'Not connected'}
                 </span>
               </div>
             </div>
@@ -2368,10 +2469,13 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               </div>
             </div>
             <div className="mt-auto pt-3">
-              <div className="mb-2 text-xs text-text-secondary flex items-center gap-1">
-                <Shield className="w-3 h-3" />
-                <span>Requires VPN</span>
-              </div>
+              {/* Q7: hint corrected — VPN alone is not enough; RH Portal session required */}
+              {!rhConnected && (
+                <div className="mb-2 text-xs text-text-secondary flex items-center gap-1">
+                  <Shield className="w-3 h-3" />
+                  <span>Requires active RH Portal session</span>
+                </div>
+              )}
               <button
                 onClick={handleSupportableConnect}
                 disabled={!rhConnected || supportableConnecting}
@@ -2385,16 +2489,16 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
           </div>
 
           {/* Salesforce */}
-          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${sfConnected ? 'border-l-success' : sfExpired ? 'border-l-warning' : 'border-l-border'}`}>
+          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${sfConnected ? 'border-l-success' : (sfExpired || sfSessionActive) ? 'border-l-warning' : 'border-l-border'}`}>
             <div className="flex items-center justify-between mb-1">
               <div>
                 <p className="text-sm font-medium text-white">Salesforce</p>
                 <p className="text-xs text-text-secondary">Pipeline</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${sfConnected ? 'bg-success' : sfExpired ? 'bg-warning' : 'bg-surface-active'}`} />
-                <span className={`text-xs ${sfConnected ? 'text-success' : sfExpired ? 'text-warning' : 'text-text-secondary'}`}>
-                  {sfConnected ? 'Connected' : sfExpired ? 'Expired' : 'Not connected'}
+                <span className={`w-2 h-2 rounded-full ${sfConnected ? 'bg-success' : (sfExpired || sfSessionActive) ? 'bg-warning' : 'bg-surface-active'}`} />
+                <span className={`text-xs ${sfConnected ? 'text-success' : (sfExpired || sfSessionActive) ? 'text-warning' : 'text-text-secondary'}`}>
+                  {sfConnected ? 'Connected' : sfExpired ? 'Expired' : sfSessionActive ? 'Session Active' : 'Not connected'}
                 </span>
               </div>
             </div>
@@ -2443,10 +2547,18 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               </div>
             </div>
             <div className="mt-auto pt-3">
+              {/* Q10: hint when RH Portal is disconnected */}
+              {!rhConnected && !tableauConnecting && (
+                <div className="mb-2 text-xs text-text-secondary flex items-center gap-1">
+                  <Shield className="w-3 h-3" />
+                  <span>Connect Red Hat Portal first</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleTableauConnect}
                   disabled={!rhConnected || tableauConnecting}
+                  title={!rhConnected ? 'Connect Red Hat Portal first' : undefined}
                   className="bg-surface-hover hover:bg-surface-active disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
                 >
                   {tableauConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
@@ -2484,10 +2596,11 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               )}
             </div>
             <div className="flex items-center">
-              <SyncButton onClick={handleRhSync} loading={rhSyncing} disabled={!rhConnected} label="Sync Now" icon={RefreshCw} />
+              {/* BKL-G22: loading reflects both local trigger and external isRunning from poll */}
+              <SyncButton onClick={handleRhSync} loading={rhSyncing || scraperRunning.rh} disabled={!rhConnected} label="Sync Now" icon={RefreshCw} />
             </div>
           </div>
-          {rhSyncError && <p className="text-xs text-critical pb-2">{rhSyncError}</p>}
+          {rhSyncError && <p role="alert" className="text-xs text-critical pb-2">{rhSyncError}</p>}
 
           {/* Supportable Subscriptions */}
           <div className="flex items-center justify-between py-3">
@@ -2501,11 +2614,11 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               {supportableStatus?.lastError && <p className="text-xs text-critical">{supportableStatus.lastError}</p>}
             </div>
             <div className="flex items-center">
-              {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires VPN</span>}
-              <SyncButton onClick={handleRunScrape} loading={scraping} disabled={supportableRunning} label="Sync Now" />
+              {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires active RH Portal session</span>}
+              <SyncButton onClick={handleRunScrape} loading={scraping || scraperRunning.supportable} disabled={!rhConnected || supportableRunning || scraperRunning.supportable} label="Sync Now" />
             </div>
           </div>
-          {scrapeError && <p className="text-xs text-critical pb-2">{scrapeError}</p>}
+          {scrapeError && <p role="alert" className="text-xs text-critical pb-2">{scrapeError}</p>}
           {supportableRunning && (
             <div className="flex items-center gap-2 pb-2 text-xs text-warning">
               <svg className="w-3 h-3 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
@@ -2529,10 +2642,10 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             </div>
             <div className="flex items-center">
               {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires Tableau session</span>}
-              <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping} disabled={ccspRunning} label="Sync Now" />
+              <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping || scraperRunning.ccsp} disabled={ccspRunning || scraperRunning.ccsp} label="Sync Now" />
             </div>
           </div>
-          {ccspScrapeError && <p className="text-xs text-critical pb-2">{ccspScrapeError}</p>}
+          {ccspScrapeError && <p role="alert" className="text-xs text-critical pb-2">{ccspScrapeError}</p>}
 
           {/* Pipeline (Salesforce) */}
           <div className="flex items-center justify-between py-3">
@@ -2546,10 +2659,10 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             </div>
             <div className="flex items-center">
               {!sfConnected && <span className="text-xs text-text-secondary mr-3">Requires Salesforce session</span>}
-              <SyncButton onClick={handleSfSync} loading={sfSyncing} disabled={!sfConnected || !sfStatus?.reportConfigured} label="Sync Now" />
+              <SyncButton onClick={handleSfSync} loading={sfSyncing || scraperRunning.salesforce} disabled={!sfConnected || !sfStatus?.reportConfigured} label="Sync Now" />
             </div>
           </div>
-          {sfSyncError && <p className="text-xs text-critical pb-2">{sfSyncError}</p>}
+          {sfSyncError && <p role="alert" className="text-xs text-critical pb-2">{sfSyncError}</p>}
 
         </div>
       </div>
@@ -2696,28 +2809,30 @@ export default function SetupPage() {
           </div>
         </div>
 
-        {/* Reduce Permissions banner — always visible so user can downgrade any time */}
-        <div className="mb-6 flex items-start gap-3 bg-warning/10 border border-warning/30/50 rounded-xl px-4 py-3">
-          <span className="text-warning mt-0.5 shrink-0">&#x1f512;</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-warning">Reduce Drive permissions</p>
-            <p className="text-xs text-text-secondary mt-0.5">Currently authorized with full Drive access. You can downgrade to read-only Drive for day-to-day use.</p>
+        {/* Q1: Reduce Permissions banner — only show when at least one AE is fully configured */}
+        {aeCount !== null && aeCount > 0 && (
+          <div className="mb-6 flex items-start gap-3 bg-warning/10 border border-warning/30/50 rounded-xl px-4 py-3">
+            <span className="text-warning mt-0.5 shrink-0">&#x1f512;</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-warning">Reduce Drive permissions</p>
+              <p className="text-xs text-text-secondary mt-0.5">Currently authorized with full Drive access. You can downgrade to read-only Drive for day-to-day use.</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="/oauth/start?mode=normal"
+                className="text-xs bg-warning hover:bg-warning/80 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+              >
+                Reduce Permissions
+              </a>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <a
-              href="/oauth/start?mode=normal"
-              className="text-xs bg-warning hover:bg-warning/80 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
-            >
-              Reduce Permissions
-            </a>
-          </div>
-        </div>
+        )}
 
         {/* Accordion sections */}
         <div className="space-y-3">
           <AccordionSection
             id="oauth-keys"
-            title="OAuth Keys"
+            title="Step 1 of 5 — OAuth Keys"
             badge={
               oauthKeysOk
                 ? <StatusBadge ok={true} label="Configured" />
@@ -2731,7 +2846,7 @@ export default function SetupPage() {
 
           <AccordionSection
             id="google-auth"
-            title="Google Auth"
+            title="Step 2 of 5 — Google Auth"
             badge={
               googleAuthOk === null
                 ? <StatusBadge ok={null} label="Checking..." />
@@ -2747,13 +2862,13 @@ export default function SetupPage() {
 
           <AccordionSection
             id="rh-portal"
-            title="Red Hat Portal"
+            title="Step 3 of 5 — Red Hat Portal"
             badge={
               rhOk === null
                 ? <StatusBadge ok={null} label="Checking..." />
                 : rhOk
                   ? <StatusBadge ok={true} label="Connected" />
-                  : <StatusBadge ok={false} label="Optional" />
+                  : <StatusBadge ok={false} label="Required" />
             }
             isOpen={openSection === 'rh-portal'}
             onToggle={() => toggleSection('rh-portal')}
@@ -2763,7 +2878,7 @@ export default function SetupPage() {
 
           <AccordionSection
             id="aes"
-            title="AEs & Customers"
+            title="Step 4 of 5 — AEs & Customers"
             badge={
               aeCount !== null && aeCount > 0
                 ? <span className="text-xs bg-success/15 text-success border border-success/30/50 px-2 py-0.5 rounded-full font-medium">
@@ -2779,7 +2894,7 @@ export default function SetupPage() {
 
           <AccordionSection
             id="data-sources"
-            title="Data Sources"
+            title="Step 5 of 5 — Data Sources"
             badge={
               dataSourcesHealth === 'loading'
                 ? <span className="text-xs text-text-secondary">Checking...</span>
@@ -2802,6 +2917,8 @@ export default function SetupPage() {
           >
             <div className="space-y-4">
               <RefreshTimerSettings />
+              {/* BKL-E04: Morning Brief Email delivery settings */}
+              <EmailSettingsSection />
               <a
                 href="/dashboard"
                 className="block w-full text-center bg-accent hover:bg-accent/80 text-white px-6 py-3 rounded-xl font-semibold text-base transition-colors"

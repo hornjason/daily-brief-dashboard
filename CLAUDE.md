@@ -13,14 +13,26 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 ## Deploy
 
 - **Always `make rebuild`** — never raw podman/docker commands
+- **AGENTS: Never run `make rebuild`** — only Jason runs it, always from the project root. Agent rebuilds from worktrees wipe config and overwrite other agents' changes. Agents verify with `curl` only.
+- **One rebuild, at the end, from project root** — when multiple agents work in parallel, all changes must be merged to main before a single rebuild. Never rebuild mid-task from a worktree.
 - Verify: `curl -s http://localhost:7777/api/aes`
 - Container: `pai-dashboard` | Port: `7777` | VNC: `localhost:6080`
+
+## Backlog Discipline (Zero Exceptions)
+
+**Verify before implementing.** Before working any backlog item, read the relevant source files and confirm the feature is actually absent. Many items will already be done — mark them DONE immediately and move on. Never rewrite working code.
+
+**Update backlog at close-time.** The moment an item is verified done or implemented, update its Status in BACKLOG.md. Do not defer. Drift between code and backlog creates false work and instability.
+
+**Scrapers are stable — don't touch without explicit instruction.** The scraper layer (rh-scraper.ts, ccsp-scraper.ts, supportable-scraper.ts, sf-scraper.ts, scraper-manager.ts) took significant effort to stabilize. Any change requires reading SCRAPER-RULES.md first and explicit confirmation from Jason before modifying.
+
+**No parallelism in scrapers.** Supportable runs sequentially — APEX cookie collisions make parallel contexts unsafe. This is permanent, not a workaround. Do not design or implement parallel scraping approaches.
 
 ## Agent Briefing
 
 - **Rook:** Shared browser context and no-auth are intentional — do not flag as vulnerabilities
 - **Quinn:** Test as brand new user from scratch unless Jason says otherwise
-- **Marcus:** Read the file before modifying; surgical fixes only
+- **Marcus:** Read the file before modifying; surgical fixes only; never touch scraper files without explicit instruction
 - Include relevant `ARCHITECTURE.md` section in every agent prompt
 - After every UI rebuild: spawn Quinn without being asked
 - After every item close: spawn Rook on changed files + pattern siblings

@@ -6,6 +6,9 @@ import type { Customer, CalendarEvent, EmailHighlight, DriveFile, SupportCase, C
 import type { PipelineRecord } from './pipeline.ts'
 import type { CCSPRecord } from './sheets.ts'
 import { aes } from './server-state.ts'
+import { readLatestBriefCache } from './cache-layer.ts'
+import { isFreeOrTrial } from './health-score.ts'
+import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
 import { classifyDocs } from './doc-extraction.ts'
 import { extractEmailIntelligence } from './email-extraction.ts'
@@ -329,7 +332,7 @@ export function isBriefConfigured(): boolean {
     (!!process.env.GEMINI_SERVICE_ACCOUNT_KEY || existsSync(GOOGLE_UNIFIED_TOKEN_PATH))
 }
 
-async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callLLM(systemPrompt: string, userPrompt: string, callType = 'brief-synthesize', customerName = 'unknown'): Promise<string> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
   const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
@@ -368,6 +371,18 @@ async function callLLM(systemPrompt: string, userPrompt: string): Promise<string
     throw new Error(`Gemini API error ${res.status} (project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
   }
   const json = await res.json() as any
+  // BKL-M52: record token usage for cost tracking
+  const usage = json.usageMetadata
+  if (usage) {
+    recordGeminiUsage({
+      timestamp: new Date().toISOString(),
+      callType,
+      customerName,
+      inputTokens:  usage.promptTokenCount ?? 0,
+      outputTokens: usage.candidatesTokenCount ?? 0,
+      model,
+    })
+  }
   return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 }
 
@@ -489,9 +504,11 @@ function buildXmlSources(
   }
 
   // Detailed product data from AE spreadsheet (ProductSubscription)
-  if (products.length) {
-    xml += `<source type="subscriptions_detailed" synced="${today}" count="${products.length}">\n`
-    for (const p of products) {
+  // BKL-M45: exclude free/trial/beta subs entirely — they distort intelligence signal
+  const paidProducts = products.filter(p => !isFreeOrTrial(p))
+  if (paidProducts.length) {
+    xml += `<source type="subscriptions_detailed" synced="${today}" count="${paidProducts.length}">\n`
+    for (const p of paidProducts) {
       xml += `${escapeXml(p.sku)}: ${escapeXml(p.productDescription)} | qty: ${p.quantity} | status: ${escapeXml(p.status)}${p.endDate ? ` | ends: ${fmt(p.endDate)}` : ''}\n`
     }
     xml += `</source>\n\n`
@@ -635,12 +652,27 @@ function buildXmlSources(
     xml += `<source type="previous_brief" date="${escapeXml(lastBriefDate ?? 'unknown')}">\n${previousBrief}\n</source>\n\n`
   }
 
+  // Account intelligence (ADR-008 dual-write cache)
+  const intelligenceSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+  const intelligencePath = `${process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')}/intelligence/${intelligenceSlug}.json`
+  try {
+    if (existsSync(intelligencePath)) {
+      const intel = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
+      if (intel.company || intel.industry) {
+        xml += `<source type="account_intelligence" cached="${intel.cachedAt}">\n`
+        if (intel.company) xml += `[Company Intelligence]\n${escapeXml(String(intel.company).slice(0, 3000))}\n`
+        if (intel.industry) xml += `\n[Industry Analysis]\n${escapeXml(String(intel.industry).slice(0, 2000))}\n`
+        xml += `</source>\n\n`
+      }
+    }
+  } catch { /* intelligence cache missing */ }
+
   return xml
 }
 
 // ── Structured LLM call with responseSchema (R17) ───────────────────────────
 
-async function callLLMStructured(systemPrompt: string, userPrompt: string, responseSchema: object): Promise<any> {
+async function callLLMStructured(systemPrompt: string, userPrompt: string, responseSchema: object, callType = 'brief-extract', customerName = 'unknown'): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
   const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
@@ -682,13 +714,33 @@ async function callLLMStructured(systemPrompt: string, userPrompt: string, respo
     throw new Error(`Gemini API error ${res.status} (structured, project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
   }
   const json = await res.json() as any
+  // BKL-M52: record token usage for cost tracking
+  const usage = json.usageMetadata
+  if (usage) {
+    recordGeminiUsage({
+      timestamp: new Date().toISOString(),
+      callType,
+      customerName,
+      inputTokens:  usage.promptTokenCount ?? 0,
+      outputTokens: usage.candidatesTokenCount ?? 0,
+      model,
+    })
+  }
+  const finishReason = json.candidates?.[0]?.finishReason
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  return JSON.parse(text)
+  if (!text) {
+    throw new Error(`Gemini structured call returned empty response (finishReason=${finishReason ?? 'none'}, callType=${callType}, customer=${customerName})`)
+  }
+  try {
+    return JSON.parse(text)
+  } catch (parseErr: any) {
+    throw new Error(`Gemini structured response is not valid JSON (finishReason=${finishReason ?? 'none'}, callType=${callType}, customer=${customerName}): ${text.slice(0, 200)}`)
+  }
 }
 
 // ── Signal extraction (R17 Step 1) ──────────────────────────────────────────
 
-async function extractSignals(xmlSources: string, lastInteractionDate: string): Promise<ExtractionResult> {
+async function extractSignals(xmlSources: string, lastInteractionDate: string, customerName = 'unknown'): Promise<ExtractionResult> {
   const prompt = EXTRACTION_PROMPT.replace('{last_interaction_date}', lastInteractionDate)
   // Sources placed ABOVE instructions (research: 30% quality improvement per Anthropic)
   const fullPrompt = xmlSources + '\n\n' + prompt
@@ -704,7 +756,7 @@ Rules:
 - Never fabricate connections between sources
 - Never include generic information the SA already knows`
 
-  return callLLMStructured(systemPrompt, fullPrompt, EXTRACTION_SCHEMA) as Promise<ExtractionResult>
+  return callLLMStructured(systemPrompt, fullPrompt, EXTRACTION_SCHEMA, 'brief-extract', customerName) as Promise<ExtractionResult>
 }
 
 // ── Previous brief lookup (R17) ─────────────────────────────────────────────
@@ -750,8 +802,10 @@ export async function generateBrief(
   // R18: Three-step pipeline (extract → rank → synthesize) with fallback to single-pass
   // R26: Sub-pipeline enrichment (doc classification, email intelligence, meeting prep)
   try {
-    const previousBrief = findPreviousBrief(customer.name)
-    const lastBriefDate = previousBrief ? new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-CA') : null
+    // BKL-AI26-fix: use actual cached date, not hardcoded "yesterday"
+    const previousBriefData = readLatestBriefCache(customer.name)
+    const previousBrief = previousBriefData?.text ?? null
+    const lastBriefDate = previousBriefData?.date ?? null
 
     // Compute lastInteractionDate once (reused by buildXmlSources and extractSignals)
     const pastMeetings = meetings
@@ -792,7 +846,7 @@ export async function generateBrief(
     const xmlSources = buildXmlSources(customer, meetings, emails, docs, cases, subscriptions, products, pipeline, ccsp, previousBrief, lastBriefDate, lastInteractionDate, enrichment)
 
     // Step 1: EXTRACT
-    const extraction = await extractSignals(xmlSources, lastInteractionDate)
+    const extraction = await extractSignals(xmlSources, lastInteractionDate, customer.name)
     console.log(`[brief] Step 1 EXTRACT for ${customer.name}: ${extraction.items.length} items, ${extraction.data_gaps.length} gaps`)
 
     // Step 2: RANK (deterministic)
@@ -803,7 +857,9 @@ export async function generateBrief(
     const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps)
     const brief = await callLLM(
       'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
-      synthesisPrompt
+      synthesisPrompt,
+      'brief-synthesize',
+      customer.name,
     )
     console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
 

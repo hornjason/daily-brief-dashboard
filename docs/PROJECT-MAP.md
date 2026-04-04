@@ -7,7 +7,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | Module | Purpose |
 |--------|---------|
 | `server.ts` | Hono routes, ~50 API endpoints |
-| `src/health-score.ts` | 6-signal weighted health score (Cases 25%, Subs 20%, Meetings 15%, Emails 15%, Pipeline 15%, Cloud 10%) |
+| `src/health-score.ts` | 6-signal weighted health score (Cases 25%, Subs 20%, Meetings 15%, Emails 15%, Pipeline 15%, Cloud 10%); exports `computeConfidenceScore()` (0-100 composite, ADR-011) |
 | `src/brief-pipeline.ts` | Three-step brief: `rankItems()` deterministic scorer + `buildSynthesisPrompt()` |
 | `src/customer.ts` | Brief generation: `generateBrief()`, `extractSignals()`, `buildXmlSources()`, `callLLM()` |
 | `src/kpi-history.ts` | Daily metric snapshots, 90-day rolling window, sparkline data |
@@ -20,7 +20,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `src/bootstrap-orchestrator.ts` | 6-step AE setup: Drive → Customers → Supportable → Sheets → CCSP → Pipeline |
 | `src/territory-sync.ts` | Territory sheet diff + auto-add/flag removals |
 | `src/refresh-engine.ts` | refreshAll/Subscriptions/CCSP/Pipeline from Google Sheets |
-| `src/cache-layer.ts` | Brief/sheet/CCSP/pipeline cache helpers |
+| `src/cache-layer.ts` | Brief/sheet/CCSP/pipeline cache helpers; exports `BRIEF_CACHE_TTL_MS` (4h, ADR-009) and `readLatestBriefCache()` |
 | `src/pipeline.ts` | SF pipeline data fetch + dedup |
 | `src/sheets.ts` | Google Sheets read/write, tab matching, quota retry |
 | `src/google.ts` | Google OAuth, Drive API helpers |
@@ -53,6 +53,38 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - `docs/adr/ADR-006.md` — Test snapshot/restore endpoints
 - `docs/adr/ADR-007.md` — Bun runtime, long-interval timer heartbeat
 - `docs/adr/ADR-008.md` — Supportable batch rotation
+- `docs/adr/ADR-009.md` — Brief cache: content-hash + 4h TTL invalidation
+- `docs/adr/ADR-010.md` — Account intelligence: dual-write cache pattern (Drive + local JSON)
+- `docs/adr/ADR-011.md` — Confidence Score: 0-100 composite replacing separate Renewal Risk
+
+## Frontend Components (Notable)
+
+| Component | Purpose |
+|---|---|
+| `DataQualityBadge` | Brief freshness pill — shows cached-at timestamp and staleness state on `CustomerDetailPage` |
+| `AccountIntelligencePanel` | Intelligence pipeline status + Drive doc links on `CustomerDetailPage` |
+| `AccountPortfolioGrid` | Customer list grid; shows `confidenceScore` badge per customer |
+| `AdminPage` | 3-step intelligence progress stepper for account intelligence pipeline |
+| `MorningSummary` | Morning summary page; includes Gemini `synthesis` narrative block |
+
+## API Fields (2026-04-04 Additions)
+
+| Endpoint | Field | Description |
+|---|---|---|
+| `GET /api/morning-summary` | `synthesis` | Gemini-generated 3-5 sentence portfolio narrative; 4h cached in `morning-synthesis.json` |
+| `GET /api/customer/:name` (and list) | `confidenceScore` | `ConfidenceScoreBreakdown` from `computeConfidenceScore()` — 0-100 composite with sub-scores |
+
+## Cache Files
+
+| File | Written by | Read by | TTL/Notes |
+|---|---|---|---|
+| `data/cache/{slug}-{date}.json` | `writeBriefCache()` | `readBriefCache()`, `readLatestBriefCache()` | Daily date-stamp; 4h TTL enforced at read time (ADR-009) |
+| `data/cache/{slug}-sheets.json` | `writeSheetCache()` | `readSheetCache()` | No TTL; updated on each sheet refresh |
+| `data/cache/intelligence/{slug}.json` | `account-intelligence.ts` Steps 2+3 | `buildXmlSources()` in `customer.ts` | No TTL; overwritten on each intelligence run (ADR-010) |
+| `data/cache/intelligence-jobs.json` | `setJob()` in `account-intelligence.ts` | Job status polling | Persisted across restarts via `initJobPersistence()` |
+| `data/cache/morning-synthesis.json` | `synthesizeMorningSummary()` in `dashboard-routes.ts` | `GET /api/morning-summary` | 4h TTL (`MORNING_SYNTHESIS_TTL_MS`) |
+| `data/cache/pipeline-data.json` | `writePipelineCache()` | `readPipelineCache()` | Updated daily at 2am ET |
+| `data/cache/ccsp-data.json` | `writeCCSPCache()` | `readCCSPCache()` | Updated on CCSP refresh |
 
 ## Operations
 

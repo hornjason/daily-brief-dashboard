@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dropbox — Account Sense RHEL Usage Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1923;
+    --card: #1a2836;
+    --border: #2a3a4a;
+    --text: #e0e6ed;
+    --muted: #8899aa;
+    --accent: #00b4d8;
+    --green: #2ecc71;
+    --yellow: #f39c12;
+    --orange: #e67e22;
+    --red: #e74c3c;
+    --purple: #9b59b6;
+    --rhel9: #00b4d8;
+    --rhel8: #3498db;
+    --rhel7: #f39c12;
+    --rhel10: #2ecc71;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+
+  .header {
+    background: linear-gradient(135deg, #1a2836 0%, #0f1923 100%);
+    border-bottom: 2px solid #cc0000;
+    padding: 2rem 3rem;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .header-left h1 { font-size: 1.6rem; font-weight: 700; }
+  .header-left h1 span { color: #cc0000; }
+  .header-left .subtitle { color: var(--muted); font-size: 0.85rem; margin-top: 0.25rem; }
+  .header-right { text-align: right; }
+  .header-right .account { font-size: 1.1rem; font-weight: 600; }
+  .header-right .meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
+
+  .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+  .insights-banner {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .insight-card {
+    background: var(--card); border-radius: 12px; padding: 1.2rem;
+    border-left: 4px solid var(--accent); position: relative;
+  }
+  .insight-card.warn { border-left-color: var(--yellow); }
+  .insight-card.alert { border-left-color: var(--red); }
+  .insight-card.good { border-left-color: var(--green); }
+  .insight-card .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.4rem; }
+  .insight-card .value { font-size: 1.5rem; font-weight: 700; }
+  .insight-card .detail { font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem; }
+
+  .health-row { display: flex; gap: 0.75rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .health-pill {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: var(--card); border-radius: 100px; padding: 0.5rem 1rem;
+    font-size: 0.78rem; border: 1px solid var(--border);
+  }
+  .health-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .health-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .health-dot.red { background: var(--red); box-shadow: 0 0 6px var(--red); }
+
+  .section { margin-bottom: 2rem; }
+  .section-title {
+    font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem;
+    padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .section-title .icon { font-size: 1.2rem; }
+
+  .chart-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+  .chart-card {
+    background: var(--card); border-radius: 12px; padding: 1.5rem;
+    border: 1px solid var(--border);
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-card h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; color: var(--muted); }
+  .chart-container { position: relative; height: 250px; }
+  .chart-container.tall { height: 350px; }
+
+  .data-table {
+    width: 100%; border-collapse: collapse;
+    background: var(--card); border-radius: 12px; overflow: hidden;
+  }
+  .data-table th {
+    background: #0d1520; padding: 0.65rem 0.8rem; text-align: left;
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); border-bottom: 2px solid var(--border);
+  }
+  .data-table td {
+    padding: 0.6rem 0.8rem; font-size: 0.78rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table tbody tr:hover { background: rgba(0,180,216,0.05); }
+  .data-table code {
+    background: #0d1520; padding: 0.1rem 0.4rem; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--accent);
+  }
+  .badge {
+    display: inline-block; padding: 0.15rem 0.6rem; border-radius: 100px;
+    font-size: 0.68rem; font-weight: 600;
+  }
+  .badge-blue { background: rgba(0,180,216,0.15); color: var(--accent); }
+  .badge-green { background: rgba(46,204,113,0.15); color: var(--green); }
+  .badge-yellow { background: rgba(243,156,18,0.15); color: var(--yellow); }
+  .badge-red { background: rgba(231,76,60,0.15); color: var(--red); }
+  .badge-orange { background: rgba(230,126,34,0.15); color: var(--orange); }
+  .badge-purple { background: rgba(155,89,182,0.15); color: var(--purple); }
+
+  .callout {
+    background: var(--card); border-radius: 12px; padding: 1.2rem 1.5rem;
+    border: 1px solid var(--border); margin-bottom: 1rem;
+    display: flex; gap: 1rem; align-items: flex-start;
+  }
+  .callout.warn { border-color: var(--yellow); }
+  .callout.alert { border-color: var(--red); }
+  .callout .callout-icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 0.1rem; }
+  .callout .callout-body h4 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
+  .callout .callout-body p { font-size: 0.8rem; color: var(--muted); }
+
+  .rules-bar-container { display: flex; align-items: center; margin-bottom: 0.5rem; font-size: 0.78rem; }
+  .rules-bar-label { width: 200px; flex-shrink: 0; text-align: right; padding-right: 0.75rem; color: var(--muted); }
+  .rules-bar-track { flex: 1; height: 22px; background: rgba(42,58,74,0.4); border-radius: 4px; position: relative; overflow: hidden; }
+  .rules-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-size: 0.7rem; font-weight: 600; color: white; min-width: 40px; }
+  .rules-bar-fill.critical { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+  .rules-bar-fill.high { background: linear-gradient(90deg, #e67e22, #d35400); }
+  .rules-bar-fill.medium { background: linear-gradient(90deg, #f39c12, #e67e22); }
+  .rules-bar-fill.low { background: linear-gradient(90deg, #3498db, #2980b9); }
+
+  .version-stack {
+    display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem;
+  }
+  .version-block {
+    height: 40px; border-radius: 6px; display: flex; align-items: center;
+    justify-content: center; font-size: 0.75rem; font-weight: 600; color: white;
+    min-width: 60px;
+  }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+  @media (max-width: 900px) {
+    .insights-banner { grid-template-columns: repeat(2, 1fr); }
+    .chart-grid, .two-col { grid-template-columns: 1fr; }
+    .header { flex-direction: column; text-align: center; gap: 1rem; }
+    .header-right { text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Account Sense for <span>RHEL</span></h1>
+    <div class="subtitle">Red Hat Product Analytics and Insights Team &middot; RHEL Usage View &middot; Confidential</div>
+  </div>
+  <div class="header-right">
+    <div class="account">Dropbox, Inc.</div>
+    <div class="meta">EBS 10375220 &middot; Owner: Corsanne Farrell &middot; 180-day view</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Key Metrics -->
+  <div class="insights-banner">
+    <div class="insight-card">
+      <div class="label">Total RHEL Systems</div>
+      <div class="value">~4,000</div>
+      <div class="detail">Across RHEL 7, 8, 9, 10</div>
+    </div>
+    <div class="insight-card good">
+      <div class="label">Dominant Version</div>
+      <div class="value">RHEL 9</div>
+      <div class="detail">~3.5K systems &middot; Current</div>
+    </div>
+    <div class="insight-card alert">
+      <div class="label">Security Rules (7d)</div>
+      <div class="value">113K</div>
+      <div class="detail">"Decreased Security" — 4x next highest</div>
+    </div>
+    <div class="insight-card warn">
+      <div class="label">Swatch Status</div>
+      <div class="value">Not Enabled</div>
+      <div class="detail">RHSM connected but not metering</div>
+    </div>
+  </div>
+
+  <!-- Health Indicators -->
+  <div class="health-row">
+    <div class="health-pill"><div class="health-dot red"></div> RHEL Usage Signal</div>
+    <div class="health-pill"><div class="health-dot red"></div> Account Risk/Opportunity — Insufficient data</div>
+    <div class="health-pill"><div class="health-dot green"></div> RHEL Major Current Version</div>
+    <div class="health-pill"><div class="health-dot green"></div> Non-RHEL Linux Version — None detected</div>
+    <div class="health-pill"><div class="health-dot green"></div> Unsupported Configurations — None found</div>
+  </div>
+
+  <!-- Action Items -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#9888;</span> Action Items</div>
+    <div class="callout alert">
+      <div class="callout-icon">&#128274;</div>
+      <div class="callout-body">
+        <h4>Critical: 113K Security Rule Hits in 7 Days</h4>
+        <p>"Decreased Security" is the #1 triggered rule by a massive margin. SELinux is disabled on systems running containers, and LDAP is being used without TLS for SSSD. These represent real exposure. Recommend immediate review with the customer's security team.</p>
+      </div>
+    </div>
+    <div class="callout warn">
+      <div class="callout-icon">&#128200;</div>
+      <div class="callout-body">
+        <h4>Subscription Watch Not Metering</h4>
+        <p>Customer has RHEL connections via Lightspeed and RHSM but has not enabled Swatch to meter consumption. This creates a compliance blind spot — subscription utilization cannot be accurately tracked.</p>
+      </div>
+    </div>
+    <div class="callout warn">
+      <div class="callout-icon">&#9729;</div>
+      <div class="callout-body">
+        <h4>AWS Cloud Sockets Declining Sharply</h4>
+        <p>AWS cloud sockets dropped from ~240 to near 0 over Jan–Mar. Possible cloud migration away from RHEL on AWS, or workload decommissioning. Worth investigating to protect the footprint.</p>
+      </div>
+    </div>
+    <div class="callout" style="border-color: var(--accent);">
+      <div class="callout-icon">&#128640;</div>
+      <div class="callout-body">
+        <h4>RHEL 8 → 9 Upgrade Opportunity</h4>
+        <p>Leapp utility notification is active on 6 systems eligible for in-place upgrade from RHEL 8 to RHEL 9. Customer already has strong RHEL 9 adoption — good momentum to accelerate migration of remaining RHEL 8 systems.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RHEL Version Distribution -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128202;</span> RHEL Version Distribution (Grokket — Systems)</div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>Monthly Systems by Major Version</h3>
+        <div class="chart-container"><canvas id="majorVersionChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Version Mix — Current Snapshot</h3>
+        <div class="chart-container"><canvas id="versionPieChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subscription Watch -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128203;</span> Subscription Watch (Sockets)</div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>Weekly RHEL Sockets by Footprint</h3>
+        <div class="chart-container"><canvas id="footprintChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Weekly Cloud Sockets by Provider</h3>
+        <div class="chart-container"><canvas id="cloudProviderChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightspeed Rules -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128274;</span> Lightspeed Rules — Top Triggered (Last 7 Days)</div>
+    <div class="two-col">
+      <div class="chart-card">
+        <h3>Rule Hit Counts</h3>
+        <div class="rules-bar-container"><div class="rules-bar-label">Decreased Security</div><div class="rules-bar-track"><div class="rules-bar-fill critical" style="width:100%">113K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Unsupported Software</div><div class="rules-bar-track"><div class="rules-bar-fill high" style="width:22%">25K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">JBoss Performance</div><div class="rules-bar-track"><div class="rules-bar-fill high" style="width:17%">19K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Diagnostics Failure</div><div class="rules-bar-track"><div class="rules-bar-fill medium" style="width:12%">14K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Privilege Escalation</div><div class="rules-bar-track"><div class="rules-bar-fill medium" style="width:12%">13K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Service Incorporation</div><div class="rules-bar-track"><div class="rules-bar-fill medium" style="width:10%">11K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Mgmt Availability</div><div class="rules-bar-track"><div class="rules-bar-fill medium" style="width:10%">11K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">System Stability Loss</div><div class="rules-bar-track"><div class="rules-bar-fill low" style="width:7%">8.2K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Best Practices</div><div class="rules-bar-track"><div class="rules-bar-fill low" style="width:7%">8K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Boot Failure</div><div class="rules-bar-track"><div class="rules-bar-fill low" style="width:7%">7.6K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Application Failure</div><div class="rules-bar-track"><div class="rules-bar-fill low" style="width:4%">4.2K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Sys Performance Loss</div><div class="rules-bar-track"><div class="rules-bar-fill low" style="width:4%">4.2K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">System Hang</div><div class="rules-bar-track"><div class="rules-bar-fill low" style="width:4%">4.1K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Inaccessible Storage</div><div class="rules-bar-track"><div class="rules-bar-fill low" style="width:3%">3.2K</div></div></div>
+        <div class="rules-bar-container"><div class="rules-bar-label">Invalid Configuration</div><div class="rules-bar-track"><div class="rules-bar-fill low" style="width:2%">2K</div></div></div>
+      </div>
+      <div class="chart-card">
+        <h3>Rule Trend — Last 90 Days</h3>
+        <div class="chart-container"><canvas id="ruleTrendChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Deep Dive Rules -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128269;</span> Deep Dive — Individual Rules Triggered (Last 7 Days)</div>
+    <div class="chart-card full" style="padding:0; overflow-x:auto;">
+      <table class="data-table">
+        <thead>
+          <tr><th>#</th><th>Rule</th><th>Category</th><th>Risk</th><th>Hits</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>System login slow, services don't log to journal (/dev/log owned by rsyslogd)</td><td><span class="badge badge-blue">Availability</span></td><td><span class="badge badge-orange">Important</span></td><td>6</td></tr>
+          <tr><td>2</td><td>LDAP without TLS for SSSD services</td><td><span class="badge badge-red">Security</span></td><td><span class="badge badge-yellow">Moderate</span></td><td>6</td></tr>
+          <tr><td>3</td><td>System login slow, services don't log to journal (/dev/log owned by rsyslogd)</td><td><span class="badge badge-blue">Availability</span></td><td><span class="badge badge-orange">Important</span></td><td>6</td></tr>
+          <tr><td>4</td><td>Red Hat Insights capabilities unavailable — rhc client disconnected</td><td><span class="badge badge-blue">Availability</span></td><td><span class="badge badge-orange">Important</span></td><td>6</td></tr>
+          <tr><td>5</td><td>SELinux disabled with running containers</td><td><span class="badge badge-red">Security</span></td><td><span class="badge badge-yellow">Moderate</span></td><td>2</td></tr>
+          <tr><td>6</td><td>System log permissions — decreased security</td><td><span class="badge badge-red">Security</span></td><td><span class="badge badge-orange">Important</span></td><td>6</td></tr>
+          <tr><td>7</td><td>Leapp utility available for RHEL 8 → RHEL 9 in-place upgrade</td><td><span class="badge badge-purple">Performance</span></td><td><span class="badge badge-green">Low</span></td><td>6</td></tr>
+          <tr><td>8</td><td>SELinux disabled with running containers</td><td><span class="badge badge-red">Security</span></td><td><span class="badge badge-yellow">Moderate</span></td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- System-Level Detail -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#9881;</span> RHEL System-Level Detail (Sample)</div>
+    <div class="chart-card full" style="padding:0; overflow-x:auto;">
+      <table class="data-table">
+        <thead>
+          <tr><th>#</th><th>Month</th><th>System ID</th><th>EBS Account</th><th>Account</th><th>Connection</th><th>RHEL Major</th><th>RHEL Minor</th><th>VM Type</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Jan-26</td><td><code>EC2F18C7-18FB-..E449</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-blue">RHSM</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>2</td><td>Jan-26</td><td><code>EC23F80F-1211-..78D0</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-blue">RHSM</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>3</td><td>Mar-26</td><td><code>EC23F80F-1211-..78D0</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-blue">RHSM</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>4</td><td>Mar-26</td><td><code>EC2D3EAA-BA86-..4F53</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-blue">RHSM</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>5</td><td>Jan-26</td><td><code>EC20CE22-C644-..7EC5</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-blue">RHSM</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>6</td><td>Feb-26</td><td><code>EC2E687F-FF8E-..7369</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-blue">RHSM</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>7</td><td>Nov-25</td><td><code>EC21689C-616A-..C073</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-yellow">Lightspeed</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>8</td><td>Mar-26</td><td><code>EC2F18C7-18FB-..E449</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-blue">RHSM</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>9</td><td>Dec-25</td><td><code>EC20CE22-C644-..7EC5</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-blue">RHSM</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+          <tr><td>10</td><td>Mar-26</td><td><code>EC2FA5E5-B870-..8917</code></td><td>10375220</td><td>Dropbox, Inc.</td><td><span class="badge badge-yellow">Lightspeed</span></td><td>RHEL 8</td><td>8.10</td><td>kvm</td></tr>
+        </tbody>
+      </table>
+      <p style="color:var(--muted); font-size:0.72rem; padding: 0.75rem 1rem;">All systems RHEL 8.10 on KVM (EC2/AWS). Mix of RHSM and Lightspeed connections. All UUIDs are EC2 instance IDs.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const months = ['Nov 2025', 'Dec 2025', 'Jan 2026', 'Feb 2026', 'Mar 2026'];
+const subWatchLabels = ['Jan 07','Jan 11','Jan 15','Jan 19','Jan 23','Jan 27','Jan 31','Feb 08','Feb 12','Feb 16','Feb 20','Feb 24','Feb 28','Mar 08','Mar 12','Mar 16','Mar 20','Mar 24'];
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { labels: { color: '#8899aa', font: { size: 11 }, boxWidth: 12 } } },
+  scales: {
+    x: { ticks: { color: '#667788', font: { size: 10 } }, grid: { color: 'rgba(42,58,74,0.3)' } },
+    y: { ticks: { color: '#667788', font: { size: 10 } }, grid: { color: 'rgba(42,58,74,0.3)' }, beginAtZero: true }
+  }
+};
+
+// Major Version stacked bar
+new Chart(document.getElementById('majorVersionChart'), {
+  type: 'bar',
+  data: {
+    labels: months,
+    datasets: [
+      { label: 'RHEL 10', data: [0, 0, 0, 50, 100], backgroundColor: '#2ecc71', borderRadius: 3 },
+      { label: 'RHEL 9', data: [3400, 3500, 3600, 3500, 3500], backgroundColor: '#00b4d8', borderRadius: 3 },
+      { label: 'RHEL 8', data: [2200, 2100, 2000, 2000, 2000], backgroundColor: '#3498db', borderRadius: 3 },
+      { label: 'RHEL 7', data: [800, 700, 600, 500, 500], backgroundColor: '#f39c12', borderRadius: 3 },
+      { label: 'RHEL 6', data: [50, 40, 30, 20, 10], backgroundColor: '#e74c3c', borderRadius: 3 }
+    ]
+  },
+  options: {
+    ...chartDefaults,
+    scales: { ...chartDefaults.scales, x: { ...chartDefaults.scales.x, stacked: true }, y: { ...chartDefaults.scales.y, stacked: true } },
+    plugins: { ...chartDefaults.plugins, legend: { ...chartDefaults.plugins.legend, position: 'bottom' } }
+  }
+});
+
+// Version Pie
+new Chart(document.getElementById('versionPieChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['RHEL 9', 'RHEL 8', 'RHEL 7', 'RHEL 10', 'RHEL 6'],
+    datasets: [{
+      data: [3500, 2000, 500, 100, 10],
+      backgroundColor: ['#00b4d8', '#3498db', '#f39c12', '#2ecc71', '#e74c3c'],
+      borderColor: '#1a2836', borderWidth: 3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'right', labels: { color: '#8899aa', font: { size: 11 }, padding: 12, boxWidth: 12 } },
+      tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.raw.toLocaleString()} systems (${((ctx.raw/6110)*100).toFixed(1)}%)` } }
+    }
+  }
+});
+
+// Footprint
+new Chart(document.getElementById('footprintChart'), {
+  type: 'line',
+  data: {
+    labels: subWatchLabels,
+    datasets: [
+      { label: 'Hypervisor', data: [2100,2050,2000,2050,2000,1980,1950,1920,1900,1880,1850,1830,1800,1780,1750,1720,1700,1680], borderColor: '#00b4d8', tension: 0.3, pointRadius: 2 },
+      { label: 'Physical', data: [800,790,780,770,760,750,740,730,720,710,700,690,680,670,660,650,640,630], borderColor: '#2ecc71', tension: 0.3, pointRadius: 2 },
+      { label: 'Public Cloud', data: [700,680,660,640,620,600,580,560,540,520,500,480,460,440,420,400,380,360], borderColor: '#f39c12', tension: 0.3, pointRadius: 2 },
+      { label: 'Virtual', data: [350,340,330,330,320,310,310,300,300,290,290,280,280,270,270,260,260,250], borderColor: '#9b59b6', borderDash: [5,5], tension: 0.3, pointRadius: 2 }
+    ]
+  },
+  options: chartDefaults
+});
+
+// Cloud Provider
+new Chart(document.getElementById('cloudProviderChart'), {
+  type: 'line',
+  data: {
+    labels: subWatchLabels,
+    datasets: [
+      { label: 'AWS', data: [240,230,220,210,200,190,175,160,140,120,100,80,65,50,40,30,20,10], borderColor: '#ff9900', backgroundColor: 'rgba(255,153,0,0.1)', fill: true, tension: 0.3, pointRadius: 2 },
+      { label: 'Azure', data: [5,5,4,4,4,3,3,3,3,2,2,2,2,2,1,1,1,1], borderColor: '#0078d4', tension: 0.3, pointRadius: 2 }
+    ]
+  },
+  options: chartDefaults
+});
+
+// Rule Trend
+const trendLabels = [];
+const trendData = [];
+const startDate = new Date('2026-01-01');
+for (let i = 0; i < 90; i += 3) {
+  const d = new Date(startDate); d.setDate(d.getDate() + i);
+  trendLabels.push(`${d.getMonth()+1}/${d.getDate()}`);
+  let val = 15000 + Math.random() * 8000;
+  if (i > 55 && i < 70) val = 35000 + Math.random() * 15000;
+  if (i > 65 && i < 72) val = 45000 + Math.random() * 8000;
+  trendData.push(Math.round(val));
+}
+new Chart(document.getElementById('ruleTrendChart'), {
+  type: 'line',
+  data: {
+    labels: trendLabels,
+    datasets: [{
+      label: 'Rules Triggered',
+      data: trendData,
+      borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.1)',
+      fill: true, tension: 0.3, pointRadius: 0
+    }]
+  },
+  options: {
+    ...chartDefaults,
+    scales: { ...chartDefaults.scales, x: { ...chartDefaults.scales.x, ticks: { ...chartDefaults.scales.x.ticks, maxTicksLimit: 10 } } }
+  }
+});
+</script>
+</body>
+</html>

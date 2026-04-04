@@ -36,6 +36,8 @@ import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } fr
 // ── M05 extracted modules ───────────────────────────────────────────────────
 import { initSetupRoutes, registerSetupRoutes } from './src/setup-routes.ts'
 import { initCustomerRoutes, registerCustomerRoutes } from './src/customer-routes.ts'
+import { getGeminiUsageSummary } from './src/gemini-cost-tracker.ts'
+import { initJobPersistence } from './src/account-intelligence.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -90,6 +92,7 @@ const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR
   ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const RH_CASES_CACHE_PATH = resolve(CACHE_DIR, 'cases.json')
 initCacheLayer(CACHE_DIR, RH_CASES_CACHE_PATH)
+initJobPersistence(CACHE_DIR)
 initDashboardRoutes({ cacheDir: CACHE_DIR, rhCasesCachePath: RH_CASES_CACHE_PATH, dataSourcesPath: DATA_SOURCES_PATH })
 initSettingsApi(DATA_SOURCES_PATH)
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'your-admin@example.com'
@@ -211,8 +214,8 @@ registerCustomerRoutes(app)
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
 
-// Customer list for landing page
-app.get('/customers', (c) => c.json(customers))
+// Customer list for landing page — includes confidenceScore placeholder (BKL-AI28)
+app.get('/customers', (c) => c.json(customers.map(cu => ({ ...cu, confidenceScore: null }))))
 
 // ── Google OAuth + Setup wizard routes (extracted to src/setup-routes.ts) ──
 
@@ -614,6 +617,12 @@ app.get('/api/territory/notifications', async (c) => {
   } catch (e: any) {
     return c.json({ error: sanitizeErr(e) }, 500)
   }
+})
+
+// ── Gemini cost tracking (BKL-M52) ──────────────────────────────────────────
+
+app.get('/api/admin/gemini-usage', (c) => {
+  return c.json(getGeminiUsageSummary())
 })
 
 // ── Version API ───────────────────────────────────────────────────────────────

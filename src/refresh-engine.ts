@@ -112,12 +112,17 @@ export async function refreshCCSP(): Promise<void> {
 
 export async function refreshPipeline(): Promise<void> {
   try {
+    const pipelineIds = aes.map(a => a.pipelineSheetId).filter((id): id is string => Boolean(id))
     const cached = readPipelineCache()
-    if (cached?.fileIds?.length && cached.cachedAt) {
-      const changed = await checkFilesModified(cached.fileIds, cached.cachedAt)
+    // Only use staleness check if cached fileIds exactly match current AE sheet IDs.
+    // If AEs were re-bootstrapped (new sheet IDs), cached.fileIds will differ — force refresh.
+    const cachedMatchesCurrent = cached?.fileIds?.length &&
+      pipelineIds.length === cached.fileIds.length &&
+      pipelineIds.every(id => cached.fileIds!.includes(id))
+    if (cachedMatchesCurrent && cached!.cachedAt) {
+      const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
       if (!changed) { console.log(`[refresh:pipeline] skipped — source files unchanged`); return }
     }
-    const pipelineIds = aes.map(a => a.pipelineSheetId).filter((id): id is string => Boolean(id))
     const { records, fileIds } = await fetchPipelineData(pipelineIds.length ? pipelineIds : undefined)
     // Guard: don't overwrite populated cache with empty — quota/network failure returns [] silently
     if (records.length === 0 && (readPipelineCache()?.records?.length ?? 0) > 0) {

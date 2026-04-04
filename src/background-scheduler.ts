@@ -1,15 +1,16 @@
 import { existsSync, unlinkSync, readFileSync, writeFileSync } from 'fs'
+import { renameSync } from 'node:fs'
 import { resolve } from 'path'
-import { customers } from './server-state.ts'
+import { customers, aes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { refreshAll, refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { runRhScrapeWithState, runSfSyncForAes, _rhScrapeRunning, _sfSyncRunning, ccspInFlight, setLastSkipReason } from './scraper-manager.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
-import { lastScraped, recordScrapeExpired } from './rh-auth.ts'
+import { lastScraped, recordScrapeExpired, getRhStatus } from './rh-auth.ts'
 import { initScrapeContext, getScrapeContext, closeScrapeContext } from './rh-scraper.ts'
 import { adoptSfContext } from './sf-scraper.ts'
-import { adoptSupportableContext, runSupportableDiscoverAndScrape, supportableScrapeRunning } from './supportable-scraper.ts'
-import { adoptCcspContext, runCcspScrape, ccspScrapeRunning } from './ccsp-scraper.ts'
+import { adoptSupportableContext, runSupportableDiscoverAndScrape, writeSupportableSheet, supportableScrapeRunning } from './supportable-scraper.ts'
+import { adoptCcspContext, runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './ccsp-scraper.ts'
 import { syncTerritorySheet } from './territory-sync.ts'
 import { initDriveWatcher, checkDriveChanges } from './drive-watcher.ts'
 import { captureSnapshot, writeSnapshot } from './kpi-history.ts'
@@ -17,7 +18,10 @@ import { briefCachePath, readBriefCache, readSheetCache, readPipelineCache, read
 import { isBriefConfigured, fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief } from './customer.ts'
 import { fetchCustomerCases, fetchCustomerSubscriptions } from './redhat.ts'
 import { fetchCustomerSheetData } from './sheets.ts'
-import { initStatusStore } from './scraper-status-store.ts'
+import { initStatusStore, recordOutcome, getStatus } from './scraper-status-store.ts'
+import { renderBriefHtml } from './email-template.ts'
+import { sendBriefEmail } from './email-sender.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
 // All scrapers share one BrowserContext (SSO constraint). Running them
@@ -93,6 +97,125 @@ export function getScraperQueueStatus(): { running: string | null; pending: stri
     isAnyRunning: isAnyScraperRunning(),
   }
 }
+
+/**
+ * Flush all 4 scrapers immediately after RH re-authentication.
+ * Ordering: RH first (account numbers needed by Supportable), then SF and CCSP
+ * (can start after RH since they don't depend on RH account numbers), Supportable last
+ * (depends on RH account numbers being populated).
+ * Coalesce guard in enqueueScraperTask prevents duplicates if already queued.
+ */
+export async function flushScrapersAfterAuth(): Promise<void> {
+  console.log('[scraper-queue] post-auth flush: enqueueing all 4 scrapers')
+
+  // RH first — populates account numbers consumed by Supportable
+  enqueueScraperTask({
+    name: 'rh-cases',
+    run: async () => {
+      await runRhScrapeWithState()
+      updateSchedulerField('rhLastRun', new Date().toISOString())
+    },
+    source: 'manual',
+    enqueuedAt: Date.now(),
+  })
+
+  // SF pipeline — independent of RH, can queue after RH
+  const { aes: capturedAes } = await import('./server-state.ts')
+  if (capturedAes.some((a: any) => !!a.sfReportId)) {
+    enqueueScraperTask({
+      name: 'sf-pipeline',
+      run: async () => {
+        await runSfSyncForAes(capturedAes)
+      },
+      source: 'manual',
+      enqueuedAt: Date.now(),
+    })
+  }
+
+  // CCSP — independent of RH, can queue after RH
+  const ccspConfig = getSchedulerConfig()
+  if (ccspConfig.ccspEnabled) {
+    enqueueScraperTask({
+      name: 'ccsp',
+      run: async () => {
+        const { aes: aesForCcsp } = await import('./server-state.ts')
+        await runCcspScrape(aesForCcsp)
+        updateSchedulerField('ccspLastRun', new Date().toISOString())
+      },
+      source: 'manual',
+      enqueuedAt: Date.now(),
+    })
+  }
+
+  // Supportable last — depends on RH account numbers
+  const suppConfig = getSchedulerConfig()
+  if (suppConfig.supportableEnabled) {
+    enqueueScraperTask({
+      name: 'supportable',
+      run: async () => {
+        const { customers: currentCustomers, aes: currentAes } = await import('./server-state.ts')
+        if (currentCustomers.length > 0) {
+          const results = await runSupportableDiscoverAndScrape(
+            currentCustomers,
+            (done, total, name, accountNumbers) => {
+              // Persist newly discovered account numbers to customers.json
+              const existing = currentCustomers.find(cx => cx.name === name)
+              if (existing && accountNumbers.length > 0) {
+                const merged = new Set([...(existing.accountNumbers ?? []), ...accountNumbers])
+                existing.accountNumbers = [...merged]
+                try {
+                  const tmpPath = CUSTOMERS_PATH + '.tmp'
+                  writeFileSync(tmpPath, JSON.stringify({ customers: currentCustomers }, null, 2))
+                  renameSync(tmpPath, CUSTOMERS_PATH)
+                } catch {}
+              }
+            },
+          )
+          // Split results by AE and write a sheet per AE
+          for (const ae of currentAes) {
+            const aeResults = results.filter(r => {
+              const cx = currentCustomers.find(c => c.name === r.customerName)
+              return cx?.ae === ae.name
+            })
+            if (aeResults.length > 0 && aeResults.some(r => r.accountNumbers.length > 0)) {
+              try {
+                const spreadsheetId = await writeSupportableSheet(aeResults, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
+                patchAe(ae.name, { supportableSheetId: spreadsheetId })
+              } catch (e: any) {
+                console.warn(`[scraper-queue:supportable] sheet write failed for ${ae.name}:`, sanitizeErr(e))
+              }
+            }
+          }
+          await refreshSubscriptions().catch(() => {})
+          updateSchedulerField('supportableLastRun', new Date().toISOString())
+        }
+      },
+      source: 'manual',
+      enqueuedAt: Date.now(),
+    })
+  }
+}
+
+// ── ntfy.sh push notification helper ─────────────────────────────────────────
+const _NTFY_TOPIC_SCHED = process.env.NTFY_TOPIC ?? 'asa-command-center'
+async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
+  try {
+    await fetch(`https://ntfy.sh/${_NTFY_TOPIC_SCHED}`, {
+      method: 'POST',
+      headers: { 'Title': title.slice(0, 64), 'Priority': priority, 'Content-Type': 'text/plain' },
+      body: message.slice(0, 512),
+    })
+  } catch (e: any) {
+    console.warn('[ntfy] scheduler notification failed:', e?.message ?? e)
+  }
+}
+
+// ── Session health watchdog state ────────────────────────────────────────────
+let _lastWatchdogSessionExpired = false
+const _alertedScrapers: Set<string> = new Set()
+
+// RH session path used by watchdog — set during initBackgroundScheduler
+let _watchdogRhSessionPath = ''
 
 // ── Configurable timer management (BKL-M19: heartbeat pattern) ──────────────
 // Bun's setInterval is unreliable for intervals > ~1h (see ADR-007).
@@ -272,14 +395,27 @@ export function scheduleKpiSnapshot(): void {
 const CCSP_CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'ccsp-data.json')
 const CCSP_DELTA_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'ccsp-delta.json')
 
-async function runCcspScrapeWithDelta(aes: any[]): Promise<void> {
+async function runCcspScrapeWithDelta(aesToScrape: any[]): Promise<void> {
   // Read previous cache before scrape
   let prevRecords: any[] = []
   if (existsSync(CCSP_CACHE_PATH)) {
     try { prevRecords = JSON.parse(readFileSync(CCSP_CACHE_PATH, 'utf-8')).records ?? [] } catch {}
   }
 
-  await runCcspScrape(aes)
+  const ccspResults = await runCcspScrape(aesToScrape)
+
+  // FIX N5: Write CCSP sheets per eligible AE and refresh cache
+  const eligibleAes = aesToScrape.filter((a: any) => a.tableauTerritories?.length && a.driveFolderId)
+  for (const ae of eligibleAes) {
+    const aeResults = ccspResults.filter((r: any) => r.aeName === ae.name)
+    try {
+      const spreadsheetId = await writeCcspSheet(aeResults, ae.name, ae.driveFolderId, ae.ccspSheetId || undefined)
+      patchAe(ae.name, { ccspSheetId: spreadsheetId })
+    } catch (e: any) {
+      console.warn(`[ccsp-sync] sheet write failed for ${ae.name}:`, sanitizeErr(e))
+    }
+  }
+  await refreshCCSP().catch((e: any) => console.warn('[ccsp-sync] cache refresh failed:', sanitizeErr(e)))
 
   // Read new cache after scrape
   let newRecords: any[] = []
@@ -341,6 +477,8 @@ export function scheduleCcspSync(): void {
               const reason = 'Tableau session expired. Reconnect via dashboard.'
               console.warn(`[scheduler] SKIPPED: CCSP sync — ${reason}`)
               setLastSkipReason('ccsp', reason)
+              // BKL-M50f: surface skip in scraper status store
+              recordOutcome('ccsp', { success: false, error: `Scheduled scrape skipped — session expired` })
               scheduleCcspSync()
               return
             }
@@ -349,6 +487,8 @@ export function scheduleCcspSync(): void {
           const reason = 'Tableau probe failed (unreachable). Reconnect via dashboard.'
           console.warn(`[scheduler] SKIPPED: CCSP sync — ${reason}`)
           setLastSkipReason('ccsp', reason)
+          // BKL-M50f: surface skip in scraper status store
+          recordOutcome('ccsp', { success: false, error: `Scheduled scrape skipped — session expired` })
           scheduleCcspSync()
           return
         }
@@ -445,6 +585,8 @@ export function scheduleSupportableSync(): void {
       const reason = 'VPN unreachable by 9am ET. Connect VPN and trigger manual sync.'
       console.error(`[scheduler] SKIPPED: Supportable sync — ${reason}`)
       setLastSkipReason('supportable', reason)
+      // BKL-M50f: surface skip in scraper status store
+      recordOutcome('supportable', { success: false, error: `Scheduled scrape skipped — session expired` })
       scheduleSupportableSync()
       return
     }
@@ -469,7 +611,7 @@ export function scheduleSupportableSync(): void {
         enqueueScraperTask({
           name: 'supportable',
           run: async () => {
-            await runSupportableDiscoverAndScrape(capturedBatch)
+            const results = await runSupportableDiscoverAndScrape(capturedBatch)
 
             // BKL-M21: Post-scrape validation — warn if batch results seem partial
             const customersWithAccounts = capturedBatch.filter((c: any) => c.accountNumbers?.length > 0).length
@@ -477,6 +619,23 @@ export function scheduleSupportableSync(): void {
             if (customersWithAccounts < expectedWithAccounts * 0.5 && expectedWithAccounts > 0) {
               console.warn(`[scraper-validation] WARNING: Supportable batch discovered accounts for ${customersWithAccounts}/${expectedWithAccounts} customers — possible partial scrape`)
             }
+
+            // FIX N1: Split results by AE and write a sheet per AE
+            for (const ae of aes) {
+              const aeResults = results.filter(r => {
+                const cx = customers.find(c => c.name === r.customerName)
+                return cx?.ae === ae.name
+              })
+              if (aeResults.length > 0 && aeResults.some(r => r.accountNumbers.length > 0)) {
+                try {
+                  const spreadsheetId = await writeSupportableSheet(aeResults, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
+                  patchAe(ae.name, { supportableSheetId: spreadsheetId })
+                } catch (e: any) {
+                  console.warn(`[supportable-sync] sheet write failed for ${ae.name}:`, sanitizeErr(e))
+                }
+              }
+            }
+            await refreshSubscriptions().catch(() => {})
 
             writeBatchState({ batchIndex: (capturedBatchIdx + 1) % 3, lastBatchRun: new Date().toISOString() })
             updateSchedulerField('supportableLastRun', new Date().toISOString())
@@ -649,6 +808,194 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
   }, msUntil)
 }
 
+// ── Email delivery scheduler (BKL-E06) ───────────────────────────────────────
+// Reads email-settings.json on each cycle (supports live config changes).
+// At delivery time: aggregates cached data → renderBriefHtml() → sendBriefEmail().
+
+const EMAIL_SETTINGS_PATH_SCHED = resolve(process.env.DATA_DIR ?? 'data', 'config', 'email-settings.json')
+
+interface EmailSettingsSched {
+  enabled: boolean
+  deliveryTime: string   // "HH:MM"
+  timezone: string       // IANA tz, e.g. "America/New_York"
+  schedule: string       // "daily" | "weekdays"
+  recipientEmail: string
+  sections: { meetings: boolean; emails: boolean; cases: boolean; pipeline: boolean; brief: boolean }
+}
+
+const DEFAULT_EMAIL_SETTINGS_SCHED: EmailSettingsSched = {
+  enabled: false,
+  deliveryTime: '07:00',
+  timezone: 'America/New_York',
+  schedule: 'weekdays',
+  recipientEmail: '',
+  sections: { meetings: true, emails: true, cases: true, pipeline: true, brief: true },
+}
+
+function readEmailSettingsSched(): EmailSettingsSched {
+  try {
+    if (existsSync(EMAIL_SETTINGS_PATH_SCHED)) {
+      return { ...DEFAULT_EMAIL_SETTINGS_SCHED, ...JSON.parse(readFileSync(EMAIL_SETTINGS_PATH_SCHED, 'utf-8')) }
+    }
+  } catch {}
+  return { ...DEFAULT_EMAIL_SETTINGS_SCHED }
+}
+
+/** Returns ms until next delivery based on HH:MM in the configured timezone. */
+function msUntilEmailDelivery(settings: EmailSettingsSched): number {
+  const now = new Date()
+  const tz = settings.timezone || 'America/New_York'
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  })
+  const p: Record<string, number> = {}
+  for (const part of fmt.formatToParts(now)) {
+    if (part.type !== 'literal') p[part.type] = Number(part.value)
+  }
+  // Parse HH:MM delivery time
+  const [hh, mm] = (settings.deliveryTime || '07:00').split(':').map(Number)
+  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
+  const tzOffsetMs = now.getTime() - etAsIfUtcMs
+  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, hh, mm, 0) + tzOffsetMs)
+  // If already past, schedule for tomorrow
+  if (target.getTime() <= now.getTime()) {
+    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
+  }
+  return target.getTime() - now.getTime()
+}
+
+export function scheduleEmailDelivery(): void {
+  // Re-read config on each cycle to pick up live settings changes
+  const settings = readEmailSettingsSched()
+
+  if (!settings.enabled || !settings.recipientEmail) {
+    // Email delivery disabled — reschedule check in 1 hour to pick up future config changes
+    setTimeout(() => scheduleEmailDelivery(), 60 * 60 * 1000)
+    return
+  }
+
+  const msUntil = msUntilEmailDelivery(settings)
+  console.log(`[email-delivery] next delivery in ${Math.round(msUntil / 60_000)}m to ${settings.recipientEmail}`)
+
+  setTimeout(async () => {
+    // Re-read config at delivery time (user may have changed settings)
+    const liveSettings = readEmailSettingsSched()
+
+    if (!liveSettings.enabled || !liveSettings.recipientEmail) {
+      console.log('[email-delivery] delivery skipped — email disabled or no recipient')
+      scheduleEmailDelivery()
+      return
+    }
+
+    // Weekdays-only check
+    if (liveSettings.schedule === 'weekdays') {
+      const tz = liveSettings.timezone || 'America/New_York'
+      const day = new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' })
+      if (day === 'Sat' || day === 'Sun') {
+        console.log('[email-delivery] delivery skipped — weekend (schedule=weekdays)')
+        scheduleEmailDelivery()
+        return
+      }
+    }
+
+    try {
+      const { customers: currentCustomers } = await import('./server-state.ts')
+
+      // Aggregate cached briefs into BriefEmailData
+      const today = new Date()
+      const dateDisplay = today.toLocaleDateString('en-US', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        timeZone: liveSettings.timezone || 'America/New_York',
+      })
+
+      // Gather customer briefs from cache
+      const customerBriefs = currentCustomers
+        .map((c: any) => {
+          const brief = readBriefCache(c.name)
+          return brief ? { customerName: c.name, briefText: brief.text } : null
+        })
+        .filter((b): b is { customerName: string; briefText: string } => b !== null)
+
+      // Gather pipeline from cache
+      const pipelineCache = readPipelineCache()
+      const pipeline = (pipelineCache?.records ?? []).slice(0, 10).map((r: any) => ({
+        dealName: r.opportunityName ?? r.accountName ?? 'Unknown',
+        customer: r.accountName ?? '',
+        stage: r.stage ?? '',
+        value: r.amount ? `$${Number(r.amount).toLocaleString()}` : '$0',
+        changeType: 'steady' as const,
+        sfLink: r.sfLink,
+      }))
+
+      const briefData = {
+        dateDisplay,
+        meetings: [],
+        emails: [],
+        cases: [],
+        pipeline,
+        customerBriefs,
+        sections: liveSettings.sections,
+      }
+
+      const html = renderBriefHtml(briefData)
+      const subject = `Morning Brief — ${dateDisplay}`
+      await sendBriefEmail(liveSettings.recipientEmail, subject, html)
+      console.log(`[email-delivery] brief sent to ${liveSettings.recipientEmail}`)
+    } catch (e: any) {
+      console.error('[email-delivery] failed:', e?.message ?? e)
+    }
+
+    scheduleEmailDelivery()  // reschedule for next cycle
+  }, msUntil)
+}
+
+// ── Startup account number validation ───────────────────────────────────────
+
+/**
+ * Validate cached account numbers on startup.
+ * Warns if any customer has suspiciously many accounts (likely false positives
+ * from a Supportable APEX name search that wasn't properly capped).
+ * Auto-clears accounts if count > 50 (too high to be legitimate).
+ */
+export function validateCachedAccountNumbers(): void {
+  const { customers: currentCustomers, CUSTOMERS_PATH } = require('./server-state.ts')
+  const flagged: string[] = []
+  let autoCleared = false
+
+  for (const c of currentCustomers) {
+    const count = c.accountNumbers?.length ?? 0
+    if (count > 50) {
+      console.warn(`[startup-validation] AUTO-CLEARING ${c.name}: ${count} account numbers exceeds safety limit (likely false positive)`)
+      c.accountNumbers = []
+      autoCleared = true
+      flagged.push(`${c.name} (${count} → 0)`)
+    } else if (count > 20) {
+      console.warn(`[startup-validation] WARNING: ${c.name} has ${count} cached account numbers — verify these are legitimate`)
+      flagged.push(`${c.name} (${count})`)
+    }
+  }
+
+  if (autoCleared) {
+    try {
+      const { writeFileSync, renameSync } = require('node:fs')
+      const tmpPath = CUSTOMERS_PATH + '.tmp'
+      writeFileSync(tmpPath, JSON.stringify({ customers: currentCustomers }, null, 2), { mode: 0o600 })
+      renameSync(tmpPath, CUSTOMERS_PATH)
+      console.warn(`[startup-validation] Cleared bad account numbers and saved customers.json`)
+    } catch (e: any) {
+      console.warn(`[startup-validation] Failed to save cleared accounts: ${e?.message}`)
+    }
+  }
+
+  if (flagged.length === 0) {
+    console.log(`[startup-validation] Account numbers OK — all ${currentCustomers.length} customers within limits`)
+  } else {
+    console.warn(`[startup-validation] Flagged customers: ${flagged.join(', ')}`)
+  }
+}
+
 // ── Startup background tasks ────────────────────────────────────────────────
 
 const RH_SCRAPE_TICK_MS = 15 * 60 * 1000  // tick interval — short intervals are reliable in Bun
@@ -660,8 +1007,14 @@ export function initBackgroundScheduler(opts: {
   sfSessionPath?: string
 }): void {
 
+  // Capture RH session path for session health watchdog
+  _watchdogRhSessionPath = opts.rhSessionPath
+
   // Load persisted scraper status so state survives container restarts
   initStatusStore()
+
+  // Validate cached account numbers — warn/clear false positives before scrapes start
+  validateCachedAccountNumbers()
 
   // On startup: run a full refresh, then schedule per-source timers
   if (customers.length > 0) {
@@ -683,6 +1036,9 @@ export function initBackgroundScheduler(opts: {
 
   // KPI daily snapshot at 8am ET (R05 — after all morning syncs complete)
   scheduleKpiSnapshot()
+
+  // Email brief delivery — scheduled per user config (BKL-E06)
+  scheduleEmailDelivery()
 
   // Cold-start auth-gate: On startup, wait 10s for Xvfb + Chrome to stabilise,
   // then init context. Before enqueueing scrapes, verify the session is actually
@@ -789,6 +1145,42 @@ export function initBackgroundScheduler(opts: {
           console.log(`[refresh] tick: CCSP due (${Math.round(ccspElapsed / 60_000)}m elapsed) — triggering`)
           _ccspLastRun = now
           refreshCCSP().catch((e: any) => console.error('[refresh] CCSP failed:', e?.message ?? e))
+        }
+      }
+
+      // ── Session health watchdog ─────────────────────────────────────────────
+      // Runs on every heartbeat tick. Fires static ntfy alerts (no interpolation
+      // of session tokens, cookies, or raw error objects — SECURITY-BASELINE §sanitizeErr).
+      if (_watchdogRhSessionPath) {
+        const rhStatus = getRhStatus(_watchdogRhSessionPath)
+
+        if (rhStatus.sessionExpired && !_lastWatchdogSessionExpired) {
+          notify('RH Session Expired', 'Red Hat Portal session expired — log in via VNC to restore scraping', 'high').catch(() => {})
+        }
+        if (rhStatus.loginTimedOut && !_lastWatchdogSessionExpired) {
+          notify('RH Login Timed Out', 'Login attempt timed out — retry via dashboard Connect button', 'high').catch(() => {})
+        }
+        _lastWatchdogSessionExpired = rhStatus.sessionExpired
+      }
+
+      // Consecutive failure alerting — fire once per scraper crossing the threshold
+      const scraperStatus = getStatus()
+      for (const [scraperName, entry] of Object.entries(scraperStatus)) {
+        if (entry.consecutiveFailures >= 5) {
+          if (!_alertedScrapers.has(scraperName)) {
+            _alertedScrapers.add(scraperName)
+            // SECURITY: scraper key (internal enum) + failure count (integer) only — no error strings
+            // safeError intentionally omitted: sanitizeErr cannot guarantee account numbers/hostnames
+            // are stripped from all error paths. Check server logs for error details.
+            notify(
+              `Scraper Failing: ${scraperName}`,
+              `${scraperName} has failed ${entry.consecutiveFailures} consecutive times. Check server logs for details.`,
+              'high',
+            ).catch(() => {})
+          }
+        } else if (entry.consecutiveFailures === 0) {
+          // Scraper recovered — clear the alert so it can fire again if it fails later
+          _alertedScrapers.delete(scraperName)
         }
       }
     }, RH_SCRAPE_TICK_MS)

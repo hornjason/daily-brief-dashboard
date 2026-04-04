@@ -6,6 +6,7 @@
 import { google } from 'googleapis'
 import { existsSync } from 'node:fs'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,18 @@ async function callGeminiStructured(systemPrompt: string, userPrompt: string, re
     throw new Error(`Gemini API error ${res.status} (doc-extraction, project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
   }
   const json = await res.json() as any
+  // BKL-M52: record token usage for cost tracking
+  const usage = json.usageMetadata
+  if (usage) {
+    recordGeminiUsage({
+      timestamp: new Date().toISOString(),
+      callType: 'doc-classify',
+      customerName: 'unknown',
+      inputTokens:  usage.promptTokenCount ?? 0,
+      outputTokens: usage.candidatesTokenCount ?? 0,
+      model,
+    })
+  }
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
   return JSON.parse(text)
 }

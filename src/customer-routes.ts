@@ -14,7 +14,7 @@ import { customers, aes, CUSTOMERS_PATH } from './server-state.ts'
 import { lastCcspError } from './ccsp-scraper.ts'
 import { sfSyncError } from './sf-scraper.ts'
 import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
-import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache } from './cache-layer.ts'
+import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS } from './cache-layer.ts'
 import { sanitizeErr } from './utils.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
@@ -232,17 +232,18 @@ export function registerCustomerRoutes(app: Hono): void {
 
     const force = c.req.query('force') === 'true'
 
-    // Check cache unless force refresh — auto-invalidate if underlying data is newer
+    // Check cache unless force refresh — auto-invalidate if underlying data is newer or TTL expired (ADR-007)
     if (!force) {
       const cached = readBriefCache(customer.name)
       if (cached) {
         const sheetData = readSheetCache(customer.name)
         const briefTs = new Date(cached.cachedAt).getTime()
         const sheetTs = sheetData ? new Date(sheetData.cachedAt).getTime() : 0
-        if (sheetTs <= briefTs) {
+        const ageMs = Date.now() - briefTs
+        if (sheetTs <= briefTs && ageMs < BRIEF_CACHE_TTL_MS) {
           return c.json({ text: cached.text, cachedAt: cached.cachedAt, fromCache: true })
         }
-        // Brief is stale (sheet data is newer) — fall through to regenerate
+        // Brief is stale (sheet data newer or 4h TTL expired) — fall through to regenerate
       }
     }
 
@@ -256,7 +257,23 @@ export function registerCustomerRoutes(app: Hono): void {
         fetchCustomerSubscriptions(customer).catch(() => []),
         cachedSheet ? Promise.resolve(cachedSheet.rows) : fetchCustomerSheetData(customer).catch(() => []),
       ])
-      const text = await generateBrief(customer, meetings, emails, docs, cases, subscriptions, products)
+      // BKL-AI21: filter pipeline + CCSP records for this customer before passing to brief
+      const needle = normalizeForQuery(customer.name.toLowerCase())
+      const pipelineCache = readPipelineCache()
+      const pipeline = pipelineCache
+        ? pipelineCache.records.filter(r => {
+            const hay = normalizeForQuery(r.accountName)
+            return hay.includes(needle) || needle.includes(hay)
+          }).filter(r => r.forecastCategory.toLowerCase() !== 'closed')
+        : []
+      const ccspCache = readCCSPCache()
+      const ccsp = ccspCache
+        ? ccspCache.records.filter(r => {
+            const hay = normalizeForQuery(r.accountName)
+            return hay.includes(needle) || needle.includes(hay)
+          })
+        : []
+      const text = await generateBrief(customer, meetings, emails, docs, cases, subscriptions, products, pipeline, ccsp)
       writeBriefCache(customer.name, text)
       return c.json({ text, fromCache: false })
     } catch (e: any) {

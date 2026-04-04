@@ -17,6 +17,7 @@ export interface AccountInfo {
   productCount: number
   totalLicenses: number
   cachedAt: string | null
+  confidenceScore?: number | null
 }
 
 export interface SupportCase {

@@ -33,6 +33,8 @@ import { OppDetail } from '../components/PipelineSection'
 import CopyButton from '../components/CopyButton'
 import { AccountCountPill } from '../components/AccountCountPill'
 import BriefAgePill from '../components/BriefAgePill'
+import { DataQualityBadge } from '../components/DataQualityBadge'
+import { AccountIntelligencePanel } from '../components/AccountIntelligencePanel'
 import PriorityActionBanner from '../components/PriorityActionBanner'
 import HealthScoreHero from '../components/HealthScoreHero'
 import CitationTooltip from '../components/CitationTooltip'
@@ -433,6 +435,7 @@ function BriefSection({ name }: { name: string }) {
           <Sparkles className="w-4 h-4 text-accent" />
           <h2 className="text-base font-semibold text-text-primary">Account Brief</h2>
           <BriefAgePill generatedAt={data?.cachedAt} />
+          <DataQualityBadge cachedAt={data?.cachedAt ?? null} />
         </div>
         <button
           onClick={refresh}
@@ -440,7 +443,7 @@ function BriefSection({ name }: { name: string }) {
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border text-xs text-text-secondary hover:text-text-primary hover:border-text-secondary transition-all disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Regenerate
+          {loading ? 'Refreshing…' : '↻ Refresh Brief'}
         </button>
       </div>
 
@@ -1833,6 +1836,7 @@ export function CustomerDetailPage() {
             drive={sse.drive}
             loading={sectionLoading}
           />
+          <AccountIntelligencePanel customerName={customerName} />
         </main>
 
         {/* Right column — 35%, sticky scroll */}

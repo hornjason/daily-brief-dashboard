@@ -516,6 +516,14 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
       }
 
       if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
+      // BKL-ADM02: health-check the context before use — a non-null but closed context
+      // throws "Target page, context or browser has been closed" on newPage().
+      try {
+        await _ctx.pages()  // lightweight liveness probe; throws if context is closed
+      } catch {
+        _ctx = null
+        throw new Error('Browser context is closed — re-authenticate via Setup page and retry')
+      }
       const page = await _ctx.newPage()
       const scrapePromise = scrapeOneAe(page, ae)
       scrapePromise.catch(() => {})  // suppress orphaned rejection if timeout fires first

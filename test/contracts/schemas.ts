@@ -33,7 +33,7 @@ export const BootstrapStepSchema = z.object({
 export const BootstrapStatusSchema = z.object({
   running: z.boolean(),
   steps: z.array(BootstrapStepSchema),
-  aeName: z.string(),
+  aeName: z.string().nullable(),
   completedAt: z.string().nullable(),
   error: z.string().nullable(),
   resources: z.unknown(),
@@ -81,3 +81,42 @@ export const CacheStatusSchema = z.object({
   pipeline: CacheEntrySchema,
   rh_cases: CacheEntrySchema,
 })
+
+// ── New schemas for BKL-AI20/AI21/AI27/AI28 ─────────────────────────────────
+
+export const BriefResponseSchema = z.object({
+  text: z.string().optional(),
+  fromCache: z.boolean(),
+  cachedAt: z.string().optional(),
+  error: z.string().optional(),
+}).passthrough()
+
+export const IntelligenceStatusSchema = z.object({
+  status: z.enum(['pending', 'running', 'complete', 'error', 'none']).or(z.string()),
+  step: z.string().optional(),
+  companyDocUrl: z.string().optional(),
+  industryDocUrl: z.string().optional(),
+  error: z.string().optional(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
+  message: z.string().optional(),
+}).passthrough()
+
+export const MorningSummarySchema = z.object({
+  signals: z.array(z.object({
+    customer: z.string(),
+    type: z.string(),
+    severity: z.string(),
+    text: z.string(),
+  }).passthrough()),
+  summary: z.string().optional(),
+  synthesis: z.string().optional(),
+  customerCount: z.number().optional(),
+}).passthrough()
+
+export const PipelineCustomerSchema = z.object({
+  totalAcv: z.number(),
+  openCount: z.number(),
+  opps: z.array(z.object({}).passthrough()),
+  closedOpps: z.array(z.object({}).passthrough()),
+}).passthrough()

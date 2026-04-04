@@ -113,7 +113,7 @@ jobs:
         run: podman rm -f smoke-test
 
   e2e:
-    name: Wizard E2E tests
+    name: Integration & E2E tests
     runs-on: ubuntu-latest
     needs: [test]
     timeout-minutes: 15
@@ -136,7 +136,8 @@ jobs:
       - name: Build dashboard
         run: cd dashboard && bun run build
 
-      - name: Run E2E wizard tests
-        run: CI=true bunx playwright test test/wizard.spec.ts --workers=2 --reporter=list
-        # Scoped to wizard.spec.ts — UI rendering and step labels only
-        # No Google credentials needed. Full suite runs in Tier 2 (release.yml)
+      - name: Run tests
+        run: CI=true bunx playwright test --project=ci --workers=2 --reporter=list
+        # --project=ci excludes @live-tagged tests and files in testIgnore (bootstrap-e2e, e2e-carolanne).
+        # Covers: api/, contracts/, regression, wizard, ui/, performance, accessibility, dashboard, qa.
+        # No Google credentials required. Live scraper tests run in Tier 2 (release.yml).

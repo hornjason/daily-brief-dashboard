@@ -2,7 +2,59 @@
 
 **Date:** 2026-04-01
 **Input:** 9-agent deep investigation on AI brief generation patterns
-**Status:** Ready for implementation — replaces current single-pass prompt in `customer.ts:379-454`
+**Status:** Partially implemented — see "Implemented Changes (2026-04-04)" below
+
+---
+
+## Implemented Changes (2026-04-04)
+
+These changes are live in production. The rest of this document is the research-backed target architecture — the sections below describe where the system is heading.
+
+### 1. Brief Cache TTL (ADR-009)
+
+`cache-layer.ts` exports `BRIEF_CACHE_TTL_MS = 4 * 60 * 60 * 1000` (4 hours). The brief route in `customer-routes.ts` invalidates the cached brief under **two conditions** (either is sufficient):
+
+```
+Cached brief exists
+  ↓  condition 1: sheetData.cachedAt > brief.cachedAt   → sheet data is newer than brief
+  ↓  condition 2: (Date.now() - brief.cachedAt) >= 4h   → brief older than 4h TTL
+→ if either condition true: regenerate
+→ force=true query param: always regenerate (bypasses both conditions)
+```
+
+Previously, the brief cache only invalidated when the sheet was newer — meaning stale briefs could persist indefinitely if the sheet never changed. The 4h TTL caps maximum staleness regardless of sheet activity.
+
+### 2. Pipeline + CCSP Data Passed to generateBrief
+
+`customer-routes.ts` now reads the pipeline cache and CCSP cache, filters each **per customer** (matching customer name), and passes both to `generateBrief()`. Previously `generateBrief` had no access to pipeline or cloud spend data.
+
+The pipeline filter matches on `opportunityName` or `accountName` containing the customer name. The CCSP filter matches on `accountName`. Both are passed as structured data into `buildXmlSources()`.
+
+### 3. lastBriefDate Uses Actual Cached Date
+
+`customer.ts` previously hardcoded `lastBriefDate` as "yesterday". It now calls `readLatestBriefCache(customerName)` and uses the `.date` field from the most recent cached brief file. This is the date stamp in the filename (e.g. `acme-corp-2026-04-03.json` → date `2026-04-03`). When no prior brief exists, it defaults to 30 days ago.
+
+This fix enables accurate delta detection in the brief: Gemini now knows the actual date of the last generated brief and can focus on changes since that date.
+
+### 4. Free/Trial Subscriptions Excluded from Brief XML
+
+`buildXmlSources()` now calls `isFreeOrTrial(sub)` (from `health-score.ts`) and **excludes** matching subscriptions entirely from the `<source type="subscriptions">` XML block. Previously they were included with a `[FREE/TRIAL]` tag. Exclusion reduces noise and prevents Gemini from generating renewal urgency about non-commercial subscriptions.
+
+### 5. Account Intelligence Docs Included in Brief XML
+
+When an intelligence JSON cache exists at `data/cache/intelligence/{slug}.json` (written by the account intelligence pipeline), `buildXmlSources()` reads it and includes the content as:
+
+```xml
+<source type="account_intelligence" generated="{generatedAt}">
+{intelligence content}
+</source>
+```
+
+This closes the loop between the intelligence pipeline (Steps 2+3) and the brief pipeline — previously, intelligence docs were written to Drive but never read back into brief generation.
+
+### 6. callLLMStructured Empty-Response Guard
+
+`callLLMStructured()` in `customer.ts` now checks for an empty or null response from the Gemini API before calling `JSON.parse()`. Previously, an empty Gemini response caused an HTTP 500 (`JSON.parse` of empty string throws). The guard logs a warning and returns `null`, allowing the brief pipeline to fall back to single-pass synthesis.
 
 ---
 

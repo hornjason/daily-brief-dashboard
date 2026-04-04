@@ -42,6 +42,18 @@ interface RefreshIntervals {
   rhScrape: number
 }
 
+// BKL-M52: Gemini cost summary from /api/admin/gemini-usage
+interface GeminiUsageSummary {
+  todayInputTokens: number
+  todayOutputTokens: number
+  todayCostUsd: number
+  monthInputTokens: number
+  monthOutputTokens: number
+  monthCostUsd: number
+  totalCalls: number
+  byCallType: Record<string, { inputTokens: number; outputTokens: number; calls: number; costUsd: number }>
+}
+
 interface SchedulerCfg {
   ccspTime: string
   supportableTime: string
@@ -63,6 +75,7 @@ interface SchedulerCfg {
 
 function ScrapeSection({
   label,
+  subtitle,
   status,
   onRunNow,
   running,
@@ -70,11 +83,13 @@ function ScrapeSection({
   queuePending,
 }: {
   label: string
+  subtitle?: string
   status: ScrapeStatus | null
   onRunNow: () => void
   running: boolean
   circuitBreaker?: CircuitBreakerState
-  queuePending?: boolean
+  /** true = pending (generic), string = pending with detail (e.g. "waiting on supportable") */
+  queuePending?: boolean | string
 }) {
   const busy = running || status?.isRunning
 
@@ -82,7 +97,10 @@ function ScrapeSection({
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-200">{label}</span>
+          <div>
+            <span className="text-sm font-medium text-gray-200">{label}</span>
+            {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
+          </div>
           {circuitBreaker && circuitBreaker.state !== 'closed' && (
             <span
               className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
@@ -116,10 +134,12 @@ function ScrapeSection({
         {queuePending && !status?.isRunning && (
           <div className="flex items-center gap-1.5 text-blue-400">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-            Queued — waiting for other scraper to finish
+            {typeof queuePending === 'string'
+              ? `Queued — ${queuePending}`
+              : 'Queued — waiting for other scraper to finish'}
           </div>
         )}
-        {status?.lastError && (
+        {status?.lastError && !status?.isRunning && (
           <div className="text-red-400 truncate" title={status.lastError}>Error: {status.lastError}</div>
         )}
         {circuitBreaker?.state === 'open' && circuitBreaker.lastFailure && (
@@ -328,7 +348,7 @@ function InitialLoadSection({ scrapeRunning }: { scrapeRunning: boolean }) {
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <span className="text-sm font-medium text-gray-200">Scrape Subscriptions (Full Reload)</span>
+          <span className="text-sm font-medium text-gray-200">Supportable Full Bootstrap</span>
           <p className="text-xs text-gray-500 mt-0.5">Crash-safe full load — resumes from last completed customer</p>
         </div>
         <button
@@ -367,6 +387,71 @@ function InitialLoadSection({ scrapeRunning }: { scrapeRunning: boolean }) {
   )
 }
 
+// ── Intelligence job status types ─────────────────────────────────────────────
+
+interface IntelligenceJobStatus {
+  status: 'idle' | 'running' | 'complete' | 'error'
+  step?: string
+  customerName?: string
+  completedAt?: string
+  error?: string
+}
+
+const INTEL_STEPS = [
+  { label: 'Identifying Industry', matchKey: 'identifying industry' },
+  { label: 'Generating Intelligence', matchKey: 'generating' },
+  { label: 'Writing to Drive', matchKey: 'writing docs to Drive' },
+]
+
+function IntelligenceStepperSection({ jobStatus }: { jobStatus: IntelligenceJobStatus | null }) {
+  if (!jobStatus || jobStatus.status !== 'running') return null
+
+  const currentStepIndex = INTEL_STEPS.findIndex(s => jobStatus.step?.toLowerCase().includes(s.matchKey.toLowerCase()))
+  const activeStep = currentStepIndex >= 0 ? currentStepIndex : 0
+
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+        <span className="text-sm font-medium text-gray-200">Intelligence Generation Running</span>
+        {jobStatus.customerName && (
+          <span className="text-xs text-gray-400">— {jobStatus.customerName}</span>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        {INTEL_STEPS.map((step, i) => {
+          const isComplete = i < activeStep
+          const isActive = i === activeStep
+          const isFuture = i > activeStep
+          return (
+            <div key={step.label} className="flex items-center gap-2 flex-1 min-w-0">
+              <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${isFuture ? 'opacity-40' : ''}`}>
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border ${
+                  isComplete
+                    ? 'bg-green-700 border-green-600 text-white'
+                    : isActive
+                    ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
+                    : 'bg-gray-700 border-gray-600 text-gray-500'
+                }`}>
+                  {isComplete ? '✓' : i + 1}
+                </div>
+                <span className={`text-xs truncate ${
+                  isComplete ? 'text-green-400' : isActive ? 'text-yellow-400 font-medium' : 'text-gray-500'
+                }`}>
+                  {step.label}
+                </span>
+              </div>
+              {i < INTEL_STEPS.length - 1 && (
+                <div className={`w-4 h-px shrink-0 ${i < activeStep ? 'bg-green-600' : 'bg-gray-600'}`} />
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Admin page ─────────────────────────────────────────────────────────────────
 
 export function AdminPage() {
@@ -375,6 +460,13 @@ export function AdminPage() {
   const [intervals, setIntervals] = useState<RefreshIntervals | null>(null)
   const [schedulerCfg, setSchedulerCfg] = useState<SchedulerCfg | null>(null)
   const [triggerBusy, setTriggerBusy] = useState<Record<string, boolean>>({})
+  // BKL-G21: immediate queued state set from POST response before polling catches up
+  const [localQueued, setLocalQueued] = useState<Record<string, string | true>>({})
+  // BKL-M52: Gemini cost tracking
+  const [geminiUsage, setGeminiUsage] = useState<GeminiUsageSummary | null>(null)
+  // Intelligence job status
+  const [intelJobStatus, setIntelJobStatus] = useState<IntelligenceJobStatus | null>(null)
+  // localQueued value: true = queued (no detail), or string = "waiting on <scraper>"
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -424,15 +516,82 @@ export function AdminPage() {
     return () => clearInterval(poll)
   }, [fetchStatus, fetchIntervals])
 
+  // BKL-M52: fetch Gemini usage on mount
+  useEffect(() => {
+    fetch('/api/admin/gemini-usage')
+      .then(r => r.json())
+      .then((d: GeminiUsageSummary) => setGeminiUsage(d))
+      .catch(() => {})
+  }, [])
+
+  // Intelligence job status polling (every 3s when running)
+  useEffect(() => {
+    let pollInterval: ReturnType<typeof setInterval> | null = null
+
+    const fetchIntelStatus = () => {
+      fetch('/api/intelligence/status')
+        .then(r => r.json())
+        .then((d: IntelligenceJobStatus) => {
+          setIntelJobStatus(d)
+          if (d.status !== 'running' && pollInterval) {
+            clearInterval(pollInterval)
+            pollInterval = null
+          }
+        })
+        .catch(() => {})
+    }
+
+    fetchIntelStatus()
+    pollInterval = setInterval(fetchIntelStatus, 3_000)
+    return () => { if (pollInterval) clearInterval(pollInterval) }
+  }, [])
+
+  // BKL-G21: clear localQueued entries once polling confirms the scraper is running
+  // or it's no longer in the queue's pending list (completed / dropped)
+  useEffect(() => {
+    if (!status) return
+    const pendingInQueue = status.queue?.pending ?? []
+    // Map UI key → scraper queue name
+    const keyToQueueName: Record<string, string> = {
+      rh: 'rh-cases',
+      supportable: 'supportable',
+      ccsp: 'ccsp',
+      salesforce: 'sf-pipeline',
+    }
+    setLocalQueued(prev => {
+      const next = { ...prev }
+      let changed = false
+      for (const [key, queueName] of Object.entries(keyToQueueName)) {
+        if (next[key] !== undefined) {
+          const isActuallyRunning = status[key as keyof AllScrapeStatus] !== undefined
+            && (status[key as keyof AllScrapeStatus] as ScrapeStatus)?.isRunning
+          const stillPending = pendingInQueue.includes(queueName)
+          if (isActuallyRunning || !stillPending) {
+            delete next[key]
+            changed = true
+          }
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [status])
+
   const runScrape = useCallback(async (key: string, endpoint: string) => {
     setTriggerBusy(b => ({ ...b, [key]: true }))
     try {
-      await fetch(endpoint, { method: 'POST' })
+      const res = await fetch(endpoint, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      // BKL-G21: if the API queued the task, show "Queued" state immediately without
+      // waiting for the next poll cycle. Clear localQueued when polling detects actual running.
+      if (data?.queued === true) {
+        const runningName = status?.queue?.running ?? null
+        setLocalQueued(q => ({ ...q, [key]: runningName ? `waiting on ${runningName}` : true }))
+      }
       await fetchStatus()
     } finally {
       setTriggerBusy(b => ({ ...b, [key]: false }))
     }
-  }, [fetchStatus])
+  }, [fetchStatus, status?.queue?.running])
 
   const saveSettings = useCallback(async (fields: Record<string, unknown>): Promise<string | null> => {
     try {
@@ -481,15 +640,16 @@ export function AdminPage() {
               running={!!triggerBusy['rh']}
               onRunNow={() => runScrape('rh', '/api/scrape/rh')}
               circuitBreaker={status?.circuitBreakers?.rh}
-              queuePending={status?.queue?.pending?.includes('rh-cases')}
+              queuePending={localQueued['rh'] ?? status?.queue?.pending?.includes('rh-cases')}
             />
             <ScrapeSection
-              label="Discover & Scrape Subscriptions"
+              label="Supportable Discovery + Sync"
+              subtitle="Full discovery + scrape from source for all AEs"
               status={status?.supportable ?? null}
               running={!!triggerBusy['supportable']}
               onRunNow={() => runScrape('supportable', '/api/scrape/supportable/discover')}
               circuitBreaker={status?.circuitBreakers?.supportable}
-              queuePending={status?.queue?.pending?.includes('supportable')}
+              queuePending={localQueued['supportable'] ?? status?.queue?.pending?.includes('supportable')}
             />
             <ScrapeSection
               label="CCSP"
@@ -497,7 +657,7 @@ export function AdminPage() {
               running={!!triggerBusy['ccsp']}
               onRunNow={() => runScrape('ccsp', '/api/scrape/ccsp')}
               circuitBreaker={status?.circuitBreakers?.ccsp}
-              queuePending={status?.queue?.pending?.includes('ccsp')}
+              queuePending={localQueued['ccsp'] ?? status?.queue?.pending?.includes('ccsp')}
             />
             <ScrapeSection
               label="SF Pipeline"
@@ -505,7 +665,7 @@ export function AdminPage() {
               running={!!triggerBusy['salesforce']}
               onRunNow={() => runScrape('salesforce', '/api/scrape/salesforce')}
               circuitBreaker={status?.circuitBreakers?.salesforce}
-              queuePending={status?.queue?.pending?.includes('sf-pipeline')}
+              queuePending={localQueued['salesforce'] ?? status?.queue?.pending?.includes('sf-pipeline')}
             />
           </div>
         </div>
@@ -518,6 +678,63 @@ export function AdminPage() {
 
         {/* Scheduler config */}
         <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} />
+
+        {/* Gemini API cost tracking (BKL-M52) */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Gemini API Usage</h2>
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+            {geminiUsage === null ? (
+              <div className="text-xs text-gray-500">Loading...</div>
+            ) : geminiUsage.totalCalls === 0 ? (
+              <div className="text-xs text-gray-500">No Gemini calls recorded yet this session</div>
+            ) : (
+              <div className="space-y-2 text-xs text-gray-400">
+                <div className="flex justify-between">
+                  <span>Today</span>
+                  <span className="text-gray-200 tabular-nums">
+                    {(geminiUsage.todayInputTokens + geminiUsage.todayOutputTokens).toLocaleString()} tokens
+                    &nbsp;·&nbsp;
+                    <span className="text-yellow-400">${geminiUsage.todayCostUsd.toFixed(4)}</span>
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>This month</span>
+                  <span className="text-gray-200 tabular-nums">
+                    {(geminiUsage.monthInputTokens + geminiUsage.monthOutputTokens).toLocaleString()} tokens
+                    &nbsp;·&nbsp;
+                    <span className="text-yellow-400">${geminiUsage.monthCostUsd.toFixed(4)}</span>
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Total calls this session</span>
+                  <span className="text-gray-200 tabular-nums">{geminiUsage.totalCalls}</span>
+                </div>
+                {Object.keys(geminiUsage.byCallType).length > 0 && (
+                  <div className="pt-1 border-t border-gray-700 space-y-1">
+                    {Object.entries(geminiUsage.byCallType)
+                      .sort((a, b) => b[1].costUsd - a[1].costUsd)
+                      .map(([type, stats]) => (
+                        <div key={type} className="flex justify-between">
+                          <span className="text-gray-500">{type}</span>
+                          <span className="tabular-nums text-gray-400">
+                            {stats.calls} calls · ${stats.costUsd.toFixed(4)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Intelligence job progress stepper */}
+        {intelJobStatus?.status === 'running' && (
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Intelligence Generation</h2>
+            <IntelligenceStepperSection jobStatus={intelJobStatus} />
+          </div>
+        )}
 
       </div>
     </div>

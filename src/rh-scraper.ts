@@ -26,6 +26,7 @@ import { writeFile, mkdir, readFile, unlink, rename } from 'node:fs/promises'
 import { resolve, dirname, join } from 'node:path'
 import type { SupportCase } from './types.ts'
 import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
+import { notify } from './utils.ts'
 
 // ── BKL-M50c: Auto-recovery state ───────────────────────────────────────────
 let _recoveryInProgress = false
@@ -67,6 +68,7 @@ let _onSessionExpired: (() => void) | null = null
 let _cachedToken: string | null = null   // captured Bearer JWT from intercepted page requests
 let _livePageBusy = false  // set true while external flows (e.g. Tableau login) use the live page
 let _livePageBusyAt = 0    // timestamp when busy flag was set — auto-clears after 3 minutes
+let _intentionalClose = false  // set before deliberate closeScrapeContext() calls to suppress auto-recovery
 
 /** Register a callback to invoke when the keep-alive detects session expiry. */
 export function setSessionExpiredCallback(cb: () => void): void {
@@ -129,6 +131,11 @@ function _attachDisconnectedHandler(ctx: BrowserContext, profileDir: string): vo
   const browser = ctx.browser()
   if (browser) {
     browser.on('disconnected', () => {
+      if (_intentionalClose) {
+        console.log('[rh-scraper] browser disconnected — intentional close, skipping auto-recovery')
+        _intentionalClose = false
+        return
+      }
       console.warn('[rh-scraper] browser disconnected — initiating auto-recovery')
       _autoRecover(profileDir).catch(e =>
         console.error('[rh-scraper] auto-recovery failed:', e?.message ?? e)
@@ -207,6 +214,12 @@ async function _autoRecover(profileDir: string): Promise<void> {
     browserDegraded = true
     browserDegradedReason = `Auto-recovery failed after ${MAX_RECOVERY_ATTEMPTS} attempts — reconnect manually via dashboard`
     console.error(`[rh-scraper] ${browserDegradedReason}`)
+    // BKL-M50c: notify user via ntfy only after all attempts fail
+    notify(
+      'Browser context degraded',
+      `Chromium disconnected and auto-recovery failed after ${MAX_RECOVERY_ATTEMPTS} attempts. Open the dashboard and reconnect manually.`,
+      'urgent',
+    ).catch(() => {})
   } finally {
     _recoveryInProgress = false
   }
@@ -260,7 +273,8 @@ export async function closeScrapeContext(): Promise<void> {
   _profileDir = null
   _cachedToken = null
   if (ctx) {
-    try { await ctx.close() } catch { /* already closed */ }
+    _intentionalClose = true  // suppress auto-recovery on deliberate close
+    try { await ctx.close() } catch { _intentionalClose = false /* already closed */ }
   }
 }
 

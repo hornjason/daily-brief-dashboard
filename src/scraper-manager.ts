@@ -12,7 +12,7 @@ import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper
 import { getRefreshIntervals } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
-import { markRunning, recordOutcome } from './scraper-status-store.ts'
+import { markRunning, recordOutcome, getScraperStatus } from './scraper-status-store.ts'
 
 // ── BKL-M50e: Scraper telemetry + history ──────────────────────────────────
 
@@ -123,6 +123,8 @@ class CircuitBreaker {
   private _failureCount = 0
   private _openedAt: number | null = null
   private _lastFailure: string | null = null
+  _sessionExpired = false
+  _sessionExpiredAt: number | null = null
   readonly name: string
   readonly threshold: number
   readonly cooldownMs: number
@@ -135,6 +137,17 @@ class CircuitBreaker {
 
   /** Returns true if the circuit is open (service should be skipped). */
   isOpen(): boolean {
+    // Session-expiry pin: hold open for 4 hours after a SessionExpiredError
+    if (this._sessionExpired) {
+      const elapsed = Date.now() - (this._sessionExpiredAt ?? 0)
+      if (elapsed < 4 * 60 * 60 * 1000) {
+        return true
+      }
+      // 4-hour window elapsed — clear the pin and fall through to normal logic
+      this._sessionExpired = false
+      this._sessionExpiredAt = null
+      console.log(`[circuit-breaker] ${this.name}: session-expiry pin cleared after 4h — allowing retry`)
+    }
     if (this._failureCount < this.threshold) return false
     // Check if cooldown has elapsed — if so, allow a retry (half-open)
     if (this._openedAt && (Date.now() - this._openedAt) >= this.cooldownMs) {
@@ -151,11 +164,18 @@ class CircuitBreaker {
     this._failureCount = 0
     this._openedAt = null
     this._lastFailure = null
+    this._sessionExpired = false
+    this._sessionExpiredAt = null
   }
 
-  recordFailure(reason: string): void {
+  recordFailure(reason: string, sessionExpired = false): void {
     this._failureCount++
     this._lastFailure = reason
+    if (sessionExpired) {
+      this._sessionExpired = true
+      this._sessionExpiredAt = Date.now()
+      console.warn(`[circuit-breaker] ${this.name}: session-expiry pin set — held open for 4h`)
+    }
     if (this._failureCount >= this.threshold) {
       this._openedAt = Date.now()
       console.warn(`[circuit-breaker] ${this.name}: OPEN after ${this._failureCount} failures — cooldown ${this.cooldownMs / 1000}s (last: ${reason})`)
@@ -199,7 +219,7 @@ export function resetCircuitBreaker(service: 'rh' | 'ccsp' | 'supportable' | 'sa
 /** Reset ALL circuit breakers — called on re-authentication (cold-start recovery). */
 export function resetAllCircuitBreakers(): void {
   for (const [name, cb] of Object.entries(circuitBreakers)) {
-    if (cb.getState().failures > 0) {
+    if (cb.getState().failures > 0 || cb._sessionExpired) {
       cb.recordSuccess()
       console.log(`[circuit-breaker] ${name}: reset by auth event`)
     }
@@ -320,6 +340,7 @@ export let _sfSyncRunning = false
 export let _sfSyncStartedAt: number | null = null
 export let _sfSyncCancelRequested = false
 export let _sfSyncLastError: string | null = null
+let _sfTotalRows = 0
 
 // ── Setters for cross-module state mutation (ESM live bindings) ─────────────
 
@@ -432,7 +453,7 @@ export async function runRhScrapeWithState(): Promise<void> {
     if (e instanceof SessionExpiredError) {
       _rhScrapeLastError = 'Session expired — reconnect via dashboard'
       recordScrapeExpired()
-      circuitBreakers.rh.recordFailure('session expired')
+      circuitBreakers.rh.recordFailure('session expired', true)
       await closeScrapeContext() // discard expired context so next login gets a clean one
       console.warn('[rh-scraper] session expired — reconnect via dashboard')
       notify('Red Hat Session Expired', 'Session expired during case scrape — reconnect via dashboard', 'high').catch(() => {})
@@ -456,15 +477,15 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
     _sfSyncRunning = false
     _sfSyncStartedAt = null
   }
-  if (_sfSyncRunning) return
+  if (_sfSyncRunning) return Promise.resolve()
   _sfSyncRunning = true
   _sfSyncStartedAt = Date.now()
   _sfSyncCancelRequested = false
   _sfSyncLastError = null
+  _sfTotalRows = 0
   markRunning('sf-pipeline')
   return (async () => {
     const _sfTelemetryStart = Date.now()
-    let totalRows = 0
 
     // BKL-F11: Group AEs by sfReportId to avoid scraping the same report multiple times
     const reportToAes = new Map<string, typeof aesWithSf>()
@@ -488,6 +509,9 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
         // Scrape once per unique report
         const data = await scrapeSfReport(reportId, RH_PROFILE_DIR)
 
+        // FIX BKL-W2-15: Count rows once per unique report, not once per AE write
+        _sfTotalRows += data.rows.length
+
         // Fan out: write the same data to each AE's pipeline sheet
         for (const ae of reportAes) {
           if (_sfSyncCancelRequested) {
@@ -501,7 +525,6 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
               patchAe(ae.name, { pipelineSheetId: sheetId })
             }
             await writePipelineSheet(data, sheetId)
-            totalRows += data.rows.length
             console.log(`[sf-sync] wrote ${data.rows.length} rows to ${ae.name}'s pipeline sheet`)
           } catch (e: any) {
             console.warn(`[sf-sync] sheet write failed for ${ae.name}:`, sanitizeErr(e))
@@ -515,14 +538,14 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
     }
 
     // Update exported status so /api/scrape/salesforce/status reflects the run
-    if (!_sfSyncLastError && totalRows > 0) recordSfSyncSuccess(totalRows)
+    if (!_sfSyncLastError && _sfTotalRows > 0) recordSfSyncSuccess(_sfTotalRows)
 
     // BKL-M50e: Record telemetry for SF sync
     recordScrapeResult({
       timestamp: new Date().toISOString(),
       service: 'salesforce',
       durationMs: Date.now() - _sfTelemetryStart,
-      recordCount: totalRows,
+      recordCount: _sfTotalRows,
       status: _sfSyncLastError ? 'failure' : 'success',
       error: _sfSyncLastError ?? undefined,
     })
@@ -537,6 +560,7 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
     // Note: _sfTelemetryStart is not in scope here — use updatedAt only
     recordOutcome('sf-pipeline', {
       success: !_sfSyncLastError,
+      recordCount: _sfTotalRows,
       error: _sfSyncLastError ?? undefined,
     })
     // Populate local pipeline cache from the newly-written sheet (BKL-M18)
@@ -606,30 +630,40 @@ export function registerScraperRoutes(app: Hono): void {
       return (now - new Date(lastSync).getTime()) > intervalMinutes * 2 * 60 * 1000
     }
 
+    // FIX C1: Fall back to ScraperStatusStore.lastSuccess when in-memory variable is null (survives restart)
+    const rhStatus = getScraperStatus('rh-cases')
+    const supportableStatus = getScraperStatus('supportable')
+    const ccspStatus = getScraperStatus('ccsp')
+    const sfStatus = getScraperStatus('sf-pipeline')
+
     return c.json({
       supportable: {
-        lastSync:  lastSupportableScrape,
-        lastError: lastSupportableError ? lastSupportableError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
-        isRunning: supportableScrapeRunning,
-        isStale:   isStale(lastSupportableScrape, 4 * 60),
+        lastSync:    lastSupportableScrape ?? supportableStatus.lastSuccess ?? null,
+        lastError:   lastSupportableError ? lastSupportableError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
+        isRunning:   supportableScrapeRunning,
+        isStale:     isStale(lastSupportableScrape ?? supportableStatus.lastSuccess ?? null, 24 * 60),
+        recordCount: supportableStatus.recordCount ?? null,
       },
       ccsp: {
-        lastSync:  lastCcspScrape,
-        lastError: lastCcspError ? lastCcspError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
-        isRunning: ccspScrapeRunning || ccspInFlight,
-        isStale:   isStale(lastCcspScrape, intervals.ccsp),
+        lastSync:    lastCcspScrape ?? ccspStatus.lastSuccess ?? null,
+        lastError:   lastCcspError ? lastCcspError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
+        isRunning:   ccspScrapeRunning || ccspInFlight,
+        isStale:     isStale(lastCcspScrape ?? ccspStatus.lastSuccess ?? null, intervals.ccsp),
+        recordCount: ccspStatus.recordCount ?? null,
       },
       rh: {
-        lastSync:  lastScraped,
-        lastError: _rhScrapeLastError,
-        isRunning: _rhScrapeRunning,
-        isStale:   isStale(lastScraped, intervals.rhScrape),
+        lastSync:    lastScraped ?? rhStatus.lastSuccess ?? null,
+        lastError:   _rhScrapeLastError,
+        isRunning:   _rhScrapeRunning,
+        isStale:     isStale(lastScraped ?? rhStatus.lastSuccess ?? null, intervals.rhScrape),
+        recordCount: rhStatus.recordCount ?? null,
       },
       salesforce: {
-        lastSync:  lastSfSync,
-        lastError: _sfSyncLastError,
-        isRunning: _sfSyncRunning,
-        isStale:   isStale(lastSfSync, intervals.subscriptions),
+        lastSync:    lastSfSync ?? sfStatus.lastSuccess ?? null,
+        lastError:   _sfSyncLastError,
+        isRunning:   _sfSyncRunning,
+        isStale:     isStale(lastSfSync ?? sfStatus.lastSuccess ?? null, 24 * 60),
+        recordCount: sfStatus.recordCount ?? null,
       },
       // Circuit breaker states per service
       circuitBreakers: getCircuitBreakerStates(),

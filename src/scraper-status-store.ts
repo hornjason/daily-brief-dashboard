@@ -20,6 +20,7 @@ export interface ScraperStatusEntry {
   recordCount: number           // rows/cases returned
   durationMs: number            // how long the scrape took
   updatedAt: string             // ISO timestamp of this status write
+  consecutiveFailures: number   // increments on failure, resets to 0 on success
 }
 
 export type ScraperStatusMap = Record<ScraperName, ScraperStatusEntry>
@@ -34,7 +35,10 @@ const STALE_THRESHOLDS: Record<ScraperName, number> = {
   'sf-pipeline': 24 * 60,  // 24 hours
 }
 
-const STATUS_FILE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'scraper-status.json')
+// Lazy path resolution so tests can set CACHE_DIR before any reads/writes occur.
+function getStatusFilePath() {
+  return resolve(process.env.CACHE_DIR ?? 'data/cache', 'scraper-status.json')
+}
 
 const SCRAPER_NAMES: ScraperName[] = ['rh-cases', 'supportable', 'ccsp', 'sf-pipeline']
 
@@ -49,6 +53,7 @@ function defaultEntry(): ScraperStatusEntry {
     recordCount: 0,
     durationMs: 0,
     updatedAt: new Date().toISOString(),
+    consecutiveFailures: 0,
   }
 }
 
@@ -64,9 +69,9 @@ let _store: ScraperStatusMap = {
 /** Write current store to disk atomically (write .tmp, then rename). */
 function persistStore(): void {
   try {
-    const tmpPath = STATUS_FILE_PATH + '.tmp'
+    const tmpPath = getStatusFilePath() + '.tmp'
     writeFileSync(tmpPath, JSON.stringify(_store, null, 2), { mode: 0o600 })
-    renameSync(tmpPath, STATUS_FILE_PATH)
+    renameSync(tmpPath, getStatusFilePath())
   } catch (e: any) {
     console.warn('[scraper-status-store] failed to persist:', sanitizeErr(e))
   }
@@ -81,11 +86,11 @@ function persistStore(): void {
  */
 export function initStatusStore(): void {
   try {
-    if (!existsSync(STATUS_FILE_PATH)) {
+    if (!existsSync(getStatusFilePath())) {
       console.log('[scraper-status-store] no status file found — initializing with defaults')
       return
     }
-    const raw = readFileSync(STATUS_FILE_PATH, 'utf-8')
+    const raw = readFileSync(getStatusFilePath(), 'utf-8')
     const parsed = JSON.parse(raw) as Partial<ScraperStatusMap>
     // Merge parsed entries over defaults to handle partial/missing keys
     for (const name of SCRAPER_NAMES) {
@@ -119,10 +124,12 @@ export function recordOutcome(
     entry.lastError = null
     entry.recordCount = result.recordCount ?? 0
     entry.durationMs = result.durationMs ?? 0
+    entry.consecutiveFailures = 0
   } else {
     entry.state = 'failed'
     entry.lastRun = now
     entry.lastError = result.error ? sanitizeErr({ message: result.error }) : null
+    entry.consecutiveFailures = (entry.consecutiveFailures ?? 0) + 1
   }
   entry.updatedAt = now
 

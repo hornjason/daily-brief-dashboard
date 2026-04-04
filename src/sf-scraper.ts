@@ -447,7 +447,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
       console.log(`[sf-scraper] stuck page text: ${pageText.replace(/\n/g, ' ')}`)
 
       // Try waiting with networkidle (120s) — may complete once the SAML chain fires
-      await page.waitForURL(url => url.startsWith('https://redhatcrm.lightning.force.com'), { timeout: 120_000 })
+      await page.waitForURL(url => url.toString().startsWith('https://redhatcrm.lightning.force.com'), { timeout: 120_000 })
         .catch(() => {})
     }
 

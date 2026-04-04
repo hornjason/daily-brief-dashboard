@@ -335,3 +335,85 @@ export function computeAllHealthScores(
 
   return results
 }
+
+// ── Confidence Score (BKL-AI28) ──────────────────────────────────────────────
+
+export interface ConfidenceScoreBreakdown {
+  subProximity:       { score: number; signal: string }
+  interactionRecency: { score: number; signal: string }
+  caseHealth:         { score: number; signal: string }
+  pipelinePresence:   { score: number; signal: string }
+  total:              number
+}
+
+/**
+ * Compute a 0-100 confidence score measuring engagement health for a customer.
+ *
+ * Sub proximity:       0-40   (how close subscriptions are to expiry)
+ * Interaction recency: 0-30   (days since last interaction)
+ * Case health:         0-20   (open case severity)
+ * Pipeline presence:   0-10   (has active pipeline)
+ */
+export function computeConfidenceScore(
+  subscriptions: ProductSubscription[],
+  lastInteractionDays: number,
+  openCases: SupportCase[],
+  hasPipeline: boolean,
+): ConfidenceScoreBreakdown {
+  // Sub proximity (0-40)
+  let subScore = 40
+  let subSignal = 'No active subscriptions'
+  const now = new Date()
+  let soonestDays = Infinity
+  for (const sub of subscriptions) {
+    if (sub.status?.toLowerCase() !== 'active') continue
+    if (isFreeOrTrial(sub)) continue
+    const end = sub.endDate ? new Date(sub.endDate) : null
+    if (!end) continue
+    const daysLeft = Math.ceil((end.getTime() - now.getTime()) / 86_400_000)
+    if (daysLeft < soonestDays) soonestDays = daysLeft
+  }
+  if (soonestDays !== Infinity) {
+    if (soonestDays < 0)  { subScore = 0;  subSignal = 'Subscription expired' }
+    else if (soonestDays <= 30)  { subScore = 5;  subSignal = `Renewal in ${soonestDays}d` }
+    else if (soonestDays <= 60)  { subScore = 15; subSignal = `Renewal in ${soonestDays}d` }
+    else if (soonestDays <= 90)  { subScore = 25; subSignal = `Renewal in ${soonestDays}d` }
+    else                         { subScore = 40; subSignal = `Next renewal ${soonestDays}d out` }
+  }
+
+  // Interaction recency (0-30)
+  let interactionScore = 30
+  let interactionSignal = 'No interaction data'
+  if (lastInteractionDays >= 0) {
+    if (lastInteractionDays > 90)      { interactionScore = 0;  interactionSignal = `No interaction in ${lastInteractionDays}d` }
+    else if (lastInteractionDays > 60) { interactionScore = 8;  interactionSignal = `Last interaction ${lastInteractionDays}d ago` }
+    else if (lastInteractionDays > 30) { interactionScore = 18; interactionSignal = `Last interaction ${lastInteractionDays}d ago` }
+    else if (lastInteractionDays > 14) { interactionScore = 24; interactionSignal = `Last interaction ${lastInteractionDays}d ago` }
+    else                               { interactionScore = 30; interactionSignal = `Active engagement (${lastInteractionDays}d ago)` }
+  }
+
+  // Case health (0-20)
+  let caseScore = 20
+  let caseSignal = 'No open cases'
+  if (openCases.length > 0) {
+    const hasSev1 = openCases.some(c => c.severity === '1')
+    const hasSev2 = openCases.some(c => c.severity === '2')
+    if (hasSev1)      { caseScore = 0;  caseSignal = `Sev1 case open` }
+    else if (hasSev2) { caseScore = 8;  caseSignal = `Sev2 case open` }
+    else              { caseScore = 14; caseSignal = `${openCases.length} open case(s) (Sev3/4)` }
+  }
+
+  // Pipeline presence (0-10)
+  const pipelineScore  = hasPipeline ? 10 : 5
+  const pipelineSignal = hasPipeline ? 'Active pipeline' : 'No pipeline opportunities'
+
+  const total = subScore + interactionScore + caseScore + pipelineScore
+
+  return {
+    subProximity:       { score: subScore, signal: subSignal },
+    interactionRecency: { score: interactionScore, signal: interactionSignal },
+    caseHealth:         { score: caseScore, signal: caseSignal },
+    pipelinePresence:   { score: pipelineScore, signal: pipelineSignal },
+    total,
+  }
+}
