@@ -189,6 +189,18 @@ export function registerDashboardRoutes(app: Hono): void {
       const pipelineData = readPipelineCache()
       const pipelineRecords = pipelineData?.records ?? []
 
+      // BKL-G02 signal #8: meeting today with prep needed — fetch calendar
+      let calendarEvents: { title: string; start: string; needsPrep: boolean; customers?: string[] }[] = []
+      try {
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+        const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999)
+        const events = await fetchCalendar(customers)
+        calendarEvents = events.filter(ev => {
+          const start = new Date(ev.start)
+          return start >= todayStart && start <= todayEnd && ev.customers && ev.customers.length > 0
+        })
+      } catch { /* calendar unavailable — skip prep signals */ }
+
       // Build customer account-number lookup
       const customerAccountNums = new Map<string, Set<string>>()
       for (const cu of customers) {
@@ -259,6 +271,14 @@ export function registerDashboardRoutes(app: Hono): void {
         // 7. Cloud spend anomaly (medium)
         if (hs.breakdown.cloudSpend.score <= 30) {
           signals.push({ customer: hs.name, type: 'cloud-anomaly', severity: 'medium', text: hs.breakdown.cloudSpend.signal })
+        }
+
+        // 8. Meeting today with prep needed (BKL-G02)
+        const todayMeetings = calendarEvents.filter(ev =>
+          ev.needsPrep && (ev.customers ?? []).some(c => c.toLowerCase() === hs.name.toLowerCase())
+        )
+        for (const ev of todayMeetings) {
+          signals.push({ customer: hs.name, type: 'meeting-prep', severity: 'medium', text: `Meeting today: "${ev.title}" — prepare talking points` })
         }
       }
 

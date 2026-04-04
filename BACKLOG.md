@@ -1007,7 +1007,7 @@ Fix:
   4. Show progress (industry lookup → company brief → industry analysis → Drive write)
 
 ### BKL-AI06 | Batch "Generate All" from Admin/Settings page
-Status: 🔴 OPEN
+Status: ✅ DONE
 Priority: P3
 Size: S (half day)
 Source: Jason 2026-04-02 — batch generation for full portfolio
@@ -1144,7 +1144,7 @@ Fix:
   3. Pass customer name from signal data to navigation
 
 ### BKL-G02 | Morning Summary only generates renewal signals — 8 of 9 signal types missing
-Status: ✅ DONE 2026-04-03 (Quinn: 4+ signal types — pipeline-stuck, renewal, competitor, cloud-anomaly)
+Status: ✅ DONE 2026-04-04 — All 9 signal types now live: Sev1/Sev2 cases, renewal, gone-silent, engagement, pipeline-stuck, competitor, cloud-anomaly, meeting-prep. Signal #8 (meeting-prep) added 2026-04-04: fetchCalendar() called in morning-summary route, filters today's events with needsPrep=true, generates medium-severity signal.
 Priority: P1
 Size: M (2-3 days)
 Source: Quinn visual audit 2026-04-02 — compared against UNIFIED-REDESIGN-SPEC.md
