@@ -133,6 +133,6 @@ jobs:
         run: cd dashboard && bun run build
 
       - name: Run E2E wizard tests
-        run: CI=true bunx playwright test test/wizard.spec.ts
+        run: CI=true bunx playwright test test/wizard.spec.ts --workers=2 --reporter=list
         # Scoped to wizard.spec.ts — UI rendering and step labels only
         # No Google credentials needed. Full suite runs in Tier 2 (release.yml)
