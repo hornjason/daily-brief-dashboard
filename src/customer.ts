@@ -317,6 +317,12 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
           { responseType: 'arraybuffer' },
         )
         const pdfBytes = Buffer.from(pdfRes.data as ArrayBuffer)
+        // Skip PDFs over 15MB to avoid memory pressure and Gemini inlineData limits
+        if (pdfBytes.length > 15_000_000) {
+          console.warn(`[docs] PDF too large to extract (${Math.round(pdfBytes.length / 1e6)}MB): ${f.name}`)
+          results.push(file)
+          continue
+        }
         const b64 = pdfBytes.toString('base64')
 
         const project  = process.env.GOOGLE_CLOUD_PROJECT
@@ -367,7 +373,8 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
           }
         }
       } catch (e: any) {
-        console.warn(`[docs] PDF extraction failed for ${f.name}: ${e?.message?.slice?.(0, 100) ?? 'unknown'}`)
+        const safeName = String(f.name ?? '').replace(/[\r\n]/g, ' ').slice(0, 200)
+        console.warn(`[docs] PDF extraction failed for ${safeName}: ${e?.message?.slice?.(0, 100) ?? 'unknown'}`)
         // PDF stays in results with name-only — content extraction is best-effort
       }
     }
