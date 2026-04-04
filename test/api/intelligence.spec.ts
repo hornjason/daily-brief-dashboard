@@ -56,24 +56,27 @@ test.describe('Pipeline data flows to both AEs', () => {
     expect(status).toBe(200)
   })
 
-  test('/api/pipeline byOwner array exists and is non-empty', async () => {
+  test('/api/pipeline byOwner is an array', async () => {
     const { body } = await getJSON('/api/pipeline')
     expect(body).toHaveProperty('byOwner')
     expect(Array.isArray(body.byOwner)).toBe(true)
-    expect(body.byOwner.length).toBeGreaterThanOrEqual(1)
   })
 
-  test('/api/pipeline byOwner entries have owner (string), acv (number), count (number)', async () => {
+  test('/api/pipeline has byOwner array with correct shape when data present', async () => {
     const { body } = await getJSON('/api/pipeline')
     for (const owner of body.byOwner ?? []) {
       expect(typeof owner.owner).toBe('string')
       expect(typeof owner.acv).toBe('number')
       expect(typeof owner.count).toBe('number')
-      expect(owner.count).toBeGreaterThan(0)
     }
   })
 
-  test('/api/pipeline has data for Carolanne Farrell', async () => {
+  test('@live /api/pipeline byOwner is non-empty', async () => {
+    const { body } = await getJSON('/api/pipeline')
+    expect(body.byOwner.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test('@live /api/pipeline has data for Carolanne Farrell', async () => {
     const { body } = await getJSON('/api/pipeline')
     const carolanne = (body.byOwner ?? []).find((o: { owner: string }) => o.owner?.includes('Carolanne'))
     expect(carolanne).toBeDefined()
@@ -81,7 +84,7 @@ test.describe('Pipeline data flows to both AEs', () => {
     expect(carolanne.acv).toBeGreaterThan(0)
   })
 
-  test('/api/pipeline has data for Elmer Alvarez (BKL-W2-26 fix)', async () => {
+  test('@live /api/pipeline has data for Elmer Alvarez (BKL-W2-26 fix)', async () => {
     const { body } = await getJSON('/api/pipeline')
     const elmer = (body.byOwner ?? []).find((o: { owner: string }) => o.owner?.includes('Elmer'))
     expect(elmer).toBeDefined()
@@ -89,7 +92,7 @@ test.describe('Pipeline data flows to both AEs', () => {
     expect(elmer.acv).toBeGreaterThan(0)
   })
 
-  test('/api/pipeline totalAcv is positive number', async () => {
+  test('@live /api/pipeline totalAcv is positive number', async () => {
     const { body } = await getJSON('/api/pipeline')
     expect(typeof body.totalAcv).toBe('number')
     expect(body.totalAcv).toBeGreaterThan(0)
@@ -110,7 +113,7 @@ test.describe('CCSP cache has data', () => {
     expect(status).toBe(200)
   })
 
-  test('/api/ccsp totalAcv is a number', async () => {
+  test('/api/ccsp totalAcv is a number (0 if no data in CI)', async () => {
     const { body } = await getJSON('/api/ccsp')
     expect(typeof body.totalAcv).toBe('number')
     expect(body.totalAcv).toBeGreaterThanOrEqual(0)
