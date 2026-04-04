@@ -637,6 +637,13 @@ export function registerBootstrapRoutes(app: Hono): void {
       autoBootstrapState.running = false
       autoBootstrapState.completedAt = new Date().toISOString()
       clearTimeout(bootstrapTimeoutId)
+
+      // BKL-AI07: Auto-generate account intelligence for all customers after bootstrap.
+      // Non-blocking — bootstrap completes first; generation runs in background via batch endpoint.
+      const port = process.env.PORT ?? '7777'
+      fetch(`http://localhost:${port}/api/intelligence/generate-all`, { method: 'POST' })
+        .then(r => console.log(`[auto-bootstrap] intelligence batch started: ${r.status}`))
+        .catch(e => console.warn('[auto-bootstrap] intelligence batch trigger failed:', e?.message))
       console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
       notify('Bootstrap Complete', `All steps complete for ${aeName}`, 'high').catch(() => {})
     })()

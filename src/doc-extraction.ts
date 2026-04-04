@@ -11,7 +11,7 @@ import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface DocClassification {
-  type: 'MEETING_NOTES' | 'ACCOUNT_PLAN' | 'TECHNICAL_DOC' | 'PROPOSAL' | 'OTHER'
+  type: 'MEETING_NOTES' | 'ACCOUNT_PLAN' | 'TECHNICAL_DOC' | 'PROPOSAL' | 'COMPANY_INTELLIGENCE' | 'INDUSTRY_ANALYSIS' | 'OTHER'
   action_items: { text: string; owner?: string; deadline?: string }[]
   decisions: { text: string; participants?: string[] }[]
   stakeholders_mentioned: { name: string; role?: string; sentiment?: string }[]
@@ -19,6 +19,7 @@ export interface DocClassification {
   competitive_mentions: { competitor: string; context: string }[]
   timelines: { event: string; date: string }[]
   pain_points: { text: string; severity?: string }[]
+  strategic_signals: { signal_type: 'swot' | 'trigger_event' | 'product_fit'; text: string; significance?: string }[]
 }
 
 // ── Prompt & Schema ──────────────────────────────────────────────────────────
@@ -38,7 +39,9 @@ const DOC_CLASSIFICATION_PROMPT = `Classify this document and extract structured
 DOCUMENT: {doc_name} (modified: {modified_time})
 CONTENT: {content}
 
-Classify as one of: MEETING_NOTES, ACCOUNT_PLAN, TECHNICAL_DOC, PROPOSAL, OTHER
+Classify as one of: MEETING_NOTES, ACCOUNT_PLAN, TECHNICAL_DOC, PROPOSAL, COMPANY_INTELLIGENCE, INDUSTRY_ANALYSIS, OTHER
+COMPANY_INTELLIGENCE: Company Brief, Executive Summary, Account Overview docs.
+INDUSTRY_ANALYSIS: Industry Analysis, Market Brief, Vertical Overview docs.
 
 Extract (if present):
 - action_items: [{text, owner, deadline}]
@@ -47,14 +50,15 @@ Extract (if present):
 - technical_signals: [{technology, context: "using" | "evaluating" | "migrating_from"}]
 - competitive_mentions: [{competitor, context}]
 - timelines: [{event, date}]
-- pain_points: [{text, severity}]`
+- pain_points: [{text, severity}]
+- strategic_signals: [{signal_type: "swot"|"trigger_event"|"product_fit", text, significance}]`
 
 const DOC_CLASSIFICATION_SCHEMA = {
   type: 'object' as const,
   properties: {
     type: {
       type: 'string' as const,
-      enum: ['MEETING_NOTES', 'ACCOUNT_PLAN', 'TECHNICAL_DOC', 'PROPOSAL', 'OTHER'],
+      enum: ['MEETING_NOTES', 'ACCOUNT_PLAN', 'TECHNICAL_DOC', 'PROPOSAL', 'COMPANY_INTELLIGENCE', 'INDUSTRY_ANALYSIS', 'OTHER'],
     },
     action_items: {
       type: 'array' as const,
@@ -135,10 +139,23 @@ const DOC_CLASSIFICATION_SCHEMA = {
         required: ['text'],
       },
     },
+    strategic_signals: {
+      type: 'array' as const,
+      items: {
+        type: 'object' as const,
+        properties: {
+          signal_type: { type: 'string' as const, enum: ['swot', 'trigger_event', 'product_fit'] },
+          text: { type: 'string' as const },
+          significance: { type: 'string' as const },
+        },
+        required: ['signal_type', 'text'],
+      },
+    },
   },
   required: [
     'type', 'action_items', 'decisions', 'stakeholders_mentioned',
     'technical_signals', 'competitive_mentions', 'timelines', 'pain_points',
+    'strategic_signals',
   ],
 }
 
@@ -153,6 +170,7 @@ const EMPTY_CLASSIFICATION: DocClassification = {
   competitive_mentions: [],
   timelines: [],
   pain_points: [],
+  strategic_signals: [],
 }
 
 // ── Gemini structured call (replicated from customer.ts — not exported there) ─

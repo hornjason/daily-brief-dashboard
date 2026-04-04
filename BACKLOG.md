@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-04 (BKL-G04/G05: marked DONE — confirmed already implemented; BKL-W2-29: duplicate intelligence tiles removed; BKL-W2-30: SF setup docs done; BKL-CI01: CI timeout bumped 15→25m)
+Last update: 2026-04-04 (BKL-G04/G05: marked DONE — confirmed already implemented; BKL-W2-29: duplicate intelligence tiles removed; BKL-W2-30: SF setup docs done; BKL-CI01: CI timeout bumped 15→25m; BKL-AI07: bootstrap hook done; BKL-AI08: COMPANY_INTELLIGENCE + INDUSTRY_ANALYSIS doc types + strategic_signals extraction done)
 
 ---
 
@@ -1021,30 +1021,23 @@ Fix:
   4. Frontend: progress bar, current customer name, error count, cancel button
 
 ### BKL-AI07 | Auto-generate intelligence docs during bootstrap
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04
 Priority: P3
 Size: XS (30 min)
 Source: Jason 2026-04-02 — new users should get this automatically during setup
 Files: src/bootstrap-orchestrator.ts
 Depends on: BKL-AI06 (needs batch generation)
 Description: After bootstrap customer discovery (Step 3), auto-trigger account intelligence generation for all discovered customers as a background non-blocking task. New users get intelligence docs without manual steps.
-Fix:
-  1. After bootstrap step 3 (Supportable discovery), fire POST /api/intelligence/generate-all internally
-  2. Non-blocking — bootstrap completes immediately, generation runs in background
-  3. Show generation progress on bootstrap completion card if still running
+Decision: DONE — non-blocking fetch POST to /api/intelligence/generate-all fired at end of bootstrap (after autoBootstrapState.running = false). Logs status code on success, warns on failure without blocking bootstrap.
 
 ### BKL-AI08 | Wire Account Intelligence docs into brief generation pipeline
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04
 Priority: P2
 Size: XS (30 min)
 Source: Jason 2026-04-02 — current code should leverage the intelligence data
-Files: src/doc-extraction.ts (classifyDocs prompt)
+Files: src/doc-extraction.ts, src/customer.ts
 Description: The existing Drive doc fetcher already crawls subfolders (customer.ts:246-277, depth=5) and feeds docs into classifyDocs(). Update classifyDocs() to recognize Account Intelligence docs as high-value strategic context and score them highly. This ensures SWOT findings, competitive positioning, trigger events, and product-fit insights flow into daily briefs automatically.
-Fix:
-  1. Update classifyDocs() prompt in doc-extraction.ts to recognize Account Intelligence doc types
-  2. Add classification categories: "company_intelligence" and "industry_analysis"
-  3. Score these doc types highly in the ranking step
-  4. Ensure key signals (SWOT items, trigger events, product fit) are extracted into brief XML
+Decision: DONE — added COMPANY_INTELLIGENCE and INDUSTRY_ANALYSIS to DocClassification type union; added strategic_signals field (swot/trigger_event/product_fit); updated prompt and schema; emitted strategic_signals XML with priority="high" in buildXmlSources for these doc types. TSC clean.
 
 ### BKL-E01 | Add gmail.send scope to OAuth + reauth flow
 Status: ✅ DONE 2026-04-03 (Marcus: gmail.send in NORMAL_SCOPES + BOOTSTRAP_SCOPES)

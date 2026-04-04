@@ -624,6 +624,14 @@ function buildXmlSources(
           }
           xml += `  </competitive_mentions>\n`
         }
+        if (cls.strategic_signals?.length &&
+            (cls.type === 'COMPANY_INTELLIGENCE' || cls.type === 'INDUSTRY_ANALYSIS')) {
+          xml += `  <strategic_signals priority="high">\n`
+          for (const ss of cls.strategic_signals) {
+            xml += `    [${ss.signal_type.toUpperCase()}] ${escapeXml(ss.text)}${ss.significance ? ` — significance: ${escapeXml(ss.significance)}` : ''}\n`
+          }
+          xml += `  </strategic_signals>\n`
+        }
       }
     }
     xml += `</source>\n\n`
