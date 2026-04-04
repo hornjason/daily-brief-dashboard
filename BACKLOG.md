@@ -1915,7 +1915,7 @@ Description: If Chromium crashes or RH session expires overnight, the system sta
   Implementation (pending research): browser.on('disconnected') handler, auto-relaunch persistent context, restore cookies from session-state.json, re-verify session, notify user only if auto-recovery fails.
 
 ### BKL-M50d | Session health dashboard panel
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04
 Priority: P1
 Size: M (3-4 days)
 Depends on: BKL-M50b (research recommendations)

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertCircle, X } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
+import { SessionHealthPanel } from '../components/SessionHealthPanel'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -850,6 +851,9 @@ export function AdminPage() {
             </button>
           </div>
         )}
+
+        {/* BKL-M50d: Data Source Health panel */}
+        <SessionHealthPanel />
 
         {/* Manual scrape triggers */}
         <div>
