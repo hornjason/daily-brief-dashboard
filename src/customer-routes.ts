@@ -13,7 +13,7 @@ import type { PipelineRecord } from './pipeline.ts'
 import { customers, aes, CUSTOMERS_PATH } from './server-state.ts'
 import { lastCcspError } from './ccsp-scraper.ts'
 import { sfSyncError } from './sf-scraper.ts'
-import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
+import { runIntelligencePipeline, getJobStatus, getRunningJob } from './account-intelligence.ts'
 import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS } from './cache-layer.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 
@@ -474,6 +474,12 @@ export function registerCustomerRoutes(app: Hono): void {
     const status = getJobStatus(customer.name)
     if (!status) return c.json({ status: 'none', message: 'No intelligence generation job found for this customer' })
     return c.json(status)
+  })
+
+  // GET /api/intelligence/status — global intelligence run status (polled by AdminPage)
+  app.get('/api/intelligence/status', (c) => {
+    const running = getRunningJob()
+    return c.json(running ?? { status: 'idle' })
   })
 
   // ── BKL-AI06: Batch intelligence generation ──────────────────────────────

@@ -861,6 +861,13 @@ export function getJobStatus(customerName: string): IntelligenceJobStatus | unde
   return jobs.get(customerName)
 }
 
+export function getRunningJob(): (IntelligenceJobStatus & { customerName?: string }) | null {
+  for (const [name, job] of jobs) {
+    if (job.status === 'running') return { ...job, customerName: name }
+  }
+  return null
+}
+
 /**
  * Run the full intelligence pipeline for a customer:
  *   1. Identify industry/segment (BKL-AI01)
