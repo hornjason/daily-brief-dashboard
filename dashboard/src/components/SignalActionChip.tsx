@@ -16,9 +16,10 @@ const variantStyles: Record<ChipVariant, string> = {
 }
 
 export default function SignalActionChip({ label, href, variant }: SignalActionChipProps) {
+  const safeHref = href.startsWith('https://') || href.startsWith('mailto:') ? href : '#'
   return (
     <a
-      href={href}
+      href={safeHref}
       target="_blank"
       rel="noopener noreferrer"
       className={`inline-flex items-center text-xs rounded-full px-2 py-0.5 border font-medium transition-colors ${variantStyles[variant]}`}
