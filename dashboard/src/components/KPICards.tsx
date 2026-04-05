@@ -96,7 +96,7 @@ function KPICard({ label, value, icon, accent, loading, onClick, subtitle, spark
             <SparklineKPI data={sparklineData} invertTrend={invertTrend} />
           )}
         </div>
-        <div className="text-xs text-text-secondary leading-tight">{label}</div>
+        <div className="text-sm text-text-secondary leading-tight">{label}</div>
         {subtitle && <div className="text-xs text-text-secondary/80 leading-tight mt-0.5">{subtitle}</div>}
       </div>
     </div>

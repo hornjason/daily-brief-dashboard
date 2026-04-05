@@ -59,7 +59,7 @@ export function OppDetail({ opp, onClose }: { opp: PipelineOpp; onClose: () => v
         {/* Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-text-secondary mb-0.5">{opp.accountName}</p>
+            <p className="text-sm text-text-secondary mb-0.5">{opp.accountName}</p>
             {opp.oppId ? (
               <a
                 href={`https://redhatcrm.lightning.force.com/lightning/r/Opportunity/${opp.oppId}/view`}
@@ -85,31 +85,31 @@ export function OppDetail({ opp, onClose }: { opp: PipelineOpp; onClose: () => v
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-border/30 rounded-lg p-2.5">
             <p className="text-xs text-text-secondary mb-0.5">Stage</p>
-            <p className="text-xs font-semibold" style={{ color: stageColor }}>{opp.forecastCategory}</p>
+            <p className="text-sm font-semibold" style={{ color: stageColor }}>{opp.forecastCategory}</p>
           </div>
           <div className="bg-border/30 rounded-lg p-2.5">
             <p className="text-xs text-text-secondary mb-0.5">Close Date</p>
-            <p className={`text-xs font-semibold ${URGENCY_COLORS[urgency]}`}>
+            <p className={`text-sm font-semibold ${URGENCY_COLORS[urgency]}`}>
               {opp.closeDate ? new Date(opp.closeDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
             </p>
           </div>
           <div className="bg-border/30 rounded-lg p-2.5">
             <p className="text-xs text-text-secondary mb-0.5">Probability</p>
-            <p className="text-xs font-semibold text-text-primary">{opp.probability}%</p>
+            <p className="text-sm font-semibold text-text-primary">{opp.probability}%</p>
           </div>
           <div className="bg-border/30 rounded-lg p-2.5">
             <p className="text-xs text-text-secondary mb-0.5">Type</p>
-            <p className="text-xs font-semibold text-text-primary">{opp.renewal ? '↻ Renewal' : '✦ New Business'}</p>
+            <p className="text-sm font-semibold text-text-primary">{opp.renewal ? '↻ Renewal' : '✦ New Business'}</p>
           </div>
           {opp.offeringGroup && (
             <div className="bg-border/30 rounded-lg p-2.5">
               <p className="text-xs text-text-secondary mb-0.5">Offering</p>
-              <p className="text-xs font-semibold text-text-primary">{opp.offeringGroup}</p>
+              <p className="text-sm font-semibold text-text-primary">{opp.offeringGroup}</p>
             </div>
           )}
           <div className="bg-border/30 rounded-lg p-2.5">
             <p className="text-xs text-text-secondary mb-0.5">Owner</p>
-            <p className="text-xs font-semibold text-text-primary">{opp.owner.split(' ')[0]}</p>
+            <p className="text-sm font-semibold text-text-primary">{opp.owner.split(' ')[0]}</p>
           </div>
         </div>
 
@@ -269,7 +269,7 @@ export function PipelineSection({ data, loading, error, onRefresh }: Props) {
         <div className="bg-surface border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <Users className="w-3.5 h-3.5 text-accent" />
-            <span className="text-xs font-medium text-text-secondary">By Owner</span>
+            <span className="text-sm font-medium text-text-secondary">By Owner</span>
             {activeOwner && (
               <button onClick={() => setActiveOwner(null)} className="ml-auto text-xs text-text-secondary hover:text-text-primary transition-colors" aria-label="Clear owner filter">
                 clear
@@ -291,11 +291,11 @@ export function PipelineSection({ data, loading, error, onRefresh }: Props) {
                     onClick={() => setActiveOwner(isActive ? null : owner)}
                     className={`w-full text-left rounded px-2 py-1.5 transition-colors ${isActive ? 'bg-border/40' : 'hover:bg-border/20'}`}
                   >
-                    <div className="flex justify-between text-xs mb-1">
+                    <div className="flex justify-between text-sm mb-1">
                       <span className={`font-medium ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>
                         {firstNames(owner)}
                       </span>
-                      <span className="text-text-secondary">{fmt(acv)} · {count}</span>
+                      <span className="text-xs text-text-secondary">{fmt(acv)} · {count}</span>
                     </div>
                     <div className="h-1.5 bg-border rounded-full overflow-hidden">
                       <div
@@ -336,7 +336,7 @@ export function PipelineSection({ data, loading, error, onRefresh }: Props) {
         <div className="bg-surface border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <Calendar className="w-3.5 h-3.5 text-accent" />
-            <span className="text-xs font-medium text-text-secondary">
+            <span className="text-sm font-medium text-text-secondary">
               {activeOwner ? `${firstNames(activeOwner)}'s Opps` : 'Top Opportunities'}
             </span>
             <div className="ml-auto flex items-center gap-0.5 bg-border/30 rounded-md p-0.5">
@@ -368,7 +368,7 @@ export function PipelineSection({ data, loading, error, onRefresh }: Props) {
                     <span className="text-xs font-medium shrink-0 w-10" style={{ color: stageColor }}>
                       {opp.forecastCategory === 'Best Case' ? 'Best' : opp.forecastCategory}
                     </span>
-                    <span className="text-xs text-text-primary truncate flex-1 min-w-0" title={opp.accountName}>{opp.accountName}</span>
+                    <span className="text-sm text-text-primary truncate flex-1 min-w-0" title={opp.accountName}>{opp.accountName}</span>
                     <span className={`text-xs shrink-0 ${URGENCY_COLORS[urgency]}`}>{fmtDate(opp.closeDate)}</span>
                     <span className="text-xs font-mono text-text-primary shrink-0">{fmt(opp.acv)}</span>
                     {opp.renewal && <span className="text-xs text-text-secondary/75 shrink-0">↻</span>}

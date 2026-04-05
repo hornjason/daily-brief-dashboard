@@ -223,7 +223,7 @@ function AEGroup({
         ) : (
           <ChevronUp className="w-3.5 h-3.5 text-text-secondary group-hover/ae:text-accent transition-colors shrink-0" />
         )}
-        <span className="text-xs font-semibold text-accent">{label}</span>
+        <span className="text-sm font-semibold text-accent">{label}</span>
         <span className="text-xs text-text-secondary">{count} account{count !== 1 ? 's' : ''}</span>
         <div className="flex-1 h-px bg-border/50" />
       </button>
@@ -274,7 +274,7 @@ function AccountCard({
               {account.ae.split(' ')[0]}
             </span>
           )}
-          <span className="text-xs text-text-secondary truncate max-w-[120px]" title={account.segment}>{account.segment}</span>
+          <span className="text-sm text-text-secondary truncate max-w-[120px]" title={account.segment}>{account.segment}</span>
           {account.confidenceScore != null && (
             <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
               account.confidenceScore >= 80
@@ -335,7 +335,7 @@ function AccountCard({
       </div>
 
       {nextMeeting ? (
-        <div className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent min-w-0">
+        <div className="flex items-center gap-1.5 text-sm px-2 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent min-w-0">
           <Calendar className="w-3 h-3 shrink-0" />
           <span className="font-medium truncate" title={`${formatDate(nextMeeting.start)} · ${nextMeeting.title}`}>{formatDate(nextMeeting.start)} · {nextMeeting.title}</span>
         </div>

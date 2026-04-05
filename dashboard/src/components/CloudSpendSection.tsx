@@ -324,7 +324,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
         <div className="bg-surface border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <Building2 className="w-3.5 h-3.5 text-accent" />
-            <span className="text-xs font-medium text-text-secondary">
+            <span className="text-sm font-medium text-text-secondary">
               Top Accounts{activeAE ? ` (${activeAE.split(' ')[0]})` : ''}
             </span>
           </div>
@@ -342,7 +342,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
                 const color = ACCOUNT_COLORS[i % ACCOUNT_COLORS.length]
                 return (
                   <div key={name}>
-                    <div className="flex items-center justify-between text-xs mb-0.5 min-w-0">
+                    <div className="flex items-center justify-between text-sm mb-0.5 min-w-0">
                       <Link
                         to={`/dashboard/customer/${encodeURIComponent(shortName(name))}`}
                         className="text-text-primary truncate flex-1 min-w-0 mr-2 hover:underline"
@@ -350,7 +350,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
                       >
                         {i + 1}. {shortName(name)}
                       </Link>
-                      <span className="text-text-secondary shrink-0 font-mono">{fmt(acv)}</span>
+                      <span className="text-xs text-text-secondary shrink-0 font-mono">{fmt(acv)}</span>
                     </div>
                     <div className="h-1 bg-border rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
