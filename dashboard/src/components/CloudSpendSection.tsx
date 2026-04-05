@@ -40,7 +40,7 @@ function allAEQuarters(byAE: CCSPByAE[]): string[] {
 
 function fmtQuarterLabel(q: string, totalQuarters: number): string {
   const [year, quarter] = q.replace('-Q', ' Q').split(' ')
-  return totalQuarters > 4 ? `${quarter} '${year.slice(2)}` : `${year} ${quarter}`
+  return totalQuarters >= 4 ? `${quarter} '${year.slice(2)}` : `${year} ${quarter}`
 }
 
 interface ByAETileProps {
@@ -58,7 +58,7 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
 
   // Dynamic grid columns: 1 label col + N quarter cols
   // We use a CSS grid with inline style to handle variable quarter count
-  const gridCols = `minmax(5rem, auto) repeat(${quarters.length}, minmax(0, 1fr))`
+  const gridCols = `5rem repeat(${quarters.length}, minmax(0, 1fr))`
 
   return (
     <div className="bg-surface border border-border rounded-xl p-4">
