@@ -13,12 +13,12 @@ import { rebuildFolderMap, getWatcherState } from './src/drive-watcher.ts'
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeExpired } from './src/rh-auth.ts'
 import { closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback, setContextRecoveryCallback } from './src/rh-scraper.ts'
 
-import { runSfPipelineSync, getSfContext, adoptSfContext } from './src/sf-scraper.ts'
+import { runSfPipelineSync, getSfContext, adoptSfContext, initSfSyncFromCache } from './src/sf-scraper.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
 import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning, adoptSupportableContext } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
-import { initCacheLayer, registerCacheRoutes, readSheetCache } from './src/cache-layer.ts'
+import { initCacheLayer, registerCacheRoutes, readSheetCache, readPipelineCache } from './src/cache-layer.ts'
 import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
 import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
@@ -92,6 +92,7 @@ const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR
   ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const RH_CASES_CACHE_PATH = resolve(CACHE_DIR, 'cases.json')
 initCacheLayer(CACHE_DIR, RH_CASES_CACHE_PATH)
+initSfSyncFromCache(readPipelineCache)
 initJobPersistence(CACHE_DIR)
 initDashboardRoutes({ cacheDir: CACHE_DIR, rhCasesCachePath: RH_CASES_CACHE_PATH, dataSourcesPath: DATA_SOURCES_PATH })
 initSettingsApi(DATA_SOURCES_PATH)

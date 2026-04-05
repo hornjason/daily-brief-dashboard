@@ -789,6 +789,15 @@ export let lastSfSync: string | null = null
 export let lastSfRowCount = 0
 export let sfSyncError: string | null = null
 
+/** Seed SF sync state from pipeline cache on startup — prevents amber card after container restart */
+export function initSfSyncFromCache(readPipelineCache: () => { records: any[]; cachedAt: string } | null): void {
+  const cached = readPipelineCache()
+  if (cached?.cachedAt && cached.records.length > 0) {
+    lastSfSync = cached.cachedAt
+    lastSfRowCount = cached.records.length
+  }
+}
+
 /** Update SF sync status from external callers (e.g. scraper-manager) */
 export function recordSfSyncSuccess(rowCount: number): void {
   lastSfSync = new Date().toISOString()

@@ -3696,7 +3696,7 @@ Files: src/customer.ts, src/google.ts, data/cache/*-{date}.json, dashboard/src/ 
 Description: Comprehensive investigation of the account intelligence pipeline end-to-end. Goals: (1) Performance — latency breakdown per brief (Gmail fetch / Calendar fetch / AI call / cache write), parallelization opportunities. (2) Gaps — what data is missing (Supportable subscriptions, CCSP spend, cases cross-referenced with pipeline). (3) Quality — are prompts producing high-signal output, or too verbose/shallow? (4) Token efficiency — cost per brief, differential updates vs full regen, smaller model candidates. (5) Architecture — IMPORTANT: Gemini API is NOT approved at Red Hat. Must investigate whether the current Vertex AI service account setup is Red Hat-approved, and if not, identify an approved alternative (Claude API via PAI Inference Tool is a candidate). Do not proceed with any AI provider change without confirming Red Hat approval. Deliverable: prioritized improvement list with cost estimates and approved-provider recommendation.
 
 ### BKL-AI18a | Parallelize Drive file exports + doc classification (AI18-R1a/R1b)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-05 — Shipped in commit 7c2ced1. customer.ts Drive exports parallelized with Promise.allSettled + EXPORT_CONCURRENCY=5. doc-extraction.ts classifyDocs() parallelized with Promise.allSettled(docs.map(...)). Quinn validated.
 Priority: P1
 Size: S (2-3h)
 Source: AI18 investigation 2026-04-04
@@ -3706,7 +3706,7 @@ Description: Two parallel serialization bottlenecks. (1) Drive BFS fetches each 
 ---
 
 ### BKL-AI18b | Gemini context caching for extraction system prompt (AI18-R4a / BKL-R23)
-Status: 🔴 OPEN
+Status: ⏸️ DEFERRED — Gemini v1beta/cachedContents API requires non-trivial SDK changes to current REST-based integration. Skipped to protect working Gemini pipeline. Revisit when SDK updated.
 Priority: P1
 Size: S (0.5 day)
 Source: AI18 investigation 2026-04-04
@@ -3716,7 +3716,7 @@ Description: The extraction system prompt + responseSchema is identical for ever
 ---
 
 ### BKL-AI18c | Inject scraper-failure status into brief XML (AI18-R2a)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-05 — Shipped in commit 7c2ced1. sourceStatusAttr() helper in customer.ts injects status="scraper_failed" or status="stale" into <source> XML tags. Quinn validated via Illumio brief showing scraper_failed flowing to final output.
 Priority: P1
 Size: S (2h)
 Source: AI18 investigation 2026-04-04
