@@ -893,8 +893,20 @@ Fix:
   9. Scraper change needed: add "Meeting Notes" and "Industry" columns to SF scraper column extraction in src/sf-scraper.ts. Parse and store alongside existing pipeline fields.
   10. Jason confirmed "Industry" column added to SF report (2026-04-02). This enables automatic industry-per-customer detection from live SF data — supplements or replaces AI01's web search approach. Industry from SF is authoritative (CRM-maintained) vs AI-inferred.
 
-### BKL-F10a | Implement F10 signal-action UI — Variant C + TopActionsPanel
+### BKL-F10b | Wire real signal data to F10a components — replace mock data
 Status: 🔴 OPEN
+Priority: P2
+Size: S (half day)
+Source: Quinn QA validation 2026-04-05 — components pass, data pipeline not connected
+Files: dashboard/src/App.tsx (TopActionsPanel mock→real), dashboard/src/pages/CustomerDetailPage.tsx (CustomerSignalBanner priorityAction gate)
+Description: F10a components are built and correct. Two wiring gaps remain:
+  1. TopActionsPanel (App.tsx:272) uses hardcoded mock data (Acme Corp, Globex, Initech). Replace with real signal aggregation from /api/accounts — sort by: (1) days to hard deadline, (2) case severity, (3) pipeline ARR.
+  2. CustomerSignalBanner (CustomerDetailPage.tsx:1310) is gated by `{priorityAction && ...}`. The brief API generates a Priority Action section in the brief text, but `priorityAction` as a structured field on the customer object is not populated. Extract/parse priorityAction from brief response or add as a derived field in the brief cache. Currently no customers show the banner.
+
+---
+
+### BKL-F10a | Implement F10 signal-action UI — Variant C + TopActionsPanel
+Status: ✅ DONE 2026-04-05 — All 5 components built and in production. Quinn validated: code correct, build clean, API 200. See BKL-F10b for data wiring.
 Priority: P2
 Size: M (half day)
 Source: Aditi design output 2026-04-04
@@ -3372,27 +3384,30 @@ Key design decisions:
   - Subscription-based brief injection (only surface intel when customer has that product)
 
 ### BKL-W3-13 | Telesense integration — SF utilization data mapped to account details + briefs
-Status: 🔬 RESEARCH
+Status: 🔬 RESEARCH — VNC spike complete 2026-04-05
 Priority: P2
-Size: L → XL (depends on tech stack discovery)
+Size: XL (2-3 weeks — Salesforce Analytics API, NOT Tableau)
 Source: Jason 2026-04-04 feature request
-Investigation: Telesense feasibility agent 2026-04-05 — MEDIUM complexity, HIGH risk on approach uncertainty.
-  Verdict: PROCEED with 1-day discovery spike before building.
-  - Telesense is a proprietary internal Red Hat tool with no public documentation — tech stack unknown until VNC inspection
-  - Most likely path: Tableau embed in SF (CCSP scraper is the direct template) → fallback to DOM scraping → fallback to vision API
-  - Account number matching already solved in codebase (supportable-scraper.ts pattern, Customer.accountNumbers field)
-  - Happy path timeline (Tableau + account numbers visible): 8-11 days
-  - Vision API fallback (PDF images only): +5-7 days, reconsider priority
-  - Single blocking question: does Telesense expose account numbers in its dashboard UI?
-Files: New — src/telesense-scraper.ts, src/customer.ts (brief XML), dashboard/src/ (customer detail)
-Description: Telesense is a Salesforce dashboard with 3 product buttons (RHEL, OpenShift, AAP likely) showing customer utilization reports by AE, plus an account number view. Downloaded data is multi-page images of graphs — not structured data.
-  REQUIRED FIRST STEP (1-day spike): VNC into Telesense, determine: (1) Tableau or Lightning component? (2) Account numbers visible in UI? (3) Export options — structured data or PDF images only?
-  Decision after spike: Tableau + account numbers visible → build on CCSP template. PDFs only / no account numbers → deprioritize.
-  Build (if spike confirms feasibility):
-  - Scrape Telesense per-AE utilization data (CCSP scraper as template)
-  - Map account numbers → customers in customers.json
-  - Surface utilization signals on Customer Detail page
-  - Include utilization signals in brief XML as a new source_type
+Investigation: Telesense feasibility agent 2026-04-05 + VNC inspection 2026-04-05.
+  Dashboard URL: https://redhatcrm.lightning.force.com/analytics/dashboard/0FK6e000000iHuyGAE
+  Tech stack: Salesforce CRM Analytics (Einstein Analytics / Lightning component) — NOT Tableau embed. CCSP Tableau CSV template does NOT apply.
+  Filter workflow confirmed: Account Owner dropdown → EBS Account dropdown (populated with account numbers under that AE) → per-account data.
+  EBS Account numbers VISIBLE in UI ✅ — blocking question resolved, account mapping is feasible.
+  Products: 3 separate dashboards (identical layout, same filters): RHEL, OpenShift, Ansible (AAP).
+    - RHEL: high data density, primary target
+    - OpenShift: high data density, primary target
+    - Ansible: sparse data, lower priority
+  Data available per account:
+    - Health indicators (amber): Account Risk/Opportunity, Version Lifecycle, OpenShift Offering Usage, Unattached Subs, Telemetry status
+    - Core estimated usage time series (180-day window)
+    - Summary Trends section (below fold)
+  Data freshness: Updated daily (~11 PM prior day)
+  Download button: CONFIRMED image-only (screenshots of charts, not CSV/JSON). Structured data CANNOT be obtained via download.
+  Approach decision: Salesforce Analytics REST API is REQUIRED — download is useless for machine consumption. Einstein Analytics has a documented REST API for querying dataset values directly. Fallback: Playwright DOM scraping of rendered Lightning component text values. Vision API approach is NOT viable for production use (images only, no numbers).
+  CCSP scraper is NOT the template. sf-scraper.ts (Salesforce login) IS the right starting point for auth.
+  Account number mapping: EBS Account # → customers.json accountNumbers field (same pattern as supportable/ccsp).
+Files: New — src/telesense-scraper.ts, src/customer.ts (brief XML), dashboard/src/ (customer detail signals)
+Next: Architecture decision — probe Salesforce Analytics REST API with existing SF session. Check network tab in browser for XHR calls made by the Lightning dashboard (these will reveal the actual API endpoint and dataset IDs being queried). If dataset IDs are visible, structured JSON is retrievable without scraping.
 
 ### BKL-W3-11 | Account Details header — mystery "In Progress" label next to AE name
 Status: ✅ DONE 2026-04-05 — Root cause was fetchCustomerMeetings returning 30-day window sorted ascending; meetings[0] was the oldest past meeting, triggering "In progress" permanently. Fixed nextMeetingLabel() to use find() with 2h lookback window instead of index 0. Changed "In progress" → "Meeting in progress". CustomerDetailPage.tsx:275-290.
