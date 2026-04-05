@@ -190,13 +190,13 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           })
           if (autoDomainMatch) return true
 
-          // 3. Title: any significant keyword from customer name appears as a word in the title
+          // 3. Title: any significant keyword from customer name appears as a whole word in the title
           const keywords = custKeywords(c.name)
           const titleNorm = title.toLowerCase()
-          if (keywords.some(kw => new RegExp(`\\b${kw}`, 'i').test(titleNorm))) return true
+          if (keywords.some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(titleNorm))) return true
 
           // 4. Aliases: check title against aliases too
-          if (c.aliases?.some(alias => custKeywords(alias).some(kw => new RegExp(`\\b${kw}`, 'i').test(titleNorm)))) return true
+          if (c.aliases?.some(alias => custKeywords(alias).some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(titleNorm)))) return true
 
           return false
         })
