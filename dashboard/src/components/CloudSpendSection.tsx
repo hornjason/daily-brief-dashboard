@@ -97,7 +97,7 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
                   className={`w-full text-left rounded px-2 py-1.5 transition-colors ${isActive ? 'bg-border/40' : 'hover:bg-border/20'}`}
                 >
                   <div className="flex justify-between text-sm mb-1 min-w-0">
-                    <span className={`font-medium truncate min-w-0 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>
+                    <span className={`font-medium truncate min-w-0 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`} title={ae}>
                       {ae.split(' ')[0]}
                     </span>
                     <span className="text-xs text-text-secondary shrink-0 ml-2 tabular-nums">
@@ -342,10 +342,11 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
                 const color = ACCOUNT_COLORS[i % ACCOUNT_COLORS.length]
                 return (
                   <div key={name}>
-                    <div className="flex items-center justify-between text-xs mb-0.5">
+                    <div className="flex items-center justify-between text-xs mb-0.5 min-w-0">
                       <Link
                         to={`/dashboard/customer/${encodeURIComponent(shortName(name))}`}
                         className="text-text-primary truncate flex-1 min-w-0 mr-2 hover:underline"
+                        title={shortName(name)}
                       >
                         {i + 1}. {shortName(name)}
                       </Link>

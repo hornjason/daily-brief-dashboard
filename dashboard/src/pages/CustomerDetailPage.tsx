@@ -708,9 +708,9 @@ function ActivityTimeline({
               {/* Content */}
               <div className="flex-1 px-4 py-3 flex items-start justify-between gap-3 min-w-0">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex items-center gap-2 mb-0.5 min-w-0">
                     <Icon className="w-3 h-3 text-text-secondary shrink-0" />
-                    <p className={`text-xs font-medium leading-snug truncate ${item.isFuture ? 'text-text-primary' : 'text-text-primary'}`}>
+                    <p className={`text-xs font-medium leading-snug truncate ${item.isFuture ? 'text-text-primary' : 'text-text-primary'}`} title={item.title}>
                       {item.actionRequired && <AlertTriangle className="w-3 h-3 inline mr-1 text-warning" />}
                       {item.title}
                     </p>
@@ -721,7 +721,7 @@ function ActivityTimeline({
                     )}
                   </div>
                   {item.subtitle && (
-                    <p className="text-xs text-text-secondary truncate pl-5">{item.subtitle}</p>
+                    <p className="text-xs text-text-secondary truncate pl-5" title={item.subtitle}>{item.subtitle}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -969,14 +969,14 @@ function PipelineCard({ customerName }: { customerName: string }) {
               <button
                 key={opp.oppNumber}
                 onClick={() => setSelectedOpp(opp)}
-                className="w-full text-left flex items-center gap-2 py-1.5 px-1 -mx-1 hover:bg-border/20 rounded cursor-pointer"
+                className="w-full text-left flex items-center gap-2 py-1.5 px-1 -mx-1 hover:bg-border/20 rounded cursor-pointer min-w-0"
                 tabIndex={0}
               >
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: stageColor }} />
                 <span className="text-xs font-medium shrink-0 w-10" style={{ color: stageColor }}>
                   {opp.forecastCategory === 'Best Case' ? 'Best' : opp.forecastCategory}
                 </span>
-                <span className="text-xs text-text-primary truncate flex-1 min-w-0">{opp.oppName}</span>
+                <span className="text-xs text-text-primary truncate flex-1 min-w-0" title={opp.oppName}>{opp.oppName}</span>
                 <span className={`text-xs shrink-0 ${PIPE_URGENCY_COLORS[urgency]}`}>{pipeDate(opp.closeDate)}</span>
                 <span className="text-xs font-mono text-text-primary shrink-0">{fmtCurrency(opp.acv)}</span>
                 {opp.renewal && <span className="text-xs text-text-secondary/75 shrink-0">↻</span>}
@@ -1147,7 +1147,7 @@ export function CustomerDetailPage() {
               Accounts
             </button>
             <span className="text-text-secondary/50 shrink-0">/</span>
-            <span className="text-text-primary font-medium truncate">{customerName}</span>
+            <span className="text-text-primary font-medium truncate" title={customerName}>{customerName}</span>
           </nav>
 
           {/* Right: sync state */}

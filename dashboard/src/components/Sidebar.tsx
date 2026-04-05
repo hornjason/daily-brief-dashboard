@@ -157,10 +157,10 @@ export function Sidebar({ active, onActiveChange, aes }: SidebarProps) {
                   <button
                     key={ae.name}
                     onClick={() => scrollToAeGroup(ae.name)}
-                    className="w-full flex items-center gap-2 pl-10 pr-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-colors"
+                    className="w-full flex items-center gap-2 pl-10 pr-3 py-1.5 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-colors min-w-0"
                     aria-label={`${ae.name} - ${ae.customerCount} customers`}
                   >
-                    <span className="truncate">{ae.name}</span>
+                    <span className="truncate" title={ae.name}>{ae.name}</span>
                     <span className="ml-auto text-text-secondary tabular-nums">{ae.customerCount}</span>
                   </button>
                 ))}

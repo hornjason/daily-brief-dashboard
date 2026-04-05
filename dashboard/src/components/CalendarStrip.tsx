@@ -314,8 +314,8 @@ function CustomerPrepCard({
         </div>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-text-primary truncate">{customerName}</div>
-            <div className="text-xs text-text-secondary truncate mt-0.5">{ev.title}</div>
+            <div className="text-sm font-semibold text-text-primary truncate" title={customerName}>{customerName}</div>
+            <div className="text-xs text-text-secondary truncate mt-0.5" title={ev.title}>{ev.title}</div>
           </div>
           <a href={`/dashboard/customer/${encodeURIComponent(customerName)}`} className="shrink-0 text-text-secondary hover:text-accent transition-colors" title="Open account detail">
             <ArrowRight className="w-4 h-4" />
@@ -400,7 +400,7 @@ function CustomerPrepCard({
               <span className="font-medium">Sev{topCase.severity}</span>
               {customerCases.length > 1 && ` (+${customerCases.length - 1} more)`}
               {' · '}
-              <span className="text-text-secondary line-clamp-1">{topCase.summary}</span>
+              <span className="text-text-secondary line-clamp-1" title={topCase.summary}>{topCase.summary}</span>
             </span>
           </div>
         ) : (
@@ -431,14 +431,14 @@ function InternalMeetingCard({ ev, onAgendaOpen }: { ev: CalendarEvent; onAgenda
   return (
     <div className="bg-bg border border-border rounded-xl p-3.5 flex items-center gap-3">
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
+        <div className="flex items-center gap-2 mb-0.5 min-w-0">
           <Clock className="w-3 h-3 text-text-secondary shrink-0" />
           <span className="text-xs font-mono text-text-secondary">{formatTime(ev.start)}</span>
           {ev.organizer && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-border/50 text-text-secondary truncate">{ev.organizer}</span>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-border/50 text-text-secondary truncate" title={ev.organizer}>{ev.organizer}</span>
           )}
         </div>
-        <p className="text-sm text-text-primary truncate">{ev.title}</p>
+        <p className="text-sm text-text-primary truncate" title={ev.title}>{ev.title}</p>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {ev.description && (
@@ -470,7 +470,7 @@ function WeekCard({ ev, onAgendaOpen }: { ev: CalendarEvent; onAgendaOpen: (ev: 
           <span className="text-xs font-mono text-accent">{formatTime(ev.start)}</span>
           <span className="text-xs text-text-secondary">{formatDay(ev.start)}</span>
         </div>
-        <div className="text-sm font-medium text-text-primary truncate">{ev.title}</div>
+        <div className="text-sm font-medium text-text-primary truncate" title={ev.title}>{ev.title}</div>
       </div>
       {(ev.customers?.length || ev.organizer) ? (
         <div className="flex items-center gap-1.5 flex-wrap">

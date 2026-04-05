@@ -73,7 +73,7 @@ export function SupportCasesTable({ cases, loading }: SupportCasesTableProps) {
       columnHelper.accessor('summary', {
         header: 'Summary',
         cell: (info) => (
-          <span className="text-text-primary text-sm truncate block max-w-xs">{info.getValue()}</span>
+          <span className="text-text-primary text-sm truncate block max-w-xs" title={info.getValue()}>{info.getValue()}</span>
         ),
       }),
       columnHelper.accessor('status', {

@@ -370,7 +370,7 @@ function InitialLoadSection({ scrapeRunning }: { scrapeRunning: boolean }) {
           </div>
         )}
         {loadStatus?.running && loadStatus.currentCustomer && (
-          <div className="text-gray-300 truncate">Current: {loadStatus.currentCustomer}</div>
+          <div className="text-gray-300 truncate" title={loadStatus.currentCustomer}>Current: {loadStatus.currentCustomer}</div>
         )}
         {!loadStatus?.running && loadStatus?.completedAt && (
           <div>Last run: <span className="text-gray-300">{formatRelTime(loadStatus.completedAt)}</span>
@@ -607,7 +607,7 @@ function BatchIntelligenceSection() {
               />
             </div>
             {batchState.current && (
-              <div className="text-gray-300 truncate">Current: {batchState.current}</div>
+              <div className="text-gray-300 truncate" title={batchState.current}>Current: {batchState.current}</div>
             )}
           </>
         )}
@@ -698,7 +698,7 @@ function ScrapeHistorySection() {
                     ? `${Math.round(row.durationMs / 60000)}m`
                     : `${Math.round(row.durationMs / 1000)}s`}
                 </td>
-                <td className="px-4 py-2 text-text-secondary truncate max-w-[200px]">{row.error ?? '—'}</td>
+                <td className="px-4 py-2 text-text-secondary truncate max-w-[200px]" title={row.error ?? undefined}>{row.error ?? '—'}</td>
               </tr>
             ))}
           </tbody>

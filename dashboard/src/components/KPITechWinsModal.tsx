@@ -82,8 +82,8 @@ export default function KPITechWinsModal({ open, onClose, opps }: KPITechWinsMod
         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: stageColor }} />
         <span className="text-xs font-semibold w-12 shrink-0" style={{ color: stageColor }}>{stageLabel}</span>
         <div className="flex-1 min-w-0">
-          <p className="text-xs text-text-secondary truncate">{opp.accountName}</p>
-          <p className="text-xs font-medium text-text-primary truncate leading-snug group-hover:text-accent transition-colors">{opp.oppName}</p>
+          <p className="text-xs text-text-secondary truncate" title={opp.accountName}>{opp.accountName}</p>
+          <p className="text-xs font-medium text-text-primary truncate leading-snug group-hover:text-accent transition-colors" title={opp.oppName}>{opp.oppName}</p>
         </div>
         <div className="text-right shrink-0 ml-2">
           <p className="text-xs font-mono font-semibold text-text-primary">{fmtAcv(opp.acv)}</p>

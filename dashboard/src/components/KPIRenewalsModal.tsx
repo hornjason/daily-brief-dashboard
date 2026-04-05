@@ -122,8 +122,8 @@ export default function KPIRenewalsModal({ title, accentClass, rows, byCustomer,
               </div>
               <div className="space-y-1.5">
                 {groupRows.map((row, i) => (
-                  <div key={i} className={`flex items-center justify-between gap-3 text-xs px-3 py-2 rounded-lg border ${urgencyBg(row.daysLeft)}`}>
-                    <span className="text-text-primary truncate flex-1">{row.productDescription}</span>
+                  <div key={i} className={`flex items-center justify-between gap-3 text-xs px-3 py-2 rounded-lg border min-w-0 ${urgencyBg(row.daysLeft)}`}>
+                    <span className="text-text-primary truncate flex-1" title={row.productDescription}>{row.productDescription}</span>
                     <span className="text-text-secondary shrink-0">x{row.quantity}</span>
                     <span className={`font-mono font-semibold shrink-0 tabular-nums ${urgencyColor(row.daysLeft)}`}>
                       {daysLabel(row.daysLeft)}
@@ -156,12 +156,12 @@ export default function KPIRenewalsModal({ title, accentClass, rows, byCustomer,
                   {freeTrialRows.map((row, i) => {
                     const badge = classifyTierBadge(row)
                     return (
-                      <div key={i} className="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded-lg border border-border/30 bg-transparent">
+                      <div key={i} className="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded-lg border border-border/30 bg-transparent min-w-0">
                         <span className="inline-flex items-center gap-2 truncate flex-1 min-w-0">
                           <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-border/30 text-text-secondary">
                             {badge}
                           </span>
-                          <span className="text-text-secondary truncate">{row.productDescription}</span>
+                          <span className="text-text-secondary truncate" title={row.productDescription}>{row.productDescription}</span>
                         </span>
                         <span className="text-text-secondary/60 shrink-0">x{row.quantity}</span>
                         <span className="font-mono text-text-secondary shrink-0 tabular-nums">

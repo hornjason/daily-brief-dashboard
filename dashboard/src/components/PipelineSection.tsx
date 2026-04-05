@@ -363,12 +363,12 @@ export function PipelineSection({ data, loading, error, onRefresh }: Props) {
                 const urgency = closeDateUrgency(opp.closeDate)
                 const stageColor = STAGE_COLORS[opp.forecastCategory] ?? STAGE_COLORS.Omitted
                 return (
-                  <button key={opp.oppNumber} onClick={() => setSelectedOpp(opp)} className="w-full text-left flex items-center gap-2 py-1 px-1 -mx-1 hover:bg-border/20 rounded group cursor-pointer" tabIndex={0}>
+                  <button key={opp.oppNumber} onClick={() => setSelectedOpp(opp)} className="w-full text-left flex items-center gap-2 py-1 px-1 -mx-1 hover:bg-border/20 rounded group cursor-pointer min-w-0" tabIndex={0}>
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: stageColor }} />
                     <span className="text-xs font-medium shrink-0 w-10" style={{ color: stageColor }}>
                       {opp.forecastCategory === 'Best Case' ? 'Best' : opp.forecastCategory}
                     </span>
-                    <span className="text-xs text-text-primary truncate flex-1 min-w-0">{opp.accountName}</span>
+                    <span className="text-xs text-text-primary truncate flex-1 min-w-0" title={opp.accountName}>{opp.accountName}</span>
                     <span className={`text-xs shrink-0 ${URGENCY_COLORS[urgency]}`}>{fmtDate(opp.closeDate)}</span>
                     <span className="text-xs font-mono text-text-primary shrink-0">{fmt(opp.acv)}</span>
                     {opp.renewal && <span className="text-xs text-text-secondary/75 shrink-0">↻</span>}

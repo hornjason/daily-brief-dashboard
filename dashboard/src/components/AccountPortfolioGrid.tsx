@@ -260,11 +260,11 @@ function AccountCard({
       {/* Header — links to customer page */}
       <a
         href={`/dashboard/customer/${encodeURIComponent(account.name)}`}
-        className="flex items-center justify-between mb-3"
+        className="flex items-center justify-between mb-3 min-w-0"
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <HealthDot score={health.score} breakdown={health.breakdown as any} />
-          <span className="text-sm font-semibold text-text-primary group-hover:text-accent transition-colors truncate">
+          <span className="text-sm font-semibold text-text-primary group-hover:text-accent transition-colors truncate" title={account.name}>
             {account.name}
           </span>
         </div>
@@ -335,9 +335,9 @@ function AccountCard({
       </div>
 
       {nextMeeting ? (
-        <div className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent">
+        <div className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent min-w-0">
           <Calendar className="w-3 h-3 shrink-0" />
-          <span className="font-medium truncate">{formatDate(nextMeeting.start)} · {nextMeeting.title}</span>
+          <span className="font-medium truncate" title={`${formatDate(nextMeeting.start)} · ${nextMeeting.title}`}>{formatDate(nextMeeting.start)} · {nextMeeting.title}</span>
         </div>
       ) : (
         <div className="flex items-center gap-1.5 text-xs text-text-secondary/75">

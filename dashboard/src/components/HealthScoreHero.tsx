@@ -42,7 +42,7 @@ export default function HealthScoreHero({ score, status, breakdown }: HealthScor
       </div>
       <div className="grid grid-cols-3 gap-2">
         {gauges.map(g => (
-          <div key={g.label} className="flex flex-col gap-1">
+          <div key={g.label} className="flex flex-col gap-1 min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-signal text-text-secondary">{g.label}</span>
               <span className="text-signal tabular-nums text-text-primary">{g.score}</span>
