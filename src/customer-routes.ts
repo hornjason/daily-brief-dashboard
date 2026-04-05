@@ -590,9 +590,13 @@ export function registerCustomerRoutes(app: Hono): void {
     if (question.length > 500) {
       return c.json({ error: 'question must be 500 characters or fewer' }, 400)
     }
+    // Validate customerName against known customers — prevents prompt injection via free-form text
+    const validatedCustomerName = customerName && customers.some(c => c.name === customerName)
+      ? customerName
+      : undefined
 
     try {
-      const result = await queryProductIntelligence(product, question.trim(), customerName)
+      const result = await queryProductIntelligence(product, question.trim(), validatedCustomerName)
       return c.json(result)
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)

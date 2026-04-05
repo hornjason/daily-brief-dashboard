@@ -49,9 +49,10 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
 // ── Source chip ───────────────────────────────────────────────────────────────
 
 function SourceChip({ title, url }: { title: string; url: string }) {
+  const safeHref = url.startsWith('https://') ? url : '#'
   return (
     <a
-      href={url}
+      href={safeHref}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border border-border/60 bg-bg text-text-secondary hover:text-[#00BCD4] hover:border-[#00BCD4]/40 transition-colors"

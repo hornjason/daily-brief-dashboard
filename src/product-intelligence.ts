@@ -90,7 +90,8 @@ async function callGeminiGroundedRaw(opts: {
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Gemini grounded API error ${res.status}: ${err.slice(0, 300)}`)
+    console.error(`[product-intelligence] Gemini error ${res.status}: ${err.slice(0, 500)}`)
+    throw new Error(`Gemini grounded API error ${res.status}`)
   }
 
   const json = await res.json() as any
@@ -127,10 +128,11 @@ function extractSources(json: any): ProductSource[] {
     if (!web?.uri) continue
     if (seen.has(web.uri)) continue
     seen.add(web.uri)
-    sources.push({
-      title: web.title ?? new URL(web.uri).hostname,
-      url:   web.uri,
-    })
+    let title = web.title
+    if (!title) {
+      try { title = new URL(web.uri).hostname } catch { title = web.uri }
+    }
+    sources.push({ title, url: web.uri })
   }
 
   // Fallback: groundingSupports — older grounding format
