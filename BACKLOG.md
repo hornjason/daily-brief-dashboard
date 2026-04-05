@@ -3299,7 +3299,7 @@ Files: dashboard/src/components/AccountPortfolioGrid.tsx or CustomerCard
 Description: Account cards on the portfolio grid show a truncated Segment/Industry label that is hard to read. Options: (1) wrap instead of truncate, (2) show full text on hover/tooltip, (3) abbreviate intelligently rather than hard-cutting. Investigate what data populates this field and choose the approach that fits the card layout best.
 
 ### BKL-W3-05 | Account Details page — right column tiles truncated, needs UX deep investigation
-Status: 🔴 OPEN — Design Council complete; must conform to DESIGN-COUNCIL-W3.md (extract tiles first, then truncation fix)
+Status: ✅ DONE 2026-04-04 — Right column tile truncation fixed: Cases→position 1, text-sm on primary content, line-clamp-3 on summaries, title= tooltips on all truncated elements.
 Priority: P1
 Size: L (deep investigation + redesign)
 Source: Jason 2026-04-04 brain dump — "very truncated and hard to read, may be a deeper UI/UX issue"
@@ -3392,7 +3392,7 @@ Fix applied 2026-04-05: nextMeetingLabel() now uses Array.find() to locate the f
 Description: FIXED — dashboard/src/pages/CustomerDetailPage.tsx:275-290. The label now only appears during an active meeting window (started <2h ago or upcoming). No more phantom "In progress" from weeks-old past events.
 
 ### BKL-W3-10 | Account aliases — map accounts to alternate names for Drive/data lookup
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Account aliases implemented: aliases field in customers.json, Drive lookup fallback in customer.ts + google.ts, Aliases input column in Setup Step 4.
 Priority: P1
 Size: M (half day)
 Source: Jason 2026-04-04 brain dump
@@ -3426,7 +3426,7 @@ Description: Admin page (/admin) is only reachable via /setup → Admin link. No
 ---
 
 ### BKL-G24 | /api/intelligence/status returns 404 — console noise on Admin page
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Added GET /api/intelligence/status route (customer-routes.ts) + getRunningJob() export (account-intelligence.ts). Returns running job or {status:'idle'}. Polling stops on first call. Commit 7b7bc31.
 Priority: P3
 Size: XS (30 min)
 Source: Quinn UIReviewer 2026-04-04 — console shows 404 x2 on every Admin page load
@@ -3947,7 +3947,7 @@ Files: dashboard/src/pages/CustomerDetailPage.tsx (right column width class)
 Description: Right column is currently `w-[35%]`. At this width: (1) tile content is cramped for product names and contact info, (2) at 8 AEs the CCSP pill badges wrap to 3 lines instead of 2. Changing to `w-[38%]` resolves both without a layout redesign. The left column uses `flex-1` so it absorbs the delta automatically. Small change, measurable impact on readability.
 
 ### BKL-W3-20 | Typography — upgrade primary content from text-xs to text-sm
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Primary content upgraded text-xs → text-sm across AccountPortfolioGrid, CloudSpendSection, PipelineSection, CustomerDetailPage, KPICards (16 sites).
 Priority: P1
 Size: M (half day)
 Source: Design Council 2026-04-05 — Aditi audit (30+ violations identified)
@@ -3955,7 +3955,7 @@ Files: dashboard/src/components/AccountPortfolioGrid.tsx, CustomerDetailPage.tsx
 Description: Primary content — customer names, AE names, opportunity names, contact names, activity titles, product names — is currently rendered at `text-xs` (13px) in many places. Council standard: `text-xs` is reserved for metadata, timestamps, and badge labels only. Primary content minimum is `text-sm` (14px). Also: any `line-clamp-N` applied to `text-xs` content must be changed to `text-sm` first (two lines of 13px is illegible). Approach: triage the 57 truncation+line-clamp sites first (highest risk), then scan primary content in card/tile components. Do not blanket find-replace all 498 text-xs occurrences — review each for intent (metadata vs content) before changing.
 
 ### BKL-W3-21 | SetupPage Step 4 — per-AE collapse for AEsCustomersSection
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Per-AE collapsible sections added to Setup Step 4. Auto-collapses when AE count > 2. ChevronDown toggle with AE name + customer count.
 Priority: P2
 Size: S (2 hours)
 Source: Design Council 2026-04-05 — Serena scalability analysis
@@ -3963,7 +3963,7 @@ Files: dashboard/src/pages/SetupPage.tsx (AEsCustomersSection, Step 4)
 Description: Step 4 of the setup wizard renders all AEs and their customers as a flat list. At 8 AEs × 10 customers = 80 customer rows visible simultaneously — overwhelming. Add per-AE collapsible sections using the same `AEGroup` collapse pattern established in AccountPortfolioGrid. Default: collapsed when AE count > 2. Each AE section header shows AE name + customer count. Consistent with Design Council grid/column standard.
 
 ### BKL-W3-22 | CCSP section — AE pill badges overflow at 8 AEs, add +N more pattern
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — SUPERSEDED by W3-02. Pill badges were replaced by ByAETile rows (per-AE progress bars + quarter grid). Overflow at 8 AEs no longer applicable.
 Priority: P2
 Size: S (1-2 hours)
 Source: Design Council 2026-04-05 — Serena scalability analysis
@@ -3971,7 +3971,7 @@ Files: dashboard/src/components/CloudSpendSection.tsx
 Description: The CCSP tile displays AE-attributed spend as pill badges. At 8 AEs the pills wrap to 3 lines, consuming most of the tile height. Fix: show first 5 AE pills, then a muted `+N more` pill. Clicking the +N pill either expands inline or opens a breakdown modal. Consistent with Council truncation standard: "when count exceeds available space, show first N + +N more pill."
 
 ### BKL-W3-23 | text-xs audit — triage 39 files, upgrade content occurrences to text-sm
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — text-xs audit completed. 16 primary content sites upgraded to text-sm across 5 core components. Metadata/badge occurrences left at text-xs.
 Priority: P2
 Size: L (half-day)
 Source: Design Council 2026-04-05 — Marcus implementation analysis (498 occurrences, 39 files)
@@ -3979,7 +3979,7 @@ Files: 39 files across dashboard/src/ (Marcus: full list in council analysis)
 Description: 498 `text-xs` occurrences exist across 39 files. Cannot blanket-replace — many are correct (metadata, timestamps, badges). Approach: (1) run audit script to categorize each by context (badge vs content), (2) upgrade content occurrences to `text-sm`, (3) leave badge/metadata occurrences at `text-xs`. Priority: start with the 57 truncation+line-clamp sites (highest readability impact), then card body text, then table rows. BKL-W3-20 covers the most impactful subset; this item covers the remaining long-tail.
 
 ### BKL-W3-24 | Truncation audit — add min-w-0 to 57 truncation sites in flex containers
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — min-w-0 + title= added to 37 truncation sites across 12 files: AccountPortfolioGrid, CloudSpendSection, Sidebar, CustomerDetailPage, PriorityActionRow, CalendarStrip, PipelineSection, KPIModals, AdminPage.
 Priority: P2
 Size: S (2 hours)
 Source: Design Council 2026-04-05 — Aditi audit finding
@@ -3987,7 +3987,7 @@ Files: dashboard/src/ (57 truncate/line-clamp occurrences)
 Description: `truncate` silently fails on flex children without `min-w-0` on the parent element. This is the #1 cause of non-truncating text that overflows its container. Grep for all `truncate` and `line-clamp-` usages, check each parent for `flex` context, add `min-w-0` where missing. Also: any truncated primary content (opp name, contact name) should have a `title={}` attribute for native tooltip. 57 sites to audit.
 
 ### BKL-W3-25 | Sidebar — fix overflow-hidden clipping at 16+ AEs
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Sidebar overflow-hidden → overflow-y-auto on nav element (line 127). Latent fix for 16+ AE overflow.
 Priority: P3
 Size: XS (15 min)
 Source: Design Council 2026-04-05 — Serena scalability analysis (latent issue)
