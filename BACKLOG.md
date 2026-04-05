@@ -894,7 +894,7 @@ Fix:
   10. Jason confirmed "Industry" column added to SF report (2026-04-02). This enables automatic industry-per-customer detection from live SF data — supplements or replaces AI01's web search approach. Industry from SF is authoritative (CRM-maintained) vs AI-inferred.
 
 ### BKL-F10b | Wire real signal data to F10a components — replace mock data
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-05 — TopActionsPanel now uses morningSummaryApi signals (case signals first, then meeting-prep, then alpha). Case URL chip + Google Calendar create-event chip per action. Commit 9a1a5c1.
 Priority: P2
 Size: S (half day)
 Source: Quinn QA validation 2026-04-05 — components pass, data pipeline not connected
@@ -2224,7 +2224,7 @@ Confirmed data sources (2026-04-05):
 Related: BKL-W3-12 (parent implementation task), BKL-AI16 (fulfilled by W3-12 Phase 3)
 
 ### BKL-AI16 | Interactive product Q&A — Gemini-powered query interface for AAP, OCP, RHEL
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-05 — ProductQueryPanel (3 tabs: RHEL/OCP/AAP), useProductQuery hook, POST /api/product-query, src/product-intelligence.ts with callGeminiGroundedRaw, source extraction, confidence scoring, cost tracking. Embedded in CustomerDetailPage. Commit 633d882 merged to main.
 Priority: P2
 Size: S (4 hours — revised down from M after research)
 Source: Jason 2026-04-02 — "a way to query this information directly like a gemini query to ask questions toward each product"
