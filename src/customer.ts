@@ -252,7 +252,6 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
         }
       }
       if (customerFolderId) break
-      }
     }
   }
 
