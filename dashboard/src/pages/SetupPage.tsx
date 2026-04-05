@@ -1359,6 +1359,13 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
   const [sfReports, setSfReports] = useState<SfReport[]>([])
   const [folderValidateError, setFolderValidateError] = useState<string | null>(null)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
+  const [collapsedAEs, setCollapsedAEs] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (aes.length > 2 && collapsedAEs.size === 0) {
+      setCollapsedAEs(new Set(aes.map(ae => ae.id)))
+    }
+  }, [aes.length])
 
   // Load AEs and customers from server
   useEffect(() => {
@@ -1616,8 +1623,46 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
         Configure your Account Executives and their customers. Each AE can have a Drive folder, Salesforce report, and Tableau dashboard.
       </p>
 
-      {aes.map((ae, aeIdx) => (
-        <div key={ae.id} className="bg-bg rounded-xl p-5 border border-border space-y-4">
+      {aes.map((ae, aeIdx) => {
+        const isCollapsed = collapsedAEs.has(ae.id)
+        return (
+        <div key={ae.id} className="bg-bg rounded-xl border border-border overflow-hidden">
+          {aes.length > 1 && (
+            <button
+              onClick={() => setCollapsedAEs(prev => {
+                const next = new Set(prev)
+                if (next.has(ae.id)) next.delete(ae.id)
+                else next.add(ae.id)
+                return next
+              })}
+              className="w-full flex items-center justify-between px-5 py-3 hover:bg-surface-hover transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                <span className="text-sm font-semibold text-text-primary">{ae.name.trim() || `AE #${aeIdx + 1}`}</span>
+                <span className="text-xs text-text-secondary">{ae.customers.length} customer{ae.customers.length !== 1 ? 's' : ''}</span>
+              </div>
+              {removeConfirmId === ae.id ? (
+                <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                  <span className="text-xs text-critical">Remove this AE and all customers?</span>
+                  <button onClick={(e) => { e.stopPropagation(); confirmRemoveAE(ae.id) }} className="text-xs bg-critical hover:bg-critical/80 text-white px-2 py-0.5 rounded">Remove</button>
+                  <button onClick={(e) => { e.stopPropagation(); setRemoveConfirmId(null) }} className="text-xs text-text-secondary hover:text-white">Cancel</button>
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeAE(ae.id) }}
+                  className="flex items-center gap-1 text-xs text-text-secondary hover:text-critical transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Remove AE
+                </button>
+              )}
+            </button>
+          )}
+
+          {(!isCollapsed || aes.length <= 1) && (
+          <div className="p-5 space-y-4">
+          {aes.length <= 1 && (
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-text-primary">{ae.name.trim() || `AE #${aeIdx + 1}`}</span>
             {removeConfirmId === ae.id ? (
@@ -1636,6 +1681,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
               </button>
             )}
           </div>
+          )}
 
           {/* AE fields */}
           <div className="grid grid-cols-1 gap-3">
@@ -1844,8 +1890,11 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
               Add Customer
             </button>
           </div>
+          </div>
+          )}
         </div>
-      ))}
+        )
+      })}
 
       {folderValidateError && (
         <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2">{folderValidateError}</p>

@@ -124,7 +124,7 @@ export function Sidebar({ active, onActiveChange, aes }: SidebarProps) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-2 py-4 space-y-1 overflow-hidden">
+      <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <div key={item.label} className="relative group">
             <button
