@@ -13,8 +13,9 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 ## Deploy
 
 - **Always `make rebuild`** — never raw podman/docker commands
-- **AGENTS: Never run `make rebuild`** — only Jason runs it, always from the project root. Agent rebuilds from worktrees wipe config and overwrite other agents' changes. Agents verify with `curl` only. The Makefile now enforces this with a worktree guard — `make build` will exit 1 if run from a `.claude/worktrees/` path.
-- **One rebuild, at the end, from project root** — when multiple agents work in parallel, all changes must be merged to main before a single rebuild. Never rebuild mid-task from a worktree.
+- **Primary DA runs `make rebuild`** from `/Users/jhorn/.claude/PAI/Projects/DailyBriefDashboard/` after all changes are merged to main. Run it autonomously — do not ask Jason.
+- **AGENTS: Never run `make rebuild`** — background/worktree agents verify with `curl` only. Worktree rebuilds use stale data/config and silently destroy in-flight changes. The Makefile enforces this with a worktree guard — `make build` exits 1 from a `.claude/worktrees/` path.
+- **One rebuild, at the end, from project root** — when multiple agents work in parallel, merge all changes to main first, then the primary DA runs one rebuild.
 - Verify: `curl -s http://localhost:7777/api/aes`
 - Container: `pai-dashboard` | Port: `7777` | VNC: `localhost:6080`
 
