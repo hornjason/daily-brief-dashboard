@@ -1328,16 +1328,17 @@ export function CustomerDetailPage() {
 
         {/* Right column — 35%, sticky scroll */}
         <aside className="hidden lg:block w-[38%] overflow-y-auto p-6 pl-3 space-y-4 border-l border-border/40">
-          {/* BKL-G14: StakeholderEngagementPanel moved to right column, below HealthScoreHero */}
+          {/* W3-05: Tile order — Cases first (most actionable), then Contacts, Products, Drive, Stakeholders */}
+          <CasesSection cases={sse.cases} loading={sectionLoading} />
+          <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
+          <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} />
+          <DriveSection files={sse.drive} loading={sectionLoading} />
+          {/* BKL-G14: StakeholderEngagementPanel moved to bottom of right column */}
           {stakeholderContacts.length > 0 && (
             <div className="bg-surface border border-border rounded-xl p-5">
               <StakeholderEngagementPanel contacts={stakeholderContacts} />
             </div>
           )}
-          <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} />
-          <CasesSection cases={sse.cases} loading={sectionLoading} />
-          <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
-          <DriveSection files={sse.drive} loading={sectionLoading} />
         </aside>
       </div>
     </div>

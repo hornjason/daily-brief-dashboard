@@ -54,13 +54,14 @@ export function DriveSection({ files, loading }: { files: any[]; loading: boolea
                     href={f.webViewLink?.startsWith('https://') ? f.webViewLink : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-text-primary hover:text-accent transition-colors flex items-center gap-1 truncate"
+                    className="text-sm text-text-primary hover:text-accent transition-colors flex items-center gap-1 min-w-0"
+                    title={f.name}
                   >
-                    <span className="truncate">{f.name}</span>
+                    <span className="line-clamp-1 break-all">{f.name}</span>
                     <ExternalLink className="w-3 h-3 shrink-0" />
                   </a>
                 ) : (
-                  <span className="text-xs text-text-primary truncate">{f.name}</span>
+                  <span className="text-sm text-text-primary line-clamp-1 break-all" title={f.name}>{f.name}</span>
                 )}
               </div>
               {f.modifiedTime && (

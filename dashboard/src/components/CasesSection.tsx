@@ -186,9 +186,9 @@ export function CasesSection({ cases, loading }: { cases: CaseItem[]; loading: b
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${c.severity === '1' ? 'bg-critical/20 text-critical' : c.severity === '2' ? 'bg-warning/20 text-warning' : 'bg-border/40 text-text-secondary'}`}>
                         Sev{c.severity}
                       </span>
-                      {c.product && <span className="text-xs text-text-secondary truncate">{c.product}</span>}
+                      {c.product && <span className="text-sm text-text-secondary min-w-0" title={c.product}>{c.product}</span>}
                     </div>
-                    <p className="text-xs text-text-primary leading-snug line-clamp-2">{c.summary}</p>
+                    <p className="text-sm text-text-primary leading-snug line-clamp-3" title={c.summary}>{c.summary}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <div className={`text-xs font-medium ${statusColor(c.status)}`}>{c.status}</div>

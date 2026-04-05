@@ -99,8 +99,8 @@ export function KeyContacts({ meetings, emails, loading }: { meetings: any[]; em
                   {c.name[0]?.toUpperCase() ?? '?'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-text-primary truncate">{c.name}</p>
-                  <p className="text-xs text-text-secondary truncate">{c.email}</p>
+                  <p className="text-sm font-medium text-text-primary truncate" title={c.name}>{c.name}</p>
+                  <p className="text-xs text-text-secondary truncate" title={c.email}>{c.email}</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {c.sources.has('meeting') && <span title="Met in meeting"><Calendar className="w-3 h-3 text-text-secondary" /></span>}

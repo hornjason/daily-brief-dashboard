@@ -66,7 +66,7 @@ export function SubscriptionsSection({ products, loading }: { products: SheetPro
           {sorted.map((p, i) => (
             <div key={i} className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-text-primary truncate">{p.productDescription}</p>
+                <p className="text-sm font-medium text-text-primary line-clamp-2 min-w-0" title={p.productDescription}>{p.productDescription}</p>
                 <p className="text-xs text-text-secondary mt-0.5">
                   Qty: {p.quantity.toLocaleString()}{p.sku ? ` · ${p.sku}` : ''}
                 </p>
