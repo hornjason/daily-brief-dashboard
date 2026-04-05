@@ -1303,8 +1303,7 @@ export function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Customer Signal Banner (BKL-F10a) — top signal with action chips */}
-      {/* TODO: wire real signal data — derive from priorityAction or dedicated signal endpoint */}
+      {/* Customer Signal Banner (BKL-F10a, BKL-F10b) — top signal with action chips */}
       {priorityAction && (
         <div className="px-6 pt-3">
           <CustomerSignalBanner

@@ -124,6 +124,7 @@ function Dashboard() {
   const accountsApi = useApi<{ customers: AccountInfo[] }>(`/api/accounts?_=${refreshKey}`)
   const ccspApi      = useApi<CCSPSummary>(`/api/ccsp`)
   const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline`)
+  const morningSummaryApi = useApi<{ signals: Array<{ customer: string; type: string; severity: 'critical' | 'high' | 'medium'; text: string }> }>('/api/morning-summary')
   const scrapeStatus = useApi<{
     scrapers: {
       'rh-cases':    { state: string; lastSuccess: string | null; lastError: string | null }
@@ -163,6 +164,43 @@ function Dashboard() {
       meetingsThisWeek: snapshots.map(s => s.metrics.meetingsThisWeek ?? 0),
     }
   }, [kpiHistoryApi.data])
+
+  const topActions = useMemo<TopAction[]>(() => {
+    const signals = morningSummaryApi.data?.signals ?? []
+    if (!signals.length) return []
+
+    // Group by customer — signals are server-sorted by severity, first occurrence = top signal
+    const seen = new Map<string, typeof signals[number]>()
+    for (const sig of signals) {
+      if (!seen.has(sig.customer)) seen.set(sig.customer, sig)
+    }
+
+    const sorted = [...seen.values()].sort((a, b) => {
+      const aIsCase = a.type.includes('case')
+      const bIsCase = b.type.includes('case')
+      const aIsMeeting = a.type === 'meeting-prep'
+      const bIsMeeting = b.type === 'meeting-prep'
+      if (aIsCase !== bIsCase) return aIsCase ? -1 : 1
+      if (aIsMeeting !== bIsMeeting) return aIsMeeting ? -1 : 1
+      return a.customer.localeCompare(b.customer)
+    })
+
+    return sorted.slice(0, 3).map(sig => {
+      const caseMatch = sig.text.match(/case #(\d{6,})/i)
+      const chips: TopAction['chips'] = [
+        ...(caseMatch
+          ? [{ label: 'View Case', href: `https://access.redhat.com/support/cases/#/case/${caseMatch[1]}`, variant: 'case' as const }]
+          : []),
+        { label: 'Schedule', href: `https://calendar.google.com/calendar/r/eventedit?text=${encodeURIComponent(`Follow up: ${sig.text.slice(0, 60)}`)}`, variant: 'calendar' as const },
+      ]
+      return {
+        customerName: sig.customer,
+        signal: sig.text,
+        chips,
+        priority: sig.severity === 'critical' ? 'urgent' : 'this-week',
+      }
+    })
+  }, [morningSummaryApi.data])
 
   const anyLoading = kpisApi.loading || calendarApi.loading || calendarAllApi.loading || casesApi.loading || accountsApi.loading
 
@@ -268,36 +306,8 @@ function Dashboard() {
             {/* Morning Summary (R06) */}
             <MorningSummary />
 
-            {/* Top Actions (BKL-F10a) */}
-            {/* TODO: wire real signal data — replace mock with ranked signals from /api/morning-summary or dedicated endpoint */}
-            <TopActionsPanel actions={[
-              {
-                customerName: 'Acme Corp',
-                signal: 'Sev1 case open 3 days — escalation risk',
-                chips: [
-                  { label: 'View Case', href: 'https://access.redhat.com/support/cases/#/case/00000001', variant: 'case' as const },
-                  { label: 'Schedule Call', href: 'https://calendar.google.com/calendar/r/eventedit?text=Acme+Sev1+Follow-up', variant: 'calendar' as const },
-                ],
-                priority: 'urgent' as const,
-              },
-              {
-                customerName: 'Globex Inc',
-                signal: '$420K renewal closes in 12 days — no recent contact',
-                chips: [
-                  { label: 'View Opp', href: 'https://redhatcrm.lightning.force.com/lightning/r/Opportunity/0060000000XXXXX/view', variant: 'salesforce' as const },
-                  { label: 'Send Email', href: 'mailto:buyer@globex.com?subject=Renewal+Check-in', variant: 'email' as const },
-                ],
-                priority: 'urgent' as const,
-              },
-              {
-                customerName: 'Initech',
-                signal: 'Upcoming QBR prep — 3 open action items from last meeting',
-                chips: [
-                  { label: 'Schedule Prep', href: 'https://calendar.google.com/calendar/r/eventedit?text=Initech+QBR+Prep', variant: 'calendar' as const },
-                ],
-                priority: 'this-week' as const,
-              },
-            ]} />
+            {/* Top Actions (BKL-F10a, BKL-F10b) */}
+            <TopActionsPanel actions={topActions} />
 
             {/* KPI Cards */}
             <section id="section-command" data-section="section-command">
