@@ -14,6 +14,8 @@ import { customers, aes, CUSTOMERS_PATH } from './server-state.ts'
 import { lastCcspError } from './ccsp-scraper.ts'
 import { sfSyncError } from './sf-scraper.ts'
 import { runIntelligencePipeline, getJobStatus, getRunningJob } from './account-intelligence.ts'
+import { queryProductIntelligence } from './product-intelligence.ts'
+import type { ProductKey } from './product-intelligence.ts'
 import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS } from './cache-layer.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 
@@ -561,5 +563,39 @@ export function registerCustomerRoutes(app: Hono): void {
     }
     const percentComplete = _batchState.total > 0 ? Math.round((_batchState.completed / _batchState.total) * 100) : 0
     return c.json({ ..._batchState, elapsedSeconds, estimatedSecondsRemaining, percentComplete })
+  })
+
+  // ── BKL-AI16: Product Q&A — grounded Gemini query for RHEL / OCP / AAP ─────
+
+  app.post('/api/product-query', async (c) => {
+    let body: any
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Invalid JSON body' }, 400)
+    }
+
+    const { product, question, customerName } = body as {
+      product: ProductKey
+      question: string
+      customerName?: string
+    }
+
+    if (!product || !['rhel', 'ocp', 'aap'].includes(product)) {
+      return c.json({ error: "product must be 'rhel', 'ocp', or 'aap'" }, 400)
+    }
+    if (!question || typeof question !== 'string' || question.trim().length === 0) {
+      return c.json({ error: 'question is required' }, 400)
+    }
+    if (question.length > 500) {
+      return c.json({ error: 'question must be 500 characters or fewer' }, 400)
+    }
+
+    try {
+      const result = await queryProductIntelligence(product, question.trim(), customerName)
+      return c.json(result)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
   })
 }

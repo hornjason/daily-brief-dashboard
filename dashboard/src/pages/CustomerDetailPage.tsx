@@ -36,6 +36,7 @@ import { AccountCountPill } from '../components/AccountCountPill'
 import BriefAgePill from '../components/BriefAgePill'
 import { DataQualityBadge } from '../components/DataQualityBadge'
 import { AccountIntelligencePanel } from '../components/AccountIntelligencePanel'
+import { ProductQueryPanel } from '../components/ProductQueryPanel'
 import PriorityActionBanner from '../components/PriorityActionBanner'
 import CustomerSignalBanner from '../components/CustomerSignalBanner'
 import HealthScoreHero from '../components/HealthScoreHero'
@@ -1341,6 +1342,8 @@ export function CustomerDetailPage() {
             loading={sectionLoading}
           />
           <AccountIntelligencePanel customerName={customerName} />
+          {/* BKL-AI16: Product Q&A panel — grounded Gemini for RHEL / OCP / AAP */}
+          <ProductQueryPanel customerName={customerName} />
         </main>
 
         {/* Right column — 35%, sticky scroll */}
