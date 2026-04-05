@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import type { CCSPSummary } from '../types'
+import type { CCSPSummary, CCSPByAE } from '../types'
 import { fmtCurrency as fmt } from '../lib/format'
 import RelTime from './RelTime'
-import { Cloud, Building2, RefreshCw, AlertCircle, Users, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Cloud, Building2, RefreshCw, AlertCircle, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 
@@ -27,6 +27,168 @@ const PARTNER_COLORS: Record<string, string> = {
   Other:     '#6B7280',
 }
 
+// Derive all unique quarters across all AEs, sorted chronologically
+function allAEQuarters(byAE: CCSPByAE[]): string[] {
+  const set = new Set<string>()
+  for (const ae of byAE) {
+    for (const q of ae.byQuarter) {
+      set.add(q.quarter)
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b))
+}
+
+function fmtQuarterLabel(q: string): string {
+  // "2025-Q3" -> "2025 Q3"
+  return q.replace('-Q', ' Q')
+}
+
+interface ByAETileProps {
+  data: CCSPSummary | null
+  loading: boolean
+  activeAE: string | null
+  onSelectAE: (ae: string | null) => void
+}
+
+function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
+  const byAE = data?.byAE ?? []
+  const totalSpend = byAE.reduce((sum, a) => sum + a.acv, 0)
+  const maxAEAcv = byAE.reduce((m, a) => Math.max(m, a.acv), 0)
+  const quarters = byAE.length > 0 ? allAEQuarters(byAE) : []
+
+  // Dynamic grid columns: 1 label col + N quarter cols
+  // We use a CSS grid with inline style to handle variable quarter count
+  const gridCols = `auto repeat(${quarters.length}, minmax(0, 1fr))`
+
+  return (
+    <div className="bg-surface border border-border rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Users className="w-3.5 h-3.5 text-accent" />
+        <span className="text-sm font-semibold text-text-secondary">By AE</span>
+        {activeAE && (
+          <button
+            onClick={() => onSelectAE(null)}
+            className="ml-auto text-xs text-text-secondary hover:text-text-primary transition-colors"
+            aria-label="Clear AE filter"
+          >
+            clear
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-8 bg-border rounded animate-pulse-slow" />)}
+        </div>
+      ) : byAE.length === 0 ? (
+        <div className="text-xs text-text-secondary">No AE data</div>
+      ) : (
+        <>
+          {/* Per-AE rows with progress bars */}
+          <div className="space-y-2">
+            {byAE.map(({ ae, acv, topAccounts }) => {
+              const pct = maxAEAcv > 0 ? (acv / maxAEAcv) * 100 : 0
+              const customerCount = topAccounts?.length ?? 0
+              const isActive = activeAE === ae
+              return (
+                <button
+                  key={ae}
+                  onClick={() => onSelectAE(isActive ? null : ae)}
+                  className={`w-full text-left rounded px-2 py-1.5 transition-colors ${isActive ? 'bg-border/40' : 'hover:bg-border/20'}`}
+                >
+                  <div className="flex justify-between text-sm mb-1 min-w-0">
+                    <span className={`font-medium truncate min-w-0 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>
+                      {ae.split(' ')[0]}
+                    </span>
+                    <span className="text-xs text-text-secondary shrink-0 ml-2 tabular-nums">
+                      {fmt(acv)}{customerCount > 0 ? ` · ${customerCount}` : ''}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, backgroundColor: isActive ? '#58A6FF' : '#4B5563' }}
+                    />
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Quarter x AE grid */}
+          {quarters.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-border/50">
+              {/* Column headers */}
+              <div
+                className="gap-x-1 mb-1.5"
+                style={{ display: 'grid', gridTemplateColumns: gridCols }}
+              >
+                <span className="text-xs text-text-secondary"></span>
+                {quarters.map(q => (
+                  <span key={q} className="text-xs font-medium text-text-secondary text-center truncate min-w-0">
+                    {fmtQuarterLabel(q)}
+                  </span>
+                ))}
+              </div>
+              {/* AE rows */}
+              {byAE.map(({ ae, byQuarter }) => {
+                const qMap = new Map(byQuarter.map(q => [q.quarter, q.acv]))
+                const isActive = activeAE === ae
+                return (
+                  <div
+                    key={ae}
+                    className={`gap-x-1 py-0.5 rounded px-1 -mx-1 ${isActive ? 'bg-border/30' : 'hover:bg-border/20'}`}
+                    style={{ display: 'grid', gridTemplateColumns: gridCols }}
+                  >
+                    <span className={`text-xs font-medium truncate min-w-0 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>
+                      {ae.split(' ')[0]}
+                    </span>
+                    {quarters.map(q => {
+                      const acv = qMap.get(q) ?? 0
+                      return (
+                        <span key={q} className="text-xs text-text-primary text-center font-mono">
+                          {acv > 0 ? fmt(acv) : <span className="text-text-secondary/65">—</span>}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+              {/* Total row */}
+              {byAE.length > 1 && (
+                <div
+                  className="gap-x-1 py-0.5 border-t border-border/30 mt-0.5 pt-1 px-1 -mx-1"
+                  style={{ display: 'grid', gridTemplateColumns: gridCols }}
+                >
+                  <span className="text-xs font-medium text-text-secondary">Total</span>
+                  {quarters.map(q => {
+                    const total = byAE.reduce((sum, ae) => {
+                      const qMap = new Map(ae.byQuarter.map(qd => [qd.quarter, qd.acv]))
+                      return sum + (qMap.get(q) ?? 0)
+                    }, 0)
+                    return (
+                      <span key={q} className="text-xs text-text-primary text-center font-mono font-medium">
+                        {total > 0 ? fmt(total) : <span className="text-text-secondary/65">—</span>}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Portfolio total */}
+          {totalSpend > 0 && (
+            <div className="mt-3 pt-2.5 border-t border-border/50 text-xs text-text-secondary">
+              Portfolio total: <span className="text-text-primary font-mono font-medium">{fmt(totalSpend)}</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   data: CCSPSummary | null
   loading: boolean
@@ -40,11 +202,6 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
   const customers = data?.byCustomer ?? []
   const partners = data?.byPartner ?? []
   const totalAcv = data?.totalAcv ?? 0
-
-  // Quarterly data: filter by AE when selected
-  const aeData = activeAE ? data?.byAE?.find(a => a.ae === activeAE) : null
-  const displayQuarters = aeData ? aeData.byQuarter : (data?.byQuarter ?? [])
-  const maxQuarterAcv = displayQuarters.reduce((max, q) => Math.max(max, q.acv), 0)
 
   // BKL-G17: reporting period range badge (e.g. "2025 Q3–Q4")
   // Data format: "2025-Q3" (YYYY-QN) — fixed from prior CY25Q1 assumption (BKL-W3-01)
@@ -64,9 +221,10 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
     return fy1 === fy2 ? `${fy1} ${q1}–${q2}` : `${fy1} ${q1} – ${fy2} ${q2}`
   })() : null
 
-  // Top accounts: filter by AE when selected
+  // Top accounts: filter by selected AE
+  const activeAEData = activeAE ? data?.byAE?.find(a => a.ae === activeAE) : null
   const displayedAccounts = activeAE
-    ? (aeData?.topAccounts ?? [])
+    ? (activeAEData?.topAccounts ?? [])
     : customers.slice(0, 10).map(c => ({ name: c.name, acv: c.acv }))
 
   return (
@@ -154,90 +312,20 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
           </div>
         </div>
 
-        {/* Middle: AE selector + quarterly revenue bars */}
-        <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Users className="w-3.5 h-3.5 text-accent" />
-            <span className="text-xs font-medium text-text-secondary">Quarterly Revenue</span>
-            {activeAE && (
-              <span className="text-xs text-accent font-medium ml-1">({activeAE})</span>
-            )}
-          </div>
-
-          {/* AE selector row */}
-          {(data?.byAE?.length ?? 0) > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={() => setActiveAE(null)}
-                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                  activeAE === null
-                    ? 'bg-accent text-white border-accent'
-                    : 'bg-transparent text-text-secondary border-border hover:border-text-secondary'
-                }`}
-              >
-                All
-              </button>
-              {data?.byAE?.map(({ ae }) => (
-                <button
-                  key={ae}
-                  onClick={() => setActiveAE(activeAE === ae ? null : ae)}
-                  className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                    activeAE === ae
-                      ? 'bg-accent text-white border-accent'
-                      : 'bg-transparent text-text-secondary border-border hover:border-text-secondary'
-                  }`}
-                >
-                  {ae.split(' ')[0]}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Quarterly bars */}
-          {loading ? (
-            <div className="space-y-2 flex-1">
-              {[1, 2, 3, 4].map((i) => <div key={i} className="h-5 bg-border rounded animate-pulse-slow" />)}
-            </div>
-          ) : displayQuarters.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-xs text-text-secondary">No quarterly data</div>
-          ) : (
-            <div className="space-y-2 flex-1">
-              {activeAE && aeData && (
-                <div className="text-lg font-bold text-text-primary tabular-nums mb-1">{fmt(aeData.acv)}</div>
-              )}
-              {displayQuarters.map(({ quarter, acv }, idx) => {
-                const pct = maxQuarterAcv > 0 ? (acv / maxQuarterAcv) * 100 : 0
-                const prev = displayQuarters[idx - 1]
-                const trend = prev
-                  ? acv > prev.acv * 1.02 ? 'up' : acv < prev.acv * 0.98 ? 'down' : 'flat'
-                  : null
-                return (
-                  <div key={quarter}>
-                    <div className="flex items-center justify-between text-xs mb-0.5">
-                      <span className="text-text-primary font-medium">{quarter.replace('-Q', ' Q')}</span>
-                      <span className="flex items-center gap-1 text-text-secondary font-mono">
-                        {trend === 'up'   && <TrendingUp   className="w-3 h-3 text-green-500" />}
-                        {trend === 'down' && <TrendingDown className="w-3 h-3 text-red-400" />}
-                        {trend === 'flat' && <Minus        className="w-3 h-3 text-text-secondary opacity-50" />}
-                        {fmt(acv)}
-                      </span>
-                    </div>
-                    <div className="h-1.5 bg-border rounded-full overflow-hidden">
-                      <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        {/* Middle: By AE — mirrors Pipeline "By Owner" layout */}
+        <ByAETile
+          data={data}
+          loading={loading}
+          activeAE={activeAE}
+          onSelectAE={setActiveAE}
+        />
 
         {/* Right: Top accounts (filtered by AE when selected) */}
         <div className="bg-surface border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <Building2 className="w-3.5 h-3.5 text-accent" />
             <span className="text-xs font-medium text-text-secondary">
-              Top Accounts{activeAE ? ` (${activeAE})` : ''}
+              Top Accounts{activeAE ? ` (${activeAE.split(' ')[0]})` : ''}
             </span>
           </div>
           {loading ? (
@@ -257,7 +345,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
                     <div className="flex items-center justify-between text-xs mb-0.5">
                       <Link
                         to={`/dashboard/customer/${encodeURIComponent(shortName(name))}`}
-                        className="text-text-primary truncate flex-1 mr-2 hover:underline"
+                        className="text-text-primary truncate flex-1 min-w-0 mr-2 hover:underline"
                       >
                         {i + 1}. {shortName(name)}
                       </Link>

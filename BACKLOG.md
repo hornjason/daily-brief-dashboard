@@ -3262,12 +3262,24 @@ Investigation: Marcus 2026-04-05 — Backend scraper is correct: getRollingFyWin
 Description: Fix the QTR_FMT regex from /^[A-Z]{2}\d{2}Q\d$/ to /^\d{4}-Q\d$/ so the reporting period badge renders correctly with actual data. Optional enhancement: add placeholder $0 entries for missing quarters in the rolling window so the chart always shows 4 bars, making it clear which quarters have no closed deals yet. Do not change the scraper — backend is correct.
 
 ### BKL-W3-02 | CCSP middle tile redesign — mirror ACV By Owner layout
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Extracted ByAETile component in CloudSpendSection.tsx. Middle tile now mirrors Pipeline "By Owner" exactly: per-AE rows with name, total spend, customer count, and progress bar; quarter x AE cross-tab grid with column headers and total row; clicking an AE row toggles selection. Right tile (top accounts) already filtered by activeAE via topAccounts from CCSPByAE — confirmed working. No forecast stage columns (CCSP has none). Design-Council-W3 typography standards applied throughout.
 Priority: P1
 Size: M (4 hours)
 Source: Jason 2026-04-04 brain dump — "I want this to look like the ACV by owner tile above"
-Files: dashboard/src/ (CCSP section, middle tile)
-Description: CCSP middle tile currently shows "Quarterly Revenue" as a simple list with bars. Jason wants it to look like the Pipeline "By Owner" tile: owner rows with total $ · count, a progress bar, then a quarterly breakdown grid (Q1/Q2/Q3/Q4 columns × Commit/Best/Pipeline/Closed rows). Redesign the CCSP middle tile to match that layout with cloud spend data. Per-AE rows, quarter columns, spend totals.
+Files: dashboard/src/components/CloudSpendSection.tsx (middle tile), right tile (top accounts filter)
+Design confirmed 2026-04-05 by Jason:
+  Middle tile ("By AE") layout — mirror Pipeline "By Owner" exactly:
+    - Header: "By AE"
+    - Per-AE row: [AE Name] · $X total + progress bar (share of total spend)
+    - Quarter grid below: AE rows × quarter columns (2025 Q1, 2025 Q2, … 2026 Q2)
+    - Cell values: spend $ per AE per quarter
+    - Labels: same as ACV Pipeline column headers (quarter names)
+    - NO forecast stage columns (no Commit/Best/Pipeline/Closed — CCSP has none)
+    - Clicking an AE row selects/highlights that AE
+  Right tile (top accounts) filter:
+    - When an AE is selected in the middle tile, top-accounts tile filters to only that AE's accounts
+    - Deselect (click again or clear) restores all-AE view
+  Data source: existing CCSP quarters data already in CloudSpendSection props
 
 ### BKL-W3-03 | Duplicate AE portfolio "Elmer" showing twice on dashboard
 Status: ✅ DONE 2026-04-05 — Removed Elmer Alvarez's 10 customers from data/config/customers.json. Jason will add Elmer as a proper second AE (with aes.json entry + sheet IDs) via bootstrap when ready. Dashboard now shows 10 customers, 1 AE (Carolanne).
