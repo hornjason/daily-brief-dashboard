@@ -12,6 +12,7 @@ import { isFreeOrTrial } from './health-score.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
 import { classifyDocs } from './doc-extraction.ts'
+import { getStatus, type ScraperName } from './scraper-status-store.ts'
 import { extractEmailIntelligence } from './email-extraction.ts'
 import { assembleMeetingPrep } from './calendar-extraction.ts'
 import type { DocClassification } from './doc-extraction.ts'
@@ -297,7 +298,43 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
     }
   }
 
-  // Export text content for Google Docs/Slides; cap per-doc and total
+  // BKL-AI18a: Export text content in parallel (was sequential); cap applied after collection
+  const EXPORT_CONCURRENCY = 5
+
+  // Helper: export a single file's content (returns extracted text or null)
+  async function exportFileContent(f: { id: string; name: string; mimeType: string }): Promise<string | null> {
+    if (EXPORTABLE_MIME_TYPES.has(f.mimeType) && f.id) {
+      try {
+        const exportRes = await drive.files.export(
+          { fileId: f.id, mimeType: 'text/plain' },
+          { responseType: 'text' },
+        )
+        const raw = String(exportRes.data ?? '').replace(/\s+/g, ' ').trim()
+        const capped = raw.slice(0, DOC_CONTENT_CAP)
+        return capped.length > 50 ? capped : null
+      } catch {
+        return null
+      }
+    }
+    return null
+  }
+
+  // Phase 1: Fire all exportable file fetches in parallel (concurrency-limited batches)
+  const exportableFiles = allFiles.filter(f => EXPORTABLE_MIME_TYPES.has(f.mimeType) && f.id)
+  const exportResultMap = new Map<string, string>()
+
+  for (let i = 0; i < exportableFiles.length; i += EXPORT_CONCURRENCY) {
+    const batch = exportableFiles.slice(i, i + EXPORT_CONCURRENCY)
+    const settled = await Promise.allSettled(batch.map(f => exportFileContent(f)))
+    for (let j = 0; j < batch.length; j++) {
+      const r = settled[j]
+      if (r.status === 'fulfilled' && r.value) {
+        exportResultMap.set(batch[j].id, r.value)
+      }
+    }
+  }
+
+  // Phase 2: Assemble results sequentially, enforcing totalChars cap
   let totalChars = 0
   const results: DriveFile[] = []
 
@@ -310,21 +347,10 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
       customer: customer.name,
     }
 
-    if (EXPORTABLE_MIME_TYPES.has(f.mimeType) && totalChars < TOTAL_CONTENT_CAP && f.id) {
-      try {
-        const exportRes = await drive.files.export(
-          { fileId: f.id, mimeType: 'text/plain' },
-          { responseType: 'text' },
-        )
-        const raw = String(exportRes.data ?? '').replace(/\s+/g, ' ').trim()
-        const capped = raw.slice(0, DOC_CONTENT_CAP)
-        if (capped.length > 50) {  // skip near-empty docs
-          file.content = capped
-          totalChars += capped.length
-        }
-      } catch {
-        // Export failed (permissions, unsupported format) — use name only
-      }
+    const preExported = exportResultMap.get(f.id)
+    if (preExported && totalChars < TOTAL_CONTENT_CAP) {
+      file.content = preExported
+      totalChars += preExported.length
     }
     // BKL-R25b: PDF extraction — local-first, multimodal fallback
     else if (f.mimeType === 'application/pdf' && totalChars < TOTAL_CONTENT_CAP && f.id) {
@@ -599,6 +625,22 @@ function buildXmlSources(
   }
 
   const today = new Date().toISOString().split('T')[0]
+  const now = Date.now()
+  const STALE_24H = 24 * 60 * 60 * 1000
+
+  // BKL-AI18c: scraper status for failure/staleness injection into XML
+  const scraperStatus = getStatus()
+  function sourceStatusAttr(scraperName: ScraperName): string {
+    const entry = scraperStatus[scraperName]
+    if (!entry) return ''
+    if (entry.lastError || entry.state === 'failed') {
+      return ` status="scraper_failed" last_success="${escapeXml(entry.lastSuccess ?? 'never')}"`
+    }
+    if (entry.lastSuccess && (now - new Date(entry.lastSuccess).getTime()) > STALE_24H) {
+      return ` status="stale" last_success="${escapeXml(entry.lastSuccess)}"`
+    }
+    return ''
+  }
 
   let xml = `<customer>
   <name>${escapeXml(customer.name)}</name>
@@ -610,7 +652,7 @@ function buildXmlSources(
 
   // Subscriptions from Supportable (CustomerSubscription)
   if (subscriptions.length) {
-    xml += `<source type="subscriptions" synced="${today}" count="${subscriptions.length}">\n`
+    xml += `<source type="subscriptions"${sourceStatusAttr('supportable')} synced="${today}" count="${subscriptions.length}">\n`
     for (const sub of subscriptions) {
       xml += `${escapeXml(sub.productName)} | qty: ${sub.quantity} | expires: ${fmt(sub.endDate)} | ${sub.daysLeft}d left | status: ${escapeXml(sub.status)}\n`
     }
@@ -621,7 +663,7 @@ function buildXmlSources(
   // BKL-M45: exclude free/trial/beta subs entirely — they distort intelligence signal
   const paidProducts = products.filter(p => !isFreeOrTrial(p))
   if (paidProducts.length) {
-    xml += `<source type="subscriptions_detailed" synced="${today}" count="${paidProducts.length}">\n`
+    xml += `<source type="subscriptions_detailed"${sourceStatusAttr('supportable')} synced="${today}" count="${paidProducts.length}">\n`
     for (const p of paidProducts) {
       xml += `${escapeXml(p.sku)}: ${escapeXml(p.productDescription)} | qty: ${p.quantity} | status: ${escapeXml(p.status)}${p.endDate ? ` | ends: ${fmt(p.endDate)}` : ''}\n`
     }
@@ -630,7 +672,7 @@ function buildXmlSources(
 
   // Support cases
   if (cases.length) {
-    xml += `<source type="support_cases" synced="${today}" count="${cases.length}">\n`
+    xml += `<source type="support_cases"${sourceStatusAttr('rh-cases')} synced="${today}" count="${cases.length}">\n`
     for (const c of cases) {
       xml += `Sev${c.severity} | ${escapeXml(c.caseNumber)}: ${escapeXml(c.summary)} — ${c.daysOpen}d open${c.product ? ` [${escapeXml(c.product)}]` : ''}\n`
     }
@@ -753,7 +795,7 @@ function buildXmlSources(
 
   // Pipeline opportunities
   if (pipeline.length) {
-    xml += `<source type="pipeline" synced="${today}" count="${pipeline.length}">\n`
+    xml += `<source type="pipeline"${sourceStatusAttr('sf-pipeline')} synced="${today}" count="${pipeline.length}">\n`
     for (const opp of pipeline) {
       xml += `${escapeXml(opp.oppName)} | stage: ${escapeXml(opp.forecastCategory)} | amount: $${opp.acv} | close: ${escapeXml(opp.closeDate)}\n`
     }
@@ -762,11 +804,27 @@ function buildXmlSources(
 
   // Cloud spend (CCSP)
   if (ccsp.length) {
-    xml += `<source type="cloud_spend" synced="${today}" count="${ccsp.length}">\n`
+    xml += `<source type="cloud_spend"${sourceStatusAttr('ccsp')} synced="${today}" count="${ccsp.length}">\n`
     for (const row of ccsp) {
       xml += `${escapeXml(row.cloudPartner)} | ${escapeXml(row.quarter)} | ACV+: $${row.acvPlus} | close: ${escapeXml(row.closeDate)}\n`
     }
     xml += `</source>\n\n`
+  }
+
+  // BKL-AI18c: Emit empty source tags for failed scrapers with no data, so Gemini knows data is missing
+  const failedSourceMap: [ScraperName, string, boolean][] = [
+    ['supportable', 'subscriptions', subscriptions.length > 0],
+    ['rh-cases', 'support_cases', cases.length > 0],
+    ['sf-pipeline', 'pipeline', pipeline.length > 0],
+    ['ccsp', 'cloud_spend', ccsp.length > 0],
+  ]
+  for (const [scraper, sourceType, hasData] of failedSourceMap) {
+    if (!hasData) {
+      const entry = scraperStatus[scraper]
+      if (entry && (entry.lastError || entry.state === 'failed')) {
+        xml += `<source type="${sourceType}" status="scraper_failed" last_success="${escapeXml(entry.lastSuccess ?? 'never')}" count="0" />\n\n`
+      }
+    }
   }
 
   // Previous brief for delta detection

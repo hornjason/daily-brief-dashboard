@@ -565,10 +565,10 @@ export function registerScrapeRoutes(app: Hono): void {
                     sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
                     patchAe(ae.name, { pipelineSheetId: sheetId })
                   }
-                  // BKL-F11: Filter rows to this AE's opportunities only (by first name token, case-insensitive)
+                  // BKL-F11/F11b: Filter rows to this AE's opportunities only (exact word-token match, case-insensitive)
                   const aeFirstName = ae.name.split(' ')[0].toLowerCase()
                   const filteredRows = ownerIdx !== -1
-                    ? data.rows.filter(row => (row[ownerIdx] ?? '').toLowerCase().includes(aeFirstName))
+                    ? data.rows.filter(row => (row[ownerIdx] ?? '').toLowerCase().split(/\s+/).includes(aeFirstName))
                     : data.rows
                   const filteredData = { headers: data.headers, rows: filteredRows, droppedColumns: data.droppedColumns }
                   await writePipelineSheet(filteredData, sheetId)
@@ -806,10 +806,10 @@ export function registerScrapeRoutes(app: Hono): void {
                       sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
                       patchAe(ae.name, { pipelineSheetId: sheetId })
                     }
-                    // BKL-F11: Filter rows to this AE's opportunities only (by first name token, case-insensitive)
+                    // BKL-F11/F11b: Filter rows to this AE's opportunities only (exact word-token match, case-insensitive)
                     const aeFirstName = ae.name.split(' ')[0].toLowerCase()
                     const filteredRows = ownerIdx !== -1
-                      ? data.rows.filter(row => (row[ownerIdx] ?? '').toLowerCase().includes(aeFirstName))
+                      ? data.rows.filter(row => (row[ownerIdx] ?? '').toLowerCase().split(/\s+/).includes(aeFirstName))
                       : data.rows
                     const filteredData = { headers: data.headers, rows: filteredRows, droppedColumns: data.droppedColumns }
                     await writePipelineSheet(filteredData, sheetId)

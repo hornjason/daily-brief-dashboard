@@ -253,17 +253,27 @@ export async function classifyAndExtract(
 
 // ── Batch classification ─────────────────────────────────────────────────────
 
+// BKL-AI18a: Parallelize doc classification calls (was sequential)
 export async function classifyDocs(
   docs: { name: string; modifiedTime?: string; content?: string }[],
 ): Promise<Map<string, DocClassification>> {
   const results = new Map<string, DocClassification>()
 
-  for (const doc of docs) {
-    try {
-      results.set(doc.name, await classifyAndExtract(doc))
-    } catch (e) {
-      console.warn(`[doc-extraction] Failed to classify ${doc.name}:`, e)
-      results.set(doc.name, { ...EMPTY_CLASSIFICATION })
+  const settled = await Promise.allSettled(
+    docs.map(async (doc) => ({
+      name: doc.name,
+      classification: await classifyAndExtract(doc),
+    })),
+  )
+
+  for (let i = 0; i < settled.length; i++) {
+    const result = settled[i]
+    const docName = docs[i].name
+    if (result.status === 'fulfilled') {
+      results.set(result.value.name, result.value.classification)
+    } else {
+      console.warn(`[doc-extraction] Failed to classify ${docName}:`, result.reason)
+      results.set(docName, { ...EMPTY_CLASSIFICATION })
     }
   }
 
