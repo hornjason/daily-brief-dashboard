@@ -9,7 +9,7 @@ import PriorityActionRow from './PriorityActionRow'
 const EmptyState = ({ title, description }: { title: string; description?: string }) => (
   <div className="flex flex-col items-center py-8 text-center">
     <p className="text-sm text-text-secondary">{title}</p>
-    {description && <p className="text-xs text-text-secondary/60 mt-1">{description}</p>}
+    {description && <p className="text-xs text-text-secondary mt-1">{description}</p>}
   </div>
 )
 
@@ -576,6 +576,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
               <select
                 value={aeFilter}
                 onChange={(e) => setAeFilter(e.target.value)}
+                aria-label="Filter by AE"
                 className="px-2 py-1 text-xs bg-surface-hover border border-border rounded-badge text-text-primary"
               >
                 <option value="">All AEs</option>

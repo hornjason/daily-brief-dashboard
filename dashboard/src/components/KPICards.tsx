@@ -330,7 +330,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
 
       {/* Hint when RH Portal not connected */}
       {rhHasSession === false && (kpis?.openCasesTotal ?? 0) === 0 && (
-        <p className="text-xs text-text-secondary/50 mt-1 ml-1">Connect Red Hat Portal in Settings to sync support cases</p>
+        <p className="text-xs text-text-secondary mt-1 ml-1">Connect Red Hat Portal in Settings to sync support cases</p>
       )}
 
       {/* Extracted modal components (BKL-UX46) */}

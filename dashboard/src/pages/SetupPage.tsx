@@ -2600,7 +2600,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             <div>
               <p className="text-sm text-white">Red Hat Cases</p>
               {rhStatus?.lastScraped ? (
-                <p className="text-xs text-text-secondary">Last sync: {timeAgo(rhStatus.lastScraped)} — {rhStatus.caseCount} cases</p>
+                <p className="text-xs text-text-secondary">Synced {timeAgo(rhStatus.lastScraped)} — {rhStatus.caseCount}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Support cases</p>
               )}
@@ -2617,7 +2617,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             <div>
               <p className="text-sm text-white">Supportable Subscriptions</p>
               {supportableStatus?.lastScrape ? (
-                <p className="text-xs text-text-secondary">Last scrape: {timeAgo(supportableStatus.lastScrape)}{supportableStatus.recordCount ? ` — ${supportableStatus.recordCount} subscriptions` : ''}</p>
+                <p className="text-xs text-text-secondary">Synced {timeAgo(supportableStatus.lastScrape)}{supportableStatus.recordCount ? ` — ${supportableStatus.recordCount}` : ''}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Subscription data</p>
               )}
@@ -2644,7 +2644,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             <div>
               <p className="text-sm text-white">CCSP (Tableau)</p>
               {ccspStatus?.lastScrape ? (
-                <p className="text-xs text-text-secondary">Last scrape: {timeAgo(ccspStatus.lastScrape)}{ccspStatus.recordCount ? ` — ${ccspStatus.recordCount} records` : ''}</p>
+                <p className="text-xs text-text-secondary">Synced {timeAgo(ccspStatus.lastScrape)}{ccspStatus.recordCount ? ` — ${ccspStatus.recordCount}` : ''}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Cloud spend</p>
               )}
@@ -2656,14 +2656,14 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             </div>
           </div>
           {ccspScrapeError && <p role="alert" className="text-xs text-critical pb-2">{ccspScrapeError}</p>}
-          {ccspSyncedAt && !ccspScrapeError && <p className="text-xs text-success pb-2">Synced at {new Date(ccspSyncedAt).toLocaleTimeString()}</p>}
+          {ccspSyncedAt && !ccspScrapeError && <p className="text-xs text-success pb-2">Synced {timeAgo(ccspSyncedAt)}{ccspStatus?.recordCount ? ` — ${ccspStatus.recordCount}` : ''}</p>}
 
           {/* Pipeline (Salesforce) */}
           <div className="flex items-center justify-between py-3">
             <div>
               <p className="text-sm text-white">Pipeline (Salesforce)</p>
               {sfStatus?.lastSync ? (
-                <p className="text-xs text-text-secondary">Last sync: {timeAgo(sfStatus.lastSync)} — {sfStatus.rowCount} rows</p>
+                <p className="text-xs text-text-secondary">Synced {timeAgo(sfStatus.lastSync)} — {sfStatus.rowCount}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Pipeline data</p>
               )}

@@ -161,7 +161,7 @@ export function Sidebar({ active, onActiveChange, aes }: SidebarProps) {
                     aria-label={`${ae.name} - ${ae.customerCount} customers`}
                   >
                     <span className="truncate">{ae.name}</span>
-                    <span className="ml-auto text-text-secondary/60 tabular-nums">{ae.customerCount}</span>
+                    <span className="ml-auto text-text-secondary tabular-nums">{ae.customerCount}</span>
                   </button>
                 ))}
               </div>

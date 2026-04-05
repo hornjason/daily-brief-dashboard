@@ -3225,7 +3225,7 @@ Files: dashboard/src/pages/SetupPage.tsx
 Description: The Setup page Sync section (Red Hat Cases, Supportable Subscriptions, CCSP, Pipeline) does not reflect when a scraper is actively running. The admin page correctly shows "Running..." and "In progress" indicators because it polls `/api/status/scrapes` and checks `isRunning`. The Setup page Sync buttons need the same polling — show a spinner or "Syncing..." state when `isRunning=true` for that source, and disable the button to prevent duplicate triggers.
 
 ### BKL-W3-14 | Dashboard Design Council — full UX audit before any UI/UX implementation
-Status: 🔴 OPEN
+Status: ✅ DONE — docs/DESIGN-COUNCIL-W3.md written; W3-02, W3-04, W3-05, W3-06, W3-09 unblocked
 Priority: P0
 Size: M (half day council + report)
 Source: Jason 2026-04-05 — "do a full council meeting on the design before any UI/UX work"
@@ -3241,7 +3241,7 @@ Description: Before implementing any UI/UX changes, convene a full council to au
   Council composition: Aditi (design lead), Serena (architecture/scalability), Marcus (implementability review).
 
 ### BKL-W3-15 | Scraper sync status — standard output format across all data sources
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-05 — All 4 scraper rows in SetupPage.tsx now use "Synced {timeAgo} — {N} {noun}" format. RH Cases: "cases", Supportable: "subscriptions", CCSP: "records", SF: "rows". CCSP post-sync success message also standardized to same format.
 Priority: P1
 Size: S (2-3 hours)
 Source: Jason 2026-04-05 — "standard and consistency across the app"
@@ -3253,7 +3253,7 @@ Description: Each data source sync row on the Setup page currently shows differe
   Also standardize the "last sync" display in the default (non-post-sync) state — currently each source shows the timestamp differently (some use timeAgo(), some show raw ISO, some show nothing).
 
 ### BKL-W3-01 | CCSP rolling quarters bug — showing 2025 Q3/Q4 instead of current rolling 4
-Status: ✅ DONE 2026-04-05 — Fixed QTR_FMT regex in CloudSpendSection.tsx from /^[A-Z]{2}\d{2}Q\d$/ to /^\d{4}-Q\d$/. Fixed display string parsing to match 2025-Q3 format. Reporting period badge now renders correctly. Scraper backend was correct all along — 2026 data not yet in Tableau.
+Status: ✅ DONE 2026-04-05 — Three fixes: (1) Fixed QTR_FMT regex in CloudSpendSection.tsx; (2) Fixed quarter label display bug (2025- Q3 → 2025 Q3) at line 217; (3) Fixed ccsp-scraper.ts getRollingFyWindow() — was computing FY2026+FY2027, now correctly FY[prev]+FY[current] (FY2025+FY2026 as Jason confirmed in Tableau). Quarter window expanded from 4 to full prev-year + current-year-to-date (2025-Q1 through 2026-Q2 as of April 2026).
 Priority: P1
 Size: XS (30 min)
 Source: Jason 2026-04-04 brain dump
@@ -3287,7 +3287,7 @@ Files: dashboard/src/components/AccountPortfolioGrid.tsx or CustomerCard
 Description: Account cards on the portfolio grid show a truncated Segment/Industry label that is hard to read. Options: (1) wrap instead of truncate, (2) show full text on hover/tooltip, (3) abbreviate intelligently rather than hard-cutting. Investigate what data populates this field and choose the approach that fits the card layout best.
 
 ### BKL-W3-05 | Account Details page — right column tiles truncated, needs UX deep investigation
-Status: ⏸ DEFERRED — blocked on BKL-W3-14 (Design Council must complete first)
+Status: 🔴 OPEN — Design Council complete; must conform to DESIGN-COUNCIL-W3.md (extract tiles first, then truncation fix)
 Priority: P1
 Size: L (deep investigation + redesign)
 Source: Jason 2026-04-04 brain dump — "very truncated and hard to read, may be a deeper UI/UX issue"
@@ -3303,7 +3303,7 @@ Investigation: Aditi 2026-04-05 — Full design report delivered. Key findings:
 Description: Implement Aditi's design recommendations from docs/W3-05-DESIGN-REPORT.md (or inline above). Priority order: (1) fix truncation on Products+Cases (remove `truncate`, allow wrap), (2) reorder tiles (Cases first), (3) bump text-xs→text-sm for primary content, (4) add expand-in-place for case details, (5) expiry urgency bands on Products.
 
 ### BKL-W3-06 | Setup page — header redesign with Red Hat branding
-Status: ⏸ DEFERRED — blocked on BKL-W3-14 (Design Council must complete first)
+Status: 🔴 OPEN — Design Council complete; conform to DESIGN-COUNCIL-W3.md standards
 Priority: P2
 Size: S (2-3 hours)
 Source: Jason 2026-04-04 brain dump — "change the icon to a red hat icon/image, better header design"
@@ -3899,3 +3899,101 @@ Size: XS (15 min)
 Source: Jason 2026-04-05 CI pipeline analysis
 Files: playwright.config.ts (webServer.timeout: 15_000)
 Description: playwright.config.ts configures `webServer.timeout: 15_000` (15 seconds). Bun cold-start on a GitHub Actions runner (slower than dev machine, cold dependency resolution) can approach this limit, risking "server didn't start" failures that cancel the entire test run. Fix: bump to 30_000 or 45_000 to give the server comfortable startup room without risking test runs failing before they start.
+
+### BKL-W3-16 | AdminPage — remove text-[10px] violations (P0 typography)
+Status: 🔴 OPEN
+Priority: P0
+Size: XS (30 min)
+Source: Design Council 2026-04-05 — Aditi audit
+Blocks: nothing, but must ship before W3 UI work starts
+Files: dashboard/src/pages/AdminPage.tsx lines 109, 214, 225, 297, 432
+Description: Five occurrences of `text-[10px]` in AdminPage — below the 11px minimum readable threshold established by Design Council. Replace each with `text-signal` (11px, for compact badge contexts) or `text-xs` (13px, for all other contexts). No visual redesign required — this is a pure typography floor fix. Council rule: `text-[10px]` and any inline pixel font size is BANNED app-wide.
+
+### BKL-W3-17 | AccountPortfolioGrid — AE groups collapse by default at 5+ AEs (P0 scale)
+Status: 🔴 OPEN
+Priority: P0
+Size: XS (15 min)
+Source: Design Council 2026-04-05 — Serena scalability analysis
+Files: dashboard/src/components/AccountPortfolioGrid.tsx line 668
+Description: In `byAE` view, all AE group sections render expanded by default (no `defaultCollapsed` prop passed). At 8 AEs × 10 customers each, this triggers 80 concurrent priority-action API calls on page load — the app is non-functional at scale. One-line fix: pass `defaultCollapsed={aeGroups.length > 4}` to each `<AEGroup>` in the byAE render block. When ≤4 AEs, groups stay expanded (current behavior). When 5+ AEs, all groups start collapsed and the user expands the ones they want. Does not change triage view (already handles collapse correctly).
+
+### BKL-W3-18 | CustomerDetailPage — extract right column tiles to named components (P1 foundation)
+Status: 🔴 OPEN
+Priority: P1
+Size: M (3-4 hours)
+Source: Design Council 2026-04-05 — Marcus implementation analysis
+Blocks: BKL-W3-05 (truncation fix requires extraction first)
+Files: dashboard/src/pages/CustomerDetailPage.tsx (1752 lines), new component files
+Description: Four right-column tiles are currently inline anonymous functions inside CustomerDetailPage.tsx — `CasesSection`, `SubscriptionsSection`, `KeyContacts`, `DriveSection`. They cannot have independent state (expand/collapse, show-more) without extraction. Marcus extraction order: (1) CasesSection → src/components/CasesSection.tsx, (2) KeyContacts → src/components/KeyContactsSection.tsx, (3) SubscriptionsSection → src/components/SubscriptionsSection.tsx, (4) DriveSection → src/components/DriveSection.tsx. Each extraction is a pure refactor — no behavior change, just file move + named export. Required precondition for W3-05.
+
+### BKL-W3-19 | Dashboard layout — right column width 35% → 38%
+Status: 🔴 OPEN
+Priority: P1
+Size: XS (15 min)
+Source: Design Council 2026-04-05 — Aditi + Serena combined finding
+Files: dashboard/src/pages/CustomerDetailPage.tsx (right column width class)
+Description: Right column is currently `w-[35%]`. At this width: (1) tile content is cramped for product names and contact info, (2) at 8 AEs the CCSP pill badges wrap to 3 lines instead of 2. Changing to `w-[38%]` resolves both without a layout redesign. The left column uses `flex-1` so it absorbs the delta automatically. Small change, measurable impact on readability.
+
+### BKL-W3-20 | Typography — upgrade primary content from text-xs to text-sm
+Status: 🔴 OPEN
+Priority: P1
+Size: M (half day)
+Source: Design Council 2026-04-05 — Aditi audit (30+ violations identified)
+Files: dashboard/src/components/AccountPortfolioGrid.tsx, CustomerDetailPage.tsx, CloudSpendSection.tsx, others
+Description: Primary content — customer names, AE names, opportunity names, contact names, activity titles, product names — is currently rendered at `text-xs` (13px) in many places. Council standard: `text-xs` is reserved for metadata, timestamps, and badge labels only. Primary content minimum is `text-sm` (14px). Also: any `line-clamp-N` applied to `text-xs` content must be changed to `text-sm` first (two lines of 13px is illegible). Approach: triage the 57 truncation+line-clamp sites first (highest risk), then scan primary content in card/tile components. Do not blanket find-replace all 498 text-xs occurrences — review each for intent (metadata vs content) before changing.
+
+### BKL-W3-21 | SetupPage Step 4 — per-AE collapse for AEsCustomersSection
+Status: 🔴 OPEN
+Priority: P2
+Size: S (2 hours)
+Source: Design Council 2026-04-05 — Serena scalability analysis
+Files: dashboard/src/pages/SetupPage.tsx (AEsCustomersSection, Step 4)
+Description: Step 4 of the setup wizard renders all AEs and their customers as a flat list. At 8 AEs × 10 customers = 80 customer rows visible simultaneously — overwhelming. Add per-AE collapsible sections using the same `AEGroup` collapse pattern established in AccountPortfolioGrid. Default: collapsed when AE count > 2. Each AE section header shows AE name + customer count. Consistent with Design Council grid/column standard.
+
+### BKL-W3-22 | CCSP section — AE pill badges overflow at 8 AEs, add +N more pattern
+Status: 🔴 OPEN
+Priority: P2
+Size: S (1-2 hours)
+Source: Design Council 2026-04-05 — Serena scalability analysis
+Files: dashboard/src/components/CloudSpendSection.tsx
+Description: The CCSP tile displays AE-attributed spend as pill badges. At 8 AEs the pills wrap to 3 lines, consuming most of the tile height. Fix: show first 5 AE pills, then a muted `+N more` pill. Clicking the +N pill either expands inline or opens a breakdown modal. Consistent with Council truncation standard: "when count exceeds available space, show first N + +N more pill."
+
+### BKL-W3-23 | text-xs audit — triage 39 files, upgrade content occurrences to text-sm
+Status: 🔴 OPEN
+Priority: P2
+Size: L (half-day)
+Source: Design Council 2026-04-05 — Marcus implementation analysis (498 occurrences, 39 files)
+Files: 39 files across dashboard/src/ (Marcus: full list in council analysis)
+Description: 498 `text-xs` occurrences exist across 39 files. Cannot blanket-replace — many are correct (metadata, timestamps, badges). Approach: (1) run audit script to categorize each by context (badge vs content), (2) upgrade content occurrences to `text-sm`, (3) leave badge/metadata occurrences at `text-xs`. Priority: start with the 57 truncation+line-clamp sites (highest readability impact), then card body text, then table rows. BKL-W3-20 covers the most impactful subset; this item covers the remaining long-tail.
+
+### BKL-W3-24 | Truncation audit — add min-w-0 to 57 truncation sites in flex containers
+Status: 🔴 OPEN
+Priority: P2
+Size: S (2 hours)
+Source: Design Council 2026-04-05 — Aditi audit finding
+Files: dashboard/src/ (57 truncate/line-clamp occurrences)
+Description: `truncate` silently fails on flex children without `min-w-0` on the parent element. This is the #1 cause of non-truncating text that overflows its container. Grep for all `truncate` and `line-clamp-` usages, check each parent for `flex` context, add `min-w-0` where missing. Also: any truncated primary content (opp name, contact name) should have a `title={}` attribute for native tooltip. 57 sites to audit.
+
+### BKL-W3-25 | Sidebar — fix overflow-hidden clipping at 16+ AEs
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (15 min)
+Source: Design Council 2026-04-05 — Serena scalability analysis (latent issue)
+Files: dashboard/src/components/Sidebar.tsx
+Description: Sidebar uses `overflow-hidden` which will clip AE entries when count reaches 16+. Currently at 1 AE so not visible, but will manifest when team grows. Fix: change to `overflow-y-auto` on the AE list container. Latent P3 — low urgency but trivial fix.
+
+### BKL-W3-26 | Delete MeetingPrepCards.tsx — dead code, imported nowhere
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (5 min)
+Source: Design Council 2026-04-05 — Marcus dead code audit
+Files: dashboard/src/components/MeetingPrepCards.tsx
+Description: MeetingPrepCards.tsx is a 100+ line component that is not imported anywhere in the codebase. Marcus confirmed: no references in any page, component, or test file. Safe to delete. Reduces bundle surface and grep noise.
+
+### BKL-W3-27 | Tailwind config — add semantic label/detail font tokens
+Status: 🔴 OPEN
+Priority: P3
+Size: XS (30 min)
+Source: Design Council 2026-04-05 — Marcus quick wins
+Files: dashboard/tailwind.config.js
+Description: Add two semantic fontSize tokens to tailwind.config.js to reduce ambiguity between `text-xs` (metadata) and `text-sm` (content): `text-label` (13px, 500 weight — alias for metadata text-xs) and `text-detail` (14px — alias for content text-sm). These tokens communicate intent at the use site, making future text-xs audits mechanical: any `text-xs` that should semantically be `text-label` is correct; any `text-xs` that should be `text-detail` is a violation. 30-minute config change per Marcus.

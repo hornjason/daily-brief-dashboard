@@ -156,56 +156,40 @@ async function dumpDom(page: Page, label: string): Promise<void> {
 // -- Filter helpers -----------------------------------------------------------
 
 /**
- * Rolling 4-quarter window for CCSP Tableau filters.
+ * CCSP Tableau year + quarter window.
  *
- * Selects the 4 most recent calendar quarters whose start date has passed,
- * starting from the current quarter and filling backwards.
+ * RH fiscal year convention in Tableau: FY[N] = Feb[N] – Jan[N+1]
+ *   April 2026 → FY2026 (Feb 2026 – Jan 2027)
+ *   January 2026 → FY2025 (Feb 2025 – Jan 2026)
  *
- * Derives Red Hat fiscal years from those quarters:
- *   Q1 (Jan-Mar) spans FY boundary: Jan-Feb = FY(Y), March = FY(Y+1) → both
- *   Q2-Q4 (Apr-Dec) are fully in FY(Y+1)
+ * Selects: current FY + previous FY (matches Jason's manual Tableau selection).
+ * Quarters: all 4 quarters of previous calendar year + current calendar year
+ *           quarters up to (and including) the current calendar quarter.
  *
- * Example (today = March 29, 2026):
- *   quarters = ['2026-Q1', '2025-Q4', '2025-Q3', '2025-Q2']
- *   years    = ['FY2026', 'FY2027']
+ * Example (today = April 2026):
+ *   years    = ['FY2025', 'FY2026']
+ *   quarters = ['2025-Q1', '2025-Q2', '2025-Q3', '2025-Q4', '2026-Q1', '2026-Q2']
  */
 export function getRollingFyWindow(): { years: string[]; quarters: string[]; label: string } {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth() + 1 // 1-12
 
+  // RH FY starts Feb 1: if Jan, we're still in previous FY
+  const currentFY = month >= 2 ? year : year - 1
+  const previousFY = currentFY - 1
+  const years = [`FY${previousFY}`, `FY${currentFY}`]
+
   // Calendar quarter (1-4) based on month
   const currentCalQ = Math.ceil(month / 3)
 
-  // Build 4 quarters rolling backwards from current calendar quarter
+  // All 4 quarters of previous calendar year + current year up to current quarter
   const quarters: string[] = []
-  let q = currentCalQ
-  let y = year
-  for (let i = 0; i < 4; i++) {
-    quarters.push(`${y}-Q${q}`)
-    q--
-    if (q === 0) { q = 4; y-- }
-  }
+  for (let q = 1; q <= 4; q++) quarters.push(`${previousFY}-Q${q}`)
+  for (let q = 1; q <= currentCalQ; q++) quarters.push(`${currentFY}-Q${q}`)
 
-  // Derive RH fiscal years that cover these quarters
-  // Q1 (Jan-Mar) spans FY boundary: Jan-Feb = FY(Y), March = FY(Y+1) → include both
-  // Q2-Q4 (Apr-Dec) are fully in FY(Y+1)
-  const fySet = new Set<string>()
-  for (const qtr of quarters) {
-    const [qYear, qPart] = qtr.split('-')
-    const qy = parseInt(qYear)
-    const qNum = parseInt(qPart[1])
-    if (qNum === 1) {
-      fySet.add(`FY${qy}`)
-      fySet.add(`FY${qy + 1}`)
-    } else {
-      fySet.add(`FY${qy + 1}`)
-    }
-  }
-  const years = [...fySet].sort()
-
-  const label = `${quarters[quarters.length - 1]} – ${quarters[0]}`
-  console.log(`[ccsp] rolling 4-quarter window: years=[${years.join(', ')}] quarters=[${quarters.join(', ')}] label="${label}"`)
+  const label = `${quarters[0]} – ${quarters[quarters.length - 1]}`
+  console.log(`[ccsp] window: years=[${years.join(', ')}] quarters=[${quarters.join(', ')}] label="${label}"`)
   return { years, quarters, label }
 }
 

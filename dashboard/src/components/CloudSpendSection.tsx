@@ -214,7 +214,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
                 return (
                   <div key={quarter}>
                     <div className="flex items-center justify-between text-xs mb-0.5">
-                      <span className="text-text-primary font-medium">{quarter.replace(/Q(\d)/, ' Q$1')}</span>
+                      <span className="text-text-primary font-medium">{quarter.replace('-Q', ' Q')}</span>
                       <span className="flex items-center gap-1 text-text-secondary font-mono">
                         {trend === 'up'   && <TrendingUp   className="w-3 h-3 text-green-500" />}
                         {trend === 'down' && <TrendingDown className="w-3 h-3 text-red-400" />}
