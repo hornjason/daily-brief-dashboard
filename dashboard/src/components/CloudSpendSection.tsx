@@ -38,9 +38,9 @@ function allAEQuarters(byAE: CCSPByAE[]): string[] {
   return [...set].sort((a, b) => a.localeCompare(b))
 }
 
-function fmtQuarterLabel(q: string): string {
-  // "2025-Q3" -> "2025 Q3"
-  return q.replace('-Q', ' Q')
+function fmtQuarterLabel(q: string, totalQuarters: number): string {
+  const [year, quarter] = q.replace('-Q', ' Q').split(' ')
+  return totalQuarters > 4 ? `${quarter} '${year.slice(2)}` : `${year} ${quarter}`
 }
 
 interface ByAETileProps {
@@ -58,7 +58,7 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
 
   // Dynamic grid columns: 1 label col + N quarter cols
   // We use a CSS grid with inline style to handle variable quarter count
-  const gridCols = `auto repeat(${quarters.length}, minmax(0, 1fr))`
+  const gridCols = `minmax(5rem, auto) repeat(${quarters.length}, minmax(0, 1fr))`
 
   return (
     <div className="bg-surface border border-border rounded-xl p-4">
@@ -94,7 +94,7 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
                 <button
                   key={ae}
                   onClick={() => onSelectAE(isActive ? null : ae)}
-                  className={`w-full text-left rounded px-2 py-1.5 transition-colors ${isActive ? 'bg-border/40' : 'hover:bg-border/20'}`}
+                  className={`w-full text-left rounded px-2 py-1 transition-colors ${isActive ? 'bg-border/40' : 'hover:bg-border/20'}`}
                 >
                   <div className="flex justify-between text-sm mb-1 min-w-0">
                     <span className={`font-medium truncate min-w-0 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`} title={ae}>
@@ -120,13 +120,13 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
             <div className="mt-3 pt-3 border-t border-border/50">
               {/* Column headers */}
               <div
-                className="gap-x-1 mb-1.5"
+                className="gap-x-2 pb-1 mb-0 border-b border-border/40"
                 style={{ display: 'grid', gridTemplateColumns: gridCols }}
               >
-                <span className="text-xs text-text-secondary"></span>
+                <span className="text-xs text-text-secondary w-20 min-w-[5rem]"></span>
                 {quarters.map(q => (
-                  <span key={q} className="text-xs font-medium text-text-secondary text-center truncate min-w-0">
-                    {fmtQuarterLabel(q)}
+                  <span key={q} className="text-xs font-medium text-text-secondary text-right truncate min-w-0">
+                    {fmtQuarterLabel(q, quarters.length)}
                   </span>
                 ))}
               </div>
@@ -137,16 +137,16 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
                 return (
                   <div
                     key={ae}
-                    className={`gap-x-1 py-0.5 rounded px-1 -mx-1 ${isActive ? 'bg-border/30' : 'hover:bg-border/20'}`}
+                    className={`gap-x-2 py-1 rounded px-1 -mx-1 border-b border-border/10 ${isActive ? 'bg-border/30' : 'hover:bg-border/20'}`}
                     style={{ display: 'grid', gridTemplateColumns: gridCols }}
                   >
-                    <span className={`text-xs font-medium truncate min-w-0 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>
+                    <span className={`text-xs font-medium truncate min-w-0 w-20 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>
                       {ae.split(' ')[0]}
                     </span>
                     {quarters.map(q => {
                       const acv = qMap.get(q) ?? 0
                       return (
-                        <span key={q} className="text-xs text-text-primary text-center font-mono">
+                        <span key={q} className="text-xs text-text-primary text-right tabular-nums font-mono">
                           {acv > 0 ? fmt(acv) : <span className="text-text-secondary/65">—</span>}
                         </span>
                       )
@@ -155,19 +155,19 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
                 )
               })}
               {/* Total row */}
-              {byAE.length > 1 && (
+              {byAE.length >= 1 && (
                 <div
-                  className="gap-x-1 py-0.5 border-t border-border/30 mt-0.5 pt-1 px-1 -mx-1"
+                  className="gap-x-2 py-1 border-t border-border/40 mt-0 pt-1 px-1 -mx-1"
                   style={{ display: 'grid', gridTemplateColumns: gridCols }}
                 >
-                  <span className="text-xs font-medium text-text-secondary">Total</span>
+                  <span className="text-xs font-medium text-text-secondary w-20">Total</span>
                   {quarters.map(q => {
                     const total = byAE.reduce((sum, ae) => {
                       const qMap = new Map(ae.byQuarter.map(qd => [qd.quarter, qd.acv]))
                       return sum + (qMap.get(q) ?? 0)
                     }, 0)
                     return (
-                      <span key={q} className="text-xs text-text-primary text-center font-mono font-medium">
+                      <span key={q} className="text-xs text-text-primary text-right tabular-nums font-mono font-medium">
                         {total > 0 ? fmt(total) : <span className="text-text-secondary/65">—</span>}
                       </span>
                     )
@@ -177,12 +177,6 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
             </div>
           )}
 
-          {/* Portfolio total */}
-          {totalSpend > 0 && (
-            <div className="mt-3 pt-2.5 border-t border-border/50 text-xs text-text-secondary">
-              Portfolio total: <span className="text-text-primary font-mono font-medium">{fmt(totalSpend)}</span>
-            </div>
-          )}
         </>
       )}
     </div>
