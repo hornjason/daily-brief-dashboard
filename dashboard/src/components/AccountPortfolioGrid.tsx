@@ -260,33 +260,39 @@ function AccountCard({
       {/* Header — links to customer page */}
       <a
         href={`/dashboard/customer/${encodeURIComponent(account.name)}`}
-        className="flex items-center justify-between mb-3 min-w-0"
+        className="flex flex-col mb-3 min-w-0"
       >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <HealthDot score={health.score} breakdown={health.breakdown as any} />
-          <span className="text-sm font-semibold text-text-primary group-hover:text-accent transition-colors truncate" title={account.name}>
-            {account.name}
+        <div className="flex items-center justify-between min-w-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <HealthDot score={health.score} breakdown={health.breakdown as any} />
+            <span className="text-sm font-semibold text-text-primary group-hover:text-accent transition-colors truncate" title={account.name}>
+              {account.name}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+            {showAE && account.ae && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 font-medium">
+                {account.ae.split(' ')[0]}
+              </span>
+            )}
+            {account.confidenceScore != null && (
+              <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                account.confidenceScore >= 80
+                  ? 'bg-green-100 text-green-800'
+                  : account.confidenceScore >= 60
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {account.confidenceScore}%
+              </span>
+            )}
+          </div>
+        </div>
+        {account.segment && (
+          <span className="text-xs text-text-secondary mt-1 ml-[22px] truncate" title={account.segment}>
+            {account.segment}
           </span>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-          {showAE && account.ae && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 font-medium">
-              {account.ae.split(' ')[0]}
-            </span>
-          )}
-          <span className="text-sm text-text-secondary truncate max-w-[120px]" title={account.segment}>{account.segment}</span>
-          {account.confidenceScore != null && (
-            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-              account.confidenceScore >= 80
-                ? 'bg-green-100 text-green-800'
-                : account.confidenceScore >= 60
-                ? 'bg-amber-100 text-amber-800'
-                : 'bg-red-100 text-red-800'
-            }`}>
-              {account.confidenceScore}%
-            </span>
-          )}
-        </div>
+        )}
       </a>
 
       {priorityAction && (
