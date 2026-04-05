@@ -2045,7 +2045,7 @@ Vault: ~/.claude/MEMORY/RESEARCH/2026-04/playwright-resilience-patterns/, ~/.cla
 ---
 
 ### BKL-M54 | Supportable scraper optimization — skip discovery + faster waits
-Status: 🔴 OPEN
+Status: ⏸️ DEFERRED
 Priority: P1
 Size: S (half day)
 Source: Supportable 360 User Guide analysis 2026-04-02
@@ -2059,7 +2059,7 @@ Description: Three optimizations from user guide analysis:
 ---
 
 ### BKL-M55 | Investigate RH internal APIs — one.redhat.com + compass.redhat.com catalogs
-Status: 🔴 OPEN
+Status: ⏸️ DEFERRED
 Priority: P2
 Size: Research (Jason action)
 Source: Jason 2026-04-02 — shared two internal API catalog links
@@ -2077,7 +2077,7 @@ Description: Jason identified two Red Hat internal API catalogs that may contain
 ---
 
 ### BKL-AI09 | Research: Auto-create NotebookLM per customer with Drive sources
-Status: 🔴 OPEN
+Status: ⏸️ DEFERRED
 Priority: P2
 Size: Research
 Source: Jason 2026-04-02 — "is there a way to create a notebookLM for each customer that pulls in notes/docs/pdfs from the account folder"
@@ -2107,7 +2107,7 @@ Related: BKL-AI04 (Account Intelligence subfolder — same Drive sources)
 ---
 
 ### BKL-AI10 | Enable Discovery Engine API + NotebookLM Enterprise IAM roles
-Status: 🔴 OPEN
+Status: ⏸️ DEFERRED
 Priority: P2
 Size: XS (30 min)
 Source: AI09 research — prerequisite for programmatic notebook creation
@@ -2185,7 +2185,7 @@ Description: Add "Create All Notebooks" button on Admin page that iterates all c
 ---
 
 ### BKL-AI14 | Auto-create notebook during bootstrap + refresh on Drive doc changes
-Status: 🔴 OPEN
+Status: ⏸️ DEFERRED
 Priority: P3
 Size: S (half day)
 Source: AI09 research — automation
@@ -2196,46 +2196,41 @@ Description: Automatically create NotebookLM notebook as part of bootstrap Step 
 ---
 
 ### BKL-AI15 | Research: Product roadmap/feature intelligence for AAP, OCP, RHEL
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-05 — Research + implementation spec complete. Fulfilled by BKL-W3-12 Phase 1.
 Priority: P2
-Size: Research
+Size: Research → implementation tracked in BKL-W3-12
 Source: Jason 2026-04-02 — "bring product features/tech preview/roadmaps for our top 3 platforms"
-Files: TBD
-Description: Research how to surface Red Hat product features, tech preview items, and roadmap data for the three core platforms (Ansible Automation Platform, OpenShift Container Platform, Red Hat Enterprise Linux) in customer briefs and the dashboard.
-  Use cases:
-  1. When preparing for a customer meeting, SA sees "OCP 4.17 adds X feature relevant to customer's Kubernetes workloads"
-  2. Brief mentions "RHEL 10 tech preview includes Y — potential upsell for customers on RHEL 9"
-  3. Dashboard shows upcoming GA dates, tech preview features, and deprecations per platform
-  Research complete (2026-04-02). Full report: docs/research-redhat-product-data-apis.md
-  **Confirmed data sources:**
-  - Tier 1 (free, no auth): Product Life Cycle API (233 products, versions, GA/EOL dates), AAP Atom feed, docs.redhat.com sitemap monitoring
-  - Tier 2 (~$1/mo): Gemini + Google Search grounding for feature extraction from indexed release notes
-  - Tier 3 (auth required): console.redhat.com APIs for customer installed versions
-  **Key API:** `https://access.redhat.com/product-life-cycles/api/v1/products` — JSON, free, all RH products
-  **Limitation:** docs.redhat.com uses client-side rendering — can't HTTP fetch content directly. Gemini grounding sidesteps this.
-  Implementation items to add: Life Cycle API client, `<source type="product_features">` XML schema, Gemini feature extraction, sitemap monitoring, Product Health Card component.
-Related: BKL-AI02 (company intelligence uses product fit assessment), BKL-AI16 (interactive product Q&A)
+Research complete: docs/research-redhat-product-data-apis.md
+Implementation spec: Updated in BKL-W3-12 (parent task)
+Confirmed data sources (2026-04-05):
+  - Life Cycle API: https://access.redhat.com/product-life-cycles/api/v1/products — free, no auth, all versions+EOL dates
+  - RHEL release notes: PDF download from docs.redhat.com (unpdf — already a dependency)
+  - OCP/AAP release notes: Static fetch + Playwright fallback via scraper queue
+  - AAP Atom feed: https://announcements.ansiblecloud.redhat.com/feed.atom
+  - Scraping approach: PDF-first (avoids client-side rendering). contentHash dedup = ~$0.30/month Gemini cost.
+  - Current versions: RHEL 9.7, OCP 4.21, AAP 2.6
+Related: BKL-W3-12 (parent implementation task), BKL-AI16 (fulfilled by W3-12 Phase 3)
 
 ### BKL-AI16 | Interactive product Q&A — Gemini-powered query interface for AAP, OCP, RHEL
 Status: 🔴 OPEN
 Priority: P2
-Size: M (1-2 days)
+Size: S (4 hours — revised down from M after research)
 Source: Jason 2026-04-02 — "a way to query this information directly like a gemini query to ask questions toward each product"
-Files: dashboard/src/pages/CustomerDetailPage.tsx (or new ProductIntelligencePage), server.ts (new endpoint), src/product-intelligence.ts (new)
-Depends on: BKL-AI15 (needs product data sources identified and wired)
-Description: Conversational query interface in the dashboard where an SA can ask product-specific questions and get grounded answers. Example queries:
-  - "What's new in OCP 4.17 that helps with multi-cluster management?"
-  - "When does RHEL 8 go EOL? What migration path should I recommend?"
-  - "Does AAP support event-driven automation for this customer's use case?"
-  - "What tech preview features in RHEL 10 are relevant to a financial services customer?"
-  Gemini with Google Search grounding answers using Red Hat docs, release notes, and product lifecycle data. Responses cite specific docs/release notes URLs.
-Fix:
-  1. POST /api/product-query — accepts { product: "OCP"|"AAP"|"RHEL", question: string, customerName?: string }
-  2. Build system prompt with product context from AI15 data sources (lifecycle dates, recent release notes, known features)
-  3. Call Gemini with tools: [{ googleSearch: {} }] to ground answers in current Red Hat documentation
-  4. If customerName provided, include customer context (industry, current subscriptions) for tailored answers
-  5. Return structured response: { answer: string, sources: [{title, url}], confidence: "HIGH"|"MEDIUM"|"LOW" }
-  6. Dashboard UI: chat-style input per product (or single input with product selector dropdown), response card with source links
+Research: 2026-04-05 — Architecture decided: Gemini Google Search grounding (NOT RAG, NOT long-context). callGeminiGrounded() already exists in account-intelligence.ts — reuse directly. AI15 data is an enhancement not a blocker.
+Files: src/product-intelligence.ts (new ~300L), dashboard/src/components/ProductQueryPanel.tsx (new ~250L), dashboard/src/hooks/useProductQuery.ts (new ~100L), src/customer-routes.ts (+30L endpoint), dashboard/src/pages/CustomerDetailPage.tsx (+10L embed)
+Depends on: BKL-AI15 — NOT a blocker. AI16 works standalone via grounding; AI15 improves quality when available.
+Description: Tabbed chat UI (AAP / OCP / RHEL tabs) embedded in CustomerDetailPage. Per-tab message history (max 10 messages). Streaming responses via text/event-stream. Citation cards with source URLs from Gemini grounding attributions.
+Implementation plan:
+  1. src/product-intelligence.ts — callGeminiGrounded() wrapper with product+customer system prompt, 3-layer hallucination guardrails, confidence scoring
+  2. POST /api/product-query — { product, question, customerName?, sessionId? } → streaming SSE response: chunk / source / confidence / done events
+  3. ProductQueryPanel.tsx — tabbed chat, progressive streaming render, source tooltip cards, confidence badge, clear history
+  4. useProductQuery.ts — custom hook managing fetch, streaming, abort, session state
+  5. CustomerDetailPage.tsx — embed panel in new "Product Intelligence" section
+System prompt: 3-layer (rules + AI15 context if available + optional customer context). Grounding always enabled — throw error if response has no attributions.
+Latency: 3–8s typical, 12s max. Streaming makes it feel responsive. Cost: ~$0.005–0.01/query.
+Guardrails: System prompt rules + mandatory grounding + confidence field enforcement + client-side source warning for LOW confidence.
+Session model: React state per tab, max 10 messages, oldest drop when >8000 tokens.
+Action URLs: calendar (Google Calendar), case (RH portal), opp (Salesforce). All open in new tab rel=noopener.
   7. Consider conversation history for follow-up questions within a session
 Related: BKL-AI15 (product data sources), BKL-AI02 (company intelligence)
 
@@ -3344,22 +3339,40 @@ Description: Fix the message at SetupPage.tsx:2668 to distinguish between two fa
 ---
 
 ### BKL-W3-12 | Product Intelligence Hub — RHEL, OpenShift, AAP release radar with chat
-Status: 🔴 OPEN
+Status: 🔴 OPEN — research done, ready to implement
 Priority: P2
-Size: XL (multi-session, 3 phases)
+Size: XL (3 phases: Phase 1 = 3-4 days, Phase 2 = 2 days, Phase 3 = 3-4 days)
 Source: Jason 2026-04-04 feature request
-Architecture: Serena Blackwood 2026-04-05 — Full design at docs/W3-12-PRODUCT-INTELLIGENCE-HUB.md
-Files: New feature — src/product-intelligence.ts, dashboard/src/pages/ProductIntelligencePage.tsx
-Description: SAs need to stay current on Red Hat product releases without manually tracking docs sites. A Product Intelligence Hub for RHEL, OpenShift, and Ansible Automation Platform that:
-  - Data sources: Red Hat docs (docs.redhat.com), release notes, Tech Preview pages, What's New announcements, plus any "What's Next" decks Jason drops as Markdown into a Drive folder per product
-  - Clicking a product name shows a Gemini-synthesized summary of: latest release highlights, Tech Preview items, roadmap signals — updated on a schedule (daily or on demand)
-  - Chat box on the product page: ask Gemini questions about the product using the collected intelligence as context ("Does AAP 2.6 support XYZ?", "What changed in RHEL 9.4?")
-  - Intelligence stored in data/cache/product-intelligence/{product-slug}.json (same pattern as account intelligence)
-  - Admin trigger to refresh a product's intelligence on demand
-  Phases: (1) scrape + Gemini summary (no chat), (2) add Drive folder drop for SA-curated decks, (3) chat interface
+Research: 2026-04-05 — BKL-AI15 + BKL-AI16 consolidated here as parent task. Full spec below.
+Architecture: docs/W3-12-PRODUCT-INTELLIGENCE-HUB.md
+Files: src/product-intelligence.ts (new), src/product-intel-routes.ts (new), src/product-intel-scheduler.ts (new), data/config/product-intel-config.json (new), dashboard/src/pages/ProductsPage.tsx (new), dashboard/src/components/ProductCard.tsx (new), dashboard/src/components/ProductChat.tsx (Phase 3), server.ts (+routes), background-scheduler.ts (+timer), customer.ts (+brief injection Phase 3)
+Consolidates: BKL-AI15 (data pipeline — DONE), BKL-AI16 (Q&A chat — fulfilled by Phase 3)
+Phase 1 — Scrape + Summary + UI (3-4 days):
+  - src/product-intelligence.ts: fetchLifecycleVersions(), scrapePdfNotes() via unpdf, scrapeHtmlNotes() static+Playwright fallback, parseAtomFeed(), synthesizeProductSummary() Gemini temp=0.3, cache read/write
+  - Config: data/config/product-intel-config.json with RHEL/OCP/AAP seeds, docBaseUrls, refreshIntervalHours
+  - Cache: data/cache/product-intel/{slug}-summary.json + {slug}-{version}-raw.json. contentHash dedup skips re-synthesis when source unchanged.
+  - API: GET /api/products, GET /api/products/:slug, POST /api/products/:slug/refresh
+  - Background: daily 6 AM refresh of all products
+  - UI: ProductsPage.tsx (3 cards), ProductCard.tsx (version, GA date, EOL, summary excerpt)
+  - Sidebar: Add Products nav item
+Phase 2 — Drive Drops + Admin Config (2 days):
+  - Per-product Drive folder for Jason's "What's Next" decks (Markdown)
+  - Admin page: folder ID picker per product
+  - Re-synthesis triggers when Drive content changes
+Phase 3 — Chat + Brief Integration (3-4 days):
+  - POST /api/products/:slug/chat — Gemini grounded Q&A (reuse callGeminiGrounded())
+  - ProductChat.tsx — tabbed chat UI, streaming SSE, citation cards, 10-message cap
+  - buildXmlSources() in customer.ts: inject <source type="product_intelligence"> for matched subscriptions
+  - SYNTHESIS_PROMPT update: include product intel section for matching products
+Key design decisions:
+  - PDF-first scraping (no Playwright for RHEL) — avoids shared browser contention
+  - Non-grounded Gemini for synthesis (source already in prompt, temp=0.3)
+  - Grounded Gemini for chat queries (callGeminiGrounded already exists)
+  - Config-driven product list (extensible to RHEL AI, OpenShift Virt, etc.)
+  - Subscription-based brief injection (only surface intel when customer has that product)
 
 ### BKL-W3-13 | Telesense integration — SF utilization data mapped to account details + briefs
-Status: 🔴 OPEN
+Status: 🔬 RESEARCH
 Priority: P2
 Size: L → XL (depends on tech stack discovery)
 Source: Jason 2026-04-04 feature request
@@ -3416,12 +3429,22 @@ Description: The summary cards at the top of the Admin page have misaligned text
 ---
 
 ### BKL-G23 | Admin page not discoverable from sidebar nav
-Status: 🔴 OPEN
+Status: ⏸️ DEFERRED
 Priority: P3
 Size: XS (15 min)
 Source: Quinn UIReviewer 2026-04-04 — brand new user finds no Admin link in sidebar
 Files: dashboard/src/components/Sidebar.tsx (or wherever nav links live)
 Description: Admin page (/admin) is only reachable via /setup → Admin link. No entry point exists in the main sidebar nav. Add an "Admin" link to the sidebar so users can access it directly without going through Setup first.
+
+---
+
+### BKL-G25 | Salesforce connection card shows amber "Session Active" instead of green "Connected"
+Status: 🔴 OPEN
+Priority: P2
+Size: XS (1-2 hours)
+Source: Jason 2026-04-04 — screenshot shows SF card amber while Portal/Supportable are green
+Files: dashboard/src/pages/SetupPage.tsx (connection card status logic)
+Description: The Salesforce connection card renders amber "Session Active" with a "Connect" button instead of green "Connected" with a "Reconnect" button. Portal and Supportable 360 show green when their sessions are active. SF should show green when a valid session exists and the pipeline has been synced at least once. The "Session active — sync needed to complete setup" message in the Sync section is also confusing — once a sync has been run, SF should show fully connected. Investigate the status logic that decides Connected vs Session Active, align SF with the other card states.
 
 ---
 
