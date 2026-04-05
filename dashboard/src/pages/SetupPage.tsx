@@ -1062,6 +1062,7 @@ function AutoBootstrapForm() {
             terrNum,
           }))
           setPreflightError('Bootstrap requires elevated Drive permissions. Re-authorizing…')
+          if (!d.url?.startsWith('/oauth/')) return
           setTimeout(() => { window.location.href = d.url }, 1200)
           return
         }

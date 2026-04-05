@@ -51,7 +51,7 @@ export function DriveSection({ files, loading }: { files: any[]; loading: boolea
               <div className="min-w-0 flex-1">
                 {f.webViewLink ? (
                   <a
-                    href={f.webViewLink}
+                    href={f.webViewLink?.startsWith('https://') ? f.webViewLink : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-text-primary hover:text-accent transition-colors flex items-center gap-1 truncate"

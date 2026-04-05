@@ -33,7 +33,7 @@ function fmtCommentDate(iso: string): string {
 // ── Case Detail Modal ─────────────────────────────────────────────────────────
 
 function CaseDetailModal({ c, onClose }: { c: CaseItem; onClose: () => void }) {
-  const portalUrl = `https://access.redhat.com/support/cases/#/case/${c.caseNumber}`
+  const portalUrl = `https://access.redhat.com/support/cases/#/case/${encodeURIComponent(c.caseNumber)}`
   const sev = SEV_LABELS[c.severity] ?? SEV_LABELS['4']
   const statusColor = (s: string) =>
     s.toLowerCase().includes('waiting on red hat') ? 'text-critical' :
@@ -42,7 +42,7 @@ function CaseDetailModal({ c, onClose }: { c: CaseItem; onClose: () => void }) {
   const [comment, setComment] = useState<{ author: string; body: string; createdAt: string } | null | 'loading'>('loading')
 
   useEffect(() => {
-    fetch(`/api/cases/${c.caseNumber}/latest-comment`)
+    fetch(`/api/cases/${encodeURIComponent(c.caseNumber)}/latest-comment`)
       .then((r) => r.json())
       .then((d) => setComment(d.comment ?? null))
       .catch(() => setComment(null))

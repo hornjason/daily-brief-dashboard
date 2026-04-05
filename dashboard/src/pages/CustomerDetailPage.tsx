@@ -730,7 +730,7 @@ function ActivityTimeline({
                   </span>
                   {item.joinUrl && (
                     <a
-                      href={item.joinUrl}
+                      href={item.joinUrl?.startsWith('https://') ? item.joinUrl : '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-1 px-2 py-1 rounded bg-accent/10 border border-accent/20 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
@@ -741,7 +741,7 @@ function ActivityTimeline({
                   )}
                   {item.viewUrl && (
                     <a
-                      href={item.viewUrl}
+                      href={item.viewUrl?.startsWith('https://') ? item.viewUrl : '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-text-secondary hover:text-text-primary"
