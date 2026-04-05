@@ -8,6 +8,8 @@ import { CalendarStrip } from './components/CalendarStrip'
 import { AccountPortfolioGrid } from './components/AccountPortfolioGrid'
 import { CloudSpendSection } from './components/CloudSpendSection'
 import MorningSummary from './components/MorningSummary'
+import TopActionsPanel from './components/TopActionsPanel'
+import type { TopAction } from './components/TopActionsPanel'
 import { PipelineSection } from './components/PipelineSection'
 import { RefreshTimerSettings } from './components/RefreshTimerSettings'
 import { WeatherSettings } from './components/WeatherSettings'
@@ -265,6 +267,37 @@ function Dashboard() {
 
             {/* Morning Summary (R06) */}
             <MorningSummary />
+
+            {/* Top Actions (BKL-F10a) */}
+            {/* TODO: wire real signal data — replace mock with ranked signals from /api/morning-summary or dedicated endpoint */}
+            <TopActionsPanel actions={[
+              {
+                customerName: 'Acme Corp',
+                signal: 'Sev1 case open 3 days — escalation risk',
+                chips: [
+                  { label: 'View Case', href: 'https://access.redhat.com/support/cases/#/case/00000001', variant: 'case' as const },
+                  { label: 'Schedule Call', href: 'https://calendar.google.com/calendar/r/eventedit?text=Acme+Sev1+Follow-up', variant: 'calendar' as const },
+                ],
+                priority: 'urgent' as const,
+              },
+              {
+                customerName: 'Globex Inc',
+                signal: '$420K renewal closes in 12 days — no recent contact',
+                chips: [
+                  { label: 'View Opp', href: 'https://redhatcrm.lightning.force.com/lightning/r/Opportunity/0060000000XXXXX/view', variant: 'salesforce' as const },
+                  { label: 'Send Email', href: 'mailto:buyer@globex.com?subject=Renewal+Check-in', variant: 'email' as const },
+                ],
+                priority: 'urgent' as const,
+              },
+              {
+                customerName: 'Initech',
+                signal: 'Upcoming QBR prep — 3 open action items from last meeting',
+                chips: [
+                  { label: 'Schedule Prep', href: 'https://calendar.google.com/calendar/r/eventedit?text=Initech+QBR+Prep', variant: 'calendar' as const },
+                ],
+                priority: 'this-week' as const,
+              },
+            ]} />
 
             {/* KPI Cards */}
             <section id="section-command" data-section="section-command">

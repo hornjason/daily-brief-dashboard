@@ -37,6 +37,7 @@ import BriefAgePill from '../components/BriefAgePill'
 import { DataQualityBadge } from '../components/DataQualityBadge'
 import { AccountIntelligencePanel } from '../components/AccountIntelligencePanel'
 import PriorityActionBanner from '../components/PriorityActionBanner'
+import CustomerSignalBanner from '../components/CustomerSignalBanner'
 import HealthScoreHero from '../components/HealthScoreHero'
 import CitationTooltip from '../components/CitationTooltip'
 import BriefDeltaMarker from '../components/BriefDeltaMarker'
@@ -1299,6 +1300,23 @@ export function CustomerDetailPage() {
       {priorityAction && (
         <div className="px-6 pt-4">
           <PriorityActionBanner action={priorityAction} customerName={customerName} />
+        </div>
+      )}
+
+      {/* Customer Signal Banner (BKL-F10a) — top signal with action chips */}
+      {/* TODO: wire real signal data — derive from priorityAction or dedicated signal endpoint */}
+      {priorityAction && (
+        <div className="px-6 pt-3">
+          <CustomerSignalBanner
+            signal={priorityAction.text}
+            priority={priorityAction.severity === 'critical' ? 'urgent' : 'this-week'}
+            chips={[
+              ...(priorityAction.source.toLowerCase().includes('case') && priorityAction.source.match(/\d{8,}/)
+                ? [{ label: 'View Case', href: `https://access.redhat.com/support/cases/#/case/${priorityAction.source.match(/(\d{8,})/)?.[1]}`, variant: 'case' as const }]
+                : []),
+              { label: 'Schedule', href: `https://calendar.google.com/calendar/r/eventedit?text=${encodeURIComponent(`Follow up: ${priorityAction.text.slice(0, 60)}`)}`, variant: 'calendar' as const },
+            ]}
+          />
         </div>
       )}
 
