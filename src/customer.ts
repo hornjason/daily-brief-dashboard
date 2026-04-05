@@ -189,11 +189,18 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
         fields: 'files(id,name)', pageSize: 200,
       })
       const folderList = custFolders.data.files ?? []
-      const match = fuzzyFindCustomerFolder(folderList, customer.name)
-      if (match) {
-        customerFolderId = match.id
-        console.log(`[drive] Matched folder "${match.name}" for ${customer.name} (under AE ${customer.ae})`)
-      } else {
+      // Try primary name first, then aliases as fallback
+      const namesToTry = [customer.name, ...(customer.aliases ?? [])]
+      for (const tryName of namesToTry) {
+        const match = fuzzyFindCustomerFolder(folderList, tryName)
+        if (match) {
+          customerFolderId = match.id
+          const aliasNote = tryName !== customer.name ? ` (via alias "${tryName}")` : ''
+          console.log(`[drive] Matched folder "${match.name}" for ${customer.name}${aliasNote} (under AE ${customer.ae})`)
+          break
+        }
+      }
+      if (!customerFolderId) {
         // One level deeper: AE folder → subfolder (e.g. "Accounts") → customer
         for (const sub of (custFolders.data.files ?? []).slice(0, 10)) {
           if (!sub.id) continue
@@ -201,12 +208,16 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
             q: `'${sub.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
             fields: 'files(id,name)', pageSize: 100,
           })
-          const deepMatch = fuzzyFindCustomerFolder(deeper.data.files ?? [], customer.name)
-          if (deepMatch) {
-            customerFolderId = deepMatch.id
-            console.log(`[drive] Matched folder "${deepMatch.name}" for ${customer.name} (under ${sub.name}/${customer.ae})`)
-            break
+          for (const tryName of namesToTry) {
+            const deepMatch = fuzzyFindCustomerFolder(deeper.data.files ?? [], tryName)
+            if (deepMatch) {
+              customerFolderId = deepMatch.id
+              const aliasNote = tryName !== customer.name ? ` (via alias "${tryName}")` : ''
+              console.log(`[drive] Matched folder "${deepMatch.name}" for ${customer.name}${aliasNote} (under ${sub.name}/${customer.ae})`)
+              break
+            }
           }
+          if (customerFolderId) break
         }
       }
     }
@@ -224,17 +235,23 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
       q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
       fields: 'files(id,name)', pageSize: 50,
     })
+    const legacyNamesToTry = [customer.name, ...(customer.aliases ?? [])]
     for (const aeCandidate of level1Res.data.files ?? []) {
       if (!aeCandidate.id) continue
       const custRes = await drive.files.list({
         q: `'${aeCandidate.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
         fields: 'files(id,name)', pageSize: 100,
       })
-      const match = fuzzyFindCustomerFolder(custRes.data.files ?? [], customer.name)
-      if (match) {
-        customerFolderId = match.id
-        console.log(`[drive] Matched folder "${match.name}" for ${customer.name} via parent scan`)
-        break
+      for (const tryName of legacyNamesToTry) {
+        const match = fuzzyFindCustomerFolder(custRes.data.files ?? [], tryName)
+        if (match) {
+          customerFolderId = match.id
+          const aliasNote = tryName !== customer.name ? ` (via alias "${tryName}")` : ''
+          console.log(`[drive] Matched folder "${match.name}" for ${customer.name}${aliasNote} via parent scan`)
+          break
+        }
+      }
+      if (customerFolderId) break
       }
     }
   }

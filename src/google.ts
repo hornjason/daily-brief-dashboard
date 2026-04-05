@@ -270,7 +270,7 @@ export async function fetchDrive(customers: Customer[]): Promise<DriveFile[]> {
   if (!parentId) throw new Error('AE_PARENT_FOLDER_ID not set in .env')
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-  const customerNames = customers.map((c) => c.name.toLowerCase())
+  const customerNames = customers.flatMap((c) => [c.name, ...(c.aliases ?? [])].map(n => n.toLowerCase()))
 
   // 1. List all AE folders under the parent
   const aeFoldersRes = await drive.files.list({

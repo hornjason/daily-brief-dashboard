@@ -55,6 +55,7 @@ interface WizardCustomer {
   supportableName: string
   domain: string
   accountNumbers: string
+  aliases: string
 }
 
 // ── Small helpers ──────────────────────────────────────────────────────────────
@@ -426,7 +427,7 @@ function GoogleAuthSection() {
 // ── AEs & Customers ────────────────────────────────────────────────────────────
 
 function makeBlankCustomer(): WizardCustomer {
-  return { id: crypto.randomUUID(), name: '', supportableName: '', domain: '', accountNumbers: '' }
+  return { id: crypto.randomUUID(), name: '', supportableName: '', domain: '', accountNumbers: '', aliases: '' }
 }
 
 function makeBlankAE(): WizardAE {
@@ -1390,6 +1391,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
           supportableName?: string
           domain?: string
           accountNumbers?: string[]
+          aliases?: string[]
           ae?: string
         }> = Array.isArray(customerList) ? customerList : []
 
@@ -1419,6 +1421,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                 supportableName: c.supportableName ?? '',
                 domain: c.domain ?? '',
                 accountNumbers: (c.accountNumbers ?? []).join(', '),
+                aliases: (c.aliases ?? []).join(', '),
               })),
           })).map(ae => ({
             ...ae,
@@ -1561,6 +1564,9 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
               .split(',')
               .map(s => s.trim())
               .filter(Boolean),
+            aliases: c.aliases.trim()
+              ? c.aliases.split(',').map(s => s.trim()).filter(Boolean)
+              : undefined,
             ae: a.name.trim(),
           }))
       )
@@ -1826,6 +1832,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                     <th className="text-left py-2 pr-2 font-medium">Supportable Name</th>
                     <th className="text-left py-2 pr-2 font-medium">Domain</th>
                     <th className="text-left py-2 pr-2 font-medium">Account Numbers</th>
+                    <th className="text-left py-2 pr-2 font-medium">Aliases</th>
                     <th className="w-8"></th>
                   </tr>
                 </thead>
@@ -1866,6 +1873,16 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                           onChange={e => updateCustomer(ae.id, c.id, { accountNumbers: e.target.value })}
                           placeholder="1234567, 2345678"
                           className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          value={c.aliases}
+                          onChange={e => updateCustomer(ae.id, c.id, { aliases: e.target.value })}
+                          placeholder="Dropbox Inc., Dropbox Holdings"
+                          className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
+                          title="Alternate names for Drive folder lookup (comma-separated)"
                         />
                       </td>
                       <td className="py-1.5">
