@@ -393,8 +393,8 @@ export function registerSetupRoutes(app: Hono): void {
         if (cx.region          != null) cleaned.region          = cx.region
         if (cx.sheetTab        != null) cleaned.sheetTab        = cx.sheetTab
         if (cx.supportableName != null) cleaned.supportableName = cx.supportableName
-        if (cx.aliases         != null) cleaned.aliases         = cx.aliases
-        if (cx.aliasDomains    != null) cleaned.aliasDomains    = cx.aliasDomains
+        if (cx.aliases         != null) cleaned.aliases         = (Array.isArray(cx.aliases) ? cx.aliases : []).filter((a: unknown): a is string => typeof a === 'string').map(a => sanitizeText(a, 100)).filter(Boolean)
+        if (cx.aliasDomains    != null) cleaned.aliasDomains    = (Array.isArray(cx.aliasDomains) ? cx.aliasDomains : []).filter((d: unknown): d is string => typeof d === 'string' && isValidDomain(d))
         if (cx.skipAccountDiscovery != null) cleaned.skipAccountDiscovery = cx.skipAccountDiscovery
         body.customers[i] = cleaned as Customer
       }
