@@ -3291,7 +3291,7 @@ Investigation: Marcus 2026-04-05 — NOT a code bug. API returns 20 unique custo
 Description: Elmer Alvarez has customers in customers.json but no AE entry in aes.json. This means his accounts have no associated sheet IDs or scraper config. Fix: add Elmer Alvarez to aes.json with his sheet IDs and territory config. This is a config gap, not a UI bug — deduplicating in the UI would hide missing data.
 
 ### BKL-W3-04 | Account Portfolio cards — Segment/Industry text truncated and unreadable
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Verified: `title={account.segment}` already present at AccountPortfolioGrid.tsx:277. No industry field exists. Tooltip on hover was already implemented. No code change required.
 Priority: P2
 Size: S (1-2 hours)
 Source: Jason 2026-04-04 brain dump
@@ -3315,7 +3315,7 @@ Investigation: Aditi 2026-04-05 — Full design report delivered. Key findings:
 Description: Implement Aditi's design recommendations from docs/W3-05-DESIGN-REPORT.md (or inline above). Priority order: (1) fix truncation on Products+Cases (remove `truncate`, allow wrap), (2) reorder tiles (Cases first), (3) bump text-xs→text-sm for primary content, (4) add expand-in-place for case details, (5) expiry urgency bands on Products.
 
 ### BKL-W3-06 | Setup page — header redesign with Red Hat branding
-Status: 🔴 OPEN — Design Council complete; conform to DESIGN-COUNCIL-W3.md standards
+Status: ✅ DONE 2026-04-04 — Implemented Concept B horizontal brand bar: flex items-start layout, 48×48 bg-[#EE0000] rounded-xl with white "RH" text, "ASA Command Center" subtitle in text-accent, gradient divider, reset buttons moved to right side of flex row. Conforms to DESIGN-COUNCIL-W3.md typography standards.
 Priority: P2
 Size: S (2-3 hours)
 Source: Jason 2026-04-04 brain dump — "change the icon to a red hat icon/image, better header design"
@@ -3406,7 +3406,7 @@ Design:
   - This is purely additive — no changes to existing matching logic, aliases only tried as fallback
 
 ### BKL-W3-09 | Admin page — top cards misaligned text and labels
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Applied grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 pattern with whitespace-nowrap labels and truncate min-w-0 values to the Gemini API usage key-value section. Replaced justify-between with dl/dt/dd grid per DESIGN-COUNCIL-W3.md Section 5.
 Priority: P2
 Size: XS (30 min)
 Source: Jason 2026-04-04 brain dump
@@ -3913,7 +3913,7 @@ Files: playwright.config.ts (webServer.timeout: 15_000)
 Description: playwright.config.ts configures `webServer.timeout: 15_000` (15 seconds). Bun cold-start on a GitHub Actions runner (slower than dev machine, cold dependency resolution) can approach this limit, risking "server didn't start" failures that cancel the entire test run. Fix: bump to 30_000 or 45_000 to give the server comfortable startup room without risking test runs failing before they start.
 
 ### BKL-W3-16 | AdminPage — remove text-[10px] violations (P0 typography)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Replaced all 5 text-[10px] occurrences: lines 109, 432 (compact badge contexts) → text-signal; lines 214, 225, 297 (hint/error text) → text-xs. No visual redesign.
 Priority: P0
 Size: XS (30 min)
 Source: Design Council 2026-04-05 — Aditi audit
@@ -3922,7 +3922,7 @@ Files: dashboard/src/pages/AdminPage.tsx lines 109, 214, 225, 297, 432
 Description: Five occurrences of `text-[10px]` in AdminPage — below the 11px minimum readable threshold established by Design Council. Replace each with `text-signal` (11px, for compact badge contexts) or `text-xs` (13px, for all other contexts). No visual redesign required — this is a pure typography floor fix. Council rule: `text-[10px]` and any inline pixel font size is BANNED app-wide.
 
 ### BKL-W3-17 | AccountPortfolioGrid — AE groups collapse by default at 5+ AEs (P0 scale)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Added defaultCollapsed={aeGroups.length > 4} to AEGroup in byAE render block (line 669). One-line fix prevents 80-concurrent-call storm at 5+ AEs.
 Priority: P0
 Size: XS (15 min)
 Source: Design Council 2026-04-05 — Serena scalability analysis
@@ -3930,7 +3930,7 @@ Files: dashboard/src/components/AccountPortfolioGrid.tsx line 668
 Description: In `byAE` view, all AE group sections render expanded by default (no `defaultCollapsed` prop passed). At 8 AEs × 10 customers each, this triggers 80 concurrent priority-action API calls on page load — the app is non-functional at scale. One-line fix: pass `defaultCollapsed={aeGroups.length > 4}` to each `<AEGroup>` in the byAE render block. When ≤4 AEs, groups stay expanded (current behavior). When 5+ AEs, all groups start collapsed and the user expands the ones they want. Does not change triage view (already handles collapse correctly).
 
 ### BKL-W3-18 | CustomerDetailPage — extract right column tiles to named components (P1 foundation)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Extracted all four tiles: CasesSection → dashboard/src/components/CasesSection.tsx, KeyContacts → KeyContactsSection.tsx, SubscriptionsSection → SubscriptionsSection.tsx, DriveSection → DriveSection.tsx. Pure refactor — no behavior change. CustomerDetailPage now imports from component files. TypeScript clean (0 errors).
 Priority: P1
 Size: M (3-4 hours)
 Source: Design Council 2026-04-05 — Marcus implementation analysis
@@ -3939,7 +3939,7 @@ Files: dashboard/src/pages/CustomerDetailPage.tsx (1752 lines), new component fi
 Description: Four right-column tiles are currently inline anonymous functions inside CustomerDetailPage.tsx — `CasesSection`, `SubscriptionsSection`, `KeyContacts`, `DriveSection`. They cannot have independent state (expand/collapse, show-more) without extraction. Marcus extraction order: (1) CasesSection → src/components/CasesSection.tsx, (2) KeyContacts → src/components/KeyContactsSection.tsx, (3) SubscriptionsSection → src/components/SubscriptionsSection.tsx, (4) DriveSection → src/components/DriveSection.tsx. Each extraction is a pure refactor — no behavior change, just file move + named export. Required precondition for W3-05.
 
 ### BKL-W3-19 | Dashboard layout — right column width 35% → 38%
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Changed w-[35%] → w-[38%] on aside element in CustomerDetailPage.tsx:1737. Left column uses flex-1 and absorbs the delta automatically.
 Priority: P1
 Size: XS (15 min)
 Source: Design Council 2026-04-05 — Aditi + Serena combined finding
@@ -3995,7 +3995,7 @@ Files: dashboard/src/components/Sidebar.tsx
 Description: Sidebar uses `overflow-hidden` which will clip AE entries when count reaches 16+. Currently at 1 AE so not visible, but will manifest when team grows. Fix: change to `overflow-y-auto` on the AE list container. Latent P3 — low urgency but trivial fix.
 
 ### BKL-W3-26 | Delete MeetingPrepCards.tsx — dead code, imported nowhere
-Status: 🔴 OPEN
+Status: ⚠️ BLOCKED 2026-04-04 — Confirmed not imported anywhere (grep clean). Deletion requires bash shell permission not available in this session. Jason to run: rm dashboard/src/components/MeetingPrepCards.tsx
 Priority: P3
 Size: XS (5 min)
 Source: Design Council 2026-04-05 — Marcus dead code audit
@@ -4003,7 +4003,7 @@ Files: dashboard/src/components/MeetingPrepCards.tsx
 Description: MeetingPrepCards.tsx is a 100+ line component that is not imported anywhere in the codebase. Marcus confirmed: no references in any page, component, or test file. Safe to delete. Reduces bundle surface and grep noise.
 
 ### BKL-W3-27 | Tailwind config — add semantic label/detail font tokens
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-04 — Added text-label (0.8125rem, 1.25rem lineHeight, 500 weight) and text-detail (0.875rem, 1.5rem lineHeight) to dashboard/tailwind.config.js theme.extend.fontSize.
 Priority: P3
 Size: XS (30 min)
 Source: Design Council 2026-04-05 — Marcus quick wins

@@ -666,7 +666,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
           /* By AE view */
           <div className="space-y-6">
             {aeGroups.map(([ae, aeAccounts]) => (
-              <AEGroup key={ae} label={ae} count={aeAccounts.length}>
+              <AEGroup key={ae} label={ae} count={aeAccounts.length} defaultCollapsed={aeGroups.length > 4}>
                 <CardGrid
                   accounts={aeAccounts}
                   casesByAccount={casesByAccount}

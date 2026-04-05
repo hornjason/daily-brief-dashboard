@@ -106,7 +106,7 @@ function ScrapeSection({
           </div>
           {circuitBreaker && circuitBreaker.state !== 'closed' && (
             <span
-              className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${
+              className={`px-1.5 py-0.5 text-signal font-medium rounded ${
                 circuitBreaker.state === 'open' ? 'bg-red-900/60 text-red-400' : 'bg-yellow-900/60 text-yellow-400'
               }`}
               title={circuitBreaker.lastFailure ?? undefined}
@@ -211,7 +211,7 @@ function SourceScheduleRow({ label, timeKey, enabledKey, floorHint, schedCfg, on
             onChange={e => { setTimeVal(e.target.value); setSaved(false); setError(null) }}
             className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
           />
-          <span className="text-[10px] text-gray-500 mt-0.5">{floorHint}</span>
+          <span className="text-xs text-gray-500 mt-0.5">{floorHint}</span>
         </div>
       )}
       {isInterval && <span className="text-xs text-gray-500 pt-1">{floorHint}</span>}
@@ -222,7 +222,7 @@ function SourceScheduleRow({ label, timeKey, enabledKey, floorHint, schedCfg, on
       >
         {saving ? '...' : saved ? 'Saved' : 'Save'}
       </button>
-      {error && <span className="text-[10px] text-red-400 pt-1">{error}</span>}
+      {error && <span className="text-xs text-red-400 pt-1">{error}</span>}
     </div>
   )
 }
@@ -294,7 +294,7 @@ function SchedulerConfig({
           >
             {saving ? '...' : saved ? 'Saved' : 'Save'}
           </button>
-          {saveError && <span className="text-[10px] text-red-400">{saveError}</span>}
+          {saveError && <span className="text-xs text-red-400">{saveError}</span>}
         </div>
         {schedulerCfg && (
           <SourceScheduleRow label="RH Cases" timeKey="rhScrape" enabledKey="rhEnabled" floorHint="Interval-based (see above)" schedCfg={cfg} onSave={onSave} isInterval />
@@ -429,7 +429,7 @@ function IntelligenceStepperSection({ jobStatus }: { jobStatus: IntelligenceJobS
           return (
             <div key={step.label} className="flex items-center gap-2 flex-1 min-w-0">
               <div className={`flex items-center gap-1.5 flex-1 min-w-0 ${isFuture ? 'opacity-40' : ''}`}>
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold border ${
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-signal font-bold border ${
                   isComplete
                     ? 'bg-green-700 border-green-600 text-white'
                     : isActive
@@ -968,42 +968,37 @@ export function AdminPage() {
             ) : geminiUsage.totalCalls === 0 ? (
               <div className="text-xs text-gray-500">No Gemini calls recorded yet this session</div>
             ) : (
-              <div className="space-y-2 text-xs text-gray-400">
-                <div className="flex justify-between">
-                  <span>Today</span>
-                  <span className="text-gray-200 tabular-nums">
-                    {(geminiUsage.todayInputTokens + geminiUsage.todayOutputTokens).toLocaleString()} tokens
-                    &nbsp;·&nbsp;
-                    <span className="text-yellow-400">${geminiUsage.todayCostUsd.toFixed(4)}</span>
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>This month</span>
-                  <span className="text-gray-200 tabular-nums">
-                    {(geminiUsage.monthInputTokens + geminiUsage.monthOutputTokens).toLocaleString()} tokens
-                    &nbsp;·&nbsp;
-                    <span className="text-yellow-400">${geminiUsage.monthCostUsd.toFixed(4)}</span>
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total calls this session</span>
-                  <span className="text-gray-200 tabular-nums">{geminiUsage.totalCalls}</span>
-                </div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs text-gray-400">
+                <dt className="whitespace-nowrap">Today</dt>
+                <dd className="text-gray-200 tabular-nums truncate min-w-0">
+                  {(geminiUsage.todayInputTokens + geminiUsage.todayOutputTokens).toLocaleString()} tokens
+                  &nbsp;·&nbsp;
+                  <span className="text-yellow-400">${geminiUsage.todayCostUsd.toFixed(4)}</span>
+                </dd>
+                <dt className="whitespace-nowrap">This month</dt>
+                <dd className="text-gray-200 tabular-nums truncate min-w-0">
+                  {(geminiUsage.monthInputTokens + geminiUsage.monthOutputTokens).toLocaleString()} tokens
+                  &nbsp;·&nbsp;
+                  <span className="text-yellow-400">${geminiUsage.monthCostUsd.toFixed(4)}</span>
+                </dd>
+                <dt className="whitespace-nowrap">Total calls this session</dt>
+                <dd className="text-gray-200 tabular-nums truncate min-w-0">{geminiUsage.totalCalls}</dd>
                 {Object.keys(geminiUsage.byCallType).length > 0 && (
-                  <div className="pt-1 border-t border-gray-700 space-y-1">
+                  <>
+                    <dt className="col-span-2 pt-1 border-t border-gray-700" />
                     {Object.entries(geminiUsage.byCallType)
                       .sort((a, b) => b[1].costUsd - a[1].costUsd)
                       .map(([type, stats]) => (
-                        <div key={type} className="flex justify-between">
-                          <span className="text-gray-500">{type}</span>
-                          <span className="tabular-nums text-gray-400">
+                        <>
+                          <dt key={`${type}-label`} className="text-gray-500 whitespace-nowrap">{type}</dt>
+                          <dd key={`${type}-value`} className="tabular-nums truncate min-w-0">
                             {stats.calls} calls · ${stats.costUsd.toFixed(4)}
-                          </span>
-                        </div>
+                          </dd>
+                        </>
                       ))}
-                  </div>
+                  </>
                 )}
-              </div>
+              </dl>
             )}
           </div>
         </div>

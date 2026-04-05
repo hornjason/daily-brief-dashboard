@@ -2785,43 +2785,52 @@ export default function SetupPage() {
   return (
     <div className="min-h-screen bg-bg text-white flex flex-col">
       <div className="w-full max-w-2xl mx-auto px-4 py-12 flex-1">
-        {/* Header */}
-        <div className="text-center mb-10 relative">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-accent mb-3">
-            <span className="text-xl">&#x1f5c2;&#xfe0f;</span>
+        {/* Header — Concept B: Horizontal Brand Bar */}
+        <div className="mb-10">
+          <div className="flex items-start gap-4">
+            {/* Red Hat brand icon */}
+            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[#EE0000] shrink-0">
+              <span className="text-white text-sm font-bold leading-none">RH</span>
+            </div>
+            {/* Title + subtitle */}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold text-white leading-tight">Daily Brief Dashboard</h1>
+              <p className="text-accent text-sm mt-0.5">ASA Command Center</p>
+            </div>
+            {/* Reset buttons — right side of flex row */}
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              {resetConfirm ? (
+                <div className="flex items-center gap-2 bg-critical/15 border border-critical/30 rounded-lg px-3 py-1.5">
+                  <span className="text-xs text-critical">
+                    {resetConfirm === 'full' ? 'Clears everything including OAuth keys.' : 'Clears data, keeps OAuth keys.'}
+                  </span>
+                  <button onClick={() => doReset(resetConfirm === 'full')} disabled={resetting} className="text-xs bg-critical hover:bg-critical/80 text-white px-2 py-0.5 rounded disabled:opacity-50">
+                    {resetting ? 'Clearing…' : 'Confirm'}
+                  </button>
+                  <button onClick={() => setResetConfirm(null)} className="text-xs text-text-secondary hover:text-white">Cancel</button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setResetConfirm('full')}
+                    className="text-xs text-text-secondary hover:text-critical transition-colors"
+                    title="Clear everything including OAuth keys"
+                  >
+                    Full Reset
+                  </button>
+                  <button
+                    onClick={() => setResetConfirm('data')}
+                    className="text-xs text-text-secondary/50 hover:text-text-secondary transition-colors"
+                    title="Clear data but keep OAuth keys"
+                  >
+                    Reset Data Only
+                  </button>
+                </>
+              )}
+            </div>
           </div>
-          <h1 className="text-3xl font-bold text-white">Daily Brief Dashboard</h1>
-          <p className="text-text-secondary mt-1 text-sm">Settings — configure each section independently</p>
-          <div className="absolute top-0 right-0 flex flex-col items-end gap-1">
-            {resetConfirm ? (
-              <div className="flex items-center gap-2 bg-critical/15 border border-critical/30 rounded-lg px-3 py-1.5">
-                <span className="text-xs text-critical">
-                  {resetConfirm === 'full' ? 'Clears everything including OAuth keys.' : 'Clears data, keeps OAuth keys.'}
-                </span>
-                <button onClick={() => doReset(resetConfirm === 'full')} disabled={resetting} className="text-xs bg-critical hover:bg-critical/80 text-white px-2 py-0.5 rounded disabled:opacity-50">
-                  {resetting ? 'Clearing…' : 'Confirm'}
-                </button>
-                <button onClick={() => setResetConfirm(null)} className="text-xs text-text-secondary hover:text-white">Cancel</button>
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => setResetConfirm('full')}
-                  className="text-xs text-text-secondary hover:text-critical transition-colors"
-                  title="Clear everything including OAuth keys"
-                >
-                  Full Reset
-                </button>
-                <button
-                  onClick={() => setResetConfirm('data')}
-                  className="text-xs text-text-secondary/50 hover:text-text-secondary transition-colors"
-                  title="Clear data but keep OAuth keys"
-                >
-                  Reset Data Only
-                </button>
-              </>
-            )}
-          </div>
+          {/* Divider */}
+          <div className="h-0.5 bg-gradient-to-r from-accent/50 to-transparent mt-4" />
         </div>
 
         {/* Q1: Reduce Permissions banner — only show when at least one AE is fully configured */}

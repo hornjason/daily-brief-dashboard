@@ -56,6 +56,8 @@ export default {
         'hero': ['18px', { lineHeight: '1.2', fontWeight: '700' }],
         'signal': ['11px', { lineHeight: '1.3', fontWeight: '500' }],
         'priority': ['14px', { lineHeight: '1.4', fontWeight: '600' }],
+        'label': ['0.8125rem', { lineHeight: '1.25rem', fontWeight: '500' }],
+        'detail': ['0.875rem', { lineHeight: '1.5rem' }],
       },
       borderRadius: {
         card: '0.75rem',
