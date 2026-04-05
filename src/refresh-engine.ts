@@ -40,7 +40,7 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
   // 2. CCSP
   let ccspOk = false
   try {
-    const { records, fileIds } = await fetchCCSPData(aes.map(a => a.ccspSheetId).filter(Boolean) as string[])
+    const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
     if (records.length === 0 && (readCCSPCache()?.records?.length ?? 0) > 0) {
       console.log(`[refresh:all] ccsp: got 0 records but cache has data — keeping existing cache`)
       ccspOk = true
@@ -97,7 +97,7 @@ export async function refreshCCSP(): Promise<void> {
       const changed = await checkFilesModified(cached.fileIds, cached.cachedAt)
       if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
     }
-    const { records, fileIds } = await fetchCCSPData(aes.map(a => a.ccspSheetId).filter(Boolean) as string[])
+    const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
     // Guard: don't overwrite populated cache with empty — quota failure returns [] silently
     if (records.length === 0 && (readCCSPCache()?.records?.length ?? 0) > 0) {
       console.log(`[refresh:ccsp] got 0 records but cache has data — keeping existing cache`)
