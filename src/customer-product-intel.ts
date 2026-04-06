@@ -1,0 +1,409 @@
+/**
+ * Customer Product Intel — Wave 4 Phase 2b
+ *
+ * Cross-references product release radar summaries against a specific
+ * customer's subscriptions, support cases, and pipeline to produce
+ * actionable SA insights via Gemini.
+ *
+ * Cache path: data/cache/product-intel/{slug}-customer-intel/{customerSlug}.json
+ */
+
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
+import { resolve } from 'path'
+import { createHash } from 'crypto'
+import type { ProductConfig, ProductSummary } from './product-release-radar.ts'
+import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { getGeminiToken } from './gemini-auth.ts'
+import { sanitizePromptInput } from './utils.ts'
+import { getAiConfig, getGeminiModel, getAutomationConfig } from './settings-api.ts'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface CustomerProductIntel {
+  product: string              // slug
+  customer: string
+  relevanceScore: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'
+  priorityAction: string
+  roadmapRelevance: {
+    feature: string
+    customerConnection: string
+    talkingPoint: string
+  }[]
+  expansionOpportunities: {
+    gap: string
+    product: string
+    rationale: string
+  }[]
+  caseAlignment: {
+    caseNumber: string
+    roadmapFix: string
+    timeline: string
+  }[]
+  competitiveAngle: string | null
+  featureTalkingPoints?: {
+    feature: string       // exact feature name from radar
+    status: string        // GA | Tech Preview | Roadmap
+    version: string | null // version introduced (e.g. "9.4") or null
+    reason: string        // why this matters for this customer
+    signalSource: string  // cites specific case#/SKU/doc/brief topic
+  }[]
+  generatedAt: string
+  productCacheHash: string
+}
+
+interface CustomerIntelCache {
+  contentHash: string
+  intel: CustomerProductIntel
+  cachedAt: string
+}
+
+// ── Signal loaders ────────────────────────────────────────────────────────────
+
+function loadAccountIntelligence(cacheDir: string, customerSlug: string): { company: string; industry: string } | null {
+  try {
+    const p = resolve(cacheDir, 'intelligence', `${customerSlug}.json`)
+    if (!existsSync(p)) return null
+    const d = JSON.parse(readFileSync(p, 'utf-8'))
+    if (!d.company && !d.industry) return null
+    return { company: String(d.company ?? ''), industry: String(d.industry ?? '') }
+  } catch { return null }
+}
+
+function loadBriefHistory(cacheDir: string, customerSlug: string, maxDays = 7): string {
+  // Reads up to maxDays of past brief cache files and returns a compressed summary
+  try {
+    const files = readdirSync(cacheDir)
+      .filter(f => f.startsWith(customerSlug + '-') && !f.endsWith('-sheets.json') && f.endsWith('.json'))
+      .sort()
+      .reverse()
+      .slice(0, maxDays)
+    if (!files.length) return ''
+    return files.map(f => {
+      const d = JSON.parse(readFileSync(resolve(cacheDir, f), 'utf-8'))
+      const date = f.replace(`${customerSlug}-`, '').replace('.json', '')
+      return `[Brief ${date}]\n${String(d.text ?? '').slice(0, 800)}`
+    }).join('\n\n')
+  } catch { return '' }
+}
+
+// ── Paths ─────────────────────────────────────────────────────────────────────
+
+const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../data')
+const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
+
+function customerIntelCacheDir(slug: string): string {
+  return resolve(CACHE_DIR, `${slug}-customer-intel`)
+}
+
+function customerIntelCachePath(slug: string, customerSlug: string): string {
+  return resolve(customerIntelCacheDir(slug), `${customerSlug}.json`)
+}
+
+export function toCustomerSlug(customerName: string): string {
+  return customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+}
+
+// ── Gemini auth (mirrors product-release-radar.ts pattern) ───────────────────
+
+// ── Filtering helpers ─────────────────────────────────────────────────────────
+
+/** Returns subscriptions whose productName matches any of the product's known patterns. */
+export function customerSubscribesTo(subscriptions: any[], product: ProductConfig): any[] {
+  const patterns = (product as any).subscriptionPatterns ?? [product.shortName, product.displayName]
+  return subscriptions.filter(sub => {
+    // ProductSubscription (AE sheet) uses productDescription; CustomerSubscription (Supportable) uses productName
+    const label = (sub.productDescription ?? sub.productName ?? sub.name ?? '').toLowerCase()
+    return patterns.some((p: string) => label.includes(p.toLowerCase()))
+  })
+}
+
+/** Returns support cases whose product field matches any of the product's case patterns. */
+export function customerCasesForProduct(cases: any[], product: ProductConfig): any[] {
+  const patterns = (product as any).caseProductPatterns ?? [product.shortName]
+  return cases.filter(c =>
+    c.product && patterns.some((p: string) => c.product.toLowerCase().includes(p.toLowerCase()))
+  )
+}
+
+// ── Cache read/write ──────────────────────────────────────────────────────────
+
+/** Read cached intel. Does NOT validate contentHash — returns whatever is cached. */
+export function getCachedCustomerProductIntel(slug: string, customerSlug: string): CustomerProductIntel | null {
+  const p = customerIntelCachePath(slug, customerSlug)
+  try {
+    if (existsSync(p)) {
+      const raw: CustomerIntelCache = JSON.parse(readFileSync(p, 'utf-8'))
+      return raw.intel ?? null
+    }
+  } catch (e: any) {
+    console.warn(`[customer-product-intel] cache read failed for ${slug}/${customerSlug}:`, e?.message)
+  }
+  return null
+}
+
+function writeCustomerIntelCache(slug: string, customerSlug: string, contentHash: string, intel: CustomerProductIntel): void {
+  const dir = customerIntelCacheDir(slug)
+  mkdirSync(dir, { recursive: true })
+  const cache: CustomerIntelCache = {
+    contentHash,
+    intel,
+    cachedAt: new Date().toISOString(),
+  }
+  writeFileSync(customerIntelCachePath(slug, customerSlug), JSON.stringify(cache, null, 2), { mode: 0o600 })
+}
+
+// ── Default intel (fallback when Gemini fails or returns non-parseable JSON) ──
+
+function defaultIntel(slug: string, customerName: string, productCacheHash: string): CustomerProductIntel {
+  return {
+    product: slug,
+    customer: customerName,
+    relevanceScore: 'NONE',
+    priorityAction: 'Analysis unavailable',
+    roadmapRelevance: [],
+    expansionOpportunities: [],
+    caseAlignment: [],
+    competitiveAngle: null,
+    featureTalkingPoints: [],
+    generatedAt: new Date().toISOString(),
+    productCacheHash,
+  }
+}
+
+// ── Main generation ───────────────────────────────────────────────────────────
+
+export async function generateCustomerProductIntel(opts: {
+  slug: string
+  productSummary: ProductSummary
+  slidesText: string
+  customerName: string
+  subscriptions: any[]
+  supportCases: any[]
+  customerDocsText?: string
+  customerDocsHash?: string
+  opportunityNote?: string
+  productFeatures?: { name: string; status: string; description: string; tags: string[]; versionIntroduced?: string | null }[]
+  productFeaturesHash?: string
+}): Promise<CustomerProductIntel> {
+  const { slug, productSummary, slidesText, customerName, subscriptions, supportCases, opportunityNote } = opts
+
+  const customerSlug = toCustomerSlug(customerName)
+  const cacheDir = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
+
+  // ── Load additional signals ───────────────────────────────────────────────
+  const accountIntel  = loadAccountIntelligence(cacheDir, customerSlug)
+  const briefHistory  = loadBriefHistory(cacheDir, customerSlug, getAutomationConfig().briefHistoryDays)
+
+  // ── Content hash for cache invalidation ───────────────────────────────────
+  const contentHash = createHash('sha256')
+    .update(slidesText.slice(0, 500))
+    .update(opts.customerDocsHash ?? '')
+    .update(JSON.stringify(subscriptions.map((s: any) => s.productDescription ?? s.productName ?? s.name ?? '')))
+    .update(JSON.stringify(supportCases.map((c: any) => c.caseNumber ?? '')))
+    .update(accountIntel?.company.slice(0, 100) ?? '')
+    .update(opts.productFeaturesHash ?? 'no-features')
+    .digest('hex')
+    .slice(0, 16)
+
+  // ── Cache hit ─────────────────────────────────────────────────────────────
+  const cachePath = customerIntelCachePath(slug, customerSlug)
+  try {
+    if (existsSync(cachePath)) {
+      const cached: CustomerIntelCache = JSON.parse(readFileSync(cachePath, 'utf-8'))
+      if (cached.contentHash === contentHash) {
+        console.log(`[customer-product-intel] cache hit for ${slug}/${customerSlug} (hash ${contentHash})`)
+        return cached.intel
+      }
+    }
+  } catch { /* cache miss or corrupt — regenerate */ }
+
+  // ── Build prompt ──────────────────────────────────────────────────────────
+
+  // Wave 5: signals-first prompt construction
+  const subLines = subscriptions.length
+    ? subscriptions.map(s => `${sanitizePromptInput(s.productDescription ?? s.productName ?? s.name ?? 'unknown', 200)}: qty ${s.quantity ?? '?'}, ends ${s.endDate ?? '?'}`).join('\n')
+    : 'None found'
+
+  const caseLines = supportCases.length
+    ? supportCases.map(c =>
+        `Case ${c.caseNumber}: ${sanitizePromptInput(c.summary ?? '', 300)} (severity ${c.severity}, ${c.daysOpen}d open)`
+      ).join('\n')
+    : 'None'
+
+  const pipelineText = opportunityNote ?? 'No pipeline context'
+
+  // Feature block: top features from the feature radar, formatted compactly, capped at 4000 chars
+  // BKL-MC07: filter features with missing required fields before building prompt to avoid runtime throws
+  const validFeatures = (opts.productFeatures ?? []).filter(
+    f => f.name && f.status && typeof f.description === 'string' && Array.isArray(f.tags)
+  )
+  const featureBlock = validFeatures.length
+    ? validFeatures
+        .map(f => `[${f.status}${f.versionIntroduced ? ` ${f.versionIntroduced}` : ''}] ${f.name} — ${f.description.slice(0, 150)} (tags: ${f.tags.slice(0, 4).join(', ')})`)
+        .join('\n')
+        .slice(0, 4000)
+    : null
+
+  // Version context: 200-char cap, no marketing copy (ISC-15/17)
+  const versionContext = (productSummary.summaryBullets[0] ?? productSummary.summaryText ?? '').slice(0, 200)
+
+  const customerDocsSection = opts.customerDocsText
+    ? `--- Customer Account Documents ---\n${opts.customerDocsText.slice(0, 10000)}`
+    : '--- Customer Account Documents ---\nNone cached yet'
+
+  const accountIntelSection = accountIntel
+    ? `--- Account Intelligence (Company & Industry Analysis) ---\n${accountIntel.company.slice(0, 6000)}\n\n[Industry Context]\n${accountIntel.industry.slice(0, 2000)}`
+    : '--- Account Intelligence ---\nNot yet generated'
+
+  const briefHistorySection = briefHistory
+    ? `--- Recent Brief History (last 7 days) ---\n${briefHistory.slice(0, 2000)}`
+    : '--- Recent Brief History ---\nNone'
+
+  const systemPrompt = `You are a Red Hat Solutions Architect intelligence system. Your job is to produce actionable, customer-specific insights — NOT generic product descriptions.
+
+You have access to multiple signal sources: product slide decks, customer account documents, account intelligence (company strategy, financial signals, industry pressures), recent brief history (what the SA has been tracking), subscriptions, support cases, and pipeline data.
+
+Rules (zero exceptions):
+- Every claim must cite a specific source: a case number, SKU name, doc name, slide title, or account intel finding
+- Never write anything that would be equally valid for a different customer
+- Use account intelligence to find expansion signals: company initiatives, financial pressures, or industry trends that create urgency for this product
+- Use brief history to surface follow-through items: things the SA was working on that connect to this product
+- If no customer-specific signals exist for this product, set relevanceScore to "NONE" and stop
+- Distinguish: "customer has it and needs attention" vs "customer doesn't have it but signals say they need it"
+- For expansionOpportunities: actively look for gaps — e.g., heavy RHEL footprint without Insights, OCP without AAP (automation), large VM estate without OpenShift Virtualization. Cross-reference subscriptions, cases, account intel, and pipeline to identify net-new product fits
+- Output valid JSON only matching the exact schema provided`
+
+  const userPrompt = `PRODUCT: ${productSummary.displayName} (${productSummary.shortName})
+Version context (200 chars max): ${versionContext}
+
+--- Product Slide Deck (primary source) ---
+${slidesText.slice(0, 6000)}
+
+CUSTOMER: ${customerName}
+
+${accountIntelSection}
+
+${customerDocsSection}
+
+${briefHistorySection}
+
+--- All Active Subscriptions (unfiltered — determine relevance yourself) ---
+${subLines}
+
+--- All Open Cases (unfiltered — determine product relevance yourself) ---
+${caseLines}
+
+--- Pipeline ---
+${pipelineText}
+${featureBlock ? `\n--- Product Features (from feature radar — rank top 3-5 for this customer) ---\n${featureBlock}` : ''}
+
+OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
+{
+  "relevanceScore": "HIGH|MEDIUM|LOW|NONE",
+  "priorityAction": "one sentence: what SA should do, why, by when — must cite specific case#/SKU/doc",
+  "roadmapRelevance": [{"feature": "", "customerConnection": "cite specific signal", "talkingPoint": ""}],
+  "expansionOpportunities": [{"gap": "what the customer is missing or under-using", "product": "Red Hat product that fills the gap", "rationale": "cite specific signal: case#, SKU, account intel finding, brief topic, or pipeline deal — even if no current subscription exists"}],
+  "caseAlignment": [{"caseNumber": "", "roadmapFix": "", "timeline": ""}],
+  "competitiveAngle": "string or null",
+  "featureTalkingPoints": [{"feature": "exact feature name", "status": "GA|Tech Preview|Roadmap", "version": "version string or null", "reason": "why this specific customer should care — cite their signal", "signalSource": "case#/SKU name/doc title/pipeline deal"}]
+}
+For featureTalkingPoints: select the top 3-5 features from the feature radar that are most relevant to THIS customer's signals. Each must cite a specific customer signal. Return [] if no features were provided or none are relevant.`
+
+  // ── Gemini API call ───────────────────────────────────────────────────────
+
+  const project  = process.env.GOOGLE_CLOUD_PROJECT
+  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+  const model    = getGeminiModel()
+
+  if (!project) {
+    console.warn('[customer-product-intel] GOOGLE_CLOUD_PROJECT not set — skipping Gemini, returning default')
+    const intel = defaultIntel(slug, customerName, productSummary.contentHash)
+    writeCustomerIntelCache(slug, customerSlug, contentHash, intel)
+    return intel
+  }
+
+  let intel = defaultIntel(slug, customerName, productSummary.contentHash)
+
+  try {
+    const token = await getGeminiToken()
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(60_000),
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          temperature:     getAiConfig().customerIntelTemperature,
+          maxOutputTokens: 8192,
+          thinkingConfig:  { thinkingBudget: 0 },
+        },
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      console.error(`[customer-product-intel] Gemini error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
+      // Fall through to write default and return
+    } else {
+      const json = await res.json() as any
+
+      // Record token usage for cost tracking
+      const usage = json.usageMetadata
+      if (usage) {
+        recordGeminiUsage({
+          timestamp:    new Date().toISOString(),
+          callType:     'customer-product-intel',
+          customerName,
+          inputTokens:  usage.promptTokenCount ?? 0,
+          outputTokens: usage.candidatesTokenCount ?? 0,
+          model,
+        })
+      }
+
+      // Gemini 2.5 Flash may return a thinking part before the text part — scan all parts
+      const finishReason = json.candidates?.[0]?.finishReason
+      if (finishReason === 'MAX_TOKENS') {
+        console.warn(`[customer-product-intel] Gemini hit MAX_TOKENS for ${slug}/${customerSlug} — output truncated, increase maxOutputTokens`)
+      }
+      const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
+      const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
+      console.log(`[customer-product-intel] Gemini raw text (${slug}/${customerSlug}, finish=${finishReason}): ${text.slice(0, 300)}`)
+
+      // Strip markdown fences if present
+      const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)
+
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0])
+          intel = {
+            product: slug,
+            customer: customerName,
+            relevanceScore: parsed.relevanceScore ?? 'NONE',
+            priorityAction: parsed.priorityAction ?? 'Analysis unavailable',
+            roadmapRelevance: parsed.roadmapRelevance ?? [],
+            expansionOpportunities: parsed.expansionOpportunities ?? [],
+            caseAlignment: parsed.caseAlignment ?? [],
+            competitiveAngle: parsed.competitiveAngle ?? null,
+            featureTalkingPoints: Array.isArray(parsed.featureTalkingPoints) ? parsed.featureTalkingPoints : [],
+            generatedAt: new Date().toISOString(),
+            productCacheHash: productSummary.contentHash,
+          }
+        } catch (parseErr: any) {
+          console.warn(`[customer-product-intel] JSON parse failed for ${slug}/${customerSlug}:`, parseErr?.message)
+          // intel remains the default
+        }
+      } else {
+        console.warn(`[customer-product-intel] Gemini response contained no JSON for ${slug}/${customerSlug}`)
+      }
+    }
+  } catch (e: any) {
+    console.error(`[customer-product-intel] Gemini call failed for ${slug}/${customerSlug}:`, e?.message)
+  }
+
+  // ── Save and return ───────────────────────────────────────────────────────
+  writeCustomerIntelCache(slug, customerSlug, contentHash, intel)
+  return intel
+}

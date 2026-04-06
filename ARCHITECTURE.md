@@ -611,6 +611,99 @@ Supportable tile  — state (fresh/stale/failed/running), lastSuccess, recordCou
 
 ---
 
+## §16. Product Intelligence Hub — Phase 2 + Phase 3 (2026-04-05/06)
+
+### Products supported (7)
+
+| Slug | Display Name |
+|---|---|
+| `rhel` | Red Hat Enterprise Linux |
+| `ocp` | OpenShift Container Platform |
+| `ocp-virt` | OpenShift Virtualization |
+| `aap` | Ansible Automation Platform |
+| `rhel-ai` | RHEL AI |
+| `rh-ai-inference` | AI Inference |
+| `rhoai` | OpenShift AI |
+
+Config lives in `data/config/product-intel-config.json`. New products are added by editing that JSON — no code changes required.
+
+### Phase 2: Drive corpus optional + expanded product set
+
+`driveFolder` on each `ProductConfig` is now `string | null`. Products without a configured Drive folder use release-notes-only synthesis. The generate route (`product-intel-routes.ts`) no longer requires `driveFolder` to be set before running — the Drive ingest step is silently skipped when the field is null.
+
+**Content budget (in `product-feature-radar.ts`):**
+- `SECTION_CAP` raised from 3500 → 6000 chars per section
+- `TOTAL_CAP` raised from 9000 → 18000 chars total corpus per product
+
+### Phase 3: Feature radar injected into customer briefs
+
+**Data flow:**
+
+```
+product-feature-radar.ts
+  → getFeatureCache(slug)          ← reads data/cache/product-intel/{slug}-features.json
+       |
+       v
+product-intel-routes.ts (POST /api/products/:slug/generate-customer-intel)
+  → passes productFeatures + productFeaturesHash to generateCustomerProductIntel()
+       |
+       v
+customer-product-intel.ts: generateCustomerProductIntel()
+  → injects features as structured block (4000-char cap) into Gemini prompt
+  → content hash includes productFeaturesHash (corpusHash) for cache invalidation
+  → returns CustomerProductIntel with featureTalkingPoints field
+```
+
+**New field on `CustomerProductIntel`:**
+
+```typescript
+featureTalkingPoints: Array<{
+  feature: string        // exact feature name from feature radar
+  status: string         // "GA" | "Tech Preview" | "Roadmap"
+  version: string | null
+  reason: string         // why this specific customer should care
+  signalSource: string   // case#/SKU name/doc title/pipeline deal
+}>
+```
+
+Ranked top 3-5 features selected by Gemini from the feature radar, each anchored to a specific customer signal. Returns `[]` when no features were provided or none are relevant.
+
+**Account intelligence caps (in `customer-product-intel.ts`):**
+- Company content cap: 2000 → 6000 chars
+- Industry content cap: 1000 → 2000 chars
+
+### Bootstrap wizard: Product Intelligence scaffold
+
+The setup wizard (`SetupPage.tsx`) shows the Product Intelligence folder tree only for the first AE (`knownAes.length === 0`). The shared `Product Intelligence/` Drive folder with 7 product subfolders is a one-time scaffold — second+ AEs share the same Drive folder and do not re-create it.
+
+```
+📁 Product Intelligence/   ← created on first AE only
+   ├── 📁 rhel/
+   ├── 📁 ocp/
+   ├── 📁 ocp-virt/
+   ├── 📁 aap/
+   ├── 📁 rhel-ai/
+   ├── 📁 rh-ai-inference/
+   └── 📁 rhoai/
+```
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `src/product-release-radar.ts` | Life Cycle API + PDF/HTML scraping + Gemini synthesis per product |
+| `src/product-feature-radar.ts` | Feature extraction from Drive corpus; `getFeatureCache(slug)`, `SECTION_CAP=6000`, `TOTAL_CAP=18000` |
+| `src/product-drive-ingest.ts` | Drive folder listing + Markdown/doc content ingestion per product |
+| `src/product-intelligence.ts` | Q&A chat pipeline (BKL-AI16); separate from release radar |
+| `src/product-intel-routes.ts` | All `/api/products/*` endpoints; loads feature cache and passes to customer intel |
+| `src/customer-product-intel.ts` | `generateCustomerProductIntel()`; Gemini prompt with feature injection; `featureTalkingPoints` output |
+| `dashboard/src/pages/ProductsPage.tsx` | Products listing (Unified Stream layout: FeatureFilterBar + SpotlightStrip + FeatureListRow + FeatureDetailPanel) |
+| `dashboard/src/components/ProductIntelSection.tsx` | Per-product intel section component; hardcodes all 7 slugs |
+| `data/config/product-intel-config.json` | Product definitions: slugs, Drive folder IDs, seed URLs, refresh intervals |
+| `data/cache/product-intel/` | Feature caches (`{slug}-features.json`), summaries (`{slug}-summary.json`), customer intel (`{slug}-customer-intel/{customer}.json`) |
+
+---
+
 ## Agent Briefing Checklist
 
 Before spawning any specialist agent (Rook, Marcus, Quinn, etc.) on this codebase:

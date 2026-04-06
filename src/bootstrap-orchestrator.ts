@@ -16,6 +16,7 @@ import { refreshPipeline } from './refresh-engine.ts'
 import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import type { AE } from './types.ts'
 import { sanitizeErr } from './utils.ts'
+import { loadProductIntelConfig, saveProductConfig } from './product-release-radar.ts'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -327,6 +328,47 @@ export function registerBootstrapRoutes(app: Hono): void {
 
     // Run async — client polls /api/bootstrap/auto/status
     ;(async () => {
+      // Pre-flight — Ensure product intel Drive folders exist under parent (silent, idempotent)
+      try {
+        const productIntelConfig = loadProductIntelConfig()
+        const parentId = productIntelConfig.driveParentFolderId
+        if (parentId) {
+          const drivePI = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
+          const updatedProducts = [...productIntelConfig.products]
+          let anyUpdated = false
+          for (let i = 0; i < updatedProducts.length; i++) {
+            const p = updatedProducts[i]
+            if (p.driveFolder) continue  // already set — skip
+            const safeSlug = p.slug.replace(/'/g, "\\'")
+            const existing = await drivePI.files.list({
+              q: `name='${safeSlug}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+              fields: 'files(id)',
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            }).catch(() => ({ data: { files: [] } }))
+            if (existing.data.files?.length) {
+              updatedProducts[i] = { ...p, driveFolder: existing.data.files[0].id! }
+              anyUpdated = true
+              console.log(`[auto-bootstrap] Product folder found for ${p.slug}: ${existing.data.files[0].id}`)
+            } else {
+              const created = await drivePI.files.create({
+                requestBody: { name: p.slug, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+                supportsAllDrives: true,
+                fields: 'id',
+              }).catch(() => null)
+              if (created?.data.id) {
+                updatedProducts[i] = { ...p, driveFolder: created.data.id }
+                anyUpdated = true
+                console.log(`[auto-bootstrap] Product folder created for ${p.slug}: ${created.data.id}`)
+              }
+            }
+          }
+          if (anyUpdated) saveProductConfig(updatedProducts)
+        }
+      } catch (e: any) {
+        console.warn('[auto-bootstrap] Product intel folder pre-flight failed (non-blocking):', e?.message)
+      }
+
       // Check if AE already has a Drive folder from a previous run — skip creation if so
       const existingAe = aes.find(a => a.name === aeName)
       let driveFolderId = existingAe?.driveFolderId ?? ''

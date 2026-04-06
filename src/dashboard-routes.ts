@@ -11,6 +11,7 @@ import { fetchCustomerEmails } from './customer.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, fetchCalendar } from './google.ts'
 import { getRecentHistory } from './kpi-history.ts'
 import { sanitizeErr } from './utils.ts'
+import { getGeminiModel } from './settings-api.ts'
 import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
@@ -46,7 +47,7 @@ async function synthesizeMorningSummary(signals: { customer: string; type: strin
 
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const model    = getGeminiModel()
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for synthesis')
 
   let token: string | null | undefined
@@ -81,7 +82,7 @@ async function synthesizeMorningSummary(signals: { customer: string; type: strin
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
     }),
   })
   if (!res.ok) {
@@ -462,11 +463,11 @@ export function registerDashboardRoutes(app: Hono): void {
         for (const line of lines) {
           const clean = line.replace(/^[-*•]\s*/, '').replace(/^\d+\.\s*/, '').replace(/\*{1,2}/g, '')
           if (!clean || clean === '---') continue
-          if (clean.match(/(?:case|sev\s*\d|severity\s*\d).{0,80}/i)) { facts.push(clean.slice(0, 100)); continue }
-          if (clean.match(/\$[\d,.]+[KMB]?/i)) { facts.push(clean.slice(0, 100)); continue }
-          if (clean.match(/(?:contact|meeting|spoke|scheduled|attendee|stakeholder).{0,60}/i)) { facts.push(clean.slice(0, 100)); continue }
-          if (clean.match(/(?:renew|expir|pipeline|opportunity|close date|forecast).{0,60}/i)) { facts.push(clean.slice(0, 100)); continue }
-          if (line.match(/^[-*•]/) && clean.length > 10) { facts.push(clean.slice(0, 100)) }
+          if (clean.match(/(?:case|sev\s*\d|severity\s*\d).{0,80}/i)) { facts.push(clean); continue }
+          if (clean.match(/\$[\d,.]+[KMB]?/i)) { facts.push(clean); continue }
+          if (clean.match(/(?:contact|meeting|spoke|scheduled|attendee|stakeholder).{0,60}/i)) { facts.push(clean); continue }
+          if (clean.match(/(?:renew|expir|pipeline|opportunity|close date|forecast).{0,60}/i)) { facts.push(clean); continue }
+          if (line.match(/^[-*•]/) && clean.length > 10) { facts.push(clean) }
         }
         return facts.slice(0, 5)
       }
@@ -485,7 +486,7 @@ export function registerDashboardRoutes(app: Hono): void {
             const fallbacks = newLines
               .filter(l => l.length > 5)
               .slice(0, 2)
-              .map(l => l.replace(/^[-*•]\s*/, '').replace(/\*{1,2}/g, '').slice(0, 100))
+              .map(l => l.replace(/^[-*•]\s*/, '').replace(/\*{1,2}/g, ''))
             details.push(...fallbacks)
           }
           changes.push({ section: heading, type: 'changed', summary: deriveSummary('changed', details), details })

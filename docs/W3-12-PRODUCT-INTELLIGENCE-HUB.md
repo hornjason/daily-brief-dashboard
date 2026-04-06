@@ -1,14 +1,16 @@
 # W3-12: Product Intelligence Hub — Architecture Design
 
-**Date:** 2026-04-04
+**Date:** 2026-04-04 (revised 2026-04-05/06)
 **Author:** Serena Blackwood (Architect Agent)
-**Status:** Design — awaiting review
+**Status:** Phase 1 complete, Phase 2 complete, Phase 3 complete (feature injection + talking points)
 
 ---
 
 ## Problem Statement
 
-Jason needs product-level intelligence for RHEL, OpenShift, and Ansible Automation Platform — latest releases, Tech Previews, roadmap signals, and "What's Next" deck content — synthesized by Gemini and surfaced both as standalone product pages and integrated into customer briefs when the customer has that product in their subscriptions.
+Jason needs product-level intelligence for RHEL, OpenShift, OpenShift Virtualization, Ansible Automation Platform, RHEL AI, AI Inference, and OpenShift AI — latest releases, Tech Previews, roadmap signals, and "What's Next" deck content — synthesized by Gemini and surfaced both as standalone product pages and integrated into customer briefs when the customer has that product in their subscriptions.
+
+**Products (7):** `rhel`, `ocp`, `ocp-virt`, `aap`, `rhel-ai`, `rh-ai-inference`, `rhoai`
 
 The existing intelligence pipeline (`account-intelligence.ts`) handles per-customer company/industry analysis. This feature adds a per-product dimension that is orthogonal to accounts but must intersect with them at brief generation time.
 
@@ -129,7 +131,9 @@ interface ProductDef {
 }
 ```
 
-**Seed with three products:** RHEL, OpenShift, AAP. New products added by editing this JSON (admin page can expose this later).
+**Seed with seven products:** RHEL, OCP, OCP Virt, AAP, RHEL AI, AI Inference, OpenShift AI. New products added by editing this JSON (admin page can expose this later).
+
+**Drive corpus is optional (Phase 2):** `driveFolderId` is `string | null`. Products without a Drive folder use release-notes-only synthesis — the ingest step is skipped gracefully.
 
 ### 2B. Product Intelligence Cache
 
@@ -430,35 +434,28 @@ Add to the existing `SYNTHESIS_PROMPT` in `brief-pipeline.ts`:
 9. [ ] Scheduler: daily product intel refresh
 10. [ ] Test: verify PDF extraction, Gemini synthesis, API endpoints
 
-### Phase 2: Drive Drops (2 days)
+### Phase 2: Drive Drops + Expanded Products (COMPLETE 2026-04-05)
 
 **Deliverables:**
-- Drive folder reading for "What's Next" Markdown files
-- Admin page: configure Drive folder ID per product
-- Drive watcher integration: detect new drops and trigger re-synthesis
+- Drive corpus made optional — products without `driveFolder` use release-notes-only synthesis
+- Expanded from 3 products (RHEL, OCP, AAP) to 7: added OCP Virt, RHEL AI, AI Inference, OpenShift AI
+- `product-drive-ingest.ts`: Drive folder listing + Markdown/doc content ingestion
+- `ProductIntelSection.tsx` updated to all 7 slugs
+- Products page: Option A "Unified Stream" layout (FeatureFilterBar + SpotlightStrip + FeatureListRow + FeatureDetailPanel)
+- `SECTION_CAP` 3500→6000, `TOTAL_CAP` 9000→18000 in `product-feature-radar.ts`
 
-**Tasks:**
-1. [ ] Add `driveFolderId` config per product
-2. [ ] Drive file listing + Markdown content reading (reuse `fetchCustomerDocs` pattern)
-3. [ ] Merge Drive content into raw cache, trigger re-synthesis
-4. [ ] Admin UI: product config panel (folder IDs, refresh interval)
-5. [ ] Extend `drive-watcher.ts` to monitor product folders
+### Phase 3: Feature Radar Injection into Customer Intel (COMPLETE 2026-04-06)
 
-### Phase 3: Chat + Brief Integration (3-4 days)
+**Deliverables (as implemented — differs from original design):**
+- Feature radar (`{slug}-features.json`) injected into `generateCustomerProductIntel()` prompt as structured block (4000-char cap)
+- New `featureTalkingPoints` field on `CustomerProductIntel` — top 3-5 features ranked by customer relevance, each with `reason` + `signalSource` anchored to a specific customer signal
+- Content hash now includes `productFeaturesHash` (corpusHash) for precise cache invalidation when corpus changes
+- `product-intel-routes.ts`: loads `getFeatureCache(slug)` before calling generation; passes `productFeatures` + `productFeaturesHash`
+- `driveFolder` guard removed from generate route — Drive is optional per Phase 2
+- Account intel caps expanded: company 2000→6000 chars, industry 1000→2000 chars
+- Bootstrap wizard: Product Intelligence scaffold shown only for first AE (`knownAes.length === 0`)
 
-**Deliverables:**
-- Chat interface on product detail page
-- Product intelligence injected into customer briefs
-- Conversation history with session management
-
-**Tasks:**
-1. [ ] `POST /api/products/:slug/chat` endpoint
-2. [ ] Chat UI component on product detail page
-3. [ ] Conversation history management (cap, TTL, storage)
-4. [ ] `buildXmlSources()` integration: match subscriptions to products
-5. [ ] `SYNTHESIS_PROMPT` update for product context
-6. [ ] Test: brief generation with product intelligence included
-7. [ ] Cost tracking: new callTypes for product chat
+**Note:** Chat interface (`POST /api/products/:slug/chat`, `ProductChat.tsx`) was descoped from Phase 3. Feature injection into `buildXmlSources()` / brief pipeline (original §4B plan) was also descoped — product intelligence is surfaced via `CustomerProductIntel.featureTalkingPoints` instead, not injected as a brief XML source block.
 
 ---
 

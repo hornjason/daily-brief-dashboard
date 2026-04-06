@@ -41,6 +41,9 @@ while ! xdpyinfo -display :99 >/dev/null 2>&1; do
 done
 echo "[entrypoint] Xvfb ready (${XVFB_ATTEMPTS} probes)"
 
+# ── Window manager — gives VNC a visible desktop (not just a black screen) ──
+openbox &
+
 # ── VNC server (reads the Xvfb display, streams over VNC protocol) ─────────────
 # -nopw       : no VNC password — port is bound to localhost only (see below)
 # -localhost  : only accept connections from 127.0.0.1 (websockify proxies in)

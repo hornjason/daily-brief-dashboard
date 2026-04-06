@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, X } from 'lucide-react'
+import { AlertCircle, X, ExternalLink } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
 import { SessionHealthPanel } from '../components/SessionHealthPanel'
+import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ function ScrapeSection({
   running,
   circuitBreaker,
   queuePending,
+  extraActions,
 }: {
   label: string
   subtitle?: string
@@ -93,11 +95,13 @@ function ScrapeSection({
   circuitBreaker?: CircuitBreakerState
   /** true = pending (generic), string = pending with detail (e.g. "waiting on supportable") */
   queuePending?: boolean | string
+  /** Optional extra action buttons rendered at the card bottom */
+  extraActions?: ReactNode
 }) {
   const busy = running || status?.isRunning
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <div>
@@ -118,12 +122,12 @@ function ScrapeSection({
         <button
           onClick={onRunNow}
           disabled={!!busy || !!queuePending}
-          className="px-3 py-1.5 text-xs font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+          className="px-3 py-1.5 text-xs font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors whitespace-nowrap shrink-0"
         >
           {busy ? 'Running…' : queuePending ? 'Queued…' : circuitBreaker?.state === 'open' ? 'Force Run' : 'Run Now'}
         </button>
       </div>
-      <div className="space-y-1 text-xs text-gray-400">
+      <div className="mt-auto space-y-1 text-xs text-gray-400">
         {status?.lastSync && (
           <div>Last run: <span className="text-gray-300">{formatRelTime(status.lastSync)}</span></div>
         )}
@@ -151,6 +155,7 @@ function ScrapeSection({
           </div>
         )}
       </div>
+      {extraActions && <div className="mt-3 pt-3 border-t border-gray-700">{extraActions}</div>}
     </div>
   )
 }
@@ -193,7 +198,7 @@ function SourceScheduleRow({ label, timeKey, enabledKey, floorHint, schedCfg, on
 
   return (
     <div className="flex items-start gap-3 py-2">
-      <label className="flex items-center gap-2 w-40 shrink-0">
+      <label className="flex items-center gap-2 w-40 shrink-0 self-center">
         <input
           type="checkbox"
           checked={enabled}
@@ -202,23 +207,25 @@ function SourceScheduleRow({ label, timeKey, enabledKey, floorHint, schedCfg, on
         />
         <span className="text-xs text-gray-300">{label}</span>
       </label>
-      {!isInterval && (
-        <div className="flex flex-col">
-          <input
-            type="text"
-            placeholder="HH:MM"
-            value={timeVal}
-            onChange={e => { setTimeVal(e.target.value); setSaved(false); setError(null) }}
-            className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
-          />
-          <span className="text-xs text-gray-500 mt-0.5">{floorHint}</span>
-        </div>
-      )}
-      {isInterval && <span className="text-xs text-gray-500 pt-1">{floorHint}</span>}
+      <div className="flex-1 flex flex-col justify-center">
+        {!isInterval && (
+          <>
+            <input
+              type="text"
+              placeholder="HH:MM"
+              value={timeVal}
+              onChange={e => { setTimeVal(e.target.value); setSaved(false); setError(null) }}
+              className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
+            />
+            <span className="text-xs text-gray-500 mt-0.5">{floorHint}</span>
+          </>
+        )}
+        {isInterval && <span className="text-xs text-gray-500">{floorHint}</span>}
+      </div>
       <button
         onClick={handleSave}
         disabled={saving}
-        className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors shrink-0"
+        className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors shrink-0 self-center ml-auto"
       >
         {saving ? '...' : saved ? 'Saved' : 'Save'}
       </button>
@@ -268,7 +275,6 @@ function SchedulerConfig({
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <h3 className="text-sm font-medium text-gray-200 mb-4">Scheduler Config</h3>
       <div className="space-y-1 divide-y divide-gray-700/50">
         <SourceScheduleRow label="CCSP" timeKey="ccspTime" enabledKey="ccspEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
         <SourceScheduleRow label="Supportable" timeKey="supportableTime" enabledKey="supportableEnabled" floorHint="Min 12h between runs" schedCfg={cfg} onSave={onSave} />
@@ -279,18 +285,20 @@ function SchedulerConfig({
             RH Cases interval
             <span className="block text-gray-500">30 min floor</span>
           </label>
-          <input
-            type="number"
-            min={30}
-            value={rhMinutes}
-            onChange={e => { setRhMinutes(e.target.value); setSaveError(null); setSaved(false) }}
-            className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
-          />
-          <span className="text-xs text-gray-500">min</span>
+          <div className="flex-1 flex items-center gap-1.5">
+            <input
+              type="number"
+              min={30}
+              value={rhMinutes}
+              onChange={e => { setRhMinutes(e.target.value); setSaveError(null); setSaved(false) }}
+              className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
+            />
+            <span className="text-xs text-gray-500">min</span>
+          </div>
           <button
             onClick={handleRhSave}
             disabled={saving}
-            className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors"
+            className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors shrink-0 ml-auto"
           >
             {saving ? '...' : saved ? 'Saved' : 'Save'}
           </button>
@@ -652,14 +660,21 @@ function ScrapeHistorySection() {
   const [history, setHistory] = useState<ScrapeLogEntry[]>([])
 
   useEffect(() => {
-    fetch('/api/status/telemetry/history')
-      .then(r => r.json())
-      .then((d: Record<string, ScrapeLogEntry[]>) => {
-        const all = Object.values(d).flat()
-        all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        setHistory(all.slice(0, 50))
-      })
-      .catch(() => {})
+    const load = () =>
+      fetch('/api/status/telemetry/history')
+        .then(r => r.json())
+        .then((d: Record<string, ScrapeLogEntry[]>) => {
+          // Take last 10 per service before merging so infrequent scrapers (CCSP, Supportable) always appear
+          const all = Object.values(d).flatMap((entries) =>
+            [...entries].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10)
+          )
+          all.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+          setHistory(all)
+        })
+        .catch(() => {})
+    load()
+    const interval = setInterval(load, 10_000)
+    return () => clearInterval(interval)
   }, [])
 
   if (history.length === 0) return null
@@ -709,6 +724,50 @@ function ScrapeHistorySection() {
 }
 
 // ── Admin page ────────────────────────────────��────────────────────────────────
+
+// ── Content RH session save button ───────────────────────────────────────────
+
+function ContentRhSessionButton() {
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const [isError, setIsError] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    setMsg(null)
+    setIsError(false)
+    try {
+      const res = await fetch('/api/browser/save-content-rh-session', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        setMsg(`Saved ${data.cookieCount} cookies`)
+        setIsError(false)
+      } else {
+        setMsg(data.error ?? 'Unknown error')
+        setIsError(true)
+      }
+    } catch (e: any) {
+      setMsg(e?.message ?? 'Request failed')
+      setIsError(true)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={save}
+        disabled={saving}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white transition-colors"
+      >
+        {saving ? 'Saving...' : 'Save Content RH Session'}
+      </button>
+      <span className="text-xs text-gray-400">Captures content.redhat.com cookies from VNC browser for product scraping</span>
+      {msg && <span className={`text-xs ${isError ? 'text-red-400' : 'text-green-400'}`}>{msg}</span>}
+    </div>
+  )
+}
 
 export function AdminPage() {
   const navigate = useNavigate()
@@ -938,6 +997,18 @@ export function AdminPage() {
               onRunNow={() => runScrape('ccsp', '/api/scrape/ccsp')}
               circuitBreaker={status?.circuitBreakers?.ccsp}
               queuePending={localQueued['ccsp'] ?? status?.queue?.pending?.includes('ccsp')}
+              extraActions={
+                <button
+                  onClick={() => {
+                    fetch('/api/browser/open-tableau-login', { method: 'POST' }).catch(() => {})
+                    window.open('http://localhost:6080/vnc.html', '_blank')
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Open VNC Login
+                </button>
+              }
             />
             <ScrapeSection
               label="SF Pipeline"
@@ -950,6 +1021,14 @@ export function AdminPage() {
           </div>
         </div>
 
+        {/* Browser Sessions */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Browser Sessions</h2>
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+            <ContentRhSessionButton />
+          </div>
+        </div>
+
         {/* Initial load */}
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Initial Load</h2>
@@ -957,7 +1036,10 @@ export function AdminPage() {
         </div>
 
         {/* Scheduler config */}
-        <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} />
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Scheduler Config</h2>
+          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} />
+        </div>
 
         {/* Gemini API cost tracking (BKL-M52) */}
         <div>
@@ -1022,6 +1104,9 @@ export function AdminPage() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">NotebookLM</h2>
           <NotebookLMSection />
         </div>
+
+        {/* Product Intelligence Sources */}
+        <ProductSourcesAdmin />
 
         {/* BKL-M50e: Scrape History */}
         <ScrapeHistorySection />

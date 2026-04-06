@@ -9,7 +9,7 @@ import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSh
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
 import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper.ts'
-import { getRefreshIntervals } from './settings-api.ts'
+import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
 import { markRunning, recordOutcome, getScraperStatus } from './scraper-status-store.ts'
@@ -193,11 +193,12 @@ class CircuitBreaker {
   }
 }
 
+const _automationCfg = getAutomationConfig()
 const circuitBreakers = {
-  rh: new CircuitBreaker('rh'),
-  ccsp: new CircuitBreaker('ccsp'),
-  supportable: new CircuitBreaker('supportable'),
-  salesforce: new CircuitBreaker('salesforce'),
+  rh: new CircuitBreaker('rh', _automationCfg.circuitBreakerThreshold, _automationCfg.circuitBreakerCooldownMs),
+  ccsp: new CircuitBreaker('ccsp', _automationCfg.circuitBreakerThreshold, _automationCfg.circuitBreakerCooldownMs),
+  supportable: new CircuitBreaker('supportable', _automationCfg.circuitBreakerThreshold, _automationCfg.circuitBreakerCooldownMs),
+  salesforce: new CircuitBreaker('salesforce', _automationCfg.circuitBreakerThreshold, _automationCfg.circuitBreakerCooldownMs),
 }
 
 /** Get circuit breaker states for all services — exposed for /api/status endpoint. */
@@ -228,8 +229,8 @@ export function resetAllCircuitBreakers(): void {
 
 // ── BKL-M50c: Wall-clock timeout wrapper ─────────────────────────────────────
 
-const DEFAULT_SCRAPE_TIMEOUT_MS = 5 * 60 * 1000  // 5 minutes (CCSP, Supportable, SF)
-const RH_SCRAPE_TIMEOUT_MS = 10 * 60 * 1000      // 10 minutes (RH iterates 50+ accounts at 3-5s each)
+const DEFAULT_SCRAPE_TIMEOUT_MS = () => getAutomationConfig().defaultScrapeTimeoutMs
+const RH_SCRAPE_TIMEOUT_MS = () => getAutomationConfig().rhScrapeTimeoutMs
 
 /**
  * Wrap a promise with a wall-clock timeout. If the timeout fires, the promise
@@ -399,7 +400,7 @@ export async function runRhScrapeWithState(): Promise<void> {
         cachePath: RH_CASES_CACHE_PATH,
         shouldCancel: () => _rhScrapeCancelRequested,
       }),
-      RH_SCRAPE_TIMEOUT_MS,
+      RH_SCRAPE_TIMEOUT_MS(),
       'RH case scrape',
     )
     _rhScrapeLastError = null

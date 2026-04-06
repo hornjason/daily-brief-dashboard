@@ -850,7 +850,7 @@ Related: BKL-F11 (SF dedup — also implemented)
 ### BKL-F11 | Shared SF report dedup — scrape once, fan out to multiple AE sheets + UI toggle
 Status: ✅ DONE 2026-04-04 — backend dedup + per-AE row filter implemented. Rook MEDIUM: first-name substring match (e.g. "Chris" matches "Christine") — see BKL-F11b for exact-token fix. UI "share report" toggle deferred.
 ### BKL-F11b | SF report filter: exact token match for Opportunity Owner (Rook MEDIUM follow-up)
-Status: 🔲 TODO
+Status: ✅ DONE 2026-04-06 — verified already applied: scrape-api.ts lines 573+814 use .split(/\s+/).includes(aeFirstName)
 Priority: P3
 Size: XS (15 min)
 Source: Rook scan 2026-04-04 — MEDIUM finding on F11
@@ -1739,6 +1739,15 @@ Source: Jason request 2026-04-01
 Files: src/background-scheduler.ts, src/territory-sync.ts (new), server.ts
 Related: BKL-M32 (territory drift gap), BKL-M15 (territory lookup quota)
 Decision: DONE — Daily 1:45am ET timer added. Territory parser extracted into src/territory-sync.ts. syncTerritorySheet() diffs GSheet vs customers.json per AE. New customers auto-added. Removals/reassignments written to data/cache/territory-notifications.json (never auto-deleted). GET /api/territory/notifications endpoint added. Google auth pre-flight check before running.
+
+### BKL-M34 | customers.json wiped to empty on container restart — root cause unknown
+Status: 🔴 OPEN
+Priority: P1
+Severity: High
+Source: Quinn/UIReviewer catch 2026-04-06 — customer detail "not found" after rebuild
+Files: src/server-state.ts, src/background-scheduler.ts
+Description: After `make rebuild`, customers.json was overwritten with `{ "customers": [] }` at container start (12:53 Apr 6). Startup validation saw 10 customers in-memory but something in the startup sequence (likely triggered by Quinn test run or refresh cycle) wrote empty customers.json to disk. customers.json.bak from Apr 5 has the 9 valid customers. Immediate fix: restore from backup. Root cause must be traced — patchCustomer or saveCustomers is being called with an empty array on startup. Suspect: test state restore in __test/snapshot endpoint, or refresh cycle calling patchCustomer before loadServerState populates in-memory customers.
+Related: BKL-M32 (territory drift), server-state.ts saveCustomers
 
 ### BKL-M35 | CCSP trend diff — store delta between pulls to show consumption trends
 Status: ✅ DONE 2026-04-01
@@ -3351,37 +3360,61 @@ Description: Fix the message at SetupPage.tsx:2668 to distinguish between two fa
 ---
 
 ### BKL-W3-12 | Product Intelligence Hub — RHEL, OpenShift, AAP release radar with chat
-Status: 🔴 OPEN — research done, ready to implement
+Status: ✅ DONE 2026-04-06 — Phase 1 ✅ | Phase 2 ✅ | Phase 3 ✅ — all 30 ISC criteria verified
 Priority: P2
 Size: XL (3 phases: Phase 1 = 3-4 days, Phase 2 = 2 days, Phase 3 = 3-4 days)
 Source: Jason 2026-04-04 feature request
 Research: 2026-04-05 — BKL-AI15 + BKL-AI16 consolidated here as parent task. Full spec below.
 Architecture: docs/W3-12-PRODUCT-INTELLIGENCE-HUB.md
-Files: src/product-intelligence.ts (new), src/product-intel-routes.ts (new), src/product-intel-scheduler.ts (new), data/config/product-intel-config.json (new), dashboard/src/pages/ProductsPage.tsx (new), dashboard/src/components/ProductCard.tsx (new), dashboard/src/components/ProductChat.tsx (Phase 3), server.ts (+routes), background-scheduler.ts (+timer), customer.ts (+brief injection Phase 3)
+Files: src/product-intelligence.ts (new), src/product-intel-routes.ts (new), src/product-intel-scheduler.ts (new), data/config/product-intel-config.json (new), data/config/product-alerts.json (new), dashboard/src/pages/ProductsPage.tsx (new), dashboard/src/components/ProductCard.tsx (new), dashboard/src/components/ProductReleaseBanner.tsx (new), dashboard/src/components/ProductChat.tsx (Phase 3), server.ts (+routes), background-scheduler.ts (+timer), customer.ts (+brief injection Phase 3)
 Consolidates: BKL-AI15 (data pipeline — DONE), BKL-AI16 (Q&A chat — fulfilled by Phase 3)
+Confirmed decisions (2026-04-05):
+  - Google Slides extraction: PDF + unpdf (convert deck to PDF, extract text via unpdf library)
+  - Product list: config-driven in product-intel-config.json (extensible to RHEL AI, OpenShift Virt, etc.)
+  - Gemini API: NOT available at Red Hat — do not use for any feature
+  - Portal scraping (access.redhat.com): DEFERRED — Phase 2+ after public data pipeline is stable
+  - Trust boundary: only public .redhat.com sources (access.redhat.com requires auth, defer)
 Phase 1 — Scrape + Summary + UI (3-4 days):
-  - src/product-intelligence.ts: fetchLifecycleVersions(), scrapePdfNotes() via unpdf, scrapeHtmlNotes() static+Playwright fallback, parseAtomFeed(), synthesizeProductSummary() Gemini temp=0.3, cache read/write
-  - Config: data/config/product-intel-config.json with RHEL/OCP/AAP seeds, docBaseUrls, refreshIntervalHours
+  - src/product-intelligence.ts: fetchLifecycleVersions(), scrapePdfNotes() via unpdf, scrapeHtmlNotes() static+Playwright fallback, parseAtomFeed(), synthesizeProductSummary() (Claude Sonnet, temp=0.3), cache read/write
+  - Slides export: if Drive file is a Google Slides doc → export to PDF bytes → unpdf text extraction (Google Slides → PDF is a Drive API export format, no Gemini needed)
+  - Config: data/config/product-intel-config.json with RHEL/OCP/AAP seeds, docBaseUrls, refreshIntervalHours. Schema includes `products: [{slug, displayName, driveFolder, marketingDoc, seeds: {lifecycle, releaseNotes, atomFeed}}]`
   - Cache: data/cache/product-intel/{slug}-summary.json + {slug}-{version}-raw.json. contentHash dedup skips re-synthesis when source unchanged.
   - API: GET /api/products, GET /api/products/:slug, POST /api/products/:slug/refresh
-  - Background: daily 6 AM refresh of all products
-  - UI: ProductsPage.tsx (3 cards), ProductCard.tsx (version, GA date, EOL, summary excerpt)
-  - Sidebar: Add Products nav item
-Phase 2 — Drive Drops + Admin Config (2 days):
-  - Per-product Drive folder for Jason's "What's Next" decks (Markdown)
-  - Admin page: folder ID picker per product
-  - Re-synthesis triggers when Drive content changes
+  - Alert persistence: data/config/product-alerts.json keyed by `{slug}-{version}`. Alert stays until acknowledged by Jason OR a "What's Next" deck is added to Drive folder for that version. Includes `{ slug, version, detectedAt, acknowledged, deckAdded }`.
+  - Background: weekly Sunday 6 AM refresh of all products (configurable; admin "Refresh Now" button available)
+  - UI: ProductsPage.tsx (3 ProductCards), ProductCard.tsx (version, GA date, EOL, summary excerpt, alert badge)
+  - ProductReleaseBanner: top-of-ProductsPage banner when `product-alerts.json` has unacknowledged releases. Shows product name, version, "What's New" link, dismiss button. Also injected into daily briefing email (Phase 3).
+  - Sidebar: Add Products nav item with badge count when alerts > 0
+Phase 2 — ✅ DONE 2026-04-06 (scope pivoted from Drive Drops to: 7 products, Option A UX, Drive optional, caps fix):
+  Delivered: 7 products (RHEL, OCP, OCP Virt, AAP, RHEL AI, AI Inference, OpenShift AI) | Option A Unified Stream layout (FeatureFilterBar + SpotlightStrip + FeatureListRow + FeatureDetailPanel + ProductFeatureGroup) | Drive corpus optional (new products with no Drive folder proceed with release-notes-only) | SECTION_CAP 3500→6000, TOTAL_CAP 9000→18000 | releaseNotesDocNames per-product config | OCP Virt fixed from 4 to 7 features | ProductIntelSection.tsx updated to all 7 products
+  Feature counts: RHEL 29 (6 TP) | OCP 21 (3 TP) | OCP Virt 7 (2 TP) | AAP 10 (2 TP) | RHEL AI 19 (19 TP) | AI Inference 30 (30 TP) | OpenShift AI 18 (14 TP)
+  Original Phase 2 Drive Drops spec (deferred to post-Phase 3):
+  - Per-product Drive folder for Jason's "What's Next" decks: Drive shortcuts (links) pointing to decks that live elsewhere
+  - Shortcut code path: `src/drive-sources.ts` — when a Drive item is a shortcut (mimeType = application/vnd.google-apps.shortcut), follow targetId to the actual file. If target is Google Slides → PDF export + unpdf. If target is Google Docs → text extract. If target is PDF → direct unpdf.
+  - Marketing.doc at product root: each product config has a `marketingDoc` Drive file ID pointing to a shared Marketing doc containing user groups, RH events, marketing events relevant to that product. Fetched and injected into synthesis prompt.
+  - Admin page: folder ID picker per product + marketing doc ID input per product
+  - Re-synthesis triggers when Drive content changes (contentHash comparison)
+  - Onboarding callout text per product: "Drop .redhat.com links and What's New deck shortcuts here to improve summaries"
 Phase 3 — Chat + Brief Integration (3-4 days):
-  - POST /api/products/:slug/chat — Gemini grounded Q&A (reuse callGeminiGrounded())
+  - POST /api/products/:slug/chat — Claude Sonnet grounded Q&A (reuse callGeminiGrounded() pattern, swap to Claude)
   - ProductChat.tsx — tabbed chat UI, streaming SSE, citation cards, 10-message cap
   - buildXmlSources() in customer.ts: inject <source type="product_intelligence"> for matched subscriptions
   - SYNTHESIS_PROMPT update: include product intel section for matching products
+  - Daily briefing email: inject ProductReleaseBanner content for customers subscribed to that product
 Key design decisions:
   - PDF-first scraping (no Playwright for RHEL) — avoids shared browser contention
-  - Non-grounded Gemini for synthesis (source already in prompt, temp=0.3)
-  - Grounded Gemini for chat queries (callGeminiGrounded already exists)
-  - Config-driven product list (extensible to RHEL AI, OpenShift Virt, etc.)
+  - Non-grounded Claude Sonnet for synthesis (source already in prompt, temp=0.3) — Gemini blocked at Red Hat
+  - Drive shortcuts: follow targetId to actual file, export to appropriate format, unpdf for PDFs/Slides
+  - Config-driven product list (extensible without code change)
   - Subscription-based brief injection (only surface intel when customer has that product)
+  - Alert persistence keyed by {slug}-{version}: survives restarts, cleared on acknowledge or deck-add
+  - Weekly refresh default (not daily) — product intel changes slowly, reduce API noise
+UX spec (Aditi Sharma 2026-04-05):
+  - ProductReleaseBanner: dismissible top-of-page banner, product icon + version + "What's New" link + ack button
+  - Sidebar: "Products" nav item with amber badge count when alerts pending
+  - ProductsPage: 3 ProductCard components in responsive grid
+  - ProductCard: product logo/icon, current version, GA/EOL dates, 2-sentence summary excerpt, "View Details" link, alert badge if new release
+  - AccountProductIntelligence section: in CustomerDetailPage sidebar, shows relevant product intel for subscribed products (Phase 3)
 
 ### BKL-W3-13 | Telesense integration — SF utilization data mapped to account details + briefs
 Status: 🔬 RESEARCH — VNC spike complete 2026-04-05
@@ -3443,6 +3476,72 @@ Description: The summary cards at the top of the Admin page have misaligned text
 
 ---
 
+### BKL-G33 | Setup page sync status inconsistent — CCSP shows green post-sync, others show grey; no live update after SF sync
+Status: ✅ DONE 2026-04-05 — Added `isRecent()` helper (5-min window) for consistent green/grey logic across all 4 sync rows; `handleSfSync` now awaits status re-fetch immediately instead of setTimeout; green status persists across navigations via server-sourced timestamps.
+Priority: P2
+Size: S (2-4 hours)
+Source: Jason 2026-04-05 — screenshot shows CCSP "Synced just now — 557" in green while RH Cases and SF Pipeline show same-format text in grey; after triggering SF pipeline resync the status doesn't update to show completion
+Files: dashboard/src/pages/SetupPage.tsx
+Description: The four sync status rows in the Setup Data Sources page use inconsistent colors and refresh behavior. CCSP shows green text immediately after sync; RH Cases and SF Pipeline show grey text. After triggering an SF pipeline sync, the status line doesn't update to reflect completion. Need to: (1) audit all 4 sync status text color logic and standardize — green for just-synced, grey for older syncs; (2) ensure the status polling picks up the latest sync result immediately after completion so the text updates without requiring a page reload.
+
+---
+
+### BKL-G32 | Scrape history missing CCSP/Supportable — 50-entry global cap + no auto-refresh
+Status: ✅ DONE 2026-04-05 — (1) Increased slice from 50 to last-10-per-service before merge, so infrequent scrapers (CCSP, Supportable) always appear; (2) Added 10s polling interval to ScrapeHistorySection so triggered scrapes show without page reload.
+Priority: P2
+Size: XS (30 min)
+Source: Jason 2026-04-05 — CCSP and Salesforce don't appear in scrape history after triggering from Data Sources page; root cause: 50-entry global cap filled by RH Cases (every 15min), plus no auto-refresh
+Files: dashboard/src/pages/AdminPage.tsx
+
+---
+
+### BKL-G31 | Admin page layout unpolished — buttons misaligned, sections visually inconsistent
+Status: ✅ DONE 2026-04-05 — (1) ScrapeSection card: added `flex flex-col` + `mt-auto` on status div for equal-height button alignment; (2) SourceScheduleRow: added `self-center` to label + Save button; (3) SchedulerConfig: removed internal h3, added external h2 matching all other section headers.
+Priority: P3
+Size: S (2-4 hours)
+Source: Jason 2026-04-05 — screenshot shows "Run Now" buttons at different vertical positions across cards, Scheduler Config save buttons misaligned with inputs, overall section spacing inconsistent
+Files: dashboard/src/pages/AdminPage.tsx
+
+---
+
+### BKL-G30 | Scraper pre-flight checks inconsistent — Supportable fires even when VPN unreachable
+Status: ✅ DONE 2026-04-06 — Fixed P0/P1 gaps: (1) Added `liveProbe()` at entry of both `runSupportableScrape()` and `runSupportableDiscoverAndScrape()` — throws user-friendly error if VPN unreachable. (2) Converted SF Lightning probe from log-only to scrape gate — probe failure now skips enqueue and sets skip reason. (3) Added `liveProbe()` to `flushScrapersAfterAuth()` Supportable block — skips enqueue if VPN down. (4) `sanitizeErr()` now maps Playwright DNS error patterns (`ERR_NAME_NOT_RESOLVED`, `ERR_CONNECTION_REFUSED`, etc.) to user-friendly messages. P0 Gap 2 (RH heartbeat session check) deferred — scraper rules require extra caution.
+Priority: P1
+Size: M (4-8 hours)
+Source: Jason 2026-04-05 — screenshot shows "goto: net::ERR_NAME_NOT_RESOLVED at https://supportable.corp.redhat.com:4443..." error in Supportable Subscriptions sync section while off VPN; UI correctly showed "Not reachable — check VPN" but background scheduler still attempted the scrape
+Files: src/scrape-api.ts, src/background-scheduler.ts, src/supportable-scraper.ts, src/rh-scraper.ts, src/ccsp-scraper.ts, src/sf-scraper.ts
+Description: Marcus audit found 7 gaps across P0-P2 severity:
+
+  **P0 — Gap 1:** Supportable scraper calls `page.goto()` at `supportable-scraper.ts:864` with zero VPN/DNS check. Scheduler probes VPN for daily 7am runs but `flushScrapersAfterAuth()` (background-scheduler.ts:110-199) bypasses all probes. Manual POST /api/scrape/supportable (scrape-api.ts:188) also skips the reachability check.
+  **P0 — Gap 2:** RH Cases 15-min heartbeat (background-scheduler.ts:1104-1121) enqueues on elapsed time only — no session validity check. Startup path has auth pre-flight; heartbeat does not.
+  **P1 — Gap 3:** SF Pipeline scheduler probe (background-scheduler.ts:779-792) is log-only (`console.warn`) — does not gate the scrape. CCSP correctly returns/skips on probe failure; SF does not.
+  **P1 — Gap 4:** CCSP Tableau probe (background-scheduler.ts:471) only runs `if (tableauBase)` (env var). If `TABLEAU_BASE_URL` unset, scrape proceeds blind.
+  **P1 — Gap 5:** `sanitizeErr` (utils.ts:4-5) truncates errors but passes raw Playwright DNS strings like "goto: net::ERR_NAME_NOT_RESOLVED" to UI. No mapping to user-friendly messages.
+  **P2 — Gap 6:** `flushScrapersAfterAuth()` enqueues all 4 scrapers with no per-scraper connectivity checks.
+  **P2 — Gap 7:** No error classification — UI cannot differentiate VPN issue vs session expiry vs parse error.
+
+Fix priority: (1) Add `probeVpn()` inside Supportable scraper entry points before `page.goto()`; (2) Add session pre-flight to RH heartbeat; (3) Convert SF probe to a skip gate; (4) Add `probeVpn()` to `flushScrapersAfterAuth()` before Supportable; (5) Map Playwright error patterns to user-friendly messages in utils.ts.
+
+---
+
+### BKL-G29 | What Changed delta items truncated at 100 chars — sentences cut mid-word
+Status: ✅ DONE 2026-04-05 — Removed all `.slice(0, 100)` caps in `extractFacts()` and fallback lines in dashboard-routes.ts (lines 465–469, 488). Full sentence text now flows to frontend.
+Priority: P2
+Size: XS (10 min)
+Source: Jason 2026-04-05 — screenshot shows delta bullets cut off mid-sentence ("resolve the outstand", "Chief Data Offic", etc.)
+Files: src/dashboard-routes.ts
+
+---
+
+### BKL-G28 | Account Intelligence Docs panel in wrong column — should be right, not left
+Status: ✅ DONE 2026-04-05 — Moved AccountIntelligencePanel from left column to bottom of right column in CustomerDetailPage.tsx (below DriveSection, above StakeholderEngagementPanel).
+Priority: P2
+Size: XS (15 min)
+Source: Jason 2026-04-05 — screenshot shows Intelligence Docs and Product Q&A stacked in left column; Intelligence Docs belongs in right sidebar
+Files: dashboard/src/pages/CustomerDetailPage.tsx
+
+---
+
 ### BKL-G23 | Admin page not discoverable from sidebar nav
 Status: ⏸️ DEFERRED
 Priority: P3
@@ -3454,12 +3553,33 @@ Description: Admin page (/admin) is only reachable via /setup → Admin link. No
 ---
 
 ### BKL-G25 | Salesforce connection card shows amber "Session Active" instead of green "Connected"
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-05 — Removed `!sfStatus?.syncError` from `sfScrapeOk`; a stale syncError alongside a valid lastSync was blocking green Connected state. Now sfConnected = sfSessionActive && !!lastSync, matching the ticket spec.
 Priority: P2
 Size: XS (1-2 hours)
 Source: Jason 2026-04-04 — screenshot shows SF card amber while Portal/Supportable are green
 Files: dashboard/src/pages/SetupPage.tsx (connection card status logic)
 Description: The Salesforce connection card renders amber "Session Active" with a "Connect" button instead of green "Connected" with a "Reconnect" button. Portal and Supportable 360 show green when their sessions are active. SF should show green when a valid session exists and the pipeline has been synced at least once. The "Session active — sync needed to complete setup" message in the Sync section is also confusing — once a sync has been run, SF should show fully connected. Investigate the status logic that decides Connected vs Session Active, align SF with the other card states.
+
+---
+
+### BKL-G27 | customers.json AI-enriched fields (segment, industry) wiped on container restart
+Status: ✅ DONE 2026-04-05
+Priority: P2
+Size: S (2-4 hours)
+Source: Jason 2026-04-05 — segment labels disappeared from account cards after container restart; restored manually from git
+Files: src/background-scheduler.ts, src/bootstrap-orchestrator.ts, src/scrape-api.ts, src/drive-sources.ts, src/sheet-import.ts
+Description: Multiple code paths write customers.json by reconstructing the customer array from external sources (territory sheet, Supportable discovery, drive sources). These writes replace the full customer object but do not preserve AI-enriched fields: `segment`, `industry`, `industryDescription`, `industryCompetitors`, `industryUpdatedAt`. On container restart, the background scheduler or territory sync runs and rewrites customers.json with source-only fields, silently clearing all AI enrichment. Fix: each write path should merge new source data onto the existing customer object, preserving any fields not present in the source (spread existing, then overlay new fields).
+Resolution: Created src/customer-merge.ts with mergeCustomers() + readExistingCustomers() helpers. Applied merge-not-replace to the two dangerous write paths that build a fresh array from external sources: sheet-import.ts (importSheetRows) and drive-sources.ts (drive folder import). Also applied to server-state.ts saveCustomers() so all callers going through that function are covered. Preserved fields: segment, industry, confidenceScore, and any field prefixed with ai or intelligence.
+
+---
+
+### BKL-G26 | Supportable header dot stays green when off VPN — stale cache vs live reachability mismatch
+Status: ✅ DONE 2026-04-05 — Three-part fix: (1) `/api/scraper-status` now does a 60s-cached HEAD request to supportable.corp.redhat.com and returns `supportableReachable: boolean`; (2) App.tsx header dot turns amber + tooltip "Not reachable — check VPN" when `supportableReachable === false`; (3) SetupPage.tsx Sync Now button disabled + shows "Not reachable — check VPN" hint when unreachable. Commits pending rebuild.
+Priority: P2
+Size: XS (1 hour)
+Source: Jason 2026-04-05 — header shows all green (RH Cases, CCSP, Supportable, Salesforce) while off VPN; Data Sources page correctly shows Supportable 360 "Not connected"
+Files: src/scrape-api.ts, dashboard/src/App.tsx, dashboard/src/pages/SetupPage.tsx
+Description: Header status dots used cached scraper-store state (last sync timestamp). Data Sources page made a live VPN HEAD request via `/api/auth/supportable/check`. When user was off VPN but had a recent successful sync, header stayed green while Setup showed "Not connected". Also, Sync Now button had no VPN reachability check in its disabled condition — it would fire even when Supportable was unreachable.
 
 ---
 
@@ -3680,7 +3800,7 @@ Files: dashboard/src/pages/SetupPage.tsx
 Description: `resetForm()` now preserves `sfReportId` across AE resets so users don't have to re-enter it. All other fields (aeName, customerText, pod, terrNum) are still cleared.
 
 ### BKL-W2-24 | CCSP sync row hint and disabled state — dependency chain inconsistency
-Status: ✅ DONE 2026-04-04 — hint text updated to "Requires active Tableau session" (consistent with "active" wording in other hints). Button gating deferred — CCSP doesn't strictly require RH Portal the way Supportable does.
+Status: ✅ DONE 2026-04-05 — hint condition corrected to `!tableauConnected` (was `!rhConnected`); text updated to "Requires active Tableau session — Connect in Data Sources above". AdminPage CCSP card gains "Open VNC Login" button (POST /api/browser/open-tableau-login + opens localhost:6080/vnc.html).
 Priority: P3
 Size: XS (20 min)
 Source: Quinn validation 2026-04-04
@@ -4033,7 +4153,7 @@ Files: dashboard/src/components/Sidebar.tsx
 Description: Sidebar uses `overflow-hidden` which will clip AE entries when count reaches 16+. Currently at 1 AE so not visible, but will manifest when team grows. Fix: change to `overflow-y-auto` on the AE list container. Latent P3 — low urgency but trivial fix.
 
 ### BKL-W3-26 | Delete MeetingPrepCards.tsx — dead code, imported nowhere
-Status: ⚠️ BLOCKED 2026-04-04 — Confirmed not imported anywhere (grep clean). Deletion requires bash shell permission not available in this session. Jason to run: rm dashboard/src/components/MeetingPrepCards.tsx
+Status: ✅ DONE 2026-04-06 — file does not exist; already deleted
 Priority: P3
 Size: XS (5 min)
 Source: Design Council 2026-04-05 — Marcus dead code audit
@@ -4047,3 +4167,379 @@ Size: XS (30 min)
 Source: Design Council 2026-04-05 — Marcus quick wins
 Files: dashboard/tailwind.config.js
 Description: Add two semantic fontSize tokens to tailwind.config.js to reduce ambiguity between `text-xs` (metadata) and `text-sm` (content): `text-label` (13px, 500 weight — alias for metadata text-xs) and `text-detail` (14px — alias for content text-sm). These tokens communicate intent at the use site, making future text-xs audits mechanical: any `text-xs` that should semantically be `text-label` is correct; any `text-xs` that should be `text-detail` is a violation. 30-minute config change per Marcus.
+
+### BKL-W4-QA1 | Add cross-page navigation regression tests to Playwright suite
+Status: ✅ DONE 2026-04-06 — test/navigation-regression.spec.ts created; 14 tests across 5 describe blocks (NAV-REG-001 through NAV-REG-005); syntax validated via --list
+Priority: P1
+Size: S (1h)
+Source: 2026-04-05 — Sidebar nav bug escaped QA (navigated to /dashboard/products then clicked main nav — stayed on product page)
+Files: test/
+Description: Add Playwright regression tests for cross-page navigation flows: (1) navigate to /dashboard/products, click "Command Center" sidebar item, verify URL changes to /dashboard; (2) navigate to /dashboard/products/:slug detail page, click sidebar items, verify navigation works; (3) navigate to /dashboard/customer/:name, verify brief section loads. These flows were missing from the test suite and allowed the sidebar routing bug (useLocation not checked before scrollTo) to ship undetected.
+
+### BKL-W4-SYNC1 | Tableau CCSP scraper — session dropped (browser context closed)
+Status: 📋 BACKLOG
+Priority: P1
+Size: M (2-3h)
+Source: 2026-04-05 — Quinn found ccspStatus.state="failed" with "page: Target page, context or browser has been closed"
+Files: src/ccsp-scraper.ts
+Description: CCSP scraper state is "failed" with error "Target page, context or browser has been closed". This means the Tableau Playwright session has been dropped — likely the shared browser context was recycled or the Tableau page navigated away. Needs investigation: (1) read ccsp-scraper.ts to understand session recovery path, (2) check if the Tableau page is still alive in the VNC browser, (3) determine if a re-login is needed or if the scraper can auto-recover. Do NOT touch scraper code without reading SCRAPER-RULES.md first.
+
+### BKL-W4-SYNC2 | Sync Now confirmation — ccspSyncedAt/sfSyncedAt reset on page reload
+Status: ✅ DONE
+Priority: P2
+Size: XS
+Source: 2026-04-05 — Quinn found syncedAt state vars were set but never rendered; fixed by adding "✓ Sheet refreshed" confirmation line
+Files: dashboard/src/pages/SetupPage.tsx
+Description: Fixed — ccspSyncedAt and sfSyncedAt now render as "✓ Sheet refreshed just now" in green after manual sync. State is ephemeral (resets on page reload) which is acceptable since the persistent lastScrape/lastSuccess timestamps remain.
+
+### BKL-W4-MD1 | Markdown rendering — Product Intelligence cards
+Status: ✅ DONE 2026-04-06 — renderMarkdownInline applied to priorityAction, talkingPoint, rationale, competitiveAngle in ProductIntelSection.tsx
+Priority: P2
+Size: S (1-2h)
+Source: 2026-04-05 — Jason noted Gemini output fields render as raw text with literal asterisks
+Files: dashboard/src/components/ProductIntelSection.tsx
+Description: ProductIntelSection renders `priorityAction`, `talkingPoint`, `rationale`, and `competitiveAngle` fields as plain strings. Gemini output frequently includes **bold** and *italic* markdown that displays as literal asterisks. Add inline markdown renderer (e.g. extract to a shared `renderMarkdownInline` util) to handle bold/italic/backticks in these fields.
+
+### BKL-W4-MD2 | Markdown rendering — Product summary/detail page
+Status: ✅ DONE 2026-04-06 — renderMarkdownInline applied to summaryText/summaryBullets in ProductCard.tsx and ProductDetailPage.tsx. Note: full markdown (headers/lists) requires react-markdown dependency — not added; inline bold/italic/code covered.
+Priority: P2
+Size: S (1-2h)
+Source: 2026-04-05 — Jason noted product detail view needs markdown for rich summaries
+Files: dashboard/src/pages/ProductsPage.tsx (or equivalent product detail component)
+Description: Product summary `summaryText` and `summaryBullets` from RHEL/OCP/AAP are Gemini-generated and may contain markdown formatting. Add full markdown rendering (headers, bullets, bold, italic, code) for the product detail view.
+
+### BKL-W4-MD3 | Markdown rendering — Daily brief inline text
+Status: ✅ DONE 2026-04-06 — renderMarkdownInline added as pre-pass in renderBriefWithCitations (CustomerDetailPage.tsx); [Source: X] citation rendering untouched
+Priority: P2
+Size: S (1-2h)
+Source: 2026-04-05 — Brief sections parsed into custom renderer but inline bold/italic not handled
+Files: dashboard/src/pages/CustomerDetailPage.tsx
+Description: `renderBriefWithCitations` handles `[Source: ...]` tags but not inline markdown (`**bold**`, `*italic*`, `` `code` ``). Lines with Gemini-generated bold text display as literal `**text**`. Extend `renderBriefWithCitations` or add a pre-pass to convert inline markdown to React spans before citation splitting.
+
+### BKL-W4-MD4 | Markdown rendering — Account Intelligence panel
+Status: ✅ DONE 2026-04-06 — N/A: AccountIntelligencePanel.tsx renders only Drive doc links (companyDocUrl, industryDocUrl), not inline text content. No markdown fields to render. Item closed as inapplicable.
+Priority: P3
+Size: XS (30 min)
+Source: 2026-04-05 — Company/industry block text from Gemini rendered as raw string
+Files: dashboard/src/components/AccountIntelligencePanel.tsx (or inline in CustomerDetailPage)
+Description: Account Intelligence `company` and `industry` text blocks from the intelligence cache are rendered as plain text. These Gemini outputs contain section headers and bold text. Add markdown rendering consistent with BKL-W4-MD1–3 implementation.
+
+### BKL-W4-BRIEF1 | Brief regenerates on every page visit after scheduler runs
+Status: ✅ DONE 2026-04-05
+Priority: P1
+Size: XS
+Source: 2026-04-05 — Jason noticed brief takes a long time to display on every account visit
+Files: src/cache-layer.ts
+Description: `writeSheetCache` stamped `cachedAt: now` on every scheduler run even when row data was identical. This made `sheetTs > briefTs` after every refresh cycle, causing `customer-routes.ts:266` to fall through the cache check and regenerate the brief via Gemini on every page visit. Fixed by adding SHA256 content hash check in `writeSheetCache` — if rows are unchanged, return without writing (preserving existing `cachedAt` so brief cache invalidation logic only triggers on real data changes).
+
+### BKL-W5-EXPAND1 | Product intel: surface expansion opportunities beyond existing subscriptions
+Status: ✅ DONE 2026-04-06 — subscription filtering already relaxed in Wave 5; strengthened Gemini prompt with explicit expansion cross-reference instructions (customer-product-intel.ts:273-304); dead imports removed from product-intel-routes.ts
+Priority: P1
+Size: M (2-3h)
+Source: 2026-04-05 — Jason: "does it also look at existing data signals to determine if other products may also work and why"
+Files: src/customer-product-intel.ts
+Description: Currently `generateCustomerProductIntel` filters subscriptions to only those matching `subscriptionPatterns` and only surfaces intel for products the customer already has. Should also analyze all data signals (cases, pipeline, tech stack, brief) to identify net-new product fits — e.g. heavy RHEL footprint → flag Insights gap; OCP without AAP → flag automation opportunity. Change: remove "only surface relevant to actual subscriptions" constraint, pass all customer signals, let Gemini distinguish between "has it and needs attention" vs "doesn't have it but would benefit". `expansionOpportunities` schema already exists for this.
+
+### BKL-W5-DRIVE1 | Drive doc fetch: 6-month modification filter excludes strategic reference PDFs
+Status: ✅ DONE 2026-04-06 — verified already applied: customer.ts line 268 uses twoYearsAgo (730-day window)
+Priority: P1
+Size: XS (30 min)
+Source: 2026-04-05 — Jason noted "RH business value maps.pdf" in Account Intelligence folder may not be found
+Files: src/customer.ts (_fetchCustomerDocsImpl)
+Description: File listing uses `modifiedTime > sixMonthsAgo` filter — any file not modified in 6 months is silently skipped. Strategic account documents (business value maps, POVs, exec summaries) are often set once and never modified. Fix: extend window to 2 years for files in subfolders named "Account Intelligence" or similar, OR remove the date filter entirely and rely on MAX_FILES_PER_CUSTOMER (50) and TOTAL_CONTENT_CAP (80K) as the guardrails. Subfolders (like Account Intelligence/) are not date-filtered — only file listings within them are.
+
+### BKL-W5-TS2 | Pre-existing TypeScript error in product-intel-routes.ts:270 (opportunityName vs oppName)
+Status: 📋 BACKLOG
+Priority: P3
+Size: XS (15 min)
+Source: 2026-04-06 — Marcus found during W5-P2-PRODPAGE work
+Files: src/product-intel-routes.ts:270
+Description: Pre-existing error — property `opportunityName` used but correct field name on `PipelineRecord` is `oppName`. Not introduced by current session. One-line rename fix.
+
+### BKL-W5-TS1 | Pre-existing TypeScript errors in server.ts (tableauUrl + EmailSettings)
+Status: 📋 BACKLOG
+Priority: P2
+Size: S (1h)
+Source: 2026-04-06 — Marcus tsc check found 18 pre-existing errors; unrelated to current session work
+Files: server.ts (lines 684, 913-934)
+Description: Two unrelated error clusters: (1) server.ts:684 — `tableauUrl` does not exist on AE type; (2) server.ts:913-934 — `deliveryTime`, `timezone`, `schedule`, `recipientEmail` not recognized on `Partial<EmailSettings> | {}` type due to narrow union type. Need to add `tableauUrl?: string` to AE interface and narrow the EmailSettings union to the concrete type before property access.
+
+### BKL-W5-P2-PRODPAGE | Products page: territory radar instead of product brochure
+Status: ✅ DONE 2026-04-06 — GET /api/products/:slug/territory-summary added (product-intel-routes.ts:351-414); ProductsPage.tsx replaced summaryText with TerritoryRadarCard showing coverage/priority actions/slide status; "Refresh slides" button wired to POST /api/products/ingest-slides
+Priority: P1
+Size: M (2-3h)
+Source: 2026-04-05 — Jason: Products page shows generic summaryText from content.redhat.com, same problem as the account cards
+Files: dashboard/src/pages/ProductsPage.tsx, dashboard/src/components/ProductCard.tsx, src/product-intel-routes.ts
+Description: Replace the current Products page (which shows content.redhat.com summaryText — marketing copy everyone already knows) with a territory-level radar view:
+  (1) Slide deck status per product: files ingested, last refreshed, corpusHash, total chars
+  (2) Territory coverage: X of Y customers have intel generated, breakdown by HIGH/MEDIUM/LOW/NONE
+  (3) Top 3 priority actions across all customers for this product (aggregate from cached CustomerProductIntel)
+  (4) "Refresh slides" button → POST /api/products/ingest-slides
+  (5) Remove summaryText display; keep version/GA/EOL dates as compact header only
+  Requires new API endpoint: GET /api/products/:slug/territory-summary that aggregates cached customer intel files for the product.
+
+---
+
+## Security — Rook Audit 2026-04-06 (Product Intel Wave 4/5)
+
+### BKL-S12 | Prompt injection via customer data in Gemini prompts
+Status: ✅ DONE 2026-04-06 — Added `sanitizePromptInput()` to utils.ts. Applied to: subscription name/desc (customer-product-intel.ts), case summaries (customer-product-intel.ts), opportunity names (product-intel-routes.ts), and customerName in identifyIndustry prompt (account-intelligence.ts). Strips zero-width chars (U+200B-200D, FEFF), HTML/XML, instruction-override patterns, role-impersonation directives, and bare SYSTEM/USER/ASSISTANT markers. Gate: 9/10 PASS; 1 low gap (zero-width bypass) fixed same session.
+Severity: HIGH
+Priority: P2
+Size: M (1 day)
+Source: Rook audit 2026-04-06
+Files: src/utils.ts, src/customer-product-intel.ts, src/product-intel-routes.ts, src/account-intelligence.ts
+
+---
+
+### BKL-S13 | SSRF via customSources URL validation bypass
+Status: ✅ DONE 2026-04-06 (bypass fix applied 2026-04-06) — Exported `isAllowedUrl()` from product-feature-radar.ts. PATCH /api/products/:slug/sources now validates against ALLOWED_DOMAINS allowlist. Rook Batch2 scan (2026-04-06) identified path-based bypass: `(hostname + pathname).includes(d)` allowed `https://evil.com/.redhat.com/x` to pass. Fixed by splitting logic: `hostname.endsWith()` for *.redhat.com/*.openshift.com; `hostname === 'github.com' && pathname.startsWith('/openshift')` for GitHub.
+Severity: HIGH
+Priority: P2
+Size: S (2-4 hours)
+Source: Rook audit 2026-04-06
+Files: src/product-intel-routes.ts lines 400-407, src/product-feature-radar.ts isAllowedUrl()
+Description: `PATCH /api/products/:slug/sources` validates URLs with only `url.startsWith('http')`, allowing cloud metadata SSRF (169.254.169.254), loopback requests, and internal network scanning. URLs are later fetched by `product-release-radar.ts` `followLinksInContent()`. Risk is mitigated by localhost-only design but violates defense-in-depth.
+Decision: Validate against domain allowlist — fixed `isAllowedUrl()` to use precise hostname/path checks preventing bypass.
+
+---
+
+### BKL-S14 | Missing mode 0o600 on customer-docs-corpus cache writes
+Status: ✅ DONE 2026-04-06 — Added `{ mode: 0o600 }` to `writeFileSync` at `customer-docs-corpus.ts:80`. One-line fix applied immediately.
+Severity: MEDIUM
+Priority: P1
+Size: XS (5 min)
+Source: Rook audit 2026-04-06
+Files: src/customer-docs-corpus.ts line 80
+
+---
+
+### BKL-S15 | No slug input validation on product intel routes — path traversal vector
+Status: ✅ DONE 2026-04-06 — Added `/^[a-z0-9-]+$/` guard to GET /api/products/:slug/intel/:customerSlug and GET /api/products/:slug/features. Both slug and customerSlug validated before file path construction.
+Severity: MEDIUM
+Priority: P2
+Size: XS (30 min)
+Source: Rook audit 2026-04-06
+Files: src/product-intel-routes.ts (GET /api/products/:slug/intel/:customerSlug, GET /api/products/:slug/features)
+Description: `:slug` and `:customerSlug` route params used in file path construction without explicit format validation. Read routes skip the `products.find()` allowlist check that generation routes have. `resolve()` normalizes paths but `../` in slug could traverse cache dir. Add guard: `if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)` at top of each handler.
+
+---
+
+### BKL-S16 | No concurrency guard on Gemini generation endpoints
+Status: ✅ DONE 2026-04-06 — Added `_generatingKeys` Set (module-level) in `product-intel-routes.ts`. Guards POST /intel/:customerSlug/generate, POST /features/refresh, and POST /refresh with mutex key per slug/customer. Returns HTTP 409 on duplicate. Released in `finally` to handle error paths.
+Severity: MEDIUM
+Priority: P2
+Size: S (2-4 hours)
+Source: Rook audit 2026-04-06
+Files: src/product-intel-routes.ts (POST /generate, POST /features/refresh, POST /refresh)
+Description: Generation endpoints trigger Gemini API calls with no in-memory mutex. Rapid clicks or frontend retry bugs could spawn multiple simultaneous Gemini calls, exhausting GCP quota and amplifying cost. Apply same in-memory mutex pattern used by existing scrapers.
+
+---
+
+### BKL-S17 | Gemini error responses logged at excessive length
+Status: ✅ DONE 2026-04-06 — Applied to all 4 Gemini callers (customer-product-intel, product-feature-radar, product-release-radar, product-intelligence). Now strips Bearer tokens and truncates to 200 chars.
+Severity: MEDIUM
+Priority: P3
+Size: XS (15 min)
+Source: Rook audit 2026-04-06
+Files: src/customer-product-intel.ts line 359, src/product-feature-radar.ts line 383
+Description: Gemini error response body logged up to 500 chars — can include request payload echo, project IDs, token fragments. Reduce to 200 chars and strip any Authorization/Bearer patterns, consistent with `sanitizeErr` pattern.
+
+---
+
+## Code Review — Marcus Webb 2026-04-06
+
+### BKL-MC01 | Undefined variable `inputFields` crash in test endpoint
+Status: ✅ DONE 2026-04-06 — Removed `inputFields` from the return object at server.ts:539. `tableData` already contains the error detail; the undefined var was redundant.
+Severity: CRITICAL (test-only, not production)
+Priority: P2
+Size: XS (5 min)
+Source: Marcus code review 2026-04-06
+Files: src/server.ts line 539
+Description: `inputFields` variable referenced but never declared in scope. Throws ReferenceError when error path is hit. Only in test endpoint guarded by `NODE_ENV !== 'production'`, but crashes debug sessions. Likely intended to be `inputDump`.
+
+---
+
+### BKL-MC02 | `getGeminiToken()` duplicated across 3 files
+Status: ✅ DONE 2026-04-06 — Created `src/gemini-auth.ts` with single exported `getGeminiToken()`. Removed local copies from all 5 files (was 5, not 3 — account-intelligence.ts and product-intelligence.ts also had copies). Updated imports in all 5 files.
+Priority: P2
+Size: S (2 hours)
+Source: Marcus code review 2026-04-06
+Files: src/gemini-auth.ts (new), src/customer-product-intel.ts, src/product-feature-radar.ts, src/product-release-radar.ts, src/account-intelligence.ts, src/product-intelligence.ts
+Description: Identical auth logic in 3 places (was actually 5). A fix to one (e.g. token caching, error handling) must be applied in all 3 or the system silently diverges. Extract to `src/gemini-auth.ts` shared module.
+
+---
+
+### BKL-MC03 | No timeout on Gemini API fetch calls
+Status: ✅ DONE 2026-04-06 — Added `signal: AbortSignal.timeout(60_000)` to all 4 Gemini fetch callers: customer-product-intel.ts, product-feature-radar.ts, product-release-radar.ts, product-intelligence.ts.
+Priority: P1
+Size: S (2-3 hours)
+Source: Marcus code review 2026-04-06
+Files: src/customer-product-intel.ts:344, src/product-feature-radar.ts, src/product-release-radar.ts, src/product-intelligence.ts
+Description: All `fetch()` calls to Gemini lack `AbortSignal.timeout()`. A hanging Gemini response blocks the request indefinitely. Especially problematic for `/generate` endpoint called from UI. Add `signal: AbortSignal.timeout(60_000)` to all Gemini fetch calls.
+
+---
+
+### BKL-MC04 | `enrichFeatures` mutates cached object in-place
+Status: ✅ DONE 2026-04-06 — Added deep clone at top of `enrichFeatures()`: `const cache = { ...rawCache, features: rawCache.features.map(f => ({ ...f, sourceUrls: [...f.sourceUrls] })) }`. Mutations now operate on the clone, not the original parsed object.
+Priority: P2
+Size: S (1-2 hours)
+Source: Marcus code review 2026-04-06
+Files: src/product-feature-radar.ts enrichFeatures()
+Description: `getFeatureCache(slug)` returns parsed JSON, enrichment mutates objects directly, then writes back. Works today because cache is never memoized, but adding caching would create aliasing bugs. Concurrent reads could see partially-enriched data. Should clone the cache before mutating.
+
+---
+
+### BKL-MC05 | Hardcoded Chromium binary path in `product-release-radar.ts`
+Status: ✅ DONE 2026-04-06 — Removed `executablePath: '/ms-playwright/chromium-1208/...'` and changed `headless: false` → `headless: true`. Playwright now resolves the binary automatically via its own install path, and no visible browser window is spawned.
+Priority: P1
+Size: S (2 hours)
+Source: Marcus code review 2026-04-06
+Files: src/product-release-radar.ts scrapeContentHubPage()
+Description: `scrapeContentHubPage` hardcodes `/ms-playwright/chromium-1208/chrome-linux/chrome` and `headless: false`. Path breaks on Playwright upgrades. Should use `chromium.executablePath()` or the standard Playwright launch without executablePath. `headless: false` pops a visible browser window.
+
+---
+
+### BKL-MC06 | `PRODUCT_SLUGS` hardcoded in `ProductIntelSection.tsx`
+Status: ✅ DONE 2026-04-06 — Removed hardcoded `PRODUCT_SLUGS` const. Added `productSlugs` state + `productLabels` state. On mount, fetches `/api/products/config` to populate both. Falls back to hardcoded defaults if config fetch fails. `ProductCard` now receives `label` as a prop via `productLabel()` helper.
+Priority: P2
+Size: S (2-3 hours)
+Source: Marcus code review 2026-04-06
+Files: dashboard/src/components/ProductIntelSection.tsx:46
+Description: Product slug list hardcoded in React component but product config is dynamic server-side (product-intel-config.json). Adding a product requires updating both config AND this constant. Should fetch from `GET /api/products/config` on mount and derive slugs + labels dynamically.
+
+---
+
+### BKL-MC07 | Feature cache data flows to Gemini prompt without schema validation
+Status: ✅ DONE 2026-04-06 — Added `validFeatures` filter in `customer-product-intel.ts` before building featureBlock: requires `name`, `status`, `typeof description === 'string'`, and `Array.isArray(tags)`. Prevents runtime throws from `undefined.slice()` on malformed cache entries.
+Priority: P2
+Size: S (1-2 hours)
+Source: Marcus code review 2026-04-06
+Files: src/product-intel-routes.ts:264-271
+Description: `featureCache.features` mapped and passed to `generateCustomerProductIntel` with no validation that the cache structure matches expected shape. A corrupted cache file produces malformed prompts without error until Gemini returns garbage. Add zod or manual shape check before mapping.
+
+---
+
+## Config Audit — Serena Blackwood 2026-04-06
+
+### BKL-SR01 | `GEMINI_MODEL` env var ignored in 3 files — hardcoded model bypasses config
+Status: ✅ DONE 2026-04-06 — Fixed all 3: `customer-product-intel.ts:329`, `product-feature-radar.ts:356`, `product-feature-radar.ts:512` now use `process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'`. Consistent with all other Gemini callers in the codebase.
+Priority: P1
+Size: XS (done)
+Source: Serena audit 2026-04-06
+Files: src/customer-product-intel.ts, src/product-feature-radar.ts (×2)
+
+---
+
+### BKL-SR02 | AI & Intelligence Settings accordion section (Settings UI)
+Status: ✅ DONE 2026-04-06 — Added `AiConfig` interface + `getAiConfig()` + `getGeminiModel()` + `GET/POST /api/settings/ai` to settings-api.ts. `getGeminiModel()` centralizes model selection (env var override precedence). Wired to all 8 Gemini call sites: customer.ts (x3), customer-product-intel.ts, product-feature-radar.ts (x2), product-release-radar.ts, product-intelligence.ts, doc-extraction.ts, account-intelligence.ts, dashboard-routes.ts. briefSynthesisTemperature wired to callLLM + callLLMStructured in customer.ts. customerIntelTemperature wired to customer-product-intel.ts. featureExtractionMaxFeatures injected into product-feature-radar.ts prompt. Pricing made dynamic in gemini-cost-tracker.ts. Added `AiIntelligenceSettings.tsx` component + accordion section in SetupPage.
+Priority: P1
+Size: L (2-3 days)
+Files: src/settings-api.ts, dashboard/src/components/AiIntelligenceSettings.tsx, dashboard/src/pages/SetupPage.tsx, src/customer.ts, src/customer-product-intel.ts, src/product-feature-radar.ts, src/product-release-radar.ts, src/product-intelligence.ts, src/doc-extraction.ts, src/account-intelligence.ts, src/dashboard-routes.ts, src/gemini-cost-tracker.ts, server.ts
+
+---
+
+### BKL-SR03 | Automation & Limits Settings accordion section (Settings UI)
+Status: ✅ DONE 2026-04-06 — Added `AutomationConfig` interface + `getAutomationConfig()` + `GET/POST /api/settings/automation` to settings-api.ts. Wired to all 6 consumer sites: scraper-manager.ts (defaultScrapeTimeoutMs, rhScrapeTimeoutMs, circuitBreakerThreshold, circuitBreakerCooldownMs), customer-docs-corpus.ts (driveDocTextCap), customer.ts x2 (briefEmailsInPrompt), customer-product-intel.ts (briefHistoryDays). Added AutomationSettings.tsx component + accordion section in SetupPage.
+Priority: P2
+Size: M (1-2 days)
+Files: src/settings-api.ts, dashboard/src/components/AutomationSettings.tsx, dashboard/src/pages/SetupPage.tsx, src/scraper-manager.ts, src/customer-docs-corpus.ts, src/customer.ts, src/customer-product-intel.ts
+
+---
+
+### BKL-S18 | Missing timeout on enrichFeatures() Gemini call in product-feature-radar.ts
+Status: ✅ DONE 2026-04-06 — Added `signal: AbortSignal.timeout(60_000)` to enrichment fetch in `enrichFeatures()`. Rook Batch 3 scan caught this gap after BKL-MC03 fix covered only the extraction call.
+Severity: LOW
+Priority: P3
+Size: XS (5 min)
+Source: Rook Batch 3 scan 2026-04-06
+Files: src/product-feature-radar.ts enrichFeatures() enrichment fetch
+
+---
+
+### BKL-S19 | Malformed GEMINI_SERVICE_ACCOUNT_KEY could expose partial key material in stack trace
+Status: ✅ DONE 2026-04-06 — Added try/catch around JSON.parse in gemini-auth.ts with sanitized error messages. Added field validation for client_email + private_key before JWT construction.
+Severity: LOW
+Priority: P3
+Size: XS (30 min)
+Source: Rook Batch 3 scan 2026-04-06
+Files: src/gemini-auth.ts:14-18
+Description: `JSON.parse(Buffer.from(saKeyB64, 'base64').toString())` has no schema validation. A malformed key (not valid JSON, or valid JSON but missing fields) throws an unhandled error that could include partial key material in the stack trace. Add try/catch with a sanitized error message.
+
+---
+
+### BKL-S20 | POST /api/products/features/refresh-all lacks concurrency mutex
+Status: ✅ DONE 2026-04-06 — Added `refresh-all` mutex key to `/api/products/features/refresh-all`. Returns HTTP 409 on duplicate. Follows same pattern as BKL-S16.
+Severity: LOW
+Priority: P3
+Size: XS (30 min)
+Source: Rook Batch 3 scan 2026-04-06
+Files: src/product-intel-routes.ts POST /api/products/features/refresh-all
+Description: Bulk feature refresh endpoint (line ~328) calls `refreshAllFeatures()` with no mutex. Concurrent POSTs spawn parallel bulk jobs. Lower risk than per-product endpoints since refresh-all is admin-only, but should be guarded with `refresh-all` mutex key for consistency.
+
+---
+
+### BKL-S21 | Gemini thinking budget not disabled on 7 of 9 call sites
+Status: ✅ DONE 2026-04-06 — Added `thinkingConfig: { thinkingBudget: 0 }` to all remaining call sites: customer.ts (PDF multimodal), doc-extraction.ts, product-feature-radar.ts (enrichment), product-release-radar.ts, product-intelligence.ts, account-intelligence.ts, customer-product-intel.ts, dashboard-routes.ts. Only callLLM + callLLMStructured in customer.ts had it originally.
+Severity: MEDIUM (silent cost leak — thinking tokens charge against output quota)
+Priority: P1
+Size: XS (15 min)
+Source: User audit 2026-04-06 — Jason asked if thinking was disabled everywhere
+
+---
+
+## Rook Gate — BKL-SR03 Automation & Limits (2026-04-06)
+
+### BKL-SR03-F1 | Circuit breaker config snapshot-at-startup — UI cooldown/threshold changes require restart
+Status: 📋 BACKLOG
+Severity: P2
+Priority: P2
+Size: S (1-2h)
+Source: Rook gate 2026-04-06 — F1 finding on SR03 pass
+Files: src/scraper-manager.ts (lines 196–201)
+Description: `circuitBreakerThreshold` and `circuitBreakerCooldownMs` are read once at module initialization and baked into `CircuitBreaker` constructor args. Timeout fields (`DEFAULT_SCRAPE_TIMEOUT_MS`, `RH_SCRAPE_TIMEOUT_MS`) correctly use lazy lambdas that call `getAutomationConfig()` at invocation time, but circuit breaker config does not. Result: saving a new threshold/cooldown via `POST /api/settings/automation` takes effect for timeouts immediately but has no effect on circuit breakers until container restart. Fix: pass the config getter into `CircuitBreaker` or re-read config in `isOpen()`.
+
+### BKL-SR03-F2 | DEFAULT_SCRAPE_TIMEOUT_MS lambda never invoked — Supportable/CCSP use hardcoded 10-min timeout
+Status: 📋 BACKLOG
+Severity: P3
+Priority: P3
+Size: XS (30 min)
+Source: Rook gate 2026-04-06 — F2 finding on SR03 pass
+Files: src/scraper-manager.ts:232, src/scrape-api.ts:330,389
+Description: `DEFAULT_SCRAPE_TIMEOUT_MS` lambda is defined in scraper-manager.ts but never called. `scrape-api.ts` lines 330 and 389 use hardcoded `10 * 60 * 1000` for Supportable wallTimeout calls, bypassing `getAutomationConfig()` entirely. The "Default Scrape Timeout" UI control has no observable effect on CCSP or Supportable scrapes. Fix: replace hardcoded values in scrape-api.ts with `getAutomationConfig().defaultScrapeTimeoutMs`.
+
+### BKL-SR03-Q1 | AutomationSettings: no client-side pre-save validation (browser min/max only)
+Status: 📋 BACKLOG
+Severity: P3 — UX gap, not functional regression
+Priority: P3
+Size: XS (30 min)
+Source: Quinn gate 2026-04-06 — minor UX observation on SR03 pass
+Files: dashboard/src/components/AutomationSettings.tsx
+Description: Input fields use HTML `min`/`max` attributes for browser-native range hints but have no JavaScript pre-save validation. Out-of-range typed values are only caught at save time via server rejection. UX gap: user can type invalid values and submit; error only appears after the POST fails. Fix: add client-side range check before the POST call, highlighting the specific field that's out of range.
+
+---
+
+## Rook Gate — Wave 5 Security Review (2026-04-06)
+
+### BKL-W5-RK-F1 | territory-summary: intelDir path uses resolve() but CACHE_DIR env var is unconstrained
+Status: 📋 BACKLOG
+Severity: P2
+Priority: P2
+Size: XS (30 min)
+Source: Rook gate 2026-04-06 — Wave 5 review of GET /api/products/:slug/territory-summary
+Files: src/product-intel-routes.ts (lines 356-358)
+Description: The slug parameter is correctly validated via `/^[a-z0-9-]+$/.test(slug)` (line 354) before being interpolated into the path. However, `CACHE_DIR` and `DATA_DIR` are taken directly from `process.env` without validation. If an operator misconfigures these vars to point outside the container data volume, the `resolve()` call will happily construct a path anywhere on disk. In the current container-only deployment this is a low-likelihood operational issue (not an external injection vector), but worth a one-line existence check that CACHE_DIR stays within DATA_DIR. No user-controlled input reaches the env vars — severity is P2 (operator error, not attacker-controlled). Fix: add an assertion at startup that `CACHE_DIR` resolves within `DATA_DIR`, or document the constraint in ARCHITECTURE.md.
+
+### BKL-W5-RK-F2 | ProductIntelSection file enumeration: readdirSync filenames used as display fallback without sanitization
+Status: 📋 BACKLOG
+Severity: P3
+Priority: P3
+Size: XS (15 min)
+Source: Rook gate 2026-04-06 — Wave 5 review of territory-summary endpoint
+Files: src/product-intel-routes.ts (line 377)
+Description: `intel.customer ?? file.replace('.json', '')` — if a cache JSON file is missing the `intel.customer` field, the raw filename (minus extension) is used as the display customer name in the territory summary response. Cache files are written by the server itself (not externally uploaded), so this is a self-referential risk. However if a corrupt/hand-placed .json file with a crafted filename lands in the directory, its name surfaces in the API response verbatim. Since the directory is server-written only, severity is P3 (defense-in-depth). Fix: strip non-printable characters from the fallback filename before returning, e.g. `.replace(/[^\w\s-]/g, '')`.
+
+### BKL-W5-RK-PASS | All other Wave 5 checks — PASS
+Status: ✅ DONE 2026-04-06
+Source: Rook gate 2026-04-06
+Description: (1) renderMarkdownInline — no dangerouslySetInnerHTML anywhere in dashboard/src. All tokens are pushed into React elements (<strong>, <em>, <code>) via JSX, never injected as raw HTML. XSS risk: NONE. (2) Test file navigation-regression.spec.ts — all tests are GET + UI click navigation only; no POST/DELETE to non-test endpoints; no state mutation. (3) customer-product-intel.ts prompt — expansion opportunity prompt change is purely instructional text added to the system/user prompt; no new external input injected; sanitizePromptInput() already wraps all customer-sourced strings. (4) AccountIntelligencePanel.tsx — renders only Drive doc URLs as anchor hrefs (no text content rendered); no markdown rendering needed. (5) SetupPage.tsx — renders config strings and status strings from server API; no markdown content fields present; no renderMarkdownInline gap.

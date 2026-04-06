@@ -107,6 +107,67 @@ export function getWeatherSettings(): WeatherSettings {
 let _weatherCache: { data: object; fetchedAt: number } | null = null
 const WEATHER_CACHE_MS = 30 * 60 * 1000
 
+// ── AI & Intelligence config ─────────────────────────────────────────────────
+
+export interface AiConfig {
+  geminiModel: string                // 'gemini-2.5-flash' | 'gemini-2.5-pro'
+  briefSynthesisTemperature: number  // 0.0–1.0
+  customerIntelTemperature: number   // 0.0–1.0
+  featureExtractionMaxFeatures: number
+  geminiInputCostPerM: number        // USD per 1M input tokens
+  geminiOutputCostPerM: number       // USD per 1M output tokens
+}
+
+export const DEFAULT_AI_CONFIG: AiConfig = {
+  geminiModel: 'gemini-2.5-flash',
+  briefSynthesisTemperature: 0.7,
+  customerIntelTemperature: 0.3,
+  featureExtractionMaxFeatures: 30,
+  geminiInputCostPerM: 0.15,
+  geminiOutputCostPerM: 0.60,
+}
+
+export function getAiConfig(): AiConfig {
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    return { ...DEFAULT_AI_CONFIG, ...(ds.aiConfig ?? {}) }
+  } catch { return { ...DEFAULT_AI_CONFIG } }
+}
+
+/** Gemini model selection: env var takes precedence over persisted config. */
+export function getGeminiModel(): string {
+  return process.env.GEMINI_MODEL ?? getAiConfig().geminiModel
+}
+
+// ── Automation config ────────────────────────────────────────────────────────
+
+export interface AutomationConfig {
+  defaultScrapeTimeoutMs: number    // default 5 * 60 * 1000 (5 min)
+  rhScrapeTimeoutMs: number         // default 10 * 60 * 1000 (10 min)
+  circuitBreakerThreshold: number   // default 3
+  circuitBreakerCooldownMs: number  // default 5 * 60 * 1000 (5 min)
+  driveDocTextCap: number           // chars per doc, default 15000
+  briefEmailsInPrompt: number       // emails included in brief, default 20
+  briefHistoryDays: number          // days of brief history in prompt, default 7
+}
+
+export const DEFAULT_AUTOMATION_CONFIG: AutomationConfig = {
+  defaultScrapeTimeoutMs: 5 * 60 * 1000,
+  rhScrapeTimeoutMs: 10 * 60 * 1000,
+  circuitBreakerThreshold: 3,
+  circuitBreakerCooldownMs: 5 * 60 * 1000,
+  driveDocTextCap: 15_000,
+  briefEmailsInPrompt: 20,
+  briefHistoryDays: 7,
+}
+
+export function getAutomationConfig(): AutomationConfig {
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    return { ...DEFAULT_AUTOMATION_CONFIG, ...(ds.automationConfig ?? {}) }
+  } catch { return { ...DEFAULT_AUTOMATION_CONFIG } }
+}
+
 // ── Route registration ──────────────────────────────────────────────────────
 
 export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimers: (intervals: typeof DEFAULT_REFRESH_INTERVALS) => void }): void {
@@ -206,6 +267,126 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       renameSync(tmpPath, DATA_SOURCES_PATH)
       _weatherCache = null // invalidate cache on settings change
       return c.json(updated)
+    } catch (e: any) {
+      return c.json({ error: String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]') }, 500)
+    }
+  })
+
+  // ── AI & Intelligence settings ────────────────────────────────────────────
+
+  app.get('/api/settings/ai', (c) => c.json({ config: getAiConfig(), defaults: DEFAULT_AI_CONFIG }))
+
+  app.post('/api/settings/ai', async (c) => {
+    const body = await c.req.json<Partial<AiConfig>>().catch(() => ({}))
+    const current = getAiConfig()
+    const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro'])
+    const updated: AiConfig = { ...current }
+
+    if ('geminiModel' in body) {
+      if (typeof body.geminiModel !== 'string' || !ALLOWED_MODELS.has(body.geminiModel)) {
+        return c.json({ error: 'geminiModel must be gemini-2.5-flash or gemini-2.5-pro' }, 400)
+      }
+      updated.geminiModel = body.geminiModel
+    }
+    const tempKeys: Array<keyof AiConfig> = ['briefSynthesisTemperature', 'customerIntelTemperature']
+    for (const k of tempKeys) {
+      if (k in body) {
+        const v = body[k] as number
+        if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1) {
+          return c.json({ error: `${k} must be a number between 0.0 and 1.0` }, 400)
+        }
+        ;(updated as any)[k] = v
+      }
+    }
+    if ('featureExtractionMaxFeatures' in body) {
+      const v = body.featureExtractionMaxFeatures as number
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 100) {
+        return c.json({ error: 'featureExtractionMaxFeatures must be an integer between 1 and 100' }, 400)
+      }
+      updated.featureExtractionMaxFeatures = v
+    }
+    const priceKeys: Array<keyof AiConfig> = ['geminiInputCostPerM', 'geminiOutputCostPerM']
+    for (const k of priceKeys) {
+      if (k in body) {
+        const v = body[k] as number
+        if (typeof v !== 'number' || !Number.isFinite(v) || v < 0 || v > 1000) {
+          return c.json({ error: `${k} must be a non-negative number` }, 400)
+        }
+        ;(updated as any)[k] = v
+      }
+    }
+
+    try {
+      let ds: Record<string, unknown> = {}
+      try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
+      const tmpPath = DATA_SOURCES_PATH + '.tmp'
+      writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, aiConfig: updated }, null, 2), { mode: 0o600 })
+      renameSync(tmpPath, DATA_SOURCES_PATH)
+      return c.json({ config: updated })
+    } catch (e: any) {
+      return c.json({ error: String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]') }, 500)
+    }
+  })
+
+  // ── Automation & Limits settings ─────────────────────────────────────────
+
+  app.get('/api/settings/automation', (c) => c.json({ config: getAutomationConfig(), defaults: DEFAULT_AUTOMATION_CONFIG }))
+
+  app.post('/api/settings/automation', async (c) => {
+    const body = await c.req.json<Partial<AutomationConfig>>().catch(() => ({}))
+    const current = getAutomationConfig()
+    const updated: AutomationConfig = { ...current }
+
+    const timeoutKeys: Array<keyof AutomationConfig> = ['defaultScrapeTimeoutMs', 'rhScrapeTimeoutMs', 'circuitBreakerCooldownMs']
+    for (const k of timeoutKeys) {
+      if (k in body) {
+        const v = body[k] as number
+        if (typeof v !== 'number' || !Number.isInteger(v) || v < 60_000 || v > 3_600_000) {
+          return c.json({ error: `${k} must be an integer between 60000 (1 min) and 3600000 (60 min)` }, 400)
+        }
+        ;(updated as any)[k] = v
+      }
+    }
+
+    if ('circuitBreakerThreshold' in body) {
+      const v = body.circuitBreakerThreshold as number
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 20) {
+        return c.json({ error: 'circuitBreakerThreshold must be an integer between 1 and 20' }, 400)
+      }
+      updated.circuitBreakerThreshold = v
+    }
+
+    if ('driveDocTextCap' in body) {
+      const v = body.driveDocTextCap as number
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1_000 || v > 100_000) {
+        return c.json({ error: 'driveDocTextCap must be an integer between 1000 and 100000' }, 400)
+      }
+      updated.driveDocTextCap = v
+    }
+
+    if ('briefEmailsInPrompt' in body) {
+      const v = body.briefEmailsInPrompt as number
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 50) {
+        return c.json({ error: 'briefEmailsInPrompt must be an integer between 1 and 50' }, 400)
+      }
+      updated.briefEmailsInPrompt = v
+    }
+
+    if ('briefHistoryDays' in body) {
+      const v = body.briefHistoryDays as number
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 30) {
+        return c.json({ error: 'briefHistoryDays must be an integer between 1 and 30' }, 400)
+      }
+      updated.briefHistoryDays = v
+    }
+
+    try {
+      let ds: Record<string, unknown> = {}
+      try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
+      const tmpPath = DATA_SOURCES_PATH + '.tmp'
+      writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, automationConfig: updated }, null, 2), { mode: 0o600 })
+      renameSync(tmpPath, DATA_SOURCES_PATH)
+      return c.json({ config: updated })
     } catch (e: any) {
       return c.json({ error: String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]') }, 500)
     }

@@ -1,6 +1,7 @@
 import type { AE, Customer } from './types.ts'
 import { readFileSync, writeFileSync, renameSync } from 'fs'
 import { resolve } from 'path'
+import { mergeCustomers, readExistingCustomers } from './customer-merge.ts'
 
 // ── Path constants ──────────────────────────────────────────────────────────
 
@@ -63,10 +64,13 @@ export function patchAe(name: string, fields: Partial<AE>): void {
 }
 
 export function saveCustomers(updated: Customer[]): void {
+  // BKL-G27: merge-not-replace — carry forward AI-enriched fields not present in `updated`
+  const existing = readExistingCustomers(CUSTOMERS_PATH)
+  const merged = mergeCustomers(updated as Record<string, any>[], existing) as Customer[]
   const tmp = CUSTOMERS_PATH + '.tmp'
-  writeFileSync(tmp, JSON.stringify({ customers: updated }, null, 2), { mode: 0o600 })
+  writeFileSync(tmp, JSON.stringify({ customers: merged }, null, 2), { mode: 0o600 })
   renameSync(tmp, CUSTOMERS_PATH)
-  customers = updated
+  customers = merged
 }
 
 /** BKL-AI11: Atomically patch a single customer's fields (same pattern as patchAe). */

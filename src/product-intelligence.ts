@@ -6,10 +6,10 @@
  * Returns answer text + extracted source citations + confidence level.
  */
 
-import { google } from 'googleapis'
 import { resolve } from 'path'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { getGeminiToken } from './gemini-auth.ts'
+import { getGeminiModel } from './settings-api.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,29 +35,6 @@ const PRODUCT_NAMES: Record<ProductKey, string> = {
   aap:  'Red Hat Ansible Automation Platform (AAP)',
 }
 
-// ── Auth (mirrors account-intelligence.ts pattern) ───────────────────────────
-
-const CONFIG_DIR_PATH = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
-
-async function getGeminiToken(): Promise<string> {
-  const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-  if (saKeyB64) {
-    const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-    const jwtAuth = new google.auth.JWT({
-      email:  keyData.client_email,
-      key:    keyData.private_key,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    })
-    const token = (await jwtAuth.getAccessToken()).token
-    if (!token) throw new Error('Failed to get access token from service account key')
-    return token
-  }
-  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-  const token = (await auth.getAccessToken()).token
-  if (!token) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
-  return token
-}
-
 // ── Raw Gemini call returning full response JSON (for grounding metadata) ─────
 
 async function callGeminiGroundedRaw(opts: {
@@ -68,7 +45,7 @@ async function callGeminiGroundedRaw(opts: {
 }): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const model    = getGeminiModel()
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
 
   const token = await getGeminiToken()
@@ -77,6 +54,7 @@ async function callGeminiGroundedRaw(opts: {
   const res = await fetch(url, {
     method:  'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(60_000),
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: opts.systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
@@ -84,13 +62,14 @@ async function callGeminiGroundedRaw(opts: {
       generationConfig: {
         temperature:     0.7,
         maxOutputTokens: 4096,
+        thinkingConfig:  { thinkingBudget: 0 },
       },
     }),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[product-intelligence] Gemini error ${res.status}: ${err.slice(0, 500)}`)
+    console.error(`[product-intelligence] Gemini error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
     throw new Error(`Gemini grounded API error ${res.status}`)
   }
 

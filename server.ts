@@ -25,7 +25,7 @@ import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe
 import { initRefreshEngine, registerRefreshRoutes, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
-import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask } from './src/background-scheduler.ts'
+import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
 import { initDashboardRoutes, registerDashboardRoutes } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
 import { registerBootstrapRoutes, startAccountDiscovery } from './src/bootstrap-orchestrator.ts'
@@ -36,6 +36,7 @@ import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } fr
 // ── M05 extracted modules ───────────────────────────────────────────────────
 import { initSetupRoutes, registerSetupRoutes } from './src/setup-routes.ts'
 import { initCustomerRoutes, registerCustomerRoutes } from './src/customer-routes.ts'
+import { registerProductIntelRoutes } from './src/product-intel-routes.ts'
 import { getGeminiUsageSummary } from './src/gemini-cost-tracker.ts'
 import { initJobPersistence } from './src/account-intelligence.ts'
 
@@ -211,6 +212,8 @@ registerCacheRoutes(app)
 registerDashboardRoutes(app)
 registerSetupRoutes(app)
 registerCustomerRoutes(app)
+// ── Wave 4: Product Intelligence routes ─────────────────────────────────────
+registerProductIntelRoutes(app)
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
@@ -533,7 +536,7 @@ app.post('/api/test/supportable-customer-search', async (c) => {
 
     await page.close()
 
-    if ('error' in tableData) return c.json({ customerName, fieldId, inputFields, tableData })
+    if ('error' in tableData) return c.json({ customerName, fieldId, tableData })
 
     // Filter: Country = Web or USA, Entl Active Cnt > 0
     const filtered = (tableData.rows as Record<string, string>[]).filter(row => {
@@ -854,6 +857,12 @@ app.get('/admin', async (c) => {
 
 registerSettingsRoutes(app, { rescheduleRefreshTimers })
 
+// ── Env var status (BKL-SR02) — lets UI warn when env overrides config settings
+app.get('/api/env/gemini-model', (c) => {
+  const envVal = process.env.GEMINI_MODEL
+  return c.json({ model: envVal ?? null, fromEnv: !!envVal })
+})
+
 // ── Email delivery settings (BKL-E05) ────────────────────────────────────────
 
 const EMAIL_SETTINGS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'config', 'email-settings.json')
@@ -897,7 +906,7 @@ app.get('/api/settings/email', (c) => {
 
 app.put('/api/settings/email', async (c) => {
   try {
-    const body = await c.req.json<Partial<EmailSettings>>().catch(() => ({}))
+    const body = await c.req.json<Partial<EmailSettings>>().catch((): Partial<EmailSettings> => ({}))
     const current = readEmailSettings()
 
     // Validate deliveryTime
@@ -1100,6 +1109,9 @@ initBackgroundScheduler({
   rhProfileDir: RH_PROFILE_DIR,
   sfSessionPath: SF_SESSION_PATH,
 })
+
+// ── Wave 4: Product Intel weekly refresh (Sunday 6am ET) ────────────────────
+scheduleProductIntelRefresh()
 
 // ── Test-only endpoints (never active in production) ──────────────────
 if (process.env.NODE_ENV !== 'production') {

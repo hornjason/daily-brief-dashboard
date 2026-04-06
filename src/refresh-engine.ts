@@ -56,21 +56,23 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
 
 // ── Per-source refresh functions ────────────────────────────────────────────
 
-export async function refreshSubscriptions(): Promise<void> {
+export async function refreshSubscriptions(force = false): Promise<void> {
   // Check if Supportable source sheet has changed before re-fetching all customers
-  try {
-    const syncConfig = JSON.parse(readFileSync(SHEETS_SYNC_PATH, 'utf-8')) as { fileId?: string }
-    if (syncConfig.fileId) {
-      // Use oldest sheet cachedAt as the baseline — if the source file is newer, all customers refresh
-      const timestamps = customers.map(cu => readSheetCache(cu.name)?.cachedAt).filter(Boolean) as string[]
-      const oldestCachedAt = timestamps.length ? timestamps.reduce((a, b) => a < b ? a : b) : null
-      if (oldestCachedAt) {
-        const changed = await checkFilesModified([syncConfig.fileId], oldestCachedAt)
-        if (!changed) { console.log(`[refresh:subscriptions] skipped — source file unchanged`); return }
+  if (!force) {
+    try {
+      const syncConfig = JSON.parse(readFileSync(SHEETS_SYNC_PATH, 'utf-8')) as { fileId?: string }
+      if (syncConfig.fileId) {
+        // Use oldest sheet cachedAt as the baseline — if the source file is newer, all customers refresh
+        const timestamps = customers.map(cu => readSheetCache(cu.name)?.cachedAt).filter(Boolean) as string[]
+        const oldestCachedAt = timestamps.length ? timestamps.reduce((a, b) => a < b ? a : b) : null
+        if (oldestCachedAt) {
+          const changed = await checkFilesModified([syncConfig.fileId], oldestCachedAt)
+          if (!changed) { console.log(`[refresh:subscriptions] skipped — source file unchanged`); return }
+        }
       }
+    } catch {
+      // If we can't check, proceed with refresh
     }
-  } catch {
-    // If we can't check, proceed with refresh
   }
   // Collect all known supportable sheet IDs from AE config — avoids BFS + quota-burning all-sheet scan
   const supportableSheetIds = aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
@@ -90,12 +92,14 @@ export async function refreshSubscriptions(): Promise<void> {
   console.log(`[refresh:subscriptions] done (${customers.length} customers)`)
 }
 
-export async function refreshCCSP(): Promise<void> {
+export async function refreshCCSP(force = false): Promise<void> {
   try {
-    const cached = readCCSPCache()
-    if (cached?.fileIds?.length && cached.cachedAt) {
-      const changed = await checkFilesModified(cached.fileIds, cached.cachedAt)
-      if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
+    if (!force) {
+      const cached = readCCSPCache()
+      if (cached?.fileIds?.length && cached.cachedAt) {
+        const changed = await checkFilesModified(cached.fileIds, cached.cachedAt)
+        if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
+      }
     }
     const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
     // Guard: don't overwrite populated cache with empty — quota failure returns [] silently
@@ -110,18 +114,20 @@ export async function refreshCCSP(): Promise<void> {
   }
 }
 
-export async function refreshPipeline(): Promise<void> {
+export async function refreshPipeline(force = false): Promise<void> {
   try {
     const pipelineIds = aes.map(a => a.pipelineSheetId).filter((id): id is string => Boolean(id))
     const cached = readPipelineCache()
-    // Only use staleness check if cached fileIds exactly match current AE sheet IDs.
-    // If AEs were re-bootstrapped (new sheet IDs), cached.fileIds will differ — force refresh.
-    const cachedMatchesCurrent = cached?.fileIds?.length &&
-      pipelineIds.length === cached.fileIds.length &&
-      pipelineIds.every(id => cached.fileIds!.includes(id))
-    if (cachedMatchesCurrent && cached!.cachedAt) {
-      const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
-      if (!changed) { console.log(`[refresh:pipeline] skipped — source files unchanged`); return }
+    if (!force) {
+      // Only use staleness check if cached fileIds exactly match current AE sheet IDs.
+      // If AEs were re-bootstrapped (new sheet IDs), cached.fileIds will differ — force refresh.
+      const cachedMatchesCurrent = cached?.fileIds?.length &&
+        pipelineIds.length === cached.fileIds.length &&
+        pipelineIds.every(id => cached.fileIds!.includes(id))
+      if (cachedMatchesCurrent && cached!.cachedAt) {
+        const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
+        if (!changed) { console.log(`[refresh:pipeline] skipped — source files unchanged`); return }
+      }
     }
     const { records, fileIds } = await fetchPipelineData(pipelineIds.length ? pipelineIds : undefined)
     // Guard: don't overwrite populated cache with empty — quota/network failure returns [] silently
@@ -144,15 +150,15 @@ export function registerRefreshRoutes(app: Hono): void {
     return c.json({ ...result, refreshedAt: new Date().toISOString() })
   })
   app.post('/api/refresh/pipeline', async (c) => {
-    await refreshPipeline()
+    await refreshPipeline(true)
     return c.json({ ok: true, refreshedAt: new Date().toISOString() })
   })
   app.post('/api/refresh/subscriptions', async (c) => {
-    await refreshSubscriptions()
+    await refreshSubscriptions(true)
     return c.json({ ok: true, refreshedAt: new Date().toISOString() })
   })
   app.post('/api/refresh/ccsp', async (c) => {
-    await refreshCCSP()
+    await refreshCCSP(true)
     return c.json({ ok: true, refreshedAt: new Date().toISOString() })
   })
 }

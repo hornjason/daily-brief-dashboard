@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
+import { createHash } from 'crypto'
 import type { Hono } from 'hono'
 import type { CCSPRecord } from './sheets.ts'
 import type { PipelineRecord } from './pipeline.ts'
@@ -19,7 +20,7 @@ export const toSlug = (name: string) =>
   name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '')
 
 // ── Brief cache TTL (ADR-007) ────────────────────────────────────────────────
-export const BRIEF_CACHE_TTL_MS = 4 * 60 * 60 * 1000  // 4 hours
+export const BRIEF_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours
 
 // ── Brief cache (daily, date-stamped) ────────────────────────────────────────
 export function briefCachePath(customerName: string): string {
@@ -82,6 +83,10 @@ export function readSheetCache(customerName: string): { rows: ProductSubscriptio
 
 export function writeSheetCache(customerName: string, rows: ProductSubscription[]): void {
   try {
+    const newHash = createHash('sha256').update(JSON.stringify(rows)).digest('hex').slice(0, 16)
+    const existing = readSheetCache(customerName)
+    const existingHash = existing ? createHash('sha256').update(JSON.stringify(existing.rows)).digest('hex').slice(0, 16) : null
+    if (existingHash === newHash) return  // data unchanged — preserve cachedAt so brief cache stays valid
     writeFileSync(sheetCachePath(customerName), JSON.stringify({ rows, cachedAt: new Date().toISOString() }), { mode: 0o600 })
   } catch (e: any) { console.warn('[cache] sheet write failed:', e.message) }
 }

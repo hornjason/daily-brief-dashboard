@@ -42,6 +42,7 @@ import CustomerSignalBanner from '../components/CustomerSignalBanner'
 import HealthScoreHero from '../components/HealthScoreHero'
 import CitationTooltip from '../components/CitationTooltip'
 import BriefDeltaMarker from '../components/BriefDeltaMarker'
+import { renderMarkdownInline } from '../lib/markdown'
 import TemporalDeltaSection from '../components/TemporalDeltaSection'
 import CompetitiveSignalBadge from '../components/CompetitiveSignalBadge'
 import StakeholderEngagementPanel from '../components/StakeholderEngagementPanel'
@@ -52,6 +53,7 @@ import type { CaseItem } from '../components/CasesSection'
 import { KeyContacts } from '../components/KeyContactsSection'
 import { SubscriptionsSection } from '../components/SubscriptionsSection'
 import { DriveSection } from '../components/DriveSection'
+import { ProductIntelSection } from '../components/ProductIntelSection'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -348,7 +350,7 @@ function renderBriefWithCitations(text: string) {
       citationIndex++
       return <CitationTooltip key={i} index={citationIndex} source={match[1]} />
     }
-    return <span key={i}>{part}</span>
+    return <span key={i}>{renderMarkdownInline(part)}</span>
   })
 }
 
@@ -1333,6 +1335,10 @@ export function CustomerDetailPage() {
         <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
           <TemporalDeltaSection customerName={customerName} />
           <BriefSection name={customerName} />
+          <ProductIntelSection
+            customerName={customerName}
+            customerSlug={customerName.toLowerCase().replace(/\s+/g, '-')}
+          />
           <CloudSpendCard customerName={customerName} />
           <PipelineCard customerName={customerName} />
           <ActivityTimeline
@@ -1341,7 +1347,6 @@ export function CustomerDetailPage() {
             drive={sse.drive}
             loading={sectionLoading}
           />
-          <AccountIntelligencePanel customerName={customerName} />
           {/* BKL-AI16: Product Q&A panel — grounded Gemini for RHEL / OCP / AAP */}
           <ProductQueryPanel customerName={customerName} />
         </main>
@@ -1353,6 +1358,7 @@ export function CustomerDetailPage() {
           <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
           <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} />
           <DriveSection files={sse.drive} loading={sectionLoading} />
+          <AccountIntelligencePanel customerName={customerName} />
           {/* BKL-G14: StakeholderEngagementPanel moved to bottom of right column */}
           {stakeholderContacts.length > 0 && (
             <div className="bg-surface border border-border rounded-xl p-5">

@@ -16,12 +16,13 @@ import { initDriveWatcher, checkDriveChanges } from './drive-watcher.ts'
 import { captureSnapshot, writeSnapshot } from './kpi-history.ts'
 import { briefCachePath, readBriefCache, readSheetCache, readPipelineCache, readCCSPCache, writeBriefCache, cleanOrphanedCacheFiles } from './cache-layer.ts'
 import { isBriefConfigured, fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief } from './customer.ts'
+import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
 import { fetchCustomerCases, fetchCustomerSubscriptions } from './redhat.ts'
 import { fetchCustomerSheetData } from './sheets.ts'
 import { initStatusStore, recordOutcome, getStatus } from './scraper-status-store.ts'
 import { renderBriefHtml } from './email-template.ts'
 import { sendBriefEmail } from './email-sender.ts'
-import { sanitizeErr, normalizeForQuery } from './utils.ts'
+import { sanitizeErr, normalizeForQuery, liveProbe } from './utils.ts'
 import { isBootstrapRunning } from './bootstrap-orchestrator.ts'
 
 // ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
@@ -150,8 +151,13 @@ export async function flushScrapersAfterAuth(): Promise<void> {
   }
 
   // Supportable last — depends on RH account numbers
+  // BKL-G30 Gap 6: probe VPN before enqueueing to avoid silent DNS failures
   const suppConfig = getSchedulerConfig()
   if (suppConfig.supportableEnabled) {
+    const suppVpnOk = await liveProbe('https://supportable.corp.redhat.com:4443/', 'supportable-vpn', 5000)
+    if (!suppVpnOk) {
+      console.warn('[scraper-queue:supportable] VPN not reachable — skipping post-auth Supportable enqueue')
+    } else {
     enqueueScraperTask({
       name: 'supportable',
       run: async () => {
@@ -195,6 +201,7 @@ export async function flushScrapersAfterAuth(): Promise<void> {
       source: 'manual',
       enqueuedAt: Date.now(),
     })
+    } // end else (suppVpnOk)
   }
 }
 
@@ -776,31 +783,39 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
         setLastSkipReason('salesforce', reason)
         await refreshPipeline()
       } else {
-        // BKL-T06: Lightweight pre-flight — verify SF Lightning is reachable (session alive != report accessible)
+        // BKL-T06 / BKL-G30 Gap 3: SF Lightning pre-flight — gates the scrape (was log-only)
+        let sfProbeOk = false
         try {
           const probe = await fetch('https://redhatcrm.lightning.force.com/lightning/n/Home', {
             signal: AbortSignal.timeout(8_000),
             redirect: 'manual',
           })
           if (probe.status >= 400) {
-            console.warn(`[pipeline-sync] SF pre-flight: Lightning returned ${probe.status} — session may be expired`)
+            const reason = `SF Lightning returned ${probe.status} — session may be expired`
+            console.warn(`[pipeline-sync] SF pre-flight: ${reason}`)
+            setLastSkipReason('salesforce', reason)
           } else {
             console.log('[pipeline-sync] SF pre-flight: Lightning reachable')
+            sfProbeOk = true
           }
         } catch (e: any) {
-          console.warn('[pipeline-sync] SF pre-flight probe failed:', e?.message ?? e)
+          const reason = `SF pre-flight probe failed: ${e?.message ?? e}`
+          console.warn(`[pipeline-sync] ${reason}`)
+          setLastSkipReason('salesforce', reason)
         }
 
-        // BKL-M49: Enqueue SF pipeline sync through scraper queue
-        const { aes: capturedAes } = await import('./server-state.ts')
-        enqueueScraperTask({
-          name: 'sf-pipeline',
-          run: async () => {
-            await runSfSyncForAes(capturedAes)
-          },
-          source: 'scheduled',
-          enqueuedAt: Date.now(),
-        })
+        // BKL-M49: Enqueue SF pipeline sync through scraper queue (gated on probe)
+        if (sfProbeOk) {
+          const { aes: capturedAes } = await import('./server-state.ts')
+          enqueueScraperTask({
+            name: 'sf-pipeline',
+            run: async () => {
+              await runSfSyncForAes(capturedAes)
+            },
+            source: 'scheduled',
+            enqueuedAt: Date.now(),
+          })
+        }
       }
       updateSchedulerField('sfPipelineLastRun', new Date().toISOString())
     } catch (e: any) {
@@ -1238,6 +1253,10 @@ export function initBackgroundScheduler(opts: {
           fetchCustomerSubscriptions(customer).catch(() => []),
           cachedSheet ? Promise.resolve(cachedSheet.rows) : fetchCustomerSheetData(customer).catch(() => []),
         ])
+        // Wave 5: cache customer Drive docs corpus for product intel use
+        const customerSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+        writeCustomerDocsCorpus(customerSlug, docs)
+
         // AI18-R1d: use normalizeForQuery (same as customer-routes.ts) to match "Acme Corp" ↔ "Acme Corporation"
         const customerNeedle = normalizeForQuery(customer.name)
         const pipelineRecords = (readPipelineCache()?.records ?? []).filter(r => normalizeForQuery(r.accountName).includes(customerNeedle) || customerNeedle.includes(normalizeForQuery(r.accountName)))
@@ -1262,4 +1281,60 @@ export function initBackgroundScheduler(opts: {
   }
   process.on('SIGTERM', shutdown)
   process.on('SIGINT',  shutdown)
+}
+
+// ── Product Intelligence weekly refresh — Sunday 6am ET (Wave 4) ─────────────
+// Bun's setInterval is unreliable for intervals > ~1h (ADR-007).
+// Uses setTimeout + reschedule loop (container-safe).
+
+function nextEtSunday6amUtc(now?: Date): Date {
+  const base = now ?? new Date()
+  // Determine ET offset: UTC-5 (EST) or UTC-4 (EDT)
+  const etOffsetMin = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'shortOffset',
+  })
+    .formatToParts(base)
+    .find(p => p.type === 'timeZoneName')
+    ?.value?.replace('GMT', '') ?? '-5'
+  const offsetHours = parseInt(etOffsetMin, 10) || -5
+  const offsetMs    = offsetHours * 60 * 60 * 1000
+
+  // Target: next Sunday at 06:00 ET
+  const candidate = new Date(base)
+  // Find next Sunday
+  const dayOfWeek = candidate.getUTCDay() - (offsetHours < 0 ? 0 : 0)
+  const daysUntilSunday = ((7 - candidate.getDay()) % 7) || 7
+  candidate.setUTCDate(candidate.getUTCDate() + daysUntilSunday)
+  // Set to 06:00 ET = 06:00 - offsetHours UTC
+  candidate.setUTCHours(6 - offsetHours, 0, 0, 0)
+  // If already past, add 7 days
+  if (candidate <= base) candidate.setUTCDate(candidate.getUTCDate() + 7)
+  return candidate
+}
+
+export function scheduleProductIntelRefresh(): void {
+  const msUntil = nextEtSunday6amUtc().getTime() - Date.now()
+  const hUntil  = Math.round(msUntil / 3_600_000)
+  console.log(`[product-intel] next weekly refresh in ${hUntil}h (Sunday 6:00am ET)`)
+
+  setTimeout(async () => {
+    console.log('[product-intel] weekly refresh started')
+    try {
+      const { refreshAllProducts } = await import('./product-release-radar.ts')
+      await refreshAllProducts()
+      console.log('[product-intel] weekly refresh completed')
+      // Extract + enrich features after product refresh
+      try {
+        const { refreshAllFeatures } = await import('./product-feature-radar.ts')
+        await refreshAllFeatures()
+        console.log('[product-intel] weekly feature radar refresh completed')
+      } catch (featErr: any) {
+        console.error('[product-intel] weekly feature radar refresh failed:', featErr?.message ?? featErr)
+      }
+    } catch (e: any) {
+      console.error('[product-intel] weekly refresh failed:', e?.message ?? e)
+    }
+    scheduleProductIntelRefresh()  // reschedule for next Sunday
+  }, msUntil)
 }

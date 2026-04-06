@@ -1,8 +1,17 @@
 // src/utils.ts — Shared utility functions (no imports from other src/ modules)
 
-/** Strip internal file paths and cap length before returning error strings to clients. */
-export const sanitizeErr = (e: any): string =>
-  String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
+/** Strip internal file paths and cap length before returning error strings to clients.
+ * BKL-G30 Gap 5: maps Playwright DNS/network patterns to user-friendly messages. */
+export function sanitizeErr(e: any): string {
+  const raw = String(e?.message ?? e)
+  // Map Playwright/DNS error patterns to user-friendly messages before truncation
+  if (/ERR_NAME_NOT_RESOLVED/i.test(raw)) return 'Host not reachable — check VPN connection'
+  if (/ERR_CONNECTION_REFUSED/i.test(raw)) return 'Connection refused — service may be down or VPN required'
+  if (/ERR_TIMED_OUT|ETIMEDOUT/i.test(raw)) return 'Connection timed out — check VPN or network'
+  if (/ERR_INTERNET_DISCONNECTED/i.test(raw)) return 'No internet connection'
+  if (/net::ERR_/i.test(raw)) return 'Network error — check VPN connection'
+  return raw.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
+}
 
 /** Prefix formula-trigger characters with apostrophe to prevent injection */
 export function sanitizeCell(value: string): string {
@@ -18,6 +27,34 @@ export function sanitizeText(value: unknown, maxLen = 200): string | null {
   const trimmed = value.trim()
   if (trimmed.length === 0 || trimmed.length > maxLen) return null
   return trimmed
+}
+
+/**
+ * Sanitize a customer-supplied string before injection into AI prompts.
+ * Strips prompt-injection patterns (instruction overrides, role impersonation, HTML/XML)
+ * and caps length. BKL-S12.
+ */
+export function sanitizePromptInput(value: string, maxLen = 500): string {
+  if (typeof value !== 'string') return ''
+  // Strip zero-width chars that can break word-boundary detection
+  let cleaned = value.replace(/[\u200B-\u200D\uFEFF]/g, '')
+  // Strip HTML/XML tags
+  cleaned = cleaned.replace(/<[^>]*>/g, ' ')
+  // Strip instruction-override patterns
+  cleaned = cleaned.replace(
+    /\b(ignore|disregard|forget|override|bypass)\s+(previous|prior|all|above|the)\s+(instructions?|rules?|prompt|directives?|context)/gi,
+    '[removed]'
+  )
+  // Strip role-impersonation patterns
+  cleaned = cleaned.replace(
+    /\b(you\s+are\s+now|act\s+as|pretend\s+(you\s+are|to\s+be)|roleplay\s+as)\b/gi,
+    '[removed]'
+  )
+  // Strip bare SYSTEM/USER/ASSISTANT role markers that could hijack prompt structure
+  cleaned = cleaned.replace(/^\s*(SYSTEM|USER|ASSISTANT)\s*:/gim, '[removed]:')
+  // Collapse excessive whitespace
+  cleaned = cleaned.replace(/\s{3,}/g, ' ').trim()
+  return cleaned.slice(0, maxLen)
 }
 
 /**

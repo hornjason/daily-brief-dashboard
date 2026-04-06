@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Calendar,
@@ -11,6 +12,7 @@ import {
   ChevronRight,
   ChevronDown,
   Sun,
+  Package,
 } from 'lucide-react'
 
 const navItems = [
@@ -26,9 +28,12 @@ interface SidebarProps {
   active: string
   onActiveChange: (label: string) => void
   aes?: { name: string; customerCount: number }[]
+  productAlertCount?: number
 }
 
-export function Sidebar({ active, onActiveChange, aes }: SidebarProps) {
+export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0 }: SidebarProps) {
+  const navigate = useNavigate()
+  const location = useLocation()
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
     return stored === null ? true : stored === 'true'
@@ -73,6 +78,10 @@ export function Sidebar({ active, onActiveChange, aes }: SidebarProps) {
 
   function scrollTo(item: typeof navItems[0]) {
     onActiveChange(item.label)
+    if (location.pathname.startsWith('/dashboard/products')) {
+      navigate('/dashboard')
+      return
+    }
     const el = document.getElementById(item.sectionId)
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -169,9 +178,41 @@ export function Sidebar({ active, onActiveChange, aes }: SidebarProps) {
           </div>
         ))}
 
+        {/* Products nav item (Wave 4) */}
         <div className="relative group mt-4">
+          <a
+            href="/dashboard/products"
+            aria-label="Products"
+            className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
+          >
+            <Package className="w-4 h-4 shrink-0" />
+            {!collapsed && (
+              <span className="flex items-center gap-1.5 whitespace-nowrap">
+                Products
+                {productAlertCount > 0 && (
+                  <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs font-medium px-1.5 py-0.5 rounded-full leading-none">
+                    {productAlertCount}
+                  </span>
+                )}
+              </span>
+            )}
+            {collapsed && productAlertCount > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full" />
+            )}
+          </a>
+          {collapsed && (
+            <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
+              Products
+            </span>
+          )}
+        </div>
+
+        <div className="relative group">
           <button
-            onClick={() => onActiveChange('Settings')}
+            onClick={() => {
+              onActiveChange('Settings')
+              if (location.pathname.startsWith('/dashboard/products')) navigate('/dashboard')
+            }}
             aria-label="Settings"
             className={`${btnBase} ${
               active === 'Settings'

@@ -11,10 +11,11 @@
  * service account key or OAuth fallback).
  */
 
-import { google } from 'googleapis'
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs'
 import { resolve } from 'path'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { getGeminiToken } from './gemini-auth.ts'
+import { sanitizePromptInput } from './utils.ts'
+import { getGeminiModel } from './settings-api.ts'
 import { aes, customers, CUSTOMERS_PATH } from './server-state.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import type { Customer } from './types.ts'
@@ -23,27 +24,6 @@ import type { Customer } from './types.ts'
 
 const CONFIG_DIR_PATH  = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
-
-// ── Gemini auth helper (shared pattern with customer.ts) ─────────────────────
-
-async function getGeminiToken(): Promise<string> {
-  const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-  if (saKeyB64) {
-    const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-    const jwtAuth = new google.auth.JWT({
-      email: keyData.client_email,
-      key:   keyData.private_key,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    })
-    const token = (await jwtAuth.getAccessToken()).token
-    if (!token) throw new Error('Failed to get access token from service account key')
-    return token
-  }
-  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-  const token = (await auth.getAccessToken()).token
-  if (!token) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
-  return token
-}
 
 // ── Gemini call with Google Search grounding ─────────────────────────────────
 
@@ -57,7 +37,7 @@ interface GeminiGroundedOptions {
 async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: string; customerName?: string }): Promise<string> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const model    = getGeminiModel()
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
 
   const token = await getGeminiToken()
@@ -66,6 +46,7 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(60_000),
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: opts.systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
@@ -73,13 +54,14 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
       generationConfig: {
         temperature: opts.temperature ?? 1.0,
         maxOutputTokens: opts.maxOutputTokens ?? 16384,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }),
   })
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Gemini grounded API error ${res.status}: ${err.slice(0, 300)}`)
+    throw new Error(`Gemini grounded API error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 300)}`)
   }
   const json = await res.json() as any
   // BKL-M52: record token usage for cost tracking
@@ -137,7 +119,7 @@ export async function identifyIndustry(customerName: string): Promise<IndustryRe
 
   const result = await callGeminiGroundedStructured({
     systemPrompt: `You are an industry classification analyst. Use Google Search to verify current information about the company. Return accurate, specific industry and market segment classifications.`,
-    userPrompt: `What industry and market segment does "${customerName}" operate in?
+    userPrompt: `What industry and market segment does "${sanitizePromptInput(customerName, 200)}" operate in?
 
 Return:
 - industry: The broad industry (e.g. "Financial Services", "Healthcare", "Technology", "Retail")

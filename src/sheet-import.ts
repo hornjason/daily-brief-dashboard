@@ -6,6 +6,7 @@ import { google } from 'googleapis'
 import { makeAuth } from './google.ts'
 import { customers, CUSTOMERS_PATH } from './server-state.ts'
 import { sanitizeErr } from './utils.ts'
+import { mergeCustomers, readExistingCustomers } from './customer-merge.ts'
 
 // ── Path constants (module-scoped) ──────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -29,10 +30,13 @@ async function importSheetRows(
   const sheets = google.sheets({ version: 'v4', auth })
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: fileId, range: 'A2:Z5000' })
   const rows = res.data.values ?? []
-  const customers = rows
+  const incoming = rows
     .filter((row: any[]) => row.some((cell: string) => cell?.trim()))
     .map((row: string[]) => buildCustomer(row, columnMap))
     .filter((r) => r.name)
+  // BKL-G27: preserve AI-enriched fields that live only in customers.json
+  const existing = readExistingCustomers(CUSTOMERS_PATH)
+  const customers = mergeCustomers(incoming as Record<string, any>[], existing)
   const tmpPath = CUSTOMERS_PATH + '.tmp'
   writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
   renameSync(tmpPath, CUSTOMERS_PATH)

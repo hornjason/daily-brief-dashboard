@@ -2,7 +2,8 @@
 // Replaces fragmented /api/bootstrap/* and /api/auth/*/sync endpoints with
 // a unified /api/scrape/* layer. Each endpoint runs the full pipeline:
 // source → Google Sheets → local cache.
-import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { writeFileSync as writeFileSyncRaw, writeFileSync, mkdirSync, renameSync } from 'fs'
+import { resolve } from 'path'
 import type { Hono } from 'hono'
 import { aes, customers, patchAe, patchCustomer, CUSTOMERS_PATH } from './server-state.ts'
 import { createOrUpdateNotebook, isNotebookLmEnabled } from './notebooklm.ts'
@@ -66,6 +67,7 @@ import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-en
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
+import { getScrapeContext } from './rh-scraper.ts'
 
 // ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
 /** Rejects after `ms` milliseconds with an informative error. */
@@ -882,12 +884,84 @@ export function registerScrapeRoutes(app: Hono): void {
   // GET /api/scraper-status — centralized status map from ScraperStatusStore
   // Returns ScraperStatusMap with staleness applied per scraper threshold,
   // plus circuit breaker states and scheduler queue state.
-  app.get('/api/scraper-status', (c) => c.json({
-    scrapers: getStatus(),
-    circuitBreakers: getCircuitBreakerStates(),
-    queue: getScraperQueueStatus(),
-    browserRestartNeeded: detectBrowserCrash(),
-  }))
+  // Includes supportableReachable: live VPN check cached for 60s.
+  let _supportableReachableCache: { value: boolean; at: number } | null = null
+  app.get('/api/scraper-status', async (c) => {
+    // Cached VPN reachability check (60s TTL) — avoids live HTTP on every poll
+    if (!_supportableReachableCache || Date.now() - _supportableReachableCache.at > 60_000) {
+      try {
+        await fetch('https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1', {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(5_000),
+          redirect: 'manual',
+          // @ts-ignore — Bun-specific TLS option
+          tls: { rejectUnauthorized: false },
+        })
+        _supportableReachableCache = { value: true, at: Date.now() }
+      } catch {
+        _supportableReachableCache = { value: false, at: Date.now() }
+      }
+    }
+    return c.json({
+      scrapers: getStatus(),
+      circuitBreakers: getCircuitBreakerStates(),
+      queue: getScraperQueueStatus(),
+      browserRestartNeeded: detectBrowserCrash(),
+      supportableReachable: _supportableReachableCache.value,
+    })
+  })
+
+  // ── Browser management endpoints ─────────────────────────────────────────
+
+  /** Restart the shared Playwright browser context without a full container rebuild.
+   *  Kills zombie Chrome processes, signals the scraper queue to relaunch the context. */
+  app.post('/api/browser/restart', async (c) => {
+    try {
+      // Kill any zombie/stuck chrome processes
+      Bun.spawnSync(['pkill', '-f', 'chrome'], { stderr: 'ignore' })
+      await new Promise(r => setTimeout(r, 1_500))
+      return c.json({ ok: true, message: 'Browser processes killed — context will relaunch on next scrape' })
+    } catch (e: any) {
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  /** Open a Chromium window to the Tableau login page in the VNC display.
+   *  Use this when the Tableau session has expired and you need to re-authenticate. */
+  app.post('/api/browser/open-tableau-login', async (c) => {
+    try {
+      const TABLEAU_LOGIN = 'https://10ay.online.tableau.com/#/site/redhatanalytics/signin'
+      // Launch Chromium directly on the VNC display for manual login
+      Bun.spawn(
+        ['/ms-playwright/chromium-1208/chrome-linux/chrome',
+          '--no-sandbox', '--disable-dev-shm-usage',
+          `--display=${process.env.DISPLAY ?? ':99'}`,
+          TABLEAU_LOGIN],
+        { env: { ...process.env, DISPLAY: process.env.DISPLAY ?? ':99' } }
+      )
+      return c.json({ ok: true, message: 'Opening Tableau login in VNC browser — connect to http://localhost:6080 to authenticate' })
+    } catch (e: any) {
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  /** Save content.redhat.com cookies from the shared browser context for use in product intelligence scraping. */
+  app.post('/api/browser/save-content-rh-session', async (c) => {
+    try {
+      const ctx = getScrapeContext()
+      if (!ctx) return c.json({ ok: false, error: 'No active browser context — connect Red Hat Portal first' }, 400)
+      const state = await ctx.storageState()
+      const contentRhCookies = state.cookies.filter(ck => ck.domain.includes('content.redhat.com') || ck.domain.includes('.redhat.com'))
+      if (contentRhCookies.length === 0) return c.json({ ok: false, error: 'No content.redhat.com cookies found — open VNC and log in at content.redhat.com first' }, 400)
+      const profileDir = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
+      mkdirSync(profileDir, { recursive: true })
+      const sessionPath = resolve(profileDir, 'content-rh-session.json')
+      writeFileSync(sessionPath, JSON.stringify({ cookies: contentRhCookies, savedAt: new Date().toISOString() }), { mode: 0o600 })
+      return c.json({ ok: true, cookieCount: contentRhCookies.length, savedAt: new Date().toISOString() })
+    } catch (e: any) {
+      return c.json({ ok: false, error: sanitizeErr(e) }, 500)
+    }
+  })
 
   // ── BKL-AI11: NotebookLM routes ─────────────────────────────────────────────
 

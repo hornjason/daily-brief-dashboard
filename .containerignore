@@ -2,6 +2,7 @@ node_modules
 dashboard/node_modules
 dashboard/dist
 cache/
+data/
 .env
 *.log
 .git

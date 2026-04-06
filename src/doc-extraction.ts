@@ -7,6 +7,7 @@ import { google } from 'googleapis'
 import { existsSync } from 'node:fs'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { getGeminiModel } from './settings-api.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -178,7 +179,7 @@ const EMPTY_CLASSIFICATION: DocClassification = {
 async function callGeminiStructured(systemPrompt: string, userPrompt: string, responseSchema: object): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const model    = getGeminiModel()
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
   let token: string | null | undefined
@@ -207,6 +208,7 @@ async function callGeminiStructured(systemPrompt: string, userPrompt: string, re
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 8192,
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: 'application/json',
         responseSchema,
       },

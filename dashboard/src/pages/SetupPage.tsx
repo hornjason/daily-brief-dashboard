@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatRelTime } from '../lib/format'
 import { RefreshTimerSettings } from '../components/RefreshTimerSettings'
+import { AiIntelligenceSettings } from '../components/AiIntelligenceSettings'
+import { AutomationSettings } from '../components/AutomationSettings'
 import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import {
@@ -87,6 +89,10 @@ function CodeBlock({ code, copyable = true }: { code: string; copyable?: boolean
 
 // timeAgo is an alias for formatRelTime — use the shared implementation
 const timeAgo = (iso: string) => formatRelTime(iso)
+
+// Returns true if timestamp is within the last 5 minutes
+const isRecent = (iso: string | null | undefined) =>
+  !!iso && Date.now() - new Date(iso).getTime() < 5 * 60 * 1000
 
 function VersionFooter() {
   const [version, setVersion] = useState<string | null>(null)
@@ -1307,17 +1313,27 @@ function AutoBootstrapForm() {
         </div>
       </div>
 
-      {/* Hierarchy preview — shows exactly what bootstrap creates (D2: no per-customer subfolders) */}
+      {/* Hierarchy preview — shows full structure including product intel folders */}
       {aeName.trim() && (
         <div className="bg-bg border border-border rounded-lg p-3 text-xs font-mono space-y-0.5">
           <p className="text-text-secondary mb-1 font-sans text-xs font-medium">What will be created:</p>
           <p className="text-text-primary">
             📁 {folderName ? <span className="text-success">{folderName}</span> : parentFolderId.trim() ? <span className="text-accent">parent folder</span> : 'My Drive'}/
           </p>
-          <p className="text-text-primary pl-4">└── 📁 {aeName.trim()}/</p>
+          <p className="text-text-primary pl-4">{knownAes.length === 0 ? '├──' : '└──'} 📁 {aeName.trim()}/</p>
           <p className="text-text-secondary pl-8">├── 📊 Supportable Sheet</p>
           <p className="text-text-secondary pl-8">├── 📊 CCSP Sheet</p>
           <p className="text-text-secondary pl-8">└── 📊 Pipeline Sheet</p>
+          {knownAes.length === 0 && (<>
+            <p className="text-text-primary pl-4">└── 📁 Product Intelligence/</p>
+            <p className="text-text-secondary pl-8">├── 📁 rhel/</p>
+            <p className="text-text-secondary pl-8">├── 📁 ocp/</p>
+            <p className="text-text-secondary pl-8">├── 📁 ocp-virt/</p>
+            <p className="text-text-secondary pl-8">├── 📁 aap/</p>
+            <p className="text-text-secondary pl-8">├── 📁 rhel-ai/</p>
+            <p className="text-text-secondary pl-8">├── 📁 rh-ai-inference/</p>
+            <p className="text-text-secondary pl-8">└── 📁 rhoai/</p>
+          </>)}
         </div>
       )}
 
@@ -2118,6 +2134,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const [supportableStatus, setSupportableStatus] = useState<{
     running: boolean
     lastScrape: string | null
+    lastSuccess?: string | null
     lastError: string | null
     recordCount?: number | null
   } | null>(null)
@@ -2138,6 +2155,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const [ccspStatus, setCcspStatus] = useState<{
     running: boolean
     lastScrape: string | null
+    lastSuccess?: string | null
     lastError: string | null
     recordCount?: number | null
   } | null>(null)
@@ -2150,8 +2168,10 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const [ccspSyncedAt, setCcspSyncedAt] = useState<string | null>(null)
   const [sfSyncing, setSfSyncing] = useState(false)
   const [sfSyncError, setSfSyncError] = useState<string | null>(null)
+  const [sfSyncedAt, setSfSyncedAt] = useState<string | null>(null)
   const [rhSyncing, setRhSyncing] = useState(false)
   const [rhSyncError, setRhSyncError] = useState<string | null>(null)
+  const [rhSyncedAt, setRhSyncedAt] = useState<string | null>(null)
 
   // BKL-G22: Poll /api/scraper-status so Sync buttons reflect live running state
   // even when a scrape was triggered externally or on page load mid-run.
@@ -2358,6 +2378,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
   const handleRhSync = async () => {
     setRhSyncError(null)
+    setRhSyncedAt(null)
     setRhSyncing(true)
     try {
       if (!rhStatus?.hasSession) {
@@ -2365,6 +2386,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
         return
       }
       await fetch('/api/scrape/rh', { method: 'POST' })
+      setRhSyncedAt(new Date().toISOString())
       setTimeout(() => fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {}), 3_000)
     } catch (e: any) {
       setRhSyncError(`Sync failed: ${e.message}`)
@@ -2375,12 +2397,15 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
   const handleSfSync = async () => {
     setSfSyncError(null)
+    setSfSyncedAt(null)
     setSfSyncing(true)
     try {
       const res = await fetch('/api/refresh/pipeline', { method: 'POST' })
       const d = await res.json()
       if (d.error) { setSfSyncError(d.error); return }
-      setTimeout(() => fetch('/api/auth/salesforce/status').then(r => r.json()).then(setSfStatus).catch(() => {}), 1_000)
+      setSfSyncedAt(d.refreshedAt ?? new Date().toISOString())
+      const newStatus = await fetch('/api/auth/salesforce/status').then(r => r.json()).catch(() => null)
+      if (newStatus) setSfStatus(newStatus)
     } catch (e: any) {
       setSfSyncError('Sync failed. Check server logs for details.')
     } finally {
@@ -2441,7 +2466,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const rhSessionActive = (rhStatus?.hasSession && !rhStatus?.sessionExpired) ?? false
   const rhConnected = rhSessionActive && rhScrapeOk
   const sfExpired = sfStatus?.syncError?.toLowerCase().includes('session expired')
-  const sfScrapeOk = !!sfStatus?.lastSync && !sfStatus?.syncError
+  const sfScrapeOk = !!sfStatus?.lastSync
   const sfSessionActive = (sfStatus?.hasSession && !sfExpired) ?? false
   const sfConnected = sfSessionActive && sfScrapeOk
   const supportableConnected = supportableReachable === true
@@ -2667,7 +2692,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             <div>
               <p className="text-sm text-white">Red Hat Cases</p>
               {rhStatus?.lastScraped ? (
-                <p className="text-xs text-text-secondary">Synced {timeAgo(rhStatus.lastScraped)} — {rhStatus.caseCount}</p>
+                <p className={`text-xs ${isRecent(rhStatus.lastScraped) ? 'text-success' : 'text-text-secondary'}`}>Synced {timeAgo(rhStatus.lastScraped)} — {rhStatus.caseCount}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Support cases</p>
               )}
@@ -2683,8 +2708,8 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
           <div className="flex items-center justify-between py-3">
             <div>
               <p className="text-sm text-white">Supportable Subscriptions</p>
-              {supportableStatus?.lastScrape ? (
-                <p className="text-xs text-text-secondary">Synced {timeAgo(supportableStatus.lastScrape)}{supportableStatus.recordCount ? ` — ${supportableStatus.recordCount}` : ''}</p>
+              {(supportableStatus?.lastSuccess ?? supportableStatus?.lastScrape) ? (
+                <p className="text-xs text-text-secondary">Synced {timeAgo(supportableStatus.lastSuccess ?? supportableStatus.lastScrape ?? '')}{supportableStatus.recordCount ? ` — ${supportableStatus.recordCount}` : ''}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Subscription data</p>
               )}
@@ -2692,7 +2717,8 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             </div>
             <div className="flex items-center">
               {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires active RH Portal session</span>}
-              <SyncButton onClick={handleRunScrape} loading={scraping || scraperRunning.supportable} disabled={!rhConnected || supportableRunning || scraperRunning.supportable} label="Sync Now" />
+              {rhConnected && !supportableConnected && <span className="text-xs text-text-secondary mr-3">Not reachable — check VPN</span>}
+              <SyncButton onClick={handleRunScrape} loading={scraping || scraperRunning.supportable} disabled={!rhConnected || !supportableConnected || supportableRunning || scraperRunning.supportable} label="Sync Now" />
             </div>
           </div>
           {scrapeError && <p role="alert" className="text-xs text-critical pb-2">{scrapeError}</p>}
@@ -2710,30 +2736,31 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
           <div className="flex items-center justify-between py-3">
             <div>
               <p className="text-sm text-white">CCSP (Tableau)</p>
-              {ccspStatus?.lastScrape ? (
-                <p className="text-xs text-text-secondary">Synced {timeAgo(ccspStatus.lastScrape)}{ccspStatus.recordCount ? ` — ${ccspStatus.recordCount}` : ''}</p>
+              {(ccspStatus?.lastSuccess ?? ccspStatus?.lastScrape) ? (
+                <p className="text-xs text-text-secondary">Synced {timeAgo(ccspStatus.lastSuccess ?? ccspStatus.lastScrape ?? '')}{ccspStatus.recordCount ? ` — ${ccspStatus.recordCount}` : ''}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Cloud spend</p>
               )}
+              {ccspSyncedAt && <p className="text-xs text-success">✓ Sheet refreshed {timeAgo(ccspSyncedAt)}</p>}
               {ccspStatus?.lastError && <p className="text-xs text-critical">{ccspStatus.lastError}</p>}
             </div>
             <div className="flex items-center">
-              {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires active Tableau session</span>}
+              {!tableauConnected && <span className="text-xs text-text-secondary mr-3">Requires active Tableau session — Connect in Data Sources above</span>}
               <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping || scraperRunning.ccsp} disabled={ccspRunning || scraperRunning.ccsp} label="Sync Now" />
             </div>
           </div>
           {ccspScrapeError && <p role="alert" className="text-xs text-critical pb-2">{ccspScrapeError}</p>}
-          {ccspSyncedAt && !ccspScrapeError && <p className="text-xs text-success pb-2">Synced {timeAgo(ccspSyncedAt)}{ccspStatus?.recordCount ? ` — ${ccspStatus.recordCount}` : ''}</p>}
 
           {/* Pipeline (Salesforce) */}
           <div className="flex items-center justify-between py-3">
             <div>
               <p className="text-sm text-white">Pipeline (Salesforce)</p>
               {sfStatus?.lastSync ? (
-                <p className="text-xs text-text-secondary">Synced {timeAgo(sfStatus.lastSync)} — {sfStatus.rowCount}</p>
+                <p className={`text-xs ${isRecent(sfStatus.lastSync) ? 'text-success' : 'text-text-secondary'}`}>Synced {timeAgo(sfStatus.lastSync)} — {sfStatus.rowCount}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Pipeline data</p>
               )}
+              {sfSyncedAt && <p className="text-xs text-success">✓ Sheet refreshed {timeAgo(sfSyncedAt)}</p>}
             </div>
             <div className="flex items-center">
               {!sfConnected && (
@@ -2754,7 +2781,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
 // ── Main Setup Page ────────────────────────────────────────────────────────────
 
-type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings'
+type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings'
 
 export default function SetupPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>(null)
@@ -3017,6 +3044,26 @@ export default function SetupPage() {
                 Open Dashboard
               </a>
             </div>
+          </AccordionSection>
+
+          <AccordionSection
+            id="ai-settings"
+            title="AI & Intelligence Settings"
+            badge={<span className="text-xs text-text-secondary">Optional</span>}
+            isOpen={openSection === 'ai-settings'}
+            onToggle={() => toggleSection('ai-settings')}
+          >
+            <AiIntelligenceSettings />
+          </AccordionSection>
+
+          <AccordionSection
+            id="automation-settings"
+            title="Automation & Limits"
+            badge={<span className="text-xs text-text-secondary">Optional</span>}
+            isOpen={openSection === 'automation-settings'}
+            onToggle={() => toggleSection('automation-settings')}
+          >
+            <AutomationSettings />
           </AccordionSection>
         </div>
 

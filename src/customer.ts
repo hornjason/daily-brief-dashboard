@@ -10,9 +10,12 @@ import { aes } from './server-state.ts'
 import { readLatestBriefCache } from './cache-layer.ts'
 import { isFreeOrTrial } from './health-score.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { getAiConfig, getGeminiModel, getAutomationConfig } from './settings-api.ts'
 import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
 import { classifyDocs } from './doc-extraction.ts'
 import { getStatus, type ScraperName } from './scraper-status-store.ts'
+import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
+import { loadProductConfig } from './product-release-radar.ts'
 import { extractEmailIntelligence } from './email-extraction.ts'
 import { assembleMeetingPrep } from './calendar-extraction.ts'
 import type { DocClassification } from './doc-extraction.ts'
@@ -262,7 +265,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
   }
 
   // BFS: collect all files from customer folder + all subfolders (depth-limited)
-  const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString()
+  const twoYearsAgo = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString()
   const allFiles: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string }> = []
   const queue: Array<{ id: string; depth: number }> = [{ id: customerFolderId, depth: 0 }]
 
@@ -271,7 +274,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
 
     // List files in this folder
     const filesRes = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and modifiedTime > '${sixMonthsAgo}' and trashed = false`,
+      q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and modifiedTime > '${twoYearsAgo}' and trashed = false`,
       fields: 'files(id,name,mimeType,modifiedTime,webViewLink)',
       orderBy: 'modifiedTime desc',
       pageSize: Math.min(50, MAX_FILES_PER_CUSTOMER - allFiles.length),
@@ -392,7 +395,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
 
           const project  = process.env.GOOGLE_CLOUD_PROJECT
           const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-          const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+          const model    = getGeminiModel()
 
           if (project && b64.length > 0) {
             let token: string | null | undefined
@@ -423,7 +426,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
                       { text: 'Extract the text content from this PDF document. Return only the extracted text, no commentary or formatting.' },
                     ],
                   }],
-                  generationConfig: { temperature: 0, maxOutputTokens: 4096 },
+                  generationConfig: { temperature: 0, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },
                 }),
               })
               if (geminiRes.ok) {
@@ -470,7 +473,7 @@ export function isBriefConfigured(): boolean {
 async function callLLM(systemPrompt: string, userPrompt: string, callType = 'brief-synthesize', customerName = 'unknown'): Promise<string> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const model    = getGeminiModel()
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
   // Prefer service account key (works without cloud-platform OAuth scope on the user token).
@@ -498,7 +501,7 @@ async function callLLM(systemPrompt: string, userPrompt: string, callType = 'bri
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },  // thinkingBudget=0: gemini-2.5-flash is a thinking model; thinking tokens consume output budget, leaving ~200 tokens for actual brief. Disable thinking for brief synthesis — creative writing task, not complex reasoning.
+      generationConfig: { temperature: getAiConfig().briefSynthesisTemperature, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },  // thinkingBudget=0: gemini-2.5-flash is a thinking model; thinking tokens consume output budget, leaving ~200 tokens for actual brief. Disable thinking for brief synthesis — creative writing task, not complex reasoning.
     }),
   })
   if (!res.ok) {
@@ -713,7 +716,7 @@ function buildXmlSources(
   // Emails (enriched with classification when available)
   if (emails.length) {
     xml += `<source type="emails" window="last_30_days" count="${emails.length}">\n`
-    for (const e of emails.slice(0, 20)) {
+    for (const e of emails.slice(0, getAutomationConfig().briefEmailsInPrompt)) {
       const emailKey = `${e.from}|${e.subject}|${e.date}`
       const intel = enrichment?.emailClassifications?.get(emailKey)
       const classTag = intel ? ` [${intel.classification}]` : (e.actionRequired ? ' [ACTION REQUIRED]' : '')
@@ -847,6 +850,43 @@ function buildXmlSources(
     }
   } catch { /* intelligence cache missing */ }
 
+  // Product intelligence — per-product SA talking points (Wave 4 Phase 2c)
+  const customerSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+  try {
+    const productConfigs = loadProductConfig()
+    for (const productCfg of productConfigs) {
+      const intel = getCachedCustomerProductIntel(productCfg.slug, customerSlug)
+      if (!intel || intel.relevanceScore === 'NONE') continue
+      xml += `<source type="product_intelligence" product="${escapeXml(productCfg.slug)}" relevance="${escapeXml(intel.relevanceScore)}" generated="${escapeXml(intel.generatedAt)}">\n`
+      xml += `[Priority Action]\n${escapeXml(intel.priorityAction)}\n\n`
+      if (intel.roadmapRelevance.length) {
+        xml += `[Roadmap Talking Points]\n`
+        for (const r of intel.roadmapRelevance) {
+          xml += `- ${escapeXml(r.feature)}: ${escapeXml(r.talkingPoint)}\n`
+        }
+        xml += '\n'
+      }
+      if (intel.expansionOpportunities.length) {
+        xml += `[Expansion Opportunities]\n`
+        for (const e of intel.expansionOpportunities) {
+          xml += `- ${escapeXml(e.gap)} → ${escapeXml(e.product)}: ${escapeXml(e.rationale)}\n`
+        }
+        xml += '\n'
+      }
+      if (intel.caseAlignment.length) {
+        xml += `[Case Alignment]\n`
+        for (const ca of intel.caseAlignment) {
+          xml += `- Case ${escapeXml(ca.caseNumber)}: ${escapeXml(ca.roadmapFix)} (${escapeXml(ca.timeline)})\n`
+        }
+        xml += '\n'
+      }
+      if (intel.competitiveAngle) {
+        xml += `[Competitive Angle]\n${escapeXml(intel.competitiveAngle)}\n\n`
+      }
+      xml += `</source>\n\n`
+    }
+  } catch { /* product intel cache missing or config unreadable */ }
+
   return xml
 }
 
@@ -855,7 +895,7 @@ function buildXmlSources(
 async function callLLMStructured(systemPrompt: string, userPrompt: string, responseSchema: object, callType = 'brief-extract', customerName = 'unknown'): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const model    = getGeminiModel()
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
   let token: string | null | undefined
@@ -882,7 +922,7 @@ async function callLLMStructured(systemPrompt: string, userPrompt: string, respo
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
-        temperature: 0.7,
+        temperature: getAiConfig().briefSynthesisTemperature,
         maxOutputTokens: 8192,
         thinkingConfig: { thinkingBudget: 0 },  // gemini-2.5-flash thinking model: disable thinking so all 8192 tokens go to structured JSON output
         responseMimeType: 'application/json',
@@ -1063,7 +1103,7 @@ export async function generateBrief(
     : 'No upcoming meetings.'
 
   const emailLines = emails.length
-    ? emails.slice(0, 20).map((e) => `- [${fmt(e.date)}] ${e.subject}${e.snippet ? ` — ${e.snippet.slice(0, 500)}` : ''}${e.actionRequired ? ' ⚡action needed' : ''}`).join('\n')
+    ? emails.slice(0, getAutomationConfig().briefEmailsInPrompt).map((e) => `- [${fmt(e.date)}] ${e.subject}${e.snippet ? ` — ${e.snippet.slice(0, 500)}` : ''}${e.actionRequired ? ' ⚡action needed' : ''}`).join('\n')
     : 'No recent emails.'
 
   // Documents: include content if available, otherwise just name

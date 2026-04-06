@@ -24,6 +24,12 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `src/pipeline.ts` | SF pipeline data fetch + dedup |
 | `src/sheets.ts` | Google Sheets read/write, tab matching, quota retry |
 | `src/google.ts` | Google OAuth, Drive API helpers |
+| `src/product-release-radar.ts` | Life Cycle API + PDF/HTML scraping + Gemini synthesis per product; `SECTION_CAP=6000`, `TOTAL_CAP=18000` |
+| `src/product-feature-radar.ts` | Drive corpus feature extraction; exports `getFeatureCache(slug)`, `extractProductFeatures()`, `enrichFeatures()`, `refreshAllFeatures()` |
+| `src/product-drive-ingest.ts` | Drive folder listing + Markdown/doc content ingestion for each product |
+| `src/product-intelligence.ts` | Q&A chat pipeline for product pages (BKL-AI16) |
+| `src/product-intel-routes.ts` | Hono route handlers for all `/api/products/*` endpoints; loads feature cache and passes to customer intel generation |
+| `src/customer-product-intel.ts` | `generateCustomerProductIntel()` — Gemini prompt with injected feature radar; outputs `featureTalkingPoints` (top 3-5 ranked features with reason + signalSource) |
 
 ## Stack
 
@@ -56,6 +62,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - `docs/adr/ADR-009.md` — Brief cache: content-hash + 4h TTL invalidation
 - `docs/adr/ADR-010.md` — Account intelligence: dual-write cache pattern (Drive + local JSON)
 - `docs/adr/ADR-011.md` — Confidence Score: 0-100 composite replacing separate Renewal Risk
+- `docs/adr/ADR-012.md` — Product Intelligence Hub: Drive optional, feature injection into customer intel, cap expansion, 7-product bootstrap scaffold
 
 ## Frontend Components (Notable)
 
@@ -66,13 +73,20 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `AccountPortfolioGrid` | Customer list grid; shows `confidenceScore` badge per customer |
 | `AdminPage` | 3-step intelligence progress stepper for account intelligence pipeline |
 | `MorningSummary` | Morning summary page; includes Gemini `synthesis` narrative block |
+| `ProductsPage` | Products listing — Unified Stream layout (FeatureFilterBar + SpotlightStrip + FeatureListRow + FeatureDetailPanel) |
+| `ProductIntelSection` | Per-product intelligence section; hardcodes all 7 slugs: rhel, ocp, ocp-virt, aap, rhel-ai, rh-ai-inference, rhoai |
 
-## API Fields (2026-04-04 Additions)
+## API Fields (2026-04-05/06 Additions — Phase 2 + Phase 3)
 
 | Endpoint | Field | Description |
 |---|---|---|
 | `GET /api/morning-summary` | `synthesis` | Gemini-generated 3-5 sentence portfolio narrative; 4h cached in `morning-synthesis.json` |
 | `GET /api/customer/:name` (and list) | `confidenceScore` | `ConfidenceScoreBreakdown` from `computeConfidenceScore()` — 0-100 composite with sub-scores |
+| `POST /api/products/:slug/generate-customer-intel` | — | Generates `CustomerProductIntel` for a specific customer+product pair; injects feature radar into prompt |
+| `GET /api/products` | — | Lists all 7 product configs with feature cache status |
+| `GET /api/products/:slug` | — | Returns `ProductSummary` + `ProductFeatureCache` for a single product |
+| `POST /api/products/:slug/refresh` | — | On-demand re-scrape + re-synthesis for a product |
+| `CustomerProductIntel` response | `featureTalkingPoints` | Top 3-5 feature radar items ranked by relevance to this customer; each has `feature`, `status`, `version`, `reason`, `signalSource` |
 
 ## Cache Files
 
@@ -85,6 +99,9 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `data/cache/morning-synthesis.json` | `synthesizeMorningSummary()` in `dashboard-routes.ts` | `GET /api/morning-summary` | 4h TTL (`MORNING_SYNTHESIS_TTL_MS`) |
 | `data/cache/pipeline-data.json` | `writePipelineCache()` | `readPipelineCache()` | Updated daily at 2am ET |
 | `data/cache/ccsp-data.json` | `writeCCSPCache()` | `readCCSPCache()` | Updated on CCSP refresh |
+| `data/cache/product-intel/{slug}-features.json` | `refreshAllFeatures()` in `product-feature-radar.ts` | `getFeatureCache(slug)` | Updated on product Drive corpus refresh; includes `corpusHash` for cache invalidation |
+| `data/cache/product-intel/{slug}-summary.json` | `product-release-radar.ts` synthesis | `GET /api/products/:slug` | Updated on product release radar refresh |
+| `data/cache/product-intel/{slug}-customer-intel/{customer}.json` | `generateCustomerProductIntel()` | `GET /api/products/:slug/generate-customer-intel` | Content hash includes `productFeaturesHash`; invalidated when corpus changes |
 
 ## Operations
 

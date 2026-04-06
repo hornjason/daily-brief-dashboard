@@ -18,6 +18,7 @@ import { queryProductIntelligence } from './product-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
 import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS } from './cache-layer.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
+import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -280,6 +281,10 @@ export function registerCustomerRoutes(app: Hono): void {
         fetchCustomerSubscriptions(customer).catch(() => []),
         cachedSheet ? Promise.resolve(cachedSheet.rows) : fetchCustomerSheetData(customer).catch(() => []),
       ])
+      // Wave 5: cache customer Drive docs corpus for product intel use
+      const customerSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      writeCustomerDocsCorpus(customerSlug, docs)
+
       // BKL-AI21: filter pipeline + CCSP records for this customer before passing to brief
       const needle = normalizeForQuery(customer.name.toLowerCase())
       const pipelineCache = readPipelineCache()

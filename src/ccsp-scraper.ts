@@ -35,6 +35,36 @@ const TABLEAU_BASE_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics
 // This renders the viz without the outer portal shell and applies all filters before the viz loads.
 const TABLEAU_EMBED_BASE = 'https://10ay.online.tableau.com/t/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 
+import { readFileSync, writeFileSync, existsSync } from 'fs'
+
+const TABLEAU_SESSION_PATH = `${process.env.RH_PROFILE_DIR ?? '/data/rh-profile'}/tableau-session.json`
+
+/** Save Tableau-domain cookies from the active context to disk so they survive container restarts. */
+async function saveTableauSession(ctx: BrowserContext): Promise<void> {
+  try {
+    const state = await ctx.storageState()
+    const tableauCookies = state.cookies.filter(c => c.domain.includes('tableau.com') || c.domain.includes('online.tableau'))
+    if (tableauCookies.length === 0) return
+    writeFileSync(TABLEAU_SESSION_PATH, JSON.stringify({ cookies: tableauCookies, savedAt: new Date().toISOString() }))
+    console.log(`[ccsp] saved ${tableauCookies.length} Tableau cookies to disk`)
+  } catch (e: any) {
+    console.warn(`[ccsp] could not save Tableau session: ${e.message}`)
+  }
+}
+
+/** Restore Tableau-domain cookies into the active context from disk. */
+async function restoreTableauSession(ctx: BrowserContext): Promise<void> {
+  try {
+    if (!existsSync(TABLEAU_SESSION_PATH)) return
+    const saved = JSON.parse(readFileSync(TABLEAU_SESSION_PATH, 'utf-8'))
+    if (!saved.cookies?.length) return
+    await ctx.addCookies(saved.cookies)
+    console.log(`[ccsp] restored ${saved.cookies.length} Tableau cookies from disk (saved ${saved.savedAt})`)
+  } catch (e: any) {
+    console.warn(`[ccsp] could not restore Tableau session: ${e.message}`)
+  }
+}
+
 import type { BrowserContext, Page, ElementHandle } from '@playwright/test'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
@@ -94,6 +124,7 @@ let _ctx: BrowserContext | null = null
 export function adoptCcspContext(ctx: BrowserContext): void {
   _ctx = ctx
   console.log('[ccsp] adopted shared browser context')
+  restoreTableauSession(ctx).catch(() => {})
 }
 
 export function closeCcspContext(): void {
@@ -528,6 +559,7 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
     }
 
     lastCcspScrape = new Date().toISOString()
+    if (_ctx) saveTableauSession(_ctx).catch(() => {})
     return results
 
   } catch (e: any) {

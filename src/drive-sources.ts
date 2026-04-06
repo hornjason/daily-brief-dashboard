@@ -7,6 +7,7 @@ import { makeAuth } from './google.ts'
 import { customers, CUSTOMERS_PATH } from './server-state.ts'
 import { discoverAccountsFromFolders } from './account-discovery.ts'
 import { sanitizeErr } from './utils.ts'
+import { mergeCustomers, readExistingCustomers } from './customer-merge.ts'
 
 // ── Path constants (module-scoped) ──────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -315,11 +316,14 @@ export function registerDriveSourcesRoutes(app: Hono): void {
       if (!accounts.length) return c.json({ error: 'No accounts found. Check your folder connection or paste a pipeline URL.' }, 400)
 
       accounts.sort((a, b) => a.name.localeCompare(b.name))
-      const imported = accounts.map(a => ({ name: a.name, ae: a.ae, domain: '', segment: a.segment ?? '', region: '', accountNumbers: [], ...(a.aliases?.length ? { aliases: a.aliases } : {}), ...(a.supportableFileId ? { supportableFileId: a.supportableFileId } : {}) }))
+      const incoming = accounts.map(a => ({ name: a.name, ae: a.ae, domain: '', segment: a.segment ?? '', region: '', accountNumbers: [], ...(a.aliases?.length ? { aliases: a.aliases } : {}), ...(a.supportableFileId ? { supportableFileId: a.supportableFileId } : {}) }))
+      // BKL-G27: preserve AI-enriched fields that live only in customers.json
+      const existing = readExistingCustomers(CUSTOMERS_PATH)
+      const imported = mergeCustomers(incoming as Record<string, any>[], existing)
       const tmpPath = CUSTOMERS_PATH + '.tmp'
       writeFileSyncRaw(tmpPath, JSON.stringify({ customers: imported }, null, 2), { mode: 0o600 })
       renameSync(tmpPath, CUSTOMERS_PATH)
-      customers.splice(0, customers.length, ...imported)
+      customers.splice(0, customers.length, ...imported as any[])
       return c.json({ imported: imported.length, source })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)

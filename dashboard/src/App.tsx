@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
@@ -17,6 +17,8 @@ import { EmailSettingsSection } from './components/EmailSettingsSection'
 import { CustomerDetailPage } from './pages/CustomerDetailPage'
 import { SetupPage } from './pages/SetupPage'
 import { AdminPage } from './pages/AdminPage'
+import { ProductsPage } from './pages/ProductsPage'
+import { ProductDetailPage } from './pages/ProductDetailPage'
 import { formatRelTime } from './lib/format'
 import { ChevronUp } from 'lucide-react'
 import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, PipelineSummary } from './types'
@@ -93,6 +95,7 @@ function NoAEsBanner({ onDismiss }: { onDismiss: () => void }) {
 }
 
 function Dashboard() {
+  const location = useLocation()
   const [refreshKey, setRefreshKey] = useState(0)
   const [active, setActive] = useState('Command Center')
 
@@ -106,6 +109,7 @@ function Dashboard() {
   const [rhReconnecting, setRhReconnecting] = useState(false)
   const [noAesDismissed, setNoAesDismissed] = useState(false)
   const [aeCount, setAeCount] = useState<number | null>(null)
+  const [productAlertCount, setProductAlertCount] = useState(0)
   const vncWindowRef = useRef<Window | null>(null)
 
   // Back to top button (BKL-UX23)
@@ -132,6 +136,7 @@ function Dashboard() {
       'supportable': { state: string; lastSuccess: string | null; lastError: string | null }
       'sf-pipeline': { state: string; lastSuccess: string | null; lastError: string | null }
     }
+    supportableReachable: boolean
   }>('/api/scraper-status')
 
   // ── KPI history for sparklines (BKL-R30) ─────────────────────────────────
@@ -232,6 +237,19 @@ function Dashboard() {
     fetch('/health').then(r => r.json()).then(d => setAeCount(d.aes ?? 0)).catch(() => {})
   }, [refreshKey])
 
+  // Poll product alert count for sidebar badge (every 5 min)
+  useEffect(() => {
+    function fetchAlertCount() {
+      fetch('/api/products/alerts')
+        .then(r => r.json())
+        .then((alerts: any[]) => setProductAlertCount(Array.isArray(alerts) ? alerts.filter((a: any) => !a.acknowledged).length : 0))
+        .catch(() => {})
+    }
+    fetchAlertCount()
+    const interval = setInterval(fetchAlertCount, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   // Derive lastSynced from the most recent cachedAt across data sources
   const lastSynced = (() => {
     if (anyLoading || !kpisApi.data) return null
@@ -257,6 +275,7 @@ function Dashboard() {
             }))
           : undefined
         }
+        productAlertCount={productAlertCount}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
@@ -266,7 +285,11 @@ function Dashboard() {
         {aeCount === 0 && !noAesDismissed && (
           <NoAEsBanner onDismiss={() => setNoAesDismissed(true)} />
         )}
-        {active === 'Settings' ? (
+        {location.pathname.startsWith('/dashboard/products/') ? (
+          <ProductDetailPage />
+        ) : location.pathname === '/dashboard/products' ? (
+          <ProductsPage />
+        ) : active === 'Settings' ? (
           <main className="flex-1 overflow-y-auto p-6">
             <div className="max-w-lg">
               <h2 className="text-lg font-semibold text-text-primary mb-4">Settings</h2>
@@ -291,8 +314,9 @@ function Dashboard() {
                   const s = scrapeStatus.data!.scrapers[storeKey]
                   const isRunning = s.state === 'running'
                   const isStale = s.state === 'stale'
-                  const color = isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : isStale ? 'bg-warning' : 'bg-green-500'
-                  const tooltip = isRunning ? 'Currently running' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSuccess ? `Last sync: ${new Date(s.lastSuccess).toLocaleString()}` : 'Not yet synced'
+                  const isUnreachable = storeKey === 'supportable' && scrapeStatus.data!.supportableReachable === false
+                  const color = isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : isStale || isUnreachable ? 'bg-warning' : 'bg-green-500'
+                  const tooltip = isRunning ? 'Currently running' : isUnreachable ? 'Not reachable — check VPN' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSuccess ? `Last sync: ${new Date(s.lastSuccess).toLocaleString()}` : 'Not yet synced'
                   return (
                     <span key={displayKey} className="flex items-center gap-1" title={tooltip}>
                       <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
@@ -367,7 +391,7 @@ function App() {
     <Routes>
       <Route path="/dashboard/customer/:name" element={<CustomerDetailPage />} />
       <Route path="/dashboard/setup" element={<SetupPage />} />
-      <Route path="/admin" element={<AdminPage />} />
+<Route path="/admin" element={<AdminPage />} />
       <Route path="*" element={<Dashboard />} />
     </Routes>
   )

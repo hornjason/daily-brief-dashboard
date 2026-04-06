@@ -1,6 +1,9 @@
 // BKL-M52: In-memory Gemini API cost tracker.
 // Captures per-call token usage from Vertex AI usageMetadata.
-// Pricing: Gemini 2.5 Flash — $0.15/1M input tokens, $0.60/1M output tokens.
+// Pricing defaults: Gemini 2.5 Flash — $0.15/1M input tokens, $0.60/1M output tokens.
+// Configurable via /api/settings/ai (BKL-SR02).
+
+import { getAiConfig } from './settings-api.ts'
 
 export interface GeminiUsageEntry {
   timestamp: string    // ISO-8601
@@ -22,12 +25,9 @@ interface UsageSummary {
   byCallType: Record<string, { inputTokens: number; outputTokens: number; calls: number; costUsd: number }>
 }
 
-// Pricing constants (Gemini 2.5 Flash, per 1M tokens)
-const INPUT_COST_PER_M  = 0.15
-const OUTPUT_COST_PER_M = 0.60
-
 function computeCost(inputTokens: number, outputTokens: number): number {
-  return (inputTokens / 1_000_000) * INPUT_COST_PER_M + (outputTokens / 1_000_000) * OUTPUT_COST_PER_M
+  const { geminiInputCostPerM, geminiOutputCostPerM } = getAiConfig()
+  return (inputTokens / 1_000_000) * geminiInputCostPerM + (outputTokens / 1_000_000) * geminiOutputCostPerM
 }
 
 // Rolling in-memory log — entries accumulate for the lifetime of the process

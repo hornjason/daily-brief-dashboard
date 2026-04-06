@@ -30,6 +30,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts
 import type { AE } from './types.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
 import { SUBSCRIPTION_COLUMN_PATTERNS, parseHtmlTable, stripLegalSuffix, buildNameCandidates } from './supportable-extract.ts'
+import { liveProbe } from './utils.ts'
 
 const SUPPORTABLE_URL = 'https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1'
 /** Get this page's own Supportable landing URL (respects app 305, 306, etc from New Session) */
@@ -758,6 +759,9 @@ export async function runSupportableScrape(
     }
   }
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
+  // BKL-G30 Gap 1: VPN pre-flight — abort before any Playwright navigation if host is unreachable
+  const vpnReachable = await liveProbe('https://supportable.corp.redhat.com:4443/', 'supportable-vpn', 5000)
+  if (!vpnReachable) throw new Error('Supportable host unreachable — check VPN connection')
 
   supportableScrapeRunning = true
   supportableScrapeStartedAt = Date.now()
@@ -839,6 +843,9 @@ export async function runSupportableDiscoverAndScrape(
     }
   }
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
+  // BKL-G30 Gap 1: VPN pre-flight — abort before any Playwright navigation if host is unreachable
+  const vpnReachable = await liveProbe('https://supportable.corp.redhat.com:4443/', 'supportable-vpn', 5000)
+  if (!vpnReachable) throw new Error('Supportable host unreachable — check VPN connection')
 
   supportableScrapeRunning = true
   supportableScrapeStartedAt = Date.now()

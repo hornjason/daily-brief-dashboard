@@ -8,6 +8,7 @@ export interface AE {
   driveFolderId: string         // Google Drive folder where AE sheets live
   sfReportId?: string           // Salesforce report ID for pipeline scrape
   tableauTerritories?: string[] // Account Territory filter values, e.g. ["WEST_COMM_CORP_NORTHWEST_TERR01"]
+  tableauUrl?: string           // Full Tableau dashboard URL; territory extracted automatically
   supportableSheetId?: string   // Written back after first Supportable scrape
   pipelineSheetId?: string      // Written back after first SF pipeline scrape
   ccspSheetId?: string          // Written back after first CCSP scrape
