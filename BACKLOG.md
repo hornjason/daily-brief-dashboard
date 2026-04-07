@@ -4685,3 +4685,21 @@ Size: S (1-2h)
 Source: 2026-04-07 Quinn QA run wiped Elmer Alvarez AE config — afterAll restore failed, git checkout only recovered committed Carolanne data
 Files: test/qa-e2e-newuser.spec.ts, server.ts (snapshot/restore endpoints)
 Description: The test suite resets the live server to factory state in beforeAll and attempts to restore in afterAll. When afterAll fails or is interrupted, live production data is permanently lost if it was uncommitted. Root cause: tests run against the live server with real data. Fix options: (1) require a dedicated test server on a different port, (2) make snapshot/restore atomic with a rollback guarantee, (3) skip beforeAll factory reset when SKIP_RESET=true env var is set. Until fixed, never run the full test suite while uncommitted AE/customer data exists.
+
+### BKL-TEST-02 | Quinn lifecycle tests must use snapshot/restore — missing guard caused customers.json wipe
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: S
+Source: 2026-04-07 — Quinn AE lifecycle test called POST /api/aes without snapshot/restore; atomic customer cleanup wiped customers.json
+Files: QUINN-STANDARD.md (updated), test/lifecycle.spec.ts (to be created)
+Description: Quinn's AE lifecycle tests (add/remove AE via POST /api/aes) ran without wrapping in snapshot/restore. Our atomic customer cleanup (added in f377045) deletes customers for removed AEs. Without snapshot/restore, this permanently wipes customers.json. Fix: (1) QUINN-STANDARD.md updated 2026-04-07 to mandate snapshot/restore for any test touching AEs/customers. (2) Create a dedicated lifecycle spec that uses beforeAll snapshot + afterAll restore with a rollback guarantee. (3) Never call POST /api/aes in ad-hoc tests without snapshot wrapping.
+
+### BKL-UI-04 | ASA/Product toggle invisible in collapsed sidebar — single unlabeled "A" button
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Quinn QA 2026-04-07 Phase 1 Product View verification
+Files: dashboard/src/components/Sidebar.tsx
+Description: In collapsed sidebar state (default on first load), the ASA/Product view mode toggle renders as a single small "A" button. There is no visible "Product" option, no tooltip, and no indication that a view mode toggle exists. New users cannot discover Product View without knowing to expand the sidebar first. Fix: in collapsed state, show both "A" and "P" as stacked compact buttons with tooltips ("ASA View" / "Product View"), or auto-show a tooltip on first visit pointing to the toggle.

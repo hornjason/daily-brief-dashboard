@@ -164,13 +164,20 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
         </div>
       )}
       {collapsed && onViewModeChange && (
-        <div className="px-1 pt-3 pb-1 flex justify-center">
+        <div className="px-1 pt-3 pb-1 flex flex-col items-center gap-0.5">
           <button
-            onClick={() => onViewModeChange(viewMode === 'asa' ? 'product' : 'asa')}
-            title={`Switch to ${viewMode === 'asa' ? 'Product' : 'ASA'} view`}
-            className="text-xs px-1.5 py-1 rounded bg-border/30 text-text-secondary hover:text-accent transition-colors font-medium"
+            onClick={() => onViewModeChange('asa')}
+            title="ASA View"
+            className={`text-xs w-7 py-0.5 rounded font-medium transition-colors ${viewMode === 'asa' ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-border/30 text-text-secondary hover:text-accent'}`}
           >
-            {viewMode === 'asa' ? 'A' : 'P'}
+            A
+          </button>
+          <button
+            onClick={() => onViewModeChange('product')}
+            title="Product View"
+            className={`text-xs w-7 py-0.5 rounded font-medium transition-colors ${viewMode === 'product' ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-border/30 text-text-secondary hover:text-accent'}`}
+          >
+            P
           </button>
         </div>
       )}
