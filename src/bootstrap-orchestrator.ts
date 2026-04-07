@@ -660,6 +660,11 @@ export function registerBootstrapRoutes(app: Hono): void {
 
     const force = body.force === true
 
+    // Set running=true synchronously BEFORE the fire-and-forget call.
+    // If we waited until inside bootstrapPOD(), a second rapid POST could slip through the 409 guard
+    // before the flag is set (TOCTOU window). Bun is single-threaded but `await` yields the event loop.
+    podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+
     // Run async — fire-and-forget
     bootstrapPOD({
       territorySheetId,
