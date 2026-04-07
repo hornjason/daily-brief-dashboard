@@ -373,6 +373,7 @@ export interface CCSPRecord {
   cloudPartner: string  // normalized: "AWS" | "Google" | "Microsoft" | "Other"
   acvPlus: number
   ae?: string           // AE name — set when fetched via { sheetId, aeName } pairs
+  productOfferingGroup?: string  // column S (index 18) — e.g. "RHEL"; optional, absent in older sheet formats
 }
 
 function normalizePartner(raw: string): string {
@@ -584,6 +585,7 @@ export async function fetchCCSPData(
       const acv = parseFloat(acvStr)
       if (!acv || isNaN(acv)) continue
 
+      const productOfferingGroupRaw = String(row[18] ?? '').trim()
       allRecords.push({
         accountName:  String(row[acctCol] ?? '').trim(),
         quarter:      qtrCol >= 0 ? String(row[qtrCol] ?? '').trim() : '',
@@ -591,6 +593,7 @@ export async function fetchCCSPData(
         cloudPartner: partnerCol >= 0 ? normalizePartner(String(row[partnerCol] ?? '')) : 'Other',
         acvPlus:      acv,
         ...(aeMap.has(spreadsheetId) ? { ae: aeMap.get(spreadsheetId)! } : {}),
+        ...(productOfferingGroupRaw ? { productOfferingGroup: productOfferingGroupRaw } : {}),
       })
     }
   }

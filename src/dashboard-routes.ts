@@ -3,7 +3,7 @@ import { readdir } from 'fs/promises'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import type { Hono } from 'hono'
-import { customers } from './server-state.ts'
+import { aes, customers } from './server-state.ts'
 import { toSlug, readPipelineCache, readLatestBriefCache, readSheetCache } from './cache-layer.ts'
 import { computeAllHealthScores, isFreeOrTrial } from './health-score.ts'
 import { fetchCases } from './redhat.ts'
@@ -18,6 +18,26 @@ import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 let CACHE_DIR = ''
 let RH_CASES_CACHE_PATH = ''
 let DATA_SOURCES_PATH = ''
+
+// ── POD summary TTL cache ─────────────────────────────────────────────────────
+interface PodSummary {
+  totalCustomers: number
+  totalAEs: number
+  openCases: number
+  openCasesByProduct: Record<string, number>
+  expiringNext90Days: number
+  productMix: Record<string, number>
+  cachedAt: string
+}
+let _podSummaryCache: { data: PodSummary; at: number } | null = null
+const POD_SUMMARY_TTL = 30_000
+
+// ── Product name normalization ─────────────────────────────────────────────────
+// Strips "Red Hat " prefix and everything from the first comma onward.
+// Kept local to avoid a cross-package import from the dashboard UI bundle.
+function stripProductName(raw: string): string {
+  return raw.replace(/^Red Hat\s+/i, '').replace(/,.*$/, '').trim()
+}
 
 export function initDashboardRoutes(opts: {
   cacheDir: string
@@ -624,6 +644,81 @@ export function registerDashboardRoutes(app: Hono): void {
         totalProducts: 0,
         totalLicenses: 0,
       }, 500)
+    }
+  })
+
+  // ── GET /api/pod/summary — Aggregated POD-level KPIs ─────────────────────
+  app.get('/api/pod/summary', (c) => {
+    try {
+      // Serve from 30s TTL cache
+      if (_podSummaryCache && Date.now() - _podSummaryCache.at < POD_SUMMARY_TTL) {
+        return c.json(_podSummaryCache.data)
+      }
+
+      // Deduplicate customers by lowercased name (same customer may appear under 2 AEs)
+      const seenNames = new Set<string>()
+      const uniqueCustomers = customers.filter(cu => {
+        const key = cu.name.toLowerCase()
+        if (seenNames.has(key)) return false
+        seenNames.add(key)
+        return true
+      })
+
+      // Read cases from disk cache (same pattern as /api/morning-summary)
+      let rawCases: Array<{ severity: string; product?: string; status?: string }> = []
+      try {
+        const casesRaw = JSON.parse(readFileSync(RH_CASES_CACHE_PATH, 'utf-8'))
+        rawCases = casesRaw.cases ?? []
+      } catch { /* no cached cases */ }
+
+      // Only count open cases (exclude closed/resolved — same filter as fetchCases)
+      const openCases = rawCases.filter(ca => {
+        const s = (ca.status ?? '').toLowerCase()
+        return !s.includes('closed') && !s.includes('resolved')
+      })
+
+      const openCasesByProduct: Record<string, number> = {}
+      for (const ca of openCases) {
+        const prod = ca.product ? stripProductName(ca.product) : 'Unknown'
+        openCasesByProduct[prod] = (openCasesByProduct[prod] ?? 0) + 1
+      }
+
+      // Walk per-customer sheet caches for subscription metrics
+      const nowMs = Date.now()
+      let expiringNext90Days = 0
+      const productMix: Record<string, number> = {}
+
+      for (const cu of uniqueCustomers) {
+        const cached = readSheetCache(cu.name)
+        if (!cached) continue
+        const productsForCustomer = new Set<string>()
+        for (const row of cached.rows) {
+          const stripped = stripProductName(row.productDescription)
+          productsForCustomer.add(stripped)
+          if (row.endDate) {
+            const daysLeft = Math.ceil((new Date(row.endDate).getTime() - nowMs) / 86_400_000)
+            if (daysLeft >= 0 && daysLeft <= 90) expiringNext90Days++
+          }
+        }
+        for (const prod of productsForCustomer) {
+          productMix[prod] = (productMix[prod] ?? 0) + 1
+        }
+      }
+
+      const data: PodSummary = {
+        totalCustomers: uniqueCustomers.length,
+        totalAEs: aes.length,
+        openCases: openCases.length,
+        openCasesByProduct,
+        expiringNext90Days,
+        productMix,
+        cachedAt: new Date().toISOString(),
+      }
+
+      _podSummaryCache = { data, at: Date.now() }
+      return c.json(data)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 
