@@ -7,6 +7,7 @@ import { AutomationSettings } from '../components/AutomationSettings'
 import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import {
+  AlertCircle,
   AlertTriangle,
   CheckCircle,
   XCircle,
@@ -2924,9 +2925,22 @@ interface PodBootstrapStatus {
 
 function PodBootstrapSection() {
   const [territorySheetId, setTerritorySheetId] = useState('')
+  const [sfReportId, setSfReportId] = useState('')
+  const [parentFolderId, setParentFolderId] = useState('')
+  const [tableauOk, setTableauOk] = useState<boolean | null>(null)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [status, setStatus] = useState<PodBootstrapStatus['podBootstrap'] | null>(null)
+
+  // Check Tableau status on mount
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/bootstrap/tableau/session-status', { signal: controller.signal })
+      .then(r => r.json())
+      .then((d: { reachable: boolean; sessionValid: boolean }) => setTableauOk(d.sessionValid))
+      .catch(() => setTableauOk(false))
+    return () => controller.abort()
+  }, [])
 
   // Check for existing run on mount
   useEffect(() => {
@@ -2958,14 +2972,18 @@ function PodBootstrapSection() {
   }, [status?.running])
 
   const startPodBootstrap = async () => {
-    if (!territorySheetId.trim()) return
+    if (!territorySheetId.trim() || !sfReportId.trim() || !parentFolderId.trim()) return
     setStarting(true)
     setStartError(null)
     try {
       const r = await fetch('/api/bootstrap/pod', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ territorySheetId: territorySheetId.trim() }),
+        body: JSON.stringify({
+          territorySheetId: territorySheetId.trim(),
+          sfReportId: sfReportId.trim(),
+          parentFolderId: parentFolderId.trim(),
+        }),
       })
       const d = await r.json()
       if (!r.ok || d.error) {
@@ -3012,6 +3030,37 @@ function PodBootstrapSection() {
             <p className="text-xs text-text-secondary mt-1">Google Sheet containing AE names and territory configurations.</p>
           </div>
 
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">SF Pipeline Report ID</label>
+            <input
+              type="text"
+              value={sfReportId}
+              onChange={e => { setSfReportId(e.target.value); setStartError(null) }}
+              placeholder="00OPe000001abcDEF or full Salesforce report URL"
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent font-mono"
+            />
+            <p className="text-xs text-text-secondary mt-1">Salesforce pipeline report — shared across all AEs in this POD.</p>
+          </div>
+
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">Parent Drive Folder</label>
+            <input
+              type="text"
+              value={parentFolderId}
+              onChange={e => { setParentFolderId(e.target.value); setStartError(null) }}
+              placeholder="Drive folder URL or bare folder ID"
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent font-mono"
+            />
+            <p className="text-xs text-text-secondary mt-1">Drive folder where each AE's subfolder will be created.</p>
+          </div>
+
+          {tableauOk === false && (
+            <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-2.5 text-xs text-warning">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>Tableau is not connected. CCSP scrape will fail for each AE. Connect Tableau in Step 3 first or continue knowing CCSP will be skipped.</span>
+            </div>
+          )}
+
           {startError && (
             <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
               <XCircle className="w-3.5 h-3.5 shrink-0" /> {startError}
@@ -3021,7 +3070,7 @@ function PodBootstrapSection() {
           <div className="flex justify-end">
             <button
               onClick={startPodBootstrap}
-              disabled={!territorySheetId.trim() || starting}
+              disabled={!territorySheetId.trim() || !sfReportId.trim() || !parentFolderId.trim() || starting}
               className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
             >
               {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}

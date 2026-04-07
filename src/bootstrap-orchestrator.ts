@@ -323,10 +323,12 @@ function isAEFullyBootstrapped(aeConfig: AE): boolean {
  */
 export async function bootstrapPOD(opts: {
   territorySheetId: string
+  sfReportId: string
+  parentFolderId: string
   force?: boolean
   onProgress?: (info: { aeName: string; index: number; total: number; status: 'skipped' | 'ok' | 'error'; error?: string }) => void
 }): Promise<{ succeeded: string[]; skipped: string[]; failed: Array<{ name: string; error: string }> }> {
-  const { territorySheetId, force = false, onProgress } = opts
+  const { territorySheetId, sfReportId, parentFolderId, force = false, onProgress } = opts
   const port = process.env.PORT ?? '7777'
   const baseUrl = `http://localhost:${port}`
 
@@ -374,7 +376,7 @@ export async function bootstrapPOD(opts: {
     podBootstrapState.currentAE = aeName
 
     // Check if AE exists in aes.json with required config
-    const aeConfig = aes.find(a => a.name === aeName)
+    let aeConfig = aes.find(a => a.name === aeName)
 
     // Idempotency: skip if already fully bootstrapped (unless force)
     if (aeConfig && isAEFullyBootstrapped(aeConfig) && !force) {
@@ -386,15 +388,17 @@ export async function bootstrapPOD(opts: {
       continue
     }
 
-    // AE must exist in aes.json with sfReportId to bootstrap
-    if (!aeConfig?.sfReportId) {
-      const err = `AE "${aeName}" not found in aes.json or missing sfReportId — configure via setup wizard first`
-      console.warn(`[pod-bootstrap] ${err}`)
-      failed.push({ name: aeName, error: err })
-      podBootstrapState.results[i] = { name: aeName, status: 'error', error: err }
-      podBootstrapState.completed++
-      onProgress?.({ aeName, index: i, total: aeEntries.length, status: 'error', error: err })
-      continue
+    // Create or update AE in aes.json using POD-level sfReportId + parentFolderId
+    if (!aeConfig) {
+      const newAe = { name: aeName, driveFolderId: '', sfReportId, tableauTerritories: territories, parentFolderId }
+      saveAes([...aes, newAe])
+      aeConfig = aes.find(a => a.name === aeName)!
+      console.log(`[pod-bootstrap] Created new AE entry for ${aeName}`)
+    } else if (!aeConfig.sfReportId) {
+      const updated = aes.map(a => a.name === aeName ? { ...a, sfReportId, parentFolderId } : a)
+      saveAes(updated)
+      aeConfig = aes.find(a => a.name === aeName)!
+      console.log(`[pod-bootstrap] Updated sfReportId for ${aeName}`)
     }
 
     // Wait for any in-progress single-AE bootstrap to finish before starting the next
@@ -656,8 +660,15 @@ export function registerBootstrapRoutes(app: Hono): void {
     // marker; bootstrapPOD() overwrites these fields once it reads the territory sheet.
     podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
 
-    const body = await c.req.json<{ territorySheetId?: string; force?: boolean }>().catch(() => ({ territorySheetId: undefined, force: undefined } as { territorySheetId?: string; force?: boolean }))
+    const body = await c.req.json<{ territorySheetId?: string; sfReportId?: string; parentFolderId?: string; force?: boolean }>().catch(() => ({} as { territorySheetId?: string; sfReportId?: string; parentFolderId?: string; force?: boolean }))
     const territorySheetId = (body.territorySheetId ?? '').trim()
+    const rawSfReportId = (body.sfReportId ?? '').trim()
+    const sfReportId = rawSfReportId ? extractSfReportId(rawSfReportId) : ''
+    const rawParent = (body.parentFolderId ?? '').trim()
+    const parentFolderId = rawParent
+      ? (rawParent.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)?.[1] ?? rawParent)
+      : ''
+
     if (!territorySheetId) {
       podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
       return c.json({ error: 'territorySheetId is required' }, 400)
@@ -667,12 +678,22 @@ export function registerBootstrapRoutes(app: Hono): void {
       podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
       return c.json({ error: 'Invalid territorySheetId format' }, 400)
     }
+    if (!sfReportId || !isValidSfId(sfReportId)) {
+      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+      return c.json({ error: 'sfReportId is required — provide a Salesforce report URL or bare ID' }, 400)
+    }
+    if (!parentFolderId || !/^[a-zA-Z0-9_-]{10,}$/.test(parentFolderId)) {
+      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+      return c.json({ error: 'parentFolderId is required — provide a Google Drive folder URL or bare ID' }, 400)
+    }
 
     const force = body.force === true
 
     // Run async — fire-and-forget
     bootstrapPOD({
       territorySheetId,
+      sfReportId,
+      parentFolderId,
       force,
       onProgress: (info) => {
         console.log(`[pod-bootstrap] Progress: ${info.aeName} (${info.index + 1}/${info.total}) — ${info.status}${info.error ? ': ' + info.error : ''}`)
