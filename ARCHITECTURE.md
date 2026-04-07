@@ -586,7 +586,79 @@ Extracted text is capped at `DOC_CONTENT_CAP` (8K chars) per file, same as Googl
 
 ---
 
-## §15. Account Plan Generation (BKL-AI17, 2026-04-06)
+## §15. Product Filter / POD View (BKL-PVIEW-01–04, 2026-04-07)
+
+A product-centric view mode layered on top of the existing ASA dashboard. All filter state is client-side via localStorage; the backend has one product-aware endpoint (`GET /api/ccsp`).
+
+### View modes
+
+Two modes toggled in `Sidebar.tsx` (localStorage key: `dashboard-view-mode`):
+
+| Mode | Key | Behavior |
+|------|-----|----------|
+| ASA | `"asa"` | Default view — AE filter chip bar, calendar, morning summary all visible |
+| Product | `"product"` | Morning summary hidden; product chip bar shown; AE chips remain |
+
+### Filter chip bars (App.tsx)
+
+**AE chip bar** — single-select radio group. Shows each AE's first name + customer count + worst-health dot (color = lowest confidence score across that AE's customers). Persisted in localStorage key `ae-filter-selected`. When an AE is selected, `selectedAe` prop threads down to the grid.
+
+**Product chip bar** — multi-select. Labels sourced from `discoverAllProducts()` (live from subscription data). Each chip shows a `title` tooltip listing the raw subscription names in that group (`getProductGroupMembers()` — LOG-03). Persisted in localStorage key `product-filter-selected`.
+
+### Product name normalization (`dashboard/src/utils/productName.ts`)
+
+Raw subscription names (e.g., `"Red Hat Ansible Automation Platform, Standard (100 Managed Nodes)"`) are mapped through a two-step pipeline:
+
+1. `stripProductName()` — removes `"Red Hat "` prefix + everything after the first comma
+2. `normalizeProductName()` — keyword-match to one of 10 display labels:
+
+| Label | Matches |
+|-------|---------|
+| Beta | `beta` |
+| Free | `free` |
+| Trial | `trial` |
+| AAP | `ansible` |
+| Storage | `storage` |
+| OCP | `openshift` |
+| RHEL | `enterprise linux`, `satellite` |
+| Middleware | `runtimes`, `integration` |
+| Partner Subscriptions | `partner` |
+| Developer Subscriptions | `developer subscription` |
+
+First match wins. Names that don't match any rule pass through as-is.
+
+### Filter propagation
+
+| Surface | How filter is applied |
+|---------|----------------------|
+| `AccountPortfolioGrid` | `selectedProducts` prop; matching subs expanded inline on each card; non-matching collapsed behind "show N more" toggle |
+| AE grouping | When filter active + 2+ AEs: cards grouped by AE with "N matching / M hidden" header; zero-match AE groups collapsed |
+| `KPICards` | Receives `filteredAccounts` (matching accounts only); shows filtered/total ratio for cases; expiring + renewal counts scoped to matching subs (LOG-04) |
+| `MorningSummary` | Customer bullets filtered to product-matching accounts (LOG-05) |
+| `GET /api/ccsp?products=OCP,RHEL` | Server-side: maps labels → `productOfferingGroup` values, filters CCSP records before aggregation (LOG-06) |
+
+### Virtualization (Phase 4)
+
+`AccountPortfolioGrid` uses **react-window VariableSizeGrid** for the "All" mode. A `ResizeObserver` computes responsive column count. Each row is fixed at 240px height. This keeps 80-160 card portfolios in `~50ms` render time.
+
+### `GET /api/pod/summary`
+
+Runtime aggregation endpoint for portfolio-level KPIs:
+
+```
+totalCustomers        — deduplicated by lowercase name across all AEs
+totalAEs              — AE count from aes.json
+openCases             — sum of open cases across all customers
+openCasesByProduct    — Map<productLabel, caseCount>
+expiringNext90Days    — count of subscriptions expiring within 90 days
+productMix            — normalized label → customer count
+```
+
+30-second in-memory TTL. No disk cache — recomputed from existing customer + cases cache files.
+
+---
+
+## §16. Account Plan Generation (BKL-AI17, 2026-04-06)
 
 `src/account-plan.ts` — on-demand Gemini multimodal pipeline that assembles a full account plan for a customer.
 
@@ -650,7 +722,7 @@ The system prompt explicitly requires 12 sections. Sections 10-12 are structural
 
 ---
 
-## §16. Admin Page — Operational Panels (2026-04-04)
+## §17. Admin Page — Operational Panels (2026-04-04)
 
 ### Session Health Panel (BKL-M50d)
 
@@ -675,7 +747,7 @@ Supportable tile  — state (fresh/stale/failed/running), lastSuccess, recordCou
 
 ---
 
-## §17. Product Intelligence Hub — Phase 2 + Phase 3 (2026-04-05/06)
+## §18. Product Intelligence Hub — Phase 2 + Phase 3 (2026-04-05/06)
 
 ### Products supported (7)
 
@@ -826,7 +898,7 @@ If `ccspSheetId` is lost (AE re-bootstrap), `writeCcspSheet` creates a new blank
 
 ---
 
-## §17. Data Pipeline Inventory
+## §19. Data Pipeline Inventory
 
 Complete inventory of every data pipeline in the system, organized by execution model.
 

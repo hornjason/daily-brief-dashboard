@@ -66,6 +66,12 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - `docs/adr/ADR-011.md` — Confidence Score: 0-100 composite replacing separate Renewal Risk
 - `docs/adr/ADR-012.md` — Product Intelligence Hub: Drive optional, feature injection into customer intel, cap expansion, 7-product bootstrap scaffold
 
+## Frontend Utilities
+
+| Utility | Purpose |
+|---|---|
+| `dashboard/src/utils/productName.ts` | Product name normalization pipeline: `stripProductName()` (removes "Red Hat " prefix + packaging suffix), `normalizeProductName()` (maps raw names → 10 display labels: RHEL, OCP, AAP, Middleware, Storage, Trial, Free, Beta, Partner Subscriptions, Developer Subscriptions), `discoverAllProducts()` (deduped sorted labels from all accounts), `getProductGroupMembers()` (reverse-lookup for chip tooltips — LOG-03) |
+
 ## Frontend Components (Notable)
 
 | Component | Purpose |
@@ -74,11 +80,21 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `AccountIntelligencePanel` | Intelligence pipeline status + Drive doc links on `CustomerDetailPage` |
 | `AccountPlanPanel` | Account plan section on `CustomerDetailPage` — 3 states: not-generated (Generate button), generating (spinner + polling), generated (View/Download/Regenerate) |
 | `MarkdownPreviewModal` | Full-screen modal with rendered markdown — tables, headers, lists, inline formatting; handles `javascript:` URI injection |
-| `AccountPortfolioGrid` | Customer list grid; shows `confidenceScore` badge per customer |
+| `AccountPortfolioGrid` | Customer list grid; product filter: matching subs expanded inline, non-matching collapsed behind "show N more"; AE grouping when filter active + 2+ AEs; react-window VariableSizeGrid virtualization for "All" mode; shows `confidenceScore` badge per customer |
 | `AdminPage` | 3-step intelligence progress stepper for account intelligence pipeline |
-| `MorningSummary` | Morning summary page; includes Gemini `synthesis` narrative block |
+| `KPICards` | Portfolio KPI summary bar; product-scoped when filter active — shows filtered/total ratio; case counts, expiring, and renewal counts scoped to matching subscriptions (LOG-04) |
+| `MorningSummary` | Morning summary page; includes Gemini `synthesis` narrative block; customer bullets filtered to product-matching accounts when filter active (LOG-05); hidden in Product view mode |
+| `Sidebar` | Navigation sidebar; ASA/Product view mode toggle (localStorage key: `dashboard-view-mode`); collapsed state shows stacked A/P compact buttons |
 | `ProductsPage` | Products listing — Unified Stream layout (FeatureFilterBar + SpotlightStrip + FeatureListRow + FeatureDetailPanel) |
 | `ProductIntelSection` | Per-product intelligence section; hardcodes all 7 slugs: rhel, ocp, ocp-virt, aap, rhel-ai, rh-ai-inference, rhoai |
+
+## Product Filter — localStorage State Keys
+
+| Key | Values | Purpose |
+|---|---|---|
+| `dashboard-view-mode` | `"asa"` \| `"product"` | ASA vs Product view mode toggle (Sidebar) |
+| `ae-filter-selected` | AE first name string \| `""` | Single-select AE chip filter (App.tsx) |
+| `product-filter-selected` | JSON array of label strings | Multi-select product chip filter (App.tsx) |
 
 ## API Fields (2026-04-05/06 Additions — Phase 2 + Phase 3)
 
@@ -89,6 +105,8 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `POST /api/products/:slug/generate-customer-intel` | — | Generates `CustomerProductIntel` for a specific customer+product pair; injects feature radar into prompt |
 | `POST /api/customers/:id/account-plan/generate` | `{ ok, generatedAt, driveUrl }` | Triggers Gemini account plan generation; in-flight guard returns 409 if already running; uploads to `Account Plans/` Drive subfolder |
 | `GET /api/customers/:id/account-plan` | `{ markdown, generatedAt, driveUrl } \| { notGenerated: true }` | Returns cached account plan markdown or not-generated sentinel |
+| `GET /api/pod/summary` | `{ totalCustomers, totalAEs, openCases, openCasesByProduct, expiringNext90Days, productMix }` | Aggregated POD-level KPIs; runtime aggregation across all customer + RH cases caches; 30s in-memory TTL; customer deduplication by lowercase name |
+| `GET /api/ccsp` | — | Cloud spend data; accepts optional `?products=OCP,RHEL` param — filters records by `productOfferingGroup` before aggregating (LOG-06) |
 | `GET /api/products` | — | Lists all 7 product configs with feature cache status |
 | `GET /api/products/:slug` | — | Returns `ProductSummary` + `ProductFeatureCache` for a single product |
 | `POST /api/products/:slug/refresh` | — | On-demand re-scrape + re-synthesis for a product |
