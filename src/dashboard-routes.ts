@@ -92,8 +92,19 @@ async function synthesizeMorningSummary(signals: { customer: string; type: strin
   const mediumCount   = signals.filter(s => s.severity === 'medium').length
   const signalLines   = signals.slice(0, 20).map(s => `[${s.severity.toUpperCase()}] ${s.customer}: ${s.text}`).join('\n')
 
-  const systemPrompt = `You are a Red Hat Account Solution Architect's AI assistant. Your job is to synthesize portfolio signals into a crisp daily briefing.`
-  const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}\n\nWrite a 3-5 sentence morning summary covering: (1) the most urgent issues requiring action today, (2) any patterns across customers, (3) top 3 recommended actions for the day. Be specific. No fluff.`
+  const systemPrompt = `You are a Red Hat Account Solution Architect's AI assistant. Your job is to synthesize portfolio signals into a crisp daily briefing.
+
+Format your response as markdown with bold headers and bullet points. Keep each bullet to one line. Bold account names. Use exactly this structure:
+
+## Priority Today
+1-2 sentences on the single most important thing to address today.
+
+## Actions
+- 3 specific actions with **account names** bolded, one per line
+
+## Watch
+- 2-3 accounts to watch (renewals, competitive signals, stuck pipeline)`
+  const userPrompt   = `Today's portfolio signals (${signals.length} total: ${criticalCount} critical, ${highCount} high, ${mediumCount} medium):\n\n${signalLines}\n\nWrite a structured daily briefing using the markdown format specified. Be specific with account names and actions. No fluff.`
 
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
   const res = await fetch(url, {

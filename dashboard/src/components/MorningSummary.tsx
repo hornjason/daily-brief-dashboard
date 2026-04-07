@@ -1,6 +1,52 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sun, AlertTriangle, Clock, ChevronDown, ChevronUp } from 'lucide-react'
+import { Sun, AlertTriangle, Clock, ChevronDown, ChevronUp, FileText } from 'lucide-react'
+
+/** Lightweight inline markdown renderer for constrained AI output.
+ *  Handles: **bold**, ## headings, - bullets, and paragraphs. */
+function RenderMarkdown({ text }: { text: string }) {
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  let listItems: React.ReactNode[] = []
+  let key = 0
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(<ul key={key++} className="list-disc list-inside space-y-1 mb-3">{listItems}</ul>)
+      listItems = []
+    }
+  }
+
+  const renderInline = (line: string): React.ReactNode => {
+    // Split on **bold** markers
+    const parts = line.split(/(\*\*[^*]+\*\*)/)
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="text-text-primary font-semibold">{part.slice(2, -2)}</strong>
+      }
+      return part
+    })
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) { flushList(); continue }
+
+    if (trimmed.startsWith('## ')) {
+      flushList()
+      elements.push(
+        <h3 key={key++} className="text-sm font-bold text-accent mt-3 mb-1.5 first:mt-0">{trimmed.slice(3)}</h3>
+      )
+    } else if (trimmed.startsWith('- ')) {
+      listItems.push(<li key={key++} className="text-sm text-text-secondary leading-relaxed">{renderInline(trimmed.slice(2))}</li>)
+    } else {
+      flushList()
+      elements.push(<p key={key++} className="text-sm text-text-secondary leading-relaxed mb-2">{renderInline(trimmed)}</p>)
+    }
+  }
+  flushList()
+  return <>{elements}</>
+}
 
 interface Signal {
   customer: string
@@ -25,6 +71,7 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
   const navigate = useNavigate()
   const [data, setData] = useState<MorningSummaryData | null>(null)
   const [collapsed, setCollapsed] = useState(false)
+  const [showBriefModal, setShowBriefModal] = useState(false)
 
   useEffect(() => {
     fetch('/api/morning-summary')
@@ -32,6 +79,13 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
       .then(setData)
       .catch(() => {})
   }, [])
+
+  const briefPreview = useMemo(() => {
+    if (!data?.synthesis) return ''
+    // Strip markdown formatting for the preview
+    const plain = data.synthesis.replace(/[#*\-]/g, '').replace(/\s+/g, ' ').trim()
+    return plain.length > 60 ? plain.slice(0, 57) + '...' : plain
+  }, [data?.synthesis])
 
   if (!data) return null
 
@@ -64,17 +118,43 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-text-secondary">{data.summary}</span>
+          {data.synthesis && (
+            <span
+              className="relative group inline-flex items-center gap-1 px-2 py-0.5 bg-accent/15 text-accent text-xs rounded-full cursor-pointer hover:bg-accent/25 transition-colors"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (collapsed) {
+                  setShowBriefModal(!showBriefModal)
+                } else {
+                  // Scroll to synthesis section
+                  document.querySelector('#section-morning .leading-relaxed')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                }
+              }}
+              title={briefPreview}
+            >
+              <FileText className="w-3 h-3" />
+              Today's Brief
+            </span>
+          )}
           {collapsed
             ? <ChevronDown className="w-3.5 h-3.5 text-text-secondary" />
             : <ChevronUp className="w-3.5 h-3.5 text-text-secondary" />
           }
         </div>
       </button>
+      {/* Brief modal when collapsed */}
+      {collapsed && showBriefModal && data.synthesis && (
+        <div className="px-5 py-3 border-t border-border">
+          <div className="p-3 bg-surface-hover border border-border rounded-lg leading-relaxed">
+            <RenderMarkdown text={data.synthesis} />
+          </div>
+        </div>
+      )}
       {!collapsed && (
         <div className="p-5">
           {data.synthesis && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 leading-relaxed">
-              {data.synthesis}
+            <div className="mb-4 p-3 bg-surface-hover border border-border rounded-lg leading-relaxed">
+              <RenderMarkdown text={data.synthesis} />
             </div>
           )}
           {displaySignals.length === 0 ? (
