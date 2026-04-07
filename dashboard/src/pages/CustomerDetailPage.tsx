@@ -36,6 +36,7 @@ import { AccountCountPill } from '../components/AccountCountPill'
 import BriefAgePill from '../components/BriefAgePill'
 import { DataQualityBadge } from '../components/DataQualityBadge'
 import { AccountIntelligencePanel } from '../components/AccountIntelligencePanel'
+import { AccountPlanPanel } from '../components/AccountPlanPanel'
 import { ProductQueryPanel } from '../components/ProductQueryPanel'
 import PriorityActionBanner from '../components/PriorityActionBanner'
 import CustomerSignalBanner from '../components/CustomerSignalBanner'
@@ -1354,6 +1355,7 @@ export function CustomerDetailPage() {
         {/* Right column — 35%, sticky scroll */}
         <aside className="hidden lg:block w-[38%] overflow-y-auto p-6 pl-3 space-y-4 border-l border-border/40">
           {/* Order: Intelligence Brief → Cases → Products → Customer Engagement → Key Contacts → Drive */}
+          <AccountPlanPanel customerName={customerName} />
           <AccountIntelligencePanel customerName={customerName} />
           <CasesSection cases={sse.cases} loading={sectionLoading} />
           <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} />

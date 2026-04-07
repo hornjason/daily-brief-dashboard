@@ -16,9 +16,10 @@ import { sfSyncError } from './sf-scraper.ts'
 import { runIntelligencePipeline, getJobStatus, getRunningJob } from './account-intelligence.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
-import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS } from './cache-layer.ts'
+import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS, toSlug } from './cache-layer.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
+import { generateAndSaveAccountPlan, readAccountPlan } from './account-plan.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -583,6 +584,46 @@ export function registerCustomerRoutes(app: Hono): void {
     }
     const percentComplete = _batchState.total > 0 ? Math.round((_batchState.completed / _batchState.total) * 100) : 0
     return c.json({ ..._batchState, elapsedSeconds, estimatedSecondsRemaining, percentComplete })
+  })
+
+  // ── Account Plan generation ──────────────────────────────────────────────────
+
+  const _accountPlanInFlight = new Set<string>()
+
+  app.post('/api/customers/:id/account-plan/generate', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('id'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    if (_accountPlanInFlight.has(slug)) {
+      return c.json({ error: 'Generation already in progress for this customer' }, 409)
+    }
+
+    _accountPlanInFlight.add(slug)
+    try {
+      const configDir = process.env.CONFIG_DIR ?? ''
+      const result = await generateAndSaveAccountPlan(customer, CACHE_DIR, configDir)
+      return c.json({ ok: true, generatedAt: result.generatedAt, driveUrl: result.driveUrl })
+    } catch (e: any) {
+      console.error(`[acct-plan] Generation failed for ${customer.name}:`, e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    } finally {
+      _accountPlanInFlight.delete(slug)
+    }
+  })
+
+  app.get('/api/customers/:id/account-plan', (c) => {
+    const rawName = decodeURIComponent(c.req.param('id'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const plan = readAccountPlan(slug, CACHE_DIR)
+    if (!plan) return c.json({ notGenerated: true })
+    return c.json({ markdown: plan.markdown, generatedAt: plan.generatedAt, driveUrl: plan.driveUrl })
   })
 
   // ── BKL-AI16: Product Q&A — grounded Gemini query for RHEL / OCP / AAP ─────

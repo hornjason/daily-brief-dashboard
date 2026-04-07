@@ -78,6 +78,9 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/node_modules ./node_modules
 
+# Copy account plan config (sample, questions PDF, playbook) for AI generation
+COPY --from=builder /app/config/account-plan /app/config/account-plan
+
 # Install Playwright Chromium browser binary
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN bunx playwright install chromium --no-shell

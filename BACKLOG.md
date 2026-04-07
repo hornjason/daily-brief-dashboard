@@ -4674,3 +4674,14 @@ Size: XS (5 min)
 Source: Generate All trigger after customers.json restore — Drive docs write step failed
 Files: src/account-intelligence.ts
 Description: `google` from `googleapis` was referenced in the Drive docs write step (Step 3) but never imported. Steps 1-2 (industry/segment classification, company brief) completed successfully, but Step 3 (Drive document write) failed with `google is not defined`. Result: intelligence was generated but never persisted to Drive. Both import bugs were caught when triggering "Generate All" to restore industry/segment labels after a customers.json restore.
+
+---
+
+### BKL-TEST-01 | Playwright test beforeAll/afterAll snapshot restore unreliable against live server
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: S (1-2h)
+Source: 2026-04-07 Quinn QA run wiped Elmer Alvarez AE config — afterAll restore failed, git checkout only recovered committed Carolanne data
+Files: test/qa-e2e-newuser.spec.ts, server.ts (snapshot/restore endpoints)
+Description: The test suite resets the live server to factory state in beforeAll and attempts to restore in afterAll. When afterAll fails or is interrupted, live production data is permanently lost if it was uncommitted. Root cause: tests run against the live server with real data. Fix options: (1) require a dedicated test server on a different port, (2) make snapshot/restore atomic with a rollback guarantee, (3) skip beforeAll factory reset when SKIP_RESET=true env var is set. Until fixed, never run the full test suite while uncommitted AE/customer data exists.

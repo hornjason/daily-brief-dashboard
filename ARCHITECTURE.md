@@ -586,7 +586,71 @@ Extracted text is capped at `DOC_CONTENT_CAP` (8K chars) per file, same as Googl
 
 ---
 
-## §15. Admin Page — Operational Panels (2026-04-04)
+## §15. Account Plan Generation (BKL-AI17, 2026-04-06)
+
+`src/account-plan.ts` — on-demand Gemini multimodal pipeline that assembles a full account plan for a customer.
+
+### Source assembly
+
+Four sources are combined at generation time:
+
+| Source | Location | Format | Notes |
+|--------|----------|--------|-------|
+| Sample account plan | `/app/config/account-plan/sample.pdf` | Base64 inlineData | Bundled in image via `Containerfile` |
+| Account planning questions | `/app/config/account-plan/questions.pdf` | Base64 inlineData | Image-based PDF — passed via Gemini vision |
+| Account planning playbook | `/app/config/account-plan/playbook.pdf` | Base64 inlineData | Always included; A/B test confirmed significantly better output |
+| Customer intel | `data/cache/intelligence/{slug}.json` | Text injection | Per-customer signals from the intelligence pipeline |
+
+Config dir is `APP_CONFIG_DIR = /app/config/account-plan/` inside the container, configurable via env var.
+
+### Drive isolation
+
+`ensureAccountPlansSubfolder(customerFolderId)` creates or finds an `Account Plans/` subfolder in the customer's Drive folder — **separate from `Account Intelligence/`**. This is intentional: `fetchCustomerDocs()` only ingests `Account Intelligence/` docs. If generated plans were written there, they would feed back into their own generation prompt on the next brief run.
+
+### Write path
+
+```
+POST /api/customers/:id/account-plan/generate
+  ├── In-flight guard (_accountPlanInFlight Set) → 409 if duplicate
+  ├── Read 3 PDF sources from /app/config/account-plan/
+  ├── Read customer intel from cache
+  ├── Call Gemini multimodal (inlineData for PDFs)
+  ├── Write → data/cache/intelligence/{slug}-account-plan.md
+  ├── Write → data/cache/intelligence/{slug}-account-plan-meta.json (driveUrl + generatedAt)
+  └── Upload → Drive Account Plans/ subfolder
+```
+
+**In-flight guard:** `_accountPlanInFlight` is a module-level `Set<string>`. The route returns 409 if a generation is already running for that customer. Prevents double-click cost explosion.
+
+### Read path
+
+```
+GET /api/customers/:id/account-plan
+  ├── readAccountPlan(slug, cacheDir)
+  ├── If cache hit → { markdown, generatedAt, driveUrl }
+  └── If no cache → { notGenerated: true }
+```
+
+### Required output sections
+
+The system prompt explicitly requires 12 sections. Sections 10-12 are structurally enforced:
+
+- **Whitespace Map** — markdown table: Business Units (rows) × Red Hat products (cols), with opportunity level (🟢/🟡/⚪) and Opportunity Status
+- **Initiatives** — 3-5 customer-centric initiatives with: Customer Objective, Red Hat Solution, Estimated Deal Size, Timeline, Next Steps, Tagged Potential Opportunity
+- **Actions & Next Steps** — numbered markdown table: #, Action, Owner (AE/ASA name from customers.json), Target Date, Status
+
+### Frontend
+
+`AccountPlanPanel.tsx` — 3-state component on `CustomerDetailPage`:
+1. **Not generated** — "Generate Account Plan" button
+2. **Generating** — spinner + polls `GET /api/customers/:id/account-plan` every 3 seconds
+3. **Generated** — View (opens `MarkdownPreviewModal`) / Download / Regenerate
+
+`MarkdownPreviewModal.tsx` — full-screen modal with custom markdown renderer. Handles headers, lists, bold, italic, inline code, code blocks, tables (pipe syntax), horizontal rules. Security: `javascript:` URIs in link targets are blocked; rendered as `<span>` instead of `<a>`.
+
+---
+
+## §16. Admin Page — Operational Panels (2026-04-04)
 
 ### Session Health Panel (BKL-M50d)
 
@@ -611,7 +675,7 @@ Supportable tile  — state (fresh/stale/failed/running), lastSuccess, recordCou
 
 ---
 
-## §16. Product Intelligence Hub — Phase 2 + Phase 3 (2026-04-05/06)
+## §17. Product Intelligence Hub — Phase 2 + Phase 3 (2026-04-05/06)
 
 ### Products supported (7)
 

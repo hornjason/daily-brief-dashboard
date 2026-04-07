@@ -30,6 +30,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `src/product-intelligence.ts` | Q&A chat pipeline for product pages (BKL-AI16) |
 | `src/product-intel-routes.ts` | Hono route handlers for all `/api/products/*` endpoints; loads feature cache and passes to customer intel generation |
 | `src/customer-product-intel.ts` | `generateCustomerProductIntel()` — Gemini prompt with injected feature radar; outputs `featureTalkingPoints` (top 3-5 ranked features with reason + signalSource) |
+| `src/account-plan.ts` | `generateAccountPlan()` — assembles 4 sources (sample plan, questions PDF, playbook, customer intel) and calls Gemini multimodal to produce a full account plan markdown; `ensureAccountPlansSubfolder()` creates `Account Plans/` in Drive (separate from `Account Intelligence/`); `readAccountPlan()` reads from cache |
 
 ## Stack
 
@@ -71,6 +72,8 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 |---|---|
 | `DataQualityBadge` | Brief freshness pill — shows cached-at timestamp and staleness state on `CustomerDetailPage` |
 | `AccountIntelligencePanel` | Intelligence pipeline status + Drive doc links on `CustomerDetailPage` |
+| `AccountPlanPanel` | Account plan section on `CustomerDetailPage` — 3 states: not-generated (Generate button), generating (spinner + polling), generated (View/Download/Regenerate) |
+| `MarkdownPreviewModal` | Full-screen modal with rendered markdown — tables, headers, lists, inline formatting; handles `javascript:` URI injection |
 | `AccountPortfolioGrid` | Customer list grid; shows `confidenceScore` badge per customer |
 | `AdminPage` | 3-step intelligence progress stepper for account intelligence pipeline |
 | `MorningSummary` | Morning summary page; includes Gemini `synthesis` narrative block |
@@ -84,6 +87,8 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `GET /api/morning-summary` | `synthesis` | Gemini-generated 3-5 sentence portfolio narrative; 4h cached in `morning-synthesis.json` |
 | `GET /api/customer/:name` (and list) | `confidenceScore` | `ConfidenceScoreBreakdown` from `computeConfidenceScore()` — 0-100 composite with sub-scores |
 | `POST /api/products/:slug/generate-customer-intel` | — | Generates `CustomerProductIntel` for a specific customer+product pair; injects feature radar into prompt |
+| `POST /api/customers/:id/account-plan/generate` | `{ ok, generatedAt, driveUrl }` | Triggers Gemini account plan generation; in-flight guard returns 409 if already running; uploads to `Account Plans/` Drive subfolder |
+| `GET /api/customers/:id/account-plan` | `{ markdown, generatedAt, driveUrl } \| { notGenerated: true }` | Returns cached account plan markdown or not-generated sentinel |
 | `GET /api/products` | — | Lists all 7 product configs with feature cache status |
 | `GET /api/products/:slug` | — | Returns `ProductSummary` + `ProductFeatureCache` for a single product |
 | `POST /api/products/:slug/refresh` | — | On-demand re-scrape + re-synthesis for a product |
@@ -96,6 +101,8 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `data/cache/{slug}-{date}.json` | `writeBriefCache()` | `readBriefCache()`, `readLatestBriefCache()` | Daily date-stamp; 4h TTL enforced at read time (ADR-009) |
 | `data/cache/{slug}-sheets.json` | `writeSheetCache()` | `readSheetCache()` | No TTL; updated on each sheet refresh |
 | `data/cache/intelligence/{slug}.json` | `account-intelligence.ts` Steps 2+3 | `buildXmlSources()` in `customer.ts` | No TTL; overwritten on each intelligence run (ADR-010) |
+| `data/cache/intelligence/{slug}-account-plan.md` | `generateAccountPlan()` in `account-plan.ts` | `readAccountPlan()` | No TTL; overwritten on each manual generation; includes `<!-- Generated: ISO -->` header |
+| `data/cache/intelligence/{slug}-account-plan-meta.json` | `savePlanMeta()` in `account-plan.ts` | `readAccountPlan()` | Stores `driveUrl` + `generatedAt` sidecar |
 | `data/cache/intelligence-jobs.json` | `setJob()` in `account-intelligence.ts` | Job status polling | Persisted across restarts via `initJobPersistence()` |
 | `data/cache/morning-synthesis.json` | `synthesizeMorningSummary()` in `dashboard-routes.ts` | `GET /api/morning-summary` | 4h TTL (`MORNING_SYNTHESIS_TTL_MS`) |
 | `data/cache/pipeline-data.json` | `writePipelineCache()` | `readPipelineCache()` | Updated daily at 2am ET |
