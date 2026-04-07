@@ -2,6 +2,7 @@ import { google } from 'googleapis'
 import { resolve } from 'path'
 import { makeAuth, withQuotaRetry } from './google.ts'
 import type { Customer, SheetRow, ProductSubscription } from './types.ts'
+import { aes, patchAe } from './server-state.ts'
 
 const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const SHEETS_TOKEN_PATH = process.env.SHEETS_TOKEN ?? resolve(CONFIG_DIR_PATH, '.sheets-token.json')
@@ -481,6 +482,74 @@ export async function fetchCCSPData(
         }
       } catch (e: any) { console.warn(`[ccsp-read] tab discovery error for ${spreadsheetId}: ${e?.message}`) }
     }
+
+    // Drive-folder fallback: known sheet was empty AND tab discovery within it also failed.
+    // Look up the AE's driveFolderId and search it for an alternative CCSP spreadsheet.
+    if (rows.length < 2 && resolvedIds?.length) {
+      const aeName = aeMap.get(spreadsheetId)
+      const aeEntry = aeName
+        ? aes.find(a => a.name === aeName)
+        : aes.find(a => a.ccspSheetId === spreadsheetId)
+      const driveFolderId = aeEntry?.driveFolderId
+      if (driveFolderId) {
+        console.warn(`[ccsp-read] known sheet empty — searching AE Drive folder ${driveFolderId} for alternative CCSP sheet`)
+        try {
+          const driveAuth = makeAuth(GDRIVE_TOKEN_PATH)
+          const drive = google.drive({ version: 'v3', auth: driveAuth })
+          const candidateIds = await getSpreadsheetIdsUnderRoot(drive, driveFolderId)
+
+          // Filter: only spreadsheets with "ccsp" in the filename
+          const candidateMeta = await Promise.all(
+            candidateIds.map(id =>
+              sheets.spreadsheets.get({ spreadsheetId: id, fields: 'properties.title,sheets.properties.title' })
+                .then(res => ({
+                  id,
+                  fileName: (res.data.properties?.title ?? '').toLowerCase(),
+                  tabs: (res.data.sheets ?? []).map(s => s.properties?.title ?? ''),
+                }))
+                .catch(() => ({ id, fileName: '', tabs: [] as string[] }))
+            )
+          )
+
+          let altSheetId: string | null = null
+          let altTab: string | null = null
+          let altRows: unknown[][] = []
+
+          for (const { id, fileName, tabs } of candidateMeta) {
+            if (id === spreadsheetId) continue  // skip the sheet we already know is empty
+            if (!fileName.includes('ccsp')) continue
+            const ccspTabName = tabs.find(t => t.toLowerCase().includes('ccsp'))
+            if (!ccspTabName) continue
+
+            const safeTab = ccspTabName.replace(/'/g, "''")
+            const altRes = await withQuotaRetry(
+              () => sheets.spreadsheets.values.get({ spreadsheetId: id, range: `'${safeTab}'!A:AM` }),
+              `ccsp-read alt ${id}`,
+            ).catch(() => null)
+            const candidateRows = altRes?.data.values ?? []
+            if (candidateRows.length >= 2) {
+              altSheetId = id
+              altTab = ccspTabName
+              altRows = candidateRows
+              break
+            }
+          }
+
+          if (altSheetId && altTab && altRows.length >= 2) {
+            console.log(`[ccsp-read] found alternative CCSP sheet ${altSheetId} in AE folder — using instead`)
+            rows = altRows
+            // Persist so next run uses the correct sheet directly
+            const nameForPatch = aeName ?? aeEntry?.name
+            if (nameForPatch) patchAe(nameForPatch, { ccspSheetId: altSheetId })
+          } else {
+            console.warn(`[ccsp-read] no alternative CCSP sheet found in AE folder — skipping`)
+          }
+        } catch (e: any) {
+          console.warn(`[ccsp-read] Drive folder search failed for ${driveFolderId}: ${e?.message}`)
+        }
+      }
+    }
+
     if (rows.length < 2) {
       console.warn(`[ccsp-read] sheet ${spreadsheetId}: all tabs returned <2 rows — skipping`)
       continue
