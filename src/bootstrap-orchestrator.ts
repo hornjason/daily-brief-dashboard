@@ -353,8 +353,8 @@ export async function bootstrapPOD(opts: {
     error: null,
   }
 
-  // Dynamic timeout: 15 min per AE
-  const podTimeoutMs = aeEntries.length * 15 * 60 * 1000
+  // Dynamic timeout: 30 min per AE
+  const podTimeoutMs = aeEntries.length * 30 * 60 * 1000
   const podTimeoutId = setTimeout(() => {
     if (podBootstrapState.running) {
       podBootstrapState.running = false
@@ -771,18 +771,19 @@ export function registerBootstrapRoutes(app: Hono): void {
       autoBootstrapState.steps[idx] = { ...autoBootstrapState.steps[idx], status, detail }
     }
 
-    // Hard timeout: if bootstrap is still running after 60 minutes, unstick it
+    // Hard timeout: scales with AE count (min 60 min, +30 min per AE)
+    const autoTimeoutMin = Math.max(60, aes.length * 30)
     const bootstrapTimeoutId = setTimeout(() => {
       if (autoBootstrapState.running) {
         autoBootstrapState.running = false
         autoBootstrapState.completedAt = new Date().toISOString()
-        autoBootstrapState.error = 'Bootstrap timed out after 60 minutes'
+        autoBootstrapState.error = `Bootstrap timed out after ${autoTimeoutMin} minutes`
         const stuck = autoBootstrapState.steps.findIndex(s => s.status === 'running')
         if (stuck >= 0) autoBootstrapState.steps[stuck] = { ...autoBootstrapState.steps[stuck], status: 'error', detail: 'Timed out' }
         console.error('[auto-bootstrap] Hard timeout reached — unsticking')
-        notify('Bootstrap Timed Out', 'Bootstrap did not complete within 60 minutes — check dashboard', 'urgent').catch(() => {})
+        notify('Bootstrap Timed Out', `Bootstrap did not complete within ${autoTimeoutMin} minutes — check dashboard`, 'urgent').catch(() => {})
       }
-    }, 60 * 60 * 1_000)
+    }, autoTimeoutMin * 60 * 1_000)
 
     // Run async — client polls /api/bootstrap/auto/status
     ;(async () => {

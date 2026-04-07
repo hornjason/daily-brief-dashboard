@@ -34,19 +34,44 @@ export function extractProductNames(account: AccountInfo): string[] {
 }
 
 /**
- * Return all unique product names across all accounts, sorted by frequency desc.
+ * Normalize a raw (already-stripped) product name to a short display chip label.
+ * First match wins, case-insensitive.
+ */
+export function normalizeProductName(raw: string): string {
+  const lower = raw.toLowerCase()
+  if (lower.includes('beta')) return 'Beta'
+  if (lower.includes('free')) return 'Free'
+  if (lower.includes('trial')) return 'Trial'
+  if (lower.includes('ansible')) return 'AAP'
+  if (lower.includes('storage')) return 'Storage'
+  if (lower.includes('openshift')) return 'OCP'
+  if (lower.includes('enterprise linux')) return 'RHEL'
+  if (lower.includes('satellite')) return 'RHEL'
+  if (/\bruntimes\b/.test(lower) || /\bintegration\b/.test(lower)) return 'Middleware'
+  if (lower.includes('partner')) return 'Partner Subscriptions'
+  if (lower.includes('developer subscription')) return 'Developer Subscriptions'
+  return raw
+}
+
+/**
+ * Return all unique normalized product labels across all accounts, sorted alphabetically.
  */
 export function discoverAllProducts(accounts: AccountInfo[]): string[] {
-  const freq = new Map<string, number>()
+  const labels = new Set<string>()
   for (const account of accounts) {
     if (!account.products) continue
     for (const p of account.products) {
       if (!p.productDescription) continue
-      const name = stripProductName(p.productDescription)
-      freq.set(name, (freq.get(name) ?? 0) + 1)
+      labels.add(normalizeProductName(stripProductName(p.productDescription)))
     }
   }
-  return [...freq.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([name]) => name)
+  return [...labels].sort()
+}
+
+/**
+ * Return raw product names that map to a given normalized label.
+ * Useful for tooltip transparency (LOG-03).
+ */
+export function getProductGroupMembers(label: string, allRawProducts: string[]): string[] {
+  return allRawProducts.filter(raw => normalizeProductName(stripProductName(raw)) === label)
 }
