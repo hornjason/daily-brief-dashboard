@@ -21,6 +21,9 @@ interface AccountPortfolioGridProps {
   events: CalendarEvent[]
   loading: boolean
   selectedProducts?: string[]
+  aeList?: { name: string; count: number }[]
+  aeFilterSelected?: string
+  allAccounts?: AccountInfo[]
 }
 
 type ViewMode = 'all' | 'byAE' | 'triage' | 'list'
@@ -231,6 +234,109 @@ function AEGroup({
         <div className="flex-1 h-px bg-border/50" />
       </button>
       {!collapsed && children}
+    </div>
+  )
+}
+
+// ── Product-filtered AE Group (LOG-12) ──────────────────────────────────────
+
+function ProductAEGroup({
+  ae,
+  matching,
+  hidden,
+  casesByAccount,
+  events,
+  onProductClick,
+  healthScores,
+  priorityActions,
+  selectedProducts,
+}: {
+  ae: string
+  matching: AccountInfo[]
+  hidden: AccountInfo[]
+  casesByAccount: Map<string, SupportCase[]>
+  events: CalendarEvent[]
+  onProductClick: (a: AccountInfo) => void
+  healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
+  priorityActions: Record<string, string>
+  selectedProducts: string[]
+}) {
+  const [showHidden, setShowHidden] = useState(false)
+
+  return (
+    <div data-ae-product-group={ae}>
+      {/* AE header row */}
+      <div className="flex items-center gap-2 mb-3">
+        <Users className="w-3.5 h-3.5 text-accent shrink-0" />
+        <span className="text-sm font-semibold text-accent">{ae}</span>
+        <span className="text-xs text-text-secondary">
+          {matching.length} matching
+          {hidden.length > 0 && <span className="text-text-secondary/60"> / {hidden.length} hidden</span>}
+        </span>
+        <div className="flex-1 h-px bg-border/50" />
+      </div>
+
+      {/* Matching account cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {matching.map((account) => {
+          const acctCases = account.accountNumbers.flatMap(
+            (num) => casesByAccount.get(String(num)) ?? []
+          )
+          return (
+            <AccountCard
+              key={account.name}
+              account={account}
+              accountCases={acctCases}
+              events={events}
+              showAE={false}
+              onProductClick={onProductClick}
+              healthScores={healthScores}
+              priorityAction={priorityActions[account.name]}
+              selectedProducts={selectedProducts}
+            />
+          )
+        })}
+      </div>
+
+      {/* Hidden accounts expand toggle */}
+      {hidden.length > 0 && !showHidden && (
+        <button
+          onClick={() => setShowHidden(true)}
+          className="mt-2 text-xs text-accent hover:underline"
+        >
+          + {hidden.length} more account{hidden.length !== 1 ? 's' : ''}
+        </button>
+      )}
+      {showHidden && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 opacity-60">
+            {hidden.map((account) => {
+              const acctCases = account.accountNumbers.flatMap(
+                (num) => casesByAccount.get(String(num)) ?? []
+              )
+              return (
+                <AccountCard
+                  key={account.name}
+                  account={account}
+                  accountCases={acctCases}
+                  events={events}
+                  showAE={false}
+                  onProductClick={onProductClick}
+                  healthScores={healthScores}
+                  priorityAction={priorityActions[account.name]}
+                  selectedProducts={selectedProducts}
+                />
+              )
+            })}
+          </div>
+          <button
+            onClick={() => setShowHidden(false)}
+            className="mt-2 text-xs text-text-secondary hover:underline"
+          >
+            hide {hidden.length} account{hidden.length !== 1 ? 's' : ''}
+          </button>
+        </>
+      )}
     </div>
   )
 }
@@ -582,7 +688,7 @@ function VirtualizedCardGrid({
   )
 }
 
-export function AccountPortfolioGrid({ accounts, cases, events, loading, selectedProducts = [] }: AccountPortfolioGridProps) {
+export function AccountPortfolioGrid({ accounts, cases, events, loading, selectedProducts = [], aeList = [], aeFilterSelected = 'all', allAccounts = [] }: AccountPortfolioGridProps) {
   const [modalAccount, setModalAccount] = useState<AccountInfo | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('byAE')
   const [search, setSearch] = useState('')
@@ -680,6 +786,33 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [filteredAccounts])
+
+  // LOG-12: Product-filtered AE grouping — groups by AE showing matching vs hidden accounts
+  const useProductAEGrouping = selectedProducts.length > 0 && aeFilterSelected === 'all' && aeList.length > 1
+  const productAEGroups = useMemo(() => {
+    if (!useProductAEGrouping) return []
+    // Build a map of AE -> { matching (filtered), hidden (all minus filtered) }
+    const matchingNames = new Set(filteredAccounts.map(a => a.name))
+    const grouped = new Map<string, { matching: AccountInfo[]; hidden: AccountInfo[] }>()
+    for (const a of allAccounts) {
+      const ae = a.ae || 'Unassigned'
+      if (!grouped.has(ae)) grouped.set(ae, { matching: [], hidden: [] })
+      const g = grouped.get(ae)!
+      if (matchingNames.has(a.name)) {
+        g.matching.push(a)
+      } else {
+        g.hidden.push(a)
+      }
+    }
+    // Order by aeList order, filter out groups with zero matching
+    const ordered = aeList
+      .map(ae => {
+        const g = grouped.get(ae.name)
+        return g ? { ae: ae.name, matching: g.matching, hidden: g.hidden } : null
+      })
+      .filter((g): g is { ae: string; matching: AccountInfo[]; hidden: AccountInfo[] } => g !== null && g.matching.length > 0)
+    return ordered
+  }, [useProductAEGrouping, filteredAccounts, allAccounts, aeList, aeFilterSelected, selectedProducts])
 
   // Triage groups — uses composite health scores when available, falls back to case-only
   const triageGroups = useMemo(() => {
@@ -810,6 +943,24 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
         {/* Empty state */}
         {filteredAccounts.length === 0 ? (
           <EmptyState title="No accounts found" description="Try adjusting your search or filter" />
+        ) : useProductAEGrouping ? (
+          /* LOG-12: Product-filtered AE grouping */
+          <div className="space-y-6">
+            {productAEGroups.map(({ ae, matching, hidden }) => (
+              <ProductAEGroup
+                key={ae}
+                ae={ae}
+                matching={matching}
+                hidden={hidden}
+                casesByAccount={casesByAccount}
+                events={events}
+                onProductClick={setModalAccount}
+                healthScores={healthScores}
+                priorityActions={priorityActions}
+                selectedProducts={selectedProducts}
+              />
+            ))}
+          </div>
         ) : effectiveViewMode === 'triage' ? (
           /* Triage view */
           <div className="space-y-6">

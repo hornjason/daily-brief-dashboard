@@ -147,12 +147,33 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /api/ccsp — Cloud spend data aggregated from CCSP Raw Data tabs
+  // Optional ?products=OCP,RHEL filters records by productOfferingGroup before aggregating (LOG-06)
   app.get('/api/ccsp', async (c) => {
     const force = c.req.query('force') === 'true'
+    const productsParam = c.req.query('products')
     const cached = readCCSPCache()
+
+    // Map frontend product labels to actual productOfferingGroup values
+    const PRODUCT_GROUP_MAP: Record<string, string> = {
+      OCP: 'OPENSHIFT',
+      RHEL: 'RHEL',
+      AAP: 'AAP',
+      Storage: 'STORAGE',
+      'App Services': 'APPLICATION SERVICES',
+    }
+    // Build set of productOfferingGroup values to keep (case-insensitive matching)
+    const productFilter = productsParam
+      ? productsParam.split(',').map(p => (PRODUCT_GROUP_MAP[p.trim()] ?? p.trim()).toUpperCase()).filter(Boolean)
+      : null
+
+    function filterRecords(recs: CCSPRecord[]): CCSPRecord[] {
+      if (!productFilter || productFilter.length === 0) return recs
+      return recs.filter(r => r.productOfferingGroup && productFilter.includes(r.productOfferingGroup.toUpperCase()))
+    }
+
     // Use cache if available and not forced (data doesn't change hourly)
     if (cached && !force) {
-      return c.json(buildCCSPSummary(cached.records, cached.cachedAt, !!lastCcspError))
+      return c.json(buildCCSPSummary(filterRecords(cached.records), cached.cachedAt, !!lastCcspError))
     }
     try {
       const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
@@ -160,13 +181,13 @@ export function registerCustomerRoutes(app: Hono): void {
       // (empty usually means Tableau scraper wrote summary-view data without Account Name column)
       if (records.length === 0 && (cached?.records?.length ?? 0) > 0) {
         console.warn(`[ccsp] force-refresh returned 0 records but cache has ${cached!.records.length} — keeping existing cache`)
-        return c.json(buildCCSPSummary(cached!.records, cached!.cachedAt, true))
+        return c.json(buildCCSPSummary(filterRecords(cached!.records), cached!.cachedAt, true))
       }
       writeCCSPCache(records, fileIds)
-      return c.json(buildCCSPSummary(records, new Date().toISOString(), false))
+      return c.json(buildCCSPSummary(filterRecords(records), new Date().toISOString(), false))
     } catch (e: any) {
       console.error('[ccsp] fetchCCSPData failed:', e.message)
-      if (cached) return c.json(buildCCSPSummary(cached.records, cached.cachedAt, true))
+      if (cached) return c.json(buildCCSPSummary(filterRecords(cached.records), cached.cachedAt, true))
       return c.json({ error: 'CCSP data fetch failed', byCustomer: [], byQuarter: [], byPartner: [], totalAcv: 0, cachedAt: null, sourceWarning: true }, 500)
     }
   })

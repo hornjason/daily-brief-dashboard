@@ -180,7 +180,8 @@ function Dashboard() {
   const calendarAllApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&all=true&_=${refreshKey}`)
   const casesApi = useApi<{ cases: SupportCase[]; totalCount: number }>(`/api/cases/all?_=${refreshKey}`)
   const accountsApi = useApi<{ customers: AccountInfo[] }>(`/api/accounts?_=${refreshKey}`)
-  const ccspApi      = useApi<CCSPSummary>(`/api/ccsp`)
+  const ccspQueryStr = productFilterSelected.length > 0 ? `?products=${productFilterSelected.join(',')}` : ''
+  const ccspApi      = useApi<CCSPSummary>(`/api/ccsp${ccspQueryStr}`)
   const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline`)
   const morningSummaryApi = useApi<{ signals: Array<{ customer: string; type: string; severity: 'critical' | 'high' | 'medium'; text: string }> }>('/api/morning-summary')
   const scrapeStatus = useApi<{
@@ -612,6 +613,9 @@ function Dashboard() {
                 events={calendarApi.data?.events ?? []}
                 loading={accountsApi.loading}
                 selectedProducts={productFilterSelected}
+                aeList={aeList}
+                aeFilterSelected={aeFilterSelected}
+                allAccounts={accountsApi.data?.customers ?? []}
               />
             </section>
           </main>
