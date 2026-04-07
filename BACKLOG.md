@@ -4723,7 +4723,7 @@ Files: src/dashboard-routes.ts, src/sheets.ts
 Description: Phase 2 backend additions. GET /api/pod/summary: runtime aggregation across all customer caches + RH cases cache, returns totalCustomers/totalAEs/openCases/openCasesByProduct/expiringNext90Days/productMix, 30s in-memory TTL, customer deduplication by lowercase name. CCSP productOfferingGroup: added field to CCSPRecord interface, parsed from column S (index 18 zero-based) positionally, optional for backward compat with older sheet formats. Verified: 423/423 CCSP rows have productOfferingGroup populated.
 
 ### BKL-PVIEW-03 | Product View — Phase 3: POD bootstrap via territory sheet
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-07 — Commit c08e188: bootstrapPOD(), readAEsFromTerritorySheet(), POST /api/bootstrap/pod, extended status + reset
 Severity: HIGH
 Priority: P1
 Size: XL
@@ -4759,3 +4759,30 @@ Size: S
 Source: Rook security scan 2026-04-07 Phase 2 (src/utils.ts sanitizeErr)
 Files: src/utils.ts
 Description: sanitizeErr strips .ts/.js file paths from error messages but doesn't mask .json paths or absolute non-code paths (e.g., /app/config/customers.json). A file-not-found error on a config file could leak internal container directory structure. Fix: broaden the sanitizeErr regex to also strip absolute paths: `s/\/[^\s:]+/[path]/g` or similar. Low practical impact on a localhost app, but worth fixing for defense-in-depth.
+
+### BKL-SEC-04 | POST /api/bootstrap/pod — TOCTOU race in 409 conflict guard
+Status: ✅ DONE 2026-04-07 — Fixed in commit 862c99c: lock claimed synchronously before first await, released on validation failure
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Rook + Quinn scan 2026-04-07 Phase 3
+Files: src/bootstrap-orchestrator.ts
+Description: The 409 conflict guard read `podBootstrapState.running` then yielded the event loop via `await c.req.json()` before setting `running=true`. Two simultaneous POSTs both passed the guard before either set the flag. Fix: claim the lock (`podBootstrapState.running = true`) synchronously before the first await; release on validation failure.
+
+### BKL-SEC-05 | POST /api/bootstrap/pod — Sheet ID regex accepts 10+ chars (real IDs are 44)
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: S
+Source: Rook scan 2026-04-07 Phase 3
+Files: src/bootstrap-orchestrator.ts line 657
+Description: The territorySheetId regex `{10,}` accepts any 10+ alphanumeric string. Real Google Sheet IDs are exactly 44 characters. A tighter bound `{44}` or `{30,60}` would reduce accident surface (not a meaningful security gain on localhost but worth tightening).
+
+### BKL-SEC-06 | bootstrapPOD retry silently no-ops on 409 instead of waiting
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: S
+Source: Rook scan 2026-04-07 Phase 3
+Files: src/bootstrap-orchestrator.ts ~line 360
+Description: During the auto-retry pass for zero-account AEs, if the retry fetch() to POST /api/bootstrap/auto returns 409 (prior AE's bootstrap still running), the code logs a warning and continues without waiting. The retry becomes a silent no-op. Fix: on 409 during retry, wait for autoBootstrapState.running === false (same pattern as lines 341-343) before continuing.
