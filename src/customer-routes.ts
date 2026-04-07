@@ -377,47 +377,62 @@ export function registerCustomerRoutes(app: Hono): void {
     if (!customer) return c.text('Customer not found', 404)
 
     return streamSSE(c, async (stream) => {
-      // Ensure account numbers are populated before fetching cases/subscriptions
-      if (!customer.accountNumbers?.length) {
-        // Scope sheet IDs to the customer's own AE — prevents cross-AE tab name collisions
-        const aeMatch = customer.ae ? aes.find(a => a.name === customer.ae) : undefined
-        const supportableIds = aeMatch?.supportableSheetId
-          ? [aeMatch.supportableSheetId]
-          : aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
-        const discovered = await fetchCustomerAccountNumbers(customer, supportableIds.length ? supportableIds : undefined).catch(() => [] as string[])
-        if (discovered.length) {
-          customer.accountNumbers = discovered
-          // Persist back to customers.json so future loads don't need to re-fetch
-          try {
-            const updated = customers.map((cu) =>
-              cu.name === customer.name ? { ...cu, accountNumbers: discovered } : cu
-            )
-            writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
-            renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
-            customers.splice(0, customers.length, ...updated)
-          } catch (e: any) { console.warn('[discovery] account numbers persist failed:', e.message) }
+      // Helper: write SSE event, swallowing errors so one failed write
+      // doesn't kill the stream and prevent subsequent events (BKL-UI-02)
+      const safeWrite = async (event: string, data: string) => {
+        try {
+          await stream.writeSSE({ event, data })
+        } catch (e: any) {
+          console.warn(`[sse] write failed for event="${event}":`, e.message)
         }
       }
 
-      // Meta (send after account numbers are resolved so client gets the latest)
-      await stream.writeSSE({ event: 'meta', data: JSON.stringify(customer) })
+      try {
+        // Ensure account numbers are populated before fetching cases/subscriptions
+        if (!customer.accountNumbers?.length) {
+          // Scope sheet IDs to the customer's own AE — prevents cross-AE tab name collisions
+          const aeMatch = customer.ae ? aes.find(a => a.name === customer.ae) : undefined
+          const supportableIds = aeMatch?.supportableSheetId
+            ? [aeMatch.supportableSheetId]
+            : aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
+          const discovered = await fetchCustomerAccountNumbers(customer, supportableIds.length ? supportableIds : undefined).catch(() => [] as string[])
+          if (discovered.length) {
+            customer.accountNumbers = discovered
+            // Persist back to customers.json so future loads don't need to re-fetch
+            try {
+              const updated = customers.map((cu) =>
+                cu.name === customer.name ? { ...cu, accountNumbers: discovered } : cu
+              )
+              writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
+              renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+              customers.splice(0, customers.length, ...updated)
+            } catch (e: any) { console.warn('[discovery] account numbers persist failed:', e.message) }
+          }
+        }
 
-      // Fetch all sections in parallel
-      const [meetings, emails, docs, cases, subscriptions] = await Promise.all([
-        fetchCustomerMeetings(customer).catch(() => []),
-        fetchCustomerEmails(customer).catch(() => []),
-        fetchCustomerDocs(customer).catch(() => []),
-        fetchCustomerCases(customer).catch(() => []),
-        fetchCustomerSubscriptions(customer).catch(() => []),
-      ])
+        // Meta (send after account numbers are resolved so client gets the latest)
+        await safeWrite('meta', JSON.stringify(customer))
 
-      await stream.writeSSE({ event: 'meetings',      data: JSON.stringify(meetings) })
-      await stream.writeSSE({ event: 'emails',        data: JSON.stringify(emails) })
-      await stream.writeSSE({ event: 'drive',         data: JSON.stringify(docs) })
-      await stream.writeSSE({ event: 'cases',         data: JSON.stringify(cases) })
-      await stream.writeSSE({ event: 'subscriptions', data: JSON.stringify(subscriptions) })
+        // Fetch all sections in parallel
+        const [meetings, emails, docs, cases, subscriptions] = await Promise.all([
+          fetchCustomerMeetings(customer).catch(() => []),
+          fetchCustomerEmails(customer).catch(() => []),
+          fetchCustomerDocs(customer).catch(() => []),
+          fetchCustomerCases(customer).catch(() => []),
+          fetchCustomerSubscriptions(customer).catch(() => []),
+        ])
 
-      await stream.writeSSE({ event: 'complete', data: JSON.stringify({ timestamp: new Date().toISOString() }) })
+        await safeWrite('meetings',      JSON.stringify(meetings))
+        await safeWrite('emails',        JSON.stringify(emails))
+        await safeWrite('drive',         JSON.stringify(docs))
+        await safeWrite('cases',         JSON.stringify(cases))
+        await safeWrite('subscriptions', JSON.stringify(subscriptions))
+      } catch (e: any) {
+        console.error('[sse] stream handler error:', e.message)
+      } finally {
+        // Always send complete so the frontend exits loading state (BKL-UI-02)
+        await safeWrite('complete', JSON.stringify({ timestamp: new Date().toISOString() }))
+      }
     })
   })
 

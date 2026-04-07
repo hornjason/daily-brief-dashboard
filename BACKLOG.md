@@ -4634,11 +4634,12 @@ Description: Currently each customer read fires one `values.get` call — 30 cus
 Fix: Group customers by `supportableSheetId` in `refreshSubscriptions`, build ranges array per sheet (`['Tab1'!A:Z, 'Tab2'!A:Z, ...]`), call `batchGet` once per AE sheet, distribute `valueRanges[i]` results back to customers. Requires preserving all tab-matching, normalization, and empty-result guard logic. Complexity: M. Requires explicit Jason approval before touching sheets.ts.
 
 ### BKL-UI-02 | Support Cases section empty on customer detail despite open cases — SSE chunked encoding error
-Status: 🔴 OPEN | Priority: P2 | Type: Bug
+Status: ✅ DONE 2026-04-06 | Priority: P2 | Type: Bug
 Source: Quinn QA 2026-04-07 (full dashboard visual test)
 Files: src/customer-routes.ts (events SSE endpoint), dashboard/src/pages/CustomerDetailPage.tsx
 Description: The `/customer/{name}/events` SSE endpoint returns `ERR_INCOMPLETE_CHUNKED_ENCODING` for A10 Networks. The Support Cases section in the customer detail page renders with a heading but no case rows, while the health radar correctly shows "1 Sev2 case open" and the What Changed section mentions the case by number. Users see contradictory information: radar says 1 case, cases panel shows nothing. A persistent "Loading..." spinner appears in the header. Crowdstrike and McAfee correctly show "No open support cases" empty state — the bug only manifests for customers with active cases.
-Fix: Investigate the SSE stream for `ERR_INCOMPLETE_CHUNKED_ENCODING` — may be a Hono streaming issue, a Podman chunked-transfer-encoding proxy issue, or the cases data arriving after the stream closes. Check if adding a keep-alive or ensuring `cases` event fires before stream end resolves it.
+Root cause: SSE stream handler had no top-level try/catch and no per-event error isolation. If any `writeSSE` call threw (client disconnect, stream error), the entire handler died, Hono terminated the chunked transfer, and the browser received `ERR_INCOMPLETE_CHUNKED_ENCODING`. The `complete` event never fired, leaving the frontend stuck in loading state with empty cases array.
+Fix: Added `safeWrite` helper wrapping each `writeSSE` in try/catch so one failed write doesn't kill subsequent events. Wrapped entire stream body in try/catch/finally, with `complete` event sent in the `finally` block so the frontend always exits loading state.
 
 ### BKL-UI-03 | Supportable status inconsistency — top bar shows "Not reachable" while Setup shows "Connected"
 Status: 🔴 OPEN | Priority: P3 | Type: UX
