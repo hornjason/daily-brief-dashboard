@@ -158,7 +158,402 @@ export let autoBootstrapState: AutoBootstrapState = {
 }
 
 /** BKL-W2-17: Exposed so background-scheduler can include bootstrap in isAnyScraperRunning() guard. */
-export function isBootstrapRunning(): boolean { return autoBootstrapState.running }
+export function isBootstrapRunning(): boolean { return autoBootstrapState.running || podBootstrapState.running }
+
+// ── POD Bootstrap ───────────────────────────────────────────────────────────
+
+interface PodAeResult {
+  name: string
+  status: 'skipped' | 'ok' | 'error' | 'pending' | 'retrying'
+  error?: string
+  customerCount?: number
+}
+
+interface PodBootstrapState {
+  running: boolean
+  total: number
+  completed: number
+  currentAE: string | null
+  results: PodAeResult[]
+  completedAt: string | null
+  error: string | null
+}
+
+export let podBootstrapState: PodBootstrapState = {
+  running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null,
+}
+
+/**
+ * Read the territory sheet and extract a map of AE name → { territories, customerNames }.
+ * Reuses the same parsing logic as territory-sync.ts but returns raw AE-level data
+ * rather than a diff against the current customer list.
+ */
+async function readAEsFromTerritorySheet(
+  territorySheetId: string,
+): Promise<Array<{ aeName: string; territories: string[]; customerNames: string[] }>> {
+  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+  if (!auth) throw new Error('Google auth not configured')
+
+  const sheetsClient = google.sheets({ version: 'v4', auth })
+  const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: territorySheetId })
+  const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
+
+  // Same filtering as territory-sync.ts — corp/regional tabs
+  const corpTabs = tabNames.filter(t => {
+    const lower = t.toLowerCase()
+    return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
+           !lower.includes('accounts a')
+  })
+
+  // Same pod-prefix logic as territory-sync.ts
+  const podPrefixFromTab = (tabTitle: string): string => {
+    const t = tabTitle.toLowerCase()
+    if (t.includes('northwest') || t.includes('nw')) return 'WEST_COMM_CORP_NORTHWEST'
+    if (t.includes('southwest') || t.includes('sw')) return 'WEST_COMM_CORP_SOUTHWEST'
+    if (t.includes('north central') || t.includes('nc corp')) return 'WEST_COMM_CORP_NORTHCENTRAL'
+    if (t.includes('south central') || t.includes('sc corp')) return 'WEST_COMM_CORP_SOUTHCENTRAL'
+    return ''
+  }
+
+  // Accumulate per-AE data: name → { territories, customerNames }
+  const aeMap = new Map<string, { territories: Set<string>; customerNames: Set<string> }>()
+
+  for (const tabTitle of corpTabs) {
+    const podPrefix = podPrefixFromTab(tabTitle)
+    if (!podPrefix) continue
+
+    const resp = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId: territorySheetId,
+      range: `'${tabTitle}'!A1:Z60`,
+    })
+    const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>
+      r.map((c: any) => String(c ?? '').trim())
+    )
+
+    // Find "Account Executive" header row
+    let headerRowIdx = -1
+    for (let r = 0; r < rows.length; r++) {
+      if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
+    }
+    if (headerRowIdx === -1) continue
+
+    const aeNameRowIdx = headerRowIdx + 1
+    const accountsStartIdx = aeNameRowIdx + 1
+    const headerRow = rows[headerRowIdx] ?? []
+    const aeNameRow = rows[aeNameRowIdx] ?? []
+
+    const aeCols = headerRow
+      .map((cell, idx) => ({ cell, idx }))
+      .filter(({ cell }) => cell === 'Account Executive')
+      .map(({ idx }) => idx)
+
+    for (const col of aeCols) {
+      const aeCell = aeNameRow[col] ?? ''
+      if (!aeCell) continue
+
+      // Extract AE name (first line) and territory code
+      const aeName = aeCell.split('\n')[0].trim()
+      if (!aeName) continue
+
+      let terrCode = ''
+      if (aeCell.includes('\n')) {
+        terrCode = aeCell.split('\n')[1].trim()
+      } else {
+        const terrMatch = aeCell.match(/\bTerr(\d+)\b/i)
+        if (terrMatch) terrCode = terrMatch[0]
+      }
+
+      const terrNumMatch = terrCode.match(/(\d+)/)
+      if (!terrNumMatch) continue
+      const terrNum = terrNumMatch[1].padStart(2, '0')
+      const tableauTerritory = `${podPrefix}_TERR${terrNum}`
+
+      // Ensure AE entry exists in map
+      if (!aeMap.has(aeName)) {
+        aeMap.set(aeName, { territories: new Set(), customerNames: new Set() })
+      }
+      const entry = aeMap.get(aeName)!
+      entry.territories.add(tableauTerritory)
+
+      // Extract customer names from column
+      for (let r = accountsStartIdx; r < rows.length; r++) {
+        const cell = rows[r][col] ?? ''
+        if (!cell) continue
+        if (/^\d{1,3}$/.test(cell)) break
+        if (/^Account\s+S[Aa]/i.test(cell)) break
+        if (/^(Support|Partner Sales|\d+ of \d+)$/i.test(cell)) break
+        if (/^(Openshift|Ansible|Rhel|Ai)\s+(SSP|SSA)/i.test(cell)) break
+        const normalized = normalizeCustomerName(cell)
+        if (normalized && !isJunkCustomerName(normalized)) {
+          entry.customerNames.add(normalized)
+        }
+      }
+    }
+  }
+
+  return Array.from(aeMap.entries()).map(([aeName, data]) => ({
+    aeName,
+    territories: [...data.territories],
+    customerNames: [...data.customerNames],
+  }))
+}
+
+/**
+ * Check if an AE is considered "already bootstrapped" — has all 4 key sheet IDs
+ * and a Drive folder.
+ */
+function isAEFullyBootstrapped(aeConfig: AE): boolean {
+  return !!(
+    aeConfig.driveFolderId &&
+    aeConfig.supportableSheetId &&
+    aeConfig.pipelineSheetId &&
+    aeConfig.ccspSheetId
+  )
+}
+
+/**
+ * Bootstrap all AEs in the POD sequentially from a territory sheet.
+ * Reads the AE list from the territory sheet URL/ID, then calls bootstrapAE() per AE
+ * via the internal HTTP endpoint (fire-and-forget + poll pattern).
+ *
+ * Options:
+ *   territorySheetId: the Google Sheet containing the AE list
+ *   force: if true, re-bootstrap AEs that already have all 4 sheet IDs (normally skipped)
+ *   onProgress: callback called after each AE completes
+ */
+export async function bootstrapPOD(opts: {
+  territorySheetId: string
+  force?: boolean
+  onProgress?: (info: { aeName: string; index: number; total: number; status: 'skipped' | 'ok' | 'error'; error?: string }) => void
+}): Promise<{ succeeded: string[]; skipped: string[]; failed: Array<{ name: string; error: string }> }> {
+  const { territorySheetId, force = false, onProgress } = opts
+  const port = process.env.PORT ?? '7777'
+  const baseUrl = `http://localhost:${port}`
+
+  // Step 1: Read territory sheet to discover AEs + their customer lists
+  console.log(`[pod-bootstrap] Reading territory sheet ${territorySheetId}…`)
+  const aeEntries = await readAEsFromTerritorySheet(territorySheetId)
+  if (aeEntries.length === 0) {
+    throw new Error('No AEs found in territory sheet — check that the sheet has "Account Executive" header rows')
+  }
+  console.log(`[pod-bootstrap] Found ${aeEntries.length} AEs in territory sheet: ${aeEntries.map(a => a.aeName).join(', ')}`)
+
+  const succeeded: string[] = []
+  const skipped: string[] = []
+  const failed: Array<{ name: string; error: string }> = []
+
+  // Initialize POD bootstrap state for status endpoint
+  podBootstrapState = {
+    running: true,
+    total: aeEntries.length,
+    completed: 0,
+    currentAE: null,
+    results: aeEntries.map(e => ({ name: e.aeName, status: 'pending' as const })),
+    completedAt: null,
+    error: null,
+  }
+
+  // Dynamic timeout: 15 min per AE
+  const podTimeoutMs = aeEntries.length * 15 * 60 * 1000
+  const podTimeoutId = setTimeout(() => {
+    if (podBootstrapState.running) {
+      podBootstrapState.running = false
+      podBootstrapState.completedAt = new Date().toISOString()
+      podBootstrapState.error = `POD bootstrap timed out after ${Math.round(podTimeoutMs / 60000)} minutes`
+      console.error(`[pod-bootstrap] Hard timeout reached (${Math.round(podTimeoutMs / 60000)} min)`)
+    }
+  }, podTimeoutMs)
+
+  // Step 2: Sequential bootstrap per AE
+  for (let i = 0; i < aeEntries.length; i++) {
+    if (!podBootstrapState.running) break  // timeout triggered
+
+    const entry = aeEntries[i]
+    const { aeName, territories, customerNames } = entry
+
+    podBootstrapState.currentAE = aeName
+
+    // Check if AE exists in aes.json with required config
+    const aeConfig = aes.find(a => a.name === aeName)
+
+    // Idempotency: skip if already fully bootstrapped (unless force)
+    if (aeConfig && isAEFullyBootstrapped(aeConfig) && !force) {
+      console.log(`[pod-bootstrap] Skipping ${aeName} — already fully bootstrapped`)
+      skipped.push(aeName)
+      podBootstrapState.results[i] = { name: aeName, status: 'skipped' }
+      podBootstrapState.completed++
+      onProgress?.({ aeName, index: i, total: aeEntries.length, status: 'skipped' })
+      continue
+    }
+
+    // AE must exist in aes.json with sfReportId to bootstrap
+    if (!aeConfig?.sfReportId) {
+      const err = `AE "${aeName}" not found in aes.json or missing sfReportId — configure via setup wizard first`
+      console.warn(`[pod-bootstrap] ${err}`)
+      failed.push({ name: aeName, error: err })
+      podBootstrapState.results[i] = { name: aeName, status: 'error', error: err }
+      podBootstrapState.completed++
+      onProgress?.({ aeName, index: i, total: aeEntries.length, status: 'error', error: err })
+      continue
+    }
+
+    // Wait for any in-progress single-AE bootstrap to finish before starting the next
+    while (autoBootstrapState.running) {
+      await new Promise(r => setTimeout(r, 3000))
+    }
+
+    // Fire the bootstrap for this AE via internal endpoint
+    console.log(`[pod-bootstrap] Starting bootstrap for ${aeName} (${i + 1}/${aeEntries.length})…`)
+    try {
+      const startRes = await fetch(`${baseUrl}/api/bootstrap/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aeName,
+          sfReportId: aeConfig.sfReportId,
+          tableauTerritories: territories.length > 0 ? territories : aeConfig.tableauTerritories,
+          customerNames,
+          parentFolderId: aeConfig.parentFolderId,
+        }),
+      })
+
+      if (!startRes.ok) {
+        const body = await startRes.json().catch(() => ({ error: `HTTP ${startRes.status}` }))
+        throw new Error((body as any).error ?? `Bootstrap start failed: HTTP ${startRes.status}`)
+      }
+
+      // Poll until this AE's bootstrap completes
+      const perAeTimeoutMs = 15 * 60 * 1000
+      const deadline = Date.now() + perAeTimeoutMs
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 5000))
+        if (!autoBootstrapState.running) break
+      }
+
+      if (autoBootstrapState.running) {
+        // Still running after per-AE timeout — force-reset and record error
+        autoBootstrapState.running = false
+        autoBootstrapState.completedAt = new Date().toISOString()
+        autoBootstrapState.error = `Timed out after ${Math.round(perAeTimeoutMs / 60000)} minutes (POD bootstrap)`
+        throw new Error(`Bootstrap for ${aeName} timed out after 15 minutes`)
+      }
+
+      // Check if bootstrap had errors
+      if (autoBootstrapState.error) {
+        const err = autoBootstrapState.error
+        console.warn(`[pod-bootstrap] ${aeName} completed with error: ${err}`)
+        // Still count as succeeded if some steps completed — error might be non-fatal
+        const hasAnySheet = !!(aes.find(a => a.name === aeName)?.supportableSheetId ||
+                              aes.find(a => a.name === aeName)?.pipelineSheetId ||
+                              aes.find(a => a.name === aeName)?.ccspSheetId)
+        if (hasAnySheet) {
+          succeeded.push(aeName)
+          const aeCustomerCount = customers.filter(c => c.ae === aeName).length
+          podBootstrapState.results[i] = { name: aeName, status: 'ok', customerCount: aeCustomerCount }
+        } else {
+          failed.push({ name: aeName, error: err })
+          podBootstrapState.results[i] = { name: aeName, status: 'error', error: err }
+        }
+      } else {
+        succeeded.push(aeName)
+        const aeCustomerCount = customers.filter(c => c.ae === aeName).length
+        podBootstrapState.results[i] = { name: aeName, status: 'ok', customerCount: aeCustomerCount }
+        console.log(`[pod-bootstrap] ${aeName} bootstrap complete (${aeCustomerCount} customers)`)
+      }
+    } catch (e: any) {
+      const err = e?.message ?? String(e)
+      console.error(`[pod-bootstrap] ${aeName} failed: ${err}`)
+      failed.push({ name: aeName, error: err })
+      podBootstrapState.results[i] = { name: aeName, status: 'error', error: err }
+    }
+
+    podBootstrapState.completed++
+    onProgress?.({
+      aeName,
+      index: i,
+      total: aeEntries.length,
+      status: podBootstrapState.results[i].status === 'ok' ? 'ok' : podBootstrapState.results[i].status === 'skipped' ? 'skipped' : 'error',
+      error: podBootstrapState.results[i].error,
+    })
+  }
+
+  // Step 3: Auto-retry pass for zero-account AEs (one retry only)
+  const zeroAccountAEs = succeeded.filter(aeName => {
+    const aeCustomers = customers.filter(c => c.ae === aeName)
+    return aeCustomers.length === 0 || aeCustomers.every(c => !c.accountNumbers?.length)
+  })
+
+  if (zeroAccountAEs.length > 0 && podBootstrapState.running) {
+    console.log(`[pod-bootstrap] Auto-retry: ${zeroAccountAEs.length} AE(s) with zero accounts: ${zeroAccountAEs.join(', ')}`)
+
+    for (const aeName of zeroAccountAEs) {
+      if (!podBootstrapState.running) break
+
+      const idx = aeEntries.findIndex(e => e.aeName === aeName)
+      if (idx >= 0) podBootstrapState.results[idx] = { name: aeName, status: 'retrying' }
+      podBootstrapState.currentAE = `${aeName} (retry)`
+
+      const entry = aeEntries.find(e => e.aeName === aeName)
+      const aeConfig = aes.find(a => a.name === aeName)
+      if (!entry || !aeConfig?.sfReportId) continue
+
+      // Wait for any in-progress bootstrap
+      while (autoBootstrapState.running) {
+        await new Promise(r => setTimeout(r, 3000))
+      }
+
+      try {
+        console.log(`[pod-bootstrap] Retrying bootstrap for ${aeName}…`)
+        const startRes = await fetch(`${baseUrl}/api/bootstrap/auto`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            aeName,
+            sfReportId: aeConfig.sfReportId,
+            tableauTerritories: entry.territories.length > 0 ? entry.territories : aeConfig.tableauTerritories,
+            customerNames: entry.customerNames,
+            parentFolderId: aeConfig.parentFolderId,
+          }),
+        })
+
+        if (!startRes.ok) {
+          console.warn(`[pod-bootstrap] Retry for ${aeName} failed to start`)
+          continue
+        }
+
+        const deadline = Date.now() + 15 * 60 * 1000
+        while (Date.now() < deadline) {
+          await new Promise(r => setTimeout(r, 5000))
+          if (!autoBootstrapState.running) break
+        }
+
+        const retryCustomerCount = customers.filter(c => c.ae === aeName && (c.accountNumbers?.length ?? 0) > 0).length
+        if (idx >= 0) {
+          podBootstrapState.results[idx] = {
+            name: aeName,
+            status: retryCustomerCount > 0 ? 'ok' : 'error',
+            customerCount: retryCustomerCount,
+            error: retryCustomerCount === 0 ? 'Zero accounts after retry' : undefined,
+          }
+        }
+        console.log(`[pod-bootstrap] Retry for ${aeName}: ${retryCustomerCount} customers with accounts`)
+      } catch (e: any) {
+        console.warn(`[pod-bootstrap] Retry for ${aeName} failed: ${e?.message}`)
+        if (idx >= 0) {
+          podBootstrapState.results[idx] = { name: aeName, status: 'error', error: `Retry failed: ${e?.message}` }
+        }
+      }
+    }
+  }
+
+  clearTimeout(podTimeoutId)
+  podBootstrapState.running = false
+  podBootstrapState.currentAE = null
+  podBootstrapState.completedAt = new Date().toISOString()
+  console.log(`[pod-bootstrap] Complete: ${succeeded.length} succeeded, ${skipped.length} skipped, ${failed.length} failed`)
+
+  return { succeeded, skipped, failed }
+}
 
 // ── Tableau constant ─────────────────────────────────────────────────────────
 const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
@@ -213,7 +608,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   app.get('/api/bootstrap/auto/status', (c) => {
     const sanitizeDetail = (s: string | null | undefined) =>
       s ? s.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : s
-    const sanitized = {
+    const sanitized: Record<string, unknown> = {
       ...autoBootstrapState,
       error: sanitizeDetail(autoBootstrapState.error),
       steps: autoBootstrapState.steps.map(step => ({
@@ -221,14 +616,67 @@ export function registerBootstrapRoutes(app: Hono): void {
         detail: sanitizeDetail(step.detail),
       })),
     }
+    // Phase 3: Include POD bootstrap progress when a POD bootstrap is running or recently completed
+    if (podBootstrapState.running || podBootstrapState.completedAt) {
+      sanitized.podBootstrap = {
+        total: podBootstrapState.total,
+        completed: podBootstrapState.completed,
+        currentAE: podBootstrapState.currentAE,
+        results: podBootstrapState.results.map(r => ({
+          name: r.name,
+          status: r.status,
+          ...(r.error ? { error: sanitizeDetail(r.error) } : {}),
+          ...(r.customerCount !== undefined ? { customerCount: r.customerCount } : {}),
+        })),
+        completedAt: podBootstrapState.completedAt,
+        error: sanitizeDetail(podBootstrapState.error),
+      }
+    }
     return c.json(sanitized)
   })
 
   // POST /api/bootstrap/auto/reset — clear a stuck bootstrap state
   app.post('/api/bootstrap/auto/reset', (c) => {
     autoBootstrapState = { running: false, steps: [], aeName: '', completedAt: null, error: null, resources: {} }
+    podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
     console.log('[auto-bootstrap] State reset by user request')
     return c.json({ ok: true })
+  })
+
+  // POST /api/bootstrap/pod — Bootstrap all AEs in the POD from a territory sheet
+  // Fire-and-forget: returns immediately, poll /api/bootstrap/auto/status for progress
+  app.post('/api/bootstrap/pod', async (c) => {
+    if (autoBootstrapState.running || podBootstrapState.running) {
+      return c.json({ error: 'A bootstrap is already in progress' }, 409)
+    }
+
+    const body = await c.req.json<{ territorySheetId?: string; force?: boolean }>().catch(() => ({ territorySheetId: undefined, force: undefined } as { territorySheetId?: string; force?: boolean }))
+    const territorySheetId = (body.territorySheetId ?? '').trim()
+    if (!territorySheetId) return c.json({ error: 'territorySheetId is required' }, 400)
+    // Validate sheet ID format (alphanumeric + hyphens + underscores, typical Google Sheet IDs)
+    if (!/^[a-zA-Z0-9_-]{10,}$/.test(territorySheetId)) {
+      return c.json({ error: 'Invalid territorySheetId format' }, 400)
+    }
+
+    const force = body.force === true
+
+    // Run async — fire-and-forget
+    bootstrapPOD({
+      territorySheetId,
+      force,
+      onProgress: (info) => {
+        console.log(`[pod-bootstrap] Progress: ${info.aeName} (${info.index + 1}/${info.total}) — ${info.status}${info.error ? ': ' + info.error : ''}`)
+      },
+    }).then(result => {
+      console.log(`[pod-bootstrap] Final: ${result.succeeded.length} succeeded, ${result.skipped.length} skipped, ${result.failed.length} failed`)
+    }).catch(e => {
+      console.error(`[pod-bootstrap] Fatal error: ${e?.message ?? e}`)
+      podBootstrapState.running = false
+      podBootstrapState.error = `Fatal: ${e?.message ?? e}`
+      podBootstrapState.completedAt = new Date().toISOString()
+    })
+
+    return c.json({ ok: true, message: `POD bootstrap started — poll /api/bootstrap/auto/status for progress` })
   })
 
   // POST /api/oauth/dismiss-downgrade — user has seen the reduce-permissions banner
