@@ -148,9 +148,11 @@ export function registerCustomerRoutes(app: Hono): void {
 
   // GET /api/ccsp — Cloud spend data aggregated from CCSP Raw Data tabs
   // Optional ?products=OCP,RHEL filters records by productOfferingGroup before aggregating (LOG-06)
+  // Optional ?ae=AE+Name filters records to a single AE (case-insensitive exact match)
   app.get('/api/ccsp', async (c) => {
     const force = c.req.query('force') === 'true'
     const productsParam = c.req.query('products')
+    const aeParam = c.req.query('ae') ?? null
     const cached = readCCSPCache()
 
     // Map frontend product labels to actual productOfferingGroup values
@@ -167,8 +169,15 @@ export function registerCustomerRoutes(app: Hono): void {
       : null
 
     function filterRecords(recs: CCSPRecord[]): CCSPRecord[] {
-      if (!productFilter || productFilter.length === 0) return recs
-      return recs.filter(r => r.productOfferingGroup && productFilter.includes(r.productOfferingGroup.toUpperCase()))
+      let out = recs
+      if (aeParam) {
+        const ae = aeParam.trim().toLowerCase()
+        out = out.filter(r => r.ae?.toLowerCase() === ae)
+      }
+      if (productFilter && productFilter.length > 0) {
+        out = out.filter(r => r.productOfferingGroup && productFilter.includes(r.productOfferingGroup.toUpperCase()))
+      }
+      return out
     }
 
     // Use cache if available and not forced (data doesn't change hourly)

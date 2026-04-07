@@ -180,7 +180,13 @@ function Dashboard() {
   const calendarAllApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&all=true&_=${refreshKey}`)
   const casesApi = useApi<{ cases: SupportCase[]; totalCount: number }>(`/api/cases/all?_=${refreshKey}`)
   const accountsApi = useApi<{ customers: AccountInfo[] }>(`/api/accounts?_=${refreshKey}`)
-  const ccspQueryStr = productFilterSelected.length > 0 ? `?products=${productFilterSelected.map(encodeURIComponent).join(',')}` : ''
+  const ccspQueryStr = (() => {
+    const params = new URLSearchParams()
+    if (aeFilterSelected !== 'all') params.set('ae', aeFilterSelected)
+    if (productFilterSelected.length > 0) params.set('products', productFilterSelected.map(encodeURIComponent).join(','))
+    const s = params.toString()
+    return s ? `?${s}` : ''
+  })()
   const ccspApi      = useApi<CCSPSummary>(`/api/ccsp${ccspQueryStr}`)
   const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline`)
   const morningSummaryApi = useApi<{ signals: Array<{ customer: string; type: string; severity: 'critical' | 'high' | 'medium'; text: string }> }>('/api/morning-summary')
@@ -589,10 +595,12 @@ function Dashboard() {
               <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} />
             </section>
 
-            {/* Cloud Spend */}
-            <section id="section-cloudspend" data-section="section-cloudspend">
-              <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
-            </section>
+            {/* Cloud Spend — hide when AE filter yields no customers */}
+            {filteredAccounts.length > 0 && (
+              <section id="section-cloudspend" data-section="section-cloudspend">
+                <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
+              </section>
+            )}
 
             {/* Calendar + Meeting Prep — visible in both views */}
             <section id="section-calendar" data-section="section-calendar">
