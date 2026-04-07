@@ -1,8 +1,9 @@
 import { readFileSync } from 'fs'
 import type { Hono } from 'hono'
+import type { Customer } from './types.ts'
 import { aes, customers } from './server-state.ts'
 import { readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache } from './cache-layer.ts'
-import { fetchCustomerSheetData, fetchCCSPData } from './sheets.ts'
+import { fetchCustomerSheetData, fetchCCSPData, batchFetchSubscriptions } from './sheets.ts'
 import { fetchPipelineData } from './pipeline.ts'
 import { checkFilesModified } from './drive-watcher.ts'
 import { recordSfSyncSuccess } from './sf-scraper.ts'
@@ -17,31 +18,83 @@ export function initRefreshEngine(sheetsSyncPath: string): void {
   SHEETS_SYNC_PATH = sheetsSyncPath
 }
 
+// ── Batch subscription refresh (BKL-AE-03) ────────────────────────────────
+// Groups customers by their AE's supportableSheetId and fetches all tabs
+// from each sheet in a single batchGet call (~3 API calls instead of ~30).
+
+async function batchRefreshSubscriptions(): Promise<{ refreshed: number; errors: string[] }> {
+  const errors: string[] = []
+  let refreshed = 0
+
+  // Group customers by their AE's supportableSheetId
+  const sheetGroups = new Map<string, Customer[]>()
+  const customersWithOverride: Customer[] = []
+
+  for (const customer of customers) {
+    // Per-customer supportableFileId overrides — handle individually
+    if (customer.supportableFileId) {
+      customersWithOverride.push(customer)
+      continue
+    }
+
+    // Find which AE this customer belongs to
+    const ae = aes.find(a => a.name === customer.ae)
+    if (!ae?.supportableSheetId) continue
+
+    const group = sheetGroups.get(ae.supportableSheetId) ?? []
+    group.push(customer)
+    sheetGroups.set(ae.supportableSheetId, group)
+  }
+
+  // Batch path: one batchGet per unique AE sheet
+  for (const [sheetId, groupCustomers] of sheetGroups) {
+    try {
+      const resultMap = await batchFetchSubscriptions(sheetId, groupCustomers)
+      for (const [customerName, rows] of resultMap) {
+        // Guard: don't overwrite populated cache with empty — quota failure returns [] silently
+        if (rows.length === 0 && (readSheetCache(customerName)?.rows?.length ?? 0) > 0) {
+          console.log(`[refresh:batch] ${customerName}: got 0 rows but cache has data — keeping existing cache`)
+          refreshed++
+          continue
+        }
+        writeSheetCache(customerName, rows)
+        refreshed++
+      }
+    } catch (e: any) {
+      errors.push(`batch ${sheetId}: ${e.message}`)
+      // If batch fails, don't lose the whole group — errors are logged but we continue
+    }
+  }
+
+  // Individual path: customers with per-customer supportableFileId override
+  for (const customer of customersWithOverride) {
+    try {
+      const rows = await fetchCustomerSheetData(customer)
+      if (rows.length === 0 && (readSheetCache(customer.name)?.rows?.length ?? 0) > 0) {
+        console.log(`[refresh:batch] ${customer.name}: got 0 rows but cache has data — keeping existing cache`)
+        refreshed++
+        continue
+      }
+      writeSheetCache(customer.name, rows)
+      refreshed++
+    } catch (e: any) {
+      errors.push(`${customer.name}: ${e.message}`)
+    }
+    // Stagger only for individual calls
+    await new Promise(r => setTimeout(r, 750))
+  }
+
+  return { refreshed, errors }
+}
+
 // ── Full data refresh ───────────────────────────────────────────────────────
 
 export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; errors: string[] }> {
   const errors: string[] = []
-  let sheetsRefreshed = 0
 
-  // 1. Subscription sheet data for every customer
-  const supportableSheetIds = aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
-  for (const customer of customers) {
-    try {
-      const rows = await fetchCustomerSheetData(customer, supportableSheetIds.length ? supportableSheetIds : undefined)
-      // Guard: don't overwrite populated cache with empty — quota failure returns [] silently
-      if (rows.length === 0 && (readSheetCache(customer.name)?.rows?.length ?? 0) > 0) {
-        console.log(`[refresh:all] ${customer.name}: got 0 rows but cache has data — keeping existing cache`)
-        sheetsRefreshed++
-        continue
-      }
-      writeSheetCache(customer.name, rows)
-      sheetsRefreshed++
-    } catch (e: any) {
-      errors.push(`${customer.name}: ${e.message}`)
-    }
-    // Stagger: stay under Sheets API 300 req/min quota during bulk refresh
-    await new Promise(r => setTimeout(r, 750))
-  }
+  // 1. Subscription sheet data for every customer (batch path — BKL-AE-03)
+  const { refreshed: sheetsRefreshed, errors: sheetErrors } = await batchRefreshSubscriptions()
+  errors.push(...sheetErrors)
 
   // 2. CCSP
   let ccspOk = false
@@ -82,27 +135,15 @@ export async function refreshSubscriptions(force = false): Promise<void> {
       // If we can't check, proceed with refresh
     }
   }
-  // Collect all known supportable sheet IDs from AE config — avoids BFS + quota-burning all-sheet scan
-  const supportableSheetIds = aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
-  for (const customer of customers) {
-    try {
-      const rows = await fetchCustomerSheetData(customer, supportableSheetIds.length ? supportableSheetIds : undefined)
-      // Guard: don't overwrite a populated cache with empty results — quota failure returns [] silently
-      if (rows.length === 0 && (readSheetCache(customer.name)?.rows?.length ?? 0) > 0) {
-        console.log(`[refresh:subscriptions] ${customer.name}: got 0 rows but cache has data — keeping existing cache`)
-        continue
-      }
-      writeSheetCache(customer.name, rows)
-    } catch (e: any) {
-      console.warn(`[refresh:subscriptions] ${customer.name}: ${e.message}`)
-    }
-    // Stagger: stay under Sheets API 300 req/min quota during bulk refresh
-    await new Promise(r => setTimeout(r, 750))
+  // Batch path (BKL-AE-03): one batchGet per AE sheet instead of N individual reads
+  const { refreshed, errors } = await batchRefreshSubscriptions()
+  if (errors.length) {
+    for (const err of errors) console.warn(`[refresh:subscriptions] ${err}`)
   }
   const totalRows = customers.reduce((sum, cu) => sum + (readSheetCache(cu.name)?.rows?.length ?? 0), 0)
   recordOutcome('supportable', { success: true, recordCount: totalRows })
   recordSupportableRefreshAt()
-  console.log(`[refresh:subscriptions] done (${customers.length} customers)`)
+  console.log(`[refresh:subscriptions] done (${refreshed}/${customers.length} customers, batch mode)`)
 }
 
 export async function refreshCCSP(force = false): Promise<void> {

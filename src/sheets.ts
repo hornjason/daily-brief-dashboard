@@ -200,6 +200,116 @@ export function normalizeRows(rows: SheetRow[], customerName?: string): ProductS
   return Array.from(skuMap.values())
 }
 
+// ── Batch fetch (BKL-AE-03) ──────────────────────────────────────────────────
+
+/**
+ * Fetch subscription data for multiple customers from a single spreadsheet
+ * using one batchGet call instead of N individual gets.
+ * Returns a map of customerName → ProductSubscription[].
+ */
+export async function batchFetchSubscriptions(
+  spreadsheetId: string,
+  customers: Customer[],
+  knownSupportableSheetIds?: string[],
+): Promise<Map<string, ProductSubscription[]>> {
+  const result = new Map<string, ProductSubscription[]>()
+  if (!customers.length) return result
+
+  const sheetsAuth = makeAuth(SHEETS_TOKEN_PATH)
+  const sheets = google.sheets({ version: 'v4', auth: sheetsAuth })
+
+  // Step 1: Get all tab names from this spreadsheet (same as fetchCustomerSheetData)
+  let titles: string[]
+  try {
+    const meta = await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets.properties.title',
+    })
+    titles = (meta.data.sheets ?? []).map((s) => s.properties?.title ?? '')
+  } catch {
+    // If we can't read the spreadsheet metadata, return empty for all customers
+    for (const c of customers) result.set(c.name, [])
+    return result
+  }
+
+  // Step 2: Match each customer to their tab using the same logic as fetchCustomerSheetData
+  // Track which customers matched which tabs for the batchGet response mapping
+  const rangeToCustomers: { range: string; customer: Customer; tabName: string }[] = []
+
+  for (const customer of customers) {
+    // Per-customer override file ID takes precedence — skip batch for these
+    if (customer.supportableFileId) continue
+
+    const matchedTabs = titles.filter((t) => tabMatchesAny(t, customer))
+    if (!matchedTabs.length) {
+      result.set(customer.name, [])
+      continue
+    }
+
+    // Use the first matching tab (same as fetchCustomerSheetData which iterates and returns first with data)
+    for (const tab of matchedTabs) {
+      rangeToCustomers.push({
+        range: `'${tab}'!A:Z`,
+        customer,
+        tabName: tab,
+      })
+    }
+  }
+
+  // Step 3: If no ranges matched, return what we have (empty arrays)
+  if (!rangeToCustomers.length) return result
+
+  // Step 4: Single batchGet call for all matched ranges
+  const ranges = rangeToCustomers.map((r) => r.range)
+  let valueRanges: any[]
+  try {
+    const batchRes = await withQuotaRetry(
+      () => sheets.spreadsheets.values.batchGet({ spreadsheetId, ranges }),
+      `batch-subscriptions-read ${spreadsheetId}`,
+    )
+    valueRanges = batchRes.data.valueRanges ?? []
+  } catch (e: any) {
+    console.warn(`[sheets] batchGet failed for ${spreadsheetId}: ${e.message}`)
+    for (const c of customers) if (!result.has(c.name)) result.set(c.name, [])
+    return result
+  }
+
+  // Step 5: Map each valueRange back to its customer and parse rows
+  // Track which customers already have data (first matching tab with data wins)
+  const customerHasData = new Set<string>()
+
+  for (let i = 0; i < valueRanges.length && i < rangeToCustomers.length; i++) {
+    const { customer } = rangeToCustomers[i]
+    if (customerHasData.has(customer.name)) continue
+
+    const rows = valueRanges[i]?.values ?? []
+    if (rows.length < 2) continue
+
+    // Same row-parsing logic as fetchCustomerSheetData
+    const headers = (rows[0] ?? []).map(String)
+    const sheetRows: SheetRow[] = rows.slice(1)
+      .map((row: any[]) => {
+        const obj: SheetRow = {}
+        headers.forEach((h: string, idx: number) => { obj[h] = String(row[idx] ?? '') })
+        return obj
+      })
+      .filter((row: SheetRow) => Object.values(row).some((v: string) => v.trim()))
+
+    const normalized = normalizeRows(sheetRows, customer.name)
+    if (normalized.length > 0) {
+      result.set(customer.name, normalized)
+      customerHasData.add(customer.name)
+    }
+  }
+
+  // Customers with no data get empty array
+  for (const c of customers) {
+    if (!result.has(c.name)) result.set(c.name, [])
+  }
+
+  return result
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function fetchCustomerSheetRaw(customer: Customer): Promise<{ tab: string; headers: string[]; rows: SheetRow[] }> {
