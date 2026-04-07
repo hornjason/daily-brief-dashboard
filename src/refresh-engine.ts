@@ -39,6 +39,8 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
     } catch (e: any) {
       errors.push(`${customer.name}: ${e.message}`)
     }
+    // Stagger: stay under Sheets API 300 req/min quota during bulk refresh
+    await new Promise(r => setTimeout(r, 750))
   }
 
   // 2. CCSP
@@ -94,6 +96,8 @@ export async function refreshSubscriptions(force = false): Promise<void> {
     } catch (e: any) {
       console.warn(`[refresh:subscriptions] ${customer.name}: ${e.message}`)
     }
+    // Stagger: stay under Sheets API 300 req/min quota during bulk refresh
+    await new Promise(r => setTimeout(r, 750))
   }
   const totalRows = customers.reduce((sum, cu) => sum + (readSheetCache(cu.name)?.rows?.length ?? 0), 0)
   recordOutcome('supportable', { success: true, recordCount: totalRows })

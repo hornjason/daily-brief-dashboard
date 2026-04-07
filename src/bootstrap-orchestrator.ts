@@ -285,10 +285,10 @@ export function registerBootstrapRoutes(app: Hono): void {
     // Upsert AE into aes.json immediately with basic fields
     let aeConfig = aes.find(a => a.name === aeName)
     if (!aeConfig) {
-      aeConfig = { name: aeName, driveFolderId: '', sfReportId, tableauTerritories }
+      aeConfig = { name: aeName, driveFolderId: '', sfReportId, tableauTerritories, ...(parentFolderId ? { parentFolderId } : {}) }
       saveAes([...aes, aeConfig])
     } else {
-      const updated = aes.map(a => a.name === aeName ? { ...a, sfReportId, tableauTerritories } : a)
+      const updated = aes.map(a => a.name === aeName ? { ...a, sfReportId, tableauTerritories, ...(parentFolderId ? { parentFolderId } : {}) } : a)
       saveAes(updated)
       aeConfig = aes.find(a => a.name === aeName)!
     }

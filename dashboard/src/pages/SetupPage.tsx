@@ -869,7 +869,7 @@ function AutoBootstrapForm() {
   const [parentFolderId, setParentFolderId] = useState('')
   const [folderName, setFolderName] = useState<string | null>(null)
   const [folderError, setFolderError] = useState<string | null>(null)
-  const [knownAes, setKnownAes] = useState<Array<{ name: string; tableauTerritories?: string[]; accounts?: string[] }>>([])
+  const [knownAes, setKnownAes] = useState<Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string }>>([])
   const bootstrapStartingRef = useRef(false)
 
   // Territory picker state — pod + terrNum are source of truth; territoryInput is derived
@@ -898,7 +898,7 @@ function AutoBootstrapForm() {
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/aes', { signal: controller.signal })
       .then(r => r.json())
-      .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[] }> }) => setKnownAes(d.aes ?? []))
+      .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string }> }) => setKnownAes(d.aes ?? []))
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/sf/reports', { signal: controller.signal })
       .then(r => r.json())
@@ -922,6 +922,13 @@ function AutoBootstrapForm() {
     }
     return () => controller.abort()
   }, [])
+
+  // Auto-inherit parentFolderId from existing AEs so second AE lands in same parent
+  useEffect(() => {
+    if (parentFolderId) return  // already set — don't overwrite user input or OAuth restore
+    const inherited = knownAes.find(a => a.parentFolderId)?.parentFolderId
+    if (inherited) setParentFolderId(inherited)
+  }, [knownAes])
 
   // Derive full territory string(s) from pod + terrNum — no reverse-parsing needed
   const territoryInput = useMemo(() => {

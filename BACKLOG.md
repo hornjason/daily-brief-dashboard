@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-06 (BKL-SCRAPER-01–06: scraper/sync council review findings; BKL-UI-01: product intel API 400 on special-char customer names; BKL-AI-IMPORT-01/02: DONE)
+Last update: 2026-04-07 (BKL-AE-01: parentFolderId persisted+auto-inherited DONE; BKL-AE-02: Sheets quota burst fixed DONE; BKL-AE-03: batchGet structural fix logged)
 
 ---
 
@@ -4609,6 +4609,29 @@ Description: `lastScraped` in rh-auth.ts is a module-level in-memory variable in
 Fix: Same pattern as ISC-01 (CCSP fix) — hydrate `lastScraped` from the RH cases cache file `cachedAt` on startup. Alternatively, change the rh-cases status endpoint to read `lastSuccess` from ScraperStatusStore (already disk-backed) as the primary timestamp source.
 
 ---
+
+### BKL-AE-01 | parentFolderId not persisted — new AE folders land at Drive root
+Status: ✅ DONE 2026-04-07
+Severity: High
+Source: Jason observation + Serena retro 2026-04-07
+Files: src/types.ts, src/bootstrap-orchestrator.ts, dashboard/src/pages/SetupPage.tsx
+Description: `parentFolderId` was accepted as a one-shot bootstrap request param but never written to `aes.json`. After a wizard reset or new browser session, the field came back blank and subsequent AE folders were created at My Drive root instead of under the shared parent. Phil Yi's folder was affected.
+Decision: DONE — Added `parentFolderId?: string` to `AE` interface, persisted it in both new-AE and update-AE branches of bootstrap-orchestrator. Added `useEffect` in SetupPage that auto-inherits `parentFolderId` from first existing AE that has one saved, so future AEs land in the right place without the user re-pasting the URL.
+
+### BKL-AE-02 | Sheets API quota burst during multi-AE bootstrap causes silent empty-cache failures
+Status: ✅ DONE 2026-04-07
+Severity: High
+Source: Container logs — Phil Yi Supportable unreachable; Rook investigation 2026-04-07
+Files: src/sheets.ts, src/refresh-engine.ts
+Description: `fetchCustomerSheetData`, `fetchCustomerSheetRaw`, and `fetchCustomerAccountNumbers` all called `spreadsheets.values.get` naked with no quota retry. A 429 silently returned `[]`, which the bootstrap cache guard couldn't protect (nothing to preserve on fresh install). Additionally, `refreshAll` and `refreshSubscriptions` fired all 30 customer reads in ~3 seconds, saturating the 300/min quota when combined with concurrent reads.
+Decision: DONE — Wrapped 3 naked `spreadsheets.values.get` calls with `withQuotaRetry` (retries once after 61s on 429). Added 750ms stagger between customer iterations in both `refreshAll` and `refreshSubscriptions` loops to spread 30 reads over ~22s.
+
+### BKL-AE-03 | Sheets API quota: structural fix — batchGet to collapse per-AE reads
+Status: 🔴 OPEN | Priority: P2 | Type: Architecture
+Source: Rook investigation 2026-04-07
+Files: src/sheets.ts, src/refresh-engine.ts
+Description: Currently each customer read fires one `values.get` call — 30 customers = 30 API calls per refresh cycle. `spreadsheets.values.batchGet` can consolidate all per-customer tab reads for a single AE sheet into one call, reducing ~30 reads to ~3 (one per AE sheet). Fixes the structural quota pressure rather than working around it.
+Fix: Group customers by `supportableSheetId` in `refreshSubscriptions`, build ranges array per sheet (`['Tab1'!A:Z, 'Tab2'!A:Z, ...]`), call `batchGet` once per AE sheet, distribute `valueRanges[i]` results back to customers. Requires preserving all tab-matching, normalization, and empty-result guard logic. Complexity: M. Requires explicit Jason approval before touching sheets.ts.
 
 ### BKL-UI-01 | Product intel API returns 400 for customer names with special characters
 Status: 🔴 OPEN | Priority: P2 | Type: Bug

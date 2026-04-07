@@ -231,7 +231,10 @@ export async function fetchCustomerSheetRaw(customer: Customer): Promise<{ tab: 
     const matchedTab = titles.find((t) => tabMatchesAny(t, customer))
     if (!matchedTab) continue
 
-    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${matchedTab}'!A:Z` })
+    const dataRes = await withQuotaRetry(
+      () => sheets.spreadsheets.values.get({ spreadsheetId, range: `'${matchedTab}'!A:Z` }),
+      `sheet-raw-read ${customer.name}`,
+    )
     const rows = dataRes.data.values ?? []
     if (rows.length < 2) continue
 
@@ -455,10 +458,13 @@ export async function fetchCustomerSheetData(customer: Customer, knownSheetIds?:
 
     for (const matchedTab of matchedTabs) {
       // Step 4: Read and normalize the tab data
-      const dataRes = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `'${matchedTab}'!A:Z`,
-      })
+      const dataRes = await withQuotaRetry(
+        () => sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${matchedTab}'!A:Z`,
+        }),
+        `subscriptions-read ${customer.name}`,
+      )
       const rows = dataRes.data.values ?? []
       if (rows.length < 2) continue
 
@@ -517,7 +523,10 @@ export async function fetchCustomerAccountNumbers(customer: Customer, knownSheet
     const matchedTab = titles.find((t) => tabMatchesAny(t, customer))
     if (!matchedTab) continue
 
-    const dataRes = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${matchedTab}'!A:Z` }).catch(() => null)
+    const dataRes = await withQuotaRetry(
+      () => sheets.spreadsheets.values.get({ spreadsheetId, range: `'${matchedTab}'!A:Z` }),
+      `account-numbers-read ${customer.name}`,
+    ).catch(() => null)
     const rows = dataRes?.data.values ?? []
     if (rows.length < 2) continue
 
