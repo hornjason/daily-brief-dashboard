@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react'
-import type { AccountInfo, SupportCase, CalendarEvent } from '../types'
+import type { AccountInfo, SupportCase, CalendarEvent, ProductSubscription } from '../types'
 import { Building2, Shield, Package, Key, Calendar, X, ChevronUp, ChevronDown, Users } from 'lucide-react'
 import { formatDate, formatRelTime } from '../lib/format'
 import HealthDot from './HealthDot'
 import PriorityActionRow from './PriorityActionRow'
+import { stripProductName } from '../utils/productName'
 
 // Inline fallback — replaced when EmptyState.tsx lands from another track
 const EmptyState = ({ title, description }: { title: string; description?: string }) => (
@@ -18,6 +19,7 @@ interface AccountPortfolioGridProps {
   cases: SupportCase[]
   events: CalendarEvent[]
   loading: boolean
+  selectedProducts?: string[]
 }
 
 type ViewMode = 'all' | 'byAE' | 'triage' | 'list'
@@ -242,6 +244,7 @@ function AccountCard({
   onProductClick,
   healthScores,
   priorityAction,
+  selectedProducts = [],
 }: {
   account: AccountInfo
   accountCases: SupportCase[]
@@ -250,10 +253,27 @@ function AccountCard({
   onProductClick: (a: AccountInfo) => void
   healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
   priorityAction?: string
+  selectedProducts?: string[]
 }) {
   const health = getHealthStatus(account, accountCases, healthScores)
   const openCases = accountCases.length
   const nextMeeting = getNextMeeting(account, events)
+  const [showMoreSubs, setShowMoreSubs] = useState(false)
+
+  // Subscription expansion: split into matching and non-matching
+  const { matchingSubs, otherSubs } = useMemo(() => {
+    if (selectedProducts.length === 0 || !account.products) return { matchingSubs: [], otherSubs: [] }
+    const matching: ProductSubscription[] = []
+    const other: ProductSubscription[] = []
+    for (const p of account.products) {
+      if (selectedProducts.includes(stripProductName(p.productDescription))) {
+        matching.push(p)
+      } else {
+        other.push(p)
+      }
+    }
+    return { matchingSubs: matching, otherSubs: other }
+  }, [account.products, selectedProducts])
 
   return (
     <div className="bg-surface border border-border rounded-xl p-4 hover:border-accent/30 transition-all group">
@@ -340,6 +360,40 @@ function AccountCard({
         </button>
       </div>
 
+      {/* Subscription expansion (Step 7) */}
+      {selectedProducts.length > 0 && matchingSubs.length > 0 && (
+        <div className="mb-3 space-y-1">
+          {matchingSubs.map((sub, i) => (
+            <div key={`${sub.sku}-${i}`} className="flex items-center justify-between text-xs text-muted-foreground text-text-secondary px-1">
+              <span className="truncate mr-2" title={sub.productDescription}>
+                {stripProductName(sub.productDescription)}
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {sub.quantity}x {sub.endDate ? formatDate(sub.endDate) : ''}
+              </span>
+            </div>
+          ))}
+          {otherSubs.length > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowMoreSubs(v => !v) }}
+              className="text-xs text-accent cursor-pointer hover:underline px-1"
+            >
+              {showMoreSubs ? 'hide' : `show ${otherSubs.length} more`} {showMoreSubs ? '\u25B4' : '\u25BE'}
+            </button>
+          )}
+          {showMoreSubs && otherSubs.map((sub, i) => (
+            <div key={`other-${sub.sku}-${i}`} className="flex items-center justify-between text-xs text-text-secondary/60 px-1">
+              <span className="truncate mr-2" title={sub.productDescription}>
+                {stripProductName(sub.productDescription)}
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {sub.quantity}x {sub.endDate ? formatDate(sub.endDate) : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {nextMeeting ? (
         <div className="flex items-center gap-1.5 text-sm px-2 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-accent min-w-0">
           <Calendar className="w-3 h-3 shrink-0" />
@@ -365,6 +419,7 @@ function CardGrid({
   onProductClick,
   healthScores,
   priorityActions,
+  selectedProducts = [],
 }: {
   accounts: AccountInfo[]
   casesByAccount: Map<string, SupportCase[]>
@@ -373,6 +428,7 @@ function CardGrid({
   onProductClick: (a: AccountInfo) => void
   healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
   priorityActions: Record<string, string>
+  selectedProducts?: string[]
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -390,6 +446,7 @@ function CardGrid({
             onProductClick={onProductClick}
             healthScores={healthScores}
             priorityAction={priorityActions[account.name]}
+            selectedProducts={selectedProducts}
           />
         )
       })}
@@ -397,7 +454,7 @@ function CardGrid({
   )
 }
 
-export function AccountPortfolioGrid({ accounts, cases, events, loading }: AccountPortfolioGridProps) {
+export function AccountPortfolioGrid({ accounts, cases, events, loading, selectedProducts = [] }: AccountPortfolioGridProps) {
   const [modalAccount, setModalAccount] = useState<AccountInfo | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('byAE')
   const [search, setSearch] = useState('')
@@ -638,6 +695,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
                   onProductClick={setModalAccount}
                   healthScores={healthScores}
                   priorityActions={priorityActions}
+                  selectedProducts={selectedProducts}
                 />
               </AEGroup>
             )}
@@ -651,6 +709,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
                   onProductClick={setModalAccount}
                   healthScores={healthScores}
                   priorityActions={priorityActions}
+                  selectedProducts={selectedProducts}
                 />
               </AEGroup>
             )}
@@ -664,6 +723,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
                   onProductClick={setModalAccount}
                   healthScores={healthScores}
                   priorityActions={priorityActions}
+                  selectedProducts={selectedProducts}
                 />
               </AEGroup>
             )}
@@ -681,6 +741,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
                   onProductClick={setModalAccount}
                   healthScores={healthScores}
                   priorityActions={priorityActions}
+                  selectedProducts={selectedProducts}
                 />
               </AEGroup>
             ))}
@@ -739,6 +800,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading }: Accou
             onProductClick={setModalAccount}
             healthScores={healthScores}
             priorityActions={priorityActions}
+            selectedProducts={selectedProducts}
           />
         )}
       </div>

@@ -24,14 +24,18 @@ const navItems = [
   { icon: Users,           label: 'Accounts',        sectionId: 'section-accounts' },
 ]
 
+export type DashboardViewMode = 'asa' | 'product'
+
 interface SidebarProps {
   active: string
   onActiveChange: (label: string) => void
   aes?: { name: string; customerCount: number }[]
   productAlertCount?: number
+  viewMode?: DashboardViewMode
+  onViewModeChange?: (mode: DashboardViewMode) => void
 }
 
-export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0 }: SidebarProps) {
+export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, viewMode = 'asa', onViewModeChange }: SidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -132,9 +136,52 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0 }: 
         )}
       </div>
 
+      {/* View mode toggle */}
+      {!collapsed && onViewModeChange && (
+        <div className="px-3 pt-3 pb-1">
+          <div className="flex items-center gap-0.5 bg-border/30 rounded-md p-0.5">
+            <button
+              onClick={() => onViewModeChange('asa')}
+              className={`flex-1 text-xs px-2 py-1 rounded font-medium transition-colors ${
+                viewMode === 'asa'
+                  ? 'bg-accent/20 text-accent ring-1 ring-accent'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              ASA
+            </button>
+            <button
+              onClick={() => onViewModeChange('product')}
+              className={`flex-1 text-xs px-2 py-1 rounded font-medium transition-colors ${
+                viewMode === 'product'
+                  ? 'bg-accent/20 text-accent ring-1 ring-accent'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Product
+            </button>
+          </div>
+        </div>
+      )}
+      {collapsed && onViewModeChange && (
+        <div className="px-1 pt-3 pb-1 flex justify-center">
+          <button
+            onClick={() => onViewModeChange(viewMode === 'asa' ? 'product' : 'asa')}
+            title={`Switch to ${viewMode === 'asa' ? 'Product' : 'ASA'} view`}
+            className="text-xs px-1.5 py-1 rounded bg-border/30 text-text-secondary hover:text-accent transition-colors font-medium"
+          >
+            {viewMode === 'asa' ? 'A' : 'P'}
+          </button>
+        </div>
+      )}
+
       {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
+        {navItems.filter(item => {
+          // Hide Morning Summary nav in product view
+          if (viewMode === 'product' && item.label === 'Morning Summary') return false
+          return true
+        }).map((item) => (
           <div key={item.label} className="relative group">
             <button
               onClick={() => {
@@ -230,21 +277,23 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0 }: 
           )}
         </div>
 
-        <div className="relative group">
-          <a
-            href="/dashboard/setup"
-            aria-label="Setup"
-            className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
-          >
-            <Wrench className="w-4 h-4 shrink-0" />
-            {!collapsed && <span className="whitespace-nowrap">Setup</span>}
-          </a>
-          {collapsed && (
-            <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
-              Setup
-            </span>
-          )}
-        </div>
+        {viewMode !== 'product' && (
+          <div className="relative group">
+            <a
+              href="/dashboard/setup"
+              aria-label="Setup"
+              className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              {!collapsed && <span className="whitespace-nowrap">Setup</span>}
+            </a>
+            {collapsed && (
+              <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
+                Setup
+              </span>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* Footer */}

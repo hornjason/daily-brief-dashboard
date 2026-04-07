@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
 import { Sidebar } from './components/Sidebar'
+import type { DashboardViewMode } from './components/Sidebar'
+import { discoverAllProducts, stripProductName } from './utils/productName'
 import { TopBar } from './components/TopBar'
 import { KPICards } from './components/KPICards'
 import { CalendarStrip } from './components/CalendarStrip'
@@ -98,6 +100,15 @@ function Dashboard() {
   const location = useLocation()
   const [refreshKey, setRefreshKey] = useState(0)
   const [active, setActive] = useState('Command Center')
+  const [viewMode, setViewMode] = useState<DashboardViewMode>(() => {
+    const stored = localStorage.getItem('dashboard-view-mode')
+    return stored === 'product' ? 'product' : 'asa'
+  })
+
+  const handleViewModeChange = useCallback((mode: DashboardViewMode) => {
+    setViewMode(mode)
+    localStorage.setItem('dashboard-view-mode', mode)
+  }, [])
 
   // Dynamic page title based on active sidebar section
   useEffect(() => {
@@ -110,6 +121,18 @@ function Dashboard() {
   const [noAesDismissed, setNoAesDismissed] = useState(false)
   const [aeCount, setAeCount] = useState<number | null>(null)
   const [productAlertCount, setProductAlertCount] = useState(0)
+
+  // AE filter chip state (Step 4)
+  const [aeFilterSelected, setAeFilterSelected] = useState<string>(() => {
+    return localStorage.getItem('ae-filter-selected') ?? 'all'
+  })
+  // Product filter chip state (Step 5)
+  const [productFilterSelected, setProductFilterSelected] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('product-filter-selected')
+      return stored ? JSON.parse(stored) : []
+    } catch { return [] }
+  })
   const vncWindowRef = useRef<Window | null>(null)
 
   // Back to top button (BKL-UX23)
@@ -213,6 +236,57 @@ function Dashboard() {
     setRefreshKey((k) => k + 1)
   }, [])
 
+  const handleAeFilterChange = useCallback((ae: string) => {
+    setAeFilterSelected(ae)
+    localStorage.setItem('ae-filter-selected', ae)
+  }, [])
+
+  const handleProductFilterToggle = useCallback((product: string) => {
+    setProductFilterSelected(prev => {
+      let next: string[]
+      if (product === '__all__') {
+        next = []
+      } else {
+        next = prev.includes(product) ? prev.filter(p => p !== product) : [...prev, product]
+      }
+      localStorage.setItem('product-filter-selected', JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  // Derive AE list with counts
+  const aeList = useMemo(() => {
+    const accounts = accountsApi.data?.customers ?? []
+    const map = new Map<string, number>()
+    for (const a of accounts) {
+      if (a.ae) map.set(a.ae, (map.get(a.ae) ?? 0) + 1)
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ name, count }))
+  }, [accountsApi.data])
+
+  // Discover all products across accounts
+  const allProducts = useMemo(() => {
+    return discoverAllProducts(accountsApi.data?.customers ?? [])
+  }, [accountsApi.data])
+
+  // Filter accounts based on AE and product filters
+  const filteredAccounts = useMemo(() => {
+    let accounts = accountsApi.data?.customers ?? []
+    if (aeFilterSelected !== 'all') {
+      accounts = accounts.filter(a => a.ae === aeFilterSelected)
+    }
+    if (productFilterSelected.length > 0) {
+      accounts = accounts.filter(a =>
+        a.products?.some(p =>
+          productFilterSelected.includes(stripProductName(p.productDescription))
+        )
+      )
+    }
+    return accounts
+  }, [accountsApi.data, aeFilterSelected, productFilterSelected])
+
   // Poll RH session status every 5 minutes; every 2s while reconnecting
   const fetchRhStatus = useCallback(async () => {
     try {
@@ -276,6 +350,8 @@ function Dashboard() {
           : undefined
         }
         productAlertCount={productAlertCount}
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
@@ -327,8 +403,72 @@ function Dashboard() {
               </div>
             )}
 
-            {/* Morning Summary (R06) */}
-            <MorningSummary />
+            {/* AE Filter Chip Bar (Step 4) */}
+            {aeList.length > 1 && (
+              <div className="sticky top-14 z-10 bg-bg/95 backdrop-blur-sm pb-2 -mt-2 pt-2 space-y-2">
+                <div role="radiogroup" aria-label="Filter by Account Executive" className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => handleAeFilterChange('all')}
+                    className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
+                      aeFilterSelected === 'all'
+                        ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                        : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                    }`}
+                    role="radio"
+                    aria-checked={aeFilterSelected === 'all'}
+                  >
+                    All <span className="text-xs opacity-70 ml-0.5">{accountsApi.data?.customers?.length ?? 0}</span>
+                  </button>
+                  {aeList.map(ae => (
+                    <button
+                      key={ae.name}
+                      onClick={() => handleAeFilterChange(ae.name)}
+                      className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
+                        aeFilterSelected === ae.name
+                          ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                          : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                      }`}
+                      role="radio"
+                      aria-checked={aeFilterSelected === ae.name}
+                    >
+                      {ae.name.split(' ')[0]} <span className="text-xs opacity-70 ml-0.5">{ae.count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Product Filter Chip Bar (Step 5) */}
+                {allProducts.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap" aria-label="Filter by product">
+                    <button
+                      onClick={() => handleProductFilterToggle('__all__')}
+                      className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
+                        productFilterSelected.length === 0
+                          ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                          : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                      }`}
+                    >
+                      All Products
+                    </button>
+                    {allProducts.map(product => (
+                      <button
+                        key={product}
+                        onClick={() => handleProductFilterToggle(product)}
+                        className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
+                          productFilterSelected.includes(product)
+                            ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                            : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                        }`}
+                      >
+                        {product}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Morning Summary (R06) — hidden in product view */}
+            {viewMode === 'asa' && <MorningSummary />}
 
             {/* Top Actions (BKL-F10a, BKL-F10b) */}
             <TopActionsPanel actions={topActions} />
@@ -348,7 +488,7 @@ function Dashboard() {
               <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
             </section>
 
-            {/* Calendar + Meeting Prep */}
+            {/* Calendar + Meeting Prep — visible in both views */}
             <section id="section-calendar" data-section="section-calendar">
               <CalendarStrip
                 events={calendarApi.data?.events ?? []}
@@ -359,13 +499,14 @@ function Dashboard() {
               />
             </section>
 
-            {/* Account Portfolio Grid */}
+            {/* Account Portfolio Grid — pass filtered accounts and selected products */}
             <section id="section-accounts" data-section="section-accounts">
               <AccountPortfolioGrid
-                accounts={accountsApi.data?.customers ?? []}
+                accounts={filteredAccounts}
                 cases={casesApi.data?.cases ?? []}
                 events={calendarApi.data?.events ?? []}
                 loading={accountsApi.loading}
+                selectedProducts={productFilterSelected}
               />
             </section>
           </main>
