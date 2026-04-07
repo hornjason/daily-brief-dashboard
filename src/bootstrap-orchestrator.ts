@@ -650,20 +650,25 @@ export function registerBootstrapRoutes(app: Hono): void {
       return c.json({ error: 'A bootstrap is already in progress' }, 409)
     }
 
+    // Claim the lock SYNCHRONOUSLY before the first `await` (c.req.json yields the event loop).
+    // Without this, two simultaneous POSTs both pass the guard above, then both set running=true
+    // after the await — a TOCTOU race. Claiming here with total:0/results:[] is an "initializing"
+    // marker; bootstrapPOD() overwrites these fields once it reads the territory sheet.
+    podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+
     const body = await c.req.json<{ territorySheetId?: string; force?: boolean }>().catch(() => ({ territorySheetId: undefined, force: undefined } as { territorySheetId?: string; force?: boolean }))
     const territorySheetId = (body.territorySheetId ?? '').trim()
-    if (!territorySheetId) return c.json({ error: 'territorySheetId is required' }, 400)
+    if (!territorySheetId) {
+      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+      return c.json({ error: 'territorySheetId is required' }, 400)
+    }
     // Validate sheet ID format (alphanumeric + hyphens + underscores, typical Google Sheet IDs)
     if (!/^[a-zA-Z0-9_-]{10,}$/.test(territorySheetId)) {
+      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
       return c.json({ error: 'Invalid territorySheetId format' }, 400)
     }
 
     const force = body.force === true
-
-    // Set running=true synchronously BEFORE the fire-and-forget call.
-    // If we waited until inside bootstrapPOD(), a second rapid POST could slip through the 409 guard
-    // before the flag is set (TOCTOU window). Bun is single-threaded but `await` yields the event loop.
-    podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
 
     // Run async — fire-and-forget
     bootstrapPOD({
