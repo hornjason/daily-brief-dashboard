@@ -4696,10 +4696,66 @@ Files: QUINN-STANDARD.md (updated), test/lifecycle.spec.ts (to be created)
 Description: Quinn's AE lifecycle tests (add/remove AE via POST /api/aes) ran without wrapping in snapshot/restore. Our atomic customer cleanup (added in f377045) deletes customers for removed AEs. Without snapshot/restore, this permanently wipes customers.json. Fix: (1) QUINN-STANDARD.md updated 2026-04-07 to mandate snapshot/restore for any test touching AEs/customers. (2) Create a dedicated lifecycle spec that uses beforeAll snapshot + afterAll restore with a rollback guarantee. (3) Never call POST /api/aes in ad-hoc tests without snapshot wrapping.
 
 ### BKL-UI-04 | ASA/Product toggle invisible in collapsed sidebar — single unlabeled "A" button
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-07 — Fixed in commit e0d2773: collapsed sidebar now shows stacked A/P buttons with active-state ring and tooltips
 Severity: MEDIUM
 Priority: P2
 Size: S
 Source: Quinn QA 2026-04-07 Phase 1 Product View verification
 Files: dashboard/src/components/Sidebar.tsx
 Description: In collapsed sidebar state (default on first load), the ASA/Product view mode toggle renders as a single small "A" button. There is no visible "Product" option, no tooltip, and no indication that a view mode toggle exists. New users cannot discover Product View without knowing to expand the sidebar first. Fix: in collapsed state, show both "A" and "P" as stacked compact buttons with tooltips ("ASA View" / "Product View"), or auto-show a tooltip on first visit pointing to the toggle.
+
+### BKL-PVIEW-01 | Product View — Phase 1 complete (client-side filters, AE chips, product bar)
+Status: ✅ DONE 2026-04-07 — Commit 4c8e38d
+Severity: —
+Priority: —
+Size: L
+Source: Council review 2026-04-07 (Serena/Aditi/Marcus)
+Files: dashboard/src/App.tsx, dashboard/src/components/Sidebar.tsx, dashboard/src/components/AccountPortfolioGrid.tsx, dashboard/src/utils/productName.ts
+Description: Phase 1 of Product View feature. AE filter chips (replace select dropdown, single-select, localStorage key ae-filter-selected), Product filter chips (multi-select, discoverAllProducts from live data, localStorage key product-filter-selected), ASA/Product sidebar toggle (localStorage key dashboard-view-mode), subscription inline expansion on account cards when product filter active (matching subs expanded, non-matching collapsed with "show N more"), Morning Summary hidden in product view, stripProductName utility strips "Red Hat " + comma suffix.
+
+### BKL-PVIEW-02 | Product View — Phase 2 complete (GET /api/pod/summary + CCSP productOfferingGroup)
+Status: ✅ DONE 2026-04-07 — Commit f3bf339
+Severity: —
+Priority: —
+Size: M
+Source: Council review 2026-04-07
+Files: src/dashboard-routes.ts, src/sheets.ts
+Description: Phase 2 backend additions. GET /api/pod/summary: runtime aggregation across all customer caches + RH cases cache, returns totalCustomers/totalAEs/openCases/openCasesByProduct/expiringNext90Days/productMix, 30s in-memory TTL, customer deduplication by lowercase name. CCSP productOfferingGroup: added field to CCSPRecord interface, parsed from column S (index 18 zero-based) positionally, optional for backward compat with older sheet formats. Verified: 423/423 CCSP rows have productOfferingGroup populated.
+
+### BKL-PVIEW-03 | Product View — Phase 3: POD bootstrap via territory sheet
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: XL
+Source: Council review 2026-04-07 — POD bootstrap design (Option C: Import from territory sheet)
+Files: src/bootstrap-orchestrator.ts, src/setup-routes.ts (or server.ts), dashboard/src/pages/SetupPage.tsx
+Description: POD-level bootstrap flow. bootstrapPOD() function in bootstrap-orchestrator.ts: reads AE list from territory sheet (territory sheet is canonical source), loops existing bootstrapAE() sequentially (never parallel — Sheets quota constraint), idempotency (skip AEs where all 4 sheet IDs already populated, force:true flag available), dynamic timeout aeConfigs.length × 15min. Wizard step: shows AE checklist from territory sheet, user confirms, progress polls per-AE status (AE 3/8). Auto-retry second pass for AEs with zero account numbers or missing rows. User sees partial failure: "3/8 succeeded, 5 failed — retry failed AEs". Estimated time: 36–52 min for 8 AEs.
+Dependencies: Phase 2 complete (done).
+
+### BKL-PVIEW-04 | Product View — Phase 4: react-window virtualization for 8 AEs/96 customers
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: L
+Source: Council review 2026-04-07 — Layout Scaling (Option C: AE filter chips + react-window)
+Files: dashboard/src/components/AccountPortfolioGrid.tsx, dashboard/src/App.tsx
+Description: Virtualized card grid using react-window VariableSizeGrid for 80-160 customer cards (~50ms render target). AE filter chips enhanced with worst-health dot per AE. Chips wrap to 2 rows max at 8 AEs. Sticky filter panel (sticky top-14) keeps filters visible during scroll. Existing view modes (All, By AE, Triage, List) compose with filter chips.
+Dependencies: Phase 3 complete.
+
+### BKL-SEC-02 | sheetCachePath path safety relies implicitly on toSlug invariant
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Rook security scan 2026-04-07 Phase 2 (dashboard-routes.ts GET /api/pod/summary)
+Files: src/cache-layer.ts (sheetCachePath function)
+Description: readSheetCache(cu.name) constructs a file path using toSlug(customerName). The safety guarantee depends entirely on toSlug producing only safe filesystem characters. If toSlug has an edge case (e.g., name with only special characters), it could produce an unexpected path. The invariant is implicit — no explicit bounds check or allowlist guard at the sheetCachePath level. Fix: add an explicit regex check inside sheetCachePath: if the slug is empty or contains `..` or `/`, throw rather than silently construct a bad path. Low practical risk (customer names come from internal config), but worth hardening.
+
+### BKL-SEC-03 | sanitizeErr regex doesn't mask .json config paths in 500 responses
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: S
+Source: Rook security scan 2026-04-07 Phase 2 (src/utils.ts sanitizeErr)
+Files: src/utils.ts
+Description: sanitizeErr strips .ts/.js file paths from error messages but doesn't mask .json paths or absolute non-code paths (e.g., /app/config/customers.json). A file-not-found error on a config file could leak internal container directory structure. Fix: broaden the sanitizeErr regex to also strip absolute paths: `s/\/[^\s:]+/[path]/g` or similar. Low practical impact on a localhost app, but worth fixing for defense-in-depth.
