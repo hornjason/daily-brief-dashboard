@@ -131,6 +131,9 @@ interface AutoBootstrapStep {
   name: string
   status: 'pending' | 'running' | 'done' | 'error' | 'skipped'
   detail?: string
+  startedAt?: string
+  completedAt?: string
+  durationMs?: number
 }
 
 interface AutoBootstrapResources {
@@ -167,6 +170,9 @@ interface PodAeResult {
   status: 'skipped' | 'ok' | 'error' | 'pending' | 'retrying'
   error?: string
   customerCount?: number
+  startedAt?: string
+  completedAt?: string
+  durationMs?: number
 }
 
 interface PodBootstrapState {
@@ -175,12 +181,14 @@ interface PodBootstrapState {
   completed: number
   currentAE: string | null
   results: PodAeResult[]
+  startedAt: string | null
   completedAt: string | null
+  totalDurationMs?: number
   error: string | null
 }
 
 export let podBootstrapState: PodBootstrapState = {
-  running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null,
+  running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null,
 }
 
 /**
@@ -345,12 +353,14 @@ export async function bootstrapPOD(opts: {
   const failed: Array<{ name: string; error: string }> = []
 
   // Initialize POD bootstrap state for status endpoint
+  const podStartedAt = new Date().toISOString()
   podBootstrapState = {
     running: true,
     total: aeEntries.length,
     completed: 0,
     currentAE: null,
     results: aeEntries.map(e => ({ name: e.aeName, status: 'pending' as const })),
+    startedAt: podStartedAt,
     completedAt: null,
     error: null,
   }
@@ -374,6 +384,8 @@ export async function bootstrapPOD(opts: {
     const { aeName, territories, customerNames } = entry
 
     podBootstrapState.currentAE = aeName
+    const aeStartMs = Date.now()
+    podBootstrapState.results[i] = { ...podBootstrapState.results[i], startedAt: new Date().toISOString() }
 
     // Check if AE exists in aes.json with required config
     let aeConfig = aes.find(a => a.name === aeName)
@@ -471,6 +483,12 @@ export async function bootstrapPOD(opts: {
       podBootstrapState.results[i] = { name: aeName, status: 'error', error: err }
     }
 
+    const aeDurationMs = Date.now() - aeStartMs
+    podBootstrapState.results[i] = {
+      ...podBootstrapState.results[i],
+      completedAt: new Date().toISOString(),
+      durationMs: aeDurationMs,
+    }
     podBootstrapState.completed++
     onProgress?.({
       aeName,
@@ -551,10 +569,12 @@ export async function bootstrapPOD(opts: {
   }
 
   clearTimeout(podTimeoutId)
+  const podTotalMs = Date.now() - new Date(podStartedAt).getTime()
   podBootstrapState.running = false
   podBootstrapState.currentAE = null
   podBootstrapState.completedAt = new Date().toISOString()
-  console.log(`[pod-bootstrap] Complete: ${succeeded.length} succeeded, ${skipped.length} skipped, ${failed.length} failed`)
+  podBootstrapState.totalDurationMs = podTotalMs
+  console.log(`[pod-bootstrap] Complete: ${succeeded.length} succeeded, ${skipped.length} skipped, ${failed.length} failed — total ${Math.round(podTotalMs / 60000)}min`)
 
   return { succeeded, skipped, failed }
 }
@@ -626,13 +646,18 @@ export function registerBootstrapRoutes(app: Hono): void {
         total: podBootstrapState.total,
         completed: podBootstrapState.completed,
         currentAE: podBootstrapState.currentAE,
+        startedAt: podBootstrapState.startedAt,
+        completedAt: podBootstrapState.completedAt,
+        totalDurationMs: podBootstrapState.totalDurationMs,
         results: podBootstrapState.results.map(r => ({
           name: r.name,
           status: r.status,
           ...(r.error ? { error: sanitizeDetail(r.error) } : {}),
           ...(r.customerCount !== undefined ? { customerCount: r.customerCount } : {}),
+          ...(r.startedAt ? { startedAt: r.startedAt } : {}),
+          ...(r.completedAt ? { completedAt: r.completedAt } : {}),
+          ...(r.durationMs !== undefined ? { durationMs: r.durationMs } : {}),
         })),
-        completedAt: podBootstrapState.completedAt,
         error: sanitizeDetail(podBootstrapState.error),
       }
     }
@@ -642,7 +667,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   // POST /api/bootstrap/auto/reset — clear a stuck bootstrap state
   app.post('/api/bootstrap/auto/reset', (c) => {
     autoBootstrapState = { running: false, steps: [], aeName: '', completedAt: null, error: null, resources: {} }
-    podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+    podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
     console.log('[auto-bootstrap] State reset by user request')
     return c.json({ ok: true })
   })
@@ -672,20 +697,20 @@ export function registerBootstrapRoutes(app: Hono): void {
       : ''
 
     if (!territorySheetId) {
-      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
       return c.json({ error: 'territorySheetId is required' }, 400)
     }
     // Validate sheet ID format (alphanumeric + hyphens + underscores, typical Google Sheet IDs)
     if (!/^[a-zA-Z0-9_-]{10,}$/.test(territorySheetId)) {
-      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
       return c.json({ error: 'Invalid territorySheetId format' }, 400)
     }
     if (!sfReportId || !isValidSfId(sfReportId)) {
-      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
       return c.json({ error: 'sfReportId is required — provide a Salesforce report URL or bare ID' }, 400)
     }
     if (!parentFolderId || !/^[a-zA-Z0-9_-]{10,}$/.test(parentFolderId)) {
-      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
       return c.json({ error: 'parentFolderId is required — provide a Google Drive folder URL or bare ID' }, 400)
     }
 
@@ -790,8 +815,26 @@ export function registerBootstrapRoutes(app: Hono): void {
       resources: { junkFiltered: junkFiltered.length > 0 ? junkFiltered : undefined },
     }
 
+    const stepStartMs: Record<number, number> = {}
     const setStep = (idx: number, status: AutoBootstrapStep['status'], detail?: string) => {
-      autoBootstrapState.steps[idx] = { ...autoBootstrapState.steps[idx], status, detail }
+      const now = Date.now()
+      const existing = autoBootstrapState.steps[idx] ?? {}
+      // Record startedAt when transitioning to 'running'
+      if (status === 'running' && !stepStartMs[idx]) {
+        stepStartMs[idx] = now
+      }
+      // Record completedAt + durationMs when finishing
+      const isFinished = status === 'done' || status === 'error' || status === 'skipped'
+      autoBootstrapState.steps[idx] = {
+        ...existing,
+        status,
+        detail,
+        ...(status === 'running' && !existing.startedAt ? { startedAt: new Date(now).toISOString() } : {}),
+        ...(isFinished && stepStartMs[idx] ? {
+          completedAt: new Date(now).toISOString(),
+          durationMs: now - stepStartMs[idx],
+        } : {}),
+      }
     }
 
     // Hard timeout: scales with AE count (min 60 min, +30 min per AE)
