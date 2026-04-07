@@ -365,7 +365,7 @@ function Dashboard() {
     if (productFilterSelected.length > 0) {
       accounts = accounts.filter(a =>
         a.products?.some(p =>
-          productFilterSelected.includes(stripProductName(p.productDescription))
+          productFilterSelected.includes(normalizeProductName(stripProductName(p.productDescription)))
         )
       )
     }

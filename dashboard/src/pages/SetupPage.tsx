@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Shield,
   Trash2,
+  Users,
 } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -2907,9 +2908,224 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   )
 }
 
+// ── POD Bootstrap ─────────────────────────────────────────────────────────────
+
+interface PodBootstrapStatus {
+  podBootstrap: {
+    running: boolean
+    total: number
+    completed: number
+    currentAE: string | null
+    results: Array<{ aeName: string; success: boolean; error?: string }>
+    completedAt: string | null
+    error: string | null
+  }
+}
+
+function PodBootstrapSection() {
+  const [territorySheetId, setTerritorySheetId] = useState('')
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const [status, setStatus] = useState<PodBootstrapStatus['podBootstrap'] | null>(null)
+
+  // Check for existing run on mount
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/bootstrap/status', { signal: controller.signal })
+      .then(r => r.json())
+      .then((d: PodBootstrapStatus) => {
+        if (d.podBootstrap && (d.podBootstrap.running || d.podBootstrap.completedAt)) {
+          setStatus(d.podBootstrap)
+        }
+      })
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
+    return () => controller.abort()
+  }, [])
+
+  // Poll while running
+  useEffect(() => {
+    if (!status?.running) return
+    const controller = new AbortController()
+    const interval = setInterval(async () => {
+      try {
+        const r = await fetch('/api/bootstrap/status', { signal: controller.signal })
+        const d: PodBootstrapStatus = await r.json()
+        setStatus(d.podBootstrap)
+        if (!d.podBootstrap.running) clearInterval(interval)
+      } catch (e: any) { if (e.name !== 'AbortError') { /* ignore */ } }
+    }, 3_000)
+    return () => { controller.abort(); clearInterval(interval) }
+  }, [status?.running])
+
+  const startPodBootstrap = async () => {
+    if (!territorySheetId.trim()) return
+    setStarting(true)
+    setStartError(null)
+    try {
+      const r = await fetch('/api/bootstrap/pod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ territorySheetId: territorySheetId.trim() }),
+      })
+      const d = await r.json()
+      if (!r.ok || d.error) {
+        setStartError(d.error ?? 'Failed to start POD bootstrap')
+        return
+      }
+      setStatus({ running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null })
+    } catch (e: any) {
+      setStartError(e.message ?? 'Network error')
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  const resetPodBootstrap = async () => {
+    await fetch('/api/bootstrap/reset', { method: 'POST' }).catch(() => {})
+    setStatus(null)
+    setStartError(null)
+  }
+
+  const successCount = status?.results.filter(r => r.success).length ?? 0
+  const failCount = status?.results.filter(r => !r.success).length ?? 0
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="text-sm text-text-secondary">
+          Bootstrap your entire POD at once. Provide the Territory Sheet ID and the system will iterate through each AE in the sheet, running the full bootstrap pipeline for each one.
+        </p>
+      </div>
+
+      {/* Input + button — hide when running */}
+      {!status?.running && !status?.completedAt && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">Territory Sheet ID</label>
+            <input
+              type="text"
+              value={territorySheetId}
+              onChange={e => { setTerritorySheetId(e.target.value); setStartError(null) }}
+              placeholder="1abc2DEF3ghi4JKL5mno6PQR7stu8VWX9yz"
+              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent font-mono"
+            />
+            <p className="text-xs text-text-secondary mt-1">Google Sheet containing AE names and territory configurations.</p>
+          </div>
+
+          {startError && (
+            <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
+              <XCircle className="w-3.5 h-3.5 shrink-0" /> {startError}
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={startPodBootstrap}
+              disabled={!territorySheetId.trim() || starting}
+              className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+              {starting ? 'Starting...' : 'Bootstrap POD'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Live progress */}
+      {status?.running && (
+        <div className="space-y-3" aria-live="polite">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-text-primary">
+              {status.completed} / {status.total} AEs complete
+            </p>
+            <Loader2 className="w-4 h-4 animate-spin text-accent" />
+          </div>
+
+          {status.currentAE && (
+            <div className="flex items-center gap-2 bg-accent/10 border border-accent/30 rounded-lg px-3 py-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-accent shrink-0" />
+              <span className="text-sm text-accent">Bootstrapping: {status.currentAE}...</span>
+            </div>
+          )}
+
+          {/* Per-AE results as they complete */}
+          {status.results.length > 0 && (
+            <div className="space-y-1">
+              {status.results.map((result, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                  {result.success
+                    ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                    : <XCircle className="w-4 h-4 text-critical shrink-0" />}
+                  <span className={result.success ? 'text-success' : 'text-critical'}>{result.aeName}</span>
+                  {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Completion state */}
+      {status?.completedAt && !status.running && (
+        <div className="space-y-3">
+          <div className={`rounded-lg border p-4 text-sm ${failCount > 0 ? 'border-warning/30 bg-warning/10' : 'border-success/30 bg-success/10'}`}>
+            <p className={`font-medium ${failCount > 0 ? 'text-warning' : 'text-success'}`}>
+              POD bootstrap complete — {successCount} succeeded{failCount > 0 ? `, ${failCount} failed` : ''}
+            </p>
+          </div>
+
+          {/* Per-AE results */}
+          {status.results.length > 0 && (
+            <div className="space-y-1">
+              {status.results.map((result, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                  {result.success
+                    ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                    : <XCircle className="w-4 h-4 text-critical shrink-0" />}
+                  <span className={result.success ? 'text-success' : 'text-critical'}>{result.aeName}</span>
+                  {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Error message */}
+          {status.error && (
+            <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {status.error}
+            </p>
+          )}
+
+          <button
+            onClick={resetPodBootstrap}
+            className="text-xs text-text-secondary hover:text-text-primary underline"
+          >
+            Reset and run again
+          </button>
+        </div>
+      )}
+
+      {/* Error outside of completion (e.g. top-level error before any results) */}
+      {status?.error && !status.completedAt && !status.running && (
+        <div className="space-y-3">
+          <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {status.error}
+          </p>
+          <button
+            onClick={resetPodBootstrap}
+            className="text-xs text-text-secondary hover:text-text-primary underline"
+          >
+            Reset and try again
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Setup Page ────────────────────────────────────────────────────────────
 
-type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings'
+type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'pod-bootstrap' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings'
 
 export default function SetupPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>(null)
@@ -3131,6 +3347,16 @@ export default function SetupPage() {
             onToggle={() => toggleSection('rh-portal')}
           >
             <RedHatPortalSection onConnected={() => setRhOk(true)} />
+          </AccordionSection>
+
+          <AccordionSection
+            id="pod-bootstrap"
+            title="POD Bootstrap"
+            badge={<span className="text-xs text-text-secondary">Full-team onboarding</span>}
+            isOpen={openSection === 'pod-bootstrap'}
+            onToggle={() => toggleSection('pod-bootstrap')}
+          >
+            <PodBootstrapSection />
           </AccordionSection>
 
           <AccordionSection
