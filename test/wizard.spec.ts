@@ -21,33 +21,38 @@ test.describe('Setup page — accordion sections', () => {
 
   test('OAuth Keys section header is visible', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await expect(page.getByText('OAuth Keys', { exact: true })).toBeVisible()
+    await expect(page.getByText(/OAuth Keys/)).toBeVisible()
   })
 
   test('Google Auth section header is visible', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await expect(page.getByText('Google Auth', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Google Auth/)).toBeVisible()
   })
 
   test('Red Hat Portal section header is visible', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await expect(page.getByText('Red Hat Portal', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Red Hat Portal/)).toBeVisible()
   })
 
   test('AEs & Customers section header is visible', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await expect(page.getByText('AEs & Customers', { exact: true })).toBeVisible()
+    await expect(page.getByText(/AEs & Customers/)).toBeVisible()
   })
 
   test('Data Sources section header is visible', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await expect(page.getByText('Data Sources', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Data Sources/)).toBeVisible()
   })
 
-  test('all 6 section headers are present', async ({ page }) => {
+  test('POD Bootstrap section header is visible', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    for (const section of ['OAuth Keys', 'Google Auth', 'Red Hat Portal', 'AEs & Customers', 'Data Sources']) {
-      await expect(page.getByText(section, { exact: true })).toBeVisible()
+    await expect(page.getByText(/POD Bootstrap/)).toBeVisible()
+  })
+
+  test('all section headers are present', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    for (const section of [/OAuth Keys/, /Google Auth/, /Red Hat Portal/, /POD Bootstrap/, /AEs & Customers/, /Data Sources/]) {
+      await expect(page.getByText(section)).toBeVisible()
     }
   })
 })
@@ -60,8 +65,14 @@ test.describe('Setup page — OAuth Keys section', () => {
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: false }) })
     )
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    // Open the OAuth Keys accordion
-    await page.getByText('OAuth Keys', { exact: true }).click()
+    // OAuth Keys auto-expands when keys are missing; clicking may close it if already open.
+    // Ensure it is open regardless of auto-expand timing.
+    const content = page.locator('section#oauth-keys textarea')
+    await page.getByRole('button', { name: /OAuth Keys/ }).click()
+    if (!await content.isVisible()) {
+      await page.getByRole('button', { name: /OAuth Keys/ }).click()
+    }
+    await content.waitFor({ state: 'visible' })
   })
 
   test('OAuth Keys section expands on click', async ({ page }) => {
@@ -109,11 +120,18 @@ test.describe('Setup page — OAuth Keys section', () => {
 
 test.describe('Setup page — Google Auth section', () => {
   test('Google Auth section expands on click and shows auth button', async ({ page }) => {
-    await page.route('**/api/auth/google/status', route =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authorized: false }) })
+    await page.route('**/api/setup/oauth-keys-status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: true }) })
+    )
+    await page.route('**/api/oauth/status', route =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authorized: false, expired: false }) })
     )
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await page.getByText('Google Auth', { exact: true }).click()
+    const content = page.locator('section#google-auth')
+    await page.getByRole('button', { name: /Google Auth/ }).click()
+    if (!await page.getByText(/Connect Google Workspace/i).isVisible()) {
+      await page.getByRole('button', { name: /Google Auth/ }).click()
+    }
     // Connect Google Workspace link or button should be visible
     await expect(page.getByText(/Connect Google Workspace/i)).toBeVisible()
   })
@@ -147,7 +165,7 @@ test.describe('Setup page — Red Hat Portal section', () => {
       }) })
     )
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await page.getByText('Red Hat Portal', { exact: true }).click()
+    await page.getByRole('button', { name: /Red Hat Portal/ }).click()
     await expect(page.getByRole('button', { name: /Connect Red Hat Portal/i })).toBeVisible()
   })
 
@@ -164,7 +182,7 @@ test.describe('Setup page — Red Hat Portal section', () => {
       return route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
     })
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await page.getByText('Red Hat Portal', { exact: true }).click()
+    await page.getByRole('button', { name: /Red Hat Portal/ }).click()
     await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
     await expect(page.getByText(/Browser window opened/i)).toBeVisible()
     expect(startCalled).toBe(true)
@@ -181,7 +199,7 @@ test.describe('Setup page — Red Hat Portal section', () => {
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
     )
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await page.getByText('Red Hat Portal', { exact: true }).click()
+    await page.getByRole('button', { name: /Red Hat Portal/ }).click()
     await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
     await expect(page.getByText(/Login timed out/i)).toBeVisible()
   })
@@ -201,7 +219,7 @@ test.describe('Setup page — Red Hat Portal section', () => {
       })
     )
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await page.getByText('Red Hat Portal', { exact: true }).click()
+    await page.getByRole('button', { name: /Red Hat Portal/ }).click()
     await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
     await expect(page.getByText(/Login already in progress/i)).toBeVisible()
   })
@@ -214,7 +232,7 @@ test.describe('Setup page — Red Hat Portal section', () => {
       }) })
     )
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await page.getByText('Red Hat Portal', { exact: true }).click()
+    await page.getByRole('button', { name: /Red Hat Portal/ }).click()
     await expect(page.getByText(/Red Hat Portal Connected/i)).toBeVisible()
   })
 
@@ -232,7 +250,7 @@ test.describe('Setup page — Red Hat Portal section', () => {
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({}) })
     )
     await page.goto(`${BASE_URL}/dashboard/setup`)
-    await page.getByText('Red Hat Portal', { exact: true }).click()
+    await page.getByRole('button', { name: /Red Hat Portal/ }).click()
     await page.getByRole('button', { name: /Connect Red Hat Portal/i }).click()
     await expect(page.getByRole('button', { name: /Cancel/i })).toBeVisible()
     await page.getByRole('button', { name: /Cancel/i }).click()
