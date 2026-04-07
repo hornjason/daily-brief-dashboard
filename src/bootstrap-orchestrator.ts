@@ -661,7 +661,9 @@ export function registerBootstrapRoutes(app: Hono): void {
     podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
 
     const body = await c.req.json<{ territorySheetId?: string; sfReportId?: string; parentFolderId?: string; force?: boolean }>().catch(() => ({} as { territorySheetId?: string; sfReportId?: string; parentFolderId?: string; force?: boolean }))
-    const territorySheetId = (body.territorySheetId ?? '').trim()
+    const rawTerritorySheet = (body.territorySheetId ?? '').trim()
+    // Accept full Google Sheets URL — extract bare sheet ID
+    const territorySheetId = rawTerritorySheet.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/)?.[1] ?? rawTerritorySheet
     const rawSfReportId = (body.sfReportId ?? '').trim()
     const sfReportId = rawSfReportId ? extractSfReportId(rawSfReportId) : ''
     const rawParent = (body.parentFolderId ?? '').trim()
