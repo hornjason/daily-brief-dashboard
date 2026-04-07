@@ -659,34 +659,8 @@ export async function writeCcspSheet(
       })
     }
   } else {
-    // Search for existing CCSP sheet in AE's Drive folder before creating a new one
-    let foundId: string | undefined
-    try {
-      const searchRes = await drive.files.list({
-        q: `'${driveFolderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and name contains 'CCSP' and trashed=false`,
-        fields: 'files(id,name)',
-        pageSize: 5,
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      })
-      const matches = (searchRes.data.files ?? []).filter(f =>
-        f.name?.toLowerCase().includes(aeName.toLowerCase()) || f.name?.toLowerCase().includes('ccsp')
-      )
-      if (matches.length > 0) {
-        foundId = matches[0].id!
-        console.log(`[ccsp] ${aeName}: found existing CCSP sheet '${matches[0].name}' (${foundId}) — reusing instead of creating new`)
-        patchAe(aeName, { ccspSheetId: foundId })
-      }
-    } catch (e: any) {
-      console.warn(`[ccsp] ${aeName}: Drive search failed: ${e?.message} — will create new sheet`)
-    }
-
-    if (foundId) {
-      // Recurse with found sheet ID (will use the "existing sheet" path)
-      return writeCcspSheet(results, aeName, driveFolderId, foundId)
-    }
-
     // Create new spreadsheet in AE's Drive folder
+    // Note: bootstrap registers the correct sheet ID in aes.json — no Drive search needed here.
     const created = await drive.files.create({
       requestBody: {
         name: `${aeName} CCSP`,
