@@ -445,45 +445,48 @@ function Dashboard() {
               </div>
             )}
 
-            {/* AE Filter Chip Bar (Step 4) */}
-            {aeList.length > 1 && (
+            {/* Filter Bar — AE chips (2+ AEs only) + Product chips (always when data exists) */}
+            {(aeList.length > 1 || allProducts.length > 0) && (
               <div className="sticky top-14 z-10 bg-bg/95 backdrop-blur-sm pb-2 -mt-2 pt-2 space-y-2">
-                <div role="radiogroup" aria-label="Filter by Account Executive" className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    onClick={() => handleAeFilterChange('all')}
-                    className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
-                      aeFilterSelected === 'all'
-                        ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
-                        : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
-                    }`}
-                    role="radio"
-                    aria-checked={aeFilterSelected === 'all'}
-                  >
-                    All <span className="text-xs opacity-70 ml-0.5">{accountsApi.data?.customers?.length ?? 0}</span>
-                  </button>
-                  {aeList.map(ae => {
-                    const healthStatus = aeWorstHealth[ae.name]
-                    const dotColor = healthStatus === 'critical' ? 'bg-red-500' : healthStatus === 'warning' ? 'bg-amber-500' : 'bg-green-500'
-                    return (
-                      <button
-                        key={ae.name}
-                        onClick={() => handleAeFilterChange(ae.name)}
-                        className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors flex items-center gap-1.5 ${
-                          aeFilterSelected === ae.name
-                            ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
-                            : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
-                        }`}
-                        role="radio"
-                        aria-checked={aeFilterSelected === ae.name}
-                      >
-                        {ae.count > 0 && <span className={`w-2 h-2 rounded-full ${dotColor} shrink-0`} />}
-                        {ae.name.split(' ')[0]} <span className="text-xs opacity-70 ml-0.5">{ae.count}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+                {/* AE Filter Chip Bar — only shown when 2+ AEs configured */}
+                {aeList.length > 1 && (
+                  <div role="radiogroup" aria-label="Filter by Account Executive" className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => handleAeFilterChange('all')}
+                      className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
+                        aeFilterSelected === 'all'
+                          ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                          : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                      }`}
+                      role="radio"
+                      aria-checked={aeFilterSelected === 'all'}
+                    >
+                      All <span className="text-xs opacity-70 ml-0.5">{accountsApi.data?.customers?.length ?? 0}</span>
+                    </button>
+                    {aeList.map(ae => {
+                      const healthStatus = aeWorstHealth[ae.name]
+                      const dotColor = healthStatus === 'critical' ? 'bg-red-500' : healthStatus === 'warning' ? 'bg-amber-500' : 'bg-green-500'
+                      return (
+                        <button
+                          key={ae.name}
+                          onClick={() => handleAeFilterChange(ae.name)}
+                          className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors flex items-center gap-1.5 ${
+                            aeFilterSelected === ae.name
+                              ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                              : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                          }`}
+                          role="radio"
+                          aria-checked={aeFilterSelected === ae.name}
+                        >
+                          {ae.count > 0 && <span className={`w-2 h-2 rounded-full ${dotColor} shrink-0`} />}
+                          {ae.name.split(' ')[0]} <span className="text-xs opacity-70 ml-0.5">{ae.count}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
 
-                {/* Product Filter Chip Bar (Step 5) */}
+                {/* Product Filter Chip Bar — shown whenever subscription data exists */}
                 {allProducts.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap" aria-label="Filter by product">
                     <button
