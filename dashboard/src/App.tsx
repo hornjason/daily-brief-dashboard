@@ -3,7 +3,7 @@ import { Routes, Route, useLocation } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
 import { Sidebar } from './components/Sidebar'
 import type { DashboardViewMode } from './components/Sidebar'
-import { discoverAllProducts, stripProductName } from './utils/productName'
+import { discoverAllProducts, stripProductName, normalizeProductName, getProductGroupMembers } from './utils/productName'
 import { TopBar } from './components/TopBar'
 import { KPICards } from './components/KPICards'
 import { CalendarStrip } from './components/CalendarStrip'
@@ -35,6 +35,35 @@ interface RhStatus {
 }
 
 const timeAgo = formatRelTime
+
+/** Map normalized product labels to case-matching keywords (LOG-04) */
+const PRODUCT_CASE_KEYWORDS: Record<string, string[]> = {
+  'RHEL': ['enterprise linux', 'satellite'],
+  'OCP': ['openshift'],
+  'AAP': ['ansible'],
+  'Storage': ['storage'],
+  'Middleware': ['runtimes', 'integration'],
+  'Trial': ['trial'],
+  'Free': ['free'],
+  'Beta': ['beta'],
+  'Partner Subscriptions': ['partner'],
+  'Developer Subscriptions': ['developer subscription'],
+}
+
+function caseMatchesProducts(caseProduct: string, selectedLabels: string[]): boolean {
+  if (!caseProduct) return false
+  const lower = caseProduct.toLowerCase()
+  for (const label of selectedLabels) {
+    const keywords = PRODUCT_CASE_KEYWORDS[label]
+    if (keywords) {
+      if (keywords.some(kw => lower.includes(kw))) return true
+    } else {
+      // For labels not in the map, match if the label appears in the case product
+      if (lower.includes(label.toLowerCase())) return true
+    }
+  }
+  return false
+}
 
 function RhSessionBanner({ status, onReconnect, onVncOpen }: { status: RhStatus; onReconnect: () => void; onVncOpen: (win: Window | null) => void }) {
   const [reconnecting, setReconnecting] = useState(false)
@@ -296,10 +325,35 @@ function Dashboard() {
     return result
   }, [aeList, accountsApi.data, casesApi.data, aeHealthScores])
 
-  // Discover all products across accounts
+  // Discover products scoped to the current AE filter
+  // When a specific AE is selected, only show products from that AE's customers
   const allProducts = useMemo(() => {
-    return discoverAllProducts(accountsApi.data?.customers ?? [])
-  }, [accountsApi.data])
+    let accounts = accountsApi.data?.customers ?? []
+    if (aeFilterSelected !== 'all') {
+      accounts = accounts.filter(a => a.ae === aeFilterSelected)
+    }
+    return discoverAllProducts(accounts)
+  }, [accountsApi.data, aeFilterSelected])
+
+  // Raw product descriptions for tooltip grouping (LOG-03)
+  const rawProducts = useMemo(() => {
+    let accounts = accountsApi.data?.customers ?? []
+    if (aeFilterSelected !== 'all') {
+      accounts = accounts.filter(a => a.ae === aeFilterSelected)
+    }
+    return [...new Set(accounts.flatMap(a => (a.products ?? []).map(p => p.productDescription).filter(Boolean)))]
+  }, [accountsApi.data, aeFilterSelected])
+
+  // Clear product selections that no longer exist when AE filter changes
+  useEffect(() => {
+    if (productFilterSelected.length === 0) return
+    const validSet = new Set(allProducts)
+    const still = productFilterSelected.filter(p => validSet.has(p))
+    if (still.length !== productFilterSelected.length) {
+      setProductFilterSelected(still)
+      localStorage.setItem('product-filter-selected', JSON.stringify(still))
+    }
+  }, [allProducts])
 
   // Filter accounts based on AE and product filters
   const filteredAccounts = useMemo(() => {
@@ -503,6 +557,7 @@ function Dashboard() {
                       <button
                         key={product}
                         onClick={() => handleProductFilterToggle(product)}
+                        title={getProductGroupMembers(product, rawProducts).join(', ')}
                         className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
                           productFilterSelected.includes(product)
                             ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
@@ -518,14 +573,14 @@ function Dashboard() {
             )}
 
             {/* Morning Summary (R06) — hidden in product view */}
-            {viewMode === 'asa' && <MorningSummary />}
+            {viewMode === 'asa' && <MorningSummary matchingCustomers={productFilterSelected.length > 0 ? new Set(filteredAccounts.map(a => a.name)) : undefined} />}
 
             {/* Top Actions (BKL-F10a, BKL-F10b) */}
             <TopActionsPanel actions={topActions} />
 
             {/* KPI Cards */}
             <section id="section-command" data-section="section-command">
-              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={accountsApi.data?.customers ?? []} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={rhStatus?.hasSession} sparklineHistory={sparklineHistory} />
+              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={filteredAccounts} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={rhStatus?.hasSession} sparklineHistory={sparklineHistory} selectedProducts={productFilterSelected} allCases={casesApi.data?.cases ?? []} allAccounts={accountsApi.data?.customers ?? []} caseMatchesProducts={caseMatchesProducts} />
             </section>
 
             {/* Pipeline */}

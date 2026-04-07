@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { KPIs, SupportCase, AccountInfo, PipelineOpp } from '../types'
+import { normalizeProductName, stripProductName } from '../utils/productName'
 import KPICasesModal from './KPICasesModal'
 import KPISev1Modal from './KPISev1Modal'
 import KPIRenewalsModal, { type RenewalRow, isFreeOrTrialRow } from './KPIRenewalsModal'
@@ -114,6 +115,14 @@ interface KPICardsProps {
   rhLastScraped?: string | null
   rhHasSession?: boolean
   sparklineHistory?: Record<string, number[]>
+  /** Currently selected product filter labels (LOG-04) */
+  selectedProducts?: string[]
+  /** All cases unfiltered — for showing "filtered / total" display */
+  allCases?: SupportCase[]
+  /** All accounts unfiltered — for showing "filtered / total" display */
+  allAccounts?: AccountInfo[]
+  /** Case-to-product matching function from App */
+  caseMatchesProducts?: (caseProduct: string, selectedLabels: string[]) => boolean
 }
 
 function rhTimeAgo(isoString: string): string {
@@ -126,7 +135,7 @@ function rhTimeAgo(isoString: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory }: KPICardsProps) {
+export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory, selectedProducts, allCases, allAccounts, caseMatchesProducts }: KPICardsProps) {
   const [casesOpen, setCasesOpen] = useState(false)
   const [sev1Open, setSev1Open] = useState(false)
   const [redOpen, setRedOpen] = useState(false)
@@ -187,6 +196,43 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
   const amberRows = paidRows.filter((r) => r.daysLeft >= 30)
   const redFreeTrialRows = freeTrialRows.filter((r) => r.daysLeft < 30)
   const amberFreeTrialRows = freeTrialRows.filter((r) => r.daysLeft >= 30)
+  // LOG-04: Compute total renewal rows from ALL accounts for "filtered / total" display
+  const allRenewalRows = useMemo((): RenewalRow[] => {
+    if (!selectedProducts?.length || !allAccounts) return []
+    const today = Date.now()
+    const rows: RenewalRow[] = []
+    for (const acct of allAccounts) {
+      for (const p of acct.products ?? []) {
+        if (!p.endDate) continue
+        const daysLeft = Math.ceil((new Date(p.endDate).getTime() - today) / 86_400_000)
+        if (daysLeft <= 90) {
+          rows.push({
+            customerName: acct.name,
+            productDescription: p.productDescription,
+            quantity: p.quantity,
+            endDate: p.endDate,
+            daysLeft,
+            ae: acct.ae,
+            sku: p.sku,
+          })
+        }
+      }
+    }
+    return rows
+  }, [allAccounts, selectedProducts])
+
+  const allPaidRows = useMemo(() => allRenewalRows.filter(r => !isFreeOrTrialRow(r)), [allRenewalRows])
+  const totalRedCount = selectedProducts?.length ? allPaidRows.filter(r => r.daysLeft < 30).length : 0
+  const totalAmberCount = selectedProducts?.length ? allPaidRows.filter(r => r.daysLeft >= 30).length : 0
+
+  // LOG-04: Filtered case counts
+  const isProductFiltered = (selectedProducts?.length ?? 0) > 0
+  const filteredCaseCount = useMemo(() => {
+    if (!isProductFiltered || !caseMatchesProducts) return cases.length
+    return cases.filter(c => caseMatchesProducts(c.product ?? '', selectedProducts!)).length
+  }, [cases, selectedProducts, isProductFiltered, caseMatchesProducts])
+  const totalCaseCount = isProductFiltered ? (allCases?.length ?? cases.length) : cases.length
+
   const redCount = redRows.length
   const amberCount = amberRows.length
 
@@ -216,7 +262,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       <KPICard
         key="openCases"
         label="Open Cases"
-        value={kpis?.openCasesTotal ?? 0}
+        value={isProductFiltered ? `${filteredCaseCount} / ${totalCaseCount}` : (kpis?.openCasesTotal ?? 0)}
         icon={<ShieldAlert className="w-5 h-5" />}
         accent="#00BCD4"
         loading={loading}
@@ -279,7 +325,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       <KPICard
         key="expiringWithin30"
         label="Expiring Within 30 Days"
-        value={loading ? 0 : redCount}
+        value={loading ? 0 : isProductFiltered ? `${redCount} / ${totalRedCount}` : redCount}
         icon={<Package className="w-5 h-5" />}
         accent={redCount > 0 ? '#F85149' : '#3FB950'}
         loading={loading}
@@ -293,7 +339,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       <KPICard
         key="renewals30to90"
         label="Renewals in 30-90 Days"
-        value={loading ? 0 : amberCount}
+        value={loading ? 0 : isProductFiltered ? `${amberCount} / ${totalAmberCount}` : amberCount}
         icon={<Key className="w-5 h-5" />}
         accent={amberCount > 0 ? '#D29922' : '#3FB950'}
         loading={loading}

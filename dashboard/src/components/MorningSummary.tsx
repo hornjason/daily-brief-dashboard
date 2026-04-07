@@ -16,7 +16,12 @@ interface MorningSummaryData {
   synthesis?: string
 }
 
-export default function MorningSummary() {
+interface MorningSummaryProps {
+  /** Customer names whose accounts match the selected product filter */
+  matchingCustomers?: Set<string>
+}
+
+export default function MorningSummary({ matchingCustomers }: MorningSummaryProps = {}) {
   const navigate = useNavigate()
   const [data, setData] = useState<MorningSummaryData | null>(null)
   const [collapsed, setCollapsed] = useState(false)
@@ -29,6 +34,11 @@ export default function MorningSummary() {
   }, [])
 
   if (!data) return null
+
+  // LOG-05: Filter signals to matching customers when product filter is active
+  const displaySignals = matchingCustomers && matchingCustomers.size > 0
+    ? data.signals.filter(s => matchingCustomers.has(s.customer))
+    : data.signals
 
   const severityBar: Record<string, string> = {
     critical: 'bg-health-red',
@@ -67,13 +77,15 @@ export default function MorningSummary() {
               {data.synthesis}
             </div>
           )}
-          {data.signals.length === 0 ? (
+          {displaySignals.length === 0 ? (
             <p className="text-sm text-text-secondary text-center py-4">
-              All clear across {data.customerCount} accounts
+              {matchingCustomers && matchingCustomers.size > 0
+                ? 'No signals for selected products'
+                : `All clear across ${data.customerCount} accounts`}
             </p>
           ) : (
             <div className="space-y-2">
-              {data.signals.map((s, i) => {
+              {displaySignals.map((s, i) => {
                 const Icon = severityIcon[s.severity]
                 return (
                   <button
