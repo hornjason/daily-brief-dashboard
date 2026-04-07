@@ -34,18 +34,22 @@ async function postJSON(path: string, data: unknown) {
   return { status: res.status, body: await res.json() }
 }
 
-// ── Snapshot / restore AE config ─────────────────────────────────────────────
+// ── Snapshot / restore full config (aes + customers) ─────────────────────────
+// Uses /api/__test/snapshot + /api/__test/restore to capture and atomically
+// restore both aes.json and customers.json. This prevents the POST /api/aes
+// wizard cleanup from irreversibly purging customers for "removed" AEs.
 
-let originalAes: unknown[] = []
+let snapshot: unknown = null
 
 test.beforeAll(async () => {
-  const { body } = await getJSON('/api/aes')
-  originalAes = body.aes ?? []
+  const { body } = await postJSON('/api/__test/snapshot', {})
+  snapshot = body
 })
 
 test.afterAll(async () => {
-  // Restore original AE config so tests are non-destructive
-  await postJSON('/api/aes', { aes: originalAes })
+  if (snapshot) {
+    await postJSON('/api/__test/restore', snapshot)
+  }
 })
 
 // ── REG-001: tableauTerritories preserved after POST /api/aes ────────────────

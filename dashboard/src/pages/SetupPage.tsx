@@ -2927,6 +2927,10 @@ function PodBootstrapSection() {
   const [territorySheetId, setTerritorySheetId] = useState('')
   const [sfReportId, setSfReportId] = useState('')
   const [parentFolderId, setParentFolderId] = useState('')
+  const [podTabTitle, setPodTabTitle] = useState('')
+  const [podTabs, setPodTabs] = useState<string[]>([])
+  const [podTabsError, setPodTabsError] = useState<string | null>(null)
+  const [podTabsLoading, setPodTabsLoading] = useState(false)
   const [tableauOk, setTableauOk] = useState<boolean | null>(null)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
@@ -2956,6 +2960,46 @@ function PodBootstrapSection() {
     return () => controller.abort()
   }, [])
 
+  // Fetch POD tabs when territorySheetId changes (debounced)
+  useEffect(() => {
+    if (territorySheetId.trim().length < 10) {
+      setPodTabs([])
+      setPodTabTitle('')
+      setPodTabsError(null)
+      return
+    }
+    setPodTabsLoading(true)
+    setPodTabsError(null)
+    const timer = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/bootstrap/pod/tabs?sheetId=${encodeURIComponent(territorySheetId.trim())}`)
+        const d = await r.json()
+        if (!r.ok || d.error) {
+          setPodTabsError('Could not load tabs — check sheet ID')
+          setPodTabs([])
+          setPodTabTitle('')
+        } else if (!d.tabs?.length) {
+          setPodTabsError('Could not load tabs — check sheet ID')
+          setPodTabs([])
+          setPodTabTitle('')
+        } else {
+          setPodTabs(d.tabs)
+          setPodTabsError(null)
+          // Auto-select if only one tab
+          if (d.tabs.length === 1) setPodTabTitle(d.tabs[0])
+          else setPodTabTitle('')
+        }
+      } catch {
+        setPodTabsError('Could not load tabs — check sheet ID')
+        setPodTabs([])
+        setPodTabTitle('')
+      } finally {
+        setPodTabsLoading(false)
+      }
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [territorySheetId])
+
   // Poll while running
   useEffect(() => {
     if (!status?.running) return
@@ -2972,7 +3016,7 @@ function PodBootstrapSection() {
   }, [status?.running])
 
   const startPodBootstrap = async () => {
-    if (!territorySheetId.trim() || !sfReportId.trim() || !parentFolderId.trim()) return
+    if (!territorySheetId.trim() || !sfReportId.trim() || !parentFolderId.trim() || !podTabTitle) return
     setStarting(true)
     setStartError(null)
     try {
@@ -2983,6 +3027,7 @@ function PodBootstrapSection() {
           territorySheetId: territorySheetId.trim(),
           sfReportId: sfReportId.trim(),
           parentFolderId: parentFolderId.trim(),
+          podTabTitle,
         }),
       })
       const d = await r.json()
@@ -3054,6 +3099,37 @@ function PodBootstrapSection() {
             <p className="text-xs text-text-secondary mt-1">Drive folder where each AE's subfolder will be created.</p>
           </div>
 
+          <div>
+            <label className="block text-xs text-text-secondary mb-1">POD Tab</label>
+            {podTabsLoading ? (
+              <div className="flex items-center gap-2 text-xs text-text-secondary py-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading tabs...
+              </div>
+            ) : podTabs.length > 0 ? (
+              <select
+                value={podTabTitle}
+                onChange={e => setPodTabTitle(e.target.value)}
+                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent"
+              >
+                <option value="">Select a tab...</option>
+                {podTabs.map(tab => (
+                  <option key={tab} value={tab}>{tab}</option>
+                ))}
+              </select>
+            ) : (
+              <select
+                disabled
+                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-secondary opacity-50"
+              >
+                <option>Enter Territory Sheet ID first</option>
+              </select>
+            )}
+            {podTabsError && (
+              <p className="text-xs text-critical mt-1">{podTabsError}</p>
+            )}
+            <p className="text-xs text-text-secondary mt-1">Select the territory tab for this POD.</p>
+          </div>
+
           {tableauOk === false && (
             <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-2.5 text-xs text-warning">
               <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -3070,7 +3146,7 @@ function PodBootstrapSection() {
           <div className="flex justify-end">
             <button
               onClick={startPodBootstrap}
-              disabled={!territorySheetId.trim() || !sfReportId.trim() || !parentFolderId.trim() || starting}
+              disabled={!territorySheetId.trim() || !sfReportId.trim() || !parentFolderId.trim() || !podTabTitle || starting}
               className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
             >
               {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}

@@ -1055,13 +1055,13 @@ export function AdminPage() {
                 <dd className="text-gray-200 tabular-nums truncate min-w-0">
                   {(geminiUsage.todayInputTokens + geminiUsage.todayOutputTokens).toLocaleString()} tokens
                   &nbsp;·&nbsp;
-                  <span className="text-yellow-400">${geminiUsage.todayCostUsd.toFixed(4)}</span>
+                  <span className="text-yellow-400">${(geminiUsage.todayCostUsd ?? 0).toFixed(4)}</span>
                 </dd>
                 <dt className="whitespace-nowrap">This month</dt>
                 <dd className="text-gray-200 tabular-nums truncate min-w-0">
                   {(geminiUsage.monthInputTokens + geminiUsage.monthOutputTokens).toLocaleString()} tokens
                   &nbsp;·&nbsp;
-                  <span className="text-yellow-400">${geminiUsage.monthCostUsd.toFixed(4)}</span>
+                  <span className="text-yellow-400">${(geminiUsage.monthCostUsd ?? 0).toFixed(4)}</span>
                 </dd>
                 <dt className="whitespace-nowrap">Total calls this session</dt>
                 <dd className="text-gray-200 tabular-nums truncate min-w-0">{geminiUsage.totalCalls}</dd>
@@ -1074,7 +1074,7 @@ export function AdminPage() {
                         <>
                           <dt key={`${type}-label`} className="text-gray-500 whitespace-nowrap">{type}</dt>
                           <dd key={`${type}-value`} className="tabular-nums truncate min-w-0">
-                            {stats.calls} calls · ${stats.costUsd.toFixed(4)}
+                            {stats.calls} calls · ${(stats.costUsd ?? 0).toFixed(4)}
                           </dd>
                         </>
                       ))}

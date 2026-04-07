@@ -293,7 +293,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
                     <div key={partner}>
                       <div className="flex items-center justify-between text-xs mb-1">
                         <span className="text-text-primary font-medium">{partner}</span>
-                        <span className="text-text-secondary">{fmt(acv)} · {pct.toFixed(0)}%</span>
+                        <span className="text-text-secondary">{fmt(acv)} · {(pct ?? 0).toFixed(0)}%</span>
                       </div>
                       <div className="h-1.5 bg-border rounded-full overflow-hidden">
                         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
@@ -331,8 +331,8 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
           ) : (
             <div className="space-y-2">
               {displayedAccounts.map(({ name, acv }, i) => {
-                const maxAcv = displayedAccounts[0]?.acv ?? 1
-                const pct = (acv / maxAcv) * 100
+                const maxAcv = displayedAccounts[0]?.acv || 1
+                const pct = maxAcv > 0 ? ((acv ?? 0) / maxAcv) * 100 : 0
                 const color = ACCOUNT_COLORS[i % ACCOUNT_COLORS.length]
                 return (
                   <div key={name}>

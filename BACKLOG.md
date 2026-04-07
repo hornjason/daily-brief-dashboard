@@ -4733,7 +4733,7 @@ Description: POD-level bootstrap flow. bootstrapPOD() function in bootstrap-orch
 Dependencies: Phase 2 complete (done).
 
 ### BKL-PVIEW-04 | Product View — Phase 4: react-window virtualization for 8 AEs/96 customers
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-07 — Commit 98702f1: react-window Grid in AccountPortfolioGrid.tsx, ResizeObserver responsive columns, fixed 240px row height
 Severity: MEDIUM
 Priority: P2
 Size: L
@@ -4778,6 +4778,15 @@ Source: Rook scan 2026-04-07 Phase 3
 Files: src/bootstrap-orchestrator.ts line 657
 Description: The territorySheetId regex `{10,}` accepts any 10+ alphanumeric string. Real Google Sheet IDs are exactly 44 characters. A tighter bound `{44}` or `{30,60}` would reduce accident surface (not a meaningful security gain on localhost but worth tightening).
 
+### BKL-POD-01 | POD Bootstrap — Drive folder preview after fields populated
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P2
+Size: S
+Source: Jason 2026-04-07
+Files: dashboard/src/pages/SetupPage.tsx — PodBootstrapSection
+Description: Once Territory Sheet ID, SF Report ID, and Parent Drive Folder are all filled in, show a Google Drive folder preview (similar to the single-AE bootstrap folder preview) so the user can confirm they've selected the right parent folder before clicking Bootstrap POD. Should use the same Drive folder name lookup pattern already used in AutoBootstrapForm.
+
 ### BKL-SEC-06 | bootstrapPOD retry silently no-ops on 409 instead of waiting
 Status: 🔴 OPEN
 Severity: LOW
@@ -4786,3 +4795,39 @@ Size: S
 Source: Rook scan 2026-04-07 Phase 3
 Files: src/bootstrap-orchestrator.ts ~line 360
 Description: During the auto-retry pass for zero-account AEs, if the retry fetch() to POST /api/bootstrap/auto returns 409 (prior AE's bootstrap still running), the code logs a warning and continues without waiting. The retry becomes a silent no-op. Fix: on 409 during retry, wait for autoBootstrapState.running === false (same pattern as lines 341-343) before continuing.
+
+### BKL-POD-02 | POD Bootstrap — 15-minute per-AE timeout too short for AEs with 10+ accounts
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: POD Bootstrap test 2026-04-07
+Files: src/bootstrap-orchestrator.ts line 442
+Description: The per-AE timeout is hardcoded at 15 minutes. Danny Hollar (11 accounts including slow portal lookups like Ringcentral, Rakuten Group) timed out consistently. Account discovery + Supportable scraping for 10+ accounts can exceed 15 minutes on slow portal sessions. Fix: make the timeout dynamic based on customer count (e.g., 10 min base + 90s per customer), or raise to 30 minutes flat. Also consider logging a warning at 10 minutes so operators know it's close to timeout.
+
+### BKL-POD-03 | POD Bootstrap — Pipeline sync fails with "File not found" if Drive folder is deleted mid-run
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: POD Bootstrap test 2026-04-07
+Files: src/bootstrap-orchestrator.ts — syncPipelineSheet step
+Description: If the AE's Drive folder is deleted after the bootstrap has already recorded the folder ID in aes.json (e.g., via a wipe script during retry), the Pipeline sync step fails with "File not found: {folderId}". The bootstrap does not detect the missing folder before attempting the pipeline sync, and the error message does not suggest recovery. Fix: before pipeline sync, verify the Drive folder exists (drive.files.get with fields:'id') and surface a clearer error ("Drive folder was deleted — re-run bootstrap with force:true to recreate it") rather than the raw Google API error.
+
+### BKL-POD-04 | POD Bootstrap — tabs endpoint doesn't extract sheet ID from full URL
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: XS
+Source: Quinn QA 2026-04-07
+Files: src/bootstrap-orchestrator.ts — GET /api/bootstrap/pod/tabs handler
+Description: The tabs endpoint receives the full Google Sheets URL verbatim and fails with 500. The URL extraction regex (already applied in bootstrapPOD for the main flow) needs to be applied in the tabs endpoint handler as well, before passing to the Sheets API. Fix: extract sheetId from URL with the same regex used in bootstrapPOD.
+
+### BKL-POD-05 | POD Bootstrap — all AEs show "error" even when Drive + Pipeline succeeded
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: S
+Source: Quinn QA 2026-04-07
+Files: src/bootstrap-orchestrator.ts — bootstrapPOD result reporting
+Description: When the Red Hat Portal is not connected, the bootstrap correctly creates Drive folders, customer subfolders, and pipeline sheets, but marks the AE status as "error: Zero accounts after retry". This is misleading — partial success isn't reflected. Consider reporting "partial" status with detail on which steps succeeded vs failed, rather than blanket "error".

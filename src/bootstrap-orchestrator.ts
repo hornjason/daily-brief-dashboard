@@ -1,6 +1,6 @@
 // ── Auto-bootstrap + Tableau routes (M03 — extracted from server.ts) ────────
 import { Hono } from 'hono'
-import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { writeFileSync as writeFileSyncRaw, readFileSync, renameSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
@@ -22,7 +22,31 @@ import { loadProductIntelConfig, saveProductConfig } from './product-release-rad
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
+const DATA_SOURCES_PATH = resolve(SRV_CONFIG_DIR, 'data-sources.json')
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
+
+// ── POD config persistence ────────────────────────────────────────────────────
+/** Save the POD bootstrap inputs to data-sources.json so they survive restarts. */
+function savePodConfig(cfg: { territorySheetId: string; sfReportId: string; parentFolderId: string; podTabTitle?: string }): void {
+  try {
+    let ds: Record<string, unknown> = {}
+    try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch { /* fresh file */ }
+    const tmp = DATA_SOURCES_PATH + '.tmp'
+    writeFileSyncRaw(tmp, JSON.stringify({ ...ds, podConfig: cfg }, null, 2), { mode: 0o600 })
+    renameSync(tmp, DATA_SOURCES_PATH)
+    console.log('[pod-bootstrap] POD config saved to data-sources.json')
+  } catch (e: any) {
+    console.warn('[pod-bootstrap] Could not save POD config:', e?.message)
+  }
+}
+
+/** Read the last saved POD config from data-sources.json. Returns null if not saved. */
+function readPodConfig(): { territorySheetId: string; sfReportId: string; parentFolderId: string; podTabTitle?: string } | null {
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    return ds.podConfig ?? null
+  } catch { return null }
+}
 
 async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
   try {
@@ -198,6 +222,7 @@ export let podBootstrapState: PodBootstrapState = {
  */
 async function readAEsFromTerritorySheet(
   territorySheetId: string,
+  podTabTitle?: string,
 ): Promise<Array<{ aeName: string; territories: string[]; customerNames: string[] }>> {
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   if (!auth) throw new Error('Google auth not configured')
@@ -213,6 +238,11 @@ async function readAEsFromTerritorySheet(
            !lower.includes('accounts a')
   })
 
+  // When a specific POD tab is selected, restrict to just that tab
+  const filteredTabs = podTabTitle
+    ? corpTabs.filter(t => t === podTabTitle)
+    : corpTabs
+
   // Same pod-prefix logic as territory-sync.ts
   const podPrefixFromTab = (tabTitle: string): string => {
     const t = tabTitle.toLowerCase()
@@ -226,7 +256,7 @@ async function readAEsFromTerritorySheet(
   // Accumulate per-AE data: name → { territories, customerNames }
   const aeMap = new Map<string, { territories: Set<string>; customerNames: Set<string> }>()
 
-  for (const tabTitle of corpTabs) {
+  for (const tabTitle of filteredTabs) {
     const podPrefix = podPrefixFromTab(tabTitle)
     if (!podPrefix) continue
 
@@ -333,20 +363,23 @@ export async function bootstrapPOD(opts: {
   territorySheetId: string
   sfReportId: string
   parentFolderId: string
+  podTabTitle?: string
   force?: boolean
   onProgress?: (info: { aeName: string; index: number; total: number; status: 'skipped' | 'ok' | 'error'; error?: string }) => void
 }): Promise<{ succeeded: string[]; skipped: string[]; failed: Array<{ name: string; error: string }> }> {
-  const { territorySheetId, sfReportId, parentFolderId, force = false, onProgress } = opts
+  const { territorySheetId, sfReportId, parentFolderId, podTabTitle, force = false, onProgress } = opts
   const port = process.env.PORT ?? '7777'
   const baseUrl = `http://localhost:${port}`
 
   // Step 1: Read territory sheet to discover AEs + their customer lists
   console.log(`[pod-bootstrap] Reading territory sheet ${territorySheetId}…`)
-  const aeEntries = await readAEsFromTerritorySheet(territorySheetId)
+  const aeEntries = await readAEsFromTerritorySheet(territorySheetId, podTabTitle)
   if (aeEntries.length === 0) {
     throw new Error('No AEs found in territory sheet — check that the sheet has "Account Executive" header rows')
   }
   console.log(`[pod-bootstrap] Found ${aeEntries.length} AEs in territory sheet: ${aeEntries.map(a => a.aeName).join(', ')}`)
+  // Persist POD config so it survives server restarts and can seed future re-runs
+  savePodConfig({ territorySheetId, sfReportId, parentFolderId, podTabTitle })
 
   const succeeded: string[] = []
   const skipped: string[] = []
@@ -439,7 +472,8 @@ export async function bootstrapPOD(opts: {
       }
 
       // Poll until this AE's bootstrap completes
-      const perAeTimeoutMs = 15 * 60 * 1000
+      // BKL-POD-02: 30 min per AE (was 15) — AEs with 10+ accounts need more time
+      const perAeTimeoutMs = 30 * 60 * 1000
       const deadline = Date.now() + perAeTimeoutMs
       while (Date.now() < deadline) {
         await new Promise(r => setTimeout(r, 5000))
@@ -451,7 +485,7 @@ export async function bootstrapPOD(opts: {
         autoBootstrapState.running = false
         autoBootstrapState.completedAt = new Date().toISOString()
         autoBootstrapState.error = `Timed out after ${Math.round(perAeTimeoutMs / 60000)} minutes (POD bootstrap)`
-        throw new Error(`Bootstrap for ${aeName} timed out after 15 minutes`)
+        throw new Error(`Bootstrap for ${aeName} timed out after ${Math.round(perAeTimeoutMs / 60000)} minutes`)
       }
 
       // Check if bootstrap had errors
@@ -543,7 +577,7 @@ export async function bootstrapPOD(opts: {
           continue
         }
 
-        const deadline = Date.now() + 15 * 60 * 1000
+        const deadline = Date.now() + 30 * 60 * 1000
         while (Date.now() < deadline) {
           await new Promise(r => setTimeout(r, 5000))
           if (!autoBootstrapState.running) break
@@ -672,6 +706,38 @@ export function registerBootstrapRoutes(app: Hono): void {
     return c.json({ ok: true })
   })
 
+  // GET /api/bootstrap/pod/tabs — List corp tabs from a territory sheet
+  app.get('/api/bootstrap/pod/tabs', async (c) => {
+    const rawSheetId = (c.req.query('sheetId') ?? '').trim()
+    const sheetId = rawSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/)?.[1] ?? rawSheetId
+    if (!sheetId || !/^[a-zA-Z0-9_-]{10,}$/.test(sheetId)) {
+      return c.json({ error: 'sheetId query parameter is required' }, 400)
+    }
+    try {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      if (!auth) return c.json({ error: 'Google auth not configured' }, 500)
+      const sheetsClient = google.sheets({ version: 'v4', auth })
+      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: sheetId })
+      const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
+      const tabs = tabNames.filter(t => {
+        const lower = t.toLowerCase()
+        return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
+               !lower.includes('accounts a')
+      })
+      return c.json({ tabs })
+    } catch (e: any) {
+      console.error(`[pod-tabs] Error reading sheet ${sheetId}: ${e?.message ?? e}`)
+      return c.json({ error: e?.message ?? 'Failed to read sheet metadata' }, 500)
+    }
+  })
+
+  // GET /api/bootstrap/pod/config — Return last saved POD bootstrap config
+  app.get('/api/bootstrap/pod/config', (c) => {
+    const cfg = readPodConfig()
+    if (!cfg) return c.json({ config: null })
+    return c.json({ config: cfg })
+  })
+
   // POST /api/bootstrap/pod — Bootstrap all AEs in the POD from a territory sheet
   // Fire-and-forget: returns immediately, poll /api/bootstrap/auto/status for progress
   app.post('/api/bootstrap/pod', async (c) => {
@@ -685,7 +751,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     // marker; bootstrapPOD() overwrites these fields once it reads the territory sheet.
     podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
 
-    const body = await c.req.json<{ territorySheetId?: string; sfReportId?: string; parentFolderId?: string; force?: boolean }>().catch(() => ({} as { territorySheetId?: string; sfReportId?: string; parentFolderId?: string; force?: boolean }))
+    const body = await c.req.json<{ territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }>().catch(() => ({} as { territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }))
     const rawTerritorySheet = (body.territorySheetId ?? '').trim()
     // Accept full Google Sheets URL — extract bare sheet ID
     const territorySheetId = rawTerritorySheet.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/)?.[1] ?? rawTerritorySheet
@@ -714,6 +780,7 @@ export function registerBootstrapRoutes(app: Hono): void {
       return c.json({ error: 'parentFolderId is required — provide a Google Drive folder URL or bare ID' }, 400)
     }
 
+    const podTabTitle = (body.podTabTitle ?? '').trim() || undefined
     const force = body.force === true
 
     // Run async — fire-and-forget
@@ -721,6 +788,7 @@ export function registerBootstrapRoutes(app: Hono): void {
       territorySheetId,
       sfReportId,
       parentFolderId,
+      podTabTitle,
       force,
       onProgress: (info) => {
         console.log(`[pod-bootstrap] Progress: ${info.aeName} (${info.index + 1}/${info.total}) — ${info.status}${info.error ? ': ' + info.error : ''}`)

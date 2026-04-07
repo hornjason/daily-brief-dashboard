@@ -843,7 +843,7 @@ function CloudSpendCard({ customerName }: { customerName: string }) {
               <div key={partner}>
                 <div className="flex justify-between text-xs mb-0.5">
                   <span className="text-text-primary font-medium">{partner}</span>
-                  <span className="text-text-secondary">{fmtCurrency(acv)} · {pct.toFixed(0)}%</span>
+                  <span className="text-text-secondary">{fmtCurrency(acv)} · {(pct ?? 0).toFixed(0)}%</span>
                 </div>
                 <div className="h-1.5 bg-border rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />

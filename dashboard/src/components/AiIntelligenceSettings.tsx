@@ -187,7 +187,7 @@ function TemperatureSlider({
           <p className="text-xs text-text-secondary">{hint}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
-          <span className="text-sm text-white w-8 text-right">{value.toFixed(1)}</span>
+          <span className="text-sm text-white w-8 text-right">{(value ?? 0).toFixed(1)}</span>
           {value !== defaultValue && (
             <button
               onClick={() => onChange(defaultValue)}

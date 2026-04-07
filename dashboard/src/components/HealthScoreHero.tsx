@@ -25,19 +25,20 @@ export default function HealthScoreHero({ score, status, breakdown }: HealthScor
       ? 'bg-health-amber-bg border-health-amber-border'
       : 'bg-health-red-bg border-health-red-border'
 
+  const fallback = { score: 0, signal: 'No data' }
   const gauges: SignalGauge[] = [
-    { label: 'Cases', ...breakdown.cases },
-    { label: 'Subscriptions', ...breakdown.subscriptions },
-    { label: 'Meetings', ...breakdown.meetings },
-    { label: 'Emails', ...breakdown.emails },
-    { label: 'Pipeline', ...breakdown.pipeline },
-    { label: 'Cloud Spend', ...breakdown.cloudSpend },
+    { label: 'Cases', ...(breakdown?.cases ?? fallback) },
+    { label: 'Subscriptions', ...(breakdown?.subscriptions ?? fallback) },
+    { label: 'Meetings', ...(breakdown?.meetings ?? fallback) },
+    { label: 'Emails', ...(breakdown?.emails ?? fallback) },
+    { label: 'Pipeline', ...(breakdown?.pipeline ?? fallback) },
+    { label: 'Cloud Spend', ...(breakdown?.cloudSpend ?? fallback) },
   ]
 
   return (
     <div className={`p-4 rounded-card border ${statusBg}`}>
       <div className="flex items-center gap-3 mb-3">
-        <span className={`text-hero ${statusColor}`}>{(score / 10).toFixed(1)}</span>
+        <span className={`text-hero ${statusColor}`}>{((score ?? 0) / 10).toFixed(1)}</span>
         <span className="text-xs text-text-secondary">/ 10</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
