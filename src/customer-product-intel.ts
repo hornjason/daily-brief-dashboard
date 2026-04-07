@@ -12,10 +12,15 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import type { ProductConfig, ProductSummary } from './product-release-radar.ts'
+import { getFeatureCache } from './product-feature-radar.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
-import { sanitizePromptInput } from './utils.ts'
+import { sanitizePromptInput, normalizeForQuery } from './utils.ts'
 import { getAiConfig, getGeminiModel, getAutomationConfig } from './settings-api.ts'
+import { readSheetCache, readPipelineCache } from './cache-layer.ts'
+import { fetchCases } from './redhat.ts'
+import { customers } from './server-state.ts'
+import { getCachedCustomerDocsCorpus } from './customer-docs-corpus.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -406,4 +411,87 @@ For featureTalkingPoints: select the top 3-5 features from the feature radar tha
   // ── Save and return ───────────────────────────────────────────────────────
   writeCustomerIntelCache(slug, customerSlug, contentHash, intel)
   return intel
+}
+
+// ── Shared context helper ────────────────────────────────────────────────────
+
+/**
+ * Assembles the full customer intelligence context needed by both generate
+ * endpoints in product-intel-routes.ts. Centralises: customer resolution,
+ * subscriptions, support cases, docs corpus, pipeline, and feature cache
+ * accessor. Call once per request and pass the result to generateCustomerProductIntel.
+ */
+export async function buildCustomerIntelContext(customerSlug: string): Promise<{
+  customerName: string
+  subscriptions: any[]
+  supportCases: any[]
+  customerDocsText: string
+  customerDocsHash: string
+  opportunityNote: string | undefined
+  productFeaturesFn: (slug: string) => { features: any[]; hash: string | undefined }
+}> {
+  // Resolve customer by slug
+  const customer = customers.find(cu => toCustomerSlug(cu.name) === customerSlug)
+  const customerName = customer?.name ?? customerSlug
+
+  // Subscriptions
+  const sheetCache    = readSheetCache(customerName)
+  const subscriptions = sheetCache?.rows ?? []
+
+  // Support cases — all cases filtered to this customer's account numbers
+  let supportCases: any[] = []
+  try {
+    const allCases    = await fetchCases().catch(() => [])
+    const accountNums = (customer?.accountNumbers ?? []).map(String)
+    supportCases = accountNums.length
+      ? allCases.filter(c => accountNums.includes(String(c.accountNumber)))
+      : []
+  } catch (e: any) {
+    console.warn(`[customer-product-intel] buildCustomerIntelContext: could not load cases for ${customerName}:`, e?.message)
+  }
+
+  // Customer docs corpus
+  const docsCorpus       = getCachedCustomerDocsCorpus(customerSlug)
+  const customerDocsText = docsCorpus
+    ? docsCorpus.files.map(f => `[${f.name}]\n${f.textContent}`).join('\n\n')
+    : ''
+  const customerDocsHash = docsCorpus?.corpusHash ?? ''
+
+  // Pipeline context
+  const needle = normalizeForQuery(customerName.toLowerCase())
+  const pipelineCache = readPipelineCache()
+  const pipelineRecords = pipelineCache
+    ? pipelineCache.records.filter(r => {
+        const hay = normalizeForQuery(r.accountName)
+        return hay.includes(needle) || needle.includes(hay)
+      }).filter(r => r.forecastCategory.toLowerCase() !== 'closed')
+    : []
+  const opportunityNote = pipelineRecords.length
+    ? pipelineRecords.map(r => `${sanitizePromptInput(r.oppName ?? '', 200)}: $${r.acv?.toLocaleString() ?? '?'} ACV, close ${r.closeDate ?? '?'}, ${r.forecastCategory}`).join('\n')
+    : undefined
+
+  // Per-product feature accessor — callers pass the product slug to get features for that product
+  const productFeaturesFn = (slug: string): { features: any[]; hash: string | undefined } => {
+    const featureCache = getFeatureCache(slug)
+    return {
+      features: featureCache?.features.map(f => ({
+        name: f.name,
+        status: f.status,
+        description: f.description,
+        tags: f.tags,
+        versionIntroduced: f.versionIntroduced,
+      })) ?? [],
+      hash: featureCache?.corpusHash,
+    }
+  }
+
+  return {
+    customerName,
+    subscriptions,
+    supportCases,
+    customerDocsText,
+    customerDocsHash,
+    opportunityNote,
+    productFeaturesFn,
+  }
 }

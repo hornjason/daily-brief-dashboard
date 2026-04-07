@@ -371,6 +371,7 @@ export function registerSetupRoutes(app: Hono): void {
     try {
       const body = await c.req.json<{ customers: Customer[] }>()
       if (!Array.isArray(body.customers)) return c.json({ error: 'customers must be an array' }, 400)
+      if (body.customers.length === 0) return c.json({ error: 'Refusing to overwrite customer list with empty array — this would wipe all customers' }, 400)
       if (body.customers.length > 200) return c.json({ error: 'customers array exceeds maximum of 200 entries' }, 400)
 
       // Validate each customer

@@ -52,6 +52,11 @@ export let supportableScrapeRunning = false
 export let supportableStatusMessage: string | null = null
 export let supportableScrapeStartedAt: number | null = null
 
+/** Called by refresh-engine after a sheet-based subscription cache write (no browser scrape needed). */
+export function recordSupportableRefreshAt(): void {
+  lastSupportableScrape = new Date().toISOString()
+}
+
 // A run that has been stuck for this long is assumed crashed — mutex auto-resets
 const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
 
@@ -760,7 +765,8 @@ export async function runSupportableScrape(
   }
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
   // BKL-G30 Gap 1: VPN pre-flight — abort before any Playwright navigation if host is unreachable
-  const vpnReachable = await liveProbe('https://supportable.corp.redhat.com:4443/', 'supportable-vpn', 5000)
+  // 12s timeout + 2 retries: first-connect through VPN can spike (DNS + TLS + tunnel setup)
+  const vpnReachable = await liveProbe('https://supportable.corp.redhat.com:4443/', 'supportable-vpn', 12000, 2)
   if (!vpnReachable) throw new Error('Supportable host unreachable — check VPN connection')
 
   supportableScrapeRunning = true
@@ -844,7 +850,8 @@ export async function runSupportableDiscoverAndScrape(
   }
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
   // BKL-G30 Gap 1: VPN pre-flight — abort before any Playwright navigation if host is unreachable
-  const vpnReachable = await liveProbe('https://supportable.corp.redhat.com:4443/', 'supportable-vpn', 5000)
+  // 12s timeout + 2 retries: first-connect through VPN can spike (DNS + TLS + tunnel setup)
+  const vpnReachable = await liveProbe('https://supportable.corp.redhat.com:4443/', 'supportable-vpn', 12000, 2)
   if (!vpnReachable) throw new Error('Supportable host unreachable — check VPN connection')
 
   supportableScrapeRunning = true

@@ -27,6 +27,11 @@ export function loadServerState(): void {
   }
   try {
     customers = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8')).customers ?? []
+    if (customers.length === 0) {
+      console.warn('[WARN] customers.json loaded with 0 customers — file may be corrupted or was wiped. Re-run territory sync or bootstrap to restore.')
+    } else {
+      console.log(`[config] loaded ${customers.length} customers from customers.json`)
+    }
   } catch {
     console.warn('[warn] config/customers.json not found — customer filtering disabled')
   }

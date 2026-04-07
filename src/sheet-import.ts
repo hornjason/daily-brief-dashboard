@@ -34,6 +34,7 @@ async function importSheetRows(
     .filter((row: any[]) => row.some((cell: string) => cell?.trim()))
     .map((row: string[]) => buildCustomer(row, columnMap))
     .filter((r) => r.name)
+  if (incoming.length === 0) throw new Error('Sheet import produced zero valid customers — refusing to overwrite customers.json')
   // BKL-G27: preserve AI-enriched fields that live only in customers.json
   const existing = readExistingCustomers(CUSTOMERS_PATH)
   const customers = mergeCustomers(incoming as Record<string, any>[], existing)

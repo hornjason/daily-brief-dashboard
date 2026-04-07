@@ -258,6 +258,7 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
   const [regenerating, setRegenerating] = useState<Set<ProductSlug>>(new Set())
+  const [generatingAll, setGeneratingAll] = useState(false)
   // BKL-MC06: product slugs and labels fetched from /api/products/config
   const [productSlugs, setProductSlugs] = useState<string[]>(['rhel', 'ocp', 'ocp-virt', 'aap', 'rhel-ai', 'rh-ai-inference', 'rhoai'])
   const [productLabels, setProductLabels] = useState<Record<string, string>>(PRODUCT_LABEL_FALLBACKS)
@@ -324,11 +325,27 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
     }
   }
 
-  // Determine which products have visible intel
+  async function handleGenerateAll() {
+    setGeneratingAll(true)
+    try {
+      await fetch(`/api/products/intel/${encodeURIComponent(customerSlug)}/generate-all`, {
+        method: 'POST',
+      })
+      // Re-fetch all cached intel after generation completes
+      setRefreshKey(k => k + 1)
+    } catch {
+      // Silently fail — stale data will remain visible
+    } finally {
+      setGeneratingAll(false)
+    }
+  }
+
+  // Determine which products have visible intel (non-NONE cached) vs. uncached
   const visibleSlugs = productSlugs.filter(slug => {
     const data = intel[slug]
     return data !== null && data !== undefined && data.relevanceScore !== 'NONE'
   })
+  const uncachedSlugs = productSlugs.filter(slug => intel[slug] === null || intel[slug] === undefined)
 
   // During loading — show skeleton
   if (loading) {
@@ -360,37 +377,43 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
             <span className="text-xs text-text-secondary">{visibleSlugs.length}</span>
           )}
         </div>
-        {visibleSlugs.length > 0 && (
-          <button
-            onClick={() => setRefreshKey(k => k + 1)}
-            className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors"
-            title={`Refresh intel for ${customerName}`}
-          >
-            <RefreshCw className="w-3 h-3" />
-            Refresh All
-          </button>
-        )}
+        <button
+          onClick={handleGenerateAll}
+          disabled={generatingAll}
+          className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title={`Generate intel for all products for ${customerName}`}
+        >
+          {generatingAll
+            ? <Loader2 className="w-3 h-3 animate-spin" />
+            : <Sparkles className="w-3 h-3" />
+          }
+          {generatingAll ? 'Generating...' : 'Generate All'}
+        </button>
       </div>
 
-      {/* Product cards or empty state */}
+      {/* Product cards + uncached stubs */}
       <div className="p-4 space-y-3">
-        {visibleSlugs.length > 0 ? (
-          visibleSlugs.map(slug => (
-            <ProductCard
-              key={slug}
-              slug={slug}
-              label={productLabel(slug, productLabels)}
-              intel={intel[slug]!}
-              onRegenerate={handleRegenerate}
-              regenerating={regenerating.has(slug)}
-            />
-          ))
-        ) : (
+        {/* Cached cards with non-NONE relevance */}
+        {visibleSlugs.map(slug => (
+          <ProductCard
+            key={slug}
+            slug={slug}
+            label={productLabel(slug, productLabels)}
+            intel={intel[slug]!}
+            onRegenerate={handleRegenerate}
+            regenerating={regenerating.has(slug)}
+          />
+        ))}
+
+        {/* Uncached products — always visible with individual Generate button */}
+        {uncachedSlugs.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs text-text-secondary mb-3">
-              Generate product talking points for {customerName} based on their subscriptions, cases, and product roadmaps.
-            </p>
-            {productSlugs.map(slug => (
+            {visibleSlugs.length === 0 && (
+              <p className="text-xs text-text-secondary mb-3">
+                Generate product talking points for {customerName} based on their subscriptions, cases, and product roadmaps.
+              </p>
+            )}
+            {uncachedSlugs.map(slug => (
               <div key={slug} className="flex items-center justify-between py-2 px-3 bg-bg rounded-lg border border-border/60">
                 <span className="text-sm font-medium text-text-secondary">{productLabel(slug, productLabels)}</span>
                 <button
@@ -407,6 +430,11 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
               </div>
             ))}
           </div>
+        )}
+
+        {/* Neither cached nor uncached — should not happen, but guard */}
+        {visibleSlugs.length === 0 && uncachedSlugs.length === 0 && (
+          <p className="text-xs text-text-secondary">No products configured.</p>
         )}
       </div>
     </div>

@@ -7,6 +7,7 @@ import { AutomationSettings } from '../components/AutomationSettings'
 import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import {
+  AlertTriangle,
   CheckCircle,
   XCircle,
   Copy,
@@ -504,6 +505,7 @@ function SaveAeButton() {
             })
             if (!saveRes.ok) throw new Error('Failed to save AEs')
             setSaved(true)
+            window.dispatchEvent(new CustomEvent('ae-saved', { detail: { count: currentAes.length } }))
           } catch (e: any) {
             setError(e.message ?? 'Save failed')
           } finally {
@@ -516,6 +518,31 @@ function SaveAeButton() {
       </button>
       {error && <span className="text-xs text-critical">{error}</span>}
     </div>
+  )
+}
+
+function RetryStepButton({ label, endpoint, body }: { label: string; endpoint: string; body: Record<string, unknown> }) {
+  const [status, setStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
+  const handleRetry = async () => {
+    setStatus('running')
+    try {
+      const r = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      setStatus(r.ok ? 'done' : 'error')
+    } catch { setStatus('error') }
+  }
+  return (
+    <button
+      onClick={handleRetry}
+      disabled={status === 'running'}
+      className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border transition-colors ${
+        status === 'done' ? 'border-success/40 text-success bg-success/10' :
+        status === 'error' ? 'border-critical/40 text-critical bg-critical/10' :
+        'border-accent/40 text-accent bg-accent/10 hover:bg-accent/20'
+      }`}
+    >
+      {status === 'running' && <Loader2 className="w-3 h-3 animate-spin" />}
+      {status === 'done' ? '✓ Started' : status === 'error' ? 'Failed — try again' : label}
+    </button>
   )
 }
 
@@ -611,32 +638,56 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
           <p className={`font-medium mb-2 ${hasError ? 'text-warning' : 'text-success'}`} {...(hasError ? { role: 'alert' } : {})}>
             {hasError ? 'Completed with errors — some steps may need retry' : 'All done! Resources are ready.'}
           </p>
-          {/* Q4: Per-step retry guidance for failed steps */}
+          {/* Q4: Per-step retry guidance + one-click retry for failed steps */}
           {hasError && (() => {
             const failedSteps = state.steps.filter(s => s.status === 'error')
             if (failedSteps.length === 0) return null
+            const isSupportableStep = (name: string) => name.toLowerCase().includes('supportable') || name.toLowerCase().includes('discover account')
+            const isCcspStep = (name: string) => name.toLowerCase().includes('ccsp') || name.toLowerCase().includes('tableau')
             const hintFor = (stepName: string): string => {
               if (stepName.toLowerCase().includes('rh portal') || stepName.toLowerCase().includes('red hat') || stepName.toLowerCase().includes('account'))
                 return 'RH Portal auth failed — scroll up to Step 3 and reconnect.'
-              if (stepName.toLowerCase().includes('supportable'))
-                return 'Supportable sheet failed — check VPN connection and retry.'
+              if (isSupportableStep(stepName))
+                return 'VPN connected? Click Retry Supportable to re-run discovery.'
               if (stepName.toLowerCase().includes('drive') || stepName.toLowerCase().includes('folder'))
                 return 'Drive folder failed — verify Google Auth is connected in Step 2.'
-              if (stepName.toLowerCase().includes('ccsp') || stepName.toLowerCase().includes('tableau'))
-                return 'CCSP sheet failed — connect Tableau in Data Sources (Step 5).'
+              if (isCcspStep(stepName))
+                return 'Connect Tableau in Step 5, then click Retry CCSP.'
               if (stepName.toLowerCase().includes('pipeline') || stepName.toLowerCase().includes('salesforce'))
                 return 'Pipeline sheet failed — check Salesforce connection in Step 5.'
               if (stepName.toLowerCase().includes('territory'))
                 return 'Territory lookup failed — verify Google Sheets access in Step 2.'
               return 'Step failed — check server logs and click "Clear stuck state" to retry.'
             }
+            const hasSupportableFailure = failedSteps.some(s => isSupportableStep(s.name))
+            const hasCcspFailure = failedSteps.some(s => isCcspStep(s.name))
             return (
-              <div className="mb-3 space-y-1">
-                {failedSteps.map((s, i) => (
-                  <p key={i} className="text-xs text-warning bg-warning/10 border border-warning/20 rounded px-2 py-1.5">
-                    <span className="font-medium">{s.name}</span> — {hintFor(s.name)}
-                  </p>
-                ))}
+              <div className="mb-3 space-y-2">
+                <div className="space-y-1">
+                  {failedSteps.map((s, i) => (
+                    <p key={i} className="text-xs text-warning bg-warning/10 border border-warning/20 rounded px-2 py-1.5">
+                      <span className="font-medium">{s.name}</span> — {hintFor(s.name)}
+                    </p>
+                  ))}
+                </div>
+                {(hasSupportableFailure || hasCcspFailure) && state.aeName && (
+                  <div className="flex gap-2 flex-wrap">
+                    {hasSupportableFailure && (
+                      <RetryStepButton
+                        label="Retry Supportable"
+                        endpoint="/api/scrape/supportable/discover"
+                        body={{ aeName: state.aeName }}
+                      />
+                    )}
+                    {hasCcspFailure && (
+                      <RetryStepButton
+                        label="Retry CCSP"
+                        endpoint="/api/scrape/ccsp"
+                        body={{}}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             )
           })()}
@@ -998,8 +1049,16 @@ function AutoBootstrapForm() {
       return
     }
 
-    // Q11: SF Report ID format check
-    if (!/^00O[a-zA-Z0-9]{12,15}$/.test(sfReportId.trim())) {
+    // Q11: SF Report ID format check — extract from URL first if needed
+    const extractedReportId = (() => {
+      const raw = sfReportId.trim()
+      const urlMatch = raw.match(/\/Report\/([a-zA-Z0-9]{15,18})/)
+      if (urlMatch) return urlMatch[1]
+      const idMatch = raw.match(/^([a-zA-Z0-9]{15,18})$/)
+      if (idMatch) return idMatch[1]
+      return raw
+    })()
+    if (!/^00O[a-zA-Z0-9]{12,15}$/.test(extractedReportId)) {
       setSfReportIdError('Must start with 00O and be 15–18 characters (e.g. 00OPe000001abcDEF)')
       bootstrapStartingRef.current = false
       return
@@ -1052,7 +1111,7 @@ function AutoBootstrapForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           aeName: aeName.trim(),
-          sfReportId: sfReportId.trim(),
+          sfReportId: extractedReportId,
           tableauTerritories: territories,
           customerNames,
           parentFolderId: parentFolderId.trim() || undefined,
@@ -1189,8 +1248,11 @@ function AutoBootstrapForm() {
               value={sfReportId}
               onChange={e => { setSfReportId(e.target.value); setSfReportIdError(null) }}
               onBlur={() => {
-                const val = sfReportId.trim()
-                if (val && !/^00O[a-zA-Z0-9]{12,15}$/.test(val)) {
+                const raw = sfReportId.trim()
+                if (!raw) return
+                const urlMatch = raw.match(/\/Report\/([a-zA-Z0-9]{15,18})/)
+                const extracted = urlMatch ? urlMatch[1] : raw
+                if (!/^00O[a-zA-Z0-9]{12,15}$/.test(extracted)) {
                   setSfReportIdError('Must start with 00O and be 15–18 characters (e.g. 00OPe000001abcDEF)')
                 }
               }}
@@ -1321,6 +1383,12 @@ function AutoBootstrapForm() {
             📁 {folderName ? <span className="text-success">{folderName}</span> : parentFolderId.trim() ? <span className="text-accent">parent folder</span> : 'My Drive'}/
           </p>
           <p className="text-text-primary pl-4">{knownAes.length === 0 ? '├──' : '└──'} 📁 {aeName.trim()}/</p>
+          {customerNames.slice(0, 5).map((name, i) => (
+            <p key={name} className="text-text-secondary pl-8">{i < Math.min(4, customerNames.length - 1) ? '├──' : customerNames.length > 5 ? '├──' : '└──'} 📁 {name}/</p>
+          ))}
+          {customerNames.length > 5 && (
+            <p className="text-text-secondary pl-8">└── 📁 … {customerNames.length - 5} more</p>
+          )}
           <p className="text-text-secondary pl-8">├── 📊 Supportable Sheet</p>
           <p className="text-text-secondary pl-8">├── 📊 CCSP Sheet</p>
           <p className="text-text-secondary pl-8">└── 📊 Pipeline Sheet</p>
@@ -2165,10 +2233,10 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const supportablePollMsgRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [ccspScraping, setCcspScraping] = useState(false)
   const [ccspScrapeError, setCcspScrapeError] = useState<string | null>(null)
-  const [ccspSyncedAt, setCcspSyncedAt] = useState<string | null>(null)
+  // ccspSyncedAt removed — derived from server ccspStatus.lastSuccess/lastScrape via isRecent()
   const [sfSyncing, setSfSyncing] = useState(false)
   const [sfSyncError, setSfSyncError] = useState<string | null>(null)
-  const [sfSyncedAt, setSfSyncedAt] = useState<string | null>(null)
+  // sfSyncedAt removed — derived from server sfStatus.lastSync via isRecent()
   const [rhSyncing, setRhSyncing] = useState(false)
   const [rhSyncError, setRhSyncError] = useState<string | null>(null)
   const [rhSyncedAt, setRhSyncedAt] = useState<string | null>(null)
@@ -2214,6 +2282,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const supportablePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sfPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tableauPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refreshAll = (signal?: AbortSignal) => {
     fetch('/api/auth/supportable/check', { method: 'POST', signal }).then(r => r.json()).then(d => setSupportableReachable(d.reachable)).catch((e) => { if (e.name !== 'AbortError') setSupportableReachable(false) })
@@ -2227,7 +2296,11 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   useEffect(() => {
     const controller = new AbortController()
     refreshAll(controller.signal)
-    return () => controller.abort()
+    statusPollRef.current = setInterval(() => refreshAll(), 15000)
+    return () => {
+      controller.abort()
+      if (statusPollRef.current) clearInterval(statusPollRef.current)
+    }
   }, [])
 
   // Cleanup polling intervals on unmount
@@ -2236,6 +2309,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       if (supportablePollRef.current) clearInterval(supportablePollRef.current)
       if (sfPollRef.current) clearInterval(sfPollRef.current)
       if (tableauPollRef.current) clearInterval(tableauPollRef.current)
+      if (statusPollRef.current) clearInterval(statusPollRef.current)
     }
   }, [])
 
@@ -2320,10 +2394,9 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const handleTableauConnect = async () => {
     setTableauConnecting(true)
 
-    // Always re-probe live session status — cached tableauStatus may be stale
-    // (Tableau SSO sessions expire faster than RH Portal sessions)
+    // Force-bypass server cache — user explicitly clicked Connect, need live result
     try {
-      const res = await fetch('/api/bootstrap/tableau/session-status')
+      const res = await fetch('/api/bootstrap/tableau/session-status?force=true')
       const status = await res.json()
       setTableauStatus(status)
       if (status.sessionValid) {
@@ -2366,7 +2439,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     // detection misses the login (SSO URL variation, slow redirect chain)
     tableauPollRef.current = setInterval(async () => {
       try {
-        const res = await fetch('/api/bootstrap/tableau/session-status')
+        const res = await fetch('/api/bootstrap/tableau/session-status?force=true')
         const status = await res.json()
         if (status.sessionValid) resolveLogin(true)
       } catch { /* retry next tick */ }
@@ -2378,16 +2451,29 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
   const handleRhSync = async () => {
     setRhSyncError(null)
-    setRhSyncedAt(null)
     setRhSyncing(true)
     try {
       if (!rhStatus?.hasSession) {
         setRhSyncError('No active session — connect in the RH Portal section above first.')
+        setRhSyncing(false)
         return
       }
       await fetch('/api/scrape/rh', { method: 'POST' })
-      setRhSyncedAt(new Date().toISOString())
-      setTimeout(() => fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {}), 3_000)
+      // Poll status endpoint until scraper finishes
+      const poll = () => new Promise<void>((resolve) => {
+        const iv = setInterval(async () => {
+          try {
+            const s = await fetch('/api/scrape/rh/status').then(r => r.json())
+            if (!s.running) {
+              clearInterval(iv)
+              // Refresh displayed data
+              fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {})
+              resolve()
+            }
+          } catch { clearInterval(iv); resolve() }
+        }, 2_000)
+      })
+      await poll()
     } catch (e: any) {
       setRhSyncError(`Sync failed: ${e.message}`)
     } finally {
@@ -2397,15 +2483,25 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
   const handleSfSync = async () => {
     setSfSyncError(null)
-    setSfSyncedAt(null)
     setSfSyncing(true)
     try {
       const res = await fetch('/api/refresh/pipeline', { method: 'POST' })
       const d = await res.json()
-      if (d.error) { setSfSyncError(d.error); return }
-      setSfSyncedAt(d.refreshedAt ?? new Date().toISOString())
-      const newStatus = await fetch('/api/auth/salesforce/status').then(r => r.json()).catch(() => null)
-      if (newStatus) setSfStatus(newStatus)
+      if (d.error) { setSfSyncError(d.error); setSfSyncing(false); return }
+      // Poll status endpoint until scraper finishes
+      const poll = () => new Promise<void>((resolve) => {
+        const iv = setInterval(async () => {
+          try {
+            const s = await fetch('/api/scrape/salesforce/status').then(r => r.json())
+            if (!s.running) {
+              clearInterval(iv)
+              fetch('/api/auth/salesforce/status').then(r => r.json()).then(setSfStatus).catch(() => {})
+              resolve()
+            }
+          } catch { clearInterval(iv); resolve() }
+        }, 2_000)
+      })
+      await poll()
     } catch (e: any) {
       setSfSyncError('Sync failed. Check server logs for details.')
     } finally {
@@ -2419,9 +2515,21 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     try {
       const res = await fetch('/api/refresh/subscriptions', { method: 'POST' })
       const d = await res.json()
-      if (d.error) { setScrapeError(d.error); return }
-      const newStatus = await fetch('/api/scrape/supportable/status').then(r => r.json()).catch(() => null)
-      if (newStatus) setSupportableStatus(newStatus)
+      if (d.error) { setScrapeError(d.error); setScraping(false); return }
+      // Poll status endpoint until scraper finishes
+      const poll = () => new Promise<void>((resolve) => {
+        const iv = setInterval(async () => {
+          try {
+            const s = await fetch('/api/scrape/supportable/status').then(r => r.json())
+            if (!s.running) {
+              clearInterval(iv)
+              setSupportableStatus(s)
+              resolve()
+            }
+          } catch { clearInterval(iv); resolve() }
+        }, 2_000)
+      })
+      await poll()
     } catch (e: any) {
       setScrapeError('Sync failed — check server logs for details.')
     } finally {
@@ -2431,15 +2539,25 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
   const handleRunCcspScrape = async () => {
     setCcspScrapeError(null)
-    setCcspSyncedAt(null)
     setCcspScraping(true)
     try {
       const res = await fetch('/api/refresh/ccsp', { method: 'POST' })
       const d = await res.json()
-      if (d.error) { setCcspScrapeError(d.error); return }
-      const newStatus = await fetch('/api/scrape/ccsp/status').then(r => r.json()).catch(() => null)
-      if (newStatus) setCcspStatus(newStatus)
-      setCcspSyncedAt(d.refreshedAt ?? new Date().toISOString())
+      if (d.error) { setCcspScrapeError(d.error); setCcspScraping(false); return }
+      // Poll status endpoint until scraper finishes
+      const poll = () => new Promise<void>((resolve) => {
+        const iv = setInterval(async () => {
+          try {
+            const s = await fetch('/api/scrape/ccsp/status').then(r => r.json())
+            if (!s.running) {
+              clearInterval(iv)
+              setCcspStatus(s)
+              resolve()
+            }
+          } catch { clearInterval(iv); resolve() }
+        }, 2_000)
+      })
+      await poll()
     } catch (e: any) {
       setCcspScrapeError('Sync failed. Check server logs for details.')
     } finally {
@@ -2454,7 +2572,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       className="flex items-center gap-1.5 bg-surface-hover hover:bg-surface-active disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
     >
       {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Icon className="w-3.5 h-3.5" />}
-      {label}
+      {loading ? 'Syncing\u2026' : label}
     </button>
   )
 
@@ -2518,16 +2636,16 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
         <div className="grid grid-cols-1 md:grid-cols-2 min-[1440px]:grid-cols-4 gap-3">
 
           {/* Red Hat Portal */}
-          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${rhConnected ? 'border-l-success' : rhSessionActive ? 'border-l-warning' : 'border-l-border'}`}>
+          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${rhSessionActive ? 'border-l-success' : 'border-l-border'}`}>
             <div className="flex items-center justify-between mb-1">
               <div>
                 <p className="text-sm font-medium text-white">Red Hat Portal</p>
                 <p className="text-xs text-text-secondary">Support cases</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${rhConnected ? 'bg-success' : rhSessionActive ? 'bg-warning' : 'bg-surface-active'}`} />
-                <span className={`text-xs ${rhConnected ? 'text-success' : rhSessionActive ? 'text-warning' : 'text-text-secondary'}`}>
-                  {rhConnected ? 'Connected' : rhSessionActive ? 'Session Active' : 'Not connected'}
+                <span className={`w-2 h-2 rounded-full ${rhSessionActive ? 'bg-success' : 'bg-surface-active'}`} />
+                <span className={`text-xs ${rhSessionActive ? 'text-success' : 'text-text-secondary'}`}>
+                  {rhSessionActive ? 'Connected' : 'Not connected'}
                 </span>
               </div>
             </div>
@@ -2537,7 +2655,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                 className="bg-surface-hover hover:bg-surface-active text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                {rhConnected ? 'Reconnect' : 'Connect'}
+                {rhSessionActive ? 'Reconnect' : 'Connect'}
               </button>
             </div>
           </div>
@@ -2709,11 +2827,17 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             <div>
               <p className="text-sm text-white">Supportable Subscriptions</p>
               {(supportableStatus?.lastSuccess ?? supportableStatus?.lastScrape) ? (
-                <p className="text-xs text-text-secondary">Synced {timeAgo(supportableStatus.lastSuccess ?? supportableStatus.lastScrape ?? '')}{supportableStatus.recordCount ? ` — ${supportableStatus.recordCount}` : ''}</p>
+                <p className="text-xs text-text-secondary">Synced {timeAgo(([supportableStatus.lastSuccess, supportableStatus.lastScrape].filter((t): t is string => !!t).sort().slice(-1)[0]) ?? '')}{supportableStatus.recordCount ? ` — ${supportableStatus.recordCount}` : ''}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Subscription data</p>
               )}
               {supportableStatus?.lastError && <p className="text-xs text-critical">{supportableStatus.lastError}</p>}
+              {supportableStatus?.lastError?.toLowerCase().includes('unreachable') && (
+                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-warning/10 text-warning text-[11px] font-medium">
+                  <AlertTriangle className="w-3 h-3" />
+                  VPN required
+                </span>
+              )}
             </div>
             <div className="flex items-center">
               {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires active RH Portal session</span>}
@@ -2737,17 +2861,14 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             <div>
               <p className="text-sm text-white">CCSP (Tableau)</p>
               {(ccspStatus?.lastSuccess ?? ccspStatus?.lastScrape) ? (
-                <p className="text-xs text-text-secondary">Synced {timeAgo(ccspStatus.lastSuccess ?? ccspStatus.lastScrape ?? '')}{ccspStatus.recordCount ? ` — ${ccspStatus.recordCount}` : ''}</p>
+                <p className="text-xs text-text-secondary">Synced {timeAgo(([ccspStatus.lastSuccess, ccspStatus.lastScrape].filter((t): t is string => !!t).sort().slice(-1)[0]) ?? '')}{ccspStatus.recordCount ? ` — ${ccspStatus.recordCount}` : ''}</p>
               ) : (
                 <p className="text-xs text-text-secondary">Cloud spend</p>
               )}
-              {ccspSyncedAt && <p className="text-xs text-success">✓ Sheet refreshed {timeAgo(ccspSyncedAt)}</p>}
+              {isRecent([ccspStatus?.lastSuccess, ccspStatus?.lastScrape].filter((t): t is string => !!t).sort().slice(-1)[0]) && <p className="text-xs text-success">✓ Synced just now</p>}
               {ccspStatus?.lastError && <p className="text-xs text-critical">{ccspStatus.lastError}</p>}
             </div>
-            <div className="flex items-center">
-              {!tableauConnected && <span className="text-xs text-text-secondary mr-3">Requires active Tableau session — Connect in Data Sources above</span>}
-              <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping || scraperRunning.ccsp} disabled={ccspRunning || scraperRunning.ccsp} label="Sync Now" />
-            </div>
+            <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping || scraperRunning.ccsp} disabled={ccspRunning || scraperRunning.ccsp} label="Sync Now" />
           </div>
           {ccspScrapeError && <p role="alert" className="text-xs text-critical pb-2">{ccspScrapeError}</p>}
 
@@ -2760,7 +2881,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               ) : (
                 <p className="text-xs text-text-secondary">Pipeline data</p>
               )}
-              {sfSyncedAt && <p className="text-xs text-success">✓ Sheet refreshed {timeAgo(sfSyncedAt)}</p>}
+              {isRecent(sfStatus?.lastSync) && <p className="text-xs text-success">✓ Synced just now</p>}
             </div>
             <div className="flex items-center">
               {!sfConnected && (
@@ -2785,6 +2906,7 @@ type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sour
 
 export default function SetupPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>(null)
+  const userToggledRef = useRef(false) // tracks whether user has interacted with accordion
   const [oauthKeysOk, setOauthKeysOk] = useState(false)
   const [googleAuthOk, setGoogleAuthOk] = useState<boolean | null>(null) // null = still checking
   const [aeCount, setAeCount] = useState<number | null>(null)
@@ -2847,12 +2969,21 @@ export default function SetupPage() {
       setOpenSection('aes')
       window.history.replaceState({}, '', '/dashboard/setup')
     }
-    return () => controller.abort()
+    // Listen for SaveAeButton saves (Auto Setup flow) to keep counter accurate
+    const onAeSaved = (e: Event) => {
+      const count = (e as CustomEvent).detail?.count
+      if (typeof count === 'number') setAeCount(count)
+      else fetch('/api/aes').then(r => r.json()).then(d => setAeCount((d.aes ?? []).length)).catch(() => {})
+    }
+    window.addEventListener('ae-saved', onAeSaved)
+    return () => { controller.abort(); window.removeEventListener('ae-saved', onAeSaved) }
   }, [])
 
-  // First-run auto-expand logic
+  // First-run auto-expand logic — fires only once before user interacts with accordion.
+  // Uses a ref guard so background data refreshes never re-trigger auto-expand.
   useEffect(() => {
-    if (openSection !== null) return // user already toggled something
+    if (userToggledRef.current) return // user already interacted — never auto-expand again
+    if (openSection !== null) return // already auto-expanded from OAuth return or prior run
     if (!oauthKeysOk && aeCount !== null) {
       setOpenSection('oauth-keys')
     } else if (oauthKeysOk && googleAuthOk === false && aeCount !== null) {
@@ -2860,9 +2991,10 @@ export default function SetupPage() {
     } else if (oauthKeysOk && googleAuthOk === true && aeCount === 0) {
       setOpenSection('aes')
     }
-  }, [oauthKeysOk, googleAuthOk, aeCount, openSection])
+  }, [oauthKeysOk, googleAuthOk, aeCount])
 
   const toggleSection = (id: SectionId) => {
+    userToggledRef.current = true // lock out auto-expand once user interacts
     setOpenSection(prev => prev === id ? null : id)
   }
 

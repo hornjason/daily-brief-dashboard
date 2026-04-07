@@ -13,7 +13,9 @@
 
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs'
 import { resolve } from 'path'
+import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
+import { makeAuth } from './google.ts'
 import { sanitizePromptInput } from './utils.ts'
 import { getGeminiModel } from './settings-api.ts'
 import { aes, customers, CUSTOMERS_PATH } from './server-state.ts'

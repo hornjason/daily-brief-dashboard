@@ -339,33 +339,39 @@ export async function fetchCCSPData(
         range: `'${ccspTab}'!A:AM`,  // A:AM = 39 cols — covers 32-col Tableau CSV with room to spare
       }),
       `ccsp-read ${spreadsheetId}`,
-    ).catch((e: any) => { console.warn(`[ccsp-read] sheet ${spreadsheetId} read failed: ${e?.message}`); return null })
-    if (!dataRes) continue
+    ).catch((e: any) => { console.warn(`[ccsp-read] sheet ${spreadsheetId} tab '${ccspTab}' read failed: ${e?.message} — will attempt tab discovery`); return null })
 
-    let rows = dataRes.data.values ?? []
-    if (rows.length < 2 && resolvedIds?.length) {
-      // Fast-path tab miss — discover actual CCSP tab name and retry once
+    let rows = dataRes?.data.values ?? []
+    // Trigger tab discovery when: (a) fast-path tab returned <2 rows, or (b) fast-path tab threw an error (tab doesn't exist)
+    if ((rows.length < 2 || !dataRes) && resolvedIds?.length) {
       console.warn(`[ccsp-read] fast-path sheet ${spreadsheetId} tab '${ccspTab}' returned <2 rows — attempting tab discovery`)
       try {
         const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties.title' })
-        const actualTab = (meta.data.sheets ?? [])
-          .map(s => s.properties?.title ?? '')
-          .find(t => t.toLowerCase().includes('ccsp'))
-        if (actualTab && actualTab !== ccspTab) {
-          const safeTab = actualTab.replace(/'/g, "''")  // Sheets A1 notation: escape single-quotes
+        const allTabs = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
+        console.log(`[ccsp-read] sheet ${spreadsheetId} tabs found: [${allTabs.join(', ')}]`)
+        // First: try any tab with 'ccsp' in name (but different from fast-path tab that already failed)
+        const ccspNamedTab = allTabs.find(t => t.toLowerCase().includes('ccsp') && t !== ccspTab)
+        // Fallback: try all remaining tabs (header validation will reject wrong-format tabs)
+        const tabsToTry = ccspNamedTab ? [ccspNamedTab] : allTabs.filter(t => t !== ccspTab)
+        for (const tab of tabsToTry) {
+          const safeTab = tab.replace(/'/g, "''")
           const retryRes = await withQuotaRetry(
             () => sheets.spreadsheets.values.get({ spreadsheetId, range: `'${safeTab}'!A:AM` }),
             `ccsp-read retry ${spreadsheetId}`,
           ).catch(() => null)
           const retryRows = retryRes?.data.values ?? []
           if (retryRows.length >= 2) {
-            console.log(`[ccsp-read] tab discovery succeeded with '${actualTab}'`)
+            console.log(`[ccsp-read] tab discovery succeeded with '${tab}'`)
             rows = retryRows
+            break
           }
         }
-      } catch { /* best effort — fall through to skip */ }
+      } catch (e: any) { console.warn(`[ccsp-read] tab discovery error for ${spreadsheetId}: ${e?.message}`) }
     }
-    if (rows.length < 2) continue
+    if (rows.length < 2) {
+      console.warn(`[ccsp-read] sheet ${spreadsheetId}: all tabs returned <2 rows — skipping`)
+      continue
+    }
 
     const headers = (rows[0] ?? []).map((h: unknown) => String(h ?? '').trim())
     // Flexible column detection — Tableau CSV headers vary between Raw Data and summary views.

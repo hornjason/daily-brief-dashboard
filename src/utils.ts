@@ -93,21 +93,39 @@ export async function notify(title: string, message: string, priority: 'default'
 const _probeCache = new Map<string, { result: boolean; at: number }>()
 const PROBE_TTL_MS = 30_000
 
-/** Probe a URL and return true if reachable (status < 400). Results cached for PROBE_TTL_MS. */
-export async function liveProbe(url: string, key: string, timeoutMs = 5000): Promise<boolean> {
+/** Probe a URL and return true if reachable (status < 400). Results cached for PROBE_TTL_MS.
+ *  retries: number of additional attempts after first failure (default 0 for backward compat).
+ *  Negative cache is skipped when retries > 0 to avoid poisoning retry loops. */
+export async function liveProbe(url: string, key: string, timeoutMs = 5000, retries = 0): Promise<boolean> {
   const cached = _probeCache.get(key)
-  if (cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.result
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-      redirect: 'manual',
-    })
-    // 2xx or 3xx redirect = alive; 401/403 = session expired
-    const alive = res.status < 400
-    _probeCache.set(key, { result: alive, at: Date.now() })
-    return alive
-  } catch {
-    _probeCache.set(key, { result: false, at: Date.now() })
-    return false
+  // Only use cached result if it was a success, or if caller isn't retrying
+  if (cached && Date.now() - cached.at < PROBE_TTL_MS && (cached.result || retries === 0)) return cached.result
+  const maxAttempts = 1 + Math.max(0, retries)
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+        redirect: 'manual',
+      })
+      // 2xx or 3xx redirect = alive; 401/403 = session expired but reachable
+      const alive = res.status < 500
+      _probeCache.set(key, { result: alive, at: Date.now() })
+      if (alive) return true
+    } catch (e: any) {
+      // TLS/cert errors mean host IS reachable — Playwright handles certs internally
+      const msg = e?.message ?? ''
+      if (msg.includes('certificate') || msg.includes('SSL') || msg.includes('TLS') || msg.includes('CERT')) {
+        console.warn(`[liveProbe] ${key} — cert error but host reachable: ${msg}`)
+        _probeCache.set(key, { result: true, at: Date.now() })
+        return true
+      }
+      // Genuine network failure — retry if attempts remain
+    }
+    if (attempt < maxAttempts) {
+      console.warn(`[liveProbe] ${key} attempt ${attempt}/${maxAttempts} failed — retrying in ${attempt * 2}s…`)
+      await new Promise(r => setTimeout(r, attempt * 2000))
+    }
   }
+  _probeCache.set(key, { result: false, at: Date.now() })
+  return false
 }

@@ -5,6 +5,10 @@ import { readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPip
 import { fetchCustomerSheetData, fetchCCSPData } from './sheets.ts'
 import { fetchPipelineData } from './pipeline.ts'
 import { checkFilesModified } from './drive-watcher.ts'
+import { recordSfSyncSuccess } from './sf-scraper.ts'
+import { recordOutcome } from './scraper-status-store.ts'
+import { recordCcspRefreshAt } from './ccsp-scraper.ts'
+import { recordSupportableRefreshAt } from './supportable-scraper.ts'
 
 // ── Module state ────────────────────────────────────────────────────────────
 let SHEETS_SYNC_PATH = ''
@@ -46,6 +50,8 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
       ccspOk = true
     } else {
       writeCCSPCache(records, fileIds)
+      recordOutcome('ccsp', { success: true, recordCount: records.length })
+      recordCcspRefreshAt()
       ccspOk = true
     }
   } catch (e: any) { errors.push(`ccsp: ${e.message}`) }
@@ -89,6 +95,9 @@ export async function refreshSubscriptions(force = false): Promise<void> {
       console.warn(`[refresh:subscriptions] ${customer.name}: ${e.message}`)
     }
   }
+  const totalRows = customers.reduce((sum, cu) => sum + (readSheetCache(cu.name)?.rows?.length ?? 0), 0)
+  recordOutcome('supportable', { success: true, recordCount: totalRows })
+  recordSupportableRefreshAt()
   console.log(`[refresh:subscriptions] done (${customers.length} customers)`)
 }
 
@@ -96,8 +105,13 @@ export async function refreshCCSP(force = false): Promise<void> {
   try {
     if (!force) {
       const cached = readCCSPCache()
-      if (cached?.fileIds?.length && cached.cachedAt) {
-        const changed = await checkFilesModified(cached.fileIds, cached.cachedAt)
+      const currentSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
+      // Mirror pipeline staleness check: if AE sheet IDs don't match cached fileIds, force refresh
+      const cachedMatchesCurrent = cached?.fileIds?.length &&
+        currentSheetIds.length === cached.fileIds.length &&
+        currentSheetIds.every(id => cached.fileIds!.includes(id))
+      if (cachedMatchesCurrent && cached!.cachedAt) {
+        const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
         if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
       }
     }
@@ -108,6 +122,8 @@ export async function refreshCCSP(force = false): Promise<void> {
       return
     }
     writeCCSPCache(records, fileIds)
+    recordOutcome('ccsp', { success: true, recordCount: records.length })
+    recordCcspRefreshAt()
     console.log(`[refresh:ccsp] done`)
   } catch (e: any) {
     console.warn(`[refresh:ccsp] ${e.message}`)
@@ -136,6 +152,8 @@ export async function refreshPipeline(force = false): Promise<void> {
       return
     }
     writePipelineCache(records, fileIds)
+    recordOutcome('sf-pipeline', { success: true, recordCount: records.length })
+    recordSfSyncSuccess(records.length)
     console.log(`[refresh:pipeline] done`)
   } catch (e: any) {
     console.warn(`[refresh:pipeline] ${e.message}`)

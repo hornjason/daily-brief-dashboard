@@ -712,3 +712,98 @@ Before spawning any specialist agent (Rook, Marcus, Quinn, etc.) on this codebas
 - [ ] Confirm the agent knows: single-user, single-container, localhost-only
 - [ ] For security reviews: share Section 1 (shared context) and Section 2 (no auth) explicitly
 - [ ] For any "why don't you use X" recommendation: check if it's covered in this doc first
+
+---
+
+## §13. Scraper Status Layer Architecture
+
+### Two-tier status system
+
+The status layer is a hybrid of two mechanisms. Understanding which fields come from which source is critical for reading status correctly.
+
+**Tier 1 — ScraperStatusStore** (`src/scraper-status-store.ts`):
+- Disk-backed: persisted to `data/cache/scraper-status.json`
+- Survives container restarts
+- Fields: `lastRun`, `lastSuccess`, `lastError`, `recordCount`, `state`, `consecutiveFailures`
+- Updated by: full browser scrapes AND (after 2026-04-06) sheet-based syncs via `recordOutcome()`
+- Service name keys: `'rh-cases'`, `'ccsp'`, `'supportable'`, `'sf-pipeline'`
+
+**Tier 2 — In-memory module variables** (in each scraper module):
+- Lives in process memory only
+- Resets to null/false on every container restart
+- Exists for: `lastScraped` (rh-auth.ts), `lastCcspScrape` (ccsp-scraper.ts), `lastSupportableScrape` (supportable-scraper.ts), `lastSfSync` / `lastSfRowCount` (sf-scraper.ts)
+- Most are now superseded by disk-backed alternatives (see below)
+
+### Status endpoint field sources (as of 2026-04-06)
+
+| Endpoint | `lastScrape`/`lastSync` source | `recordCount` source | Survives restart? |
+|---|---|---|---|
+| `GET /api/scrape/rh/status` | `lastScraped` (in-memory) | `store.recordCount` | Partial — store survives, `lastScraped` resets |
+| `GET /api/scrape/supportable/status` | `readSheetCache()` max `cachedAt` (disk) | `store.recordCount` | Yes |
+| `GET /api/scrape/ccsp/status` | `readCCSPCache()?.cachedAt` (disk) | `readCCSPCache()?.records.length` (disk) | Yes |
+| `GET /api/scrape/salesforce/status` | `lastSfSync` (in-memory, seeded from cache at startup) | `store.recordCount` | Yes (via `initSfSyncFromCache`) |
+
+### When sheet-based sync updates the store
+
+`refresh-engine.ts` calls `recordOutcome()` after every successful cache write:
+- `refreshCCSP()` → `recordOutcome('ccsp', { success: true, recordCount })`
+- `refreshSubscriptions()` → `recordOutcome('supportable', { success: true, recordCount })`
+- `refreshPipeline()` → `recordOutcome('sf-pipeline', { success: true, recordCount })`
+
+This means a "Sync Now" from the Setup page Data Sources section (GSheet → cache) correctly updates the store's `lastSuccess` and `state`, even without a browser scrape.
+
+### CCSP sheet access constraint
+
+The Sheets API uses a service account (`SHEETS_TOKEN_PATH`). The service account can only access sheets it created. User-created CCSP sheets are inaccessible (API returns "not found"). The correct CCSP flow is:
+1. Admin panel → Run CCSP Sync (Tableau → creates/writes service-account-owned sheet → cache)
+2. Setup page → CCSP Sync Now (reads service-account sheet → cache) — works once step 1 has run
+
+If `ccspSheetId` is lost (AE re-bootstrap), `writeCcspSheet` creates a new blank sheet rather than finding the existing one (BKL-SCRAPER-01 — pending fix with Jason's approval).
+
+---
+
+## §17. Data Pipeline Inventory
+
+Complete inventory of every data pipeline in the system, organized by execution model.
+
+### Browser-based scrapers (Playwright)
+
+| Pipeline | Schedule | Trigger | Notes |
+|---|---|---|---|
+| **RH Cases** | Heartbeat interval (default 240 min, configurable via `rhScrape` in data-sources.json) | Automatic timer tick; manual via Admin "Run Now" | Runs for all account numbers in customers.json. 15-min tick checks elapsed time against configured interval. |
+| **Supportable** | Daily 7:00 AM ET | `schedulerConfig.supportableTime` | Rotating 3-batch (ADR-008). Single BrowserContext, strictly sequential — no parallelism (APEX cookie collisions). Requires VPN. |
+| **CCSP / Tableau** | Daily 6:30 AM ET | `schedulerConfig.ccspTime` | Tableau SSO via shared browser context. Writes to service-account-owned Google Sheet. |
+| **SF Pipeline** | Daily 2:00 AM ET | `schedulerConfig.sfPipelineTime` | Salesforce Lightning report export. Requires active SF session. |
+
+All schedule times configurable via Admin page or `POST /api/settings/scheduler`. Floors enforced server-side (SF/Supportable: 12h, CCSP/Territory: 6h).
+
+### Intelligence pipelines (Gemini + Google Search grounding)
+
+| Pipeline | Trigger | Cache | Notes |
+|---|---|---|---|
+| **Account Intelligence** | Post-bootstrap auto-trigger; manual via Admin "Generate All" (`POST /api/intelligence/generate-all`) | `data/cache/intelligence/{slug}.json` (dual-write: Drive doc + local JSON, ADR-010) | Three steps: (1) industry/segment classification, (2) company brief + industry analysis via Gemini with Google Search grounding, (3) Drive docs write. ~10 min/customer. |
+| **Customer Briefs** | On-demand per page view (`GET /api/customer/:name/brief`) | `data/cache/{slug}-{date}.json` | 4h TTL (ADR-009). Auto-invalidates when source sheet data is newer than cached brief. `force=true` bypasses both conditions. |
+| **Product Intelligence** | Weekly Sunday 6:00 AM ET | `data/cache/product-intel/{slug}-features.json`, `{slug}-summary.json` | Regenerates feature radar (AAP/OCP/RHEL/etc.) for all 7 products. Feature cache injected into customer product intel generation. |
+| **Morning Synthesis** | On-demand via `GET /api/morning-summary` | `data/cache/morning-synthesis.json` | 4h TTL. Gemini narrative summarizing portfolio signals. Non-blocking — endpoint returns without `synthesis` field on failure. |
+
+### Live on-demand (no persistent cache except brief output)
+
+| Pipeline | Trigger | Data Window | Notes |
+|---|---|---|---|
+| **Gmail** | Fetched per brief generation | Last 30 days | Domain + name matching against customer. Included in brief XML as `<source type="emails">`. |
+| **Calendar** | Fetched per dashboard load | Next 30 days | Google Calendar API. Included in brief XML as `<source type="calendar">`. |
+| **Google Drive docs** | Crawled per brief generation | All docs in customer folder | Depth 5 traversal. Google Docs + PDFs (Gemini multimodal extraction, 15MB size gate). 8K char cap per doc. |
+
+### Other pipelines
+
+| Pipeline | Trigger | Notes |
+|---|---|---|
+| **Domain Inference** | Auto-runs post-bootstrap for all new customers | High-confidence results auto-saved to customers.json. |
+| **Territory Sync** | Daily 1:45 AM ET | GSheet diff against customers.json. Auto-adds new customers, flags removals. |
+| **KPI Snapshot** | Daily 8:00 AM ET | Daily metric snapshots to `kpi-history.json`. 90-day rolling window. |
+| **NotebookLM** | Manual only | Requires `NOTEBOOKLM_ENABLED=true` env var. Admin trigger only. |
+
+### Known bugs (fixed 2026-04-06)
+
+- **`makeAuth` missing import** in `src/account-intelligence.ts` — caused intelligence generation to crash on startup when `makeAuth` was called but not imported from `google-auth-library`.
+- **`google` (googleapis) missing import** in `src/account-intelligence.ts` — caused Drive docs write step (Step 3) to fail with `google is not defined`. Both caught when triggering "Generate All" to restore industry/segment labels after customers.json restore.

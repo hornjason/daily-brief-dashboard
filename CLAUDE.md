@@ -55,6 +55,21 @@ See `docs/DATA-RULES.md` — read before touching cache, sheets, or territory sy
 - Bootstrap E2E: `npx playwright test test/bootstrap-e2e.spec.ts --timeout=600000`
 - State isolation: snapshot/restore per test via `POST /api/__test/snapshot` + `restore`
 
+## Adding a New AE — Runbook
+
+Full documentation: `docs/ADDING-NEW-AE.md`
+
+**Quick reference:**
+
+1. Setup Wizard creates AE entry + territory config
+2. Bootstrap wizard auto-runs 6 steps: Drive folder → customer folders → Supportable discovery/scrape → CCSP scrape → SF Pipeline sync
+3. Post-bootstrap auto-triggers: domain inference + account intelligence batch (~10 min/customer)
+4. RH Cases picks up at next scheduled run (or Admin "Run Now" for same-day)
+5. Customer briefs generate on first page view (on-demand, 4h cache)
+6. NotebookLM is manual-only (Admin trigger, requires `NOTEBOOKLM_ENABLED=true`)
+
+**Validation:** Check `aes.json` for 4 sheet IDs, `customers.json` for account numbers, `/api/intelligence/generate-all/status` for pipeline progress, then open a customer detail page to trigger brief generation.
+
 ## Project Map
 
 For module inventory, API endpoints, ADR index, design specs, timer reference, and doc catalog: `docs/PROJECT-MAP.md`

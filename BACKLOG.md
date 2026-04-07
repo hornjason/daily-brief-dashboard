@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-05 (BKL-CI02–06: CI pipeline performance; BKL-W3-01/03/07/08/11/12/13: updated with team investigation findings)
+Last update: 2026-04-06 (BKL-SCRAPER-01–06: scraper/sync council review findings; BKL-UI-01: product intel API 400 on special-char customer names; BKL-AI-IMPORT-01/02: DONE)
 
 ---
 
@@ -1741,12 +1741,16 @@ Related: BKL-M32 (territory drift gap), BKL-M15 (territory lookup quota)
 Decision: DONE — Daily 1:45am ET timer added. Territory parser extracted into src/territory-sync.ts. syncTerritorySheet() diffs GSheet vs customers.json per AE. New customers auto-added. Removals/reassignments written to data/cache/territory-notifications.json (never auto-deleted). GET /api/territory/notifications endpoint added. Google auth pre-flight check before running.
 
 ### BKL-M34 | customers.json wiped to empty on container restart — root cause unknown
-Status: 🔴 OPEN
+Status: ✅ FIXED 2026-04-06
 Priority: P1
 Severity: High
 Source: Quinn/UIReviewer catch 2026-04-06 — customer detail "not found" after rebuild
-Files: src/server-state.ts, src/background-scheduler.ts
-Description: After `make rebuild`, customers.json was overwritten with `{ "customers": [] }` at container start (12:53 Apr 6). Startup validation saw 10 customers in-memory but something in the startup sequence (likely triggered by Quinn test run or refresh cycle) wrote empty customers.json to disk. customers.json.bak from Apr 5 has the 9 valid customers. Immediate fix: restore from backup. Root cause must be traced — patchCustomer or saveCustomers is being called with an empty array on startup. Suspect: test state restore in __test/snapshot endpoint, or refresh cycle calling patchCustomer before loadServerState populates in-memory customers.
+Files: src/server-state.ts, src/background-scheduler.ts, src/setup-routes.ts
+Root Cause: `POST /api/setup/save-customers` had no guard against an empty `customers` array. If the endpoint was called with `{"customers":[]}` (e.g., during a setup UI render before data loaded), it would atomically overwrite customers.json with an empty list.
+Fix:
+  1. setup-routes.ts: Added explicit 400 guard — rejects any save-customers call with empty array
+  2. background-scheduler.ts startup-validation: Added `currentCustomers.length > 0` guard before writing (belt-and-suspenders)
+  3. server-state.ts loadServerState: Added prominent WARN log when 0 customers load from disk (diagnostic aid)
 Related: BKL-M32 (territory drift), server-state.ts saveCustomers
 
 ### BKL-M35 | CCSP trend diff — store delta between pulls to show consumption trends
@@ -4543,3 +4547,92 @@ Description: `intel.customer ?? file.replace('.json', '')` — if a cache JSON f
 Status: ✅ DONE 2026-04-06
 Source: Rook gate 2026-04-06
 Description: (1) renderMarkdownInline — no dangerouslySetInnerHTML anywhere in dashboard/src. All tokens are pushed into React elements (<strong>, <em>, <code>) via JSX, never injected as raw HTML. XSS risk: NONE. (2) Test file navigation-regression.spec.ts — all tests are GET + UI click navigation only; no POST/DELETE to non-test endpoints; no state mutation. (3) customer-product-intel.ts prompt — expansion opportunity prompt change is purely instructional text added to the system/user prompt; no new external input injected; sanitizePromptInput() already wraps all customer-sourced strings. (4) AccountIntelligencePanel.tsx — renders only Drive doc URLs as anchor hrefs (no text content rendered); no markdown rendering needed. (5) SetupPage.tsx — renders config strings and status strings from server API; no markdown content fields present; no renderMarkdownInline gap.
+
+---
+
+### BKL-QA01 | SetupPage status polling — missing test for post-load scrape update
+Status: OPEN | Priority: P1 | Type: QA Gap
+Description: SetupPage `refreshAll()` was only called on mount with no periodic re-poll. Status showed stale amber/wrong-messages when RH scrape completed after page load. Fixed: 15-second `setInterval` added. Gap: no test covers "load setup page → scrape fires → verify status updates without reload." Quinn's tests always load after scrape, masking this.
+Action: Add Playwright test — load /dashboard/setup, mock scrape completing mid-session, assert RH Portal status flips to green within 20s.
+
+### BKL-QA02 | CalendarStrip "Generate brief" broken URL — missing /api/ prefix
+Status: FIXED 2026-04-06 | Priority: P0 | Type: Bug
+Description: `handleGenerate` fetched `/customer/{name}/brief` (no `/api/` prefix) — 404 on every click. Fixed to `/api/customer/{name}/brief`. Root cause: copy-paste from a pre-API-prefix era. QA gap: no test exercises the "Generate brief" button click on a meeting card.
+Action: Add Playwright test for Generate brief button on a customer meeting card — assert loading state then brief content renders.
+
+### BKL-QA03 | Product intel 404 console noise on customer detail — empty state not silent
+Status: 🟡 LOW | Priority: P3 | Type: Polish
+Source: Quinn QA 2026-04-06
+Description: Customer detail page fires 8 console errors on load — all 404s for product intel endpoints (e.g., `/api/products/ocp-virt/intel/dropbox`). Route is correct — 404 is the expected empty state when no intel has been generated yet. The frontend fetches all products on mount regardless of whether intel exists, logging each 404 as a console error. Page renders correctly; user sees Generate buttons. Fix: suppress console errors on 404 for product intel fetches (expected empty state), or prefetch only products with known cache entries.
+Files: dashboard/src/components/ProductIntelSection.tsx
+
+### BKL-SCRAPER-01 | writeCcspSheet does not search Drive by name before creating new sheet
+Status: 📋 BACKLOG | Priority: P2 | Type: Architecture Gap
+Source: Council review 2026-04-06
+Files: src/ccsp-scraper.ts (writeCcspSheet ~line 594)
+Description: When AE config loses the ccspSheetId (e.g., re-bootstrap), writeCcspSheet creates a new blank Google Sheet instead of searching the AE's Drive folder for an existing "[AE] CCSP" sheet by name. This creates orphaned duplicate sheets on every re-bootstrap. The function accepts an optional existingSheetId — if absent, it blindly creates a new one.
+Fix: Before `drive.files.create()`, query `drive.files.list({ q: "name contains '[AE Name]' and name contains 'CCSP' and mimeType='application/vnd.google-apps.spreadsheet'" })` in the AE's Drive folder. If found, use that ID. Requires explicit Jason approval before touching ccsp-scraper.ts (protected file).
+
+### BKL-SCRAPER-02 | CCSP service account cannot access user-created sheets
+Status: 📋 BACKLOG | Priority: P2 | Type: Architecture Gap
+Source: Council review 2026-04-06
+Description: Google Sheets API auth uses a service account (SHEETS_TOKEN_PATH). The service account can only read/write sheets it created or was explicitly shared on. User-created CCSP sheets (e.g., "Carolanne Farrell CCSP" at 1zfQOj...) are inaccessible — API returns "Requested entity was not found." The CCSP Sync Now flow only works against the service-account-created sheet (10JEEZb3...). 
+Fix options: (a) Share user's existing CCSP sheet with the service account email; or (b) run full Admin CCSP scrape to populate service-account sheet. Option (b) is the supported flow — document this constraint clearly in Setup UI.
+
+### BKL-SCRAPER-03 | CCSP sheet empty after scrape — Tableau Raw Data download issue
+Status: 📋 BACKLOG | Priority: P1 | Type: Bug
+Source: Council review 2026-04-06
+Description: The service-account CCSP sheet (10JEEZb3...) has a 'CCSP Data' tab with 0 data rows — the full CCSP scrape ran at some point but wrote no rows. ccsp-scraper.ts warns: "scraped data missing required columns — this usually means the Tableau .csv endpoint returned the summary view instead of Raw Data." The Tableau scraper sometimes gets the summary view (missing account/ACV columns) instead of the Raw Data tab download. Carolanne's CCSP widget shows $0/No AE data as a result.
+Fix: Investigate Tableau Raw Data download reliability. May need to retry or explicitly navigate to the Raw Data tab before triggering download. Requires a fresh full CCSP scrape from Admin panel to reproduce and diagnose.
+Action: Jason to run Admin panel → CCSP Sync → capture container logs during scrape → report what Tableau view was downloaded.
+
+### BKL-SCRAPER-04 | Naming inconsistency: telemetry uses short names, StatusStore uses long names
+Status: 📋 BACKLOG | Priority: P3 | Type: Tech Debt
+Source: Council review 2026-04-06
+Files: src/scraper-manager.ts, src/scraper-status-store.ts
+Description: Telemetry log service names: 'rh', 'ccsp', 'supportable', 'salesforce'. ScraperStatusStore names: 'rh-cases', 'ccsp', 'supportable', 'sf-pipeline'. No cross-linking. Low impact (different consumers) but creates confusion in logs and dashboards.
+Fix: Standardize on ScraperStatusStore names across both systems. Low priority — no functional impact.
+
+### BKL-SCRAPER-05 | Salesforce ScraperStatusStore `state` stuck at "running" while `isRunning: false`
+Status: 📋 BACKLOG | Priority: P2 | Type: Bug
+Source: Quinn QA 2026-04-06 (council review verification pass)
+Files: src/scraper-manager.ts, src/scrape-api.ts (salesforce status endpoint)
+Description: `/api/scrape/salesforce/status` returns `state: "running"` from ScraperStatusStore while simultaneously returning `isRunning: false` from the in-memory flag. These are contradictory — store says scrape is running, but the mutex says it's not. Downstream effect: the Setup page Pipeline (Salesforce) Sync Now button may be disabled due to the stuck `state`. Root cause likely: a previous SF scrape called `markRunning('sf-pipeline')` but the subsequent `recordOutcome()` was never called (process crash, timeout, or error path that bypassed the outcome recording).
+Fix: Add a staleness check — if `state === 'running'` but `isRunning === false` and `updatedAt` is older than 15 minutes, auto-reset to `state: 'stale'`. This is the same stale-mutex pattern used for the Playwright mutex guards.
+
+
+### BKL-SCRAPER-06 | RH Cases `lastSync` null after container restart — in-memory var never hydrated from cache
+Status: 📋 BACKLOG | Priority: P2 | Type: Bug
+Source: Quinn QA gate 2026-04-06 (council review validation)
+Files: src/rh-auth.ts (line ~30), src/scrape-api.ts (rh-cases status endpoint)
+Description: `lastScraped` in rh-auth.ts is a module-level in-memory variable initialized to `null`. It is set when a scrape runs but never hydrated from disk on startup. After container restart, `/api/scrape/rh-cases/status` returns `lastSync: null` even when 7 cached records exist. The centralized ScraperStatusStore does persist `lastSuccess` (used by AdminPage), but the individual status endpoint reads the in-memory var.
+Fix: Same pattern as ISC-01 (CCSP fix) — hydrate `lastScraped` from the RH cases cache file `cachedAt` on startup. Alternatively, change the rh-cases status endpoint to read `lastSuccess` from ScraperStatusStore (already disk-backed) as the primary timestamp source.
+
+---
+
+### BKL-UI-01 | Product intel API returns 400 for customer names with special characters
+Status: 🔴 OPEN | Priority: P2 | Type: Bug
+Source: Quinn QA 2026-04-06 (strict criteria pass)
+Files: src/product-intel-routes.ts, dashboard/src/components/ProductIntelSection.tsx
+Description: Customer names containing commas or periods (e.g., "Taylor Fresh Foods, Inc.", "NORDSTROM") cause product intel API calls to return 400 Bad Request. The customer name is used directly in the URL path without encoding — `GET /api/products/ocp-virt/intel/Taylor Fresh Foods, Inc.` — the comma breaks URL parsing. Generates ~14 console errors per affected customer page load. Non-blocking: UI renders gracefully with empty product intel state.
+Fix: URL-encode the customer name in the frontend fetch calls (`encodeURIComponent(customerName)`) and decode it in the API route handler (`decodeURIComponent(c.req.param('customerName'))`).
+
+---
+
+### BKL-AI-IMPORT-01 | makeAuth missing import in account-intelligence.ts
+Status: ✅ DONE 2026-04-06
+Severity: CRITICAL
+Priority: P0
+Size: XS (5 min)
+Source: Generate All trigger after customers.json restore — intelligence pipeline crashed on startup
+Files: src/account-intelligence.ts
+Description: `makeAuth` from `google-auth-library` was referenced but never imported. The intelligence pipeline crashed immediately when `POST /api/intelligence/generate-all` was called. Silent failure — no customer intelligence generated until manually triggered and error observed in logs.
+
+### BKL-AI-IMPORT-02 | google (googleapis) missing import in account-intelligence.ts
+Status: ✅ DONE 2026-04-06
+Severity: CRITICAL
+Priority: P0
+Size: XS (5 min)
+Source: Generate All trigger after customers.json restore — Drive docs write step failed
+Files: src/account-intelligence.ts
+Description: `google` from `googleapis` was referenced in the Drive docs write step (Step 3) but never imported. Steps 1-2 (industry/segment classification, company brief) completed successfully, but Step 3 (Drive document write) failed with `google is not defined`. Result: intelligence was generated but never persisted to Drive. Both import bugs were caught when triggering "Generate All" to restore industry/segment labels after a customers.json restore.

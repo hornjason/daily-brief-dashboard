@@ -24,6 +24,7 @@ All data is cached locally. Nothing leaves your machine except API calls to serv
 - **GitHub account** — to pull the container image from GHCR (private registry)
 - **Red Hat Google Workspace account** (for Gmail, Calendar, and Drive)
 - **Red Hat Customer Portal access** (your existing SSO credentials)
+- **Red Hat Offline Token** — required for support case data. Generate yours at [access.redhat.com/management/api](https://access.redhat.com/management/api) → click **Generate Token** (you must be logged in). Copy the token — you'll need it for your `.env` file in the next step.
 
 ## Quick Start
 

@@ -169,7 +169,7 @@ test.describe('Dashboard empty state — Pipeline', () => {
     await expect(pipelineSection.getByText('Open Pipeline')).toBeVisible()
 
     // Should show $0 for total ACV (fmt(0) = "$0")
-    await expect(pipelineSection.getByText('$0')).toBeVisible()
+    await expect(pipelineSection.getByText('$0').first()).toBeVisible()
 
     // Should show "0 opportunities"
     await expect(pipelineSection.getByText('0 opportunities')).toBeVisible()

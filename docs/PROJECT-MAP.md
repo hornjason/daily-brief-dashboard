@@ -47,6 +47,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - `docs/GEMINI-BRIEF-ARCHITECTURE.md` — Brief pipeline prompts, schemas, sub-pipelines
 - `docs/INFORMATION-ARCHITECTURE-V2.md` — Information architecture (Serena)
 - `docs/VISUAL-DESIGN-SPEC.md` — Visual design (Aditi)
+- `docs/ADDING-NEW-AE.md` — AE onboarding runbook (bootstrap, post-triggers, validation)
 
 ## ADRs
 
@@ -111,6 +112,29 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - `ROADMAP.md` — Priority tracks
 - `FLOWS.md` — User + data flows
 - `EXECUTION-PLAN.md` — Implementation phasing
+- `docs/ADDING-NEW-AE.md` — Complete runbook for onboarding a new AE (bootstrap → validation)
+
+## Data Pipeline Summary
+
+Full inventory in `ARCHITECTURE.md` §17. Quick reference:
+
+| Pipeline | Type | Schedule / Trigger |
+|---|---|---|
+| RH Cases | Browser scrape | Heartbeat interval (default 4h, configurable) |
+| Supportable | Browser scrape | Daily 7:00 AM ET, 3-batch rotation |
+| CCSP / Tableau | Browser scrape | Daily 6:30 AM ET |
+| SF Pipeline | Browser scrape | Daily 2:00 AM ET |
+| Account Intelligence | Gemini + grounding | Post-bootstrap + Admin "Generate All" |
+| Customer Briefs | Gemini | On-demand per page view, 4h cache |
+| Product Intelligence | Gemini + Drive corpus | Weekly Sunday 6:00 AM ET |
+| Morning Synthesis | Gemini | On-demand, 4h cache |
+| Gmail | Google API | Per brief generation (30 days) |
+| Calendar | Google API | Per dashboard load (30 days) |
+| Drive docs | Google API | Per brief generation (customer folder) |
+| Domain Inference | Automated | Post-bootstrap |
+| Territory Sync | Google Sheets | Daily 1:45 AM ET |
+| KPI Snapshot | Internal | Daily 8:00 AM ET |
+| NotebookLM | Manual | Admin trigger only |
 
 ## Morning Sync Sequence
 

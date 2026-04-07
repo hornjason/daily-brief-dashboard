@@ -64,6 +64,7 @@ import {
 } from './ccsp-scraper.ts'
 import { getRefreshIntervals } from './settings-api.ts'
 import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
+import { readSheetCache, readCCSPCache, readPipelineCache } from './cache-layer.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
@@ -273,9 +274,13 @@ export function registerScrapeRoutes(app: Hono): void {
   // GET /api/scrape/supportable/status
   app.get('/api/scrape/supportable/status', (c) => {
     const store = getScraperStatus('supportable')
+    // Derive lastScrape from sheet cache timestamps — more reliable than in-memory variable
+    // (survives restarts, works across module boundaries, reflects actual data writes)
+    const sheetCachedAts = customers.map(cu => readSheetCache(cu.name)?.cachedAt).filter(Boolean) as string[]
+    const lastSheetSync = sheetCachedAts.length ? sheetCachedAts.reduce((a, b) => a > b ? a : b) : lastSupportableScrape
     return c.json({
       running:       supportableScrapeRunning,
-      lastScrape:    lastSupportableScrape,
+      lastScrape:    lastSheetSync,
       lastError:     lastSupportableError ? sanitizeErr(lastSupportableError) : null,
       statusMessage: supportableStatusMessage,
       // ScraperStatusStore fields for unified freshness tracking
@@ -482,15 +487,16 @@ export function registerScrapeRoutes(app: Hono): void {
   // GET /api/scrape/ccsp/status
   app.get('/api/scrape/ccsp/status', (c) => {
     const store = getScraperStatus('ccsp')
+    const ccspCache = readCCSPCache()
     return c.json({
       running:    ccspScrapeRunning || ccspInFlight,
-      lastScrape: lastCcspScrape,
+      lastScrape: ccspCache?.cachedAt ?? lastCcspScrape,
       lastError:  lastCcspError ? sanitizeErr(lastCcspError) : null,
       // ScraperStatusStore fields for unified freshness tracking
       lastRun:       store.lastRun,
       lastSuccess:   store.lastSuccess,
       storeLastError: store.lastError,
-      recordCount:   store.recordCount,
+      recordCount:   ccspCache?.records?.length ?? store.recordCount,
       state:         store.state,
     })
   })

@@ -20,24 +20,40 @@ import {
   saveProductConfig,
 } from './product-release-radar.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
-import { sanitizeErr, sanitizePromptInput, isValidDriveFolderId } from './utils.ts'
+import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 import { refreshDriveCorpus, getCachedDriveCorpus } from './product-drive-ingest.ts'
 import { getFeatureCache, extractProductFeatures, enrichFeatures, refreshAllFeatures, isAllowedUrl } from './product-feature-radar.ts'
 import {
   getCachedCustomerProductIntel,
   generateCustomerProductIntel,
   toCustomerSlug,
+  buildCustomerIntelContext,
 } from './customer-product-intel.ts'
-import { readSheetCache, readPipelineCache } from './cache-layer.ts'
-import { fetchCases } from './redhat.ts'
 import { customers } from './server-state.ts'
-import { getCachedCustomerDocsCorpus } from './customer-docs-corpus.ts'
-import { normalizeForQuery } from './utils.ts'
 
 // ── BKL-S16: In-memory mutex for Gemini generation endpoints ──────────────────
 // Bun is single-threaded — a Set of active keys prevents concurrent duplicate calls.
 // Keys: "intel:{slug}:{customerSlug}" | "refresh:{slug}" | "features:{slug}"
-const _generatingKeys = new Set<string>()
+export const _generatingKeys = new Set<string>()
+
+// ── Batch all-customers state (R4) ────────────────────────────────────────────
+let _allCustomersBatchState: {
+  running: boolean
+  current: string | null
+  completed: number
+  total: number
+  errors: string[]
+  startedAt: string | null
+  completedAt: string | null
+} = {
+  running: false,
+  current: null,
+  completed: 0,
+  total: 0,
+  errors: [],
+  startedAt: null,
+  completedAt: null,
+}
 
 export function registerProductIntelRoutes(app: Hono): void {
 
@@ -193,6 +209,161 @@ export function registerProductIntelRoutes(app: Hono): void {
     }
   })
 
+  // GET /api/products/intel/generate-all-customers/status — batch generation status
+  // NOTE: registered BEFORE /api/products/:slug and BEFORE /:customerSlug to avoid slug collision
+  app.get('/api/products/intel/generate-all-customers/status', (c) => {
+    return c.json({
+      running: _allCustomersBatchState.running,
+      current: _allCustomersBatchState.current,
+      completed: _allCustomersBatchState.completed,
+      total: _allCustomersBatchState.total,
+      errors: _allCustomersBatchState.errors,
+      startedAt: _allCustomersBatchState.startedAt,
+      completedAt: _allCustomersBatchState.completedAt,
+    })
+  })
+
+  // POST /api/products/intel/generate-all-customers — regenerate intel for all customers x all products
+  // NOTE: registered BEFORE /api/products/:slug and BEFORE /:customerSlug to avoid slug collision
+  app.post('/api/products/intel/generate-all-customers', async (c) => {
+    const batchKey = 'intel:batch:all-customers'
+    if (_generatingKeys.has(batchKey)) {
+      return c.json({ error: 'Batch generation already running', state: _allCustomersBatchState }, 409)
+    }
+    _generatingKeys.add(batchKey)
+
+    const productConfigs = loadProductConfig()
+    const customerList   = [...customers]
+    const total          = customerList.length
+
+    _allCustomersBatchState = {
+      running: true,
+      current: null,
+      completed: 0,
+      total,
+      errors: [],
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+    }
+
+    // Return immediately — run in background
+    ;(async () => {
+      try {
+        for (const customer of customerList) {
+          const customerSlug = toCustomerSlug(customer.name)
+          _allCustomersBatchState.current = customer.name
+          try {
+            const ctx = await buildCustomerIntelContext(customerSlug)
+            for (const product of productConfigs) {
+              const summary = getCachedSummary(product.slug)
+              if (!summary) continue
+              const mutexKey = `intel:${product.slug}:${customerSlug}`
+              if (_generatingKeys.has(mutexKey)) continue
+              _generatingKeys.add(mutexKey)
+              try {
+                const corpus     = getCachedDriveCorpus(product.slug)
+                const slidesText = corpus ? corpus.files.map(f => f.textContent).join('\n\n') : ''
+                const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(product.slug)
+                await generateCustomerProductIntel({
+                  slug: product.slug,
+                  productSummary: summary,
+                  slidesText,
+                  customerName: ctx.customerName,
+                  subscriptions: ctx.subscriptions,
+                  supportCases: ctx.supportCases,
+                  customerDocsText: ctx.customerDocsText,
+                  customerDocsHash: ctx.customerDocsHash,
+                  opportunityNote: ctx.opportunityNote,
+                  productFeatures,
+                  productFeaturesHash,
+                })
+              } finally {
+                _generatingKeys.delete(mutexKey)
+              }
+              await new Promise(r => setTimeout(r, 3000))  // 3s between Gemini calls
+            }
+          } catch (e: any) {
+            const msg = `${customer.name}: ${e?.message ?? String(e)}`
+            console.error(`[product-intel] generate-all-customers: ${msg}`)
+            _allCustomersBatchState.errors.push(msg)
+          }
+          _allCustomersBatchState.completed++
+        }
+        console.log(`[product-intel] generate-all-customers: completed ${total} customers`)
+      } finally {
+        _allCustomersBatchState.running = false
+        _allCustomersBatchState.current = null
+        _allCustomersBatchState.completedAt = new Date().toISOString()
+        _generatingKeys.delete(batchKey)
+      }
+    })()
+
+    return c.json({ message: 'Batch generation started', customerCount: total })
+  })
+
+  // POST /api/products/intel/:customerSlug/generate-all — generate intel for ALL products sequentially
+  // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "intel"
+  app.post('/api/products/intel/:customerSlug/generate-all', async (c) => {
+    const customerSlug = c.req.param('customerSlug')
+    if (!/^[a-z0-9-]+$/.test(customerSlug)) {
+      return c.json({ error: 'Invalid customerSlug' }, 400)
+    }
+
+    const products = loadProductConfig()
+    const queued: string[] = []
+    const skipped: string[] = []
+
+    // Resolve customer context once — shared across all product generations
+    const ctx = await buildCustomerIntelContext(customerSlug)
+
+    // Sequential loop — Gemini rate limits require sequential generation
+    for (const product of products) {
+      const slug     = product.slug
+      const mutexKey = `intel:${slug}:${customerSlug}`
+
+      if (_generatingKeys.has(mutexKey)) {
+        skipped.push(slug)
+        continue
+      }
+
+      const productSummary = getCachedSummary(slug)
+      if (!productSummary) {
+        console.warn(`[product-intel] generate-all: no cached summary for ${slug} — skipping`)
+        skipped.push(slug)
+        continue
+      }
+
+      _generatingKeys.add(mutexKey)
+      try {
+        const corpus     = getCachedDriveCorpus(slug)
+        const slidesText = corpus ? corpus.files.map(f => f.textContent).join('\n\n') : ''
+        const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(slug)
+
+        await generateCustomerProductIntel({
+          slug,
+          productSummary,
+          slidesText,
+          customerName: ctx.customerName,
+          subscriptions: ctx.subscriptions,
+          supportCases: ctx.supportCases,
+          customerDocsText: ctx.customerDocsText,
+          customerDocsHash: ctx.customerDocsHash,
+          opportunityNote: ctx.opportunityNote,
+          productFeatures,
+          productFeaturesHash,
+        })
+        queued.push(slug)
+      } catch (e: any) {
+        console.error(`[product-intel] generate-all: error generating ${slug}/${customerSlug}:`, sanitizeErr(e))
+        skipped.push(slug)
+      } finally {
+        _generatingKeys.delete(mutexKey)
+      }
+    }
+
+    return c.json({ queued, skipped })
+  })
+
   // GET /api/products/:slug/intel/:customerSlug — cached customer intel (no generation)
   // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "intel"
   app.get('/api/products/:slug/intel/:customerSlug', (c) => {
@@ -233,70 +404,23 @@ export function registerProductIntelRoutes(app: Hono): void {
       if (!productSummary) return c.json({ error: `No cached summary for ${slug} — run POST /api/products/${slug}/refresh first` }, 400)
 
       // Drive corpus — concat all file text; empty string if no corpus yet
-      const corpus    = getCachedDriveCorpus(slug)
+      const corpus     = getCachedDriveCorpus(slug)
       const slidesText = corpus ? corpus.files.map(f => f.textContent).join('\n\n') : ''
 
-      // Resolve customer by customerSlug — match against customers array
-      const customer = customers.find(cu => toCustomerSlug(cu.name) === customerSlug)
-      const customerName = customer?.name ?? customerSlug  // fallback: use slug as display name
-
-      // Wave 5: pass ALL subscriptions unfiltered — let Gemini determine relevance
-      const sheetCache    = readSheetCache(customerName)
-      const subscriptions = sheetCache?.rows ?? []
-
-      // Wave 5: pass ALL customer cases unfiltered — let Gemini determine relevance
-      let supportCases: any[] = []
-      try {
-        const allCases    = await fetchCases().catch(() => [])
-        const accountNums = (customer?.accountNumbers ?? []).map(String)
-        supportCases = accountNums.length
-          ? allCases.filter(c => accountNums.includes(String(c.accountNumber)))
-          : []
-      } catch (e: any) {
-        console.warn(`[product-intel] could not load cases for ${customerName} — proceeding with empty array:`, e?.message)
-      }
-
-      // Wave 5: customer docs corpus (cached at brief-gen time, zero Drive API calls)
-      const docsCorpus     = getCachedCustomerDocsCorpus(customerSlug)
-      const customerDocsText = docsCorpus
-        ? docsCorpus.files.map(f => `[${f.name}]\n${f.textContent}`).join('\n\n')
-        : ''
-      const customerDocsHash = docsCorpus?.corpusHash ?? ''
-
-      // Pipeline context
-      const needle = normalizeForQuery(customerName.toLowerCase())
-      const pipelineCache = readPipelineCache()
-      const pipelineRecords = pipelineCache
-        ? pipelineCache.records.filter(r => {
-            const hay = normalizeForQuery(r.accountName)
-            return hay.includes(needle) || needle.includes(hay)
-          }).filter(r => r.forecastCategory.toLowerCase() !== 'closed')
-        : []
-      const opportunityNote = pipelineRecords.length
-        ? pipelineRecords.map(r => `${sanitizePromptInput(r.oppName ?? '', 200)}: $${r.acv?.toLocaleString() ?? '?'} ACV, close ${r.closeDate ?? '?'}, ${r.forecastCategory}`).join('\n')
-        : undefined
-
-      // Load feature radar cache for this product (Phase 3: feature talking points)
-      const featureCache = getFeatureCache(slug)
-      const productFeatures = featureCache?.features.map(f => ({
-        name: f.name,
-        status: f.status,
-        description: f.description,
-        tags: f.tags,
-        versionIntroduced: f.versionIntroduced,
-      }))
-      const productFeaturesHash = featureCache?.corpusHash
+      // Resolve customer context via shared helper
+      const ctx = await buildCustomerIntelContext(customerSlug)
+      const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(slug)
 
       const intel = await generateCustomerProductIntel({
         slug,
         productSummary,
         slidesText,
-        customerName,
-        subscriptions,
-        supportCases,
-        customerDocsText,
-        customerDocsHash,
-        opportunityNote,
+        customerName: ctx.customerName,
+        subscriptions: ctx.subscriptions,
+        supportCases: ctx.supportCases,
+        customerDocsText: ctx.customerDocsText,
+        customerDocsHash: ctx.customerDocsHash,
+        opportunityNote: ctx.opportunityNote,
         productFeatures,
         productFeaturesHash,
       })

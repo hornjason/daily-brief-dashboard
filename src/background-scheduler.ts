@@ -8,7 +8,7 @@ import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
 import { lastScraped, recordScrapeExpired, getRhStatus } from './rh-auth.ts'
 import { initScrapeContext, getScrapeContext, closeScrapeContext } from './rh-scraper.ts'
-import { adoptSfContext } from './sf-scraper.ts'
+import { adoptSfContext, initSfSyncFromCache } from './sf-scraper.ts'
 import { adoptSupportableContext, runSupportableDiscoverAndScrape, writeSupportableSheet, supportableScrapeRunning } from './supportable-scraper.ts'
 import { adoptCcspContext, runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './ccsp-scraper.ts'
 import { syncTerritorySheet } from './territory-sync.ts'
@@ -994,7 +994,7 @@ export function validateCachedAccountNumbers(): void {
     }
   }
 
-  if (autoCleared) {
+  if (autoCleared && currentCustomers.length > 0) {
     try {
       const { writeFileSync, renameSync } = require('node:fs')
       const tmpPath = CUSTOMERS_PATH + '.tmp'
@@ -1004,12 +1004,47 @@ export function validateCachedAccountNumbers(): void {
     } catch (e: any) {
       console.warn(`[startup-validation] Failed to save cleared accounts: ${e?.message}`)
     }
+  } else if (autoCleared && currentCustomers.length === 0) {
+    console.warn('[startup-validation] SKIPPED disk write — currentCustomers is empty, refusing to overwrite customers.json')
   }
 
   if (flagged.length === 0) {
     console.log(`[startup-validation] Account numbers OK — all ${currentCustomers.length} customers within limits`)
   } else {
     console.warn(`[startup-validation] Flagged customers: ${flagged.join(', ')}`)
+  }
+}
+
+// ── Sheet ID health check ──────────────────────────────────────────────────────
+// Verifies each AE's configured sheet IDs are accessible to the OAuth token.
+// Runs 5s after startup, fire-and-forget. Problems surface in container logs
+// rather than silently serving stale or missing data.
+async function runSheetHealthCheck(): Promise<void> {
+  try {
+    const { google } = await import('googleapis')
+    const { makeAuth } = await import('./google.ts')
+    const auth = makeAuth('__unused__')  // makeAuth uses unified token if it exists, __unused__ is never read
+    const sheets = google.sheets({ version: 'v4', auth })
+    const checks: { ae: string; type: string; id: string }[] = []
+    for (const ae of aes) {
+      if (ae.ccspSheetId)        checks.push({ ae: ae.name, type: 'ccsp',        id: ae.ccspSheetId })
+      if (ae.pipelineSheetId)    checks.push({ ae: ae.name, type: 'pipeline',    id: ae.pipelineSheetId })
+      if (ae.supportableSheetId) checks.push({ ae: ae.name, type: 'supportable', id: ae.supportableSheetId })
+    }
+    if (checks.length === 0) {
+      console.log('[sheet-health] no sheet IDs configured — skipping health check')
+      return
+    }
+    for (const { ae, type, id } of checks) {
+      try {
+        await sheets.spreadsheets.get({ spreadsheetId: id, fields: 'spreadsheetId' })
+        console.log(`[sheet-health] ✓ ${ae} ${type}: accessible`)
+      } catch (e: any) {
+        console.warn(`[sheet-health] ✗ ${ae} ${type}: UNREACHABLE (${id}) — ${e?.message}`)
+      }
+    }
+  } catch (e: any) {
+    console.warn('[sheet-health] check failed:', e?.message)
   }
 }
 
@@ -1029,6 +1064,12 @@ export function initBackgroundScheduler(opts: {
 
   // Load persisted scraper status so state survives container restarts
   initStatusStore()
+
+  // Seed lastSfSync from pipeline cache so it survives container restarts
+  initSfSyncFromCache(readPipelineCache)
+
+  // Async sheet health check — fire and forget, runs 5s after startup
+  setTimeout(() => runSheetHealthCheck(), 5000)
 
   // Validate cached account numbers — warn/clear false positives before scrapes start
   validateCachedAccountNumbers()
@@ -1331,6 +1372,57 @@ export function scheduleProductIntelRefresh(): void {
         console.log('[product-intel] weekly feature radar refresh completed')
       } catch (featErr: any) {
         console.error('[product-intel] weekly feature radar refresh failed:', featErr?.message ?? featErr)
+      }
+
+      // Regenerate per-customer product intel after features are fresh
+      try {
+        const { buildCustomerIntelContext, generateCustomerProductIntel, toCustomerSlug: slugify } = await import('./customer-product-intel.ts')
+        const { loadProductConfig, getCachedSummary } = await import('./product-release-radar.ts')
+        const { _generatingKeys } = await import('./product-intel-routes.ts') as any
+        const { getCachedDriveCorpus } = await import('./product-drive-ingest.ts')
+
+        const productConfigs = loadProductConfig()
+        console.log(`[product-intel] weekly customer intel refresh: ${customers.length} customers x ${productConfigs.length} products`)
+
+        for (const customer of customers) {
+          const customerSlug = slugify(customer.name)
+          try {
+            const ctx = await buildCustomerIntelContext(customerSlug)
+            for (const product of productConfigs) {
+              const summary = getCachedSummary(product.slug)
+              if (!summary) continue  // skip products with no cached summary
+              const mutexKey = `intel:${product.slug}:${customerSlug}`
+              if (_generatingKeys && _generatingKeys.has(mutexKey)) continue  // skip if already generating
+              if (_generatingKeys) _generatingKeys.add(mutexKey)
+              try {
+                const corpus = getCachedDriveCorpus(product.slug)
+                const slidesText = corpus ? corpus.files.map((f: any) => f.textContent).join('\n\n') : ''
+                const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(product.slug)
+                await generateCustomerProductIntel({
+                  slug: product.slug,
+                  productSummary: summary,
+                  slidesText,
+                  customerName: ctx.customerName,
+                  subscriptions: ctx.subscriptions,
+                  supportCases: ctx.supportCases,
+                  customerDocsText: ctx.customerDocsText,
+                  customerDocsHash: ctx.customerDocsHash,
+                  opportunityNote: ctx.opportunityNote,
+                  productFeatures,
+                  productFeaturesHash,
+                })
+              } finally {
+                if (_generatingKeys) _generatingKeys.delete(mutexKey)
+              }
+              await new Promise(r => setTimeout(r, 3000))  // 3s between Gemini calls
+            }
+          } catch (e: any) {
+            console.error(`[product-intel] weekly customer intel refresh failed for ${customer.name}:`, e?.message)
+          }
+        }
+        console.log('[product-intel] weekly customer intel refresh completed')
+      } catch (intelErr: any) {
+        console.error('[product-intel] weekly customer intel refresh failed:', intelErr?.message ?? intelErr)
       }
     } catch (e: any) {
       console.error('[product-intel] weekly refresh failed:', e?.message ?? e)

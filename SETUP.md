@@ -8,7 +8,11 @@ Setup takes about 15-20 minutes the first time using the built-in setup wizard.
 
 ## Prerequisites
 
-See [README.md — Prerequisites](README.md#prerequisites) for the full list. In short: Podman (or Docker), a GitHub account for pulling the container image, and your Red Hat Google Workspace + Customer Portal credentials.
+See [README.md — Prerequisites](README.md#prerequisites) for the full list. In short:
+- Podman (or Docker)
+- GitHub account for pulling the container image
+- Red Hat Google Workspace account (`@redhat.com`)
+- **Red Hat Offline Token** — generate at [access.redhat.com/management/api](https://access.redhat.com/management/api) → click **Generate Token** (must be logged in)
 
 > **Bun runtime** is only needed if running without a container (development mode). Container users do not need Bun installed.
 
@@ -122,17 +126,30 @@ Your session is saved to `./data/rh-profile/` and persists across container rest
 
 #### AEs & Customers
 
-Connect your AE's Google Drive folder(s). This is where the dashboard discovers your customer data, pipeline, CCSP cloud spend, and subscription information.
+This section sets up your AE data. There are two paths:
 
-**Connect AE Folder(s):**
-1. Open the AE's Google Drive folder in your browser and copy the URL
-2. Paste the URL into the "Add AE Data Folder" field and click **Add**
-3. Repeat for each AE you support (SAs supporting multiple AEs can add multiple folders)
+**Option A — Auto Setup (recommended for new installs):**
 
-Once folders are connected, click **Preview Discovery** to see what the dashboard found: pipeline sheets, CCSP data, and customer-named tabs.
+Click **Auto Setup** to run the full bootstrap wizard. You provide:
+- AE name
+- Customer names (one per line — copied from your territory list)
+- Salesforce Report URL or ID (the pipeline report for this AE — paste the full Lightning URL or bare report ID, both work)
+- Tableau territory name(s)
+- Optionally, a parent Google Drive folder URL
 
-**Import customers from pipeline:**
-After connecting folders, click **Preview** to auto-discover the pipeline spreadsheet, review the detected columns, then click **Import**. Your customer list is built automatically from the pipeline data.
+The wizard then automatically:
+1. Creates an AE folder on Google Drive (or uses the parent folder you specified)
+2. Creates a customer subfolder for each customer name
+3. Runs Supportable discovery and scrape for all customers
+4. Runs CCSP (Tableau) scrape and sheet creation
+5. Syncs Salesforce pipeline data to a new sheet
+6. Kicks off domain inference + AI account intelligence batch for all customers
+
+This takes 5-10 minutes and requires Red Hat VPN for Supportable. When complete, your dashboard will be fully populated.
+
+**Option B — Connect existing folders:**
+
+If you already have an AE folder structure on Drive, open the AE's Google Drive folder in your browser, copy the URL, paste it into the "Add AE Data Folder" field, and click **Add**. The dashboard searches recursively — connect at any level and it finds everything beneath it. Then click **Preview Discovery** to see what was found, and **Import** to build the customer list from the pipeline data.
 
 ---
 

@@ -70,6 +70,7 @@ import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import type { AE } from './types.ts'
 import { sanitizeErr, sanitizeCell } from './utils.ts'
+import { patchAe } from './server-state.ts'
 import { markRunning, recordOutcome } from './scraper-status-store.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
 
@@ -113,6 +114,11 @@ export let lastCcspScrape: string | null = null
 export let lastCcspError:  string | null = null
 export let ccspScrapeRunning = false
 export let ccspScrapeStartedAt: number | null = null
+
+/** Called by refresh-engine after a sheet-based CCSP cache write (no browser scrape needed). */
+export function recordCcspRefreshAt(): void {
+  lastCcspScrape = new Date().toISOString()
+}
 const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
 
 const CCSP_DEBUG = process.env.CCSP_DEBUG === 'true'
@@ -653,6 +659,33 @@ export async function writeCcspSheet(
       })
     }
   } else {
+    // Search for existing CCSP sheet in AE's Drive folder before creating a new one
+    let foundId: string | undefined
+    try {
+      const searchRes = await drive.files.list({
+        q: `'${driveFolderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and name contains 'CCSP' and trashed=false`,
+        fields: 'files(id,name)',
+        pageSize: 5,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      })
+      const matches = (searchRes.data.files ?? []).filter(f =>
+        f.name?.toLowerCase().includes(aeName.toLowerCase()) || f.name?.toLowerCase().includes('ccsp')
+      )
+      if (matches.length > 0) {
+        foundId = matches[0].id!
+        console.log(`[ccsp] ${aeName}: found existing CCSP sheet '${matches[0].name}' (${foundId}) — reusing instead of creating new`)
+        patchAe(aeName, { ccspSheetId: foundId })
+      }
+    } catch (e: any) {
+      console.warn(`[ccsp] ${aeName}: Drive search failed: ${e?.message} — will create new sheet`)
+    }
+
+    if (foundId) {
+      // Recurse with found sheet ID (will use the "existing sheet" path)
+      return writeCcspSheet(results, aeName, driveFolderId, foundId)
+    }
+
     // Create new spreadsheet in AE's Drive folder
     const created = await drive.files.create({
       requestBody: {

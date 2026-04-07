@@ -723,7 +723,17 @@ export function registerBootstrapRoutes(app: Hono): void {
   // reachable=false → not on VPN or Tableau is down — don't show login prompt
   // reachable=true, sessionValid=false → on VPN but needs login — show prompt
   // reachable=true, sessionValid=true → already logged in — no action needed
+  //
+  // Cached for 5 minutes — the live browser probe takes ~6s (SSO redirect settle).
+  // Pass ?force=true to bypass cache (used by Connect button after login).
+  let _tableauStatusCache: { result: { reachable: boolean; sessionValid: boolean }; cachedAt: number } | null = null
+  const TABLEAU_STATUS_TTL_MS = 5 * 60 * 1000
+
   app.get('/api/bootstrap/tableau/session-status', async (c) => {
+    const force = c.req.query('force') === 'true'
+    if (!force && _tableauStatusCache && Date.now() - _tableauStatusCache.cachedAt < TABLEAU_STATUS_TTL_MS) {
+      return c.json(_tableauStatusCache.result)
+    }
     const ctx = getScrapeContext()
     if (!ctx) return c.json({ reachable: false, sessionValid: false })
     let page: Awaited<ReturnType<typeof ctx.newPage>> | null = null
@@ -738,9 +748,13 @@ export function registerBootstrapRoutes(app: Hono): void {
       // or if there's actually a password/login form visible (not just /auth in the URL)
       const hasLoginForm = !!(await page.$('input[type="password"], input#username, [data-testid="login"]').catch(() => null))
       const onLoginPage = !url.startsWith('https://10ay.online.tableau.com') || hasLoginForm
-      return c.json({ reachable: true, sessionValid: !onLoginPage })
+      const result = { reachable: true, sessionValid: !onLoginPage }
+      _tableauStatusCache = { result, cachedAt: Date.now() }
+      return c.json(result)
     } catch {
-      return c.json({ reachable: false, sessionValid: false })
+      const result = { reachable: false, sessionValid: false }
+      _tableauStatusCache = { result, cachedAt: Date.now() }
+      return c.json(result)
     } finally {
       await page?.close().catch(() => {})
     }
