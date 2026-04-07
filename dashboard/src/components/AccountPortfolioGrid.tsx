@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import type { AccountInfo, SupportCase, CalendarEvent, ProductSubscription } from '../types'
 import { Building2, Shield, Package, Key, Calendar, X, ChevronUp, ChevronDown, Users } from 'lucide-react'
 import { formatDate, formatRelTime } from '../lib/format'
 import HealthDot from './HealthDot'
 import PriorityActionRow from './PriorityActionRow'
 import { stripProductName } from '../utils/productName'
+import { Grid } from 'react-window'
 
 // Inline fallback — replaced when EmptyState.tsx lands from another track
 const EmptyState = ({ title, description }: { title: string; description?: string }) => (
@@ -411,6 +412,17 @@ function AccountCard({
 
 // ── Card Grid Helper ─────────────────────────────────────────────────────────
 
+interface CardGridProps {
+  accounts: AccountInfo[]
+  casesByAccount: Map<string, SupportCase[]>
+  events: CalendarEvent[]
+  showAE: boolean
+  onProductClick: (a: AccountInfo) => void
+  healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
+  priorityActions: Record<string, string>
+  selectedProducts?: string[]
+}
+
 function CardGrid({
   accounts,
   casesByAccount,
@@ -420,16 +432,7 @@ function CardGrid({
   healthScores,
   priorityActions,
   selectedProducts = [],
-}: {
-  accounts: AccountInfo[]
-  casesByAccount: Map<string, SupportCase[]>
-  events: CalendarEvent[]
-  showAE: boolean
-  onProductClick: (a: AccountInfo) => void
-  healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
-  priorityActions: Record<string, string>
-  selectedProducts?: string[]
-}) {
+}: CardGridProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {accounts.map((account) => {
@@ -450,6 +453,131 @@ function CardGrid({
           />
         )
       })}
+    </div>
+  )
+}
+
+// ── Virtualized Card Grid (react-window v2) ────────────────────────────────
+
+const ROW_HEIGHT = 240
+const COLUMN_GAP = 16
+
+interface VirtualCellProps {
+  accounts: AccountInfo[]
+  casesByAccount: Map<string, SupportCase[]>
+  events: CalendarEvent[]
+  showAE: boolean
+  onProductClick: (a: AccountInfo) => void
+  healthScores: Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>
+  priorityActions: Record<string, string>
+  selectedProducts: string[]
+  columnCount: number
+}
+
+function VirtualCell({
+  columnIndex,
+  rowIndex,
+  style,
+  accounts,
+  casesByAccount,
+  events,
+  showAE,
+  onProductClick,
+  healthScores,
+  priorityActions,
+  selectedProducts,
+  columnCount,
+}: {
+  columnIndex: number
+  rowIndex: number
+  style: React.CSSProperties
+  ariaAttributes: { 'aria-colindex': number; role: 'gridcell' }
+} & VirtualCellProps) {
+  const idx = rowIndex * columnCount + columnIndex
+  if (idx >= accounts.length) return null
+  const account = accounts[idx]
+  const acctCases = account.accountNumbers.flatMap(
+    (num) => casesByAccount.get(String(num)) ?? []
+  )
+
+  return (
+    <div style={{ ...style, paddingRight: COLUMN_GAP, paddingBottom: COLUMN_GAP }}>
+      <AccountCard
+        account={account}
+        accountCases={acctCases}
+        events={events}
+        showAE={showAE}
+        onProductClick={onProductClick}
+        healthScores={healthScores}
+        priorityAction={priorityActions[account.name]}
+        selectedProducts={selectedProducts}
+      />
+    </div>
+  )
+}
+
+function VirtualizedCardGrid({
+  accounts,
+  casesByAccount,
+  events,
+  showAE,
+  onProductClick,
+  healthScores,
+  priorityActions,
+  selectedProducts = [],
+}: CardGridProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+
+  // Observe container width for responsive columns
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerWidth(entry.contentRect.width)
+      }
+    })
+    observer.observe(el)
+    setContainerWidth(el.getBoundingClientRect().width)
+    return () => observer.disconnect()
+  }, [])
+
+  const columnCount = containerWidth >= 1200 ? 3 : containerWidth >= 768 ? 2 : 1
+  const rowCount = Math.ceil(accounts.length / columnCount)
+
+  // Don't render grid until we have a width measurement
+  if (containerWidth === 0) {
+    return <div ref={containerRef} className="w-full min-h-[240px]" />
+  }
+
+  const gridHeight = Math.min(
+    rowCount * (ROW_HEIGHT + COLUMN_GAP),
+    Math.max(600, window.innerHeight - 200)
+  )
+
+  return (
+    <div ref={containerRef} className="w-full">
+      <Grid
+        columnCount={columnCount}
+        columnWidth={(containerWidth / columnCount)}
+        rowCount={rowCount}
+        rowHeight={ROW_HEIGHT + COLUMN_GAP}
+        overscanCount={2}
+        style={{ overflowX: 'hidden', width: containerWidth, height: gridHeight }}
+        cellComponent={VirtualCell}
+        cellProps={{
+          accounts,
+          casesByAccount,
+          events,
+          showAE,
+          onProductClick,
+          healthScores,
+          priorityActions,
+          selectedProducts: selectedProducts ?? [],
+          columnCount,
+        }}
+      />
     </div>
   )
 }
@@ -791,8 +919,8 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
             </table>
           </div>
         ) : (
-          /* All view */
-          <CardGrid
+          /* All view — virtualized for performance with large portfolios */
+          <VirtualizedCardGrid
             accounts={filteredAccounts}
             casesByAccount={casesByAccount}
             events={events}

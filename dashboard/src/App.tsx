@@ -121,6 +121,8 @@ function Dashboard() {
   const [noAesDismissed, setNoAesDismissed] = useState(false)
   const [aeCount, setAeCount] = useState<number | null>(null)
   const [productAlertCount, setProductAlertCount] = useState(0)
+  const [aeHealthScores, setAeHealthScores] = useState<Record<string, { score: number; status: string }>>({})
+
 
   // AE filter chip state (Step 4)
   const [aeFilterSelected, setAeFilterSelected] = useState<string>(() => {
@@ -266,6 +268,34 @@ function Dashboard() {
       .map(([name, count]) => ({ name, count }))
   }, [accountsApi.data])
 
+  // Compute worst health status per AE for chip dots
+  const aeWorstHealth = useMemo(() => {
+    const accounts = accountsApi.data?.customers ?? []
+    const cases = casesApi.data?.cases ?? []
+    const result: Record<string, 'critical' | 'warning' | 'healthy'> = {}
+    for (const ae of aeList) {
+      const aeAccounts = accounts.filter(a => a.ae === ae.name)
+      let worst = 'healthy' as string
+      for (const acct of aeAccounts) {
+        // Check health scores first
+        const hs = aeHealthScores[acct.name]
+        if (hs) {
+          if (hs.status === 'red') { worst = 'critical'; break }
+          if (hs.status === 'yellow' && worst !== 'critical') worst = 'warning'
+        } else {
+          // Fallback: check cases
+          const acctCases = acct.accountNumbers.flatMap(
+            num => cases.filter(c => String(c.accountNumber) === String(num))
+          )
+          if (acctCases.some(c => c.severity === '1')) { worst = 'critical'; break }
+          if (acctCases.length > 0 && worst !== 'critical') worst = 'warning'
+        }
+      }
+      result[ae.name] = worst as 'critical' | 'warning' | 'healthy'
+    }
+    return result
+  }, [aeList, accountsApi.data, casesApi.data, aeHealthScores])
+
   // Discover all products across accounts
   const allProducts = useMemo(() => {
     return discoverAllProducts(accountsApi.data?.customers ?? [])
@@ -309,6 +339,18 @@ function Dashboard() {
   // Fetch AE count from health endpoint once on mount
   useEffect(() => {
     fetch('/health').then(r => r.json()).then(d => setAeCount(d.aes ?? 0)).catch(() => {})
+  }, [refreshKey])
+
+  // Fetch health scores for AE chip dots
+  useEffect(() => {
+    fetch('/api/health-scores')
+      .then(r => r.json())
+      .then((scores: { name: string; score: number; status: string }[]) => {
+        const map: Record<string, { score: number; status: string }> = {}
+        for (const s of scores) map[s.name] = { score: s.score, status: s.status }
+        setAeHealthScores(map)
+      })
+      .catch(() => {})
   }, [refreshKey])
 
   // Poll product alert count for sidebar badge (every 5 min)
@@ -419,21 +461,26 @@ function Dashboard() {
                   >
                     All <span className="text-xs opacity-70 ml-0.5">{accountsApi.data?.customers?.length ?? 0}</span>
                   </button>
-                  {aeList.map(ae => (
-                    <button
-                      key={ae.name}
-                      onClick={() => handleAeFilterChange(ae.name)}
-                      className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
-                        aeFilterSelected === ae.name
-                          ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
-                          : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
-                      }`}
-                      role="radio"
-                      aria-checked={aeFilterSelected === ae.name}
-                    >
-                      {ae.name.split(' ')[0]} <span className="text-xs opacity-70 ml-0.5">{ae.count}</span>
-                    </button>
-                  ))}
+                  {aeList.map(ae => {
+                    const healthStatus = aeWorstHealth[ae.name]
+                    const dotColor = healthStatus === 'critical' ? 'bg-red-500' : healthStatus === 'warning' ? 'bg-amber-500' : 'bg-green-500'
+                    return (
+                      <button
+                        key={ae.name}
+                        onClick={() => handleAeFilterChange(ae.name)}
+                        className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors flex items-center gap-1.5 ${
+                          aeFilterSelected === ae.name
+                            ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                            : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                        }`}
+                        role="radio"
+                        aria-checked={aeFilterSelected === ae.name}
+                      >
+                        {ae.count > 0 && <span className={`w-2 h-2 rounded-full ${dotColor} shrink-0`} />}
+                        {ae.name.split(' ')[0]} <span className="text-xs opacity-70 ml-0.5">{ae.count}</span>
+                      </button>
+                    )
+                  })}
                 </div>
 
                 {/* Product Filter Chip Bar (Step 5) */}
