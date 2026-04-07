@@ -535,7 +535,8 @@ export async function fetchCCSPData(
             }
           }
 
-          if (altSheetId && altTab && altRows.length >= 2) {
+          const SHEET_ID_RE = /^[a-zA-Z0-9_-]{20,60}$/
+          if (altSheetId && altTab && altRows.length >= 2 && SHEET_ID_RE.test(altSheetId)) {
             console.log(`[ccsp-read] found alternative CCSP sheet ${altSheetId} in AE folder — using instead`)
             rows = altRows
             // Persist so next run uses the correct sheet directly
