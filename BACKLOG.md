@@ -4633,6 +4633,20 @@ Files: src/sheets.ts, src/refresh-engine.ts
 Description: Currently each customer read fires one `values.get` call — 30 customers = 30 API calls per refresh cycle. `spreadsheets.values.batchGet` can consolidate all per-customer tab reads for a single AE sheet into one call, reducing ~30 reads to ~3 (one per AE sheet). Fixes the structural quota pressure rather than working around it.
 Fix: Group customers by `supportableSheetId` in `refreshSubscriptions`, build ranges array per sheet (`['Tab1'!A:Z, 'Tab2'!A:Z, ...]`), call `batchGet` once per AE sheet, distribute `valueRanges[i]` results back to customers. Requires preserving all tab-matching, normalization, and empty-result guard logic. Complexity: M. Requires explicit Jason approval before touching sheets.ts.
 
+### BKL-UI-02 | Support Cases section empty on customer detail despite open cases — SSE chunked encoding error
+Status: 🔴 OPEN | Priority: P2 | Type: Bug
+Source: Quinn QA 2026-04-07 (full dashboard visual test)
+Files: src/customer-routes.ts (events SSE endpoint), dashboard/src/pages/CustomerDetailPage.tsx
+Description: The `/customer/{name}/events` SSE endpoint returns `ERR_INCOMPLETE_CHUNKED_ENCODING` for A10 Networks. The Support Cases section in the customer detail page renders with a heading but no case rows, while the health radar correctly shows "1 Sev2 case open" and the What Changed section mentions the case by number. Users see contradictory information: radar says 1 case, cases panel shows nothing. A persistent "Loading..." spinner appears in the header. Crowdstrike and McAfee correctly show "No open support cases" empty state — the bug only manifests for customers with active cases.
+Fix: Investigate the SSE stream for `ERR_INCOMPLETE_CHUNKED_ENCODING` — may be a Hono streaming issue, a Podman chunked-transfer-encoding proxy issue, or the cases data arriving after the stream closes. Check if adding a keep-alive or ensuring `cases` event fires before stream end resolves it.
+
+### BKL-UI-03 | Supportable status inconsistency — top bar shows "Not reachable" while Setup shows "Connected"
+Status: 🔴 OPEN | Priority: P3 | Type: UX
+Source: Quinn QA 2026-04-07
+Files: dashboard/src/components/ (status bar), dashboard/src/pages/SetupPage.tsx
+Description: Dashboard top status bar shows "Not reachable — check VPN" for Supportable while the Setup page simultaneously shows Supportable as "Connected." These check different things — the status bar does a live VPN probe (`liveProbe`) while Setup checks stored session state. Confusing to a new user who sees contradictory statuses. Low priority — no functional impact, but creates support confusion.
+Fix: Align labels — if Supportable credentials are connected but VPN is not active, the status bar should say "VPN required for sync" rather than "Not reachable." Or collapse to a single authoritative status.
+
 ### BKL-UI-01 | Product intel API returns 400 for customer names with special characters
 Status: 🔴 OPEN | Priority: P2 | Type: Bug
 Source: Quinn QA 2026-04-06 (strict criteria pass)
