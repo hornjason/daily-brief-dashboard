@@ -45,7 +45,7 @@ async function saveTableauSession(ctx: BrowserContext): Promise<void> {
     const state = await ctx.storageState()
     const tableauCookies = state.cookies.filter(c => c.domain.includes('tableau.com') || c.domain.includes('online.tableau'))
     if (tableauCookies.length === 0) return
-    writeFileSync(TABLEAU_SESSION_PATH, JSON.stringify({ cookies: tableauCookies, savedAt: new Date().toISOString() }))
+    writeFileSync(TABLEAU_SESSION_PATH, JSON.stringify({ cookies: tableauCookies, savedAt: new Date().toISOString() }), { mode: 0o600 })
     console.log(`[ccsp] saved ${tableauCookies.length} Tableau cookies to disk`)
   } catch (e: any) {
     console.warn(`[ccsp] could not save Tableau session: ${e.message}`)
