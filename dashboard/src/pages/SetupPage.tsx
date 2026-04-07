@@ -1486,8 +1486,8 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
           ae?: string
         }> = Array.isArray(customerList) ? customerList : []
 
-        // Manual mode only shows AEs that have been fully bootstrapped (have a Drive folder)
-        const configuredAes = serverAes.filter(ae => ae.driveFolderId)
+        // Show all named AEs regardless of bootstrap state so pre-bootstrap AEs can be edited/removed
+        const configuredAes = serverAes.filter(ae => ae.name)
         if (configuredAes.length > 0) setMode('manual') // auto-switch to edit view when AEs exist
         if (configuredAes.length === 0) {
           setAes([makeBlankAE()])

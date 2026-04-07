@@ -55,6 +55,10 @@ See `docs/DATA-RULES.md` — read before touching cache, sheets, or territory sy
 - Bootstrap E2E: `npx playwright test test/bootstrap-e2e.spec.ts --timeout=600000`
 - State isolation: snapshot/restore per test via `POST /api/__test/snapshot` + `restore`
 
+**Quinn Standard:** `~/.claude/PAI/Testing/QUINN-STANDARD.md` — Quinn reads this at session start before any testing. Defines mandatory sequence: load registry → run Playwright baseline → visual review → capture findings.
+
+**Quinn Registry:** `~/.claude/PAI/Testing/registries/dailybriefdashboard.md` — accumulating list of known issues and visual findings. Quinn checks every entry each session and appends new findings.
+
 ## Adding a New AE — Runbook
 
 Full documentation: `docs/ADDING-NEW-AE.md`

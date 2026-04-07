@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-07 (BKL-AE-01: parentFolderId persisted+auto-inherited DONE; BKL-AE-02: Sheets quota burst fixed DONE; BKL-AE-03: batchGet structural fix logged)
+Last update: 2026-04-07 (BKL-AE-01, BKL-AE-02, BKL-AE-03 all DONE; BKL-UI-02 SSE fix DONE; full remove→re-add→remove cycle Quinn-verified 23/23)
 
 ---
 
@@ -4627,11 +4627,11 @@ Description: `fetchCustomerSheetData`, `fetchCustomerSheetRaw`, and `fetchCustom
 Decision: DONE — Wrapped 3 naked `spreadsheets.values.get` calls with `withQuotaRetry` (retries once after 61s on 429). Added 750ms stagger between customer iterations in both `refreshAll` and `refreshSubscriptions` loops to spread 30 reads over ~22s.
 
 ### BKL-AE-03 | Sheets API quota: structural fix — batchGet to collapse per-AE reads
-Status: 🔴 OPEN | Priority: P2 | Type: Architecture
+Status: ✅ DONE 2026-04-07 | Priority: P2 | Type: Architecture
 Source: Rook investigation 2026-04-07
 Files: src/sheets.ts, src/refresh-engine.ts
-Description: Currently each customer read fires one `values.get` call — 30 customers = 30 API calls per refresh cycle. `spreadsheets.values.batchGet` can consolidate all per-customer tab reads for a single AE sheet into one call, reducing ~30 reads to ~3 (one per AE sheet). Fixes the structural quota pressure rather than working around it.
-Fix: Group customers by `supportableSheetId` in `refreshSubscriptions`, build ranges array per sheet (`['Tab1'!A:Z, 'Tab2'!A:Z, ...]`), call `batchGet` once per AE sheet, distribute `valueRanges[i]` results back to customers. Requires preserving all tab-matching, normalization, and empty-result guard logic. Complexity: M. Requires explicit Jason approval before touching sheets.ts.
+Description: Each customer read was firing one `values.get` call — 30 customers = 30 API calls per refresh cycle.
+Decision: DONE — Implemented `batchFetchSubscriptions()` in sheets.ts using `spreadsheets.values.batchGet`. Groups customers by AE `supportableSheetId`, builds ranges array, calls batchGet once per AE sheet, distributes `valueRanges[i]` back to customers. `batchRefreshSubscriptions()` added to refresh-engine.ts using the batch path. ~30 reads → ~3 per refresh cycle. Empty-result guard and individual fallback path for per-customer overrides preserved.
 
 ### BKL-UI-02 | Support Cases section empty on customer detail despite open cases — SSE chunked encoding error
 Status: ✅ DONE 2026-04-06 | Priority: P2 | Type: Bug

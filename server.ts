@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { bodyLimit } from 'hono/body-limit'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync } from 'fs'
 import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
@@ -18,7 +18,7 @@ import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
 import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning, adoptSupportableContext } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
-import { initCacheLayer, registerCacheRoutes, readSheetCache, readPipelineCache } from './src/cache-layer.ts'
+import { initCacheLayer, registerCacheRoutes, readSheetCache, readPipelineCache, toSlug } from './src/cache-layer.ts'
 import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
 import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
@@ -679,6 +679,7 @@ app.post('/api/aes', async (c) => {
       body.aes[i] = {
         name,
         driveFolderId,
+        parentFolderId:       ae.parentFolderId       ?? undefined,
         sfReportId:           ae.sfReportId           ?? '',
         tableauTerritories:   ae.tableauTerritories   ?? [],
         tableauUrl:           ae.tableauUrl           ?? undefined,
@@ -690,12 +691,55 @@ app.post('/api/aes', async (c) => {
       Object.keys(body.aes[i]).forEach(k => (body.aes[i] as any)[k] === undefined && delete (body.aes[i] as any)[k])
     }
 
+    // Detect removed AEs and invalidate their customer caches
+    const newAeNames = new Set(body.aes.map((a: AE) => a.name))
+    const removedAeNames = aes.filter(a => !newAeNames.has(a.name)).map(a => a.name)
+    const removedCustomerNames = removedAeNames.length > 0
+      ? customers.filter(c => c.ae && removedAeNames.includes(c.ae)).map(c => c.name)
+      : []
+
     saveAes(body.aes)
-    // Rebuild flat customer list with denormalized ae names
-    try {
-      const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
-      setCustomers(raw.customers ?? [])
-    } catch (e: any) { console.warn('[wizard] customers reload failed:', e.message) }
+    // Atomically remove customers belonging to deleted AEs from customers.json
+    if (removedAeNames.length > 0) {
+      try {
+        const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
+        const kept = (raw.customers ?? []).filter((c: Customer) => !c.ae || !removedAeNames.includes(c.ae))
+        writeFileSync(CUSTOMERS_PATH, JSON.stringify({ customers: kept }, null, 2))
+        setCustomers(kept)
+        console.log(`[wizard] removed ${(raw.customers ?? []).length - kept.length} customers for deleted AEs: ${removedAeNames.join(', ')}`)
+      } catch (e: any) { console.warn('[wizard] customer cleanup after AE removal failed:', e.message) }
+    } else {
+      // No AEs removed — just reload customers in case other changes happened
+      try {
+        const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
+        setCustomers(raw.customers ?? [])
+      } catch (e: any) { console.warn('[wizard] customers reload failed:', e.message) }
+    }
+
+    // Purge per-customer cache files for removed AEs
+    if (removedCustomerNames.length > 0) {
+      try {
+        const cacheFiles = readdirSync(CACHE_DIR).filter(f => f.endsWith('.json'))
+        const removedSlugs = new Set(removedCustomerNames.map(toSlug))
+        for (const file of cacheFiles) {
+          const match = file.match(/^(.+?)-(sheets|\d{4}-\d{2}-\d{2})\.json$/)
+          if (!match) continue
+          if (removedSlugs.has(match[1])) {
+            try { unlinkSync(resolve(CACHE_DIR, file)) } catch { /* already gone */ }
+            console.log(`[wizard] purged cache file for removed AE customer: ${file}`)
+          }
+        }
+        // AE-level caches are stale after AE removal — delete so next sync rebuilds clean
+        for (const aeCache of ['ccsp-data.json', 'pipeline-data.json']) {
+          try { unlinkSync(resolve(CACHE_DIR, aeCache)) } catch { /* ok if absent */ }
+          console.log(`[wizard] purged ${aeCache} after removing AEs: ${removedAeNames.join(', ')}`)
+        }
+        // Morning synthesis is stale after AE removal
+        try { unlinkSync(resolve(CACHE_DIR, 'morning-synthesis.json')) } catch { /* ok */ }
+        console.log(`[wizard] invalidated morning-synthesis.json after removing AEs: ${removedAeNames.join(', ')}`)
+      } catch (e: any) { console.warn('[wizard] cache cleanup after AE removal failed:', e.message) }
+    }
+
     return c.json({ ok: true, count: aes.length })
   } catch (e: any) {
     return c.json({ error: sanitizeErr(e) }, 500)
