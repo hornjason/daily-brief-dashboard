@@ -219,7 +219,7 @@ registerProductIntelRoutes(app)
 app.get('/', (c) => c.redirect('/dashboard'))
 
 // Customer list for landing page — includes confidenceScore placeholder (BKL-AI28)
-app.get('/customers', (c) => c.json(customers.map(cu => ({ ...cu, confidenceScore: null }))))
+app.get('/customers', (c) => c.json(customers.filter(cu => !cu.inactive).map(cu => ({ ...cu, confidenceScore: null }))))
 
 // ── Google OAuth + Setup wizard routes (extracted to src/setup-routes.ts) ──
 
@@ -288,7 +288,7 @@ app.post('/api/auth/redhat/start', async (c) => {
           run: async () => {
             if (supportableScrapeRunning) { console.log('[rh-auth] supportable: busy — skipping'); return }
             for (const ae of aes) {
-              const aeCustomers = customers.filter(cu => cu.ae === ae.name && cu.accountNumbers?.length)
+              const aeCustomers = customers.filter(cu => !cu.inactive && cu.ae === ae.name && cu.accountNumbers?.length)
               if (!aeCustomers.length) continue
               try {
                 const results = await runSupportableScrape(aeCustomers as SupportableCustomer[])
@@ -699,14 +699,23 @@ app.post('/api/aes', async (c) => {
       : []
 
     saveAes(body.aes)
-    // Atomically remove customers belonging to deleted AEs from customers.json
+    // Mark customers belonging to deleted AEs as inactive (preserve if they have data)
     if (removedAeNames.length > 0) {
       try {
         const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
-        const kept = (raw.customers ?? []).filter((c: Customer) => !c.ae || !removedAeNames.includes(c.ae))
-        writeFileSync(CUSTOMERS_PATH, JSON.stringify({ customers: kept }, null, 2))
-        setCustomers(kept)
-        console.log(`[wizard] removed ${(raw.customers ?? []).length - kept.length} customers for deleted AEs: ${removedAeNames.join(', ')}`)
+        const updated = (raw.customers ?? []).map((c: Customer) => {
+          if (!c.ae || !removedAeNames.includes(c.ae)) return c
+          // Preserve if customer has account numbers or a Drive folder — mark inactive
+          if ((c.accountNumbers?.length ?? 0) > 0 || c.driveFolderId) {
+            return { ...c, inactive: true }
+          }
+          return null // no data — drop entirely
+        }).filter(Boolean)
+        writeFileSync(CUSTOMERS_PATH, JSON.stringify({ customers: updated }, null, 2))
+        setCustomers(updated)
+        const markedInactive = updated.filter((c: Customer) => c.inactive && removedAeNames.includes(c.ae ?? '')).length
+        const dropped = (raw.customers ?? []).length - updated.length
+        console.log(`[wizard] AE removal: ${markedInactive} customers marked inactive, ${dropped} dropped (no data) for AEs: ${removedAeNames.join(', ')}`)
       } catch (e: any) { console.warn('[wizard] customer cleanup after AE removal failed:', e.message) }
     } else {
       // No AEs removed — just reload customers in case other changes happened
@@ -792,7 +801,7 @@ app.get('/api/config/test', async (c) => {
 
 // GET /api/accounts — All customers with cached sheet data merged
 app.get('/api/accounts', (c) => {
-  const result = customers.map((customer) => {
+  const result = customers.filter(cu => !cu.inactive).map((customer) => {
     const cached = readSheetCache(customer.name)
     const products = cached?.rows ?? []
     const distinctProducts = new Set(products.map((p) => p.productDescription)).size

@@ -33,8 +33,10 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
     return i >= 0 ? row[i] : null
   }
 
-  // First pass: collect product descriptions per opp number
+  // First pass: collect product descriptions AND renewal flag per opp number
+  // renewal=true if ANY row for that opp has the checkbox checked or keyword in name
   const productsByOpp = new Map<string, string[]>()
+  const renewalByOpp  = new Map<string, boolean>()
   for (const row of rawRows.slice(1)) {
     if (!row.some((v: any) => v != null && v !== '')) continue
     const oppNum = String(col(row, 'Opportunity Number') ?? '')
@@ -43,9 +45,17 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
     const arr = productsByOpp.get(oppNum) ?? []
     if (desc && !arr.includes(desc)) arr.push(desc)
     productsByOpp.set(oppNum, arr)
+    // Accumulate renewal across all product rows — if any row is a renewal, the opp is a renewal
+    if (!renewalByOpp.get(oppNum)) {
+      const r = String(col(row, 'Renewal') ?? '').toLowerCase().trim()
+      const isRenewalField = r === '1' || r === 'true' || r === 'yes' || (r.includes('included') && !r.includes('not'))
+      const name = String(col(row, 'Opportunity Name') ?? '').toLowerCase()
+      const isRenewalName = /\brenewal\b|\brenew\b/.test(name)
+      if (isRenewalField || isRenewalName) renewalByOpp.set(oppNum, true)
+    }
   }
 
-  // Second pass: one record per opp
+  // Second pass: one record per opp, using pre-computed renewal flag
   const seen = new Set<string>()
   const records: PipelineRecord[] = []
 
@@ -75,10 +85,7 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
       closeDate,
       forecastCategory: fc,
       owner:            String(col(row, 'Opportunity Owner') ?? '').trim(),
-      renewal:          (() => {
-        const r = String(col(row, 'Renewal') ?? '').toLowerCase().trim()
-        return r === '1' || r === 'true' || r === 'yes' || (r.includes('included') && !r.includes('not'))
-      })(),
+      renewal:          renewalByOpp.get(oppNumber) ?? false,
       offeringGroup:    String(col(row, 'Offering Group') ?? '').trim(),
       probability:      Number(col(row, 'Probability (%)') ?? 0),
       products:         productsByOpp.get(oppNumber) ?? [],

@@ -15,6 +15,7 @@ import { adoptSupportableContext, closeSupportableContext } from './supportable-
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
 import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
+import { recordSessionEstablished } from './settings-api.ts'
 
 const RH_PORTAL_URL = 'https://access.redhat.com/support/cases/#/case/list'
 const LOGIN_POLL_INTERVAL_MS = 2_000
@@ -151,6 +152,9 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
           adoptSfContext(ctx, profileDir)
           adoptSupportableContext(ctx)
           adoptCcspContext(ctx)
+          recordSessionEstablished('rh-portal')
+          recordSessionEstablished('salesforce')
+          recordSessionEstablished('tableau')
 
           // Cold-start recovery: reset all circuit breakers that accumulated
           // failures while auth was stale (e.g. overnight laptop sleep)

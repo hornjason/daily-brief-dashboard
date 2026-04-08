@@ -577,45 +577,67 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
       loadAttempts++
     }
 
-    // Scroll the table's own scrollable container (not document.body) to trigger lazy row loading.
-    // SF treegrid uses a div with overflow:auto/scroll as the viewport, not the window.
-    {
-      let scrollPrev = await targetFrame.locator(ROW_SEL).count().catch(() => 0)
-      for (let s = 0; s < 20; s++) {
-        const scrolled = await targetFrame.evaluate(() => {
-          // Find elements with overflow scroll/auto that are tall enough to be the table container
-          const candidates = Array.from(document.querySelectorAll('div, section'))
-            .filter(el => {
-              const style = window.getComputedStyle(el)
-              const overflow = style.overflowY
-              return (overflow === 'auto' || overflow === 'scroll') && el.scrollHeight > el.clientHeight + 100
-            })
-          let scrolled = 0
-          for (const el of candidates) {
-            el.scrollTop = el.scrollHeight
-            scrolled++
-          }
-          // Also scroll window as fallback
-          window.scrollTo(0, document.body.scrollHeight)
-          return scrolled
-        }).catch(() => 0)
-        await targetFrame.waitForTimeout(2_000)
-        const scrollCur = await targetFrame.locator(ROW_SEL).count().catch(() => 0)
-        console.log(`[sf-scraper] scroll ${s + 1} (${scrolled} containers): ${scrollCur} rows`)
-        if (scrollCur === scrollPrev) break
-        scrollPrev = scrollCur
+    // Scroll the table's own scrollable container with INCREMENTAL row capture.
+    // SF Lightning uses virtual scrolling — the DOM viewport holds only a subset of rows
+    // at any time. Evicted rows disappear from the DOM as new ones load. A single
+    // querySelectorAll at the end would miss everything outside the final viewport.
+    // Fix: capture rows at every scroll position and deduplicate by row fingerprint.
+    const seenRows = new Map<string, string[]>() // key = row fingerprint
+
+    const captureVisibleRows = async (): Promise<number> => {
+      const batch: string[][] = await targetFrame.evaluate((sel: string) => {
+        const trs = Array.from(document.querySelectorAll(sel))
+        return trs
+          .map(tr => Array.from(tr.querySelectorAll('td, th[scope="row"]')).map(cell => (cell.textContent ?? '').trim()))
+          .filter(cells => cells.some(c => c.length > 0))
+      }, ROW_SEL).catch(() => [] as string[][])
+      let added = 0
+      for (const row of batch) {
+        // Key on first 4 cells (Opp ID + Opp Number + Account + Opp Name) — unique per product row
+        const key = row.slice(0, 4).join('\0')
+        if (key && !seenRows.has(key)) { seenRows.set(key, row); added++ }
+      }
+      return added
+    }
+
+    // Capture rows at the top of the report before first scroll
+    await captureVisibleRows()
+
+    // Incremental scroll — move by one viewport height per step so SF virtual DOM
+    // renders new rows progressively. Jumping to scrollHeight skips intermediate rows.
+    let consecutiveZeros = 0
+    for (let s = 0; s < 120; s++) {
+      const scrolled = await targetFrame.evaluate(() => {
+        // Find elements with overflow scroll/auto that are tall enough to be the table container
+        const candidates = Array.from(document.querySelectorAll('div, section'))
+          .filter(el => {
+            const style = window.getComputedStyle(el)
+            const overflow = style.overflowY
+            return (overflow === 'auto' || overflow === 'scroll') && el.scrollHeight > el.clientHeight + 100
+          })
+        let scrolled = 0
+        for (const el of candidates) {
+          // Scroll by one viewport height per step (incremental, not jump-to-bottom)
+          el.scrollTop += el.clientHeight
+          scrolled++
+        }
+        // Also scroll window as fallback
+        window.scrollBy(0, window.innerHeight)
+        return scrolled
+      }).catch(() => 0)
+      await targetFrame.waitForTimeout(2_500)
+      const added = await captureVisibleRows()
+      console.log(`[sf-scraper] scroll ${s + 1} (${scrolled} containers): ${seenRows.size} unique rows (+${added} new)`)
+      if (added === 0) {
+        consecutiveZeros++
+        if (consecutiveZeros >= 3) break  // 3 consecutive zero-gain scrolls = truly at end
+      } else {
+        consecutiveZeros = 0
       }
     }
 
-    // ── Extract rows from the DOM (single evaluate call for speed) ────────────
-    // Previous approach: 686 individual Playwright calls (1-2s each = 10+ min)
-    // New approach: one page.evaluate() extracting all rows at once (~1-2s total)
-    const rows: string[][] = await targetFrame.evaluate((sel: string) => {
-      const trs = Array.from(document.querySelectorAll(sel))
-      return trs
-        .map(tr => Array.from(tr.querySelectorAll('td, th[scope="row"]')).map(cell => (cell.textContent ?? '').trim()))
-        .filter(cells => cells.some(c => c.length > 0))
-    }, ROW_SEL).catch(() => [] as string[][])
+    const rows = [...seenRows.values()]
+    console.log(`[sf-scraper] incremental capture complete: ${rows.length} unique rows`)
 
     // ── Post-processing ────────────────────────────────────────────────────────
     // 1. Clean header text — strip "Column Actions" and sort-state descriptions

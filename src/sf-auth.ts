@@ -21,6 +21,7 @@ import { adoptSupportableContext, closeSupportableContext } from './supportable-
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
 import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
+import { recordSessionEstablished } from './settings-api.ts'
 
 const SF_LOGIN_URL   = 'https://redhatcrm.my.salesforce.com'
 const RH_PORTAL_URL  = 'https://access.redhat.com/support/cases/#/case/list'
@@ -152,6 +153,9 @@ export async function startSfLoginBrowser(
             adoptSfContext(ctx, profileDir)
             adoptSupportableContext(ctx)
             adoptCcspContext(ctx)
+            recordSessionEstablished('rh-portal')
+            recordSessionEstablished('salesforce')
+            recordSessionEstablished('tableau')
 
             // Cold-start recovery: reset circuit breakers accumulated during stale auth
             resetAllCircuitBreakers()

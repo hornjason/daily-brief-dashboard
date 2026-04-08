@@ -33,6 +33,8 @@ export interface Customer {
   supportableFileId?: string  // Supportable Google Sheet file ID for this customer
   notebookId?: string    // BKL-AI11: NotebookLM notebook ID (set after notebook is created)
   notebookUrl?: string   // BKL-AI11: NotebookLM notebook URL for dashboard linking
+  importedFrom?: string  // provenance tag: "territory-sheet", "manual", etc.
+  inactive?: boolean     // true = AE removed but customer preserved (has account numbers or Drive folder)
 }
 
 export interface CustomerSubscription {

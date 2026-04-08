@@ -1,186 +1,1502 @@
 {
   "customers": [
     {
+      "name": "Nordstrom Inc",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "846430",
+        "11659668"
+      ],
+      "domain": "",
+      "industry": "Retail",
+      "segment": "Fashion Retail / Department Stores",
+      "industryDescription": "Nordstrom Inc. is an American fashion retailer offering apparel, shoes, beauty products, accessories, and home goods for women, men, young adults, and children through its full-line stores, Nordstrom Rack, and e-commerce platforms.",
+      "industryCompetitors": [
+        "Macy's",
+        "Bloomingdale's",
+        "Neiman Marcus"
+      ],
+      "industryUpdatedAt": "2026-04-08T02:21:03.918Z"
+    },
+    {
+      "name": "Autodesk",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Design and Engineering Software",
+      "driveFolderId": "1kniTZ0Sjc9GJqRwlgznawCa1dqR5gCO5",
+      "industryDescription": "Autodesk is a multinational software corporation that provides software products and services for the architecture, engineering, construction, manufacturing, media, education, and entertainment industries, enabling users to design, visualize, and simulate their ideas.",
+      "industryCompetitors": [
+        "Dassault Systèmes",
+        "Bentley Systems",
+        "Siemens Digital Industries Software"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:47:17.027Z"
+    },
+    {
+      "name": "Business Wire",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [
+        "1106304"
+      ],
+      "domain": "",
+      "industry": "",
+      "segment": "",
+      "driveFolderId": "1TOEy1ixKTcWi1KiAJKHqFH2l5XSJrjim"
+    },
+    {
+      "name": "E. & J. Gallo Winery",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [
+        "1011228"
+      ],
+      "domain": "",
+      "industry": "Beverages",
+      "segment": "Wine, Spirits, and Ready-to-Drink (RTD) Beverages",
+      "driveFolderId": "1jjLq8wcKeQXqgxU3EGQg5-mdywvsuspC",
+      "industryDescription": "E. & J. Gallo Winery is the world's largest family-owned winery, producing and distributing a diverse portfolio of wines, spirits, and ready-to-drink beverages globally.",
+      "industryCompetitors": [
+        "Constellation Brands",
+        "Treasury Wine Estates",
+        "The Wine Group"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:48:28.600Z"
+    },
+    {
+      "name": "EBAY/PAYPAL",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [
+        "5505842",
+        "5591780",
+        "5978749",
+        "12252952"
+      ],
+      "domain": "",
+      "industry": "E-commerce and Financial Technology",
+      "segment": "Online Marketplaces and Digital Payments",
+      "driveFolderId": "1yNdTZdppYjKmfjJgv0cjxDTktIEkSrFw",
+      "industryDescription": "eBay operates a global online marketplace enabling individuals and businesses to buy and sell a wide variety of goods, while PayPal provides an online payment system for electronic money transfers and payment processing for online vendors.",
+      "industryCompetitors": [
+        "Amazon",
+        "Stripe",
+        "Square"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:49:42.259Z"
+    },
+    {
+      "name": "Genesys Cloud Services",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Cloud-based Customer Experience (CX) and Contact Center Software",
+      "driveFolderId": "1MbyZvzFv_9K3FcaPsfr5x1LZew9FR0sf",
+      "industryDescription": "Genesys Cloud Services provides cloud-based software solutions for customer experience (CX) and contact center management, enabling businesses to unify communication channels, manage customer interactions, and optimize operational efficiency through features like AI and workforce management.",
+      "industryCompetitors": [
+        "Five9",
+        "NICE CXone",
+        "Talkdesk"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:50:49.745Z"
+    },
+    {
+      "name": "Intuitive Surgical",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [
+        "5909515",
+        "769571"
+      ],
+      "domain": "",
+      "industry": "Healthcare",
+      "segment": "Robotic-Assisted Surgery / Medical Devices",
+      "driveFolderId": "1TMsDabkm3qOUheiFYnfcef8UYYPZ5xTE",
+      "industryDescription": "Intuitive Surgical is a biotechnology and medical technology company that develops, manufactures, and markets robotic products, most notably the da Vinci Surgical System, to improve clinical outcomes for patients through minimally invasive surgery.",
+      "industryCompetitors": [
+        "Medtronic",
+        "Johnson & Johnson",
+        "Stryker"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:51:58.497Z"
+    },
+    {
+      "name": "Lumentum Holdings",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Optical and Photonic Products",
+      "driveFolderId": "1LfgLGQdZEOhKx6tJ_lr19NA3O5iJUUEk",
+      "industryDescription": "Lumentum Holdings Inc. manufactures and sells optical and photonic products, including optical components for telecommunications networking equipment and commercial lasers for various industrial and scientific applications, with a significant focus on AI infrastructure.",
+      "industryCompetitors": [
+        "Coherent Corp.",
+        "IPG Photonics",
+        "Ciena"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:53:06.380Z"
+    },
+    {
+      "name": "Oracle Corporation",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [
+        "420723",
+        "11426249",
+        "12221287",
+        "12666422",
+        "10465244",
+        "12366815"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Enterprise Software and Cloud Services",
+      "driveFolderId": "1lFOVl-XB1Lu7wndOqVKpYVKqxu0TjYgl",
+      "industryDescription": "Oracle Corporation is a global technology company that provides a wide range of enterprise software, cloud computing services, and hardware products, with a strong focus on database software and cloud infrastructure.",
+      "industryCompetitors": [
+        "Microsoft",
+        "SAP",
+        "Amazon Web Services"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:54:24.752Z"
+    },
+    {
+      "name": "Rambus Inc",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [
+        "644570"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Semiconductors - High-Performance Memory and Interfaces",
+      "driveFolderId": "1luIZZ-fbaA5s2nSGBwKGteVE8fTbY92F",
+      "industryDescription": "Rambus Inc. designs, develops, and licenses chip interface technologies and architectures, as well as manufactures semiconductor products, primarily focusing on high-speed memory and interfaces, and security solutions for data-intensive computing systems like AI infrastructure, data centers, and high-performance computing.",
+      "industryCompetitors": [
+        "Renesas",
+        "Montage Technology",
+        "Cadence Design Systems"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:55:30.904Z"
+    },
+    {
+      "name": "Rescale",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Cloud High-Performance Computing (HPC) and Simulation Software",
+      "driveFolderId": "1686VTQ1if3_qtDzTgauvCUErU16uAHss",
+      "industryDescription": "Rescale provides a cloud-based platform for high-performance computing (HPC) that enables engineers and scientists to run complex simulations, modeling, AI/ML workloads, and digital twin applications for digital research and development across various industries.",
+      "industryCompetitors": [
+        "Ansys",
+        "Google Compute Engine",
+        "Amazon EC2"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:56:59.908Z"
+    },
+    {
+      "name": "Rubrik, Inc.- Ca",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Cloud Data Management and Security",
+      "driveFolderId": "1Hgo1PYyrIcMvxPBQEG1nNgFueQlfYWrG",
+      "industryDescription": "Rubrik, Inc. is a cloud data management and data security company that provides solutions for data backup and recovery, ransomware recovery, data security posture, and compliance, primarily for large enterprises operating in hybrid cloud environments.",
+      "industryCompetitors": [
+        "Veeam Data Platform",
+        "Druva Data Security Cloud",
+        "Cohesity DataProtect"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:58:25.671Z"
+    },
+    {
+      "name": "Zuora, Inc.",
+      "ae": "Cail McClenahen",
+      "accountNumbers": [
+        "6334553"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Enterprise SaaS (Subscription Management & Billing)",
+      "driveFolderId": "1qio8XjCE6_R-6m94wqfBKDUVEN3zf-1n",
+      "industryDescription": "Zuora, Inc. is an enterprise software company that provides a cloud-based monetization platform for businesses to launch, manage, and transform their subscription-based services, handling recurring billing, collections, quoting, and revenue recognition.",
+      "industryCompetitors": [
+        "Chargebee",
+        "Maxio",
+        "Stripe Billing"
+      ],
+      "industryUpdatedAt": "2026-04-08T00:59:52.863Z"
+    },
+    {
+      "name": "Agilent",
+      "ae": "Danny Hollar",
+      "accountNumbers": [
+        "655096"
+      ],
+      "domain": "",
+      "industry": "Life Sciences & Chemical Analysis",
+      "segment": "Laboratory Equipment & Services",
+      "driveFolderId": "1eqcp3tzeh9VV00bQ0xyhkPft8DEZcnsV",
+      "industryDescription": "Agilent Technologies provides instruments, software, services, and consumables for laboratories in the life sciences, diagnostics, and applied chemical markets, enabling customers to achieve precise and reliable results.",
+      "industryCompetitors": [
+        "Thermo Fisher Scientific",
+        "Danaher",
+        "Illumina"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:00:58.376Z"
+    },
+    {
+      "name": "Cadence Design Systems, Inc.",
+      "ae": "Danny Hollar",
+      "accountNumbers": [
+        "632119"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Electronic Design Automation (EDA) Software and Hardware",
+      "driveFolderId": "1DLNahcqB2fx8uZ10mqAURDNW9KEMNMKz",
+      "industryDescription": "Cadence Design Systems is a multinational technology and computational software company that develops software, hardware, and intellectual property used to design integrated circuits, systems on chips, printed circuit boards, and other electronic systems.",
+      "industryCompetitors": [
+        "Synopsys Inc.",
+        "ANSYS INC.",
+        "Siemens EDA (formerly Mentor Graphics)"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:02:04.749Z"
+    },
+    {
+      "name": "Docusign",
+      "ae": "Danny Hollar",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Enterprise SaaS (Electronic Signature and Digital Transaction Management)",
+      "driveFolderId": "1eK3fgNVX7MDjsNKnCDm6uHhbDHvaapf9",
+      "industryDescription": "DocuSign provides products for organizations to manage electronic agreements with electronic signatures and offers a comprehensive platform for creating, committing to, and managing agreements.",
+      "industryCompetitors": [
+        "Adobe Sign",
+        "Dropbox Sign (formerly HelloSign)",
+        "PandaDoc"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:03:11.861Z"
+    },
+    {
+      "name": "Flextronics International",
+      "ae": "Danny Hollar",
+      "accountNumbers": [
+        "1482935"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Electronics Manufacturing Services (EMS)",
+      "driveFolderId": "19IxkWr_fO8FUSc2LZ564pnCJtIfoRVq5",
+      "industryDescription": "Flextronics International, now known as Flex, is a multinational manufacturing company that provides comprehensive design, engineering, manufacturing, and supply chain solutions for a wide range of industries including automotive, healthcare, industrial, and consumer electronics.",
+      "industryCompetitors": [
+        "Foxconn Electronics",
+        "Jabil",
+        "Celestica"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:04:19.781Z"
+    },
+    {
+      "name": "h2o.ai",
+      "ae": "Danny Hollar",
+      "accountNumbers": [
+        "6102067",
+        "11956338",
+        "11927581",
+        "7069933"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "AI and Machine Learning Platforms",
+      "driveFolderId": "1NL8kbra_3n2eP6Efd1T67tonHWES9Sm1",
+      "industryDescription": "H2O.ai is an open-source leader in AI and machine learning, providing a platform that enables users to build predictive models and perform data analytics with speed and ease, aiming to democratize AI for everyone.",
+      "industryCompetitors": [
+        "DataRobot",
+        "Google Cloud Vertex AI",
+        "Amazon SageMaker"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:05:27.509Z"
+    },
+    {
+      "name": "Hcl Technologies Limited",
+      "ae": "Danny Hollar",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "IT Services and Consulting",
+      "driveFolderId": "1DjgSR2sOCiP0PS1peXkA-vmjLd4dCweW",
+      "industryDescription": "HCL Technologies Limited is an Indian multinational information technology (IT) consulting company that provides a broad portfolio of technology services and products, including digital, engineering, cloud, and AI solutions, to enterprises worldwide.",
+      "industryCompetitors": [
+        "Tata Consultancy Services (TCS)",
+        "Infosys",
+        "Wipro"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:06:35.587Z"
+    },
+    {
+      "name": "i2c",
+      "ae": "Danny Hollar",
+      "accountNumbers": [
+        "6030211",
+        "5950990"
+      ],
+      "domain": "",
+      "industry": "",
+      "segment": "",
+      "driveFolderId": "1CalYKJcHJ4E-w4ZoBdil-2-YmkW463ry"
+    },
+    {
+      "name": "Kla Corporation",
+      "ae": "Danny Hollar",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Semiconductor Equipment and Materials",
+      "driveFolderId": "1XFIXr_HnE9YoQH_XNZsYWhY7HZw2sauj",
+      "industryDescription": "KLA Corporation is a global manufacturer of semiconductor wafer fabrication equipment, specializing in process control and yield management solutions for the semiconductor and related nanoelectronics industries.",
+      "industryCompetitors": [
+        "Applied Materials",
+        "Lam Research",
+        "ASML"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:07:48.146Z"
+    },
+    {
+      "name": "Pure Storage",
+      "ae": "Danny Hollar",
+      "accountNumbers": [
+        "11604473",
+        "12538796",
+        "12705054",
+        "12363569",
+        "7906509",
+        "11954053",
+        "12494589",
+        "6271824",
+        "10856557",
+        "1476472",
+        "6151492"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Enterprise Data Storage",
+      "driveFolderId": "1pS1dRP5y6GtO_Hud3BRmfREx21q9yf8q",
+      "industryDescription": "Pure Storage provides all-flash data storage hardware and software solutions designed for high-performance, reliability, and efficiency in enterprise environments and data centers.",
+      "industryCompetitors": [
+        "Dell EMC",
+        "NetApp",
+        "Hewlett Packard Enterprise (HPE)"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:08:53.714Z"
+    },
+    {
+      "name": "Rakuten Group",
+      "ae": "Danny Hollar",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Technology Conglomerate",
+      "segment": "E-commerce, Fintech, Digital Content, and Telecommunications",
+      "driveFolderId": "1ty5SJITWBqeXU89KjMZuBBTYCeT0WEQs",
+      "industryDescription": "Rakuten Group, Inc. is a Japanese technology conglomerate that offers a wide array of internet services, including e-commerce, financial technology, digital content, and mobile communication services globally.",
+      "industryCompetitors": [
+        "Amazon",
+        "eBay",
+        "Alibaba Group"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:09:59.542Z"
+    },
+    {
+      "name": "RINGCENTRAL INC",
+      "ae": "Danny Hollar",
+      "accountNumbers": [
+        "1553219",
+        "11964624",
+        "9671141",
+        "12487790"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Unified Communications as a Service (UCaaS) & Contact Center as a Service (CCaaS)",
+      "driveFolderId": "18lIDPm9iyCxov0zj9owmjlQBDDbur8fp",
+      "industryDescription": "RingCentral Inc. is a global provider of cloud-based communication and collaboration products and services, offering a unified platform that integrates voice, video conferencing, team messaging, and contact center functionalities for businesses.",
+      "industryCompetitors": [
+        "Zoom",
+        "Microsoft",
+        "Dialpad"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:11:05.776Z"
+    },
+    {
+      "name": "Francisco Partners",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "11956449"
+      ],
+      "domain": "",
+      "industry": "Financial Services",
+      "segment": "Private Equity (Technology-focused)",
+      "driveFolderId": "1GRUn_ClcVHpkkeZnr_k5UenqsB_v5Spz",
+      "industryDescription": "Francisco Partners Management is an American private equity firm that exclusively invests in technology and technology-enabled services businesses globally.",
+      "industryCompetitors": [
+        "Summit Partners",
+        "Insight Partners",
+        "Thoma Bravo"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:12:11.299Z"
+    },
+    {
+      "name": "Guidewire Software, Inc.",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "5542051",
+        "5677892"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Enterprise SaaS for Property & Casualty Insurance",
+      "driveFolderId": "1LAthjUrhbXz_x8Q-9QK6HT80EMJ7DuHu",
+      "industryDescription": "Guidewire Software provides a cloud-based platform and software solutions specifically designed for property and casualty (P&C) insurance carriers, covering the entire insurance lifecycle from policy administration and billing to claims management.",
+      "industryCompetitors": [
+        "Duck Creek Technologies",
+        "Majesco",
+        "Insurity"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:13:17.749Z"
+    },
+    {
+      "name": "KKR",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "11531195"
+      ],
+      "domain": "",
+      "industry": "Financial Services",
+      "segment": "Alternative Asset Management",
+      "driveFolderId": "1sOzMYhWjf7n_1YwTGD4hAW2gAs63AM8Z",
+      "industryDescription": "KKR is a global investment firm that provides alternative asset management, capital markets, and insurance solutions to institutional investors, wealth investors, and family offices.",
+      "industryCompetitors": [
+        "The Blackstone Group",
+        "Apollo Global Management",
+        "The Carlyle Group"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:14:25.934Z"
+    },
+    {
+      "name": "Levi Strauss & Co.",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "1189647"
+      ],
+      "domain": "",
+      "industry": "Retail",
+      "segment": "Apparel & Footwear",
+      "driveFolderId": "1sYgiKxn6nufI6EI2QdcRxvZsnAFhIcE4",
+      "industryDescription": "Levi Strauss & Co. is a global apparel company known for designing and marketing jeans, casual wear, and related accessories for men, women, and children under brands like Levi's®, Beyond Yoga®, and Levi Strauss Signature™.",
+      "industryCompetitors": [
+        "Wrangler",
+        "Lee Jeans",
+        "GAP"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:15:33.257Z"
+    },
+    {
+      "name": "Online Solutions",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "1045796",
+        "561866"
+      ],
+      "domain": "",
+      "industry": "",
+      "segment": "",
+      "driveFolderId": "1bL7-PZzrmcuqFeBisFCS_mz2I84SXLjN"
+    },
+    {
+      "name": "Partnership Health Plan Of California",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "12179686"
+      ],
+      "domain": "",
+      "industry": "Healthcare",
+      "segment": "Managed Care (Medi-Cal)",
+      "driveFolderId": "1Wgj1n5E4mzZ6I3ch5e3sljm5GYMbxI_j",
+      "industryDescription": "Partnership HealthPlan of California is a non-profit community-based healthcare organization that contracts with the State of California to administer Medi-Cal benefits to beneficiaries in 24 Northern California counties.",
+      "industryCompetitors": [
+        "L.A. Care Health Plan",
+        "Santa Clara Family Health Plan",
+        "Valley Health Plan"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:16:49.098Z"
+    },
+    {
+      "name": "ROSS Stores, Inc.",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "833793"
+      ],
+      "domain": "",
+      "industry": "Retail",
+      "segment": "Off-Price Apparel and Home Fashion Retail",
+      "driveFolderId": "1vSoo7iJeQYzQs7oc803kqBaDGgnQ8Pyu",
+      "industryDescription": "ROSS Stores, Inc. operates as an off-price retailer, offering branded apparel, accessories, footwear, and home fashions at discounted prices through its Ross Dress for Less and DD's Discounts stores.",
+      "industryCompetitors": [
+        "TJX Companies, Inc.",
+        "Burlington Stores, Inc.",
+        "Walmart Inc."
+      ],
+      "industryUpdatedAt": "2026-04-08T01:17:55.300Z"
+    },
+    {
+      "name": "Sifive",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "6661926"
+      ],
+      "domain": "",
+      "industry": "Semiconductors",
+      "segment": "Processor IP & Design",
+      "driveFolderId": "1gSlOMI2Mf0vDFQR-xdzcI4P5x1KSgfHd",
+      "industryDescription": "SiFive is a fabless semiconductor IP company that develops and licenses RISC-V processor cores and related silicon chips, software, and tools for various applications such as AI, automotive, and IoT.",
+      "industryCompetitors": [
+        "Arm Holdings",
+        "Intel",
+        "MediaTek"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:19:02.748Z"
+    },
+    {
+      "name": "The Gap",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "1359317"
+      ],
+      "domain": "",
+      "industry": "Retail",
+      "segment": "Apparel Retail",
+      "driveFolderId": "1DTAuIhvsT1lXs7xm8e5GuxXINdNsA0ot",
+      "industryDescription": "The Gap, Inc. is an American multinational clothing and accessories retailer that operates several brands, including Gap, Old Navy, Banana Republic, and Athleta, offering a diverse range of apparel and personal care products.",
+      "industryCompetitors": [
+        "H&M",
+        "Zara",
+        "Abercrombie & Fitch"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:20:11.731Z"
+    },
+    {
+      "name": "Veeva Systems",
+      "ae": "David Delmundo",
+      "accountNumbers": [
+        "5521338"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Enterprise SaaS for Life Sciences",
+      "driveFolderId": "1mmVbndt_O7LT60qRI8iGGIQo2RPXnRI_",
+      "industryDescription": "Veeva Systems provides cloud-based software, data, and business consulting services specifically tailored for the global life sciences industry, including pharmaceutical, biotechnology, and medical device companies.",
+      "industryCompetitors": [
+        "IQVIA",
+        "Salesforce",
+        "Oracle"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:21:25.852Z"
+    },
+    {
+      "name": "Aligntech",
+      "ae": "Duy Pham",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Healthcare",
+      "segment": "Orthodontic Devices and Digital Dentistry",
+      "driveFolderId": "1Lk6lXP_Jp9wALAfPL_fba2a6kGJR4i4p",
+      "industryDescription": "Align Technology is a global medical device company that designs, manufactures, and markets the Invisalign system of clear aligners, iTero intraoral scanners, and exocad CAD/CAM software for orthodontic and restorative dental treatments.",
+      "industryCompetitors": [
+        "Dentsply Sirona",
+        "Envista Holdings Corporation",
+        "Henry Schein"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:22:33.703Z"
+    },
+    {
+      "name": "BioMarin Pharmaceuticals",
+      "ae": "Duy Pham",
+      "accountNumbers": [
+        "1380380"
+      ],
+      "domain": "",
+      "industry": "Healthcare",
+      "segment": "Biotechnology - Rare Genetic Diseases",
+      "driveFolderId": "1tA6G1BeWao3cE-XlqS0TJHEgRgAk-Re9",
+      "industryDescription": "BioMarin Pharmaceutical is a global biotechnology company focused on developing and commercializing therapies for rare genetic diseases, including enzyme replacement therapies, gene therapies, and other advanced treatments.",
+      "industryCompetitors": [
+        "Alnylam Pharmaceuticals",
+        "Biogen",
+        "Ultragenyx Pharmaceutical"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:23:41.443Z"
+    },
+    {
+      "name": "Blackhawk Network",
+      "ae": "Duy Pham",
+      "accountNumbers": [
+        "871121"
+      ],
+      "domain": "",
+      "industry": "Financial Services",
+      "segment": "Digital Payments",
+      "driveFolderId": "1AEtLv29VL0UJMjvXfjH5D7-8_aH0hjNw",
+      "industryDescription": "Blackhawk Network Holdings is a global financial technology company that provides branded payment solutions, including physical and digital gift cards, prepaid cards, and incentive and loyalty programs, for businesses and consumers worldwide.",
+      "industryCompetitors": [
+        "InComm Payments",
+        "Fiserv",
+        "CardCash"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:24:48.820Z"
+    },
+    {
+      "name": "Grocery Outlet Holding",
+      "ae": "Duy Pham",
+      "accountNumbers": [
+        "11824810"
+      ],
+      "domain": "",
+      "industry": "Retail",
+      "segment": "Extreme Value Grocery Retail",
+      "driveFolderId": "14MBb-AV4LMMDnHLake4Lotw1t5P5i3TB",
+      "industryDescription": "Grocery Outlet Holding Corp. is an American discount closeout retailer that sells discounted, overstocked, and closeout products from name-brand and private-label suppliers through a network of independently operated supermarket locations.",
+      "industryCompetitors": [
+        "Aldi",
+        "Lidl",
+        "Costco"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:25:56.053Z"
+    },
+    {
+      "name": "Intuit Inc.",
+      "ae": "Duy Pham",
+      "accountNumbers": [
+        "12291011",
+        "11773198",
+        "5909515",
+        "5827350",
+        "11867669",
+        "769571",
+        "5474672",
+        "7113467"
+      ],
+      "domain": "",
+      "industry": "",
+      "segment": "",
+      "driveFolderId": "1f2-TLV0wsRMfsaZ0_Lqoq3ZW_ybaV3aG"
+    },
+    {
+      "name": "Rxo Capacity Solutions",
+      "ae": "Duy Pham",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "",
+      "segment": "",
+      "driveFolderId": "1bfvXwnkwFZtwQE6aY0wUT9B_35GbWKGf"
+    },
+    {
+      "name": "Save Mart Supermarkets",
+      "ae": "Duy Pham",
+      "accountNumbers": [
+        "780687"
+      ],
+      "domain": "",
+      "industry": "Retail",
+      "segment": "Grocery Stores",
+      "driveFolderId": "1V-fBlQ76ru7mdz9jRii0TTtwkyZGWTxT",
+      "industryDescription": "Save Mart Supermarkets operates as a chain of full-service grocery stores offering a wide range of products, including fresh produce, bakery goods, deli foods, and ethnic foods, primarily across California and Northern Nevada.",
+      "industryCompetitors": [
+        "Trader Joe's",
+        "WinCo Foods",
+        "Safeway"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:27:15.107Z"
+    },
+    {
+      "name": "Seagate Technology",
+      "ae": "Duy Pham",
+      "accountNumbers": [
+        "6378993",
+        "6440675",
+        "5910892"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Data Storage Solutions",
+      "driveFolderId": "1hTilclu_xXI3CfTLdQ-9rVBeLLpu8aD2",
+      "industryDescription": "Seagate Technology designs, manufactures, and sells data storage solutions, primarily focusing on hard disk drives (HDDs) and solid-state drives (SSDs) for a wide range of customers including hyperscale data centers, cloud service providers, and individual consumers.",
+      "industryCompetitors": [
+        "Western Digital",
+        "Micron Technology",
+        "Samsung"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:28:20.798Z"
+    },
+    {
+      "name": "TriNet HR Corporation",
+      "ae": "Duy Pham",
+      "accountNumbers": [
+        "540011"
+      ],
+      "domain": "",
+      "industry": "Human Resources",
+      "segment": "Professional Employer Organization (PEO) & HR Technology",
+      "driveFolderId": "1YYYehpaiUgAk_g19bA9vfxQPWw9HZkcL",
+      "industryDescription": "TriNet HR Corporation provides comprehensive HR solutions, including payroll, benefits, risk management, and compliance, primarily for small and medium-sized businesses.",
+      "industryCompetitors": [
+        "ADP",
+        "Paychex",
+        "Insperity"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:29:28.454Z"
+    },
+    {
+      "name": "XPO Logistics",
+      "ae": "Duy Pham",
+      "accountNumbers": [
+        "916227"
+      ],
+      "domain": "",
+      "industry": "Transportation & Logistics",
+      "segment": "Less-Than-Truckload (LTL) Freight Shipping",
+      "driveFolderId": "1kF9zcZSH4WmscxOJ4P9UaHNMGjfw_riw",
+      "industryDescription": "XPO, Inc. is an American transportation company specializing in less-than-truckload (LTL) freight shipping across North America, serving a diverse customer base that includes industrial, manufacturing, retail, and e-commerce businesses.",
+      "industryCompetitors": [
+        "Old Dominion Freight Line",
+        "FedEx Freight",
+        "Saia Motor Freight"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:30:35.224Z"
+    },
+    {
+      "name": "Bespin Global U.S.",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "9510919"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Cloud Computing and Managed Services",
+      "driveFolderId": "1g347dP_PlxEAXk72x7dMEZEc6_9tgVjJ",
+      "industryDescription": "Bespin Global U.S. provides comprehensive cloud management services, including migration, operation, optimization, and AI-driven solutions across major cloud platforms like AWS, Google Cloud, and Microsoft Azure, to help businesses with their digital transformation.",
+      "industryCompetitors": [
+        "Accenture",
+        "Deloitte Consulting",
+        "IBM Consulting"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:31:43.731Z"
+    },
+    {
+      "name": "Bitrise, Inc.",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "11416649"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Mobile DevOps Platform / CI/CD for Mobile",
+      "driveFolderId": "1lZYXJ98NQrDXVdkQumR4Nv3MneThO2lq",
+      "industryDescription": "Bitrise is a mobile DevOps platform that provides a Continuous Integration and Delivery (CI/CD) system specifically designed for automating the building, testing, and deployment of mobile applications.",
+      "industryCompetitors": [
+        "Jenkins",
+        "CircleCI",
+        "GitLab"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:32:50.394Z"
+    },
+    {
+      "name": "Confluent, Inc.",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "6390417",
+        "6084814",
+        "12849784",
+        "12091277"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Data Streaming Platform / Enterprise SaaS",
+      "driveFolderId": "1LxLRXkgjK_NsrTQDy36cbV2KxVTRBoyR",
+      "industryDescription": "Confluent, Inc. provides a data streaming platform that enables organizations to access, process, and manage data as real-time streams, built on Apache Kafka.",
+      "industryCompetitors": [
+        "Datadog",
+        "MongoDB",
+        "Cloudflare"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:42:53.528Z"
+    },
+    {
+      "name": "Intrado Corporation",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "11504906"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Public Safety Communications",
+      "driveFolderId": "1jUCbOaCeWsgREkmNyV301sVBwlh_QAyX",
+      "industryDescription": "Intrado Corporation is a global leader in emergency communication services, providing technology and solutions that enhance public safety outcomes by connecting individuals in need with emergency responders.",
+      "industryCompetitors": [
+        "TeleCommunication Systems",
+        "Airbus DS Communications",
+        "Level 3"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:44:11.499Z"
+    },
+    {
+      "name": "McAfee",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "1264530"
+      ],
+      "domain": "mcafee.com",
+      "industry": "Technology",
+      "segment": "Cybersecurity",
+      "driveFolderId": "1zebkYQexxOTD26gB_IuSJWbemKwn7ehl",
+      "industryDescription": "McAfee is an American proprietary software company focused on online protection for consumers worldwide, providing integrated security, privacy, and trust solutions against cyberattacks.",
+      "industryCompetitors": [
+        "Symantec",
+        "Norton",
+        "Kaspersky"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:45:17.311Z"
+    },
+    {
+      "name": "Omnivision Technologies",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "1207290"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Semiconductors",
+      "driveFolderId": "1b9QDtPTHuvyhn9ZY5hoKf_rb6LugFTrf",
+      "industryDescription": "OmniVision Technologies designs and develops advanced digital imaging solutions, including CMOS image sensors, for a wide range of applications across various industries.",
+      "industryCompetitors": [
+        "Sony Group Corporation",
+        "Samsung Electronics Co., Ltd.",
+        "ON Semiconductor Corporation"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:46:25.456Z"
+    },
+    {
+      "name": "ROBERT HALF INTERNATIONAL",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "5308452"
+      ],
+      "domain": "",
+      "industry": "Professional Services",
+      "segment": "Specialized Staffing and Consulting",
+      "driveFolderId": "1vzyzZO9dxabbxPfgPoX5pBsSPdD2eX-p",
+      "industryDescription": "Robert Half International is a global human resource consulting firm that provides specialized staffing solutions and business consulting services across various professional fields, including finance, accounting, technology, legal, and administrative roles, as well as risk and internal audit consulting through its Protiviti subsidiary.",
+      "industryCompetitors": [
+        "ManpowerGroup",
+        "Randstad",
+        "Adecco"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:47:33.545Z"
+    },
+    {
+      "name": "Taylor Fresh Foods, Inc.",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "11823554"
+      ],
+      "domain": "",
+      "industry": "Food Products",
+      "segment": "Fresh-cut Produce & Packaged Salads",
+      "driveFolderId": "1BLdyYSbrCjMtFG7H9IlLL2Zeqizi2Ewj",
+      "industryDescription": "Taylor Fresh Foods, Inc. produces and supplies fresh-cut fruits and vegetables, including chopped salad kits, classic bagged salads, organic salads, and vegetable trays.",
+      "industryCompetitors": [
+        "Ready Pac Foods",
+        "Fresh Express",
+        "Dole"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:48:41.822Z"
+    },
+    {
+      "name": "Uber Technologies, Inc.",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "6943734"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Subscription Business Management & Billing Software",
+      "driveFolderId": "1twI8kt3srs3EmhV5e7UOvqBHpnsYaw00",
+      "industryDescription": "Ubersmith is a business management platform that offers open, scalable, and integrated solutions for billing, infrastructure, and ticketing, primarily serving data centers, cloud and hosting providers, ISPs, telcos, and managed service providers.",
+      "industryCompetitors": [
+        "Rev.io Billing",
+        "PortaBilling",
+        "TimelyBill"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:49:50.770Z"
+    },
+    {
+      "name": "Workday, Inc.",
+      "ae": "Elmer Alvarez",
+      "accountNumbers": [
+        "5350212"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Enterprise SaaS",
+      "driveFolderId": "1v0IqtX6QMFwHF5PJhzUDQPb-nAD2N-Fs",
+      "industryDescription": "Workday, Inc. is a leading provider of cloud-based software solutions for financial management, human capital management (HCM), and enterprise resource planning (ERP).",
+      "industryCompetitors": [
+        "Oracle",
+        "SAP",
+        "ADP"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:50:58.706Z"
+    },
+    {
+      "name": "Cambia Health Solutions",
+      "ae": "Philip Yi",
+      "accountNumbers": [],
+      "domain": "",
+      "industry": "Healthcare",
+      "segment": "Health Insurance and Services",
+      "driveFolderId": "17IVNPNVfNoEa6xem_LgPoMoxNLjh0asN",
+      "industryDescription": "Cambia Health Solutions is a family of companies providing health services and innovative solutions to individuals and families, focusing on creating a person-focused and economically sustainable healthcare system.",
+      "industryCompetitors": [
+        "UnitedHealth Group",
+        "Intermountain Health",
+        "Highmark"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:52:05.869Z"
+    },
+    {
+      "name": "Columbia Sportswear Company",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "12183730",
+        "6102002"
+      ],
+      "domain": "",
+      "industry": "Retail",
+      "segment": "Outdoor and Active Lifestyle Apparel, Footwear, and Equipment",
+      "driveFolderId": "1JjWmzkS8D-btxoZRbBR-meP4QuCia9nt",
+      "industryDescription": "Columbia Sportswear Company designs, sources, markets, and distributes outdoor and active lifestyle apparel, footwear, accessories, and equipment globally.",
+      "industryCompetitors": [
+        "Nike",
+        "Adidas",
+        "Patagonia"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:53:14.151Z"
+    },
+    {
+      "name": "Expeditors International Of Washington",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "1498189"
+      ],
+      "domain": "",
+      "industry": "Logistics and Transportation",
+      "segment": "Freight Forwarding & Supply Chain Solutions",
+      "driveFolderId": "1Ei76sIcNcN61B97LVvhoZbmnd0kir9WP",
+      "industryDescription": "Expeditors International of Washington is a global logistics and freight forwarding company that provides integrated supply chain solutions, including air and ocean freight forwarding, customs brokerage, warehousing, and distribution services.",
+      "industryCompetitors": [
+        "C.H. Robinson Worldwide",
+        "XPO Logistics",
+        "Kuehne + Nagel International AG"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:54:22.554Z"
+    },
+    {
+      "name": "Nintendo of America Inc.",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "6667518"
+      ],
+      "domain": "",
+      "industry": "Technology",
+      "segment": "Video Game Development & Consumer Electronics",
+      "driveFolderId": "1K38jXY19ONytdJHAaFp3-6yrO2xqsIGi",
+      "industryDescription": "Nintendo of America Inc. develops, manufactures, and distributes desktop consoles, portable consoles, related hardware, and games, including iconic franchises like Mario, The Legend of Zelda, and Pokémon.",
+      "industryCompetitors": [
+        "Sony Interactive Entertainment",
+        "Microsoft Gaming (Xbox)",
+        "Tencent Interactive Entertainment"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:55:30.126Z"
+    },
+    {
+      "name": "NORDSTROM",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "846430",
+        "11659668"
+      ],
+      "domain": "",
+      "industry": "Retail",
+      "segment": "Fashion Retail (Department Stores and Off-Price)",
+      "driveFolderId": "1sTrEVxn-HrK3YvwFMhZO8t2F_MnzuR_W",
+      "industryDescription": "Nordstrom is a fashion retailer operating full-line stores and off-price Nordstrom Rack locations, offering a wide selection of apparel, shoes, cosmetics, and accessories for men, women, and children through an omnichannel strategy that integrates physical and digital shopping experiences.",
+      "industryCompetitors": [
+        "Macy's",
+        "Neiman Marcus",
+        "Saks Fifth Avenue"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:56:35.607Z"
+    },
+    {
+      "name": "Northwest Natural Holding Company",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "7183919"
+      ],
+      "domain": "",
+      "industry": "",
+      "segment": "",
+      "driveFolderId": "1_6SvPJdrS_df7IGyUPM7pGoiR2uO8eQH"
+    },
+    {
+      "name": "Perkins Coie LLP",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "7533850",
+        "7107191"
+      ],
+      "domain": "",
+      "industry": "Legal Services",
+      "segment": "Full-service Business Law",
+      "driveFolderId": "1GZAqVOehzJhNKWjnxMy1ZvO_4NqUWC1Y",
+      "industryDescription": "Perkins Coie LLP is an international law firm providing a full array of corporate, commercial litigation, intellectual property, and regulatory legal advice to a broad range of clients, including technology companies, startups, and public and not-for-profit organizations.",
+      "industryCompetitors": [
+        "Kirkland & Ellis",
+        "Cooley",
+        "King & Spalding"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:57:48.018Z"
+    },
+    {
+      "name": "Premera Blue Cross",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "1152569"
+      ],
+      "domain": "",
+      "industry": "Healthcare",
+      "segment": "Health Insurance",
+      "driveFolderId": "1d7jR3Op0-CKOokLNIBRJY7jVspcpbFYB",
+      "industryDescription": "Premera Blue Cross is a non-profit health insurance company that provides health plans and related services to individuals and employer groups in Washington and Alaska.",
+      "industryCompetitors": [
+        "Aetna",
+        "Unum",
+        "Group Health Cooperative"
+      ],
+      "industryUpdatedAt": "2026-04-08T01:58:53.507Z"
+    },
+    {
+      "name": "The Pokemon Company International",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "12616826"
+      ],
+      "domain": "",
+      "industry": "Entertainment",
+      "segment": "Transmedia Franchise Management & Licensing",
+      "driveFolderId": "1Sya51bxQPbohN_NjmvGgby6KkX0HNmKi",
+      "industryDescription": "The Pokémon Company International manages the Pokémon brand outside of Asia, overseeing licensing, marketing, the Pokémon Trading Card Game, animated series, home entertainment, and the official Pokémon website.",
+      "industryCompetitors": [
+        "Nintendo",
+        "Sega",
+        "Mind Candy"
+      ],
+      "industryUpdatedAt": "2026-04-08T02:00:02.283Z"
+    },
+    {
+      "name": "Whatcom Educational Credit Union",
+      "ae": "Philip Yi",
+      "accountNumbers": [
+        "5975052"
+      ],
+      "domain": "",
+      "industry": "Financial Services",
+      "segment": "Credit Unions",
+      "driveFolderId": "1HGWug7bdAlX-WvocR27Q4gxQBJhmFwBu",
+      "industryDescription": "Whatcom Educational Credit Union (WECU) is a not-for-profit financial cooperative that provides a range of financial products and services to its members, including consumer loans, real estate loans, commercial loans, and deposit accounts.",
+      "industryCompetitors": [
+        "Industrial Credit Union (ICU)",
+        "BECU",
+        "North Coast Credit Union"
+      ],
+      "industryUpdatedAt": "2026-04-08T02:01:10.779Z"
+    },
+    {
+      "name": "Avista Corporation",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1jYjFjkG8viqMlqCXNq1kZZzlPfkyuoK0",
+      "accountNumbers": [
+        "533251"
+      ]
+    },
+    {
+      "name": "Banner Corporation",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1I9eqJ_UQ5E0Js9nmSASqo1m-DPBkUAyg",
+      "accountNumbers": [
+        "12847991"
+      ]
+    },
+    {
+      "name": "Hotwire Communications",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1nZbirB-64CxVNLpHa3R3UdNdOScSmTcU",
+      "accountNumbers": []
+    },
+    {
+      "name": "IDAHO POWER COMPANY",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1rZT_JRJoKKMDzNAF87gwpRlTNFoK8R4q",
+      "accountNumbers": [
+        "5288777",
+        "1116241"
+      ]
+    },
+    {
+      "name": "Itron Inc.",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1HlJEfS5s9VqXCeVX7MBqLzz_9cz-QYBC",
+      "accountNumbers": [
+        "1344904",
+        "6029894",
+        "12400235",
+        "11507954"
+      ]
+    },
+    {
+      "name": "J. R. Simplot",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1ZmxyAiOauH709t6yyuvdjrP4vl-gzzCI",
+      "accountNumbers": [
+        "393681"
+      ]
+    },
+    {
+      "name": "Portland General Electric",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1vxIb-mvBFRAjUWCWY-pzUrg94hJfxpfd",
+      "accountNumbers": [
+        "925416"
+      ]
+    },
+    {
+      "name": "St. Joseph Health System / Providence Health",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1alThQqbx9bY3Ohjnoh5oHLSue7wCsUq4",
+      "accountNumbers": [
+        "12373546"
+      ]
+    },
+    {
+      "name": "StanCorp Financial Group, Inc",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "16q673DoHob6bWYzWOjcOdHD3PSlczL1P",
+      "accountNumbers": [
+        "1039931",
+        "12030182"
+      ]
+    },
+    {
+      "name": "TerraPower, LLC",
+      "ae": "Tyler McManigal",
+      "driveFolderId": "1EcOYMWQXPi-MnOPIl7fghRlPG2RJoRyH",
+      "accountNumbers": [
+        "6266277"
+      ]
+    },
+    {
+      "name": "Arka Group",
+      "ae": "Max Stroup",
+      "driveFolderId": "1x7SCTfIYp8mP5mqPF_1sc2kqIG9uvhIx",
+      "accountNumbers": []
+    },
+    {
+      "name": "Communify Fincentric",
+      "ae": "Max Stroup",
+      "driveFolderId": "1vMbbFDfmMgw7Oq9earKnZnHp105DXeuu",
+      "accountNumbers": []
+    },
+    {
+      "name": "Employers Holdings",
+      "ae": "Max Stroup",
+      "driveFolderId": "1rT0d9zEZTvH3ujbC9lr39EPo3foNJlY5",
+      "accountNumbers": []
+    },
+    {
+      "name": "First Bank",
+      "ae": "Max Stroup",
+      "driveFolderId": "1S0Ij9UkD6EAmB2_w00t9HXCtXK5ZHyQo",
+      "accountNumbers": [
+        "11830229",
+        "7341525"
+      ]
+    },
+    {
+      "name": "Newmont Mining",
+      "ae": "Max Stroup",
+      "driveFolderId": "17x9sSC750PJgF-DXk7NtUv1nJIGgGgC-",
+      "accountNumbers": [
+        "5844237"
+      ]
+    },
+    {
+      "name": "Red Robin",
+      "ae": "Max Stroup",
+      "driveFolderId": "10QdOgnjnArxmMwGOrYSIkMM_8DZrodjo",
+      "accountNumbers": [
+        "5547767"
+      ]
+    },
+    {
+      "name": "TRI-STATE G & T",
+      "ae": "Max Stroup",
+      "driveFolderId": "1G8qCM7UDKYQ-etj4huel9n8ksDs4YEzs",
+      "accountNumbers": [
+        "5264248"
+      ]
+    },
+    {
+      "name": "Vail Resorts",
+      "ae": "Max Stroup",
+      "driveFolderId": "1I14Qup84hPm7hZmOsYnLVTmzTYsNCu3e",
+      "accountNumbers": [
+        "1339200"
+      ]
+    },
+    {
+      "name": "WideOpenWest",
+      "ae": "Max Stroup",
+      "driveFolderId": "1yJEShR5iX_7RHMX93Zk6J9e8GhlosA9d",
+      "accountNumbers": [
+        "12432575"
+      ]
+    },
+    {
+      "name": "Zayo Group LLC",
+      "ae": "Max Stroup",
+      "driveFolderId": "10YhDLaeezsfkvVoApSS_54IsAejXDJye",
+      "accountNumbers": [
+        "6834971"
+      ]
+    },
+    {
+      "name": "America First Credit Union",
+      "ae": "Paul Maes",
+      "driveFolderId": "11Fl-SwQciVsM5b1J7uq6Afs3uz5NXUQQ",
+      "accountNumbers": [
+        "5540820",
+        "12732034",
+        "6664820"
+      ]
+    },
+    {
+      "name": "Finicity Corporation",
+      "ae": "Paul Maes",
+      "driveFolderId": "11NHN4LoT-NImaX6J5BGX_EBtkQy0jBCk",
+      "accountNumbers": [
+        "5249350"
+      ]
+    },
+    {
+      "name": "Intermountain Health Care, Inc.",
+      "ae": "Paul Maes",
+      "driveFolderId": "1VNllci0Ybyv-I-fdSFCEtMTij4tS4ZBO",
+      "accountNumbers": [
+        "686906"
+      ]
+    },
+    {
+      "name": "Renown Health",
+      "ae": "Paul Maes",
+      "driveFolderId": "1mh3Oxc_ovg0jhMiXY8hSDA9grHrVoVif",
+      "accountNumbers": [
+        "5773024"
+      ]
+    },
+    {
+      "name": "Sierra Nevada",
+      "ae": "Paul Maes",
+      "driveFolderId": "1Ojh5GW1q7ctmkFTQbDb7qw4_AvuKeE32",
+      "accountNumbers": []
+    },
+    {
+      "name": "Sirsi Corporation",
+      "ae": "Paul Maes",
+      "driveFolderId": "1sbJCXu4UIffLEG1737acLlAR6nii96C-",
+      "accountNumbers": [
+        "878200"
+      ]
+    },
+    {
+      "name": "Unishippers",
+      "ae": "Paul Maes",
+      "driveFolderId": "1ib5LX5yhZEcAEq-tXfquicAnG9CqPywC",
+      "accountNumbers": [
+        "1276427"
+      ]
+    },
+    {
+      "name": "Zions Bank",
+      "ae": "Paul Maes",
+      "driveFolderId": "18ea3cxPyECBYiDgK-XqIaTJsoYeKfcby",
+      "accountNumbers": [
+        "1414856"
+      ]
+    },
+    {
       "name": "A10 Networks",
-      "domain": "a10networks.com",
+      "ae": "Carolanne Farrell",
+      "driveFolderId": "1xF4uDT7yQjqZ7GLCeNJlH-SADC6FTJ5i",
       "accountNumbers": [
         "5929071",
         "916824"
       ],
-      "ae": "Carolanne Farrell",
+      "domain": "a10networks.com",
       "industry": "Technology",
-      "segment": "Network and Application Security",
-      "industryDescription": "A10 Networks provides secure application services and solutions, including application delivery controllers (ADCs), DDoS protection, and AI infrastructure security, for enterprises, service providers, and government entities across on-premises, hybrid cloud, and multi-cloud environments.",
+      "segment": "Cybersecurity & Application Delivery",
+      "industryDescription": "A10 Networks provides secure application and network infrastructure solutions, including application delivery and traffic management, distributed denial-of-service (DDoS) protection, and application and API security for enterprises and service providers.",
       "industryCompetitors": [
         "F5 Networks",
         "Fortinet",
-        "Citrix"
+        "Cisco Systems"
       ],
-      "industryUpdatedAt": "2026-04-04T18:12:16.701Z"
+      "industryUpdatedAt": "2026-04-08T02:02:19.227Z"
     },
     {
-      "name": "Dropbox",
-      "domain": "dropbox.com",
-      "accountNumbers": [
-        "10375220"
-      ],
+      "name": "CROWDSTRIKE",
       "ae": "Carolanne Farrell",
-      "industry": "Technology",
-      "segment": "Cloud Storage and File Synchronization",
-      "industryDescription": "Dropbox is a secure cloud storage platform that enables users to store, share, and access files and collaborate across various devices.",
-      "industryCompetitors": [
-        "Google Drive",
-        "Microsoft OneDrive",
-        "Box"
-      ],
-      "industryUpdatedAt": "2026-04-04T18:13:52.070Z"
-    },
-    {
-      "name": "Seattle Cancer Care",
-      "domain": "fredhutch.org",
-      "accountNumbers": [
-        "5456785",
-        "6077752",
-        "12240165",
-        "7101850",
-        "609870",
-        "924354"
-      ],
-      "ae": "Carolanne Farrell",
-      "industry": "Healthcare",
-      "segment": "Oncology Care and Cancer Research",
-      "industryDescription": "Fred Hutchinson Cancer Center, which was formed by the merger of Seattle Cancer Care Alliance and Fred Hutchinson Cancer Research Center, is a non-profit organization dedicated to providing comprehensive cancer treatment and patient care, alongside conducting innovative cancer research and clinical trials.",
-      "industryCompetitors": [
-        "University of Texas MD Anderson Cancer Center",
-        "Memorial Sloan Kettering Cancer Center",
-        "Dana-Farber Brigham Cancer Center"
-      ],
-      "industryUpdatedAt": "2026-04-04T18:16:06.516Z"
-    },
-    {
-      "name": "Illumio",
-      "domain": "illumio.com",
-      "accountNumbers": [
-        "9162122",
-        "11390719",
-        "5963272",
-        "6033587",
-        "12550526",
-        "11980107"
-      ],
-      "ae": "Carolanne Farrell",
-      "industry": "Technology",
-      "segment": "Zero Trust Segmentation",
-      "industryDescription": "Illumio is a cybersecurity company that provides a Zero Trust Segmentation platform to prevent the spread of breaches by visualizing application traffic, setting granular segmentation policies, and isolating workloads across various environments.",
-      "industryCompetitors": [
-        "Akamai",
-        "Palo Alto Networks",
-        "Broadcom (VMware)"
-      ],
-      "industryUpdatedAt": "2026-04-04T18:17:54.173Z"
-    },
-    {
-      "name": "Lynden Logistics",
-      "domain": "lynden.com",
-      "accountNumbers": [
-        "5242436",
-        "10752341"
-      ],
-      "ae": "Carolanne Farrell",
-      "industry": "Transportation & Logistics",
-      "segment": "Multi-modal Freight Forwarding and Supply Chain Solutions",
-      "industryDescription": "Lynden Logistics is a full-service transportation and logistics provider offering air, ocean, and ground freight forwarding, customs brokerage, and specialized supply chain services globally.",
-      "industryCompetitors": [
-        "SBA Global Logistic Services",
-        "AIT Worldwide Logistics",
-        "DHL"
-      ],
-      "industryUpdatedAt": "2026-04-04T18:20:45.029Z"
-    },
-    {
-      "name": "Recreational Equipment",
-      "domain": "rei.com",
-      "accountNumbers": [
-        "627962"
-      ],
-      "ae": "Carolanne Farrell",
-      "industry": "Retail",
-      "segment": "Outdoor Recreation Products and Services",
-      "industryDescription": "Recreational Equipment, Inc. (REI) is an American consumer co-operative retailer that sells outdoor gear, apparel, and footwear for various outdoor activities, and also offers outdoor recreation services.",
-      "industryCompetitors": [
-        "Patagonia",
-        "The North Face",
-        "L.L.Bean"
-      ],
-      "industryUpdatedAt": "2026-04-04T18:22:52.563Z"
-    },
-    {
-      "name": "Shutterfly",
-      "domain": "shutterfly.com",
-      "accountNumbers": [
-        "565461"
-      ],
-      "ae": "Carolanne Farrell",
-      "industry": "E-commerce",
-      "segment": "Personalized Photo Products & Services",
-      "industryDescription": "Shutterfly is an online platform that enables individuals and families to preserve memories by creating and purchasing personalized photo products such as photo books, cards, prints, and home decor items.",
-      "industryCompetitors": [
-        "Snapfish",
-        "Vistaprint",
-        "Mixbook"
-      ],
-      "industryUpdatedAt": "2026-04-04T18:24:57.774Z"
-    },
-    {
-      "name": "Crowdstrike",
-      "domain": "crowdstrike.com",
+      "driveFolderId": "1ru0EgyqPIlTWPSMql-viC9hL4Zeu0NQy",
       "accountNumbers": [
         "5311018",
         "5857069"
       ],
-      "ae": "Carolanne Farrell",
-      "industry": "Cybersecurity",
-      "segment": "Cybersecurity Platform (Endpoint Protection, EDR, Cloud Security)",
-      "industryDescription": "Crowdstrike is a cybersecurity technology company that provides cloud-native endpoint security, threat intelligence, and cyberattack response services through its AI-powered Falcon platform.",
+      "domain": "crowdstrike.com",
+      "industry": "Technology",
+      "segment": "Cybersecurity",
+      "industryDescription": "CrowdStrike is an American cybersecurity technology company that provides cloud-native endpoint protection, threat intelligence, and cyberattack response services through its Falcon platform.",
       "industryCompetitors": [
         "SentinelOne",
         "Palo Alto Networks",
         "Microsoft Defender for Endpoint"
       ],
-      "industryUpdatedAt": "2026-04-04T18:26:58.231Z"
+      "industryUpdatedAt": "2026-04-08T02:09:06.934Z"
     },
     {
-      "name": "Lifetouch",
-      "domain": "lifetouch.com",
-      "accountNumbers": [
-        "1368936"
-      ],
+      "name": "Dropbox Inc",
       "ae": "Carolanne Farrell",
-      "industry": "Professional Photography",
-      "segment": "School and Event Photography",
-      "industryDescription": "Lifetouch provides professional photography services for families, schools, and organizations, capturing memories through school pictures, yearbooks, and portrait studios.",
-      "industryCompetitors": [
-        "Jostens",
-        "Herff Jones",
-        "TreeRing"
+      "driveFolderId": "1W3xix28iUWoSB3rKczcK0ppY11CG5d6m",
+      "accountNumbers": [
+        "10375220"
       ],
-      "industryUpdatedAt": "2026-04-04T18:29:02.356Z"
+      "industry": "Technology",
+      "segment": "Cloud Storage and Content Collaboration (SaaS)",
+      "industryDescription": "Dropbox Inc. is an American company that offers cloud storage, file synchronization, personal cloud, and client software, providing tools for individuals and businesses to store, share, and collaborate on files.",
+      "industryCompetitors": [
+        "Google Drive",
+        "Microsoft OneDrive",
+        "Box"
+      ],
+      "industryUpdatedAt": "2026-04-08T02:03:25.385Z"
     },
     {
       "name": "Fred Hutchinson Cancer Center",
+      "ae": "Carolanne Farrell",
       "accountNumbers": [
         "12763660"
       ],
-      "ae": "Carolanne Farrell",
+      "domain": "",
       "industry": "Healthcare",
-      "segment": "Cancer Treatment and Biomedical Research",
-      "industryDescription": "Fred Hutchinson Cancer Center unites comprehensive care and advanced research to prevent, treat, and eliminate cancer and infectious diseases worldwide, functioning as an independent, nonprofit organization and serving as UW Medicine's cancer program.",
+      "segment": "Cancer Research and Treatment",
+      "driveFolderId": "1rgDUg065eUxPB20T_NvOJAFJsGHMhOFW",
+      "industryDescription": "Fred Hutchinson Cancer Center is an independent, non-profit organization dedicated to the elimination of cancer and infectious diseases through innovative research and compassionate patient care.",
       "industryCompetitors": [
-        "Memorial Sloan Kettering Cancer Center",
         "Dana-Farber Cancer Institute",
-        "Scripps Health"
+        "Memorial Sloan Kettering Cancer Center",
+        "City of Hope"
       ],
-      "industryUpdatedAt": "2026-04-04T18:31:10.495Z"
+      "industryUpdatedAt": "2026-04-08T02:17:39.728Z"
+    },
+    {
+      "name": "Illumio",
+      "ae": "Carolanne Farrell",
+      "driveFolderId": "1N6BmAJQct1gExhQYSE2XhoItiK6_xNPH",
+      "accountNumbers": [
+        "9162122",
+        "11390719",
+        "5963272",
+        "6033587",
+        "11980107",
+        "12550526"
+      ],
+      "domain": "illumio.com",
+      "industry": "Technology",
+      "segment": "Cybersecurity (Zero Trust Segmentation)",
+      "industryDescription": "Illumio is a cybersecurity company that provides a Zero Trust Segmentation platform to prevent the spread of breaches by visualizing application traffic, setting granular segmentation policies, and isolating workloads across hybrid and multi-cloud environments.",
+      "industryCompetitors": [
+        "Akamai Guardicore",
+        "Palo Alto Networks",
+        "VMware NSX"
+      ],
+      "industryUpdatedAt": "2026-04-08T02:04:33.523Z"
+    },
+    {
+      "name": "Lynden Logistics, Inc.",
+      "ae": "Carolanne Farrell",
+      "driveFolderId": "1mDr9Em_0QtxboF24DrOBGPyiLF39dhkn",
+      "accountNumbers": [
+        "5242436",
+        "10752341"
+      ]
+    },
+    {
+      "name": "Shutterfly",
+      "ae": "Carolanne Farrell",
+      "driveFolderId": "1_fQLQog5ZOofyKsNpSV1OkKWLYxQX2O-",
+      "accountNumbers": [
+        "565461"
+      ],
+      "industry": "E-commerce",
+      "segment": "Personalized Photo Products and Services",
+      "industryDescription": "Shutterfly is an e-commerce company that provides personalized photo products and services, allowing customers to create custom items like photo books, cards, gifts, and home decor from their digital images.",
+      "industryCompetitors": [
+        "Snapfish",
+        "Vistaprint",
+        "Mixbook"
+      ],
+      "industryUpdatedAt": "2026-04-08T02:08:00.351Z"
+    },
+    {
+      "name": "Recreational Equipment, Inc.",
+      "ae": "Carolanne Farrell",
+      "driveFolderId": "11VUzatNwLtut95oCULZ3sT5mV_9QpfeA",
+      "accountNumbers": [
+        "627962"
+      ],
+      "industry": "Retail",
+      "segment": "Outdoor Recreation Equipment and Apparel Retail",
+      "industryDescription": "Recreational Equipment, Inc. (REI) is an American retail and outdoor recreation services corporation specializing in selling outdoor gear, apparel, and footwear, operating as a member-owned cooperative.",
+      "industryCompetitors": [
+        "Dick's Sporting Goods",
+        "Patagonia",
+        "L.L.Bean"
+      ],
+      "industryUpdatedAt": "2026-04-08T02:06:51.667Z"
+    },
+    {
+      "name": "Lifetouch Inc",
+      "ae": "Carolanne Farrell",
+      "driveFolderId": "1o-Uzah4Lp92fUF2PNa-EJLr-NxpJGiSv",
+      "accountNumbers": [
+        "1368936"
+      ]
     }
   ]
 }
