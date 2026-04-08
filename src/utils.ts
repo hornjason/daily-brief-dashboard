@@ -10,7 +10,7 @@ export function sanitizeErr(e: any): string {
   if (/ERR_TIMED_OUT|ETIMEDOUT/i.test(raw)) return 'Connection timed out — check VPN or network'
   if (/ERR_INTERNET_DISCONNECTED/i.test(raw)) return 'No internet connection'
   if (/net::ERR_/i.test(raw)) return 'Network error — check VPN connection'
-  return raw.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]')
+  return raw.slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]')
 }
 
 /** Prefix formula-trigger characters with apostrophe to prevent injection */

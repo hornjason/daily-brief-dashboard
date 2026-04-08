@@ -455,21 +455,32 @@ export async function bootstrapPOD(opts: {
     // Fire the bootstrap for this AE via internal endpoint
     console.log(`[pod-bootstrap] Starting bootstrap for ${aeName} (${i + 1}/${aeEntries.length})…`)
     try {
-      const startRes = await fetch(`${baseUrl}/api/bootstrap/auto`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          aeName,
-          sfReportId: aeConfig.sfReportId,
-          tableauTerritories: territories.length > 0 ? territories : aeConfig.tableauTerritories,
-          customerNames,
-          parentFolderId: aeConfig.parentFolderId,
-        }),
-      })
+      const MAX_409_RETRIES = 3
+      let startRes: Response | null = null
+      for (let attempt = 1; attempt <= MAX_409_RETRIES; attempt++) {
+        startRes = await fetch(`${baseUrl}/api/bootstrap/auto`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            aeName,
+            sfReportId: aeConfig.sfReportId,
+            tableauTerritories: territories.length > 0 ? territories : aeConfig.tableauTerritories,
+            customerNames,
+            parentFolderId: aeConfig.parentFolderId,
+          }),
+        })
 
-      if (!startRes.ok) {
-        const body = await startRes.json().catch(() => ({ error: `HTTP ${startRes.status}` }))
-        throw new Error((body as any).error ?? `Bootstrap start failed: HTTP ${startRes.status}`)
+        if (startRes.status === 409 && attempt < MAX_409_RETRIES) {
+          console.log(`[bootstrap] 409 — scraper busy, waiting 30s (attempt ${attempt}/${MAX_409_RETRIES})`)
+          await new Promise(r => setTimeout(r, 30_000))
+          continue
+        }
+        break
+      }
+
+      if (!startRes!.ok) {
+        const body = await startRes!.json().catch(() => ({ error: `HTTP ${startRes!.status}` }))
+        throw new Error((body as any).error ?? `Bootstrap start failed: HTTP ${startRes!.status}`)
       }
 
       // Poll until this AE's bootstrap completes
@@ -710,8 +721,8 @@ export function registerBootstrapRoutes(app: Hono): void {
   // GET /api/bootstrap/pod/tabs — List corp tabs from a territory sheet
   app.get('/api/bootstrap/pod/tabs', async (c) => {
     const rawSheetId = (c.req.query('sheetId') ?? '').trim()
-    const sheetId = rawSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/)?.[1] ?? rawSheetId
-    if (!sheetId || !/^[a-zA-Z0-9_-]{10,}$/.test(sheetId)) {
+    const sheetId = rawSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{44})/)?.[1] ?? rawSheetId
+    if (!sheetId || !/^[a-zA-Z0-9_-]{44}$/.test(sheetId)) {
       return c.json({ error: 'sheetId query parameter is required' }, 400)
     }
     try {
@@ -761,7 +772,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     const body = await c.req.json<{ territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }>().catch(() => ({} as { territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }))
     const rawTerritorySheet = (body.territorySheetId ?? '').trim()
     // Accept full Google Sheets URL — extract bare sheet ID
-    const territorySheetId = rawTerritorySheet.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/)?.[1] ?? rawTerritorySheet
+    const territorySheetId = rawTerritorySheet.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{44})/)?.[1] ?? rawTerritorySheet
     const rawSfReportId = (body.sfReportId ?? '').trim()
     const sfReportId = rawSfReportId ? extractSfReportId(rawSfReportId) : ''
     const rawParent = (body.parentFolderId ?? '').trim()
@@ -774,7 +785,7 @@ export function registerBootstrapRoutes(app: Hono): void {
       return c.json({ error: 'territorySheetId is required' }, 400)
     }
     // Validate sheet ID format (alphanumeric + hyphens + underscores, typical Google Sheet IDs)
-    if (!/^[a-zA-Z0-9_-]{10,}$/.test(territorySheetId)) {
+    if (!/^[a-zA-Z0-9_-]{44}$/.test(territorySheetId)) {
       podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
       return c.json({ error: 'Invalid territorySheetId format' }, 400)
     }

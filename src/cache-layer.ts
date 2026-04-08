@@ -24,8 +24,12 @@ export const BRIEF_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours
 
 // ── Brief cache (daily, date-stamped) ────────────────────────────────────────
 export function briefCachePath(customerName: string): string {
+  const slug = toSlug(customerName)
+  if (!slug || /[^a-zA-Z0-9_-]/.test(slug)) {
+    throw new Error(`[cache] unsafe slug for cache path: "${slug}"`)
+  }
   const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local time
-  return `${CACHE_DIR}/${toSlug(customerName)}-${today}.json`
+  return `${CACHE_DIR}/${slug}-${today}.json`
 }
 
 export function readBriefCache(customerName: string): { text: string; cachedAt: string } | null {
@@ -70,7 +74,11 @@ export function invalidateBriefCaches(customerNames: string[]): void {
 
 // ── Sheet data cache — permanent (no date), stays until force-refreshed ────────
 export function sheetCachePath(customerName: string): string {
-  return `${CACHE_DIR}/${toSlug(customerName)}-sheets.json`
+  const slug = toSlug(customerName)
+  if (!slug || /[^a-zA-Z0-9_-]/.test(slug)) {
+    throw new Error(`[cache] unsafe slug for cache path: "${slug}"`)
+  }
+  return `${CACHE_DIR}/${slug}-sheets.json`
 }
 
 export function readSheetCache(customerName: string): { rows: ProductSubscription[]; cachedAt: string } | null {
