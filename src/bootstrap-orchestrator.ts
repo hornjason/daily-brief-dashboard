@@ -17,6 +17,7 @@ import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import type { AE } from './types.ts'
 import { sanitizeErr } from './utils.ts'
 import { loadProductIntelConfig, saveProductConfig } from './product-release-radar.ts'
+import { recordBootstrapRun } from './bootstrap-history.ts'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -727,7 +728,13 @@ export function registerBootstrapRoutes(app: Hono): void {
       return c.json({ tabs })
     } catch (e: any) {
       console.error(`[pod-tabs] Error reading sheet ${sheetId}: ${e?.message ?? e}`)
-      return c.json({ error: e?.message ?? 'Failed to read sheet metadata' }, 500)
+      // Fallback: if we have a saved POD config with a tab title, return it as a cached hint
+      const savedCfg = readPodConfig()
+      if (savedCfg?.podTabTitle) {
+        console.log(`[pod-tabs] Returning cached tab from saved POD config: ${savedCfg.podTabTitle}`)
+        return c.json({ tabs: [savedCfg.podTabTitle], fromCache: true })
+      }
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 
@@ -883,6 +890,7 @@ export function registerBootstrapRoutes(app: Hono): void {
       resources: { junkFiltered: junkFiltered.length > 0 ? junkFiltered : undefined },
     }
 
+    const bootstrapStartMs = Date.now()
     const stepStartMs: Record<number, number> = {}
     const setStep = (idx: number, status: AutoBootstrapStep['status'], detail?: string) => {
       const now = Date.now()
@@ -1061,7 +1069,7 @@ export function registerBootstrapRoutes(app: Hono): void {
                 if (existingCustomer) {
                   existingCustomer.driveFolderId = folderId
                 } else {
-                  customers.push({ name: cname, ae: aeName, driveFolderId: folderId })
+                  customers.push({ name: cname, ae: aeName, driveFolderId: folderId, importedFrom: 'territory-sheet' })
                 }
                 try {
                   const tmpPath = CUSTOMERS_PATH + '.tmp'
@@ -1109,7 +1117,7 @@ export function registerBootstrapRoutes(app: Hono): void {
               const merged = new Set([...(existing.accountNumbers ?? []), ...accountNumbers])
               existing.accountNumbers = [...merged]
             } else {
-              customers.push({ name, ae: aeName, accountNumbers })
+              customers.push({ name, ae: aeName, accountNumbers, importedFrom: 'territory-sheet' })
             }
             // Persist to disk after each customer so progress survives a hard timeout
             try {
@@ -1142,7 +1150,7 @@ export function registerBootstrapRoutes(app: Hono): void {
               existing.name = canonicalName
             }
           } else {
-            customers.push({ name: canonicalName, ae: aeName, accountNumbers: r.accountNumbers })
+            customers.push({ name: canonicalName, ae: aeName, accountNumbers: r.accountNumbers, importedFrom: 'territory-sheet' })
           }
         }
         const tmpPath = CUSTOMERS_PATH + '.tmp'
@@ -1253,7 +1261,7 @@ export function registerBootstrapRoutes(app: Hono): void {
       // BKL-F05: Auto-run domain inference for bootstrapped customers after all steps complete.
       // Non-blocking — runs after bootstrap marks complete, stores results in resources.
       ;(async () => {
-        const aeCustomers = customers.filter(cx => cx.ae === aeName)
+        const aeCustomers = customers.filter(cx => !cx.inactive && cx.ae === aeName)
         if (aeCustomers.length === 0) return
         console.log(`[auto-bootstrap] Running domain inference for ${aeCustomers.length} customers…`)
         const inferenceResults: NonNullable<typeof autoBootstrapState.resources.domainInference> = []
@@ -1295,6 +1303,18 @@ export function registerBootstrapRoutes(app: Hono): void {
       autoBootstrapState.running = false
       autoBootstrapState.completedAt = new Date().toISOString()
       clearTimeout(bootstrapTimeoutId)
+
+      // Record bootstrap history
+      const aeCustomerCount = customers.filter(cx => !cx.inactive && cx.ae === aeName).length
+      recordBootstrapRun({
+        aeName,
+        completedAt: autoBootstrapState.completedAt,
+        success: !autoBootstrapState.error,
+        customerCount: aeCustomerCount,
+        accountsFound: customers.filter(cx => !cx.inactive && cx.ae === aeName && (cx.accountNumbers?.length ?? 0) > 0).length,
+        durationMs: Date.now() - bootstrapStartMs,
+        source: 'single',
+      })
 
       // BKL-AI07: Auto-generate account intelligence for all customers after bootstrap.
       // Non-blocking — bootstrap completes first; generation runs in background via batch endpoint.

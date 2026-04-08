@@ -173,7 +173,7 @@ export async function flushScrapersAfterAuth(): Promise<void> {
                 existing.accountNumbers = [...merged]
                 try {
                   const tmpPath = CUSTOMERS_PATH + '.tmp'
-                  writeFileSync(tmpPath, JSON.stringify({ customers: currentCustomers }, null, 2))
+                  writeFileSync(tmpPath, JSON.stringify({ customers: currentCustomers }, null, 2), { mode: 0o600 })
                   renameSync(tmpPath, CUSTOMERS_PATH)
                 } catch {}
               }

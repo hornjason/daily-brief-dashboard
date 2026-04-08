@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import type { Hono } from 'hono'
+import { sanitizeErr } from './utils.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let DATA_SOURCES_PATH = ''
@@ -92,6 +93,42 @@ const LAST_RUN_KEY: Record<string, keyof SchedulerConfig> = {
   territoryTime: 'territoryLastRun',
 }
 
+// ── Session timestamp tracking ──────────────────────────────────────────────
+
+type SessionService = 'rh-portal' | 'tableau' | 'salesforce'
+
+const SESSION_KEYS: Record<SessionService, string> = {
+  'rh-portal': 'rhPortalSessionAt',
+  'tableau': 'tableauSessionAt',
+  'salesforce': 'salesforceSessionAt',
+}
+
+export function recordSessionEstablished(service: SessionService): void {
+  try {
+    let ds: Record<string, unknown> = {}
+    try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
+    ds[SESSION_KEYS[service]] = new Date().toISOString()
+    const tmpPath = DATA_SOURCES_PATH + '.tmp'
+    writeFileSyncRaw(tmpPath, JSON.stringify(ds, null, 2), { mode: 0o600 })
+    renameSync(tmpPath, DATA_SOURCES_PATH)
+  } catch (e: any) {
+    console.warn(`[session-timestamps] failed to record ${service}:`, e.message)
+  }
+}
+
+export function getSessionTimestamps(): Record<string, string | null> {
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    return {
+      'rh-portal': ds.rhPortalSessionAt ?? null,
+      'tableau': ds.tableauSessionAt ?? null,
+      'salesforce': ds.salesforceSessionAt ?? null,
+    }
+  } catch {
+    return { 'rh-portal': null, 'tableau': null, 'salesforce': null }
+  }
+}
+
 // ── Weather settings ─────────────────────────────────────────────────────────
 
 interface WeatherSettings { enabled: boolean; zipCode: string }
@@ -171,6 +208,9 @@ export function getAutomationConfig(): AutomationConfig {
 // ── Route registration ──────────────────────────────────────────────────────
 
 export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimers: (intervals: typeof DEFAULT_REFRESH_INTERVALS) => void }): void {
+  // GET /api/session-timestamps — when each scraper session was last established
+  app.get('/api/session-timestamps', (c) => c.json(getSessionTimestamps()))
+
   // GET /api/settings/refresh — current refresh intervals + scheduler config
   app.get('/api/settings/refresh', (c) => {
     return c.json({
@@ -241,7 +281,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       deps.rescheduleRefreshTimers(updated)
       return c.json({ intervals: updated, schedulerConfig: getSchedulerConfig() })
     } catch (e: any) {
-      return c.json({ error: String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]') }, 500)
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 
@@ -268,7 +308,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       _weatherCache = null // invalidate cache on settings change
       return c.json(updated)
     } catch (e: any) {
-      return c.json({ error: String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]') }, 500)
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 
@@ -324,7 +364,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       renameSync(tmpPath, DATA_SOURCES_PATH)
       return c.json({ config: updated })
     } catch (e: any) {
-      return c.json({ error: String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]') }, 500)
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 
@@ -388,7 +428,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       renameSync(tmpPath, DATA_SOURCES_PATH)
       return c.json({ config: updated })
     } catch (e: any) {
-      return c.json({ error: String(e?.message ?? e).slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]') }, 500)
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 

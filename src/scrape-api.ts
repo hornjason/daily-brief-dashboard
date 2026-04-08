@@ -327,7 +327,7 @@ export function registerScrapeRoutes(app: Hono): void {
                   existing.accountNumbers = [...merged]
                   try {
                     const tmpPath = CUSTOMERS_PATH + '.tmp'
-                    writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
+                    writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
                     renameSync(tmpPath, CUSTOMERS_PATH)
                   } catch {}
                 }
@@ -384,7 +384,7 @@ export function registerScrapeRoutes(app: Hono): void {
             if (accountNumbers.length > 0) {
               try {
                 const tmpPath = CUSTOMERS_PATH + '.tmp'
-                writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
+                writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
                 renameSync(tmpPath, CUSTOMERS_PATH)
               } catch (e: any) { console.warn('[scrape:discover] progress write failed:', e.message) }
             }

@@ -357,7 +357,7 @@ export function registerSetupRoutes(app: Hono): void {
     })
 
     try {
-      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2))
+      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2), { mode: 0o600 })
       renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
       customers.splice(0, customers.length, ...updated)
       return c.json({ ok: true, updated: body.domains.length })
@@ -400,7 +400,7 @@ export function registerSetupRoutes(app: Hono): void {
         body.customers[i] = cleaned as Customer
       }
 
-      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: body.customers }, null, 2))
+      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: body.customers }, null, 2), { mode: 0o600 })
       renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
       customers.splice(0, customers.length, ...body.customers)
       return c.json({ ok: true, count: body.customers.length })

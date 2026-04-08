@@ -39,10 +39,10 @@ async function importSheetRows(
   const existing = readExistingCustomers(CUSTOMERS_PATH)
   const customers = mergeCustomers(incoming as Record<string, any>[], existing)
   const tmpPath = CUSTOMERS_PATH + '.tmp'
-  writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2))
+  writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
   renameSync(tmpPath, CUSTOMERS_PATH)
   const syncedAt = new Date().toISOString()
-  writeFileSyncRaw(SHEETS_SYNC_PATH, JSON.stringify({ fileId, fileName, columnMap, syncedAt }, null, 2))
+  writeFileSyncRaw(SHEETS_SYNC_PATH, JSON.stringify({ fileId, fileName, columnMap, syncedAt }, null, 2), { mode: 0o600 })
   return { customers, syncedAt }
 }
 

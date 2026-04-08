@@ -283,7 +283,7 @@ export function registerProductIntelRoutes(app: Hono): void {
               await new Promise(r => setTimeout(r, 3000))  // 3s between Gemini calls
             }
           } catch (e: any) {
-            const msg = `${customer.name}: ${e?.message ?? String(e)}`
+            const msg = `${customer.name}: ${sanitizeErr(e)}`
             console.error(`[product-intel] generate-all-customers: ${msg}`)
             _allCustomersBatchState.errors.push(msg)
           }
