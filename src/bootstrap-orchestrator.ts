@@ -1250,6 +1250,13 @@ export function registerBootstrapRoutes(app: Hono): void {
       } else {
         try {
           setStep(5, 'running')
+          // BKL-POD-03: Verify Drive folder still exists before attempting pipeline sheet create
+          const driveCheck = await google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
+            .files.get({ fileId: driveFolderId, fields: 'id' })
+            .catch(() => null)
+          if (!driveCheck) {
+            throw new Error(`Drive folder was deleted or inaccessible (${driveFolderId}) — re-run bootstrap with force:true to recreate it`)
+          }
           const existingPipelineId = aes.find(a => a.name === aeName)?.pipelineSheetId
             ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `${aeName} Pipeline`) : null)
             ?? null

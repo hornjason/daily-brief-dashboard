@@ -4642,14 +4642,14 @@ Root cause: SSE stream handler had no top-level try/catch and no per-event error
 Fix: Added `safeWrite` helper wrapping each `writeSSE` in try/catch so one failed write doesn't kill subsequent events. Wrapped entire stream body in try/catch/finally, with `complete` event sent in the `finally` block so the frontend always exits loading state.
 
 ### BKL-UI-03 | Supportable status inconsistency — top bar shows "Not reachable" while Setup shows "Connected"
-Status: 🔴 OPEN | Priority: P3 | Type: UX
+Status: ✅ DONE — 2026-04-08 | Priority: P3 | Type: UX
 Source: Quinn QA 2026-04-07
 Files: dashboard/src/components/ (status bar), dashboard/src/pages/SetupPage.tsx
 Description: Dashboard top status bar shows "Not reachable — check VPN" for Supportable while the Setup page simultaneously shows Supportable as "Connected." These check different things — the status bar does a live VPN probe (`liveProbe`) while Setup checks stored session state. Confusing to a new user who sees contradictory statuses. Low priority — no functional impact, but creates support confusion.
 Fix: Align labels — if Supportable credentials are connected but VPN is not active, the status bar should say "VPN required for sync" rather than "Not reachable." Or collapse to a single authoritative status.
 
 ### BKL-UI-01 | Product intel API returns 400 for customer names with special characters
-Status: 🔴 OPEN | Priority: P2 | Type: Bug
+Status: ✅ DONE — 2026-04-08 | Priority: P2 | Type: Bug
 Source: Quinn QA 2026-04-06 (strict criteria pass)
 Files: src/product-intel-routes.ts, dashboard/src/components/ProductIntelSection.tsx
 Description: Customer names containing commas or periods (e.g., "Taylor Fresh Foods, Inc.", "NORDSTROM") cause product intel API calls to return 400 Bad Request. The customer name is used directly in the URL path without encoding — `GET /api/products/ocp-virt/intel/Taylor Fresh Foods, Inc.` — the comma breaks URL parsing. Generates ~14 console errors per affected customer page load. Non-blocking: UI renders gracefully with empty product intel state.
@@ -4743,7 +4743,7 @@ Description: Virtualized card grid using react-window VariableSizeGrid for 80-16
 Dependencies: Phase 3 complete.
 
 ### BKL-SEC-02 | sheetCachePath path safety relies implicitly on toSlug invariant
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -4752,7 +4752,7 @@ Files: src/cache-layer.ts (sheetCachePath function)
 Description: readSheetCache(cu.name) constructs a file path using toSlug(customerName). The safety guarantee depends entirely on toSlug producing only safe filesystem characters. If toSlug has an edge case (e.g., name with only special characters), it could produce an unexpected path. The invariant is implicit — no explicit bounds check or allowlist guard at the sheetCachePath level. Fix: add an explicit regex check inside sheetCachePath: if the slug is empty or contains `..` or `/`, throw rather than silently construct a bad path. Low practical risk (customer names come from internal config), but worth hardening.
 
 ### BKL-SEC-03 | sanitizeErr regex doesn't mask .json config paths in 500 responses
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: LOW
 Priority: P3
 Size: S
@@ -4770,7 +4770,7 @@ Files: src/bootstrap-orchestrator.ts
 Description: The 409 conflict guard read `podBootstrapState.running` then yielded the event loop via `await c.req.json()` before setting `running=true`. Two simultaneous POSTs both passed the guard before either set the flag. Fix: claim the lock (`podBootstrapState.running = true`) synchronously before the first await; release on validation failure.
 
 ### BKL-SEC-05 | POST /api/bootstrap/pod — Sheet ID regex accepts 10+ chars (real IDs are 44)
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: LOW
 Priority: P3
 Size: S
@@ -4788,7 +4788,7 @@ Files: dashboard/src/pages/SetupPage.tsx — PodBootstrapSection
 Description: Once Territory Sheet ID, SF Report ID, and Parent Drive Folder are all filled in, show a Google Drive folder preview (similar to the single-AE bootstrap folder preview) so the user can confirm they've selected the right parent folder before clicking Bootstrap POD. Should use the same Drive folder name lookup pattern already used in AutoBootstrapForm.
 
 ### BKL-SEC-06 | bootstrapPOD retry silently no-ops on 409 instead of waiting
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: LOW
 Priority: P3
 Size: S
@@ -4797,7 +4797,7 @@ Files: src/bootstrap-orchestrator.ts ~line 360
 Description: During the auto-retry pass for zero-account AEs, if the retry fetch() to POST /api/bootstrap/auto returns 409 (prior AE's bootstrap still running), the code logs a warning and continues without waiting. The retry becomes a silent no-op. Fix: on 409 during retry, wait for autoBootstrapState.running === false (same pattern as lines 341-343) before continuing.
 
 ### BKL-POD-02 | POD Bootstrap — 15-minute per-AE timeout too short for AEs with 10+ accounts
-Status: 🔴 OPEN
+Status: ✅ DONE — already implemented (30 min, dynamic, BKL-POD-02 comment in code)
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -4806,7 +4806,7 @@ Files: src/bootstrap-orchestrator.ts line 442
 Description: The per-AE timeout is hardcoded at 15 minutes. Danny Hollar (11 accounts including slow portal lookups like Ringcentral, Rakuten Group) timed out consistently. Account discovery + Supportable scraping for 10+ accounts can exceed 15 minutes on slow portal sessions. Fix: make the timeout dynamic based on customer count (e.g., 10 min base + 90s per customer), or raise to 30 minutes flat. Also consider logging a warning at 10 minutes so operators know it's close to timeout.
 
 ### BKL-POD-03 | POD Bootstrap — Pipeline sync fails with "File not found" if Drive folder is deleted mid-run
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -4815,7 +4815,7 @@ Files: src/bootstrap-orchestrator.ts — syncPipelineSheet step
 Description: If the AE's Drive folder is deleted after the bootstrap has already recorded the folder ID in aes.json (e.g., via a wipe script during retry), the Pipeline sync step fails with "File not found: {folderId}". The bootstrap does not detect the missing folder before attempting the pipeline sync, and the error message does not suggest recovery. Fix: before pipeline sync, verify the Drive folder exists (drive.files.get with fields:'id') and surface a clearer error ("Drive folder was deleted — re-run bootstrap with force:true to recreate it") rather than the raw Google API error.
 
 ### BKL-POD-04 | POD Bootstrap — tabs endpoint doesn't extract sheet ID from full URL
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: MEDIUM
 Priority: P2
 Size: XS
@@ -4936,7 +4936,7 @@ Files: dashboard/src/pages/SetupWizard.tsx, src/bootstrap-orchestrator.ts (isAEF
 Description: When re-running the wizard for an AE that already has supportableSheetId, ccspSheetId, pipelineSheetId, and driveFolderId in aes.json, the wizard should pre-populate those fields and mark those bootstrap steps as already complete — skipping the Supportable and CCSP scrape (which takes ~10 min/AE). Currently `isAEFullyBootstrapped()` skips entirely only during POD-level bootstrap; the single-AE wizard always re-runs all steps. UX: show existing IDs in the wizard, let user confirm or clear, and only re-run missing steps. This avoids the 104-minute re-bootstrap problem when adding one AE to an existing POD.
 
 ### BKL-POD-05 | POD Bootstrap — all AEs show "error" even when Drive + Pipeline succeeded
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: LOW
 Priority: P3
 Size: S
