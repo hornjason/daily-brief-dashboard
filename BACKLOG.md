@@ -4932,13 +4932,14 @@ Files: src/supportable-scraper.ts, src/bootstrap-orchestrator.ts, data/config/ae
 Description: The Supportable scrape takes ~10 min/AE because it requires an authenticated CCSP session and scrapes live. Since the output (active subscriptions per account) is relatively stable week-to-week, it can be pre-seeded centrally and distributed. Strategy: (1) Schedule a nightly/weekly background job that scrapes Supportable for all AEs in the POD and writes to a shared Google Sheet (or per-AE sheets in a shared Drive folder). (2) Publish those sheet IDs in a config file or central registry. (3) When a teammate bootstraps a new AE, the wizard checks for a pre-seeded sheet first — if found, link to it and skip the 10-min scrape. Authentication constraint: the scraper requires the machine owner's CCSP session, so the central job runs on Jason's machine; only the *output sheets* are distributed. Each teammate still needs their own session for live re-scrapes but can bootstrap instantly using the pre-seeded data.
 
 ### BKL-BOOT-01 | Setup Wizard — pre-populate existing sheet IDs to skip re-bootstrap
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: MEDIUM
 Priority: P2
 Size: M
 Source: Jason 2026-04-07
 Files: dashboard/src/pages/SetupWizard.tsx, src/bootstrap-orchestrator.ts (isAEFullyBootstrapped)
 Description: When re-running the wizard for an AE that already has supportableSheetId, ccspSheetId, pipelineSheetId, and driveFolderId in aes.json, the wizard should pre-populate those fields and mark those bootstrap steps as already complete — skipping the Supportable and CCSP scrape (which takes ~10 min/AE). Currently `isAEFullyBootstrapped()` skips entirely only during POD-level bootstrap; the single-AE wizard always re-runs all steps. UX: show existing IDs in the wizard, let user confirm or clear, and only re-run missing steps. This avoids the 104-minute re-bootstrap problem when adding one AE to an existing POD.
+Decision: DONE — Extended knownAes type to include all 4 sheet IDs. Added matchedAeIsBootstrapped computed flag. When all 4 IDs are present: wizard shows green "already bootstrapped" banner with truncated sheet IDs, hides the prerequisites/button. "Force re-bootstrap" link shows the button again. forceRebootstrap flag resets on territory change.
 
 ### BKL-POD-05 | POD Bootstrap — all AEs show "error" even when Drive + Pipeline succeeded
 Status: ✅ DONE — 2026-04-08

@@ -871,7 +871,8 @@ function AutoBootstrapForm() {
   const [parentFolderId, setParentFolderId] = useState('')
   const [folderName, setFolderName] = useState<string | null>(null)
   const [folderError, setFolderError] = useState<string | null>(null)
-  const [knownAes, setKnownAes] = useState<Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string }>>([])
+  const [knownAes, setKnownAes] = useState<Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string; supportableSheetId?: string; ccspSheetId?: string; pipelineSheetId?: string; driveFolderId?: string }>>([])
+  const [forceRebootstrap, setForceRebootstrap] = useState(false)
   const bootstrapStartingRef = useRef(false)
 
   // Territory picker state — pod + terrNum are source of truth; territoryInput is derived
@@ -900,7 +901,7 @@ function AutoBootstrapForm() {
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/aes', { signal: controller.signal })
       .then(r => r.json())
-      .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string }> }) => setKnownAes(d.aes ?? []))
+      .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string; supportableSheetId?: string; ccspSheetId?: string; pipelineSheetId?: string; driveFolderId?: string }> }) => setKnownAes(d.aes ?? []))
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/sf/reports', { signal: controller.signal })
       .then(r => r.json())
@@ -1001,6 +1002,7 @@ function AutoBootstrapForm() {
     if (!matchedAe) return
     setAeName(matchedAe.name)
     if (matchedAe.accounts?.length) setCustomerText(matchedAe.accounts.join('\n'))
+    setForceRebootstrap(false)  // reset force flag when territory changes to a new AE
   }, [matchedAe])
 
   // Live territory lookup — fires when territoryInput changes and no match in knownAes
@@ -1190,6 +1192,7 @@ function AutoBootstrapForm() {
   const customerNames = customerText.split('\n').map(s => s.trim()).filter(Boolean)
   const territories = territoryInput.split(',').map(s => s.trim()).filter(Boolean)
   const canStart = aeName.trim() && sfReportId.trim() && territories.length > 0 && customerNames.length > 0
+  const matchedAeIsBootstrapped = !!(matchedAe?.supportableSheetId && matchedAe?.ccspSheetId && matchedAe?.pipelineSheetId && matchedAe?.driveFolderId)
 
   if (autoStartPending) {
     return (
@@ -1414,30 +1417,56 @@ function AutoBootstrapForm() {
         </div>
       )}
 
+      {/* Already-bootstrapped notice — BKL-BOOT-01 */}
+      {matchedAeIsBootstrapped && !forceRebootstrap && (
+        <div className="bg-success/10 border border-success/30 rounded-lg px-3 py-3 text-xs space-y-2">
+          <p className="font-medium text-success flex items-center gap-1.5">
+            <CheckCircle className="w-3.5 h-3.5" /> {matchedAe!.name} is already fully bootstrapped
+          </p>
+          <p className="text-text-secondary">All 4 sheet IDs are in place — Supportable, CCSP, Pipeline, and Drive folder. No re-bootstrap needed.</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono text-text-secondary pt-1">
+            <span>Supportable: <span className="text-text-primary">{matchedAe!.supportableSheetId?.slice(0, 20)}…</span></span>
+            <span>CCSP: <span className="text-text-primary">{matchedAe!.ccspSheetId?.slice(0, 20)}…</span></span>
+            <span>Pipeline: <span className="text-text-primary">{matchedAe!.pipelineSheetId?.slice(0, 20)}…</span></span>
+            <span>Drive: <span className="text-text-primary">{matchedAe!.driveFolderId?.slice(0, 20)}…</span></span>
+          </div>
+          <button
+            onClick={() => setForceRebootstrap(true)}
+            className="mt-1 text-xs text-text-secondary hover:text-text-primary underline"
+          >
+            Force re-bootstrap (overwrites existing sheets)
+          </button>
+        </div>
+      )}
+
       {/* Q5: Prerequisites callout — shown before starting bootstrap */}
-      <div className="bg-accent/5 border border-accent/20 rounded-lg px-3 py-2.5 text-xs text-text-secondary space-y-1">
-        <p className="font-medium text-text-primary text-xs">Before you start:</p>
-        <ul className="space-y-0.5 list-disc list-inside">
-          <li>This takes <span className="text-white">7–15 minutes</span> to complete</li>
-          <li>You must be connected to <span className="text-white">Red Hat VPN</span></li>
-          <li>A <span className="text-white">Tableau VNC popup</span> will appear mid-run — leave it open</li>
-        </ul>
-      </div>
+      {(!matchedAeIsBootstrapped || forceRebootstrap) && (
+        <div className="bg-accent/5 border border-accent/20 rounded-lg px-3 py-2.5 text-xs text-text-secondary space-y-1">
+          <p className="font-medium text-text-primary text-xs">Before you start:</p>
+          <ul className="space-y-0.5 list-disc list-inside">
+            <li>This takes <span className="text-white">7–15 minutes</span> to complete</li>
+            <li>You must be connected to <span className="text-white">Red Hat VPN</span></li>
+            <li>A <span className="text-white">Tableau VNC popup</span> will appear mid-run — leave it open</li>
+          </ul>
+        </div>
+      )}
 
       {preflightError && (
         <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2">{preflightError}</p>
       )}
 
-      <div className="flex justify-end pt-1">
-        <button
-          onClick={startBootstrap}
-          disabled={!canStart || starting}
-          className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
-          {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-          {starting ? 'Starting...' : 'Set Up AE'}
-        </button>
-      </div>
+      {(!matchedAeIsBootstrapped || forceRebootstrap) && (
+        <div className="flex justify-end pt-1">
+          <button
+            onClick={startBootstrap}
+            disabled={!canStart || starting}
+            className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            {starting ? 'Starting...' : 'Set Up AE'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
