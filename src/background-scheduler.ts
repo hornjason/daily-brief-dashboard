@@ -405,6 +405,11 @@ const CCSP_CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'ccsp-d
 const CCSP_DELTA_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'ccsp-delta.json')
 
 async function runCcspScrapeWithDelta(aesToScrape: any[]): Promise<void> {
+  // BKL-SUP-02: Defer CCSP if Supportable is actively scraping (session collision guard)
+  if (supportableScrapeRunning) {
+    console.log('[ccsp-sync] supportable scrape in progress — deferring CCSP to avoid session collision')
+    return
+  }
   // Read previous cache before scrape
   let prevRecords: any[] = []
   if (existsSync(CCSP_CACHE_PATH)) {
@@ -506,6 +511,13 @@ export function scheduleCcspSync(): void {
       const { aes } = await import('./server-state.ts')
       if (!aes.length) {
         console.log('[ccsp-sync] no AEs configured — skipping')
+        scheduleCcspSync()
+        return
+      }
+
+      // BKL-SUP-02: Defer scheduled CCSP if Supportable is actively scraping (session collision guard)
+      if (supportableScrapeRunning) {
+        console.log('[ccsp-sync] supportable scrape in progress — deferring scheduled CCSP to avoid session collision')
         scheduleCcspSync()
         return
       }

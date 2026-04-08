@@ -478,6 +478,11 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
     _sfSyncRunning = false
     _sfSyncStartedAt = null
   }
+  // BKL-SUP-02: Defer SF sync while Supportable is scraping (session collision guard)
+  if (supportableScrapeRunning) {
+    console.log('[sf-sync] supportable scrape in progress — deferring SF sync to avoid session collision')
+    return Promise.resolve()
+  }
   if (_sfSyncRunning) return Promise.resolve()
   _sfSyncRunning = true
   _sfSyncStartedAt = Date.now()

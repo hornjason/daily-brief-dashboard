@@ -429,6 +429,10 @@ export function registerScrapeRoutes(app: Hono): void {
     const ccspStale = ccspScrapeRunning && ccspScrapeStartedAt &&
       (Date.now() - ccspScrapeStartedAt > 15 * 60 * 1000)
     if (ccspStale) console.warn(`[scrape:ccsp] stale mutex detected (${Math.round((Date.now() - ccspScrapeStartedAt!) / 60000)}min) — allowing request through`)
+    // BKL-SUP-02: Block CCSP manual trigger while Supportable is scraping (session collision guard)
+    if (supportableScrapeRunning) {
+      return c.json({ queued: false, reason: 'Supportable scrape in progress — retry after it completes' }, 409)
+    }
     // ARCHITECTURE.md §9: check BOTH mutex guards (skip if stale)
     if ((ccspScrapeRunning || ccspInFlight) && !ccspStale) return c.json({ scraper: 'ccsp', status: 'busy', error: 'CCSP scrape already in progress' }, 409)
     resetCircuitBreaker('ccsp')
@@ -742,6 +746,8 @@ export function registerScrapeRoutes(app: Hono): void {
               // Stale-mutex passthrough: if stuck >15 min, let runCcspScrape() handle reset
               const ccspStaleAll = ccspScrapeRunning && ccspScrapeStartedAt &&
                 (Date.now() - ccspScrapeStartedAt > 15 * 60 * 1000)
+              // BKL-SUP-02: Skip CCSP in scrape:all while Supportable is running (session collision guard)
+              if (supportableScrapeRunning) { console.log('[scrape:all] ccsp: supportable scrape in progress — skipping to avoid session collision'); return }
               if ((ccspScrapeRunning || ccspInFlight) && !ccspStaleAll) { console.log('[scrape:all] ccsp: busy — skipping'); return }
               const eligibleAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
               if (!eligibleAes.length) { console.log('[scrape:all] ccsp: no eligible AEs — skipping'); return }

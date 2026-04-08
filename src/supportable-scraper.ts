@@ -956,6 +956,36 @@ export async function runSupportableDiscoverAndScrape(
             } catch (e: any) {
               console.warn(`[supportable] discover-worker-${workerId}: name search failed for "${job.name}": ${e.message}`)
             }
+
+            // BKL-SUP-01: Word-backoff retry when discovery returns 0 accounts.
+            // discoverAccountNumbersByName already tries buildNameCandidates internally,
+            // but browser session interference can cause all candidates to fail in one call.
+            // Re-navigating the page and retrying with shorter names (fresh page state) resolves this.
+            if (accountNumbers.length === 0) {
+              const backoffCandidates = buildNameCandidates(job.name, job.supportableName)
+              // Skip first candidate — that's the full/normalized name which already failed
+              const retryCandidates = backoffCandidates.slice(1)
+              for (const candidate of retryCandidates) {
+                console.log(`[supportable] discover: "${job.name}" returned 0 — retrying with "${candidate}"`)
+                // Fresh page navigation to reset any stale APEX state
+                await page.goto(getPageLandingUrl(page), { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+                await page.waitForTimeout(1_500)
+                try {
+                  // Pass candidate as supportableName override so it becomes the primary search term
+                  accountNumbers = await discoverAccountNumbersByName(page, job.name, candidate)
+                } catch (e: any) {
+                  console.warn(`[supportable] discover-worker-${workerId}: backoff retry failed for "${job.name}" with "${candidate}": ${e.message}`)
+                }
+                if (accountNumbers.length > 0) {
+                  console.log(`[supportable] discover: "${job.name}" found ${accountNumbers.length} accounts via fallback "${candidate}"`)
+                  break
+                }
+              }
+              if (accountNumbers.length === 0) {
+                console.log(`[supportable] discover: "${job.name}" — no accounts found after all backoff candidates`)
+              }
+            }
+
             discovered[job.originalIndex] = { customerName: job.name, accountNumbers }
             console.log(`[supportable] discover-worker-${workerId}: "${job.name}" → ${accountNumbers.length} account(s)`)
           }
@@ -978,6 +1008,19 @@ export async function runSupportableDiscoverAndScrape(
     for (let di = 0; di < customers.length; di++) {
       if (!discovered[di]) {
         discovered[di] = { customerName: customers[di].name, accountNumbers: [] }
+      }
+    }
+
+    // BKL-SUP-01: Fall back to cached account numbers for customers still at 0.
+    // If discovery returned 0 but customers.json has existing account numbers,
+    // use the cached values rather than skipping the customer entirely.
+    for (let di = 0; di < customers.length; di++) {
+      if (discovered[di].accountNumbers.length === 0) {
+        const cached = customers[di].accountNumbers
+        if (Array.isArray(cached) && cached.length > 0) {
+          console.warn(`[supportable] discover: "${customers[di].name}" has 0 discovered accounts but ${cached.length} cached — using cached account numbers`)
+          discovered[di].accountNumbers = [...cached]
+        }
       }
     }
 

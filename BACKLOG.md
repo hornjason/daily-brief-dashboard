@@ -4823,6 +4823,118 @@ Source: Quinn QA 2026-04-07
 Files: src/bootstrap-orchestrator.ts — GET /api/bootstrap/pod/tabs handler
 Description: The tabs endpoint receives the full Google Sheets URL verbatim and fails with 500. The URL extraction regex (already applied in bootstrapPOD for the main flow) needs to be applied in the tabs endpoint handler as well, before passing to the Sheets API. Fix: extract sheetId from URL with the same regex used in bootstrapPOD.
 
+### BKL-SUP-02 | Shared browser context — CCSP and SF sync not gated on Supportable scrape running
+Status: ✅ DONE — 2026-04-07
+Severity: HIGH
+Priority: P1
+Size: S
+Source: Jason 2026-04-07, session locking audit
+Files: src/scraper-manager.ts (runSfSyncForAes, CCSP trigger), src/ccsp-scraper.ts
+Description: CCSP and SF sync do not check `supportableScrapeRunning` before opening pages in the shared browser context. If a scheduler-triggered CCSP or SF sync fires during a Supportable discovery session, it can disrupt APEX page state and cause discovery to return 0 accounts silently. RH keep-alive is correctly gated via `setLivePageBusy(true)` but CCSP and SF have no equivalent guard. Fix: add `if (supportableScrapeRunning) { defer/return }` at the top of both CCSP and SF sync entry points. Also: Supportable should set a broader "exclusive session" flag that all scrapers check before opening any new page in the shared context.
+
+### BKL-SUP-01 | Supportable discovery — retry zero-account customers before writing sheet
+Status: ✅ DONE — 2026-04-07 (Fix Parts 1+3 implemented; Fix Part 2 noAccountsFound flag deferred)
+Severity: HIGH
+Priority: P1
+Size: M
+Source: Jason 2026-04-07, audit of zero-account customers after POD bootstrap
+Files: src/supportable-scraper.ts (runSupportableDiscoverAndScrape), src/supportable-extract.ts (buildNameCandidates)
+Description: During POD bootstrap (~104 min, 10 AEs sequential), some Supportable discovery calls return 0 accounts due to VPN/APEX session timeouts or browser session interference — no retry, no flag, just silent empty result. Confirmed: Autodesk, Genesys Cloud Services, Lumentum Holdings, KLA Corporation, Docusign and others all return valid account numbers when searched manually. buildNameCandidates already has word-backoff logic — the problem is the discovery silently accepts 0 results and moves on.
+
+Root cause (confirmed via code audit 2026-04-07): Phase 1 (name search / discovery) has zero retry logic. If search returns 0 accounts, customer is immediately marked 0 accounts and skipped in Phase 2 (scrape worker loop). The 2-attempt retry that exists only covers Phase 2 (per-account scrape), never Phase 1. Zero-account customers skip Phase 2 entirely (supportable-scraper.ts lines 1080-1087).
+
+Fix Part 1 — Discovery retry with word-backoff: After initial discovery returns 0 accounts, immediately retry using the next word-backoff candidate from buildNameCandidates() (already exists in supportable-extract.ts). Stop retrying at first candidate that returns results. Rule: if full name finds accounts on first try, do NOT back off — lock to that result and move on.
+
+Fix Part 2 — Zero-account flag: If all word-backoff candidates still return 0, mark customer with `noAccountsFound: true` in customers.json. Dashboard shows "No subscriptions found — verify manually" indicator instead of hiding the customer.
+
+Fix Part 3 — Session health: Before each discovery job, add a lightweight APEX probe to confirm the session is still live. If dead, re-establish before continuing rather than silently returning 0.
+
+Note: BKL-SUP-02 (session locking) must be implemented first — concurrent CCSP/SF scrapes during a Supportable sync will reproduce the same zero-account failures. Fix order: SUP-02 → SUP-01 → re-sync.
+
+### BKL-RESTORE-01 | GSheet restore — rebuild all dashboard data from source sheets without re-scraping
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: L
+Source: Jason 2026-04-07
+Files: New src/restore-from-sheets.ts + server.ts (POST /api/admin/restore), dashboard UI admin panel
+Description: When data/ is lost, corrupted, or a new deployment is set up, the dashboard currently requires a full re-bootstrap (Supportable scrape ~10 min/AE, CCSP scrape, SF sync, etc.). All transactional data already lives in the GSheets — we just need a restore path that reads from them. Goal: given a valid aes.json (containing supportableSheetId, pipelineSheetId, ccspSheetId per AE), restore 80%+ of dashboard data in under 2 minutes without any live portal scraping.
+
+**Restorable from GSheets (no scraping required):**
+- `customers.json` (name, ae, accountNumbers[]) — Supportable sheet tab 1: "Accounts" has Account Name + Account ID(s)
+- `{slug}-sheets.json` (subscription rows per customer) — Supportable sheet per-customer tabs
+- `pipeline-data.json` — each AE's pipelineSheetId, full opportunity rows
+- `ccsp-data.json` — each AE's ccspSheetId, cloud spend records
+- AE-to-customer mapping — territory sheet (territorySheetId in data-sources.json podConfig)
+
+**Restorable from Drive (needs Drive auth, no scraping):**
+- `intelligence/{slug}-account-plan.md` — sourced from customer Drive folders
+- `product-intel/customer-docs/` — Drive corpus per product
+- `drive-watcher-state.json` — reset to empty; Drive will re-scan on next poll
+
+**NOT restorable (require live scrape or AI generation):**
+- `cases.json` — VPN-gated Red Hat portal, real-time only
+- `{slug}-{date}.json` daily briefs — AI-generated on demand (4h cache), no restore needed
+- `intelligence/{slug}.json` account intelligence — re-queued by intelligence-jobs.json on next run
+- `morning-synthesis.json` — AI-generated from other cache on demand
+
+**What we might be missing (gaps to verify before implementing):**
+- `intelligence-jobs.json` — tracks which customers have had intelligence generated; if lost, stale detection breaks until next full cycle. Needs reset strategy.
+- `drive-watcher-state.json` pageTokens — if reset, Drive changes since last sync are missed until next full folder scan. Restore should trigger an immediate re-scan.
+- `product-intel-config.json` driveParentFolderId + products list — this is configuration, not cache; must be preserved or re-entered.
+- `scraper-status.json` + `scrape-log.json` — operational state; safe to reset (scheduler rebuilds on startup).
+- Duplicate customer entries (slug collisions from name variants) — restore must deduplicate by account number, not slug.
+- Customers whose names differ between territory sheet and Supportable sheet (e.g. "Lynden Logistics" vs "Lynden Incorporated") — restore should use Supportable sheet as name authority since it has account numbers already matched.
+- AEs without a supportableSheetId yet — restore must handle partial AE configs gracefully.
+- Customers with no account numbers (in territory sheet but not yet in Supportable) — keep them in the dashboard, show a visual indicator (e.g. "No subscriptions found") so it's clear they're unresolved, not missing.
+- Name drift / slug migration (e.g. acquisition renames) — out of scope for restore; restore is a quick-recovery tool. Long-term solution tracked in BKL-BOOT-02 (scheduled Supportable sheet updates keep sheets current over time, which keeps slugs stable).
+
+**Proposed implementation:**
+1. `POST /api/admin/restore` — accepts optional `{ aeNames?: string[] }` to restore subset
+2. For each AE: read Supportable sheet tab 1 → upsert customers (name + accountNumbers), read remaining tabs → write {slug}-sheets.json
+3. Read pipeline sheet → write pipeline-data.json
+4. Read CCSP sheet → write ccsp-data.json
+5. Read territory sheet → sync AE-to-customer mapping in customers.json
+6. Reset intelligence-jobs.json (mark all customers as needing re-generation)
+7. Reset drive-watcher-state.json (trigger immediate Drive re-scan)
+8. Admin UI button: "Restore from Sheets" with progress indicator per AE
+
+### BKL-SF-01 | SF pipeline GSheet only captures ~375 of 1929 report rows — virtual scrolling bug
+Status: 🟡 IN PROGRESS
+Severity: HIGH
+Priority: P1
+Size: M
+Source: Jason 2026-04-07, pipeline investigation
+Files: src/sf-scraper.ts — scroll loop + row extraction
+Description: SF Lightning report has 1,929 rows for the Northwest POD but GSheet only receives ~375. Root cause: single `querySelectorAll` after scroll captures only the DOM viewport (virtual scrolling evicts rows outside viewport). Fix: incremental capture at every scroll step, accumulating unique rows by fingerprint. Applied 2026-04-07 — requires repull + rebuild to verify.
+
+### BKL-SF-02 | Phil Yi / Philip Yi name mismatch causes 12 opps dropped from pipeline
+Status: 🟡 IN PROGRESS
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Jason 2026-04-07, pipeline investigation
+Files: data/config/aes.json, data/config/customers.json, src/customer-routes.ts (filterToAEs)
+Description: Territory sheet uses "Phil Yi" (display name); SF report owner field uses "Philip Yi" (legal name). `filterToAEs` does exact match → 12 Philip Yi opps dropped. Fixed aes.json + customers.json to "Philip Yi". Long-term: add name alias/fuzzy match in filterToAEs so territory sheet name doesn't need to exactly match SF owner name. Also: POD bootstrap re-runs will re-create a "Phil Yi" entry from the territory sheet, causing duplicates again.
+
+### BKL-BOOT-02 | Shareable Supportable pulls — central scrape + distribute to team
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: L
+Source: Jason 2026-04-07
+Files: src/supportable-scraper.ts, src/bootstrap-orchestrator.ts, data/config/aes.json
+Description: The Supportable scrape takes ~10 min/AE because it requires an authenticated CCSP session and scrapes live. Since the output (active subscriptions per account) is relatively stable week-to-week, it can be pre-seeded centrally and distributed. Strategy: (1) Schedule a nightly/weekly background job that scrapes Supportable for all AEs in the POD and writes to a shared Google Sheet (or per-AE sheets in a shared Drive folder). (2) Publish those sheet IDs in a config file or central registry. (3) When a teammate bootstraps a new AE, the wizard checks for a pre-seeded sheet first — if found, link to it and skip the 10-min scrape. Authentication constraint: the scraper requires the machine owner's CCSP session, so the central job runs on Jason's machine; only the *output sheets* are distributed. Each teammate still needs their own session for live re-scrapes but can bootstrap instantly using the pre-seeded data.
+
+### BKL-BOOT-01 | Setup Wizard — pre-populate existing sheet IDs to skip re-bootstrap
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: M
+Source: Jason 2026-04-07
+Files: dashboard/src/pages/SetupWizard.tsx, src/bootstrap-orchestrator.ts (isAEFullyBootstrapped)
+Description: When re-running the wizard for an AE that already has supportableSheetId, ccspSheetId, pipelineSheetId, and driveFolderId in aes.json, the wizard should pre-populate those fields and mark those bootstrap steps as already complete — skipping the Supportable and CCSP scrape (which takes ~10 min/AE). Currently `isAEFullyBootstrapped()` skips entirely only during POD-level bootstrap; the single-AE wizard always re-runs all steps. UX: show existing IDs in the wizard, let user confirm or clear, and only re-run missing steps. This avoids the 104-minute re-bootstrap problem when adding one AE to an existing POD.
+
 ### BKL-POD-05 | POD Bootstrap — all AEs show "error" even when Drive + Pipeline succeeded
 Status: 🔴 OPEN
 Severity: LOW
