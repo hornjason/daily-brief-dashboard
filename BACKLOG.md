@@ -4943,3 +4943,25 @@ Size: S
 Source: Quinn QA 2026-04-07
 Files: src/bootstrap-orchestrator.ts — bootstrapPOD result reporting
 Description: When the Red Hat Portal is not connected, the bootstrap correctly creates Drive folders, customer subfolders, and pipeline sheets, but marks the AE status as "error: Zero accounts after retry". This is misleading — partial success isn't reflected. Consider reporting "partial" status with detail on which steps succeeded vs failed, rather than blanket "error".
+
+### BKL-DATA-01 | 9 customers with no Supportable account numbers — manual investigation needed
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Supportable sync 2026-04-08 (post BKL-SUP-01 retry fix)
+Files: data/config/customers.json
+Description: After full Supportable discover+scrape with word-backoff retry (BKL-SUP-01), 9 customers still returned 0 accounts. These may genuinely have no Red Hat support portal presence, or their names may not match Supportable's database. 
+
+Customers to investigate:
+- Kla Corporation (AE: Danny Hollar) — try "KLA Corporation" or just "KLA"
+- Aligntech (AE: Duy Pham) — try "Align Technology"
+- Rxo Capacity Solutions (AE: Elmer Alvarez) — try "RXO" 
+- Cambia Health Solutions (AE: unknown) — try "Cambia"
+- Hotwire Communications (AE: unknown) — try "Hotwire"
+- Arka Group (AE: unknown) — try "Arka"
+- Communify Fincentric (AE: unknown) — try "Fincentric" or "Communify"
+- Employers Holdings (AE: unknown) — try "Employers" 
+- Sierra Nevada (AE: unknown) — may be "Sierra Nevada Corporation" or genuinely no Supportable presence
+
+Fix: Set supportableName field in customers.json with the correct Supportable portal search term for each. Then trigger POST /api/scrape/supportable/discover for each AE.
