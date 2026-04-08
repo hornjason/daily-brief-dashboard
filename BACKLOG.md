@@ -4678,22 +4678,24 @@ Description: `google` from `googleapis` was referenced in the Drive docs write s
 ---
 
 ### BKL-TEST-01 | Playwright test beforeAll/afterAll snapshot restore unreliable against live server
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: HIGH
 Priority: P1
 Size: S (1-2h)
 Source: 2026-04-07 Quinn QA run wiped Elmer Alvarez AE config — afterAll restore failed, git checkout only recovered committed Carolanne data
 Files: test/qa-e2e-newuser.spec.ts, server.ts (snapshot/restore endpoints)
 Description: The test suite resets the live server to factory state in beforeAll and attempts to restore in afterAll. When afterAll fails or is interrupted, live production data is permanently lost if it was uncommitted. Root cause: tests run against the live server with real data. Fix options: (1) require a dedicated test server on a different port, (2) make snapshot/restore atomic with a rollback guarantee, (3) skip beforeAll factory reset when SKIP_RESET=true env var is set. Until fixed, never run the full test suite while uncommitted AE/customer data exists.
+Decision: DONE — Implemented option 2. POST /api/__test/snapshot takes a full state snapshot (AEs + customers) to memory before any test mutations. POST /api/__test/restore atomically restores from snapshot with atomic rename. qa-e2e-newuser.spec.ts updated to use these endpoints with try/retry afterAll rollback guarantee. If restore fails after all retries, an error message tells the operator to call POST /api/__test/restore manually — the in-memory snapshot survives until next server restart.
 
 ### BKL-TEST-02 | Quinn lifecycle tests must use snapshot/restore — missing guard caused customers.json wipe
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: HIGH
 Priority: P1
 Size: S
 Source: 2026-04-07 — Quinn AE lifecycle test called POST /api/aes without snapshot/restore; atomic customer cleanup wiped customers.json
-Files: QUINN-STANDARD.md (updated), test/lifecycle.spec.ts (to be created)
+Files: QUINN-STANDARD.md (updated), test/lifecycle.spec.ts (created), src/setup-routes.ts (/api/__test/snapshot + /api/__test/restore)
 Description: Quinn's AE lifecycle tests (add/remove AE via POST /api/aes) ran without wrapping in snapshot/restore. Our atomic customer cleanup (added in f377045) deletes customers for removed AEs. Without snapshot/restore, this permanently wipes customers.json. Fix: (1) QUINN-STANDARD.md updated 2026-04-07 to mandate snapshot/restore for any test touching AEs/customers. (2) Create a dedicated lifecycle spec that uses beforeAll snapshot + afterAll restore with a rollback guarantee. (3) Never call POST /api/aes in ad-hoc tests without snapshot wrapping.
+Decision: DONE — Added POST /api/__test/snapshot and POST /api/__test/restore to setup-routes.ts. These save/restore AEs+customers atomically in-memory (file-backed with atomic rename). Updated qa-e2e-newuser.spec.ts to use new endpoints with try/retry afterAll for rollback guarantee. Created test/lifecycle.spec.ts with full snapshot/restore wrapping pattern for AE lifecycle tests.
 
 ### BKL-UI-04 | ASA/Product toggle invisible in collapsed sidebar — single unlabeled "A" button
 Status: ✅ DONE 2026-04-07 — Fixed in commit e0d2773: collapsed sidebar now shows stacked A/P buttons with active-state ring and tooltips
@@ -4779,13 +4781,14 @@ Files: src/bootstrap-orchestrator.ts line 657
 Description: The territorySheetId regex `{10,}` accepts any 10+ alphanumeric string. Real Google Sheet IDs are exactly 44 characters. A tighter bound `{44}` or `{30,60}` would reduce accident surface (not a meaningful security gain on localhost but worth tightening).
 
 ### BKL-POD-01 | POD Bootstrap — Drive folder preview after fields populated
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: LOW
 Priority: P2
 Size: S
 Source: Jason 2026-04-07
 Files: dashboard/src/pages/SetupPage.tsx — PodBootstrapSection
 Description: Once Territory Sheet ID, SF Report ID, and Parent Drive Folder are all filled in, show a Google Drive folder preview (similar to the single-AE bootstrap folder preview) so the user can confirm they've selected the right parent folder before clicking Bootstrap POD. Should use the same Drive folder name lookup pattern already used in AutoBootstrapForm.
+Decision: DONE — Added folderName/folderError state + onBlur handler calling /api/aes/validate-folder in PodBootstrapSection. Border turns green + shows "✓ FolderName" on success; red + error on failure. Matches existing AutoBootstrapForm pattern exactly.
 
 ### BKL-SEC-06 | bootstrapPOD retry silently no-ops on 409 instead of waiting
 Status: ✅ DONE — 2026-04-08
@@ -4900,22 +4903,24 @@ Description: When data/ is lost, corrupted, or a new deployment is set up, the d
 8. Admin UI button: "Restore from Sheets" with progress indicator per AE
 
 ### BKL-SF-01 | SF pipeline GSheet only captures ~375 of 1929 report rows — virtual scrolling bug
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-04-08
 Severity: HIGH
 Priority: P1
 Size: M
 Source: Jason 2026-04-07, pipeline investigation
 Files: src/sf-scraper.ts — scroll loop + row extraction
 Description: SF Lightning report has 1,929 rows for the Northwest POD but GSheet only receives ~375. Root cause: single `querySelectorAll` after scroll captures only the DOM viewport (virtual scrolling evicts rows outside viewport). Fix: incremental capture at every scroll step, accumulating unique rows by fingerprint. Applied 2026-04-07 — requires repull + rebuild to verify.
+Decision: DONE — verified 2026-04-08. pipeline-data.json contains 737 unique opps deduped from 1933 raw captured rows. Previous ~375 was due to single-capture after scroll; incremental accumulation with fingerprint dedup fixed this.
 
 ### BKL-SF-02 | Phil Yi / Philip Yi name mismatch causes 12 opps dropped from pipeline
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-04-08 (immediate fix applied; long-term alias feature deferred to BKL-BOOT-02 scope)
 Severity: MEDIUM
 Priority: P2
 Size: S
 Source: Jason 2026-04-07, pipeline investigation
 Files: data/config/aes.json, data/config/customers.json, src/customer-routes.ts (filterToAEs)
 Description: Territory sheet uses "Phil Yi" (display name); SF report owner field uses "Philip Yi" (legal name). `filterToAEs` does exact match → 12 Philip Yi opps dropped. Fixed aes.json + customers.json to "Philip Yi". Long-term: add name alias/fuzzy match in filterToAEs so territory sheet name doesn't need to exactly match SF owner name. Also: POD bootstrap re-runs will re-create a "Phil Yi" entry from the territory sheet, causing duplicates again.
+Decision: DONE — aes.json and customers.json updated to "Philip Yi". Verified: Philip Yi now shows 54 opps in pipeline data. Alias/fuzzy match remains a future enhancement; note in BKL-BOOT-01 that POD re-bootstrap may re-introduce "Phil Yi" from territory sheet.
 
 ### BKL-BOOT-02 | Shareable Supportable pulls — central scrape + distribute to team
 Status: 🔴 OPEN

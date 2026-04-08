@@ -4,7 +4,7 @@ import { resolve } from 'path'
 import { google } from 'googleapis'
 import type { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './google.ts'
-import { customers, aes, saveAes, CUSTOMERS_PATH } from './server-state.ts'
+import { customers, aes, saveAes, CUSTOMERS_PATH, AES_PATH, setAes, setCustomers } from './server-state.ts'
 import type { Customer } from './types.ts'
 import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, getScopeLevel, type StoredToken } from './oauth-scopes.ts'
 import { inferCustomerDomain } from './domains.ts'
@@ -404,6 +404,50 @@ export function registerSetupRoutes(app: Hono): void {
       renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
       customers.splice(0, customers.length, ...body.customers)
       return c.json({ ok: true, count: body.customers.length })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── Test isolation endpoints — snapshot/restore full config state ─────────
+  // These endpoints let integration tests save and restore the full server state
+  // (AEs + customers) so tests are non-destructive even if afterAll fails.
+  // In-memory snapshot — single-process Bun server, no persistence needed.
+
+  let _testSnapshot: { aes: string; customers: string } | null = null
+
+  app.post('/api/__test/snapshot', (c) => {
+    try {
+      _testSnapshot = {
+        aes:       existsSync(AES_PATH)       ? readFileSync(AES_PATH, 'utf-8')       : '{"aes":[]}',
+        customers: existsSync(CUSTOMERS_PATH) ? readFileSync(CUSTOMERS_PATH, 'utf-8') : '{"customers":[]}',
+      }
+      const aesCount = (JSON.parse(_testSnapshot.aes).aes ?? []).length
+      const custCount = (JSON.parse(_testSnapshot.customers).customers ?? []).length
+      return c.json({ ok: true, aes: aesCount, customers: custCount })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  app.post('/api/__test/restore', (c) => {
+    if (!_testSnapshot) return c.json({ error: 'No snapshot to restore — call /api/__test/snapshot first' }, 409)
+    try {
+      const snap = _testSnapshot
+      // Restore AEs
+      writeFileSyncRaw(AES_PATH + '.tmp', snap.aes, { mode: 0o600 })
+      renameSync(AES_PATH + '.tmp', AES_PATH)
+      const restoredAes = JSON.parse(snap.aes).aes ?? []
+      setAes(restoredAes)
+      aes.splice(0, aes.length, ...restoredAes)
+      // Restore customers
+      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', snap.customers, { mode: 0o600 })
+      renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+      const restoredCustomers = JSON.parse(snap.customers).customers ?? []
+      setCustomers(restoredCustomers)
+      customers.splice(0, customers.length, ...restoredCustomers)
+      _testSnapshot = null  // consume snapshot
+      return c.json({ ok: true, aes: restoredAes.length, customers: restoredCustomers.length })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }

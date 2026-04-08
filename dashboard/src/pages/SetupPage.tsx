@@ -2932,6 +2932,8 @@ function PodBootstrapSection() {
   const [podTabsError, setPodTabsError] = useState<string | null>(null)
   const [podTabsLoading, setPodTabsLoading] = useState(false)
   const [tableauOk, setTableauOk] = useState<boolean | null>(null)
+  const [folderName, setFolderName] = useState<string | null>(null)
+  const [folderError, setFolderError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [status, setStatus] = useState<PodBootstrapStatus['podBootstrap'] | null>(null)
@@ -3092,11 +3094,27 @@ function PodBootstrapSection() {
             <input
               type="text"
               value={parentFolderId}
-              onChange={e => { setParentFolderId(e.target.value); setStartError(null) }}
+              onChange={e => { setParentFolderId(e.target.value); setStartError(null); setFolderName(null); setFolderError(null) }}
+              onBlur={async () => {
+                const val = parentFolderId.trim()
+                if (!val) { setFolderName(null); setFolderError(null); return }
+                try {
+                  const r = await fetch('/api/aes/validate-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ folderUrl: val }),
+                  })
+                  const d = await r.json()
+                  if (d.error) { setFolderError('Folder not found — check the URL'); setFolderName(null) }
+                  else { setFolderName(d.folderName); setFolderError(null) }
+                } catch { setFolderError('Could not reach Drive API'); setFolderName(null) }
+              }}
               placeholder="Drive folder URL or bare folder ID"
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent font-mono"
+              className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent font-mono ${folderError ? 'border-critical' : folderName ? 'border-success' : 'border-border'}`}
             />
-            <p className="text-xs text-text-secondary mt-1">Drive folder where each AE's subfolder will be created.</p>
+            {folderName && <p className="text-xs text-success mt-1">✓ {folderName}</p>}
+            {folderError && <p className="text-xs text-critical mt-1">✗ {folderError}</p>}
+            {!folderName && !folderError && <p className="text-xs text-text-secondary mt-1">Drive folder where each AE's subfolder will be created.</p>}
           </div>
 
           <div>

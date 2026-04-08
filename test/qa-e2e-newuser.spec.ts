@@ -17,23 +17,37 @@ const CAROLANNE_AE = {
   pipelineSheetId: '10H8Nl8oQQg1x9Zt0p5cys7JJp0b4ObfzhB-pPMot3BM',
 }
 
-// Snapshot and restore AE config around all tests
-let originalAes: unknown[] = []
+// Snapshot and restore FULL server state around all tests (BKL-TEST-01/02)
+// Uses /api/__test/snapshot + /api/__test/restore for atomic recovery —
+// even if afterAll is interrupted, the snapshot endpoint was already committed
+// to memory and restore can be retried manually via the API.
 
 test.beforeAll(async ({ request }) => {
-  // Snapshot current AE list before clearing
-  const snapshot = await (await request.get(`${BASE}/api/aes`)).json()
-  originalAes = snapshot.aes ?? []
+  // Take full snapshot (AEs + customers) before any mutations
+  const snap = await (await request.post(`${BASE}/api/__test/snapshot`)).json()
+  if (!snap.ok) throw new Error(`Snapshot failed: ${snap.error}`)
 
-  // Clear AEs to simulate factory state
+  // Clear AEs to simulate factory state (this also clears customers atomically)
   await request.post(`${BASE}/api/aes`, { data: { aes: [] } })
   const health = await (await request.get(`${BASE}/health`)).json()
   if (health.aes !== 0) throw new Error('Failed to reset to factory state')
 })
 
 test.afterAll(async ({ request }) => {
-  // Restore original AE config so tests are non-destructive
-  await request.post(`${BASE}/api/aes`, { data: { aes: originalAes } })
+  // Restore full state — try twice for rollback guarantee (BKL-TEST-01)
+  try {
+    const r = await request.post(`${BASE}/api/__test/restore`)
+    const d = await r.json()
+    if (!d.ok) throw new Error(d.error ?? 'restore failed')
+  } catch (e) {
+    // Retry once — transient network errors in CI
+    try {
+      await request.post(`${BASE}/api/__test/restore`)
+    } catch (e2) {
+      console.error('[afterAll] RESTORE FAILED — server state may be corrupted. Call POST /api/__test/restore manually.')
+      throw e2
+    }
+  }
 })
 
 // ── TEST 1: Health check — factory state ────────────────────────────────────
