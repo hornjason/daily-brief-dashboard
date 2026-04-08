@@ -138,7 +138,13 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
     maxResults: 50,
   })
 
-  const items = res.data.items ?? []
+  // BKL-CAL-01: filter out proposed/tentative events before processing
+  const items = (res.data.items ?? []).filter(ev => {
+    if (/^\[proposed time\]/i.test(ev.summary ?? '')) return false
+    const selfAttendee = (ev.attendees ?? []).find(a => a.self)
+    if (selfAttendee && selfAttendee.responseStatus !== 'accepted') return false
+    return true
+  })
 
   // Unique AE names and first names for organizer matching
   const aeNames = [...new Set(customers.map((c) => c.ae).filter(Boolean))] as string[]

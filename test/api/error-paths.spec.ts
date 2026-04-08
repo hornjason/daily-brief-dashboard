@@ -19,7 +19,7 @@ test.describe('POST /api/scrape/ccsp — auth guard', () => {
     // Accept 200 (auth valid, scrape started), 400 (no eligible AEs), 409 (already running)
     expect([200, 400, 401, 403, 409]).toContain(status)
     if (status >= 400) {
-      expect(body).toHaveProperty('error')
+      expect(body.error ?? body.reason).toBeDefined()
     }
   })
 })

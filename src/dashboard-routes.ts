@@ -133,7 +133,16 @@ Format your response as markdown with bold headers and bullet points. Keep each 
 
 // ── Territory helpers ─────────────────────────────────────────────────────────
 
-const TERRITORY_SHEET_ID = '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
+const TERRITORY_SHEET_ID_FALLBACK = '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
+
+function getTerritorySheetId(): string {
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    return (ds.podConfig?.territorySheetId as string | undefined) ?? TERRITORY_SHEET_ID_FALLBACK
+  } catch {
+    return TERRITORY_SHEET_ID_FALLBACK
+  }
+}
 
 const territoryCacheMap = new Map<string, { data: unknown; cachedAt: number }>()
 const TERRITORY_CACHE_TTL_MS = 60 * 60 * 1000
@@ -752,7 +761,7 @@ export function registerDashboardRoutes(app: Hono): void {
 
     try {
       const sheetsClient = google.sheets({ version: 'v4', auth })
-      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: TERRITORY_SHEET_ID })
+      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: getTerritorySheetId() })
       const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
       const corpTabs = tabNames.filter(t => {
         const lower = t.toLowerCase()
@@ -767,7 +776,7 @@ export function registerDashboardRoutes(app: Hono): void {
         if (podPrefix !== pod) continue
 
         const resp = await sheetsClient.spreadsheets.values.get({
-          spreadsheetId: TERRITORY_SHEET_ID,
+          spreadsheetId: getTerritorySheetId(),
           range: `'${tabTitle}'!A1:Z60`,
         })
         const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>
@@ -838,7 +847,7 @@ export function registerDashboardRoutes(app: Hono): void {
       const sheetsClient = google.sheets({ version: 'v4', auth })
 
       // Get all tab names
-      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: TERRITORY_SHEET_ID })
+      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: getTerritorySheetId() })
       const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
       const corpTabs = tabNames.filter(t => {
         const lower = t.toLowerCase()
@@ -853,7 +862,7 @@ export function registerDashboardRoutes(app: Hono): void {
         if (!requestedTerritory.startsWith(podPrefix)) continue
 
         const resp = await sheetsClient.spreadsheets.values.get({
-          spreadsheetId: TERRITORY_SHEET_ID,
+          spreadsheetId: getTerritorySheetId(),
           range: `'${tabTitle}'!A1:Z60`,
         })
         const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>

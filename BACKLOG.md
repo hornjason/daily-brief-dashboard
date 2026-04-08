@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-08 (BKL-RESTORE-01 DONE; BKL-DATA-01 IN PROGRESS with 10 supportableName overrides applied; 40 zero-account customers being resolved)
+Last update: 2026-04-08 (BKL-DRIVE-01 filed: POD subfolder layer in Drive for AE/customer separation)
 
 ---
 
@@ -4181,12 +4181,13 @@ Files: test/
 Description: Add Playwright regression tests for cross-page navigation flows: (1) navigate to /dashboard/products, click "Command Center" sidebar item, verify URL changes to /dashboard; (2) navigate to /dashboard/products/:slug detail page, click sidebar items, verify navigation works; (3) navigate to /dashboard/customer/:name, verify brief section loads. These flows were missing from the test suite and allowed the sidebar routing bug (useLocation not checked before scrollTo) to ship undetected.
 
 ### BKL-W4-SYNC1 | Tableau CCSP scraper — session dropped (browser context closed)
-Status: 📋 BACKLOG
+Status: ✅ DONE 2026-04-08 — BKL-ADM02 fix added liveness probe `await _ctx.pages()` before each CCSP scrape in ccsp-scraper.ts:540-546. If context is closed, throws a clear error ("Browser context is closed — re-authenticate via Setup page and retry") instead of crashing mid-scrape. Verified in code — probe is in place.
 Priority: P1
 Size: M (2-3h)
 Source: 2026-04-05 — Quinn found ccspStatus.state="failed" with "page: Target page, context or browser has been closed"
 Files: src/ccsp-scraper.ts
 Description: CCSP scraper state is "failed" with error "Target page, context or browser has been closed". This means the Tableau Playwright session has been dropped — likely the shared browser context was recycled or the Tableau page navigated away. Needs investigation: (1) read ccsp-scraper.ts to understand session recovery path, (2) check if the Tableau page is still alive in the VNC browser, (3) determine if a re-login is needed or if the scraper can auto-recover. Do NOT touch scraper code without reading SCRAPER-RULES.md first.
+Decision: DONE — liveness probe in adoptCcspContext path detects closed contexts before scrape begins.
 
 ### BKL-W4-SYNC2 | Sync Now confirmation — ccspSyncedAt/sfSyncedAt reset on page reload
 Status: ✅ DONE
@@ -4253,20 +4254,30 @@ Files: src/customer.ts (_fetchCustomerDocsImpl)
 Description: File listing uses `modifiedTime > sixMonthsAgo` filter — any file not modified in 6 months is silently skipped. Strategic account documents (business value maps, POVs, exec summaries) are often set once and never modified. Fix: extend window to 2 years for files in subfolders named "Account Intelligence" or similar, OR remove the date filter entirely and rely on MAX_FILES_PER_CUSTOMER (50) and TOTAL_CONTENT_CAP (80K) as the guardrails. Subfolders (like Account Intelligence/) are not date-filtered — only file listings within them are.
 
 ### BKL-W5-TS2 | Pre-existing TypeScript error in product-intel-routes.ts:270 (opportunityName vs oppName)
-Status: 📋 BACKLOG
+Status: ✅ DONE 2026-04-08 — `tsc` no longer reports this error. Fixed in a prior session.
 Priority: P3
 Size: XS (15 min)
 Source: 2026-04-06 — Marcus found during W5-P2-PRODPAGE work
 Files: src/product-intel-routes.ts:270
 Description: Pre-existing error — property `opportunityName` used but correct field name on `PipelineRecord` is `oppName`. Not introduced by current session. One-line rename fix.
+Decision: DONE — no longer present in tsc output as of 2026-04-08 verification.
+
+### BKL-W5-TS3 | TypeScript errors — server.ts Customer type missing + bootstrap-orchestrator.ts union narrowing
+Status: ✅ DONE 2026-04-08
+Priority: P2
+Size: S
+Source: 2026-04-08 — tsc verification pass revealed new errors not in original BKL-W5-TS1/TS2
+Files: server.ts:709,719 — bootstrap-orchestrator.ts:772,847-853
+Description: Two new error clusters found during 2026-04-08 tsc check: (1) server.ts:709,719 — `Customer` type used in AE removal cleanup code but not imported; (2) bootstrap-orchestrator.ts:772 — `startedAt` missing from PodBootstrapState initialization; bootstrap-orchestrator.ts:847-853 — properties (`aeName`, `sfReportId`, `tableauTerritories`, `customerNames`) accessed on union type without narrowing, and two lambda params implicitly typed `any`. Likely introduced by BKL-BOOT-01 session changes. App runs fine under Bun (no strict TS enforcement at runtime) but should be clean.
 
 ### BKL-W5-TS1 | Pre-existing TypeScript errors in server.ts (tableauUrl + EmailSettings)
-Status: 📋 BACKLOG
+Status: ✅ DONE 2026-04-08 — `tsc` no longer reports tableauUrl or EmailSettings errors. Fixed in a prior session.
 Priority: P2
 Size: S (1h)
 Source: 2026-04-06 — Marcus tsc check found 18 pre-existing errors; unrelated to current session work
 Files: server.ts (lines 684, 913-934)
 Description: Two unrelated error clusters: (1) server.ts:684 — `tableauUrl` does not exist on AE type; (2) server.ts:913-934 — `deliveryTime`, `timezone`, `schedule`, `recipientEmail` not recognized on `Partial<EmailSettings> | {}` type due to narrow union type. Need to add `tableauUrl?: string` to AE interface and narrow the EmailSettings union to the concrete type before property access.
+Decision: DONE — original errors resolved. New TS errors introduced in later sessions tracked in BKL-W5-TS3.
 
 ### BKL-W5-P2-PRODPAGE | Products page: territory radar instead of product brochure
 Status: ✅ DONE 2026-04-06 — GET /api/products/:slug/territory-summary added (product-intel-routes.ts:351-414); ProductsPage.tsx replaced summaryText with TerritoryRadarCard showing coverage/priority actions/slide status; "Refresh slides" button wired to POST /api/products/ingest-slides
@@ -4594,11 +4605,12 @@ Description: Telemetry log service names: 'rh', 'ccsp', 'supportable', 'salesfor
 Fix: Standardize on ScraperStatusStore names across both systems. Low priority — no functional impact.
 
 ### BKL-SCRAPER-05 | Salesforce ScraperStatusStore `state` stuck at "running" while `isRunning: false`
-Status: 📋 BACKLOG | Priority: P2 | Type: Bug
+Status: ✅ DONE 2026-04-08 — `recordOutcome('sf-pipeline', ...)` moved into `.finally()` block in scraper-manager.ts:561. Outcome is now always recorded regardless of success/error/crash path.
+Priority: P2 | Type: Bug
 Source: Quinn QA 2026-04-06 (council review verification pass)
 Files: src/scraper-manager.ts, src/scrape-api.ts (salesforce status endpoint)
 Description: `/api/scrape/salesforce/status` returns `state: "running"` from ScraperStatusStore while simultaneously returning `isRunning: false` from the in-memory flag. These are contradictory — store says scrape is running, but the mutex says it's not. Downstream effect: the Setup page Pipeline (Salesforce) Sync Now button may be disabled due to the stuck `state`. Root cause likely: a previous SF scrape called `markRunning('sf-pipeline')` but the subsequent `recordOutcome()` was never called (process crash, timeout, or error path that bypassed the outcome recording).
-Fix: Add a staleness check — if `state === 'running'` but `isRunning === false` and `updatedAt` is older than 15 minutes, auto-reset to `state: 'stale'`. This is the same stale-mutex pattern used for the Playwright mutex guards.
+Decision: DONE — `.finally()` wrapper ensures recordOutcome always fires. Verified in code at scraper-manager.ts:561.
 
 
 ### BKL-SCRAPER-06 | RH Cases `lastSync` null after container restart — in-memory var never hydrated from cache
@@ -4696,6 +4708,43 @@ Source: 2026-04-07 — Quinn AE lifecycle test called POST /api/aes without snap
 Files: QUINN-STANDARD.md (updated), test/lifecycle.spec.ts (created), src/setup-routes.ts (/api/__test/snapshot + /api/__test/restore)
 Description: Quinn's AE lifecycle tests (add/remove AE via POST /api/aes) ran without wrapping in snapshot/restore. Our atomic customer cleanup (added in f377045) deletes customers for removed AEs. Without snapshot/restore, this permanently wipes customers.json. Fix: (1) QUINN-STANDARD.md updated 2026-04-07 to mandate snapshot/restore for any test touching AEs/customers. (2) Create a dedicated lifecycle spec that uses beforeAll snapshot + afterAll restore with a rollback guarantee. (3) Never call POST /api/aes in ad-hoc tests without snapshot wrapping.
 Decision: DONE — Added POST /api/__test/snapshot and POST /api/__test/restore to setup-routes.ts. These save/restore AEs+customers atomically in-memory (file-backed with atomic rename). Updated qa-e2e-newuser.spec.ts to use new endpoints with try/retry afterAll for rollback guarantee. Created test/lifecycle.spec.ts with full snapshot/restore wrapping pattern for AE lifecycle tests.
+
+### BKL-BACKUP-01 | Comprehensive config backup/restore — POD Bootstrap scaffolding + Admin page buttons
+Status: 🔴 OPEN
+Severity: CRITICAL
+Priority: P0
+Size: L
+Source: 2026-04-08 — test-induced data wipe; aes.json had no recovery path; customers.json partial only
+Files: src/setup-routes.ts (POD Bootstrap step), dashboard/src/pages/AdminPage.tsx, server.ts (new backup-routes.ts)
+Description: Every critical config file needs auto-backup to a Google Sheet created during POD Bootstrap. Currently aes.json has zero recovery path; customers.json requires 1-2h scrape recovery; data-sources.json, product-intel-config.json have nothing. This has caused two production data losses.
+
+Design (confirmed with Jason 2026-04-08):
+- **PAI Config Backup sheet** created at POD Bootstrap Step 0 (before any AEs configured); lives in the parent Drive folder
+- **Tabs:** AE Registry (aes.json), Customers (customers.json), Data Sources (data-sources.json), Product Intel (product-intel-config.json), Restore Log
+- **Auto-backup trigger:** Every call to saveAes(), saveCustomers(), saveDataSources() — async, non-blocking, fire-and-forget with retry
+- **Cache backup:** Sheet-based is preferred; restore path = sheet → cache (not re-scrape)
+- **Restore granularity:** Single "Restore All" endpoint + per-section API endpoints for granular recovery
+- **Admin page:** "Backup Now" button + "Restore from Backup" button; restore shows per-section status
+- **Recovery flow:** POST /api/admin/backup/restore → reads Config Backup sheet → rebuilds all config + triggers cache restore from data sheets
+
+Implementation plan (Marcus):
+1. Add "Create Config Backup sheet" as Step 0 of POD Bootstrap in bootstrap-orchestrator.ts
+2. Hook saveAes() / saveCustomers() / saveDataSources() to async write to Config Backup sheet
+3. New backup-routes.ts: POST /api/admin/backup (manual trigger), POST /api/admin/backup/restore
+4. Admin page: Backup Now + Restore from Backup buttons with status display
+
+### BKL-TEST-03 | Full Playwright suite wipes production data — Quinn must never run `npx playwright test`
+Status: 🔴 OPEN
+Severity: CRITICAL
+Priority: P0
+Size: S
+Source: 2026-04-08 — Quinn ran full suite during final verification; wiped 9 AEs and 130 customers
+Files: ~/.claude/PAI/Testing/QUINN-STANDARD.md (updated), test/lifecycle.spec.ts, test/qa-e2e-newuser.spec.ts
+Description: Quinn ran `npx playwright test` (full suite) during a final verification pass. The lifecycle and new-user specs call `POST /api/__test/snapshot` + `POST /api/__test/restore`. The snapshot reads from DISK — at that moment, disk had 1 AE (stale from a prior test run) while memory had 10. Snapshot captured 1 AE, restore wrote 1 AE back to disk and memory. All 9 bootstrapped AEs and 130 customers wiped. Recovery required: (1) reconstruct aes.json from in-session curl output, (2) rebuild container, (3) restore from GSheets, (4) re-apply 17 supportableName overrides, (5) re-trigger discovers for all AEs.
+
+Root cause fix needed: The snapshot endpoint reads from DISK, not from the authoritative in-memory state. If disk diverges from memory (after bootstrap adds AEs), snapshot captures stale data. Fix: snapshot should serialize in-memory `aes` + `customers` arrays, not read from disk.
+
+Workaround in place (2026-04-08): QUINN-STANDARD.md updated to ban `npx playwright test`. Safe baseline is `npx playwright test test/api/` only. Lifecycle and new-user specs require explicit Jason approval.
 
 ### BKL-UI-04 | ASA/Product toggle invisible in collapsed sidebar — single unlabeled "A" button
 Status: ✅ DONE 2026-04-07 — Fixed in commit e0d2773: collapsed sidebar now shows stacked A/P buttons with active-state ring and tooltips
@@ -4924,6 +4973,15 @@ Files: data/config/aes.json, data/config/customers.json, src/customer-routes.ts 
 Description: Territory sheet uses "Phil Yi" (display name); SF report owner field uses "Philip Yi" (legal name). `filterToAEs` does exact match → 12 Philip Yi opps dropped. Fixed aes.json + customers.json to "Philip Yi". Long-term: add name alias/fuzzy match in filterToAEs so territory sheet name doesn't need to exactly match SF owner name. Also: POD bootstrap re-runs will re-create a "Phil Yi" entry from the territory sheet, causing duplicates again.
 Decision: DONE — aes.json and customers.json updated to "Philip Yi". Verified: Philip Yi now shows 54 opps in pipeline data. Alias/fuzzy match remains a future enhancement; note in BKL-BOOT-01 that POD re-bootstrap may re-introduce "Phil Yi" from territory sheet.
 
+### BKL-BOOT-03 | POD Bootstrap seed from shared Supportable folder — skip scrape if sheet exists
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Jason 2026-04-08 — enable seeding dashboard for another user from existing GSheet data
+Files: dashboard/src/pages/SetupPage.tsx (or SetupWizard.tsx), src/bootstrap-orchestrator.ts
+Description: Add one optional field to the POD bootstrap UI: "Shared Supportable Folder" (a Google Drive folder ID/URL). During the bootstrap Supportable step, before triggering a scrape, check that folder for a file matching `{AE Name} - Supportable` (same naming convention as today). If found: grab its Sheet ID, write to aes.json as supportableSheetId, skip the scrape entirely — AE's sheet column shows up exactly as today. If not found: fall through to existing Supportable discover + scrape flow unchanged. Field is optional — if blank, bootstrap runs exactly as today. Everything else (wizard flow, scaffolding, CCSP/SF runs, territory selection, Drive folder creation) stays identical. Sheet living in the shared folder does not break anything — all reads/writes use Sheet ID via Sheets API, Drive location is irrelevant once the ID is stored. AE's own Drive folder still needed for CCSP/Pipeline sheets. No Drive shortcut required — clean separation: shared data in shared folder, generated sheets in AE folder. Use case: Jason has existing Northwest POD AE sheets in a shared folder; a teammate deploys a fresh container, enters the shared folder ID, bootstrap links all 10 AE sheets in seconds instead of running 10x Supportable scrapes.
+
 ### BKL-BOOT-02 | Shareable Supportable pulls — central scrape + distribute to team
 Status: 🔴 OPEN
 Severity: MEDIUM
@@ -4932,6 +4990,7 @@ Size: L
 Source: Jason 2026-04-07
 Files: src/supportable-scraper.ts, src/bootstrap-orchestrator.ts, data/config/aes.json
 Description: The Supportable scrape takes ~10 min/AE because it requires an authenticated CCSP session and scrapes live. Since the output (active subscriptions per account) is relatively stable week-to-week, it can be pre-seeded centrally and distributed. Strategy: (1) Schedule a nightly/weekly background job that scrapes Supportable for all AEs in the POD and writes to a shared Google Sheet (or per-AE sheets in a shared Drive folder). (2) Publish those sheet IDs in a config file or central registry. (3) When a teammate bootstraps a new AE, the wizard checks for a pre-seeded sheet first — if found, link to it and skip the 10-min scrape. Authentication constraint: the scraper requires the machine owner's CCSP session, so the central job runs on Jason's machine; only the *output sheets* are distributed. Each teammate still needs their own session for live re-scrapes but can bootstrap instantly using the pre-seeded data.
+Note: BKL-BOOT-03 is the implementation of this strategy — the "shared folder pre-check" is the pickup mechanism.
 
 ### BKL-BOOT-01 | Setup Wizard — pre-populate existing sheet IDs to skip re-bootstrap
 Status: ✅ DONE — 2026-04-08
@@ -4973,7 +5032,20 @@ Description: After full Supportable discover+scrape with word-backoff retry, and
 - Terrapower → "TerraPower"
 - Tri-state Generation And Transportation → "Tri-State G&T"
 
-Remaining zero-account customers after override discover completes need manual review to determine if they genuinely have no Supportable presence (cloud-native SaaS companies, startups, non-RHEL shops).
+Additional overrides applied for Arka, Communify→Fincentric, Employers Holdings, Sierra Nevada Corporation, Unishippers, Cambia, Hotwire.
+Full discovers run for all 4 remaining AEs (Tyler, Max, Paul, Philip) with complete word-backoff retry.
+
+Final state (2026-04-08): 134/141 customers have account numbers (7 zero-account total):
+- 3 confirmed no active Red Hat subscriptions (skipAccountDiscovery=true):
+  - KLA Corporation (Danny Hollar) — filtered by entitlements/country
+  - Communify Fincentric (Max Stroup) — not found in Supportable
+  - Employers Holdings (Max Stroup) — all accounts filtered by entitlements
+- 4 unresolvable via automation — need Jason manual investigation:
+  - Hotwire Communications (Tyler McManigal) — searched "Hotwire", no match
+  - Arka Group (Max Stroup) — searched "Arka", no match
+  - Sierra Nevada (Paul Maes) — searched "Sierra Nevada Corporation" + backoff, no match
+  - Cambia Health Solutions (Philip Yi) — searched "Cambia", no match
+  These may be under a different name in Supportable, may have no RHEL subscriptions, or may be cloud/SaaS accounts not tracked in the portal.
 
 ### BKL-SUP-03 | Supportable detail-page extraction fails when page has 0 <th> elements
 Status: 🔴 OPEN
@@ -4985,3 +5057,149 @@ Files: src/supportable-scraper.ts — name-search extraction patterns
 Description: When Supportable shows a single-match detail page (hasCustomerInfo=true, 9 tables, 0 <th> elements), all 3 account-number extraction patterns fail. The HTML size is ~31KB with 9 tables but no <th> elements — the tables use a different structure (probably <tr><td> without header row or use <strong>/<label> for field labels). Affected customers include Business Wire Asia Pacific, Rubrik, Lumentum Holdings (before backoff found it), and possibly others. The scraper logs: "detail page detected (hasCustomerInfo=true) but all 3 account-number extraction patterns failed". Fix: add a 4th extraction pattern that handles the no-<th> table format. Read the actual HTML for one of these failures to understand the layout (account number may be in a <td> labeled "Account Number" or similar, without a table header).
 
 Note: Do NOT fix this without reading SCRAPER-RULES.md and getting explicit approval from Jason. Scraper files are stable — surgical change only.
+
+### BKL-PVIEW-05 | normalizeProductName() missing mappings — 36 raw chips, chip bar wraps 3 rows
+Status: ✅ DONE 2026-04-08
+Severity: HIGH
+Priority: P1
+Size: S
+Source: Quinn QA 2026-04-08 — full dataset (10 AEs, 102 customers) exposed unmapped names
+Files: dashboard/src/utils/productName.ts — normalizeProductName()
+Description: With 10 AEs and 102 customers, the product chip bar showed 36 unnormalized names including raw strings like "Advanced Cluster Management for Kubernetes for IBM Power", "JBoss Enterprise Application Platform", "AI Accelerator", "OpenStack", "Quay.io", "CCSP Subscription", "High Availability", "Learning Subscription". Chip bar wrapped to ~3 rows (312px height), dominating the top of the dashboard. Root cause: normalizeProductName() had only 12 rules and no mappings for ACM, ACS, AI/ML, OpenStack, Quay, CCSP, HA, Learning, JBoss, AMQ, 3scale, etc.
+Decision: DONE — normalizeProductName() expanded with 20+ rules covering all known Red Hat product families. Quinn verified against live 102-customer dataset: 106 raw product descriptions collapse to 16 normalized chips (AAP, ACM, ACS, AI/ML, Beta, CCSP, Developer Subscriptions, Free, HA, Learning, Middleware, OCP, OpenStack, Partner Subscriptions, RHEL, Storage, Trial). CCSP gap patched: stripped name loses "CCSP" acronym; added "certified cloud" / "cloud and service provider" / "software access enablement" fallback. Chip bar expected to fit in 1-2 rows.
+
+### BKL-PVIEW-06 | Reduce product chip bar to RHEL / OCP / AAP only
+Status: ✅ DONE 2026-04-08
+Severity: HIGH
+Priority: P1
+Size: S
+Source: Jason brain dump 2026-04-08 — 18 chips is too much clutter for daily use
+Files: dashboard/src/utils/productName.ts, dashboard/src/App.tsx (or wherever discoverAllProducts is called)
+Description: Even after normalization, 18 product chips is noisy. For daily use the only meaningful filter categories are RHEL, OCP, and AAP — the three core Red Hat platforms the POD sells. All other chips (ACM, ACS, AI/ML, Beta, CCSP, Developer Subscriptions, Free, HA, Learning, Middleware, OpenStack, Partner Subscriptions, Quay, Storage, Trial) should be hidden from the chip bar. "All Products" chip stays. Implementation: filter discoverAllProducts output to only emit RHEL, OCP, AAP (plus "All Products"). Other product labels still used internally for subscription card expansion — only the chip UI is restricted.
+
+### BKL-PVIEW-07 | Merge ASA/Product views — one view, product chips always visible
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: M
+Source: Jason brain dump 2026-04-08 — two views are redundant; only difference is morning brief presence
+Files: dashboard/src/App.tsx, dashboard/src/components/Sidebar.tsx
+Description: ASA View and Product View are nearly identical — the only observable difference is that Morning Summary is hidden in Product View. This isn't enough differentiation to justify a separate view toggle. Merge back to a single view that always shows Morning Summary and always shows the product chip bar. Remove the ASA/Product toggle from the sidebar entirely. Product chips (RHEL / OCP / AAP / All Products per BKL-PVIEW-06) remain permanently visible above the AE chips. The view-mode localStorage key and toggle code can be removed.
+
+### BKL-PVIEW-08 | Morning brief collapse — keep bullet outline visible when closed
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Jason brain dump 2026-04-08 — closing the full brief should not hide the summary bullets
+Files: dashboard/src/components/MorningSummary.tsx
+Description: The Morning Summary card has a "Today's Brief" expand/collapse toggle. When collapsed, the Priority Today / Actions / Watch bullet points disappear entirely — only the header row remains. The bullet outline is high-value at-a-glance context that should survive the collapse. When collapsed, show the bullet points (stripped of full prose, just the bold customer names + short label) as a compact inline list. The "Today's Brief" button expands to show the full narrative. Closed state: header + compact bullet list. Open state: header + full brief prose. This mirrors the free/beta/trial pattern used on subscription cards.
+
+### BKL-PVIEW-09 | Product filter cascade — KPIs filter by selected product chip
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: M
+Source: Jason brain dump 2026-04-08 — KPI numbers should reflect selected product, not full portfolio
+Files: dashboard/src/App.tsx, dashboard/src/components/KPISection.tsx (or similar)
+Description: When a product chip (OCP, RHEL, AAP) is selected, all KPI tiles should filter to that product context: Open Cases count → only cases for that product; Sev 1 Cases → only Sev 1 for that product; Renewals in 30d / 90d → only subscriptions matching that product; Meetings Today/This Week → unchanged (meetings are not product-scoped). Currently KPIs show full portfolio numbers regardless of product chip selection. Implementation: pass activeProduct filter down to each KPI computation. Cases: filter by product keyword in case summary. Renewals: filter by normalizeProductName(subscription) === activeProduct.
+
+### BKL-PVIEW-10 | Product filter cascade — RH Cases modal filters by selected product
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: M
+Source: Jason brain dump 2026-04-08 — cases modal ignores product chip, shows unrelated cases (Image #3)
+Files: dashboard/src/components/KPISev1Modal.tsx (or cases modal component)
+Description: When OCP is selected as the product chip, the Open Support Cases modal should show OCP/OpenShift-related cases at the top and collapse non-OCP cases into a hidden section at the bottom — same pattern used for Free/Beta/Trial subscriptions on account cards. Currently all 34 cases show regardless of chip selection (Image #3: "Updated the MCP and a node didnt come back", "On Redhat 9.6 cockpit", "Upgrade Satellite", etc. — mix of OCP and non-OCP). Product matching for cases: check case summary text for product keywords (openshift, ocp, cluster, container, kubernetes for OCP; rhel, enterprise linux, satellite for RHEL; ansible, aap for AAP). Non-matching cases collapsed with "Show N more" toggle at bottom. Note: Jason observed KPI shows 11/34 — may indicate 11 are OCP-related; verify against actual case summaries.
+
+### BKL-PVIEW-11 | Product filter cascade — Renewals (30d + 90d) filter by selected product
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: M
+Source: Jason brain dump 2026-04-08 — renewal modals ignore product chip (Image #5)
+Files: dashboard/src/components/ (renewal modals for Expiring Within 30 Days + Renewals in 30-90 Days)
+Description: When OCP is selected, the Expiring Within 30 Days and Renewals in 30-90 Days modals should show only OCP-matching subscriptions. Non-matching subscriptions collapsed or hidden. Currently both modals show all subscriptions regardless of chip. Image #5 shows: Vail Resorts (OCP Platform Plus ✓, Satellite ✗, OCP Broker ✓), Dropbox (OCP on AWS ✓), Pure Storage (Quay ✗), H2O.AI (OCP on AWS ✓, OCP Dedicated GCP ✓), Uber (OCP Dedicated ✓) — so with OCP selected, Satellite and Quay rows should be collapsed/hidden. Implementation: filter renewal rows using normalizeProductName(subscriptionName) === activeProduct before rendering. Collapsed non-matching rows shown as "N other subscriptions hidden" with expand toggle.
+
+### BKL-PVIEW-12 | Product filter cascade — Pipeline data filters by selected product
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: M
+Source: Jason brain dump 2026-04-08 — pipeline section ignores product chip entirely
+Files: dashboard/src/components/PipelineSection.tsx
+Description: When OCP, RHEL, or AAP is selected as the product chip, the pipeline section (SF opportunities) should filter to show only opportunities related to that product. Currently pipeline tiles and opportunity list show full portfolio regardless of chip. Implementation: SF opportunity data includes product fields or opportunity name — filter by product keyword match (same approach as cases). Opportunities without a matching product in the name/type are collapsed or shown as a summary count. If SF data doesn't have reliable product tagging, show a "Pipeline data not product-scoped" notice rather than silently showing everything.
+
+### BKL-CAL-01 | Calendar showing proposed/unconfirmed meetings as confirmed
+Status: ✅ DONE 2026-04-08
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Jason brain dump 2026-04-08 — E. & J. Gallo Winery "[Proposed Time]" meeting showing in Today's Meetings (Image #6)
+Files: src/calendar-routes.ts (or calendar scraper/parser), dashboard/src/components/CalendarStrip.tsx
+Description: Today's Meetings strip is showing a meeting titled "[Proposed Time] Robert Half + Red Hat | Intro..." for E. & J. Gallo Winery. Jason confirms he does not have a confirmed meeting with this customer today. The "[Proposed Time]" prefix in Google Calendar indicates a tentative/proposed event that has not been accepted. Calendar scraper is including tentative/proposed events in the confirmed meeting feed. Fix: filter out events with responseStatus !== 'accepted' OR where the event title starts with "[Proposed Time]" or similar tentative markers. Also consider filtering events where Jason's own RSVP is "tentative" or "declined". This is a data quality issue causing incorrect customer associations on the dashboard.
+
+### BKL-TEST-04 | CCSP auth guard spec uses wrong field name
+Status: ✅ DONE 2026-04-08
+Severity: LOW
+Priority: P3
+Size: XS
+Source: Quinn QA 2026-04-08 — test/api/error-paths.spec.ts:22
+Files: test/api/error-paths.spec.ts
+Description: CCSP auth guard test expects response body to have `error` field on 409, but server returns `reason` field. Test fails but this is a spec mismatch, not a code bug. Fix: update test to assert `body.reason` instead of `body.error`. Confirm which field name is the intended contract first.
+
+
+### BKL-WIZ-01 | Bootstrap wizard — Google Drive folder preview missing
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Jason 2026-04-08 — observed during SF bookings bootstrap test
+Files: dashboard/src/pages/SetupPage.tsx — AutoBootstrapForm or PodBootstrapSection
+Description: The Google Drive folder preview (folder name confirmation shown after parent folder ID is entered) was lost at some point. Previously worked — BKL-POD-01 confirms it was implemented for PodBootstrapSection. Regression likely introduced during a recent rebuild or UI change. Fix: restore the onBlur/validate-folder call and green "✓ FolderName" / red error display that matches the original AutoBootstrapForm pattern. Verify in both single-AE and POD bootstrap forms.
+
+### BKL-WIZ-02 | POD Bootstrap — no cancel button to stop in-flight run
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Jason 2026-04-08 — discovered during SW bootstrap test
+Files: dashboard/src/pages/SetupPage.tsx — PodBootstrapSection, src/bootstrap-orchestrator.ts
+Description: Once POD Bootstrap is started there is no way to cancel it from the UI. The run continues until all AEs complete or timeout. Need a "Cancel" button that calls a stop endpoint to abort the in-flight bootstrap, mark it as cancelled, and reset state so a new run can be started. Backend needs a POST /api/bootstrap/pod/cancel endpoint.
+
+### BKL-ADMIN-01 | Admin page — "Reset All Data" button for clean wipe
+Status: ✅ DONE — already exists on Setup page as "Reset Data Only" / "Full Reset"
+Severity: LOW
+Priority: P3
+Size: S
+Source: Jason 2026-04-08 — no UI way to clear AEs/customers/cache for fresh bootstrap test
+Files: dashboard/src/pages/AdminPage.tsx, src/scrape-api.ts or server.ts
+Description: Add a "Reset All Data" button in Admin page (dangerous zone, confirmation required) that wipes aes.json → [], customers.json → [], data-sources.json, and data/cache/*. Equivalent to what the DA does manually via podman exec. Should require a typed confirmation ("RESET") before proceeding. Useful for fresh bootstrap tests without needing CLI access.
+
+### BKL-WIZ-03 | Bootstrap step labels outdated after SF bookings migration
+Status: ✅ DONE 2026-04-08
+Severity: LOW
+Priority: P3
+Size: XS
+Source: Jason 2026-04-08 — observed during SW bootstrap, steps still show old names
+Files: src/bootstrap-orchestrator.ts — step name strings
+Description: Bootstrap step 3 is labeled "Discover Account Numbers" (correct) and step 4 is "Create Supportable Sheet" (wrong — now writes SF bookings data). Step names are hardcoded strings in bootstrap-orchestrator.ts. Update to: step 3 → "Read SF Bookings Sheet", step 4 → "Write Subscriptions Sheet", step 5 → "Create CCSP Sheet" (unchanged), step 6 → "Sync Pipeline Sheet" (unchanged). Also update step detail messages that reference Supportable.
+
+### BKL-BOOT-02 | matchPodSheet() substring match caused NW to resolve to SW bookings sheet
+Status: ✅ DONE 2026-04-08
+Severity: HIGH
+Priority: P1
+Size: XS
+Source: 2026-04-08 — NW POD bootstrap populated 0 subscriptions on first run; all NW AEs missing supportableSheetId
+Files: src/sf-bookings-reader.ts — matchPodSheet() lines 78-92
+Description: Territory strings like `WEST_COMM_CORP_NORTHWEST_TERR04` split into tokens including "west" (4 chars, passes length filter). `sLower.includes(w)` matched "southwest" before "northwest" because "southwest".includes("west") is true. All 8 NW AEs got the SW POD sheet ID instead of the NW sheet. Fix: changed to word-boundary regex `new RegExp(\`\\b${w}\\b\`).test(sLower)` — "southwest" has no word boundary around "west" inside it, so the false match is eliminated. Confirmed on second bootstrap run: all 8 NW AEs received NW sheet ID; 174 customers processed; 58 with subscription data.
+
+### BKL-DRIVE-01 | Drive folder hierarchy — add POD subfolder layer
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P2
+Size: M
+Source: Jason 2026-04-08
+Files: src/bootstrap-orchestrator.ts — Drive folder creation steps
+Description: Current structure: parentFolderId / AE Name / customer folders. Desired: parentFolderId / POD Name / AE Name / customer folders. During POD bootstrap, create a subfolder named after the POD (e.g. "Southwest") under parentFolderId if it doesn't already exist, then create each AE's Drive folder under that POD folder instead of directly under parentFolderId. The POD display name (from the SF bookings sheet displayName, e.g. "Southwest" or "Northwest") should be used as the folder name. AE-level bootstrap (single AE) should skip the POD layer. Existing AEs are unaffected unless re-bootstrapped.

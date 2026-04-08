@@ -339,7 +339,8 @@ function Dashboard() {
     if (aeFilterSelected !== 'all') {
       accounts = accounts.filter(a => a.ae === aeFilterSelected)
     }
-    return discoverAllProducts(accounts)
+    const ALLOWED_CHIPS = ['RHEL', 'OCP', 'AAP']
+    return discoverAllProducts(accounts).filter(p => ALLOWED_CHIPS.includes(p))
   }, [accountsApi.data, aeFilterSelected])
 
   // Raw product descriptions for tooltip grouping (LOG-03)

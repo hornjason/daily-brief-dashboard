@@ -5,10 +5,22 @@
  * Parsing logic extracted from the /api/territory-lookup handler in server.ts.
  */
 
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 
-const TERRITORY_SHEET_ID = process.env.TERRITORY_SHEET_ID ?? '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
+const TERRITORY_SHEET_ID_FALLBACK = '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
+
+function getTerritorySheetId(): string {
+  try {
+    const configPath = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'data-sources.json')
+    const ds = JSON.parse(readFileSync(configPath, 'utf-8'))
+    return (ds.podConfig?.territorySheetId as string | undefined) ?? process.env.TERRITORY_SHEET_ID ?? TERRITORY_SHEET_ID_FALLBACK
+  } catch {
+    return process.env.TERRITORY_SHEET_ID ?? TERRITORY_SHEET_ID_FALLBACK
+  }
+}
 
 // ── Helpers (duplicated from server.ts — these are local non-exported functions there) ──
 
@@ -59,7 +71,7 @@ export async function syncTerritorySheet(
   const sheetsClient = google.sheets({ version: 'v4', auth })
 
   // Get all tab names
-  const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: TERRITORY_SHEET_ID })
+  const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: getTerritorySheetId() })
   const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
   const corpTabs = tabNames.filter(t => {
     const lower = t.toLowerCase()
@@ -84,7 +96,7 @@ export async function syncTerritorySheet(
         if (!territory.startsWith(podPrefix)) continue
 
         const resp = await sheetsClient.spreadsheets.values.get({
-          spreadsheetId: TERRITORY_SHEET_ID,
+          spreadsheetId: getTerritorySheetId(),
           range: `'${tabTitle}'!A1:Z60`,
         })
         const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>

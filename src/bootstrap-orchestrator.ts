@@ -7,6 +7,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { runSfPipelineSync, createPipelineSheet } from './sf-scraper.ts'
 import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
+import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 import { runCcspScrape, writeCcspSheet } from './ccsp-scraper.ts'
 import { fetchCustomerAccountNumbers } from './sheets.ts'
 import { runRhScrapeWithState } from './scraper-manager.ts'
@@ -24,6 +25,7 @@ const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../co
 const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
 const DATA_SOURCES_PATH = resolve(SRV_CONFIG_DIR, 'data-sources.json')
+const SETTINGS_PATH = resolve(SRV_CONFIG_DIR, 'settings.json')
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
 
 // ── POD config persistence ────────────────────────────────────────────────────
@@ -239,9 +241,14 @@ async function readAEsFromTerritorySheet(
            !lower.includes('accounts a')
   })
 
-  // When a specific POD tab is selected, restrict to just that tab
+  // When a POD is selected, restrict to matching tab using word-level match.
+  // Accepts either an exact tab name OR a Drive sheet displayName (e.g. "Northwest").
   const filteredTabs = podTabTitle
-    ? corpTabs.filter(t => t === podTabTitle)
+    ? corpTabs.filter(t => {
+        const words = podTabTitle.toLowerCase().split(/[\W_]+/).filter(w => w.length > 3)
+        return t.toLowerCase() === podTabTitle.toLowerCase() ||
+               words.some(w => t.toLowerCase().includes(w))
+      })
     : corpTabs
 
   // Same pod-prefix logic as territory-sync.ts
@@ -545,10 +552,12 @@ export async function bootstrapPOD(opts: {
     })
   }
 
-  // Step 3: Auto-retry pass for zero-account AEs (one retry only)
+  // Step 3: Auto-retry pass for AEs with zero customers (one retry only)
+  // Note: accountNumbers are populated by the RH scraper separately — not during bootstrap.
+  // Only retry if no customers were discovered at all (SF sheet returned nothing).
   const zeroAccountAEs = succeeded.filter(aeName => {
     const aeCustomers = customers.filter(c => c.ae === aeName)
-    return aeCustomers.length === 0 || aeCustomers.every(c => !c.accountNumbers?.length)
+    return aeCustomers.length === 0
   })
 
   if (zeroAccountAEs.length > 0 && podBootstrapState.running) {
@@ -595,16 +604,16 @@ export async function bootstrapPOD(opts: {
           if (!autoBootstrapState.running) break
         }
 
-        const retryCustomerCount = customers.filter(c => c.ae === aeName && (c.accountNumbers?.length ?? 0) > 0).length
+        const retryCustomerCount = customers.filter(c => c.ae === aeName).length
         if (idx >= 0) {
           podBootstrapState.results[idx] = {
             name: aeName,
             status: retryCustomerCount > 0 ? 'ok' : 'error',
             customerCount: retryCustomerCount,
-            error: retryCustomerCount === 0 ? 'Zero accounts after retry' : undefined,
+            error: retryCustomerCount === 0 ? 'Zero customers after retry' : undefined,
           }
         }
-        console.log(`[pod-bootstrap] Retry for ${aeName}: ${retryCustomerCount} customers with accounts`)
+        console.log(`[pod-bootstrap] Retry for ${aeName}: ${retryCustomerCount} customers`)
       } catch (e: any) {
         console.warn(`[pod-bootstrap] Retry for ${aeName} failed: ${e?.message}`)
         if (idx >= 0) {
@@ -769,7 +778,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     // Without this, two simultaneous POSTs both pass the guard above, then both set running=true
     // after the await — a TOCTOU race. Claiming here with total:0/results:[] is an "initializing"
     // marker; bootstrapPOD() overwrites these fields once it reads the territory sheet.
-    podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null }
+    podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], startedAt: new Date().toISOString(), completedAt: null, error: null }
 
     const body = await c.req.json<{ territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }>().catch(() => ({} as { territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }))
     const rawTerritorySheet = (body.territorySheetId ?? '').trim()
@@ -842,7 +851,7 @@ export function registerBootstrapRoutes(app: Hono): void {
       tableauTerritories?: string[]
       customerNames?: string[]
       parentFolderId?: string
-    }>().catch(() => ({}))
+    }>().catch(() => ({} as { aeName?: string; sfReportId?: string; tableauTerritories?: string[]; customerNames?: string[]; parentFolderId?: string }))
 
     const aeName = (body.aeName ?? '').trim()
     // BKL-F07: Accept full Salesforce URLs — extract bare ID
@@ -893,8 +902,8 @@ export function registerBootstrapRoutes(app: Hono): void {
       steps: [
         { name: 'Create Drive Folder', status: 'pending' },
         { name: 'Create Customer Folders', status: 'pending' },
-        { name: 'Discover Account Numbers', status: 'pending' },
-        { name: 'Create Supportable Sheet', status: 'pending' },
+        { name: 'Read SF Bookings Sheet', status: 'pending' },
+        { name: 'Write Subscriptions Sheet', status: 'pending' },
         { name: 'Create CCSP Sheet', status: 'pending' },
         { name: 'Sync Pipeline Sheet', status: 'pending' },
       ],
@@ -1107,98 +1116,82 @@ export function registerBootstrapRoutes(app: Hono): void {
         }
       }
 
-      // Steps 3 + 4 — Discover Account Numbers via Supportable name search, then
-      // immediately scrape subscriptions for each account in the same session.
-      // Account numbers are saved to customers.json after each customer completes.
-      // Scraped subscription data is held in memory and written to sheet in Step 4.
+      // Steps 3 + 4 — Populate subscription data.
+      // If a podBookingsSheet is registered for this AE's territory (settings.json), use the
+      // SF bookings sheet as source of truth. Otherwise fall back to Supportable scraper.
       let supportableScrapeResults: Awaited<ReturnType<typeof runSupportableDiscoverAndScrape>> = []
+
+      // Check settings.json for a POD bookings folder, then discover sheets from Drive
+      let podSheetId: string | null = null
       try {
-        setStep(2, 'running', `0/${customerNames.length} — starting Supportable…`)
-        setStep(3, 'running', 'waiting for discovery…')
-
-        // Build customer objects — include supportableName override from customers.json if present
-        const discoverCustomers = customerNames.map(name => {
-          const existing = customers.find(cx => cx.name === name)
-          return { name, supportableName: existing?.supportableName }
-        })
-        supportableScrapeResults = await runSupportableDiscoverAndScrape(
-          discoverCustomers,
-          (done, total, name, accountNumbers, rowCount) => {
-            // Save account numbers to customers array immediately after each customer
-            const existing = customers.find(cx => cx.name === name)
-            if (existing) {
-              const merged = new Set([...(existing.accountNumbers ?? []), ...accountNumbers])
-              existing.accountNumbers = [...merged]
-            } else {
-              customers.push({ name, ae: aeName, accountNumbers, importedFrom: 'territory-sheet' })
-            }
-            // Persist to disk after each customer so progress survives a hard timeout
-            try {
-              const tmpPath = CUSTOMERS_PATH + '.tmp'
-              writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-              renameSync(tmpPath, CUSTOMERS_PATH)
-            } catch (e: any) { console.warn('[bootstrap] customer progress write failed:', e.message) }
-            const acctCount = accountNumbers.length
-            const summary = acctCount > 0
-              ? `✓ ${acctCount} acct${acctCount !== 1 ? 's' : ''}, ${rowCount} rows`
-              : 'no match'
-            setStep(2, 'running', `${done}/${total} — ${name}: ${summary}`)
-            setStep(3, 'running', `${done}/${total} — ${name}: ${summary}`)
-            console.log(`[auto-bootstrap] ${done}/${total} ${name}: ${acctCount} accounts, ${rowCount} rows`)
-          },
-          (msg) => {
-            // Pipe SSO/startup status into the step detail so user sees what's happening
-            setStep(2, 'running', `0/${customerNames.length} — ${msg}`)
-          },
-        )
-
-        // Sync any remaining customers to customers.json (handles customers with 0 accounts)
-        // Use canonical name from Supportable CSV (rows[0].Name) as source of truth for display name.
-        for (const r of supportableScrapeResults) {
-          const canonicalName = (r.rows[0] as Record<string, string> | undefined)?.['Name'] ?? r.customerName
-          const existing = customers.find(cx => cx.name === r.customerName)
-          if (existing) {
-            if (canonicalName !== r.customerName) {
-              console.log(`[auto-bootstrap] Renaming "${r.customerName}" → "${canonicalName}" (Supportable canonical)`)
-              existing.name = canonicalName
-            }
-          } else {
-            customers.push({ name: canonicalName, ae: aeName, accountNumbers: r.accountNumbers, importedFrom: 'territory-sheet' })
+        const settings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+        const folderId: string | undefined = settings.podBookingsFolderId
+        if (folderId) {
+          const podSheets = await listPodBookingSheets(folderId)
+          podSheetId = matchPodSheet(podSheets, tableauTerritories)
+          if (podSheetId) {
+            const matched = podSheets.find(s => s.sheetId === podSheetId)
+            console.log(`[auto-bootstrap] Resolved POD sheet for ${aeName}: "${matched?.displayName}" (${podSheetId})`)
           }
         }
-        const tmpPath = CUSTOMERS_PATH + '.tmp'
-        writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-        renameSync(tmpPath, CUSTOMERS_PATH)
+      } catch { /* no settings file or Drive error — fall back to Supportable */ }
 
-        const withAccounts = supportableScrapeResults.filter(r => r.accountNumbers.length > 0).length
-        const unmatched = supportableScrapeResults
-          .filter(r => r.accountNumbers.length === 0)
-          .map(r => r.customerName)
-        if (unmatched.length > 0) autoBootstrapState.resources.unmatchedCustomers = unmatched
-        setStep(2, 'done', `${withAccounts}/${customerNames.length} customers matched`)
-        console.log(`[auto-bootstrap] Supportable discovery complete: ${withAccounts}/${customerNames.length} matched`)
-      } catch (e: any) {
-        // FIX N2: supportableScrapeResults holds whatever partial results were yielded before
-        // the throw (via onProgress). Use them as-is for the sheet write below rather than
-        // reconstructing from customers (which lack subscription rows and would write bad data).
-        // If no partial results were collected, the array stays empty and Step 4 is skipped.
-        const partialCustomers = customers.filter(cx => cx.ae === aeName && (cx.accountNumbers?.length ?? 0) > 0)
-        if (partialCustomers.length > 0) {
-          setStep(2, 'error', `${e.message} (${partialCustomers.length} partial results saved)`)
-          console.error(`[auto-bootstrap] Supportable discovery+scrape failed midway: ${e.message} — ${partialCustomers.length} customers already saved`)
-        } else {
+      if (podSheetId) {
+        // ── SF Bookings path ──────────────────────────────────────────────────
+        // SF sheet is source of truth for customer names + subscriptions.
+        // Account numbers come later via RH case scraper (no Supportable needed).
+        try {
+          setStep(2, 'running', `reading SF bookings sheet…`)
+          setStep(3, 'running', 'waiting for SF data…')
+          console.log(`[auto-bootstrap] Using SF bookings sheet ${podSheetId} for ${aeName} (territories: ${tableauTerritories.join(', ')})`)
+
+          const rawSfData = await fetchSfBookingsRaw(podSheetId)
+          const existingCustomers = customers.filter(cx => cx.ae === aeName && !cx.inactive)
+          const { results, matched, newCustomers, aliasedCustomers, ccspOnly } = deriveSfCustomersByTerritory(
+            rawSfData, tableauTerritories, existingCustomers, aeName, false,
+          )
+
+          // Upsert net-new and alias-updated customers into customers array + disk
+          for (const nc of newCustomers) {
+            if (!customers.some(c => c.name === nc.name)) {
+              customers.push(nc)
+              console.log(`[auto-bootstrap] SF new customer: ${nc.name}`)
+            }
+          }
+          for (const ac of aliasedCustomers) {
+            const idx = customers.findIndex(c => c.name === ac.name)
+            if (idx !== -1) customers[idx] = ac
+          }
+          for (const name of ccspOnly) {
+            const cx = customers.find(c => c.name === name)
+            if (cx) cx.ccspCustomer = true
+          }
+          const tmpPath = CUSTOMERS_PATH + '.tmp'
+          writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
+          renameSync(tmpPath, CUSTOMERS_PATH)
+
+          supportableScrapeResults = results
+          setStep(2, 'done', `${matched.length}/${results.length} customers with subscriptions`)
+          console.log(`[auto-bootstrap] SF bookings: ${matched.length} matched, ${newCustomers.length} new, ${ccspOnly.length} CCSP-only`)
+        } catch (e: any) {
           setStep(2, 'error', e.message)
-          setStep(3, 'error', 'discovery failed — no results to write')
-          console.error('[auto-bootstrap] Supportable discovery+scrape failed:', e.message)
+          setStep(3, 'error', 'SF sheet read failed — no results to write')
+          console.error('[auto-bootstrap] SF bookings read failed:', e.message)
+          autoBootstrapState.error = `SF bookings read failed: ${e.message}`
         }
-        autoBootstrapState.error = `Supportable discovery failed: ${e.message}`
+      } else {
+        // No SF bookings sheet found for this AE's territory — skip subscription steps.
+        // This app only processes PODs that have a sheet in the shared Drive folder.
+        setStep(2, 'skipped', 'No SF bookings sheet found for this territory — add sheet to shared folder to enable')
+        setStep(3, 'skipped', 'Skipped: no SF bookings sheet')
+        console.warn(`[auto-bootstrap] No POD sheet found for ${aeName} (territories: ${tableauTerritories.join(', ')}) — skipping subscription steps`)
       }
 
       // Step 4 — Write Supportable Sheet (data already scraped in Step 3)
       if (!driveFolderId) {
         setStep(3, 'skipped', 'Skipped: Drive folder creation failed')
         console.log('[auto-bootstrap] Skipping Supportable sheet — no Drive folder')
-      } else if (supportableScrapeResults.length > 0 && supportableScrapeResults.some(r => r.accountNumbers.length > 0)) {
+      } else if (supportableScrapeResults.length > 0) {
         try {
           setStep(3, 'running', 'writing to Google Sheet…')
           const existingSupportableId = aes.find(a => a.name === aeName)?.supportableSheetId
@@ -1331,7 +1324,7 @@ export function registerBootstrapRoutes(app: Hono): void {
         completedAt: autoBootstrapState.completedAt,
         success: !autoBootstrapState.error,
         customerCount: aeCustomerCount,
-        accountsFound: customers.filter(cx => !cx.inactive && cx.ae === aeName && (cx.accountNumbers?.length ?? 0) > 0).length,
+        accountsFound: customers.filter(cx => !cx.inactive && cx.ae === aeName).length,
         durationMs: Date.now() - bootstrapStartMs,
         source: 'single',
       })
@@ -1658,7 +1651,7 @@ export function registerBootstrapRoutes(app: Hono): void {
             if (ae) {
               const sheetId = await writeSupportableSheet(
                 results,
-                cu.ae,
+                cu.ae!,
                 ae.driveFolderId || undefined,
                 ae.supportableSheetId || undefined
               ).catch((e: any) => { console.warn(`[initial-load:${cu.name}] sheet write failed: ${sanitizeErr(e)}`); return null })
