@@ -37,6 +37,7 @@ import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } fr
 import { initSetupRoutes, registerSetupRoutes } from './src/setup-routes.ts'
 import { initCustomerRoutes, registerCustomerRoutes } from './src/customer-routes.ts'
 import { registerProductIntelRoutes } from './src/product-intel-routes.ts'
+import { initRestoreRoutes, registerRestoreRoutes } from './src/restore-routes.ts'
 import { getGeminiUsageSummary } from './src/gemini-cost-tracker.ts'
 import { initJobPersistence } from './src/account-intelligence.ts'
 
@@ -110,6 +111,7 @@ initSetupRoutes({
   adminEmail: ADMIN_EMAIL,
 })
 initCustomerRoutes({ cacheDir: CACHE_DIR, customersPath: CUSTOMERS_PATH })
+initRestoreRoutes({ cacheDir: CACHE_DIR })
 
 const app = new Hono()
 
@@ -214,6 +216,7 @@ registerSetupRoutes(app)
 registerCustomerRoutes(app)
 // ── Wave 4: Product Intelligence routes ─────────────────────────────────────
 registerProductIntelRoutes(app)
+registerRestoreRoutes(app)
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))

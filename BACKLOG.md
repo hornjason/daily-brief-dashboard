@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-07 (BKL-AE-01, BKL-AE-02, BKL-AE-03 all DONE; BKL-UI-02 SSE fix DONE; full remove→re-add→remove cycle Quinn-verified 23/23)
+Last update: 2026-04-08 (BKL-RESTORE-01 DONE; BKL-DATA-01 IN PROGRESS with 10 supportableName overrides applied; 40 zero-account customers being resolved)
 
 ---
 
@@ -4855,7 +4855,7 @@ Fix Part 3 — Session health: Before each discovery job, add a lightweight APEX
 Note: BKL-SUP-02 (session locking) must be implemented first — concurrent CCSP/SF scrapes during a Supportable sync will reproduce the same zero-account failures. Fix order: SUP-02 → SUP-01 → re-sync.
 
 ### BKL-RESTORE-01 | GSheet restore — rebuild all dashboard data from source sheets without re-scraping
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-08
 Severity: HIGH
 Priority: P1
 Size: L
@@ -4901,6 +4901,8 @@ Description: When data/ is lost, corrupted, or a new deployment is set up, the d
 6. Reset intelligence-jobs.json (mark all customers as needing re-generation)
 7. Reset drive-watcher-state.json (trigger immediate Drive re-scan)
 8. Admin UI button: "Restore from Sheets" with progress indicator per AE
+
+Decision: DONE — Implemented src/restore-routes.ts with POST /api/admin/restore. Reads Supportable "Accounts" tab + per-customer tabs, CCSP sheet, and Pipeline sheet. Merges into customers.json, writes {slug}-sheets.json cache files, ccsp-data.json, and pipeline-data.json. Registered in server.ts. Does NOT restore: cases.json, daily briefs, intelligence files (see spec). Accepts optional { aeNames: string[] } to restore a subset.
 
 ### BKL-SF-01 | SF pipeline GSheet only captures ~375 of 1929 report rows — virtual scrolling bug
 Status: ✅ DONE — 2026-04-08
@@ -4950,24 +4952,36 @@ Source: Quinn QA 2026-04-07
 Files: src/bootstrap-orchestrator.ts — bootstrapPOD result reporting
 Description: When the Red Hat Portal is not connected, the bootstrap correctly creates Drive folders, customer subfolders, and pipeline sheets, but marks the AE status as "error: Zero accounts after retry". This is misleading — partial success isn't reflected. Consider reporting "partial" status with detail on which steps succeeded vs failed, rather than blanket "error".
 
-### BKL-DATA-01 | 9 customers with no Supportable account numbers — manual investigation needed
-Status: 🔴 OPEN
+### BKL-DATA-01 | Customers with no Supportable account numbers — name mismatch investigation
+Status: 🟡 IN PROGRESS — 2026-04-08
 Severity: MEDIUM
 Priority: P2
 Size: S
 Source: Supportable sync 2026-04-08 (post BKL-SUP-01 retry fix)
 Files: data/config/customers.json
-Description: After full Supportable discover+scrape with word-backoff retry (BKL-SUP-01), 9 customers still returned 0 accounts. These may genuinely have no Red Hat support portal presence, or their names may not match Supportable's database. 
+Description: After full Supportable discover+scrape with word-backoff retry, and CCSP sync adding ~40 new customers, 40 customers total have 0 account numbers. Many may genuinely have no Red Hat portal presence; others have name mismatches.
 
-Customers to investigate:
-- Kla Corporation (AE: Danny Hollar) — try "KLA Corporation" or just "KLA"
-- Aligntech (AE: Duy Pham) — try "Align Technology"
-- Rxo Capacity Solutions (AE: Elmer Alvarez) — try "RXO" 
-- Cambia Health Solutions (AE: unknown) — try "Cambia"
-- Hotwire Communications (AE: unknown) — try "Hotwire"
-- Arka Group (AE: unknown) — try "Arka"
-- Communify Fincentric (AE: unknown) — try "Fincentric" or "Communify"
-- Employers Holdings (AE: unknown) — try "Employers" 
-- Sierra Nevada (AE: unknown) — may be "Sierra Nevada Corporation" or genuinely no Supportable presence
+2026-04-08 progress: Applied 10 supportableName overrides and re-queued discover for Danny Hollar, Duy Pham, Max Stroup, Tyler McManigal:
+- Aligntech → "Align Technology"
+- Kla Corporation → "KLA Corporation"
+- Rxo Capacity Solutions → "RXO"
+- Ringcentral → "RingCentral"
+- Biomarin Pharmaceutical → "BioMarin Pharmaceutical"
+- Trinet Group → "TriNet"
+- Xpo → "XPO"
+- Stancorp Financial Group → "StanCorp Financial Group"
+- Terrapower → "TerraPower"
+- Tri-state Generation And Transportation → "Tri-State G&T"
 
-Fix: Set supportableName field in customers.json with the correct Supportable portal search term for each. Then trigger POST /api/scrape/supportable/discover for each AE.
+Remaining zero-account customers after override discover completes need manual review to determine if they genuinely have no Supportable presence (cloud-native SaaS companies, startups, non-RHEL shops).
+
+### BKL-SUP-03 | Supportable detail-page extraction fails when page has 0 <th> elements
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: S
+Source: 2026-04-08 — Supportable discover run, observed pattern on Rubrik, Business Wire Asia Pacific, Lumentum Holdings, others
+Files: src/supportable-scraper.ts — name-search extraction patterns
+Description: When Supportable shows a single-match detail page (hasCustomerInfo=true, 9 tables, 0 <th> elements), all 3 account-number extraction patterns fail. The HTML size is ~31KB with 9 tables but no <th> elements — the tables use a different structure (probably <tr><td> without header row or use <strong>/<label> for field labels). Affected customers include Business Wire Asia Pacific, Rubrik, Lumentum Holdings (before backoff found it), and possibly others. The scraper logs: "detail page detected (hasCustomerInfo=true) but all 3 account-number extraction patterns failed". Fix: add a 4th extraction pattern that handles the no-<th> table format. Read the actual HTML for one of these failures to understand the layout (account number may be in a <td> labeled "Account Number" or similar, without a table header).
+
+Note: Do NOT fix this without reading SCRAPER-RULES.md and getting explicit approval from Jason. Scraper files are stable — surgical change only.
