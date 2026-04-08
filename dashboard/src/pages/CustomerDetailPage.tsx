@@ -1338,7 +1338,7 @@ export function CustomerDetailPage() {
           <BriefSection name={customerName} />
           <ProductIntelSection
             customerName={customerName}
-            customerSlug={customerName.toLowerCase().replace(/\s+/g, '-')}
+            customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
           />
           <CloudSpendCard customerName={customerName} />
           <PipelineCard customerName={customerName} />

@@ -2917,7 +2917,7 @@ interface PodBootstrapStatus {
     total: number
     completed: number
     currentAE: string | null
-    results: Array<{ aeName: string; success: boolean; error?: string }>
+    results: Array<{ name: string; status: string; error?: string; customerCount?: number }>
     completedAt: string | null
     error: string | null
   }
@@ -2949,7 +2949,7 @@ function PodBootstrapSection() {
   // Check for existing run on mount
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/bootstrap/status', { signal: controller.signal })
+    fetch('/api/bootstrap/auto/status', { signal: controller.signal })
       .then(r => r.json())
       .then((d: PodBootstrapStatus) => {
         if (d.podBootstrap && (d.podBootstrap.running || d.podBootstrap.completedAt)) {
@@ -3006,7 +3006,7 @@ function PodBootstrapSection() {
     const controller = new AbortController()
     const interval = setInterval(async () => {
       try {
-        const r = await fetch('/api/bootstrap/status', { signal: controller.signal })
+        const r = await fetch('/api/bootstrap/auto/status', { signal: controller.signal })
         const d: PodBootstrapStatus = await r.json()
         setStatus(d.podBootstrap)
         if (!d.podBootstrap.running) clearInterval(interval)
@@ -3044,13 +3044,13 @@ function PodBootstrapSection() {
   }
 
   const resetPodBootstrap = async () => {
-    await fetch('/api/bootstrap/reset', { method: 'POST' }).catch(() => {})
+    await fetch('/api/bootstrap/auto/reset', { method: 'POST' }).catch(() => {})
     setStatus(null)
     setStartError(null)
   }
 
-  const successCount = status?.results.filter(r => r.success).length ?? 0
-  const failCount = status?.results.filter(r => !r.success).length ?? 0
+  const successCount = status?.results.filter(r => r.status === 'ok' || r.status === 'skipped').length ?? 0
+  const failCount = status?.results.filter(r => r.status === 'error').length ?? 0
 
   return (
     <div className="space-y-5">
@@ -3176,15 +3176,22 @@ function PodBootstrapSection() {
           {/* Per-AE results as they complete */}
           {status.results.length > 0 && (
             <div className="space-y-1">
-              {status.results.map((result, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm">
-                  {result.success
-                    ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
-                    : <XCircle className="w-4 h-4 text-critical shrink-0" />}
-                  <span className={result.success ? 'text-success' : 'text-critical'}>{result.aeName}</span>
-                  {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
-                </div>
-              ))}
+              {status.results.map((result, i) => {
+                const isOk = result.status === 'ok' || result.status === 'skipped'
+                return (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    {isOk
+                      ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                      : result.status === 'pending' || result.status === 'retrying'
+                        ? <Loader2 className="w-4 h-4 animate-spin text-accent shrink-0" />
+                        : <XCircle className="w-4 h-4 text-critical shrink-0" />}
+                    <span className={isOk ? 'text-success' : result.status === 'error' ? 'text-critical' : 'text-text-secondary'}>{result.name}</span>
+                    {result.status === 'skipped' && <span className="text-xs text-text-secondary">(skipped)</span>}
+                    {result.customerCount !== undefined && result.customerCount > 0 && <span className="text-xs text-text-secondary">({result.customerCount} customers)</span>}
+                    {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -3202,15 +3209,20 @@ function PodBootstrapSection() {
           {/* Per-AE results */}
           {status.results.length > 0 && (
             <div className="space-y-1">
-              {status.results.map((result, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm">
-                  {result.success
-                    ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
-                    : <XCircle className="w-4 h-4 text-critical shrink-0" />}
-                  <span className={result.success ? 'text-success' : 'text-critical'}>{result.aeName}</span>
-                  {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
-                </div>
-              ))}
+              {status.results.map((result, i) => {
+                const isOk = result.status === 'ok' || result.status === 'skipped'
+                return (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    {isOk
+                      ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                      : <XCircle className="w-4 h-4 text-critical shrink-0" />}
+                    <span className={isOk ? 'text-success' : 'text-critical'}>{result.name}</span>
+                    {result.status === 'skipped' && <span className="text-xs text-text-secondary">(skipped)</span>}
+                    {result.customerCount !== undefined && result.customerCount > 0 && <span className="text-xs text-text-secondary">({result.customerCount} customers)</span>}
+                    {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
+                  </div>
+                )
+              })}
             </div>
           )}
 

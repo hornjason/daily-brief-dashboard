@@ -493,7 +493,7 @@ function Dashboard() {
                   const s = scrapeStatus.data!.scrapers[storeKey]
                   const isRunning = s.state === 'running'
                   const isStale = s.state === 'stale'
-                  const isUnreachable = storeKey === 'supportable' && scrapeStatus.data!.supportableReachable === false
+                  const isUnreachable = storeKey === 'supportable' && scrapeStatus.data!.supportableReachable === false && !s.lastSuccess
                   const color = isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : isStale || isUnreachable ? 'bg-warning' : 'bg-green-500'
                   const tooltip = isRunning ? 'Currently running' : isUnreachable ? 'Not reachable — check VPN' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSuccess ? `Last sync: ${new Date(s.lastSuccess).toLocaleString()}` : 'Not yet synced'
                   return (

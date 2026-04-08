@@ -689,6 +689,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     // Phase 3: Include POD bootstrap progress when a POD bootstrap is running or recently completed
     if (podBootstrapState.running || podBootstrapState.completedAt) {
       sanitized.podBootstrap = {
+        running: podBootstrapState.running,
         total: podBootstrapState.total,
         completed: podBootstrapState.completed,
         currentAE: podBootstrapState.currentAE,
@@ -721,8 +722,9 @@ export function registerBootstrapRoutes(app: Hono): void {
   // GET /api/bootstrap/pod/tabs — List corp tabs from a territory sheet
   app.get('/api/bootstrap/pod/tabs', async (c) => {
     const rawSheetId = (c.req.query('sheetId') ?? '').trim()
-    const sheetId = rawSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{44})/)?.[1] ?? rawSheetId
-    if (!sheetId || !/^[a-zA-Z0-9_-]{44}$/.test(sheetId)) {
+    const urlMatch = rawSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/)
+    const sheetId = urlMatch ? urlMatch[1] : rawSheetId
+    if (!sheetId || !/^[a-zA-Z0-9_-]{10,}$/.test(sheetId)) {
       return c.json({ error: 'sheetId query parameter is required' }, 400)
     }
     try {
