@@ -684,14 +684,14 @@ Description: Many interactive elements smaller than 44x44px WCAG minimum (sideba
 Fix: Global CSS: `button, a, [role="button"] { min-height: 32px; min-width: 32px; }`. For small icon buttons add invisible padding: p-2 -m-1 pattern.
 
 ### BKL-Q09 | Customer detail page fires 14 console 404s on `/api/products/*/intel/*` endpoints
-Status: OPEN
+Status: ✅ DONE 2026-04-10
 Severity: Medium
 Source: Quinn QA 2026-04-10
 Files: dashboard/src/pages/CustomerDetailPage.tsx
 Description: Every customer detail page load makes product intelligence API calls for all products before checking if intel has been generated. This produces 14 console 404 errors per page load (one per product). Fix options: (a) suppress the calls until user explicitly triggers "Generate", or (b) return 200 with empty data from the endpoint instead of 404.
 
 ### BKL-Q10 | Data Sources badge flashes "All connected" briefly before health checks resolve
-Status: OPEN
+Status: ✅ DONE 2026-04-10 (verified already implemented — loading state prevents flash)
 Severity: Low
 Source: Quinn QA 2026-04-10
 Files: dashboard/src/pages/SetupPage.tsx
@@ -4917,6 +4917,15 @@ Fix Part 3 — Session health: Before each discovery job, add a lightweight APEX
 
 Note: BKL-SUP-02 (session locking) must be implemented first — concurrent CCSP/SF scrapes during a Supportable sync will reproduce the same zero-account failures. Fix order: SUP-02 → SUP-01 → re-sync.
 
+### BKL-RESTORE-02 | Post-restore alias repopulation from SF bookings sheets
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P1
+Size: S
+Source: 2026-04-10 — restore stripped aliases, blocking RH account discovery
+Files: src/restore-routes.ts
+Description: Restore writes customers.json from Supportable "Accounts" tab which lacks aliases[]. The RH scraper uses aliases[0] (SF canonical name) for account discovery — without it, all customers appear un-discoverable after a restore. Fix: after saveCustomers(), fire a non-blocking background pass that reads POD bookings sheets via deriveSfCustomersByTerritory and re-adds aliases[0] per customer. Committed 093e025.
+
 ### BKL-RESTORE-01 | GSheet restore — rebuild all dashboard data from source sheets without re-scraping
 Status: ✅ DONE — 2026-04-08
 Severity: HIGH
@@ -5101,7 +5110,7 @@ Files: dashboard/src/App.tsx, dashboard/src/components/Sidebar.tsx
 Description: ASA View and Product View are nearly identical — the only observable difference is that Morning Summary is hidden in Product View. This isn't enough differentiation to justify a separate view toggle. Merge back to a single view that always shows Morning Summary and always shows the product chip bar. Remove the ASA/Product toggle from the sidebar entirely. Product chips (RHEL / OCP / AAP / All Products per BKL-PVIEW-06) remain permanently visible above the AE chips. The view-mode localStorage key and toggle code can be removed.
 
 ### BKL-PVIEW-08 | Morning brief collapse — keep bullet outline visible when closed
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified already implemented — compactBullets in MorningSummary.tsx lines 92-111)
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -5165,7 +5174,7 @@ Description: CCSP auth guard test expects response body to have `error` field on
 
 
 ### BKL-WIZ-01 | Bootstrap wizard — Google Drive folder preview missing
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified already implemented — onBlur handlers on all 3 Drive folder inputs in SetupPage.tsx)
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -5239,6 +5248,15 @@ Description: cases.json contains 6 unique cases each duplicated 10x (60 total). 
 ---
 
 ## AI Cost Optimization
+
+### BKL-AI-COST-04 | Admin UI setting for doc-classify age filter (docClassifyMaxAgeDays)
+Status: ✅ DONE 2026-04-10
+Severity: MEDIUM
+Priority: P1
+Size: S
+Source: Jason 2026-04-10 — unlimited classify by default, but configurable
+Files: dashboard/src/pages/AdminPage.tsx, src/settings-api.ts, src/doc-extraction.ts
+Description: Added number input in AI Settings card for docClassifyMaxAgeDays. 0 = unlimited (classify all docs regardless of age), >0 = skip docs older than N days. Backend AiConfig default is 0. Committed 133ebbe.
 
 ### BKL-AI-01 | Use gemini-2.0-flash for structured output tasks
 Status: 🔴 OPEN
