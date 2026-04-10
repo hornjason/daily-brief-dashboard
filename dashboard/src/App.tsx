@@ -1,11 +1,14 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useNavigate } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
 import { Sidebar } from './components/Sidebar'
 import { TopBar } from './components/TopBar'
 import { KPICards } from './components/KPICards'
 import { CalendarStrip } from './components/CalendarStrip'
 import { AccountPortfolioGrid } from './components/AccountPortfolioGrid'
+import { AEGroupedList } from './components/AEGroupedList'
+import { PodTabBar } from './components/PodTabBar'
+import { PodKPIHeader } from './components/PodKPIHeader'
 import { CloudSpendSection } from './components/CloudSpendSection'
 import MorningSummary from './components/MorningSummary'
 import TopActionsPanel from './components/TopActionsPanel'
@@ -19,7 +22,7 @@ import { SetupPage } from './pages/SetupPage'
 import { AdminPage } from './pages/AdminPage'
 import { formatRelTime } from './lib/format'
 import { ChevronUp } from 'lucide-react'
-import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, PipelineSummary } from './types'
+import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, PipelineSummary, PodInfo } from './types'
 
 interface RhStatus {
   hasSession: boolean
@@ -93,8 +96,18 @@ function NoAEsBanner({ onDismiss }: { onDismiss: () => void }) {
 }
 
 function Dashboard() {
+  const navigate = useNavigate()
   const [refreshKey, setRefreshKey] = useState(0)
   const [active, setActive] = useState('Command Center')
+
+  // BKL-UX52: Pod tab state — persisted in localStorage
+  const [activePodId, setActivePodId] = useState<string>(() => {
+    return localStorage.getItem('active-pod-id') ?? ''
+  })
+  const handlePodChange = useCallback((podId: string) => {
+    setActivePodId(podId)
+    localStorage.setItem('active-pod-id', podId)
+  }, [])
 
   // Dynamic page title based on active sidebar section
   useEffect(() => {
@@ -117,11 +130,28 @@ function Dashboard() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // BKL-UX52: Fetch pod list
+  const podsApi = useApi<{ pods: PodInfo[] }>('/api/pods')
+
+  // Set default pod on first load
+  useEffect(() => {
+    if (podsApi.data?.pods?.length && !activePodId) {
+      const defaultId = podsApi.data.pods[0].id
+      setActivePodId(defaultId)
+      localStorage.setItem('active-pod-id', defaultId)
+    }
+  }, [podsApi.data, activePodId])
+
+  const pods = podsApi.data?.pods ?? []
+  const activePod = pods.find(p => p.id === activePodId) ?? pods[0]
+
   const kpisApi = useApi<KPIs>(`/api/kpis?_=${refreshKey}`)
   const calendarApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&_=${refreshKey}`)
   const calendarAllApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&all=true&_=${refreshKey}`)
   const casesApi = useApi<{ cases: SupportCase[]; totalCount: number }>(`/api/cases/all?_=${refreshKey}`)
-  const accountsApi = useApi<{ customers: AccountInfo[] }>(`/api/accounts?_=${refreshKey}`)
+  // BKL-UX52: Pod-filtered accounts with attention scores
+  const podQuery = activePodId ? `&pod=${activePodId}` : ''
+  const accountsApi = useApi<{ customers: AccountInfo[] }>(`/api/accounts?_=${refreshKey}${podQuery}`)
   const ccspApi      = useApi<CCSPSummary>(`/api/ccsp`)
   const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline`)
   const scrapeStatus = useApi<{
@@ -222,6 +252,18 @@ function Dashboard() {
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
+        {/* BKL-UX52: Pod tab bar */}
+        {pods.length > 1 && (
+          <PodTabBar pods={pods} activePodId={activePodId} onChange={handlePodChange} />
+        )}
+        {/* BKL-UX52: Pod KPI header */}
+        {activePod && (accountsApi.data?.customers?.length ?? 0) > 0 && (
+          <PodKPIHeader
+            podName={activePod.name}
+            accounts={accountsApi.data?.customers ?? []}
+            cases={casesApi.data?.cases ?? []}
+          />
+        )}
         {rhStatus && (
           <RhSessionBanner status={rhStatus} onReconnect={() => setRhReconnecting(true)} onVncOpen={(win) => { vncWindowRef.current = win }} />
         )}
@@ -325,13 +367,14 @@ function Dashboard() {
               />
             </section>
 
-            {/* Account Portfolio Grid */}
+            {/* BKL-UX52: AE-grouped customer list with attention scores */}
             <section id="section-accounts" data-section="section-accounts">
-              <AccountPortfolioGrid
+              <AEGroupedList
                 accounts={accountsApi.data?.customers ?? []}
                 cases={casesApi.data?.cases ?? []}
                 events={calendarApi.data?.events ?? []}
                 loading={accountsApi.loading}
+                onCustomerClick={(name) => navigate(`/dashboard/customer/${encodeURIComponent(name)}`)}
               />
             </section>
           </main>

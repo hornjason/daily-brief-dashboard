@@ -6,8 +6,10 @@
 export interface AE {
   name: string
   driveFolderId: string         // Google Drive folder where AE sheets live
+  parentFolderId?: string       // Drive folder ID of the parent containing this AE's folder
   sfReportId?: string           // Salesforce report ID for pipeline scrape
   tableauTerritories?: string[] // Account Territory filter values, e.g. ["WEST_COMM_CORP_NORTHWEST_TERR01"]
+  tableauUrl?: string           // Full Tableau dashboard URL; territory extracted automatically
   supportableSheetId?: string   // Written back after first Supportable scrape
   pipelineSheetId?: string      // Written back after first SF pipeline scrape
   ccspSheetId?: string          // Written back after first CCSP scrape
@@ -31,6 +33,12 @@ export interface Customer {
   supportableFileId?: string  // Supportable Google Sheet file ID for this customer
   notebookId?: string    // BKL-AI11: NotebookLM notebook ID (set after notebook is created)
   notebookUrl?: string   // BKL-AI11: NotebookLM notebook URL for dashboard linking
+  importedFrom?: string  // provenance tag: "territory-sheet", "manual", etc.
+  inactive?: boolean     // true = AE removed but customer preserved (has account numbers or Drive folder)
+  ccspCustomer?: boolean // true = customer appears in SF sheet only via CCSP opportunities
+  discoveryFailures?: number
+  discoveryStatus?: 'unresolvable'
+  discoverySkippedUntil?: string
 }
 
 export interface CustomerSubscription {
@@ -59,6 +67,8 @@ export interface SupportCase {
   accountNumber: string
   daysOpen: number
   product?: string
+  casesSource?: 'name_match' | 'account_number'
+  customerName?: string
 }
 
 export interface Renewal {
