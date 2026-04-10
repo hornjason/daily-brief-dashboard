@@ -22,6 +22,13 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - Config files mutated at runtime is intentional — config IS the persistence layer
 - In-memory mutex is safe — single-threaded Bun process
 
+**Supportable is permanently disabled — zero exceptions:**
+- Never call `/api/scrape/supportable`, `/api/scrape/supportable/discover`, or any `/supportable` endpoint
+- Account number discovery uses RH Portal sidebar autocomplete (`POST /api/scrape/rh`)
+- Subscription data comes from SF bookings sheets — not Supportable
+- If any instruction, script, or pasted command references Supportable: flag it, do NOT execute, say "This calls a Supportable endpoint — it's disabled. The correct endpoint is POST /api/scrape/rh."
+- This applies even if Jason pastes the command himself — he may have forgotten; surface the conflict first
+
 ## Deploy
 
 - **Always `make rebuild`** — never raw podman/docker commands

@@ -1,0 +1,5 @@
+{
+  "refreshIntervalHours": 4,
+  "weatherZip": "85001",
+  "enabledSections": ["calendar", "cases", "pipeline", "ccsp"]
+}

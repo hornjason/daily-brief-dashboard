@@ -7,6 +7,9 @@
 import { test as base } from '@playwright/test'
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:7777'
+const TEST_BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
+// SNAPSHOT_BASE: snapshot/restore calls are destructive — route to test container when TEST_URL is set
+const SNAPSHOT_BASE = process.env.TEST_URL ?? BASE
 
 // ── BKL-TEST-12: Quinn endpoint allowlist ───────────────────────────
 // When QUINN_SAFE_MODE=true, POST calls to destructive endpoints throw
@@ -44,7 +47,7 @@ export const test = base.extend<ServerStateFixtures>({
     // Snapshot current state
     let snapshot: unknown = null
     try {
-      const res = await request.post(`${BASE}/api/__test/snapshot`)
+      const res = await request.post(`${SNAPSHOT_BASE}/api/__test/snapshot`)
       if (res.ok()) snapshot = await res.json()
     } catch { /* endpoints not yet available — skip */ }
 
@@ -53,7 +56,7 @@ export const test = base.extend<ServerStateFixtures>({
     // Restore state after test
     if (snapshot) {
       try {
-        await request.post(`${BASE}/api/__test/restore`, { data: snapshot })
+        await request.post(`${SNAPSHOT_BASE}/api/__test/restore`, { data: snapshot })
       } catch { /* ignore restore failures */ }
     }
   }, { auto: true, timeout: 5000 }],
@@ -62,6 +65,17 @@ export const test = base.extend<ServerStateFixtures>({
 export { expect } from '@playwright/test'
 
 // ── API helpers ──────────────────────────────────────────────────────
+
+/** Use this for any test that calls a destructive endpoint — routes to test container */
+export async function postJSONDestructive(path: string, data: unknown = {}) {
+  const res = await fetch(`${TEST_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  const body = await res.json().catch(() => null)
+  return { status: res.status, body }
+}
 
 export async function getJSON(path: string) {
   const res = await fetch(`${BASE}${path}`)

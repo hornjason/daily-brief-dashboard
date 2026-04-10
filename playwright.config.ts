@@ -1,5 +1,17 @@
 import { defineConfig } from '@playwright/test'
 
+// Container map:
+//   pai-dashboard      → port 7777  (production, never wipe)
+//   pai-dashboard-dev  → port 7778  (dev snapshot)
+//   pai-dashboard-test → port 7776  (ALLOW_RESET=true, safe to wipe)
+//
+// Environment variables:
+//   BASE_URL  — overrides the default production URL (7777) for all tests
+//   TEST_URL  — overrides the test container URL (7776) for @destructive tests
+//              and snapshot/restore calls in the serverState fixture
+//
+// Run destructive tests: npx playwright test --project=test
+
 export default defineConfig({
   testDir: './test',
   timeout: 30_000,
@@ -27,6 +39,17 @@ export default defineConfig({
       name: 'live-scrapers',
       grep: /@live/,
       testMatch: '**/live-scrapers.spec.ts',
+    },
+    {
+      // Destructive tests — always routed to the test container (port 7776).
+      // Tests must be tagged @destructive. Set TEST_URL to override the container URL.
+      // TEST_KNOWN_CUSTOMER is set to a seed customer so API tests find real data.
+      name: 'test',
+      use: {
+        baseURL: process.env.TEST_URL ?? 'http://localhost:7776',
+        extraHTTPHeaders: {},
+      },
+      grep: /@destructive/,
     },
   ],
   webServer: process.env.CI ? {

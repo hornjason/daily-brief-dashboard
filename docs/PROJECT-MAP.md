@@ -172,6 +172,51 @@ Full inventory in `ARCHITECTURE.md` §17. Quick reference:
 
 All schedule times configurable via Admin page. Floors enforced server-side.
 
+## Testing Infrastructure
+
+### Container Map
+
+| Container | Port | Data Dir | ALLOW_RESET | Purpose |
+|-----------|------|----------|-------------|---------|
+| `pai-dashboard` | 7777 | `data/` | not set | **Production** — never wipe |
+| `pai-dashboard-dev` | 7778 | `data-dev/` | not set | Dev snapshot of production |
+| `pai-dashboard-test` | 7776 | `data-test/` | `true` | **Testing** — safe to wipe |
+
+### Makefile Targets
+
+| Target | Description |
+|--------|-------------|
+| `make seed` | Resets `data-test/` from canonical fixture source in `scripts/seed-data/` (2 AEs, 5 fake customers) |
+| `make test-up` | Starts `pai-dashboard-test` container on port 7776 with `ALLOW_RESET=true` |
+| `make test-down` | Stops and removes `pai-dashboard-test` container |
+| `make test-logs` | Tails logs from the test container |
+| `make lint` | Runs `scripts/check-empty-catches.sh` — fails if any `.catch(() => {})` exists in `dashboard/src/` |
+
+### Unit Tests
+
+Location: `test/unit/`
+
+| File | What it tests |
+|------|--------------|
+| `test/unit/slug.test.ts` | Customer slug generation |
+| `test/unit/sanitize.test.ts` | `sanitizeCell()` and `sanitizeErr()` helpers |
+| `test/unit/account-numbers.test.ts` | Account number validation and normalization |
+| `test/unit/setup-validation.test.ts` | Setup endpoint guard logic |
+
+Run with: `bun test test/unit/` (no container needed, 27 pure-function tests)
+
+### Production Guards
+
+The following endpoints block destructive operations when >5 customers are loaded and `ALLOW_RESET=true` is not set:
+- `POST /api/setup/reset`
+- `POST /api/setup/save-customers`
+- `POST /api/__test/restore` (also requires an existing snapshot)
+
+### Reference
+
+Full testing guide: `docs/TESTING-RUNBOOK.md`
+Testing strategy and rationale: `docs/BKL-TEST-STRATEGY.md`
+
 ## Stale Docs (do not use as authoritative)
 
 - `docs/ARCHITECTURE-oauth-multiAE.md` → captured in `ARCHITECTURE.md` §7

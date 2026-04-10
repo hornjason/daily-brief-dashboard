@@ -11,6 +11,10 @@
 #   make push      Push to GHCR
 #   make rebuild   Full cycle: build → push → restart container
 #   make ps        Show container status
+#   make seed      Populate data-test/ with known fixture data
+#   make test-up   Start test container on port 7776 (ALLOW_RESET=true)
+#   make test-down Stop test container
+#   make lint      Check for empty catch blocks in dashboard/src/
 
 IMAGE  := localhost/daily-brief-dashboard:latest
 REMOTE := ghcr.io/hornjason/daily-brief-dashboard:latest
@@ -18,6 +22,7 @@ DATA   := $(CURDIR)/data
 
 .PHONY: up down logs build push rebuild ps setup release-patch release-minor release-major version \
        dev-snapshot dev-up dev-down dev-logs \
+       seed test-up test-down test-logs lint \
        demo-snapshot demo-up demo-down demo-logs \
        all-down all-ps
 
@@ -119,6 +124,49 @@ dev-down:
 
 dev-logs:
 	podman logs -f pai-dashboard-dev
+
+# ── Test environment (port 7776, destructive-safe) ───────────────────────────
+# ALLOW_RESET=true enables POST /api/setup/reset and POST /api/__test/restore
+# against datasets with >5 customers. Never set this on the production container.
+seed:
+	@echo "Seeding test data..."
+	@mkdir -p $(CURDIR)/data-test/config $(CURDIR)/data-test/cache/intelligence $(CURDIR)/data-test/rh-profile
+	@cp $(CURDIR)/scripts/seed-data/aes.json         $(CURDIR)/data-test/config/aes.json
+	@cp $(CURDIR)/scripts/seed-data/customers.json   $(CURDIR)/data-test/config/customers.json
+	@cp $(CURDIR)/scripts/seed-data/settings.json    $(CURDIR)/data-test/config/settings.json
+	@cp $(CURDIR)/scripts/seed-data/product-intel-config.json $(CURDIR)/data-test/config/product-intel-config.json
+	@echo '{"history":[]}' > $(CURDIR)/data-test/config/bootstrap-history.json
+	@echo '{"folders":{},"lastChecked":null}' > $(CURDIR)/data-test/config/drive-watcher-state.json
+	@cp -r $(CURDIR)/scripts/seed-data/cache/. $(CURDIR)/data-test/cache/
+	@echo "✅  Test data seeded at data-test/"
+
+test-up: test-down seed
+	podman run -d \
+	  -p 7776:7777 \
+	  -p 127.0.0.1:6083:6080 \
+	  -v $(CURDIR)/data-test:/data:Z \
+	  --env-file .env \
+	  -e PORT=7777 \
+	  -e CONFIG_DIR=/data/config \
+	  -e CACHE_DIR=/data/cache \
+	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  -e ALLOW_RESET=true \
+	  --shm-size=1g \
+	  --memory=4g \
+	  --name pai-dashboard-test \
+	  $(IMAGE)
+	@echo "Test container running at http://localhost:7776 (ALLOW_RESET=true)"
+
+test-down:
+	podman stop pai-dashboard-test 2>/dev/null || true
+	podman rm   pai-dashboard-test 2>/dev/null || true
+
+test-logs:
+	podman logs -f pai-dashboard-test
+
+lint:
+	@echo "Checking for empty catch blocks in dashboard/src/..."
+	@bash $(CURDIR)/scripts/check-empty-catches.sh
 
 # ── Demo environment (port 7779, frozen) ─────────────────────────────────────
 demo-snapshot: demo-down

@@ -109,8 +109,8 @@ test.describe('GET /customer/:name/events', () => {
 // ── /customer/:name/brief ───────────────────────────────────────────────────
 
 // Use a real customer from the live server — "A10 Networks" is in Carolanne's territory.
-// CAROLANNE is the AE name, not a customer; customer lookups use the customer name.
-const KNOWN_CUSTOMER = 'A10 Networks'
+// Override with TEST_KNOWN_CUSTOMER env var when targeting the test container (e.g. "Acme Corp").
+const KNOWN_CUSTOMER = process.env.TEST_KNOWN_CUSTOMER ?? 'A10 Networks'
 const KNOWN_CUSTOMER_ENCODED = encodeURIComponent(KNOWN_CUSTOMER)
 
 test.describe('GET /customer/:name/brief', () => {

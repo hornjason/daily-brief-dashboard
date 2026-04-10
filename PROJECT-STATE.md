@@ -168,9 +168,24 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 
 ## Testing Strategy
 
-**Doc:** `docs/BKL-TEST-STRATEGY.md` (created 2026-04-10)
-**Production guard:** Customer-count guard on `/api/setup/reset` and `/api/__test/restore` -- blocks destructive operations when >5 customers loaded (BKL-TEST-11, DONE)
-**Open items:** BKL-TEST-12 through BKL-TEST-20 (endpoint allowlist, empty-catch ban, useAction hook, unit test foundation, Docker volume, seed script, delta guard, fixture detection, setup.spec.ts wrapper)
+**Docs:** `docs/BKL-TEST-STRATEGY.md` (strategy, rationale), `docs/TESTING-RUNBOOK.md` (how to run tests safely)
+
+**Production guards (BKL-TEST-11 + this session):**
+- `POST /api/setup/reset` — blocks if >5 customers without `ALLOW_RESET=true`
+- `POST /api/setup/save-customers` — blocks if >5 customers without `ALLOW_RESET=true`
+- `POST /api/__test/restore` — blocks if no snapshot + >5 customers without `ALLOW_RESET=true`
+
+**Test container (2026-04-10):**
+- Container: `pai-dashboard-test`, port `7776`, data dir: `data-test/`, `ALLOW_RESET=true`
+- Seed data: `scripts/seed-data/` (2 AEs, 5 fake customers with account numbers 990000x)
+- `make seed` — reset `data-test/` from seed fixtures
+- `make test-up` / `make test-down` — start/stop test container
+
+**Unit tests (2026-04-10):** `test/unit/` — 27 pure-function tests covering slug, sanitize, account-numbers, setup-validation. Run: `bun test test/unit/`
+
+**CI gate (2026-04-10):** `make lint` runs `scripts/check-empty-catches.sh` — fails build if any `.catch(() => {})` exists in `dashboard/src/`
+
+**Open items:** BKL-TEST-12 (endpoint allowlist), BKL-TEST-18 (delta guard), BKL-TEST-19 (fixture detection), BKL-TEST-20 (setup.spec.ts wrapper), BKL-TEST-21 (complete unit coverage), BKL-TEST-22 (@destructive tag routing)
 
 ---
 

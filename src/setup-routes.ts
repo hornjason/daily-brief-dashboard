@@ -553,6 +553,15 @@ export function registerSetupRoutes(app: Hono): void {
       if (body.customers.length === 0) return c.json({ error: 'Refusing to overwrite customer list with empty array — this would wipe all customers' }, 400)
       if (body.customers.length > 200) return c.json({ error: 'customers array exceeds maximum of 200 entries' }, 400)
 
+      // Production guard: refuse to overwrite if >5 customers are already loaded
+      // and ALLOW_RESET is not set (test containers set ALLOW_RESET=true)
+      if (customers.length > 5 && process.env.ALLOW_RESET !== 'true') {
+        console.error(`[save-customers] BLOCKED: ${customers.length} customers loaded — production guard triggered`)
+        return c.json({
+          error: `BLOCKED: ${customers.length} customers loaded — production guard active. save-customers would overwrite ${customers.length} existing records. Set ALLOW_RESET=true in env to override (test containers only).`,
+        }, 403)
+      }
+
       // Validate each customer
       for (let i = 0; i < body.customers.length; i++) {
         const cx = body.customers[i]

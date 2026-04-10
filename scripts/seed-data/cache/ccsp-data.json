@@ -1,0 +1,8 @@
+{
+  "records": [
+    { "accountName": "Acme Corp", "cloudPartner": "AWS", "acvPlus": 25000, "quarter": "2026-Q1", "closeDate": "" },
+    { "accountName": "Globex Industries", "cloudPartner": "AWS", "acvPlus": 15000, "quarter": "2026-Q1", "closeDate": "" }
+  ],
+  "cachedAt": "2026-04-10T00:00:00.000Z",
+  "fileIds": ["1TESTCCSP1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "1TESTCCSP2AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]
+}

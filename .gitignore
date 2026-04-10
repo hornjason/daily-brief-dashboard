@@ -7,6 +7,9 @@ dashboard/dist/
 
 # Runtime cache (brief caches, sheet caches)
 cache/
+# Exception: seed-data cache is canonical test fixtures, must be committed
+!scripts/seed-data/cache/
+!scripts/seed-data/cache/**
 
 # Logs
 logs/
@@ -65,3 +68,9 @@ data-demo/
 
 # Unsanctioned deploy files — make rebuild is the only sanctioned deploy method (BKL-H01)
 docker-compose.yml
+
+# Test container data (mutated by tests, never commit)
+data-test/
+
+# Seed data source (committed — canonical test fixtures)
+# scripts/seed-data/ is intentionally tracked

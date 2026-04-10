@@ -1,0 +1,55 @@
+{
+  "driveParentFolderId": "1TESTDRIVEPARENTFOLDERAAAAAAAAAAAA",
+  "products": [
+    {
+      "slug": "openshift",
+      "displayName": "OpenShift Test Product",
+      "shortName": "OpenShift",
+      "driveFolder": "1TESTDRIVEFOLDEROPENSHIFT000000AA",
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OpenShift",
+        "OCP"
+      ],
+      "caseProductPatterns": [
+        "OpenShift"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      }
+    },
+    {
+      "slug": "ansible",
+      "displayName": "Ansible Test Product",
+      "shortName": "Ansible",
+      "driveFolder": "1TESTDRIVEFOLDERANSIBLE0000000AA",
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "Ansible",
+        "AAP"
+      ],
+      "caseProductPatterns": [
+        "Ansible"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": null,
+        "docsBaseUrl": null,
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      }
+    }
+  ]
+}

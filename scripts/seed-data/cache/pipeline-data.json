@@ -1,0 +1,36 @@
+{
+  "records": [
+    {
+      "oppNumber": "OP-TEST-001",
+      "oppId": "006TEST0000000001AAA",
+      "accountName": "Acme Corp",
+      "oppName": "Acme Corp - RHEL Renewal FY2026",
+      "acv": 50000,
+      "closeDate": "2026-06-30",
+      "forecastCategory": "Commit",
+      "owner": "Test AE One",
+      "renewal": true,
+      "offeringGroup": "RHEL",
+      "probability": 90,
+      "products": ["RHEL"],
+      "territory": "WEST_COMM_CORP_TEST_TERR01"
+    },
+    {
+      "oppNumber": "OP-TEST-002",
+      "oppId": "006TEST0000000002AAA",
+      "accountName": "Globex Industries",
+      "oppName": "Globex Industries - OCP Expansion FY2026",
+      "acv": 35000,
+      "closeDate": "2026-09-30",
+      "forecastCategory": "Best Case",
+      "owner": "Test AE Two",
+      "renewal": false,
+      "offeringGroup": "OPENSHIFT",
+      "probability": 50,
+      "products": ["OCP"],
+      "territory": "WEST_COMM_CORP_TEST_TERR02"
+    }
+  ],
+  "cachedAt": "2026-04-10T00:00:00.000Z",
+  "fileIds": ["1TESTPIPELINE1AAAAAAAAAAAAAAAAAAAAAAAAAAA", "1TESTPIPELINE2AAAAAAAAAAAAAAAAAAAAAAAAAAA"]
+}
