@@ -5087,15 +5087,14 @@ Final state (2026-04-08): 134/141 customers have account numbers (7 zero-account
   These may be under a different name in Supportable, may have no RHEL subscriptions, or may be cloud/SaaS accounts not tracked in the portal.
 
 ### BKL-SUP-03 | Supportable detail-page extraction fails when page has 0 <th> elements
-Status: 🔴 OPEN
+Status: ✅ DONE
+ClosedAt: 2026-04-10
 Severity: HIGH
 Priority: P1
 Size: S
 Source: 2026-04-08 — Supportable discover run, observed pattern on Rubrik, Business Wire Asia Pacific, Lumentum Holdings, others
 Files: src/supportable-scraper.ts — name-search extraction patterns
-Description: When Supportable shows a single-match detail page (hasCustomerInfo=true, 9 tables, 0 <th> elements), all 3 account-number extraction patterns fail. The HTML size is ~31KB with 9 tables but no <th> elements — the tables use a different structure (probably <tr><td> without header row or use <strong>/<label> for field labels). Affected customers include Business Wire Asia Pacific, Rubrik, Lumentum Holdings (before backoff found it), and possibly others. The scraper logs: "detail page detected (hasCustomerInfo=true) but all 3 account-number extraction patterns failed". Fix: add a 4th extraction pattern that handles the no-<th> table format. Read the actual HTML for one of these failures to understand the layout (account number may be in a <td> labeled "Account Number" or similar, without a table header).
-
-Note: Do NOT fix this without reading SCRAPER-RULES.md and getting explicit approval from Jason. Scraper files are stable — surgical change only.
+Description: When Supportable shows a single-match detail page (hasCustomerInfo=true, 9 tables, 0 <th> elements), all 3 account-number extraction patterns fail. The HTML size is ~31KB with 9 tables but no <th> elements — the tables use a different structure (probably <tr><td> without header row or use <strong>/<label> for field labels). Affected customers include Business Wire Asia Pacific, Rubrik, Lumentum Holdings (before backoff found it), and possibly others. The scraper logs: "detail page detected (hasCustomerInfo=true) but all 3 account-number extraction patterns failed". Fix: added Pattern 4 — DOM-based extraction that walks <strong>/<label>/<b>/<span> elements for "Account Number" labels with adjacent digit values, plus a fallback <tr>/<td> row scan. Commit 9db1b83.
 
 ### BKL-PVIEW-05 | normalizeProductName() missing mappings — 36 raw chips, chip bar wraps 3 rows
 Status: ✅ DONE 2026-04-08
