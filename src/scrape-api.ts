@@ -72,6 +72,12 @@ import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets,
 import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
 import { getScrapeContext, discoverAccountNumberByName } from './rh-scraper.ts'
 
+// ── Supportable kill switch ───────────────────────────────────────────────────
+// Set to true to block all Supportable scrape and discover calls.
+// Account discovery uses RH Portal (POST /api/scrape/rh) exclusively.
+// Re-enable by setting this to false and rebuilding.
+const SUPPORTABLE_DISABLED = true
+
 // ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
 /** Rejects after `ms` milliseconds with an informative error. */
 function wallTimeout(ms: number, label: string): Promise<never> {
@@ -236,6 +242,7 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // POST /api/scrape/supportable — full pipeline: APEX scrape → sheet → cache
   app.post('/api/scrape/supportable', async (c) => {
+    if (SUPPORTABLE_DISABLED) return c.json({ error: 'Supportable scraper is disabled. Use POST /api/scrape/rh for account discovery.' }, 503)
     // Stale-mutex auto-release: if the flag has been stuck for >15 min (container restart, crash),
     // let the request through — runSupportableScrape() will reset the mutex internally.
     const supportableStale = supportableScrapeRunning && supportableScrapeStartedAt &&
@@ -344,6 +351,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // Unlike /api/scrape/supportable, this accepts customers without accountNumbers.
   // When aeName is omitted (e.g. admin "Run Now"), runs for ALL AEs sequentially.
   app.post('/api/scrape/supportable/discover', async (c) => {
+    if (SUPPORTABLE_DISABLED) return c.json({ error: 'Supportable scraper is disabled. Use POST /api/scrape/rh for account discovery.' }, 503)
     // Stale-mutex auto-release (same pattern as POST /api/scrape/supportable above)
     const supportableStale = supportableScrapeRunning && supportableScrapeStartedAt &&
       (Date.now() - supportableScrapeStartedAt > 15 * 60 * 1000)
