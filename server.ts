@@ -1176,13 +1176,15 @@ scheduleProductIntelRefresh()
 // ── Test-only endpoints (never active in production) ──────────────────
 if (process.env.NODE_ENV !== 'production') {
   // Snapshot current server config state for test isolation
+  // BKL-TEST-03: Snapshot reads from IN-MEMORY arrays, not disk.
+  // Disk may be stale (scrapes/bootstrap write to memory before flushing).
+  // This prevents Quinn from capturing stale disk state as the "good" snapshot.
   app.post('/api/__test/snapshot', async (c) => {
     try {
-      let aesRaw: string
-      try { aesRaw = readFileSync(AES_PATH, 'utf-8') } catch { aesRaw = '{"aes":[]}' }
-      let customersRaw: string
-      try { customersRaw = readFileSync(CUSTOMERS_PATH, 'utf-8') } catch { customersRaw = '{"customers":[]}' }
-      return c.json({ aes: JSON.parse(aesRaw), customers: JSON.parse(customersRaw) })
+      return c.json({
+        aes: { aes: [...aes] },
+        customers: { customers: [...customers] },
+      })
     } catch (e) {
       return c.json({ error: 'snapshot failed' }, 500)
     }
@@ -1194,6 +1196,15 @@ if (process.env.NODE_ENV !== 'production') {
       const snap = await c.req.json()
       const aesData = snap.aes ?? { aes: [] }
       const customersData = snap.customers ?? { customers: [] }
+      // BKL-TEST-03: Guard against accidental production wipe.
+      // If in-memory customers has >5 entries and restore would reduce them,
+      // require explicit { force: true } in the body.
+      const incomingCount = (customersData.customers ?? []).length
+      if (customers.length > 5 && incomingCount < customers.length && !snap.force) {
+        return c.json({
+          error: `Restore would reduce customers from ${customers.length} to ${incomingCount}. Pass { force: true } to confirm.`,
+        }, 409)
+      }
       writeFileSync(AES_PATH + '.tmp', JSON.stringify(aesData, null, 2))
       renameSync(AES_PATH + '.tmp', AES_PATH)
       writeFileSync(CUSTOMERS_PATH + '.tmp', JSON.stringify(customersData, null, 2))
