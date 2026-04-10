@@ -198,6 +198,14 @@ export async function cancelLoginBrowser(): Promise<void> {
 }
 
 /**
+ * BKL-UX60: Clear sessionExpired at the start of a scrape run so the frontend
+ * doesn't show "Not connected" while a scrape is actively running.
+ */
+export function recordScrapeStart(): void {
+  rhSessionExpired = false
+}
+
+/**
  * Update scrape state after a successful run.
  */
 export function recordScrapeSuccess(caseCount: number): void {

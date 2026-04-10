@@ -2095,7 +2095,8 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
     try {
       const d: RhStatus = await fetch('/api/auth/redhat/status', { signal }).then((r) => r.json())
       setStatus(d)
-      if (d.hasSession && !d.sessionExpired) onConnected?.()
+      // BKL-UX60: sessionExpired can be stale while scraper is running; treat hasSession as sufficient
+      if (d.hasSession) onConnected?.()
       if (d.loginInProgress) loginStartedRef.current = true
       if (d.hasSession && !d.loginInProgress && connecting && loginStartedRef.current) {
         setConnecting(false)
@@ -2120,34 +2121,28 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
   }, [connecting])
 
   const handleConnect = async () => {
+    // BKL-UX60: Connect button always wins — check status first, then either
+    // start a new login or re-use the in-progress one. Never show errors.
     setError(null)
     loginStartedRef.current = false
     setConnecting(true)
     try {
-      const res = await fetch('/api/auth/redhat/start', { method: 'POST' })
-      const d = await res.json()
-      if (d.error) {
-        // Sanitize raw Playwright/Chromium errors into user-readable messages
-        const raw: string = d.error
-        let msg: string
-        if (raw.includes('locked the profile') || raw.includes('in use by another') || raw.includes('SingletonLock')) {
-          msg = 'Browser profile was locked by a stale process. The lock has been cleared — try connecting again.'
-        } else if (raw.includes('has been closed') || raw.includes('Target page')) {
-          msg = 'Browser session closed unexpectedly — try connecting again.'
-        } else if (raw.includes('Login already in progress')) {
-          msg = 'Login already in progress — cancel first or wait.'
-        } else {
-          msg = raw.split(/\n|Browser logs:/)[0].trim()
-          if (msg.length > 140) msg = msg.slice(0, 140) + '…'
-        }
-        setError(msg)
-        setConnecting(false)
+      // Step 1: check current state
+      const currentStatus: RhStatus = await fetch('/api/auth/redhat/status').then(r => r.json())
+      setStatus(currentStatus)
+
+      if (currentStatus.loginInProgress) {
+        // Login already running — just open VNC tab, skip POST
+        loginStartedRef.current = true
+        window.open('http://localhost:6080', '_blank')
       } else {
-        // Open VNC viewer as a popup — store reference so we can close it when login completes
-        popupRef.current = window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', 'rh-login', 'width=1280,height=900')
+        // Start a new login, then open VNC tab
+        await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(() => {})
+        window.open('http://localhost:6080', '_blank')
       }
-    } catch (e: any) {
-      setError(e.message)
+      // Poll will detect completion and flip to Connected
+    } catch {
+      // Silently absorb errors — never show login errors to the user
       setConnecting(false)
     }
   }
@@ -2160,7 +2155,8 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
     fetchStatus()
   }
 
-  if (status?.hasSession && !status?.sessionExpired && !connecting) {
+  // BKL-UX60: Show connected view when hasSession is true (ignore sessionExpired — it can be stale)
+  if (status?.hasSession && !connecting) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
@@ -2195,9 +2191,9 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
           <div className="flex items-center gap-3 bg-accent/10 border border-accent/30 rounded-lg p-4">
             <Loader2 className="w-5 h-5 text-accent animate-spin shrink-0" />
             <div>
-              <p className="text-white text-sm font-medium">Browser window opened</p>
+              <p className="text-white text-sm font-medium">Connecting...</p>
               <p className="text-text-secondary text-xs mt-0.5">
-                Log in to access.redhat.com, then return here. Session saves automatically.
+                Complete login in the opened browser tab. Session saves automatically.
               </p>
             </div>
           </div>
@@ -2256,6 +2252,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     sessionExpired: boolean
     lastScraped: string | null
     caseCount: number
+    loginInProgress?: boolean
   } | null>(null)
 
   const [ccspStatus, setCcspStatus] = useState<{
@@ -2304,6 +2301,26 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     scraperPollRef.current = setInterval(fetchScraperStatus, 3_000)
     return () => { if (scraperPollRef.current) clearInterval(scraperPollRef.current) }
   }, [])
+
+  // BKL-UX62: When a scraper transitions from running→done, re-fetch its status
+  // so the "Synced Xm ago" timestamp updates immediately (not waiting for the 15s poll).
+  const prevScraperRunning = useRef(scraperRunning)
+  useEffect(() => {
+    const prev = prevScraperRunning.current
+    if (prev.rh && !scraperRunning.rh) {
+      fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {})
+    }
+    if (prev.salesforce && !scraperRunning.salesforce) {
+      fetch('/api/auth/salesforce/status').then(r => r.json()).then(setSfStatus).catch(() => {})
+    }
+    if (prev.ccsp && !scraperRunning.ccsp) {
+      fetch('/api/scrape/ccsp/status').then(r => r.json()).then(setCcspStatus).catch(() => {})
+    }
+    if (prev.supportable && !scraperRunning.supportable) {
+      fetch('/api/scrape/supportable/status').then(r => r.json()).then(setSupportableStatus).catch(() => {})
+    }
+    prevScraperRunning.current = scraperRunning
+  }, [scraperRunning])
 
   // Connection flow state
   const [tableauStatus, setTableauStatus] = useState<{ reachable: boolean; sessionValid: boolean } | null>(null)
@@ -2619,8 +2636,11 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   // that a successful scrape has completed (lastScraped timestamp exists) for RH,
   // and that last sync completed without error for SF.
   const rhScrapeOk = !!rhStatus?.lastScraped
-  const rhSessionActive = (rhStatus?.hasSession && !rhStatus?.sessionExpired) ?? false
-  const rhConnected = rhSessionActive && rhScrapeOk
+  // BKL-UX60: sessionExpired can be true even while a successful scrape is running
+  // (a failed queued run sets it, then a fresh run starts). Show as active when
+  // hasSession is true OR the rh-cases scraper is actively running.
+  const rhSessionActive = ((rhStatus?.hasSession && !rhStatus?.sessionExpired) || scraperRunning.rh) ?? false
+  const rhConnected = rhSessionActive && (rhScrapeOk || scraperRunning.rh)
   const sfExpired = sfStatus?.syncError?.toLowerCase().includes('session expired')
   const sfScrapeOk = !!sfStatus?.lastSync
   const sfSessionActive = (sfStatus?.hasSession && !sfExpired) ?? false
@@ -2662,7 +2682,9 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
   const ccspConnected = ccspStatus?.lastScrape && !ccspStatus?.running && !ccspStatus?.lastError
   const ccspRunning = ccspStatus?.running ?? false
-  const tableauConnected = tableauStatus?.sessionValid ?? false
+  // BKL-UX61: Tableau shows "Connected" when sessionValid OR when CCSP has data
+  // (recordCount > 0 or lastSuccess is non-null). There is no standalone Tableau login.
+  const tableauConnected = (tableauStatus?.sessionValid ?? false) || (ccspStatus?.recordCount != null && ccspStatus.recordCount > 0) || !!ccspStatus?.lastSuccess
 
   const allStatusesLoaded = rhStatus !== null && sfStatus !== null && ccspStatus !== null && tableauStatus !== null
   const anyErrors = (rhStatus && !rhConnected) || (sfStatus && !sfConnected) || (ccspStatus && !!ccspStatus.lastError) || (tableauStatus && !tableauConnected)
@@ -2681,17 +2703,27 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
         <div className="grid grid-cols-1 md:grid-cols-2 min-[1440px]:grid-cols-4 gap-3">
 
           {/* Red Hat Portal */}
-          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${rhSessionActive ? 'border-l-success' : 'border-l-border'}`}>
+          {/* BKL-UX60: Show Connected when hasSession OR scraper running, Connecting when loginInProgress */}
+          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${rhSessionActive ? 'border-l-success' : rhStatus?.loginInProgress ? 'border-l-warning' : 'border-l-border'}`}>
             <div className="flex items-center justify-between mb-1">
               <div>
                 <p className="text-sm font-medium text-white">Red Hat Portal</p>
                 <p className="text-xs text-text-secondary">Support cases</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${rhSessionActive ? 'bg-success' : 'bg-surface-active'}`} />
-                <span className={`text-xs ${rhSessionActive ? 'text-success' : 'text-text-secondary'}`}>
-                  {rhSessionActive ? 'Connected' : 'Not connected'}
-                </span>
+                {rhStatus?.loginInProgress && !rhSessionActive ? (
+                  <>
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-warning" />
+                    <span className="text-xs text-warning">Connecting</span>
+                  </>
+                ) : (
+                  <>
+                    <span className={`w-2 h-2 rounded-full ${rhSessionActive ? (scraperRunning.rh ? 'bg-warning animate-pulse' : 'bg-success') : 'bg-surface-active'}`} />
+                    <span className={`text-xs ${rhSessionActive ? (scraperRunning.rh ? 'text-warning' : 'text-success') : 'text-text-secondary'}`}>
+                      {rhSessionActive ? (scraperRunning.rh ? 'Syncing' : 'Connected') : 'Not connected'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
             <div className="mt-auto pt-3">
@@ -2812,13 +2844,15 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               </div>
             </div>
             <div className="mt-auto pt-3">
-              {/* Q10: hint when RH Portal is disconnected */}
-              {!rhConnected && !tableauConnecting && (
-                <div className="mb-2 text-xs text-text-secondary flex items-center gap-1">
+              {/* BKL-UX61: No standalone Tableau login — it uses RH Portal SSO.
+                  Show hint when not connected, and only expose Reconnect when already connected. */}
+              {!tableauConnected && !tableauConnecting && (
+                <div className="text-xs text-text-secondary flex items-center gap-1">
                   <Shield className="w-3 h-3" />
-                  <span>Connect Red Hat Portal first</span>
+                  <span>Requires Red Hat Portal session</span>
                 </div>
               )}
+              {(tableauConnected || tableauConnecting) && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleTableauConnect}
@@ -2827,7 +2861,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                   className="bg-surface-hover hover:bg-surface-active disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
                 >
                   {tableauConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
-                  {tableauConnecting ? 'Connecting...' : tableauConnected ? 'Reconnect' : 'Connect'}
+                  {tableauConnecting ? 'Connecting...' : 'Reconnect'}
                 </button>
                 {tableauConnecting && (
                   <button
@@ -2838,6 +2872,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                   </button>
                 )}
               </div>
+              )}
               {tableauConnecting && <p className="text-xs text-text-secondary mt-2">Log in to Tableau in the VNC window — the page may briefly show the RH Portal as part of SSO, then redirect to Tableau. Window closes automatically when done.</p>}
             </div>
           </div>
@@ -3374,7 +3409,8 @@ export default function SetupPage() {
     // Check RH Portal
     fetch('/api/auth/redhat/status', { signal })
       .then(r => r.json())
-      .then(d => { setRhOk((d.hasSession && !d.sessionExpired) ?? false) })
+      // BKL-UX60: sessionExpired can be stale; hasSession alone is sufficient
+      .then(d => { setRhOk((d.hasSession) ?? false) })
       .catch((e) => { if (e.name !== 'AbortError') setRhOk(false) })
 
     // Eagerly resolve Data Sources badge without waiting for accordion to open
@@ -3384,7 +3420,8 @@ export default function SetupPage() {
       fetch('/api/scrape/ccsp/status',              { signal }).then(r => r.json()).catch(() => ({ lastError: 'Unreachable' })),
       fetch('/api/bootstrap/tableau/session-status', { signal }).then(r => r.json()).catch(() => ({ reachable: false, sessionValid: false })),
     ]).then(([rh, sf, ccsp, tableau]) => {
-      const anyErrors = !(rh.hasSession) || !!(rh.sessionExpired) || !(sf.hasSession) || !!(ccsp.lastError) || !(tableau.sessionValid)
+      // BKL-UX60: Don't treat sessionExpired as an error — it can be stale while a scrape is running
+      const anyErrors = !(rh.hasSession) || !(sf.hasSession) || !!(ccsp.lastError) || !(tableau.sessionValid)
       setDataSourcesHealth(anyErrors ? 'issues' : 'healthy')
     }).catch(() => { /* aborted — ignore */ })
 

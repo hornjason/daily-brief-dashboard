@@ -3,7 +3,7 @@ import { writeFile, rename } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
-import { recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
+import { recordScrapeStart, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
 import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage } from './rh-scraper.ts'
 import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess } from './sf-scraper.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
@@ -495,6 +495,7 @@ export async function runRhScrapeWithState(): Promise<void> {
 
   const _rhTelemetryStart = Date.now()
   markRunning('rh-cases')
+  recordScrapeStart() // BKL-UX60: clear sessionExpired at scrape start
   try {
     console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
     // BKL-UX55: Build reverse map accountNumber → customerName for stamping cases
