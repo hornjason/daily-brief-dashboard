@@ -8,6 +8,18 @@
 import { test, expect, getJSON, postJSON, buildAE, buildCustomer } from '../fixtures'
 
 // ── POST /api/setup/reset ───────────────────────────────────────────────────
+// NOTE (BKL-TEST-11): When production data is loaded (>5 customers), reset
+// returns 403. The destructive tests below skip automatically in that case.
+
+const BASE = process.env.BASE_URL ?? 'http://localhost:7777'
+
+async function getCustomerCount(): Promise<number> {
+  try {
+    const res = await fetch(`${BASE}/api/accounts`)
+    const body = await res.json()
+    return body.customers?.length ?? 0
+  } catch { return 0 }
+}
 
 test.describe('POST /api/setup/reset', () => {
   test('returns 400 without ?confirm=true', async () => {
@@ -18,27 +30,34 @@ test.describe('POST /api/setup/reset', () => {
   })
 
   test('clears AEs and customers when called with ?confirm=true', async () => {
-    // First verify we have data
+    const count = await getCustomerCount()
+    test.skip(count > 5, `Production guard active (${count} customers) — reset blocked. Run with ALLOW_RESET=true in test env.`)
+
     const before = await getJSON('/api/aes')
     expect(before.status).toBe(200)
 
-    // Reset
     const { status, body } = await postJSON('/api/setup/reset?confirm=true')
     expect(status).toBe(200)
     expect(body).toHaveProperty('ok', true)
     expect(body).toHaveProperty('deleted')
     expect(typeof body.deleted).toBe('number')
 
-    // Verify AEs are cleared
     const after = await getJSON('/api/aes')
     expect(after.body.aes).toHaveLength(0)
   })
 
+  test('returns 403 with production guard when customers > 5', async () => {
+    const count = await getCustomerCount()
+    test.skip(count <= 5, 'Not enough customers to test production guard')
+
+    const { status, body } = await postJSON('/api/setup/reset?confirm=true')
+    expect(status).toBe(403)
+    expect(body).toHaveProperty('error')
+    expect(body.error).toContain('BLOCKED')
+    expect(body.error).toContain('customers loaded')
+  })
+
   test('returns 409 if scrape is running', async () => {
-    // We cannot easily trigger a running scrape in tests, so we verify
-    // the endpoint at least does not crash when called normally.
-    // The 409 path is tested implicitly — when no scrape is running,
-    // we get 200 (or 400 without confirm).
     const { status } = await postJSON('/api/setup/reset')
     expect([400, 409]).toContain(status)
   })
@@ -110,8 +129,12 @@ test.describe('POST /api/setup/save-customers', () => {
 // ── POST /api/setup/infer-domains ───────────────────────────────────────────
 
 // serial: these tests mutate server state (reset + save) and must not race with other workers
+// BKL-TEST-20: skipped when production data is loaded (>5 customers) — reset would return 403
 test.describe.serial('POST /api/setup/infer-domains', () => {
   test('returns 400 if no customers configured', async () => {
+    const count = await getCustomerCount()
+    test.skip(count > 5, `Production guard active (${count} customers) — reset blocked`)
+
     // Reset first to clear customers
     await postJSON('/api/setup/reset?confirm=true')
 

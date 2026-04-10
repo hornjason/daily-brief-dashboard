@@ -8,6 +8,29 @@ import { test as base } from '@playwright/test'
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:7777'
 
+// ── BKL-TEST-12: Quinn endpoint allowlist ───────────────────────────
+// When QUINN_SAFE_MODE=true, POST calls to destructive endpoints throw
+// instead of executing. Prevents AI agent from wiping production data.
+// Set in playwright.config.ts or agent environment.
+const QUINN_SAFE_MODE = process.env.QUINN_SAFE_MODE === 'true'
+
+/** Endpoints that are NEVER safe to call from an AI agent test session */
+const QUINN_BLOCKED_POSTS = [
+  '/api/setup/reset',
+  '/api/admin/backup/restore',
+] as const
+
+/** Wraps postJSON to enforce Quinn's endpoint allowlist */
+export async function safePostJSON(path: string, data: unknown = {}) {
+  if (QUINN_SAFE_MODE) {
+    const blocked = QUINN_BLOCKED_POSTS.some(p => path.startsWith(p))
+    if (blocked) {
+      throw new Error(`QUINN GUARDRAIL: POST ${path} is in the blocked list. Set QUINN_SAFE_MODE=false to override (requires explicit approval).`)
+    }
+  }
+  return postJSON(path, data)
+}
+
 // ── serverState fixture ──────────────────────────────────────────────
 // Auto-snapshots config state before each test, restores after.
 // Requires the /api/__test/snapshot + /api/__test/restore endpoints
