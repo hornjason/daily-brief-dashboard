@@ -382,10 +382,20 @@ export function registerSetupRoutes(app: Hono): void {
 
   // POST /api/setup/reset — Clear all config and cache for a clean setup
   // ?full=true also removes the OAuth keys file (simulate brand new user)
+  // Production guard (BKL-TEST-11): blocks reset when real data is loaded
   app.post('/api/setup/reset', (c) => {
     console.warn('[reset] Factory reset triggered at', new Date().toISOString())
     if (c.req.query('confirm') !== 'true') {
       return c.json({ error: 'Destructive operation requires ?confirm=true' }, 400)
+    }
+    // ── Production guard: refuse reset when real data is loaded ──────────
+    // If more than 5 customers are loaded, this is almost certainly production data.
+    // Require ALLOW_RESET=true in env to override (set explicitly for test environments).
+    if (customers.length > 5 && process.env.ALLOW_RESET !== 'true') {
+      console.error(`[reset] BLOCKED: ${customers.length} customers loaded — production guard triggered`)
+      return c.json({
+        error: `BLOCKED: ${customers.length} customers loaded — this endpoint requires fewer than 5 customers (production guard). Set ALLOW_RESET=true in env to override.`,
+      }, 403)
     }
     if (supportableScrapeRunning || ccspScrapeRunning || _rhScrapeRunning) {
       return c.json({ error: 'Cannot reset while scrape is in progress' }, 409)
@@ -608,6 +618,17 @@ export function registerSetupRoutes(app: Hono): void {
   })
 
   app.post('/api/__test/restore', (c) => {
+    // ── Guard 0: production guard (BKL-TEST-11) ─────────────────────────────
+    // If no snapshot exists AND real data is loaded, refuse outright.
+    // This catches the scenario where an agent calls restore without ever snapshotting.
+    if (!existsSync(SNAPSHOT_PATH) && customers.length > 5 && process.env.ALLOW_RESET !== 'true') {
+      console.error(`[restore] BLOCKED: no snapshot + ${customers.length} customers loaded — production guard`)
+      return c.json({
+        error: `BLOCKED: No snapshot exists and ${customers.length} customers are loaded. `
+             + 'Restoring without a prior snapshot would destroy production data. '
+             + 'Call POST /api/__test/snapshot first, or set ALLOW_RESET=true to override.',
+      }, 403)
+    }
     // ── Guard 1: snapshot must exist on disk ────────────────────────────────
     if (!existsSync(SNAPSHOT_PATH)) {
       return c.json({

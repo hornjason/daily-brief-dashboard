@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-10 (BKL-REG-01/02/03 added: intelligence button wrong endpoint, product intel silent fail, domain inference missing admin trigger)
+Last update: 2026-04-10 (BKL-TEST-11 through BKL-TEST-20 added: enterprise testing strategy — production guard, endpoint allowlist, empty-catch ban, useAction hook, unit tests, Docker volume, seed script, delta guard, fixture detection, setup.spec.ts wrapper)
 
 ---
 
@@ -5870,3 +5870,100 @@ Size: XS
 Source: 2026-04-10 Quinn regression session
 Files: test/ui/customer-detail.spec.ts
 Description: Test at line 261 expects h1 to show the fake customer name "__nonexistent__" but the page correctly renders "Customer not found". The UI behavior is better than the test expectation. Fix: change assertion to expect(h1).toHaveText("Customer not found").
+
+---
+
+## Testing Strategy (BKL-TEST-STRATEGY)
+
+See `docs/BKL-TEST-STRATEGY.md` for the full enterprise testing strategy document.
+
+### BKL-TEST-11 | Customer-count production guard on destructive endpoints
+Status: ✅ DONE — 2026-04-10
+Severity: CRITICAL
+Priority: P0
+Size: XS (30 min)
+Source: Architect testing strategy 2026-04-10 — 4 production wipes in 10 days
+Files: src/setup-routes.ts
+Description: `POST /api/setup/reset` and `POST /api/__test/restore` (without snapshot) now return 403 when `customers.length > 5` unless `ALLOW_RESET=true` is set in env. Production always has 50-150 customers; test fixtures have 1-3. This single guard would have prevented all 4 production wipes. The override env var is never set in the production container.
+Decision: DONE — Guard added to both endpoints. Reset blocked with descriptive error message including customer count. Restore blocked when no snapshot exists AND customer count exceeds threshold.
+
+### BKL-TEST-12 | Quinn endpoint allowlist in Playwright fixtures
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P0
+Size: S (1-2h)
+Source: Architect testing strategy 2026-04-10
+Files: test/fixtures.ts (or Playwright globalSetup), test/playwright.config.ts
+Description: Quinn agent tests must only call endpoints from a curated allowlist. Destructive endpoints (`/api/setup/reset`, `/api/__test/restore`, `/api/bootstrap/auto`, `/api/bootstrap/pod`) are excluded unless the test explicitly opts in with `DESTRUCTIVE_TEST=true`. Implement via Playwright `globalSetup` wrapping `page.route()` to intercept and block non-allowlisted POST calls. Log warnings for blocked calls.
+
+### BKL-TEST-13 | ESLint/grep empty-catch ban in CI
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: XS (30 min)
+Source: Architect testing strategy 2026-04-10 — 20+ `catch(() => {})` patterns found in dashboard/src/
+Files: Makefile or CI config, dashboard/src/**/*.tsx
+Description: Add a CI gate that fails the build if `catch(() => {})` or `catch(()=>{})` patterns exist in `dashboard/src/`. Implementation: `grep -rn '.catch(() *=> *{})' dashboard/src/ && exit 1` in the lint or build step. This prevents silent failures from being introduced. Existing instances must be migrated to proper error handling (see BKL-TEST-14) before enabling.
+
+### BKL-TEST-14 | useAction hook to replace silent-fail fetch patterns
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: M (4-6h)
+Source: Architect testing strategy 2026-04-10 — 20+ action buttons swallow errors
+Files: dashboard/src/hooks/useAction.ts (new), dashboard/src/pages/AdminPage.tsx, dashboard/src/pages/CustomerDetailPage.tsx, dashboard/src/pages/ProductDetailPage.tsx
+Description: Create a `useAction` hook that wraps `fetch()` calls with loading state, error state, and automatic error surfacing. Replace all 20+ `fetch().then(...).catch(() => {})` patterns across action buttons (Generate Intelligence, Refresh Product, Run Scraper, etc.). Each button gets: loading spinner while running, red error text on failure, success feedback on completion. Migration order: AdminPage (scraper controls) first, then CustomerDetailPage (intelligence), then ProductDetailPage (refresh).
+
+### BKL-TEST-15 | Unit test foundation with Bun test runner + Hono app.request()
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: L (8-12h)
+Source: Architect testing strategy 2026-04-10 — test pyramid is 0% unit tests
+Files: test/unit/ (new directory), bunfig.toml or package.json test config
+Description: Create unit test infrastructure using Bun's native test runner with Hono's `app.request()` pattern. Start with the 10 highest-risk route handlers: (1) POST /api/setup/reset, (2) POST /api/__test/snapshot, (3) POST /api/__test/restore, (4) POST /api/aes, (5) POST /api/setup/infer-domains, (6) GET /api/accounts, (7) GET /api/kpis, (8) GET /api/customer/:name, (9) GET /api/products, (10) POST /api/products/:slug/refresh. Target: 60% of test coverage from unit tests within 4 weeks. No live server, no browser, sub-millisecond per test.
+
+### BKL-TEST-16 | Docker volume for cache persistence across rebuilds
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P1
+Size: XS (30 min)
+Source: Architect testing strategy 2026-04-10 — caches wiped on every `make rebuild`
+Files: Makefile, Dockerfile (or docker-compose.yml)
+Description: Mount `data/cache/` as a named Docker volume (`pai-dashboard-cache`) so product intelligence caches, brief caches, and sheet data caches survive `make rebuild`. Currently every rebuild wipes all caches, causing product intelligence silent failures until the weekly scheduler re-seeds on Sunday. The volume mount is a one-line Makefile change in the `docker run` command. Verify: after `make rebuild`, product cache files should still exist in the container.
+
+### BKL-TEST-17 | Seed script for isolated test data (make seed)
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: M (4-6h)
+Source: Architect testing strategy 2026-04-10 — tests mutate live data because no alternative exists
+Files: scripts/seed.ts (new), Makefile (new target)
+Description: Create a `make seed` command that generates a minimal test dataset: 1 AE ("Test AE"), 3 customers ("Acme Corp", "Beta Inc", "Gamma LLC") with fake account numbers, fake sheet IDs, and pre-populated cache files. Writes to `data/test-config/` (NOT `data/config/`). Tests can point at this directory via `CONFIG_DIR=data/test-config/` env var. This eliminates the need for tests to ever touch production config files. Include: aes.json, customers.json, data-sources.json, and minimal cache stubs for briefs/sheets.
+
+### BKL-TEST-18 | Snapshot delta guard — refuse restore with >50% customer count change
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: XS (30 min)
+Source: Architect testing strategy 2026-04-10 — defense-in-depth for snapshot/restore
+Files: src/setup-routes.ts (restore endpoint)
+Description: Add a delta guard to the restore endpoint: if the snapshot's customer count differs from the current in-memory customer count by more than 50%, refuse the restore with a descriptive error. Example: snapshot has 2 customers, current state has 105 — the delta is 98%, far exceeding the 50% threshold. This catches the scenario where a test creates a snapshot with minimal data and then tries to restore it over production. Override: `force:true` in the request body bypasses the delta guard.
+
+### BKL-TEST-19 | Stale fixture detection — verify test/fixtures.ts IDs match live data
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: S (1-2h)
+Source: Architect testing strategy 2026-04-10 — hardcoded Google Drive/Sheet IDs drift
+Files: test/fixtures.ts, test/playwright.config.ts (globalSetup)
+Description: `test/fixtures.ts` contains hardcoded Google Drive folder IDs and Sheet IDs that drift from live data as AEs are re-bootstrapped. Add a Playwright globalSetup check: before running tests, fetch `/api/aes` and compare the first AE's sheet IDs against the fixture values. If they differ, log a warning (not a failure — tests should still run, but the operator knows fixtures are stale). Long-term: fixtures should dynamically discover IDs from the live API instead of hardcoding them.
+
+### BKL-TEST-20 | setup.spec.ts snapshot wrapper — prevent reset from wiping production
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P0
+Size: S (1h)
+Source: Architect testing strategy 2026-04-10 — test auditor found setup.spec.ts calls reset with no snapshot
+Files: test/api/setup.spec.ts
+Description: `api/setup.spec.ts` calls `POST /api/setup/reset?confirm=true` with NO snapshot/restore wrapper. If this test runs against a server with production data loaded, it permanently wipes everything. Fix: wrap the entire spec in beforeAll snapshot + afterAll restore (same pattern as lifecycle.spec.ts). The customer-count guard (BKL-TEST-11) provides a second layer of defense, but the test itself should be self-contained.

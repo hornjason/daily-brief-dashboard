@@ -3,7 +3,7 @@
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-04-10 (session — Supportable disabled, backlog cleared, BOOT-03 on hold; 106 customers, 39 missing account numbers, discovery in progress)
+Last updated: 2026-04-10 (enterprise testing strategy added — BKL-TEST-11 production guard implemented, BKL-TEST-12 through BKL-TEST-20 opened; 105 customers, 9 AEs)
 
 ---
 
@@ -163,6 +163,14 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 - **Territory sheet:** `1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8` (in data-sources.json)
 - **SF pipeline report:** `00OPe00000k5m9ZMAQ` (SW report)
 - **Account intelligence:** Not yet run post-bootstrap (queued)
+
+---
+
+## Testing Strategy
+
+**Doc:** `docs/BKL-TEST-STRATEGY.md` (created 2026-04-10)
+**Production guard:** Customer-count guard on `/api/setup/reset` and `/api/__test/restore` -- blocks destructive operations when >5 customers loaded (BKL-TEST-11, DONE)
+**Open items:** BKL-TEST-12 through BKL-TEST-20 (endpoint allowlist, empty-catch ban, useAction hook, unit test foundation, Docker volume, seed script, delta guard, fixture detection, setup.spec.ts wrapper)
 
 ---
 
