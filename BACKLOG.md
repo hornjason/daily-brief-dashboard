@@ -4089,7 +4089,7 @@ Files: playwright.config.ts (webServer.timeout: 15_000)
 Description: playwright.config.ts configures `webServer.timeout: 15_000` (15 seconds). Bun cold-start on a GitHub Actions runner (slower than dev machine, cold dependency resolution) can approach this limit, risking "server didn't start" failures that cancel the entire test run. Fix: bump to 30_000 or 45_000 to give the server comfortable startup room without risking test runs failing before they start.
 
 ### BKL-OPS-01 | Release management best practices — versioning, changelog, rollback, and branch strategy
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: MEDIUM
 Priority: P2
 Size: M
