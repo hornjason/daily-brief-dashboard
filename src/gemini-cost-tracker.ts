@@ -25,7 +25,19 @@ interface UsageSummary {
   byCallType: Record<string, { inputTokens: number; outputTokens: number; calls: number; costUsd: number }>
 }
 
-function computeCost(inputTokens: number, outputTokens: number): number {
+// Per-model standard pricing (USD per 1M tokens)
+const MODEL_RATES: Record<string, { input: number; output: number }> = {
+  'gemini-2.5-flash':      { input: 0.30, output: 2.50 },
+  'gemini-2.5-flash-lite': { input: 0.10, output: 0.40 },
+  'gemini-2.5-pro':        { input: 1.25, output: 10.00 },
+}
+
+function computeCost(inputTokens: number, outputTokens: number, model?: string): number {
+  const rates = model ? MODEL_RATES[model] : undefined
+  if (rates) {
+    return (inputTokens / 1_000_000) * rates.input + (outputTokens / 1_000_000) * rates.output
+  }
+  // Fallback to configured rates for unknown models
   const { geminiInputCostPerM, geminiOutputCostPerM } = getAiConfig()
   return (inputTokens / 1_000_000) * geminiInputCostPerM + (outputTokens / 1_000_000) * geminiOutputCostPerM
 }
@@ -59,16 +71,24 @@ export function getGeminiUsageSummary(): UsageSummary {
     byCallType[e.callType].inputTokens  += e.inputTokens
     byCallType[e.callType].outputTokens += e.outputTokens
     byCallType[e.callType].calls        += 1
-    byCallType[e.callType].costUsd      += computeCost(e.inputTokens, e.outputTokens)
+    byCallType[e.callType].costUsd      += computeCost(e.inputTokens, e.outputTokens, e.model)
+  }
+
+  // Compute aggregate costs by summing per-entry costs (respects per-model rates)
+  let todayCost = 0, monthCost = 0
+  for (const e of usageLog) {
+    const cost = computeCost(e.inputTokens, e.outputTokens, e.model)
+    if (e.timestamp.startsWith(todayPrefix)) todayCost += cost
+    if (e.timestamp.startsWith(monthPrefix)) monthCost += cost
   }
 
   return {
     todayInputTokens:  todayIn,
     todayOutputTokens: todayOut,
-    todayCostUsd:      computeCost(todayIn, todayOut),
+    todayCostUsd:      todayCost,
     monthInputTokens:  monthIn,
     monthOutputTokens: monthOut,
-    monthCostUsd:      computeCost(monthIn, monthOut),
+    monthCostUsd:      monthCost,
     totalCalls:        usageLog.length,
     byCallType,
   }

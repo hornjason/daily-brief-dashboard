@@ -9,7 +9,7 @@
 import { resolve } from 'path'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModel } from './settings-api.ts'
+import { getGeminiModelLite } from './settings-api.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ async function callGeminiGroundedRaw(opts: {
 }): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
+  const model    = getGeminiModelLite()  // BKL-AI-COST-01: product Q&A is high-volume, use lite model
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
 
   const token = await getGeminiToken()

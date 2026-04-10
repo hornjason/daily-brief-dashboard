@@ -156,6 +156,7 @@ const WEATHER_CACHE_MS = 30 * 60 * 1000
 
 export interface AiConfig {
   geminiModel: string                // 'gemini-2.5-flash' | 'gemini-2.5-pro'
+  geminiModelLite: string            // 'gemini-2.5-flash-lite' — cheap model for high-volume brief/extract calls
   briefSynthesisTemperature: number  // 0.0–1.0
   customerIntelTemperature: number   // 0.0–1.0
   featureExtractionMaxFeatures: number
@@ -166,11 +167,12 @@ export interface AiConfig {
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
   geminiModel: 'gemini-2.5-flash',
+  geminiModelLite: 'gemini-2.5-flash-lite',
   briefSynthesisTemperature: 0.7,
   customerIntelTemperature: 0.3,
   featureExtractionMaxFeatures: 30,
-  geminiInputCostPerM: 0.15,
-  geminiOutputCostPerM: 0.60,
+  geminiInputCostPerM: 0.30,
+  geminiOutputCostPerM: 2.50,
   intelligenceEnabled: true,
 }
 
@@ -184,6 +186,11 @@ export function getAiConfig(): AiConfig {
 /** Gemini model selection: env var takes precedence over persisted config. */
 export function getGeminiModel(): string {
   return process.env.GEMINI_MODEL ?? getAiConfig().geminiModel
+}
+
+/** Lite model for high-volume cheap calls (brief-extract, brief-synthesize, product-qa, doc-classify). */
+export function getGeminiModelLite(): string {
+  return process.env.GEMINI_MODEL_LITE ?? getAiConfig().geminiModelLite
 }
 
 // ── Automation config ────────────────────────────────────────────────────────
@@ -331,14 +338,20 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
   app.post('/api/settings/ai', async (c) => {
     const body = await c.req.json<Partial<AiConfig>>().catch(() => ({}))
     const current = getAiConfig()
-    const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro'])
+    const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'])
     const updated: AiConfig = { ...current }
 
     if ('geminiModel' in body) {
       if (typeof body.geminiModel !== 'string' || !ALLOWED_MODELS.has(body.geminiModel)) {
-        return c.json({ error: 'geminiModel must be gemini-2.5-flash or gemini-2.5-pro' }, 400)
+        return c.json({ error: 'geminiModel must be one of: gemini-2.5-flash, gemini-2.5-pro, gemini-2.5-flash-lite' }, 400)
       }
       updated.geminiModel = body.geminiModel
+    }
+    if ('geminiModelLite' in body) {
+      if (typeof body.geminiModelLite !== 'string' || !ALLOWED_MODELS.has(body.geminiModelLite)) {
+        return c.json({ error: 'geminiModelLite must be one of: gemini-2.5-flash, gemini-2.5-pro, gemini-2.5-flash-lite' }, 400)
+      }
+      updated.geminiModelLite = body.geminiModelLite
     }
     const tempKeys: Array<keyof AiConfig> = ['briefSynthesisTemperature', 'customerIntelTemperature']
     for (const k of tempKeys) {

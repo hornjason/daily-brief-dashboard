@@ -10,7 +10,7 @@ import { aes } from './server-state.ts'
 import { readLatestBriefCache } from './cache-layer.ts'
 import { isFreeOrTrial } from './health-score.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { getAiConfig, getGeminiModel, getAutomationConfig } from './settings-api.ts'
+import { getAiConfig, getGeminiModel, getGeminiModelLite, getAutomationConfig } from './settings-api.ts'
 import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
 import { classifyDocs } from './doc-extraction.ts'
 import { getStatus, type ScraperName } from './scraper-status-store.ts'
@@ -395,7 +395,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
 
           const project  = process.env.GOOGLE_CLOUD_PROJECT
           const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-          const model    = getGeminiModel()
+          const model    = getGeminiModelLite()  // BKL-AI-COST-01: PDF text extraction is high-volume, use lite model
 
           if (project && b64.length > 0) {
             let token: string | null | undefined
@@ -473,7 +473,7 @@ export function isBriefConfigured(): boolean {
 async function callLLM(systemPrompt: string, userPrompt: string, callType = 'brief-synthesize', customerName = 'unknown'): Promise<string> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
+  const model    = getGeminiModelLite()  // BKL-AI-COST-01: brief synthesis is high-volume, use lite model
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
   // Prefer service account key (works without cloud-platform OAuth scope on the user token).
@@ -895,7 +895,7 @@ function buildXmlSources(
 async function callLLMStructured(systemPrompt: string, userPrompt: string, responseSchema: object, callType = 'brief-extract', customerName = 'unknown'): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
+  const model    = getGeminiModelLite()  // BKL-AI-COST-01: brief extraction is high-volume, use lite model
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
   let token: string | null | undefined

@@ -218,21 +218,22 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
         </div>
 
         <div className="relative group">
-          <button
-            onClick={() => {
-              onActiveChange('Settings')
-              if (location.pathname.startsWith('/dashboard/products')) navigate('/dashboard')
+          <a
+            href="/admin"
+            onClick={(e) => {
+              e.preventDefault()
+              navigate('/admin')
             }}
             aria-label="Settings"
             className={`${btnBase} ${
-              active === 'Settings'
+              location.pathname === '/admin'
                 ? 'bg-accent/10 text-accent'
                 : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
             }`}
           >
             <Settings className="w-4 h-4 shrink-0" />
             {!collapsed && <span className="whitespace-nowrap">Settings</span>}
-          </button>
+          </a>
           {collapsed && (
             <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
               Settings

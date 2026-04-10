@@ -11,7 +11,7 @@ import { fetchCustomerEmails } from './customer.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, fetchCalendar } from './google.ts'
 import { getRecentHistory } from './kpi-history.ts'
 import { sanitizeErr } from './utils.ts'
-import { getGeminiModel } from './settings-api.ts'
+import { getGeminiModelLite } from './settings-api.ts'
 import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ async function synthesizeMorningSummary(signals: { customer: string; type: strin
 
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
+  const model    = getGeminiModelLite()  // BKL-AI-COST-01: morning synthesis is high-volume, use lite model
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for synthesis')
 
   let token: string | null | undefined
