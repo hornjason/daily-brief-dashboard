@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-10 (BKL-REG-09 added + closed DONE; empty-hay guard fixed at 2 call sites in customer-routes.ts lines 392/419)
+Last update: 2026-04-10 (BKL-REG-10 added + closed DONE; intelligence cache-skip path now persists and restores doc URLs across container restarts)
 
 ---
 
@@ -5781,6 +5781,16 @@ Files: dashboard/src/components/PodKPIHeader.tsx
 Root cause: `openCases` filter used `accountNumSet.has(c.accountNumber)` only. 39 customers with zero account numbers have cases matched by name (casesSource: 'name_match') which were excluded from banner count. KPI used server-computed `kpis.openCasesTotal` which included all cases.
 Fix: Added `customerNameSet` from `accounts.map(a => a.name.toLowerCase())`. Filter now matches on EITHER account number OR customerName (case-insensitive). REG-013 in regression.spec.ts covers brief cache indirectly; UI consistency test should be added in a follow-up.
 Decision: DONE — fixed 2026-04-10 in PodKPIHeader.tsx lines 21-31. Rebuild required.
+
+### BKL-REG-10 | Account Intelligence panel shows only "Generate" button after container restart even when docs exist
+Status: ✅ DONE 2026-04-10
+Severity: MEDIUM
+Priority: P1
+Source: Jason observed docs visible in Google Drive but panel shows only "Generate Intelligence" button
+Files: src/account-intelligence.ts
+Root cause: The TTL cache-skip path (line 891) writes `{ status: 'complete', step: 'skipped (cache fresh)' }` with NO companyDocUrl/industryDocUrl. The per-customer intelligence cache JSON stored company/industry TEXT but not doc URLs. After container restart, skip path fires for all fresh-cache customers — job status has no URLs — panel hasDocs=false — shows only Generate button.
+Fix: (1) Cache write at pipeline completion now includes companyDocUrl and industryDocUrl in the per-customer `{slug}.json`. (2) Cache-fresh skip path reads those URL fields from cache and passes them into the job status. Existing cache files (predating this fix) won't have URLs until next real generation — expected behavior.
+Decision: DONE — no frontend or API changes needed; panel already renders links when URLs present.
 
 ### BKL-REG-09 | normalizeForQuery empty-string match causes U.S.-prefixed accounts to match every customer
 Status: ✅ DONE 2026-04-10

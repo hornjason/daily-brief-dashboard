@@ -32,7 +32,7 @@ const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '
 const INTELLIGENCE_CACHE_TTL_DAYS = Number(process.env.INTELLIGENCE_CACHE_TTL_DAYS) || 7
 const INTELLIGENCE_CACHE_TTL_MS   = INTELLIGENCE_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
 
-function readIntelligenceCache(customerName: string): { company: string; industry: string; cachedAt: string; skipped?: boolean } | null {
+function readIntelligenceCache(customerName: string): { company: string; industry: string; cachedAt: string; skipped?: boolean; companyDocUrl?: string; industryDocUrl?: string } | null {
   if (!JOB_CACHE_PATH) return null
   try {
     const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
@@ -888,7 +888,14 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
     const age = Date.now() - new Date(cachedIntel.cachedAt).getTime()
     if (age < INTELLIGENCE_CACHE_TTL_MS && cachedIntel.company && cachedIntel.industry) {
       console.log(`[acct-intel] Skipping ${customerName} — cache is ${Math.round(age / 86400000)}d old (TTL: ${INTELLIGENCE_CACHE_TTL_DAYS}d)`)
-      setJob(jobId, { status: 'complete', step: 'skipped (cache fresh)', startedAt: new Date().toISOString(), completedAt: new Date().toISOString() })
+      setJob(jobId, {
+        status: 'complete',
+        step: 'skipped (cache fresh)',
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        ...(cachedIntel.companyDocUrl ? { companyDocUrl: cachedIntel.companyDocUrl } : {}),
+        ...(cachedIntel.industryDocUrl ? { industryDocUrl: cachedIntel.industryDocUrl } : {}),
+      })
       return jobId
     }
   }
@@ -956,6 +963,8 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
               company: companyBrief ?? '',
               industry: industryAnalysis ?? '',
               cachedAt: new Date().toISOString(),
+              companyDocUrl: docUrls.companyDocUrl,
+              industryDocUrl: docUrls.industryDocUrl,
             }),
             { mode: 0o600 }
           )
