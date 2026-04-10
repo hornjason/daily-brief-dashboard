@@ -756,13 +756,46 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
 
         const elapsedSec = ((Date.now() - batchStartMs) / 1000).toFixed(1)
         // Count unique accounts that returned cases in this chunk
-        const accountsWithCases = new Set(
-          allCases.slice(allCases.length - chunkCaseCount).map(c => c.accountNumber)
-        ).size
+        const chunkCases = allCases.slice(allCases.length - chunkCaseCount)
+        const accountsWithCases = new Set(chunkCases.map(c => c.accountNumber)).size
         console.log(
           `[rh-scraper] batch chunk ${ci + 1}/${chunks.length}: ${chunkCaseCount} cases ` +
           `across ${accountsWithCases} accounts (${elapsedSec}s, ${pageNum} page(s))`,
         )
+
+        // BKL-RH-01: Starvation detection — if chunk hit the pagination limit AND some
+        // accounts in this chunk returned 0 cases, a high-volume account likely filled
+        // all pages. Re-query each starved account individually to recover their cases.
+        if (pageNum >= 10 && accountsWithCases < chunk.length) {
+          const seenInChunk = new Set(chunkCases.map(c => c.accountNumber).filter(Boolean))
+          const starvedAccounts = chunk.filter(n => !seenInChunk.has(n))
+          if (starvedAccounts.length > 0) {
+            console.warn(
+              `[rh-scraper] starvation detected in chunk ${ci + 1}: ${starvedAccounts.length} accounts got 0 cases — re-querying individually`,
+            )
+            for (const acct of starvedAccounts) {
+              if (shouldCancel?.()) break
+              const singleQuery = encodeURIComponent(`accountNumber: ("${acct}") orderBy severity asc`)
+              let singlePage = 1
+              let singleCount = 0
+              while (true) {
+                const url =
+                  `https://access.redhat.com/support/cases/#/case/list` +
+                  `?query=${singleQuery}&p=${singlePage}&size=${BATCH_PAGE_SIZE}&searchType=basic`
+                await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
+                await checkForSessionExpiry(page)
+                await waitForTable(page)
+                const recovered = await extractCasesFromPage(page, [acct], null)
+                singleCount += recovered.length
+                pushCases(recovered)
+                const rows = await page.evaluate(() => document.querySelectorAll('table tbody tr').length).catch(() => 0)
+                if (rows < BATCH_PAGE_SIZE || singlePage >= 10) break
+                singlePage++
+              }
+              console.log(`[rh-scraper] starvation recovery: ${acct} → ${singleCount} cases (${singlePage} page(s))`)
+            }
+          }
+        }
       }
 
       // ── Post-batch: log any unresolved account numbers ──────────────────
