@@ -915,6 +915,9 @@ export function AdminPage() {
   const [geminiUsage, setGeminiUsage] = useState<GeminiUsageSummary | null>(null)
   // Intelligence job status
   const [intelJobStatus, setIntelJobStatus] = useState<IntelligenceJobStatus | null>(null)
+  // Intelligence enabled toggle
+  const [intelligenceEnabled, setIntelligenceEnabled] = useState<boolean | null>(null)
+  const [intelligenceToggling, setIntelligenceToggling] = useState(false)
   // localQueued value: true = queued (no detail), or string = "waiting on <scraper>"
 
   const fetchStatus = useCallback(async () => {
@@ -972,6 +975,16 @@ export function AdminPage() {
     fetch('/api/admin/gemini-usage')
       .then(r => r.json())
       .then((d: GeminiUsageSummary) => setGeminiUsage(d))
+      .catch(() => {})
+  }, [])
+
+  // Fetch AI config for intelligence toggle
+  useEffect(() => {
+    fetch('/api/settings/ai')
+      .then(r => r.json())
+      .then((d: { config: { intelligenceEnabled: boolean } }) => {
+        setIntelligenceEnabled(d.config.intelligenceEnabled ?? false)
+      })
       .catch(() => {})
   }, [])
 
@@ -1177,6 +1190,52 @@ export function AdminPage() {
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Scheduler Config</h2>
           <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} />
+        </div>
+
+        {/* AI Settings — intelligence toggle */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">AI Settings</h2>
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-200">Intelligence Generation</p>
+                <p className="text-xs text-gray-500 mt-0.5">Enable/disable Gemini account intelligence and briefs globally</p>
+              </div>
+              {intelligenceEnabled === null ? (
+                <div className="text-xs text-gray-500">Loading...</div>
+              ) : (
+                <button
+                  onClick={async () => {
+                    setIntelligenceToggling(true)
+                    try {
+                      const newVal = !intelligenceEnabled
+                      const r = await fetch('/api/settings/ai', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ intelligenceEnabled: newVal }),
+                      })
+                      if (r.ok) {
+                        setIntelligenceEnabled(newVal)
+                      }
+                    } catch { /* ignore */ }
+                    finally { setIntelligenceToggling(false) }
+                  }}
+                  disabled={intelligenceToggling}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    intelligenceEnabled ? 'bg-green-600' : 'bg-gray-600'
+                  } ${intelligenceToggling ? 'opacity-50' : ''}`}
+                  role="switch"
+                  aria-checked={intelligenceEnabled}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      intelligenceEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Gemini API cost tracking (BKL-M52) */}

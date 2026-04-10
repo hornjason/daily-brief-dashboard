@@ -1835,9 +1835,10 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                 <input
                   type="text"
                   value={ae.folderUrl}
-                  onChange={e => updateAE(ae.id, { folderUrl: e.target.value })}
+                  onChange={e => { updateAE(ae.id, { folderUrl: e.target.value, folderName: '', folderId: '' }); setFolderValidateError(null) }}
+                  onBlur={() => validateFolder(ae.id)}
                   placeholder="https://drive.google.com/drive/folders/..."
-                  className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
+                  className={`flex-1 bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent ${folderValidateError && validatingFolder === null ? 'border-critical' : ae.folderName && ae.folderId ? 'border-success' : 'border-border'}`}
                 />
                 <button
                   onClick={() => validateFolder(ae.id)}
@@ -1855,6 +1856,9 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                   <CheckCircle className="w-3 h-3" />
                   {ae.folderName}
                 </p>
+              )}
+              {folderValidateError && !ae.folderName && (
+                <p className="text-xs text-critical mt-1">{folderValidateError}</p>
               )}
             </div>
 
@@ -3048,6 +3052,7 @@ function PodBootstrapSection() {
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [status, setStatus] = useState<PodBootstrapStatus['podBootstrap'] | null>(null)
+  const [cancelling, setCancelling] = useState(false)
 
   // Fetch available SF POD sheets from Drive folder on mount
   useEffect(() => {
@@ -3133,10 +3138,19 @@ function PodBootstrapSection() {
     }
   }
 
+  const cancelPodBootstrap = async () => {
+    setCancelling(true)
+    try {
+      await fetch('/api/bootstrap/cancel', { method: 'POST' })
+    } catch { /* ignore */ }
+    // Don't reset cancelling — let the poll detect completion and clear the running state
+  }
+
   const resetPodBootstrap = async () => {
     await fetch('/api/bootstrap/auto/reset', { method: 'POST' }).catch(() => {})
     setStatus(null)
     setStartError(null)
+    setCancelling(false)
   }
 
   const successCount = status?.results.filter(r => r.status === 'ok' || r.status === 'skipped').length ?? 0
@@ -3263,7 +3277,17 @@ function PodBootstrapSection() {
             <p className="text-sm font-semibold text-text-primary">
               {status.completed} / {status.total} AEs complete
             </p>
-            <Loader2 className="w-4 h-4 animate-spin text-accent" />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={cancelPodBootstrap}
+                disabled={cancelling}
+                className="flex items-center gap-1.5 text-xs text-critical hover:text-critical/80 disabled:opacity-50 transition-colors"
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                {cancelling ? 'Cancelling...' : 'Cancel'}
+              </button>
+              <Loader2 className="w-4 h-4 animate-spin text-accent" />
+            </div>
           </div>
 
           {status.currentAE && (

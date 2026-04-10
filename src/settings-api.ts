@@ -357,6 +357,14 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       }
       updated.featureExtractionMaxFeatures = v
     }
+    // BKL-WIZ-02: intelligenceEnabled toggle
+    if ('intelligenceEnabled' in body) {
+      if (typeof body.intelligenceEnabled !== 'boolean') {
+        return c.json({ error: 'intelligenceEnabled must be a boolean' }, 400)
+      }
+      updated.intelligenceEnabled = body.intelligenceEnabled
+    }
+
     const priceKeys: Array<keyof AiConfig> = ['geminiInputCostPerM', 'geminiOutputCostPerM']
     for (const k of priceKeys) {
       if (k in body) {

@@ -220,6 +220,14 @@ export let podBootstrapState: PodBootstrapState = {
   running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null,
 }
 
+/** BKL-WIZ-02: Cancellation flag — checked between AE steps in the POD bootstrap loop. */
+let podBootstrapCancelled = false
+export function requestPodBootstrapCancel(): boolean {
+  if (!podBootstrapState.running) return false
+  podBootstrapCancelled = true
+  return true
+}
+
 /**
  * Read the territory sheet and extract a map of AE name → { territories, customerNames }.
  * Reuses the same parsing logic as territory-sync.ts but returns raw AE-level data
@@ -430,9 +438,24 @@ export async function bootstrapPOD(opts: {
     }
   }, podTimeoutMs)
 
+  // BKL-WIZ-02: Reset cancellation flag at start
+  podBootstrapCancelled = false
+
   // Step 2: Sequential bootstrap per AE
   for (let i = 0; i < aeEntries.length; i++) {
     if (!podBootstrapState.running) break  // timeout triggered
+    // BKL-WIZ-02: Check cancellation between AE steps
+    if (podBootstrapCancelled) {
+      console.log(`[pod-bootstrap] Cancelled by user after ${i} AE(s)`)
+      podBootstrapState.error = `Cancelled by user after ${i} AE(s) completed`
+      // Mark remaining AEs as skipped
+      for (let j = i; j < aeEntries.length; j++) {
+        if (podBootstrapState.results[j].status === 'pending') {
+          podBootstrapState.results[j] = { name: aeEntries[j].aeName, status: 'skipped' }
+        }
+      }
+      break
+    }
 
     const entry = aeEntries[i]
     const { aeName, territories, customerNames } = entry
@@ -691,6 +714,16 @@ export function registerBootstrapRoutes(app: Hono): void {
       }
     }
     return c.json(sanitized)
+  })
+
+  // BKL-WIZ-02: POST /api/bootstrap/cancel — request cancellation of a running POD bootstrap
+  app.post('/api/bootstrap/cancel', (c) => {
+    const cancelled = requestPodBootstrapCancel()
+    if (!cancelled) {
+      return c.json({ ok: false, error: 'No POD bootstrap is currently running' }, 400)
+    }
+    console.log('[pod-bootstrap] Cancellation requested by user')
+    return c.json({ ok: true })
   })
 
   // POST /api/bootstrap/auto/reset — clear a stuck bootstrap state

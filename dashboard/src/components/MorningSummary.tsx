@@ -87,6 +87,29 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
     return plain.length > 60 ? plain.slice(0, 57) + '...' : plain
   }, [data?.synthesis])
 
+  /** BKL-PVIEW-08: Extract compact bullet outline from synthesis for collapsed state.
+   *  Pulls bold customer names + signal labels from bullet lines. */
+  const compactBullets = useMemo(() => {
+    if (!data?.synthesis) return []
+    const bullets: Array<{ customer: string; label: string }> = []
+    for (const line of data.synthesis.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('- ')) continue
+      // Extract **CustomerName** and the following short label
+      const boldMatch = trimmed.match(/\*\*([^*]+)\*\*/)
+      if (!boldMatch) continue
+      const customer = boldMatch[1]
+      // Get the text after the bold name up to the first period or end of line
+      const afterBold = trimmed.slice(trimmed.indexOf('**', trimmed.indexOf('**') + 2) + 2).trim()
+      // Strip leading punctuation (dash, colon, etc.)
+      const cleaned = afterBold.replace(/^[\s:—–\-]+/, '').trim()
+      // Take just the first clause (up to period, semicolon, or comma-separated detail)
+      const label = cleaned.split(/[.;]/)[0]?.trim() || ''
+      if (label) bullets.push({ customer, label: label.length > 50 ? label.slice(0, 47) + '...' : label })
+    }
+    return bullets
+  }, [data?.synthesis])
+
   if (!data) return null
 
   // LOG-05: Filter signals to matching customers when product filter is active
@@ -142,6 +165,20 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
           }
         </div>
       </button>
+      {/* BKL-PVIEW-08: Compact bullet outline when collapsed */}
+      {collapsed && compactBullets.length > 0 && !showBriefModal && (
+        <div className="px-5 py-2 border-t border-border">
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {compactBullets.map((b, i) => (
+              <span key={i} className="text-xs text-text-secondary">
+                <span className="font-medium text-text-primary">{b.customer}</span>
+                {' '}
+                <span className="text-text-secondary/70">{b.label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Brief modal when collapsed */}
       {collapsed && showBriefModal && data.synthesis && (
         <div className="px-5 py-3 border-t border-border">
