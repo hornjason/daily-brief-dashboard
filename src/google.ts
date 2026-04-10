@@ -207,7 +207,8 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
       const TITLE_STOPWORDS = new Set([
         'office', 'services', 'service', 'systems', 'system', 'solutions', 'solution',
         'group', 'national', 'international', 'company', 'management', 'global',
-        'the', 'and', 'for', 'new', 'one',
+        'the', 'and', 'for', 'new', 'one', 'power', 'electric', 'energy', 'capital',
+        'technology', 'technologies', 'health', 'financial', 'insurance',
       ])
       const custKeywords = (name: string) =>
         name.toLowerCase()
@@ -218,16 +219,29 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
 
       const matchedCustomers = customers
         .filter((c) => {
+          // BKL-CAL-06: domain-only matches require corroboration to prevent false positives.
+          // A single external attendee from a customer domain is insufficient — require either
+          // 2+ attendees from that domain OR a title keyword from the customer name.
+          const titleCorroboration = (name: string) =>
+            custKeywords(name).some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(title))
+
           // 1. Explicit domain config (exact suffix match)
-          if (c.domain && externalAttendees.some((e) => e.endsWith(c.domain!))) return true
+          if (c.domain && externalAttendees.some((e) => e.endsWith(c.domain!))) {
+            const domainCount = externalAttendees.filter(e => e.endsWith(c.domain!)).length
+            if (domainCount >= 2 || titleCorroboration(c.name)) return true
+            return false
+          }
 
           // 2. Auto domain: company part of attendee email appears in customer name (or vice versa)
           const normCust = normAlpha(c.name)
-          const autoDomainMatch = externalAttendees.some((e) => {
+          const autoDomainAttendees = externalAttendees.filter((e) => {
             const co = domainCompany(e)
             return co.length > 3 && (normCust.includes(co) || co.includes(normAlpha(c.name.split(/[\s,]/)[0])))
           })
-          if (autoDomainMatch) return true
+          if (autoDomainAttendees.length > 0) {
+            if (autoDomainAttendees.length >= 2 || titleCorroboration(c.name)) return true
+            return false
+          }
 
           // 3. Title: require ≥2 significant keywords from customer name in the title (or all, if only 1 keyword)
           // Single-keyword matches cause too many false positives ("Dental" → "Delta Dental of California")

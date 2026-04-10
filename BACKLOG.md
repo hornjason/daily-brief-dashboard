@@ -5371,3 +5371,13 @@ Source: 2026-04-10 — Jason reported: selecting a product filter from the top d
 Files: dashboard/src/ (top filter bar, product filter component, dependent data fetch)
 Description: Selecting a product filter from the top dashboard navigation causes the entire page to render black/blank. All three product options (OCP, AAP, RHEL) trigger this. Likely a React rendering crash (unhandled error in component tree, missing null check on filtered data, or a useState/useEffect cycle that produces undefined/null state on filter change). Should surface an error boundary instead of a black screen.
 Decision: OPEN — needs investigation. Check browser console for errors when filter is selected.
+
+### BKL-SF-02 | AE "TBH" placeholder name — pipeline records will never match
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: XS
+Source: 2026-04-10 — Marcus SF investigation
+Files: data/config/aes.json, src/scrape-api.ts (write-side AE filter), src/customer-routes.ts (filterToAEs)
+Description: AE named "TBH" (placeholder — real name unknown) has 14 customers but will never receive pipeline records. The AE name filter (both write-side and read-side) matches by first name prefix — "TBH" doesn't match any real person's first name in SF opportunity owner fields. TBH's pipeline sheet will always be empty. Fix: update "TBH" to the actual AE's name in aes.json, or implement a territory-based fallback for the pipeline filter.
+Decision: OPEN — requires knowing the real AE name for TERR01.
