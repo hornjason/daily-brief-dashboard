@@ -11,7 +11,8 @@ import { test, expect, getJSON, postJSON, buildAE, buildCustomer } from '../fixt
 // NOTE (BKL-TEST-11): When production data is loaded (>5 customers), reset
 // returns 403. The destructive tests below skip automatically in that case.
 
-const BASE = process.env.BASE_URL ?? 'http://localhost:7777'
+// @destructive tests run against the test container — use TEST_URL if set, then BASE_URL, then default to 7776
+const BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
 
 async function getCustomerCount(): Promise<number> {
   try {

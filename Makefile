@@ -23,6 +23,7 @@ DATA   := $(CURDIR)/data
 .PHONY: up down logs build push rebuild ps setup release-patch release-minor release-major version \
        dev-snapshot dev-up dev-down dev-logs \
        seed test-up test-down test-logs lint \
+       pre-promote \
        demo-snapshot demo-up demo-down demo-logs \
        all-down all-ps
 
@@ -167,6 +168,63 @@ test-logs:
 lint:
 	@echo "Checking for empty catch blocks in dashboard/src/..."
 	@bash $(CURDIR)/scripts/check-empty-catches.sh
+
+# ── Pre-promote gate ──────────────────────────────────────────────────────────
+# Runs the full CI suite against real production data in an isolated container.
+# All three gates must pass before make rebuild.
+#
+# Gate 1 (lint):        No silent catch blocks in dashboard/src/
+# Gate 2 (real data):   ci suite passes against real data on port 7776
+# Gate 3 (destructive): @destructive suite passes against seed data on port 7776
+#
+# Usage: make pre-promote && make rebuild
+pre-promote: lint test-down
+	@echo "━━━ Gate 1: lint ✅ (passed above)"
+	@echo ""
+	@echo "━━━ Gate 2: real-data test — copying production data to test container..."
+	@mkdir -p $(CURDIR)/data-test/config $(CURDIR)/data-test/cache $(CURDIR)/data-test/rh-profile
+	rsync -a --delete $(CURDIR)/data/config/ $(CURDIR)/data-test/config/
+	rsync -a --delete $(CURDIR)/data/cache/  $(CURDIR)/data-test/cache/
+	podman run -d \
+	  -p 7776:7777 \
+	  -p 127.0.0.1:6083:6080 \
+	  -v $(CURDIR)/data-test:/data:Z \
+	  --env-file .env \
+	  -e PORT=7777 \
+	  -e CONFIG_DIR=/data/config \
+	  -e CACHE_DIR=/data/cache \
+	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  --shm-size=1g \
+	  --memory=4g \
+	  --name pai-dashboard-test \
+	  $(IMAGE)
+	@echo "Waiting for test container to start..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
+	  curl -sf http://localhost:7776/health > /dev/null 2>&1 && echo "Container ready after $$i seconds" && break; \
+	  sleep 1; \
+	done
+	@curl -sf http://localhost:7776/health > /dev/null || (echo "❌  Test container failed to start" && podman logs pai-dashboard-test | tail -10 && exit 1)
+	@echo "Test container ready — running ci suite against real data..."
+	BASE_URL=http://localhost:7776 TEST_KNOWN_CUSTOMER="Big Ten Network Services" npx playwright test test/api/ --project=ci --reporter=line || \
+	  (echo "❌  Gate 2 FAILED — real-data ci tests failed. Fix before promoting." && $(MAKE) test-down && exit 1)
+	@echo "✅  Gate 2 passed — real data looks clean"
+	@echo ""
+	@echo "━━━ Gate 3: destructive suite — reseeding with fake data..."
+	$(MAKE) test-down
+	$(MAKE) test-up
+	@echo "Waiting for test container to restart..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
+	  curl -sf http://localhost:7776/health > /dev/null 2>&1 && echo "Container ready after $$i seconds" && break; \
+	  sleep 1; \
+	done
+	BASE_URL=http://localhost:7776 TEST_URL=http://localhost:7776 TEST_KNOWN_CUSTOMER="Acme Corp" npx playwright test test/api/ test/lifecycle.spec.ts --project=test --reporter=line --workers=1 || \
+	  (echo "❌  Gate 3 FAILED — destructive tests failed. Fix before promoting." && $(MAKE) test-down && exit 1)
+	@echo "✅  Gate 3 passed"
+	$(MAKE) test-down
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "✅  All gates passed — safe to run: make rebuild"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ── Demo environment (port 7779, frozen) ─────────────────────────────────────
 demo-snapshot: demo-down

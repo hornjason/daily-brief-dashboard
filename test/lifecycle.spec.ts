@@ -56,19 +56,19 @@ test.describe('@destructive AE lifecycle — add and remove', () => {
   })
 
   test('POST /api/aes adds an AE without wiping existing data', async ({ request }) => {
-    // Get current state
+    // GET current AE list, then POST the full list with test AE appended
     const before = await (await request.get(`${BASE}/api/aes`)).json()
     const beforeCount = before.aes?.length ?? 0
+    const existing = before.aes ?? []
 
-    // Add test AE
-    const addResp = await request.post(`${BASE}/api/aes/add`, {
-      data: TEST_AE,
-    })
-    // Accept 200 OK or 409 if AE already exists (idempotent)
-    expect([200, 201, 409]).toContain(addResp.status())
+    // Skip if test AE already exists (previous run didn't clean up)
+    const alreadyExists = existing.some((a: { name: string }) => a.name === TEST_AE.name)
+    if (!alreadyExists) {
+      const addResp = await request.post(`${BASE}/api/aes`, {
+        data: { aes: [...existing, TEST_AE] },
+      })
+      expect([200, 201]).toContain(addResp.status())
 
-    if (addResp.ok()) {
-      // Verify count increased
       const after = await (await request.get(`${BASE}/api/aes`)).json()
       expect(after.aes?.length).toBeGreaterThanOrEqual(beforeCount)
     }
@@ -79,18 +79,19 @@ test.describe('@destructive AE lifecycle — add and remove', () => {
     const healthBefore = await (await request.get(`${BASE}/health`)).json()
     const custBefore = healthBefore.customers ?? 0
 
-    // If we added the test AE successfully, remove it
+    // If test AE exists, remove it by posting the list without it
     const aeList = await (await request.get(`${BASE}/api/aes`)).json()
     const testAeExists = aeList.aes?.some((a: { name: string }) => a.name === TEST_AE.name)
 
     if (testAeExists) {
-      const removeResp = await request.delete(`${BASE}/api/aes/${encodeURIComponent(TEST_AE.name)}`)
-      expect([200, 204]).toContain(removeResp.status())
+      const remaining = (aeList.aes ?? []).filter((a: { name: string }) => a.name !== TEST_AE.name)
+      const removeResp = await request.post(`${BASE}/api/aes`, {
+        data: { aes: remaining },
+      })
+      expect(removeResp.status()).toBe(200)
 
-      // Customer count should not go below pre-test count minus test AE's customers
-      // (test AE has no real customers, so count should stay the same)
+      // Customer count should not total-wipe (test AE has no real customers)
       const healthAfter = await (await request.get(`${BASE}/health`)).json()
-      // Allow some variance but not a total wipe
       if (custBefore > 0) {
         expect(healthAfter.customers).toBeGreaterThan(0)
       }

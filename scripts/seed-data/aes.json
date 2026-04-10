@@ -3,7 +3,7 @@
     {
       "name": "Test AE One",
       "driveFolderId": "1TESTFOLDER1AAAAAAAAAAAAAAAAAAAA",
-      "sfReportId": "00OTESTSFID1AAAAAAAAA",
+      "sfReportId": "00OTestReport0001",
       "tableauTerritories": ["WEST_COMM_CORP_TEST_TERR01"],
       "parentFolderId": "1TESTPARENTFOLDERAAAAAAAAAAAAAAA",
       "supportableSheetId": "1TESTSUPPORTABLE1AAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -13,7 +13,7 @@
     {
       "name": "Test AE Two",
       "driveFolderId": "1TESTFOLDER2AAAAAAAAAAAAAAAAAAAA",
-      "sfReportId": "00OTESTSFID2AAAAAAAAA",
+      "sfReportId": "00OTestReport0002",
       "tableauTerritories": ["WEST_COMM_CORP_TEST_TERR02"],
       "parentFolderId": "1TESTPARENTFOLDERAAAAAAAAAAAAAAA",
       "supportableSheetId": "1TESTSUPPORTABLE2AAAAAAAAAAAAAAAAAAAAAAAAA",

@@ -177,7 +177,7 @@ test.describe('BKL-AI21: Pipeline and CCSP caches flow into brief', () => {
     expect(Array.isArray(body.byOwner)).toBe(true)
   })
 
-  test('pipeline byOwner has at least one entry with owner, acv, count', async () => {
+  test('@live pipeline byOwner has at least one entry with owner, acv, count', async () => {
     const { body } = await getJSON('/api/pipeline')
     const owners = body.byOwner ?? []
     expect(owners.length).toBeGreaterThanOrEqual(1)

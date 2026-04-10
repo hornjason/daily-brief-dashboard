@@ -5982,7 +5982,7 @@ Files: test/unit/ (extend), src/setup-routes.ts, server.ts
 Description: Extend unit test coverage beyond pure functions to route handlers using Hono's `app.request()` pattern (no live server, no browser). Priority targets: (1) POST /api/setup/reset — verify guard fires at >5 customers, (2) POST /api/setup/save-customers — verify guard fires, (3) POST /api/__test/restore — verify requires snapshot, (4) GET /api/accounts — verify shape, (5) POST /api/aes — verify validation. Target: all setup-routes.ts handlers covered. Prerequisite: BKL-TEST-15 done (foundation in place).
 
 ### BKL-TEST-22 | Add @destructive tags to setup.spec.ts and lifecycle.spec.ts
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 — tagged reset/save-customers/infer-domains/save-domains/lifecycle; ci project grepInvert excludes @destructive; 88 ci tests pass against production
 Severity: MEDIUM
 Priority: P1
 Size: S (1-2h)
