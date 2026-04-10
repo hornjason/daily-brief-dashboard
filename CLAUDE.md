@@ -2,6 +2,18 @@
 
 ## Read Before Touching Code
 
+Read `PROJECT-STATE.md` **first** — it tells you what pages, endpoints, and config files exist right now. Never ask Jason "does X exist?" without checking it first.
+
+**Update `PROJECT-STATE.md` immediately when any of these happen (no exceptions, no deferring to end of session):**
+- New API endpoint added or removed
+- New frontend page or component added
+- Config file list changes (new file, file deleted, contents change significantly)
+- Current data state changes (AE count, customer count, wipe, restore)
+- Backlog item status changes (opened, closed, deferred)
+- Architecture changes (new module, new data flow, scraper replaced)
+
+**After every `make rebuild`:** update Current Data State section to reflect live AE/customer counts and any new endpoints that shipped.
+
 Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document intentional patterns that look like anti-patterns.
 
 **Architectural truths (do not suggest alternatives):**

@@ -8,7 +8,7 @@ import { google } from 'googleapis'
 import { fetchEmail, fetchDrive, fetchCalendar, makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './src/google.ts'
 import { fetchCases } from './src/redhat.ts'
 import { generateBrief, getBriefProvider, isBriefConfigured } from './src/customer.ts'
-import type { AE } from './src/types.ts'
+import type { AE, Customer } from './src/types.ts'
 import { rebuildFolderMap, getWatcherState } from './src/drive-watcher.ts'
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeExpired } from './src/rh-auth.ts'
 import { closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback, setContextRecoveryCallback } from './src/rh-scraper.ts'
@@ -28,7 +28,7 @@ import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
 import { initDashboardRoutes, registerDashboardRoutes } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
-import { registerBootstrapRoutes, startAccountDiscovery } from './src/bootstrap-orchestrator.ts'
+import { registerBootstrapRoutes } from './src/bootstrap-orchestrator.ts'
 // ── M04 extracted modules ───────────────────────────────────────────────────
 import { registerSheetImportRoutes } from './src/sheet-import.ts'
 import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
@@ -820,6 +820,7 @@ app.get('/api/accounts', (c) => {
       productCount: distinctProducts,
       totalLicenses,
       cachedAt: cached?.cachedAt ?? null,
+      ccspCustomer: customer.ccspCustomer ?? false,
     }
   })
   return c.json({ customers: result })
@@ -1157,8 +1158,7 @@ console.log(`   http://localhost:${port}`)
 console.log(`   http://localhost:${port}/dashboard\n`)
 
 // ── Background scheduler (timers, startup IIFEs, drive watcher) ─────────────
-// Account discovery IIFE extracted to src/bootstrap-orchestrator.ts (M03)
-startAccountDiscovery()
+// Account discovery now handled by RH Cases scraper (discoverAccountNumberByName in rh-scraper.ts)
 
 initBackgroundScheduler({
   rhSessionPath: RH_SESSION_PATH,
@@ -1200,6 +1200,205 @@ if (process.env.NODE_ENV !== 'production') {
       return c.json({ ok: true })
     } catch (e) {
       return c.json({ error: 'restore failed' }, 500)
+    }
+  })
+
+  // DOM diagnostic: inspect Accounts filter dropdown DOM on the live RH Portal page
+  // FINDINGS (2026-04-09): dropdown is portal-rendered at body level as div.pf-v6-c-menu.pf-m-scrollable
+  // input aria-controls="account-selector-dropdown" but that ID does not exist on the menu element
+  // list items have role="menuitem" NOT role="option" — query must use `li` not `[role="option"]`
+  app.post('/api/__test/dom-inspect', async (c) => {
+    try {
+      const ctx = getScrapeContext()
+      if (!ctx) return c.json({ error: 'No active RH session' }, 409)
+      const page = await ctx.newPage()
+      try {
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await page.goto('https://access.redhat.com/support/cases/#/case/list', {
+          waitUntil: 'load',
+          timeout: 30_000,
+        })
+        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
+
+        // Screenshot 1: initial state
+        await page.screenshot({ path: '/tmp/diag-step1.png' })
+
+        // Click the menu toggle
+        const toggleResult = await page.evaluate(() => {
+          const input = document.querySelector('input[placeholder="Search for an account"]') as HTMLInputElement | null
+          if (!input) return 'no-input'
+          let el: Element | null = input
+          while (el) {
+            if (el.classList.contains('pf-v6-c-menu-toggle')) {
+              ;(el as HTMLElement).click()
+              return 'clicked-toggle:' + el.tagName + ' classes=' + el.className.slice(0, 80)
+            }
+            el = el.parentElement
+          }
+          const btn = input.closest('button, [role="button"]')
+          if (btn) { ;(btn as HTMLElement).click(); return 'clicked-btn' }
+          input.focus(); input.click(); return 'clicked-input-directly'
+        })
+        await page.waitForTimeout(500)
+
+        // Type "A10" to trigger autocomplete
+        const inputEl = page.locator('input[placeholder="Search for an account"]').first()
+        await inputEl.click()
+        await inputEl.fill('A10')
+        await page.waitForTimeout(2000)
+
+        // Screenshot 2: with dropdown open
+        await page.screenshot({ path: '/tmp/diag-step2.png' })
+
+        // Deep DOM inspection
+        const domInfo = await page.evaluate(() => {
+          const input = document.querySelector('input[placeholder="Search for an account"]') as HTMLInputElement | null
+          if (!input) return { error: 'no input found' }
+
+          const ariaOwns = input.getAttribute('aria-owns')
+          const ariaControls = input.getAttribute('aria-controls')
+          const ariaExpanded = input.getAttribute('aria-expanded')
+          const ariaActivedescendant = input.getAttribute('aria-activedescendant')
+          const ariaAutocomplete = input.getAttribute('aria-autocomplete')
+          const ariaHaspopup = input.getAttribute('aria-haspopup')
+
+          const parentChain: string[] = []
+          let el: Element | null = input.parentElement
+          while (el && parentChain.length < 12) {
+            const r = el.getBoundingClientRect()
+            parentChain.push(
+              `${el.tagName.toLowerCase()}` +
+              `[id="${el.id}"]` +
+              `[class="${el.className?.toString?.()?.slice(0, 100) || ''}"]` +
+              `[role="${el.getAttribute('role') || ''}"]` +
+              `[aria-expanded="${el.getAttribute('aria-expanded') || ''}"]` +
+              ` w=${Math.round(r.width)} h=${Math.round(r.height)}`
+            )
+            el = el.parentElement
+            if (el?.tagName === 'BODY' || el?.tagName === 'HTML') break
+          }
+
+          const allListboxes = Array.from(document.querySelectorAll('[role="listbox"]')).map(el => {
+            const r = el.getBoundingClientRect()
+            const items = Array.from(el.querySelectorAll('[role="option"]'))
+            const liItems = Array.from(el.querySelectorAll('li'))
+            return {
+              id: el.id, tagName: el.tagName.toLowerCase(),
+              className: el.className?.toString?.()?.slice(0, 150) || '',
+              itemCount_option: items.length, itemCount_li: liItems.length,
+              visible: r.width > 0 && r.height > 0, w: Math.round(r.width), h: Math.round(r.height),
+              parentTag: el.parentElement?.tagName || '',
+              parentId: el.parentElement?.id || '',
+              parentClass: el.parentElement?.className?.toString?.()?.slice(0, 80) || '',
+              isBodyChild: el.parentElement?.tagName === 'BODY',
+              firstItem: items[0]?.textContent?.trim()?.slice(0, 60) || liItems[0]?.textContent?.trim()?.slice(0, 60) || '',
+              outerHTMLSlice: el.outerHTML.slice(0, 500),
+            }
+          })
+
+          const allPfMenus = Array.from(document.querySelectorAll('[class*="pf-v6-c-menu"]')).map(el => {
+            const r = el.getBoundingClientRect()
+            return {
+              id: el.id, tagName: el.tagName.toLowerCase(),
+              className: el.className?.toString?.()?.slice(0, 150) || '',
+              role: el.getAttribute('role') || '',
+              visible: r.width > 0 && r.height > 0, w: Math.round(r.width), h: Math.round(r.height),
+              itemCount: el.querySelectorAll('li, [role="option"]').length,
+              outerHTMLSlice: el.outerHTML.slice(0, 500),
+            }
+          })
+
+          let ariaRefDropdown = null
+          if (ariaOwns) ariaRefDropdown = document.getElementById(ariaOwns)?.outerHTML?.slice(0, 800)
+          if (!ariaRefDropdown && ariaControls) ariaRefDropdown = document.getElementById(ariaControls)?.outerHTML?.slice(0, 800)
+
+          const allToggleEls = Array.from(document.querySelectorAll('[class*="pf-v6-c-menu-toggle"]')).map(el => ({
+            tagName: el.tagName.toLowerCase(), id: el.id,
+            className: el.className?.toString?.()?.slice(0, 100) || '',
+            ariaExpanded: el.getAttribute('aria-expanded'),
+            outerHTMLSlice: el.outerHTML.slice(0, 300),
+          }))
+
+          // Scan full page for anything with "option" role that is visible
+          const visibleOptions = Array.from(document.querySelectorAll('[role="option"]'))
+            .filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 })
+            .slice(0, 10)
+            .map(el => ({
+              text: el.textContent?.trim()?.slice(0, 60) || '',
+              className: el.className?.toString?.()?.slice(0, 80) || '',
+              parentClass: el.parentElement?.className?.toString?.()?.slice(0, 80) || '',
+              parentId: el.parentElement?.id || '',
+            }))
+
+          // Get listbox parent chain
+          const listboxParentChain: string[] = []
+          if (allListboxes.length > 0) {
+            const lb = document.querySelector('[role="listbox"]')
+            let p: Element | null = lb?.parentElement || null
+            while (p && listboxParentChain.length < 8) {
+              const r = p.getBoundingClientRect()
+              listboxParentChain.push(
+                `${p.tagName.toLowerCase()}[id="${p.id}"][class="${p.className?.toString?.()?.slice(0, 80) || ''}"] w=${Math.round(r.width)} h=${Math.round(r.height)}`
+              )
+              p = p.parentElement
+              if (p?.tagName === 'BODY' || p?.tagName === 'HTML') break
+            }
+          }
+
+          // Get actual li items from the listbox
+          const listboxItems: string[] = []
+          const lb = document.querySelector('[role="listbox"]')
+          if (lb) {
+            const liEls = Array.from(lb.querySelectorAll('li'))
+            listboxItems.push(...liEls.slice(0, 25).map(li => {
+              const txt = li.textContent?.trim()?.replace(/\s+/g, ' ')?.slice(0, 80) || ''
+              const role = li.getAttribute('role') || ''
+              const cls = li.className?.toString?.()?.slice(0, 60) || ''
+              return `[role="${role}"][class="${cls}"] "${txt}"`
+            }))
+          }
+
+          // Check what element has id="account-selector-dropdown"
+          const accountSelectorEl = document.getElementById('account-selector-dropdown')
+          const accountSelectorInfo = accountSelectorEl ? {
+            tagName: accountSelectorEl.tagName.toLowerCase(),
+            className: accountSelectorEl.className?.toString?.()?.slice(0, 150) || '',
+            role: accountSelectorEl.getAttribute('role') || '',
+            id: accountSelectorEl.id,
+            parentTag: accountSelectorEl.parentElement?.tagName || '',
+            parentClass: accountSelectorEl.parentElement?.className?.toString?.()?.slice(0, 80) || '',
+            outerHTMLSlice: accountSelectorEl.outerHTML.slice(0, 400),
+          } : null
+
+          // Check the menu-toggle's siblings and nearby elements
+          const toggleEl = input.closest('[class*="pf-v6-c-menu-toggle"]')
+          const toggleSiblings = toggleEl ? Array.from(toggleEl.parentElement?.children || []).map(el => {
+            const r = el.getBoundingClientRect()
+            return {
+              tagName: el.tagName.toLowerCase(),
+              id: el.id,
+              className: el.className?.toString?.()?.slice(0, 80) || '',
+              role: el.getAttribute('role') || '',
+              visible: r.width > 0 && r.height > 0,
+              w: Math.round(r.width), h: Math.round(r.height),
+              childCount: el.children.length,
+            }
+          }) : []
+
+          return {
+            input: { value: input.value, id: input.id, ariaOwns, ariaControls, ariaExpanded, ariaActivedescendant, ariaAutocomplete, ariaHaspopup },
+            parentChain, allListboxes, allPfMenus: allPfMenus.slice(0, 10),
+            ariaRefDropdown, allToggleEls: allToggleEls.slice(0, 6), visibleOptions,
+            listboxParentChain, listboxItems, accountSelectorInfo, toggleSiblings,
+          }
+        })
+
+        return c.json({ toggleResult, domInfo, screenshots: ['/tmp/diag-step1.png', '/tmp/diag-step2.png'] })
+      } finally {
+        await page.close().catch(() => {})
+      }
+    } catch (e: any) {
+      return c.json({ error: e?.message ?? String(e) }, 500)
     }
   })
 }

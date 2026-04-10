@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-08 (BKL-DRIVE-01 filed: POD subfolder layer in Drive for AE/customer separation)
+Last update: 2026-04-09 (BKL-CAL-02/03/04, BKL-CCSP-01 filed: calendar and CCSP issues from debugging session)
 
 ---
 
@@ -5203,3 +5203,110 @@ Size: M
 Source: Jason 2026-04-08
 Files: src/bootstrap-orchestrator.ts — Drive folder creation steps
 Description: Current structure: parentFolderId / AE Name / customer folders. Desired: parentFolderId / POD Name / AE Name / customer folders. During POD bootstrap, create a subfolder named after the POD (e.g. "Southwest") under parentFolderId if it doesn't already exist, then create each AE's Drive folder under that POD folder instead of directly under parentFolderId. The POD display name (from the SF bookings sheet displayName, e.g. "Southwest" or "Northwest") should be used as the folder name. AE-level bootstrap (single AE) should skip the POD layer. Existing AEs are unaffected unless re-bootstrapped.
+
+### BKL-RH-01 | RH batch scraper — per-account chunking to prevent high-volume account starvation
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: M
+Source: 2026-04-09 — SW pod test run
+Files: src/rh-scraper.ts — batch query chunk logic
+Description: When multiple accounts are batched together in a single Solr query (e.g., 15 accounts in one chunk), a high-volume account like QAD (5856163) that has hundreds of cases can consume all 10 pagination pages. The scraper stops after the pagination limit, so all other accounts in the same chunk get 0 cases. Fix: scrape each account in its own chunk (chunk size = 1) so each account gets independent pagination up to 10 pages. Alternatively, per-account case counts could cap accounts with >N pages before moving to the next. Confirmed: with 15 accounts queried, 60/60 cached cases were from QAD only.
+
+### BKL-RH-02 | RH batch scraper — duplicate cases across pagination batches
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: XS
+Source: 2026-04-09 — Quinn QA review
+Files: src/rh-scraper.ts — batch result collection
+Description: cases.json contains 6 unique cases each duplicated 10x (60 total). The batch scraper collects cases across multiple pages but does not deduplicate by case number before writing to cache. Fix: deduplicate by caseNumber before writing the results array. One-line fix in the dedup step after all pages are collected.
+
+---
+
+## AI Cost Optimization
+
+### BKL-AI-01 | Use gemini-2.0-flash for structured output tasks
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P2
+Size: S
+Source: 2026-04-09 — cost review
+Files: src/product-intelligence.ts, src/product-feature-radar.ts, src/customer-product-intel.ts, src/doc-extraction.ts, src/product-release-radar.ts
+Description: These files use gemini-2.5-flash for structured JSON extraction and product intelligence — tasks that don't need frontier reasoning. gemini-2.0-flash is ~10× cheaper and sufficient for these. Keep gemini-2.5-flash only in src/customer.ts (brief synthesis) and src/account-plan.ts (account plans) where output quality matters. Requires adding gemini-2.0-flash as an allowed model in settings-api.ts and updating each call site.
+
+### BKL-AI-02 | Lower maxOutputTokens to realistic caps
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P2
+Size: XS
+Source: 2026-04-09 — cost review
+Files: src/account-plan.ts (32768), src/account-intelligence.ts (16384 × 2 calls)
+Description: account-plan.ts sets maxOutputTokens: 32768 — far above what a typical account plan needs. account-intelligence.ts sets 16384 and calls twice per customer. Gemini charges on actual output tokens but oversized caps bloat prompts and generated content length. Audit actual output sizes via gemini-cost-tracker and cap account-plan at 8192, account-intelligence at 8192.
+
+### BKL-AI-03 | Add TTL to account intelligence cache
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P2
+Size: S
+Source: 2026-04-09 — cost review
+Files: src/account-intelligence.ts, src/cache-layer.ts
+Description: Brief cache has a 24h TTL (ADR-007). Account intelligence has no TTL — it regenerates on every generate-all trigger. Add a 7-day TTL: skip regeneration if cachedAt is less than 7 days old and source data hash is unchanged. This prevents re-running expensive Gemini calls on stable accounts. Use the same hash-based staleness check already in cache-layer.ts.
+
+### BKL-AI-04 | Skip intelligence pipeline for customers with no data
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P2
+Size: XS
+Source: 2026-04-09 — cost review
+Files: src/account-intelligence.ts, src/customer-product-intel.ts
+Description: Customers with no account numbers, no cases, and no subscriptions get the full intelligence pipeline run, burning tokens for effectively empty output. Add a pre-flight gate: if accountNumbers.length === 0 && subscriptions.length === 0, skip AI generation and write a minimal stub cache entry. Log skipped customers for visibility.
+
+### BKL-AI-05 | Rate-limit generate-all on bootstrap — don't run 72 customers at once
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: M
+Source: 2026-04-09 — cost review
+Files: src/bootstrap-orchestrator.ts, src/account-intelligence.ts
+Description: generate-all auto-triggers for every newly bootstrapped customer. Bootstrapping 72 SW customers triggers 72 simultaneous intelligence pipeline runs — a spike cost event. Consider: (a) background queue with max concurrency of 5, or (b) making generate-all manual-only post-bootstrap with a UI trigger. Option (a) is lower friction. Either prevents the burst billing from large pod bootstraps.
+
+## Calendar & Data Source Issues (2026-04-09)
+
+### BKL-CAL-02 | Misleading "Synced just now" status for Calendar/CCSP/Pipeline
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: 2026-04-09 — Jason debugging session
+Files: dashboard/src/components/ (status indicators), src/scraper-manager.ts
+Description: UI shows "Synced just now" success status when the background queue accepts a scrape task, but the actual scrape may fail silently with 0 records. Status text should reflect actual data written (row count, timestamp of last successful write), not just queue acceptance. Users see green checkmarks on stale or empty data.
+
+### BKL-CCSP-01 | No Tableau re-auth prompt on expired session
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: M
+Source: 2026-04-09 — Jason debugging session
+Files: src/ccsp-scraper.ts, dashboard/src/pages/ (admin or status UI)
+Description: When Tableau session expires, CCSP scrape silently returns 0 rows and BKL-S17 guard prevents overwrite — so data stays stale but no error surfaces. No user-facing prompt to re-authenticate with Tableau. Should detect expired session (0-row result or auth error) and surface a warning in the UI so the user knows to re-login via VNC.
+
+### BKL-CAL-03 | Calendar was fetching primary calendar only
+Status: ✅ DONE 2026-04-09
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: 2026-04-09 — Jason debugging session
+Files: src/calendar-routes.ts
+Description: Calendar integration was only fetching events from the user's primary Google Calendar, missing events from shared/secondary calendars. Fixed 2026-04-09: now fetches all calendars and starts query window at midnight (was using current time, missing earlier events).
+Decision: DONE — fetches all calendars, query starts at midnight. Verified with multi-calendar user.
+
+### BKL-CAL-04 | Calendar title keyword false-matching on common words
+Status: ✅ DONE 2026-04-09
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: 2026-04-09 — Jason debugging session
+Files: src/calendar-routes.ts
+Description: Customer names containing common English words like "office", "services", "systems" were matching unrelated calendar events (e.g., "Office Hours" matching a customer named "X Office Solutions"). Fixed 2026-04-09: added stopword list to exclude common words from title keyword matching, preventing false customer-event associations.
+Decision: DONE — stopword list filters common words from customer name tokens before calendar event matching.

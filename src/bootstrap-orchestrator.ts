@@ -11,6 +11,7 @@ import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets,
 import { runCcspScrape, writeCcspSheet } from './ccsp-scraper.ts'
 import { fetchCustomerAccountNumbers } from './sheets.ts'
 import { runRhScrapeWithState } from './scraper-manager.ts'
+import { getAiConfig } from './settings-api.ts'
 
 import { getScrapeContext, getLivePage, setLivePageBusy } from './rh-scraper.ts'
 import { refreshPipeline } from './refresh-engine.ts'
@@ -637,48 +638,8 @@ export async function bootstrapPOD(opts: {
 // ── Tableau constant ─────────────────────────────────────────────────────────
 const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 
-// ── Account discovery startup IIFE (extracted as callable function) ──────────
-
-export function startAccountDiscovery(): void {
-  ;(async () => {
-    const missing = customers.filter((c) => !c.accountNumbers?.length && !c.skipAccountDiscovery)
-    if (!missing.length) return
-
-    console.log(`[account-discovery] discovering account numbers for ${missing.length} customers…`)
-    let discovered = 0
-
-    for (const customer of missing) {
-      try {
-        // Scope to the customer's own AE sheet — prevents cross-AE tab name collisions
-        const aeMatch = customer.ae ? aes.find(a => a.name === customer.ae) : undefined
-        const supportableIds = aeMatch?.supportableSheetId
-          ? [aeMatch.supportableSheetId]
-          : aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
-        const nums = await fetchCustomerAccountNumbers(customer, supportableIds.length ? supportableIds : undefined)
-        if (!nums.length) continue
-        customer.accountNumbers = nums
-        const updated = customers.map((cu) =>
-          cu.name === customer.name ? { ...cu, accountNumbers: nums } : cu
-        )
-        writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2), { mode: 0o600 })
-        renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
-        customers.splice(0, customers.length, ...updated)
-        console.log(`[account-discovery] ${customer.name}: ${nums.join(', ')}`)
-        discovered++
-      } catch (e: any) {
-        console.warn(`[account-discovery] ${customer.name}: ${e.message}`)
-      }
-    }
-
-    if (discovered > 0) {
-      console.log(`[account-discovery] done — ${discovered} customers updated`)
-      // Trigger a fresh scrape now that more account numbers are available
-      runRhScrapeWithState().catch((e: any) => console.error("[rh-scraper] unhandled error:", e?.message ?? e))
-    } else {
-      console.log('[account-discovery] no new account numbers found')
-    }
-  })()
-}
+// startAccountDiscovery() removed — account discovery now handled by RH Cases scraper
+// (runRhScrapeWithState in scraper-manager.ts searches by customer name when accountNumbers is empty)
 
 // ── Route registration ───────────────────────────────────────────────────────
 
@@ -1090,14 +1051,14 @@ export function registerBootstrapRoutes(app: Hono): void {
                 }
                 if (existingCustomer) {
                   existingCustomer.driveFolderId = folderId
-                } else {
-                  customers.push({ name: cname, ae: aeName, driveFolderId: folderId, importedFrom: 'territory-sheet' })
+                  try {
+                    const tmpPath = CUSTOMERS_PATH + '.tmp'
+                    writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
+                    renameSync(tmpPath, CUSTOMERS_PATH)
+                  } catch (e: any) { console.warn('[bootstrap] customer folder ID persist failed:', e.message) }
                 }
-                try {
-                  const tmpPath = CUSTOMERS_PATH + '.tmp'
-                  writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-                  renameSync(tmpPath, CUSTOMERS_PATH)
-                } catch (e: any) { console.warn('[bootstrap] customer folder ID persist failed:', e.message) }
+                // Do NOT create territory-sheet customer records — territory sheet is AE→territory map only.
+                // Customers are sourced exclusively from sf-bookings-sync with canonical SF names.
               }
               folderResources[cname] = { id: folderId, url: `https://drive.google.com/drive/folders/${folderId}` }
               setStep(1, 'running', `${i + 1}/${customerNames.length} folders…`)
@@ -1331,10 +1292,15 @@ export function registerBootstrapRoutes(app: Hono): void {
 
       // BKL-AI07: Auto-generate account intelligence for all customers after bootstrap.
       // Non-blocking — bootstrap completes first; generation runs in background via batch endpoint.
+      // Gated by intelligenceEnabled in AiConfig — disabled during testing/bootstrap validation.
       const port = process.env.PORT ?? '7777'
-      fetch(`http://localhost:${port}/api/intelligence/generate-all`, { method: 'POST' })
-        .then(r => console.log(`[auto-bootstrap] intelligence batch started: ${r.status}`))
-        .catch(e => console.warn('[auto-bootstrap] intelligence batch trigger failed:', e?.message))
+      if (getAiConfig().intelligenceEnabled) {
+        fetch(`http://localhost:${port}/api/intelligence/generate-all`, { method: 'POST' })
+          .then(r => console.log(`[auto-bootstrap] intelligence batch started: ${r.status}`))
+          .catch(e => console.warn('[auto-bootstrap] intelligence batch trigger failed:', e?.message))
+      } else {
+        console.log('[auto-bootstrap] intelligence generation skipped — intelligenceEnabled=false')
+      }
       console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
       notify('Bootstrap Complete', `All steps complete for ${aeName}`, 'high').catch(() => {})
     })()

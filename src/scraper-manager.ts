@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
-import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason } from './rh-scraper.ts'
+import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage } from './rh-scraper.ts'
 import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess } from './sf-scraper.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
@@ -334,6 +334,7 @@ export let _rhScrapeRunning = false
 export let _rhScrapeStartedAt: number | null = null
 export let _rhScrapeCancelRequested = false
 export let _rhScrapeLastError: string | null = null
+export let _rhDiscoveryProgress: { done: number; total: number; current: string | null } | null = null
 const RH_STALE_MUTEX_MS = 15 * 60 * 1000  // 15 min auto-release — same as CCSP/Supportable
 
 // SF sync state
@@ -373,14 +374,80 @@ export async function runRhScrapeWithState(): Promise<void> {
   }
   if (!existsSync(RH_SESSION_PATH)) return
 
-  // Collect account numbers from customers config — check before setting flag to avoid leak
-  const { customers } = await import('./server-state.ts')
-  const accountNumbers = customers
+  // Collect account numbers from customers config; discover missing ones by name
+  const serverState = await import('./server-state.ts')
+  let accountNumbers = serverState.customers
     .flatMap((c) => (c.accountNumbers ?? []).map(String))
     .filter(Boolean)
 
+  // Discover account numbers for all customers that don't have them yet.
+  // Uses POST /hydra/rest/search/v2/cases with account_name: Solr field.
+  // For customers without account numbers: search by full name.
+  // Primary goal = find cases. Bonus = discover account numbers for future runs.
+  // Cases found via name search are folded directly into nameDiscoveredCases for display.
+  const needsDiscovery = serverState.customers.filter((c) => !c.accountNumbers?.length)
+  const nameDiscoveredCases: import('./rh-scraper.ts').DiscoverResult['cases'] = []
+  if (needsDiscovery.length > 0) {
+    console.log(`[rh-scraper] name-searching portal for ${needsDiscovery.length} customers without account numbers…`)
+    _rhDiscoveryProgress = { done: 0, total: needsDiscovery.length, current: null }
+    const newNums: string[] = []
+    for (const customer of needsDiscovery) {
+      try {
+        // Use SF canonical alias (full name from source sheet) for portal search.
+        // Always use FULL name (with INC, LLC, Corp etc.) — avoids false positives from
+        // accounts in different regions or owned by different account teams.
+        const searchName = (customer as any).aliases?.[0]
+        if (!searchName) {
+          console.log(`[rh-scraper] skipping "${customer.name}" — no canonical SF alias for RH discovery`)
+          _rhDiscoveryProgress = { ..._rhDiscoveryProgress!, done: _rhDiscoveryProgress!.done + 1, current: null }
+          continue
+        }
+        _rhDiscoveryProgress = { ..._rhDiscoveryProgress!, current: customer.name }
+        console.log(`[rh-scraper] searching portal for "${searchName}" (display: "${customer.name}")`)
+        const { accountNumbers: nums, cases: discoveredCases } = await discoverAccountNumberByName(searchName, RH_PROFILE_DIR)
+
+        // Fold any cases found into the result set — cases are the primary goal
+        if (discoveredCases.length > 0) {
+          nameDiscoveredCases.push(...discoveredCases)
+          console.log(`[rh-scraper] ${customer.name}: found ${discoveredCases.length} cases via name search`)
+        }
+
+        // Bonus: save discovered account numbers for future batch scrapes.
+        // No cap — sidebar autocomplete returns real accounts (ground truth), not false positives.
+        // Multi-entity companies like Microchip Technology legitimately have 7+ account numbers.
+        if (nums.length > 0) {
+          serverState.patchCustomer(customer.name, { accountNumbers: nums })
+          newNums.push(...nums)
+          console.log(`[rh-scraper] ${customer.name}: saved account numbers ${nums.join(', ')}`)
+        }
+      } catch (e: any) {
+        if (e instanceof SessionExpiredError) throw e
+        console.warn(`[rh-scraper] name discovery error for "${customer.name}": ${e?.message ?? e}`)
+      }
+      _rhDiscoveryProgress = { ..._rhDiscoveryProgress!, done: _rhDiscoveryProgress!.done + 1, current: null }
+    }
+    _rhDiscoveryProgress = null
+    accountNumbers = [...new Set([...accountNumbers, ...newNums])]
+    console.log(`[rh-scraper] name search done — ${newNums.length} new account numbers, ${nameDiscoveredCases.length} cases found`)
+    await closeDiscoverPage()  // free the reused tab — no longer needed for discovery
+  }
+
+  // If no account numbers at all, we still may have name-discovered cases to cache
   if (accountNumbers.length === 0) {
-    console.log('[rh-scraper] no account numbers configured — skipping')
+    if (nameDiscoveredCases.length > 0) {
+      console.log(`[rh-scraper] no account numbers but ${nameDiscoveredCases.length} name-search cases — caching those`)
+      // Write name-discovered cases directly (no batch scrape needed)
+      const { mkdir, writeFile, rename } = await import('node:fs/promises')
+      const { dirname } = await import('node:path')
+      await mkdir(dirname(RH_CASES_CACHE_PATH), { recursive: true })
+      const tmpPath = RH_CASES_CACHE_PATH + '.tmp'
+      await writeFile(tmpPath, JSON.stringify({ scrapedAt: new Date().toISOString(), accounts: [], cases: nameDiscoveredCases }, null, 2), { mode: 0o600 })
+      await rename(tmpPath, RH_CASES_CACHE_PATH)
+      recordOutcome('rh-cases', { success: true, recordCount: nameDiscoveredCases.length })
+    } else {
+      console.log('[rh-scraper] no account numbers and no name-search cases — nothing to cache')
+      recordOutcome('rh-cases', { success: true, recordCount: 0 })
+    }
     return
   }
 
@@ -403,6 +470,33 @@ export async function runRhScrapeWithState(): Promise<void> {
       RH_SCRAPE_TIMEOUT_MS(),
       'RH case scrape',
     )
+    // Merge name-discovered cases (customers with no account number) into batch results.
+    // Dedup by caseNumber so batch wins if the same case appears in both.
+    if (nameDiscoveredCases.length > 0) {
+      const batchNums = new Set(cases.map(c => c.caseNumber))
+      const newFromName = nameDiscoveredCases.filter(c => !batchNums.has(c.caseNumber))
+      if (newFromName.length > 0) {
+        cases.push(...newFromName.map(c => ({
+          caseNumber: c.caseNumber,
+          summary: c.summary,
+          status: c.status,
+          severity: c.severity,
+          accountNumber: c.accountNumber,
+          daysOpen: 0,
+          product: c.product,
+          casesSource: c.casesSource,
+        })))
+        // Re-write cache with merged results
+        const { mkdir: mkdirMerge, writeFile: writeFileMerge, rename: renameMerge } = await import('node:fs/promises')
+        const { dirname: dirnameMerge } = await import('node:path')
+        await mkdirMerge(dirnameMerge(RH_CASES_CACHE_PATH), { recursive: true })
+        const tmpMerge = RH_CASES_CACHE_PATH + '.tmp'
+        await writeFileMerge(tmpMerge, JSON.stringify({ scrapedAt: new Date().toISOString(), accounts: accountNumbers, cases }, null, 2), { mode: 0o600 })
+        await renameMerge(tmpMerge, RH_CASES_CACHE_PATH)
+        console.log(`[rh-scraper] merged ${newFromName.length} name-search cases into cache (total: ${cases.length})`)
+      }
+    }
+
     _rhScrapeLastError = null
     recordScrapeSuccess(cases.length)
     circuitBreakers.rh.recordSuccess()

@@ -2,10 +2,10 @@
 // Replaces fragmented /api/bootstrap/* and /api/auth/*/sync endpoints with
 // a unified /api/scrape/* layer. Each endpoint runs the full pipeline:
 // source → Google Sheets → local cache.
-import { writeFileSync as writeFileSyncRaw, writeFileSync, mkdirSync, renameSync } from 'fs'
+import { writeFileSync as writeFileSyncRaw, writeFileSync, mkdirSync, renameSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import type { Hono } from 'hono'
-import { aes, customers, patchAe, patchCustomer, CUSTOMERS_PATH } from './server-state.ts'
+import { aes, customers, patchAe, patchCustomer, saveCustomers, CUSTOMERS_PATH } from './server-state.ts'
 import { createOrUpdateNotebook, isNotebookLmEnabled } from './notebooklm.ts'
 import { lastScraped } from './rh-auth.ts'
 import {
@@ -13,6 +13,7 @@ import {
   ccspInFlight,
   _rhScrapeRunning,
   _rhScrapeLastError,
+  _rhDiscoveryProgress,
   _sfSyncRunning,
   _sfSyncStartedAt,
   _sfSyncCancelRequested,
@@ -67,8 +68,9 @@ import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-en
 import { readSheetCache, readCCSPCache, readPipelineCache } from './cache-layer.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
+import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
-import { getScrapeContext } from './rh-scraper.ts'
+import { getScrapeContext, discoverAccountNumberByName } from './rh-scraper.ts'
 
 // ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
 /** Rejects after `ms` milliseconds with an informative error. */
@@ -181,6 +183,51 @@ export function registerScrapeRoutes(app: Hono): void {
     setRhScrapeCancelRequested(true)
     console.log('[scrape:rh] cancel requested via API')
     return c.json({ ok: true })
+  })
+
+  // GET /api/scrape/rh/debug-fields?name=X — return raw Solr fields for first doc matching name
+  app.get('/api/scrape/rh/debug-fields', async (c) => {
+    const name = c.req.query('name') ?? ''
+    if (!name) return c.json({ error: 'name query param required' }, 400)
+    const ctx = getScrapeContext()
+    if (!ctx) return c.json({ error: 'no browser context' }, 503)
+    const page = await ctx.newPage()
+    try {
+      await page.goto('https://access.redhat.com/support/cases/#/case/list', { waitUntil: 'load', timeout: 30_000 })
+      const solrName = name.replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim()
+      const raw = await page.evaluate(async (n: string) => {
+        const body = { q: `account_name: "${n}"`, start: 0, rows: 3, partnerSearch: false, expression: 'fl=*' }
+        const resp = await fetch('/hydra/rest/search/v2/cases?redhat_client=Portal%20Case%20Management&account_number=901532',
+          { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        if (!resp.ok) return { error: `HTTP ${resp.status}`, docs: [] }
+        const data = await resp.json() as { response?: { docs?: any[]; numFound?: number } }
+        return { numFound: data?.response?.numFound ?? 0, docs: data?.response?.docs ?? [] }
+      }, solrName)
+      return c.json(raw)
+    } finally {
+      await page.close().catch(() => {})
+    }
+  })
+
+  // POST /api/scrape/rh/test-discover — run name discovery for specific customers (test only, no writes)
+  // Body: { customers: string[] } — list of SF alias names to search
+  app.post('/api/scrape/rh/test-discover', async (c) => {
+    const body = await c.req.json<{ customers?: string[] }>().catch(() => ({}))
+    const names: string[] = Array.isArray(body.customers) ? body.customers : []
+    if (names.length === 0) return c.json({ error: 'customers array required' }, 400)
+    if (names.length > 10) return c.json({ error: 'max 10 customers per test run' }, 400)
+    const results: Array<{ name: string; accountNumbers: string[]; cases: number; caseList: any[]; error?: string }> = []
+    for (const name of names) {
+      try {
+        const { accountNumbers, cases } = await discoverAccountNumberByName(name, RH_PROFILE_DIR)
+        results.push({ name, accountNumbers, cases: cases.length, caseList: cases })
+        console.log(`[scrape/rh/test-discover] "${name}": ${accountNumbers.length} accts, ${cases.length} cases`)
+      } catch (e: any) {
+        results.push({ name, accountNumbers: [], cases: 0, caseList: [], error: e?.message })
+        console.warn(`[scrape/rh/test-discover] "${name}" error: ${e?.message}`)
+      }
+    }
+    return c.json({ results })
   })
 
   // ╭──────────────────────────────────────────────────────────────────────────╮
@@ -577,10 +624,13 @@ export function registerScrapeRoutes(app: Hono): void {
                     sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
                     patchAe(ae.name, { pipelineSheetId: sheetId })
                   }
-                  // BKL-F11/F11b: Filter rows to this AE's opportunities only (exact word-token match, case-insensitive)
+                  // BKL-F11/F11b: Filter rows to this AE's opportunities only (prefix match handles Alex/Alexander variations)
                   const aeFirstName = ae.name.split(' ')[0].toLowerCase()
                   const filteredRows = ownerIdx !== -1
-                    ? data.rows.filter(row => (row[ownerIdx] ?? '').toLowerCase().split(/\s+/).includes(aeFirstName))
+                    ? data.rows.filter(row => {
+                        const tokens = (row[ownerIdx] ?? '').toLowerCase().split(/\s+/)
+                        return tokens.some(t => t.startsWith(aeFirstName) || aeFirstName.startsWith(t))
+                      })
                     : data.rows
                   const filteredData = { headers: data.headers, rows: filteredRows, droppedColumns: data.droppedColumns }
                   await writePipelineSheet(filteredData, sheetId)
@@ -920,6 +970,7 @@ export function registerScrapeRoutes(app: Hono): void {
       queue: getScraperQueueStatus(),
       browserRestartNeeded: detectBrowserCrash(),
       supportableReachable: _supportableReachableCache.value,
+      rhDiscoveryProgress: _rhDiscoveryProgress,
     })
   })
 
@@ -1057,5 +1108,192 @@ export function registerScrapeRoutes(app: Hono): void {
 
     const ok = results.filter(r => r.status === 'ok').length
     return c.json({ total: eligible.length, ok, failed: eligible.length - ok, results })
+  })
+
+  // ── GET /api/sf-bookings/pod-sheets — list available POD sheets from Drive folder ──
+  app.get('/api/sf-bookings/pod-sheets', async (c) => {
+    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'settings.json')
+    let podBookingsFolderId: string | null = null
+    try {
+      const raw = readFileSync(SETTINGS_PATH, 'utf-8')
+      podBookingsFolderId = JSON.parse(raw).podBookingsFolderId ?? null
+    } catch { /* no settings */ }
+    if (!podBookingsFolderId) return c.json({ sheets: [] })
+    try {
+      const sheets = await listPodBookingSheets(podBookingsFolderId)
+      return c.json({ sheets: sheets.map(s => ({ name: s.name, displayName: s.displayName, sheetId: s.sheetId })) })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── POST /api/scrape/sf-bookings-sync — BKL-SF-01 ────────────────────────
+  // Reads Salesforce bookings GSheets (discovered from Drive folder in settings.json) and
+  // writes subscription data into each AE's Supportable sheet.
+  //
+  // Body: { aeNames?: string[] }
+  //   aeNames  — optional list of AE names to sync (defaults to all AEs)
+  app.post('/api/scrape/sf-bookings-sync', async (c) => {
+    let body: { aeNames?: string[] }
+    try { body = await c.req.json() } catch { body = {} }
+
+    const { aeNames } = body
+
+    // Load POD bookings folder ID from settings.json
+    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'settings.json')
+    let podBookingsFolderId: string | null = null
+    try {
+      const raw = readFileSync(SETTINGS_PATH, 'utf-8')
+      podBookingsFolderId = JSON.parse(raw).podBookingsFolderId ?? null
+    } catch { /* no settings file */ }
+
+    if (!podBookingsFolderId) {
+      return c.json({ error: 'podBookingsFolderId not configured in settings.json' }, 400)
+    }
+
+    // Discover POD sheets from Drive folder — { name, sheetId }[]
+    let podSheets: Array<{ name: string; sheetId: string }> = []
+    try {
+      podSheets = await listPodBookingSheets(podBookingsFolderId)
+      console.log(`[sf-bookings-sync] found ${podSheets.length} POD sheet(s) in folder: ${podSheets.map(s => s.name).join(', ')}`)
+    } catch (e: any) {
+      return c.json({ error: `Failed to list POD sheets from Drive folder: ${sanitizeErr(e)}` }, 500)
+    }
+
+    if (!podSheets.length) {
+      return c.json({ error: 'No sheets found in podBookingsFolderId — check folder contents' }, 400)
+    }
+
+    const targetAes = aeNames?.length
+      ? aes.filter(ae => aeNames.includes(ae.name))
+      : aes
+
+    if (!targetAes.length) return c.json({ error: 'No matching AEs found' }, 400)
+
+    const summary: Array<{
+      ae: string
+      customersTotal: number
+      customersMatched: number
+      customersEmpty: number
+      sheetId: string | null
+      error?: string
+    }> = []
+
+    // Fetch each POD sheet once — cached per sheetId to avoid quota burns
+    const rawDataCache = new Map<string, Awaited<ReturnType<typeof fetchSfBookingsRaw>>>()
+
+    // Helper: resolve which POD sheet to use for an AE based on tableauTerritories
+    function resolveSheetForAe(territories: string[]): string | null {
+      return matchPodSheet(podSheets, territories)
+    }
+
+    for (let aeIdx = 0; aeIdx < targetAes.length; aeIdx++) {
+      // Pace sheet writes to stay under Sheets API quota (300 writes/min/user as of 2026-04-08).
+      // writeSupportableSheet makes ~3-4 API calls per AE; 3s gives ~20 AEs/min headroom.
+      if (aeIdx > 0) await new Promise(r => setTimeout(r, 3_000))
+
+      const ae = targetAes[aeIdx]
+      const territories = ae.tableauTerritories ?? []
+
+      if (!territories.length) {
+        console.warn(`[sf-bookings-sync] ${ae.name}: no tableauTerritories configured — skipping`)
+        summary.push({ ae: ae.name, customersTotal: 0, customersMatched: 0, customersEmpty: 0, sheetId: null, error: 'No territories configured' })
+        continue
+      }
+
+      const aeSheetId = resolveSheetForAe(territories)
+      if (!aeSheetId) {
+        console.warn(`[sf-bookings-sync] ${ae.name}: no podBookingsSheet matches territories [${territories.join(', ')}] — skipping`)
+        summary.push({ ae: ae.name, customersTotal: 0, customersMatched: 0, customersEmpty: 0, sheetId: null, error: 'No matching POD sheet for territories' })
+        continue
+      }
+
+      try {
+        // Fetch POD sheet (cached per sheetId — one fetch per POD, reused across AEs)
+        if (!rawDataCache.has(aeSheetId)) {
+          console.log(`[sf-bookings-sync] fetching POD sheet ${aeSheetId}`)
+          rawDataCache.set(aeSheetId, await fetchSfBookingsRaw(aeSheetId))
+        }
+        const rawData = rawDataCache.get(aeSheetId)!
+
+        // SF sheet is the source of truth — derive customer list from the sheet by territory.
+        // existingCustomers passed only to preserve known names + accountNumbers.
+        const existingCustomers = customers.filter(cu => cu.ae === ae.name && !cu.inactive)
+        console.log(`[sf-bookings-sync] ${ae.name}: deriving customers from sheet (territories: ${territories.join(', ')})`)
+
+        const { results, matched, newCustomers, aliasedCustomers, ccspOnly } = deriveSfCustomersByTerritory(
+          rawData, territories, existingCustomers, ae.name, false,
+        )
+
+        // Upsert net-new customers + alias updates into customers.json
+        if (newCustomers.length > 0 || aliasedCustomers.length > 0) {
+          const allCustomers = [...customers]
+          for (const nc of newCustomers) {
+            if (!allCustomers.some(c => c.name === nc.name)) {
+              allCustomers.push(nc)
+              console.log(`[sf-bookings-sync] new customer: ${nc.name} (${ae.name})`)
+            }
+          }
+          for (const ac of aliasedCustomers) {
+            const idx = allCustomers.findIndex(c => c.name === ac.name)
+            if (idx !== -1) allCustomers[idx] = ac
+            console.log(`[sf-bookings-sync] alias updated: ${ac.name} → ${ac.aliases?.join(', ')}`)
+          }
+          saveCustomers(allCustomers)
+        }
+
+        // Persist CCSP-only flag
+        for (const name of ccspOnly) patchCustomer(name, { ccspCustomer: true })
+        for (const name of matched) patchCustomer(name, { ccspCustomer: false })
+
+        if (results.length === 0) {
+          console.warn(`[sf-bookings-sync] ${ae.name}: no customers found — skipping sheet write`)
+          summary.push({
+            ae: ae.name,
+            customersTotal: 0,
+            customersMatched: 0,
+            customersEmpty: 0,
+            sheetId: ae.supportableSheetId ?? null,
+            error: 'No customers found — sheet not updated',
+          })
+          continue
+        }
+
+        const spreadsheetId = await writeSupportableSheet(
+          results,
+          ae.name,
+          ae.driveFolderId,
+          ae.supportableSheetId || undefined,
+        )
+
+        if (!ae.supportableSheetId) {
+          patchAe(ae.name, { supportableSheetId: spreadsheetId })
+        }
+
+        console.log(`[sf-bookings-sync] ${ae.name}: ${matched.length} customers, ${newCustomers.length} new, ${aliasedCustomers.length} alias-updated → sheet ${spreadsheetId}`)
+        summary.push({
+          ae: ae.name,
+          customersTotal: results.length,
+          customersMatched: matched.length,
+          customersEmpty: results.length - matched.length,
+          sheetId: spreadsheetId,
+        })
+      } catch (e: any) {
+        const msg = sanitizeErr(e)
+        console.error(`[sf-bookings-sync] ${ae.name}: error — ${msg}`)
+        summary.push({
+          ae: ae.name,
+          customersTotal: 0,
+          customersMatched: 0,
+          customersEmpty: 0,
+          sheetId: null,
+          error: msg,
+        })
+      }
+    }
+
+    const totalMatched = summary.reduce((s, r) => s + r.customersMatched, 0)
+    const totalCustomers = summary.reduce((s, r) => s + r.customersTotal, 0)
+    return c.json({ aes: targetAes.length, customersTotal: totalCustomers, customersMatched: totalMatched, summary })
   })
 }

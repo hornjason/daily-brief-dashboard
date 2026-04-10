@@ -2957,15 +2957,26 @@ function PodBootstrapSection() {
   const [sfReportId, setSfReportId] = useState('')
   const [parentFolderId, setParentFolderId] = useState('')
   const [podTabTitle, setPodTabTitle] = useState('')
-  const [podTabs, setPodTabs] = useState<string[]>([])
-  const [podTabsError, setPodTabsError] = useState<string | null>(null)
-  const [podTabsLoading, setPodTabsLoading] = useState(false)
+  const [availableSfSheets, setAvailableSfSheets] = useState<Array<{ name: string; displayName: string; sheetId?: string }>>([])
+  const [sfSheetsLoading, setSfSheetsLoading] = useState(false)
   const [tableauOk, setTableauOk] = useState<boolean | null>(null)
   const [folderName, setFolderName] = useState<string | null>(null)
   const [folderError, setFolderError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
   const [status, setStatus] = useState<PodBootstrapStatus['podBootstrap'] | null>(null)
+
+  // Fetch available SF POD sheets from Drive folder on mount
+  useEffect(() => {
+    setSfSheetsLoading(true)
+    fetch('/api/sf-bookings/pod-sheets')
+      .then(r => r.json())
+      .then((d: { sheets?: Array<{ name: string; displayName: string }> }) => {
+        if (d.sheets?.length) setAvailableSfSheets(d.sheets)
+      })
+      .catch(() => { /* no SF sheets configured */ })
+      .finally(() => setSfSheetsLoading(false))
+  }, [])
 
   // Check Tableau status on mount
   useEffect(() => {
@@ -2991,45 +3002,10 @@ function PodBootstrapSection() {
     return () => controller.abort()
   }, [])
 
-  // Fetch POD tabs when territorySheetId changes (debounced)
+  // Auto-select if only one SF sheet available
   useEffect(() => {
-    if (territorySheetId.trim().length < 10) {
-      setPodTabs([])
-      setPodTabTitle('')
-      setPodTabsError(null)
-      return
-    }
-    setPodTabsLoading(true)
-    setPodTabsError(null)
-    const timer = setTimeout(async () => {
-      try {
-        const r = await fetch(`/api/bootstrap/pod/tabs?sheetId=${encodeURIComponent(territorySheetId.trim())}`)
-        const d = await r.json()
-        if (!r.ok || d.error) {
-          setPodTabsError('Could not load tabs — check sheet ID')
-          setPodTabs([])
-          setPodTabTitle('')
-        } else if (!d.tabs?.length) {
-          setPodTabsError('Could not load tabs — check sheet ID')
-          setPodTabs([])
-          setPodTabTitle('')
-        } else {
-          setPodTabs(d.tabs)
-          setPodTabsError(null)
-          // Auto-select if only one tab
-          if (d.tabs.length === 1) setPodTabTitle(d.tabs[0])
-          else setPodTabTitle('')
-        }
-      } catch {
-        setPodTabsError('Could not load tabs — check sheet ID')
-        setPodTabs([])
-        setPodTabTitle('')
-      } finally {
-        setPodTabsLoading(false)
-      }
-    }, 600)
-    return () => clearTimeout(timer)
-  }, [territorySheetId])
+    if (availableSfSheets.length === 1) setPodTabTitle(availableSfSheets[0].displayName)
+  }, [availableSfSheets])
 
   // Poll while running
   useEffect(() => {
@@ -3147,34 +3123,28 @@ function PodBootstrapSection() {
           </div>
 
           <div>
-            <label className="block text-xs text-text-secondary mb-1">POD Tab</label>
-            {podTabsLoading ? (
+            <label className="block text-xs text-text-secondary mb-1">POD</label>
+            {sfSheetsLoading ? (
               <div className="flex items-center gap-2 text-xs text-text-secondary py-2">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading tabs...
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading available PODs...
               </div>
-            ) : podTabs.length > 0 ? (
+            ) : availableSfSheets.length > 0 ? (
               <select
                 value={podTabTitle}
                 onChange={e => setPodTabTitle(e.target.value)}
                 className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent"
               >
-                <option value="">Select a tab...</option>
-                {podTabs.map(tab => (
-                  <option key={tab} value={tab}>{tab}</option>
+                <option value="">Select a POD...</option>
+                {availableSfSheets.map(s => (
+                  <option key={s.sheetId ?? s.name} value={s.displayName}>{s.displayName}</option>
                 ))}
               </select>
             ) : (
-              <select
-                disabled
-                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-secondary opacity-50"
-              >
-                <option>Enter Territory Sheet ID first</option>
+              <select disabled className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-secondary opacity-50">
+                <option>No PODs available — add sheets to shared folder</option>
               </select>
             )}
-            {podTabsError && (
-              <p className="text-xs text-critical mt-1">{podTabsError}</p>
-            )}
-            <p className="text-xs text-text-secondary mt-1">Select the territory tab for this POD.</p>
+            <p className="text-xs text-text-secondary mt-1">PODs are discovered from the shared SF bookings Drive folder.</p>
           </div>
 
           {tableauOk === false && (

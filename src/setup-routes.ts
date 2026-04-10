@@ -418,13 +418,14 @@ export function registerSetupRoutes(app: Hono): void {
 
   app.post('/api/__test/snapshot', (c) => {
     try {
+      // BKL-TEST-03: Serialize in-memory state, not disk state.
+      // Disk can be stale when AEs are added via bootstrap without a restart.
+      // Reading disk caused a 2026-04-08 incident where 9 AEs were wiped on restore.
       _testSnapshot = {
-        aes:       existsSync(AES_PATH)       ? readFileSync(AES_PATH, 'utf-8')       : '{"aes":[]}',
-        customers: existsSync(CUSTOMERS_PATH) ? readFileSync(CUSTOMERS_PATH, 'utf-8') : '{"customers":[]}',
+        aes:       JSON.stringify({ aes }),
+        customers: JSON.stringify({ customers }),
       }
-      const aesCount = (JSON.parse(_testSnapshot.aes).aes ?? []).length
-      const custCount = (JSON.parse(_testSnapshot.customers).customers ?? []).length
-      return c.json({ ok: true, aes: aesCount, customers: custCount })
+      return c.json({ ok: true, aes: aes.length, customers: customers.length })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }

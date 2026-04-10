@@ -224,6 +224,7 @@ interface AccountInfo {
   productCount: number
   totalLicenses: number
   products: SheetProduct[]
+  ccspCustomer: boolean
 }
 
 function useAccountInfo(customerName: string): AccountInfo | null {
@@ -236,8 +237,9 @@ function useAccountInfo(customerName: string): AccountInfo | null {
         const acct = (json.customers ?? []).find(
           (c: any) => c.name.toLowerCase() === customerName.toLowerCase()
         )
+        const ccspCustomer = acct?.ccspCustomer ?? false
         if (acct && (acct.products ?? []).length > 0) {
-          setInfo({ productCount: acct.productCount, totalLicenses: acct.totalLicenses, products: acct.products })
+          setInfo({ productCount: acct.productCount, totalLicenses: acct.totalLicenses, products: acct.products, ccspCustomer })
         } else {
           // Cache empty — fetch from sheet then re-read accounts
           fetch(`/customer/${encoded}/sheetdata`)
@@ -248,6 +250,7 @@ function useAccountInfo(customerName: string): AccountInfo | null {
                 productCount: new Set(products.map((p: any) => p.productDescription)).size,
                 totalLicenses: products.reduce((s: number, p: any) => s + p.quantity, 0),
                 products,
+                ccspCustomer,
               })
             })
             .catch(() => {})
@@ -1358,7 +1361,7 @@ export function CustomerDetailPage() {
           <AccountPlanPanel customerName={customerName} />
           <AccountIntelligencePanel customerName={customerName} />
           <CasesSection cases={sse.cases} loading={sectionLoading} />
-          <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} />
+          <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} ccspCustomer={accountInfo?.ccspCustomer ?? false} />
           {stakeholderContacts.length > 0 && (
             <div className="bg-surface border border-border rounded-xl p-5">
               <StakeholderEngagementPanel contacts={stakeholderContacts} />

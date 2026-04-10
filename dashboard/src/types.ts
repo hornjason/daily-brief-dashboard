@@ -29,6 +29,7 @@ export interface SupportCase {
   daysOpen: number
   product?: string
   customerName?: string
+  casesSource?: 'name_match' | 'account_number'
 }
 
 export interface CalendarEvent {

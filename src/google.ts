@@ -126,23 +126,51 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
   const auth = makeAuth(GCAL_TOKEN_PATH)
   const calendar = google.calendar({ version: 'v3', auth })
 
-  const now     = new Date()
-  const weekOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  // Start of current week (Monday midnight) so the full Mon-Sun grid is populated
+  const weekStart = new Date()
+  weekStart.setHours(0, 0, 0, 0)
+  const day = weekStart.getDay() // 0=Sun, 1=Mon...
+  weekStart.setDate(weekStart.getDate() - (day === 0 ? 6 : day - 1)) // back to Monday
+  const weekOut = new Date(weekStart.getTime() + 14 * 24 * 60 * 60 * 1000) // 2 weeks to cover this + next week
 
-  const res = await calendar.events.list({
-    calendarId: 'primary',
-    timeMin: now.toISOString(),
-    timeMax: weekOut.toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: 50,
-  })
+  // Fetch all calendars the user has access to, then merge events
+  const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' }).catch(() => ({ data: { items: [] } }))
+  const calIds = (calListRes.data.items ?? [])
+    .filter(cal => cal.selected !== false)
+    .map(cal => cal.id!)
+    .filter(Boolean)
+  // Always include primary; deduplicate
+  if (!calIds.includes('primary')) calIds.unshift('primary')
 
-  // BKL-CAL-01: filter out proposed/tentative events before processing
+  const allItems: any[] = []
+  for (const calId of calIds) {
+    const res = await calendar.events.list({
+      calendarId: calId,
+      timeMin: weekStart.toISOString(),
+      timeMax: weekOut.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 200,
+    }).catch(() => ({ data: { items: [] } }))
+    allItems.push(...(res.data.items ?? []))
+  }
+
+  // Deduplicate by iCalUID across calendars
+  const seen = new Set<string>()
+  const res = { data: { items: allItems.filter(ev => {
+    const key = ev.iCalUID ?? ev.id
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }) } }
+
+  // BKL-CAL-01: filter out proposed/declined events before processing
+  // Only drop events the user explicitly declined or that are "[Proposed Time]" placeholders.
+  // Keep 'needsAction' (default for most meetings) and 'tentative' — these are real calendar entries.
   const items = (res.data.items ?? []).filter(ev => {
     if (/^\[proposed time\]/i.test(ev.summary ?? '')) return false
     const selfAttendee = (ev.attendees ?? []).find(a => a.self)
-    if (selfAttendee && selfAttendee.responseStatus !== 'accepted') return false
+    if (selfAttendee && selfAttendee.responseStatus === 'declined') return false
     return true
   })
 
@@ -175,13 +203,18 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
         return normAlpha(parts.length >= 2 ? parts.slice(0, -1).join('') : domain)
       }
 
-      // Significant words from customer name (> 3 chars, no legal suffixes)
+      // Significant words from customer name (> 3 chars, no legal suffixes or generic words)
+      const TITLE_STOPWORDS = new Set([
+        'office', 'services', 'service', 'systems', 'system', 'solutions', 'solution',
+        'group', 'national', 'international', 'company', 'management', 'global',
+        'the', 'and', 'for', 'new', 'one',
+      ])
       const custKeywords = (name: string) =>
         name.toLowerCase()
           .replace(/\b(inc|llc|corp|ltd|co|corporation|incorporated|u\.s|us)\b\.?/g, '')
           .replace(/[^a-z0-9\s]/g, ' ')
           .split(/\s+/)
-          .filter(w => w.length > 2)
+          .filter(w => w.length > 2 && !TITLE_STOPWORDS.has(w))
 
       const matchedCustomers = customers
         .filter((c) => {
@@ -196,10 +229,12 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           })
           if (autoDomainMatch) return true
 
-          // 3. Title: any significant keyword from customer name appears as a whole word in the title
+          // 3. Title: require ≥2 significant keywords from customer name in the title (or all, if only 1 keyword)
+          // Single-keyword matches cause too many false positives ("Dental" → "Delta Dental of California")
           const keywords = custKeywords(c.name)
           const titleNorm = title.toLowerCase()
-          if (keywords.some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(titleNorm))) return true
+          const matchingKws = keywords.filter(kw => new RegExp(`\\b${kw}\\b`, 'i').test(titleNorm))
+          if (keywords.length >= 2 ? matchingKws.length >= 2 : matchingKws.length >= 1) return true
 
           // 4. Aliases: check title against aliases too
           if (c.aliases?.some(alias => custKeywords(alias).some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(titleNorm)))) return true

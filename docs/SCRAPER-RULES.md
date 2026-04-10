@@ -4,7 +4,10 @@
 - Subscription scraping is strictly sequential (one page, one account) — council decision 2026-04-03. Discovery uses up to 3 parallel pages (read-only HTML, no downloads).
 - Keep-alive expiry guard: check all 3 mutex flags before `closeScrapeContext()`
 - CCSP two-phase mutex: `ccspScrapeRunning || ccspInFlight` — both required
-- Supportable is the ONLY account discovery source — never use RH Portal SOLR
+- RH Cases scraper is the account discovery source — searches RH portal by quoted customer name when accountNumbers is empty; Supportable is NOT used for discovery
+- RH discovery uses `aliases[0]` (canonical SF name from sf-bookings) ONLY — customers without aliases are skipped entirely; no fallback to display name
+- SF bookings alias column priority (sf-bookings-reader.ts): `ACCOUNT_SALES_GROUP_NAME` first (parent company legal name, matches RH Portal), then `ACCOUNT_GLOBAL_SALES_GROUP_NAME`, then `ACCOUNT_NAME` (deal-level entity, too specific). Do not change priority — global-first caused abbreviated misses ("INSIGHT" instead of "INSIGHT ENTERPRISES, INC."); account-first caused subsidiary misses ("Big Ten Network Services, LLC" instead of "FOX CORPORATION").
+- Territory sheet is AE→territory map ONLY — never a customer data source; customers come exclusively from sf-bookings-sync
 - Chrome needs `--no-sandbox` + `--disable-dev-shm-usage` at all 4 `launchPersistentContext` sites
 - `--shm-size=2g` + `--memory=4g` in Makefile — do not remove (Chromium stability)
 - Circuit breakers reset on auth event (RH or SF SSO) — do not change this behavior

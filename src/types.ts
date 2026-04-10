@@ -35,6 +35,7 @@ export interface Customer {
   notebookUrl?: string   // BKL-AI11: NotebookLM notebook URL for dashboard linking
   importedFrom?: string  // provenance tag: "territory-sheet", "manual", etc.
   inactive?: boolean     // true = AE removed but customer preserved (has account numbers or Drive folder)
+  ccspCustomer?: boolean // true = customer appears in SF sheet only via CCSP opportunities
 }
 
 export interface CustomerSubscription {
@@ -63,6 +64,8 @@ export interface SupportCase {
   accountNumber: string
   daysOpen: number
   product?: string
+  /** 'name_match' = found via company name search; 'account_number' = found via direct account number scrape */
+  casesSource?: 'name_match' | 'account_number'
 }
 
 export interface Renewal {

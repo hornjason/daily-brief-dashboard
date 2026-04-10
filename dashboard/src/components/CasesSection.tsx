@@ -10,6 +10,7 @@ export type CaseItem = {
   severity: string
   daysOpen: number
   product?: string
+  casesSource?: 'name_match' | 'account_number'
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -186,6 +187,14 @@ export function CasesSection({ cases, loading }: { cases: CaseItem[]; loading: b
                       <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${c.severity === '1' ? 'bg-critical/20 text-critical' : c.severity === '2' ? 'bg-warning/20 text-warning' : 'bg-border/40 text-text-secondary'}`}>
                         Sev{c.severity}
                       </span>
+                      {c.casesSource === 'name_match' && (
+                        <span
+                          className="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                          title="Matched by company name — may include related accounts"
+                        >
+                          name match
+                        </span>
+                      )}
                       {c.product && <span className="text-sm text-text-secondary min-w-0" title={c.product}>{c.product}</span>}
                     </div>
                     <p className="text-sm text-text-primary leading-snug line-clamp-3" title={c.summary}>{c.summary}</p>

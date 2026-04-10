@@ -16,10 +16,9 @@
  *   ACCOUNT_NAME / ACCOUNT_SALES_GROUP_NAME / ACCOUNT_GLOBAL_SALES_GROUP_NAME → customer matching
  *   Status derived: endDate > today → "Active", else "Expired"
  *
- * Name matching: 3-tier lookup (ACCOUNT_NAME first as most specific entity):
+ * Name matching: 2-tier lookup (ACCOUNT_NAME first as most specific entity):
  *   1. ACCOUNT_NAME (billing entity)
  *   2. ACCOUNT_SALES_GROUP_NAME (sales entity)
- *   3. ACCOUNT_GLOBAL_SALES_GROUP_NAME (holding company)
  *
  * Territory filtering: when AE tableauTerritories provided, only rows matching
  * those territory codes are considered — eliminates cross-AE false matches.
@@ -99,10 +98,10 @@ function normalizeName(s: string): string {
     .toLowerCase()
     // Strip "/..." suffixes from names like "EBAY/PAYPAL" → "EBAY"
     .replace(/\/\S+/g, '')
-    // Strip legal entity abbreviations
-    .replace(/\bl\.?l\.?c\.?\b|\bl\.?p\.?\b|\bp\.?l\.?c\.?\b/g, '')
+    // Strip legal entity abbreviations (LLC, LLP, LL, LP, PLC)
+    .replace(/\bl\.?l\.?c\.?\b|\bl\.?l\.?p\.?\b|\bll\b|\bl\.?p\.?\b|\bp\.?l\.?c\.?\b/g, '')
     // Strip common corporate noise words (bank/bancorporation for Zions/FirstBank)
-    .replace(/\binc\.?\b|\bcorp\.?\b|\bcorporation\b|\bbancorporation\b|\bbank\b|\bltd\.?\b|\bco\.?\b|\bholding[s]?\b|\binternational\b|\bcompany\b|\bthe\b/g, '')
+    .replace(/\binc\.?\b|\bcorp\.?\b|\bcorporation\b|\bbancorporation\b|\bbank\b|\bltd\.?\b|\bco\.?\b|\bholding[s]?\b|\binternational\b|\bcompany\b|\bthe\b|\battn\b/g, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -291,7 +290,7 @@ export function mapSfBookingsToCustomers(
     if (oppName.toLowerCase().includes('ccsp')) {
       // Still run the name match to track this customer had a CCSP presence
       let ccspMatchedCustomer: Customer | null = null
-      for (const name of [acctName, salesName, globalName]) {
+      for (const name of [acctName, salesName]) {
         if (!name) continue
         ccspMatchedCustomer = matchCustomer(name, customers)
         if (ccspMatchedCustomer) break
@@ -306,12 +305,12 @@ export function mapSfBookingsToCustomers(
     const isExpired = endDateStr ? new Date(endDateStr) <= today : false
     if (activeOnly && isExpired) continue
 
-    // Try to match customer using 3-tier lookup.
-    // Order: ACCOUNT_NAME first (most specific billing entity), then sales group, then global.
+    // Try to match customer using 2-tier lookup.
+    // Order: ACCOUNT_NAME first (most specific billing entity), then sales group.
     // This ensures Lifetouch Inc. rows go to "Lifetouch" rather than "Shutterfly" even though
     // both share the same ACCOUNT_SALES_GROUP_NAME = "SHUTTERFLY, LLC".
     let matched: Customer | null = null
-    for (const name of [acctName, salesName, globalName]) {
+    for (const name of [acctName, salesName]) {
       if (!name) continue
       matched = matchCustomer(name, customers)
       if (matched) break
@@ -427,7 +426,9 @@ export function deriveSfCustomersByTerritory(
   const today = new Date()
 
   // Map: normalizedGroupKey → { resolvedCustomer, rows[], ccspRowCount }
-  const groups = new Map<string, { customer: Customer | null; sfCanonicalName: string; rows: Record<string, string>[]; ccspRows: number }>()
+  // sfCanonicalName = global > sales > acct (for grouping/deduplication)
+  // sfSearchName    = acct > sales (most specific real name for RH Portal search)
+  const groups = new Map<string, { customer: Customer | null; sfCanonicalName: string; sfSearchName: string; rows: Record<string, string>[]; ccspRows: number }>()
 
   for (const row of dataRows) {
     const globalName = (row[globalIdx] ?? '').trim()
@@ -444,8 +445,8 @@ export function deriveSfCustomersByTerritory(
       if (!rowTerritory || !territorySet.has(rowTerritory)) continue
     }
 
-    // Canonical grouping name: global > sales > account
-    const canonicalName = globalName || salesName || acctName
+    // Canonical grouping name: account > sales (ACCOUNT_NAME is what AEs see and matches portal)
+    const canonicalName = acctName || salesName
     if (!canonicalName) continue
     const groupKey = normalizeName(canonicalName)
     if (!groupKey) continue
@@ -454,7 +455,8 @@ export function deriveSfCustomersByTerritory(
     if (!groups.has(groupKey)) {
       // Try to match an existing customer so we preserve their name + accountNumbers
       const existingMatch = matchCustomer(canonicalName, existingCustomers)
-      groups.set(groupKey, { customer: existingMatch, sfCanonicalName: canonicalName, rows: [], ccspRows: 0 })
+      const sfSearchName = acctName || salesName
+      groups.set(groupKey, { customer: existingMatch, sfCanonicalName: canonicalName, sfSearchName, rows: [], ccspRows: 0 })
     }
 
     const group = groups.get(groupKey)!
@@ -517,13 +519,13 @@ export function deriveSfCustomersByTerritory(
     // else: group had rows but all were filtered (activeOnly) — skip entirely
 
     if (!group.customer) {
-      // Net-new: upsert into customers.json with SF canonical name as alias
-      newCustomers.push({ name: displayName, ae: aeName, importedFrom: 'sf-bookings', aliases: [group.sfCanonicalName] })
+      // Net-new: upsert into customers.json — sfSearchName (acct > sales > global) as alias for RH discovery
+      newCustomers.push({ name: displayName, ae: aeName, importedFrom: 'sf-bookings', aliases: [group.sfSearchName] })
     } else if (group.customer.importedFrom === 'sf-bookings') {
-      // Existing sf-bookings customer — ensure SF canonical name is in aliases for RH scraper
+      // Existing sf-bookings customer — replace alias[0] with sfSearchName for RH scraper
       const existingAliases = group.customer.aliases ?? []
-      if (!existingAliases.includes(group.sfCanonicalName)) {
-        group.customer.aliases = [...existingAliases, group.sfCanonicalName]
+      if (existingAliases[0] !== group.sfSearchName) {
+        group.customer.aliases = [group.sfSearchName, ...existingAliases.filter(a => a !== group.sfSearchName)]
         aliasedCustomers.push(group.customer)
       }
     }

@@ -606,6 +606,15 @@ export async function writeCcspSheet(
     throw new Error(`[ccsp] invalid driveFolderId: "${driveFolderId}"`)
   }
 
+  // BKL-S17: check for empty results BEFORE clearing the existing sheet.
+  // Previously the sheet was cleared first, then the empty-rows guard fired —
+  // leaving a blank sheet when the Tableau scrape returned 0 rows.
+  const allRows = results.flatMap(r => r.rows)
+  if (allRows.length === 0 && existingSheetId) {
+    console.warn(`[ccsp] ${aeName}: 0 rows returned — skipping write to protect existing sheet data (BKL-S17)`)
+    return existingSheetId
+  }
+
   let spreadsheetId: string
 
   if (existingSheetId) {
@@ -689,15 +698,10 @@ export async function writeCcspSheet(
     }
   }
 
-  // Combine all results into a single data set
-  const allRows = results.flatMap(r => r.rows)
+  // allRows already computed above (before sheet clear), reuse it.
+  // The existingSheetId + 0 rows case was handled by the early return above.
 
   if (allRows.length === 0) {
-    // BKL-S17: never overwrite an existing sheet with empty scrape results
-    if (existingSheetId) {
-      console.warn(`[ccsp] ${aeName}: 0 rows returned — skipping write to protect existing sheet data (BKL-S17)`)
-      return spreadsheetId
-    }
     // First-run / genuinely empty — write placeholder
     await withQuotaRetry(
       () => sheets.spreadsheets.values.update({

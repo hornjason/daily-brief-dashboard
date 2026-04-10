@@ -38,6 +38,7 @@ interface AllScrapeStatus {
   circuitBreakers?: Record<string, CircuitBreakerState>
   queue?: { running: string | null; pending: string[]; isAnyRunning: boolean }
   browserRestartNeeded?: boolean
+  rhDiscoveryProgress?: { done: number; total: number; current: string | null } | null
 }
 
 interface RefreshIntervals {
@@ -815,6 +816,7 @@ export function AdminPage() {
         queue: d.queue,
         browserRestartNeeded: d.browserRestartNeeded,
       }
+      mapped.rhDiscoveryProgress = d.rhDiscoveryProgress ?? null
       setStatus(mapped)
     } catch {}
   }, [])
@@ -980,6 +982,11 @@ export function AdminPage() {
               onRunNow={() => runScrape('rh', '/api/scrape/rh')}
               circuitBreaker={status?.circuitBreakers?.rh}
               queuePending={localQueued['rh'] ?? status?.queue?.pending?.includes('rh-cases')}
+              subtitle={
+                status?.rhDiscoveryProgress
+                  ? `Discovering ${status.rhDiscoveryProgress.done}/${status.rhDiscoveryProgress.total}${status.rhDiscoveryProgress.current ? ` — ${status.rhDiscoveryProgress.current}` : ''}`
+                  : undefined
+              }
             />
             <ScrapeSection
               label="Supportable Discovery + Sync"

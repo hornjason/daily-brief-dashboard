@@ -198,7 +198,8 @@ export async function refreshPipeline(force = false): Promise<void> {
     }
     writePipelineCache(records, fileIds)
     recordOutcome('sf-pipeline', { success: true, recordCount: records.length })
-    recordSfSyncSuccess(records.length)
+    // NOTE: recordSfSyncSuccess is intentionally NOT called here — this path only reads
+    // from Google Sheets, not from Salesforce. Only the actual SF browser scrape calls it.
     console.log(`[refresh:pipeline] done`)
   } catch (e: any) {
     console.warn(`[refresh:pipeline] ${e.message}`)

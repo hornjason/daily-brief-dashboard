@@ -190,15 +190,27 @@ export function normalizeRows(rows: SheetRow[], customerName?: string): ProductS
     ? normalizeElmerFormat(rows)
     : normalizeFlatFormat(rows, customerName)
 
-  // Filter to ACTIVE only, then aggregate quantities per SKU
-  const skuMap = new Map<string, ProductSubscription>()
+  // Pass 1: aggregate ACTIVE rows by SKU (sum quantities)
+  const activeMap = new Map<string, ProductSubscription>()
   for (const p of raw) {
     if (p.status.toUpperCase() !== 'ACTIVE') continue
-    const existing = skuMap.get(p.sku)
+    const existing = activeMap.get(p.sku)
     if (existing) existing.quantity += p.quantity
-    else skuMap.set(p.sku, { ...p })
+    else activeMap.set(p.sku, { ...p })
   }
-  return Array.from(skuMap.values())
+
+  // Pass 2: aggregate EXPIRED rows by SKU — only include if no active row for same SKU
+  // This lets expired contracts surface (e.g. Illumio) while not duplicating active ones
+  const expiredMap = new Map<string, ProductSubscription>()
+  for (const p of raw) {
+    if (p.status.toUpperCase() !== 'EXPIRED') continue
+    if (activeMap.has(p.sku)) continue  // active version already present
+    const existing = expiredMap.get(p.sku)
+    if (existing) existing.quantity += p.quantity
+    else expiredMap.set(p.sku, { ...p })
+  }
+
+  return [...activeMap.values(), ...expiredMap.values()]
 }
 
 // ── Batch fetch (BKL-AE-03) ──────────────────────────────────────────────────

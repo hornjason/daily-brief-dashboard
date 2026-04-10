@@ -31,7 +31,7 @@ function formatDate(iso: string): string {
 
 // ── SubscriptionsSection ──────────────────────────────────────────────────────
 
-export function SubscriptionsSection({ products, loading }: { products: SheetProduct[]; loading: boolean }) {
+export function SubscriptionsSection({ products, loading, ccspCustomer = false }: { products: SheetProduct[]; loading: boolean; ccspCustomer?: boolean }) {
   const today = Date.now()
   const sorted = useMemo(() =>
     [...products]
@@ -57,7 +57,16 @@ export function SubscriptionsSection({ products, loading }: { products: SheetPro
         </div>
       )}
 
-      {!loading && products.length === 0 && (
+      {!loading && products.length === 0 && ccspCustomer && (
+        <div className="flex flex-col gap-1 py-1">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-0.5 w-fit">
+            CCSP Customer
+          </span>
+          <p className="text-sm text-text-secondary italic">Subscription data is managed via CCSP — see Cloud Spend section</p>
+        </div>
+      )}
+
+      {!loading && products.length === 0 && !ccspCustomer && (
         <p className="text-sm text-text-secondary italic py-1">No product data cached — run sheet sync</p>
       )}
 

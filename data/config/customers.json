@@ -1,2537 +1,1481 @@
 {
   "customers": [
     {
-      "name": "Dako Us Logistics",
+      "name": "Big Ten Network Services",
       "ae": "TBH",
-      "driveFolderId": "1-LSXtL9inhetUw_q5DlPhnQNzqt4hT9g",
-      "importedFrom": "territory-sheet",
-      "industry": "Logistics & Supply Chain",
-      "segment": "Freight Forwarding & Transportation",
-      "industryDescription": "Dako US Logistics specializes in international and domestic freight forwarding, offering road, sea, and air transportation services, including full truckload, less-than-truckload (LTL), and express shipments, as well as warehousing and customs brokerage.",
-      "industryCompetitors": [
-        "DHL",
-        "UPS",
-        "FedEx"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Big Ten Network Services, LLC"
       ],
-      "industryUpdatedAt": "2026-04-08T22:24:50.193Z"
+      "industry": "Media and Entertainment",
+      "segment": "Sports Broadcasting and Streaming",
+      "industryDescription": "Big Ten Network Services operates a sports network dedicated to covering collegiate sports sanctioned by the Big Ten Conference, offering live and recorded event telecasts, news, and analysis across various platforms.",
+      "industryCompetitors": [
+        "ESPN",
+        "FOX Sports",
+        "NBC Sports"
+      ],
+      "industryUpdatedAt": "2026-04-09T22:30:06.250Z",
+      "accountNumbers": [
+        "11899794"
+      ],
+      "domain": "btn.com"
     },
     {
-      "name": "First American Financial Corporation",
+      "name": "First American Financial",
       "ae": "TBH",
-      "driveFolderId": "1YMCWC_87vZps4IBuugIXRPBnTDFy2n5f",
-      "importedFrom": "territory-sheet",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "First American Financial Corporation"
+      ],
       "industry": "Financial Services",
       "segment": "Title Insurance and Settlement Services",
-      "industryDescription": "First American Financial Corporation is an American financial services company that provides title insurance, settlement services, and other risk solutions for residential and commercial real estate transactions.",
+      "industryDescription": "First American Financial Corporation provides title insurance, settlement services, and risk solutions for real estate transactions, along with property data, home warranties, and banking and trust services.",
+      "industryCompetitors": [
+        "Fidelity National Financial",
+        "Old Republic Title",
+        "Stewart Information Services"
+      ],
+      "industryUpdatedAt": "2026-04-09T22:31:13.428Z",
+      "accountNumbers": [
+        "12653942",
+        "9512872"
+      ],
+      "domain": "firstam.com"
+    },
+    {
+      "name": "First American Home Buyers Protection",
+      "ae": "TBH",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "First American Home Buyers Protection Corporation"
+      ],
+      "accountNumbers": [
+        "7457646"
+      ],
+      "domain": "firstam.com"
+    },
+    {
+      "name": "First American Trust",
+      "ae": "TBH",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "First American Trust Company"
+      ],
+      "industry": "Financial Services",
+      "segment": "Wealth Management, Trust, and Banking Services",
+      "industryDescription": "First American Trust provides wealth management, investment management, and trust services for high-net-worth individuals and families, alongside specialized banking solutions for the real estate settlement services industry, including escrow and title-related banking.",
       "industryCompetitors": [
         "Fidelity National Financial",
         "Stewart Information Services",
-        "Old Republic Title"
+        "MGIC Investment Corporation"
       ],
-      "industryUpdatedAt": "2026-04-08T22:25:55.690Z",
-      "ccspCustomer": false
+      "industryUpdatedAt": "2026-04-09T22:32:31.403Z",
+      "domain": "firstam.com"
     },
     {
-      "name": "Fox Corporation",
+      "name": "Fox",
       "ae": "TBH",
-      "driveFolderId": "1j7tar-2WPTtPHKSzAra6PmmXsRuWMuKt",
-      "importedFrom": "territory-sheet",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Fox Corporation"
+      ],
       "industry": "Media",
-      "segment": "Broadcasting and Content Production",
-      "industryDescription": "Fox Corporation is an American multinational mass media company that produces and distributes news, sports, and entertainment content through its various brands, including Fox News, Fox Sports, the Fox Network, and Tubi.",
+      "segment": "Television Broadcasting, News, and Sports Broadcasting",
+      "industryDescription": "Fox Corporation is an American multinational mass media company that produces and distributes content through its television broadcasting, news, and sports assets, including the FOX Network, Fox News, Fox Sports, and Tubi.",
+      "industryCompetitors": [
+        "Netflix",
+        "Warner Bros. Discovery",
+        "NBCNews"
+      ],
+      "industryUpdatedAt": "2026-04-09T22:33:40.094Z",
+      "accountNumbers": [
+        "11820898",
+        "11841066",
+        "12816567",
+        "1330049",
+        "6247997",
+        "11940498",
+        "6316369",
+        "6324439"
+      ],
+      "domain": "fox.com"
+    },
+    {
+      "name": "Fox News Network",
+      "ae": "TBH",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Fox News Network, LLC"
+      ],
+      "industry": "Media",
+      "segment": "Cable News and Digital Media",
+      "industryDescription": "Fox News Network is a multinational conservative news and political commentary television channel and website that provides in-depth news reporting, opinion, and analysis.",
       "industryCompetitors": [
         "CNN",
         "MSNBC",
-        "Warner Bros. Discovery"
+        "NBC News"
       ],
-      "industryUpdatedAt": "2026-04-08T22:27:02.544Z",
-      "ccspCustomer": false
+      "industryUpdatedAt": "2026-04-09T22:34:45.927Z",
+      "accountNumbers": [
+        "1032475",
+        "6278491"
+      ],
+      "domain": "foxnews.com"
     },
     {
-      "name": "Latham & Watkins",
+      "name": "Fox Television Station",
       "ae": "TBH",
-      "driveFolderId": "15lhEf1OaPp6XDHM-BjrjmAD35RZfv-Nh",
-      "importedFrom": "territory-sheet",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Fox Television Station LL"
+      ],
+      "industry": "Media and Entertainment",
+      "segment": "Broadcast Television",
+      "industryDescription": "Fox Television Stations, LLC is a group of television stations in the United States owned and operated by Fox Corporation, which distributes sports, entertainment, and syndicated content, and produces local news.",
+      "industryCompetitors": [
+        "NBCUniversal",
+        "Warner Bros. Discovery",
+        "Paramount Global"
+      ],
+      "industryUpdatedAt": "2026-04-09T22:35:53.305Z",
+      "accountNumbers": [
+        "1145919",
+        "12002787",
+        "12003583",
+        "12118125",
+        "12133215",
+        "12159625",
+        "12227838",
+        "1258245",
+        "12818560",
+        "1392035",
+        "1551546",
+        "1587650",
+        "341199",
+        "468502",
+        "5254424",
+        "5266632",
+        "5273390",
+        "5432126",
+        "5610513",
+        "5802266"
+      ],
+      "domain": "fox.com"
+    },
+    {
+      "name": "Foxcorp",
+      "ae": "TBH",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Foxcorp Holdings LLC Attn"
+      ],
+      "industry": "Media",
+      "segment": "Broadcasting & Content Distribution",
+      "industryDescription": "Fox Corporation is an American multinational mass media company that produces and distributes news, sports, and entertainment content through its various brands, including Fox News, Fox Sports, and the Fox Broadcasting Company.",
+      "industryCompetitors": [
+        "Netflix",
+        "Warner Bros. Discovery",
+        "NBCUniversal"
+      ],
+      "industryUpdatedAt": "2026-04-09T22:37:02.093Z",
+      "domain": "foxcorporation.com"
+    },
+    {
+      "name": "Latham Watkins",
+      "ae": "TBH",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Latham & Watkins LLP"
+      ],
       "industry": "Legal Services",
-      "segment": "Corporate, Finance, and Litigation Law",
-      "industryDescription": "Latham & Watkins is a multinational white-shoe law firm that provides integrated corporate, litigation, finance, and regulatory services to global clients, specializing in high-value transactions and complex disputes.",
+      "segment": "Global Corporate and Financial Legal Services",
+      "industryDescription": "Latham & Watkins is a multinational law firm that advises businesses and institutions across a wide spectrum of transactional, litigation, corporate, and regulatory areas globally, with particular strength in M&A, private equity, and capital markets.",
       "industryCompetitors": [
         "Kirkland & Ellis",
-        "Skadden, Arps, Slate, Meagher & Flom LLP",
+        "Skadden, Arps, Slate, Meagher & Flom",
         "Sullivan & Cromwell"
       ],
-      "industryUpdatedAt": "2026-04-08T22:28:10.132Z",
-      "ccspCustomer": false
+      "industryUpdatedAt": "2026-04-09T22:38:10.283Z",
+      "accountNumbers": [
+        "835498"
+      ],
+      "domain": "lw.com"
     },
     {
-      "name": "Peraton",
+      "name": "Peraton Technology Services",
       "ae": "TBH",
-      "driveFolderId": "1emkMdJek7Mycj3fD21AP4WMvAWlzvcck",
-      "importedFrom": "territory-sheet",
-      "industry": "National Security and Technology",
-      "segment": "Government IT Services and Solutions",
-      "industryDescription": "Peraton is a national security company that provides advanced technology solutions and services, including cybersecurity, cloud, engineering, and mission support, primarily to U.S. government agencies and the armed forces.",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Peraton Technology Services Inc."
+      ],
+      "industry": "Technology",
+      "segment": "Government IT Solutions and National Security",
+      "industryDescription": "Peraton Technology Services provides information solutions, engineering, and analysis, focusing on complex engineering systems, cybersecurity engineering, IT support services, network design and architecture, and cloud migration support primarily for U.S. federal government customers in national security, defense, and intelligence markets.",
       "industryCompetitors": [
         "ManTech",
         "Leidos",
         "SAIC"
       ],
-      "industryUpdatedAt": "2026-04-08T22:29:18.626Z"
+      "industryUpdatedAt": "2026-04-09T22:39:24.495Z",
+      "domain": "peraton.com"
     },
     {
-      "name": "Rxlogix Corporation",
+      "name": "Peraton Oscomet",
       "ae": "TBH",
-      "driveFolderId": "1ggpXWep7DP0oGzSVTyV9VxZ2a_gvA87z",
-      "importedFrom": "territory-sheet",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Peraton-OSCOMET"
+      ],
+      "domain": "peraton.com"
+    },
+    {
+      "name": "Rxlogix",
+      "ae": "TBH",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Rxlogix Corporation"
+      ],
       "ccspCustomer": true,
-      "industry": "Healthcare Technology",
-      "segment": "Pharmacovigilance Software and Consulting",
-      "industryDescription": "RxLogix Corporation provides innovative software solutions and consulting services focused on pharmacovigilance and drug safety for the life sciences industry, utilizing advanced technologies like AI and machine learning.",
+      "industry": "Healthcare",
+      "segment": "Pharmacovigilance Software / Enterprise SaaS",
+      "industryDescription": "RxLogix provides pharmacovigilance software solutions that leverage AI and machine learning to help life sciences companies and regulatory agencies manage drug safety, detect signals, and ensure compliance.",
       "industryCompetitors": [
         "PharmaLex",
         "Medfiles",
         "Ennov"
       ],
-      "industryUpdatedAt": "2026-04-08T22:30:24.717Z"
+      "industryUpdatedAt": "2026-04-09T22:40:39.814Z",
+      "domain": "rxlogix.com"
     },
     {
       "name": "Solartis",
       "ae": "TBH",
-      "driveFolderId": "1hKpRPueCoWFubM5eFIZCql0Sdn5nLY85",
-      "importedFrom": "territory-sheet",
-      "industry": "Technology",
-      "segment": "Insurance Software / Insurtech",
-      "industryDescription": "Solartis is a cloud-based software company that provides insurance companies with solutions for rating, underwriting, policy administration, claims, and billing, focusing on property and casualty (P&C) insurance.",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Solartis, LLC"
+      ],
+      "industry": "Insurance Technology",
+      "segment": "P&C Insurance Software and Services",
+      "industryDescription": "Solartis is a cloud-based software company that provides insurance companies with solutions for rating, underwriting, policy administration, claims, and billing, focusing on Property & Casualty (P&C) insurance.",
       "industryCompetitors": [
         "Guidewire InsuranceSuite",
         "Ebix",
-        "Oracle Insurance"
+        "Sapiens"
       ],
-      "industryUpdatedAt": "2026-04-08T22:31:31.802Z",
-      "ccspCustomer": false
+      "industryUpdatedAt": "2026-04-09T22:41:48.390Z",
+      "accountNumbers": [
+        "11916628",
+        "5262442",
+        "5629489",
+        "5632235",
+        "5796430"
+      ],
+      "domain": "solartis.com"
     },
     {
       "name": "Tgs Management",
       "ae": "TBH",
-      "driveFolderId": "1BGW7OcPUCnJDAyD7St4jXk8CoH-egUdq",
-      "importedFrom": "territory-sheet",
-      "industry": "Financial Services",
-      "segment": "Quantitative Investment Management",
-      "industryDescription": "TGS Management is a quantitative investment management firm that develops and deploys quantitative trading systems across financial markets, utilizing scientific methods and engineering discipline to identify and exploit pricing inefficiencies.",
-      "industryCompetitors": [
-        "Fidelity Investments",
-        "Goldman Sachs",
-        "Investec"
-      ],
-      "industryUpdatedAt": "2026-04-08T21:33:10.329Z",
-      "ccspCustomer": false
-    },
-    {
-      "name": "Veritas Capital Fund Management",
-      "ae": "TBH",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "VERITAS CAPITAL FUND MANAGEMENT, L.L.C."
+        "Tgs Management Corp"
       ],
       "industry": "Financial Services",
-      "segment": "Private Equity",
-      "industryDescription": "Veritas Capital Fund Management is a private equity firm that invests in companies providing technology-enabled products and services, primarily to government and commercial customers worldwide, with a focus on industries such as aerospace & defense, national security, healthcare, and education.",
+      "segment": "Quantitative Investment Management (Hedge Fund)",
+      "industryDescription": "TGS Management is a quantitative investment management firm that utilizes scientific methods, engineering discipline, and advanced technology to develop and implement trading systems for global financial markets.",
       "industryCompetitors": [
-        "Clarion",
-        "TBG",
-        "Stone Arch Capital"
+        "Renaissance Technologies",
+        "Citadel LLC",
+        "Goldman Sachs"
       ],
-      "industryUpdatedAt": "2026-04-08T22:13:26.968Z",
-      "ccspCustomer": false
+      "industryUpdatedAt": "2026-04-09T22:42:57.374Z",
+      "accountNumbers": [
+        "320795"
+      ],
+      "domain": "tgsmc.com"
     },
     {
       "name": "Axway",
       "ae": "Peter Niklaus",
-      "driveFolderId": "1fcJBffKGxPb0JsbEDzjeOLU5Qkx-bcIz",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Information Technology",
-      "segment": "Enterprise Integration Software",
-      "industryDescription": "Axway is a global software company specializing in API management, managed file transfer (MFT), and B2B integration solutions, helping organizations securely integrate and exchange enterprise data.",
-      "industryCompetitors": [
-        "MuleSoft",
-        "IBM",
-        "WSO2"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Axway Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T22:32:59.478Z"
+      "accountNumbers": [
+        "1185684",
+        "5659174",
+        "5731137",
+        "5956386",
+        "7348196",
+        "7494779"
+      ],
+      "domain": "axway.com"
     },
     {
-      "name": "Best Western International",
+      "name": "Connexity",
       "ae": "Peter Niklaus",
-      "driveFolderId": "1t5LPqpfVRhQcupxkQflp-E_Z1Js-1RH3",
-      "importedFrom": "territory-sheet",
-      "industry": "Hospitality",
-      "segment": "Hotels & Lodging",
-      "industryDescription": "Best Western International, Inc. operates as a global hospitality enterprise, licensing the Best Western Hotels & Resorts brand to over 4,500 hotels worldwide and offering a diverse portfolio of 18 brands across various chain scales.",
-      "industryCompetitors": [
-        "Marriott International",
-        "Hyatt Hotels",
-        "Hilton Worldwide Holdings Inc."
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Connexity, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T22:15:40.539Z"
+      "accountNumbers": [
+        "5935082"
+      ],
+      "domain": "connexity.com"
     },
     {
-      "name": "Consumer Cellular, Incorporated",
+      "name": "Consumer Cellular Incorporated",
       "ae": "Peter Niklaus",
-      "driveFolderId": "1vZC4hecMamYEz2WXKXkbOBTs--O1JJY8",
-      "importedFrom": "territory-sheet",
-      "industry": "Telecommunications",
-      "segment": "Mobile Virtual Network Operator (MVNO)",
-      "industryDescription": "Consumer Cellular, Inc. is an American postpaid mobile virtual network operator that provides cellphones, no-contract cellphone plans, and accessories, primarily focusing on users over the age of 50.",
-      "industryCompetitors": [
-        "Verizon",
-        "Cricket Wireless",
-        "TracFone Wireless"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Consumer Cellular, Incorporated"
       ],
-      "industryUpdatedAt": "2026-04-08T22:34:18.201Z"
+      "accountNumbers": [
+        "1010239",
+        "12316598"
+      ],
+      "domain": "consumercellular.com"
     },
     {
       "name": "Microchip Technology",
       "ae": "Peter Niklaus",
-      "driveFolderId": "19Y9aHtWI-HrWvi7hdPiWbzvD9W5w0Aom",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Semiconductors",
-      "industryDescription": "Microchip Technology is a leading provider of smart, connected, and secure embedded control solutions, manufacturing microcontrollers, mixed-signal, analog, and Flash-IP integrated circuits for diverse applications across industrial, automotive, consumer, aerospace, and defense markets.",
-      "industryCompetitors": [
-        "Analog Devices",
-        "NXP Semiconductors",
-        "Texas Instruments"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Microchip Technology"
       ],
-      "industryUpdatedAt": "2026-04-08T22:35:24.876Z"
+      "domain": "microchip.com"
+    },
+    {
+      "name": "Microsemi Storage Solutions",
+      "ae": "Peter Niklaus",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "MICROSEMI STORAGE SOLUTIONS, INC."
+      ],
+      "accountNumbers": [
+        "5722021"
+      ],
+      "domain": "microchip.com"
+    },
+    {
+      "name": "Musarubra Us",
+      "ae": "Peter Niklaus",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Musarubra US LLC"
+      ],
+      "ccspCustomer": true,
+      "accountNumbers": [
+        "11911836",
+        "7342937",
+        "8438510"
+      ],
+      "domain": "trellix.com"
     },
     {
       "name": "Nextiva",
       "ae": "Peter Niklaus",
-      "driveFolderId": "11snCWlNm7xeF15EfVqnYKe46XMTG8NUq",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Unified Communications as a Service (UCaaS) & Contact Center as a Service (CCaaS)",
-      "industryDescription": "Nextiva provides a cloud-based customer experience management platform that integrates business phone, contact center, AI receptionist, and unified communication tools to optimize customer journeys and streamline business communication.",
-      "industryCompetitors": [
-        "RingCentral",
-        "8x8",
-        "GoTo Connect"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Nextiva, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T22:36:31.020Z"
+      "accountNumbers": [
+        "12017425",
+        "1538597"
+      ],
+      "domain": "nextiva.com"
     },
     {
       "name": "Pnm Resources",
       "ae": "Peter Niklaus",
-      "driveFolderId": "1lqgBN_uC5nHcSIhz7w9q2AtzvOfOi0Z4",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Utilities",
-      "segment": "Electric Utilities",
-      "industryDescription": "PNM Resources is an energy holding company that provides electricity and electric services to residential, commercial, and industrial customers in New Mexico and Texas through its regulated utilities, PNM and Texas-New Mexico Power (TNMP).",
-      "industryCompetitors": [
-        "Sempra Energy",
-        "Southwest Gas Corporation",
-        "EDF Energy"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Pnm Resources, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T22:37:37.242Z"
+      "accountNumbers": [
+        "11920598"
+      ],
+      "domain": "pnmresources.com"
     },
     {
-      "name": "Trellix",
-      "ae": "Peter Niklaus",
-      "driveFolderId": "1LlLiVSRplHhKjkUjU5gd7IuEclwGl6mU",
-      "importedFrom": "territory-sheet",
-      "industry": "Technology",
-      "segment": "Cybersecurity",
-      "industryDescription": "Trellix is a privately held cybersecurity company that provides an extended detection and response (XDR) platform, combining endpoint, cloud, collaboration, data, and infrastructure security capabilities with AI and machine learning to detect and respond to advanced threats.",
-      "industryCompetitors": [
-        "Microsoft",
-        "Trend Micro",
-        "CrowdStrike"
-      ],
-      "industryUpdatedAt": "2026-04-08T22:38:42.696Z"
-    },
-    {
-      "name": "Tucson Electric Power Company",
-      "ae": "Peter Niklaus",
-      "driveFolderId": "1rGHsUazdvQSiFcjIoJXXh_M6MJfLJ7yi",
-      "importedFrom": "territory-sheet",
-      "industry": "Electric Utilities",
-      "segment": "Electric Power Generation, Transmission, and Distribution",
-      "industryDescription": "Tucson Electric Power Company (TEP) is a regulated electric utility company that generates, transmits, and distributes electric power to over 457,000 customers in the Tucson metropolitan area and southern Arizona.",
-      "industryCompetitors": [
-        "Green Mountain Energy",
-        "Champion Energy Marketing",
-        "Salt River Project"
-      ],
-      "industryUpdatedAt": "2026-04-08T22:39:49.310Z"
-    },
-    {
-      "name": "Symphony Technology Group",
+      "name": "Public Service Of New Mexico",
       "ae": "Peter Niklaus",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "SYMPHONY TECHNOLOGY GROUP, L.L.C."
+        "Public Service Company of New Mexico"
       ],
-      "ccspCustomer": false,
-      "industry": "Financial Services",
-      "segment": "Private Equity",
-      "industryDescription": "Symphony Technology Group (STG) is a private equity firm that invests in and builds enterprise software, data, and analytics companies, primarily in the mid-market.",
-      "industryCompetitors": [
-        "HGGC",
-        "Francisco Partners",
-        "Vista Equity Partners"
-      ],
-      "industryUpdatedAt": "2026-04-08T22:22:28.829Z"
+      "domain": "pnm.com"
     },
     {
-      "name": "Cci Parent",
+      "name": "Tucson Electric Power",
       "ae": "Peter Niklaus",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "CCI PARENT, INC."
+        "Tucson Electric Power"
       ],
-      "ccspCustomer": false
+      "accountNumbers": [
+        "1190227",
+        "1203707",
+        "1211700",
+        "1401160",
+        "1447443",
+        "682361"
+      ],
+      "domain": "tep.com"
     },
     {
-      "name": "Fortis",
-      "ae": "Peter Niklaus",
+      "name": "Aera Energy Services",
+      "ae": "Oren Shaolian",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "FORTIS INC."
+        "Aera Energy Services Company"
       ],
-      "ccspCustomer": false
+      "domain": "aeraenergy.com"
     },
     {
-      "name": "California Resources Corporation",
+      "name": "California Resources",
       "ae": "Oren Shaolian",
-      "driveFolderId": "1yYO3l-nPKOIfEuvZ-PF7ux-Y-MOP5Evl",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Energy",
-      "segment": "Oil and Natural Gas Exploration & Production, and Carbon Management",
-      "industryDescription": "California Resources Corporation is an independent energy and carbon management company primarily focused on hydrocarbon exploration and production in California, alongside developing carbon capture and storage projects to reduce emissions.",
-      "industryCompetitors": [
-        "Berry Petroleum Company",
-        "Aera Energy",
-        "Southwestern Energy"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "California Resources Corporation"
       ],
-      "industryUpdatedAt": "2026-04-08T22:41:14.985Z"
+      "accountNumbers": [
+        "5566912"
+      ],
+      "domain": "crc.com"
     },
     {
-      "name": "Insurance Company Of West",
+      "name": "Insurance Of West",
       "ae": "Oren Shaolian",
-      "driveFolderId": "1vOvSiCN6sZkwQAnzzKN_LVa_mVilUxgp",
-      "importedFrom": "territory-sheet",
-      "industry": "Financial Services",
-      "segment": "Property & Casualty Insurance",
-      "industryDescription": "Insurance Company of the West (ICW Group) is a multi-line property and casualty insurer based in California, offering workers' compensation, earthquake, assumed reinsurance, and personal automobile insurance.",
-      "industryCompetitors": [
-        "Skyward Specialty Insurance",
-        "The Hanover Insurance Group",
-        "Amwins"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Insurance Company of West"
       ],
-      "industryUpdatedAt": "2026-04-08T22:42:21.819Z"
+      "domain": "inswest.com"
     },
     {
-      "name": "Internet Corporation For Assigned Names And Numbers",
+      "name": "Internet For Assigned Names And Numbers",
       "ae": "Oren Shaolian",
-      "driveFolderId": "1HHZFdftS1Dn6R2Jinncw9muAXExIUaTJ",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Internet Governance",
-      "segment": "Domain Name System (DNS) Management and IP Address Allocation",
-      "industryDescription": "The Internet Corporation for Assigned Names and Numbers (ICANN) is a non-profit organization responsible for coordinating the global management of domain names, IP addresses, and the Domain Name System (DNS) to ensure a stable, secure, and unified internet.",
-      "industryCompetitors": [
-        "Internet Assigned Numbers Authority (IANA)",
-        "Regional Internet Registries (RIRs)",
-        "Verisign"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Internet Corporation For Assigned Names and Numbers"
       ],
-      "industryUpdatedAt": "2026-04-08T22:43:29.569Z"
+      "domain": "icann.org"
     },
     {
       "name": "Korn Ferry",
       "ae": "Oren Shaolian",
-      "driveFolderId": "114mTLLmrht4eELgPQPOYeVCHODCXHXpw",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Consulting",
-      "segment": "Organizational Consulting & Talent Management",
-      "industryDescription": "Korn Ferry is a global organizational consulting firm that helps clients synchronize strategy, operations, and talent to accelerate performance and drive business transformation.",
-      "industryCompetitors": [
-        "McKinsey & Company",
-        "Bain & Company",
-        "Deloitte"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Korn Ferry"
       ],
-      "industryUpdatedAt": "2026-04-08T22:44:36.703Z"
+      "accountNumbers": [
+        "11835658",
+        "12308748",
+        "5615352",
+        "5785765",
+        "6233905",
+        "6661455"
+      ],
+      "domain": "kornferry.com"
     },
     {
-      "name": "(la Care) Local Initiative Health Authority For Los Angeles County",
+      "name": "Local Initiative Health Authority For Los Angeles County",
       "ae": "Oren Shaolian",
-      "driveFolderId": "1jaJu74T4DTJBa2gwIihhbSrUXCRGD5So",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Managed Care / Health Insurance",
-      "industryDescription": "L.A. Care Health Plan is a public agency that provides health insurance services to low-income and vulnerable residents of Los Angeles County through various programs, including Medi-Cal, L.A. Care Covered (ACA exchange), and Medicare Advantage Plans.",
-      "industryCompetitors": [
-        "Kaiser Permanente",
-        "Molina Healthcare",
-        "Health Net"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Local Initiative Health Authority For Los Angeles County"
       ],
-      "industryUpdatedAt": "2026-04-08T22:45:42.661Z"
+      "accountNumbers": [
+        "523393"
+      ],
+      "domain": "lacare.org"
     },
     {
       "name": "Radiology Partners",
       "ae": "Oren Shaolian",
-      "driveFolderId": "19QVEYIvyivyHtKnWd3bcq5VXp54_SfT-",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Practice Management (Healthcare)",
-      "industryDescription": "Radiology Partners is the largest physician-led and physician-owned radiology practice in the U.S., providing diagnostic and interventional radiology services to hospitals and healthcare facilities across the nation.",
-      "industryCompetitors": [
-        "Vituity",
-        "Sound Physicians",
-        "SCP Health"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Radiology Partners"
       ],
-      "industryUpdatedAt": "2026-04-08T22:46:49.971Z"
+      "accountNumbers": [
+        "11996523",
+        "12862587",
+        "12862602",
+        "5380573",
+        "6029692"
+      ],
+      "domain": "radpartners.com"
     },
     {
-      "name": "Skechers U.S.A.",
+      "name": "Skechers U S A",
       "ae": "Oren Shaolian",
-      "driveFolderId": "1C7LkuPiVvfyzRPdZL-xLzoYtc1vbTHUO",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Retail",
-      "segment": "Footwear, Apparel, and Accessories",
-      "industryDescription": "Skechers U.S.A., Inc. designs, develops, and markets a diverse range of lifestyle and performance footwear, apparel, and accessories for men, women, and children worldwide.",
-      "industryCompetitors": [
-        "Nike",
-        "Adidas",
-        "New Balance"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Skechers U.S.A., Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T22:48:00.664Z"
+      "accountNumbers": [
+        "12761369"
+      ],
+      "domain": "skechers.com"
+    },
+    {
+      "name": "Skechers U S A Ii",
+      "ae": "Oren Shaolian",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Skechers U.S.A., Inc. II"
+      ],
+      "ccspCustomer": true,
+      "domain": "skechers.com"
     },
     {
       "name": "Xifin",
       "ae": "Oren Shaolian",
-      "driveFolderId": "1eA32lhKh5qjxIEQsFfhJlyDGC_7nRWRO",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare Technology",
-      "segment": "Revenue Cycle Management (RCM) & Workflow Automation",
-      "industryDescription": "Xifin is a healthcare information technology company that provides AI-enabled revenue cycle management and workflow automation solutions to healthcare providers, focusing on diagnostic and ancillary services to improve financial and operational outcomes.",
-      "industryCompetitors": [
-        "Carepatron",
-        "ModMed",
-        "Tebra"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Xifin, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T22:49:08.548Z"
+      "accountNumbers": [
+        "5655332"
+      ],
+      "domain": "xifin.com"
     },
     {
       "name": "Yardi Systems",
       "ae": "Oren Shaolian",
-      "driveFolderId": "1EFykvQCOiRst7iOxPXa1BJghrvVxDu6s",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Enterprise SaaS",
-      "industryDescription": "Yardi Systems is a global technology company that develops and supports industry-leading investment and property management software for all types and sizes of real estate companies.",
-      "industryCompetitors": [
-        "RealPage",
-        "MRI Software",
-        "Entrata"
-      ],
-      "industryUpdatedAt": "2026-04-08T22:50:14.610Z"
-    },
-    {
-      "name": "Icw Group",
-      "ae": "Oren Shaolian",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "ICW GROUP HOLDINGS, INC."
+        "Yardi Systems, Inc."
       ],
-      "ccspCustomer": false,
-      "industry": "Financial Services",
-      "segment": "Property and Casualty Insurance",
-      "industryDescription": "ICW Group is a multi-line property and casualty insurance carrier offering workers' compensation, earthquake, personal automobile, catastrophe, and assumed reinsurance coverage.",
-      "industryCompetitors": [
-        "The Hanover Insurance Group",
-        "FCCI",
-        "Chubb"
+      "accountNumbers": [
+        "444120",
+        "5820464",
+        "6874765"
       ],
-      "industryUpdatedAt": "2026-04-08T22:51:24.379Z"
+      "domain": "yardi.com"
+    },
+    {
+      "name": "Ademco",
+      "ae": "Sherry Gayo",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Ademco Inc."
+      ],
+      "accountNumbers": [
+        "6158784"
+      ],
+      "domain": "ademcosecurity.com"
+    },
+    {
+      "name": "American Traffic Solutions Consolidated",
+      "ae": "Sherry Gayo",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "American Traffic Solutions Consolidated, L.L.C."
+      ],
+      "domain": "verramobility.com"
+    },
+    {
+      "name": "American Traffic Solutions",
+      "ae": "Sherry Gayo",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "American Traffic Solutions, Inc."
+      ],
+      "domain": "verramobility.com"
     },
     {
       "name": "Avnet",
       "ae": "Sherry Gayo",
-      "driveFolderId": "1nNAhZ6QoCGBD9_MQeF-pZPOr2MD5CvAm",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Electronic Components Distribution",
-      "industryDescription": "Avnet is a global technology distributor of electronic components and technology solutions, connecting innovators with manufacturers and guiding products from idea to design and from prototype to production.",
-      "industryCompetitors": [
-        "Arrow Electronics",
-        "Future Electronics",
-        "Mouser"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Avnet, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T22:52:36.874Z"
+      "accountNumbers": [
+        "11618080",
+        "1277684",
+        "511644",
+        "5232297",
+        "5305411",
+        "5345407",
+        "5446301",
+        "5494006",
+        "5742458",
+        "6027659",
+        "6994455",
+        "767146",
+        "914912"
+      ],
+      "domain": "avnet.com"
     },
     {
       "name": "Banner Health",
       "ae": "Sherry Gayo",
-      "driveFolderId": "1IbfEDshojZOH4Ptwp_4Ac33dUhMJQkVU",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Integrated Healthcare System",
-      "industryDescription": "Banner Health is a non-profit healthcare system that operates 33 hospitals and numerous specialized facilities across six states, providing a wide range of services including hospital care, urgent care, long-term care, and health insurance plans.",
-      "industryCompetitors": [
-        "Dignity Health",
-        "HonorHealth",
-        "Duke Health"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Banner Health"
       ],
-      "industryUpdatedAt": "2026-04-08T22:53:45.230Z"
+      "accountNumbers": [
+        "1108805",
+        "12402464",
+        "1273930",
+        "1309811",
+        "1557449",
+        "520598",
+        "5471411",
+        "5505793",
+        "5525547",
+        "5526297",
+        "604580",
+        "6184131",
+        "6344266",
+        "851608"
+      ],
+      "domain": "bannerhealth.com"
     },
     {
-      "name": "Cable One",
+      "name": "Cableone Corporate Office",
       "ae": "Sherry Gayo",
-      "driveFolderId": "1u6EaROaSi1q-EgNUnYojqH5z5MWzflY4",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Telecommunications Services",
-      "segment": "Broadband Communications",
-      "industryDescription": "Cable One is a broadband communications provider offering internet, cable television, and phone services to residential and business customers across 24 states under brands like Sparklight.",
-      "industryCompetitors": [
-        "AT&T",
-        "Xfinity",
-        "Charter Spectrum"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Cableone Corporate Office"
       ],
-      "industryUpdatedAt": "2026-04-08T22:54:52.199Z"
+      "domain": "sparklight.com"
     },
     {
       "name": "Ebocom",
       "ae": "Sherry Gayo",
-      "driveFolderId": "11A4q6H9fiuGT0XDrnf541fJwBwAtumkC",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Financial Technology",
-      "segment": "Payment Processing",
-      "industryDescription": "Ebocom is a financial technology company that provides full-service back-office electronic transaction processing solutions, including credit card processing, interchange management, and reporting.",
-      "industryCompetitors": [],
-      "industryUpdatedAt": "2026-04-08T22:56:00.784Z"
-    },
-    {
-      "name": "Freeport Mcmoran",
-      "ae": "Sherry Gayo",
-      "driveFolderId": "1F2XxDRSFrFQuQ3oE3aFKkoN30NvzONNv",
-      "importedFrom": "territory-sheet",
-      "industry": "Mining",
-      "segment": "Copper, Gold, and Molybdenum Mining",
-      "industryDescription": "Freeport-McMoRan is a leading international mining company primarily engaged in the mining of copper, gold, and molybdenum, operating large, geographically diverse assets with significant reserves of these metals.",
-      "industryCompetitors": [
-        "BHP",
-        "Rio Tinto",
-        "Southern Copper"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Ebocom LLC"
       ],
-      "industryUpdatedAt": "2026-04-08T22:57:10.654Z"
-    },
-    {
-      "name": "Republic Services",
-      "ae": "Sherry Gayo",
-      "driveFolderId": "1qtv-tOm8i3Md1ypX_2rss2ST6T04cW3_",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Environmental Services",
-      "segment": "Waste Management and Recycling",
-      "industryDescription": "Republic Services is a leading provider of environmental services in North America, offering non-hazardous solid waste collection, transfer, disposal, recycling, and energy services to residential, commercial, industrial, and municipal customers.",
-      "industryCompetitors": [
-        "Waste Management (WM)",
-        "Waste Connections",
-        "GFL Environmental"
+      "accountNumbers": [
+        "1038291",
+        "1089595",
+        "1223429",
+        "5366900",
+        "565717",
+        "7119942"
       ],
-      "industryUpdatedAt": "2026-04-08T22:58:20.899Z"
-    },
-    {
-      "name": "Resideo Technologies",
-      "ae": "Sherry Gayo",
-      "driveFolderId": "1NSSXP2l92yUPCo2ILT6wCk5qTUIDsvPR",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Smart Home & Security Solutions",
-      "industryDescription": "Resideo Technologies manufactures and distributes smart home and security products, including temperature and lighting controls, security systems, and water and air monitoring devices, primarily for residential dwellings.",
-      "industryCompetitors": [
-        "ADT",
-        "Vivint",
-        "Brinks Home"
-      ],
-      "industryUpdatedAt": "2026-04-08T22:59:28.721Z"
-    },
-    {
-      "name": "Verra Mobility Corporation",
-      "ae": "Sherry Gayo",
-      "driveFolderId": "10pOhJh70zg0RPDij51jZlxKO39d5SRu7",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Smart Mobility and Transportation Technology",
-      "industryDescription": "Verra Mobility Corporation provides smart mobility technology solutions, including automated toll and violation management, traffic enforcement, and parking management, to rental car companies, fleet owners, and government agencies globally.",
-      "industryCompetitors": [
-        "Kapsch TrafficCom",
-        "Conduent",
-        "Samsara"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:00:40.963Z"
+      "domain": "ebocom.com"
     },
     {
       "name": "Freeeport Mcmoran",
       "ae": "Sherry Gayo",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "FREEEPORT MCMORAN INC."
+        "Freeeport McMoran Inc."
       ],
-      "ccspCustomer": false,
-      "industry": "Mining",
-      "segment": "Copper, Gold, and Molybdenum Mining",
-      "industryDescription": "Freeport-McMoRan is a global mining company focused on the acquisition, exploration, and development of mineral properties, primarily producing copper, gold, and molybdenum.",
-      "industryCompetitors": [
-        "BHP",
-        "Rio Tinto",
-        "Codelco"
+      "domain": "fcx.com"
+    },
+    {
+      "name": "Republic Services",
+      "ae": "Sherry Gayo",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Republic Services, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:01:51.686Z"
+      "accountNumbers": [
+        "12477276"
+      ],
+      "domain": "republicservices.com"
+    },
+    {
+      "name": "Resideo Technologies",
+      "ae": "Sherry Gayo",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Resideo Technologies Inc."
+      ],
+      "ccspCustomer": true,
+      "accountNumbers": [
+        "6193973",
+        "8497908"
+      ],
+      "domain": "resideo.com"
+    },
+    {
+      "name": "Rsi Video Technologies",
+      "ae": "Sherry Gayo",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "RSI Video Technologies, Inc."
+      ],
+      "accountNumbers": [
+        "6286500"
+      ],
+      "domain": "videofied.com"
+    },
+    {
+      "name": "Sonora Quest Laboratories",
+      "ae": "Sherry Gayo",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Sonora Quest Laboratories Llc."
+      ],
+      "accountNumbers": [
+        "11879735",
+        "12800239"
+      ],
+      "domain": "sonoraquest.com"
+    },
+    {
+      "name": "Verra Mobility",
+      "ae": "Sherry Gayo",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Verra Mobility Corporation"
+      ],
+      "domain": "verramobility.com"
     },
     {
       "name": "Viavi Solutions",
       "ae": "Sherry Gayo",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "VIAVI SOLUTIONS INC."
+        "Viavi Solutions Inc."
       ],
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Network Test, Monitoring, and Assurance & Optical Technologies",
-      "industryDescription": "Viavi Solutions provides network test, monitoring, and assurance solutions for telecommunications, cloud, and enterprise clients, alongside advanced optical technologies for various applications including anti-counterfeiting and 3D sensing.",
-      "industryCompetitors": [
-        "NETSCOUT",
-        "Anritsu Company",
-        "EXFO"
+      "accountNumbers": [
+        "11596425",
+        "1339725",
+        "1363897",
+        "5608162",
+        "5641825",
+        "5645252",
+        "5679391",
+        "5682726",
+        "5685021",
+        "5699042",
+        "5809566",
+        "6031438",
+        "6221153",
+        "6290576",
+        "6838356"
       ],
-      "industryUpdatedAt": "2026-04-08T23:03:00.051Z"
+      "domain": "viavisolutions.com"
+    },
+    {
+      "name": "Celestial Saturn Parent",
+      "ae": "Amanda Mejia",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Celestial-Saturn Parent Inc."
+      ]
     },
     {
       "name": "Core Logic",
       "ae": "Amanda Mejia",
-      "driveFolderId": "10BDxDOgmmX_bBG1BPb1k7h8fYx9Bz7Yx",
-      "importedFrom": "territory-sheet",
-      "industry": "Information Services",
-      "segment": "Property Data & Analytics",
-      "industryDescription": "CoreLogic is a global provider of property information, analytics, and data-enabled solutions for industries including real estate, mortgage finance, and insurance.",
-      "industryCompetitors": [
-        "Equifax",
-        "Black Knight",
-        "ATTOM"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Core Logic"
       ],
-      "industryUpdatedAt": "2026-04-08T23:04:07.323Z"
+      "ccspCustomer": true,
+      "accountNumbers": [
+        "5531956",
+        "715344"
+      ],
+      "domain": "corelogic.com"
+    },
+    {
+      "name": "Corelogic Systems",
+      "ae": "Amanda Mejia",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Corelogic Systems, Inc."
+      ],
+      "ccspCustomer": true,
+      "domain": "corelogic.com"
+    },
+    {
+      "name": "Corelogic",
+      "ae": "Amanda Mejia",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "CoreLogic, Inc."
+      ],
+      "ccspCustomer": true,
+      "accountNumbers": [
+        "1620270",
+        "1646216",
+        "5209512"
+      ],
+      "domain": "corelogic.com"
     },
     {
       "name": "Guess",
       "ae": "Amanda Mejia",
-      "driveFolderId": "1yfDD4AxE_TJXWIpGocgBZ_odJO4thzZQ",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Retail",
-      "segment": "Fashion Apparel and Accessories",
-      "industryDescription": "Guess is a global lifestyle brand that designs, markets, distributes, and licenses contemporary apparel and accessories for men, women, and children, known for its denim, clothing, and fashion accessories.",
-      "industryCompetitors": [
-        "Calvin Klein",
-        "Uniqlo",
-        "Lacoste"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Guess , Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:05:15.537Z"
+      "domain": "guess.com"
     },
     {
-      "name": "Herbalife International",
+      "name": "Herbalife",
       "ae": "Amanda Mejia",
-      "driveFolderId": "1ypq5ZmCkkFwqwywdfg1PIqvYwd3m2MYz",
-      "importedFrom": "territory-sheet",
-      "industry": "Health & Wellness",
-      "segment": "Nutritional Supplements and Weight Management (Direct Selling)",
-      "industryDescription": "Herbalife International is a multinational multi-level marketing (MLM) corporation that develops and sells dietary supplements, weight-management products, sports nutrition, and personal care products.",
-      "industryCompetitors": [
-        "Nu Skin Enterprises",
-        "Amway Corporation",
-        "Natura & Co"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Herbalife International, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:06:24.198Z"
+      "accountNumbers": [
+        "540393",
+        "689858"
+      ],
+      "domain": "herbalife.com"
+    },
+    {
+      "name": "Hyundai Auto Canada",
+      "ae": "Amanda Mejia",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Hyundai Auto Canada Corp."
+      ],
+      "accountNumbers": [
+        "6982382"
+      ],
+      "domain": "hyundaicanada.com"
     },
     {
       "name": "Hyundai Autoever America",
       "ae": "Amanda Mejia",
-      "driveFolderId": "1QEYtrq3o1g7f5N6BhBLpeffo9L8guoO7",
-      "importedFrom": "territory-sheet",
-      "industry": "Technology",
-      "segment": "Automotive IT Solutions",
-      "industryDescription": "Hyundai Autoever America provides world-class information technology services and solutions specifically for the automotive industry, including cloud-based systems, AI-powered tools, and mobility innovations to its clients throughout North America.",
-      "industryCompetitors": [
-        "Visteon Corporation",
-        "Calsonic Kansei Corporation",
-        "Faurecia"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Hyundai Autoever America, LLC"
       ],
-      "industryUpdatedAt": "2026-04-08T23:07:32.191Z"
+      "accountNumbers": [
+        "10774298",
+        "5721795"
+      ],
+      "domain": "haeaus.com"
+    },
+    {
+      "name": "Hyundai Capital America",
+      "ae": "Amanda Mejia",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Hyundai Capital America"
+      ],
+      "domain": "hyundaicapitalamerica.com"
+    },
+    {
+      "name": "Hyundai Motor America",
+      "ae": "Amanda Mejia",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Hyundai Motor America"
+      ],
+      "ccspCustomer": true,
+      "domain": "hyundaiusa.com"
     },
     {
       "name": "Illumina",
       "ae": "Amanda Mejia",
-      "driveFolderId": "19LmsSaob_23m16gs9vtMo4aBFhB_myd1",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Biotechnology",
-      "segment": "Genomic Sequencing and Analysis",
-      "industryDescription": "Illumina develops, manufactures, and markets integrated systems for genetic and genomic analysis, providing tools and services for DNA sequencing, genotyping, and gene expression to improve human health.",
-      "industryCompetitors": [
-        "Thermo Fisher Scientific",
-        "QIAGEN",
-        "Agilent Technologies"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Illumina, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:08:37.629Z"
+      "accountNumbers": [
+        "12001756",
+        "12221608",
+        "5240577",
+        "5243536",
+        "6051343",
+        "6051386",
+        "6051387",
+        "6051391",
+        "6223950",
+        "7053161",
+        "979959"
+      ],
+      "domain": "illumina.com"
     },
     {
       "name": "Maxlinear",
       "ae": "Amanda Mejia",
-      "driveFolderId": "1kv9ZyXEg2k8Um28tgHxvdkrTy3NpmT5L",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Semiconductors - Communication & Connectivity",
-      "industryDescription": "MaxLinear designs, develops, and markets high-performance analog and mixed-signal integrated circuits and software solutions for broadband communications applications, enabling multi-gig connectivity for various markets including broadband access, connectivity, infrastructure, and industrial applications.",
-      "industryCompetitors": [
-        "NXP Semiconductors",
-        "MACOM Technology Solutions",
-        "Silicon Labs"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Maxlinear, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:09:42.957Z"
+      "accountNumbers": [
+        "7000762"
+      ],
+      "domain": "maxlinear.com"
     },
     {
-      "name": "Rady Childrens Hospital-san Diego",
+      "name": "Rady Children S Hospital San Diego",
       "ae": "Amanda Mejia",
-      "driveFolderId": "1wb-32atAwgwQIFq-k6_4R6iYNE2ngWV1",
-      "importedFrom": "territory-sheet",
-      "industry": "Healthcare",
-      "segment": "Pediatric Healthcare Services",
-      "industryDescription": "Rady Children's Hospital-San Diego is a non-profit, 551-bed pediatric-care facility that provides comprehensive pediatric medical services, including emergency and trauma services, genomic medicine, and child development programs, to patients aged 0-21 in San Diego, southern Riverside, and Imperial counties.",
-      "industryCompetitors": [
-        "Children's Hospital Los Angeles",
-        "Children's National Hospital (Washington, D.C.)",
-        "Sharp HealthCare"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Rady Children's Hospital-San Diego"
       ],
-      "industryUpdatedAt": "2026-04-08T23:10:51.903Z"
+      "accountNumbers": [
+        "1433306"
+      ],
+      "domain": "rchsd.org"
     },
     {
       "name": "Scripps Health",
       "ae": "Amanda Mejia",
-      "driveFolderId": "1QpBa-nTI0ogC15q7I2GQYWvj8-jyyCiC",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Integrated Healthcare System",
-      "industryDescription": "Scripps Health is a non-profit integrated healthcare system based in San Diego, California, offering a wide range of medical services through its hospitals, outpatient centers, clinics, and medical research and education programs.",
-      "industryCompetitors": [
-        "Sharp HealthCare",
-        "Kaiser Permanente",
-        "Mayo Clinic"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Scripps Health"
       ],
-      "industryUpdatedAt": "2026-04-08T23:11:57.749Z"
+      "accountNumbers": [
+        "1007776",
+        "1037583",
+        "5307663",
+        "824489"
+      ],
+      "domain": "scripps.org"
     },
     {
       "name": "Sharp Healthcare",
       "ae": "Amanda Mejia",
-      "driveFolderId": "1YsqQFWkGgP9TybkqXyQL2DSv5zIsFgYE",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Hospitals/Inpatient Services",
-      "industryDescription": "Sharp HealthCare is a not-for-profit regional healthcare group based in San Diego, California, operating a network of acute-care hospitals, specialty hospitals, affiliated medical groups, and a health plan.",
-      "industryCompetitors": [
-        "Kaiser Permanente",
-        "Scripps Health",
-        "Intermountain Healthcare"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:13:04.651Z"
-    },
-    {
-      "name": "Jenpark Business Sys Jennings",
-      "ae": "Amanda Mejia",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "JENPARK BUSINESS SYS/MARK JENNINGS"
+        "Sharp Healthcare"
       ],
-      "ccspCustomer": false
+      "accountNumbers": [
+        "786846"
+      ],
+      "domain": "sharp.com"
     },
     {
-      "name": "Herbalife Nutrition",
-      "ae": "Amanda Mejia",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "HERBALIFE NUTRITION LTD."
-      ],
-      "ccspCustomer": false,
-      "industry": "Health and Wellness",
-      "segment": "Nutritional Supplements and Direct Selling",
-      "industryDescription": "Herbalife Nutrition is a global multi-level marketing corporation that develops and sells dietary supplements and health and wellness products through a network of independent distributors.",
-      "industryCompetitors": [
-        "Amway",
-        "Nu Skin Enterprises",
-        "USANA Health Sciences"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:14:16.418Z"
-    },
-    {
-      "name": "Hyundai Motor Group",
-      "ae": "Amanda Mejia",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "HYUNDAI MOTOR GROUP"
-      ],
-      "ccspCustomer": false
-    },
-    {
-      "name": "Rady Childrens Hospital And Health Center",
-      "ae": "Amanda Mejia",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "RADY CHILDRENS HOSPITAL AND HEALTH CENTER"
-      ],
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Pediatric Healthcare Services",
-      "industryDescription": "Rady Children's Hospital and Health Center is a non-profit, 511-bed pediatric care facility dedicated to providing comprehensive healthcare services, including patient care, research, and teaching, to children and adolescents.",
-      "industryCompetitors": [
-        "Cincinnati Children's",
-        "Nationwide Children's Hospital",
-        "The Children's Mercy Hospital"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:15:28.463Z"
-    },
-    {
-      "name": "Applied Medical Corporation",
+      "name": "Applied Medical",
       "ae": "Alex Smith",
-      "driveFolderId": "1aUNdAjH_nwlbVNjfLZBr_Bd3g65Ce1p7",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Medical Devices",
-      "industryDescription": "Applied Medical Corporation develops, manufactures, and markets medical devices and breakthrough technologies for minimally invasive and general surgical procedures across various specialties.",
-      "industryCompetitors": [
-        "Medtronic",
-        "Johnson & Johnson",
-        "Cook Medical"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Applied Medical Corporation"
       ],
-      "industryUpdatedAt": "2026-04-08T23:16:35.156Z"
+      "ccspCustomer": true,
+      "accountNumbers": [
+        "12613573",
+        "5518102",
+        "5902704",
+        "5934371"
+      ],
+      "domain": "appliedmedical.net"
+    },
+    {
+      "name": "Applied Medical Resources",
+      "ae": "Alex Smith",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Applied Medical Resources Corporation"
+      ],
+      "accountNumbers": [
+        "11989831",
+        "6086160"
+      ],
+      "domain": "appliedmedical.com"
     },
     {
       "name": "Blackline",
       "ae": "Alex Smith",
-      "driveFolderId": "1JzuFFEFkFC41oBaDpYkJxoRripO1jTEs",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Enterprise Financial Software",
-      "industryDescription": "BlackLine provides cloud-based software that automates and streamlines financial close, accounting, and other finance processes for businesses.",
-      "industryCompetitors": [
-        "FloQast",
-        "OneStream",
-        "Workiva"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Blackline, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:17:42.741Z"
+      "accountNumbers": [
+        "10471930",
+        "11516271",
+        "12273150",
+        "5666051",
+        "6137942"
+      ],
+      "domain": "blackline.com"
     },
     {
       "name": "Epson America",
       "ae": "Alex Smith",
-      "driveFolderId": "1Lkwds_yefdGa1cFB6zrv6rcrIq_CTzjQ",
-      "importedFrom": "territory-sheet",
-      "industry": "Technology",
-      "segment": "Printers, Projectors, and Robotics",
-      "industryDescription": "Epson America designs, manufactures, and sells a wide range of imaging and information-related equipment, including printers, projectors, scanners, and robotics, for consumer, business, and industrial use.",
-      "industryCompetitors": [
-        "Canon",
-        "Brother Industries",
-        "HP"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Epson America Inc"
       ],
-      "industryUpdatedAt": "2026-04-08T23:18:49.862Z"
+      "ccspCustomer": true,
+      "accountNumbers": [
+        "1090227",
+        "336035"
+      ],
+      "domain": "epson.com"
     },
     {
-      "name": "Guitar Center Holdings",
+      "name": "Guitar Center",
       "ae": "Alex Smith",
-      "driveFolderId": "1CZo8TSgL2evjpx_Vumorqi74fBWeSf5E",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Retail",
-      "segment": "Musical Instrument & Supplies Stores",
-      "industryDescription": "Guitar Center Holdings is the largest musical instrument retailer in the United States, selling a wide range of musical instruments, equipment, and accessories, and offering services like repairs, rentals, and music lessons through its physical stores and e-commerce platforms.",
-      "industryCompetitors": [
-        "Sweetwater",
-        "Amazon",
-        "Best Buy"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Guitar Center, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:19:54.664Z"
+      "accountNumbers": [
+        "5644912",
+        "782467"
+      ],
+      "domain": "guitarcenter.com"
     },
     {
       "name": "Matson",
       "ae": "Alex Smith",
-      "driveFolderId": "1fFEeDxB3qaMFVYjg5BWDtJ9G75a5_H2p",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Transportation and Logistics",
-      "segment": "Ocean Shipping and Supply Chain Services",
-      "industryDescription": "Matson is an American shipping and navigation services company that provides ocean transportation, and logistics services primarily across the Pacific to Hawaii, Alaska, Guam, Micronesia, China, and Japan.",
-      "industryCompetitors": [
-        "A.P. Møller - Maersk",
-        "C.H. Robinson Worldwide",
-        "Pasha Hawaii"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Matson, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:21:00.770Z"
+      "accountNumbers": [
+        "7230811"
+      ],
+      "domain": "matson.com"
     },
     {
       "name": "Mission Cloud Services",
       "ae": "Alex Smith",
-      "driveFolderId": "1Bj-cQ4KhLVRe7_fJg0DA5H73rWHEw0V5",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false
-    },
-    {
-      "name": "Queens Development Corporation",
-      "ae": "Alex Smith",
-      "driveFolderId": "1H848WMrsMb3l9TFzpUaN7ZbFVWcwZZQM",
-      "importedFrom": "territory-sheet",
-      "industry": "Economic Development",
-      "segment": "Community and Small Business Development",
-      "industryDescription": "Queens Development Corporation (QDC) fosters economic growth in Queens through various programs, including business counseling, entrepreneur training, and neighborhood development initiatives.",
-      "industryCompetitors": [
-        "Empire State Development",
-        "NYC Department of Small Business Services",
-        "Bronx Overall Economic Development Corporation"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Mission Cloud Services, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:22:16.155Z"
+      "domain": "missioncloud.com"
     },
     {
-      "name": "Southwest Gas Corporation",
-      "ae": "Alex Smith",
-      "driveFolderId": "1FKCrxdhZlwbw42WLQPrP8ZoHFA_l03pa",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Utilities",
-      "segment": "Natural Gas Distribution",
-      "industryDescription": "Southwest Gas Corporation is an investor-owned public utility that provides regulated natural gas distribution, transportation, and sale services to residential, commercial, and industrial customers in parts of Arizona, Nevada, and California.",
-      "industryCompetitors": [
-        "National Fuel Gas",
-        "UGI Corporation",
-        "NewJersey Resources"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:23:25.061Z"
-    },
-    {
-      "name": "Seiko Epson",
+      "name": "Queen S Development",
       "ae": "Alex Smith",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "SEIKO EPSON CORPORATION"
+        "Queen's Development Corporation"
       ],
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Printers, Visual Communications, Robotics, and Wearables",
-      "industryDescription": "Seiko Epson Corporation is a Japanese multinational electronics company that manufactures printers, visual communication equipment like projectors, wearables, and industrial robots.",
-      "industryCompetitors": [
-        "Canon",
-        "HP",
-        "Brother Industries"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:24:32.254Z"
+      "domain": "queens.org"
     },
     {
-      "name": "Queens Health Systems",
+      "name": "Southwest Gas",
       "ae": "Alex Smith",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "THE QUEENS HEALTH SYSTEMS"
+        "Southwest Gas Corporation"
       ],
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Hospital and Healthcare Services",
-      "industryDescription": "The Queen's Health Systems is a private, non-profit healthcare organization based in Hawaii, offering a comprehensive range of medical services including acute care, primary care, specialty care, and various health programs across multiple facilities.",
-      "industryCompetitors": [
-        "Hawaii Pacific Health",
-        "Hawaii Health Systems Corporation",
-        "Kaiser Permanente Moanalua Medical Center"
+      "accountNumbers": [
+        "1105535",
+        "1259482",
+        "370737",
+        "469665"
       ],
-      "industryUpdatedAt": "2026-04-08T23:25:39.623Z"
+      "domain": "swgas.com"
+    },
+    {
+      "name": "Queen S Health Systems",
+      "ae": "Alex Smith",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "The Queen's Health Systems"
+      ],
+      "domain": "queens.org"
+    },
+    {
+      "name": "U S Epson",
+      "ae": "Alex Smith",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "U.S. Epson, Inc."
+      ],
+      "domain": "epson.com"
     },
     {
       "name": "Allegiant Air",
       "ae": "Beena Patel",
-      "driveFolderId": "1o68RKNNoRZN1wOZVjXP3uQt7O5PBivf0",
-      "importedFrom": "territory-sheet",
-      "industry": "Transportation",
-      "segment": "Ultra-Low-Cost Carrier (ULCC) Airline",
-      "industryDescription": "Allegiant Air is an American ultra-low-cost airline that focuses on providing affordable, nonstop leisure travel from small to medium-sized cities to popular vacation destinations, often bundling airfare with hotel and car rental packages.",
-      "industryCompetitors": [
-        "Spirit Airlines",
-        "Frontier Airlines",
-        "Southwest Airlines"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Allegiant Air, LLC"
       ],
-      "industryUpdatedAt": "2026-04-08T23:26:48.816Z"
-    },
-    {
-      "name": "Aristocrat Technologies",
-      "ae": "Beena Patel",
-      "driveFolderId": "1BGIGW8XCmUzNet8bwVG4vJH4tQCTJvES",
-      "importedFrom": "territory-sheet",
-      "industry": "Gaming",
-      "segment": "Casino Gaming & Digital Entertainment",
-      "industryDescription": "Aristocrat Technologies develops and supplies innovative gaming machines, casino management systems, and digital gaming platforms for casinos and online operators globally, including slot machines, progressive jackpot systems, and mobile and social casino games.",
-      "industryCompetitors": [
-        "International Game Technology (IGT)",
-        "Light & Wonder (formerly Scientific Games)",
-        "Konami"
+      "accountNumbers": [
+        "1488277",
+        "5270543",
+        "5647643"
       ],
-      "industryUpdatedAt": "2026-04-08T23:27:57.437Z"
-    },
-    {
-      "name": "Boyd Gaming Corporation",
-      "ae": "Beena Patel",
-      "driveFolderId": "13OwJH__fwueoQWB4rucmRKbGZnufLCs7",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Gaming and Hospitality",
-      "segment": "Casino Entertainment and Online Gaming",
-      "industryDescription": "Boyd Gaming Corporation is a leading American gambling and hospitality company that owns and operates 28 gaming properties across ten states, including casinos, hotels, and online gaming platforms.",
-      "industryCompetitors": [
-        "Caesars Entertainment",
-        "MGM Resorts International",
-        "Penn Entertainment"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:29:05.234Z"
-    },
-    {
-      "name": "Caesars Entertainment",
-      "ae": "Beena Patel",
-      "driveFolderId": "1NpGtUFJW4_B1bFF3B-m_zLozydRkbAKY",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Hospitality and Gaming",
-      "segment": "Casino Hotels and Online Gambling Services",
-      "industryDescription": "Caesars Entertainment is a diversified casino-entertainment provider that owns and operates numerous gaming and hospitality facilities, including casino resorts, hotels, and a growing digital platform for online sports betting and iGaming.",
-      "industryCompetitors": [
-        "MGM Resorts International",
-        "Wynn Resorts",
-        "Las Vegas Sands Corporation"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:30:11.146Z"
-    },
-    {
-      "name": "Insight Enterprises",
-      "ae": "Beena Patel",
-      "driveFolderId": "1zkRaK7asxZ_GB1nT1odfQbdjt3h_woSo",
-      "importedFrom": "territory-sheet",
-      "industry": "Technology",
-      "segment": "IT Solutions Integration and Managed Services",
-      "industryDescription": "Insight Enterprises is a global technology company that provides businesses, government organizations, healthcare, and educational institutions with IT solutions, including hardware, software, cloud services, and managed IT services for digital transformation.",
-      "industryCompetitors": [
-        "CDW",
-        "Arrow Electronics",
-        "PC Connection"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:31:16.689Z"
-    },
-    {
-      "name": "Mattel",
-      "ae": "Beena Patel",
-      "driveFolderId": "1r36rj0KTF-gScfvmpu7cYnqmelYgMeCf",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Consumer Cyclical",
-      "segment": "Leisure (Toys & Games)",
-      "industryDescription": "Mattel is a global play and family entertainment company that designs, manufactures, and markets a diverse range of toys, games, and consumer products, including iconic brands like Barbie, Hot Wheels, and Fisher-Price.",
-      "industryCompetitors": [
-        "Hasbro",
-        "The LEGO Group",
-        "Spin Master"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:32:24.200Z"
-    },
-    {
-      "name": "Mgm Resorts International",
-      "ae": "Beena Patel",
-      "driveFolderId": "1XniZW2P1ucnY9N1zkKkrp3sCxQ_oJ076",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Hospitality and Entertainment",
-      "segment": "Integrated Resorts and Gaming",
-      "industryDescription": "MGM Resorts International is a global hospitality and entertainment company that operates a portfolio of destination resort brands, including hotels, casinos, and entertainment venues, offering gaming, accommodations, live events, dining, and retail experiences.",
-      "industryCompetitors": [
-        "Caesars Entertainment",
-        "Las Vegas Sands",
-        "Wynn Resorts"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:33:34.580Z"
-    },
-    {
-      "name": "Smart City Networks, Limited Partnership",
-      "ae": "Beena Patel",
-      "driveFolderId": "185ao_jVSm9l6CfuTA9vZDgEltaipJpZl",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Telecommunications",
-      "segment": "Event Technology and Connectivity Services",
-      "industryDescription": "Smart City Networks, Limited Partnership provides utilities, technology, and telecommunications services, including high-speed internet, Wi-Fi, and network design, primarily for convention centers, hospitality venues, and large event facilities.",
-      "industryCompetitors": [
-        "Autonomy Networx",
-        "Ecotel Tv.",
-        "Ibis Instruments"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:34:43.248Z"
-    },
-    {
-      "name": "Switch",
-      "ae": "Beena Patel",
-      "driveFolderId": "10iZ1q1scrRyXLsZQJzed9Pf1g_eDED4V",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Technology",
-      "segment": "Data Center Solutions",
-      "industryDescription": "Switch is a technology infrastructure company that designs, builds, and operates high-density, energy-efficient data centers, offering colocation, cloud services, and telecommunications solutions.",
-      "industryCompetitors": [
-        "Equinix",
-        "CoreSite",
-        "CyrusOne"
-      ],
-      "industryUpdatedAt": "2026-04-08T23:35:52.753Z"
+      "domain": "allegiantair.com"
     },
     {
       "name": "Allegiant Travel",
       "ae": "Beena Patel",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "ALLEGIANT TRAVEL COMPANY"
+        "Allegiant Travel Company"
       ],
-      "ccspCustomer": false,
-      "industry": "Travel",
-      "segment": "Leisure Airline and Vacation Packages",
-      "industryDescription": "Allegiant Travel Company operates a low-cost passenger airline, Allegiant Air, that provides scheduled and charter air service, primarily focusing on connecting small to medium-sized cities to popular leisure destinations, and also offers complete vacation packages including hotels and rental cars.",
-      "industryCompetitors": [
-        "Spirit Airlines",
-        "Frontier Airlines",
-        "JetBlue Airways"
+      "accountNumbers": [
+        "11602275",
+        "5210894",
+        "5740991"
       ],
-      "industryUpdatedAt": "2026-04-08T23:36:57.910Z"
+      "domain": "allegiantair.com"
     },
     {
-      "name": "Aristocrat Leisure",
+      "name": "Aristocrat Technologies",
       "ae": "Beena Patel",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "ARISTOCRAT LEISURE LTD."
+        "Aristocrat Technologies, Inc."
       ],
-      "ccspCustomer": false,
-      "industry": "Gaming",
-      "segment": "Gaming Technology and Content",
-      "industryDescription": "Aristocrat Leisure is a global leader in gaming content and technology, designing, developing, and manufacturing gaming machines and systems for casinos worldwide, as well as offering social casino games and real-money gaming platforms.",
-      "industryCompetitors": [
-        "International Game Technology (IGT)",
-        "Light & Wonder (formerly Scientific Games)",
-        "Konami"
+      "accountNumbers": [
+        "1068155",
+        "12199937",
+        "712194",
+        "12653772"
       ],
-      "industryUpdatedAt": "2026-04-08T23:38:01.945Z"
+      "domain": "aristocrat.com"
     },
     {
-      "name": "Insight",
+      "name": "Boyd Gaming",
       "ae": "Beena Patel",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "INSIGHT"
+        "Boyd Gaming Corporation"
+      ],
+      "accountNumbers": [
+        "12541655",
+        "5690473",
+        "828644",
+        "973213"
+      ],
+      "domain": "boydgaming.com"
+    },
+    {
+      "name": "Caesars Palace",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Caesars Palace"
+      ],
+      "domain": "caesars.com"
+    },
+    {
+      "name": "Insight Direct Usa",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Insight Direct Usa, Inc."
+      ],
+      "domain": "insight.com"
+    },
+    {
+      "name": "Insight Enterprises",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Insight Enterprises, Inc."
+      ],
+      "accountNumbers": [
+        "10168151",
+        "11585427",
+        "11872154",
+        "11943087",
+        "11965541",
+        "12621461",
+        "12796648",
+        "7179555",
+        "8312513",
+        "834896"
+      ],
+      "domain": "insight.com"
+    },
+    {
+      "name": "Mattel",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Mattel, Inc."
+      ],
+      "accountNumbers": [
+        "1167076",
+        "831778"
+      ],
+      "domain": "mattel.com"
+    },
+    {
+      "name": "Mattell",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Mattell Inc"
+      ],
+      "domain": "mattel.com"
+    },
+    {
+      "name": "Mgm Mirage Design Warehouse",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "MGM Mirage Design Warehouse"
+      ],
+      "domain": "mgmresorts.com"
+    },
+    {
+      "name": "Mgm Resorts",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "MGM Resorts International"
       ],
       "ccspCustomer": true,
-      "industry": "Technology",
-      "segment": "IT Solutions Integrator",
-      "industryDescription": "Insight Enterprises is a global technology company that provides hardware, software, cloud solutions, and IT services to businesses, government agencies, educational institutions, and healthcare organizations to help them with digital transformation and optimizing their IT infrastructures.",
-      "industryCompetitors": [
-        "CDW",
-        "PC Connection",
-        "Arrow Electronics"
+      "accountNumbers": [
+        "10593212",
+        "1506166",
+        "6115942",
+        "7030612",
+        "8774493"
       ],
-      "industryUpdatedAt": "2026-04-08T23:39:08.347Z"
+      "domain": "mgmresorts.com"
+    },
+    {
+      "name": "Pcm",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Pcm, Inc."
+      ],
+      "ccspCustomer": true,
+      "accountNumbers": [
+        "5497785",
+        "6039616"
+      ],
+      "domain": "insight.com"
+    },
+    {
+      "name": "Smart City Networks Limited Partnership",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Smart City Networks, Limited Partnership"
+      ],
+      "accountNumbers": [
+        "11678981",
+        "991471"
+      ],
+      "domain": "smartcitynetworks.com"
+    },
+    {
+      "name": "Switch",
+      "ae": "Beena Patel",
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Switch, Ltd."
+      ],
+      "domain": "switch.com"
     },
     {
       "name": "Delta Dental Of California",
       "ae": "O'Neil Hopson",
-      "driveFolderId": "1dFIu_l4I8fbcS_aqKUY43aBL4uk4YKzL",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Dental Insurance",
-      "industryDescription": "Delta Dental of California is a non-profit company that provides dental benefit plans and comprehensive oral healthcare coverage to individuals, families, and groups.",
-      "industryCompetitors": [
-        "United Concordia Dental",
-        "Humana",
-        "USAble Life"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Delta Dental of California"
       ],
-      "industryUpdatedAt": "2026-04-08T23:40:14.098Z"
+      "accountNumbers": [
+        "12626670",
+        "1576388",
+        "5588402",
+        "5993550",
+        "825422",
+        "830409"
+      ],
+      "domain": "deltadentalins.com"
     },
     {
       "name": "Logix Federal Credit Union",
       "ae": "O'Neil Hopson",
-      "driveFolderId": "1-0_FV5WFnac0Mq5lMv-7kKJkYxkAIP9l",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Financial Services",
-      "segment": "Credit Unions",
-      "industryDescription": "Logix Federal Credit Union is a not-for-profit financial institution that provides a range of banking services including checking, savings, loans, mortgages, and credit cards to its members.",
-      "industryCompetitors": [
-        "Veridian Credit Union",
-        "Connexus Credit Union",
-        "TDECU"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Logix Federal Credit Union"
       ],
-      "industryUpdatedAt": "2026-04-08T23:41:21.441Z"
+      "accountNumbers": [
+        "12073887",
+        "12076208",
+        "5855265"
+      ],
+      "domain": "lfcu.com"
     },
     {
-      "name": "Masimo Corporation",
+      "name": "Masimo",
       "ae": "O'Neil Hopson",
-      "driveFolderId": "1BJQ0HlVIvvH3HhsaF8GqgYBL-zRlWweH",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Masimo Corporation"
+      ],
+      "accountNumbers": [
+        "1025434",
+        "1436574",
+        "5250305",
+        "6350582",
+        "6450177",
+        "6889112"
+      ],
+      "domain": "masimo.com"
     },
     {
       "name": "Molina Healthcare",
       "ae": "O'Neil Hopson",
-      "driveFolderId": "1JiaSj1oG19Y84vrBeYehqhDE8TxgpZcc",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false,
-      "industry": "Healthcare",
-      "segment": "Managed Care / Health Insurance",
-      "industryDescription": "Molina Healthcare is an American managed care company that provides health insurance to individuals through government programs such as Medicaid, Medicare, and the Affordable Care Act (ACA) Marketplace.",
-      "industryCompetitors": [
-        "Centene",
-        "Elevance Health",
-        "Cigna Group"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Molina Healthcare, Inc."
       ],
-      "industryUpdatedAt": "2026-04-08T23:42:34.194Z"
+      "accountNumbers": [
+        "11916728",
+        "11916762",
+        "11916923",
+        "12498922",
+        "5493562",
+        "831952",
+        "8821830"
+      ],
+      "domain": "molinahealthcare.com"
     },
     {
-      "name": "Murata Electronics North America",
+      "name": "Pacific Life Insurance",
       "ae": "O'Neil Hopson",
-      "driveFolderId": "1tVGnYHlnA6EKhEwehXVqeBBr6LU9RKzN",
-      "importedFrom": "territory-sheet"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Pacific Life Insurance Company"
+      ],
+      "accountNumbers": [
+        "11431296"
+      ],
+      "domain": "pacificlife.com"
     },
     {
-      "name": "Pacific Life Insurance Company",
+      "name": "Psemi",
       "ae": "O'Neil Hopson",
-      "driveFolderId": "1riok1o_n-0dqwkvOc9IRjBCStKUAwKda",
-      "importedFrom": "territory-sheet"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Psemi Corporation"
+      ],
+      "accountNumbers": [
+        "6156729"
+      ],
+      "domain": "psemi.com"
     },
     {
       "name": "Sada Systems",
       "ae": "O'Neil Hopson",
-      "driveFolderId": "1oKgJf-zbxXKkDVYBdfZr9_crSiTFFIjo",
-      "importedFrom": "territory-sheet"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Sada Systems, Inc."
+      ],
+      "ccspCustomer": true,
+      "accountNumbers": [
+        "7559272"
+      ],
+      "domain": "sada.com"
     },
     {
       "name": "Skyworks Solutions",
       "ae": "O'Neil Hopson",
-      "driveFolderId": "1JUqHfpXmVuUVs0PzBHX3owaENhgzO-pq",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false
-    },
-    {
-      "name": "Pacific Mutual",
-      "ae": "O'Neil Hopson",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "PACIFIC MUTUAL HOLDING COMPANY"
+        "Skyworks Solutions, Inc."
       ],
-      "ccspCustomer": false
-    },
-    {
-      "name": "Murata Manufacturing",
-      "ae": "O'Neil Hopson",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "MURATA MANUFACTURING CO., LTD."
+      "accountNumbers": [
+        "1549679",
+        "563164"
       ],
-      "ccspCustomer": false
+      "domain": "skyworksinc.com"
     },
     {
       "name": "Alteryx",
       "ae": "Cameron Floyd",
-      "driveFolderId": "1vUJGa-BcNHHsq1vJnTto8DoioMxQUFKy",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Alteryx, Inc."
+      ],
+      "accountNumbers": [
+        "11378739"
+      ],
+      "domain": "alteryx.com"
     },
     {
       "name": "Brightpoint",
       "ae": "Cameron Floyd",
-      "driveFolderId": "1eTA3rDbiVZG5RqnV-I6t15AmJKH9St_H",
-      "importedFrom": "territory-sheet"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Brightpoint, Inc."
+      ],
+      "accountNumbers": [
+        "828666"
+      ],
+      "domain": "ingrammicro.com"
     },
     {
       "name": "Harbor Freight Tools Usa",
       "ae": "Cameron Floyd",
-      "driveFolderId": "1jBWozzs5flPMVwI6LWkm0mH_llE5pYKc",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Harbor Freight Tools Usa, Inc."
+      ],
+      "accountNumbers": [
+        "5453255",
+        "5607528",
+        "6314160",
+        "718735",
+        "799992"
+      ],
+      "domain": "harborfreight.com"
     },
     {
       "name": "Hot Topic",
       "ae": "Cameron Floyd",
-      "driveFolderId": "1yPU0or86aIRdt7Qo7T3G-Sx8jM-qG4Z7",
-      "importedFrom": "territory-sheet"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Hot Topic, Inc."
+      ],
+      "accountNumbers": [
+        "1474506",
+        "5716109",
+        "614668",
+        "834770"
+      ],
+      "domain": "hottopic.com"
     },
     {
       "name": "Ingram Micro",
       "ae": "Cameron Floyd",
-      "driveFolderId": "1tiexnNom_EBbc3Y6VryW-1O-bUVTJDyW",
-      "importedFrom": "territory-sheet"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Ingram Micro Inc."
+      ],
+      "accountNumbers": [
+        "1160953"
+      ],
+      "domain": "ingrammicro.com"
     },
     {
       "name": "Qad",
       "ae": "Cameron Floyd",
-      "driveFolderId": "1pqtsq8YL5PIrOcpb109nIfVRq1xCTzMg",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": false
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Qad Inc."
+      ],
+      "accountNumbers": [
+        "1310964",
+        "1632614",
+        "859813"
+      ],
+      "domain": "qad.com"
     },
     {
       "name": "Topgolf Callaway Brands",
       "ae": "Cameron Floyd",
-      "driveFolderId": "1HqeqH6kX-duokpUFcSiiG3JNG2VN_EUh",
-      "importedFrom": "territory-sheet"
+      "importedFrom": "sf-bookings",
+      "aliases": [
+        "Topgolf Callaway Brands Corp."
+      ],
+      "domain": "callawaygolf.com"
     },
     {
-      "name": "Zenith Insurance Company",
-      "ae": "Cameron Floyd",
-      "driveFolderId": "1z1nMM9KWEmQOQxKFKSJ8tGpLnbn4fhfd",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Platinum Equity",
+      "name": "Zenith Insurance",
       "ae": "Cameron Floyd",
       "importedFrom": "sf-bookings",
       "aliases": [
-        "PLATINUM EQUITY, LLC"
+        "Zenith Insurance Company"
       ],
-      "ccspCustomer": false
-    },
-    {
-      "name": "Sycamore Partners Management Staples",
-      "ae": "Cameron Floyd",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "SYCAMORE PARTNERS MANAGEMENT, LP (STAPLES)"
+      "accountNumbers": [
+        "1070374",
+        "5434459",
+        "6280884"
       ],
-      "ccspCustomer": false
-    },
-    {
-      "name": "Callaway Golf",
-      "ae": "Cameron Floyd",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "CALLAWAY GOLF COMPANY"
-      ],
-      "ccspCustomer": false
-    },
-    {
-      "name": "Fairfax Financial",
-      "ae": "Cameron Floyd",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "FAIRFAX FINANCIAL HOLDINGS LTD."
-      ],
-      "ccspCustomer": false
-    },
-    {
-      "name": "Alaska Airlines",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1MQiuSGM0IAatbXKnGaPowa_rEEGlNbwZ",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Cambia Health Solutions",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1hbj7DnIy7qGpPFFVu9D7MTHlBgaRuOUX",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Columbia Sportswear Company",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1opGs8y3Y5wEQly6Za2aN7BCLYKq-lJZv",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Daimler Truck Financial Services Usa",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1pcTkQpM-BwdbgTmXZUIlmRWVHLWxWnfy",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Daimler Truck North America",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1yVqK6RtaG7kqIz4qAZF4H2wnUFvj1bmf",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Dtna Data Center",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1Bc4T_ZyD3V4a9VpccraZn3xOYfl0LN49",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Expeditors International of Washington",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "13DZUSuaaeDJF_wZV1mkzW2HHpkTILe0-",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Mitsubishi Fuso Truck of America",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1YHnyXl-U-Sb1-KrIDlIuKrVKfpW9fehx",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Nor",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1KbIcYdbNonncrzu7mlokjzL-1WHFEVBW",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Nordstrom",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1ZWLd0IfObrw15fYJRf0ED9SK6YScslnm",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Pacificsource Health Plans",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1UMXQc4M2iKvJ4VRP_v_8tNHB9WwTXSbK",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Portland General Electric Company",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1Shaw3FRaMoF4Df2bVnMlJaLOxkZ25vK2",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Protego Trust Company",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1VB2YzZMdK44p_SkytNpsAXoIeMnO6uVe",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Quest Software",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1-9_Jc--ejBdzNTxfo-nJphUEZ0TXx5OF",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Regence Bluecross Blueshield of Oregon",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1YgBBz9P_xFdVQAI3xs3pPXKuEGVz2s6C",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Stancorp Financial Group",
-      "ae": "Carolanne Farrell",
-      "driveFolderId": "1ty6tsyFwSHDgtY751xHY76LAmti3JueF",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Delta Dental of Washington",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1XRBVf1zSpHry0VtnopAZI0iFHE5me0kl",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Fred Hutchinson Cancer Center",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1VUDepmCjAO1b37qCMV1oneAVCWspW8Dt",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Multicare Health System",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1K-ChEQNDEEu5HyaMuDcxOmwHaCuCFwq2",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Northwest Fiber",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1B81Wvdni1h2HDpHduEHQ3RBAZWOWZ5L3",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Premera Blue Cross",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1YiJCURJXvH6qRbLGWozVCQE5u7S0e5I_",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Modusbox",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1fHoMRAKSLT6Eovri5N1ASKETtjeFw62n",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "montana-dakota utilities",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1Fbacz0r4wsFhYb3dahK9iDHVP_Wunpp1",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Perkins Coie",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1_dBFZL63hd0zxqPJP-z6wf0W_uEFlNO3",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Altalink",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1OnjW3rh3PGsAIQAWICmEVwrjW8nAGMMV",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Nintendo of America",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1nVj7dA8lAGQwUmptBmr48svdLYSVvj5H",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Paccar",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1odlbME6iacCBDAYn-ML4UEOZwPQdsU_e",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Rumpke/Kenworth Contract",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1Q__JHfimA0_FEwdTuAoobz7tiK2n7iul",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Seattle Children's Hospital",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1c1aepublBcaGUsMdtXToq95egc-Fveb_",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Senior Adult Mental Health Unit",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1qj6PREwMM3mwIXWG7NN60aFr6aRkxQZS",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Whatcom Educational Credit Union",
-      "ae": "Phillip Yi",
-      "driveFolderId": "1l7CtUG4h01DknQ2Q1cX4OQ9SzyVX53ya",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Idaho Power Company",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "16N9NR-ylFm6RKBWnJsF2x-vAwasU_3Aq",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "J. R. Simplot Company",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1m83vIERPHKM8W-d8LbepXke2EVMRCjvP",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Avalara",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1TixVvR5ix6jA5zcrgRdyAK7wbvrDkcGZ",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Providence Health & Services",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1NvzsjYgObYqXYB0e-bP8iJXkijBxXPgi",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Providence Health and Services",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1WV5eBW3S3ugU10qjOGwMVkSwMUSqZHcm",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Itron",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1Y41uSva6hCmnMonczn_Tnf5_bC0Cr1gv",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Laurie Gillman",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1tbUM0sVZ0ygLVHk1Ew1walUV60tQAV2M",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Recreational Equipment",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1NuTPo8EBdDsY27V7TdgNqLmwKa9rmyNj",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Expedia Group",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1cP5ICWG2bMNNMLPZp_eh8_eJUy0vXuWc",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hotwire Communications",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1D6aF36nN3C-v2douYux5XwR2GZDPJFJ3",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Avista",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1ZTYmOzmgFuz45DEKVvuN7umQATovtsLM",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Avista Corporation",
-      "ae": "Tyler McManigal",
-      "driveFolderId": "1P_u-C_WHBRVk-Y5x4ZdWUHzeQ4deiqQr",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Cartera Commerce",
-      "ae": "Keren Williams",
-      "driveFolderId": "1B90SkGyiypuNwMWBQV7Dt8X2Ue9bCqHG",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "E. & J. Gallo Winery",
-      "ae": "Keren Williams",
-      "driveFolderId": "17PxrfhxLf8KZfClDE_G_aENPT9WfK0IC",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Electronic Arts",
-      "ae": "Keren Williams",
-      "driveFolderId": "1WqRlguDj5Bb2b0jNiFd_VCvEfKMARhBm",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Keysight Technologies",
-      "ae": "Keren Williams",
-      "driveFolderId": "1t7ARL2XWXxaK4dmOtDWNMfrgBvj7VMml",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Matt Galloway",
-      "ae": "Keren Williams",
-      "driveFolderId": "1y9Ih88aMpDwmy2-RMEHSAYEPEZov5HgQ",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Out There Labs",
-      "ae": "Keren Williams",
-      "driveFolderId": "1q-DuyiY1_0kw9u0LG7vzoaBeQqktllo7",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Palo Alto Networks",
-      "ae": "Keren Williams",
-      "driveFolderId": "1tClTNiq0vd30mDD95iX-rW68irYoVLDz",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Rakuten Kobo",
-      "ae": "Keren Williams",
-      "driveFolderId": "1zXZBTacxw0wdcuqueIqXbHsU_VsWf3Dy",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Rakuten Marketing",
-      "ae": "Keren Williams",
-      "driveFolderId": "1EEcvi7X0RsoULgdyco_eYeLn3trEYCZi",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Rue Gilt Groupe",
-      "ae": "Keren Williams",
-      "driveFolderId": "1SVR4jxx_a0xSsn0m5_TN2vjB_hTuUayP",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Seagate Technology",
-      "ae": "Keren Williams",
-      "driveFolderId": "1skL6TN0lS5DDDvmU64cdS0Kom_Af7LgT",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Blue Origin",
-      "ae": "Keren Williams",
-      "driveFolderId": "1p2I8pKeCJ0sFMOLJaLgCFy6NyY_hX_12",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Robert Half International",
-      "ae": "Duy Pham",
-      "driveFolderId": "1-DGqp4nDlgmkvsu9usFY8f0R4vc_UqAC",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Rxo",
-      "ae": "Duy Pham",
-      "driveFolderId": "1k_N-0F0sDgfX2EHldtJVBLEn8fORikLY",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Save Mart Supermarkets Disc",
-      "ae": "Duy Pham",
-      "driveFolderId": "1_ncffh4q-Gc7qCOKjSWN1jjdGVKONqjO",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Sony Interactive Entertainment",
-      "ae": "Duy Pham",
-      "driveFolderId": "1ZkV6WepFNnwmowH32-CETvmGtmYzLsaO",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Trinet Group",
-      "ae": "Duy Pham",
-      "driveFolderId": "1B0aiPprVcwqU76NlA-oH50IkJptQ9xj5",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Vistronix",
-      "ae": "Duy Pham",
-      "driveFolderId": "1AD9BMzsWrYCvomPC8vKgGE0zmli4Hbug",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Xpo",
-      "ae": "Duy Pham",
-      "driveFolderId": "1f-hn2tNfFB_OjhVWegaYy1oxv3njIUAf",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Legacy Health",
-      "ae": "Duy Pham",
-      "driveFolderId": "1TeJ98V3nsWKs7HUpI82Tpz5kCA5X2sJh",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Mcafee",
-      "ae": "Duy Pham",
-      "driveFolderId": "1hZu8LGrZkxE-w5AlQ8d3ToRL7D765Jyu",
-      "importedFrom": "territory-sheet",
-      "domain": "mcafee.com",
-      "ccspCustomer": true
-    },
-    {
-      "name": "McAfee",
-      "ae": "Duy Pham",
-      "driveFolderId": "1hZu8LGrZkxE-w5AlQ8d3ToRL7D765Jyu",
-      "importedFrom": "territory-sheet",
-      "domain": "mcafee.com"
-    },
-    {
-      "name": "Biomarin Pharmaceutical",
-      "ae": "Duy Pham",
-      "driveFolderId": "136SbaB5h509SxycH4XmQnujpc2RiY6vf",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "St. Josephs Hospital, Yonkers",
-      "ae": "Duy Pham",
-      "driveFolderId": "1Old6RCktMn32LDNuGua9ntsypP7Owy4P",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Caffeine",
-      "ae": "Danny Hollar",
-      "driveFolderId": "16anXiairh5eZPA20HjbmapwAusQ-QL_J",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi America Capital",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1T9WY0L7gn3Bufv4Ha-aqgf8_IPx41u2f",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Astemo Americas",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1idjWobW8sZo8cOZVaNaCUhW13A8LhBfi",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Consulting",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1LVUBfaUwFp8mIkr3nwohrLQho6TaEnI3",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Energy Usa",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1M_P5AwD0xUYGWrjPaCTM54ZldCo3TfZ7",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi High-Tech America",
-      "ae": "Danny Hollar",
-      "driveFolderId": "11skQNPpwT3JDTMk5ATU9NYkfFoo0urIK",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Metals America",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1uhAFbg3UHHPKMXlQIQnB88OC13hepyYv",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Rail Honolulu Jv",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1Dy4L5VWmBW_stlGQio1Ae9XqQwvlq-PN",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Rail Sts Canada",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1WeUQMvbdVxSmEfllt43VyCJio1ZPlc26",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Rail Sts Usa",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1Zy5_oPjhDdqwjq-KECk33wq678Y-c2Yc",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Vantara Corporation",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1ytiFdW2XxaRHfrn5KR2gx6UQoa3y_kkF",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi Vantara",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1cPvr_kHVXHNkP76RJmJ4wyi1Q9KMEqM5",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Hitachi, Ltd.-NA",
-      "ae": "Danny Hollar",
-      "driveFolderId": "127q-asHPW-94eWEGevtVO72u3sUm3C85",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Kla-tencor Corporation-na",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1ki474hoOErQIKFV5KfuNx8Ftp3cuETAh",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Nvidia Corporation",
-      "ae": "Danny Hollar",
-      "driveFolderId": "110F9UNTGXK1bmLP6Tda7X_BHVrml9S0q",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Pentaho",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1h12W2vq-8Ua36bSTaaIgWqLIxBoaR8XA",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Pure Storage",
-      "ae": "Danny Hollar",
-      "driveFolderId": "1Il2g1ESpnFzUakVz97EThX7t6kQH_tpp",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Technology Finance",
-      "ae": "Danny Hollar",
-      "driveFolderId": "10LQwMWisDtrUe4rNhwhsoR2kCp1iliFY",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Blackhawk Network Holdings",
-      "ae": "Matt Reza",
-      "driveFolderId": "1MBGCPpYtvTiDpI3x3HfYWR-BrNuHlL4g",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Blackhawk Network",
-      "ae": "Matt Reza",
-      "driveFolderId": "1T3f0_UeSOiV_HyXPYqzAreNH_yTJUAKP",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Celebration Dental Services L.C.",
-      "ae": "Matt Reza",
-      "driveFolderId": "1IwqCCS9vwIaQkWfmgkh-5UlT67SkQo-1",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Concentrix Services Us",
-      "ae": "Matt Reza",
-      "driveFolderId": "1TQFJwFPY2IbCgN6p4S9dEMdif78t8P-4",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Dropbox",
-      "ae": "Matt Reza",
-      "driveFolderId": "1CNqVfvU-8NpbDoLRlQcx3OTiz1cMjnlF",
-      "importedFrom": "territory-sheet",
-      "domain": "dropbox.com"
-    },
-    {
-      "name": "Flextronics Corporation",
-      "ae": "Matt Reza",
-      "driveFolderId": "1nXHTeSvM9iMgbHhuPFBpweQflp_0Qwn1",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Flextronics International",
-      "ae": "Matt Reza",
-      "driveFolderId": "1yUYQQmq4aFDQGXB0QUSKu_zGZRjuZZUr",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Flextronics International Usa",
-      "ae": "Matt Reza",
-      "driveFolderId": "19jCkb3ANr3YX5LT8gvwGQogfm46BX-QQ",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Jsr Corporation",
-      "ae": "Matt Reza",
-      "driveFolderId": "1inU7039KfmSIb6kM9YoA3yp5exUdu-G0",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Jsr Micro",
-      "ae": "Matt Reza",
-      "driveFolderId": "1V6J4l_NgBYwrSfKtq6bV2s0MkV2ZehKh",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Lumentum Holdings",
-      "ae": "Matt Reza",
-      "driveFolderId": "1RFpLSNpuaRDl44Jm8uF9Qsw0R-cXvT2K",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Marvell Technology Group",
-      "ae": "Matt Reza",
-      "driveFolderId": "1kt22ijUesMUCq_5cDCDuLE-IfN322UDz",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Qlogic",
-      "ae": "Matt Reza",
-      "driveFolderId": "155wFnvFD0kh3B3bwo749jau5xxsDVahy",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Ringcentral",
-      "ae": "Matt Reza",
-      "driveFolderId": "13CdHFShyYk5h4FX5lJXI-7ppJe5UQl2q",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Aligntech",
-      "ae": "David Delmundo",
-      "driveFolderId": "1WlwTAJmdtyBwVXgsIVZdexb8W_69eXS5",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Ambarella",
-      "ae": "David Delmundo",
-      "driveFolderId": "13Sc49R-posjJ_72blRKZbAwcth4xURM8",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Gap",
-      "ae": "David Delmundo",
-      "driveFolderId": "1x15_1R2rHV0Cwyd8zZFay6jLu4Ne53Lr",
-      "importedFrom": "territory-sheet",
-      "ccspCustomer": true
-    },
-    {
-      "name": "Gitlab",
-      "ae": "David Delmundo",
-      "driveFolderId": "13qw1QAHXU9cd6CKcKYWBwjH7dLM3qhP7",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Illumio",
-      "ae": "David Delmundo",
-      "driveFolderId": "1U9cKy7XiPrCmsQFFQH-31phget1taN2I",
-      "importedFrom": "territory-sheet",
-      "domain": "illumio.com",
-      "ccspCustomer": true
-    },
-    {
-      "name": "iscs",
-      "ae": "David Delmundo",
-      "driveFolderId": "1lvR5tuP-uO87IHzLPqiFLryrOmkzynnw",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Levi Strauss &",
-      "ae": "David Delmundo",
-      "driveFolderId": "1yVycqsoaesgbBIo2zhi9TblpaxFq-vHe",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Levi Strauss",
-      "ae": "David Delmundo",
-      "driveFolderId": "1_r3Vnj4FOtf0AkYyTpJ4WuECHHcmOVmC",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Lvmh Moet Hennessy Louis Vuitton",
-      "ae": "David Delmundo",
-      "driveFolderId": "1wfQpegzzl3MxP0_S1BXlPAajnnW-UN0D",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Moet Hennessy Usa",
-      "ae": "David Delmundo",
-      "driveFolderId": "1wAtYjLzEKoEW7vtWB0_oCzGGWnHdksBi",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Nutanix",
-      "ae": "David Delmundo",
-      "driveFolderId": "1NVHKQYyHbZ38nJQFTbygT-N3h-Cn30ed",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Ross Stores",
-      "ae": "David Delmundo",
-      "driveFolderId": "14boq0H0gA-X_IwQrwbhwGbK4m_t8gHUa",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Starboard Holdings",
-      "ae": "David Delmundo",
-      "driveFolderId": "1EUbZndLkKelz5qQZ6hP-LvmzTwL8NXic",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "The Gap",
-      "ae": "David Delmundo",
-      "driveFolderId": "1T_AynNE6ggjRwEC_vkZTorWneU8FwzcJ",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "Veeva Systems",
-      "ae": "David Delmundo",
-      "driveFolderId": "1omU5s3ZHJTiJ-MhBd711_MA8YYoVXq1T",
-      "importedFrom": "territory-sheet"
-    },
-    {
-      "name": "A10 Networks",
-      "ae": "Carolanne Farrell",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "A10 NETWORKS, INC."
-      ],
-      "domain": "a10networks.com"
-    },
-    {
-      "name": "Crowdstrike",
-      "ae": "Carolanne Farrell",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "CROWDSTRIKE HOLDINGS, INC."
-      ],
-      "domain": "crowdstrike.com"
-    },
-    {
-      "name": "Photo",
-      "ae": "Carolanne Farrell",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "PHOTO HOLDINGS, LLC"
-      ]
-    },
-    {
-      "name": "Lynden Incorporated",
-      "ae": "Carolanne Farrell",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "LYNDEN INCORPORATED"
-      ]
-    },
-    {
-      "name": "Pdf Solutions",
-      "ae": "Carolanne Farrell",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "PDF SOLUTIONS, INC."
-      ],
-      "ccspCustomer": true
-    },
-    {
-      "name": "Autodesk",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "AUTODESK, INC."
-      ]
-    },
-    {
-      "name": "Business Wire Asia Pacific Pty",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "BUSINESS WIRE ASIA PACIFIC PTY LTD"
-      ]
-    },
-    {
-      "name": "Oracle",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "ORACLE"
-      ]
-    },
-    {
-      "name": "E J Gallo Winery",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "E. & J. GALLO WINERY"
-      ]
-    },
-    {
-      "name": "Ebay",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "EBAY INC."
-      ]
-    },
-    {
-      "name": "Genesys Cloud Services Ii",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "GENESYS CLOUD SERVICES HOLDINGS II, LLC"
-      ]
-    },
-    {
-      "name": "Intuitive Surgical",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "INTUITIVE SURGICAL, INC."
-      ]
-    },
-    {
-      "name": "Lumentum",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "LUMENTUM HOLDINGS INC."
-      ]
-    },
-    {
-      "name": "Rambus",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "RAMBUS INC."
-      ]
-    },
-    {
-      "name": "Rescale",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "RESCALE, INC."
-      ],
-      "ccspCustomer": true
-    },
-    {
-      "name": "Rubrik",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "RUBRIK, INC."
-      ]
-    },
-    {
-      "name": "Zuora",
-      "ae": "Phillip Yi",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "ZUORA, INC."
-      ],
-      "ccspCustomer": true
-    },
-    {
-      "name": "Agilent Technologies",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "AGILENT TECHNOLOGIES, INC."
-      ]
-    },
-    {
-      "name": "Cadence Design Systems",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "CADENCE DESIGN SYSTEMS, INC."
-      ]
-    },
-    {
-      "name": "Rakuten Group",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "RAKUTEN GROUP, INC."
-      ]
-    },
-    {
-      "name": "Docusign",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "DOCUSIGN, INC."
-      ]
-    },
-    {
-      "name": "Flex",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "FLEX LTD."
-      ]
-    },
-    {
-      "name": "Ai H2o",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "AI H2O INC"
-      ]
-    },
-    {
-      "name": "Hcl",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "HCL"
-      ]
-    },
-    {
-      "name": "I2c",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "I2C INC."
-      ]
-    },
-    {
-      "name": "Kla Tencor",
-      "ae": "Tyler McManigal",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "KLA-TENCOR CORPORATION"
-      ]
-    },
-    {
-      "name": "Kkr",
-      "ae": "Keren Williams",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "KKR & CO. INC."
-      ]
-    },
-    {
-      "name": "Francisco Partners Management",
-      "ae": "Keren Williams",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "FRANCISCO PARTNERS MANAGEMENT, L.P."
-      ]
-    },
-    {
-      "name": "Guidewire Software",
-      "ae": "Keren Williams",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "GUIDEWIRE SOFTWARE, INC."
-      ]
-    },
-    {
-      "name": "Anju Software",
-      "ae": "Keren Williams",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "ANJU SOFTWARE, INC."
-      ]
-    },
-    {
-      "name": "Partnership Health Plan Of California",
-      "ae": "Keren Williams",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "PARTNERSHIP HEALTH PLAN OF CALIFORNIA"
-      ]
-    },
-    {
-      "name": "Sifive",
-      "ae": "Keren Williams",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "SIFIVE, INC."
-      ]
-    },
-    {
-      "name": "Align Technology",
-      "ae": "Duy Pham",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "ALIGN TECHNOLOGY, INC."
-      ]
-    },
-    {
-      "name": "Bhn",
-      "ae": "Duy Pham",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "BHN HOLDINGS, INC."
-      ]
-    },
-    {
-      "name": "Grocery Outlet",
-      "ae": "Duy Pham",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "GROCERY OUTLET HOLDING CORP."
-      ],
-      "ccspCustomer": true
-    },
-    {
-      "name": "Intuit",
-      "ae": "Duy Pham",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "INTUIT INC."
-      ]
-    },
-    {
-      "name": "Juniper",
-      "ae": "Duy Pham",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "JUNIPER"
-      ]
-    },
-    {
-      "name": "Seagate Technology Public Limited",
-      "ae": "Duy Pham",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "SEAGATE TECHNOLOGY PUBLIC LIMITED COMPANY"
-      ]
-    },
-    {
-      "name": "Bespin Global U S",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "BESPIN GLOBAL U.S., INC."
-      ],
-      "ccspCustomer": true
-    },
-    {
-      "name": "Bitrise Limited",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "BITRISE LIMITED"
-      ]
-    },
-    {
-      "name": "Confluent Development",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "CONFLUENT DEVELOPMENT, LLC"
-      ]
-    },
-    {
-      "name": "Intrado",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "INTRADO CORPORATION"
-      ],
-      "domain": "intrado.com"
-    },
-    {
-      "name": "Omnivision Technologies",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "OMNIVISION TECHNOLOGIES, INC."
-      ]
-    },
-    {
-      "name": "Robert Half",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "ROBERT HALF INTERNATIONAL INC."
-      ],
-      "ccspCustomer": true,
-      "domain": "roberthalf.com"
-    },
-    {
-      "name": "Taylor Fresh Foods",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "TAYLOR FRESH FOODS, INC."
-      ]
-    },
-    {
-      "name": "Uber Technologies",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "UBER TECHNOLOGIES, INC."
-      ]
-    },
-    {
-      "name": "Workday",
-      "ae": "Danny Hollar",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "WORKDAY, INC"
-      ],
-      "domain": "workday.com"
-    },
-    {
-      "name": "Columbia Sportswear",
-      "ae": "Matt Reza",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "COLUMBIA SPORTSWEAR COMPANY"
-      ]
-    },
-    {
-      "name": "Expeditors Of Washington",
-      "ae": "Matt Reza",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "EXPEDITORS INTERNATIONAL OF WASHINGTON, INC."
-      ]
-    },
-    {
-      "name": "Nintendo",
-      "ae": "Matt Reza",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "NINTENDO CO., LTD."
-      ]
-    },
-    {
-      "name": "Northwest Natural",
-      "ae": "Matt Reza",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "NORTHWEST NATURAL HOLDING COMPANY"
-      ]
-    },
-    {
-      "name": "Perkins Coie Llp",
-      "ae": "Matt Reza",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "PERKINS COIE LLP"
-      ]
-    },
-    {
-      "name": "Pokemon",
-      "ae": "Matt Reza",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "POKEMON COMPANY, THE"
-      ]
-    },
-    {
-      "name": "Banner",
-      "ae": "David Delmundo",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "BANNER CORPORATION"
-      ]
-    },
-    {
-      "name": "Idacorp",
-      "ae": "David Delmundo",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "IDACORP, INC."
-      ]
-    },
-    {
-      "name": "J R Simplot",
-      "ae": "David Delmundo",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "J. R. SIMPLOT COMPANY"
-      ]
-    },
-    {
-      "name": "Portland General Electric",
-      "ae": "David Delmundo",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "PORTLAND GENERAL ELECTRIC COMPANY"
-      ]
-    },
-    {
-      "name": "Providence St Joseph Health",
-      "ae": "David Delmundo",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "PROVIDENCE ST. JOSEPH HEALTH"
-      ]
-    },
-    {
-      "name": "Meiji Yasuda Life Insurance",
-      "ae": "David Delmundo",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "MEIJI YASUDA LIFE INSURANCE COMPANY"
-      ]
-    },
-    {
-      "name": "Terrapower",
-      "ae": "David Delmundo",
-      "importedFrom": "sf-bookings",
-      "aliases": [
-        "TERRAPOWER, LLC"
-      ]
+      "domain": "zenith-insurance.com"
     }
   ]
 }

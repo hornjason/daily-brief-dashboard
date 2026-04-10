@@ -39,15 +39,46 @@ export function extractProductNames(account: AccountInfo): string[] {
  */
 export function normalizeProductName(raw: string): string {
   const lower = raw.toLowerCase()
+  // Lifecycle / packaging qualifiers
   if (lower.includes('beta')) return 'Beta'
   if (lower.includes('free')) return 'Free'
   if (lower.includes('trial')) return 'Trial'
+  // Core platform products
   if (lower.includes('ansible')) return 'AAP'
-  if (lower.includes('storage')) return 'Storage'
   if (lower.includes('openshift')) return 'OCP'
   if (lower.includes('enterprise linux')) return 'RHEL'
   if (lower.includes('satellite')) return 'RHEL'
-  if (/\bruntimes\b/.test(lower) || /\bintegration\b/.test(lower)) return 'Middleware'
+  // Cluster management / security
+  if (lower.includes('advanced cluster management') || lower.includes('acm')) return 'ACM'
+  if (lower.includes('advanced cluster security') || lower.includes('acs')) return 'ACS'
+  // AI / Data Science
+  if (lower.includes('ai accelerator') || lower.includes('artificial intelligence') || lower.includes('data science') || lower.includes('openshift ai')) return 'AI/ML'
+  // Storage (broad — catches Ceph, ODF, etc.)
+  if (lower.includes('storage') || lower.includes('ceph') || lower.includes('data foundation')) return 'Storage'
+  // OpenStack
+  if (lower.includes('openstack')) return 'OpenStack'
+  // Quay registry
+  if (lower.includes('quay')) return 'Quay'
+  // Middleware (JBoss, AMQ, Fuse, 3scale, Process Automation, Service Interconnect, etc.)
+  if (
+    lower.includes('jboss') ||
+    lower.includes('amq') ||
+    lower.includes('fuse') ||
+    lower.includes('3scale') ||
+    lower.includes('process automation') ||
+    lower.includes('service interconnect') ||
+    /\bruntimes\b/.test(lower) ||
+    /\bintegration\b/.test(lower)
+  ) return 'Middleware'
+  // CCSP — raw name after strip loses "CCSP" acronym; match on "certified cloud" or "cloud and service provider"
+  if (lower.includes('ccsp') || lower.includes('certified cloud') || lower.includes('cloud and service provider') || lower.includes('software access enablement')) return 'CCSP'
+  // High Availability
+  if (lower.includes('high availability')) return 'HA'
+  // Learning / Training
+  if (lower.includes('learning') || lower.includes('training')) return 'Learning'
+  // Support tiers
+  if (lower.includes('premium support') || lower.includes('standard support')) return 'Support'
+  // Developer / Partner
   if (lower.includes('partner')) return 'Partner Subscriptions'
   if (lower.includes('developer subscription')) return 'Developer Subscriptions'
   return raw

@@ -153,6 +153,7 @@ export interface AiConfig {
   featureExtractionMaxFeatures: number
   geminiInputCostPerM: number        // USD per 1M input tokens
   geminiOutputCostPerM: number       // USD per 1M output tokens
+  intelligenceEnabled: boolean       // false = disable all Gemini intelligence generation globally
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -162,6 +163,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   featureExtractionMaxFeatures: 30,
   geminiInputCostPerM: 0.15,
   geminiOutputCostPerM: 0.60,
+  intelligenceEnabled: true,
 }
 
 export function getAiConfig(): AiConfig {

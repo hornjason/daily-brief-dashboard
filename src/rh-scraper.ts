@@ -71,6 +71,7 @@ let _cachedToken: string | null = null   // captured Bearer JWT from intercepted
 let _livePageBusy = false  // set true while external flows (e.g. Tableau login) use the live page
 let _livePageBusyAt = 0    // timestamp when busy flag was set — auto-clears after 3 minutes
 let _intentionalClose = false  // set before deliberate closeScrapeContext() calls to suppress auto-recovery
+let _discoverPage: Page | null = null  // reused across discoverAccountNumberByName() calls — avoids per-customer navigation
 
 /** Register a callback to invoke when the keep-alive detects session expiry. */
 export function setSessionExpiredCallback(cb: () => void): void {
@@ -284,11 +285,20 @@ export function getScrapeContext() { return _context }
 /** Returns the live authenticated page, or null if no session is open. */
 export function getLivePage() { return _livePage }
 
+/** Close and discard the reused discover page (call after discovery loop finishes). */
+export async function closeDiscoverPage(): Promise<void> {
+  if (_discoverPage && !_discoverPage.isClosed()) {
+    await _discoverPage.close().catch(() => {})
+  }
+  _discoverPage = null
+}
+
 export async function closeScrapeContext(): Promise<void> {
   if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
   const ctx = _context
   _context = null
   _livePage = null
+  _discoverPage = null
   _profileDir = null
   _cachedToken = null
   if (ctx) {
@@ -452,6 +462,7 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
   const usingLivePage = false
 
   const allCases: SupportCase[] = []
+  const seenCaseNumbers = new Set<string>()  // dedup guard — portal paginates through same rows
 
   // ── Batch query helpers ───────────────────────────────────────────────────
   const BATCH_CHUNK_SIZE = 25   // accounts per OR-query (keeps URL under ~4 KB)
@@ -650,6 +661,8 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
       console.log(`[rh-scraper] first case href attr: ${diag.firstCaseHrefAttr}`)
     }
     for (const c of cases) {
+      if (seenCaseNumbers.has(c.caseNumber)) continue  // skip duplicate (pagination overlap)
+      seenCaseNumbers.add(c.caseNumber)
       const severityNum = String(c.severity).match(/^(\d)/)?.[1] ?? c.severity
       allCases.push({
         caseNumber: c.caseNumber,
@@ -891,4 +904,339 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
   await rename(tmpPath, cachePath)
 
   return allCases
+}
+
+/**
+ * Search the RH portal by customer name to discover account numbers.
+ * Primary strategy (sidebar autocomplete):
+ *  1. Navigate to the cases list page
+ *  2. Type the customer name into the "Accounts" filter input in the left sidebar
+ *  3. Wait for the autocomplete dropdown — entries look like "Company Name (1234567)"
+ *  4. Extract all account numbers from parens using regex \((\d{4,12})\)
+ *  5. Return { accountNumbers, cases: [] } — cases scraped separately by account number
+ *
+ * Fallback (case API):
+ *  If sidebar approach fails (selector not found, no dropdown, 0 results),
+ *  fall back to POST /hydra/rest/search/v2/cases with account_name: Solr query.
+ *  Fallback extracts account numbers only — does not populate cases array.
+ */
+export type DiscoverResult = {
+  accountNumbers: string[]
+  cases: Array<{ caseNumber: string; summary: string; status: string; severity: string; accountNumber: string; product?: string; createdDate?: string; casesSource?: 'name_match' | 'account_number' }>
+}
+
+export async function discoverAccountNumberByName(
+  customerName: string,
+  profileDir: string,
+): Promise<DiscoverResult> {
+  await initScrapeContext(profileDir)
+  if (!_context) return { accountNumbers: [], cases: [] }
+
+  // Reuse discover page across calls — avoids full portal navigation + 4s render wait per customer.
+  // First call creates the page and navigates; subsequent calls reuse the already-rendered page.
+  let page = _discoverPage
+  let isNewPage = false
+  if (!page || page.isClosed()) {
+    page = await _context.newPage()
+    _discoverPage = page
+    isNewPage = true
+  }
+
+  try {
+    if (isNewPage) {
+      await page.goto('https://access.redhat.com/support/cases/#/case/list', {
+        waitUntil: 'load',
+        timeout: 30_000,
+      })
+      if (!page.url().includes('access.redhat.com')) throw new SessionExpiredError()
+    }
+
+    // ── Primary: sidebar account filter autocomplete ──────────────────────────
+    // The portal cases list has an "Accounts" filter in the left sidebar. Typing a
+    // company name into it fires a lookup and shows a dropdown of matching accounts
+    // with their numbers in parens: "Microchip Technology Inc. (5559614)".
+    // This is ground truth — works even for accounts with zero open cases.
+    let sidebarNums: string[] = []
+    let sidebarSucceeded = false
+    // ── Fix #2: HTTP-first case-API pre-call ─────────────────────────────────
+    // Runs BEFORE sidebar UI — pure HTTP fetch inside the authenticated page context.
+    // For direct end-customers: returns their own account numbers → skip sidebar entirely.
+    // For resellers (Insight Direct pattern): returns end-customer cases (still useful),
+    // but not the reseller's own account numbers → continue to sidebar for those.
+    const solrName = customerName.replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim()
+    const apiPreResult = await page.evaluate(async (name: string) => {
+      type RawDoc = {
+        case_accountNumber?: string | number
+        case_account_name?: string
+        case_number?: string | number
+        case_summary?: string
+        case_status?: string
+        case_severity?: string | number
+        case_product?: string
+        case_createdDate?: string
+      }
+      type CaseEntry = { caseNumber: string; summary: string; status: string; severity: string; accountNumber: string; product?: string; createdDate?: string; casesSource: 'name_match' }
+      const body = {
+        q: `account_name: "${name}"`,
+        start: 0,
+        rows: 100,
+        partnerSearch: false,
+        expression: 'fl=case_accountNumber,case_account_name,case_number,case_summary,case_status,case_severity,case_product,case_createdDate',
+      }
+      const normName = (s: string) => s.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+      const searchedNorm = normName(name)
+      const seenNums = new Set<string>()
+      const seenCaseNums = new Set<string>()
+      const seenCases: CaseEntry[] = []
+      const LEGAL_WORDS = new Set(['INC', 'LLC', 'LLP', 'LTD', 'LP', 'CORP', 'CO', 'PLC', 'ATTN', 'LL'])
+      const processDoc = (doc: RawDoc) => {
+        const caseNum = doc.case_number != null ? String(doc.case_number).trim() : null
+        if (caseNum && !seenCaseNums.has(caseNum)) {
+          const n = doc.case_accountNumber
+          const validNum = n != null && /^\d{4,12}$/.test(String(n).trim()) ? String(n).trim() : null
+          seenCaseNums.add(caseNum)
+          seenCases.push({ caseNumber: caseNum, summary: doc.case_summary ?? '', status: doc.case_status ?? '', severity: doc.case_severity != null ? String(doc.case_severity) : '', accountNumber: validNum ?? (n != null ? String(n) : ''), product: doc.case_product, createdDate: doc.case_createdDate, casesSource: 'name_match' })
+        }
+        const storedName = normName(doc.case_account_name ?? '')
+        const searchWords = searchedNorm.split(' ').filter(w => w.length > 1 && !LEGAL_WORDS.has(w))
+        if (searchWords.length === 0) return
+        if (!searchWords.every(w => storedName.includes(w))) return
+        const n = doc.case_accountNumber
+        const validNum = n != null && /^\d{4,12}$/.test(String(n).trim()) ? String(n).trim() : null
+        if (validNum) seenNums.add(validNum)
+      }
+      const resp1 = await fetch('/hydra/rest/search/v2/cases?redhat_client=Portal%20Case%20Management&account_number=901532', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      let total = 0
+      if (resp1.ok) { const d1 = await resp1.json() as { response?: { docs?: RawDoc[] } }; const docs1 = d1?.response?.docs ?? []; total += docs1.length; for (const doc of docs1) processDoc(doc) }
+      else if (resp1.status === 401) return { error: 'HTTP 401' as const, nums: [] as string[], total: 0, cases: [] as CaseEntry[] }
+      const resp2 = await fetch('/hydra/rest/search/v2/cases?redhat_client=Portal%20Case%20Management', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (resp2.ok) { const d2 = await resp2.json() as { response?: { docs?: RawDoc[] } }; const docs2 = d2?.response?.docs ?? []; total += docs2.length; for (const doc of docs2) processDoc(doc) }
+      return { error: null, nums: Array.from(seenNums), total, cases: seenCases }
+    }, solrName)
+
+    let prefetchedCases: DiscoverResult['cases'] = []
+    if (apiPreResult.error === 'HTTP 401') throw new SessionExpiredError()
+    if (!apiPreResult.error) {
+      prefetchedCases = apiPreResult.cases
+      if (apiPreResult.nums.length > 0) {
+        // Direct end-customer: API found their own account numbers — skip sidebar entirely
+        console.log(`[rh-scraper/discover] "${customerName}" → HTTP-first hit (${apiPreResult.total} docs, ${apiPreResult.cases.length} cases, accts=[${apiPreResult.nums.join(', ')}])`)
+        return { accountNumbers: apiPreResult.nums, cases: apiPreResult.cases }
+      }
+      console.log(`[rh-scraper/discover] "${customerName}" → HTTP-first (${apiPreResult.total} docs, ${apiPreResult.cases.length} cases, no matching accts — sidebar next)`)
+    }
+
+    try {
+      if (isNewPage) {
+        // Wait for portal to fully render on first navigation only — filter panel
+        // takes time after navigation; skip on reused page (already rendered)
+        await page.waitForTimeout(4_000)
+      }
+
+      // Ensure the filter panel is open — it has a toggle button that collapses/expands it.
+      // The toggle shows "Collapse filter section" when open, "Expand" when closed.
+      // If panel is collapsed, click to open it.
+      const filterPanelToggle = page.locator([
+        '[aria-label*="filter section" i]',
+        '[title*="filter section" i]',
+        '[aria-label*="collapse filter" i]',
+        '[aria-label*="expand filter" i]',
+      ].join(', ')).first()
+      const panelToggleVisible = await filterPanelToggle.isVisible({ timeout: 2_000 }).catch(() => false)
+      if (panelToggleVisible) {
+        const label = await filterPanelToggle.getAttribute('aria-label').catch(() => '')
+        const title = await filterPanelToggle.getAttribute('title').catch(() => '')
+        if ((label + title).toLowerCase().includes('expand')) {
+          await filterPanelToggle.click()
+          await page.waitForTimeout(1_000)
+          console.log(`[rh-scraper/discover] sidebar: expanded filter panel`)
+        }
+      }
+
+      // The "Search for an account" input is the Accounts section typeahead toggle.
+      // On a fresh page it is directly visible. Clicking it opens the dropdown showing
+      // account entries with numbers: "Company Name (1234567)".
+      // Confirmed from live portal screenshot: input[placeholder="Search for an account"]
+      const accountInput = page.locator('input[placeholder="Search for an account"]').first()
+      const inputVisible = await accountInput.isVisible({ timeout: 5_000 }).catch(() => false)
+      console.log(`[rh-scraper/discover] sidebar: account input visible=${inputVisible}`)
+
+      if (inputVisible) {
+        await accountInput.click()
+        await page.waitForTimeout(500)
+        // Normalize search input: replace hyphens with spaces so "HOSPITAL-SAN DIEGO"
+        // matches portal entries like "Hospital San Diego"
+        const normalizedSearchName = customerName.replace(/-/g, ' ')
+        await accountInput.fill(normalizedSearchName)
+
+        // Wait for dropdown to update after typing
+        await page.waitForTimeout(1_500)
+
+        // Read dropdown items — PF v6 renders them as list items with account name + number in parens.
+        // Confirmed from live portal: entries look like "First American Financial Corporation (12653942)"
+        // Use broad selectors to capture whatever list structure PF v6 renders
+        const dropdownSelectors = [
+          '[role="option"]',
+          '[role="menuitem"]',
+          'li.pf-v6-c-menu__item',
+          'li.pf-v6-c-select__menu-item',
+          '[role="listbox"] li',
+          'ul[role="listbox"] li',
+          '.pf-v5-c-select__menu li',  // PF v5 fallback
+        ]
+
+        let dropdownItems = null
+        for (const sel of dropdownSelectors) {
+          try {
+            await page.waitForSelector(sel, { timeout: 500 })
+            const count = await page.locator(sel).count()
+            if (count > 0) {
+              dropdownItems = page.locator(sel)
+              console.log(`[rh-scraper/discover] sidebar: dropdown appeared via "${sel}" (${count} items)`)
+              break
+            }
+          } catch {
+            // selector not found within timeout — try next
+          }
+        }
+
+        if (dropdownItems) {
+          const allText = await dropdownItems.allTextContents()
+          const seenNums = new Set<string>()
+          for (const text of allText) {
+            const matches = [...text.matchAll(/\((\d{4,12})\)/g)]
+            for (const m of matches) seenNums.add(m[1])
+          }
+          sidebarNums = Array.from(seenNums)
+          sidebarSucceeded = sidebarNums.length > 0
+          console.log(`[rh-scraper/discover] "${customerName}" → sidebar autocomplete: accts=[${sidebarNums.join(', ')}] (from ${allText.length} dropdown items)`)
+        } else {
+          console.log(`[rh-scraper/discover] "${customerName}" — sidebar dropdown did not appear, will fallback`)
+        }
+
+        // ── Second attempt: suffix-stripped search with exact-match filter ─────
+        // If full name returned no dropdown, strip legal entity suffixes (INC, LLC,
+        // CORP, LTD) and search again. Filter results so only account names that
+        // exactly match the stripped target are kept — prevents "Applied Medical
+        // Resources" from being grabbed when searching for "Applied Medical".
+        if (!sidebarSucceeded) {
+          const strippedName = customerName
+            .replace(/[\s,.]*(LIMITED\s+PARTNERSHIP|INCORPORATED|CORPORATION|L\.L\.C\.|L\.P\.|INC\.|LLC\.|CORP\.|LTD\.|INC|LLC|CORP|LTD|LP)\s*[.,]?\s*$/i, '')
+            .trim()
+          const normalize = (s: string) => s.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+          const strippedNorm = normalize(strippedName)
+          const fullNorm = normalize(customerName)
+          if (strippedNorm !== fullNorm) {
+            await accountInput.fill(strippedName)
+            await page.waitForTimeout(1_500)
+            let dropdownItems2 = null
+            for (const sel of dropdownSelectors) {
+              try {
+                await page.waitForSelector(sel, { timeout: 500 })
+                const count = await page.locator(sel).count()
+                if (count > 0) { dropdownItems2 = page.locator(sel); break }
+              } catch { /* try next */ }
+            }
+            if (dropdownItems2) {
+              const allText2 = await dropdownItems2.allTextContents()
+              const exactNums = new Set<string>()
+              for (const text of allText2) {
+                // Parse "Company Name (1234567)" → extract and normalize account name
+                const nameMatch = text.match(/^(.*?)\s*\(\d{4,12}\)/)
+                const acctRaw = nameMatch ? nameMatch[1].trim() : text
+                const acctNorm = normalize(
+                  acctRaw.replace(/[\s,.]*(LIMITED\s+PARTNERSHIP|INCORPORATED|CORPORATION|L\.L\.C\.|L\.P\.|INC\.|LLC\.|CORP\.|LTD\.|INC|LLC|CORP|LTD|LP)\s*[.,]?\s*$/i, '').trim()
+                )
+                if (acctNorm !== strippedNorm) continue  // skip non-matching companies
+                const nums = [...text.matchAll(/\((\d{4,12})\)/g)]
+                for (const m of nums) exactNums.add(m[1])
+              }
+              const exactArr = Array.from(exactNums)
+              if (exactArr.length > 0) {
+                sidebarNums = exactArr
+                sidebarSucceeded = true
+                console.log(`[rh-scraper/discover] "${customerName}" → stripped sidebar ("${strippedName}"): accts=[${exactArr.join(', ')}]`)
+              } else {
+                console.log(`[rh-scraper/discover] "${customerName}" → stripped sidebar ("${strippedName}"): no exact matches from ${allText2.length} items`)
+              }
+            } else {
+              console.log(`[rh-scraper/discover] "${customerName}" → stripped sidebar ("${strippedName}"): dropdown did not appear`)
+            }
+
+            // ── Pass 3: strip geographic/country suffixes (USA, US, America, Canada) ──────
+            // For companies like "Insight Direct Usa, Inc." → "Insight Direct"
+            // Portal may not autocomplete "Insight Direct Usa" but will autocomplete "Insight Direct"
+            if (!sidebarSucceeded) {
+              const coreNorm = normalize(
+                strippedName.replace(/[\s,]*(usa|u\.s\.a|us|america|canada|international|global)\s*$/i, '').trim()
+              )
+              if (coreNorm !== strippedNorm && coreNorm.length >= 4) {
+                const coreName = strippedName.replace(/[\s,]*(usa|u\.s\.a|us|america|canada|international|global)\s*$/i, '').trim()
+                await accountInput.fill(coreName)
+                await page.waitForTimeout(1_500)
+                let dropdownItems3 = null
+                for (const sel of dropdownSelectors) {
+                  try {
+                    await page.waitForSelector(sel, { timeout: 500 })
+                    const count = await page.locator(sel).count()
+                    if (count > 0) { dropdownItems3 = page.locator(sel); break }
+                  } catch { /* try next */ }
+                }
+                if (dropdownItems3) {
+                  const allText3 = await dropdownItems3.allTextContents()
+                  const coreNums = new Set<string>()
+                  for (const text of allText3) {
+                    const nameMatch = text.match(/^(.*?)\s*\(\d{4,12}\)/)
+                    const acctRaw = nameMatch ? nameMatch[1].trim() : text
+                    const acctNorm = normalize(
+                      acctRaw.replace(/[\s,.]*(LIMITED\s+PARTNERSHIP|INCORPORATED|CORPORATION|L\.L\.C\.|L\.P\.|INC\.|LLC\.|CORP\.|LTD\.|INC|LLC|CORP|LTD|LP)\s*[.,]?\s*$/i, '')
+                        .replace(/[\s,]*(usa|u\.s\.a|us|america|canada|international|global)\s*$/i, '').trim()
+                    )
+                    // Match entries whose core name starts with our core search term
+                    if (!acctNorm.startsWith(coreNorm)) continue
+                    const nums = [...text.matchAll(/\((\d{4,12})\)/g)]
+                    for (const m of nums) coreNums.add(m[1])
+                  }
+                  const coreArr = Array.from(coreNums)
+                  if (coreArr.length > 0) {
+                    sidebarNums = coreArr
+                    sidebarSucceeded = true
+                    console.log(`[rh-scraper/discover] "${customerName}" → core sidebar ("${coreName}"): accts=[${coreArr.join(', ')}]`)
+                  } else {
+                    console.log(`[rh-scraper/discover] "${customerName}" → core sidebar ("${coreName}"): no matches from ${allText3.length} items`)
+                  }
+                } else {
+                  console.log(`[rh-scraper/discover] "${customerName}" → core sidebar ("${coreName}"): dropdown did not appear`)
+                }
+              }
+            }
+          }
+        }
+      } else {
+        console.log(`[rh-scraper/discover] "${customerName}" — sidebar account input not found, will fallback`)
+      }
+    } catch (sidebarErr: any) {
+      console.log(`[rh-scraper/discover] "${customerName}" — sidebar attempt failed: ${sidebarErr?.message ?? sidebarErr}`)
+    }
+
+    if (sidebarSucceeded) {
+      // Merge HTTP-first cases (name_match) with sidebar-found account numbers
+      return { accountNumbers: sidebarNums, cases: prefetchedCases }
+    }
+
+    // Both HTTP-first and sidebar failed to find account numbers — return whatever cases the API found
+    console.log(`[rh-scraper/discover] "${customerName}" → sidebar+API both done (${prefetchedCases.length} cases from HTTP-first, no accts)`)
+    return { accountNumbers: [], cases: prefetchedCases }
+  } catch (e: any) {
+    if (e instanceof SessionExpiredError) {
+      _discoverPage = null  // context will be closed; don't try to reuse
+      throw e
+    }
+    // On unexpected error discard the page so next call starts fresh
+    _discoverPage = null
+    await page.close().catch(() => {})
+    console.warn(`[rh-scraper] name discovery failed for "${customerName}": ${e?.message ?? e}`)
+    return { accountNumbers: [], cases: [] }
+  }
+  // NOTE: page intentionally NOT closed — reused for next customer in the discovery loop
 }

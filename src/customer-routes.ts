@@ -20,6 +20,7 @@ import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, 
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
 import { generateAndSaveAccountPlan, readAccountPlan } from './account-plan.ts'
+import { getAiConfig } from './settings-api.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -124,8 +125,22 @@ function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, sourceWarning
 // GET /api/pipeline — Open opportunity pipeline from Drive XLS
 function filterToAEs(records: PipelineRecord[]): PipelineRecord[] {
   if (!aes.length) return records
-  const names = new Set(aes.map(a => a.name.toLowerCase()))
-  return records.filter(r => names.has(r.owner.toLowerCase()))
+  // Build lookup: exact full name match OR (last-name exact + first-name prefix in either direction)
+  // Handles SF formal names like "Alexander Smith" matching AE config "Alex Smith"
+  const aeParts = aes.map(a => {
+    const parts = a.name.toLowerCase().split(/\s+/)
+    return { full: a.name.toLowerCase(), first: parts[0] ?? '', last: parts.slice(1).join(' ') }
+  })
+  return records.filter(r => {
+    const ownerLower = r.owner.toLowerCase()
+    const ownerParts = ownerLower.split(/\s+/)
+    const ownerFirst = ownerParts[0] ?? ''
+    const ownerLast = ownerParts.slice(1).join(' ')
+    return aeParts.some(ae =>
+      ae.full === ownerLower ||
+      (ae.last === ownerLast && ae.last !== '' && (ownerFirst.startsWith(ae.first) || ae.first.startsWith(ownerFirst)))
+    )
+  })
 }
 
 // ── Route registration ────────────────────────────────────────────────────────
@@ -538,6 +553,10 @@ export function registerCustomerRoutes(app: Hono): void {
   // ── BKL-AI06: Batch intelligence generation ──────────────────────────────
 
   app.post('/api/intelligence/generate-all', (c) => {
+    if (!getAiConfig().intelligenceEnabled) {
+      return c.json({ error: 'Intelligence generation is disabled — set intelligenceEnabled=true in AI settings to enable' }, 503)
+    }
+
     if (_batchState.running) {
       return c.json({ error: 'Batch generation already running', state: _batchState }, 409)
     }

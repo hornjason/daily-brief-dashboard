@@ -549,9 +549,10 @@ async function discoverAccountNumbersByName(
     await page.click('button.button-alt1')
     console.log(`[supportable] name-search: Go clicked — on ${page.url().slice(0, 80)}`)
     // Race: results table appearing (fast) vs networkidle (slow fallback)
+    // 25s: APEX can be slow on VPN; 10s caused timeouts for valid customers (Pure Storage pattern)
     await Promise.race([
-      page.waitForSelector('table th', { timeout: 10_000 }).catch(() => {}),
-      page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}),
+      page.waitForSelector('table th', { timeout: 25_000 }).catch(() => {}),
+      page.waitForLoadState('networkidle', { timeout: 25_000 }).catch(() => {}),
     ])
     // Short settle — APEX may still be rendering, but table header means data is coming
     await page.waitForTimeout(1_500)
@@ -586,7 +587,7 @@ async function discoverAccountNumbersByName(
     // so we must wait for digit data to appear near "Account Number" before extracting.
     if (hasCustomerInfo) {
       // Wait for account number data to populate (APEX loads values async)
-      const DATA_WAIT_MS = 8_000
+      const DATA_WAIT_MS = 18_000  // 18s: APEX detail page AJAX can lag on VPN
       const dataLoaded = await page.waitForFunction(
         () => {
           // Look for any digit sequence (5+ digits) in the page body — indicates data populated

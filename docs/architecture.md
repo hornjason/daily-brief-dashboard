@@ -341,3 +341,36 @@ The `data/` directory is mounted as a volume so config, credentials, cache, and 
 | `CONFIG_DIR` | Path to config inside container (default `/data/config`) |
 | `CACHE_DIR` | Path to cache inside container (default `/data/cache`) |
 | `RH_PROFILE_DIR` | Path to Chromium profile (default `$CONFIG_DIR/.rh-chrome-profile`) |
+
+---
+
+## SF Bookings Sheet — Required Report Columns
+
+The SF bookings reader (`src/sf-bookings-reader.ts`) requires these exact column names in the exported Google Sheet. The sheet must be placed in the shared POD bookings Drive folder (`podBookingsFolderId` in `settings.json`).
+
+| Column | Required | Purpose |
+|--------|----------|---------|
+| `ACCOUNT_NAME` | ✅ | Customer matching — most specific (billing entity) |
+| `ACCOUNT_SALES_GROUP_NAME` | ✅ | Customer matching — fallback (sales entity) |
+| `ACCOUNT_GLOBAL_SALES_GROUP_NAME` | ✅ | Customer matching — fallback (holding company) |
+| `OPPORTUNITY_TERRITORY_NAME` | ✅ | Filters rows to the AE's assigned territory |
+| `PRODUCT_DESCRIPTION` | ✅ | Subscription/product name |
+| `PRODUCT_QUANTITY` | ✅ | Quantity |
+| `OPPORTUNITY_LINE_START_DATE` | ✅ | Subscription start date |
+| `OPPORTUNITY_LINE_END_DATE` | ✅ | Subscription end date (used to derive Active/Expired) |
+| `PRODUCT_FORECAST_OFFERING_GROUP` | ✅ | Product group — "CCSP" in value = CCSP-only customer |
+| `PRODUCT_CODE` | ✅ | Internal SKU |
+
+### Adding a New POD
+
+1. Export the SF subscription report filtered to that POD's territories
+2. Upload the resulting sheet to the shared Drive folder (`podBookingsFolderId`)
+3. Name the file to include the territory name (e.g. "Northeast" for NORTHEAST territory)
+4. The bootstrap wizard and SF sync will auto-discover it — no code or config changes needed
+
+### How Territory Matching Works
+
+Sheet file names are matched against AE `tableauTerritories` using word-level matching.
+Example: territory `"WESTCOM NORTHWEST"` → words `["westcom", "northwest"]` → matches file named `"Northwest POD - Subscriptions"` because `"northwest"` appears in the file name.
+
+Name the file after the key territory word for reliable matching.
