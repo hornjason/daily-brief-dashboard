@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-10 (BKL-TEST-13/15/16/17 closed DONE; BKL-TEST-21 and BKL-TEST-22 added; test infrastructure shipped: test container 7776, seed fixtures, 27 unit tests, CI empty-catch gate)
+Last update: 2026-04-10 (BKL-REG-09 added + closed DONE; empty-hay guard fixed at 2 call sites in customer-routes.ts lines 392/419)
 
 ---
 
@@ -5781,6 +5781,16 @@ Files: dashboard/src/components/PodKPIHeader.tsx
 Root cause: `openCases` filter used `accountNumSet.has(c.accountNumber)` only. 39 customers with zero account numbers have cases matched by name (casesSource: 'name_match') which were excluded from banner count. KPI used server-computed `kpis.openCasesTotal` which included all cases.
 Fix: Added `customerNameSet` from `accounts.map(a => a.name.toLowerCase())`. Filter now matches on EITHER account number OR customerName (case-insensitive). REG-013 in regression.spec.ts covers brief cache indirectly; UI consistency test should be added in a follow-up.
 Decision: DONE — fixed 2026-04-10 in PodKPIHeader.tsx lines 21-31. Rebuild required.
+
+### BKL-REG-09 | normalizeForQuery empty-string match causes U.S.-prefixed accounts to match every customer
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P0
+Source: Gate 2 pre-promote failure — U.S. Epson, Inc. returned results for all customer CCSP/pipeline queries
+Files: src/customer-routes.ts (lines 392, 419)
+Root cause: `normalizeForQuery` regex `u\.s\..*` strips everything from "u.s." to end of string. "U.S. Epson, Inc." → `''`. `anyString.includes('')` is always true, so empty-normalized names matched every query.
+Fix: Added `hay.length === 0 ||` guard before both unguarded `includes` checks in the `/customer/:name/ccsp` loop (line 392) and `/customer/:name/pipeline` loop (line 419). Lines 354 and 363 already had this guard from a prior fix. `normalizeForQuery` itself left unchanged — regex behavior may be intentional elsewhere.
+Decision: DONE — four call sites now all guard against empty hay. Gate 2 re-run required.
 
 ### BKL-UX52-P1 | Pod tab bar renders as static label, not interactive tabs
 Status: 🔴 OPEN

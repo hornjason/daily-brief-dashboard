@@ -190,6 +190,57 @@ test.describe('BKL-AI21: Pipeline and CCSP caches flow into brief', () => {
   })
 })
 
+// ── BKL-ENRICH-01: industry/segment fields on /customers list ──────────────
+//
+// @xfail — BKL-AI01 was marked DONE 2026-04-02 but enrichment never ran on the
+// SW pod. As of 2026-04-10, only 2 of 106 customers have industry/segment
+// populated. Tests below document the expected contract; they are marked
+// xfail until the enrichment batch completes. Remove xfail once all customers
+// have industry populated (verify: grep -c '"industry"' data/config/customers.json).
+
+test.describe('GET /customers — industry/segment fields (BKL-ENRICH-01)', () => {
+  test('returns 200 with an array of customer objects', async () => {
+    const { status, body } = await getJSON('/customers')
+    expect(status).toBe(200)
+    expect(Array.isArray(body)).toBe(true)
+  })
+
+  // @xfail: enrichment batch has not run — most customers lack industry/segment.
+  // Remove xfail and the fail() guard once BKL-ENRICH-01 is resolved.
+  test.fail('every customer has a non-empty industry field [xfail: BKL-ENRICH-01 — enrichment never ran on SW pod]', async () => {
+    const { body } = await getJSON('/customers')
+    const customers: unknown[] = body
+    const missing = customers.filter((c: any) => !c.industry || c.industry === '')
+    // Should be 0 once enrichment runs; currently ~104 of 106 are missing
+    expect(missing.length).toBe(0)
+  })
+
+  // @xfail: same root cause as above.
+  test.fail('every customer has a non-empty segment field [xfail: BKL-ENRICH-01 — enrichment never ran on SW pod]', async () => {
+    const { body } = await getJSON('/customers')
+    const customers: unknown[] = body
+    const missing = customers.filter((c: any) => !c.segment || c.segment === '')
+    expect(missing.length).toBe(0)
+  })
+
+  // Non-xfail: structure contract. industry/segment MUST be present on objects
+  // that have them (not undefined, not null — string or absent).
+  test('customers with industry field have it as a non-empty string', async () => {
+    const { body } = await getJSON('/customers')
+    const customers: unknown[] = body
+    for (const c of customers as any[]) {
+      if ('industry' in c) {
+        expect(typeof c.industry).toBe('string')
+        expect(c.industry.length).toBeGreaterThan(0)
+      }
+      if ('segment' in c) {
+        expect(typeof c.segment).toBe('string')
+        expect(c.segment.length).toBeGreaterThan(0)
+      }
+    }
+  })
+})
+
 // ── /customer/:name/sheetdata ───────────────────────────────────────────────
 
 test.describe('GET /customer/:name/sheetdata', () => {

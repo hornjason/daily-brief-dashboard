@@ -351,7 +351,7 @@ export function registerCustomerRoutes(app: Hono): void {
       const pipeline = pipelineCache
         ? pipelineCache.records.filter(r => {
             const hay = normalizeForQuery(r.accountName)
-            return hay.includes(needle) || needle.includes(hay)
+            return hay.length > 0 && (hay.includes(needle) || needle.includes(hay))
           }).filter(r => r.forecastCategory.toLowerCase() !== 'closed')
         : []
       const ccspCache = readCCSPCache()
@@ -360,7 +360,7 @@ export function registerCustomerRoutes(app: Hono): void {
       const ccsp = (ccspCache && !ccspStale)
         ? ccspCache.records.filter(r => {
             const hay = normalizeForQuery(r.accountName)
-            return hay.includes(needle) || needle.includes(hay)
+            return hay.length > 0 && (hay.includes(needle) || needle.includes(hay))
           })
         : []
       const text = await generateBrief(customer, meetings, emails, docs, cases, subscriptions, products, pipeline, ccsp)
@@ -389,7 +389,7 @@ export function registerCustomerRoutes(app: Hono): void {
 
     for (const r of cached.records) {
       const hay = normalizeForQuery(r.accountName)
-      if (!hay.includes(needle) && !needle.includes(hay)) continue
+      if (hay.length === 0 || (!hay.includes(needle) && !needle.includes(hay))) continue
       totalAcv += r.acvPlus
       if (r.quarter) byQuarter.set(r.quarter, (byQuarter.get(r.quarter) ?? 0) + r.acvPlus)
       byPartner.set(r.cloudPartner, (byPartner.get(r.cloudPartner) ?? 0) + r.acvPlus)
@@ -416,7 +416,7 @@ export function registerCustomerRoutes(app: Hono): void {
 
     for (const r of cached.records) {
       const hay = normalizeForQuery(r.accountName)
-      if (!hay.includes(needle) && !needle.includes(hay)) continue
+      if (hay.length === 0 || (!hay.includes(needle) && !needle.includes(hay))) continue
       if (r.forecastCategory.toLowerCase() === 'closed') closed.push(r)
       else open.push(r)
     }
