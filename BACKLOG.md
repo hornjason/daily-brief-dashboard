@@ -5447,7 +5447,7 @@ Description: Selecting a product filter from the top dashboard navigation causes
 Decision: OPEN — needs investigation. Check browser console for errors when filter is selected.
 
 ### BKL-SF-02 | AE "TBH" placeholder name — pipeline records will never match
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (by design: filterToAEs() primary path uses territory field not AE name; TERR01-tagged SF records pass through correctly; on hire, re-bootstrap replaces TBH with real name and both passes work)
 Severity: MEDIUM
 Priority: P2
 Size: XS
