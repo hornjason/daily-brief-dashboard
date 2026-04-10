@@ -606,10 +606,16 @@ export function registerScrapeRoutes(app: Hono): void {
               // Scrape once per unique report
               const data = await scrapeSfReport(reportId, RH_PROFILE_DIR)
 
-              // BKL-F11: Find "Opportunity Owner" column index for per-AE filtering
+              // BKL-SF-01: Find "Opportunity Territory Name" column for territory-based AE filtering
+              const territoryIdx = data.headers.findIndex(h => /opportunity.*territory.*name/i.test(h))
+              // Fallback: "Opportunity Owner" column for legacy name-based filtering
               const ownerIdx = data.headers.findIndex(h => h === 'Opportunity Owner')
-              if (ownerIdx === -1) {
-                console.warn(`[scrape:salesforce] "Opportunity Owner" column not found in headers — writing all rows to every AE sheet (no filtering)`)
+              if (territoryIdx === -1 && ownerIdx === -1) {
+                console.warn(`[scrape:salesforce] neither "Opportunity Territory Name" nor "Opportunity Owner" column found — writing all rows to every AE sheet (no filtering)`)
+              } else if (territoryIdx !== -1) {
+                console.log(`[scrape:salesforce] using territory-based filtering (column index ${territoryIdx})`)
+              } else {
+                console.warn(`[scrape:salesforce] "Opportunity Territory Name" column not found — falling back to owner name matching`)
               }
 
               // Fan out: write to each AE's pipeline sheet
@@ -624,18 +630,30 @@ export function registerScrapeRoutes(app: Hono): void {
                     sheetId = await createPipelineSheet(ae.name, ae.driveFolderId)
                     patchAe(ae.name, { pipelineSheetId: sheetId })
                   }
-                  // BKL-F11/F11b: Filter rows to this AE's opportunities only (prefix match handles Alex/Alexander variations)
-                  const aeFirstName = ae.name.split(' ')[0].toLowerCase()
-                  const filteredRows = ownerIdx !== -1
-                    ? data.rows.filter(row => {
-                        const tokens = (row[ownerIdx] ?? '').toLowerCase().split(/\s+/)
-                        return tokens.some(t => t.startsWith(aeFirstName) || aeFirstName.startsWith(t))
-                      })
-                    : data.rows
+                  // BKL-SF-01: Filter rows by territory (primary) or owner name (fallback)
+                  let filteredRows: string[][]
+                  if (territoryIdx !== -1 && ae.tableauTerritories?.length) {
+                    // Primary path: match on "Opportunity Territory Name" column
+                    const aeTerritoriesLower = ae.tableauTerritories.map(t => t.toLowerCase())
+                    filteredRows = data.rows.filter(row => {
+                      const territory = (row[territoryIdx] ?? '').toLowerCase()
+                      return aeTerritoriesLower.some(t => territory === t || territory.includes(t))
+                    })
+                  } else if (ownerIdx !== -1) {
+                    // Fallback: name-based prefix match (legacy behavior)
+                    const aeFirstName = ae.name.split(' ')[0].toLowerCase()
+                    filteredRows = data.rows.filter(row => {
+                      const tokens = (row[ownerIdx] ?? '').toLowerCase().split(/\s+/)
+                      return tokens.some(t => t.startsWith(aeFirstName) || aeFirstName.startsWith(t))
+                    })
+                  } else {
+                    // No filtering columns available — include all rows
+                    filteredRows = data.rows
+                  }
                   const filteredData = { headers: data.headers, rows: filteredRows, droppedColumns: data.droppedColumns }
                   await writePipelineSheet(filteredData, sheetId)
                   totalRows += filteredRows.length
-                  console.log(`[scrape:salesforce] wrote ${filteredRows.length} rows to ${ae.name}'s pipeline sheet${ownerIdx !== -1 ? ` (filtered from ${data.rows.length} total)` : ''}`)
+                  console.log(`[scrape:salesforce] wrote ${filteredRows.length} rows to ${ae.name}'s pipeline sheet (filtered from ${data.rows.length} total via ${territoryIdx !== -1 && ae.tableauTerritories?.length ? 'territory' : ownerIdx !== -1 ? 'owner-name' : 'none'})`)
                 } catch (e: any) {
                   if (e instanceof SfSessionExpiredError) {
                     console.warn('[scrape:salesforce] SF session expired during sync')

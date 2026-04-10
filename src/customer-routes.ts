@@ -123,15 +123,25 @@ function buildCCSPSummary(records: CCSPRecord[], cachedAt: string, sourceWarning
 // Shared fuzzy name normalizer for customer URL-param queries against cached records.
 // Strips common legal suffixes and punctuation for substring overlap matching.
 // GET /api/pipeline — Open opportunity pipeline from Drive XLS
+// BKL-SF-01: Filter cached pipeline records to configured AEs.
+// Primary: match record.territory against ae.tableauTerritories (exact, case-insensitive).
+// Fallback: owner-name prefix match for records without a territory field (backward compat with pre-territory cache).
 function filterToAEs(records: PipelineRecord[]): PipelineRecord[] {
   if (!aes.length) return records
-  // Build lookup: exact full name match OR (last-name exact + first-name prefix in either direction)
-  // Handles SF formal names like "Alexander Smith" matching AE config "Alex Smith"
+  // Pre-compute territory lookup: lowercase territory string → true
+  const aeTerritorySet = new Set<string>()
+  for (const ae of aes) {
+    for (const t of ae.tableauTerritories ?? []) aeTerritorySet.add(t.toLowerCase())
+  }
+  // Pre-compute name parts for fallback matching
   const aeParts = aes.map(a => {
     const parts = a.name.toLowerCase().split(/\s+/)
     return { full: a.name.toLowerCase(), first: parts[0] ?? '', last: parts.slice(1).join(' ') }
   })
   return records.filter(r => {
+    // Primary: territory match
+    if (r.territory && aeTerritorySet.has(r.territory.toLowerCase())) return true
+    // Fallback: owner name match (for records without territory)
     const ownerLower = r.owner.toLowerCase()
     const ownerParts = ownerLower.split(/\s+/)
     const ownerFirst = ownerParts[0] ?? ''

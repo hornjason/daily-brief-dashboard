@@ -18,6 +18,7 @@ export interface PipelineRecord {
   offeringGroup:    string
   probability:      number
   products:         string[]
+  territory?:       string   // BKL-SF-01: "Opportunity Territory Name" from SF report — used for AE matching
 }
 
 const STAGE_ORDER = ['Commit', 'Best Case', 'Pipeline', 'Omitted']
@@ -76,6 +77,8 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
 
     const rawOppId = String(col(row, 'Opportunity ID') ?? '').trim()
 
+    const rawTerritory = String(col(row, 'Opportunity Territory Name') ?? '').trim()
+
     records.push({
       oppNumber,
       oppId:            rawOppId || undefined,
@@ -89,6 +92,7 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
       offeringGroup:    String(col(row, 'Offering Group') ?? '').trim(),
       probability:      Number(col(row, 'Probability (%)') ?? 0),
       products:         productsByOpp.get(oppNumber) ?? [],
+      territory:        rawTerritory || undefined,  // BKL-SF-01: territory-based AE matching
     })
   }
 
