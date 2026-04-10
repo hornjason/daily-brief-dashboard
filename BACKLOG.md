@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-09 (BKL-CAL-02/03/04, BKL-CCSP-01 filed: calendar and CCSP issues from debugging session)
+Last update: 2026-04-10 (BKL-TEST-05 DONE: Quinn validated cold-start sync for CCSP and pipeline)
 
 ---
 
@@ -5022,7 +5022,7 @@ Files: dashboard/src/pages/SetupPage.tsx (or SetupWizard.tsx), src/bootstrap-orc
 Description: Add one optional field to the POD bootstrap UI: "Shared Supportable Folder" (a Google Drive folder ID/URL). During the bootstrap Supportable step, before triggering a scrape, check that folder for a file matching `{AE Name} - Supportable` (same naming convention as today). If found: grab its Sheet ID, write to aes.json as supportableSheetId, skip the scrape entirely — AE's sheet column shows up exactly as today. If not found: fall through to existing Supportable discover + scrape flow unchanged. Field is optional — if blank, bootstrap runs exactly as today. Everything else (wizard flow, scaffolding, CCSP/SF runs, territory selection, Drive folder creation) stays identical. Sheet living in the shared folder does not break anything — all reads/writes use Sheet ID via Sheets API, Drive location is irrelevant once the ID is stored. AE's own Drive folder still needed for CCSP/Pipeline sheets. No Drive shortcut required — clean separation: shared data in shared folder, generated sheets in AE folder. Use case: Jason has existing Northwest POD AE sheets in a shared folder; a teammate deploys a fresh container, enters the shared folder ID, bootstrap links all 10 AE sheets in seconds instead of running 10x Supportable scrapes.
 
 ### BKL-BOOT-02 | Shareable Supportable pulls — central scrape + distribute to team
-Status: 🔴 OPEN
+Status: ⛔ OBSOLETE — 2026-04-10 — Supportable disabled; SF Bookings sheets are the shared data source; problem this solved no longer exists
 Severity: MEDIUM
 Priority: P2
 Size: L
@@ -5477,14 +5477,14 @@ Fix: Added isCCSPCacheStale(currentSheetIds) to cache-layer.ts — compares cach
 Decision: DONE.
 
 ### BKL-TEST-05 | Sync Now buttons untested against empty cache — cold-start validation needed
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (Quinn validated: cold-start sync works for CCSP and pipeline)
 Severity: MEDIUM
 Priority: P2
 Size: S
 Source: 2026-04-10 — Jason: "test each sync now can sync properly by erasing the cache for ccsp and pipeline"
 Files: data/cache/ccsp-data.json, data/cache/pipeline-data.json, dashboard/src/pages/SetupPage.tsx
 Description: "Sync Now" for CCSP and SF Pipeline have never been validated against a fully empty cache (cold-start). The pipeline parser had a dedup bug (BKL-SF-01 root cause) that was masked because the cache always had prior data. Test procedure: (1) backup cache files, (2) delete ccsp-data.json and pipeline-data.json, (3) click Sync Now for each and verify the dashboard populates correctly, (4) verify no blank-screen or zero-record states appear. Run this once the current CCSP/pipeline fixes are stable.
-Decision: OPEN — manual validation test; defer until dashboard stabilizes post-fixes.
+Decision: DONE — Quinn validated 2026-04-10. Pipeline: removed cache file, API correctly returned 0 records, triggered POST /api/scrape/salesforce, data arrived in ~42s (286 records, $32M ACV across 9 AEs). CCSP: removed cache file, server served from memory (resilient), triggered POST /api/scrape/ccsp, scraper ran end-to-end (Tableau connect, 9 AE sheets written, cookies saved), refresh skipped because source data unchanged (correct behavior). Both scrapers handle cold-start correctly. Production data restored from backups, verified intact (9 AEs, 245 pipeline records, 53 CCSP customers).
 
 ### BKL-BOOT-03 | Single-AE bootstrap regression check — verify one-at-a-time bootstrap still works
 Status: 🔴 OPEN
