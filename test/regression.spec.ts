@@ -14,19 +14,36 @@
  */
 import { test, expect } from '@playwright/test'
 
+// @destructive tests (REG-001, REG-002, REG-004) replace the AEs list — always route to test container.
+// Read-only tests (REG-003, REG-005, REG-006, REG-007) use BASE_URL which defaults to production.
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:7777'
+const DESTRUCTIVE_URL = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
+
+// REG-005/006: known customer with a populated brief cache — override with TEST_KNOWN_CUSTOMER in CI
+const KNOWN_CUSTOMER = process.env.TEST_KNOWN_CUSTOMER ?? 'Big Ten Network Services'
+const KNOWN_CUSTOMER_ENCODED = encodeURIComponent(KNOWN_CUSTOMER)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** GET JSON from the server */
+/** GET JSON from the server (read-only, targets BASE_URL) */
 async function getJSON(path: string) {
   const res = await fetch(`${BASE_URL}${path}`)
   return { status: res.status, body: await res.json() }
 }
 
-/** POST JSON to the server */
+/** POST JSON to the server (read-only, targets BASE_URL) */
 async function postJSON(path: string, data: unknown) {
   const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return { status: res.status, body: await res.json() }
+}
+
+/** POST JSON to the test container (destructive — replaces AEs/customers) */
+async function postJSONDestructive(path: string, data: unknown) {
+  const res = await fetch(`${DESTRUCTIVE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -42,19 +59,19 @@ async function postJSON(path: string, data: unknown) {
 let snapshot: unknown = null
 
 test.beforeAll(async () => {
-  const { body } = await postJSON('/api/__test/snapshot', {})
+  const { body } = await postJSONDestructive('/api/__test/snapshot', {})
   snapshot = body
 })
 
 test.afterAll(async () => {
   if (snapshot) {
-    await postJSON('/api/__test/restore', snapshot)
+    await postJSONDestructive('/api/__test/restore', snapshot)
   }
 })
 
 // ── REG-001: tableauTerritories preserved after POST /api/aes ────────────────
 
-test.describe('REG-001: tableauTerritories preserved after POST /api/aes', () => {
+test.describe('@destructive REG-001: tableauTerritories preserved after POST /api/aes', () => {
   test('server-managed fields survive a round-trip save', async () => {
     // Save an AE with tableauTerritories set
     const testAe = {
@@ -62,11 +79,14 @@ test.describe('REG-001: tableauTerritories preserved after POST /api/aes', () =>
       driveFolderId: 'test-folder-id',
       tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR01', 'EAST_ENT_TERR02'],
     }
-    const postRes = await postJSON('/api/aes', { aes: [testAe] })
+    const postRes = await postJSONDestructive('/api/aes', { aes: [testAe] })
     expect(postRes.status).toBe(200)
 
     // Read back and verify tableauTerritories survived
-    const getRes = await getJSON('/api/aes')
+    const getRes = await (async () => {
+      const res = await fetch(`${DESTRUCTIVE_URL}/api/aes`)
+      return { status: res.status, body: await res.json() }
+    })()
     expect(getRes.status).toBe(200)
     expect(getRes.body.aes).toHaveLength(1)
     expect(getRes.body.aes[0].tableauTerritories).toEqual([
@@ -79,13 +99,13 @@ test.describe('REG-001: tableauTerritories preserved after POST /api/aes', () =>
 
 // ── REG-002: POST /api/scrape/ccsp returns 400 when no territories ────────
 
-test.describe('REG-002: POST /api/scrape/ccsp rejects AEs without territories', () => {
+test.describe('@destructive REG-002: POST /api/scrape/ccsp rejects AEs without territories', () => {
   test('returns 400 when no AEs have tableauTerritories configured', async () => {
     // Save an AE with NO tableauTerritories
     const aeWithoutTerritories = { name: 'No Territory AE' }
-    await postJSON('/api/aes', { aes: [aeWithoutTerritories] })
+    await postJSONDestructive('/api/aes', { aes: [aeWithoutTerritories] })
 
-    const res = await postJSON('/api/scrape/ccsp', {})
+    const res = await postJSONDestructive('/api/scrape/ccsp', {})
     // Should be 400 (or 401/403 if no Google auth) — but NOT 200 with silent skip
     // Accept 400 (no territories), 401 (no Google auth), 403 (missing scopes), 409 (scrape in flight from parallel tests)
     expect([400, 401, 403, 409]).toContain(res.status)
@@ -124,9 +144,9 @@ test.describe('REG-003: GET /api/aes returns correct schema', () => {
 
 // ── REG-004: POST /api/aes rejects HTML injection ───────────────────────────
 
-test.describe('REG-004: POST /api/aes rejects HTML injection in AE names', () => {
+test.describe('@destructive REG-004: POST /api/aes rejects HTML injection in AE names', () => {
   test('script tag in name returns 400', async () => {
-    const res = await postJSON('/api/aes', {
+    const res = await postJSONDestructive('/api/aes', {
       aes: [{ name: '<script>alert(1)</script>' }],
     })
     expect(res.status).toBe(400)
@@ -135,7 +155,7 @@ test.describe('REG-004: POST /api/aes rejects HTML injection in AE names', () =>
   })
 
   test('img onerror injection in name returns 400', async () => {
-    const res = await postJSON('/api/aes', {
+    const res = await postJSONDestructive('/api/aes', {
       aes: [{ name: '<img onerror="alert(1)" src=x>' }],
     })
     expect(res.status).toBe(400)
@@ -143,7 +163,7 @@ test.describe('REG-004: POST /api/aes rejects HTML injection in AE names', () =>
   })
 
   test('valid name is accepted', async () => {
-    const res = await postJSON('/api/aes', {
+    const res = await postJSONDestructive('/api/aes', {
       aes: [{ name: 'Jane Smith' }],
     })
     expect(res.status).toBe(200)
@@ -153,7 +173,6 @@ test.describe('REG-004: POST /api/aes rejects HTML injection in AE names', () =>
 // ── REG-005: Brief cache behavior (BKL-AI20) ─────────────────────────────────
 
 test.describe('REG-005: Brief cache behavior (BKL-AI20)', () => {
-  const KNOWN_CUSTOMER_ENCODED = encodeURIComponent('A10 Networks')
 
   test('brief endpoint returns fromCache field (never missing)', async () => {
     const { status, body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
@@ -178,7 +197,6 @@ test.describe('REG-005: Brief cache behavior (BKL-AI20)', () => {
 // ── REG-006: HTTP 500 on empty Gemini response (BKL-G08) ────────────────────
 
 test.describe('REG-006: HTTP 500 on empty Gemini response (BKL-G08)', () => {
-  const KNOWN_CUSTOMER_ENCODED = encodeURIComponent('A10 Networks')
 
   test('brief endpoint returns 200 or structured error (never 500 with empty body)', async () => {
     const { status, body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
@@ -211,10 +229,8 @@ test.describe('REG-006: HTTP 500 on empty Gemini response (BKL-G08)', () => {
 // The pipeline test uses originalAes to restore context explicitly.
 
 test.describe('REG-007: Pipeline data flows to both AEs (BKL-W2-26)', () => {
-  // Restore full AE config before these tests so filterToAEs includes both AEs
-  test.beforeAll(async () => {
-    await postJSON('/api/aes', { aes: originalAes })
-  })
+  // Note: file-level beforeAll/afterAll snapshot+restore ensures AE config is restored
+  // before these tests run. No nested beforeAll needed.
 
   test('pipeline endpoint returns 200 with byOwner array', async () => {
     const { status, body } = await getJSON('/api/pipeline')

@@ -8,8 +8,10 @@ import { test as base } from '@playwright/test'
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:7777'
 const TEST_BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
-// SNAPSHOT_BASE: snapshot/restore calls are destructive — route to test container when TEST_URL is set
-const SNAPSHOT_BASE = process.env.TEST_URL ?? BASE
+// SNAPSHOT_BASE: snapshot/restore calls must target the same container as the tests being run.
+// Default to TEST_BASE (7776) so destructive tests never accidentally snapshot/restore production.
+// Override by setting BASE_URL=http://localhost:7777 for ci runs against production.
+const SNAPSHOT_BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
 
 // ── BKL-TEST-12: Quinn endpoint allowlist ───────────────────────────
 // When QUINN_SAFE_MODE=true, POST calls to destructive endpoints throw
