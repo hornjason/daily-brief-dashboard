@@ -67,10 +67,11 @@ function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse bg-surface-hover rounded ${className}`} />
 }
 
-const RELEVANCE_STYLES: Record<'HIGH' | 'MEDIUM' | 'LOW', { badge: string; dot: string }> = {
-  HIGH:   { badge: 'bg-success/15 text-success border border-success/30',   dot: 'bg-success' },
-  MEDIUM: { badge: 'bg-warning/15 text-warning border border-warning/30',   dot: 'bg-warning' },
-  LOW:    { badge: 'bg-border/40 text-text-secondary border border-border',  dot: 'bg-text-secondary' },
+const RELEVANCE_STYLES: Record<'HIGH' | 'MEDIUM' | 'LOW' | 'NONE', { badge: string; dot: string }> = {
+  HIGH:   { badge: 'bg-success/15 text-success border border-success/30',          dot: 'bg-success' },
+  MEDIUM: { badge: 'bg-warning/15 text-warning border border-warning/30',          dot: 'bg-warning' },
+  LOW:    { badge: 'bg-border/40 text-text-secondary border border-border',         dot: 'bg-text-secondary' },
+  NONE:   { badge: 'bg-border/20 text-text-secondary/60 border border-border/40',  dot: 'bg-text-secondary/40' },
 }
 
 // ── ProductCard ───────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ function ProductCard({
   regenerating: boolean
 }) {
   const [collapsed, setCollapsed] = useState(true)
-  const relevance = intel.relevanceScore as 'HIGH' | 'MEDIUM' | 'LOW'
+  const relevance = intel.relevanceScore as 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'
   const relStyle = RELEVANCE_STYLES[relevance] ?? RELEVANCE_STYLES.LOW
 
   return (
@@ -307,22 +308,38 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
     setRegenerating(prev => new Set(prev).add(slug))
     setError(null)
     try {
-      // Ensure product summary cache exists before generating intel
-      const refreshRes = await fetch(`/api/products/${slug}/refresh`, { method: 'POST' })
-      if (!refreshRes.ok) {
-        const refreshErr = await refreshRes.json().catch(() => ({}))
-        setError(`Failed to refresh ${productLabel(slug, productLabels)}: ${refreshErr.error ?? refreshRes.statusText}`)
-        return
-      }
+      // BKL-REG-11: Call generate directly using cached product summary.
+      // Do NOT call /refresh first — refresh scrapes live URLs and can time out (30-90s),
+      // silently blocking generation for all non-RHEL products. Product summaries are kept
+      // fresh by the background scheduler; intel generation does not require a fresh scrape.
       const genRes = await fetch(`/api/products/${slug}/intel/${encodeURIComponent(customerSlug)}/generate`, {
         method: 'POST',
       })
       if (!genRes.ok) {
         const genErr = await genRes.json().catch(() => ({}))
-        setError(`Failed to generate ${productLabel(slug, productLabels)} intel: ${genErr.error ?? genRes.statusText}`)
-        return
+        // If the error is "No cached summary", fall back to refreshing once
+        if (genErr.error?.includes('No cached summary')) {
+          const refreshRes = await fetch(`/api/products/${slug}/refresh`, { method: 'POST' })
+          if (!refreshRes.ok) {
+            const refreshErr = await refreshRes.json().catch(() => ({}))
+            setError(`Failed to refresh ${productLabel(slug, productLabels)}: ${refreshErr.error ?? refreshRes.statusText}`)
+            return
+          }
+          // Retry generate after refresh
+          const retryRes = await fetch(`/api/products/${slug}/intel/${encodeURIComponent(customerSlug)}/generate`, {
+            method: 'POST',
+          })
+          if (!retryRes.ok) {
+            const retryErr = await retryRes.json().catch(() => ({}))
+            setError(`Failed to generate ${productLabel(slug, productLabels)} intel: ${retryErr.error ?? retryRes.statusText}`)
+            return
+          }
+        } else {
+          setError(`Failed to generate ${productLabel(slug, productLabels)} intel: ${genErr.error ?? genRes.statusText}`)
+          return
+        }
       }
-      // Refresh just this product
+      // Fetch updated result (handles both successful generate and NONE-score results)
       const res = await fetch(`/api/products/${slug}/intel/${encodeURIComponent(customerSlug)}`)
       if (res.ok) {
         const data: CustomerProductIntel = await res.json()
@@ -343,16 +360,9 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
     setGeneratingAll(true)
     setError(null)
     try {
-      // Refresh all product summary caches first
-      const refreshResults = await Promise.allSettled(
-        productSlugs.map(slug => fetch(`/api/products/${slug}/refresh`, { method: 'POST' }))
-      )
-      const failedRefreshes = refreshResults
-        .map((r, i) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok) ? productSlugs[i] : null)
-        .filter(Boolean)
-      if (failedRefreshes.length > 0) {
-        setError(`Warning: failed to refresh caches for ${failedRefreshes.join(', ')}. Generating with available data.`)
-      }
+      // BKL-REG-11: Call generate-all directly without pre-refreshing product summaries.
+      // Summaries are kept fresh by background scheduler; pre-refresh causes serial 30-90s
+      // scrape timeouts that block intel generation for all non-RHEL products.
       const genRes = await fetch(`/api/products/intel/${encodeURIComponent(customerSlug)}/generate-all`, {
         method: 'POST',
       })
@@ -371,9 +381,11 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
   }
 
   // Determine which products have visible intel (non-NONE cached) vs. uncached
+  // BKL-REG-11: Include NONE-scored results in visible slugs so they render as "Not relevant"
+  // rather than silently disappearing. Users need to see the result and be able to regenerate.
   const visibleSlugs = productSlugs.filter(slug => {
     const data = intel[slug]
-    return data !== null && data !== undefined && data.relevanceScore !== 'NONE'
+    return data !== null && data !== undefined
   })
   const uncachedSlugs = productSlugs.filter(slug => intel[slug] === null || intel[slug] === undefined)
 
@@ -403,8 +415,8 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-accent" />
           <h2 className="text-sm font-semibold text-text-primary">Product Intelligence</h2>
-          {visibleSlugs.length > 0 && (
-            <span className="text-xs text-text-secondary">{visibleSlugs.length}</span>
+          {visibleSlugs.filter(s => intel[s]?.relevanceScore !== 'NONE').length > 0 && (
+            <span className="text-xs text-text-secondary">{visibleSlugs.filter(s => intel[s]?.relevanceScore !== 'NONE').length}</span>
           )}
         </div>
         <button
@@ -431,7 +443,12 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
 
       {/* Product cards + uncached stubs */}
       <div className="p-4 space-y-3">
-        {/* Cached cards with non-NONE relevance */}
+        {/* All cached product cards (including NONE-scored — visible so user can see result and regenerate) */}
+        {visibleSlugs.length === 0 && uncachedSlugs.length === productSlugs.length && (
+          <p className="text-xs text-text-secondary mb-3">
+            Generate product talking points for {customerName} based on their subscriptions, cases, and product roadmaps.
+          </p>
+        )}
         {visibleSlugs.map(slug => (
           <ProductCard
             key={slug}
@@ -446,11 +463,6 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
         {/* Uncached products — always visible with individual Generate button */}
         {uncachedSlugs.length > 0 && (
           <div className="space-y-2">
-            {visibleSlugs.length === 0 && (
-              <p className="text-xs text-text-secondary mb-3">
-                Generate product talking points for {customerName} based on their subscriptions, cases, and product roadmaps.
-              </p>
-            )}
             {uncachedSlugs.map(slug => (
               <div key={slug} className="flex items-center justify-between py-2 px-3 bg-bg rounded-lg border border-border/60">
                 <span className="text-sm font-medium text-text-secondary">{productLabel(slug, productLabels)}</span>
