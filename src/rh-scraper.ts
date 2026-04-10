@@ -56,6 +56,8 @@ export interface ScrapeOptions {
   cachePath: string
   /** Optional callback checked between accounts — return true to abort early */
   shouldCancel?: () => boolean
+  /** BKL-UX55: reverse map accountNumber → customerName for stamping cases at scrape time */
+  accountToCustomer?: Map<string, string>
 }
 
 // ── Long-lived context + page ─────────────────────────────────────────────────
@@ -314,7 +316,9 @@ async function persistSessionState(): Promise<void> {
   try {
     const state = await _context.storageState()
     await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
-  } catch { /* non-fatal */ }
+  } catch (e: any) {
+    console.warn(`[rh-scraper] persistSessionState failed: ${e?.message ?? e}`)
+  }
 }
 
 /**
@@ -446,7 +450,7 @@ async function checkForSessionExpiry(page: { url(): string; waitForURL(p: string
 // ── Main scrape function ──────────────────────────────────────────────────────
 
 export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]> {
-  const { accountNumbers, profileDir, cachePath, shouldCancel } = options
+  const { accountNumbers, profileDir, cachePath, shouldCancel, accountToCustomer } = options
 
   // Ensure long-lived context is open
   await initScrapeContext(profileDir)
@@ -664,6 +668,7 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
       if (seenCaseNumbers.has(c.caseNumber)) continue  // skip duplicate (pagination overlap)
       seenCaseNumbers.add(c.caseNumber)
       const severityNum = String(c.severity).match(/^(\d)/)?.[1] ?? c.severity
+      const customerName = accountToCustomer?.get(c.accountNumber) ?? undefined
       allCases.push({
         caseNumber: c.caseNumber,
         summary: c.summary,
@@ -672,6 +677,7 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
         accountNumber: c.accountNumber,
         daysOpen: 0,
         product: c.product || undefined,
+        customerName,
       } satisfies SupportCase)
     }
   }
@@ -1063,14 +1069,21 @@ export async function discoverAccountNumberByName(
 
       if (inputVisible) {
         await accountInput.click()
-        await page.waitForTimeout(500)
+        // fill() implicitly focuses the element — no fixed wait needed after click
         // Normalize search input: replace hyphens with spaces so "HOSPITAL-SAN DIEGO"
         // matches portal entries like "Hospital San Diego"
         const normalizedSearchName = customerName.replace(/-/g, ' ')
         await accountInput.fill(normalizedSearchName)
 
-        // Wait for dropdown to update after typing
-        await page.waitForTimeout(1_500)
+        // BKL-RH-PERF-01: Wait for dropdown results instead of fixed delay.
+        // Fires immediately when results appear (fast path) or falls through after 2s (slow/empty path).
+        const dropdownWaitSelector = '[role="option"], [role="menuitem"], li.pf-v6-c-menu__item, li.pf-v6-c-select__menu-item, [role="listbox"] li, .pf-v5-c-select__menu li'
+        const waitForDropdown = () => page.waitForFunction(
+          (sel: string) => document.querySelectorAll(sel).length > 0,
+          dropdownWaitSelector,
+          { timeout: 2_000 }
+        ).catch(() => {})
+        await waitForDropdown()
 
         // Read dropdown items — PF v6 renders them as list items with account name + number in parens.
         // Confirmed from live portal: entries look like "First American Financial Corporation (12653942)"
@@ -1128,7 +1141,7 @@ export async function discoverAccountNumberByName(
           const fullNorm = normalize(customerName)
           if (strippedNorm !== fullNorm) {
             await accountInput.fill(strippedName)
-            await page.waitForTimeout(1_500)
+            await waitForDropdown()
             let dropdownItems2 = null
             for (const sel of dropdownSelectors) {
               try {
@@ -1173,7 +1186,7 @@ export async function discoverAccountNumberByName(
               if (coreNorm !== strippedNorm && coreNorm.length >= 4) {
                 const coreName = strippedName.replace(/[\s,]*(usa|u\.s\.a|us|america|canada|international|global)\s*$/i, '').trim()
                 await accountInput.fill(coreName)
-                await page.waitForTimeout(1_500)
+                await waitForDropdown()
                 let dropdownItems3 = null
                 for (const sel of dropdownSelectors) {
                   try {

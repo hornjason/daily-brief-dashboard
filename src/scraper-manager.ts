@@ -391,8 +391,26 @@ export async function runRhScrapeWithState(): Promise<void> {
     console.log(`[rh-scraper] name-searching portal for ${needsDiscovery.length} customers without account numbers…`)
     _rhDiscoveryProgress = { done: 0, total: needsDiscovery.length, current: null }
     const newNums: string[] = []
+    // BKL-RH-PERF-01: per-customer timing instrumentation
+    const discoveryWallStart = Date.now()
+    let customersSkipped = 0
+    let customersSearched = 0
+    let totalSearchMs = 0
     for (const customer of needsDiscovery) {
       try {
+        // BKL-RH-PERF-01: Negative cache — skip tombstoned customers until TTL expires
+        const now = new Date()
+        if ((customer as any).discoveryStatus === 'unresolvable' && (customer as any).discoverySkippedUntil) {
+          if (new Date((customer as any).discoverySkippedUntil) > now) {
+            console.log(`[rh-scraper] skipping "${customer.name}" — tombstoned until ${(customer as any).discoverySkippedUntil}`)
+            _rhDiscoveryProgress = { ..._rhDiscoveryProgress!, done: _rhDiscoveryProgress!.done + 1, current: null }
+            customersSkipped++
+            continue
+          }
+          // TTL expired — clear status and retry
+          serverState.patchCustomer(customer.name, { discoveryStatus: undefined, discoverySkippedUntil: undefined, discoveryFailures: 0 })
+        }
+
         // Use SF canonical alias (full name from source sheet) for portal search.
         // Always use FULL name (with INC, LLC, Corp etc.) — avoids false positives from
         // accounts in different regions or owned by different account teams.
@@ -403,12 +421,17 @@ export async function runRhScrapeWithState(): Promise<void> {
           continue
         }
         _rhDiscoveryProgress = { ..._rhDiscoveryProgress!, current: customer.name }
-        console.log(`[rh-scraper] searching portal for "${searchName}" (display: "${customer.name}")`)
+        const discoverStart = Date.now()
         const { accountNumbers: nums, cases: discoveredCases } = await discoverAccountNumberByName(searchName, RH_PROFILE_DIR)
+        const discoverMs = Date.now() - discoverStart
+        customersSearched++
+        totalSearchMs += discoverMs
+        console.log(`[rh-scraper] searching portal for "${searchName}" (display: "${customer.name}") — ${discoverMs}ms`)
 
         // Fold any cases found into the result set — cases are the primary goal
+        // BKL-UX55: Stamp customerName on name-discovered cases since we know the customer from the loop
         if (discoveredCases.length > 0) {
-          nameDiscoveredCases.push(...discoveredCases)
+          nameDiscoveredCases.push(...discoveredCases.map(c => ({ ...c, customerName: customer.name })))
           console.log(`[rh-scraper] ${customer.name}: found ${discoveredCases.length} cases via name search`)
         }
 
@@ -416,9 +439,25 @@ export async function runRhScrapeWithState(): Promise<void> {
         // No cap — sidebar autocomplete returns real accounts (ground truth), not false positives.
         // Multi-entity companies like Microchip Technology legitimately have 7+ account numbers.
         if (nums.length > 0) {
-          serverState.patchCustomer(customer.name, { accountNumbers: nums })
+          // BKL-RH-PERF-01: Clear failure count on successful discovery
+          serverState.patchCustomer(customer.name, { accountNumbers: nums, discoveryFailures: 0, discoveryStatus: undefined, discoverySkippedUntil: undefined })
           newNums.push(...nums)
           console.log(`[rh-scraper] ${customer.name}: saved account numbers ${nums.join(', ')}`)
+        } else if (discoveredCases.length === 0) {
+          // BKL-RH-PERF-01: Negative cache — increment failure count, tombstone after 3
+          const failures = ((customer as any).discoveryFailures ?? 0) + 1
+          if (failures >= 3) {
+            const skippedUntil = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+            serverState.patchCustomer(customer.name, {
+              discoveryFailures: failures,
+              discoveryStatus: 'unresolvable',
+              discoverySkippedUntil: skippedUntil,
+            })
+            console.log(`[rh-scraper] "${customer.name}" tombstoned after ${failures} failures — skipping until ${skippedUntil}`)
+          } else {
+            serverState.patchCustomer(customer.name, { discoveryFailures: failures })
+            console.log(`[rh-scraper] "${customer.name}" — failure ${failures}/3`)
+          }
         }
       } catch (e: any) {
         if (e instanceof SessionExpiredError) throw e
@@ -428,7 +467,10 @@ export async function runRhScrapeWithState(): Promise<void> {
     }
     _rhDiscoveryProgress = null
     accountNumbers = [...new Set([...accountNumbers, ...newNums])]
+    const discoveryWallMs = Date.now() - discoveryWallStart
+    const avgMs = customersSearched > 0 ? Math.round(totalSearchMs / customersSearched) : 0
     console.log(`[rh-scraper] name search done — ${newNums.length} new account numbers, ${nameDiscoveredCases.length} cases found`)
+    console.log(`[rh-scraper] discovery stats: wall=${discoveryWallMs}ms, skipped=${customersSkipped}, searched=${customersSearched}, avg=${avgMs}ms/customer`)
     await closeDiscoverPage()  // free the reused tab — no longer needed for discovery
   }
 
@@ -459,6 +501,13 @@ export async function runRhScrapeWithState(): Promise<void> {
   markRunning('rh-cases')
   try {
     console.log(`[rh-scraper] scraping ${accountNumbers.length} accounts…`)
+    // BKL-UX55: Build reverse map accountNumber → customerName for stamping cases
+    const accountToCustomer = new Map<string, string>()
+    for (const c of serverState.customers) {
+      for (const num of c.accountNumbers ?? []) {
+        accountToCustomer.set(String(num), c.name)
+      }
+    }
     // BKL-M50c: Wrap with wall-clock timeout to prevent 7+ min stalls
     const cases = await withTimeout(
       runRhScrape({
@@ -466,6 +515,7 @@ export async function runRhScrapeWithState(): Promise<void> {
         profileDir: RH_PROFILE_DIR,
         cachePath: RH_CASES_CACHE_PATH,
         shouldCancel: () => _rhScrapeCancelRequested,
+        accountToCustomer,
       }),
       RH_SCRAPE_TIMEOUT_MS(),
       'RH case scrape',

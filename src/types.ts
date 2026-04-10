@@ -36,6 +36,9 @@ export interface Customer {
   importedFrom?: string  // provenance tag: "territory-sheet", "manual", etc.
   inactive?: boolean     // true = AE removed but customer preserved (has account numbers or Drive folder)
   ccspCustomer?: boolean // true = customer appears in SF sheet only via CCSP opportunities
+  discoveryFailures?: number        // BKL-RH-PERF-01: count of consecutive failed discovery attempts
+  discoveryStatus?: 'unresolvable'  // BKL-RH-PERF-01: set after 3 failures
+  discoverySkippedUntil?: string    // BKL-RH-PERF-01: ISO timestamp — skip discovery until this date
 }
 
 export interface CustomerSubscription {
@@ -66,6 +69,7 @@ export interface SupportCase {
   product?: string
   /** 'name_match' = found via company name search; 'account_number' = found via direct account number scrape */
   casesSource?: 'name_match' | 'account_number'
+  customerName?: string  // BKL-UX55: resolved at scrape time from accountNumber → customer map
 }
 
 export interface Renewal {
