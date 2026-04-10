@@ -2653,6 +2653,13 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       if (supportablePollMsgRef.current) clearInterval(supportablePollMsgRef.current)
     }
   }, [supportableRunning])
+  // BKL-CCSP-01: Detect Tableau session expiry errors from backend
+  const isTableauSessionError = (err: string | null | undefined): boolean => {
+    if (!err) return false
+    const lower = err.toLowerCase()
+    return lower.includes('tableau session') || lower.includes('re-authenticate') || lower.includes('browser context')
+  }
+
   const ccspConnected = ccspStatus?.lastScrape && !ccspStatus?.running && !ccspStatus?.lastError
   const ccspRunning = ccspStatus?.running ?? false
   const tableauConnected = tableauStatus?.sessionValid ?? false
@@ -2913,11 +2920,43 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                 <p className="text-xs text-text-secondary">Cloud spend</p>
               )}
               {isRecent([ccspStatus?.lastSuccess, ccspStatus?.lastScrape].filter((t): t is string => !!t).sort().slice(-1)[0]) && <p className="text-xs text-success">✓ Synced just now</p>}
-              {ccspStatus?.lastError && <p className="text-xs text-critical">{ccspStatus.lastError}</p>}
+              {ccspStatus?.lastError && isTableauSessionError(ccspStatus.lastError) ? (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <p className="text-xs text-warning">Tableau session expired — re-authenticate via VNC to continue</p>
+                  <a
+                    href="http://localhost:6080/vnc.html?autoconnect=1&resize=scale"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 underline whitespace-nowrap"
+                    onClick={() => handleTableauConnect()}
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Open VNC
+                  </a>
+                </div>
+              ) : ccspStatus?.lastError ? (
+                <p className="text-xs text-critical">{ccspStatus.lastError}</p>
+              ) : null}
             </div>
             <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping || scraperRunning.ccsp} disabled={ccspRunning || scraperRunning.ccsp} label="Sync Now" />
           </div>
-          {ccspScrapeError && <p role="alert" className="text-xs text-critical pb-2">{ccspScrapeError}</p>}
+          {ccspScrapeError && isTableauSessionError(ccspScrapeError) ? (
+            <div className="flex items-center gap-1.5 pb-2">
+              <p className="text-xs text-warning">Tableau session expired — re-authenticate via VNC to continue</p>
+              <a
+                href="http://localhost:6080/vnc.html?autoconnect=1&resize=scale"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 underline whitespace-nowrap"
+                onClick={() => handleTableauConnect()}
+              >
+                <ExternalLink className="w-3 h-3" />
+                Open VNC
+              </a>
+            </div>
+          ) : ccspScrapeError ? (
+            <p role="alert" className="text-xs text-critical pb-2">{ccspScrapeError}</p>
+          ) : null}
 
           {/* Pipeline (Salesforce) */}
           <div className="flex items-center justify-between py-3">

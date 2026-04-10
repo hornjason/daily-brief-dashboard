@@ -16,7 +16,10 @@ IMAGE  := localhost/daily-brief-dashboard:latest
 REMOTE := ghcr.io/hornjason/daily-brief-dashboard:latest
 DATA   := $(CURDIR)/data
 
-.PHONY: up down logs build push rebuild ps setup release-patch release-minor release-major version
+.PHONY: up down logs build push rebuild ps setup release-patch release-minor release-major version \
+       dev-snapshot dev-up dev-down dev-logs \
+       demo-snapshot demo-up demo-down demo-logs \
+       all-down all-ps
 
 up: down
 	podman run -d \
@@ -86,3 +89,72 @@ setup:
 	  echo "⚠️  WARNING: REDHAT_OFFLINE_TOKEN is still the placeholder — edit .env before running"; \
 	fi
 	@echo "Next steps: Run 'make rebuild' then open http://localhost:7777 to complete setup"
+
+# ── Dev environment (port 7778) ──────────────────────────────────────────────
+dev-snapshot:
+	@echo "Syncing production data to dev..."
+	rsync -a --delete $(CURDIR)/data/ $(CURDIR)/data-dev/
+	@echo "Dev snapshot ready at data-dev/"
+
+dev-up: dev-down
+	@test -f $(CURDIR)/data-dev/config/aes.json || (echo "ERROR: Run 'make dev-snapshot' first" && exit 1)
+	podman run -d \
+	  -p 7778:7777 \
+	  -p 127.0.0.1:6081:6080 \
+	  -v $(CURDIR)/data-dev:/data:Z \
+	  --env-file .env \
+	  -e PORT=7777 \
+	  -e CONFIG_DIR=/data/config \
+	  -e CACHE_DIR=/data/cache \
+	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  --shm-size=2g \
+	  --memory=8g \
+	  --name pai-dashboard-dev \
+	  $(IMAGE)
+	@echo "Dev container running at http://localhost:7778"
+
+dev-down:
+	podman stop pai-dashboard-dev 2>/dev/null || true
+	podman rm   pai-dashboard-dev 2>/dev/null || true
+
+dev-logs:
+	podman logs -f pai-dashboard-dev
+
+# ── Demo environment (port 7779, frozen) ─────────────────────────────────────
+demo-snapshot: demo-down
+	@echo "Freezing production data for demo..."
+	rsync -a --delete $(CURDIR)/data/ $(CURDIR)/data-demo/
+	podman tag $(IMAGE) localhost/daily-brief-dashboard:demo-latest
+	@echo "Demo snapshot ready. Image tagged demo-latest. Run 'make demo-up' to start."
+
+demo-up: demo-down
+	@test -f $(CURDIR)/data-demo/config/aes.json || (echo "ERROR: Run 'make demo-snapshot' first" && exit 1)
+	podman run -d \
+	  -p 7779:7777 \
+	  -p 127.0.0.1:6082:6080 \
+	  -v $(CURDIR)/data-demo:/data:ro,Z \
+	  --tmpfs /data/cache:size=512m \
+	  --tmpfs /data/rh-profile:size=256m \
+	  --env-file .env \
+	  -e PORT=7777 \
+	  -e CONFIG_DIR=/data/config \
+	  -e CACHE_DIR=/data/cache \
+	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  --shm-size=2g \
+	  --memory=8g \
+	  --name pai-dashboard-demo \
+	  localhost/daily-brief-dashboard:demo-latest
+	@echo "Demo container running at http://localhost:7779"
+
+demo-down:
+	podman stop pai-dashboard-demo 2>/dev/null || true
+	podman rm   pai-dashboard-demo 2>/dev/null || true
+
+demo-logs:
+	podman logs -f pai-dashboard-demo
+
+# ── All environments ──────────────────────────────────────────────────────────
+all-down: down dev-down demo-down
+
+all-ps:
+	@podman ps --filter "name=pai-dashboard" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

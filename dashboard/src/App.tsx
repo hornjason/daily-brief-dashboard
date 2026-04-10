@@ -50,9 +50,10 @@ const PRODUCT_CASE_KEYWORDS: Record<string, string[]> = {
   'Developer Subscriptions': ['developer subscription'],
 }
 
-function caseMatchesProducts(caseProduct: string, selectedLabels: string[]): boolean {
-  if (!caseProduct) return false
-  const lower = caseProduct.toLowerCase()
+function caseMatchesProducts(caseProduct: string | string[], selectedLabels: string[]): boolean {
+  const productStr = Array.isArray(caseProduct) ? (caseProduct[0] ?? '') : (caseProduct ?? '')
+  if (!productStr) return false
+  const lower = productStr.toLowerCase()
   for (const label of selectedLabels) {
     const keywords = PRODUCT_CASE_KEYWORDS[label]
     if (keywords) {
@@ -372,7 +373,7 @@ function Dashboard() {
     if (productFilterSelected.length > 0) {
       accounts = accounts.filter(a =>
         a.products?.some(p =>
-          productFilterSelected.includes(normalizeProductName(stripProductName(p.productDescription)))
+          p.productDescription && productFilterSelected.includes(normalizeProductName(stripProductName(p.productDescription)))
         )
       )
     }
@@ -454,8 +455,7 @@ function Dashboard() {
           : undefined
         }
         productAlertCount={productAlertCount}
-        viewMode={viewMode}
-        onViewModeChange={handleViewModeChange}
+        viewMode="asa"
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
@@ -581,7 +581,7 @@ function Dashboard() {
             )}
 
             {/* Morning Summary (R06) — hidden in product view */}
-            {viewMode === 'asa' && <MorningSummary matchingCustomers={productFilterSelected.length > 0 ? new Set(filteredAccounts.map(a => a.name)) : undefined} />}
+            <MorningSummary matchingCustomers={productFilterSelected.length > 0 ? new Set(filteredAccounts.map(a => a.name)) : undefined} />
 
             {/* Top Actions (BKL-F10a, BKL-F10b) */}
             <TopActionsPanel actions={topActions} />
@@ -593,7 +593,7 @@ function Dashboard() {
 
             {/* Pipeline */}
             <section id="section-pipeline" data-section="section-pipeline">
-              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} />
+              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} selectedProducts={productFilterSelected} />
             </section>
 
             {/* Cloud Spend — hide when AE filter yields no customers */}

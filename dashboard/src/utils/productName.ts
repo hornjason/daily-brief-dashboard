@@ -6,6 +6,7 @@ import type { AccountInfo } from '../types'
  * "Red Hat Enterprise Linux Extended Life Cycle Support (Physical or Virtual Nodes)" -> "Enterprise Linux Extended Life Cycle Support"
  */
 export function stripProductName(raw: string): string {
+  if (!raw) return ''
   let name = raw.trim()
   // Remove "Red Hat " prefix (case-insensitive)
   if (name.toLowerCase().startsWith('red hat ')) {
@@ -38,6 +39,7 @@ export function extractProductNames(account: AccountInfo): string[] {
  * First match wins, case-insensitive.
  */
 export function normalizeProductName(raw: string): string {
+  if (!raw) return ''
   const lower = raw.toLowerCase()
   // Lifecycle / packaging qualifiers
   if (lower.includes('beta')) return 'Beta'

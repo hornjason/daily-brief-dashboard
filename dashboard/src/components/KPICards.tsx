@@ -122,7 +122,7 @@ interface KPICardsProps {
   /** All accounts unfiltered — for showing "filtered / total" display */
   allAccounts?: AccountInfo[]
   /** Case-to-product matching function from App */
-  caseMatchesProducts?: (caseProduct: string, selectedLabels: string[]) => boolean
+  caseMatchesProducts?: (caseProduct: string | string[], selectedLabels: string[]) => boolean
 }
 
 function rhTimeAgo(isoString: string): string {
@@ -138,6 +138,23 @@ function rhTimeAgo(isoString: string): string {
 export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory, selectedProducts, allCases, allAccounts, caseMatchesProducts }: KPICardsProps) {
   const [casesOpen, setCasesOpen] = useState(false)
   const [sev1Open, setSev1Open] = useState(false)
+
+  // Enrich cases with customerName via reverse lookup (accountNumber → customer name)
+  // The case cache never stores customerName, so we derive it client-side (BKL-UX55)
+  const enrichedCases = useMemo(() => {
+    const src = allAccounts ?? accounts
+    if (!src?.length) return cases
+    const numToName = new Map<string, string>()
+    for (const acct of src) {
+      for (const num of acct.accountNumbers ?? []) {
+        numToName.set(String(num), acct.name)
+      }
+    }
+    return cases.map(c => ({
+      ...c,
+      customerName: c.customerName ?? numToName.get(String(c.accountNumber)),
+    }))
+  }, [cases, accounts, allAccounts])
   const [redOpen, setRedOpen] = useState(false)
   const [amberOpen, setAmberOpen] = useState(false)
   const [techWinsOpen, setTechWinsOpen] = useState(false)
@@ -233,6 +250,21 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
   }, [cases, selectedProducts, isProductFiltered, caseMatchesProducts])
   const totalCaseCount = isProductFiltered ? (allCases?.length ?? cases.length) : cases.length
 
+  // BKL-UX56: Sev1 count filtered by product
+  const filteredSev1Count = useMemo(() => {
+    if (!isProductFiltered || !caseMatchesProducts) return kpis?.sev1Count ?? 0
+    return cases.filter(c => c.severity === '1' && caseMatchesProducts(c.product ?? '', selectedProducts!)).length
+  }, [cases, selectedProducts, isProductFiltered, caseMatchesProducts, kpis?.sev1Count])
+  const totalSev1Count = isProductFiltered ? (kpis?.sev1Count ?? 0) : 0
+
+  // BKL-UX56: Tech wins filtered by product
+  const filteredTechWins = useMemo(() => {
+    if (!isProductFiltered) return techWinsNeeded
+    return techWinsNeeded.filter(o =>
+      o.products.some(raw => selectedProducts!.includes(normalizeProductName(stripProductName(raw))))
+    )
+  }, [techWinsNeeded, selectedProducts, isProductFiltered])
+
   const redCount = redRows.length
   const amberCount = amberRows.length
 
@@ -282,7 +314,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       <KPICard
         key="sev1Cases"
         label="Sev 1 Cases"
-        value={kpis?.sev1Count ?? 0}
+        value={isProductFiltered ? `${filteredSev1Count} / ${totalSev1Count}` : (kpis?.sev1Count ?? 0)}
         icon={<AlertTriangle className="w-5 h-5" />}
         accent="#F85149"
         loading={loading}
@@ -352,11 +384,11 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       <KPICard
         key="techWinsNeeded"
         label="Tech Wins Needed"
-        value={loading ? 0 : techWinsNeeded.length}
+        value={loading ? 0 : isProductFiltered ? `${filteredTechWins.length} / ${techWinsNeeded.length}` : techWinsNeeded.length}
         icon={<Trophy className="w-5 h-5" />}
-        accent={techWinsNeeded.length > 0 ? '#D29922' : '#3FB950'}
+        accent={filteredTechWins.length > 0 ? '#D29922' : '#3FB950'}
         loading={loading}
-        onClick={techWinsNeeded.length > 0 ? () => setTechWinsOpen(true) : undefined}
+        onClick={filteredTechWins.length > 0 ? () => setTechWinsOpen(true) : undefined}
         sparklineData={sparklineHistory?.techWinsNeeded}
       />
     ),
@@ -380,8 +412,8 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       )}
 
       {/* Extracted modal components (BKL-UX46) */}
-      <KPICasesModal open={casesOpen} onClose={() => setCasesOpen(false)} cases={cases} />
-      <KPISev1Modal open={sev1Open} onClose={() => setSev1Open(false)} cases={cases} />
+      <KPICasesModal open={casesOpen} onClose={() => setCasesOpen(false)} cases={enrichedCases} />
+      <KPISev1Modal open={sev1Open} onClose={() => setSev1Open(false)} cases={enrichedCases} />
 
       {redOpen && (
         <KPIRenewalsModal
@@ -405,7 +437,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
         />
       )}
 
-      <KPITechWinsModal open={techWinsOpen} onClose={() => setTechWinsOpen(false)} opps={techWinsNeeded} />
+      <KPITechWinsModal open={techWinsOpen} onClose={() => setTechWinsOpen(false)} opps={isProductFiltered ? filteredTechWins : techWinsNeeded} />
     </>
   )
 }

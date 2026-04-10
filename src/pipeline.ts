@@ -40,19 +40,25 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
   const renewalByOpp  = new Map<string, boolean>()
   for (const row of rawRows.slice(1)) {
     if (!row.some((v: any) => v != null && v !== '')) continue
-    const oppNum = String(col(row, 'Opportunity Number') ?? '')
+    const oppId_  = String(col(row, 'Opportunity ID') ?? '').trim()
+    const oppNum  = String(col(row, 'Opportunity Number') ?? '').trim()
+    const acctN   = String(col(row, 'Account Name') ?? '').trim()
+    const oppN    = String(col(row, 'Opportunity Name') ?? '').trim()
+    const closeR  = col(row, 'Close Date')
+    const closeK  = closeR instanceof Date ? closeR.toISOString().slice(0, 10) : String(closeR ?? '').slice(0, 10)
+    const key     = oppId_ || oppNum || `${acctN}|${oppN}|${closeK}`
+    if (!key) continue
     const desc   = String(col(row, 'Product Description') ?? '').trim()
-    if (!oppNum) continue
-    const arr = productsByOpp.get(oppNum) ?? []
+    const arr = productsByOpp.get(key) ?? []
     if (desc && !arr.includes(desc)) arr.push(desc)
-    productsByOpp.set(oppNum, arr)
+    productsByOpp.set(key, arr)
     // Accumulate renewal across all product rows — if any row is a renewal, the opp is a renewal
-    if (!renewalByOpp.get(oppNum)) {
+    if (!renewalByOpp.get(key)) {
       const r = String(col(row, 'Renewal') ?? '').toLowerCase().trim()
       const isRenewalField = r === '1' || r === 'true' || r === 'yes' || (r.includes('included') && !r.includes('not'))
-      const name = String(col(row, 'Opportunity Name') ?? '').toLowerCase()
+      const name = oppN.toLowerCase()
       const isRenewalName = /\brenewal\b|\brenew\b/.test(name)
-      if (isRenewalField || isRenewalName) renewalByOpp.set(oppNum, true)
+      if (isRenewalField || isRenewalName) renewalByOpp.set(key, true)
     }
   }
 
@@ -64,8 +70,17 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
     if (!row.some((v: any) => v != null && v !== '')) continue
 
     const oppNumber = String(col(row, 'Opportunity Number') ?? '')
-    if (seen.has(oppNumber)) continue
-    seen.add(oppNumber)
+    const oppId     = String(col(row, 'Opportunity ID') ?? '').trim()
+    const oppName   = String(col(row, 'Opportunity Name') ?? '').trim()
+    const acctName  = String(col(row, 'Account Name') ?? '').trim()
+    const closeDateRaw = col(row, 'Close Date')
+    const closeKey  = closeDateRaw instanceof Date
+      ? closeDateRaw.toISOString().slice(0, 10)
+      : String(closeDateRaw ?? '').slice(0, 10)
+    // Use oppId or oppNumber when available; fallback to accountName+oppName+closeDate
+    const dedupKey  = oppId || oppNumber || `${acctName}|${oppName}|${closeKey}`
+    if (seen.has(dedupKey)) continue
+    seen.add(dedupKey)
 
     const fc = String(col(row, 'Forecast Category') ?? '').trim()
     const rawAcv = String(col(row, 'ACV Opportunity') ?? '').replace(/[^0-9.-]/g, '')
@@ -88,10 +103,10 @@ export function parsePipelineRows(rawRows: any[][]): PipelineRecord[] {
       closeDate,
       forecastCategory: fc,
       owner:            String(col(row, 'Opportunity Owner') ?? '').trim(),
-      renewal:          renewalByOpp.get(oppNumber) ?? false,
+      renewal:          renewalByOpp.get(dedupKey) ?? false,
       offeringGroup:    String(col(row, 'Offering Group') ?? '').trim(),
       probability:      Number(col(row, 'Probability (%)') ?? 0),
-      products:         productsByOpp.get(oppNumber) ?? [],
+      products:         productsByOpp.get(dedupKey) ?? [],
       territory:        rawTerritory || undefined,  // BKL-SF-01: territory-based AE matching
     })
   }

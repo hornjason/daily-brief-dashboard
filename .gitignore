@@ -59,5 +59,9 @@ dashboard/.playwright-cli/
 # Claude worktrees
 .claude/
 
+# Dev/demo data directories — ephemeral snapshots of production data (BKL-UX59)
+data-dev/
+data-demo/
+
 # Unsanctioned deploy files — make rebuild is the only sanctioned deploy method (BKL-H01)
 docker-compose.yml

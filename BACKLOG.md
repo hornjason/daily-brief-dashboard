@@ -5283,7 +5283,7 @@ Files: dashboard/src/components/ (status indicators), src/scraper-manager.ts
 Description: UI shows "Synced just now" success status when the background queue accepts a scrape task, but the actual scrape may fail silently with 0 records. Status text should reflect actual data written (row count, timestamp of last successful write), not just queue acceptance. Users see green checkmarks on stale or empty data.
 
 ### BKL-CCSP-01 | No Tableau re-auth prompt on expired session
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: MEDIUM
 Priority: P2
 Size: M
@@ -5343,27 +5343,42 @@ Description: All 9 AE CCSP Google Sheets show `<2 rows` across every tab. The cc
 Decision: OPEN — investigating root cause. Browser scrape queued and running.
 
 ### BKL-SF-01 | SF Pipeline returning only 1 record — browser scraper not populating sheets for new pod
-Status: 🟡 IN PROGRESS  
+Status: ✅ DONE — 2026-04-10
 Severity: HIGH
 Priority: P1
 Size: M
 Source: 2026-04-10 — Jason reported; pipeline-data.json confirms 1 record only
-Files: src/sf-scraper.ts, src/scrape-api.ts, data/cache/pipeline-data.json
-Description: SF Pipeline cache contains only 1 opportunity record (Applied Medical Resources Corp). All 9 AE pipeline sheets may not be populated for the new SW pod, or the AE name filter is still not matching correctly. Circuit breaker reset on auth event suggests SF session was active. Browser scrape queued and running — need to verify it produces records and identify why only 1 survived the AE filter after the Alex/Alexander prefix-match fix.
-Decision: OPEN — investigating root cause. Browser scrape queued and running.
+Files: src/sf-scraper.ts, src/pipeline.ts, src/scrape-api.ts
+Root cause: Two bugs found and fixed:
+  1. KEEP_COLS in sf-scraper.ts dropped "Opportunity Territory Name" before territory filter could read it — fell back to owner-name matching (functional but no territory routing).
+  2. parsePipelineRows in pipeline.ts deduplicated by Opportunity Number — when oppNumber is empty (SF reports often omit it), all rows mapped to the same "" key; only the first row per file survived. 8 records returned from 1068 scraped rows.
+Fix: (1) Added "Opportunity Territory Name" to both KEEP_COLS sets in sf-scraper.ts. (2) parsePipelineRows now uses oppId || oppNumber || accountName|oppName|closeDate as dedup key. SF scrape re-ran, 1068 rows written to 9 AE sheets, pipeline refresh returned 481 records (245 open, $28.1M ACV).
+Decision: DONE — verified 2026-04-10. Run another SF scrape to populate territory column now that KEEP_COLS preserves it.
 
 ### BKL-CAL-06 | Calendar false-positive customer matches via single domain attendee
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-04-10 (corroboration gate + TITLE_STOPWORDS expansion)
 Severity: HIGH
 Priority: P1
 Size: S
 Source: 2026-04-10 — Jason screenshot: "Virt Power 90" labeled Tucson Electric Power, "Upgrade troubleshooting" labeled U S Epson
 Files: src/google.ts (fetchCalendar, matchedCustomers logic)
-Description: When any single external attendee email matches a customer domain, the entire meeting is classified as a customer meeting. Examples: "Virt Power 90" (internal Red Hat enablement training) labeled as Tucson Electric Power because a tep.com attendee was on the invite. "Upgrade troubleshooting" labeled as U S Epson because sharanya.raja@epson.com was an attendee. These are not customer-facing meetings — they just happen to have one customer-domain attendee. Fix: require either (a) multiple external attendees from the customer domain, OR (b) the event title contains a customer name signal alongside the domain match, OR (c) a minimum percentage of external attendees from the domain. The current logic triggers on ANY single external email match which is too aggressive.
-Decision: OPEN — investigating heuristic. Sending Marcus to fix.
+Root cause: Single domain attendee triggered full customer classification. Second fix round: TITLE_STOPWORDS was missing directional/generic words ("west", "east", "north", etc.) — "Insurance Of West" matched "West Corp ASA Team" via "west" keyword.
+Fix: (1) Corroboration gate: domain match requires 2+ attendees OR title keyword from customer name. (2) Expanded TITLE_STOPWORDS to include directional words (west/east/north/south/central/mid/pacific/american/western/eastern/northern/southern) and generic terms (corp/enterprise/digital/data/cloud/net/connect). Deployed 2026-04-10.
+Decision: DONE — monitoring for remaining false positives. See BKL-CAL-07 for follow-on bug.
+
+### BKL-CAL-07 | Calendar auto-domain match fires on single-char first-word of customer name
+Status: ✅ DONE — 2026-04-10
+Severity: HIGH
+Priority: P1
+Size: XS
+Source: 2026-04-10 — Jason screenshot: "Illumio/Redhat Openshift cadence" still tagged as U S Epson after BKL-CAL-06 fix
+Files: src/google.ts (fetchCalendar, matchedCustomers — auto-domain path)
+Root cause: Auto-domain matching uses `co.includes(normAlpha(c.name.split(/[\s,]/)[0]))` — first word of "U S Epson" is "U", normalized to "u", which substring-matches inside "illumio". Any meeting with 2+ @illumio.com attendees triggers U S Epson via auto-domain + corroboration gate passes on attendee count.
+Fix: Add `firstWord.length > 2` guard to auto-domain filter so single/double-char first-words (initials like "U", "A", "B") cannot trigger auto-domain matching. One-line fix in google.ts.
+Decision: OPEN — needs Marcus, rebuild required.
 
 ### BKL-UX51 | Product filter (OCP/AAP/RHEL) causes dashboard to go black
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: HIGH
 Priority: P1
 Size: S
@@ -5381,3 +5396,130 @@ Source: 2026-04-10 — Marcus SF investigation
 Files: data/config/aes.json, src/scrape-api.ts (write-side AE filter), src/customer-routes.ts (filterToAEs)
 Description: AE named "TBH" (placeholder — real name unknown) has 14 customers but will never receive pipeline records. The AE name filter (both write-side and read-side) matches by first name prefix — "TBH" doesn't match any real person's first name in SF opportunity owner fields. TBH's pipeline sheet will always be empty. Fix: update "TBH" to the actual AE's name in aes.json, or implement a territory-based fallback for the pipeline filter.
 Decision: OPEN — requires knowing the real AE name for TERR01.
+
+### BKL-TEST-03 | Quinn testing wiped production customers.json — test isolation guard needed
+Status: ✅ DONE — 2026-04-10
+Severity: CRITICAL
+Priority: P0
+Size: M
+Source: 2026-04-10 — Quinn audit replaced customers.json with Acme Corp test fixture
+Files: src/setup-routes.ts or server.ts (__test/snapshot endpoint), QUINN-STANDARD.md
+Description: Quinn's full-system audit replaced customers.json with the Acme Corp test fixture, wiping 105 real customers. The snapshot/restore mechanism did not save state before testing. The __test/snapshot endpoint must be called BEFORE any test that modifies config state, and the restore must always run after. Additionally Quinn-standard must explicitly prohibit modifying customers.json or triggering any bootstrap/wipe flows during audits. Recovery required POST /api/admin/restore from Supportable sheets.
+Decision: OPEN — add hard guard: if customers.json contains real data (>1 customer), __test/restore must require explicit confirmation. Update QUINN-STANDARD.md to prohibit config-destructive operations.
+
+### BKL-CCSP-03 | CCSP shows stale AE data after customers.json wipe — cache not invalidated
+Status: ✅ DONE — 2026-04-10
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: 2026-04-10 — Jason reported CCSP shows old AEs after disk wipe
+Files: src/cache-layer.ts, src/customer-routes.ts, src/refresh-engine.ts, src/restore-routes.ts
+Fix: Added isCCSPCacheStale(currentSheetIds) to cache-layer.ts — compares cached fileIds against current AE ccspSheetId values. Read-path endpoints (/api/ccsp, brief generation) now check staleness before serving. refreshCCSP bypasses stale-overwrite guard when AE set changed. POST /api/admin/restore invalidates stale cache file. Deployed 2026-04-10.
+Decision: DONE.
+
+### BKL-TEST-05 | Sync Now buttons untested against empty cache — cold-start validation needed
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: 2026-04-10 — Jason: "test each sync now can sync properly by erasing the cache for ccsp and pipeline"
+Files: data/cache/ccsp-data.json, data/cache/pipeline-data.json, dashboard/src/pages/SetupPage.tsx
+Description: "Sync Now" for CCSP and SF Pipeline have never been validated against a fully empty cache (cold-start). The pipeline parser had a dedup bug (BKL-SF-01 root cause) that was masked because the cache always had prior data. Test procedure: (1) backup cache files, (2) delete ccsp-data.json and pipeline-data.json, (3) click Sync Now for each and verify the dashboard populates correctly, (4) verify no blank-screen or zero-record states appear. Run this once the current CCSP/pipeline fixes are stable.
+Decision: OPEN — manual validation test; defer until dashboard stabilizes post-fixes.
+
+### BKL-BOOT-03 | Single-AE bootstrap regression check — verify one-at-a-time bootstrap still works
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: M
+Source: 2026-04-10 — Jason: "we need to do a review to make sure if we go back to bootstrapping one ae at a time nothing has broken after doing all this work"
+Files: src/bootstrap-orchestrator.ts, src/setup-routes.ts, src/scrape-api.ts, dashboard/src/pages/SetupPage.tsx (setup wizard)
+Description: Significant changes have been made since the SW pod bootstrap (territory filter, domain waterfall, CCSP cache invalidation, pipeline parser, snapshot guard, CCSP re-auth prompt). Need to verify the full single-AE bootstrap flow still works end-to-end: (1) Setup Wizard creates AE entry + territory config, (2) Bootstrap wizard runs all 6 steps (Drive folder → customer folders → RH discovery/scrape → CCSP scrape → SF pipeline sync), (3) Post-bootstrap: domain inference, account intelligence batch, (4) Customer brief generates on first page view. Test against a real new AE or use a throwaway test AE. Compare against the runbook in CLAUDE.md "Adding a New AE" section.
+Decision: OPEN — run Quinn on setup + bootstrap flow with a test AE. Block any new pod bootstrap until this is validated.
+
+### BKL-UX54 | All customer health dots show amber — misleading
+Status: ✅ DONE — 2026-04-10
+Severity: HIGH
+Priority: P0
+Size: XS
+Source: 2026-04-10 — Jason: "all customer tiles show amber dot indicating unhealthy, this is misleading"
+Files: src/health-score.ts
+Root cause: `scoreMeetings()` and `scoreEmails()` always return score=50 (v1 placeholder — no real data). `scoreCases()` returns 50 when no account numbers. `scoreCloudSpend()` returns 50 when no CCSP cache. These "no data → 50" signals each had weights (0.15+0.15+0.25+0.10 = 0.65) dragging almost every customer's composite score into the 40–70 amber band. Even a perfectly healthy customer (no cases, good subscriptions, pipeline) scored ~75 — just barely green. Any customer with Sev3 cases or missing data landed at ~60, solidly amber.
+Fix: Added `isNoData(signal)` check in `computeHealthScore`. Subscores whose signal text indicates missing/placeholder data (v1 markers, "No cloud spend data", "No subscription data", "cannot match cases") are excluded from the weighted average. Remaining subscores are renormalized (divided by their combined weight). Falls back to all signals if everything is no-data.
+Decision: FIXED — 2026-04-10
+
+### BKL-UX53 | Product filter crashes with "e.toLowerCase is not a function" on every product
+Status: ✅ DONE — 2026-04-10
+Severity: HIGH
+Priority: P0
+Size: XS
+Source: 2026-04-10 — Jason: selecting any product filter shows "Something went wrong — e.toLowerCase is not a function"
+Files: dashboard/src/App.tsx, dashboard/src/components/KPICards.tsx
+Root cause: `caseMatchesProducts` typed `caseProduct` as `string` and called `.toLowerCase()` on it directly. But the RH Portal API returns `case_product` as an array in 18/27+ cases — that array value flows through the cache file unchanged and arrives at the frontend as `string[]`, crashing `.toLowerCase()`.
+Fix: Changed `caseMatchesProducts` signature to `string | string[]` and added `Array.isArray` normalization before `.toLowerCase()`. Updated matching prop type in KPICards.tsx.
+Decision: FIXED — 2026-04-10
+
+### BKL-UX59 | Demo + dev environment strategy — research first
+Status: 🟡 RESEARCH — before implementation
+Severity: LOW
+Priority: P3
+Size: L
+Source: 2026-04-10 — Jason: "copy a working container to another port to use as test bed for big changes like the new ui work. once tested promote to current container. setup true test bed environment"
+         Updated: Jason: "tag as research first — needs best practices on professional testing/dev env setup. goal: stable demo env accessible to others while we test on separate container"
+Files: Makefile, .env, data/ volume
+Description: Two distinct goals: (1) **Dev/test container** — isolated environment on port 7778 for testing big UI changes (e.g., BKL-UX52 multi-pod layout) before promoting to production on 7777; (2) **Demo environment** — stable, shareable container that external stakeholders can access while active development continues on a separate instance. Key research questions: (a) Should demo and dev share the same data volume or use separate snapshots? (b) What's the right image promotion workflow (tag-based? make target?)  (c) How do we keep demo data stable while production data syncs live? (d) Should demo be read-only? (e) Networking: is port-based isolation enough or do we need separate data dirs? Research before implementing — avoid baking in wrong assumptions.
+Decision: RESEARCH — spawn GrokResearcher or use WebSearch to investigate containerized dev/staging/demo environment patterns for single-user local setups. Produce a recommendation doc before any Makefile changes.
+
+### BKL-UX58 | Collapse ASA/Product view toggle — always use ASA view
+Status: ✅ DONE — 2026-04-10
+Severity: LOW
+Priority: P2
+Size: XS
+Source: 2026-04-10 — Jason: "collapse the two views product vs asa view, just make it all asa view but keep the product filters in place"
+Files: dashboard/src/components/Sidebar.tsx, dashboard/src/App.tsx
+Description: The ASA/Product toggle in the sidebar added a mode switch that showed different content. Jason wants a single unified view (ASA view always) with the product filter chips (AAP/OCP/RHEL) still functional. Removes cognitive overhead of switching modes.
+Fix: Removed both expanded and collapsed toggle button blocks from Sidebar.tsx. Hardcoded `viewMode="asa"` in App.tsx Sidebar call. Removed `onViewModeChange` prop from Sidebar. MorningSummary now always renders (removed `viewMode === 'asa'` gate). The `DashboardViewMode` type and `viewMode` prop remain in Sidebar for backward compat but are no longer user-controllable.
+Decision: FIXED — 2026-04-10
+
+### BKL-UX57 | Product filter: pipeline section doesn't update when product selected
+Status: ✅ DONE — 2026-04-10
+Severity: MEDIUM
+Priority: P2
+Size: M
+Source: 2026-04-10 — Jason screenshots showing pipeline data unchanged after selecting AAP
+Files: dashboard/src/components/PipelineSection.tsx, dashboard/src/App.tsx, src/dashboard-routes.ts
+Description: When a product chip (AAP, OCP, RHEL) is selected, the pipeline section (top opps, tech wins needed, by-stage breakdown) does not filter to show only pipeline opportunities that include the selected product. `PipelineOpp` type has `products: string[]` — client-side filtering is feasible. Need to: (1) pass `selectedProducts` to PipelineSection, (2) filter `topOpps`, `techWinsNeeded`, `byStage` in the component using the same `normalizeProductName` mapping used elsewhere.
+Decision: OPEN — feasible client-side; requires PipelineSection refactor + normalizeProductName integration
+
+### BKL-UX56 | Product filter: KPI tiles don't update for non-cases signals when product selected
+Status: ✅ DONE — 2026-04-10 (partial: Sev1 + Tech Wins filtered; Meetings Today/This Week not filterable — meetings have no product tags)
+Severity: MEDIUM
+Priority: P2
+Size: L
+Source: 2026-04-10 — Jason screenshots showing Sev1=0, Meetings Today=0 unchanged with AAP selected
+Files: src/dashboard-routes.ts (KPIs endpoint), dashboard/src/components/KPICards.tsx
+Description: When AAP product chip is selected, only the "Open Cases" KPI shows a filtered count (3/10). All other KPI tiles (Sev1 Cases, Meetings Today, Meetings This Week, Tech Wins Needed) pull from the `/api/kpis` aggregate which has no product awareness. The "Expiring Within 30 Days" and "Renewals in 30-90 Days" KPIs DO filter correctly (they use client-side account filtering). To fix the remaining tiles: either add product-filtered KPI endpoints, or move computation client-side using the filtered accounts + filtered cases.
+Decision: OPEN — needs scoping; Sev1 is feasible client-side from filtered cases; Meetings is not filterable by product (meetings don't have product tags)
+
+### BKL-UX55 | Support cases modal shows "Unknown" for all customer names
+Status: 🔴 BLOCKED — needs scraper change + account number discovery fix
+Severity: MEDIUM
+Priority: P1
+Size: XS
+Source: 2026-04-10 — Jason screenshot: Open Support Cases modal shows "Unknown" in Customer column for every case
+Files: dashboard/src/components/KPICards.tsx
+Root cause: `SupportCase.customerName` is never populated by the backend. The RH Portal case cache stores cases with account numbers but no customer name field. The modal fell back to `c.customerName ?? 'Unknown'` for every case.
+Attempted fix: Added `enrichedCases` reverse-lookup in KPICards. FAILED — all 105 customers have `accountNumbers: []` (empty). Account number discovery was never stored during bootstrap, so the map has nothing to match against.
+Root cause 1: `rh-scraper.ts` doesn't store `customerName` on case objects when it finds them per-customer. Requires scraper change (needs explicit Jason permission per CLAUDE.md).
+Root cause 2: `customers.json` has `accountNumbers: []` for all 105 customers — account number discovery step was never populated. Needs investigation into why account numbers aren't stored.
+Decision: BLOCKED — needs Jason's OK to modify rh-scraper.ts. Note the frontend enrichedCases code is harmless and stays in place for when account numbers are populated.
+
+### BKL-UX52 | Multi-AE / multi-pod UX design review — council session needed
+Status: 🟡 SPEC COMPLETE — implementation pending
+Severity: MEDIUM
+Priority: P2
+Size: XL
+Source: 2026-04-10 — Jason: "we need a top level UX layout that shows a professional dashboard that's easy to read and has relevant data for that many accounts / AEs"
+Files: dashboard/src/ (multiple pages and components)
+Description: With 9 AEs and 100+ customers, the current dashboard layout was designed for a smaller scale. As we approach 2-pod scale (~18 AEs, 200+ customers) the layout needs to be redesigned from the ground up for readability and professionalism.
+Decision: SPEC DONE — council session completed 2026-04-10. Design spec at `docs/UX-SPEC-MULTI-POD.md`. Implementation requires 4 phases: (1) backend multi-pod schema migration, (2) frontend pod tabs + AE grouping, (3) health dot + tooltip, (4) pod/AE level KPI tiles. Critical-path blocker: `data-sources.json` multi-pod schema must ship first.

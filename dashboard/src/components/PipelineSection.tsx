@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { TrendingUp, Calendar, Users, X, RefreshCw, AlertCircle } from 'lucide-react'
 import type { PipelineSummary, PipelineOpp, PipelineByQuarterStage } from '../types'
 import { formatRelTime, fmtCurrency as fmt } from '../lib/format'
+import { normalizeProductName, stripProductName } from '../utils/productName'
 import RelTime from './RelTime'
 import Modal from './Modal'
 
@@ -133,25 +134,51 @@ export function OppDetail({ opp, onClose }: { opp: PipelineOpp; onClose: () => v
   )
 }
 
+/** Check whether an opp's product list contains at least one product matching a selected label */
+function oppMatchesProducts(opp: PipelineOpp, selectedProducts: string[]): boolean {
+  if (selectedProducts.length === 0) return true
+  return opp.products.some(raw => selectedProducts.includes(normalizeProductName(stripProductName(raw))))
+}
+
 interface Props {
   data: PipelineSummary | null
   loading: boolean
   error?: string | null
   onRefresh?: () => void
+  selectedProducts?: string[]
 }
 
-export function PipelineSection({ data, loading, error, onRefresh }: Props) {
+export function PipelineSection({ data, loading, error, onRefresh, selectedProducts = [] }: Props) {
   const [activeOwner, setActiveOwner] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'acv' | 'date' | 'stage'>('acv')
   const [selectedOpp, setSelectedOpp] = useState<PipelineOpp | null>(null)
-  const totalAcv       = data?.totalAcv       ?? 0
-  const openCount      = data?.openCount      ?? 0
-  const renewalAcv     = data?.renewalAcv     ?? 0
-  const newAcv         = data?.newAcv         ?? 0
-  const byStage        = data?.byStage        ?? []
+
+  const productActive = selectedProducts.length > 0
+
+  // Apply product filter to opp lists
+  const allTopOpps     = data?.topOpps        ?? []
+  const allClosedOpps  = data?.closedOpps     ?? []
+  const topOpps        = productActive ? allTopOpps.filter(o => oppMatchesProducts(o, selectedProducts)) : allTopOpps
+  const closedOpps     = productActive ? allClosedOpps.filter(o => oppMatchesProducts(o, selectedProducts)) : allClosedOpps
+
+  // Recompute summary stats from filtered opps when product filter is active
+  const totalAcv       = productActive ? topOpps.reduce((s, o) => s + o.acv, 0) : (data?.totalAcv ?? 0)
+  const openCount      = productActive ? topOpps.length : (data?.openCount ?? 0)
+  const renewalAcv     = productActive ? topOpps.filter(o => o.renewal).reduce((s, o) => s + o.acv, 0) : (data?.renewalAcv ?? 0)
+  const newAcv         = productActive ? topOpps.filter(o => !o.renewal).reduce((s, o) => s + o.acv, 0) : (data?.newAcv ?? 0)
   const byOwner        = data?.byOwner        ?? []
-  const topOpps        = data?.topOpps        ?? []
-  const closedOpps     = data?.closedOpps     ?? []
+
+  // Recompute byStage from filtered opps when product filter is active
+  const byStage = productActive ? (() => {
+    const stageMap = new Map<string, { acv: number; count: number }>()
+    for (const o of topOpps) {
+      const slot = stageMap.get(o.forecastCategory) ?? { acv: 0, count: 0 }
+      slot.acv += o.acv
+      slot.count += 1
+      stageMap.set(o.forecastCategory, slot)
+    }
+    return [...stageMap.entries()].map(([stage, { acv, count }]) => ({ stage, acv, count }))
+  })() : (data?.byStage ?? [])
 
   const maxStageAcv = byStage.reduce((m, s) => Math.max(m, s.acv), 0)
   const maxOwnerAcv = byOwner.reduce((m, o) => Math.max(m, o.acv), 0)

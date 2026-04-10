@@ -35,8 +35,9 @@ const POD_SUMMARY_TTL = 30_000
 // ── Product name normalization ─────────────────────────────────────────────────
 // Strips "Red Hat " prefix and everything from the first comma onward.
 // Kept local to avoid a cross-package import from the dashboard UI bundle.
-function stripProductName(raw: string): string {
-  return raw.replace(/^Red Hat\s+/i, '').replace(/,.*$/, '').trim()
+function stripProductName(raw: string | string[]): string {
+  const s = Array.isArray(raw) ? raw[0] ?? '' : raw
+  return s.replace(/^Red Hat\s+/i, '').replace(/,.*$/, '').trim()
 }
 
 export function initDashboardRoutes(opts: {

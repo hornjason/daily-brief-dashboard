@@ -2,7 +2,7 @@ import { readFileSync } from 'fs'
 import type { Hono } from 'hono'
 import type { Customer } from './types.ts'
 import { aes, customers } from './server-state.ts'
-import { readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache } from './cache-layer.ts'
+import { readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, isCCSPCacheStale } from './cache-layer.ts'
 import { fetchCustomerSheetData, fetchCCSPData, batchFetchSubscriptions } from './sheets.ts'
 import { fetchPipelineData } from './pipeline.ts'
 import { checkFilesModified } from './drive-watcher.ts'
@@ -100,7 +100,9 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
   let ccspOk = false
   try {
     const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
-    if (records.length === 0 && (readCCSPCache()?.records?.length ?? 0) > 0) {
+    // BKL-CCSP-03: check if AE set changed — if so, don't keep stale cache even if new fetch is empty
+    const aeSetChanged = isCCSPCacheStale(aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!))
+    if (records.length === 0 && (readCCSPCache()?.records?.length ?? 0) > 0 && !aeSetChanged) {
       console.log(`[refresh:all] ccsp: got 0 records but cache has data — keeping existing cache`)
       ccspOk = true
     } else {
@@ -148,21 +150,27 @@ export async function refreshSubscriptions(force = false): Promise<void> {
 
 export async function refreshCCSP(force = false): Promise<void> {
   try {
+    const currentSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
+    let aeSetChanged = false
     if (!force) {
       const cached = readCCSPCache()
-      const currentSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
       // Mirror pipeline staleness check: if AE sheet IDs don't match cached fileIds, force refresh
       const cachedMatchesCurrent = cached?.fileIds?.length &&
         currentSheetIds.length === cached.fileIds.length &&
         currentSheetIds.every(id => cached.fileIds!.includes(id))
+      aeSetChanged = !cachedMatchesCurrent
       if (cachedMatchesCurrent && cached!.cachedAt) {
         const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
         if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
       }
+      if (aeSetChanged) {
+        console.log(`[refresh:ccsp] AE set changed — forcing full refresh (BKL-CCSP-03)`)
+      }
     }
     const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
     // Guard: don't overwrite populated cache with empty — quota failure returns [] silently
-    if (records.length === 0 && (readCCSPCache()?.records?.length ?? 0) > 0) {
+    // BKL-CCSP-03: bypass guard when AE set changed — 0 records is valid for a new AE set
+    if (records.length === 0 && (readCCSPCache()?.records?.length ?? 0) > 0 && !aeSetChanged && !force) {
       console.log(`[refresh:ccsp] got 0 records but cache has data — keeping existing cache`)
       return
     }

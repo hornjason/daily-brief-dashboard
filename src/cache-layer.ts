@@ -124,6 +124,35 @@ export function readCCSPCache(): { records: CCSPRecord[]; cachedAt: string; file
   }
 }
 
+/**
+ * BKL-CCSP-03: Check whether the CCSP cache is stale relative to the current AE set.
+ * Returns true if the cached fileIds do not exactly match the provided currentSheetIds
+ * (i.e., AEs were added, removed, or completely replaced since the cache was written).
+ */
+export function isCCSPCacheStale(currentSheetIds: string[]): boolean {
+  const cached = readCCSPCache()
+  if (!cached) return true  // no cache at all — stale by definition
+  const cachedIds = cached.fileIds ?? []
+  if (currentSheetIds.length !== cachedIds.length) return true
+  // Sort both for order-independent comparison
+  const sortedCurrent = [...currentSheetIds].sort()
+  const sortedCached = [...cachedIds].sort()
+  return sortedCurrent.some((id, i) => id !== sortedCached[i])
+}
+
+/**
+ * BKL-CCSP-03: Invalidate CCSP cache by removing the file.
+ * Called when AE set changes and cached data is known stale.
+ */
+export function invalidateCCSPCache(): void {
+  try {
+    unlinkSync(`${CACHE_DIR}/ccsp-data.json`)
+    console.log('[cache] invalidated stale CCSP cache (AE set changed)')
+  } catch {
+    // File may not exist — that's fine
+  }
+}
+
 export function writeCCSPCache(records: CCSPRecord[], fileIds: string[] = []): void {
   try {
     writeFileSync(`${CACHE_DIR}/ccsp-data.json`, JSON.stringify({ records, cachedAt: new Date().toISOString(), fileIds }), { mode: 0o600 })

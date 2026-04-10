@@ -203,12 +203,20 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
         return normAlpha(parts.length >= 2 ? parts.slice(0, -1).join('') : domain)
       }
 
+      // Escape regex metacharacters in keyword strings (Rook F2: prevents DoS from malformed customer names)
+      const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
       // Significant words from customer name (> 3 chars, no legal suffixes or generic words)
       const TITLE_STOPWORDS = new Set([
         'office', 'services', 'service', 'systems', 'system', 'solutions', 'solution',
         'group', 'national', 'international', 'company', 'management', 'global',
         'the', 'and', 'for', 'new', 'one', 'power', 'electric', 'energy', 'capital',
         'technology', 'technologies', 'health', 'financial', 'insurance',
+        // Directional / generic geography — too ambiguous for single-keyword corroboration
+        'west', 'east', 'north', 'south', 'central', 'mid', 'pacific', 'american', 'america',
+        'western', 'eastern', 'northern', 'southern',
+        // Other high-frequency false-positive triggers
+        'corp', 'enterprise', 'enterprises', 'digital', 'data', 'cloud', 'net', 'connect',
       ])
       const custKeywords = (name: string) =>
         name.toLowerCase()
@@ -223,7 +231,7 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           // A single external attendee from a customer domain is insufficient — require either
           // 2+ attendees from that domain OR a title keyword from the customer name.
           const titleCorroboration = (name: string) =>
-            custKeywords(name).some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(title))
+            custKeywords(name).some(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(title))
 
           // 1. Explicit domain config (exact suffix match)
           if (c.domain && externalAttendees.some((e) => e.endsWith(c.domain!))) {
@@ -234,9 +242,12 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
 
           // 2. Auto domain: company part of attendee email appears in customer name (or vice versa)
           const normCust = normAlpha(c.name)
+          const firstWord = normAlpha(c.name.split(/[\s,]/)[0])
           const autoDomainAttendees = externalAttendees.filter((e) => {
             const co = domainCompany(e)
-            return co.length > 3 && (normCust.includes(co) || co.includes(normAlpha(c.name.split(/[\s,]/)[0])))
+            // BKL-CAL-07: firstWord must be > 2 chars — single-char initials (e.g. "U" in "U S Epson")
+            // normalize to "u" which substring-matches inside unrelated domains (e.g. "illumio")
+            return co.length > 3 && (normCust.includes(co) || (firstWord.length > 2 && co.includes(firstWord)))
           })
           if (autoDomainAttendees.length > 0) {
             if (autoDomainAttendees.length >= 2 || titleCorroboration(c.name)) return true
@@ -247,11 +258,11 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           // Single-keyword matches cause too many false positives ("Dental" → "Delta Dental of California")
           const keywords = custKeywords(c.name)
           const titleNorm = title.toLowerCase()
-          const matchingKws = keywords.filter(kw => new RegExp(`\\b${kw}\\b`, 'i').test(titleNorm))
+          const matchingKws = keywords.filter(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(titleNorm))
           if (keywords.length >= 2 ? matchingKws.length >= 2 : matchingKws.length >= 1) return true
 
           // 4. Aliases: check title against aliases too
-          if (c.aliases?.some(alias => custKeywords(alias).some(kw => new RegExp(`\\b${kw}\\b`, 'i').test(titleNorm)))) return true
+          if (c.aliases?.some(alias => custKeywords(alias).some(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(titleNorm)))) return true
 
           return false
         })

@@ -19,7 +19,7 @@ import { google } from 'googleapis'
 import type { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import { aes, customers, saveCustomers } from './server-state.ts'
-import { toSlug, sheetCachePath } from './cache-layer.ts'
+import { toSlug, sheetCachePath, invalidateCCSPCache, isCCSPCacheStale } from './cache-layer.ts'
 import { normalizeRows } from './sheets.ts'
 import { parsePipelineRows } from './pipeline.ts'
 import type { Customer, SheetRow, ProductSubscription } from './types.ts'
@@ -405,13 +405,17 @@ export function registerRestoreRoutes(app: Hono): void {
     console.log(`[restore] wrote customers.json with ${mergedCustomers.length} customers`)
 
     // ── Write CCSP cache ────────────────────────────────────────────────────
+    const ccspFileIds = targetAes.map(ae => ae.ccspSheetId).filter((id): id is string => Boolean(id))
     if (allCCSPRecords.length > 0) {
-      const ccspFileIds = targetAes.map(ae => ae.ccspSheetId).filter((id): id is string => Boolean(id))
       atomicWriteJSON(
         resolve(CACHE_DIR, 'ccsp-data.json'),
         { records: allCCSPRecords, cachedAt: new Date().toISOString(), fileIds: ccspFileIds },
       )
       console.log(`[restore] wrote ccsp-data.json with ${allCCSPRecords.length} records`)
+    } else if (isCCSPCacheStale(ccspFileIds)) {
+      // BKL-CCSP-03: restore found 0 CCSP records but old cache has stale AE data — invalidate
+      invalidateCCSPCache()
+      console.log(`[restore] invalidated stale ccsp-data.json (AE set changed, 0 new records)`)
     }
 
     // ── Write Pipeline cache ────────────────────────────────────────────────

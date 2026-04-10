@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync, statSync } from 'fs'
 import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
 import { google } from 'googleapis'
 import type { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './google.ts'
@@ -581,19 +581,26 @@ export function registerSetupRoutes(app: Hono): void {
   // ── Test isolation endpoints — snapshot/restore full config state ─────────
   // These endpoints let integration tests save and restore the full server state
   // (AEs + customers) so tests are non-destructive even if afterAll fails.
-  // In-memory snapshot — single-process Bun server, no persistence needed.
+  // Disk-persisted snapshot with staleness guard (BKL-TEST-03).
 
-  let _testSnapshot: { aes: string; customers: string } | null = null
+  // BKL-TEST-03: Disk-persisted snapshot with staleness guard.
+  // The 2026-04-10 incident: Quinn called restore without snapshot, wiping 105 customers.
+  // Guard: snapshot must exist on disk AND be < 24h old before restore is allowed.
+  const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000  // 24 hours
+  const SNAPSHOT_PATH = resolve(dirname(AES_PATH), '__test_snapshot.json')
 
   app.post('/api/__test/snapshot', (c) => {
     try {
       // BKL-TEST-03: Serialize in-memory state, not disk state.
       // Disk can be stale when AEs are added via bootstrap without a restart.
       // Reading disk caused a 2026-04-08 incident where 9 AEs were wiped on restore.
-      _testSnapshot = {
+      const snapshot = {
+        createdAt: Date.now(),
         aes:       JSON.stringify({ aes }),
         customers: JSON.stringify({ customers }),
       }
+      // Persist to disk so the guard survives server restarts
+      writeFileSyncRaw(SNAPSHOT_PATH, JSON.stringify(snapshot), { mode: 0o600 })
       return c.json({ ok: true, aes: aes.length, customers: customers.length })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
@@ -601,9 +608,38 @@ export function registerSetupRoutes(app: Hono): void {
   })
 
   app.post('/api/__test/restore', (c) => {
-    if (!_testSnapshot) return c.json({ error: 'No snapshot to restore — call /api/__test/snapshot first' }, 409)
+    // ── Guard 1: snapshot must exist on disk ────────────────────────────────
+    if (!existsSync(SNAPSHOT_PATH)) {
+      return c.json({
+        error: 'No snapshot exists — call POST /api/__test/snapshot first. '
+             + 'Restore without a prior snapshot is blocked to prevent production data loss (BKL-TEST-03).',
+      }, 409)
+    }
+
+    // ── Guard 2: snapshot must not be stale (max 24h) ───────────────────────
+    let snapshot: { createdAt: number; aes: string; customers: string }
     try {
-      const snap = _testSnapshot
+      snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf-8'))
+    } catch {
+      // Corrupt snapshot file — refuse to restore
+      try { unlinkSync(SNAPSHOT_PATH) } catch { /* ignore cleanup errors */ }
+      return c.json({
+        error: 'Snapshot file is corrupt and has been removed. Take a new snapshot before restoring.',
+      }, 409)
+    }
+
+    const ageMs = Date.now() - (snapshot.createdAt ?? 0)
+    if (ageMs > SNAPSHOT_MAX_AGE_MS) {
+      const ageHours = Math.round(ageMs / (60 * 60 * 1000))
+      try { unlinkSync(SNAPSHOT_PATH) } catch { /* ignore cleanup errors */ }
+      return c.json({
+        error: `Snapshot is ${ageHours}h old (max 24h). Stale snapshots are rejected to prevent `
+             + 'restoring outdated state over current production data. Take a fresh snapshot.',
+      }, 409)
+    }
+
+    try {
+      const snap = snapshot
       // Restore AEs
       writeFileSyncRaw(AES_PATH + '.tmp', snap.aes, { mode: 0o600 })
       renameSync(AES_PATH + '.tmp', AES_PATH)
@@ -616,7 +652,8 @@ export function registerSetupRoutes(app: Hono): void {
       const restoredCustomers = JSON.parse(snap.customers).customers ?? []
       setCustomers(restoredCustomers)
       customers.splice(0, customers.length, ...restoredCustomers)
-      _testSnapshot = null  // consume snapshot
+      // Consume snapshot — one-time use only
+      try { unlinkSync(SNAPSHOT_PATH) } catch { /* ignore cleanup errors */ }
       return c.json({ ok: true, aes: restoredAes.length, customers: restoredCustomers.length })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)

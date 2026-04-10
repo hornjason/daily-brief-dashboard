@@ -232,6 +232,23 @@ function scoreCloudSpend(
   return { score: 10, signal: `Cloud spend dropping ${changePct.toFixed(0)}% ($${(latestTotal / 1000).toFixed(0)}K)` }
 }
 
+// ── No-data detection ────────────────────────────────────────────────────────
+// Subscores that represent "no data available" (v1 placeholders, missing cache)
+// should not penalize or reward — exclude them from the weighted average so
+// that the composite score reflects only what we actually know.
+
+const NO_DATA_MARKERS = [
+  '(v1)',                         // meetings, emails placeholder
+  'No cached',                    // meetings / emails v1 signal prefix
+  'No cloud spend data',          // CCSP cache missing
+  'No subscription data',         // sheets cache missing for customer
+  'cannot match cases',           // no account numbers on record
+]
+
+function isNoData(signal: string): boolean {
+  return NO_DATA_MARKERS.some(m => signal.includes(m))
+}
+
 // ── Composite health score ───────────────────────────────────────────────────
 
 export function computeHealthScore(
@@ -252,14 +269,20 @@ export function computeHealthScore(
   const pipeline      = scorePipeline(customer.name, allPipeline)
   const cloudSpend    = scoreCloudSpend(customer.name, allCCSP)
 
-  const score = Math.round(
-    cases.score      * WEIGHTS.cases +
-    subs.score       * WEIGHTS.subscriptions +
-    meetings.score   * WEIGHTS.meetings +
-    emails.score     * WEIGHTS.emails +
-    pipeline.score   * WEIGHTS.pipeline +
-    cloudSpend.score * WEIGHTS.cloudSpend,
-  )
+  // Only weight subscores that represent real data — exclude placeholders/missing-cache
+  // entries so they don't drag every customer into the amber band (BKL-UX54)
+  const allEntries: Array<{ subscore: { score: number; signal: string }; weight: number }> = [
+    { subscore: cases,      weight: WEIGHTS.cases },
+    { subscore: subs,       weight: WEIGHTS.subscriptions },
+    { subscore: meetings,   weight: WEIGHTS.meetings },
+    { subscore: emails,     weight: WEIGHTS.emails },
+    { subscore: pipeline,   weight: WEIGHTS.pipeline },
+    { subscore: cloudSpend, weight: WEIGHTS.cloudSpend },
+  ]
+  const active = allEntries.filter(e => !isNoData(e.subscore.signal))
+  const entries = active.length > 0 ? active : allEntries   // fallback: use all if everything is no-data
+  const totalWeight = entries.reduce((sum, e) => sum + e.weight, 0)
+  const score = Math.round(entries.reduce((sum, e) => sum + e.subscore.score * e.weight, 0) / totalWeight)
 
   const status: 'red' | 'yellow' | 'green' = score >= 70 ? 'green' : score >= 40 ? 'yellow' : 'red'
 

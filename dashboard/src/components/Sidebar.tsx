@@ -136,51 +136,7 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
         )}
       </div>
 
-      {/* View mode toggle */}
-      {!collapsed && onViewModeChange && (
-        <div className="px-3 pt-3 pb-1">
-          <div className="flex items-center gap-0.5 bg-border/30 rounded-md p-0.5">
-            <button
-              onClick={() => onViewModeChange('asa')}
-              className={`flex-1 text-xs px-2 py-1 rounded font-medium transition-colors ${
-                viewMode === 'asa'
-                  ? 'bg-accent/20 text-accent ring-1 ring-accent'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              ASA
-            </button>
-            <button
-              onClick={() => onViewModeChange('product')}
-              className={`flex-1 text-xs px-2 py-1 rounded font-medium transition-colors ${
-                viewMode === 'product'
-                  ? 'bg-accent/20 text-accent ring-1 ring-accent'
-                  : 'text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              Product
-            </button>
-          </div>
-        </div>
-      )}
-      {collapsed && onViewModeChange && (
-        <div className="px-1 pt-3 pb-1 flex flex-col items-center gap-0.5">
-          <button
-            onClick={() => onViewModeChange('asa')}
-            title="ASA View"
-            className={`text-xs w-7 py-0.5 rounded font-medium transition-colors ${viewMode === 'asa' ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-border/30 text-text-secondary hover:text-accent'}`}
-          >
-            A
-          </button>
-          <button
-            onClick={() => onViewModeChange('product')}
-            title="Product View"
-            className={`text-xs w-7 py-0.5 rounded font-medium transition-colors ${viewMode === 'product' ? 'bg-accent/20 text-accent ring-1 ring-accent' : 'bg-border/30 text-text-secondary hover:text-accent'}`}
-          >
-            P
-          </button>
-        </div>
-      )}
+      {/* BKL-UX56: ASA/Product view toggle removed — always ASA view */}
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">

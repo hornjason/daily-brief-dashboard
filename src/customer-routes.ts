@@ -16,7 +16,7 @@ import { sfSyncError } from './sf-scraper.ts'
 import { runIntelligencePipeline, getJobStatus, getRunningJob } from './account-intelligence.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
-import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS, toSlug } from './cache-layer.ts'
+import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS, toSlug, isCCSPCacheStale } from './cache-layer.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
 import { generateAndSaveAccountPlan, readAccountPlan } from './account-plan.ts'
@@ -205,15 +205,19 @@ export function registerCustomerRoutes(app: Hono): void {
       return out
     }
 
-    // Use cache if available and not forced (data doesn't change hourly)
-    if (cached && !force) {
+    // BKL-CCSP-03: Check if AE set changed since cache was written — if so, treat as stale
+    const currentCcspSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
+    const cacheIsStale = isCCSPCacheStale(currentCcspSheetIds)
+    // Use cache if available, not forced, and not stale (data doesn't change hourly)
+    if (cached && !force && !cacheIsStale) {
       return c.json(buildCCSPSummary(filterRecords(cached.records), cached.cachedAt, !!lastCcspError))
     }
     try {
       const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
       // Stale-overwrite guard: don't replace populated cache with empty results
       // (empty usually means Tableau scraper wrote summary-view data without Account Name column)
-      if (records.length === 0 && (cached?.records?.length ?? 0) > 0) {
+      // BKL-CCSP-03: bypass guard when cache is stale from AE change — 0 records is valid for new AE set
+      if (records.length === 0 && (cached?.records?.length ?? 0) > 0 && !cacheIsStale) {
         console.warn(`[ccsp] force-refresh returned 0 records but cache has ${cached!.records.length} — keeping existing cache`)
         return c.json(buildCCSPSummary(filterRecords(cached!.records), cached!.cachedAt, true))
       }
@@ -351,7 +355,9 @@ export function registerCustomerRoutes(app: Hono): void {
           }).filter(r => r.forecastCategory.toLowerCase() !== 'closed')
         : []
       const ccspCache = readCCSPCache()
-      const ccsp = ccspCache
+      // BKL-CCSP-03: don't feed stale CCSP data into brief generation
+      const ccspStale = isCCSPCacheStale(aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!))
+      const ccsp = (ccspCache && !ccspStale)
         ? ccspCache.records.filter(r => {
             const hay = normalizeForQuery(r.accountName)
             return hay.includes(needle) || needle.includes(hay)
@@ -370,7 +376,9 @@ export function registerCustomerRoutes(app: Hono): void {
   app.get('/customer/:name/ccsp', (c) => {
     const rawName = decodeURIComponent(c.req.param('name')).toLowerCase()
     const cached = readCCSPCache()
-    if (!cached) return c.json({ totalAcv: 0, byQuarter: [], byPartner: [] })
+    // BKL-CCSP-03: treat stale cache (AE set changed) as empty
+    const ccspSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
+    if (!cached || isCCSPCacheStale(ccspSheetIds)) return c.json({ totalAcv: 0, byQuarter: [], byPartner: [] })
 
     // Fuzzy match: strip legal suffixes, check substring overlap
     const needle = normalizeForQuery(rawName)

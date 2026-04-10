@@ -487,6 +487,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
         'ACV Opportunity', 'ACV Opportunity Product', 'Close Date', 'Close Month',
         'Forecast Category', 'Opportunity Owner', 'Offering Group', 'Product Code',
         'Opportunity Pod', 'Product Description', 'Renewal', 'Next Steps', 'Industry',
+        'Opportunity Territory Name',
       ])
       const keepIdx = headers.reduce<number[]>((acc, h, i) => {
         if (KEEP_COLS.has(h)) acc.push(i)
@@ -680,7 +681,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
       'Opportunity ID', 'Opportunity Number', 'Account Name', 'Opportunity Name',
       'ACV Opportunity', 'ACV Opportunity Product', 'Close Date', 'Forecast Category',
       'Opportunity Owner', 'Offering Group', 'Product Code', 'Opportunity Pod',
-      'Product Description', 'Renewal',
+      'Product Description', 'Renewal', 'Opportunity Territory Name',
     ])
     const keepIdx = headers.reduce<number[]>((acc, h, i) => {
       if (KEEP_COLS.has(h)) acc.push(i)
