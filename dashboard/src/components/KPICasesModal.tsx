@@ -17,17 +17,20 @@ export default function KPICasesModal({ open, onClose, cases, selectedProducts, 
   const [viewMode, setViewMode] = useState<'all' | 'byAe'>('all')
   const [showNonMatching, setShowNonMatching] = useState(false)
 
+  // BKL-CASES-01: filter out unattributed cases (Portal echoes parent/subsidiary account numbers)
+  const attributedCases = cases.filter(c => c.customerName && c.customerName !== 'Unknown')
+
   const isFiltered = (selectedProducts?.length ?? 0) > 0 && !!caseMatchesProducts
   const matchingCases = isFiltered
-    ? cases.filter(c => caseMatchesProducts!(c.product ?? '', selectedProducts!))
-    : cases
+    ? attributedCases.filter(c => caseMatchesProducts!(c.product ?? '', selectedProducts!))
+    : attributedCases
   const nonMatchingCases = isFiltered
-    ? cases.filter(c => !caseMatchesProducts!(c.product ?? '', selectedProducts!))
+    ? attributedCases.filter(c => !caseMatchesProducts!(c.product ?? '', selectedProducts!))
     : []
 
   const displayCases = isFiltered
     ? (showNonMatching ? [...matchingCases, ...nonMatchingCases] : matchingCases)
-    : cases
+    : attributedCases
 
   const casesByAe = (() => {
     const map = new Map<string, SupportCase[]>()
