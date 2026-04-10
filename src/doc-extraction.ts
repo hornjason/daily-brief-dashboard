@@ -244,13 +244,17 @@ export async function classifyAndExtract(
     return { ...EMPTY_CLASSIFICATION }
   }
 
-  // BKL-AI-COST-02: skip classification for docs not modified in the last 30 days
+  // BKL-AI-COST-02/04: skip classification for docs older than docClassifyMaxAgeDays (0 = unlimited)
   if (doc.modifiedTime) {
-    const modifiedDate = new Date(doc.modifiedTime)
-    const daysOld = Math.floor((Date.now() - modifiedDate.getTime()) / (1000 * 60 * 60 * 24))
-    if (daysOld > 30) {
-      console.log(`[doc-extract] skipping "${doc.name}" — last modified ${daysOld}d ago`)
-      return { ...EMPTY_CLASSIFICATION }
+    const { getAiConfig } = await import('./settings-api.ts')
+    const maxAgeDays = getAiConfig().docClassifyMaxAgeDays ?? 0
+    if (maxAgeDays > 0) {
+      const modifiedDate = new Date(doc.modifiedTime)
+      const daysOld = Math.floor((Date.now() - modifiedDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysOld > maxAgeDays) {
+        console.log(`[doc-extract] skipping "${doc.name}" — last modified ${daysOld}d ago (limit: ${maxAgeDays}d)`)
+        return { ...EMPTY_CLASSIFICATION }
+      }
     }
   }
 

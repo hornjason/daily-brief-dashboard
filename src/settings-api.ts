@@ -163,6 +163,7 @@ export interface AiConfig {
   geminiInputCostPerM: number        // USD per 1M input tokens
   geminiOutputCostPerM: number       // USD per 1M output tokens
   intelligenceEnabled: boolean       // false = disable all Gemini intelligence generation globally
+  docClassifyMaxAgeDays: number      // 0 = unlimited; >0 = skip docs older than N days (BKL-AI-COST-04)
 }
 
 export const DEFAULT_AI_CONFIG: AiConfig = {
@@ -174,6 +175,7 @@ export const DEFAULT_AI_CONFIG: AiConfig = {
   geminiInputCostPerM: 0.30,
   geminiOutputCostPerM: 2.50,
   intelligenceEnabled: true,
+  docClassifyMaxAgeDays: 0,          // 0 = unlimited (classify all docs regardless of age)
 }
 
 export function getAiConfig(): AiConfig {
