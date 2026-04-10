@@ -918,6 +918,9 @@ export function AdminPage() {
   // Intelligence enabled toggle
   const [intelligenceEnabled, setIntelligenceEnabled] = useState<boolean | null>(null)
   const [intelligenceToggling, setIntelligenceToggling] = useState(false)
+  // BKL-AI-COST-04: doc classify age limit
+  const [docClassifyMaxAgeDays, setDocClassifyMaxAgeDays] = useState<number | null>(null)
+  const [docAgeSaving, setDocAgeSaving] = useState(false)
   // localQueued value: true = queued (no detail), or string = "waiting on <scraper>"
 
   const fetchStatus = useCallback(async () => {
@@ -982,8 +985,9 @@ export function AdminPage() {
   useEffect(() => {
     fetch('/api/settings/ai')
       .then(r => r.json())
-      .then((d: { config: { intelligenceEnabled: boolean } }) => {
+      .then((d: { config: { intelligenceEnabled: boolean; docClassifyMaxAgeDays?: number } }) => {
         setIntelligenceEnabled(d.config.intelligenceEnabled ?? false)
+        setDocClassifyMaxAgeDays(d.config.docClassifyMaxAgeDays ?? 0)
       })
       .catch(() => {})
   }, [])
@@ -1233,6 +1237,45 @@ export function AdminPage() {
                     }`}
                   />
                 </button>
+              )}
+            </div>
+            {/* BKL-AI-COST-04: Doc classify age limit */}
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700">
+              <div>
+                <p className="text-sm font-medium text-gray-200">Doc Age Limit (days)</p>
+                <p className="text-xs text-gray-500 mt-0.5">0 = classify all docs regardless of age. Set to e.g. 30 to skip docs older than 30 days.</p>
+              </div>
+              {docClassifyMaxAgeDays === null ? (
+                <div className="text-xs text-gray-500">Loading...</div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={docClassifyMaxAgeDays}
+                    onChange={e => setDocClassifyMaxAgeDays(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-20 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm text-white text-right tabular-nums focus:outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={async () => {
+                      setDocAgeSaving(true)
+                      try {
+                        const r = await fetch('/api/settings/ai', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ docClassifyMaxAgeDays }),
+                        })
+                        if (!r.ok) console.error('Failed to save docClassifyMaxAgeDays')
+                      } catch { /* ignore */ }
+                      finally { setDocAgeSaving(false) }
+                    }}
+                    disabled={docAgeSaving}
+                    className="px-2 py-1 text-xs bg-accent/20 text-accent rounded hover:bg-accent/30 transition-colors disabled:opacity-50"
+                  >
+                    {docAgeSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
               )}
             </div>
           </div>
