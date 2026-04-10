@@ -244,6 +244,16 @@ export async function classifyAndExtract(
     return { ...EMPTY_CLASSIFICATION }
   }
 
+  // BKL-AI-COST-02: skip classification for docs not modified in the last 30 days
+  if (doc.modifiedTime) {
+    const modifiedDate = new Date(doc.modifiedTime)
+    const daysOld = Math.floor((Date.now() - modifiedDate.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysOld > 30) {
+      console.log(`[doc-extract] skipping "${doc.name}" — last modified ${daysOld}d ago`)
+      return { ...EMPTY_CLASSIFICATION }
+    }
+  }
+
   const prompt = DOC_CLASSIFICATION_PROMPT
     .replace('{doc_name}', doc.name)
     .replace('{modified_time}', doc.modifiedTime ?? 'unknown')

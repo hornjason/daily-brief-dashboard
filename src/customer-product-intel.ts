@@ -11,7 +11,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
-import type { ProductConfig, ProductSummary } from './product-release-radar.ts'
+import { loadProductConfig, type ProductConfig, type ProductSummary } from './product-release-radar.ts'
 import { getFeatureCache } from './product-feature-radar.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
@@ -193,6 +193,34 @@ export async function generateCustomerProductIntel(opts: {
   const { slug, productSummary, slidesText, customerName, subscriptions, supportCases, opportunityNote } = opts
 
   const customerSlug = toCustomerSlug(customerName)
+
+  // BKL-AI-COST-03: skip Gemini call if customer has zero subscriptions for this product
+  const productConfigs = loadProductConfig()
+  const productConfig = productConfigs.find(p => p.slug === slug)
+  if (productConfig && subscriptions.length > 0) {
+    const matchingSubs = customerSubscribesTo(subscriptions, productConfig)
+    if (matchingSubs.length === 0) {
+      console.log(`[customer-product-intel] skipping "${customerName}" / "${productConfig.displayName}" — no matching subscriptions`)
+      const skippedIntel: CustomerProductIntel = {
+        product: slug,
+        customer: customerName,
+        relevanceScore: 'NONE',
+        priorityAction: 'Analysis skipped — no matching subscriptions',
+        roadmapRelevance: [],
+        expansionOpportunities: [],
+        caseAlignment: [],
+        competitiveAngle: null,
+        featureTalkingPoints: [],
+        generatedAt: new Date().toISOString(),
+        productCacheHash: productSummary.contentHash,
+      }
+      // Cache the skip result so subsequent calls don't re-evaluate
+      const skipHash = 'no-subs-' + slug
+      writeCustomerIntelCache(slug, customerSlug, skipHash, skippedIntel)
+      return skippedIntel
+    }
+  }
+
   const cacheDir = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
 
   // ── Load additional signals ───────────────────────────────────────────────
