@@ -192,6 +192,9 @@ export let autoBootstrapState: AutoBootstrapState = {
 /** BKL-W2-17: Exposed so background-scheduler can include bootstrap in isAnyScraperRunning() guard. */
 export function isBootstrapRunning(): boolean { return autoBootstrapState.running || podBootstrapState.running }
 
+// BKL-WIZ-02: Single-AE cancellation flag — checked between bootstrap steps for graceful stop
+let autoBootstrapCancelRequested = false
+
 // ── POD Bootstrap ───────────────────────────────────────────────────────────
 
 interface PodAeResult {
@@ -729,9 +732,20 @@ export function registerBootstrapRoutes(app: Hono): void {
   // POST /api/bootstrap/auto/reset — clear a stuck bootstrap state
   app.post('/api/bootstrap/auto/reset', (c) => {
     autoBootstrapState = { running: false, steps: [], aeName: '', completedAt: null, error: null, resources: {} }
+    autoBootstrapCancelRequested = false
     podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
     console.log('[auto-bootstrap] State reset by user request')
     return c.json({ ok: true })
+  })
+
+  // BKL-WIZ-02: POST /api/bootstrap/auto/cancel — request graceful cancellation of single-AE bootstrap
+  app.post('/api/bootstrap/auto/cancel', (c) => {
+    if (!autoBootstrapState.running) {
+      return c.json({ error: 'No single-AE bootstrap is currently running' }, 400)
+    }
+    autoBootstrapCancelRequested = true
+    console.log('[auto-bootstrap] Cancellation requested by user')
+    return c.json({ ok: true, message: 'Cancellation requested — bootstrap will stop after the current step' })
   })
 
   // GET /api/bootstrap/pod/tabs — List corp tabs from a territory sheet
@@ -905,6 +919,9 @@ export function registerBootstrapRoutes(app: Hono): void {
       aeConfig = aes.find(a => a.name === aeName)!
     }
 
+    // BKL-WIZ-02: Reset cancellation flag at the start of each new bootstrap run
+    autoBootstrapCancelRequested = false
+
     autoBootstrapState = {
       running: true,
       aeName,
@@ -960,6 +977,21 @@ export function registerBootstrapRoutes(app: Hono): void {
 
     // Run async — client polls /api/bootstrap/auto/status
     ;(async () => {
+      // BKL-WIZ-02: Check cancellation between steps and mark remaining pending steps as cancelled
+      const checkCancelled = (): boolean => {
+        if (!autoBootstrapCancelRequested) return false
+        for (const step of autoBootstrapState.steps) {
+          if (step.status === 'pending') step.status = 'cancelled'
+        }
+        autoBootstrapState.running = false
+        autoBootstrapState.completedAt = new Date().toISOString()
+        autoBootstrapState.error = 'Cancelled by user'
+        clearTimeout(bootstrapTimeoutId)
+        autoBootstrapCancelRequested = false
+        console.log(`[auto-bootstrap] Cancelled by user after completing some steps for ${aeName}`)
+        return true
+      }
+
       // Pre-flight — Ensure product intel Drive folders exist under parent (silent, idempotent)
       try {
         const productIntelConfig = loadProductIntelConfig()
@@ -1089,6 +1121,8 @@ export function registerBootstrapRoutes(app: Hono): void {
         console.error('[auto-bootstrap] Drive folder creation failed:', e.message)
       }
 
+      if (checkCancelled()) return
+
       // Step 2 — Create Customer Folders (one subfolder per customer inside AE folder)
       if (!driveFolderId) {
         setStep(1, 'skipped', 'Skipped: Drive folder creation failed')
@@ -1155,6 +1189,8 @@ export function registerBootstrapRoutes(app: Hono): void {
           console.error('[auto-bootstrap] Customer folder creation failed:', e.message)
         }
       }
+
+      if (checkCancelled()) return
 
       // Steps 3 + 4 — Populate subscription data.
       // If a podBookingsSheet is registered for this AE's territory (settings.json), use the
@@ -1227,6 +1263,8 @@ export function registerBootstrapRoutes(app: Hono): void {
         console.warn(`[auto-bootstrap] No POD sheet found for ${aeName} (territories: ${tableauTerritories.join(', ')}) — skipping subscription steps`)
       }
 
+      if (checkCancelled()) return
+
       // Step 4 — Write Supportable Sheet (data already scraped in Step 3)
       if (!driveFolderId) {
         setStep(3, 'skipped', 'Skipped: Drive folder creation failed')
@@ -1249,6 +1287,8 @@ export function registerBootstrapRoutes(app: Hono): void {
           console.error('[auto-bootstrap] Supportable sheet write failed:', e.message)
         }
       }
+
+      if (checkCancelled()) return
 
       // Step 5 — Create CCSP Sheet
       if (!driveFolderId) {
@@ -1275,6 +1315,8 @@ export function registerBootstrapRoutes(app: Hono): void {
           console.error('[auto-bootstrap] CCSP sheet failed:', e.message)
         }
       }
+
+      if (checkCancelled()) return
 
       // Step 6 — Sync Pipeline Sheet
       if (!driveFolderId) {

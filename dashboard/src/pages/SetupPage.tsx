@@ -460,7 +460,7 @@ function makeBlankAE(): WizardAE {
 
 interface AutoBootstrapStep {
   name: string
-  status: 'pending' | 'running' | 'done' | 'error'
+  status: 'pending' | 'running' | 'done' | 'error' | 'cancelled'
   detail?: string
 }
 
@@ -571,12 +571,13 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
   }, [state.running])
 
   const statusIcon = (s: AutoBootstrapStep['status'], stepIndex: number, stepName: string) => {
-    const label = `Step ${stepIndex + 1}: ${s === 'done' ? 'Complete' : s === 'running' ? 'Running' : s === 'error' ? 'Failed' : 'Pending'} — ${stepName}`
+    const label = `Step ${stepIndex + 1}: ${s === 'done' ? 'Complete' : s === 'running' ? 'Running' : s === 'error' ? 'Failed' : s === 'cancelled' ? 'Cancelled' : 'Pending'} — ${stepName}`
     switch (s) {
-      case 'pending': return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-border bg-bg items-center justify-center" />
-      case 'running': return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-accent bg-bg items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /></span>
-      case 'done':    return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-success bg-bg items-center justify-center"><CheckCircle className="w-3.5 h-3.5 text-success" /></span>
-      case 'error':   return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-critical bg-bg items-center justify-center"><XCircle className="w-3.5 h-3.5 text-critical" /></span>
+      case 'pending':   return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-border bg-bg items-center justify-center" />
+      case 'running':   return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-accent bg-bg items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin text-accent" /></span>
+      case 'done':      return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-success bg-bg items-center justify-center"><CheckCircle className="w-3.5 h-3.5 text-success" /></span>
+      case 'error':     return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-critical bg-bg items-center justify-center"><XCircle className="w-3.5 h-3.5 text-critical" /></span>
+      case 'cancelled': return <span aria-label={label} className="relative z-10 inline-flex w-6 h-6 rounded-full border-2 border-warning bg-bg items-center justify-center"><XCircle className="w-3.5 h-3.5 text-warning" /></span>
     }
   }
 
@@ -584,11 +585,24 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
     <div className="mt-4 space-y-4" aria-live="polite">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-text-primary">
-          {state.completedAt ? `Setup ${hasError ? 'finished with errors' : 'complete'} — ${state.aeName}` : `Setting up ${state.aeName}…`}
+          {state.completedAt ? `Setup ${state.error === 'Cancelled by user' ? 'cancelled' : hasError ? 'finished with errors' : 'complete'} — ${state.aeName}` : `Setting up ${state.aeName}…`}
         </p>
-        {state.running && elapsed && (
-          <p className="text-xs text-text-secondary">{elapsed}</p>
-        )}
+        <div className="flex items-center gap-3">
+          {state.running && elapsed && (
+            <p className="text-xs text-text-secondary">{elapsed}</p>
+          )}
+          {/* BKL-WIZ-02: Cancel button while bootstrap is running */}
+          {state.running && (
+            <button
+              onClick={async () => {
+                await fetch('/api/bootstrap/auto/cancel', { method: 'POST' }).catch(() => {})
+              }}
+              className="text-xs text-warning hover:text-warning/80 underline"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Step list with connector lines */}
@@ -604,9 +618,10 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
             {/* Content row — highlight running step */}
             <div className={`flex-1 mb-2 rounded px-2 py-1 text-sm ${step.status === 'running' ? 'bg-surface/60' : ''}`}>
               <span className={
-                step.status === 'error'   ? 'text-critical' :
-                step.status === 'done'    ? 'text-success' :
-                step.status === 'running' ? 'text-white font-medium' :
+                step.status === 'error'     ? 'text-critical' :
+                step.status === 'done'      ? 'text-success' :
+                step.status === 'running'   ? 'text-white font-medium' :
+                step.status === 'cancelled' ? 'text-warning' :
                 'text-text-secondary'
               }>
                 {step.name}
