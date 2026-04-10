@@ -5135,7 +5135,7 @@ Files: dashboard/src/components/MorningSummary.tsx
 Description: The Morning Summary card has a "Today's Brief" expand/collapse toggle. When collapsed, the Priority Today / Actions / Watch bullet points disappear entirely — only the header row remains. The bullet outline is high-value at-a-glance context that should survive the collapse. When collapsed, show the bullet points (stripped of full prose, just the bold customer names + short label) as a compact inline list. The "Today's Brief" button expands to show the full narrative. Closed state: header + compact bullet list. Open state: header + full brief prose. This mirrors the free/beta/trial pattern used on subscription cards.
 
 ### BKL-PVIEW-09 | Product filter cascade — KPIs filter by selected product chip
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified live by Quinn — KPI tiles filter by selected product chip)
 Severity: HIGH
 Priority: P1
 Size: M
@@ -5144,7 +5144,7 @@ Files: dashboard/src/App.tsx, dashboard/src/components/KPISection.tsx (or simila
 Description: When a product chip (OCP, RHEL, AAP) is selected, all KPI tiles should filter to that product context: Open Cases count → only cases for that product; Sev 1 Cases → only Sev 1 for that product; Renewals in 30d / 90d → only subscriptions matching that product; Meetings Today/This Week → unchanged (meetings are not product-scoped). Currently KPIs show full portfolio numbers regardless of product chip selection. Implementation: pass activeProduct filter down to each KPI computation. Cases: filter by product keyword in case summary. Renewals: filter by normalizeProductName(subscription) === activeProduct.
 
 ### BKL-PVIEW-10 | Product filter cascade — RH Cases modal filters by selected product
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified live by Quinn — cases modal filters + collapses non-matching by product chip)
 Severity: HIGH
 Priority: P1
 Size: M
@@ -5153,7 +5153,7 @@ Files: dashboard/src/components/KPISev1Modal.tsx (or cases modal component)
 Description: When OCP is selected as the product chip, the Open Support Cases modal should show OCP/OpenShift-related cases at the top and collapse non-OCP cases into a hidden section at the bottom — same pattern used for Free/Beta/Trial subscriptions on account cards. Currently all 34 cases show regardless of chip selection (Image #3: "Updated the MCP and a node didnt come back", "On Redhat 9.6 cockpit", "Upgrade Satellite", etc. — mix of OCP and non-OCP). Product matching for cases: check case summary text for product keywords (openshift, ocp, cluster, container, kubernetes for OCP; rhel, enterprise linux, satellite for RHEL; ansible, aap for AAP). Non-matching cases collapsed with "Show N more" toggle at bottom. Note: Jason observed KPI shows 11/34 — may indicate 11 are OCP-related; verify against actual case summaries.
 
 ### BKL-PVIEW-11 | Product filter cascade — Renewals (30d + 90d) filter by selected product
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified live by Quinn — renewal modals filter by selected product chip)
 Severity: HIGH
 Priority: P1
 Size: M
