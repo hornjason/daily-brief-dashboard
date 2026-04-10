@@ -5013,7 +5013,7 @@ Description: Territory sheet uses "Phil Yi" (display name); SF report owner fiel
 Decision: DONE — aes.json and customers.json updated to "Philip Yi". Verified: Philip Yi now shows 54 opps in pipeline data. Alias/fuzzy match remains a future enhancement; note in BKL-BOOT-01 that POD re-bootstrap may re-introduce "Phil Yi" from territory sheet.
 
 ### BKL-BOOT-03 | POD Bootstrap seed from shared Supportable folder — skip scrape if sheet exists
-Status: 🔴 OPEN
+Status: ⛔ OBSOLETE — 2026-04-10 — bootstrap no longer uses Supportable scraping (replaced by SF Bookings sheets); seeding concept moot
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -5234,7 +5234,7 @@ Files: src/sf-bookings-reader.ts — matchPodSheet() lines 78-92
 Description: Territory strings like `WEST_COMM_CORP_NORTHWEST_TERR04` split into tokens including "west" (4 chars, passes length filter). `sLower.includes(w)` matched "southwest" before "northwest" because "southwest".includes("west") is true. All 8 NW AEs got the SW POD sheet ID instead of the NW sheet. Fix: changed to word-boundary regex `new RegExp(\`\\b${w}\\b\`).test(sLower)` — "southwest" has no word boundary around "west" inside it, so the false match is eliminated. Confirmed on second bootstrap run: all 8 NW AEs received NW sheet ID; 174 customers processed; 58 with subscription data.
 
 ### BKL-DRIVE-01 | Drive folder hierarchy — add POD subfolder layer
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: LOW
 Priority: P2
 Size: M
