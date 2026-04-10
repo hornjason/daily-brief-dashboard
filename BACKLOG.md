@@ -5523,3 +5523,30 @@ Source: 2026-04-10 — Jason: "we need a top level UX layout that shows a profes
 Files: dashboard/src/ (multiple pages and components)
 Description: With 9 AEs and 100+ customers, the current dashboard layout was designed for a smaller scale. As we approach 2-pod scale (~18 AEs, 200+ customers) the layout needs to be redesigned from the ground up for readability and professionalism.
 Decision: SPEC DONE — council session completed 2026-04-10. Design spec at `docs/UX-SPEC-MULTI-POD.md`. Implementation requires 4 phases: (1) backend multi-pod schema migration, (2) frontend pod tabs + AE grouping, (3) health dot + tooltip, (4) pod/AE level KPI tiles. Critical-path blocker: `data-sources.json` multi-pod schema must ship first.
+
+### BKL-TEST-05 | bootstrap-recovery.spec.ts — 6 stale tests after UI refactor
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: S
+Source: 2026-04-10 Quinn QA scan
+Files: test/bootstrap-recovery.spec.ts
+Description: All 6 tests in bootstrap-recovery.spec.ts fail. The UI components were refactored (wizard steps, view structure) and the specs no longer match current UI selectors. Needs spec update to match current setup flow.
+
+### BKL-A11Y-01 | Setup page color-contrast WCAG AA violation
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: XS
+Source: 2026-04-10 Quinn accessibility scan
+Files: dashboard/src/pages/SetupPage.tsx (or Tailwind config)
+Description: Axe found 2 color-contrast violations on /dashboard/setup. Fix: check text color vs background on form labels or helper text; boost contrast to meet WCAG AA minimum (4.5:1).
+
+### BKL-TEST-06 | intelligence-status returns 404 — route not registered
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: XS
+Source: 2026-04-10 Quinn API scan
+Files: server.ts or src/intelligence-routes.ts
+Description: GET /api/intelligence/generate-all/status returns 404. Either the route was never wired or was removed during refactor. Verify route exists in server.ts and is correctly exported.

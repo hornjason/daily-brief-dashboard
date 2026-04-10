@@ -1,25 +1,23 @@
 {
   "customers": [
     {
+      "name": "Acme Corp",
+      "domain": "acme.com",
+      "accountNumbers": [
+        "123456"
+      ]
+    },
+    {
       "name": "Big Ten Network Services",
       "ae": "TBH",
       "importedFrom": "sf-bookings",
       "aliases": [
         "Big Ten Network Services, LLC"
       ],
-      "industry": "Media and Entertainment",
-      "segment": "Sports Broadcasting and Streaming",
-      "industryDescription": "Big Ten Network Services operates a sports network dedicated to covering collegiate sports sanctioned by the Big Ten Conference, offering live and recorded event telecasts, news, and analysis across various platforms.",
-      "industryCompetitors": [
-        "ESPN",
-        "FOX Sports",
-        "NBC Sports"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:30:06.250Z",
+      "ccspCustomer": false,
       "accountNumbers": [
         "11899794"
-      ],
-      "domain": "btn.com"
+      ]
     },
     {
       "name": "First American Financial",
@@ -28,20 +26,11 @@
       "aliases": [
         "First American Financial Corporation"
       ],
-      "industry": "Financial Services",
-      "segment": "Title Insurance and Settlement Services",
-      "industryDescription": "First American Financial Corporation provides title insurance, settlement services, and risk solutions for real estate transactions, along with property data, home warranties, and banking and trust services.",
-      "industryCompetitors": [
-        "Fidelity National Financial",
-        "Old Republic Title",
-        "Stewart Information Services"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:31:13.428Z",
+      "ccspCustomer": false,
       "accountNumbers": [
         "12653942",
         "9512872"
-      ],
-      "domain": "firstam.com"
+      ]
     },
     {
       "name": "First American Home Buyers Protection",
@@ -50,10 +39,10 @@
       "aliases": [
         "First American Home Buyers Protection Corporation"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "7457646"
-      ],
-      "domain": "firstam.com"
+      ]
     },
     {
       "name": "First American Trust",
@@ -62,16 +51,7 @@
       "aliases": [
         "First American Trust Company"
       ],
-      "industry": "Financial Services",
-      "segment": "Wealth Management, Trust, and Banking Services",
-      "industryDescription": "First American Trust provides wealth management, investment management, and trust services for high-net-worth individuals and families, alongside specialized banking solutions for the real estate settlement services industry, including escrow and title-related banking.",
-      "industryCompetitors": [
-        "Fidelity National Financial",
-        "Stewart Information Services",
-        "MGIC Investment Corporation"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:32:31.403Z",
-      "domain": "firstam.com"
+      "ccspCustomer": false
     },
     {
       "name": "Fox",
@@ -80,26 +60,11 @@
       "aliases": [
         "Fox Corporation"
       ],
-      "industry": "Media",
-      "segment": "Television Broadcasting, News, and Sports Broadcasting",
-      "industryDescription": "Fox Corporation is an American multinational mass media company that produces and distributes content through its television broadcasting, news, and sports assets, including the FOX Network, Fox News, Fox Sports, and Tubi.",
-      "industryCompetitors": [
-        "Netflix",
-        "Warner Bros. Discovery",
-        "NBCNews"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:33:40.094Z",
+      "ccspCustomer": false,
       "accountNumbers": [
-        "11820898",
-        "11841066",
-        "12816567",
-        "1330049",
         "6247997",
-        "11940498",
-        "6316369",
-        "6324439"
-      ],
-      "domain": "fox.com"
+        "11820898"
+      ]
     },
     {
       "name": "Fox News Network",
@@ -108,20 +73,11 @@
       "aliases": [
         "Fox News Network, LLC"
       ],
-      "industry": "Media",
-      "segment": "Cable News and Digital Media",
-      "industryDescription": "Fox News Network is a multinational conservative news and political commentary television channel and website that provides in-depth news reporting, opinion, and analysis.",
-      "industryCompetitors": [
-        "CNN",
-        "MSNBC",
-        "NBC News"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:34:45.927Z",
+      "ccspCustomer": false,
       "accountNumbers": [
         "1032475",
         "6278491"
-      ],
-      "domain": "foxnews.com"
+      ]
     },
     {
       "name": "Fox Television Station",
@@ -130,38 +86,7 @@
       "aliases": [
         "Fox Television Station LL"
       ],
-      "industry": "Media and Entertainment",
-      "segment": "Broadcast Television",
-      "industryDescription": "Fox Television Stations, LLC is a group of television stations in the United States owned and operated by Fox Corporation, which distributes sports, entertainment, and syndicated content, and produces local news.",
-      "industryCompetitors": [
-        "NBCUniversal",
-        "Warner Bros. Discovery",
-        "Paramount Global"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:35:53.305Z",
-      "accountNumbers": [
-        "1145919",
-        "12002787",
-        "12003583",
-        "12118125",
-        "12133215",
-        "12159625",
-        "12227838",
-        "1258245",
-        "12818560",
-        "1392035",
-        "1551546",
-        "1587650",
-        "341199",
-        "468502",
-        "5254424",
-        "5266632",
-        "5273390",
-        "5432126",
-        "5610513",
-        "5802266"
-      ],
-      "domain": "fox.com"
+      "ccspCustomer": false
     },
     {
       "name": "Foxcorp",
@@ -170,16 +95,7 @@
       "aliases": [
         "Foxcorp Holdings LLC Attn"
       ],
-      "industry": "Media",
-      "segment": "Broadcasting & Content Distribution",
-      "industryDescription": "Fox Corporation is an American multinational mass media company that produces and distributes news, sports, and entertainment content through its various brands, including Fox News, Fox Sports, and the Fox Broadcasting Company.",
-      "industryCompetitors": [
-        "Netflix",
-        "Warner Bros. Discovery",
-        "NBCUniversal"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:37:02.093Z",
-      "domain": "foxcorporation.com"
+      "ccspCustomer": false
     },
     {
       "name": "Latham Watkins",
@@ -188,19 +104,10 @@
       "aliases": [
         "Latham & Watkins LLP"
       ],
-      "industry": "Legal Services",
-      "segment": "Global Corporate and Financial Legal Services",
-      "industryDescription": "Latham & Watkins is a multinational law firm that advises businesses and institutions across a wide spectrum of transactional, litigation, corporate, and regulatory areas globally, with particular strength in M&A, private equity, and capital markets.",
-      "industryCompetitors": [
-        "Kirkland & Ellis",
-        "Skadden, Arps, Slate, Meagher & Flom",
-        "Sullivan & Cromwell"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:38:10.283Z",
+      "ccspCustomer": false,
       "accountNumbers": [
         "835498"
-      ],
-      "domain": "lw.com"
+      ]
     },
     {
       "name": "Peraton Technology Services",
@@ -209,16 +116,7 @@
       "aliases": [
         "Peraton Technology Services Inc."
       ],
-      "industry": "Technology",
-      "segment": "Government IT Solutions and National Security",
-      "industryDescription": "Peraton Technology Services provides information solutions, engineering, and analysis, focusing on complex engineering systems, cybersecurity engineering, IT support services, network design and architecture, and cloud migration support primarily for U.S. federal government customers in national security, defense, and intelligence markets.",
-      "industryCompetitors": [
-        "ManTech",
-        "Leidos",
-        "SAIC"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:39:24.495Z",
-      "domain": "peraton.com"
+      "ccspCustomer": false
     },
     {
       "name": "Peraton Oscomet",
@@ -227,7 +125,7 @@
       "aliases": [
         "Peraton-OSCOMET"
       ],
-      "domain": "peraton.com"
+      "ccspCustomer": false
     },
     {
       "name": "Rxlogix",
@@ -236,17 +134,7 @@
       "aliases": [
         "Rxlogix Corporation"
       ],
-      "ccspCustomer": true,
-      "industry": "Healthcare",
-      "segment": "Pharmacovigilance Software / Enterprise SaaS",
-      "industryDescription": "RxLogix provides pharmacovigilance software solutions that leverage AI and machine learning to help life sciences companies and regulatory agencies manage drug safety, detect signals, and ensure compliance.",
-      "industryCompetitors": [
-        "PharmaLex",
-        "Medfiles",
-        "Ennov"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:40:39.814Z",
-      "domain": "rxlogix.com"
+      "ccspCustomer": true
     },
     {
       "name": "Solartis",
@@ -255,23 +143,14 @@
       "aliases": [
         "Solartis, LLC"
       ],
-      "industry": "Insurance Technology",
-      "segment": "P&C Insurance Software and Services",
-      "industryDescription": "Solartis is a cloud-based software company that provides insurance companies with solutions for rating, underwriting, policy administration, claims, and billing, focusing on Property & Casualty (P&C) insurance.",
-      "industryCompetitors": [
-        "Guidewire InsuranceSuite",
-        "Ebix",
-        "Sapiens"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:41:48.390Z",
+      "ccspCustomer": false,
       "accountNumbers": [
         "11916628",
         "5262442",
         "5629489",
         "5632235",
         "5796430"
-      ],
-      "domain": "solartis.com"
+      ]
     },
     {
       "name": "Tgs Management",
@@ -280,19 +159,10 @@
       "aliases": [
         "Tgs Management Corp"
       ],
-      "industry": "Financial Services",
-      "segment": "Quantitative Investment Management (Hedge Fund)",
-      "industryDescription": "TGS Management is a quantitative investment management firm that utilizes scientific methods, engineering discipline, and advanced technology to develop and implement trading systems for global financial markets.",
-      "industryCompetitors": [
-        "Renaissance Technologies",
-        "Citadel LLC",
-        "Goldman Sachs"
-      ],
-      "industryUpdatedAt": "2026-04-09T22:42:57.374Z",
+      "ccspCustomer": false,
       "accountNumbers": [
         "320795"
-      ],
-      "domain": "tgsmc.com"
+      ]
     },
     {
       "name": "Axway",
@@ -301,15 +171,10 @@
       "aliases": [
         "Axway Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "1185684",
-        "5659174",
-        "5731137",
-        "5956386",
-        "7348196",
-        "7494779"
-      ],
-      "domain": "axway.com"
+        "1185684"
+      ]
     },
     {
       "name": "Connexity",
@@ -318,10 +183,7 @@
       "aliases": [
         "Connexity, Inc."
       ],
-      "accountNumbers": [
-        "5935082"
-      ],
-      "domain": "connexity.com"
+      "ccspCustomer": false
     },
     {
       "name": "Consumer Cellular Incorporated",
@@ -330,11 +192,11 @@
       "aliases": [
         "Consumer Cellular, Incorporated"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "1010239",
         "12316598"
-      ],
-      "domain": "consumercellular.com"
+      ]
     },
     {
       "name": "Microchip Technology",
@@ -343,7 +205,7 @@
       "aliases": [
         "Microchip Technology"
       ],
-      "domain": "microchip.com"
+      "ccspCustomer": false
     },
     {
       "name": "Microsemi Storage Solutions",
@@ -352,10 +214,10 @@
       "aliases": [
         "MICROSEMI STORAGE SOLUTIONS, INC."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "5722021"
-      ],
-      "domain": "microchip.com"
+      ]
     },
     {
       "name": "Musarubra Us",
@@ -364,13 +226,7 @@
       "aliases": [
         "Musarubra US LLC"
       ],
-      "ccspCustomer": true,
-      "accountNumbers": [
-        "11911836",
-        "7342937",
-        "8438510"
-      ],
-      "domain": "trellix.com"
+      "ccspCustomer": true
     },
     {
       "name": "Nextiva",
@@ -379,11 +235,11 @@
       "aliases": [
         "Nextiva, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "12017425",
         "1538597"
-      ],
-      "domain": "nextiva.com"
+      ]
     },
     {
       "name": "Pnm Resources",
@@ -392,10 +248,10 @@
       "aliases": [
         "Pnm Resources, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "11920598"
-      ],
-      "domain": "pnmresources.com"
+      ]
     },
     {
       "name": "Public Service Of New Mexico",
@@ -404,7 +260,7 @@
       "aliases": [
         "Public Service Company of New Mexico"
       ],
-      "domain": "pnm.com"
+      "ccspCustomer": false
     },
     {
       "name": "Tucson Electric Power",
@@ -413,6 +269,7 @@
       "aliases": [
         "Tucson Electric Power"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "1190227",
         "1203707",
@@ -420,8 +277,7 @@
         "1401160",
         "1447443",
         "682361"
-      ],
-      "domain": "tep.com"
+      ]
     },
     {
       "name": "Aera Energy Services",
@@ -430,7 +286,7 @@
       "aliases": [
         "Aera Energy Services Company"
       ],
-      "domain": "aeraenergy.com"
+      "ccspCustomer": false
     },
     {
       "name": "California Resources",
@@ -439,10 +295,10 @@
       "aliases": [
         "California Resources Corporation"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "5566912"
-      ],
-      "domain": "crc.com"
+      ]
     },
     {
       "name": "Insurance Of West",
@@ -451,7 +307,7 @@
       "aliases": [
         "Insurance Company of West"
       ],
-      "domain": "inswest.com"
+      "ccspCustomer": false
     },
     {
       "name": "Internet For Assigned Names And Numbers",
@@ -460,7 +316,7 @@
       "aliases": [
         "Internet Corporation For Assigned Names and Numbers"
       ],
-      "domain": "icann.org"
+      "ccspCustomer": false
     },
     {
       "name": "Korn Ferry",
@@ -469,6 +325,7 @@
       "aliases": [
         "Korn Ferry"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "11835658",
         "12308748",
@@ -476,8 +333,7 @@
         "5785765",
         "6233905",
         "6661455"
-      ],
-      "domain": "kornferry.com"
+      ]
     },
     {
       "name": "Local Initiative Health Authority For Los Angeles County",
@@ -486,10 +342,7 @@
       "aliases": [
         "Local Initiative Health Authority For Los Angeles County"
       ],
-      "accountNumbers": [
-        "523393"
-      ],
-      "domain": "lacare.org"
+      "ccspCustomer": false
     },
     {
       "name": "Radiology Partners",
@@ -498,14 +351,14 @@
       "aliases": [
         "Radiology Partners"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "11996523",
         "12862587",
         "12862602",
         "5380573",
         "6029692"
-      ],
-      "domain": "radpartners.com"
+      ]
     },
     {
       "name": "Skechers U S A",
@@ -514,10 +367,10 @@
       "aliases": [
         "Skechers U.S.A., Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "12761369"
-      ],
-      "domain": "skechers.com"
+      ]
     },
     {
       "name": "Skechers U S A Ii",
@@ -526,8 +379,7 @@
       "aliases": [
         "Skechers U.S.A., Inc. II"
       ],
-      "ccspCustomer": true,
-      "domain": "skechers.com"
+      "ccspCustomer": true
     },
     {
       "name": "Xifin",
@@ -536,10 +388,10 @@
       "aliases": [
         "Xifin, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "5655332"
-      ],
-      "domain": "xifin.com"
+      ]
     },
     {
       "name": "Yardi Systems",
@@ -548,12 +400,12 @@
       "aliases": [
         "Yardi Systems, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "444120",
         "5820464",
         "6874765"
-      ],
-      "domain": "yardi.com"
+      ]
     },
     {
       "name": "Ademco",
@@ -562,10 +414,10 @@
       "aliases": [
         "Ademco Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "6158784"
-      ],
-      "domain": "ademcosecurity.com"
+      ]
     },
     {
       "name": "American Traffic Solutions Consolidated",
@@ -574,7 +426,7 @@
       "aliases": [
         "American Traffic Solutions Consolidated, L.L.C."
       ],
-      "domain": "verramobility.com"
+      "ccspCustomer": false
     },
     {
       "name": "American Traffic Solutions",
@@ -583,7 +435,7 @@
       "aliases": [
         "American Traffic Solutions, Inc."
       ],
-      "domain": "verramobility.com"
+      "ccspCustomer": false
     },
     {
       "name": "Avnet",
@@ -592,22 +444,10 @@
       "aliases": [
         "Avnet, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "11618080",
-        "1277684",
-        "511644",
-        "5232297",
-        "5305411",
-        "5345407",
-        "5446301",
-        "5494006",
-        "5742458",
-        "6027659",
-        "6994455",
-        "767146",
-        "914912"
-      ],
-      "domain": "avnet.com"
+        "725718"
+      ]
     },
     {
       "name": "Banner Health",
@@ -616,23 +456,7 @@
       "aliases": [
         "Banner Health"
       ],
-      "accountNumbers": [
-        "1108805",
-        "12402464",
-        "1273930",
-        "1309811",
-        "1557449",
-        "520598",
-        "5471411",
-        "5505793",
-        "5525547",
-        "5526297",
-        "604580",
-        "6184131",
-        "6344266",
-        "851608"
-      ],
-      "domain": "bannerhealth.com"
+      "ccspCustomer": false
     },
     {
       "name": "Cableone Corporate Office",
@@ -641,7 +465,7 @@
       "aliases": [
         "Cableone Corporate Office"
       ],
-      "domain": "sparklight.com"
+      "ccspCustomer": false
     },
     {
       "name": "Ebocom",
@@ -650,15 +474,7 @@
       "aliases": [
         "Ebocom LLC"
       ],
-      "accountNumbers": [
-        "1038291",
-        "1089595",
-        "1223429",
-        "5366900",
-        "565717",
-        "7119942"
-      ],
-      "domain": "ebocom.com"
+      "ccspCustomer": false
     },
     {
       "name": "Freeeport Mcmoran",
@@ -667,7 +483,7 @@
       "aliases": [
         "Freeeport McMoran Inc."
       ],
-      "domain": "fcx.com"
+      "ccspCustomer": false
     },
     {
       "name": "Republic Services",
@@ -676,10 +492,7 @@
       "aliases": [
         "Republic Services, Inc."
       ],
-      "accountNumbers": [
-        "12477276"
-      ],
-      "domain": "republicservices.com"
+      "ccspCustomer": false
     },
     {
       "name": "Resideo Technologies",
@@ -692,8 +505,7 @@
       "accountNumbers": [
         "6193973",
         "8497908"
-      ],
-      "domain": "resideo.com"
+      ]
     },
     {
       "name": "Rsi Video Technologies",
@@ -702,10 +514,10 @@
       "aliases": [
         "RSI Video Technologies, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "6286500"
-      ],
-      "domain": "videofied.com"
+      ]
     },
     {
       "name": "Sonora Quest Laboratories",
@@ -714,11 +526,11 @@
       "aliases": [
         "Sonora Quest Laboratories Llc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "11879735",
         "12800239"
-      ],
-      "domain": "sonoraquest.com"
+      ]
     },
     {
       "name": "Verra Mobility",
@@ -727,7 +539,7 @@
       "aliases": [
         "Verra Mobility Corporation"
       ],
-      "domain": "verramobility.com"
+      "ccspCustomer": false
     },
     {
       "name": "Viavi Solutions",
@@ -736,6 +548,7 @@
       "aliases": [
         "Viavi Solutions Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "11596425",
         "1339725",
@@ -752,8 +565,7 @@
         "6221153",
         "6290576",
         "6838356"
-      ],
-      "domain": "viavisolutions.com"
+      ]
     },
     {
       "name": "Celestial Saturn Parent",
@@ -761,7 +573,8 @@
       "importedFrom": "sf-bookings",
       "aliases": [
         "Celestial-Saturn Parent Inc."
-      ]
+      ],
+      "ccspCustomer": false
     },
     {
       "name": "Core Logic",
@@ -774,8 +587,7 @@
       "accountNumbers": [
         "5531956",
         "715344"
-      ],
-      "domain": "corelogic.com"
+      ]
     },
     {
       "name": "Corelogic Systems",
@@ -784,8 +596,7 @@
       "aliases": [
         "Corelogic Systems, Inc."
       ],
-      "ccspCustomer": true,
-      "domain": "corelogic.com"
+      "ccspCustomer": true
     },
     {
       "name": "Corelogic",
@@ -799,8 +610,7 @@
         "1620270",
         "1646216",
         "5209512"
-      ],
-      "domain": "corelogic.com"
+      ]
     },
     {
       "name": "Guess",
@@ -809,7 +619,7 @@
       "aliases": [
         "Guess , Inc."
       ],
-      "domain": "guess.com"
+      "ccspCustomer": false
     },
     {
       "name": "Herbalife",
@@ -818,11 +628,11 @@
       "aliases": [
         "Herbalife International, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "540393",
         "689858"
-      ],
-      "domain": "herbalife.com"
+      ]
     },
     {
       "name": "Hyundai Auto Canada",
@@ -831,10 +641,10 @@
       "aliases": [
         "Hyundai Auto Canada Corp."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "6982382"
-      ],
-      "domain": "hyundaicanada.com"
+      ]
     },
     {
       "name": "Hyundai Autoever America",
@@ -843,11 +653,7 @@
       "aliases": [
         "Hyundai Autoever America, LLC"
       ],
-      "accountNumbers": [
-        "10774298",
-        "5721795"
-      ],
-      "domain": "haeaus.com"
+      "ccspCustomer": false
     },
     {
       "name": "Hyundai Capital America",
@@ -856,7 +662,7 @@
       "aliases": [
         "Hyundai Capital America"
       ],
-      "domain": "hyundaicapitalamerica.com"
+      "ccspCustomer": false
     },
     {
       "name": "Hyundai Motor America",
@@ -865,8 +671,7 @@
       "aliases": [
         "Hyundai Motor America"
       ],
-      "ccspCustomer": true,
-      "domain": "hyundaiusa.com"
+      "ccspCustomer": true
     },
     {
       "name": "Illumina",
@@ -875,6 +680,7 @@
       "aliases": [
         "Illumina, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "12001756",
         "12221608",
@@ -887,8 +693,7 @@
         "6223950",
         "7053161",
         "979959"
-      ],
-      "domain": "illumina.com"
+      ]
     },
     {
       "name": "Maxlinear",
@@ -897,10 +702,10 @@
       "aliases": [
         "Maxlinear, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "7000762"
-      ],
-      "domain": "maxlinear.com"
+      ]
     },
     {
       "name": "Rady Children S Hospital San Diego",
@@ -909,10 +714,10 @@
       "aliases": [
         "Rady Children's Hospital-San Diego"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "1433306"
-      ],
-      "domain": "rchsd.org"
+      ]
     },
     {
       "name": "Scripps Health",
@@ -921,13 +726,7 @@
       "aliases": [
         "Scripps Health"
       ],
-      "accountNumbers": [
-        "1007776",
-        "1037583",
-        "5307663",
-        "824489"
-      ],
-      "domain": "scripps.org"
+      "ccspCustomer": false
     },
     {
       "name": "Sharp Healthcare",
@@ -936,10 +735,10 @@
       "aliases": [
         "Sharp Healthcare"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "786846"
-      ],
-      "domain": "sharp.com"
+      ]
     },
     {
       "name": "Applied Medical",
@@ -954,8 +753,7 @@
         "5518102",
         "5902704",
         "5934371"
-      ],
-      "domain": "appliedmedical.net"
+      ]
     },
     {
       "name": "Applied Medical Resources",
@@ -964,11 +762,11 @@
       "aliases": [
         "Applied Medical Resources Corporation"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "11989831",
         "6086160"
-      ],
-      "domain": "appliedmedical.com"
+      ]
     },
     {
       "name": "Blackline",
@@ -977,14 +775,14 @@
       "aliases": [
         "Blackline, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "10471930",
         "11516271",
         "12273150",
         "5666051",
         "6137942"
-      ],
-      "domain": "blackline.com"
+      ]
     },
     {
       "name": "Epson America",
@@ -993,12 +791,7 @@
       "aliases": [
         "Epson America Inc"
       ],
-      "ccspCustomer": true,
-      "accountNumbers": [
-        "1090227",
-        "336035"
-      ],
-      "domain": "epson.com"
+      "ccspCustomer": true
     },
     {
       "name": "Guitar Center",
@@ -1007,11 +800,10 @@
       "aliases": [
         "Guitar Center, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "5644912",
         "782467"
-      ],
-      "domain": "guitarcenter.com"
+      ]
     },
     {
       "name": "Matson",
@@ -1020,10 +812,10 @@
       "aliases": [
         "Matson, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "7230811"
-      ],
-      "domain": "matson.com"
+      ]
     },
     {
       "name": "Mission Cloud Services",
@@ -1032,7 +824,7 @@
       "aliases": [
         "Mission Cloud Services, Inc."
       ],
-      "domain": "missioncloud.com"
+      "ccspCustomer": false
     },
     {
       "name": "Queen S Development",
@@ -1041,7 +833,7 @@
       "aliases": [
         "Queen's Development Corporation"
       ],
-      "domain": "queens.org"
+      "ccspCustomer": false
     },
     {
       "name": "Southwest Gas",
@@ -1050,13 +842,10 @@
       "aliases": [
         "Southwest Gas Corporation"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "1105535",
-        "1259482",
-        "370737",
-        "469665"
-      ],
-      "domain": "swgas.com"
+        "1105535"
+      ]
     },
     {
       "name": "Queen S Health Systems",
@@ -1065,7 +854,7 @@
       "aliases": [
         "The Queen's Health Systems"
       ],
-      "domain": "queens.org"
+      "ccspCustomer": false
     },
     {
       "name": "U S Epson",
@@ -1074,7 +863,7 @@
       "aliases": [
         "U.S. Epson, Inc."
       ],
-      "domain": "epson.com"
+      "ccspCustomer": false
     },
     {
       "name": "Allegiant Air",
@@ -1083,12 +872,12 @@
       "aliases": [
         "Allegiant Air, LLC"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "1488277",
         "5270543",
         "5647643"
-      ],
-      "domain": "allegiantair.com"
+      ]
     },
     {
       "name": "Allegiant Travel",
@@ -1097,12 +886,12 @@
       "aliases": [
         "Allegiant Travel Company"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "11602275",
         "5210894",
         "5740991"
-      ],
-      "domain": "allegiantair.com"
+      ]
     },
     {
       "name": "Aristocrat Technologies",
@@ -1111,13 +900,7 @@
       "aliases": [
         "Aristocrat Technologies, Inc."
       ],
-      "accountNumbers": [
-        "1068155",
-        "12199937",
-        "712194",
-        "12653772"
-      ],
-      "domain": "aristocrat.com"
+      "ccspCustomer": false
     },
     {
       "name": "Boyd Gaming",
@@ -1126,13 +909,10 @@
       "aliases": [
         "Boyd Gaming Corporation"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "12541655",
-        "5690473",
-        "828644",
         "973213"
-      ],
-      "domain": "boydgaming.com"
+      ]
     },
     {
       "name": "Caesars Palace",
@@ -1141,7 +921,7 @@
       "aliases": [
         "Caesars Palace"
       ],
-      "domain": "caesars.com"
+      "ccspCustomer": false
     },
     {
       "name": "Insight Direct Usa",
@@ -1150,7 +930,7 @@
       "aliases": [
         "Insight Direct Usa, Inc."
       ],
-      "domain": "insight.com"
+      "ccspCustomer": false
     },
     {
       "name": "Insight Enterprises",
@@ -1159,6 +939,7 @@
       "aliases": [
         "Insight Enterprises, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "10168151",
         "11585427",
@@ -1170,8 +951,7 @@
         "7179555",
         "8312513",
         "834896"
-      ],
-      "domain": "insight.com"
+      ]
     },
     {
       "name": "Mattel",
@@ -1180,11 +960,10 @@
       "aliases": [
         "Mattel, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "1167076",
-        "831778"
-      ],
-      "domain": "mattel.com"
+        "1025778"
+      ]
     },
     {
       "name": "Mattell",
@@ -1193,7 +972,7 @@
       "aliases": [
         "Mattell Inc"
       ],
-      "domain": "mattel.com"
+      "ccspCustomer": false
     },
     {
       "name": "Mgm Mirage Design Warehouse",
@@ -1202,7 +981,7 @@
       "aliases": [
         "MGM Mirage Design Warehouse"
       ],
-      "domain": "mgmresorts.com"
+      "ccspCustomer": false
     },
     {
       "name": "Mgm Resorts",
@@ -1218,8 +997,7 @@
         "6115942",
         "7030612",
         "8774493"
-      ],
-      "domain": "mgmresorts.com"
+      ]
     },
     {
       "name": "Pcm",
@@ -1232,8 +1010,7 @@
       "accountNumbers": [
         "5497785",
         "6039616"
-      ],
-      "domain": "insight.com"
+      ]
     },
     {
       "name": "Smart City Networks Limited Partnership",
@@ -1242,11 +1019,7 @@
       "aliases": [
         "Smart City Networks, Limited Partnership"
       ],
-      "accountNumbers": [
-        "11678981",
-        "991471"
-      ],
-      "domain": "smartcitynetworks.com"
+      "ccspCustomer": false
     },
     {
       "name": "Switch",
@@ -1255,7 +1028,7 @@
       "aliases": [
         "Switch, Ltd."
       ],
-      "domain": "switch.com"
+      "ccspCustomer": false
     },
     {
       "name": "Delta Dental Of California",
@@ -1264,15 +1037,7 @@
       "aliases": [
         "Delta Dental of California"
       ],
-      "accountNumbers": [
-        "12626670",
-        "1576388",
-        "5588402",
-        "5993550",
-        "825422",
-        "830409"
-      ],
-      "domain": "deltadentalins.com"
+      "ccspCustomer": false
     },
     {
       "name": "Logix Federal Credit Union",
@@ -1281,12 +1046,10 @@
       "aliases": [
         "Logix Federal Credit Union"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "12073887",
-        "12076208",
         "5855265"
-      ],
-      "domain": "lfcu.com"
+      ]
     },
     {
       "name": "Masimo",
@@ -1295,6 +1058,7 @@
       "aliases": [
         "Masimo Corporation"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "1025434",
         "1436574",
@@ -1302,8 +1066,7 @@
         "6350582",
         "6450177",
         "6889112"
-      ],
-      "domain": "masimo.com"
+      ]
     },
     {
       "name": "Molina Healthcare",
@@ -1312,16 +1075,10 @@
       "aliases": [
         "Molina Healthcare, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "11916728",
-        "11916762",
-        "11916923",
-        "12498922",
-        "5493562",
-        "831952",
-        "8821830"
-      ],
-      "domain": "molinahealthcare.com"
+        "1530865"
+      ]
     },
     {
       "name": "Pacific Life Insurance",
@@ -1330,10 +1087,10 @@
       "aliases": [
         "Pacific Life Insurance Company"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "11431296"
-      ],
-      "domain": "pacificlife.com"
+      ]
     },
     {
       "name": "Psemi",
@@ -1342,10 +1099,10 @@
       "aliases": [
         "Psemi Corporation"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "6156729"
-      ],
-      "domain": "psemi.com"
+      ]
     },
     {
       "name": "Sada Systems",
@@ -1357,8 +1114,7 @@
       "ccspCustomer": true,
       "accountNumbers": [
         "7559272"
-      ],
-      "domain": "sada.com"
+      ]
     },
     {
       "name": "Skyworks Solutions",
@@ -1367,11 +1123,10 @@
       "aliases": [
         "Skyworks Solutions, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "1549679",
-        "563164"
-      ],
-      "domain": "skyworksinc.com"
+        "1549679"
+      ]
     },
     {
       "name": "Alteryx",
@@ -1380,10 +1135,7 @@
       "aliases": [
         "Alteryx, Inc."
       ],
-      "accountNumbers": [
-        "11378739"
-      ],
-      "domain": "alteryx.com"
+      "ccspCustomer": false
     },
     {
       "name": "Brightpoint",
@@ -1392,10 +1144,10 @@
       "aliases": [
         "Brightpoint, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "828666"
-      ],
-      "domain": "ingrammicro.com"
+        "1417674"
+      ]
     },
     {
       "name": "Harbor Freight Tools Usa",
@@ -1404,14 +1156,14 @@
       "aliases": [
         "Harbor Freight Tools Usa, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "5453255",
         "5607528",
         "6314160",
         "718735",
         "799992"
-      ],
-      "domain": "harborfreight.com"
+      ]
     },
     {
       "name": "Hot Topic",
@@ -1420,13 +1172,13 @@
       "aliases": [
         "Hot Topic, Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "1474506",
         "5716109",
         "614668",
         "834770"
-      ],
-      "domain": "hottopic.com"
+      ]
     },
     {
       "name": "Ingram Micro",
@@ -1435,10 +1187,10 @@
       "aliases": [
         "Ingram Micro Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "1160953"
-      ],
-      "domain": "ingrammicro.com"
+      ]
     },
     {
       "name": "Qad",
@@ -1447,12 +1199,10 @@
       "aliases": [
         "Qad Inc."
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
-        "1310964",
-        "1632614",
-        "859813"
-      ],
-      "domain": "qad.com"
+        "5856163"
+      ]
     },
     {
       "name": "Topgolf Callaway Brands",
@@ -1461,7 +1211,7 @@
       "aliases": [
         "Topgolf Callaway Brands Corp."
       ],
-      "domain": "callawaygolf.com"
+      "ccspCustomer": false
     },
     {
       "name": "Zenith Insurance",
@@ -1470,12 +1220,12 @@
       "aliases": [
         "Zenith Insurance Company"
       ],
+      "ccspCustomer": false,
       "accountNumbers": [
         "1070374",
         "5434459",
         "6280884"
-      ],
-      "domain": "zenith-insurance.com"
+      ]
     }
   ]
 }
