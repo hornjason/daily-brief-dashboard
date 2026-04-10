@@ -4088,6 +4088,22 @@ Source: Jason 2026-04-05 CI pipeline analysis
 Files: playwright.config.ts (webServer.timeout: 15_000)
 Description: playwright.config.ts configures `webServer.timeout: 15_000` (15 seconds). Bun cold-start on a GitHub Actions runner (slower than dev machine, cold dependency resolution) can approach this limit, risking "server didn't start" failures that cancel the entire test run. Fix: bump to 30_000 or 45_000 to give the server comfortable startup room without risking test runs failing before they start.
 
+### BKL-OPS-01 | Release management best practices — versioning, changelog, rollback, and branch strategy
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: M
+Source: Jason 2026-04-10
+Files: Makefile, .github/workflows/ci.yml, CLAUDE.md
+Description: Document and implement release management best practices for this setup (single-user localhost app, containerized, no staging env). Key areas to address:
+  (1) **Versioning** — currently no version tags on container images; every build overwrites `latest`. Add semver tags (or date-based e.g. 2026.04.10) on builds so rollback is possible via `podman run localhost/daily-brief-dashboard:2026.04.10`.
+  (2) **Changelog** — no formal changelog. Add CHANGELOG.md auto-generated from commit messages (Conventional Commits style) or manually curated per session.
+  (3) **Rollback** — no documented rollback path. Define: keep last 3 image tags locally; add `make rollback TAG=<tag>` target.
+  (4) **Branch strategy** — all work on main. Define a lightweight branch policy: feature branches for risky changes (scraper modifications, schema changes), direct-to-main for small fixes. Document in CLAUDE.md.
+  (5) **Release notes** — post-session: capture what shipped, what backlog items closed, known issues. Could be a brief RELEASES.md entry per session.
+  (6) **Pre-release gate** — formalize the Rook + Quinn gate (currently in memory only) as a required step in Makefile or CI before any `make rebuild`.
+  Research: investigate whether `instatunnel --subdomain` with a stable subdomain (Pro feature) is worth it for sharing the app with stakeholders.
+
 ### BKL-W3-16 | AdminPage — remove text-[10px] violations (P0 typography)
 Status: ✅ DONE 2026-04-04 — Replaced all 5 text-[10px] occurrences: lines 109, 432 (compact badge contexts) → text-signal; lines 214, 225, 297 (hint/error text) → text-xs. No visual redesign.
 Priority: P0
