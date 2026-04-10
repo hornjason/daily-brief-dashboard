@@ -595,7 +595,7 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
           {state.running && (
             <button
               onClick={async () => {
-                await fetch('/api/bootstrap/auto/cancel', { method: 'POST' }).catch(() => {})
+                await fetch('/api/bootstrap/auto/cancel', { method: 'POST' }).catch(e => console.error('[bootstrap] cancel failed:', e))
               }}
               className="text-xs text-warning hover:text-warning/80 underline"
             >
@@ -2156,7 +2156,7 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
         window.open('http://localhost:6080', '_blank')
       } else {
         // Start a new login, then open VNC tab
-        await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(() => {})
+        await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(e => console.warn('[rh-auth] start failed:', e))
         window.open('http://localhost:6080', '_blank')
       }
       // Poll will detect completion and flip to Connected
@@ -2167,7 +2167,7 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
   }
 
   const handleCancel = async () => {
-    await fetch('/api/auth/redhat/session', { method: 'DELETE' }).catch(() => {})
+    await fetch('/api/auth/redhat/session', { method: 'DELETE' }).catch(e => console.error('[rh-auth] cancel failed:', e))
     popupRef.current?.close()
     popupRef.current = null
     setConnecting(false)
@@ -2421,7 +2421,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
           // Session exists but lastSync is missing (e.g. after container restart).
           // Trigger a sync to populate lastSync instead of silently bailing.
           setSfConnecting(false)
-          await fetch('/api/scrape/salesforce', { method: 'POST' }).catch(() => {})
+          await fetch('/api/scrape/salesforce', { method: 'POST' }).catch(e => console.error('[sf-auth] sync trigger failed:', e))
           return
         }
       } catch { /* fall through */ }
@@ -3175,7 +3175,16 @@ function PodBootstrapSection() {
   }
 
   const resetPodBootstrap = async () => {
-    await fetch('/api/bootstrap/auto/reset', { method: 'POST' }).catch(() => {})
+    try {
+      const res = await fetch('/api/bootstrap/auto/reset', { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setStartError(d.error ?? `Reset failed (${res.status})`)
+        return
+      }
+    } catch (e: any) {
+      console.error('[bootstrap] reset failed:', e)
+    }
     setStatus(null)
     setStartError(null)
     setCancelling(false)
