@@ -663,7 +663,7 @@ function Dashboard() {
                 cases={casesApi.data?.cases ?? []}
                 events={calendarApi.data?.events ?? []}
                 loading={accountsApi.loading}
-                onCustomerClick={(name) => navigate(`/dashboard/customer/${encodeURIComponent(name)}`}
+                onCustomerClick={(name) => navigate(`/dashboard/customer/${encodeURIComponent(name)}`)}
               />
             </section>
           </main>
