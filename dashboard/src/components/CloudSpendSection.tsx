@@ -262,8 +262,11 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
       {!loading && !error && !data && (
         <div className="flex flex-col items-center justify-center py-10 text-center gap-2">
           <Cloud className="w-8 h-8 text-text-secondary opacity-40" />
-          <p className="text-sm text-text-secondary">No cloud spend data yet.</p>
-          <p className="text-xs text-text-secondary">Run a CCSP scrape in Setup to populate.</p>
+          <p className="text-sm text-text-secondary">No cloud spend data available</p>
+          <p className="text-xs text-text-secondary max-w-sm">
+            Run a CCSP sync from <Link to="/dashboard/setup" className="text-accent hover:underline">Admin &gt; Data Sources</Link> to populate cloud marketplace revenue data.
+          </p>
+          <p className="text-xs text-text-secondary/60 mt-1">CCSP (Cloud &amp; Service Provider) tracks AWS, Azure, and GCP marketplace spend across your accounts.</p>
         </div>
       )}
 

@@ -1091,8 +1091,9 @@ export function CustomerDetailPage() {
     return arrived / sections.length
   }, [sse.meta, sse.cases, sse.meetings, sse.emails, sse.drive, sse.subscriptions, sse.loading])
 
-  // Detect customer not found: SSE finished loading, no meta received, and error present
-  const customerNotFound = !sectionLoading && meta === null && sse.error !== null
+  // Detect customer not found: SSE finished loading and no meta received
+  // (either with an error, or the stream completed without sending meta)
+  const customerNotFound = !sectionLoading && meta === null
 
   // Scroll to top on customer change
   useEffect(() => { window.scrollTo(0, 0) }, [customerName])

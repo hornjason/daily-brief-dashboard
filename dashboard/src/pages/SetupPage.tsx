@@ -2596,7 +2596,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
           </div>
 
           {/* Tableau */}
-          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${tableauConnected ? 'border-l-success' : tableauConnecting ? 'border-l-warning' : 'border-l-border'}`}>
+          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${ccspStatus?.lastError ? 'border-l-critical' : tableauConnected ? 'border-l-success' : tableauConnecting ? 'border-l-warning' : 'border-l-border'}`}>
             <div className="flex items-center justify-between mb-1">
               <div>
                 <p className="text-sm font-medium text-white">Tableau</p>
@@ -2612,6 +2612,11 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                   <>
                     <Loader2 className="w-2.5 h-2.5 animate-spin text-text-secondary" />
                     <span className="text-xs text-text-secondary">Checking...</span>
+                  </>
+                ) : ccspStatus?.lastError ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-critical" />
+                    <span className="text-xs text-critical">Scrape failed</span>
                   </>
                 ) : (
                   <>
@@ -2764,6 +2769,7 @@ export default function SetupPage() {
   const [rhOk, setRhOk] = useState<boolean | null>(null)
   const [resetting, setResetting] = useState(false)
   const [dataSourcesHealth, setDataSourcesHealth] = useState<'loading' | 'healthy' | 'issues'>('loading')
+  const [dataSourcesConnected, setDataSourcesConnected] = useState<number | null>(null)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
 
   // Dynamic page title
@@ -2810,8 +2816,15 @@ export default function SetupPage() {
       fetch('/api/scrape/ccsp/status',              { signal }).then(r => r.json()).catch(() => ({ lastError: 'Unreachable' })),
       fetch('/api/bootstrap/tableau/session-status', { signal }).then(r => r.json()).catch(() => ({ reachable: false, sessionValid: false })),
     ]).then(([rh, sf, ccsp, tableau]) => {
-      const anyErrors = !(rh.hasSession) || !!(rh.sessionExpired) || !(sf.hasSession) || !!(ccsp.lastError) || !(tableau.sessionValid)
-      setDataSourcesHealth(anyErrors ? 'issues' : 'healthy')
+      const checks = [
+        rh.hasSession && !rh.sessionExpired,
+        sf.hasSession,
+        !ccsp.lastError && !!ccsp.lastScrape,
+        tableau.sessionValid,
+      ]
+      const connected = checks.filter(Boolean).length
+      setDataSourcesConnected(connected)
+      setDataSourcesHealth(connected < 4 ? 'issues' : 'healthy')
     }).catch(() => { /* aborted — ignore */ })
 
     // OAuth return: open AEs section and clean URL so the child AutoBootstrapForm can restore state
@@ -2990,8 +3003,8 @@ export default function SetupPage() {
               dataSourcesHealth === 'loading'
                 ? <span className="text-xs text-text-secondary">Checking...</span>
                 : dataSourcesHealth === 'issues'
-                  ? <span className="text-xs text-warning">Issues detected</span>
-                  : <span className="text-xs text-success">All connected</span>
+                  ? <span className="text-xs text-warning">{dataSourcesConnected ?? 0}/4 connected</span>
+                  : <span className="text-xs text-success">4/4 connected</span>
             }
             isOpen={openSection === 'data-sources'}
             onToggle={() => toggleSection('data-sources')}
