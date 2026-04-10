@@ -108,7 +108,7 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
 
   return (
     <aside
-      className={`relative ${collapsed ? 'w-14' : 'w-52'} transition-[width] duration-200 ease-in-out min-h-screen bg-surface border-r border-border flex flex-col shrink-0 overflow-visible`}
+      className={`sticky top-0 self-start ${collapsed ? 'w-14' : 'w-52'} transition-[width] duration-200 ease-in-out h-screen bg-surface border-r border-border flex flex-col shrink-0 overflow-visible`}
     >
       {/* Floating edge toggle — straddles the right border */}
       <button
