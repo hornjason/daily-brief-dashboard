@@ -6020,3 +6020,43 @@ Size: S (1-2h)
 Source: Playwright config updated 2026-04-10 — test project targeting port 7776 added but specs not yet tagged
 Files: test/api/setup.spec.ts, test/lifecycle.spec.ts, test/playwright.config.ts
 Description: The Playwright config now has a `test` project targeting port 7776 for `@destructive` tests, and `postJSONDestructive()` in fixtures.ts routes calls to `TEST_BASE`. However, `setup.spec.ts` and `lifecycle.spec.ts` do not yet have `@destructive` tags on their test cases. Add `@destructive` annotation to all tests in those two files so they are automatically routed to port 7776. Verify: `npx playwright test --project=test` runs only the tagged tests against the test container and passes.
+
+### BKL-REG-11 | Product intel only works for RHEL — other products return empty or fail silently
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P0
+Size: M (2-3h)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/components/ProductIntelSection.tsx
+Description: Two compounding bugs: (1) `handleRegenerate` called `POST /api/products/${slug}/refresh` before generate, which does live web scraping (15-90s timeouts per URL). If the refresh timed out or failed for any product, generation was silently skipped with an error banner that disappeared. (2) Products with `relevanceScore === 'NONE'` (either subscription-skip or genuine no-match) were filtered out of both `visibleSlugs` and `uncachedSlugs`, causing them to silently disappear from the UI after generation. Users could not see the result or regenerate.
+Decision: DONE — (1) Removed mandatory refresh-before-generate from `handleRegenerate` and `handleGenerateAll`; intel generation now calls generate directly using cached product summary. Added fallback: if generate fails with "No cached summary", refresh is attempted once then generate retries. (2) `visibleSlugs` now includes all non-null intel (including NONE-scored); header badge counts only non-NONE results. Added NONE to `RELEVANCE_STYLES` with muted styling. All 7 products now show their generated state after intel generation.
+
+### BKL-UX-morning-min | Morning summary starts fully expanded — should start minimized when signals > 3
+Status: ✅ DONE 2026-04-10
+Severity: LOW
+Priority: P1
+Size: XS (30m)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/components/MorningSummary.tsx
+Description: `collapsed` state was initialized to `false` (expanded). On busy mornings with many signals, the morning summary dominated the viewport immediately on page load.
+Decision: DONE — `collapsed` now initializes to `true` (collapsed). After data loads, auto-expands only when `signals.length <= 3`. Heuristic: > 3 signals = stay collapsed (user can expand). The existing collapsed view shows a compact bullet outline (BKL-PVIEW-08) so information is still accessible.
+
+### BKL-UX-sidebar-scroll | Sidebar disappears on scroll — not sticky
+Status: ✅ DONE 2026-04-10
+Severity: MEDIUM
+Priority: P2
+Size: XS (15m)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/components/Sidebar.tsx
+Description: Sidebar `<aside>` used `position: relative` and `min-h-screen` inside a `flex min-h-screen` layout container. Main content scrolling moved the sidebar out of view because it was in normal document flow.
+Decision: DONE — Changed `relative` to `sticky top-0 self-start` and `min-h-screen` to `h-screen`. The `overflow-y-auto` on the inner `<nav>` ensures sidebar content itself can scroll independently when the nav items are tall. Sidebar now stays fixed at the top of the viewport as main content scrolls.
+
+### BKL-BOOT-AI | Bootstrap does not pre-generate briefs for new customers after completion
+Status: ✅ DONE 2026-04-10
+Severity: LOW
+Priority: P3
+Size: S (1h)
+Source: Jason — 2026-04-10 testing session
+Files: src/customer-routes.ts, src/bootstrap-orchestrator.ts
+Description: After bootstrap, `POST /api/intelligence/generate-all` was triggered (BKL-AI07) but there was no equivalent trigger for brief pre-generation. Newly bootstrapped customers had no cached brief until a user navigated to their detail page. The background scheduler's startup pregen ran only once at server start, missing customers added post-startup.
+Decision: DONE — Added `POST /api/briefs/pregen-all` endpoint in customer-routes.ts. Uses same pattern as background-scheduler.ts brief-pregen: skips customers with existing cache, 10s gap between customers, fire-and-forget. Added non-blocking trigger in bootstrap-orchestrator.ts after the intelligence batch trigger. Always safe to call — the endpoint is idempotent (no-ops for cached customers).
