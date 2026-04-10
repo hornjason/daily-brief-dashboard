@@ -18,6 +18,14 @@ export interface AccountInfo {
   totalLicenses: number
   cachedAt: string | null
   confidenceScore?: number | null
+  attentionScore?: number
+  attentionReasons?: string[]
+}
+
+export interface PodInfo {
+  id: string
+  name: string
+  aeNames: string[]
 }
 
 export interface SupportCase {
