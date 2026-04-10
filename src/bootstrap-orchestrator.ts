@@ -857,7 +857,8 @@ export function registerBootstrapRoutes(app: Hono): void {
       tableauTerritories?: string[]
       customerNames?: string[]
       parentFolderId?: string
-    }>().catch(() => ({} as { aeName?: string; sfReportId?: string; tableauTerritories?: string[]; customerNames?: string[]; parentFolderId?: string }))
+      podName?: string  // BKL-DRIVE-01: optional POD display name for subfolder hierarchy
+    }>().catch(() => ({} as { aeName?: string; sfReportId?: string; tableauTerritories?: string[]; customerNames?: string[]; parentFolderId?: string; podName?: string }))
 
     const aeName = (body.aeName ?? '').trim()
     // BKL-F07: Accept full Salesforce URLs — extract bare ID
@@ -869,6 +870,8 @@ export function registerBootstrapRoutes(app: Hono): void {
     if (junkFiltered.length > 0) {
       console.log(`[auto-bootstrap] Filtered ${junkFiltered.length} junk name(s) from territory sheet: ${junkFiltered.join(', ')}`)
     }
+    // BKL-DRIVE-01: optional POD display name for subfolder hierarchy
+    const podName = (body.podName ?? '').trim() || undefined
     // Accept full Drive URL or bare folder ID — extract ID from URL if needed
     const rawParent = (body.parentFolderId ?? '').trim()
     const parentFolderId = rawParent
@@ -1012,11 +1015,42 @@ export function registerBootstrapRoutes(app: Hono): void {
         } else {
           const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
 
+          // BKL-DRIVE-01: If podName is provided, find-or-create a POD subfolder under
+          // parentFolderId, then use it as the effective parent for the AE folder.
+          // Hierarchy: parentFolderId / POD Name / AE Name / customer folders
+          // Single-AE bootstrap without podName skips the POD layer.
+          let effectiveParentId = parentFolderId
+          if (podName && parentFolderId) {
+            const safePodName = podName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+            const existingPod = await drive.files.list({
+              q: `name='${safePodName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+              fields: 'files(id, name)',
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            }).catch(() => ({ data: { files: [] } }))
+            if (existingPod.data.files?.length) {
+              effectiveParentId = existingPod.data.files[0].id!
+              console.log(`[auto-bootstrap] Reusing existing POD folder: ${podName} (${effectiveParentId})`)
+            } else {
+              const podFolder = await drive.files.create({
+                requestBody: {
+                  name: podName,
+                  mimeType: 'application/vnd.google-apps.folder',
+                  parents: [parentFolderId],
+                },
+                supportsAllDrives: true,
+                fields: 'id',
+              })
+              effectiveParentId = podFolder.data.id!
+              console.log(`[auto-bootstrap] Created POD folder: ${podName} (${effectiveParentId})`)
+            }
+          }
+
           // BKL-M27: Check if folder already exists in parent before creating
-          if (parentFolderId) {
+          if (effectiveParentId) {
             const safeName = aeName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
             const existing = await drive.files.list({
-              q: `name='${safeName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+              q: `name='${safeName}' and '${effectiveParentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
               fields: 'files(id, name, webViewLink)',
               supportsAllDrives: true,
               includeItemsFromAllDrives: true,
@@ -1036,7 +1070,7 @@ export function registerBootstrapRoutes(app: Hono): void {
               requestBody: {
                 name: aeName,
                 mimeType: 'application/vnd.google-apps.folder',
-                ...(parentFolderId ? { parents: [parentFolderId] } : {}),
+                ...(effectiveParentId ? { parents: [effectiveParentId] } : {}),
               },
               supportsAllDrives: true,
               fields: 'id,webViewLink',
