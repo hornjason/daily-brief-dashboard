@@ -1422,6 +1422,15 @@ export function registerBootstrapRoutes(app: Hono): void {
       } else {
         console.log('[auto-bootstrap] intelligence generation skipped — intelligenceEnabled=false')
       }
+
+      // BKL-BOOT-AI: Auto-pre-generate briefs for all customers after bootstrap.
+      // Non-blocking — fires after intelligence batch trigger. Brief pregen skips customers that
+      // already have a cached brief, so this is safe to call on every bootstrap.
+      fetch(`http://localhost:${port}/api/briefs/pregen-all`, { method: 'POST' })
+        .then(r => r.json())
+        .then((d: any) => console.log(`[auto-bootstrap] brief pregen triggered: ${d?.message ?? 'ok'}`))
+        .catch(e => console.warn('[auto-bootstrap] brief pregen trigger failed:', e?.message))
+
       console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
       notify('Bootstrap Complete', `All steps complete for ${aeName}`, 'high').catch(() => {})
     })()
