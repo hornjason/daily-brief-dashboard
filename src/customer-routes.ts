@@ -596,41 +596,57 @@ export function registerCustomerRoutes(app: Hono): void {
       errors: [],
     }
 
-    // Run sequentially in background (no Promise.all — single Gemini call at a time)
-    ;(async () => {
-      for (const customer of customerList) {
-        _batchState.current = customer.name
-        try {
-          await runIntelligencePipeline(customer.name)
-          // Wait for the per-customer pipeline to finish (it runs in background via IIFE)
-          // Poll getJobStatus until it resolves to complete or error
-          let settled = false
-          for (let i = 0; i < 600; i++) { // max ~10 min per customer
-            const jobStatus = getJobStatus(customer.name)
-            if (jobStatus && (jobStatus.status === 'complete' || jobStatus.status === 'error')) {
-              if (jobStatus.status === 'error') {
-                _batchState.failed++
-                _batchState.errors.push({ customer: customer.name, error: jobStatus.error ?? 'Unknown error' })
-              }
-              settled = true
-              break
-            }
-            await new Promise(r => setTimeout(r, 1000))
-          }
-          if (!settled) {
-            _batchState.failed++
-            _batchState.errors.push({ customer: customer.name, error: 'Timed out after 10 minutes' })
-          }
-        } catch (e: any) {
-          _batchState.failed++
-          _batchState.errors.push({ customer: customer.name, error: String(e?.message ?? e).slice(0, 300) })
-        }
-        _batchState.completed++
-        // 2-second delay between customers for Gemini rate limits
-        if (_batchState.completed < _batchState.total) {
-          await new Promise(r => setTimeout(r, 2000))
-        }
+    // BKL-AI-05: Run with concurrency cap to prevent Gemini API spike on large PODs
+    const MAX_CONCURRENT = 5
+    let inFlight = 0
+
+    console.log(`[intelligence] generate-all: queuing ${customerList.length} customers (max ${MAX_CONCURRENT} concurrent)`)
+
+    async function withConcurrencyLimit<T>(fn: () => Promise<T>): Promise<T> {
+      while (inFlight >= MAX_CONCURRENT) {
+        await new Promise(r => setTimeout(r, 200))
       }
+      inFlight++
+      try {
+        return await fn()
+      } finally {
+        inFlight--
+      }
+    }
+
+    async function processCustomer(customer: { name: string }) {
+      try {
+        await runIntelligencePipeline(customer.name)
+        // Poll getJobStatus until it resolves to complete or error
+        let settled = false
+        for (let i = 0; i < 600; i++) { // max ~10 min per customer
+          const jobStatus = getJobStatus(customer.name)
+          if (jobStatus && (jobStatus.status === 'complete' || jobStatus.status === 'error')) {
+            if (jobStatus.status === 'error') {
+              _batchState.failed++
+              _batchState.errors.push({ customer: customer.name, error: jobStatus.error ?? 'Unknown error' })
+            }
+            settled = true
+            break
+          }
+          await new Promise(r => setTimeout(r, 1000))
+        }
+        if (!settled) {
+          _batchState.failed++
+          _batchState.errors.push({ customer: customer.name, error: 'Timed out after 10 minutes' })
+        }
+      } catch (e: any) {
+        _batchState.failed++
+        _batchState.errors.push({ customer: customer.name, error: String(e?.message ?? e).slice(0, 300) })
+      }
+      _batchState.completed++
+    }
+
+    ;(async () => {
+      const tasks = customerList.map(customer =>
+        withConcurrencyLimit(() => processCustomer(customer))
+      )
+      await Promise.all(tasks)
       _batchState.running = false
       _batchState.current = null
       _batchState.completedAt = new Date().toISOString()

@@ -5322,7 +5322,7 @@ Files: src/account-intelligence.ts, src/customer-product-intel.ts
 Description: Customers with no account numbers, no cases, and no subscriptions get the full intelligence pipeline run, burning tokens for effectively empty output. Add a pre-flight gate: if accountNumbers.length === 0 && subscriptions.length === 0, skip AI generation and write a minimal stub cache entry. Log skipped customers for visibility.
 
 ### BKL-AI-05 | Rate-limit generate-all on bootstrap — don't run 72 customers at once
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: LOW
 Priority: P3
 Size: M
