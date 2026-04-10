@@ -5550,3 +5550,32 @@ Size: XS
 Source: 2026-04-10 Quinn API scan
 Files: server.ts or src/intelligence-routes.ts
 Description: GET /api/intelligence/generate-all/status returns 404. Either the route was never wired or was removed during refactor. Verify route exists in server.ts and is correctly exported.
+
+### BKL-RH-PERF-01 | RH scraper PR1 — negative cache + waitForSelector + persistSessionState fix
+Status: 🟡 IN PROGRESS
+Severity: HIGH
+Priority: P1
+Size: M
+Source: 2026-04-10 Council review — unanimous recommendation
+Files: src/scraper-manager.ts, src/rh-scraper.ts, data/config/customers.json (schema)
+Description: Three zero-risk fixes in one PR.
+(1) **Negative cache (tombstoning):** After 3 consecutive discovery failures for a customer, write `discoveryStatus: "unresolvable"` + timestamp to that customer record in customers.json. Skip on future runs until 14-day TTL expires. Add admin UI to manually invalidate. This eliminates re-searching 77 dead names every 15-min heartbeat run — expected to cut repeat-run time from 13-34 min to under 2 min.
+(2) **Replace fixed waits with element-readiness:** Replace `waitForTimeout(1500)` and `waitForTimeout(500)` in discoverAccountNumberByName with `waitForSelector` on the dropdown element appearing + explicit fallback timeout. Faster when dropdown renders quickly, more reliable when slow.
+(3) **persistSessionState error propagation:** Current `catch { /* non-fatal */ }` silently drops disk write failures. A dropped session state cascades to false customer-not-found on next run, poisoning the negative cache before it starts. Log and surface these errors explicitly.
+Constraint: SCRAPER-RULES.md — read before touching. 3-concurrent discovery is already sanctioned by rules. Sequential constraint applies to Supportable only.
+Decision: Council unanimous. Jason authorized 2026-04-10 ("let's go for it").
+
+### BKL-RH-PERF-02 | RH scraper PR2 — failure audit + batch HTTP-first + jitter
+Status: 🔴 BLOCKED on BKL-RH-PERF-01
+Severity: MEDIUM
+Priority: P2
+Size: M
+Source: 2026-04-10 Council review
+Files: src/scraper-manager.ts, src/rh-scraper.ts
+Description: Second PR, ships after PR1 instrumentation data is available (1 week).
+(1) **Failure reason audit:** Add logging to classify each discovery failure as "no portal entry" vs "name mismatch" vs "timeout". This data determines whether to invest in normalization.
+(2) **Batch HTTP-first Solr calls:** Currently fires one HTTP call per customer sequentially. Move all HTTP-first calls into a single `page.evaluate()` with `Promise.all` at 3 concurrent (already sanctioned by SCRAPER-RULES.md). Expected to cut HTTP-path portion from ~2min to ~20s.
+(3) **Jitter between batches:** Add 200-800ms random delay between batch windows. Ships as toggleable infrastructure (off by default), activated on evidence of rate limiting.
+(4) **Session validation bookends:** Validate session before and after each batch window to guard against stale-cookie silent success.
+(5) **Name normalization** (only if failure audit shows name mismatches > missing accounts): Strip legal suffixes (LLC, Inc, Corp, Ltd) from search name before sidebar lookup. Expected recovery: 10-15% of current failures.
+Decision: Council consensus. Blocked on PR1 shipping + 1 week of failure data.
