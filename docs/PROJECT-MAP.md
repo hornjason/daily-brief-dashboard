@@ -17,7 +17,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `src/background-scheduler.ts` | All scheduled timers (ADR-007 self-rescheduling setTimeout pattern) |
 | `src/settings-api.ts` | Refresh intervals, scheduler config, weather settings |
 | `src/scraper-manager.ts` | RH/SF scrape orchestration, mutex guards, session lifecycle |
-| `src/bootstrap-orchestrator.ts` | 6-step AE setup: Drive → Customers → Supportable → Sheets → CCSP → Pipeline |
+| `src/bootstrap-orchestrator.ts` | 6-step AE setup: Drive folder → Customer folders → SF Bookings read → Write sheet → CCSP → Pipeline |
 | `src/territory-sync.ts` | Territory sheet diff + auto-add/flag removals |
 | `src/refresh-engine.ts` | refreshAll/Subscriptions/CCSP/Pipeline from Google Sheets |
 | `src/cache-layer.ts` | Brief/sheet/CCSP/pipeline cache helpers; exports `BRIEF_CACHE_TTL_MS` (4h, ADR-009) and `readLatestBriefCache()` |
@@ -37,7 +37,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - **Runtime:** Bun + Hono (server), React + Vite (dashboard)
 - **Scraping:** Playwright (shared browser context)
 - **AI:** Gemini (Vertex AI) — three-step pipeline in `src/brief-pipeline.ts`
-- **External:** Google Sheets/Drive, Red Hat Portal, Salesforce, Tableau, Supportable 360
+- **External:** Google Sheets/Drive, Red Hat Portal, Salesforce, Tableau
 - **Container:** Podman, `localhost/daily-brief-dashboard:latest`
 
 ## Architecture & Design Docs
@@ -145,8 +145,7 @@ Full inventory in `ARCHITECTURE.md` §17. Quick reference:
 
 | Pipeline | Type | Schedule / Trigger |
 |---|---|---|
-| RH Cases | Browser scrape | Heartbeat interval (default 4h, configurable) |
-| Supportable | Browser scrape | Daily 7:00 AM ET, 3-batch rotation |
+| RH Cases + Account Discovery | Browser scrape | Heartbeat interval (default 4h, configurable) |
 | CCSP / Tableau | Browser scrape | Daily 6:30 AM ET |
 | SF Pipeline | Browser scrape | Daily 2:00 AM ET |
 | Account Intelligence | Gemini + grounding | Post-bootstrap + Admin "Generate All" |
@@ -168,7 +167,6 @@ Full inventory in `ARCHITECTURE.md` §17. Quick reference:
 | 1:45 AM | Territory Sheet | 33 | GSheet → customers.json diff |
 | 2:00 AM | SF Pipeline | 7 | SF Lightning → GSheet → cache |
 | 6:30 AM | CCSP / Tableau | 31 | Tableau → GSheet + delta |
-| 7:00 AM | Supportable | 32 | Batch rotation (ADR-008) |
 | 8:00 AM | KPI Snapshot | 34 | Daily metrics → kpi-history.json |
 | Continuous | RH Cases | 3 | 15-min heartbeat, configurable interval |
 
@@ -176,5 +174,8 @@ All schedule times configurable via Admin page. Floors enforced server-side.
 
 ## Stale Docs (do not use as authoritative)
 
-- `docs/architecture.md` → superseded by root `ARCHITECTURE.md`
 - `docs/ARCHITECTURE-oauth-multiAE.md` → captured in `ARCHITECTURE.md` §7
+
+## Disabled Systems
+
+- **Supportable 360** — fully disabled as of 2026-04-10. Account discovery uses RH Portal sidebar autocomplete (via `rh-scraper.ts`). Subscription data comes from SF Bookings sheets. Do not call Supportable endpoints.

@@ -8,8 +8,8 @@ Complete flow for onboarding a new Account Executive into the DailyBriefDashboar
 
 - Google OAuth token with bootstrap scopes (`BOOTSTRAP_SCOPES` — includes Drive write)
 - Territory sheet populated with the AE's customer list
-- RH Portal session active (for Supportable/CCSP scrapes)
-- VPN connected (required for Supportable)
+- SF Bookings sheet for the AE's POD uploaded to the shared Drive folder (`podBookingsFolderId`)
+- RH Portal session active (for case scraping and account discovery)
 - Salesforce session active (for pipeline sync)
 
 ---
@@ -29,22 +29,24 @@ The setup wizard (`/dashboard/setup`) triggers `bootstrap-orchestrator.ts` which
 - Stores `driveFolderId` on each `Customer` entry in `customers.json`
 - Idempotent: existing folder IDs reused on re-runs
 
-### Step 2-3: Supportable discovery + scrape
-- **Discovery** (Step 2): Queries Supportable 360 for each customer name, retrieves account numbers
-- **Scrape** (Step 3): For each discovered account number, exports subscription data from APEX
-- Writes results to a new Google Sheet: `Supportable — {AE Name}`
-- Stores `supportableSheetId` in `aes.json`
-- Account numbers saved to `customers.json`
+### Step 2: Read SF Bookings Sheet
+- Reads the POD SF Bookings sheet from the shared Drive folder
+- Matches sheet to AE's territory by file name (word-level match against `tableauTerritories`)
+- Derives customer list with subscription data and canonical aliases
+- Saves customers and aliases to `customers.json`
+- Account numbers are NOT discovered here — the RH Cases scraper handles that asynchronously post-bootstrap
 
-### Step 4: CCSP / Tableau scrape
-- Navigates Tableau via shared browser context (SSO passthrough)
-- Downloads cloud spend data for the AE's territory
-- Writes to a new Google Sheet: `{AE Name} CCSP`
+### Step 3: Write Subscriptions Sheet
+- Subscription rows from SF Bookings written to a Google Sheet per AE
+- One tab per customer
+- Stores sheet ID in `aes.json`
+
+### Step 4: CCSP Sheet
+- Creates a CCSP cloud spend sheet in the AE's Drive folder
 - Stores `ccspSheetId` in `aes.json`
 
 ### Step 5: SF Pipeline sync
-- Exports Salesforce pipeline report for the AE's customers
-- Writes to a new Google Sheet: `{AE Name} Pipeline`
+- Creates/updates the Pipeline Google Sheet using the AE's Salesforce report
 - Stores `pipelineSheetId` in `aes.json`
 - Populates local pipeline cache (`data/cache/pipeline-data.json`)
 
@@ -72,9 +74,9 @@ These fire automatically after bootstrap completes — no manual action needed:
 
 ## What Does NOT Auto-Run
 
-### RH Cases
-- Account numbers are saved during bootstrap (Step 2-3)
-- The RH Cases scraper picks up new accounts at the next scheduled run (default: every 4 hours, heartbeat interval)
+### RH Cases + Account Discovery
+- The RH Cases scraper discovers account numbers post-bootstrap by searching RH Portal sidebar autocomplete using the customer's canonical alias (from SF Bookings)
+- Picks up new accounts at the next scheduled run (default: every 4 hours, heartbeat interval)
 - For same-day data: Admin page → RH Cases → "Run Now"
 
 ### Customer Briefs
@@ -94,15 +96,15 @@ These fire automatically after bootstrap completes — no manual action needed:
 
 After bootstrap completes, verify:
 
-1. **aes.json** has the new AE entry with all 4 sheet IDs:
+1. **aes.json** has the new AE entry with:
    - `driveFolderId` (AE's Drive folder)
-   - `supportableSheetId` (Supportable sheet)
    - `ccspSheetId` (CCSP sheet)
    - `pipelineSheetId` (Pipeline sheet)
 
 2. **customers.json** has customer entries with:
-   - `accountNumbers` array populated (from Supportable discovery)
+   - `aliases` array populated (from SF Bookings — canonical SF account names)
    - `driveFolderId` set (per-customer Drive folder)
+   - `accountNumbers` may be empty initially — populated asynchronously by the RH Cases scraper
 
 3. **Intelligence pipeline running:**
    ```bash
@@ -122,10 +124,16 @@ After bootstrap completes, verify:
 
 ## Troubleshooting
 
-### Bootstrap fails at Supportable step
-- Verify VPN is connected
+### Bootstrap fails at SF Bookings step
+- Verify the SF Bookings sheet exists in the shared Drive folder (`podBookingsFolderId` in `settings.json`)
+- Verify the sheet file name contains the territory word (e.g. "Northwest" for NORTHWEST territory)
+- Check required columns exist (see SF Bookings section in `docs/ARCHITECTURE.md`)
+
+### Account numbers not populating after bootstrap
+- Account discovery is asynchronous — the RH Cases scraper discovers them via RH Portal sidebar autocomplete
 - Verify RH Portal session is active (check VNC at localhost:6080)
-- Check container logs for APEX timeout errors
+- Run Admin page → RH Cases → "Run Now" for immediate discovery
+- Check `customers.json` — the `aliases` field must be populated (from SF Bookings) for discovery to work
 
 ### Intelligence pipeline shows errors
 - Verify `GEMINI_SA_KEY_B64` environment variable is set
@@ -137,3 +145,6 @@ After bootstrap completes, verify:
 - Run a full CCSP scrape from Admin panel first (creates service-account-owned sheet)
 - Then Setup page "CCSP Sync Now" will work
 - See BKL-SCRAPER-02 and BKL-SCRAPER-03 for known issues
+
+### Note on Supportable 360
+Supportable 360 is **disabled** and not used anywhere in the current system. Account discovery uses the RH Portal sidebar autocomplete. Subscription data comes from SF Bookings sheets. Do not attempt to enable or call Supportable endpoints.

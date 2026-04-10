@@ -1,6 +1,6 @@
-> **DEPRECATED** — This file is superseded by `ARCHITECTURE.md` in the project root. Do not use this as an authoritative source. It is kept for historical reference only.
+> **Note:** The root `ARCHITECTURE.md` is the authoritative deep-dive reference (intentional design decisions, scraper internals, edge cases). This file provides a concise overview suitable for onboarding.
 
-# ASA Command Center — Architecture
+# DailyBriefDashboard — Architecture Overview
 
 ## Overview
 
@@ -27,7 +27,7 @@ The dashboard is pre-built at container image build time (`dashboard/` → `dist
 ### 1. Google (OAuth)
 Authenticated via a single OAuth token covering Drive, Sheets (read/write), Gmail, and Calendar.
 
-- **Subscription sheets** (`src/sheets.ts`) — Supportable-format Google Sheets per customer; product subscription data
+- **Subscription sheets** (`src/sheets.ts`) — Per-customer subscription data sourced from SF Bookings sheets (see §SF Bookings below)
 - **CCSP spend sheets** (`src/sheets.ts`) — Cloud spend data from AE-managed Google Drive folders
 - **Pipeline sheet** (`src/pipeline.ts`) — A Google Sheet with a `Pipeline` tab written by the SF scraper; read via Sheets API
 
@@ -131,7 +131,7 @@ RH scrape, subscriptions, and CCSP intervals are user-configurable via Settings 
 │   ├── sf-auth.ts             — SF login browser + session management
 │   ├── rh-scraper.ts          — Playwright RH portal case scraper
 │   ├── rh-auth.ts             — RH login browser + session management
-│   ├── rh-account-discovery.ts— Discover customer account numbers from sheets
+│   ├── rh-account-discovery.ts— Discover customer account numbers via RH Portal sidebar autocomplete
 │   ├── rh-scraper-extract.ts  — DOM extraction helpers for RH scraper
 │   ├── sheets.ts              — Google Sheets fetch (subscriptions, CCSP)
 │   ├── customer.ts            — Customer brief generation (email, calendar, AI)
@@ -171,7 +171,7 @@ RH scrape, subscriptions, and CCSP intervals are user-configurable via Settings 
 
 ## Setup Wizard & Bootstrap Flow
 
-This section documents the verified end-to-end flow from initial setup through ongoing scheduled operation. All details sourced from `server.ts` and `src/supportable-scraper.ts` (not inferred).
+This section documents the verified end-to-end flow from initial setup through ongoing scheduled operation. All details sourced from `server.ts` and `src/bootstrap-orchestrator.ts` (not inferred).
 
 ---
 
@@ -184,7 +184,6 @@ This section documents the verified end-to-end flow from initial setup through o
 - Server polls `access.redhat.com/support/cases` until it detects a successful session
 - Session persisted to `.rh-session.json`; Chromium profile (with SSO cookies) saved to `RH_PROFILE_DIR`
 - On success, `adoptScrapeContext()` + `adoptSfContext()` share the browser context with all scrapers
-- Supportable pre-warm fires immediately after login (`GET supportable.corp.redhat.com:4443`) to establish the session before bootstrap
 
 **Google OAuth**
 - User visits `/oauth/start` → redirected to Google consent screen
@@ -210,48 +209,43 @@ This section documents the verified end-to-end flow from initial setup through o
 
 ---
 
-### Step 3 — Auto-Bootstrap (5 Steps, Runs Automatically)
+### Step 3 — Auto-Bootstrap (6 Steps, Runs Automatically)
 
-`POST /api/bootstrap/auto` returns `{started: true}` immediately. The 5-step IIFE runs async; client polls `GET /api/bootstrap/auto/status` for progress.
+`POST /api/bootstrap/auto` returns `{started: true}` immediately. The 6-step sequence runs async; client polls `GET /api/bootstrap/auto/status` for progress.
 
-**Step 1 — Create Drive Subfolder**
+**Step 1 — Create Drive Folder**
 - Server calls Drive API to create `/ <Parent Folder> / <AE Name> /`
 - Subfolder ID saved to AE config in `aes.json`
+- Idempotent: reuses existing folder if re-bootstrapping
 
-**Step 2 — Discover Account Numbers (Supportable)**
-- Opens a shared Playwright Chromium context pointed at `supportable.corp.redhat.com:4443`
-- For each customer in the AE's list:
-  - Navigates to Supportable landing page before each customer (page state reset)
-  - Fills `input#P0_CUSTOMER_NAME` with first 2 words of customer name + `%` (e.g. `"Fred Hutchinson%"`)
-  - Submits the name search form; waits for results
-  - Filters: Country = USA or Web; Entl Active Cnt > 0
-  - Extracts Customer Number column from matching rows
-  - Saves account numbers incrementally to `data/config/customers.json` as each customer completes
-- If a name search returns 0 matches, the customer is saved with an empty account list (not an error)
-- SOLR fallback search (`account_name: "X"`) is present in the code but commented out
+**Step 2 — Create Customer Folders**
+- Creates `{Customer Name}/` subfolder for each customer under the AE folder
+- Uses `normalizeCustomerName()` to strip legal suffixes (Inc, LLC, Corp), state codes, parentheticals
+- Stores `driveFolderId` on each `Customer` entry in `customers.json`
+- Idempotent: existing folder IDs reused on re-runs
 
-**Step 3 — Scrape Subscription Data (Supportable)**
-- Same Playwright session (shared context with discovery)
-- For each account number discovered:
-  - Navigates to account view by entering account number in the account field and clicking Go
-  - APEX multi-step JS redirect sequence: waits for page context to stabilize via evaluate probe loop (up to 5 attempts)
-  - Clicks "Export" tab
-  - Applies Status = Active filter via Actions → Filter → Status = Active → Apply
-  - Waits 5s for APEX AJAX refresh to settle
-  - Clicks Actions → Rows Per Page → All (non-fatal; times out gracefully, scrapes visible rows instead)
-  - Scrapes all table rows using `:scope >` scoped selectors to avoid matching nested table `<th>` elements from other layout tables
-  - Required columns validated: `['Name', 'Status', 'Internal Sku']` must all be present
-  - After scraping: clicks Reset button (form reset next to Go input) to clear APEX report state
-  - On error: navigates back to Supportable landing before continuing to next account
+**Step 3 — Read SF Bookings Sheet**
+- Reads the POD SF Bookings sheet from the shared Drive folder (`podBookingsFolderId` in `settings.json`)
+- Sheet matched to AE's territory by file name (word-level matching against `tableauTerritories`)
+- Derives customer list with subscription data and aliases
+- Account numbers are discovered later by the RH Cases scraper (searches RH Portal by customer alias)
+- Saves customers and aliases to `data/config/customers.json`
 
-**Step 4 — Write Supportable Google Sheet**
-- Scraped subscription rows written to the AE's Supportable Google Sheet (`supportableSheetId`)
-- One tab per customer account name
+**Step 4 — Write Subscriptions Sheet**
+- Subscription rows from SF Bookings written to the AE's Google Sheet
+- One tab per customer
 - Clears existing tab content before writing each set of rows
 
-**Step 5 — Build CCSP Sheet + Pipeline Sheet**
-- CCSP: scrapes cloud spend data, writes to `ccspSheetId` in AE's Drive folder
-- Pipeline: scrapes Salesforce Lightning report using `sfReportId`, writes `Pipeline` tab to `pipelineSheetId`
+**Step 5 — Create CCSP Sheet**
+- Creates a CCSP cloud spend sheet in the AE's Drive folder
+- Stores `ccspSheetId` in `aes.json`
+
+**Step 6 — Sync Pipeline Sheet**
+- Creates/updates the Pipeline Google Sheet using the AE's Salesforce report
+- Stores `pipelineSheetId` in `aes.json`
+- Populates local pipeline cache (`data/cache/pipeline-data.json`)
+
+> **Note on account discovery:** Supportable 360 is disabled. Account numbers are discovered by the RH Cases scraper, which searches the RH Portal sidebar autocomplete using the customer's canonical alias (from SF Bookings). This happens asynchronously after bootstrap — not during bootstrap itself.
 
 ---
 
@@ -259,7 +253,7 @@ This section documents the verified end-to-end flow from initial setup through o
 
 | Data | Schedule | Trigger |
 |---|---|---|
-| Supportable subscriptions | Every 240 min (configurable) | `setInterval` via `rescheduleRefreshTimers` |
+| Subscriptions (SF Bookings sheets) | Every 240 min (configurable) | `setInterval` via `rescheduleRefreshTimers` |
 | CCSP cloud spend | Every 1440 min (configurable) | `setInterval` via `rescheduleRefreshTimers` |
 | Salesforce pipeline | Daily 2am ET | `setTimeout` reschedule loop |
 | RH Portal open cases | Every 4h (configurable) | `setInterval` via `rescheduleRefreshTimers` |
@@ -270,32 +264,29 @@ This section documents the verified end-to-end flow from initial setup through o
 ### Data Flow Summary
 
 ```
-Territory Google Sheet  ──────────────────────────────────────────────────────────────────
-  (live read via Sheets API)                                                               │
-        ↓                                                                                  │
-  AE name + customer list                                                                  │
-        ↓                                                                                  │
-  Setup Wizard review                                                                      │
-        ↓                                                                                  │
-  "Setup AE" → aes.json                                                                   │
-        ↓                                                                                  │
-  Auto-Bootstrap ──────────────────────────────────────────────────────────────────────── │
-    │                                                                                       │
-    ├─ Step 1: Drive API → create AE subfolder                                             │
-    │                                                                                       │
-    ├─ Step 2: Supportable (Playwright)                                                    │
-    │   CustomerName% name search → account numbers → customers.json                      │
-    │                                                                                       │
-    ├─ Step 3: Supportable (Playwright, same session)                                      │
-    │   account# → Export tab → Active filter → scrape rows                               │
-    │                                                                                       │
-    ├─ Step 4: Sheets API → write subscription data to Supportable Sheet                  │
-    │                                                                                       │
-    └─ Step 5: SF Playwright → pipeline rows → pipelineSheetId                            │
-               CCSP scraper → ccspSheetId                                                  │
-                                                                                           │
-Dashboard reads:                                                                           │
-  data/cache/*.json  ←  scheduled refreshes  ←  Supportable / SF / RH Portal / Sheets ───┘
+Territory Google Sheet
+  (live read via Sheets API)
+        ↓
+  AE name + customer list
+        ↓
+  Setup Wizard review
+        ↓
+  "Setup AE" → aes.json
+        ↓
+  Auto-Bootstrap (6 steps)
+    │
+    ├─ Step 1: Drive API → create AE subfolder
+    ├─ Step 2: Drive API → create per-customer subfolders
+    ├─ Step 3: SF Bookings sheet → customer names + subscriptions
+    ├─ Step 4: Sheets API → write subscriptions to Google Sheet
+    ├─ Step 5: Create CCSP sheet
+    └─ Step 6: SF Playwright → pipeline rows → pipelineSheetId
+
+  Post-bootstrap (async):
+    RH Cases scraper → account discovery via RH Portal sidebar autocomplete
+
+Dashboard reads:
+  data/cache/*.json  ←  scheduled refreshes  ←  SF Bookings / SF / RH Portal / Sheets
 ```
 
 ---
@@ -304,11 +295,10 @@ Dashboard reads:                                                                
 
 | Issue | Status |
 |---|---|
-| Customer name in territory sheet ≠ name in Supportable | Manual correction required (e.g. "Fred Hutchinson Cancer Center" → "Seattle Cancer Care") |
+| Customer name in territory sheet vs SF Bookings name | SF Bookings alias column provides canonical name; RH Portal discovery uses aliases |
 | Bootstrap `completedAt` set on first run even if steps fail | Cosmetic — data flows correctly; status polling shows step-level state |
-| Reset button selector | Uses `input[value="Reset"], button:has-text("Reset")` — confirmed as gray form button next to Go input |
-| Rows Per Page → All timeout | Wrapped in non-fatal try/catch; scrapes visible rows if it times out |
 | SF REST API | Blocked for SAML SSO sessions — Playwright DOM scraping required |
+| Supportable 360 | Disabled — do not use; account discovery uses RH Portal, subscriptions use SF Bookings |
 
 ---
 
@@ -329,7 +319,7 @@ The `data/` directory is mounted as a volume so config, credentials, cache, and 
 
 | Variable | Purpose |
 |---|---|
-| `AE_PARENT_FOLDER_ID` | Google Drive root folder(s) for auto-discovery of pipeline/supportable sheets |
+| `AE_PARENT_FOLDER_ID` | Google Drive root folder(s) for auto-discovery of pipeline/subscription sheets |
 | `PIPELINE_FILE_ID` | Google Sheet ID where SF scraper writes the `Pipeline` tab |
 | `SF_REPORT_ID` | Salesforce report ID to scrape |
 | `REDHAT_OFFLINE_TOKEN` | Red Hat API offline token |
