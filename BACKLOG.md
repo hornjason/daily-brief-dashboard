@@ -4592,7 +4592,7 @@ Description: (1) renderMarkdownInline — no dangerouslySetInnerHTML anywhere in
 ---
 
 ### BKL-QA01 | SetupPage status polling — missing test for post-load scrape update
-Status: OPEN | Priority: P1 | Type: QA Gap
+Status: ✅ DONE 2026-04-10 (Quinn created quinn-setup-polling.spec.ts — 2 tests PASS covering Syncing→Connected transition and mid-run state)
 Description: SetupPage `refreshAll()` was only called on mount with no periodic re-poll. Status showed stale amber/wrong-messages when RH scrape completed after page load. Fixed: 15-second `setInterval` added. Gap: no test covers "load setup page → scrape fires → verify status updates without reload." Quinn's tests always load after scrape, masking this.
 Action: Add Playwright test — load /dashboard/setup, mock scrape completing mid-session, assert RH Portal status flips to green within 20s.
 
@@ -4764,7 +4764,7 @@ Implementation plan (Marcus):
 4. Admin page: Backup Now + Restore from Backup buttons with status display
 
 ### BKL-TEST-03 | Full Playwright suite wipes production data — Quinn must never run `npx playwright test`
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (server.ts snapshot reads from memory not disk; restore requires force:true when reducing customers, commit adfd8f2)
 Severity: CRITICAL
 Priority: P0
 Size: S
@@ -5117,7 +5117,7 @@ Files: dashboard/src/utils/productName.ts, dashboard/src/App.tsx (or wherever di
 Description: Even after normalization, 18 product chips is noisy. For daily use the only meaningful filter categories are RHEL, OCP, and AAP — the three core Red Hat platforms the POD sells. All other chips (ACM, ACS, AI/ML, Beta, CCSP, Developer Subscriptions, Free, HA, Learning, Middleware, OpenStack, Partner Subscriptions, Quay, Storage, Trial) should be hidden from the chip bar. "All Products" chip stays. Implementation: filter discoverAllProducts output to only emit RHEL, OCP, AAP (plus "All Products"). Other product labels still used internally for subscription card expansion — only the chip UI is restricted.
 
 ### BKL-PVIEW-07 | Merge ASA/Product views — one view, product chips always visible
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified by Marcus — no ASA/Product toggle exists; views already merged, chips always visible)
 Severity: MEDIUM
 Priority: P2
 Size: M
@@ -5334,7 +5334,7 @@ Description: generate-all auto-triggers for every newly bootstrapped customer. B
 ## Calendar & Data Source Issues (2026-04-09)
 
 ### BKL-CAL-02 | Misleading "Synced just now" status for Calendar/CCSP/Pipeline
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (Marcus commit 96bf595 — CCSP and Pipeline show record counts or 0-record warning instead of generic "Synced just now")
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -5372,7 +5372,7 @@ Description: Customer names containing common English words like "office", "serv
 Decision: DONE — stopword list filters common words from customer name tokens before calendar event matching.
 
 ### BKL-CAL-05 | RH Cases sync shows blank spinner during active sync (no status text)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified by Marcus — SetupPage.tsx:2913-2921 already shows Syncing text with spinner)
 Severity: LOW
 Priority: P3
 Size: XS
@@ -5594,7 +5594,7 @@ Files: test/bootstrap-recovery.spec.ts
 Description: All 6 tests in bootstrap-recovery.spec.ts fail. The UI components were refactored (wizard steps, view structure) and the specs no longer match current UI selectors. Needs spec update to match current setup flow.
 
 ### BKL-A11Y-01 | Setup page color-contrast WCAG AA violation
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (Marcus commit 7066522 — text-text-secondary/50 boosted to /70 and full on reset/remove buttons; WCAG AA contrast met)
 Severity: LOW
 Priority: P3
 Size: XS
