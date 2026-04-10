@@ -38,6 +38,118 @@ export function initSetupRoutes(opts: {
   ADMIN_EMAIL = opts.adminEmail
 }
 
+// ── Domain waterfall helpers (BKL-DOM-01) ────────────────────────────────────
+
+/** Legal suffixes to strip from company names before Clearbit lookup */
+const LEGAL_SUFFIXES = /,?\s*\b(Inc\.?|LLC\.?|L\.?L\.?C\.?|Corp\.?|Corporation|Ltd\.?|Limited|L\.?P\.?|Co\.?|Group|Holdings|Incorporated)\s*$/i
+
+/** Strip legal entity suffixes and normalize whitespace */
+function stripLegalSuffixes(name: string): string {
+  return name.replace(LEGAL_SUFFIXES, '').replace(/\s+/g, ' ').trim()
+}
+
+/** Simple similarity check: first word of one string appears in the other */
+function nameMatchesClearbit(query: string, resultName: string): boolean {
+  const qWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+  const rWords = resultName.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+  if (qWords.length === 0 || rWords.length === 0) return false
+  // Check if first substantive word of result appears in query or vice versa
+  return qWords.some(w => rWords.includes(w)) || rWords.some(w => qWords.includes(w))
+}
+
+interface WaterfallResult {
+  domain: string | null
+  tier: 'clearbit' | 'llm' | null
+  verified: boolean | null  // null = not checked, true = reachable, false = unreachable
+}
+
+/** Tier 1: Clearbit autocomplete (free, no key) */
+async function tier1Clearbit(companyName: string): Promise<string | null> {
+  const stripped = stripLegalSuffixes(companyName)
+  try {
+    const res = await fetch(
+      `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(stripped)}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
+    )
+    if (!res.ok) return null
+    const hits: { name: string; domain: string }[] = await res.json()
+    if (hits.length === 0) return null
+    const first = hits[0]
+    if (!first.domain) return null
+    if (!nameMatchesClearbit(stripped, first.name)) return null
+    return first.domain.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+/** Tier 2: LLM with web search via PAI Inference tool */
+async function tier2LLM(companyName: string): Promise<string | null> {
+  const INFERENCE_PATH = '/Users/jhorn/.claude/PAI/Tools/Inference.ts'
+  const systemPrompt = 'You are a company domain lookup tool. Reply with ONLY the domain (e.g. example.com), nothing else. If genuinely unknown, reply unknown.'
+  const userPrompt = `What is the primary official website domain for the company: '${companyName}'? This may be a legal entity name, subsidiary, or rebrand. Reply with ONLY the domain (e.g. 'example.com'), nothing else. If genuinely unknown, reply 'unknown'.`
+  try {
+    const proc = Bun.spawn(['bun', INFERENCE_PATH, '--level', 'fast', systemPrompt, userPrompt], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    const output = await new Response(proc.stdout).text()
+    const exitCode = await proc.exited
+    if (exitCode !== 0) return null
+    // Parse: trim, lowercase, strip https://, www., trailing slash
+    let domain = output.trim().toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .replace(/\/+$/, '')
+      .replace(/['"]/g, '')
+    // Validate it looks like a domain
+    if (domain === 'unknown' || domain === '' || !domain.includes('.')) return null
+    // Strip anything after the domain (e.g. paths)
+    domain = domain.split('/')[0]
+    if (!/^[a-z0-9]([a-z0-9\-._]{0,251}[a-z0-9])?$/.test(domain)) return null
+    return domain
+  } catch {
+    return null
+  }
+}
+
+/** Tier 3: Domain validation — HEAD request with timeout */
+async function tier3Validate(domain: string): Promise<boolean> {
+  try {
+    const res = await fetch(`https://${domain}`, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(3000),
+      redirect: 'follow',
+    })
+    return res.ok || res.status === 301 || res.status === 302 || res.status === 403
+  } catch {
+    return false
+  }
+}
+
+/** Run the full waterfall for a single company name. Returns domain + metadata. */
+async function waterfallInferDomain(companyName: string): Promise<WaterfallResult> {
+  // Tier 1: Clearbit
+  const t1 = await tier1Clearbit(companyName)
+  if (t1) {
+    console.log(`[infer-domains] ${companyName} → tier1: ${t1}`)
+    const verified = await tier3Validate(t1)
+    return { domain: t1, tier: 'clearbit', verified }
+  }
+
+  // Tier 2: LLM fallback
+  console.log(`[infer-domains] ${companyName} → tier1 miss, trying tier2`)
+  const t2 = await tier2LLM(companyName)
+  if (t2) {
+    console.log(`[infer-domains] ${companyName} → tier2: ${t2}`)
+    const verified = await tier3Validate(t2)
+    return { domain: t2, tier: 'llm', verified }
+  }
+
+  console.log(`[infer-domains] ${companyName} → tier1+tier2 miss, no domain`)
+  return { domain: null, tier: null, verified: null }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Loose domain validation — allows subdomains, TLDs, IP-like strings, localhost. Rejects HTML. */
@@ -307,26 +419,83 @@ export function registerSetupRoutes(app: Hono): void {
     return c.json({ ok: true, deleted: deleted.length })
   })
 
-  // POST /api/setup/infer-domains — infer customer domains from Gmail + Calendar signal
+  // POST /api/setup/infer-domains — waterfall domain inference (BKL-DOM-01)
+  // Tier 1: Clearbit autocomplete (free) → Tier 2: LLM fallback → Tier 3: validation
+  // Falls back to existing Gmail/Calendar/Supportable signal inference if waterfall finds nothing
   app.post('/api/setup/infer-domains', async (c) => {
     if (customers.length === 0) return c.json({ error: 'No customers configured' }, 400)
     try {
-      // Process in batches of 3 to avoid overwhelming Google API rate limits
-      // (naive Promise.all on 19 customers fires ~950 concurrent Gmail calls)
       const results = []
-      for (let i = 0; i < customers.length; i += 3) {
-        const batch = customers.slice(i, i + 3)
-        const batchResults = await Promise.all(
-          batch.map((cu) =>
-            inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e) => ({
+      // Process sequentially with 100ms delay to avoid hammering Clearbit
+      for (let i = 0; i < customers.length; i++) {
+        const cu = customers[i]
+        if (i > 0) await new Promise(r => setTimeout(r, 100))
+
+        try {
+          // Skip waterfall if customer already has a domain
+          if (cu.domain) {
+            console.log(`[infer-domains] ${cu.name} → already has domain: ${cu.domain}, skipping waterfall`)
+            // Still run existing inference for candidates/confirmation
+            const existing = await inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e) => ({
               customerName: cu.name,
               candidates: [],
               currentDomain: cu.domain,
               error: sanitizeErr(e),
             }))
-          )
-        )
-        results.push(...batchResults)
+            results.push(existing)
+            continue
+          }
+
+          // Run waterfall: Clearbit → LLM → validate
+          const wf = await waterfallInferDomain(cu.name)
+
+          // Also run existing signal-based inference (Gmail/Calendar/Supportable)
+          const existing = await inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e) => ({
+            customerName: cu.name,
+            candidates: [] as any[],
+            currentDomain: cu.domain,
+            error: sanitizeErr(e),
+          }))
+
+          // If waterfall found a domain, inject it as top candidate with 'web' source
+          if (wf.domain) {
+            const waterfallCandidate = {
+              domain: wf.domain,
+              count: 0,
+              sources: ['web' as const],
+              tier: wf.tier,
+              verified: wf.verified,
+            }
+            // Check if domain already in candidates
+            const existingIdx = existing.candidates.findIndex(
+              (c: any) => c.domain === wf.domain
+            )
+            if (existingIdx >= 0) {
+              // Merge: add tier/verified metadata to existing candidate
+              const ec = existing.candidates[existingIdx] as any
+              ec.tier = wf.tier
+              ec.verified = wf.verified
+              if (!ec.sources.includes('web')) ec.sources.unshift('web')
+              // Move to top if not already
+              if (existingIdx > 0) {
+                existing.candidates.splice(existingIdx, 1)
+                existing.candidates.unshift(ec)
+              }
+            } else {
+              // Insert waterfall result as top candidate
+              existing.candidates.unshift(waterfallCandidate)
+            }
+          }
+
+          results.push(existing)
+        } catch (e: any) {
+          results.push({
+            customerName: cu.name,
+            candidates: [],
+            currentDomain: cu.domain,
+            error: sanitizeErr(e),
+          })
+        }
       }
       return c.json({ results })
     } catch (e: any) {

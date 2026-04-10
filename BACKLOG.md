@@ -5310,3 +5310,64 @@ Source: 2026-04-09 — Jason debugging session
 Files: src/calendar-routes.ts
 Description: Customer names containing common English words like "office", "services", "systems" were matching unrelated calendar events (e.g., "Office Hours" matching a customer named "X Office Solutions"). Fixed 2026-04-09: added stopword list to exclude common words from title keyword matching, preventing false customer-event associations.
 Decision: DONE — stopword list filters common words from customer name tokens before calendar event matching.
+
+### BKL-CAL-05 | RH Cases sync shows blank spinner during active sync (no status text)
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: XS
+Source: 2026-04-10 — Jason reported
+Files: dashboard/src/ (Admin/Setup data sources panel, RH Cases sync button/status)
+Description: While RH Cases scrape is in progress, the sync status area shows only a spinning wheel with no text. After completion it correctly shows "Synced just now — 25". The missing state is the in-progress indicator — should show something like "Syncing..." or the last known status + spinner instead of a blank area.
+Decision: OPEN — fix in-progress label so status is always visible during and after sync.
+
+### BKL-DOM-01 | Domain inference uses static override file instead of automated lookup
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: M
+Source: 2026-04-10 — Jason + research session
+Files: src/setup-routes.ts (infer-domains endpoint)
+Description: Bootstrap domain inference uses a one-pass AI guess that fails on legal entity names, rebrands (Musarubra→Trellix), mergers (PCM→Insight), typos (Freeeport, Mattell), and venue names (Caesars Palace→caesars.com). Currently requires manual intervention after each bootstrap. Goal: fully automated, self-maintaining, no static override file.
+Fix: Implement waterfall in infer-domains endpoint: (1) Clearbit Autocomplete (free, no key, fast — ~65% hit rate), (2) LLM with web search fallback for misses (handles rebrands/mergers/typos — adds ~$0/run at PAI scale). Domain validation (HTTP check) after each step. Flag unresolvable for admin review. Expected: 95%+ automated accuracy, zero user intervention for new pods.
+Decision: OPEN — implement waterfall approach. No API keys needed beyond what PAI already has.
+
+### BKL-CCSP-02 | CCSP sheets all empty — Tableau browser scraper never populated data for new pod
+Status: 🟡 IN PROGRESS
+Severity: HIGH
+Priority: P1
+Size: M
+Source: 2026-04-10 — Jason reported 0 records; confirmed via logs
+Files: src/ccsp-scraper.ts, data/cache/ccsp-data.json
+Description: All 9 AE CCSP Google Sheets show `<2 rows` across every tab. The ccsp-read path (reads from Sheets → cache) returns 0 records because Tableau browser scraper has never written to these sheets for the SW pod. Error pattern in logs: `[ccsp-read] known sheet empty — searching AE Drive folder for alternative CCSP sheet → no alternative found`. The Tableau browser scrape needs to run in VNC to populate the sheets. Investigating whether Tableau session is valid, scraper is reaching the right workbook/views, and write path is correct.
+Decision: OPEN — investigating root cause. Browser scrape queued and running.
+
+### BKL-SF-01 | SF Pipeline returning only 1 record — browser scraper not populating sheets for new pod
+Status: 🟡 IN PROGRESS  
+Severity: HIGH
+Priority: P1
+Size: M
+Source: 2026-04-10 — Jason reported; pipeline-data.json confirms 1 record only
+Files: src/sf-scraper.ts, src/scrape-api.ts, data/cache/pipeline-data.json
+Description: SF Pipeline cache contains only 1 opportunity record (Applied Medical Resources Corp). All 9 AE pipeline sheets may not be populated for the new SW pod, or the AE name filter is still not matching correctly. Circuit breaker reset on auth event suggests SF session was active. Browser scrape queued and running — need to verify it produces records and identify why only 1 survived the AE filter after the Alex/Alexander prefix-match fix.
+Decision: OPEN — investigating root cause. Browser scrape queued and running.
+
+### BKL-CAL-06 | Calendar false-positive customer matches via single domain attendee
+Status: 🟡 IN PROGRESS
+Severity: HIGH
+Priority: P1
+Size: S
+Source: 2026-04-10 — Jason screenshot: "Virt Power 90" labeled Tucson Electric Power, "Upgrade troubleshooting" labeled U S Epson
+Files: src/google.ts (fetchCalendar, matchedCustomers logic)
+Description: When any single external attendee email matches a customer domain, the entire meeting is classified as a customer meeting. Examples: "Virt Power 90" (internal Red Hat enablement training) labeled as Tucson Electric Power because a tep.com attendee was on the invite. "Upgrade troubleshooting" labeled as U S Epson because sharanya.raja@epson.com was an attendee. These are not customer-facing meetings — they just happen to have one customer-domain attendee. Fix: require either (a) multiple external attendees from the customer domain, OR (b) the event title contains a customer name signal alongside the domain match, OR (c) a minimum percentage of external attendees from the domain. The current logic triggers on ANY single external email match which is too aggressive.
+Decision: OPEN — investigating heuristic. Sending Marcus to fix.
+
+### BKL-UX51 | Product filter (OCP/AAP/RHEL) causes dashboard to go black
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: S
+Source: 2026-04-10 — Jason reported: selecting a product filter from the top dashboard (OCP, AAP, or RHEL) causes the page to go black
+Files: dashboard/src/ (top filter bar, product filter component, dependent data fetch)
+Description: Selecting a product filter from the top dashboard navigation causes the entire page to render black/blank. All three product options (OCP, AAP, RHEL) trigger this. Likely a React rendering crash (unhandled error in component tree, missing null check on filtered data, or a useState/useEffect cycle that produces undefined/null state on filter change). Should surface an error boundary instead of a black screen.
+Decision: OPEN — needs investigation. Check browser console for errors when filter is selected.
