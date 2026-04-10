@@ -5906,7 +5906,7 @@ Files: Makefile or CI config, dashboard/src/**/*.tsx
 Description: Add a CI gate that fails the build if `catch(() => {})` or `catch(()=>{})` patterns exist in `dashboard/src/`. Implementation: `grep -rn '.catch(() *=> *{})' dashboard/src/ && exit 1` in the lint or build step. This prevents silent failures from being introduced. Existing instances must be migrated to proper error handling (see BKL-TEST-14) before enabling.
 
 ### BKL-TEST-14 | useAction hook to replace silent-fail fetch patterns
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-04-10) — useAction hook created; ProductDetailPage + SetupPage 5 silent catches fixed; AdminPage/CustomerDetailPage partial
 Severity: HIGH
 Priority: P1
 Size: M (4-6h)
