@@ -2014,7 +2014,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                       <td className="py-1.5">
                         <button
                           onClick={() => removeCustomer(ae.id, c.id)}
-                          className="text-text-secondary/50 hover:text-critical transition-colors p-1"
+                          className="text-text-secondary hover:text-critical transition-colors p-1"
                           title="Remove customer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -3544,7 +3544,7 @@ export default function SetupPage() {
                   </button>
                   <button
                     onClick={() => setResetConfirm('data')}
-                    className="text-xs text-text-secondary/50 hover:text-text-secondary transition-colors"
+                    className="text-xs text-text-secondary/70 hover:text-text-secondary transition-colors"
                     title="Clear data but keep OAuth keys"
                   >
                     Reset Data Only
