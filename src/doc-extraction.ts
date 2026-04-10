@@ -7,6 +7,7 @@ import { google } from 'googleapis'
 import { existsSync } from 'node:fs'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { getGeminiModelLite } from './settings-api.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -178,7 +179,7 @@ const EMPTY_CLASSIFICATION: DocClassification = {
 async function callGeminiStructured(systemPrompt: string, userPrompt: string, responseSchema: object): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+  const model    = getGeminiModelLite()  // BKL-AI-COST-01: doc classification is high-volume, use lite model
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
   let token: string | null | undefined
@@ -207,6 +208,7 @@ async function callGeminiStructured(systemPrompt: string, userPrompt: string, re
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 8192,
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: 'application/json',
         responseSchema,
       },
@@ -240,6 +242,16 @@ export async function classifyAndExtract(
 ): Promise<DocClassification> {
   if (!doc.content || doc.content.trim().length < 50) {
     return { ...EMPTY_CLASSIFICATION }
+  }
+
+  // BKL-AI-COST-02: skip classification for docs not modified in the last 30 days
+  if (doc.modifiedTime) {
+    const modifiedDate = new Date(doc.modifiedTime)
+    const daysOld = Math.floor((Date.now() - modifiedDate.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysOld > 30) {
+      console.log(`[doc-extract] skipping "${doc.name}" — last modified ${daysOld}d ago`)
+      return { ...EMPTY_CLASSIFICATION }
+    }
   }
 
   const prompt = DOC_CLASSIFICATION_PROMPT
