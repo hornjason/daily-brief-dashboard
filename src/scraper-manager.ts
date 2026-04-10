@@ -529,6 +529,7 @@ export async function runRhScrapeWithState(): Promise<void> {
           status: c.status,
           severity: c.severity,
           accountNumber: c.accountNumber,
+          customerName: c.customerName,
           daysOpen: 0,
           product: c.product,
           casesSource: c.casesSource,

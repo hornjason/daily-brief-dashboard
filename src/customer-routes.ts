@@ -289,7 +289,7 @@ export function registerCustomerRoutes(app: Hono): void {
         const matched = customers.find((cu) =>
           (cu.accountNumbers ?? []).map(String).includes(String(sc.accountNumber))
         )
-        return { ...sc, customerName: matched?.name ?? 'Unknown' }
+        return { ...sc, customerName: matched?.name ?? sc.customerName ?? 'Unknown' }
       })
 
       return c.json({ cases: enriched, totalCount: enriched.length })

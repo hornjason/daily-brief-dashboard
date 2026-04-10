@@ -13,7 +13,7 @@
  * intelligence files, or any scraper state.
  */
 
-import { writeFileSync, renameSync, mkdirSync, existsSync } from 'fs'
+import { writeFileSync, renameSync, mkdirSync, existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import type { Hono } from 'hono'
@@ -26,12 +26,83 @@ import type { Customer, SheetRow, ProductSubscription } from './types.ts'
 import type { CCSPRecord } from './sheets.ts'
 import type { PipelineRecord } from './pipeline.ts'
 import { sanitizeErr, sanitizeText } from './utils.ts'
+import { listPodBookingSheets, matchPodSheet, fetchSfBookingsRaw, deriveSfCustomersByTerritory } from './sf-bookings-reader.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
 
 export function initRestoreRoutes(opts: { cacheDir: string }): void {
   CACHE_DIR = opts.cacheDir
+}
+
+// ── BKL-RESTORE-02: Repopulate SF aliases after restore ──────────────────────
+// Restore writes customers.json from Supportable sheets, but those sheets lack
+// the SF canonical search name (aliases[0]) needed by the RH scraper for
+// account discovery. This function fires in the background after every restore
+// to re-populate aliases from the SF bookings POD sheets.
+async function repopulateAliasesFromSfBookings(): Promise<void> {
+  const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'settings.json')
+  let podBookingsFolderId: string | null = null
+  try {
+    podBookingsFolderId = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')).podBookingsFolderId ?? null
+  } catch { /* no settings */ }
+
+  if (!podBookingsFolderId) {
+    console.log('[restore] BKL-RESTORE-02: podBookingsFolderId not set — skipping alias repopulation')
+    return
+  }
+
+  let podSheets: Array<{ name: string; sheetId: string }> = []
+  try {
+    podSheets = await listPodBookingSheets(podBookingsFolderId)
+  } catch (e: any) {
+    console.warn(`[restore] BKL-RESTORE-02: failed to list POD sheets — ${sanitizeErr(e)}`)
+    return
+  }
+
+  if (!podSheets.length) {
+    console.log('[restore] BKL-RESTORE-02: no POD sheets found — skipping alias repopulation')
+    return
+  }
+
+  const rawCache = new Map<string, Awaited<ReturnType<typeof fetchSfBookingsRaw>>>()
+  let totalAliased = 0
+
+  for (const ae of aes) {
+    const territories = ae.tableauTerritories ?? []
+    if (!territories.length) continue
+
+    const aeSheetId = matchPodSheet(podSheets, territories)
+    if (!aeSheetId) continue
+
+    try {
+      if (!rawCache.has(aeSheetId)) rawCache.set(aeSheetId, await fetchSfBookingsRaw(aeSheetId))
+      const rawData = rawCache.get(aeSheetId)!
+
+      const existingCustomers = customers.filter(cu => cu.ae === ae.name && !cu.inactive)
+      const { newCustomers, aliasedCustomers } = deriveSfCustomersByTerritory(
+        rawData, territories, existingCustomers, ae.name, false,
+      )
+
+      if (newCustomers.length > 0 || aliasedCustomers.length > 0) {
+        const allCustomers = [...customers]
+        for (const nc of newCustomers) {
+          if (!allCustomers.some(c => c.name === nc.name)) allCustomers.push(nc)
+        }
+        for (const ac of aliasedCustomers) {
+          const idx = allCustomers.findIndex(c => c.name === ac.name)
+          if (idx !== -1) allCustomers[idx] = ac
+        }
+        saveCustomers(allCustomers)
+        totalAliased += aliasedCustomers.length + newCustomers.length
+        console.log(`[restore] BKL-RESTORE-02: ${ae.name} — ${aliasedCustomers.length} aliases updated, ${newCustomers.length} new`)
+      }
+    } catch (e: any) {
+      console.warn(`[restore] BKL-RESTORE-02: ${ae.name} error — ${sanitizeErr(e)}`)
+    }
+  }
+
+  console.log(`[restore] BKL-RESTORE-02: alias repopulation complete — ${totalAliased} customers updated`)
 }
 
 // ── Atomic write helper ──────────────────────────────────────────────────────
@@ -403,6 +474,13 @@ export function registerRestoreRoutes(app: Hono): void {
     const mergedCustomers = Array.from(customerMergeMap.values())
     saveCustomers(mergedCustomers)
     console.log(`[restore] wrote customers.json with ${mergedCustomers.length} customers`)
+
+    // BKL-RESTORE-02: fire-and-forget alias repopulation from SF bookings sheets
+    // Restore strips aliases (not present in Supportable sheets); this re-adds
+    // aliases[0] (SF canonical name) needed by the RH scraper for account discovery.
+    repopulateAliasesFromSfBookings().catch(e =>
+      console.warn(`[restore] BKL-RESTORE-02 background error: ${sanitizeErr(e)}`)
+    )
 
     // ── Write CCSP cache ────────────────────────────────────────────────────
     const ccspFileIds = targetAes.map(ae => ae.ccspSheetId).filter((id): id is string => Boolean(id))

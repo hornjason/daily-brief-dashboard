@@ -3,7 +3,7 @@
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-04-10 (overnight — SW POD re-bootstrapped, BKL-UX53-59 closed, 105 customers, 60 with acct#, 66 cases)
+Last updated: 2026-04-10 (session — BKL-RH-PERF-01, BACKUP-01, PVIEW-09/10/11, UX55/60/61/62/63 closed; alias fallback fix; 106 customers, discovery in progress; intelligenceEnabled=false)
 
 ---
 
@@ -170,26 +170,30 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 - **BKL-TEST-03** 🔴 — Full Playwright suite wipes production data; workaround: ban `npx playwright test`; fix: dedicated test server
 
 ### High / P1
-- **BKL-BACKUP-01** 🔴 — Config backup sheet (planned, not yet implemented)
-- **BKL-PVIEW-09** 🔴 — KPI filter cascade by selected product chip
-- **BKL-PVIEW-10** 🔴 — RH Cases modal filters by selected product chip
-- **BKL-PVIEW-11** 🔴 — Renewals modal filters by selected product chip
-- **BKL-PVIEW-12** 🔴 — Pipeline section filters by selected product chip
+- **BKL-RESTORE-02** 🔴 — Restore endpoint doesn't populate aliases, blocking RH discovery post-restore
+- **BKL-RH-PERF-02** ⏸ — BLOCKED 1 week pending failure audit data from PR1
 
 ### Medium / P2
-- **BKL-WIZ-01** 🔴 — Bootstrap wizard Drive folder preview missing (regression)
-- **BKL-WIZ-02** 🔴 — POD Bootstrap no cancel button
-- **BKL-DRIVE-01** 🔴 — Drive folder hierarchy missing POD layer (parentFolder/POD/AE/accounts)
-- **BKL-PVIEW-07** 🔴 — Merge ASA/Product views (one view, product chips always visible)
-- **BKL-PVIEW-08** 🔴 — Morning brief collapse: show bullet outline when closed
+- **BKL-WIZ-01** 🟡 — Bootstrap wizard Drive folder preview missing (Marcus in progress)
+- **BKL-WIZ-02** 🟡 — POD Bootstrap no cancel button (Marcus in progress)
+- **BKL-PVIEW-08** 🟡 — Morning brief collapse: show bullet outline (Marcus in progress)
+- **BKL-DRIVE-01** 🔴 — Drive folder hierarchy missing POD layer
+- **BKL-DOCS-01** 🔴 — Stale runbook references Supportable instead of RH scraper
+- **BKL-TEST-07** 🔴 — QA test runs leave artifact data in dashboard
 
-### Closed this session (2026-04-08)
-- **BKL-PVIEW-06** ✅ — Chip bar reduced to RHEL/OCP/AAP only
-- **BKL-CAL-01** ✅ — Calendar filters proposed/tentative events
-- **BKL-WIZ-03** ✅ — Bootstrap step labels updated (SF bookings naming)
-- **BKL-TEST-04** ✅ — CCSP test spec corrected body.error → body.reason
-- **BKL-W5-TS3** ✅ — TypeScript errors in server.ts + bootstrap-orchestrator.ts
-- **BKL-BOOT-02** ✅ — matchPodSheet word-boundary fix (NW was matching SW sheet)
+### Closed this session (2026-04-10)
+- **BKL-RH-PERF-01** ✅ — Negative cache + smart waits + persistSessionState fix
+- **BKL-BACKUP-01** ✅ — Config backup sheet auto-syncs on every save
+- **BKL-PVIEW-07** ✅ — Merged ASA/Product views (via BKL-UX58)
+- **BKL-PVIEW-09** ✅ — KPI tile counts filter by product chip
+- **BKL-PVIEW-10** ✅ — Cases modal filters by product chip
+- **BKL-PVIEW-11** ✅ — Renewals modal filters by product chip
+- **BKL-PVIEW-12** ✅ — Pipeline section filters by product chip (via BKL-UX57)
+- **BKL-UX55** ✅ — Cases show customer names
+- **BKL-UX60** ✅ — RH Portal button opens VNC; status reflects scraper state
+- **BKL-UX61** ✅ — Tableau shows Connected when CCSP data present
+- **BKL-UX62** ✅ — Sync Now timestamp refreshes immediately after scrape
+- **BKL-UX63** ✅ — Segment label on account cards (no data yet)
 
 ---
 
