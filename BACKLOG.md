@@ -4740,7 +4740,7 @@ Description: Quinn's AE lifecycle tests (add/remove AE via POST /api/aes) ran wi
 Decision: DONE — Added POST /api/__test/snapshot and POST /api/__test/restore to setup-routes.ts. These save/restore AEs+customers atomically in-memory (file-backed with atomic rename). Updated qa-e2e-newuser.spec.ts to use new endpoints with try/retry afterAll for rollback guarantee. Created test/lifecycle.spec.ts with full snapshot/restore wrapping pattern for AE lifecycle tests.
 
 ### BKL-BACKUP-01 | Comprehensive config backup/restore — POD Bootstrap scaffolding + Admin page buttons
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (verified: src/backup-config.ts + src/backup-routes.ts fully implemented — createBackupSheet(), backupNow(), restore; backs up aes.json, customers.json, data-sources.json to GSheet tabs)
 Severity: CRITICAL
 Priority: P0
 Size: L
@@ -5243,7 +5243,7 @@ Files: src/bootstrap-orchestrator.ts — Drive folder creation steps
 Description: Current structure: parentFolderId / AE Name / customer folders. Desired: parentFolderId / POD Name / AE Name / customer folders. During POD bootstrap, create a subfolder named after the POD (e.g. "Southwest") under parentFolderId if it doesn't already exist, then create each AE's Drive folder under that POD folder instead of directly under parentFolderId. The POD display name (from the SF bookings sheet displayName, e.g. "Southwest" or "Northwest") should be used as the folder name. AE-level bootstrap (single AE) should skip the POD layer. Existing AEs are unaffected unless re-bootstrapped.
 
 ### BKL-RH-01 | RH batch scraper — per-account chunking to prevent high-volume account starvation
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (smarter starvation detection: after each chunk, re-query zero-case accounts individually when pagination limit hit; commit 8916b1a)
 Severity: HIGH
 Priority: P1
 Size: M
@@ -5286,7 +5286,7 @@ Files: dashboard/src/pages/AdminPage.tsx, src/settings-api.ts, src/doc-extractio
 Description: Added number input in AI Settings card for docClassifyMaxAgeDays. 0 = unlimited (classify all docs regardless of age), >0 = skip docs older than N days. Backend AiConfig default is 0. Committed 133ebbe.
 
 ### BKL-AI-01 | Use gemini-2.0-flash for structured output tasks
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (getGeminiModelLite() routing exists in settings-api.ts; doc-extraction.ts uses lite path; referenced product-intelligence/feature-radar files don't exist in current codebase)
 Severity: LOW
 Priority: P2
 Size: S
@@ -5295,7 +5295,7 @@ Files: src/product-intelligence.ts, src/product-feature-radar.ts, src/customer-p
 Description: These files use gemini-2.5-flash for structured JSON extraction and product intelligence — tasks that don't need frontier reasoning. gemini-2.0-flash is ~10× cheaper and sufficient for these. Keep gemini-2.5-flash only in src/customer.ts (brief synthesis) and src/account-plan.ts (account plans) where output quality matters. Requires adding gemini-2.0-flash as an allowed model in settings-api.ts and updating each call site.
 
 ### BKL-AI-02 | Lower maxOutputTokens to realistic caps
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (account-intelligence.ts: 8192 per commit 9258ddb; account-plan.ts: 32768→8192 both call sites)
 Severity: LOW
 Priority: P2
 Size: XS
@@ -5304,7 +5304,7 @@ Files: src/account-plan.ts (32768), src/account-intelligence.ts (16384 × 2 call
 Description: account-plan.ts sets maxOutputTokens: 32768 — far above what a typical account plan needs. account-intelligence.ts sets 16384 and calls twice per customer. Gemini charges on actual output tokens but oversized caps bloat prompts and generated content length. Audit actual output sizes via gemini-cost-tracker and cap account-plan at 8192, account-intelligence at 8192.
 
 ### BKL-AI-03 | Add TTL to account intelligence cache
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (INTELLIGENCE_CACHE_TTL_DAYS env var, 7d default; skips regeneration if cachedAt < TTL; commit 9258ddb)
 Severity: LOW
 Priority: P2
 Size: S
@@ -5313,7 +5313,7 @@ Files: src/account-intelligence.ts, src/cache-layer.ts
 Description: Brief cache has a 24h TTL (ADR-007). Account intelligence has no TTL — it regenerates on every generate-all trigger. Add a 7-day TTL: skip regeneration if cachedAt is less than 7 days old and source data hash is unchanged. This prevents re-running expensive Gemini calls on stable accounts. Use the same hash-based staleness check already in cache-layer.ts.
 
 ### BKL-AI-04 | Skip intelligence pipeline for customers with no data
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (pre-flight gate in runIntelligencePipeline: skip if accountNumbers=0 && subscriptions=0; writes skipped:true stub; commit 9258ddb)
 Severity: LOW
 Priority: P2
 Size: XS
@@ -5584,7 +5584,7 @@ Description: With 9 AEs and 100+ customers, the current dashboard layout was des
 Decision: SPEC DONE — council session completed 2026-04-10. Design spec at `docs/UX-SPEC-MULTI-POD.md`. Implementation requires 4 phases: (1) backend multi-pod schema migration, (2) frontend pod tabs + AE grouping, (3) health dot + tooltip, (4) pod/AE level KPI tiles. Critical-path blocker: `data-sources.json` multi-pod schema must ship first.
 
 ### BKL-TEST-05 | bootstrap-recovery.spec.ts — 6 stale tests after UI refactor
-Status: 🔴 OPEN
+Status: ⛔ OBSOLETE — 2026-04-10 (test/bootstrap-recovery.spec.ts does not exist; item moot)
 Severity: LOW
 Priority: P3
 Size: S

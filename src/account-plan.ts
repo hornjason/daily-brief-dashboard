@@ -251,7 +251,7 @@ async function callGeminiMultimodal(opts: {
       contents: [{ role: 'user', parts }],
       generationConfig: {
         temperature: opts.temperature ?? 0.7,
-        maxOutputTokens: opts.maxOutputTokens ?? 32768,
+        maxOutputTokens: opts.maxOutputTokens ?? 8192,
         thinkingConfig: { thinkingBudget: 0 },
       },
     }),
@@ -361,7 +361,7 @@ Now generate a complete Account Plan for ${customerDisplayName} following the sa
     systemPrompt: SYSTEM_PROMPT,
     textParts: [{ text: userPrompt }],
     pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
-    maxOutputTokens: 32768,
+    maxOutputTokens: 8192,
     temperature: 0.7,
     callType: 'account-plan-generation',
     customerName: customer.name,
