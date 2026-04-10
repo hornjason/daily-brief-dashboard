@@ -18,13 +18,19 @@ function formatAcv(value: number): string {
 
 export function PodKPIHeader({ podName, accounts, cases }: PodKPIHeaderProps) {
   // Count open cases matching this pod's customers
+  // BKL-REG-08: also match name_match cases for customers with no account numbers
   const accountNumSet = new Set<string>()
+  const customerNameSet = new Set<string>()
   for (const acct of accounts) {
     for (const num of acct.accountNumbers) {
       accountNumSet.add(String(num))
     }
+    customerNameSet.add(acct.name.toLowerCase())
   }
-  const openCases = cases.filter(c => accountNumSet.has(String(c.accountNumber)))
+  const openCases = cases.filter(c =>
+    accountNumSet.has(String(c.accountNumber)) ||
+    (c.customerName != null && customerNameSet.has(c.customerName.toLowerCase()))
+  )
 
   // Count renewals expiring within 90 days
   const now = new Date()

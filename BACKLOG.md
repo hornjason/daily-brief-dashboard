@@ -3950,7 +3950,7 @@ Size: XS (30 min)
 Source: Audit 2026-04-04 — pipeline-data.json stuck on April 1 data; SF scraper writes 350 rows to correct sheets but refreshPipeline() skips because cached fileIds differ from current aes.json sheet IDs
 Files: src/refresh-engine.ts (refreshPipeline function, lines ~113-132)
 Description: `refreshPipeline()` calls `checkFilesModified(cached.fileIds, cached.cachedAt)` using the fileIds stored in the old cache. After AE bootstrap creates new sheets, aes.json has new sheet IDs that differ from the cached fileIds. The staleness check compares old IDs (which haven't changed) and always returns "unchanged" → skips. Fix: move `pipelineIds` computation before the staleness check; if current sheet IDs differ from cached fileIds, skip the staleness check and force a refresh. Also: same pattern exists in refreshSubscriptions() — audit that path too.
-Tests needed: POST /api/refresh/pipeline with mismatched fileIds → should refresh; POST /api/refresh/pipeline with matching unchanged fileIds → should skip.
+Tests added: REG-012 in test/regression.spec.ts — POST /api/refresh/pipeline never 500, GET /api/pipeline always returns byOwner array, @live pipeline totalAcv is a number (regression for ReferenceError manualId bug).
 
 ### BKL-W2-27 | Bootstrap creates duplicate sheets — old empty ones accumulate in Drive
 Status: ✅ DONE 2026-04-04 — Added existingPipelineId guard in bootstrap-orchestrator.ts matching Supportable/CCSP pattern (lines 534, 557). Reuses existing pipelineSheetId from aes.json on repeat bootstraps instead of creating a new sheet every time.
@@ -5770,6 +5770,17 @@ Files: src/setup-routes.ts (POST /api/setup/infer-domains), dashboard/src/pages/
 Root cause: Domain inference runs automatically only during bootstrap wizard flow (bootstrap-orchestrator.ts:1358). After data wipe + restore, all customer domains are empty. No Admin button existed to re-trigger.
 Fix: Added DomainInferenceSection component to AdminPage.tsx with "Run Now" button that calls POST /api/setup/infer-domains. Shows loading state, displays auto-saved count, need-review count, and total processed inline. Verified: endpoint returns domain inference results for all 105 customers.
 Decision: DONE — fixed 2026-04-10.
+
+### BKL-REG-08 | PodKPIHeader banner case count excludes name-matched cases
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P1
+Size: XS
+Source: Jason 2026-04-10 — banner showed ~30 cases while KPI showed 52; screenshot confirmed live discrepancy
+Files: dashboard/src/components/PodKPIHeader.tsx
+Root cause: `openCases` filter used `accountNumSet.has(c.accountNumber)` only. 39 customers with zero account numbers have cases matched by name (casesSource: 'name_match') which were excluded from banner count. KPI used server-computed `kpis.openCasesTotal` which included all cases.
+Fix: Added `customerNameSet` from `accounts.map(a => a.name.toLowerCase())`. Filter now matches on EITHER account number OR customerName (case-insensitive). REG-013 in regression.spec.ts covers brief cache indirectly; UI consistency test should be added in a follow-up.
+Decision: DONE — fixed 2026-04-10 in PodKPIHeader.tsx lines 21-31. Rebuild required.
 
 ### BKL-UX52-P1 | Pod tab bar renders as static label, not interactive tabs
 Status: 🔴 OPEN

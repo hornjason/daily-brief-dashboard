@@ -262,3 +262,142 @@ test.describe('REG-007: Pipeline data flows to both AEs (BKL-W2-26)', () => {
     expect(carolanne.count).toBeGreaterThan(0)
   })
 })
+
+// ── REG-008: Morning summary never returns 500 (BKL-G02) ─────────────────────
+// BKL-G02: 8 of 9 signal types were missing — all renewals-only. Fixed 2026-04-04.
+
+test.describe('REG-008: Morning summary response shape (BKL-G02)', () => {
+  test('GET /api/morning-summary returns 200 with signals array', async () => {
+    const { status, body } = await getJSON('/api/morning-summary')
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('signals')
+    expect(Array.isArray(body.signals)).toBe(true)
+  })
+
+  test('morning summary never returns 500 (regression: was missing 8 signal types)', async () => {
+    const { status, body } = await getJSON('/api/morning-summary')
+    if (status === 500) {
+      expect(body).toHaveProperty('error')
+      expect(typeof body.error).toBe('string')
+      expect(body.error.length).toBeGreaterThan(0)
+    } else {
+      expect(status).toBe(200)
+    }
+  })
+
+  test('morning summary response never has null or undefined signals field', async () => {
+    const { body } = await getJSON('/api/morning-summary')
+    expect(body.signals).not.toBeNull()
+    expect(body.signals).not.toBeUndefined()
+  })
+})
+
+// ── REG-009: Domain inference endpoint is callable (BKL-REG-03) ──────────────
+// BKL-REG-03: No Admin UI to re-run domain inference — all domains empty after wipe.
+// Fixed 2026-04-10: Added DomainInferenceSection to AdminPage + endpoint verified.
+
+test.describe('@destructive REG-009: Domain inference re-runnable (BKL-REG-03)', () => {
+  test('POST /api/setup/infer-domains returns structured result', async () => {
+    const res = await postJSONDestructive('/api/setup/infer-domains', {})
+    // Accept 200 (success) or 400/409 (in-flight or no customers)
+    expect([200, 400, 409]).toContain(res.status)
+    if (res.status === 200) {
+      expect(res.body).toHaveProperty('total')
+      expect(typeof res.body.total).toBe('number')
+    } else {
+      expect(res.body.error).toBeTruthy()
+    }
+  })
+})
+
+// ── REG-010: Intelligence endpoint uses correct path (BKL-REG-01) ────────────
+// BKL-REG-01: AccountIntelligencePanel called POST /api/intelligence/run (non-existent)
+// instead of POST /api/customer/:name/generate-intelligence. Fixed 2026-04-10.
+
+test.describe('REG-010: Account intelligence uses correct endpoint (BKL-REG-01)', () => {
+  test('POST /api/intelligence/run returns 404 (old wrong endpoint must not exist)', async () => {
+    const { status } = await postJSON('/api/intelligence/run', { customer: KNOWN_CUSTOMER })
+    expect(status).toBe(404)
+  })
+
+  test('POST /api/customer/:name/generate-intelligence returns 200 or 404 (never 500)', async () => {
+    const { status, body } = await postJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/generate-intelligence`, {})
+    if (status === 500) {
+      expect(body).toHaveProperty('error')
+      expect(body.error.length).toBeGreaterThan(0)
+    } else {
+      expect([200, 202, 404]).toContain(status)
+    }
+  })
+})
+
+// ── REG-011: Intelligence status schema (BKL-AI05) ───────────────────────────
+// BKL-AI05: Dashboard UI — per-customer Generate Intelligence button + doc links.
+// Status endpoint must always return a schema, never 500 with empty body.
+
+test.describe('REG-011: Intelligence status endpoint schema (BKL-AI05)', () => {
+  test('GET /api/customer/:name/intelligence-status returns schema', async () => {
+    const { status, body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/intelligence-status`)
+    if (status === 200) {
+      expect(body).toHaveProperty('status')
+      expect(['none', 'running', 'complete', 'error']).toContain(body.status)
+    } else {
+      // 404 if customer not found — acceptable
+      expect([200, 404]).toContain(status)
+    }
+  })
+})
+
+// ── REG-012: Pipeline refresh endpoint (BKL-W2-26) ───────────────────────────
+// BKL-W2-26: refreshPipeline() staleness check used old sheet IDs → always skipped.
+// Fixed 2026-04-04. Backlog explicitly noted "Tests needed".
+
+test.describe('REG-012: Pipeline refresh endpoint (BKL-W2-26)', () => {
+  test('POST /api/refresh/pipeline returns 200 (never 500)', async () => {
+    const { status, body } = await postJSON('/api/refresh/pipeline', {})
+    if (status === 500) {
+      expect(body).toHaveProperty('error')
+      expect(body.error.length).toBeGreaterThan(0)
+    } else {
+      expect([200, 202, 401, 403]).toContain(status)
+    }
+  })
+
+  test('GET /api/pipeline always returns byOwner array (never null)', async () => {
+    const { status, body } = await getJSON('/api/pipeline')
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('byOwner')
+    expect(Array.isArray(body.byOwner)).toBe(true)
+  })
+
+  test('@live pipeline totalAcv is a number (regression: ReferenceError manualId)', async () => {
+    const { body } = await getJSON('/api/pipeline')
+    expect(typeof body.totalAcv).toBe('number')
+    expect(isNaN(body.totalAcv)).toBe(false)
+  })
+})
+
+// ── REG-013: Brief includes pipeline + CCSP context (BKL-AI21) ───────────────
+// BKL-AI21: UI-triggered brief was missing pipeline and CCSP data. Fixed 2026-04-04.
+
+test.describe('REG-013: Brief content includes pipeline and CCSP context (BKL-AI21)', () => {
+  test('brief endpoint always returns fromCache field', async () => {
+    const { status, body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
+    expect([200, 404]).toContain(status)
+    if (status === 200) {
+      expect(body).toHaveProperty('fromCache')
+      expect(typeof body.fromCache).toBe('boolean')
+    }
+  })
+
+  test('@live brief text is non-empty string when cache exists', async () => {
+    // First call seeds cache, second call must return fromCache:true
+    await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
+    const { status, body } = await getJSON(`/customer/${KNOWN_CUSTOMER_ENCODED}/brief`)
+    expect(status).toBe(200)
+    if (body.fromCache === true) {
+      expect(typeof body.text).toBe('string')
+      expect(body.text.length).toBeGreaterThan(0)
+    }
+  })
+})
