@@ -372,7 +372,8 @@ export function registerProductIntelRoutes(app: Hono): void {
     if (!/^[a-z0-9-]+$/.test(slug) || !/^[a-z0-9-]+$/.test(customerSlug)) return c.json({ error: 'Invalid slug' }, 400)
     try {
       const intel = getCachedCustomerProductIntel(slug, customerSlug)
-      if (!intel) return c.json({ error: `No cached intel for ${slug}/${customerSlug}` }, 404)
+      // BKL-Q09: return 200+null when no intel exists — "not yet generated" is expected state, not an error
+      if (!intel) return c.json(null)
       return c.json(intel)
     } catch (e: any) {
       console.error(`[product-intel] GET /api/products/${slug}/intel/${customerSlug} error:`, sanitizeErr(e))
