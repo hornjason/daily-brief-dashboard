@@ -8,16 +8,32 @@ interface KPISev1ModalProps {
   open: boolean
   onClose: () => void
   cases: SupportCase[]
+  /** BKL-PVIEW-10: Product filter cascade */
+  selectedProducts?: string[]
+  caseMatchesProducts?: (caseProduct: string | string[], selectedLabels: string[]) => boolean
 }
 
-export default function KPISev1Modal({ open, onClose, cases }: KPISev1ModalProps) {
+export default function KPISev1Modal({ open, onClose, cases, selectedProducts, caseMatchesProducts }: KPISev1ModalProps) {
   const [viewMode, setViewMode] = useState<'all' | 'byAe'>('all')
+  const [showNonMatching, setShowNonMatching] = useState(false)
 
   const sev1Cases = cases.filter((c) => String(c.severity) === '1')
 
+  const isFiltered = (selectedProducts?.length ?? 0) > 0 && !!caseMatchesProducts
+  const matchingSev1 = isFiltered
+    ? sev1Cases.filter(c => caseMatchesProducts!(c.product ?? '', selectedProducts!))
+    : sev1Cases
+  const nonMatchingSev1 = isFiltered
+    ? sev1Cases.filter(c => !caseMatchesProducts!(c.product ?? '', selectedProducts!))
+    : []
+
+  const displayCases = isFiltered
+    ? (showNonMatching ? [...matchingSev1, ...nonMatchingSev1] : matchingSev1)
+    : sev1Cases
+
   const casesByAe = (() => {
     const map = new Map<string, SupportCase[]>()
-    for (const c of sev1Cases) {
+    for (const c of displayCases) {
       const ae = c.customerName ?? 'Unknown'
       const list = map.get(ae) ?? []
       list.push(c)
@@ -32,7 +48,7 @@ export default function KPISev1Modal({ open, onClose, cases }: KPISev1ModalProps
       onClose={onClose}
       title="Severity 1 Cases"
       icon={AlertTriangle}
-      subtitle={`${sev1Cases.length} open`}
+      subtitle={isFiltered ? `${matchingSev1.length} matching · ${sev1Cases.length} total` : `${sev1Cases.length} open`}
       maxWidth="max-w-4xl"
     >
       <div className="overflow-y-auto max-h-[70vh] -m-5">
@@ -58,7 +74,7 @@ export default function KPISev1Modal({ open, onClose, cases }: KPISev1ModalProps
         </div>
 
         {viewMode === 'all' ? (
-          <SupportCasesTable cases={sev1Cases} loading={false} />
+          <SupportCasesTable cases={displayCases} loading={false} />
         ) : (
           <div className="divide-y divide-border/50">
             {casesByAe.map(([name, groupCases]) => (
@@ -72,6 +88,18 @@ export default function KPISev1Modal({ open, onClose, cases }: KPISev1ModalProps
                 <SupportCasesTable cases={groupCases} loading={false} />
               </div>
             ))}
+          </div>
+        )}
+
+        {/* BKL-PVIEW-10: Collapsed non-matching cases toggle */}
+        {isFiltered && nonMatchingSev1.length > 0 && (
+          <div className="px-5 py-3 border-t border-border/50">
+            <button
+              onClick={() => setShowNonMatching(v => !v)}
+              className="text-xs text-text-secondary/70 hover:text-text-secondary transition-colors"
+            >
+              {showNonMatching ? `Hide ${nonMatchingSev1.length} other cases` : `Show ${nonMatchingSev1.length} more cases`}
+            </button>
           </div>
         )}
       </div>

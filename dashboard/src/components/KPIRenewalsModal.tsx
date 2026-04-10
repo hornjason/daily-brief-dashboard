@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { normalizeProductName, stripProductName } from '../utils/productName'
 import { Package, ArrowRight, X, ChevronRight, ChevronDown } from 'lucide-react'
 
 export interface RenewalRow {
@@ -52,24 +53,56 @@ interface KPIRenewalsModalProps {
   byCustomer: [string, RenewalRow[]][]
   onClose: () => void
   freeTrialRows?: RenewalRow[]
+  /** BKL-PVIEW-11: Product filter cascade */
+  selectedProducts?: string[]
 }
 
-export default function KPIRenewalsModal({ title, accentClass, rows, byCustomer, onClose, freeTrialRows = [] }: KPIRenewalsModalProps) {
+function rowMatchesProducts(row: RenewalRow, selectedProducts: string[]): boolean {
+  return selectedProducts.includes(normalizeProductName(stripProductName(row.productDescription)))
+}
+
+export default function KPIRenewalsModal({ title, accentClass, rows, byCustomer, onClose, freeTrialRows = [], selectedProducts }: KPIRenewalsModalProps) {
   const [viewMode, setViewMode] = useState<'all' | 'byAe'>('all')
   const [freeTrialExpanded, setFreeTrialExpanded] = useState(false)
+  const [hiddenSubsExpanded, setHiddenSubsExpanded] = useState(false)
+
+  const isFiltered = (selectedProducts?.length ?? 0) > 0
+
+  // BKL-PVIEW-11: Split rows into matching and non-matching
+  const matchingRows = useMemo(() =>
+    isFiltered ? rows.filter(r => rowMatchesProducts(r, selectedProducts!)) : rows,
+    [rows, selectedProducts, isFiltered]
+  )
+  const nonMatchingRows = useMemo(() =>
+    isFiltered ? rows.filter(r => !rowMatchesProducts(r, selectedProducts!)) : [],
+    [rows, selectedProducts, isFiltered]
+  )
+
+  const displayRows = isFiltered ? (hiddenSubsExpanded ? rows : matchingRows) : rows
+
+  // Rebuild byCustomer from displayRows for consistent grouping
+  const displayByCustomer = useMemo(() => {
+    const map = new Map<string, RenewalRow[]>()
+    for (const row of displayRows) {
+      const list = map.get(row.customerName) ?? []
+      list.push(row)
+      map.set(row.customerName, list)
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1][0].daysLeft - b[1][0].daysLeft)
+  }, [displayRows])
 
   const byAe = useMemo(() => {
     const map = new Map<string, RenewalRow[]>()
-    for (const row of rows) {
+    for (const row of displayRows) {
       const ae = row.ae ?? row.customerName
       const list = map.get(ae) ?? []
       list.push(row)
       map.set(ae, list)
     }
     return Array.from(map.entries()).sort((a, b) => a[1][0].daysLeft - b[1][0].daysLeft)
-  }, [rows])
+  }, [displayRows])
 
-  const groupsToRender = viewMode === 'byAe' ? byAe : byCustomer
+  const groupsToRender = viewMode === 'byAe' ? byAe : displayByCustomer
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -78,7 +111,7 @@ export default function KPIRenewalsModal({ title, accentClass, rows, byCustomer,
           <div className="flex items-center gap-2">
             <Package className={`w-4 h-4 ${accentClass}`} />
             <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
-            <span className="text-xs text-text-secondary">{rows.length} subscriptions · {byCustomer.length} accounts</span>
+            <span className="text-xs text-text-secondary">{isFiltered ? `${matchingRows.length} matching · ` : ''}{rows.length} subscriptions · {byCustomer.length} accounts</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-0.5 bg-border/30 rounded-md p-0.5">
@@ -133,6 +166,25 @@ export default function KPIRenewalsModal({ title, accentClass, rows, byCustomer,
               </div>
             </div>
           ))}
+
+          {/* BKL-PVIEW-11: Collapsed non-matching subscriptions toggle */}
+          {isFiltered && nonMatchingRows.length > 0 && (
+            <div className="px-5 py-3">
+              <button
+                onClick={() => setHiddenSubsExpanded(v => !v)}
+                className="flex items-center gap-2 w-full text-left bg-border/10 hover:bg-border/20 rounded-lg px-3 py-2 transition-colors"
+                aria-expanded={hiddenSubsExpanded}
+              >
+                {hiddenSubsExpanded
+                  ? <ChevronDown className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                  : <ChevronRight className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                }
+                <span className="text-xs text-text-secondary/70">
+                  {nonMatchingRows.length} other subscription{nonMatchingRows.length !== 1 ? 's' : ''} {hiddenSubsExpanded ? '' : 'hidden'}
+                </span>
+              </button>
+            </div>
+          )}
 
           {/* BKL-M45: Collapsible free/trial section */}
           {freeTrialRows.length > 0 && (

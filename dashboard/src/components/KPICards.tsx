@@ -265,6 +265,20 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
     )
   }, [techWinsNeeded, selectedProducts, isProductFiltered])
 
+  // BKL-PVIEW-09: Subscription-level filtered counts for tile display
+  const filteredRedCount = useMemo(() => {
+    if (!isProductFiltered) return redRows.length
+    return redRows.filter(r =>
+      selectedProducts!.includes(normalizeProductName(stripProductName(r.productDescription)))
+    ).length
+  }, [redRows, selectedProducts, isProductFiltered])
+  const filteredAmberCount = useMemo(() => {
+    if (!isProductFiltered) return amberRows.length
+    return amberRows.filter(r =>
+      selectedProducts!.includes(normalizeProductName(stripProductName(r.productDescription)))
+    ).length
+  }, [amberRows, selectedProducts, isProductFiltered])
+
   const redCount = redRows.length
   const amberCount = amberRows.length
 
@@ -357,7 +371,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       <KPICard
         key="expiringWithin30"
         label="Expiring Within 30 Days"
-        value={loading ? 0 : isProductFiltered ? `${redCount} / ${totalRedCount}` : redCount}
+        value={loading ? 0 : isProductFiltered ? `${filteredRedCount} / ${totalRedCount}` : redCount}
         icon={<Package className="w-5 h-5" />}
         accent={redCount > 0 ? '#F85149' : '#3FB950'}
         loading={loading}
@@ -371,7 +385,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       <KPICard
         key="renewals30to90"
         label="Renewals in 30-90 Days"
-        value={loading ? 0 : isProductFiltered ? `${amberCount} / ${totalAmberCount}` : amberCount}
+        value={loading ? 0 : isProductFiltered ? `${filteredAmberCount} / ${totalAmberCount}` : amberCount}
         icon={<Key className="w-5 h-5" />}
         accent={amberCount > 0 ? '#D29922' : '#3FB950'}
         loading={loading}
@@ -412,8 +426,8 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       )}
 
       {/* Extracted modal components (BKL-UX46) */}
-      <KPICasesModal open={casesOpen} onClose={() => setCasesOpen(false)} cases={enrichedCases} />
-      <KPISev1Modal open={sev1Open} onClose={() => setSev1Open(false)} cases={enrichedCases} />
+      <KPICasesModal open={casesOpen} onClose={() => setCasesOpen(false)} cases={enrichedCases} selectedProducts={selectedProducts} caseMatchesProducts={caseMatchesProducts} />
+      <KPISev1Modal open={sev1Open} onClose={() => setSev1Open(false)} cases={enrichedCases} selectedProducts={selectedProducts} caseMatchesProducts={caseMatchesProducts} />
 
       {redOpen && (
         <KPIRenewalsModal
@@ -423,6 +437,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
           byCustomer={redByCustomer}
           onClose={() => setRedOpen(false)}
           freeTrialRows={redFreeTrialRows}
+          selectedProducts={selectedProducts}
         />
       )}
 
@@ -434,6 +449,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
           byCustomer={amberByCustomer}
           onClose={() => setAmberOpen(false)}
           freeTrialRows={amberFreeTrialRows}
+          selectedProducts={selectedProducts}
         />
       )}
 
