@@ -657,6 +657,137 @@ interface ScrapeLogEntry {
   error?: string
 }
 
+// ── BKL-BACKUP-01: Config Backup Section ────────────────────────────────────
+
+interface BackupStatus {
+  sheetId: string | null
+  lastBackup: string | null
+  hasSheet: boolean
+}
+
+function ConfigBackupSection() {
+  const [status, setStatus] = useState<BackupStatus | null>(null)
+  const [backing, setBacking] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [confirmRestore, setConfirmRestore] = useState(false)
+  const [result, setResult] = useState<{ type: 'backup' | 'restore'; ok: boolean; detail: string } | null>(null)
+
+  const fetchStatus = useCallback(() => {
+    fetch('/api/admin/backup/status')
+      .then(r => r.json())
+      .then(d => setStatus(d))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => { fetchStatus() }, [fetchStatus])
+
+  const handleBackup = async () => {
+    setBacking(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/admin/backup', { method: 'POST' })
+      const d = await res.json()
+      setResult({ type: 'backup', ok: d.ok, detail: d.ok ? `Backed up at ${d.timestamp}` : (d.error ?? 'No backup sheet configured') })
+      fetchStatus()
+    } catch {
+      setResult({ type: 'backup', ok: false, detail: 'Network error' })
+    } finally {
+      setBacking(false)
+    }
+  }
+
+  const handleRestore = async () => {
+    setRestoring(true)
+    setResult(null)
+    setConfirmRestore(false)
+    try {
+      const res = await fetch('/api/admin/backup/restore', { method: 'POST' })
+      const d = await res.json()
+      const detail = d.ok
+        ? `Restored: ${d.sections.join(', ')}${d.errors?.length ? ` | Errors: ${d.errors.join(', ')}` : ''}`
+        : `Failed: ${d.errors?.join(', ') ?? 'unknown error'}`
+      setResult({ type: 'restore', ok: d.ok, detail })
+    } catch {
+      setResult({ type: 'restore', ok: false, detail: 'Network error' })
+    } finally {
+      setRestoring(false)
+    }
+  }
+
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+      {/* Sheet ID */}
+      <div className="text-xs text-gray-400">
+        Sheet ID:{' '}
+        {status?.hasSheet ? (
+          <a
+            href={`https://docs.google.com/spreadsheets/d/${status.sheetId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:underline font-mono"
+          >
+            {status.sheetId}
+          </a>
+        ) : (
+          <span className="text-gray-500">Not configured (will be created on next bootstrap)</span>
+        )}
+      </div>
+
+      {/* Last backup */}
+      {status?.lastBackup && (
+        <div className="text-xs text-gray-400">
+          Last backup: <span className="text-gray-300">{formatRelTime(status.lastBackup)}</span>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleBackup}
+          disabled={backing || !status?.hasSheet}
+          className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+        >
+          {backing ? 'Backing up...' : 'Backup Now'}
+        </button>
+
+        {!confirmRestore ? (
+          <button
+            onClick={() => setConfirmRestore(true)}
+            disabled={restoring || !status?.hasSheet}
+            className="px-3 py-1.5 text-xs font-medium rounded bg-yellow-700 hover:bg-yellow-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+          >
+            Restore from Backup
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-yellow-400">This will overwrite current config. Continue?</span>
+            <button
+              onClick={handleRestore}
+              disabled={restoring}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 text-white transition-colors"
+            >
+              {restoring ? 'Restoring...' : 'Yes, Restore'}
+            </button>
+            <button
+              onClick={() => setConfirmRestore(false)}
+              className="px-3 py-1.5 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Result */}
+      {result && (
+        <div className={`text-xs ${result.ok ? 'text-green-400' : 'text-red-400'}`}>
+          {result.detail}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ScrapeHistorySection() {
   const [history, setHistory] = useState<ScrapeLogEntry[]>([])
 
@@ -1114,6 +1245,12 @@ export function AdminPage() {
 
         {/* Product Intelligence Sources */}
         <ProductSourcesAdmin />
+
+        {/* BKL-BACKUP-01: Config Backup */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Config Backup</h2>
+          <ConfigBackupSection />
+        </div>
 
         {/* BKL-M50e: Scrape History */}
         <ScrapeHistorySection />

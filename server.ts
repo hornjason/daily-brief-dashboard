@@ -38,6 +38,7 @@ import { initSetupRoutes, registerSetupRoutes } from './src/setup-routes.ts'
 import { initCustomerRoutes, registerCustomerRoutes } from './src/customer-routes.ts'
 import { registerProductIntelRoutes } from './src/product-intel-routes.ts'
 import { initRestoreRoutes, registerRestoreRoutes } from './src/restore-routes.ts'
+import { registerBackupRoutes } from './src/backup-routes.ts'
 import { getGeminiUsageSummary } from './src/gemini-cost-tracker.ts'
 import { initJobPersistence } from './src/account-intelligence.ts'
 
@@ -633,6 +634,9 @@ app.get('/api/territory/notifications', async (c) => {
     return c.json({ error: sanitizeErr(e) }, 500)
   }
 })
+
+// ── Config backup routes (BKL-BACKUP-01) ────────────────────────────────────
+registerBackupRoutes(app)
 
 // ── Gemini cost tracking (BKL-M52) ──────────────────────────────────────────
 

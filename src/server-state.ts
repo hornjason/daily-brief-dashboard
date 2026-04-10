@@ -2,6 +2,7 @@ import type { AE, Customer } from './types.ts'
 import { readFileSync, writeFileSync, renameSync } from 'fs'
 import { resolve } from 'path'
 import { mergeCustomers, readExistingCustomers } from './customer-merge.ts'
+import { backupNow } from './backup-config.ts'
 
 // ── Path constants ──────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ export function saveAes(updated: AE[]): void {
   writeFileSync(tmp, JSON.stringify({ aes: updated }, null, 2), { mode: 0o600 })
   renameSync(tmp, AES_PATH)
   aes = updated
+  backupNow().catch(e => console.warn('[backup] async backup failed:', e.message))
 }
 
 /**
@@ -76,6 +78,7 @@ export function saveCustomers(updated: Customer[]): void {
   writeFileSync(tmp, JSON.stringify({ customers: merged }, null, 2), { mode: 0o600 })
   renameSync(tmp, CUSTOMERS_PATH)
   customers = merged
+  backupNow().catch(e => console.warn('[backup] async backup failed:', e.message))
 }
 
 /** BKL-AI11: Atomically patch a single customer's fields (same pattern as patchAe). */

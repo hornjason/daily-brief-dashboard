@@ -20,6 +20,7 @@ import type { AE } from './types.ts'
 import { sanitizeErr } from './utils.ts'
 import { loadProductIntelConfig, saveProductConfig } from './product-release-radar.ts'
 import { recordBootstrapRun } from './bootstrap-history.ts'
+import { getBackupSheetId, setBackupSheetId, createBackupSheet } from './backup-config.ts'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -389,6 +390,17 @@ export async function bootstrapPOD(opts: {
   console.log(`[pod-bootstrap] Found ${aeEntries.length} AEs in territory sheet: ${aeEntries.map(a => a.aeName).join(', ')}`)
   // Persist POD config so it survives server restarts and can seed future re-runs
   savePodConfig({ territorySheetId, sfReportId, parentFolderId, podTabTitle })
+
+  // BKL-BACKUP-01: Create config backup sheet if not already configured (best-effort)
+  if (!getBackupSheetId() && parentFolderId) {
+    try {
+      const backupId = await createBackupSheet(parentFolderId)
+      setBackupSheetId(backupId)
+      console.log(`[backup] Config Backup sheet created: ${backupId}`)
+    } catch (e: any) {
+      console.warn('[backup] Could not create backup sheet during bootstrap:', e.message)
+    }
+  }
 
   const succeeded: string[] = []
   const skipped: string[] = []

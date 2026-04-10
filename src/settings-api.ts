@@ -1,6 +1,12 @@
 import { readFileSync, writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import type { Hono } from 'hono'
 import { sanitizeErr } from './utils.ts'
+import { backupNow } from './backup-config.ts'
+
+/** Fire-and-forget backup after data-sources.json write. */
+function _triggerBackup(): void {
+  backupNow().catch(e => console.warn('[backup] async backup failed:', e.message))
+}
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let DATA_SOURCES_PATH = ''
@@ -75,6 +81,7 @@ export function updateSchedulerField(field: string, value: unknown): void {
   const tmpPath = DATA_SOURCES_PATH + '.tmp'
   writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, schedulerConfig: config }, null, 2), { mode: 0o600 })
   renameSync(tmpPath, DATA_SOURCES_PATH)
+  _triggerBackup()
 }
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -111,6 +118,7 @@ export function recordSessionEstablished(service: SessionService): void {
     const tmpPath = DATA_SOURCES_PATH + '.tmp'
     writeFileSyncRaw(tmpPath, JSON.stringify(ds, null, 2), { mode: 0o600 })
     renameSync(tmpPath, DATA_SOURCES_PATH)
+    _triggerBackup()
   } catch (e: any) {
     console.warn(`[session-timestamps] failed to record ${service}:`, e.message)
   }
@@ -280,6 +288,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       const tmpPath = DATA_SOURCES_PATH + '.tmp'
       writeFileSyncRaw(tmpPath, JSON.stringify(merged, null, 2), { mode: 0o600 })
       renameSync(tmpPath, DATA_SOURCES_PATH)
+      _triggerBackup()
       deps.rescheduleRefreshTimers(updated)
       return c.json({ intervals: updated, schedulerConfig: getSchedulerConfig() })
     } catch (e: any) {
@@ -307,6 +316,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       const tmpPath = DATA_SOURCES_PATH + '.tmp'
       writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, weather: updated }, null, 2), { mode: 0o600 })
       renameSync(tmpPath, DATA_SOURCES_PATH)
+      _triggerBackup()
       _weatherCache = null // invalidate cache on settings change
       return c.json(updated)
     } catch (e: any) {
@@ -364,6 +374,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       const tmpPath = DATA_SOURCES_PATH + '.tmp'
       writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, aiConfig: updated }, null, 2), { mode: 0o600 })
       renameSync(tmpPath, DATA_SOURCES_PATH)
+      _triggerBackup()
       return c.json({ config: updated })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
@@ -428,6 +439,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       const tmpPath = DATA_SOURCES_PATH + '.tmp'
       writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, automationConfig: updated }, null, 2), { mode: 0o600 })
       renameSync(tmpPath, DATA_SOURCES_PATH)
+      _triggerBackup()
       return c.json({ config: updated })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
