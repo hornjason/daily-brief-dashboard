@@ -2963,7 +2963,11 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               ) : (
                 <p className="text-xs text-text-secondary">Cloud spend</p>
               )}
-              {isRecent([ccspStatus?.lastSuccess, ccspStatus?.lastScrape].filter((t): t is string => !!t).sort().slice(-1)[0]) && <p className="text-xs text-success">✓ Synced just now</p>}
+              {isRecent([ccspStatus?.lastSuccess, ccspStatus?.lastScrape].filter((t): t is string => !!t).sort().slice(-1)[0]) && (
+                ccspStatus?.recordCount
+                  ? <p className="text-xs text-success">✓ Synced — {ccspStatus.recordCount} records</p>
+                  : <p className="text-xs text-warning">⚠ Synced but returned 0 records</p>
+              )}
               {ccspStatus?.lastError && isTableauSessionError(ccspStatus.lastError) ? (
                 <div className="flex items-center gap-1.5 mt-1">
                   <p className="text-xs text-warning">Tableau session expired — re-authenticate via VNC to continue</p>
@@ -3011,7 +3015,11 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               ) : (
                 <p className="text-xs text-text-secondary">Pipeline data</p>
               )}
-              {isRecent(sfStatus?.lastSync) && <p className="text-xs text-success">✓ Synced just now</p>}
+              {isRecent(sfStatus?.lastSync) && (
+                sfStatus?.rowCount
+                  ? <p className="text-xs text-success">✓ Synced — {sfStatus.rowCount} rows</p>
+                  : <p className="text-xs text-warning">⚠ Synced but returned 0 rows</p>
+              )}
             </div>
             <div className="flex items-center">
               {!sfConnected && (
