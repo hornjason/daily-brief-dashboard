@@ -11,7 +11,7 @@
  * service account key or OAuth fallback).
  */
 
-import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
@@ -19,6 +19,7 @@ import { makeAuth } from './google.ts'
 import { sanitizePromptInput } from './utils.ts'
 import { getGeminiModel } from './settings-api.ts'
 import { aes, customers, CUSTOMERS_PATH } from './server-state.ts'
+import { readSheetCache } from './cache-layer.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import type { Customer } from './types.ts'
 
@@ -26,6 +27,20 @@ import type { Customer } from './types.ts'
 
 const CONFIG_DIR_PATH  = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
+
+// ── BKL-AI-03: Intelligence cache TTL ────────────────────────────────────────
+const INTELLIGENCE_CACHE_TTL_DAYS = Number(process.env.INTELLIGENCE_CACHE_TTL_DAYS) || 7
+const INTELLIGENCE_CACHE_TTL_MS   = INTELLIGENCE_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
+
+function readIntelligenceCache(customerName: string): { company: string; industry: string; cachedAt: string; skipped?: boolean } | null {
+  if (!JOB_CACHE_PATH) return null
+  try {
+    const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const p = JOB_CACHE_PATH.replace('/intelligence-jobs.json', `/intelligence/${slug}.json`)
+    if (!existsSync(p)) return null
+    return JSON.parse(readFileSync(p, 'utf-8'))
+  } catch { return null }
+}
 
 // ── Gemini call with Google Search grounding ─────────────────────────────────
 
@@ -55,7 +70,7 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
       tools: [{ google_search: {} }],
       generationConfig: {
         temperature: opts.temperature ?? 1.0,
-        maxOutputTokens: opts.maxOutputTokens ?? 16384,
+        maxOutputTokens: opts.maxOutputTokens ?? 8192,
         thinkingConfig: { thinkingBudget: 0 },
       },
     }),
@@ -358,7 +373,7 @@ export async function generateCompanyIntelligence(customer: Customer, industry: 
   const brief = await callGeminiGrounded({
     systemPrompt,
     userPrompt,
-    maxOutputTokens: 16384,
+    maxOutputTokens: 8192,
     temperature: 1.0,
     callType: 'intelligence-company',
     customerName: customer.name,
@@ -508,7 +523,7 @@ export async function generateIndustryAnalysis(customer: Customer, industry: str
   const analysis = await callGeminiGrounded({
     systemPrompt,
     userPrompt,
-    maxOutputTokens: 16384,
+    maxOutputTokens: 8192,
     temperature: 1.0,
     callType: 'intelligence-analysis',
     customerName: customer.name,
@@ -865,8 +880,43 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
   const customer = customers.find(c => c.name === customerName)
   if (!customer) throw new Error(`Customer not found: ${customerName}`)
 
-  // Set initial status
   const jobId = customerName
+
+  // BKL-AI-03: TTL check — skip regeneration if cached intel is fresh
+  const cachedIntel = readIntelligenceCache(customerName)
+  if (cachedIntel?.cachedAt && !cachedIntel.skipped) {
+    const age = Date.now() - new Date(cachedIntel.cachedAt).getTime()
+    if (age < INTELLIGENCE_CACHE_TTL_MS && cachedIntel.company && cachedIntel.industry) {
+      console.log(`[acct-intel] Skipping ${customerName} — cache is ${Math.round(age / 86400000)}d old (TTL: ${INTELLIGENCE_CACHE_TTL_DAYS}d)`)
+      setJob(jobId, { status: 'complete', step: 'skipped (cache fresh)', startedAt: new Date().toISOString(), completedAt: new Date().toISOString() })
+      return jobId
+    }
+  }
+
+  // BKL-AI-04: Skip customers with no data — no Gemini call needed
+  const accountNumbers = customer.accountNumbers ?? []
+  const sheetData = readSheetCache(customerName)
+  const subscriptions = sheetData?.rows ?? []
+  if (accountNumbers.length === 0 && subscriptions.length === 0) {
+    const existingStub = readIntelligenceCache(customerName)
+    if (!existingStub?.skipped) {
+      console.log(`[acct-intel] Skipping ${customerName} — no account numbers or subscriptions; writing stub`)
+      if (JOB_CACHE_PATH) {
+        try {
+          const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
+          mkdirSync(intelligenceDir, { recursive: true })
+          const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+          writeFileSync(`${intelligenceDir}/${slug}.json`, JSON.stringify({ customerName, company: '', industry: '', cachedAt: new Date().toISOString(), skipped: true, skipReason: 'No account numbers or subscriptions' }), { mode: 0o600 })
+        } catch (e: any) { console.warn('[acct-intel] Stub cache write failed:', e.message) }
+      }
+    } else {
+      console.log(`[acct-intel] Skipping ${customerName} — no data, stub already cached`)
+    }
+    setJob(jobId, { status: 'complete', step: 'skipped (no data)', startedAt: new Date().toISOString(), completedAt: new Date().toISOString() })
+    return jobId
+  }
+
+  // Set initial status
   setJob(jobId, { status: 'running', step: 'identifying industry', startedAt: new Date().toISOString() })
 
   // Run pipeline in background (don't await here)
