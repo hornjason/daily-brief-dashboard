@@ -645,8 +645,52 @@ async function discoverAccountNumbersByName(
         console.log(`[supportable] name-search: "${searchTerm}%" → detail page DOM extract, account# ${domAcct}`)
         return [domAcct]
       }
-      // All 3 detail-page patterns failed — log for post-mortem before falling through to table parse
-      console.warn(`[supportable] name-search: "${searchTerm}%" → detail page detected (hasCustomerInfo=true) but all 3 account-number extraction patterns failed (HTML regex, plain regex, DOM eval). HTML size=${html.length}`)
+      // Pattern 4: no-<th> detail pages — Account Number in <strong>, <label>, or <td> with value
+      // in an adjacent element (not necessarily a sibling td). Walks all text nodes to find the label,
+      // then searches nearby elements for the numeric value.
+      const domAcct4 = await page.evaluate(() => {
+        // Strategy A: find <strong> or <label> containing "Account Number", then look for digits nearby
+        const labels = Array.from(document.querySelectorAll('strong, label, b, span'))
+        for (const el of labels) {
+          if (!/Account\s*Number/i.test(el.textContent ?? '')) continue
+          // Check: value might be in a sibling text node or adjacent element
+          const parent = el.parentElement
+          if (!parent) continue
+          const parentText = parent.textContent?.replace(el.textContent ?? '', '').trim() ?? ''
+          const m = parentText.match(/(\d{5,12})/)
+          if (m) return m[1]
+          // Check next sibling elements of the parent
+          let sibling = parent.nextElementSibling
+          for (let i = 0; i < 5 && sibling; i++) {
+            const sm = sibling.textContent?.trim().match(/(\d{5,12})/)
+            if (sm) return sm[1]
+            sibling = sibling.nextElementSibling
+          }
+        }
+        // Strategy B: walk all <tr> rows — find one where any cell contains "Account Number",
+        // then grab digits from any other cell in that row
+        const rows = Array.from(document.querySelectorAll('tr'))
+        for (const row of rows) {
+          const cells = Array.from(row.querySelectorAll('td'))
+          let labelIdx = -1
+          for (let i = 0; i < cells.length; i++) {
+            if (/Account\s*Number/i.test(cells[i].textContent ?? '')) { labelIdx = i; break }
+          }
+          if (labelIdx < 0) continue
+          for (let i = 0; i < cells.length; i++) {
+            if (i === labelIdx) continue
+            const cm = cells[i].textContent?.trim().match(/(\d{5,12})/)
+            if (cm) return cm[1]
+          }
+        }
+        return null
+      }).catch(() => null)
+      if (domAcct4) {
+        console.log(`[supportable] name-search: "${searchTerm}%" → detail page pattern 4 (no-<th>), account# ${domAcct4}`)
+        return [domAcct4]
+      }
+      // All 4 detail-page patterns failed — log for post-mortem before falling through to table parse
+      console.warn(`[supportable] name-search: "${searchTerm}%" → detail page detected (hasCustomerInfo=true) but all 4 account-number extraction patterns failed (HTML regex, plain regex, DOM eval, no-th DOM). HTML size=${html.length}`)
     }
 
     // Try 1: find the results table with Customer Number column
