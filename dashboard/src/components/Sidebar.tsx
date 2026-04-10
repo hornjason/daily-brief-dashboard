@@ -219,14 +219,14 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
 
         <div className="relative group">
           <a
-            href="/admin"
+            href="/dashboard/admin"
             onClick={(e) => {
               e.preventDefault()
-              navigate('/admin')
+              navigate('/dashboard/admin')
             }}
             aria-label="Settings"
             className={`${btnBase} ${
-              location.pathname === '/admin'
+              location.pathname === '/dashboard/admin'
                 ? 'bg-accent/10 text-accent'
                 : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
             }`}

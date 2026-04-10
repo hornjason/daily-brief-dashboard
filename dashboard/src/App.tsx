@@ -689,7 +689,7 @@ function App() {
     <Routes>
       <Route path="/dashboard/customer/:name" element={<CustomerDetailPage />} />
       <Route path="/dashboard/setup" element={<SetupPage />} />
-<Route path="/admin" element={<AdminPage />} />
+      <Route path="/dashboard/admin" element={<AdminPage />} />
       <Route path="*" element={<Dashboard />} />
     </Routes>
   )
