@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-10 (BKL-TEST-05 DONE: Quinn validated cold-start sync for CCSP and pipeline)
+Last update: 2026-04-10 (BKL-REG-01/02/03 added: intelligence button wrong endpoint, product intel silent fail, domain inference missing admin trigger)
 
 ---
 
@@ -5737,3 +5737,136 @@ Description: Research and implement the full environment strategy covering:
 
 Research questions before implementing: (a) What tunnel solution fits Red Hat IT constraints? (b) Is a self-hosted GH runner practical on this Mac? (c) Should demo data be a fixed snapshot (never syncs) or periodic sync from prod?
 Decision: OPEN — research first (GrokResearcher), then implement Makefile targets + docs.
+
+### BKL-REG-01 | AccountIntelligencePanel "Generate Intelligence" button called wrong API endpoint
+Status: ✅ FIXED 2026-04-10 (AccountIntelligencePanel.tsx updated to call correct endpoint)
+Severity: HIGH
+Priority: P1
+Size: XS
+Source: Jason 2026-04-10 — button showed "identifying industry..." then disappeared with no result
+Files: dashboard/src/components/AccountIntelligencePanel.tsx
+Root cause: handleGenerate() called POST /api/intelligence/run (non-existent) instead of POST /api/customer/:name/generate-intelligence. fetch() doesn't throw on 404 so failure was silent. Status set to 'running' then polling saw 'none' and reset.
+Fix: Changed URL in handleGenerate() to correct path; added res.ok check to surface server errors.
+Decision: FIXED — rebuild in progress as of 2026-04-10.
+
+### BKL-REG-02 | Product Intelligence "Generate" buttons silently fail
+Status: ✅ DONE
+Severity: HIGH
+Priority: P1
+Size: S
+Source: Jason 2026-04-10 — clicking Generate on any product in ProductIntelSection does nothing
+Files: dashboard/src/components/ProductIntelSection.tsx, src/product-intel-routes.ts
+Root cause: getCachedSummary(slug) returned null → 400 "No cached summary" → silent catch in handleRegenerate/handleGenerateAll swallowed all errors.
+Fix: (1) Added error state with dismissible banner to ProductIntelSection. (2) handleRegenerate now calls POST /api/products/:slug/refresh before generate to ensure cache exists. (3) handleGenerateAll refreshes all product caches first via Promise.allSettled. (4) Seeded all 7 product summary caches via curl. Verified: POST /api/products/rhel/intel/radiology-partners/generate returns intel.
+Decision: DONE — fixed 2026-04-10.
+
+### BKL-REG-03 | Domain inference not re-runnable for existing customers — all SW pod domains empty
+Status: ✅ DONE
+Severity: HIGH
+Priority: P1
+Size: S
+Source: Jason 2026-04-10 — domain column shows placeholder "acme.com" for all customers in Setup Wizard
+Files: src/setup-routes.ts (POST /api/setup/infer-domains), dashboard/src/pages/AdminPage.tsx
+Root cause: Domain inference runs automatically only during bootstrap wizard flow (bootstrap-orchestrator.ts:1358). After data wipe + restore, all customer domains are empty. No Admin button existed to re-trigger.
+Fix: Added DomainInferenceSection component to AdminPage.tsx with "Run Now" button that calls POST /api/setup/infer-domains. Shows loading state, displays auto-saved count, need-review count, and total processed inline. Verified: endpoint returns domain inference results for all 105 customers.
+Decision: DONE — fixed 2026-04-10.
+
+### BKL-UX52-P1 | Pod tab bar renders as static label, not interactive tabs
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: XS
+Source: Quinn BKL-UX52 validation 2026-04-10 — "Southwest Pod:" shows as static text, no clickable tabs
+Files: dashboard/src/components/PodTabBar.tsx, dashboard/src/App.tsx
+Finding: With only 1 pod configured, PodTabBar renders a label instead of an interactive tab control. When 2+ pods are configured the tab switching may work correctly — needs verification. The spec called for a tab bar; currently it's a label.
+Fix needed: Verify tab switching works with 2 pods. If it does, this is just cosmetic — add a design clarification note.
+Decision: OPEN — low priority until NW pod is added; tab bar with 1 tab has no functional value.
+
+### BKL-UX52-P2 | Health dot reason chips shown inline instead of hover tooltip
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: XS
+Source: Quinn BKL-UX52 validation 2026-04-10 — chips visible inline, not behind hover trigger
+Files: dashboard/src/components/HealthDot.tsx, dashboard/src/components/AEGroupedList.tsx
+Finding: Reason chips ("Sev1 case open", "Pipeline $405K closes in 20d") are displayed inline next to every customer row. The spec called for hover tooltip. Quinn notes inline display is arguably better UX (always visible) but deviates from spec.
+Fix needed: Design decision — either accept inline chips as the standard or implement hover popup. No functional impact.
+Decision: OPEN — needs Jason design call. Inline chips may be preferred.
+
+### BKL-TEST-07 | Complete test coverage assessment — silent-fail buttons + untested action flows
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: L
+Source: Jason 2026-04-10 — BKL-REG-01/02 both had silent catch blocks hiding failures; entire class of bugs undetected
+Files: dashboard/src/components/*.tsx, dashboard/src/pages/*.tsx, test/
+Root cause pattern: 71 silent `catch(() => {})` blocks exist across frontend components. Any of these can hide wrong endpoints, server errors, or broken flows with zero user feedback. BKL-REG-01 (wrong endpoint) and BKL-REG-02 (missing cache) were both invisible because of this pattern.
+
+Description: Two deliverables required:
+
+  (1) **Silent catch audit** — sweep all 71 silent catch blocks in dashboard/src/:
+    - Categorize each as: (a) load-only fetch where silence is OK, (b) action button where silence hides failures (must surface error), (c) polling fetch where silence is OK
+    - For every (b): add visible error state to the component AND write a Playwright spec
+    - Priority components with confirmed silent-fail action buttons:
+      - AccountIntelligencePanel.tsx (generate intelligence) — BKL-REG-01, fixed
+      - ProductIntelSection.tsx (generate/regenerate per product, generate all) — BKL-REG-02, fixed
+      - AccountPlanPanel.tsx (generate account plan)
+      - AdminPage.tsx (scrape triggers, backup, restore, notebook generate, domain inference)
+      - ProductCard.tsx (refresh)
+      - MorningSummary.tsx (refresh)
+
+  (2) **Action flow test coverage** — for each action button that calls a mutating API endpoint, verify a Playwright spec exists that:
+    - Clicks the button
+    - Verifies the API call was made (check network or poll status endpoint)
+    - Verifies the expected result (running state, then complete, or visible error on failure)
+    - Does NOT require state mutation of customers.json or aes.json (snapshot/restore if it does)
+    - Priority test specs to write:
+      - test/ui/account-intelligence.spec.ts — generate button → job starts → status: running/complete
+      - test/ui/product-intel.spec.ts — generate button → not silent on error → returns result
+      - test/ui/account-plan.spec.ts — generate button → plan appears
+      - test/api/intelligence.spec.ts — extend existing spec with per-customer endpoint test
+
+  (3) **res.ok gate standard** — enforce that all action button fetch calls check res.ok before
+    treating the response as success. Add to CLAUDE.md as a coding standard:
+    "All action button fetch calls (POST/DELETE that trigger work) MUST check res.ok and surface
+    an error state to the user. Never silently catch a non-ok response on an action button."
+
+Decision: OPEN — assign to Marcus for audit + Quinn for test writing. Do audit first, then tests.
+
+### BKL-STARTUP-01 | Product summary caches not seeded on startup — empty after every rebuild
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Jason 2026-04-10 — BKL-REG-02 root cause; product caches wiped on every rebuild with no auto-recovery
+Files: server.ts or src/background-scheduler.ts, src/product-release-radar.ts
+Description: Product summary cache files (`data/cache/product-intel/{slug}-summary.json`) are not committed to git and are wiped on every `make rebuild`. The weekly background scheduler (Sunday 6am ET) eventually re-seeds them, but between rebuild and next Sunday the Product Intelligence generate buttons silently fail.
+Fix: On server startup, check if any configured product slugs are missing a summary cache. If missing, auto-trigger `refreshAllProducts()` in the background (non-blocking). This runs once per cold start and ensures the cache is always populated within minutes of a rebuild.
+Decision: OPEN -- small addition to server startup sequence.
+
+### BKL-TEST-08 | intelligence.spec.ts uses hardcoded "A10 Networks" not in customer dataset
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: XS
+Source: 2026-04-10 Quinn regression session
+Files: test/api/intelligence.spec.ts
+Description: KNOWN_CUSTOMER is hardcoded to "A10 Networks" which does not exist in the current 106-customer dataset. Tests 23 and 33 fail with 404 because the customer lookup correctly rejects unknown names. Fix: use a customer name from the current dataset (e.g., "Acme Corp") or dynamically discover one via /api/accounts.
+
+### BKL-TEST-09 | customers.spec.ts brief tests use AE name as customer name
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: XS
+Source: 2026-04-10 Quinn regression session
+Files: test/api/customers.spec.ts
+Description: 5 brief-related tests use CAROLANNE_ENCODED ("Carolanne Farrell") which is an AE name, not a customer name. The /customer/:name/brief endpoint requires an exact customer name and returns 404 for AE names. CCSP and pipeline endpoints work with AE names via fuzzy matching, but brief does not. Fix: add a KNOWN_CUSTOMER constant to fixtures.ts with an actual customer name, and use it for brief tests.
+
+### BKL-TEST-10 | customer-detail.spec.ts wrong assertion for nonexistent customer h1
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: XS
+Source: 2026-04-10 Quinn regression session
+Files: test/ui/customer-detail.spec.ts
+Description: Test at line 261 expects h1 to show the fake customer name "__nonexistent__" but the page correctly renders "Customer not found". The UI behavior is better than the test expectation. Fix: change assertion to expect(h1).toHaveText("Customer not found").

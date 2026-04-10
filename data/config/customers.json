@@ -1,1 +1,1079 @@
-{"customers":[{"name":"Acme Corp","domain":"acme.com","accountNumbers":["123456"]},{"name":"Big Ten Network Services","accountNumbers":["11899794"],"ae":"TBH","discoveryFailures":0},{"name":"First American Financial","accountNumbers":["12653942","9512872"],"ae":"TBH","discoveryFailures":0},{"name":"First American Home Buyers Protection","accountNumbers":["7457646"],"ae":"TBH","discoveryFailures":0},{"name":"First American Trust","accountNumbers":["847070"],"ae":"TBH","discoveryFailures":0},{"name":"Fox","accountNumbers":["11820898","5304575","6247997"],"ae":"TBH","discoveryFailures":0},{"name":"Fox News Network","accountNumbers":["1032475","1087182","6278491","852109","855297"],"ae":"TBH","discoveryFailures":0},{"name":"Fox Television Station Ll","accountNumbers":[],"ae":"TBH","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:20:15.750Z"},{"name":"Foxcorp Attn","accountNumbers":[],"ae":"TBH","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:20:25.293Z"},{"name":"Latham Watkins Llp","accountNumbers":[],"ae":"TBH","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:20:40.634Z"},{"name":"Peraton Technology Services","accountNumbers":[],"ae":"TBH","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:20:50.375Z"},{"name":"Peraton Oscomet","accountNumbers":[],"ae":"TBH","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:21:00.515Z"},{"name":"Rxlogix","accountNumbers":[],"ae":"TBH","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:21:10.301Z"},{"name":"Solartis","accountNumbers":["11407694","11491901","11916628","5262442","5629489","5632235","5650499","5796430","5972815"],"ae":"TBH","discoveryFailures":0},{"name":"Tgs Management","accountNumbers":["1079223","12678174","320795","5613975","946000"],"ae":"TBH","discoveryFailures":0},{"name":"Axway","accountNumbers":["1185684"],"ae":"Peter Niklaus","discoveryFailures":0},{"name":"Connexity","accountNumbers":["5935082"],"ae":"Peter Niklaus","discoveryFailures":0},{"name":"Consumer Cellular Incorporated","accountNumbers":["1010239","12316598"],"ae":"Peter Niklaus","discoveryFailures":0},{"name":"Microchip Technology","accountNumbers":[],"ae":"Peter Niklaus"},{"name":"Microsemi Storage Solutions","accountNumbers":["5722021"],"ae":"Peter Niklaus","discoveryFailures":0},{"name":"Musarubra Us","accountNumbers":["11911836","7342937","8438510"],"ae":"Peter Niklaus","discoveryFailures":0},{"name":"Nextiva","accountNumbers":["12017425","1538597"],"ae":"Peter Niklaus","discoveryFailures":0},{"name":"Pnm Resources","accountNumbers":["11920598","720230","898829","1042871"],"ae":"Peter Niklaus","discoveryFailures":0},{"name":"Public Service Of New Mexico","accountNumbers":[],"ae":"Peter Niklaus","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:21:45.578Z"},{"name":"Tucson Electric Power","accountNumbers":["1190227","1203707","1211700","1401160","1447443","682361"],"ae":"Peter Niklaus","discoveryFailures":0},{"name":"Aera Energy Services","accountNumbers":[],"ae":"Oren Shaolian","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:29:25.860Z"},{"name":"California Resources","accountNumbers":["5530581"],"ae":"Oren Shaolian","discoveryFailures":0},{"name":"Insurance Of West","accountNumbers":[],"ae":"Oren Shaolian","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:29:35.945Z"},{"name":"Internet For Assigned Names And Numbers","accountNumbers":[],"ae":"Oren Shaolian","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:40:54.019Z"},{"name":"Korn Ferry","accountNumbers":["11835658","12308748","5615352","5785765","6233905","6661455"],"ae":"Oren Shaolian","discoveryFailures":0},{"name":"Local Initiative Health Authority For Los Angeles County","accountNumbers":["523393"],"ae":"Oren Shaolian","discoveryFailures":0},{"name":"Radiology Partners","accountNumbers":["11996523","12862587","12862602","5380573","6029692"],"ae":"Oren Shaolian","discoveryFailures":0},{"name":"Skechers U S A","accountNumbers":[],"ae":"Oren Shaolian","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:41:04.085Z"},{"name":"Skechers U S A Ii","accountNumbers":[],"ae":"Oren Shaolian","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:41:22.860Z"},{"name":"Xifin","accountNumbers":["1085893","5584293","5599078","5655332","5842301"],"ae":"Oren Shaolian","discoveryFailures":0},{"name":"Yardi Systems","accountNumbers":["444120","5820464","6313941","6868255","6874765","6930537","7493935"],"ae":"Oren Shaolian","discoveryFailures":0},{"name":"Ademco","accountNumbers":["6158784"],"ae":"Sherry Gayo","discoveryFailures":0},{"name":"American Traffic Solutions Consolidated","accountNumbers":[],"ae":"Sherry Gayo","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:41:38.469Z"},{"name":"American Traffic Solutions","accountNumbers":[],"ae":"Sherry Gayo","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:41:48.191Z"},{"name":"Avnet","accountNumbers":["725718","5255905","800831"],"ae":"Sherry Gayo","discoveryFailures":0},{"name":"Banner Health","accountNumbers":["1108805","12402464","1273930","1309811","1557449","520598","5471411","5505793","5525547","5526297","604580","6184131","6344266","851608"],"ae":"Sherry Gayo","discoveryFailures":0},{"name":"Cableone Corporate Office","accountNumbers":[],"ae":"Sherry Gayo","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:41:57.866Z"},{"name":"Ebocom","accountNumbers":["1038291","1089595","1223429","5366900","565717","7119942"],"ae":"Sherry Gayo","discoveryFailures":0},{"name":"Freeeport Mcmoran","accountNumbers":[],"ae":"Sherry Gayo","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:42:07.845Z"},{"name":"Republic Services","accountNumbers":["12477276","5361566","5532178","5557842","6004309"],"ae":"Sherry Gayo","discoveryFailures":0},{"name":"Resideo Technologies","accountNumbers":["6193973","8497908"],"ae":"Sherry Gayo","discoveryFailures":0},{"name":"Rsi Video Technologies","accountNumbers":["6286500"],"ae":"Sherry Gayo","discoveryFailures":0},{"name":"Sonora Quest Laboratories","accountNumbers":[],"ae":"Sherry Gayo","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:42:17.753Z"},{"name":"Verra Mobility","accountNumbers":[],"ae":"Sherry Gayo","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:42:28.444Z"},{"name":"Viavi Solutions","accountNumbers":["1339725"],"ae":"Sherry Gayo","discoveryFailures":0},{"name":"Celestial Saturn Parent","accountNumbers":[],"ae":"Amanda Mejia","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:42:38.500Z"},{"name":"Core Logic","accountNumbers":["5531956","715344"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Corelogic Systems","accountNumbers":[],"ae":"Amanda Mejia","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:42:48.426Z"},{"name":"Corelogic","accountNumbers":["875285"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Guess","accountNumbers":[],"ae":"Amanda Mejia"},{"name":"Herbalife","accountNumbers":["10695263","1157997","1181624","11941041","12244829","480439","540393","5519811","6171894","6206607","686925","689858","843126","464327"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Hyundai Auto Canada","accountNumbers":["6982382"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Hyundai Autoever America","accountNumbers":["10774298","11442055","11476236","11835052","12321331","5675172","5721795","6337740"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Hyundai Capital America","accountNumbers":[],"ae":"Amanda Mejia","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:43:23.638Z"},{"name":"Hyundai Motor America","accountNumbers":[],"ae":"Amanda Mejia","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:43:33.271Z"},{"name":"Illumina","accountNumbers":["5649852","5505861"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Maxlinear","accountNumbers":["12174909","12604749","1419272","7000762"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Rady Children S Hospital San Diego","accountNumbers":[],"ae":"Amanda Mejia","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:43:52.683Z"},{"name":"Scripps Health","accountNumbers":["1007776","1037583","5307663","824489"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Sharp Healthcare","accountNumbers":["786846"],"ae":"Amanda Mejia","discoveryFailures":0},{"name":"Applied Medical","accountNumbers":["5518102"],"ae":"Alex Smith","discoveryFailures":0},{"name":"Applied Medical Resources","accountNumbers":["11989831","6086160"],"ae":"Alex Smith","discoveryFailures":0},{"name":"Blackline","accountNumbers":["6137942"],"ae":"Alex Smith","discoveryFailures":0},{"name":"Epson America","accountNumbers":["1090227","11838201","12400761","336035","464327","5213434","630750","639532","655935","659649","752097"],"ae":"Alex Smith","discoveryFailures":0},{"name":"Guitar Center","accountNumbers":["782467"],"ae":"Alex Smith","discoveryFailures":0},{"name":"Matson","accountNumbers":[],"ae":"Alex Smith"},{"name":"Mission Cloud Services","accountNumbers":[],"ae":"Alex Smith","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:44:27.885Z"},{"name":"Queen S Development","accountNumbers":[],"ae":"Alex Smith","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T13:44:37.728Z"},{"name":"Southwest Gas","accountNumbers":["1105535"],"ae":"Alex Smith","discoveryFailures":0},{"name":"Queen S Health Systems","accountNumbers":[],"ae":"Alex Smith","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T14:01:13.671Z"},{"name":"U S Epson","accountNumbers":[],"ae":"Alex Smith","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T14:01:24.547Z"},{"name":"Allegiant Air","accountNumbers":["1334837","1488277","1565493","5270543","5298296","5647643","5664320","5664541"],"ae":"Beena Patel","discoveryFailures":0},{"name":"Allegiant Travel","accountNumbers":["11602275","5210894","5740991","6364472"],"ae":"Beena Patel","discoveryFailures":0},{"name":"Aristocrat Technologies","accountNumbers":["8774476"],"ae":"Beena Patel","discoveryFailures":0},{"name":"Boyd Gaming","accountNumbers":["973213"],"ae":"Beena Patel","discoveryFailures":0},{"name":"Caesars Palace","accountNumbers":[],"ae":"Beena Patel"},{"name":"Insight Direct Usa","accountNumbers":[],"ae":"Beena Patel"},{"name":"Insight Enterprises","accountNumbers":[],"ae":"Beena Patel","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T14:01:51.965Z"},{"name":"Mattel","accountNumbers":["1025778"],"ae":"Beena Patel","discoveryFailures":0},{"name":"Mattell","accountNumbers":[],"ae":"Beena Patel"},{"name":"Mgm Mirage Design Warehouse","accountNumbers":[],"ae":"Beena Patel","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T14:02:12.704Z"},{"name":"Mgm Resorts","accountNumbers":["10593212","1506166","5262483","5816603","6115942","7030612","8774493"],"ae":"Beena Patel","discoveryFailures":0},{"name":"Pcm","accountNumbers":[],"ae":"Beena Patel","discoveryFailures":1},{"name":"Smart City Networks Limited Partnership","accountNumbers":["11678981","991471"],"ae":"Beena Patel","discoveryFailures":0},{"name":"Switch","accountNumbers":[],"ae":"Beena Patel"},{"name":"Delta Dental Of California","accountNumbers":["12626670","1576388","5588402","5993550","825422","830409"],"ae":"O'Neil Hopson","discoveryFailures":0},{"name":"Logix Federal Credit Union","accountNumbers":["5855265"],"ae":"O'Neil Hopson","discoveryFailures":0},{"name":"Masimo","accountNumbers":["1025434","11929062","11951368","11981104","12031391","1296351","1436574","5250305","6158877","6233224","6350582","6450177","686577","6889112","6943255","12243726","12795923","5503779"],"ae":"O'Neil Hopson","discoveryFailures":0},{"name":"Molina Healthcare","accountNumbers":["1530865"],"ae":"O'Neil Hopson","discoveryFailures":0},{"name":"Pacific Life Insurance","accountNumbers":["11431296"],"ae":"O'Neil Hopson","discoveryFailures":0},{"name":"Psemi","accountNumbers":["12108366","12121142","6155591","6156729","12842352"],"ae":"O'Neil Hopson","discoveryFailures":0},{"name":"Sada Systems","accountNumbers":["7060179","7559272"],"ae":"O'Neil Hopson","discoveryFailures":0},{"name":"Skyworks Solutions","accountNumbers":["1549679"],"ae":"O'Neil Hopson","discoveryFailures":0},{"name":"Alteryx","accountNumbers":["11378739"],"ae":"Cameron Floyd","discoveryFailures":0},{"name":"Brightpoint","accountNumbers":["1417674"],"ae":"Cameron Floyd","discoveryFailures":0},{"name":"Harbor Freight Tools Usa","accountNumbers":[],"ae":"Cameron Floyd","discoveryFailures":3,"discoveryStatus":"unresolvable","discoverySkippedUntil":"2026-04-24T14:04:03.802Z"},{"name":"Hot Topic","accountNumbers":["1474506","5716109","614668","7114429","834770"],"ae":"Cameron Floyd","discoveryFailures":0},{"name":"Ingram Micro","accountNumbers":["5558888","1160953","11546990","1231422","11510529","11533517","11752648","1292361"],"ae":"Cameron Floyd","discoveryFailures":0},{"name":"Qad","accountNumbers":["5856163","603895"],"ae":"Cameron Floyd","discoveryFailures":0},{"name":"Topgolf Callaway Brands","accountNumbers":[],"ae":"Cameron Floyd"},{"name":"Zenith Insurance","accountNumbers":["1070374","1362419","5434459","6280884"],"ae":"Cameron Floyd","discoveryFailures":0}]}
+{
+  "customers": [
+    {
+      "name": "Acme Corp",
+      "domain": "acmetools.com",
+      "accountNumbers": [
+        "123456"
+      ]
+    },
+    {
+      "name": "Big Ten Network Services",
+      "accountNumbers": [
+        "11899794"
+      ],
+      "ae": "TBH",
+      "discoveryFailures": 0,
+      "domain": "btn.com"
+    },
+    {
+      "name": "First American Financial",
+      "accountNumbers": [
+        "12653942",
+        "9512872"
+      ],
+      "ae": "TBH",
+      "discoveryFailures": 0,
+      "domain": "fafmc.com"
+    },
+    {
+      "name": "First American Home Buyers Protection",
+      "accountNumbers": [
+        "7457646"
+      ],
+      "ae": "TBH",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "First American Trust",
+      "accountNumbers": [
+        "847070"
+      ],
+      "ae": "TBH",
+      "discoveryFailures": 0,
+      "domain": "firstamericantrustofcentralflorida.com"
+    },
+    {
+      "name": "Fox",
+      "accountNumbers": [
+        "11820898",
+        "5304575",
+        "6247997"
+      ],
+      "ae": "TBH",
+      "discoveryFailures": 0,
+      "domain": "foxnews.com"
+    },
+    {
+      "name": "Fox News Network",
+      "accountNumbers": [
+        "1032475",
+        "1087182",
+        "6278491",
+        "852109",
+        "855297"
+      ],
+      "ae": "TBH",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Fox Television Station Ll",
+      "accountNumbers": [],
+      "ae": "TBH",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:20:15.750Z"
+    },
+    {
+      "name": "Foxcorp Attn",
+      "accountNumbers": [],
+      "ae": "TBH",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:20:25.293Z"
+    },
+    {
+      "name": "Latham Watkins Llp",
+      "accountNumbers": [],
+      "ae": "TBH",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:20:40.634Z"
+    },
+    {
+      "name": "Peraton Technology Services",
+      "accountNumbers": [],
+      "ae": "TBH",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:20:50.375Z"
+    },
+    {
+      "name": "Peraton Oscomet",
+      "accountNumbers": [],
+      "ae": "TBH",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:21:00.515Z"
+    },
+    {
+      "name": "Rxlogix",
+      "accountNumbers": [],
+      "ae": "TBH",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:21:10.301Z",
+      "domain": "rxlogix.com"
+    },
+    {
+      "name": "Solartis",
+      "accountNumbers": [
+        "11407694",
+        "11491901",
+        "11916628",
+        "5262442",
+        "5629489",
+        "5632235",
+        "5650499",
+        "5796430",
+        "5972815"
+      ],
+      "ae": "TBH",
+      "discoveryFailures": 0,
+      "domain": "solartis.com"
+    },
+    {
+      "name": "Tgs Management",
+      "accountNumbers": [
+        "1079223",
+        "12678174",
+        "320795",
+        "5613975",
+        "946000"
+      ],
+      "ae": "TBH",
+      "discoveryFailures": 0,
+      "domain": "tgsmc.com"
+    },
+    {
+      "name": "Axway",
+      "accountNumbers": [
+        "1185684"
+      ],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 0,
+      "domain": "axway.com"
+    },
+    {
+      "name": "Connexity",
+      "accountNumbers": [
+        "5935082"
+      ],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 0,
+      "domain": "connexity.com"
+    },
+    {
+      "name": "Consumer Cellular Incorporated",
+      "accountNumbers": [
+        "1010239",
+        "12316598"
+      ],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 0,
+      "domain": "consumercellular.com"
+    },
+    {
+      "name": "Microchip Technology",
+      "accountNumbers": [],
+      "ae": "Peter Niklaus",
+      "domain": "microchip.com"
+    },
+    {
+      "name": "Microsemi Storage Solutions",
+      "accountNumbers": [
+        "5722021"
+      ],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Musarubra Us",
+      "accountNumbers": [
+        "11911836",
+        "7342937",
+        "8438510"
+      ],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Nextiva",
+      "accountNumbers": [
+        "12017425",
+        "1538597"
+      ],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 0,
+      "domain": "nextiva.com"
+    },
+    {
+      "name": "Pnm Resources",
+      "accountNumbers": [
+        "11920598",
+        "720230",
+        "898829",
+        "1042871"
+      ],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Public Service Of New Mexico",
+      "accountNumbers": [],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:21:45.578Z"
+    },
+    {
+      "name": "Tucson Electric Power",
+      "accountNumbers": [
+        "1190227",
+        "1203707",
+        "1211700",
+        "1401160",
+        "1447443",
+        "682361"
+      ],
+      "ae": "Peter Niklaus",
+      "discoveryFailures": 0,
+      "domain": "tep.com"
+    },
+    {
+      "name": "Aera Energy Services",
+      "accountNumbers": [],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:29:25.860Z",
+      "domain": "aeraenergy.com"
+    },
+    {
+      "name": "California Resources",
+      "accountNumbers": [
+        "5530581"
+      ],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 0,
+      "domain": "crc.com"
+    },
+    {
+      "name": "Insurance Of West",
+      "accountNumbers": [],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:29:35.945Z"
+    },
+    {
+      "name": "Internet For Assigned Names And Numbers",
+      "accountNumbers": [],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:40:54.019Z"
+    },
+    {
+      "name": "Korn Ferry",
+      "accountNumbers": [
+        "11835658",
+        "12308748",
+        "5615352",
+        "5785765",
+        "6233905",
+        "6661455"
+      ],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 0,
+      "domain": "kornferry.com"
+    },
+    {
+      "name": "Local Initiative Health Authority For Los Angeles County",
+      "accountNumbers": [
+        "523393"
+      ],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Radiology Partners",
+      "accountNumbers": [
+        "11996523",
+        "12862587",
+        "12862602",
+        "5380573",
+        "6029692"
+      ],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 0,
+      "domain": "radpartners.com"
+    },
+    {
+      "name": "Skechers U S A",
+      "accountNumbers": [],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:41:04.085Z",
+      "domain": "skechers.com"
+    },
+    {
+      "name": "Skechers U S A Ii",
+      "accountNumbers": [],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:41:22.860Z"
+    },
+    {
+      "name": "Xifin",
+      "accountNumbers": [
+        "1085893",
+        "5584293",
+        "5599078",
+        "5655332",
+        "5842301"
+      ],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 0,
+      "domain": "xifin.com"
+    },
+    {
+      "name": "Yardi Systems",
+      "accountNumbers": [
+        "444120",
+        "5820464",
+        "6313941",
+        "6868255",
+        "6874765",
+        "6930537",
+        "7493935"
+      ],
+      "ae": "Oren Shaolian",
+      "discoveryFailures": 0,
+      "domain": "yardi.com"
+    },
+    {
+      "name": "Ademco",
+      "accountNumbers": [
+        "6158784"
+      ],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 0,
+      "domain": "ademcosecurity.com"
+    },
+    {
+      "name": "American Traffic Solutions Consolidated",
+      "accountNumbers": [],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:41:38.469Z"
+    },
+    {
+      "name": "American Traffic Solutions",
+      "accountNumbers": [],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:41:48.191Z",
+      "domain": "atitraffic.com"
+    },
+    {
+      "name": "Avnet",
+      "accountNumbers": [
+        "725718",
+        "5255905",
+        "800831"
+      ],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 0,
+      "domain": "avnet.com"
+    },
+    {
+      "name": "Banner Health",
+      "accountNumbers": [
+        "1108805",
+        "12402464",
+        "1273930",
+        "1309811",
+        "1557449",
+        "520598",
+        "5471411",
+        "5505793",
+        "5525547",
+        "5526297",
+        "604580",
+        "6184131",
+        "6344266",
+        "851608"
+      ],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 0,
+      "domain": "bannerhealth.com"
+    },
+    {
+      "name": "Cableone Corporate Office",
+      "accountNumbers": [],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:41:57.866Z"
+    },
+    {
+      "name": "Ebocom",
+      "accountNumbers": [
+        "1038291",
+        "1089595",
+        "1223429",
+        "5366900",
+        "565717",
+        "7119942"
+      ],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 0,
+      "domain": "ebo.com.ar"
+    },
+    {
+      "name": "Freeeport Mcmoran",
+      "accountNumbers": [],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:42:07.845Z"
+    },
+    {
+      "name": "Republic Services",
+      "accountNumbers": [
+        "12477276",
+        "5361566",
+        "5532178",
+        "5557842",
+        "6004309"
+      ],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 0,
+      "domain": "republicservices.com"
+    },
+    {
+      "name": "Resideo Technologies",
+      "accountNumbers": [
+        "6193973",
+        "8497908"
+      ],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 0,
+      "domain": "resideo.com"
+    },
+    {
+      "name": "Rsi Video Technologies",
+      "accountNumbers": [
+        "6286500"
+      ],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Sonora Quest Laboratories",
+      "accountNumbers": [],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:42:17.753Z",
+      "domain": "sonoraquest.com"
+    },
+    {
+      "name": "Verra Mobility",
+      "accountNumbers": [],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:42:28.444Z",
+      "domain": "verramobility.com"
+    },
+    {
+      "name": "Viavi Solutions",
+      "accountNumbers": [
+        "1339725"
+      ],
+      "ae": "Sherry Gayo",
+      "discoveryFailures": 0,
+      "domain": "viavisolutions.com"
+    },
+    {
+      "name": "Celestial Saturn Parent",
+      "accountNumbers": [],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 2,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:42:38.500Z"
+    },
+    {
+      "name": "Core Logic",
+      "accountNumbers": [
+        "5531956",
+        "715344"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0,
+      "domain": "corelogic.com"
+    },
+    {
+      "name": "Corelogic Systems",
+      "accountNumbers": [],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 2,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:42:48.426Z",
+      "domain": "corelogic.com"
+    },
+    {
+      "name": "Corelogic",
+      "accountNumbers": [
+        "875285"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0,
+      "domain": "corelogic.com"
+    },
+    {
+      "name": "Guess",
+      "accountNumbers": [],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 2,
+      "domain": "guess.com"
+    },
+    {
+      "name": "Herbalife",
+      "accountNumbers": [
+        "10695263",
+        "1157997",
+        "1181624",
+        "11941041",
+        "12244829",
+        "480439",
+        "540393",
+        "5519811",
+        "6171894",
+        "6206607",
+        "686925",
+        "689858",
+        "843126",
+        "464327"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0,
+      "domain": "herbalife.com"
+    },
+    {
+      "name": "Hyundai Auto Canada",
+      "accountNumbers": [
+        "6982382"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Hyundai Autoever America",
+      "accountNumbers": [
+        "10774298",
+        "11442055",
+        "11476236",
+        "11835052",
+        "12321331",
+        "5675172",
+        "5721795",
+        "6337740"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0,
+      "domain": "haeaus.com"
+    },
+    {
+      "name": "Hyundai Capital America",
+      "accountNumbers": [],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 2,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:43:23.638Z",
+      "domain": "hyundaicapitalamerica.com"
+    },
+    {
+      "name": "Hyundai Motor America",
+      "accountNumbers": [],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 2,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:43:33.271Z"
+    },
+    {
+      "name": "Illumina",
+      "accountNumbers": [
+        "5649852",
+        "5505861"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0,
+      "domain": "skedula.com"
+    },
+    {
+      "name": "Maxlinear",
+      "accountNumbers": [
+        "12174909",
+        "12604749",
+        "1419272",
+        "7000762"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0,
+      "domain": "maxlinear.com"
+    },
+    {
+      "name": "Rady Children S Hospital San Diego",
+      "accountNumbers": [],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:43:52.683Z",
+      "domain": "rchsd.org"
+    },
+    {
+      "name": "Scripps Health",
+      "accountNumbers": [
+        "1007776",
+        "1037583",
+        "5307663",
+        "824489"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0,
+      "domain": "scripps.org"
+    },
+    {
+      "name": "Sharp Healthcare",
+      "accountNumbers": [
+        "786846"
+      ],
+      "ae": "Amanda Mejia",
+      "discoveryFailures": 0,
+      "domain": "sharp.com"
+    },
+    {
+      "name": "Applied Medical",
+      "accountNumbers": [
+        "5518102"
+      ],
+      "ae": "Alex Smith",
+      "discoveryFailures": 0,
+      "domain": "appliedmedical.net"
+    },
+    {
+      "name": "Applied Medical Resources",
+      "accountNumbers": [
+        "11989831",
+        "6086160"
+      ],
+      "ae": "Alex Smith",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Blackline",
+      "accountNumbers": [
+        "6137942"
+      ],
+      "ae": "Alex Smith",
+      "discoveryFailures": 0,
+      "domain": "blackline.com"
+    },
+    {
+      "name": "Epson America",
+      "accountNumbers": [
+        "1090227",
+        "11838201",
+        "12400761",
+        "336035",
+        "464327",
+        "5213434",
+        "630750",
+        "639532",
+        "655935",
+        "659649",
+        "752097"
+      ],
+      "ae": "Alex Smith",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Guitar Center",
+      "accountNumbers": [
+        "782467"
+      ],
+      "ae": "Alex Smith",
+      "discoveryFailures": 0,
+      "domain": "guitarcenter.com"
+    },
+    {
+      "name": "Matson",
+      "accountNumbers": [],
+      "ae": "Alex Smith",
+      "domain": "matson.com"
+    },
+    {
+      "name": "Mission Cloud Services",
+      "accountNumbers": [],
+      "ae": "Alex Smith",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:44:27.885Z",
+      "domain": "missioncloud.com"
+    },
+    {
+      "name": "Queen S Development",
+      "accountNumbers": [],
+      "ae": "Alex Smith",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T13:44:37.728Z"
+    },
+    {
+      "name": "Southwest Gas",
+      "accountNumbers": [
+        "1105535"
+      ],
+      "ae": "Alex Smith",
+      "discoveryFailures": 0,
+      "domain": "swgas.com"
+    },
+    {
+      "name": "Queen S Health Systems",
+      "accountNumbers": [],
+      "ae": "Alex Smith",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T14:01:13.671Z",
+      "domain": "queenshealthemporium.com"
+    },
+    {
+      "name": "U S Epson",
+      "accountNumbers": [],
+      "ae": "Alex Smith",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T14:01:24.547Z"
+    },
+    {
+      "name": "Allegiant Air",
+      "accountNumbers": [
+        "1334837",
+        "1488277",
+        "1565493",
+        "5270543",
+        "5298296",
+        "5647643",
+        "5664320",
+        "5664541"
+      ],
+      "ae": "Beena Patel",
+      "discoveryFailures": 0,
+      "domain": "allegiantair.com"
+    },
+    {
+      "name": "Allegiant Travel",
+      "accountNumbers": [
+        "11602275",
+        "5210894",
+        "5740991",
+        "6364472"
+      ],
+      "ae": "Beena Patel",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Aristocrat Technologies",
+      "accountNumbers": [
+        "8774476"
+      ],
+      "ae": "Beena Patel",
+      "discoveryFailures": 0,
+      "domain": "aristocrat.com"
+    },
+    {
+      "name": "Boyd Gaming",
+      "accountNumbers": [
+        "973213"
+      ],
+      "ae": "Beena Patel",
+      "discoveryFailures": 0,
+      "domain": "boydgaming.com"
+    },
+    {
+      "name": "Caesars Palace",
+      "accountNumbers": [],
+      "ae": "Beena Patel",
+      "domain": "caesarspalace.com.mx"
+    },
+    {
+      "name": "Insight Direct Usa",
+      "accountNumbers": [],
+      "ae": "Beena Patel"
+    },
+    {
+      "name": "Insight Enterprises",
+      "accountNumbers": [],
+      "ae": "Beena Patel",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T14:01:51.965Z",
+      "domain": "insight.com"
+    },
+    {
+      "name": "Mattel",
+      "accountNumbers": [
+        "1025778"
+      ],
+      "ae": "Beena Patel",
+      "discoveryFailures": 0,
+      "domain": "mattel.com"
+    },
+    {
+      "name": "Mattell",
+      "accountNumbers": [],
+      "ae": "Beena Patel",
+      "domain": "networkbrouhaha.com"
+    },
+    {
+      "name": "Mgm Mirage Design Warehouse",
+      "accountNumbers": [],
+      "ae": "Beena Patel",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T14:02:12.704Z"
+    },
+    {
+      "name": "Mgm Resorts",
+      "accountNumbers": [
+        "10593212",
+        "1506166",
+        "5262483",
+        "5816603",
+        "6115942",
+        "7030612",
+        "8774493"
+      ],
+      "ae": "Beena Patel",
+      "discoveryFailures": 0,
+      "domain": "mgmresorts.com"
+    },
+    {
+      "name": "Pcm",
+      "accountNumbers": [],
+      "ae": "Beena Patel",
+      "discoveryFailures": 1,
+      "domain": "pcmag.com"
+    },
+    {
+      "name": "Smart City Networks Limited Partnership",
+      "accountNumbers": [
+        "11678981",
+        "991471"
+      ],
+      "ae": "Beena Patel",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Switch",
+      "accountNumbers": [],
+      "ae": "Beena Patel",
+      "domain": "switchbacktravel.com"
+    },
+    {
+      "name": "Delta Dental Of California",
+      "accountNumbers": [
+        "12626670",
+        "1576388",
+        "5588402",
+        "5993550",
+        "825422",
+        "830409"
+      ],
+      "ae": "O'Neil Hopson",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Logix Federal Credit Union",
+      "accountNumbers": [
+        "5855265"
+      ],
+      "ae": "O'Neil Hopson",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Masimo",
+      "accountNumbers": [
+        "1025434",
+        "11929062",
+        "11951368",
+        "11981104",
+        "12031391",
+        "1296351",
+        "1436574",
+        "5250305",
+        "6158877",
+        "6233224",
+        "6350582",
+        "6450177",
+        "686577",
+        "6889112",
+        "6943255",
+        "12243726",
+        "12795923",
+        "5503779"
+      ],
+      "ae": "O'Neil Hopson",
+      "discoveryFailures": 0,
+      "domain": "masimo.com"
+    },
+    {
+      "name": "Molina Healthcare",
+      "accountNumbers": [
+        "1530865"
+      ],
+      "ae": "O'Neil Hopson",
+      "discoveryFailures": 0,
+      "domain": "molinahealthcare.com"
+    },
+    {
+      "name": "Pacific Life Insurance",
+      "accountNumbers": [
+        "11431296"
+      ],
+      "ae": "O'Neil Hopson",
+      "discoveryFailures": 0
+    },
+    {
+      "name": "Psemi",
+      "accountNumbers": [
+        "12108366",
+        "12121142",
+        "6155591",
+        "6156729",
+        "12842352"
+      ],
+      "ae": "O'Neil Hopson",
+      "discoveryFailures": 0,
+      "domain": "psemi.com"
+    },
+    {
+      "name": "Sada Systems",
+      "accountNumbers": [
+        "7060179",
+        "7559272"
+      ],
+      "ae": "O'Neil Hopson",
+      "discoveryFailures": 0,
+      "domain": "sadanduseless.com"
+    },
+    {
+      "name": "Skyworks Solutions",
+      "accountNumbers": [
+        "1549679"
+      ],
+      "ae": "O'Neil Hopson",
+      "discoveryFailures": 0,
+      "domain": "skyworksinc.com"
+    },
+    {
+      "name": "Alteryx",
+      "accountNumbers": [
+        "11378739"
+      ],
+      "ae": "Cameron Floyd",
+      "discoveryFailures": 0,
+      "domain": "alteryx.com"
+    },
+    {
+      "name": "Brightpoint",
+      "accountNumbers": [
+        "1417674"
+      ],
+      "ae": "Cameron Floyd",
+      "discoveryFailures": 0,
+      "domain": "brightpoint.edu"
+    },
+    {
+      "name": "Harbor Freight Tools Usa",
+      "accountNumbers": [],
+      "ae": "Cameron Floyd",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-04-24T14:04:03.802Z"
+    },
+    {
+      "name": "Hot Topic",
+      "accountNumbers": [
+        "1474506",
+        "5716109",
+        "614668",
+        "7114429",
+        "834770"
+      ],
+      "ae": "Cameron Floyd",
+      "discoveryFailures": 0,
+      "domain": "hottopic.com"
+    },
+    {
+      "name": "Ingram Micro",
+      "accountNumbers": [
+        "5558888",
+        "1160953",
+        "11546990",
+        "1231422",
+        "11510529",
+        "11533517",
+        "11752648",
+        "1292361"
+      ],
+      "ae": "Cameron Floyd",
+      "discoveryFailures": 0,
+      "domain": "ingrammicro.com"
+    },
+    {
+      "name": "Qad",
+      "accountNumbers": [
+        "5856163",
+        "603895"
+      ],
+      "ae": "Cameron Floyd",
+      "discoveryFailures": 0,
+      "industry": "Technology",
+      "segment": "Enterprise Resource Planning (ERP) Software",
+      "industryDescription": "QAD provides cloud-based enterprise resource planning (ERP) software and related enterprise software solutions specifically designed for global manufacturing companies across various sectors.",
+      "industryCompetitors": [
+        "SAP",
+        "Oracle",
+        "Microsoft Dynamics 365"
+      ],
+      "industryUpdatedAt": "2026-04-10T19:10:48.019Z",
+      "domain": "qad.com"
+    },
+    {
+      "name": "Topgolf Callaway Brands",
+      "accountNumbers": [],
+      "ae": "Cameron Floyd",
+      "domain": "topgolfcallawaybrands.com"
+    },
+    {
+      "name": "Zenith Insurance",
+      "accountNumbers": [
+        "1070374",
+        "1362419",
+        "5434459",
+        "6280884"
+      ],
+      "ae": "Cameron Floyd",
+      "discoveryFailures": 0,
+      "domain": "thezenith.com"
+    }
+  ]
+}

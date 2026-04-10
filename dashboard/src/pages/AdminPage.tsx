@@ -788,6 +788,102 @@ function ConfigBackupSection() {
   )
 }
 
+// ── BKL-REG-03: Domain Inference section ─────────────────────────────────────
+
+function DomainInferenceSection() {
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<{ autoSaved: number; needReview: number; total: number } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleRun = async () => {
+    setRunning(true)
+    setResult(null)
+    setError(null)
+    try {
+      const res = await fetch('/api/setup/infer-domains', { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setError(d.error ?? `Failed (${res.status})`)
+        return
+      }
+      const d = await res.json()
+      const results: { customerName: string; candidates: { domain: string; sources: string[]; tier?: number; verified?: boolean }[] }[] = d.results ?? []
+      const total = results.length
+
+      // High-confidence: top candidate has 'web' source OR tier 1/2
+      const highConf: { name: string; domain: string }[] = []
+      let needReview = 0
+      for (const r of results) {
+        if (!r.candidates?.length) continue
+        const top = r.candidates[0]
+        const isHighConf = top.sources?.includes('web') || top.tier === 1 || top.tier === 2
+        if (isHighConf) {
+          highConf.push({ name: r.customerName, domain: top.domain })
+        } else {
+          needReview++
+        }
+      }
+
+      // Save high-confidence domains
+      if (highConf.length > 0) {
+        const saveRes = await fetch('/api/setup/save-domains', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domains: highConf.map(r => ({ name: r.name, domain: r.domain })) }),
+        })
+        if (!saveRes.ok) {
+          const sd = await saveRes.json().catch(() => ({}))
+          setError(`Inferred ${highConf.length} domains but save failed: ${sd.error ?? saveRes.status}`)
+          return
+        }
+      }
+
+      setResult({ autoSaved: highConf.length, needReview, total })
+    } catch {
+      setError('Network error — check server logs.')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Domain Inference</h2>
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-200">Run Domain Inference</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Infer customer email domains via Clearbit + LLM waterfall. Auto-saves high-confidence matches.
+            </p>
+          </div>
+          <button
+            onClick={handleRun}
+            disabled={running}
+            className="px-3 py-1.5 text-xs font-medium rounded bg-accent/20 text-accent hover:bg-accent/30 border border-accent/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {running ? 'Running...' : 'Run Now'}
+          </button>
+        </div>
+
+        {result && (
+          <div className="text-xs text-gray-400 bg-gray-900/50 rounded px-3 py-2 space-y-0.5">
+            <p><span className="text-green-400 font-medium">{result.autoSaved}</span> domains auto-saved</p>
+            <p><span className="text-yellow-400 font-medium">{result.needReview}</span> need manual review</p>
+            <p className="text-gray-500">{result.total} customers processed</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="text-xs text-red-400 bg-red-900/20 border border-red-700/30 rounded px-3 py-2">
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ScrapeHistorySection() {
   const [history, setHistory] = useState<ScrapeLogEntry[]>([])
 
@@ -1353,6 +1449,9 @@ export function AdminPage() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Config Backup</h2>
           <ConfigBackupSection />
         </div>
+
+        {/* BKL-REG-03: Domain Inference */}
+        <DomainInferenceSection />
 
         {/* BKL-M50e: Scrape History */}
         <ScrapeHistorySection />

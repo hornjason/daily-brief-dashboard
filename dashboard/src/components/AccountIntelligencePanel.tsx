@@ -55,11 +55,14 @@ export function AccountIntelligencePanel({ customerName }: AccountIntelligencePa
     setGenerating(true)
     setStatus({ status: 'running', step: 'identifying industry' })
     try {
-      await fetch('/api/intelligence/run', {
+      const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/generate-intelligence`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerName }),
       })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setStatus({ status: 'error', error: (body as any).error ?? `Server error ${res.status}` })
+        setGenerating(false)
+      }
     } catch {
       setStatus({ status: 'error', error: 'Failed to start generation' })
       setGenerating(false)

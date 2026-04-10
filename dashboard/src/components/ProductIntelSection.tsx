@@ -259,6 +259,7 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
   const [refreshKey, setRefreshKey] = useState(0)
   const [regenerating, setRegenerating] = useState<Set<ProductSlug>>(new Set())
   const [generatingAll, setGeneratingAll] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   // BKL-MC06: product slugs and labels fetched from /api/products/config
   const [productSlugs, setProductSlugs] = useState<string[]>(['rhel', 'ocp', 'ocp-virt', 'aap', 'rhel-ai', 'rh-ai-inference', 'rhoai'])
   const [productLabels, setProductLabels] = useState<Record<string, string>>(PRODUCT_LABEL_FALLBACKS)
@@ -304,18 +305,31 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
 
   async function handleRegenerate(slug: ProductSlug) {
     setRegenerating(prev => new Set(prev).add(slug))
+    setError(null)
     try {
-      await fetch(`/api/products/${slug}/intel/${encodeURIComponent(customerSlug)}/generate`, {
+      // Ensure product summary cache exists before generating intel
+      const refreshRes = await fetch(`/api/products/${slug}/refresh`, { method: 'POST' })
+      if (!refreshRes.ok) {
+        const refreshErr = await refreshRes.json().catch(() => ({}))
+        setError(`Failed to refresh ${productLabel(slug, productLabels)}: ${refreshErr.error ?? refreshRes.statusText}`)
+        return
+      }
+      const genRes = await fetch(`/api/products/${slug}/intel/${encodeURIComponent(customerSlug)}/generate`, {
         method: 'POST',
       })
+      if (!genRes.ok) {
+        const genErr = await genRes.json().catch(() => ({}))
+        setError(`Failed to generate ${productLabel(slug, productLabels)} intel: ${genErr.error ?? genRes.statusText}`)
+        return
+      }
       // Refresh just this product
       const res = await fetch(`/api/products/${slug}/intel/${encodeURIComponent(customerSlug)}`)
       if (res.ok) {
         const data: CustomerProductIntel = await res.json()
         setIntel(prev => ({ ...prev, [slug]: data }))
       }
-    } catch {
-      // Silently fail — the card will show stale data
+    } catch (e: any) {
+      setError(`Error generating ${productLabel(slug, productLabels)} intel: ${e?.message ?? 'network error'}`)
     } finally {
       setRegenerating(prev => {
         const next = new Set(prev)
@@ -327,14 +341,30 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
 
   async function handleGenerateAll() {
     setGeneratingAll(true)
+    setError(null)
     try {
-      await fetch(`/api/products/intel/${encodeURIComponent(customerSlug)}/generate-all`, {
+      // Refresh all product summary caches first
+      const refreshResults = await Promise.allSettled(
+        productSlugs.map(slug => fetch(`/api/products/${slug}/refresh`, { method: 'POST' }))
+      )
+      const failedRefreshes = refreshResults
+        .map((r, i) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok) ? productSlugs[i] : null)
+        .filter(Boolean)
+      if (failedRefreshes.length > 0) {
+        setError(`Warning: failed to refresh caches for ${failedRefreshes.join(', ')}. Generating with available data.`)
+      }
+      const genRes = await fetch(`/api/products/intel/${encodeURIComponent(customerSlug)}/generate-all`, {
         method: 'POST',
       })
+      if (!genRes.ok) {
+        const genErr = await genRes.json().catch(() => ({}))
+        setError(`Generate all failed: ${genErr.error ?? genRes.statusText}`)
+        return
+      }
       // Re-fetch all cached intel after generation completes
       setRefreshKey(k => k + 1)
-    } catch {
-      // Silently fail — stale data will remain visible
+    } catch (e: any) {
+      setError(`Error generating all intel: ${e?.message ?? 'network error'}`)
     } finally {
       setGeneratingAll(false)
     }
@@ -390,6 +420,14 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
           {generatingAll ? 'Generating...' : 'Generate All'}
         </button>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mx-4 mt-3 px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg flex items-start gap-2">
+          <span className="text-red-400 text-xs flex-1">{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400/60 hover:text-red-400 text-xs shrink-0">dismiss</button>
+        </div>
+      )}
 
       {/* Product cards + uncached stubs */}
       <div className="p-4 space-y-3">
