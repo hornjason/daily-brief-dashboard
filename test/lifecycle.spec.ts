@@ -8,7 +8,7 @@
  */
 import { test, expect } from '@playwright/test'
 
-const BASE = 'http://localhost:7777'
+const BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
 
 const TEST_AE = {
   name: '__test_lifecycle_ae__',
@@ -40,7 +40,7 @@ test.afterAll(async ({ request }) => {
 
 // ── AE add lifecycle ─────────────────────────────────────────────────────────
 
-test.describe('AE lifecycle — add and remove', () => {
+test.describe('@destructive AE lifecycle — add and remove', () => {
   test('health endpoint returns current AE count', async ({ request }) => {
     const r = await request.get(`${BASE}/health`)
     expect(r.ok()).toBeTruthy()

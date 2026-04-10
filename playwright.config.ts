@@ -32,8 +32,9 @@ export default defineConfig({
   },
   projects: [
     {
+      // Safe to run against production (port 7777) — excludes @live and @destructive.
       name: 'ci',
-      grepInvert: /@live/,
+      grepInvert: /@live|@destructive/,
     },
     {
       name: 'live-scrapers',

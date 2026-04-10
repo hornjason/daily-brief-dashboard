@@ -21,7 +21,7 @@ async function getCustomerCount(): Promise<number> {
   } catch { return 0 }
 }
 
-test.describe('POST /api/setup/reset', () => {
+test.describe('@destructive POST /api/setup/reset', () => {
   test('returns 400 without ?confirm=true', async () => {
     const { status, body } = await postJSON('/api/setup/reset')
     expect(status).toBe(400)
@@ -69,7 +69,7 @@ test.describe('POST /api/setup/reset', () => {
 
 // ── POST /api/setup/save-customers ──────────────────────────────────────────
 
-test.describe('POST /api/setup/save-customers', () => {
+test.describe('@destructive POST /api/setup/save-customers', () => {
   test('saves a valid customers array', async () => {
     const customer = buildCustomer({ name: 'Acme Corp', accountNumbers: ['123456'] })
     const { status, body } = await postJSON('/api/setup/save-customers', {
@@ -134,7 +134,7 @@ test.describe('POST /api/setup/save-customers', () => {
 
 // serial: these tests mutate server state (reset + save) and must not race with other workers
 // BKL-TEST-20: skipped when production data is loaded (>5 customers) — reset would return 403
-test.describe.serial('POST /api/setup/infer-domains', () => {
+test.describe.serial('@destructive POST /api/setup/infer-domains', () => {
   test('returns 400 if no customers configured', async () => {
     const count = await getCustomerCount()
     test.skip(count > 5, `Production guard active (${count} customers) — reset blocked`)
@@ -168,7 +168,7 @@ test.describe.serial('POST /api/setup/infer-domains', () => {
 
 // ── POST /api/setup/save-domains ────────────────────────────────────────────
 
-test.describe('POST /api/setup/save-domains', () => {
+test.describe('@destructive POST /api/setup/save-domains', () => {
   test('returns 400 with no domains provided', async () => {
     const { status, body } = await postJSON('/api/setup/save-domains', { domains: [] })
     expect(status).toBe(400)
