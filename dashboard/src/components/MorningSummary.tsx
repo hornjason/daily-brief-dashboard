@@ -70,13 +70,19 @@ interface MorningSummaryProps {
 export default function MorningSummary({ matchingCustomers }: MorningSummaryProps = {}) {
   const navigate = useNavigate()
   const [data, setData] = useState<MorningSummaryData | null>(null)
-  const [collapsed, setCollapsed] = useState(false)
+  // BKL-UX-morning-min: Start collapsed when signals > 3 to reduce visual noise on load.
+  // Default true (collapsed); corrected to false once data loads and signals <= 3.
+  const [collapsed, setCollapsed] = useState(true)
   const [showBriefModal, setShowBriefModal] = useState(false)
 
   useEffect(() => {
     fetch('/api/morning-summary')
       .then(r => r.json())
-      .then(setData)
+      .then((d: MorningSummaryData) => {
+        setData(d)
+        // Expand automatically when signals are few — collapsed is fine when there are many
+        if (d.signals.length <= 3) setCollapsed(false)
+      })
       .catch(() => {})
   }, [])
 
