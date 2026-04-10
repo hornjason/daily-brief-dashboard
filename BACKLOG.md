@@ -683,6 +683,20 @@ Files: dashboard/src/index.css, Sidebar.tsx, CopyButton uses
 Description: Many interactive elements smaller than 44x44px WCAG minimum (sidebar toggle ~24px, CopyButton ~24px).
 Fix: Global CSS: `button, a, [role="button"] { min-height: 32px; min-width: 32px; }`. For small icon buttons add invisible padding: p-2 -m-1 pattern.
 
+### BKL-Q09 | Customer detail page fires 14 console 404s on `/api/products/*/intel/*` endpoints
+Status: OPEN
+Severity: Medium
+Source: Quinn QA 2026-04-10
+Files: dashboard/src/pages/CustomerDetailPage.tsx
+Description: Every customer detail page load makes product intelligence API calls for all products before checking if intel has been generated. This produces 14 console 404 errors per page load (one per product). Fix options: (a) suppress the calls until user explicitly triggers "Generate", or (b) return 200 with empty data from the endpoint instead of 404.
+
+### BKL-Q10 | Data Sources badge flashes "All connected" briefly before health checks resolve
+Status: OPEN
+Severity: Low
+Source: Quinn QA 2026-04-10
+Files: dashboard/src/pages/SetupPage.tsx
+Description: During the ~3 second health check resolution on the Setup page, the Data Sources badge can show "All connected" before it updates to the correct connected count once checks complete. Users who scan quickly during load get a false impression. Fix: initialize badge to a neutral loading state rather than optimistic "all connected".
+
 ---
 
 ## UX / Scale & Future-Proofing
