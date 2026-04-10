@@ -5123,7 +5123,7 @@ Files: dashboard/src/components/ (renewal modals for Expiring Within 30 Days + R
 Description: When OCP is selected, the Expiring Within 30 Days and Renewals in 30-90 Days modals should show only OCP-matching subscriptions. Non-matching subscriptions collapsed or hidden. Currently both modals show all subscriptions regardless of chip. Image #5 shows: Vail Resorts (OCP Platform Plus ✓, Satellite ✗, OCP Broker ✓), Dropbox (OCP on AWS ✓), Pure Storage (Quay ✗), H2O.AI (OCP on AWS ✓, OCP Dedicated GCP ✓), Uber (OCP Dedicated ✓) — so with OCP selected, Satellite and Quay rows should be collapsed/hidden. Implementation: filter renewal rows using normalizeProductName(subscriptionName) === activeProduct before rendering. Collapsed non-matching rows shown as "N other subscriptions hidden" with expand toggle.
 
 ### BKL-PVIEW-12 | Product filter cascade — Pipeline data filters by selected product
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10 (implemented as BKL-UX57 — oppMatchesProducts() in PipelineSection.tsx)
 Severity: HIGH
 Priority: P1
 Size: M
@@ -5460,7 +5460,7 @@ Fix: Changed `caseMatchesProducts` signature to `string | string[]` and added `A
 Decision: FIXED — 2026-04-10
 
 ### BKL-UX59 | Demo + dev environment strategy — research first
-Status: 🟡 RESEARCH — before implementation
+Status: ✅ DONE — 2026-04-10
 Severity: LOW
 Priority: P3
 Size: L
@@ -5468,7 +5468,7 @@ Source: 2026-04-10 — Jason: "copy a working container to another port to use a
          Updated: Jason: "tag as research first — needs best practices on professional testing/dev env setup. goal: stable demo env accessible to others while we test on separate container"
 Files: Makefile, .env, data/ volume
 Description: Two distinct goals: (1) **Dev/test container** — isolated environment on port 7778 for testing big UI changes (e.g., BKL-UX52 multi-pod layout) before promoting to production on 7777; (2) **Demo environment** — stable, shareable container that external stakeholders can access while active development continues on a separate instance. Key research questions: (a) Should demo and dev share the same data volume or use separate snapshots? (b) What's the right image promotion workflow (tag-based? make target?)  (c) How do we keep demo data stable while production data syncs live? (d) Should demo be read-only? (e) Networking: is port-based isolation enough or do we need separate data dirs? Research before implementing — avoid baking in wrong assumptions.
-Decision: RESEARCH — spawn GrokResearcher or use WebSearch to investigate containerized dev/staging/demo environment patterns for single-user local setups. Produce a recommendation doc before any Makefile changes.
+Decision: DONE — GrokResearcher produced 3-container design; Marcus implemented Makefile targets: `make dev-snapshot`, `make dev-up/down`, `make demo-snapshot`, `make demo-up/down`. Uses rsync data snapshots; demo is pinned image with :ro data dir. Committed in f3fc814.
 
 ### BKL-UX58 | Collapse ASA/Product view toggle — always use ASA view
 Status: ✅ DONE — 2026-04-10

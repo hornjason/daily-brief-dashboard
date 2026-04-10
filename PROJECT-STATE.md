@@ -3,7 +3,7 @@
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-04-08 (night — NW POD bootstrapped, 6 backlog items closed, Rook+Quinn PASS)
+Last updated: 2026-04-10 (overnight — SW POD re-bootstrapped, BKL-UX53-59 closed, 105 customers, 60 with acct#, 66 cases)
 
 ---
 
@@ -148,17 +148,19 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 
 ---
 
-## Current Data State (2026-04-08)
+## Current Data State (2026-04-10)
 
-- **AEs:** 17 total
+- **AEs:** 9 (SW POD only — NW pod was removed during SW wipe/re-bootstrap 2026-04-10)
   - **SW POD (9):** TBH, Peter Niklaus, Oren Shaolian, Sherry Gayo, Amanda Mejia, Alex Smith, Beena Patel, O'Neil Hopson, Cameron Floyd
-  - **NW POD (8):** Carolanne Farrell, Phillip Yi, Tyler McManigal, Keren Williams, Duy Pham, Danny Hollar, Matt Reza, David Delmundo
-- **Customers:** 271 total — 97 SW + 174 NW
-- **Subscriptions:** 130 customers with data (72 SW + 58 NW); 141 empty (expected — not all territories covered in SF bookings sheet)
-- **SF bookings sheets:** NW ("Northwest POD - Subscriptions" `13c3jaUmbHhg7xNxPs3HYvbIiQ1wVawOQCr_zc4bfHLY`) + SW ("Southwest POD - Subscriptions") in shared folder
-- **Territory sheet:** `11E6COUHMStL7taEaOu2T7pYuxKbDr4yU7LNRLFuCGiM` (reads from data-sources.json at runtime — no longer hardcoded)
-- **SF pipeline report:** `00OPe00000k5m9ZMAQ` (SW report) — NW report ID unknown; NW pipeline sheets are empty
-- **Account intelligence:** generating in background post-NW-bootstrap (~10 min/customer)
+  - **NW POD:** Not currently configured (NW AEs were in aes.json through commit 389c2b8; removed when SW was re-bootstrapped)
+- **Customers:** 105 SW customers (fresh bootstrap 2026-04-10)
+  - 60 customers with RH Portal account numbers discovered
+  - 66 RH support cases cached (2 sev1, 10 sev2)
+  - 47 cases found via name-search during discovery
+- **SF bookings sheets:** SW pipeline sheets per AE (individual sheets per AE, not a shared pod sheet)
+- **Territory sheet:** `1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8` (in data-sources.json)
+- **SF pipeline report:** `00OPe00000k5m9ZMAQ` (SW report)
+- **Account intelligence:** Not yet run post-bootstrap (queued)
 
 ---
 
