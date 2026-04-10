@@ -5199,7 +5199,7 @@ Files: dashboard/src/pages/SetupPage.tsx — AutoBootstrapForm or PodBootstrapSe
 Description: The Google Drive folder preview (folder name confirmation shown after parent folder ID is entered) was lost at some point. Previously worked — BKL-POD-01 confirms it was implemented for PodBootstrapSection. Regression likely introduced during a recent rebuild or UI change. Fix: restore the onBlur/validate-folder call and green "✓ FolderName" / red error display that matches the original AutoBootstrapForm pattern. Verify in both single-AE and POD bootstrap forms.
 
 ### BKL-WIZ-02 | POD Bootstrap — no cancel button to stop in-flight run
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified: cancellation flag in bootstrap-orchestrator.ts:223, POST /api/bootstrap/cancel at line 719, cancelPodBootstrap() in SetupPage.tsx:3154 with Cancel button)
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -5253,7 +5253,7 @@ Files: src/rh-scraper.ts — batch query chunk logic
 Description: When multiple accounts are batched together in a single Solr query (e.g., 15 accounts in one chunk), a high-volume account like QAD (5856163) that has hundreds of cases can consume all 10 pagination pages. The scraper stops after the pagination limit, so all other accounts in the same chunk get 0 cases. Fix: scrape each account in its own chunk (chunk size = 1) so each account gets independent pagination up to 10 pages. Alternatively, per-account case counts could cap accounts with >N pages before moving to the next. Confirmed: with 15 accounts queried, 60/60 cached cases were from QAD only.
 
 ### BKL-RH-02 | RH batch scraper — duplicate cases across pagination batches
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified: seenCaseNumbers Set in pushCases() at rh-scraper.ts:468-669 deduplicates before allCases.push — was already fixed)
 Severity: MEDIUM
 Priority: P2
 Size: XS
@@ -5382,7 +5382,7 @@ Description: While RH Cases scrape is in progress, the sync status area shows on
 Decision: OPEN — fix in-progress label so status is always visible during and after sync.
 
 ### BKL-DOM-01 | Domain inference uses static override file instead of automated lookup
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (verified: domains.ts:97-119 uses Clearbit autocomplete API as web lookup source; also cross-references Gmail contacts + Google Calendar attendees for signal)
 Severity: MEDIUM
 Priority: P2
 Size: M
