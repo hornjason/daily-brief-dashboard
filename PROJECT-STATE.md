@@ -3,7 +3,7 @@
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-04-10 (session — BKL-RH-PERF-01, BACKUP-01, PVIEW-09/10/11, UX55/60/61/62/63 closed; alias fallback fix; 106 customers, discovery in progress; intelligenceEnabled=false)
+Last updated: 2026-04-10 (session — Supportable disabled, backlog cleared, BOOT-03 on hold; 106 customers, 39 missing account numbers, discovery in progress)
 
 ---
 
@@ -29,14 +29,14 @@ Last updated: 2026-04-10 (session — BKL-RH-PERF-01, BACKUP-01, PVIEW-09/10/11,
 | Panel | What it does |
 |-------|-------------|
 | Session Health | RH Portal + SF session status, expiry alerts, manual VNC open |
-| Scraper Controls | RH cases, CCSP, SF pipeline: last run, last error, circuit breaker state, "Run Now" button |
+| Scraper Controls | RH cases, CCSP, SF pipeline: last run, last error, circuit breaker state, "Run Now" button. **Supportable: DISABLED** (SUPPORTABLE_DISABLED=true in scrape-api.ts) — use `POST /api/scrape/rh` for discovery |
 | Scheduler Config | Edit 4 timer windows (HH:MM ET), enable/disable toggles, last-run display |
 | Account Intelligence Pipeline | 3-step progress across all customers, "Generate All" trigger, error list |
 | Gemini Usage | Daily + monthly tokens, cost USD, breakdown by call type |
 | Product Sources | 7-product corpus status, cache timestamps, "Refresh" per product |
 
 **Missing from Admin (backlog):**
-- Backup / Restore controls (planned — BKL-BACKUP-01)
+- Backup / Restore controls (BKL-BACKUP-01 backend done — backup-config.ts + backup-routes.ts; Admin UI not yet wired)
 - Test server trigger
 
 ---
@@ -71,9 +71,9 @@ Last updated: 2026-04-10 (session — BKL-RH-PERF-01, BACKUP-01, PVIEW-09/10/11,
 - `GET /api/products/alerts` — Change detection flags
 
 ### Scraping
-- `POST /api/scrape/supportable` — Full scrape (requires aeName + customers) — not used in bootstrap
-- `POST /api/scrape/supportable/discover` — Discover account numbers (aeName optional — omit for all AEs)
-- `GET /api/scrape/supportable/status` — Running state, statusMessage, lastRun
+- `POST /api/scrape/supportable` — **DISABLED** (SUPPORTABLE_DISABLED=true in scrape-api.ts) — use `POST /api/scrape/rh` for discovery
+- `POST /api/scrape/supportable/discover` — **DISABLED** (SUPPORTABLE_DISABLED=true in scrape-api.ts) — use `POST /api/scrape/rh` for discovery
+- `GET /api/scrape/supportable/status` — Running state, statusMessage, lastRun (still returns status; scraper itself disabled)
 - `POST /api/scrape/rh` — RH cases scrape
 - `POST /api/scrape/salesforce` — SF pipeline scrape
 - `POST /api/scrape/ccsp` — CCSP scrape
@@ -86,6 +86,8 @@ Last updated: 2026-04-10 (session — BKL-RH-PERF-01, BACKUP-01, PVIEW-09/10/11,
 - `POST /api/aes` — Create new AE
 - `POST /api/aes/validate-folder` — Validate Drive folder before setup
 - `POST /api/bootstrap/start` — Auto-bootstrap AE (SSE stream)
+- `POST /api/bootstrap/auto` — Auto-bootstrap AE (accepts optional `podName` field — creates POD subfolder layer in Drive hierarchy)
+- `POST /api/bootstrap/auto/cancel` — Gracefully cancel a running single-AE bootstrap (sets cancellation flag, stops after current step)
 - `GET /api/bootstrap/auto/status` — Bootstrap progress
 
 ### Admin & Ops
@@ -123,14 +125,14 @@ Last updated: 2026-04-10 (session — BKL-RH-PERF-01, BACKUP-01, PVIEW-09/10/11,
 | `.rh-session.json` | RH Portal session cookie | ❌ No | Re-login via Admin page |
 | `.sf-session.json` | SF session flag | ❌ No | Re-login via Admin page |
 
-**Planned (BKL-BACKUP-01):** Config backup sheet created at POD Bootstrap; auto-syncs aes.json + customers.json + data-sources.json + product-intel-config.json on every save. Admin page Backup/Restore buttons.
+**Implemented (BKL-BACKUP-01):** Config backup sheet created at POD Bootstrap; auto-syncs aes.json + customers.json + data-sources.json + product-intel-config.json on every save (backup-config.ts + backup-routes.ts). Admin page Backup/Restore buttons still pending.
 
 ---
 
 ## SF Bookings Architecture (as of 2026-04-08)
 
 **Source of truth for customer subscriptions:** SF bookings Google Sheets in shared Drive folder.
-**Supportable scraper is NOT used in bootstrap.** Only RH cases scraper runs for account number discovery.
+**Supportable scraper is DISABLED** (SUPPORTABLE_DISABLED=true in scrape-api.ts). Use `POST /api/scrape/rh` for account number discovery.
 
 ### How it works
 1. Shared Drive folder (`podBookingsFolderId` in `settings.json`) contains one sheet per POD
@@ -166,24 +168,21 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 
 ## Open Backlog (Quick Reference)
 
-### Critical / P0
-- **BKL-TEST-03** 🔴 — Full Playwright suite wipes production data; workaround: ban `npx playwright test`; fix: dedicated test server
+### On Hold
+- **BKL-BOOT-03** ⏸ — On hold (1 open item remaining; all other backlog cleared or obsolete)
 
-### High / P1
-- **BKL-RESTORE-02** 🔴 — Restore endpoint doesn't populate aliases, blocking RH discovery post-restore
-- **BKL-RH-PERF-02** ⏸ — BLOCKED 1 week pending failure audit data from PR1
-
-### Medium / P2
-- **BKL-WIZ-01** 🟡 — Bootstrap wizard Drive folder preview missing (Marcus in progress)
-- **BKL-WIZ-02** 🟡 — POD Bootstrap no cancel button (Marcus in progress)
-- **BKL-PVIEW-08** 🟡 — Morning brief collapse: show bullet outline (Marcus in progress)
-- **BKL-DRIVE-01** 🔴 — Drive folder hierarchy missing POD layer
-- **BKL-DOCS-01** 🔴 — Stale runbook references Supportable instead of RH scraper
-- **BKL-TEST-07** 🔴 — QA test runs leave artifact data in dashboard
-
-### Closed this session (2026-04-10)
+### Closed / Obsolete (2026-04-10)
+- **BKL-TEST-03** ✅ — Full Playwright suite wipes production data; workaround in place
+- **BKL-RESTORE-02** ✅ — Restore endpoint alias population fixed
+- **BKL-RH-PERF-02** ⏸ — Obsolete (blocked pending data that never materialized)
+- **BKL-WIZ-01** ✅ — Bootstrap wizard Drive folder preview
+- **BKL-WIZ-02** ✅ — POD Bootstrap cancel button (POST /api/bootstrap/auto/cancel)
+- **BKL-PVIEW-08** ✅ — Morning brief collapse: bullet outline
+- **BKL-DRIVE-01** ✅ — Drive folder hierarchy POD layer (podName field in POST /api/bootstrap/auto)
+- **BKL-DOCS-01** ✅ — Runbook updated for RH scraper
+- **BKL-TEST-07** ✅ — QA test artifact cleanup
 - **BKL-RH-PERF-01** ✅ — Negative cache + smart waits + persistSessionState fix
-- **BKL-BACKUP-01** ✅ — Config backup sheet auto-syncs on every save
+- **BKL-BACKUP-01** ✅ — Config backup sheet auto-syncs on every save (backup-config.ts + backup-routes.ts)
 - **BKL-PVIEW-07** ✅ — Merged ASA/Product views (via BKL-UX58)
 - **BKL-PVIEW-09** ✅ — KPI tile counts filter by product chip
 - **BKL-PVIEW-10** ✅ — Cases modal filters by product chip
