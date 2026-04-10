@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import type { ProductSummary, ProductAlert } from '../components/ProductCard'
 import { renderMarkdownInline } from '../lib/markdown'
+import { useAction } from '../hooks/useAction'
 
 interface ProductConfig {
   slug: string
@@ -30,6 +31,8 @@ export function ProductDetailPage() {
   const [refreshError, setRefreshError] = useState<string | null>(null)
 
   const [acknowledging, setAcknowledging] = useState(false)
+  const ackAction = useAction()
+  const followLinksAction = useAction<ProductConfig>()
 
   // Fetch product summary
   useEffect(() => {
@@ -78,11 +81,9 @@ export function ProductDetailPage() {
   async function handleAcknowledge() {
     if (!alert) return
     setAcknowledging(true)
-    try {
-      const res = await fetch(`/api/products/alerts/${alert.id}/acknowledge`, { method: 'POST' })
-      if (res.ok) setAlert(null)
-    } catch {}
-    finally { setAcknowledging(false) }
+    const result = await ackAction.execute(`/api/products/alerts/${alert.id}/acknowledge`, { method: 'POST' })
+    if (result) setAlert(null)
+    setAcknowledging(false)
   }
 
   async function handleAddSource() {
@@ -136,17 +137,12 @@ export function ProductDetailPage() {
 
   async function handleFollowLinksToggle(value: boolean) {
     if (!slug) return
-    try {
-      const res = await fetch(`/api/products/${slug}/sources`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ followLinks: value }),
-      })
-      if (res.ok) {
-        const next: ProductConfig = await res.json()
-        setConfig(next)
-      }
-    } catch {}
+    const result = await followLinksAction.execute(`/api/products/${slug}/sources`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ followLinks: value }),
+    })
+    if (result) setConfig(result)
   }
 
   async function handleRefreshNow() {
@@ -234,13 +230,16 @@ export function ProductDetailPage() {
               <p className="text-amber-400 font-medium text-sm">New version detected: {alert.version}</p>
               <p className="text-amber-300/70 text-xs mt-0.5">Detected {new Date(alert.detectedAt).toLocaleDateString()}</p>
             </div>
-            <button
-              onClick={handleAcknowledge}
-              disabled={acknowledging}
-              className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-medium transition-colors shrink-0"
-            >
-              {acknowledging ? 'Acknowledging…' : 'Acknowledge'}
-            </button>
+            <div className="shrink-0">
+              <button
+                onClick={handleAcknowledge}
+                disabled={acknowledging}
+                className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
+              >
+                {acknowledging ? 'Acknowledging…' : 'Acknowledge'}
+              </button>
+              {ackAction.error && <p className="text-xs text-warning mt-1">{ackAction.error}</p>}
+            </div>
           </div>
         )}
 
@@ -341,6 +340,7 @@ export function ProductDetailPage() {
               Follow embedded .redhat.com links for deeper context (slower)
             </span>
           </label>
+          {followLinksAction.error && <p className="text-xs text-warning mt-1">{followLinksAction.error}</p>}
 
           {/* Refresh Now */}
           <div>
