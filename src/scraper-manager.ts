@@ -414,19 +414,15 @@ export async function runRhScrapeWithState(): Promise<void> {
         // Use SF canonical alias (full name from source sheet) for portal search.
         // Always use FULL name (with INC, LLC, Corp etc.) — avoids false positives from
         // accounts in different regions or owned by different account teams.
-        const searchName = (customer as any).aliases?.[0]
-        if (!searchName) {
-          console.log(`[rh-scraper] skipping "${customer.name}" — no canonical SF alias for RH discovery`)
-          _rhDiscoveryProgress = { ..._rhDiscoveryProgress!, done: _rhDiscoveryProgress!.done + 1, current: null }
-          continue
-        }
+        const searchName = (customer as any).aliases?.[0] ?? customer.name
+        const searchSource = (customer as any).aliases?.[0] ? 'alias' : 'name'
         _rhDiscoveryProgress = { ..._rhDiscoveryProgress!, current: customer.name }
         const discoverStart = Date.now()
         const { accountNumbers: nums, cases: discoveredCases } = await discoverAccountNumberByName(searchName, RH_PROFILE_DIR)
         const discoverMs = Date.now() - discoverStart
         customersSearched++
         totalSearchMs += discoverMs
-        console.log(`[rh-scraper] searching portal for "${searchName}" (display: "${customer.name}") — ${discoverMs}ms`)
+        console.log(`[rh-scraper] searching portal for "${searchName}" [${searchSource}] (display: "${customer.name}") — ${discoverMs}ms`)
 
         // Fold any cases found into the result set — cases are the primary goal
         // BKL-UX55: Stamp customerName on name-discovered cases since we know the customer from the loop
