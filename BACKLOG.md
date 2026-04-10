@@ -5265,6 +5265,18 @@ Description: cases.json contains 6 unique cases each duplicated 10x (60 total). 
 
 ## AI Cost Optimization
 
+### BKL-AI-01 | Route high-volume AI calls to cheaper model
+Status: ✅ DONE 2026-04-10 (doc-extraction.ts already uses getGeminiModelLite() via Flash-Lite routing commit; other files referenced in backlog don't exist yet)
+
+### BKL-AI-02 | Cap maxOutputTokens at realistic limits
+Status: ✅ DONE 2026-04-10 (account-intelligence.ts: 16384→8192 in all 3 Gemini calls, commit 9258ddb)
+
+### BKL-AI-03 | 7-day TTL on account intelligence cache
+Status: ✅ DONE 2026-04-10 (runIntelligencePipeline checks cachedAt age; configurable via INTELLIGENCE_CACHE_TTL_DAYS env, commit 9258ddb)
+
+### BKL-AI-04 | Skip intelligence pipeline for customers with no data
+Status: ✅ DONE 2026-04-10 (pre-flight gate: skip if accountNumbers=0 && subscriptions=0; writes skipped:true stub, commit 9258ddb)
+
 ### BKL-AI-COST-04 | Admin UI setting for doc-classify age filter (docClassifyMaxAgeDays)
 Status: ✅ DONE 2026-04-10
 Severity: MEDIUM
@@ -5591,7 +5603,7 @@ Files: dashboard/src/pages/SetupPage.tsx (or Tailwind config)
 Description: Axe found 2 color-contrast violations on /dashboard/setup. Fix: check text color vs background on form labels or helper text; boost contrast to meet WCAG AA minimum (4.5:1).
 
 ### BKL-TEST-06 | intelligence-status returns 404 — route not registered
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-10 (route exists at customer-routes.ts:643, returns 200 — was a false positive from Quinn API scan)
 Severity: MEDIUM
 Priority: P2
 Size: XS
