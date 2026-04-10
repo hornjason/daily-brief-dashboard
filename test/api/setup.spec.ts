@@ -30,7 +30,11 @@ test.describe('POST /api/setup/reset', () => {
   })
 
   test('clears AEs and customers when called with ?confirm=true', async () => {
-    const count = await getCustomerCount()
+    // Check twice 200ms apart to avoid a transient low-count from a parallel test's save-customers call
+    const count1 = await getCustomerCount()
+    await new Promise(r => setTimeout(r, 200))
+    const count2 = await getCustomerCount()
+    const count = Math.max(count1, count2)
     test.skip(count > 5, `Production guard active (${count} customers) — reset blocked. Run with ALLOW_RESET=true in test env.`)
 
     const before = await getJSON('/api/aes')

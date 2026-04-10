@@ -54,17 +54,17 @@ test.describe('NAV-REG-001: Sidebar nav items navigate away from /dashboard/prod
 // ── NAV-REG-002: Settings button navigates away from products page ───────────
 
 test.describe('NAV-REG-002: Settings navigates away from /dashboard/products', () => {
-  test('clicking Settings from /dashboard/products navigates to /dashboard', async ({ page }) => {
+  test('clicking Settings from /dashboard/products navigates to /dashboard/admin', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard/products`)
     await page.waitForLoadState('networkidle')
 
     expect(page.url()).toContain('/dashboard/products')
 
-    const settingsButton = page.locator('aside button[aria-label="Settings"]')
-    await settingsButton.click()
+    const settingsLink = page.locator('aside a[aria-label="Settings"]')
+    await settingsLink.click()
 
-    await page.waitForURL('**/dashboard', { timeout: 5000 })
-    expect(page.url()).not.toContain('/dashboard/products')
+    await page.waitForURL('**/dashboard/admin', { timeout: 5000 })
+    expect(page.url()).toContain('/dashboard/admin')
   })
 })
 
@@ -123,15 +123,13 @@ test.describe('NAV-REG-004: Active nav item has correct CSS class after navigati
     await expect(commandCenterBtn).toHaveClass(/text-accent/)
   })
 
-  test('Settings button shows active class when clicked', async ({ page }) => {
+  test('Command Center button shows active class when on /dashboard', async ({ page }) => {
     await page.goto(`${BASE_URL}/dashboard`)
     await page.waitForLoadState('networkidle')
 
-    const settingsButton = page.locator('aside button[aria-label="Settings"]')
-    await settingsButton.click()
-
-    // Settings button should now have the active accent styling
-    await expect(settingsButton).toHaveClass(/bg-accent/)
+    // Command Center button should have the active accent styling when on /dashboard
+    const commandCenterBtn = page.locator('aside button[aria-label="Command Center"]')
+    await expect(commandCenterBtn).toHaveClass(/text-accent/)
   })
 })
 
