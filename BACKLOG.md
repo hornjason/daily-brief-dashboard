@@ -3109,7 +3109,7 @@ Deliverable: Feasible approach to eliminate VNC for recurring auth, or confirmat
 ## Customer Intelligence Pipeline (2026-04-02)
 
 ### BKL-AI17 | CustomerIntelligence PAI skill — Gemini doc generation + NotebookLM sync
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-04-10. AccountPlanAssistant workflow built, 20 account plan drafts generated, CLIs installed. Jason confirmed complete.
 Priority: P1
 Size: M (2-3 days)
 Source: Jason 2026-04-02 — wants per-customer intelligence docs synced to NotebookLM notebooks
@@ -3147,7 +3147,7 @@ Description: Admin page has two Supportable-related buttons that are unclear:
 ---
 
 ### BKL-M58 | Supportable discovery: per-search timeout + detail-page detection
-Status: 🟡 PARTIAL 2026-04-04 — Part 3 (wall-clock timeout in scrape-api.ts) done; Parts 1+2 (per-search timeout + detail-page detection in supportable-scraper.ts) require scraper rules review and Jason approval
+Status: ⏸ DEFERRED — 2026-04-10 — Supportable scraper disabled (SUPPORTABLE_DISABLED=true in scrape-api.ts:79). Item moot until Supportable is re-enabled.
 Priority: P1
 Size: S (1-2 hours)
 Source: Jason 2026-04-03 — discovery hung on "Taylor%" search that auto-navigated to detail page instead of result list
@@ -4602,7 +4602,7 @@ Description: `handleGenerate` fetched `/customer/{name}/brief` (no `/api/` prefi
 Action: Add Playwright test for Generate brief button on a customer meeting card — assert loading state then brief content renders.
 
 ### BKL-QA03 | Product intel 404 console noise on customer detail — empty state not silent
-Status: 🟡 LOW | Priority: P3 | Type: Polish
+Status: ✅ DONE — 2026-04-10 (verified: ProductIntelSection.tsx returns null on 404, no console logging)
 Source: Quinn QA 2026-04-06
 Description: Customer detail page fires 8 console errors on load — all 404s for product intel endpoints (e.g., `/api/products/ocp-virt/intel/dropbox`). Route is correct — 404 is the expected empty state when no intel has been generated yet. The frontend fetches all products on mount regardless of whether intel exists, logging each 404 as a console error. Page renders correctly; user sees Generate buttons. Fix: suppress console errors on 404 for product intel fetches (expected empty state), or prefetch only products with known cache entries.
 Files: dashboard/src/components/ProductIntelSection.tsx
@@ -5392,14 +5392,14 @@ Fix: Implement waterfall in infer-domains endpoint: (1) Clearbit Autocomplete (f
 Decision: OPEN — implement waterfall approach. No API keys needed beyond what PAI already has.
 
 ### BKL-CCSP-02 | CCSP sheets all empty — Tableau browser scraper never populated data for new pod
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-04-10
 Severity: HIGH
 Priority: P1
 Size: M
 Source: 2026-04-10 — Jason reported 0 records; confirmed via logs
 Files: src/ccsp-scraper.ts, data/cache/ccsp-data.json
 Description: All 9 AE CCSP Google Sheets show `<2 rows` across every tab. The ccsp-read path (reads from Sheets → cache) returns 0 records because Tableau browser scraper has never written to these sheets for the SW pod. Error pattern in logs: `[ccsp-read] known sheet empty — searching AE Drive folder for alternative CCSP sheet → no alternative found`. The Tableau browser scrape needs to run in VNC to populate the sheets. Investigating whether Tableau session is valid, scraper is reaching the right workbook/views, and write path is correct.
-Decision: OPEN — investigating root cause. Browser scrape queued and running.
+Decision: DONE — ccsp-data.json verified 2026-04-10: 2,417 records present. Scraper ran successfully.
 
 ### BKL-SF-01 | SF Pipeline returning only 1 record — browser scraper not populating sheets for new pod
 Status: ✅ DONE — 2026-04-10
@@ -5561,7 +5561,7 @@ Description: When AAP product chip is selected, only the "Open Cases" KPI shows 
 Decision: OPEN — needs scoping; Sev1 is feasible client-side from filtered cases; Meetings is not filterable by product (meetings don't have product tags)
 
 ### BKL-UX55 | Support cases modal shows "Unknown" for all customer names
-Status: 🔴 BLOCKED — needs scraper change + account number discovery fix
+Status: ✅ DONE — 2026-04-10
 Severity: MEDIUM
 Priority: P1
 Size: XS
@@ -5611,7 +5611,7 @@ Files: server.ts or src/intelligence-routes.ts
 Description: GET /api/intelligence/generate-all/status returns 404. Either the route was never wired or was removed during refactor. Verify route exists in server.ts and is correctly exported.
 
 ### BKL-RH-PERF-01 | RH scraper PR1 — negative cache + waitForSelector + persistSessionState fix
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-04-10 (verified in code: negative cache in scraper-manager.ts:403-450, waitForSelector in rh-scraper.ts:1111-1119, persistSessionState logs via console.warn at rh-scraper.ts:320)
 Severity: HIGH
 Priority: P1
 Size: M
@@ -5625,7 +5625,7 @@ Constraint: SCRAPER-RULES.md — read before touching. 3-concurrent discovery is
 Decision: Council unanimous. Jason authorized 2026-04-10 ("let's go for it").
 
 ### BKL-RH-PERF-02 | RH scraper PR2 — failure audit + batch HTTP-first + jitter
-Status: 🔴 BLOCKED on BKL-RH-PERF-01
+Status: 🔴 OPEN — PERF-01 shipped 2026-04-10. Waiting ~1 week for failure logging data before implementing. See description for timing.
 Severity: MEDIUM
 Priority: P2
 Size: M
@@ -5638,3 +5638,102 @@ Description: Second PR, ships after PR1 instrumentation data is available (1 wee
 (4) **Session validation bookends:** Validate session before and after each batch window to guard against stale-cookie silent success.
 (5) **Name normalization** (only if failure audit shows name mismatches > missing accounts): Strip legal suffixes (LLC, Inc, Corp, Ltd) from search name before sidebar lookup. Expected recovery: 10-15% of current failures.
 Decision: Council consensus. Blocked on PR1 shipping + 1 week of failure data.
+
+---
+
+## Data Enrichment
+
+### BKL-ENRICH-01 | Industry/segment tags missing on all 106 customers — enrichment never ran on SW pod
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: S
+Source: Jason 2026-04-10 — confirmed 0/106 customers have industry field despite BKL-AI01 being marked DONE
+Files: src/account-intelligence.ts (identifyIndustry, cacheIndustryResult), data/config/customers.json
+Description: BKL-AI01 (industry/segment detection via Gemini + Google Search) was marked DONE 2026-04-02 but that was on the NW pod test data. The SW pod has 106 customers and 0/106 have the `industry` field in customers.json. The code exists (identifyIndustry() at account-intelligence.ts:114, cacheIndustryResult() at line 156) but the enrichment batch has never run for this pod. Industry/segment is required for intelligence prompt templating (BKL-AI02, BKL-AI03) and will eventually power dashboard filtering.
+Fix: Trigger POST /api/intelligence/generate-all or run identifyIndustry() in batch for all 106 customers. Verify customers.json has `industry` + `segment` fields after run. Check intelligenceEnabled flag in data-sources.json — may need to set to true first.
+Decision: OPEN — run enrichment batch, verify all customers populated.
+
+### BKL-INTEL-01 | Intelligence docs accumulate duplicates — always delete all + create fresh
+Status: 🔴 OPEN
+Severity: HIGH
+Priority: P1
+Size: XS
+Source: Jason 2026-04-10 — duplicate docs found in account intelligence folders
+Files: src/account-intelligence.ts — upsertGoogleDoc() (~line 655)
+Root cause: upsertGoogleDoc() queries Drive with pageSize: 1, finds ONE existing doc by name, updates it, and leaves any additional same-named docs untouched. On repeat runs, duplicates accumulate.
+Fix: Replace upsert logic with delete-all-then-create: (1) query Drive with no pageSize limit to find ALL docs matching the name in the folder, (2) delete every match, (3) create a single fresh doc. This guarantees two clean docs per customer on every run regardless of prior state.
+Decision: OPEN — surgical fix to upsertGoogleDoc() only. No other changes.
+
+### BKL-AI-AUDIT-01 | Gemini call audit — model, schedule/TTL, and token cap review across all AI calls
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: S
+Source: Jason 2026-04-10 — verify every Gemini call uses the right model, right frequency, and right output cap
+Files: src/customer.ts, src/account-intelligence.ts, src/account-plan.ts, src/product-intelligence.ts, src/doc-extraction.ts, src/customer-product-intel.ts, src/product-release-radar.ts
+Description: Audit every Gemini call in the codebase for: (1) correct model tier, (2) appropriate schedule/TTL/cache, (3) correct maxOutputTokens cap. Current known state from code:
+
+| Call type | File | Model | maxOutputTokens | TTL / Trigger |
+|---|---|---|---|---|
+| brief-extract (structured) | customer.ts:895 | geminiModelLite (2.5-flash-lite) | 8192 | On-demand, 4h brief cache |
+| brief-synthesize | customer.ts:473 | geminiModelLite (2.5-flash-lite) | 4096 | On-demand, 4h brief cache |
+| PDF text extraction | customer.ts:398 | geminiModelLite (2.5-flash-lite) | 4096 | On-demand during brief gen |
+| doc-classify | doc-extraction.ts:182 | geminiModelLite (2.5-flash-lite) | 8192 | On-demand during doc processing |
+| product-query | product-intelligence.ts:48 | geminiModelLite (2.5-flash-lite) | 4096 | On-demand per product Q&A |
+| account-plan-generation | account-plan.ts:233 | geminiModel (2.5-flash) | 8192 | On-demand |
+| customer-product-intel | customer-product-intel.ts:349 | geminiModel (2.5-flash) | 8192 | On-demand |
+| intelligence-industry | account-intelligence.ts:57 | geminiModel (2.5-flash) | not set | 7-day TTL |
+| intelligence-company | account-intelligence.ts:57 | geminiModel (2.5-flash) | not set | 7-day TTL |
+| intelligence-analysis | account-intelligence.ts:57 | geminiModel (2.5-flash) | not set | 7-day TTL |
+
+Review questions for each call:
+1. Is the model tier right? (Lite = high-volume cheap tasks; Standard = quality-sensitive tasks)
+2. Is the TTL/cache interval appropriate for how often the underlying data changes?
+3. Is maxOutputTokens set? If not, Gemini defaults may burn tokens silently.
+4. Does intelligence-industry/company/analysis need an explicit maxOutputTokens?
+5. Is brief-synthesize at 4096 enough for a full customer brief, or is it getting truncated?
+Fix: For each call that has a wrong model, missing cap, or wrong TTL — make the surgical correction with a comment explaining the reasoning. Update this table when done.
+Decision: OPEN — assign to Marcus for code review pass.
+
+### BKL-OPS-02 | Dev/test/prod/demo environment strategy — research + implement team consistency standard
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: Research → M implementation
+Source: Jason 2026-04-10 — wants proper multi-env setup with tunnel demo access and team-consistency guardrails
+Files: Makefile, CLAUDE.md, .github/workflows/, docs/
+Context: BKL-UX59 shipped 3-container Makefile targets (dev-snapshot/dev-up, demo-snapshot/demo-up). BKL-OPS-01 shipped versioning, changelog, rollback, branch strategy. This item extends both with tunnel access and formal promotion pipeline.
+Description: Research and implement the full environment strategy covering:
+
+  (1) **Environment tiers** — define the 4 containers and their contracts:
+    - `pai-dashboard` (prod, port 7777) — stable, only promoted builds, live data
+    - `pai-dashboard-dev` (dev, port 7778) — frequent changes, dev data snapshot
+    - `pai-dashboard-demo` (demo, port 7779) — pinned build, read-only data, shareable
+    - `pai-dashboard-test` (test, ephemeral) — clean-slate per test run, synthetic data
+
+  (2) **Promotion pipeline** — define the gate sequence for dev→prod promotion:
+    - Feature branch → PR → CI runs Playwright API tests + Quinn smoke test → merge to main → `make rebuild`
+    - No direct-to-prod code changes; all changes flow through dev first
+    - Document in CLAUDE.md as a hard rule for all agents
+
+  (3) **Tunnel access for demo** — research best option for giving stakeholders access to the demo container:
+    - Cloudflare Tunnel (cloudflared) — free, stable subdomain, no port forwarding
+    - ngrok — simpler setup, free tier has ephemeral URLs (Pro = stable subdomain)
+    - Tailscale — best for internal Red Hat team access, no public internet exposure
+    - Decision criteria: stability, auth/access control, ease of setup, Red Hat IT policy
+    - Implement `make demo-tunnel` / `make demo-tunnel-stop` Makefile targets
+
+  (4) **Team consistency guardrails** — so all agents and future contributors use the right environment:
+    - CLAUDE.md rule: "never run make rebuild from dev — always promote to prod via gate sequence"
+    - Add Makefile guard that fails if dev container has uncommitted changes when promoting
+    - Document which container to test against for each task type
+    - Add `make env-status` to show which containers are running and on what build
+
+  (5) **CI integration** — tie GitHub Actions to the dev→prod gate:
+    - On PR open: run `npx playwright test test/api/` automatically
+    - On merge to main: trigger `make rebuild` via self-hosted runner or notify Jason to run it
+    - Research: is a self-hosted GH Actions runner on the Mac worth it vs manual `make rebuild`?
+
+Research questions before implementing: (a) What tunnel solution fits Red Hat IT constraints? (b) Is a self-hosted GH runner practical on this Mac? (c) Should demo data be a fixed snapshot (never syncs) or periodic sync from prod?
+Decision: OPEN — research first (GrokResearcher), then implement Makefile targets + docs.

@@ -33,6 +33,10 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 
 ## Backlog Discipline (Zero Exceptions)
 
+**BACKLOG.md is NOT ground truth — the code is.** Never present a backlog item's status to Jason without first verifying it against the actual source files, cache files, or config. BACKLOG.md drifts. Code does not lie. At session start, verify every open/in-progress item before reporting it. Presenting stale backlog status as fact wastes Jason's time and erodes trust.
+
+**Verify before reporting status.** When Jason asks about backlog state, check the code first: does the feature exist in source? Does the data exist in cache/config? Only then report status. One grep or Read tool call takes 2 seconds. Getting it wrong costs 20 minutes.
+
 **Verify before implementing.** Before working any backlog item, read the relevant source files and confirm the feature is actually absent. Many items will already be done — mark them DONE immediately and move on. Never rewrite working code.
 
 **Update backlog at close-time.** The moment an item is verified done or implemented, update its Status in BACKLOG.md. Do not defer. Drift between code and backlog creates false work and instability.
