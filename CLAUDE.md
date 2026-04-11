@@ -43,12 +43,16 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 
 Promotion sequence:
 1. Merge all agent changes to main
-2. `make test-up` → spins up test container at port 7776 with seed data
-3. `BASE_URL=http://localhost:7776 npx playwright test test/api/` → must pass
-4. If UI changes: Quinn audits on 7776 first, then confirms on 7777 after rebuild
-5. Only then: `make rebuild`
+2. `make build` → builds new container image from current code
+3. `make test-down && make test-up` → restart test container with new image + seed data
+4. `npx playwright test test/api/ --project=test` → destructive tests against 7776; must pass
+5. If UI changes: Quinn audits on 7776 first
+6. `make up` → restart only production (image already built in step 2)
+7. `npx playwright test test/api/ --project=ci` → regression check against 7777; must pass
 
-For a full gate: `make pre-promote && make rebuild`
+For a full gate: `make build && make test-down && make test-up` then tests, then `make up`
+
+**Note:** The `ci` project tests target production (7777) by default — never run with `BASE_URL=http://localhost:7776` or they will fail against seed data. The `test` project always targets 7776 regardless of BASE_URL.
 
 **Why:** Bugs caught on 7776 stay in test. Bugs caught on 7777 are production incidents. The test container (7776) exists exactly for this — use it.
 

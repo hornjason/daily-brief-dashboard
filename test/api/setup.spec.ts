@@ -5,7 +5,7 @@
  * save-domains, and validate-folder. Uses serverState fixture to snapshot
  * and restore config between tests.
  */
-import { test, expect, getJSON, postJSON, buildAE, buildCustomer } from '../fixtures'
+import { test, expect, getJSON, getJSONDestructive, postJSON, postJSONDestructive, buildAE, buildCustomer } from '../fixtures'
 
 // ── POST /api/setup/reset ───────────────────────────────────────────────────
 // NOTE (BKL-TEST-11): When production data is loaded (>5 customers), reset
@@ -49,7 +49,7 @@ async function getCustomerCount(): Promise<number> {
 
 test.describe('@destructive POST /api/setup/reset', () => {
   test('returns 400 without ?confirm=true', async () => {
-    const { status, body } = await postJSON('/api/setup/reset')
+    const { status, body } = await postJSONDestructive('/api/setup/reset')
     expect(status).toBe(400)
     expect(body).toHaveProperty('error')
     expect(body.error).toContain('confirm=true')
@@ -63,16 +63,16 @@ test.describe('@destructive POST /api/setup/reset', () => {
     const count = Math.max(count1, count2)
     test.skip(count > 5, `Production guard active (${count} customers) — reset blocked. Run with ALLOW_RESET=true in test env.`)
 
-    const before = await getJSON('/api/aes')
+    const before = await getJSONDestructive('/api/aes')
     expect(before.status).toBe(200)
 
-    const { status, body } = await postJSON('/api/setup/reset?confirm=true')
+    const { status, body } = await postJSONDestructive('/api/setup/reset?confirm=true')
     expect(status).toBe(200)
     expect(body).toHaveProperty('ok', true)
     expect(body).toHaveProperty('deleted')
     expect(typeof body.deleted).toBe('number')
 
-    const after = await getJSON('/api/aes')
+    const after = await getJSONDestructive('/api/aes')
     expect(after.body.aes).toHaveLength(0)
   })
 
@@ -80,7 +80,7 @@ test.describe('@destructive POST /api/setup/reset', () => {
     const count = await getCustomerCount()
     test.skip(count <= 5, 'Not enough customers to test production guard')
 
-    const { status, body } = await postJSON('/api/setup/reset?confirm=true')
+    const { status, body } = await postJSONDestructive('/api/setup/reset?confirm=true')
     expect(status).toBe(403)
     expect(body).toHaveProperty('error')
     expect(body.error).toContain('BLOCKED')
@@ -88,7 +88,7 @@ test.describe('@destructive POST /api/setup/reset', () => {
   })
 
   test('returns 409 if scrape is running', async () => {
-    const { status } = await postJSON('/api/setup/reset')
+    const { status } = await postJSONDestructive('/api/setup/reset')
     expect([400, 409]).toContain(status)
   })
 })
@@ -98,7 +98,7 @@ test.describe('@destructive POST /api/setup/reset', () => {
 test.describe('@destructive POST /api/setup/save-customers', () => {
   test('saves a valid customers array', async () => {
     const customer = buildCustomer({ name: 'Acme Corp', accountNumbers: ['123456'] })
-    const { status, body } = await postJSON('/api/setup/save-customers', {
+    const { status, body } = await postJSONDestructive('/api/setup/save-customers', {
       customers: [customer],
     })
     expect(status).toBe(200)
@@ -108,7 +108,7 @@ test.describe('@destructive POST /api/setup/save-customers', () => {
 
   test('rejects customer with empty name (400)', async () => {
     const customer = buildCustomer({ name: '' })
-    const { status, body } = await postJSON('/api/setup/save-customers', {
+    const { status, body } = await postJSONDestructive('/api/setup/save-customers', {
       customers: [customer],
     })
     expect(status).toBe(400)
@@ -118,7 +118,7 @@ test.describe('@destructive POST /api/setup/save-customers', () => {
   test('rejects HTML in customer name (400)', async () => {
     // sanitizeText rejects HTML tags outright — "<script>alert(1)</script>" returns 400
     const customer = buildCustomer({ name: '<script>alert(1)</script>' })
-    const { status, body } = await postJSON('/api/setup/save-customers', {
+    const { status, body } = await postJSONDestructive('/api/setup/save-customers', {
       customers: [customer],
     })
     expect(status).toBe(400)
@@ -127,7 +127,7 @@ test.describe('@destructive POST /api/setup/save-customers', () => {
 
   test('rejects accountNumbers with wrong format (400)', async () => {
     const customer = buildCustomer({ name: 'Valid Name', accountNumbers: ['abc'] })
-    const { status, body } = await postJSON('/api/setup/save-customers', {
+    const { status, body } = await postJSONDestructive('/api/setup/save-customers', {
       customers: [customer],
     })
     expect(status).toBe(400)
@@ -139,7 +139,7 @@ test.describe('@destructive POST /api/setup/save-customers', () => {
     const customers = Array.from({ length: 201 }, (_, i) =>
       buildCustomer({ name: `Customer ${i}`, accountNumbers: [`${1000 + i}`] })
     )
-    const { status, body } = await postJSON('/api/setup/save-customers', {
+    const { status, body } = await postJSONDestructive('/api/setup/save-customers', {
       customers,
     })
     expect(status).toBe(400)
@@ -148,7 +148,7 @@ test.describe('@destructive POST /api/setup/save-customers', () => {
   })
 
   test('rejects non-array customers field (400)', async () => {
-    const { status, body } = await postJSON('/api/setup/save-customers', {
+    const { status, body } = await postJSONDestructive('/api/setup/save-customers', {
       customers: 'not an array',
     })
     expect(status).toBe(400)
@@ -166,9 +166,9 @@ test.describe.serial('@destructive POST /api/setup/infer-domains', () => {
     test.skip(count > 5, `Production guard active (${count} customers) — reset blocked`)
 
     // Reset first to clear customers
-    await postJSON('/api/setup/reset?confirm=true')
+    await postJSONDestructive('/api/setup/reset?confirm=true')
 
-    const { status, body } = await postJSON('/api/setup/infer-domains')
+    const { status, body } = await postJSONDestructive('/api/setup/infer-domains')
     expect(status).toBe(400)
     expect(body).toHaveProperty('error')
     expect(body.error).toContain('No customers configured')
@@ -176,11 +176,11 @@ test.describe.serial('@destructive POST /api/setup/infer-domains', () => {
 
   test('returns { results } shape when customers exist', async () => {
     // Save a customer first
-    await postJSON('/api/setup/save-customers', {
+    await postJSONDestructive('/api/setup/save-customers', {
       customers: [buildCustomer({ name: 'Test Corp', accountNumbers: ['123456'] })],
     })
 
-    const { status, body } = await postJSON('/api/setup/infer-domains')
+    const { status, body } = await postJSONDestructive('/api/setup/infer-domains')
     // May succeed or fail depending on Google auth state, but shape should be consistent
     if (status === 200) {
       expect(body).toHaveProperty('results')
@@ -196,13 +196,13 @@ test.describe.serial('@destructive POST /api/setup/infer-domains', () => {
 
 test.describe('@destructive POST /api/setup/save-domains', () => {
   test('returns 400 with no domains provided', async () => {
-    const { status, body } = await postJSON('/api/setup/save-domains', { domains: [] })
+    const { status, body } = await postJSONDestructive('/api/setup/save-domains', { domains: [] })
     expect(status).toBe(400)
     expect(body).toHaveProperty('error')
   })
 
   test('rejects invalid domain format (400)', async () => {
-    const { status, body } = await postJSON('/api/setup/save-domains', {
+    const { status, body } = await postJSONDestructive('/api/setup/save-domains', {
       domains: [{ name: 'Test', domain: 'not a valid domain!!!' }],
     })
     expect(status).toBe(400)
@@ -212,11 +212,11 @@ test.describe('@destructive POST /api/setup/save-domains', () => {
 
   test('saves valid domains successfully', async () => {
     // Ensure a customer exists first
-    await postJSON('/api/setup/save-customers', {
+    await postJSONDestructive('/api/setup/save-customers', {
       customers: [buildCustomer({ name: 'Acme Corp', accountNumbers: ['123456'] })],
     })
 
-    const { status, body } = await postJSON('/api/setup/save-domains', {
+    const { status, body } = await postJSONDestructive('/api/setup/save-domains', {
       domains: [{ name: 'Acme Corp', domain: 'acme.com' }],
     })
     expect(status).toBe(200)
@@ -229,7 +229,7 @@ test.describe('@destructive POST /api/setup/save-domains', () => {
 
 test.describe('POST /api/aes/validate-folder', () => {
   test('rejects bad folder URL (400)', async () => {
-    const { status, body } = await postJSON('/api/aes/validate-folder', {
+    const { status, body } = await postJSONDestructive('/api/aes/validate-folder', {
       folderUrl: 'not-a-url',
     })
     expect(status).toBe(400)
@@ -237,7 +237,7 @@ test.describe('POST /api/aes/validate-folder', () => {
   })
 
   test('rejects empty folderUrl', async () => {
-    const { status, body } = await postJSON('/api/aes/validate-folder', {
+    const { status, body } = await postJSONDestructive('/api/aes/validate-folder', {
       folderUrl: '',
     })
     expect(status).toBe(400)
@@ -245,7 +245,7 @@ test.describe('POST /api/aes/validate-folder', () => {
   })
 
   test('accepts valid-looking folder URL format (may fail on Drive API if fake)', async () => {
-    const { status, body } = await postJSON('/api/aes/validate-folder', {
+    const { status, body } = await postJSONDestructive('/api/aes/validate-folder', {
       folderUrl: 'https://drive.google.com/drive/folders/1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq',
     })
     // Either 200 (real folder found) or 400 (Drive API rejects it) — not 500

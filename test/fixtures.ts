@@ -127,6 +127,13 @@ export async function postJSONDestructive(path: string, data: unknown = {}) {
   return { status: res.status, body }
 }
 
+/** Use this for GET calls inside @destructive tests — routes to test container (TEST_URL/BASE_URL/7776) */
+export async function getJSONDestructive(path: string) {
+  const res = await fetch(`${TEST_BASE}${path}`)
+  const body = await res.json().catch(() => null)
+  return { status: res.status, body }
+}
+
 export async function getJSON(path: string) {
   const res = await fetch(`${BASE}${path}`)
   const body = await res.json().catch(() => null)
