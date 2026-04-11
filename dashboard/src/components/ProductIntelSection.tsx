@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronDown, ChevronUp, RefreshCw, Sparkles, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, RefreshCw, Sparkles, Loader2, TrendingUp } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
 import { renderMarkdownInline } from '../lib/markdown'
 
@@ -35,6 +35,20 @@ interface CustomerProductIntel {
   competitiveAngle: string | null
   generatedAt: string
   productCacheHash: string
+}
+
+interface ExpansionRecommendation {
+  product: string
+  why: string
+  features: string[]
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+}
+
+interface ExpansionOpportunitiesResult {
+  customerName: string
+  recommendations: ExpansionRecommendation[]
+  generatedAt: string
+  allProductsCovered: boolean
 }
 
 export interface ProductIntelSectionProps {
@@ -75,6 +89,177 @@ const RELEVANCE_STYLES: Record<'HIGH' | 'MEDIUM' | 'LOW' | 'NONE' | 'EXPANSION',
   EXPANSION: { badge: 'bg-purple-500/15 text-purple-400 border border-purple-500/30', dot: 'bg-purple-400', label: 'EXPAND' },
 }
 
+const CONFIDENCE_STYLES: Record<'HIGH' | 'MEDIUM' | 'LOW', string> = {
+  HIGH:   'bg-success/15 text-success border border-success/30',
+  MEDIUM: 'bg-warning/15 text-warning border border-warning/30',
+  LOW:    'bg-border/40 text-text-secondary border border-border',
+}
+
+// ── ExpansionOpportunitiesBlock ──────────────────────────────────────────────
+
+function ExpansionOpportunitiesBlock({
+  customerName,
+  productLabels,
+  onGenerate,
+}: {
+  customerName: string
+  productLabels: Record<string, string>
+  onGenerate: () => Promise<void>
+}) {
+  const [data, setData] = useState<ExpansionOpportunitiesResult | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/expansion-opportunities`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setData(d))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [customerName])
+
+  async function handleGenerate() {
+    setGenerating(true)
+    try {
+      const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/expansion-opportunities`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        const result = await res.json()
+        setData(result)
+      }
+      await onGenerate()
+    } catch { /* ignore */ }
+    finally { setGenerating(false) }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-surface border border-border rounded-lg p-4">
+        <Skeleton className="h-6 w-48 mb-2" />
+        <Skeleton className="h-4 w-full" />
+      </div>
+    )
+  }
+
+  // Not yet generated
+  if (!data) {
+    return (
+      <div className="bg-surface border border-border/60 rounded-lg p-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-purple-400" />
+          <span className="text-sm text-text-secondary">Generate to see expansion opportunities</span>
+        </div>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {generating
+            ? <Loader2 className="w-3 h-3 animate-spin" />
+            : <Sparkles className="w-3 h-3" />
+          }
+          Generate
+        </button>
+      </div>
+    )
+  }
+
+  // Customer has all products
+  if (data.allProductsCovered) {
+    return (
+      <div className="bg-surface border border-success/20 rounded-lg p-4 flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-success" />
+        <span className="text-sm text-success">Customer has full product coverage</span>
+      </div>
+    )
+  }
+
+  // No recommendations (generated but empty)
+  if (data.recommendations.length === 0) {
+    return (
+      <div className="bg-surface border border-border/60 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-text-secondary" />
+            <span className="text-sm text-text-secondary">No expansion opportunities identified</span>
+          </div>
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded text-text-secondary hover:text-text-primary border border-border/60 hover:border-border transition-colors disabled:opacity-50"
+          >
+            {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            Regenerate
+          </button>
+        </div>
+        {data.generatedAt && (
+          <p className="text-xs text-text-secondary mt-1">Generated {formatRelTime(data.generatedAt)}</p>
+        )}
+      </div>
+    )
+  }
+
+  // Recommendations exist
+  return (
+    <div className="bg-surface border border-purple-500/20 rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-purple-500/10 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-purple-400" />
+          <h3 className="text-sm font-semibold text-text-primary">Expansion Opportunities</h3>
+          <span className="text-xs text-text-secondary">{data.recommendations.length}</span>
+        </div>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-medium rounded text-text-secondary hover:text-text-primary border border-border/60 hover:border-border transition-colors disabled:opacity-50"
+        >
+          {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+          Regenerate
+        </button>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {data.recommendations.map((rec, i) => (
+          <div key={i} className="bg-bg rounded-lg border border-border/40 p-3 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Product name */}
+              <span className="px-2 py-0.5 rounded text-xs font-semibold bg-purple-500/20 text-purple-400">
+                {productLabel(rec.product, productLabels)}
+              </span>
+              {/* Confidence badge */}
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${CONFIDENCE_STYLES[rec.confidence]}`}>
+                {rec.confidence}
+              </span>
+            </div>
+
+            {/* Why */}
+            <p className="text-sm text-text-secondary">{rec.why}</p>
+
+            {/* Feature chips */}
+            {rec.features.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {rec.features.map((feat, j) => (
+                  <span key={j} className="px-2 py-0.5 rounded text-xs bg-accent/10 text-accent border border-accent/20">
+                    {feat}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {data.generatedAt && (
+        <div className="px-4 pb-3">
+          <p className="text-xs text-text-secondary">Generated {formatRelTime(data.generatedAt)}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
 function ProductCard({
@@ -96,7 +281,7 @@ function ProductCard({
 
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden">
-      {/* Card header — always visible, clickable */}
+      {/* Card header -- always visible, clickable */}
       <div className="px-4 py-3 flex items-center gap-3">
         <button
           onClick={() => setCollapsed(v => !v)}
@@ -113,7 +298,7 @@ function ProductCard({
             {relStyle.label ?? relevance}
           </span>
 
-          {/* Priority action — truncated */}
+          {/* Priority action -- truncated */}
           <span className="flex-1 text-sm text-text-primary truncate min-w-0">
             {renderMarkdownInline(intel.priorityAction)}
           </span>
@@ -125,7 +310,7 @@ function ProductCard({
           }
         </button>
 
-        {/* Re-analyze button — only shown for NONE-scored products */}
+        {/* Re-analyze button -- only shown for NONE-scored products */}
         {relevance === 'NONE' && (
           <button
             onClick={(e) => { e.stopPropagation(); onRegenerate(slug) }}
@@ -142,7 +327,7 @@ function ProductCard({
         )}
       </div>
 
-      {/* Card body — expanded */}
+      {/* Card body -- expanded */}
       {!collapsed && (
         <div className="px-4 pb-4 pt-2 space-y-4">
 
@@ -153,7 +338,7 @@ function ProductCard({
               <ul className="space-y-2">
                 {(intel.featureTalkingPoints ?? []).map((ftp, i) => (
                   <li key={i} className="text-sm text-text-primary flex gap-2">
-                    <span className="text-text-secondary shrink-0 mt-0.5">•</span>
+                    <span className="text-text-secondary shrink-0 mt-0.5">*</span>
                     <span>
                       <span className="font-medium">{ftp.feature}</span>
                       {' '}
@@ -185,10 +370,10 @@ function ProductCard({
               <ul className="space-y-1">
                 {(intel.roadmapRelevance ?? []).map((r, i) => (
                   <li key={i} className="text-sm text-text-primary flex gap-2">
-                    <span className="text-text-secondary shrink-0 mt-0.5">•</span>
+                    <span className="text-text-secondary shrink-0 mt-0.5">*</span>
                     <span>
                       <span className="font-medium">{r.feature}</span>
-                      {' — '}
+                      {' -- '}
                       {renderMarkdownInline(r.talkingPoint)}
                     </span>
                   </li>
@@ -204,10 +389,10 @@ function ProductCard({
               <ul className="space-y-1">
                 {(intel.expansionOpportunities ?? []).map((o, i) => (
                   <li key={i} className="text-sm text-text-primary flex gap-2">
-                    <span className="text-text-secondary shrink-0 mt-0.5">•</span>
+                    <span className="text-text-secondary shrink-0 mt-0.5">*</span>
                     <span>
                       {o.gap}
-                      {' \u2192 '}
+                      {' -> '}
                       <span className="font-medium">{o.product}</span>
                       {': '}
                       {renderMarkdownInline(o.rationale)}
@@ -225,7 +410,7 @@ function ProductCard({
               <ul className="space-y-1">
                 {(intel.caseAlignment ?? []).map((c, i) => (
                   <li key={i} className="text-sm text-text-primary flex gap-2">
-                    <span className="text-text-secondary shrink-0 mt-0.5">•</span>
+                    <span className="text-text-secondary shrink-0 mt-0.5">*</span>
                     <span>
                       <span className="font-medium">Case {c.caseNumber}</span>
                       {': '}
@@ -280,6 +465,7 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
   const [regenerating, setRegenerating] = useState<Set<ProductSlug>>(new Set())
   const [generatingAll, setGeneratingAll] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [expansionRefreshKey, setExpansionRefreshKey] = useState(0)
   // BKL-MC06: product slugs and labels fetched from /api/products/config
   const [productSlugs, setProductSlugs] = useState<string[]>(['rhel', 'ocp', 'ocp-virt', 'aap', 'rhel-ai', 'rh-ai-inference', 'rhoai'])
   const [productLabels, setProductLabels] = useState<Record<string, string>>(PRODUCT_LABEL_FALLBACKS)
@@ -328,7 +514,7 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
     setError(null)
     try {
       // BKL-REG-11: Call generate directly using cached product summary.
-      // Do NOT call /refresh first — refresh scrapes live URLs and can time out (30-90s),
+      // Do NOT call /refresh first -- refresh scrapes live URLs and can time out (30-90s),
       // silently blocking generation for all non-RHEL products. Product summaries are kept
       // fresh by the background scheduler; intel generation does not require a fresh scrape.
       const genRes = await fetch(`/api/products/${slug}/intel/${encodeURIComponent(customerSlug)}/generate`, {
@@ -379,6 +565,11 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
     setGeneratingAll(true)
     setError(null)
     try {
+      // BKL-PRODINTEL-04: Also trigger expansion opportunities generation
+      const expansionPromise = fetch(`/api/customer/${encodeURIComponent(customerName)}/expansion-opportunities`, {
+        method: 'POST',
+      }).catch(() => null)
+
       // BKL-REG-11: Call generate-all directly without pre-refreshing product summaries.
       // Summaries are kept fresh by background scheduler; pre-refresh causes serial 30-90s
       // scrape timeouts that block intel generation for all non-RHEL products.
@@ -390,8 +581,13 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
         setError(`Generate all failed: ${genErr.error ?? genRes.statusText}`)
         return
       }
+
+      // Wait for expansion to complete too
+      await expansionPromise
+
       // Re-fetch all cached intel after generation completes
       setRefreshKey(k => k + 1)
+      setExpansionRefreshKey(k => k + 1)
     } catch (e: any) {
       setError(`Error generating all intel: ${e?.message ?? 'network error'}`)
     } finally {
@@ -408,7 +604,7 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
   })
   const uncachedSlugs = productSlugs.filter(slug => intel[slug] === null || intel[slug] === undefined)
 
-  // During loading — show skeleton
+  // During loading -- show skeleton
   if (loading) {
     return (
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
@@ -465,7 +661,15 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
 
       {/* Product cards + uncached stubs */}
       <div className="p-4 space-y-3">
-        {/* All cached product cards (including NONE-scored — visible so user can see result and regenerate) */}
+        {/* BKL-PRODINTEL-04: Expansion Opportunities block -- above product rows */}
+        <ExpansionOpportunitiesBlock
+          key={expansionRefreshKey}
+          customerName={customerName}
+          productLabels={productLabels}
+          onGenerate={async () => { setExpansionRefreshKey(k => k + 1) }}
+        />
+
+        {/* All cached product cards (including NONE-scored -- visible so user can see result and regenerate) */}
         {visibleSlugs.length === 0 && uncachedSlugs.length === productSlugs.length && (
           <p className="text-xs text-text-secondary mb-3">
             Generate product talking points for {customerName} based on their subscriptions, cases, and product roadmaps.
@@ -482,7 +686,7 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
           />
         ))}
 
-        {/* Uncached products — always visible with individual Generate button */}
+        {/* Uncached products -- always visible with individual Generate button */}
         {uncachedSlugs.length > 0 && (
           <div className="space-y-2">
             {uncachedSlugs.map(slug => (
@@ -504,7 +708,7 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
           </div>
         )}
 
-        {/* Neither cached nor uncached — should not happen, but guard */}
+        {/* Neither cached nor uncached -- should not happen, but guard */}
         {visibleSlugs.length === 0 && uncachedSlugs.length === 0 && (
           <p className="text-xs text-text-secondary">No products configured.</p>
         )}

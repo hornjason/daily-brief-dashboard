@@ -14,8 +14,8 @@
  */
 import { test, expect } from '@playwright/test'
 
-// @destructive tests (REG-001, REG-002, REG-004) replace the AEs list — always route to test container.
-// Read-only tests (REG-003, REG-005, REG-006, REG-007) use BASE_URL which defaults to production.
+// @destructive tests (REG-001, REG-002, REG-004, REG-024) replace the AEs/customers list — always route to test container.
+// Read-only tests (REG-003, REG-005, REG-006, REG-007, REG-025) use BASE_URL which defaults to production.
 const BASE_URL = process.env.BASE_URL ?? 'http://localhost:7777'
 const DESTRUCTIVE_URL = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
 
@@ -309,8 +309,8 @@ test.describe('@destructive REG-009: Domain inference re-runnable (BKL-REG-03)',
     // Accept 200 (success) or 400/409 (in-flight or no customers)
     expect([200, 400, 409]).toContain(res.status)
     if (res.status === 200) {
-      expect(res.body).toHaveProperty('total')
-      expect(typeof res.body.total).toBe('number')
+      expect(res.body).toHaveProperty('results')
+      expect(Array.isArray(res.body.results)).toBe(true)
     } else {
       expect(res.body.error).toBeTruthy()
     }
@@ -797,5 +797,143 @@ test.describe('REG-023: validate-all endpoint returns correct shape (BKL-INTEL-0
     expect(Array.isArray(body.requeued)).toBe(true)
     // validated >= flagged (can't flag more than you validated)
     expect(body.validated).toBeGreaterThanOrEqual(body.flagged)
+  })
+})
+
+// ── REG-024: identifyIndustry runs for no-account customers (BKL-INTEL-04) ──
+// BKL-INTEL-04: The BKL-AI-04 no-data guard skipped identifyIndustry for customers
+// with no account numbers and no subscriptions. identifyIndustry only needs the
+// company name — it should run regardless of account/subscription data state.
+// This test injects a customer with no accountNumbers, triggers intelligence,
+// and verifies industry identification was attempted (job step != plain "skipped (no data)"
+// without an industry call, or the customer's industry field gets populated).
+test.describe('@destructive @live REG-024: identifyIndustry runs for no-account customers (BKL-INTEL-04)', () => {
+  const TEST_CUSTOMER = 'Cisco Systems'  // Real company — Gemini can identify it via Google Search grounding
+
+  test('intelligence pipeline calls identifyIndustry even when customer has no account numbers', async () => {
+    test.setTimeout(90000) // intelligence pipeline + Gemini call can take up to 60s
+    // Step 1: Inject a test customer with no accountNumbers
+    const saveRes = await fetch(`${DESTRUCTIVE_URL}/api/setup/save-customers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customers: [{ name: TEST_CUSTOMER }] }),
+    })
+    // Accept 200 (saved) or 403 (production guard — test container not in ALLOW_RESET mode)
+    if (saveRes.status === 403) {
+      console.log('REG-024: save-customers blocked by production guard — skipping')
+      return
+    }
+    expect(saveRes.status).toBe(200)
+
+    // Step 2: Trigger intelligence generation for the test customer
+    const encodedName = encodeURIComponent(TEST_CUSTOMER)
+    const triggerRes = await fetch(`${DESTRUCTIVE_URL}/api/customer/${encodedName}/generate-intelligence`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    expect(triggerRes.status).toBe(200)
+
+    // Step 3: Poll intelligence status until complete or timeout (max 60s)
+    let finalStatus: any = null
+    for (let i = 0; i < 60; i++) {
+      await new Promise(r => setTimeout(r, 1000))
+      const statusRes = await fetch(`${DESTRUCTIVE_URL}/api/customer/${encodedName}/intelligence-status`)
+      if (!statusRes.ok) continue
+      const status = await statusRes.json()
+      if (status.status === 'complete' || status.status === 'error') {
+        finalStatus = status
+        break
+      }
+    }
+
+    expect(finalStatus).not.toBeNull()
+    expect(finalStatus.status).toBe('complete')
+
+    // Step 4: Verify identifyIndustry ran — the step should have passed through
+    // 'identifying industry (no-data path)' before reaching 'skipped (no data)'.
+    // Since we only see the final step, verify the customer object got industry populated.
+    const customersRes = await fetch(`${DESTRUCTIVE_URL}/customers`)
+    expect(customersRes.ok).toBe(true)
+    const customerList = await customersRes.json()
+    const testCustomer = (Array.isArray(customerList) ? customerList : []).find(
+      (c: any) => c.name === TEST_CUSTOMER
+    )
+
+    // The customer should exist and have an industry field set by identifyIndustry.
+    // If identifyIndustry was skipped (the old bug), industry would be undefined/null.
+    expect(testCustomer).toBeDefined()
+    expect(testCustomer.industry).toBeTruthy()
+    console.log(`REG-024: ${TEST_CUSTOMER} industry = "${testCustomer.industry}"`)
+  })
+})
+
+// ── REG-025: "Analysis skipped" entries excluded from Top Priority Actions (BKL-UX66) ──
+// BKL-UX66: skipped analyses must not appear in Top Priority Actions
+test.describe('REG-025: Skipped analyses excluded from priority actions (BKL-UX66)', () => {
+  test('territory-summary topPriorityActions contains no "Analysis skipped" entries', async () => {
+    // Fetch available product slugs first
+    const { status: prodStatus, body: products } = await getJSON('/api/products')
+    expect(prodStatus).toBe(200)
+    if (!Array.isArray(products) || products.length === 0) {
+      console.log('No products available — skipping REG-025')
+      return
+    }
+    // Check every product that has territory-summary data
+    for (const product of products) {
+      const slug = product.slug ?? product
+      const { status, body } = await getJSON(`/api/products/${slug}/territory-summary`)
+      if (status !== 200 || !body?.topPriorityActions) continue
+      const skipped = body.topPriorityActions.filter(
+        (entry: { action: string }) => entry.action?.startsWith('Analysis skipped')
+      )
+      expect(skipped).toEqual([])
+      return // tested successfully against one product
+    }
+    console.log('No product has territory-summary data — skipping REG-025')
+  })
+})
+
+// ── REG-026: Expansion Opportunities endpoint returns correct shape (BKL-PRODINTEL-04) ──
+
+test.describe('REG-026: Expansion opportunities cross-product recommendations (BKL-PRODINTEL-04)', () => {
+  test('POST expansion-opportunities returns recommendations array with correct shape', async () => {
+    test.setTimeout(90000) // Gemini generation can take up to 60s
+    const postRes = await fetch(`${BASE_URL}/api/customer/${KNOWN_CUSTOMER_ENCODED}/expansion-opportunities`, {
+      method: 'POST',
+    })
+    // Generation may fail if Gemini is not configured — accept 200 or 500
+    if (postRes.status === 500) {
+      console.log('Expansion opportunities generation failed (Gemini not configured?) — testing GET cache instead')
+    } else {
+      expect(postRes.status).toBe(200)
+      const postBody = await postRes.json()
+      expect(postBody).toHaveProperty('customerName')
+      expect(postBody).toHaveProperty('recommendations')
+      expect(postBody).toHaveProperty('generatedAt')
+      expect(Array.isArray(postBody.recommendations)).toBe(true)
+      for (const rec of postBody.recommendations) {
+        expect(rec).toHaveProperty('product')
+        expect(rec).toHaveProperty('why')
+        expect(rec).toHaveProperty('features')
+        expect(rec).toHaveProperty('confidence')
+        expect(typeof rec.product).toBe('string')
+        expect(typeof rec.why).toBe('string')
+        expect(Array.isArray(rec.features)).toBe(true)
+        expect(['HIGH', 'MEDIUM', 'LOW']).toContain(rec.confidence)
+      }
+    }
+    const getRes = await fetch(`${BASE_URL}/api/customer/${KNOWN_CUSTOMER_ENCODED}/expansion-opportunities`)
+    expect(getRes.status).toBe(200)
+    const getBody = await getRes.json()
+    if (getBody !== null) {
+      expect(getBody).toHaveProperty('recommendations')
+      expect(Array.isArray(getBody.recommendations)).toBe(true)
+    }
+  })
+
+  test('GET expansion-opportunities returns 404 for unknown customer', async () => {
+    const res = await fetch(`${BASE_URL}/api/customer/${encodeURIComponent('NonExistentCustomer12345')}/expansion-opportunities`)
+    expect(res.status).toBe(404)
   })
 })

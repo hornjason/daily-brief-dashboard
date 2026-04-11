@@ -506,7 +506,11 @@ export function registerProductIntelRoutes(app: Hono): void {
             const intel = raw.intel ?? raw
             const score = intel.relevanceScore ?? 'NONE'
             if (score in coverageBreakdown) coverageBreakdown[score]++
-            if (intel.priorityAction && intel.priorityAction !== 'Analysis unavailable') {
+            if (
+              intel.priorityAction &&
+              intel.priorityAction !== 'Analysis unavailable' &&
+              !intel.priorityAction.startsWith('Analysis skipped')
+            ) {
               priorityActions.push({
                 action: intel.priorityAction,
                 confidence: score,

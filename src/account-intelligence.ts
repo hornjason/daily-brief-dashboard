@@ -32,7 +32,7 @@ const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '
 const INTELLIGENCE_CACHE_TTL_DAYS = Number(process.env.INTELLIGENCE_CACHE_TTL_DAYS) || 7
 const INTELLIGENCE_CACHE_TTL_MS   = INTELLIGENCE_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
 
-function readIntelligenceCache(customerName: string): { company: string; industry: string; cachedAt: string; skipped?: boolean; companyDocUrl?: string; industryDocUrl?: string } | null {
+function readIntelligenceCache(customerName: string): { company: string; industry: string; industryClassification?: string; cachedAt: string; skipped?: boolean; companyDocUrl?: string; industryDocUrl?: string } | null {
   if (!JOB_CACHE_PATH) return null
   try {
     const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
@@ -999,7 +999,7 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
   const cachedIntel = readIntelligenceCache(customerName)
   if (cachedIntel?.cachedAt && !cachedIntel.skipped) {
     const age = Date.now() - new Date(cachedIntel.cachedAt).getTime()
-    if (age < INTELLIGENCE_CACHE_TTL_MS && cachedIntel.company && cachedIntel.industry) {
+    if (age < INTELLIGENCE_CACHE_TTL_MS && cachedIntel.company) {
       console.log(`[acct-intel] Skipping ${customerName} — cache is ${Math.round(age / 86400000)}d old (TTL: ${INTELLIGENCE_CACHE_TTL_DAYS}d)`)
 
       // BKL-ENRICH-01: If customers.json is missing industry/segment (e.g., after a data wipe),
@@ -1032,15 +1032,38 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
   const sheetData = readSheetCache(customerName)
   const subscriptions = sheetData?.rows ?? []
   if (accountNumbers.length === 0 && subscriptions.length === 0) {
-    const existingStub = readIntelligenceCache(customerName)
-    if (!existingStub?.skipped) {
+    // BKL-INTEL-04: identifyIndustry only needs the company name — run it even for no-data customers
+    if (!(customer as any).industry) {
+      setJob(jobId, { ...jobs.get(jobId)!, status: 'running', step: 'identifying industry (no-data path)', startedAt: new Date().toISOString() })
+      try {
+        const industryResult = await identifyIndustry(customerName)
+        cacheIndustryResult(customerName, industryResult)
+        console.log(`[acct-intel] Industry identified for ${customerName} (no-data path): ${industryResult.industry}`)
+      } catch (e: any) {
+        console.warn(`[acct-intel] identifyIndustry failed for ${customerName}:`, e?.message ?? e)
+      }
+    }
+
+    const existingCache = readIntelligenceCache(customerName)
+    if (!existingCache?.skipped) {
       console.log(`[acct-intel] Skipping ${customerName} — no account numbers or subscriptions; writing stub`)
       if (JOB_CACHE_PATH) {
         try {
           const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
           mkdirSync(intelligenceDir, { recursive: true })
           const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-          writeFileSync(`${intelligenceDir}/${slug}.json`, JSON.stringify({ customerName, company: '', industry: '', cachedAt: new Date().toISOString(), skipped: true, skipReason: 'No account numbers or subscriptions' }), { mode: 0o600 })
+          // Preserve existing company/industry docs if present (customer may have lost account numbers after initial run)
+          writeFileSync(`${intelligenceDir}/${slug}.json`, JSON.stringify({
+            customerName,
+            company: existingCache?.company ?? '',
+            industry: existingCache?.industry ?? '',
+            industryClassification: (customer as any).industry ?? existingCache?.industryClassification ?? '',
+            cachedAt: new Date().toISOString(),
+            skipped: true,
+            skipReason: 'No account numbers or subscriptions',
+            ...(existingCache?.companyDocUrl ? { companyDocUrl: existingCache.companyDocUrl } : {}),
+            ...(existingCache?.industryDocUrl ? { industryDocUrl: existingCache.industryDocUrl } : {}),
+          }), { mode: 0o600 })
         } catch (e: any) { console.warn('[acct-intel] Stub cache write failed:', e.message) }
       }
     } else {
@@ -1109,6 +1132,7 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
               customerName,
               company: companyBrief ?? '',
               industry: industryAnalysis ?? '',
+              industryClassification: industryResult.industry,
               cachedAt: new Date().toISOString(),
               companyDocUrl: docUrls.companyDocUrl,
               industryDocUrl: docUrls.industryDocUrl,

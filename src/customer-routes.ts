@@ -18,6 +18,7 @@ import { queryProductIntelligence } from './product-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
 import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS, toSlug, isCCSPCacheStale } from './cache-layer.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
+import { getCachedExpansionOpportunities, generateExpansionOpportunities, toCustomerSlug as toExpansionSlug } from './expansion-opportunities.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
 import { generateAndSaveAccountPlan, readAccountPlan } from './account-plan.ts'
 import { getAiConfig } from './settings-api.ts'
@@ -603,6 +604,31 @@ export function registerCustomerRoutes(app: Hono): void {
     const status = getJobStatus(customer.name)
     if (!status) return c.json({ status: 'none', message: 'No intelligence generation job found for this customer' })
     return c.json(status)
+  })
+
+  // ── BKL-PRODINTEL-04: Expansion Opportunities (cross-product proactive recommendations) ──
+  app.get('/api/customer/:name/expansion-opportunities', (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+    const slug = toExpansionSlug(customer.name)
+    const cached = getCachedExpansionOpportunities(slug)
+    if (!cached) return c.json(null)
+    return c.json(cached)
+  })
+
+  app.post('/api/customer/:name/expansion-opportunities', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+    try {
+      const slug = toExpansionSlug(customer.name)
+      const result = await generateExpansionOpportunities(slug)
+      return c.json(result)
+    } catch (e: any) {
+      console.error(`[expansion-opps] POST /api/customer/${rawName}/expansion-opportunities error:`, sanitizeErr(e))
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
   })
 
   // GET /api/intelligence/status — global intelligence run status (polled by AdminPage)

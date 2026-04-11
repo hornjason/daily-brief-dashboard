@@ -29,7 +29,7 @@ DATA   := $(CURDIR)/data
        dev-snapshot dev-up dev-down dev-logs \
        seed test-up test-down test-logs lint \
        pre-promote \
-       demo-snapshot demo-up demo-down demo-logs \
+       demo-snapshot demo-up demo-down demo-logs demo-export \
        all-down all-ps
 
 up: down
@@ -263,6 +263,36 @@ demo-down:
 
 demo-logs:
 	podman logs -f pai-dashboard-demo
+
+# ── Demo export (ship to another machine) ────────────────────────────────────
+# Creates demo-export.tar.gz with safe data only (no OAuth tokens, no RH profile).
+# On target machine: tar xzf demo-export.tar.gz && podman load -i demo-image.tar && make demo-up
+demo-export:
+	@echo "Packaging demo data (safe files only — no OAuth tokens or RH profile)..."
+	@mkdir -p /tmp/pai-demo-export/data/config /tmp/pai-demo-export/data/cache
+	@cp $(CURDIR)/data/config/aes.json /tmp/pai-demo-export/data/config/
+	@cp $(CURDIR)/data/config/customers.json /tmp/pai-demo-export/data/config/
+	@cp $(CURDIR)/data/config/settings.json /tmp/pai-demo-export/data/config/
+	@cp $(CURDIR)/data/config/product-intel-config.json /tmp/pai-demo-export/data/config/
+	@cp $(CURDIR)/data/config/product-alerts.json /tmp/pai-demo-export/data/config/
+	@cp $(CURDIR)/data/config/bootstrap-history.json /tmp/pai-demo-export/data/config/ 2>/dev/null || true
+	@cp $(CURDIR)/data/config/data-sources.json /tmp/pai-demo-export/data/config/ 2>/dev/null || true
+	@cp -r $(CURDIR)/data/cache/intelligence /tmp/pai-demo-export/data/cache/
+	@cp -r $(CURDIR)/data/cache/product-intel /tmp/pai-demo-export/data/cache/
+	@tar czf $(CURDIR)/demo-export.tar.gz -C /tmp/pai-demo-export .
+	@podman save localhost/daily-brief-dashboard:latest -o $(CURDIR)/demo-image.tar
+	@rm -rf /tmp/pai-demo-export
+	@echo ""
+	@echo "Done. Two files ready to copy to demo machine:"
+	@echo "  demo-export.tar.gz  — customer + intelligence data (~10MB)"
+	@echo "  demo-image.tar      — container image"
+	@echo ""
+	@echo "On demo machine:"
+	@echo "  1. Copy both files + this Makefile + .env (with GEMINI_API_KEY)"
+	@echo "  2. podman load -i demo-image.tar"
+	@echo "  3. mkdir -p data && tar xzf demo-export.tar.gz -C data"
+	@echo "  4. make demo-up"
+	@echo "  5. Open http://localhost:7779 — go through Google Auth once, then done"
 
 # ── Demo tunnel (Cloudflare) ─────────────────────────────────────────────────
 # Requires: brew install cloudflare/cloudflare/cloudflared

@@ -104,6 +104,13 @@ See `docs/DATA-RULES.md` — read before touching cache, sheets, or territory sy
 - Marcus writes the test in the same session as the fix, before closing the backlog item
 - No backlog item moves to DONE without a corresponding test added or a documented reason why it's untestable
 
+**"Can we test for that?" — MANDATORY after every bug find or report (Zero exceptions):**
+- Whenever a bug is found (by any agent, by Jason, or during investigation) — immediately ask or answer: "Can we test for this?"
+- Whenever Jason reports an issue — before proposing a fix, ask: "Can we test for that?"
+- If testable: Marcus writes the regression test in the same session as the fix
+- If not easily testable: document why in the backlog item and propose the closest proxy test
+- This question is not optional. Skipping it is a process failure.
+
 **Quinn Standard:** `~/.claude/PAI/Testing/QUINN-STANDARD.md` — Quinn reads this at session start before any testing. Defines mandatory sequence: load registry → run Playwright baseline → visual review → capture findings.
 
 **Quinn Registry:** `~/.claude/PAI/Testing/registries/dailybriefdashboard.md` — accumulating list of known issues and visual findings. Quinn checks every entry each session and appends new findings.

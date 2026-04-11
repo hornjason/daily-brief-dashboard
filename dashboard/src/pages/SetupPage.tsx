@@ -2153,11 +2153,11 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
       if (currentStatus.loginInProgress) {
         // Login already running — just open VNC tab, skip POST
         loginStartedRef.current = true
-        window.open('http://localhost:6080', '_blank')
+        window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', '_blank')
       } else {
         // Start a new login, then open VNC tab
         await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(e => console.warn('[rh-auth] start failed:', e))
-        window.open('http://localhost:6080', '_blank')
+        window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', '_blank')
       }
       // Poll will detect completion and flip to Connected
     } catch {

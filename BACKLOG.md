@@ -9,7 +9,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-10 (BKL-REG-10 added + closed DONE; intelligence cache-skip path now persists and restores doc URLs across container restarts)
+Last update: 2026-04-11 (BKL-INTEL-04 added + closed DONE; identifyIndustry now runs for no-data customers in early-exit path)
 
 ---
 
@@ -4869,6 +4869,26 @@ Files: dashboard/src/pages/SetupPage.tsx — PodBootstrapSection
 Description: Once Territory Sheet ID, SF Report ID, and Parent Drive Folder are all filled in, show a Google Drive folder preview (similar to the single-AE bootstrap folder preview) so the user can confirm they've selected the right parent folder before clicking Bootstrap POD. Should use the same Drive folder name lookup pattern already used in AutoBootstrapForm.
 Decision: DONE — Added folderName/folderError state + onBlur handler calling /api/aes/validate-folder in PodBootstrapSection. Border turns green + shows "✓ FolderName" on success; red + error on failure. Matches existing AutoBootstrapForm pattern exactly.
 
+### BKL-SEC-07 | Expansion Opportunities — prompt injection hardening (P2 x3)
+Status: 🔴 OPEN 2026-04-11
+Severity: MEDIUM (P2)
+Priority: P2
+Size: S
+Source: Rook scan 2026-04-11 post-BKL-PRODINTEL-04
+Files: src/expansion-opportunities.ts
+
+Description: Three unsanitized inputs in the Gemini prompt assembly:
+
+1. **SEC-EXP-01 — `expansionCachePath()` missing slug guard** (line 47): `briefCachePath()` in `cache-layer.ts:28` throws on non-`[a-zA-Z0-9_-]` chars after slugification. `expansionCachePath` trusts `toCustomerSlug` output without defense-in-depth validation. Fix: add the same post-slug regex check.
+
+2. **SEC-EXP-02 — `intelCache.company` / `intelCache.industry` unsanitized** (line ~213): Injected directly via `.slice()`. Subscription summary and pipeline text both call `sanitizePromptInput()` — intel cache fields do not. Fix: wrap both with `sanitizePromptInput(intelCache.company, 6000)` and `sanitizePromptInput(intelCache.industry, 2000)`.
+
+3. **SEC-EXP-03 — `driveDocsContext` raw injection** (loadDriveDocsContext line ~92): `f.name` and `f.textContent` from Drive docs concatenated with no sanitization. Drive docs are third-party content — highest prompt injection risk in the whole prompt assembly. Fix: apply `sanitizePromptInput` to both `f.name` and `f.textContent` inside `loadDriveDocsContext`.
+
+Pattern sibling: inline slug formula duplicated at `customer-routes.ts:200` and `:389` — same P2 gap as SEC-EXP-01. Consider extracting to a single validated slug helper.
+
+---
+
 ### BKL-SEC-06 | bootstrapPOD retry silently no-ops on 409 instead of waiting
 Status: ✅ DONE — 2026-04-08
 Severity: LOW
@@ -6174,6 +6194,15 @@ Recommended: Option 1 (post-generation check) as the permanent fix + Option 3 (A
 
 Decision (2026-04-11): Intelligence docs should be generated once at bootstrap and only regenerated on explicit manual trigger or when doc is detected as empty. No automatic scheduled regeneration. TTL guard (7d) already prevents unnecessary regeneration. Validation (BKL-INTEL-03) should only re-queue if doc content < 5 lines — not on any recurring schedule.
 
+### BKL-INTEL-04 | identifyIndustry skipped for no-account customers — fixed
+Status: ✅ DONE 2026-04-11
+Priority: P1 | Type: Bug Fix
+Source: DA — 2026-04-11
+Files: src/account-intelligence.ts
+Description: The BKL-AI-04 no-data early-exit guard skipped the entire intelligence pipeline for customers with no account numbers and no subscriptions. This was correct for Drive doc generation (which needs subscription data), but incorrectly also skipped `identifyIndustry()` which only needs the customer name. Result: 36 customers never got industry/segment populated.
+Fix: Added `identifyIndustry()` call inside the no-data guard path, before writing the stub cache. Runs for any customer missing industry data regardless of account/subscription state. Industry result is also written into the stub cache JSON.
+Decision: Minimal surgical fix — identifyIndustry runs in the no-data path before the stub write and early return. No restructuring of the async pipeline block.
+
 ### BKL-PRODINTEL-01 | Product Intelligence NONE state — use account intelligence context for expansion analysis
 Status: ✅ DONE
 Priority: P1 | Type: Feature Enhancement
@@ -6234,6 +6263,26 @@ Fix: Converted the ProductCard header from a single full-width button to a flex 
 
 ---
 
+### BKL-PRODINTEL-04 | Expansion Opportunities — cross-product recommendations block on Customer Detail
+Status: ✅ DONE 2026-04-11
+Priority: P1 | Type: Feature
+Source: Jason — 2026-04-11
+Files: src/expansion-opportunities.ts (new), src/customer-routes.ts, dashboard/src/components/ProductIntelSection.tsx, test/regression.spec.ts (REG-026)
+
+Description: New "Expansion Opportunities" block at the top of the Product Intelligence section on Customer Detail page. Gemini cross-references all available signals (intelligence cache, subscriptions, cases, Drive docs, feature caches) to recommend up to 3 Red Hat products the customer does not currently subscribe to. Each recommendation includes: product name, why sentence citing specific signal evidence, 2–3 feature chips, confidence badge (HIGH/MEDIUM/LOW).
+
+API:
+- GET /api/customer/:name/expansion-opportunities — returns cached result or null
+- POST /api/customer/:name/expansion-opportunities — generates and caches
+
+Cache: data/cache/intelligence/{slug}-expansion.json
+
+Decision: Implemented as standalone module + two new routes + new UI block at top of Product Intel section. Generate/Regenerate button per customer. "Generate All" also triggers expansion. Empty state handled gracefully. REG-026 validates endpoint shape.
+
+QA: Quinn Torres — PASS 2026-04-11. All 5 criteria validated. Recommendations include real signal grounding (CEO quotes, hiring data, IT strategy). Visual distinction from per-product rows confirmed.
+
+---
+
 ### BKL-DATA-03 | Customer Drive folder IDs not stored — fuzzy name match fails for some customers
 Status: ✅ DONE 2026-04-11
 Priority: P1 | Type: Bug
@@ -6281,3 +6330,29 @@ Cost model: ~$0 marginal (PAI CLI already running) vs ~$3.25 Gemini for 106 cust
 Consideration: Grounded search (Google Search API) is only available via Gemini — Claude cannot web-search. Product intel summaries and company profiles that rely on current web data would have lower accuracy without grounding. Hybrid approach possible: use Claude for structure/reasoning, Gemini only for the web-search-dependent calls.
 
 Decision: Research before implementing — evaluate quality tradeoff and whether ungrounded Claude output is acceptable for initial seeding.
+
+### BKL-UX63 | Setup page Step 3 vs Step 5 show conflicting RH Portal connection state
+- Status: OPEN
+- Priority: P3
+- Source: Jason caught 2026-04-11 — Step 3 shows "Connected", Step 5 shows "Not connected" for same expired session
+- Description: `RedHatPortalSection` (Step 3) shows "Connected" when `hasSession=true` regardless of `sessionExpired` (per BKL-UX60 intent). Data Sources panel (Step 5) uses `hasSession && !sessionExpired` — stricter. When session expires, both show at same time, confusing the user about true state. Fix: align Step 3 to show "Session expired — reconnect" state when `sessionExpired:true`, or reconcile logic so both panels agree.
+
+### BKL-UX65 | Step 5 Data Sources header stays "Checking..." forever — never resolves
+- Status: OPEN
+- Priority: P2
+- Source: Quinn audit 2026-04-11
+- Description: The Step 5 "Data Sources" accordion header badge shows "Checking..." indefinitely and never flips to a resolved state (e.g., "2 of 4 connected" or "Ready"). Tableau connection card inside also stays "Checking..." permanently. Nielsen #1 violation — user cannot get a quick at-a-glance read on data source status. The `dataSourcesHealth` state may never transition from 'loading' if any individual connection check hangs (Tableau in particular since it requires CCSP + session data).
+
+### BKL-UX66 | "Analysis skipped" entries appear in Top Priority Actions on Products page
+- Status: DONE (fixed this session)
+- Priority: P2
+- Source: Code review 2026-04-11 — filter only excluded 'Analysis unavailable', not 'Analysis skipped' variants
+- Fix: Added `!intel.priorityAction.startsWith('Analysis skipped')` guard in product-intel-routes.ts territory-summary endpoint
+- Test: REG-025 in regression.spec.ts
+
+### BKL-UX64 | Settings sections show blank while loading — no loading indicator
+- Status: ✅ DONE 2026-04-11
+- Priority: P2
+- Source: Jason caught 2026-04-11 — accordion opens to blank content while API fetch in-flight
+- Fix: Added Loader2 spinner to AiIntelligenceSettings, AutomationSettings, RefreshTimerSettings while draft=null
+- Files: `dashboard/src/components/AiIntelligenceSettings.tsx`, `AutomationSettings.tsx`, `RefreshTimerSettings.tsx`

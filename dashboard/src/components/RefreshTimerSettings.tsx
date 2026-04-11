@@ -24,7 +24,12 @@ export function RefreshTimerSettings() {
       .catch(() => {})
   }, [])
 
-  if (!draft) return null
+  if (!draft) return (
+    <div className="flex items-center gap-2 text-text-secondary text-sm py-6">
+      <Loader2 className="w-4 h-4 animate-spin" />
+      Loading settings...
+    </div>
+  )
 
   const handleSave = async () => {
     setSaving(true); setError(null)
