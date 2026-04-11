@@ -5644,7 +5644,7 @@ Decision: Council consensus. Blocked on PR1 shipping + 1 week of failure data.
 ## Data Enrichment
 
 ### BKL-ENRICH-01 | Industry/segment tags missing on all 106 customers — enrichment never ran on SW pod
-Status: 🟡 IN PROGRESS 2026-04-11 — 58/106 populated; 27 failing with JSON parse; cache-fresh bug fixed
+Status: ✅ DONE 2026-04-11 — 102/106 populated; 4 missing (Rxlogix, Corelogic Systems, Hyundai Motor America, Pcm — data gap, no Drive folder); cache-fresh bug fixed + Strategy 4 Gemini fallback added
 Severity: HIGH
 Priority: P1
 Size: S
@@ -5652,7 +5652,7 @@ Source: Jason 2026-04-10 — confirmed 0/106 customers have industry field despi
 Files: src/account-intelligence.ts (identifyIndustry, cacheIndustryResult), data/config/customers.json
 Description: BKL-AI01 (industry/segment detection via Gemini + Google Search) was marked DONE 2026-04-02 but that was on the NW pod test data. The SW pod has 106 customers and 0/106 have the `industry` field in customers.json. The code exists (identifyIndustry() at account-intelligence.ts:114, cacheIndustryResult() at line 156) but the enrichment batch has never run for this pod. Industry/segment is required for intelligence prompt templating (BKL-AI02, BKL-AI03) and will eventually power dashboard filtering.
 Fix: Trigger POST /api/intelligence/generate-all or run identifyIndustry() in batch for all 106 customers. Verify customers.json has `industry` + `segment` fields after run. Check intelligenceEnabled flag in data-sources.json — may need to set to true first.
-Decision: OPEN — run enrichment batch, verify all customers populated.
+Decision: DONE — cache-fresh bug fixed (re-run identifyIndustry when customers.json missing industry despite fresh Drive cache). Strategy 4 Gemini fallback added (non-grounded structured call when grounded API returns pure prose). Final count: 102/106 populated. 4 remaining (Rxlogix, Corelogic Systems, Hyundai Motor America, Pcm) have no Drive folder — data gap, not code bug. JSON parse failures eliminated (was 27/106, now 0).
 
 ### BKL-INTEL-01 | Intelligence docs accumulate duplicates — always delete all + create fresh
 Status: ✅ DONE 2026-04-11
