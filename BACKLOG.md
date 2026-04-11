@@ -6060,3 +6060,43 @@ Source: Jason — 2026-04-10 testing session
 Files: src/customer-routes.ts, src/bootstrap-orchestrator.ts
 Description: After bootstrap, `POST /api/intelligence/generate-all` was triggered (BKL-AI07) but there was no equivalent trigger for brief pre-generation. Newly bootstrapped customers had no cached brief until a user navigated to their detail page. The background scheduler's startup pregen ran only once at server start, missing customers added post-startup.
 Decision: DONE — Added `POST /api/briefs/pregen-all` endpoint in customer-routes.ts. Uses same pattern as background-scheduler.ts brief-pregen: skips customers with existing cache, 10s gap between customers, fire-and-forget. Added non-blocking trigger in bootstrap-orchestrator.ts after the intelligence batch trigger. Always safe to call — the endpoint is idempotent (no-ops for cached customers).
+
+### BKL-REG-12 | Admin page missing from sidebar — no Admin nav item, Settings navigated to AdminPage
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P0
+Size: S (1h)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/components/Sidebar.tsx
+Description: Sidebar had no "Admin" nav item. The "Settings" item was navigating to `/dashboard/admin` (AdminPage) via `navigate()`, while also calling `onActiveChange('Settings')`, causing the Dashboard to show the inline Settings panel. This made AdminPage unreachable from the sidebar. Route `/dashboard/admin` was correctly registered in App.tsx but the sidebar link was mislabeled and conflicted with the inline panel.
+Decision: DONE — Added dedicated "Admin" nav item with ShieldCheck icon that navigates to `/dashboard/admin` without calling `onActiveChange`. Settings button now only triggers the inline settings panel (button onClick only, no navigate). Admin item highlights when pathname is `/dashboard/admin`.
+
+### BKL-REG-13 | Account plan shows "Failed to start generation" — swallows actual server error
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P0
+Size: XS (30m)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/components/AccountPlanPanel.tsx
+Description: The catch block in `handleGenerate()` used a hardcoded generic message "Failed to start generation" for ALL error paths — network failures, non-JSON responses (HTML error pages from 503s), and JSON parse failures. The actual server error (e.g. missing config files, Drive auth failures) was invisible to the user.
+Decision: DONE — Split error handling into three specific paths: (1) non-JSON response shows HTTP status + statusText, (2) server JSON error shows actual `data.error` message (was already handled, kept as-is), (3) network/thrown exceptions show the actual error message. All three paths surface diagnostic information without requiring log access.
+
+### BKL-REG-14 | Product Intelligence section collapses after generating a NONE-scored product
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P0
+Size: XS (30m)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/components/ProductIntelSection.tsx
+Description: NONE-scored product intel from the API may return objects with missing array fields (roadmapRelevance, expansionOpportunities, caseAlignment as undefined instead of []). ProductCard accessed `.length` directly on these fields without optional chaining, causing a React render crash. With no error boundary, the entire Product Intelligence section unmounted silently. BKL-REG-11 added NONE to visibleSlugs correctly but did not guard the array access.
+Decision: DONE — All four array fields (roadmapRelevance, expansionOpportunities, caseAlignment, featureTalkingPoints) now use `?? []` fallback in both the guard condition and the .map() call. Component no longer crashes on sparse NONE results.
+
+### BKL-REG-15 | Segment field hidden on customer detail page — no fallback for missing data
+Status: ✅ DONE 2026-04-10
+Severity: MEDIUM
+Priority: P1
+Size: XS (15m)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/pages/CustomerDetailPage.tsx
+Description: The segment badge was rendered only when `meta?.segment` was truthy. Since 104/106 customers have no `segment` field populated in customers.json (enrichment batch BKL-ENRICH-01 not yet run), the badge was never visible. The industry field was not in the Customer data model or SSE meta event at all. Users had no way to see that the field exists but lacks data.
+Decision: DONE — Segment badge now renders whenever `meta` loads (not null), with accent styling when populated and muted '—' when empty. This makes the data gap explicit and visible. Industry field deferred — not in Customer type or SSE meta; requires BKL-ENRICH-01 to add field to data model before UI can display it.
