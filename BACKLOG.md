@@ -6120,3 +6120,23 @@ Source: Jason — 2026-04-10 testing session
 Files: dashboard/src/pages/CustomerDetailPage.tsx
 Description: BKL-REG-15 added a fallback rendering the segment badge with a grey muted style and "—" when segment is null/empty. This looked broken — a ghost badge with no real data. 104/106 customers have no segment populated so the grey badge appeared on nearly every customer detail page.
 Decision: DONE — Segment badge now only renders when meta.segment is populated (truthy). When segment is null/empty, the badge is hidden entirely. No grey ghost badge.
+
+### BKL-REG-18 | Pipeline (Salesforce) sync status disappears after Sync Now completes
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P1
+Size: XS (15m)
+Source: Jason — recurring regression, 2026-04-10
+Files: dashboard/src/pages/SetupPage.tsx
+Description: After clicking "Sync Now" on the Pipeline (Salesforce) data source card, the status line showed "Syncing…" then disappeared instead of showing "✓ Synced X rows". Root cause: in `handleSfSync`, the `fetch('/api/auth/salesforce/status')` call inside the poll's `!s.running` branch was fire-and-forget — `resolve()` fired before the fetch settled, so `setSfSyncing(false)` ran in `finally` before `setSfStatus` updated. During that window `sfStatus.lastSync` was still stale/null, so the conditional render showed "Pipeline data" fallback. Additionally, the status block had duplicate renderings (lines 3028-3029 and 3033-3036 both rendering sync result).
+Decision: DONE — Restructured poll resolution: `resolve()` now fires inside `.then()` after `setSfStatus(data)` completes, eliminating the race condition. Added "Syncing…" indicator while `sfSyncing || scraperRunning.salesforce` is true. Consolidated duplicate status render into single conditional with clear "✓ Synced X rows" / age-based display.
+
+### BKL-DATA-02 | Many customers show "acme.com" domain placeholder — domain inference incomplete
+Status: 🔴 OPEN
+Severity: MEDIUM
+Priority: P2
+Size: XS (trigger only)
+Source: Jason — Setup wizard screenshot, 2026-04-10
+Files: data/config/customers.json, src/domain-inferrer.ts
+Description: Approximately half of customers in the Setup wizard show "acme.com" as their domain. Domain inference either did not run for all customers during initial bootstrap, or ran but left some as placeholder when no domain could be resolved. This is a data gap, not a code bug — the inference logic exists and the Admin page "Run Now" button triggers it.
+Fix: Admin page → Domain Inference → Run Now (or POST /api/setup/infer-domains). No code change needed. After running, customers with resolvable company names will have real domains; edge cases may need manual override in customers.json.

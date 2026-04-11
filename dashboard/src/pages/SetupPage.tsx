@@ -2562,15 +2562,18 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       const res = await fetch('/api/refresh/pipeline', { method: 'POST' })
       const d = await res.json()
       if (d.error) { setSfSyncError(d.error); setSfSyncing(false); return }
-      // Poll status endpoint until scraper finishes
+      // Poll status endpoint until scraper finishes, then refresh sfStatus before resolving
       const poll = () => new Promise<void>((resolve) => {
         const iv = setInterval(async () => {
           try {
             const s = await fetch('/api/scrape/salesforce/status').then(r => r.json())
             if (!s.running) {
               clearInterval(iv)
-              fetch('/api/auth/salesforce/status').then(r => r.json()).then(setSfStatus).catch(() => {})
-              resolve()
+              // Await status refresh so sfStatus is updated before setSfSyncing(false) fires
+              fetch('/api/auth/salesforce/status')
+                .then(r => r.json())
+                .then(data => { setSfStatus(data); resolve() })
+                .catch(() => resolve())
             }
           } catch { clearInterval(iv); resolve() }
         }, 2_000)
@@ -3025,15 +3028,16 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
           <div className="flex items-center justify-between py-3">
             <div>
               <p className="text-sm text-white">Pipeline (Salesforce)</p>
-              {sfStatus?.lastSync ? (
-                <p className={`text-xs ${isRecent(sfStatus.lastSync) ? 'text-success' : 'text-text-secondary'}`}>Synced {timeAgo(sfStatus.lastSync)} — {sfStatus.rowCount}</p>
+              {(sfSyncing || scraperRunning.salesforce) ? (
+                <p className="text-xs text-warning">Syncing…</p>
+              ) : sfStatus?.lastSync ? (
+                <p className={`text-xs ${isRecent(sfStatus.lastSync) ? 'text-success' : 'text-text-secondary'}`}>
+                  {isRecent(sfStatus.lastSync)
+                    ? `✓ Synced ${timeAgo(sfStatus.lastSync)}${sfStatus.rowCount ? ` — ${sfStatus.rowCount} rows` : ' — 0 rows'}`
+                    : `Synced ${timeAgo(sfStatus.lastSync)}${sfStatus.rowCount ? ` — ${sfStatus.rowCount}` : ''}`}
+                </p>
               ) : (
                 <p className="text-xs text-text-secondary">Pipeline data</p>
-              )}
-              {isRecent(sfStatus?.lastSync) && (
-                sfStatus?.rowCount
-                  ? <p className="text-xs text-success">✓ Synced — {sfStatus.rowCount} rows</p>
-                  : <p className="text-xs text-warning">⚠ Synced but returned 0 rows</p>
               )}
             </div>
             <div className="flex items-center">
