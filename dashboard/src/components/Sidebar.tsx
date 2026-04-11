@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Sun,
   Package,
+  ShieldCheck,
 } from 'lucide-react'
 
 const navItems = [
@@ -217,23 +218,20 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
           )}
         </div>
 
+        {/* Settings — inline panel (stays within Dashboard) */}
         <div className="relative group">
-          <a
-            href="/dashboard/admin"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/dashboard/admin')
-            }}
+          <button
+            onClick={() => onActiveChange('Settings')}
             aria-label="Settings"
             className={`${btnBase} ${
-              location.pathname === '/dashboard/admin'
+              active === 'Settings' && !location.pathname.startsWith('/dashboard/admin')
                 ? 'bg-accent/10 text-accent'
                 : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
             }`}
           >
             <Settings className="w-4 h-4 shrink-0" />
             {!collapsed && <span className="whitespace-nowrap">Settings</span>}
-          </a>
+          </button>
           {collapsed && (
             <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
               Settings
@@ -258,6 +256,31 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
             )}
           </div>
         )}
+
+        {/* Admin — navigates to dedicated AdminPage */}
+        <div className="relative group">
+          <a
+            href="/dashboard/admin"
+            onClick={(e) => {
+              e.preventDefault()
+              navigate('/dashboard/admin')
+            }}
+            aria-label="Admin"
+            className={`${btnBase} ${
+              location.pathname === '/dashboard/admin'
+                ? 'bg-accent/10 text-accent'
+                : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            {!collapsed && <span className="whitespace-nowrap">Admin</span>}
+          </a>
+          {collapsed && (
+            <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
+              Admin
+            </span>
+          )}
+        </div>
       </nav>
 
       {/* Footer */}
