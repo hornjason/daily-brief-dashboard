@@ -27,7 +27,7 @@ import { getCachedCustomerDocsCorpus } from './customer-docs-corpus.ts'
 export interface CustomerProductIntel {
   product: string              // slug
   customer: string
-  relevanceScore: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'
+  relevanceScore: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE' | 'EXPANSION'
   priorityAction: string
   roadmapRelevance: {
     feature: string
@@ -52,6 +52,7 @@ export interface CustomerProductIntel {
     reason: string        // why this matters for this customer
     signalSource: string  // cites specific case#/SKU/doc/brief topic
   }[]
+  initiativeAlignment?: string[]  // 1-3 sentences mapping product to specific customer goals/initiatives
   generatedAt: string
   productCacheHash: string
 }
@@ -175,6 +176,176 @@ function defaultIntel(slug: string, customerName: string, productCacheHash: stri
   }
 }
 
+// ── Expansion analysis (BKL-PRODINTEL-01) ────────────────────────────────────
+
+/**
+ * When a customer has no matching subscriptions for a product but has
+ * intelligence cache, run a lightweight Gemini call to assess product fit
+ * based on company profile, industry context, and technology landscape.
+ */
+async function generateExpansionAnalysis(opts: {
+  slug: string
+  productConfig: ProductConfig
+  customerName: string
+  customerSlug: string
+  accountIntel: { company: string; industry: string }
+  productCacheHash: string
+}): Promise<CustomerProductIntel> {
+  const { slug, productConfig, customerName, customerSlug, accountIntel, productCacheHash } = opts
+
+  // Check cache first — keyed on intelligence content hash
+  const contentHash = createHash('sha256')
+    .update('expansion-v1')
+    .update(accountIntel.company.slice(0, 500))
+    .update(accountIntel.industry.slice(0, 200))
+    .update(slug)
+    .digest('hex')
+    .slice(0, 16)
+
+  const cachePath = customerIntelCachePath(slug, customerSlug)
+  try {
+    if (existsSync(cachePath)) {
+      const cached: CustomerIntelCache = JSON.parse(readFileSync(cachePath, 'utf-8'))
+      if (cached.contentHash === contentHash) {
+        console.log(`[customer-product-intel] expansion cache hit for ${slug}/${customerSlug}`)
+        return cached.intel
+      }
+    }
+  } catch { /* cache miss — regenerate */ }
+
+  const project  = process.env.GOOGLE_CLOUD_PROJECT
+  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+
+  if (!project) {
+    console.warn('[customer-product-intel] GOOGLE_CLOUD_PROJECT not set — skipping expansion analysis')
+    return makeExpansionDefault(slug, customerName, productCacheHash)
+  }
+
+  const systemPrompt = `You are a Red Hat Solutions Architect expansion analyzer. Given a company's profile and industry context, assess whether a specific Red Hat product would be relevant for them — even though they don't currently subscribe to it.
+
+Rules:
+- Be specific to this company — cite details from their profile (initiatives, tech stack, industry pressures)
+- Identify concrete use cases where this product would add value
+- If the product is genuinely not relevant, say so honestly
+- Output valid JSON only matching the schema provided`
+
+  const userPrompt = `PRODUCT: ${productConfig.displayName} (${productConfig.shortName})
+Product description: ${(productConfig as any).description ?? productConfig.displayName}
+
+CUSTOMER: ${customerName}
+(This customer does NOT currently subscribe to ${productConfig.displayName})
+
+--- Company Profile ---
+${accountIntel.company.slice(0, 6000)}
+
+--- Industry Context ---
+${accountIntel.industry.slice(0, 2000)}
+
+Assess whether ${productConfig.displayName} would be relevant for ${customerName} and provide specific expansion use cases.
+
+OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
+{
+  "isRelevant": true/false,
+  "priorityAction": "one sentence: why SA should explore this product with the customer — cite specific company initiative or industry trend",
+  "expansionOpportunities": [{"gap": "what the customer is missing", "product": "${productConfig.displayName}", "rationale": "why this product fits — cite specific company/industry signal"}],
+  "rationale": "2-3 sentence summary of the expansion case"
+}`
+
+  try {
+    const token = await getGeminiToken()
+    // Use gemini-2.5-flash-lite for cost-optimized supplementary analysis
+    const expansionModel = 'gemini-2.5-flash-lite'
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${expansionModel}:generateContent`
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(30_000),
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 2048,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      console.error(`[customer-product-intel] expansion Gemini error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
+      const fallback = makeExpansionDefault(slug, customerName, productCacheHash)
+      writeCustomerIntelCache(slug, customerSlug, contentHash, fallback)
+      return fallback
+    }
+
+    const json = await res.json() as any
+
+    // Record token usage
+    const usage = json.usageMetadata
+    if (usage) {
+      recordGeminiUsage({
+        timestamp:    new Date().toISOString(),
+        callType:     'customer-product-intel-expansion',
+        customerName,
+        inputTokens:  usage.promptTokenCount ?? 0,
+        outputTokens: usage.candidatesTokenCount ?? 0,
+        model:        'gemini-2.5-flash-lite',
+      })
+    }
+
+    const parts: any[] = json.candidates?.[0]?.content?.parts ?? []
+    const text = parts.map((p: any) => p.text ?? '').join('\n').trim()
+    const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)
+
+    if (jsonMatch) {
+      try {
+        const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0])
+        const intel: CustomerProductIntel = {
+          product: slug,
+          customer: customerName,
+          relevanceScore: parsed.isRelevant ? 'EXPANSION' : 'NONE',
+          priorityAction: parsed.priorityAction ?? 'Expansion analysis — no current subscription',
+          roadmapRelevance: [],
+          expansionOpportunities: Array.isArray(parsed.expansionOpportunities) ? parsed.expansionOpportunities : [],
+          caseAlignment: [],
+          competitiveAngle: null,
+          featureTalkingPoints: [],
+          generatedAt: new Date().toISOString(),
+          productCacheHash,
+        }
+        writeCustomerIntelCache(slug, customerSlug, contentHash, intel)
+        return intel
+      } catch (parseErr: any) {
+        console.warn(`[customer-product-intel] expansion JSON parse failed for ${slug}/${customerSlug}:`, parseErr?.message)
+      }
+    }
+  } catch (e: any) {
+    console.error(`[customer-product-intel] expansion Gemini call failed for ${slug}/${customerSlug}:`, e?.message)
+  }
+
+  const fallback = makeExpansionDefault(slug, customerName, productCacheHash)
+  writeCustomerIntelCache(slug, customerSlug, contentHash, fallback)
+  return fallback
+}
+
+function makeExpansionDefault(slug: string, customerName: string, productCacheHash: string): CustomerProductIntel {
+  return {
+    product: slug,
+    customer: customerName,
+    relevanceScore: 'NONE',
+    priorityAction: 'Expansion analysis unavailable — Gemini call failed',
+    roadmapRelevance: [],
+    expansionOpportunities: [],
+    caseAlignment: [],
+    competitiveAngle: null,
+    featureTalkingPoints: [],
+    generatedAt: new Date().toISOString(),
+    productCacheHash,
+  }
+}
+
 // ── Main generation ───────────────────────────────────────────────────────────
 
 export async function generateCustomerProductIntel(opts: {
@@ -195,12 +366,29 @@ export async function generateCustomerProductIntel(opts: {
   const customerSlug = toCustomerSlug(customerName)
 
   // BKL-AI-COST-03: skip Gemini call if customer has zero subscriptions for this product
+  // BKL-PRODINTEL-01: unless intelligence cache exists — then do expansion analysis
   const productConfigs = loadProductConfig()
   const productConfig = productConfigs.find(p => p.slug === slug)
   if (productConfig && subscriptions.length > 0) {
     const matchingSubs = customerSubscribesTo(subscriptions, productConfig)
     if (matchingSubs.length === 0) {
-      console.log(`[customer-product-intel] skipping "${customerName}" / "${productConfig.displayName}" — no matching subscriptions`)
+      // Check if intelligence cache exists — if so, run expansion analysis instead of skipping
+      const expansionCacheDir = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
+      const acctIntel = loadAccountIntelligence(expansionCacheDir, customerSlug)
+      if (acctIntel && (acctIntel.company.length > 50 || acctIntel.industry.length > 50)) {
+        console.log(`[customer-product-intel] no subs for "${customerName}" / "${productConfig.displayName}" — running expansion analysis via intelligence cache`)
+        const expansionResult = await generateExpansionAnalysis({
+          slug,
+          productConfig,
+          customerName,
+          customerSlug,
+          accountIntel: acctIntel,
+          productCacheHash: productSummary.contentHash,
+        })
+        return expansionResult
+      }
+
+      console.log(`[customer-product-intel] skipping "${customerName}" / "${productConfig.displayName}" — no matching subscriptions, no intelligence cache`)
       const skippedIntel: CustomerProductIntel = {
         product: slug,
         customer: customerName,
@@ -300,6 +488,7 @@ Rules (zero exceptions):
 - Every claim must cite a specific source: a case number, SKU name, doc name, slide title, or account intel finding
 - Never write anything that would be equally valid for a different customer
 - Use account intelligence to find expansion signals: company initiatives, financial pressures, or industry trends that create urgency for this product
+- Use company context to identify specific initiatives or goals that this product aligns to. Generate 1-3 initiative-specific alignment statements (e.g., "Based on their cloud migration initiative, OpenShift can accelerate container adoption"). If no company context is available, fall back to generic insights based on industry signals
 - Use brief history to surface follow-through items: things the SA was working on that connect to this product
 - If no customer-specific signals exist for this product, set relevanceScore to "NONE" and stop
 - Distinguish: "customer has it and needs attention" vs "customer doesn't have it but signals say they need it"
@@ -338,9 +527,11 @@ OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
   "expansionOpportunities": [{"gap": "what the customer is missing or under-using", "product": "Red Hat product that fills the gap", "rationale": "cite specific signal: case#, SKU, account intel finding, brief topic, or pipeline deal — even if no current subscription exists"}],
   "caseAlignment": [{"caseNumber": "", "roadmapFix": "", "timeline": ""}],
   "competitiveAngle": "string or null",
-  "featureTalkingPoints": [{"feature": "exact feature name", "status": "GA|Tech Preview|Roadmap", "version": "version string or null", "reason": "why this specific customer should care — cite their signal", "signalSource": "case#/SKU name/doc title/pipeline deal"}]
+  "featureTalkingPoints": [{"feature": "exact feature name", "status": "GA|Tech Preview|Roadmap", "version": "version string or null", "reason": "why this specific customer should care — cite their signal", "signalSource": "case#/SKU name/doc title/pipeline deal"}],
+  "initiativeAlignment": ["1-3 strings: each describes how this product aligns to a specific customer initiative or goal from the company/industry context — cite the initiative explicitly (e.g., 'Their cloud migration initiative maps directly to OpenShift platform modernization'). Return [] if no company context is available"]
 }
-For featureTalkingPoints: select the top 3-5 features from the feature radar that are most relevant to THIS customer's signals. Each must cite a specific customer signal. Return [] if no features were provided or none are relevant.`
+For featureTalkingPoints: select the top 3-5 features from the feature radar that are most relevant to THIS customer's signals. Each must cite a specific customer signal. Return [] if no features were provided or none are relevant.
+For initiativeAlignment: derive from the Account Intelligence section above. Each item must name the initiative, then explain the product connection. 1-3 items maximum.`
 
   // ── Gemini API call ───────────────────────────────────────────────────────
 
@@ -421,6 +612,7 @@ For featureTalkingPoints: select the top 3-5 features from the feature radar tha
             caseAlignment: parsed.caseAlignment ?? [],
             competitiveAngle: parsed.competitiveAngle ?? null,
             featureTalkingPoints: Array.isArray(parsed.featureTalkingPoints) ? parsed.featureTalkingPoints : [],
+            initiativeAlignment: Array.isArray(parsed.initiativeAlignment) ? parsed.initiativeAlignment : [],
             generatedAt: new Date().toISOString(),
             productCacheHash: productSummary.contentHash,
           }

@@ -1357,8 +1357,8 @@ export function CustomerDetailPage() {
           <ProductQueryPanel customerName={customerName} />
         </main>
 
-        {/* Right column — 35%, sticky scroll */}
-        <aside className="hidden lg:block w-[38%] overflow-y-auto p-6 pl-3 space-y-4 border-l border-border/40">
+        {/* Right column — 35%, sticky scroll (BKL-UX-sidebar-scroll) */}
+        <aside className="hidden lg:block w-[38%] sticky top-0 self-start h-screen overflow-y-auto p-6 pl-3 space-y-4 border-l border-border/40">
           {/* Order: Intelligence Brief → Cases → Products → Customer Engagement → Key Contacts → Drive */}
           <AccountPlanPanel customerName={customerName} />
           <AccountIntelligencePanel customerName={customerName} />

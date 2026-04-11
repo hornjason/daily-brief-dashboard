@@ -646,6 +646,62 @@ function BatchIntelligenceSection() {
   )
 }
 
+// ── BKL-INTEL-03: Validate & Repair intelligence docs ────────────────────────
+
+function ValidateRepairSection() {
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<{ validated: number; flagged: number; requeued: string[] } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleValidate = async () => {
+    setRunning(true)
+    setResult(null)
+    setError(null)
+    try {
+      const r = await fetch('/api/intelligence/validate-all', { method: 'POST' })
+      if (!r.ok) throw new Error(`Server error: ${r.status}`)
+      const d = await r.json()
+      setResult(d)
+    } catch (e: any) {
+      setError(e?.message ?? 'Unknown error')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <span className="text-sm font-medium text-gray-200">Validate & Repair Intelligence Docs</span>
+          <p className="text-xs text-gray-500 mt-0.5">Scan all complete docs for thin content and re-queue any with fewer than 5 lines</p>
+        </div>
+        <button
+          onClick={handleValidate}
+          disabled={running}
+          className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors shrink-0"
+        >
+          {running ? 'Validating...' : 'Validate & Repair'}
+        </button>
+      </div>
+      <div className="text-xs text-gray-500">
+        {!running && !result && !error && 'Ready — click to scan all completed intelligence docs'}
+        {running && <span className="text-yellow-400">Validating intelligence docs...</span>}
+        {error && <span className="text-red-400">Error: {error}</span>}
+        {result && (
+          <span>
+            Validated <span className="text-gray-300">{result.validated} docs</span>
+            {result.flagged > 0
+              ? <span className="text-yellow-400 ml-1">— flagged {result.flagged} for re-generation</span>
+              : <span className="text-green-400 ml-1">— all docs look healthy</span>
+            }
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── BKL-M50e: Scrape history section ─────────────────────────────────────────
 
 interface ScrapeLogEntry {
@@ -1432,7 +1488,10 @@ export function AdminPage() {
         {/* BKL-AI06: Batch intelligence generation */}
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Account Intelligence</h2>
-          <BatchIntelligenceSection />
+          <div className="space-y-3">
+            <BatchIntelligenceSection />
+            <ValidateRepairSection />
+          </div>
         </div>
 
         {/* BKL-AI13: NotebookLM batch create */}

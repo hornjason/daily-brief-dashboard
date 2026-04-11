@@ -11,9 +11,9 @@
  */
 import { test, expect, getJSON, CAROLANNE } from '../fixtures'
 
-// "A10 Networks" is a real customer under Carolanne's territory.
+// "Big Ten Network Services" is a real customer in the current 106-customer dataset.
 // Override with TEST_KNOWN_CUSTOMER env var when targeting the test container (e.g. "Acme Corp").
-const KNOWN_CUSTOMER = process.env.TEST_KNOWN_CUSTOMER ?? 'A10 Networks'
+const KNOWN_CUSTOMER = process.env.TEST_KNOWN_CUSTOMER ?? 'Big Ten Network Services'
 const KNOWN_CUSTOMER_ENCODED = encodeURIComponent(KNOWN_CUSTOMER)
 const NONEXISTENT = '__nonexistent_customer_xyz__'
 

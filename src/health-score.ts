@@ -39,12 +39,19 @@ const WEIGHTS = {
 function scoreCases(
   customerAccountNumbers: string[],
   allCases: SupportCase[],
+  customerName?: string,
 ): { score: number; signal: string } {
-  if (!customerAccountNumbers.length) {
+  // BKL-REG-19: Match cases by accountNumber OR customerName (same as PodKPIHeader BKL-REG-08)
+  const acctSet = new Set(customerAccountNumbers)
+  const nameLower = customerName?.toLowerCase()
+  const matched = allCases.filter(c =>
+    acctSet.has(c.accountNumber) ||
+    (nameLower && c.customerName != null && c.customerName.toLowerCase() === nameLower)
+  )
+
+  if (!customerAccountNumbers.length && !nameLower) {
     return { score: 50, signal: 'No account numbers — cannot match cases' }
   }
-  const acctSet = new Set(customerAccountNumbers)
-  const matched = allCases.filter(c => acctSet.has(c.accountNumber))
 
   if (matched.length === 0) return { score: 100, signal: 'No open cases' }
 
@@ -262,7 +269,7 @@ export function computeHealthScore(
   pipelineUpdatedAt: string | null,
   ccspUpdatedAt: string | null,
 ): HealthScore {
-  const cases         = scoreCases(customer.accountNumbers ?? [], allCases)
+  const cases         = scoreCases(customer.accountNumbers ?? [], allCases, customer.name)
   const subs          = scoreSubscriptions(subscriptions)
   const meetings      = scoreMeetings()
   const emails        = scoreEmails()

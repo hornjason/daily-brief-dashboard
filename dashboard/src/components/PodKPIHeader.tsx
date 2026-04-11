@@ -60,7 +60,7 @@ export function PodKPIHeader({ podName, accounts, cases }: PodKPIHeaderProps) {
       {totalPipelineAcv > 0 && (
         <>
           <span className="text-zinc-600">·</span>
-          <span>{formatAcv(totalPipelineAcv)} pipeline</span>
+          <span>{formatAcv(totalPipelineAcv)} closing in 30d</span>
         </>
       )}
       {renewalCount > 0 && (

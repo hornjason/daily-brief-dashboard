@@ -14,6 +14,31 @@ import { test, expect, getJSON, postJSON, buildAE, buildCustomer } from '../fixt
 // @destructive tests run against the test container — use TEST_URL if set, then BASE_URL, then default to 7776
 const BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
 
+// ── BKL-TEST-20: Snapshot/restore wrapper ───────────────────────────────────
+// Wraps the entire spec in a snapshot/restore cycle so POST /api/setup/reset
+// with ?confirm=true cannot permanently wipe production data.
+// Pattern mirrors lifecycle.spec.ts.
+
+test.beforeAll(async ({ request }) => {
+  const res = await request.post(`${BASE}/api/__test/snapshot`)
+  const snap = await res.json().catch(() => ({}))
+  if (!snap.ok) {
+    console.warn(`[setup.spec.ts beforeAll] Snapshot returned not-ok: ${JSON.stringify(snap)}`)
+  }
+})
+
+test.afterAll(async ({ request }) => {
+  try {
+    const r = await request.post(`${BASE}/api/__test/restore`, { data: { force: true } })
+    const d = await r.json().catch(() => ({}))
+    if (!d.ok) {
+      console.error(`[setup.spec.ts afterAll] Restore failed: ${JSON.stringify(d)} — call POST ${BASE}/api/__test/restore manually to recover data`)
+    }
+  } catch (e) {
+    console.error(`[setup.spec.ts afterAll] RESTORE FAILED: ${e} — call POST ${BASE}/api/__test/restore manually to recover data`)
+  }
+})
+
 async function getCustomerCount(): Promise<number> {
   try {
     const res = await fetch(`${BASE}/api/accounts`)

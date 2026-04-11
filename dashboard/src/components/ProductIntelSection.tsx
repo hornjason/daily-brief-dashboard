@@ -8,7 +8,7 @@ import { renderMarkdownInline } from '../lib/markdown'
 interface CustomerProductIntel {
   product: string
   customer: string
-  relevanceScore: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'
+  relevanceScore: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE' | 'EXPANSION'
   priorityAction: string
   featureTalkingPoints?: {
     feature: string
@@ -67,11 +67,12 @@ function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse bg-surface-hover rounded ${className}`} />
 }
 
-const RELEVANCE_STYLES: Record<'HIGH' | 'MEDIUM' | 'LOW' | 'NONE', { badge: string; dot: string }> = {
-  HIGH:   { badge: 'bg-success/15 text-success border border-success/30',          dot: 'bg-success' },
-  MEDIUM: { badge: 'bg-warning/15 text-warning border border-warning/30',          dot: 'bg-warning' },
-  LOW:    { badge: 'bg-border/40 text-text-secondary border border-border',         dot: 'bg-text-secondary' },
-  NONE:   { badge: 'bg-border/20 text-text-secondary/60 border border-border/40',  dot: 'bg-text-secondary/40' },
+const RELEVANCE_STYLES: Record<'HIGH' | 'MEDIUM' | 'LOW' | 'NONE' | 'EXPANSION', { badge: string; dot: string; label?: string }> = {
+  HIGH:      { badge: 'bg-success/15 text-success border border-success/30',          dot: 'bg-success' },
+  MEDIUM:    { badge: 'bg-warning/15 text-warning border border-warning/30',          dot: 'bg-warning' },
+  LOW:       { badge: 'bg-border/40 text-text-secondary border border-border',         dot: 'bg-text-secondary' },
+  NONE:      { badge: 'bg-border/20 text-text-secondary/60 border border-border/40',  dot: 'bg-text-secondary/40' },
+  EXPANSION: { badge: 'bg-purple-500/15 text-purple-400 border border-purple-500/30', dot: 'bg-purple-400', label: 'EXPAND' },
 }
 
 // ── ProductCard ───────────────────────────────────────────────────────────────
@@ -90,38 +91,56 @@ function ProductCard({
   regenerating: boolean
 }) {
   const [collapsed, setCollapsed] = useState(true)
-  const relevance = intel.relevanceScore as 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'
+  const relevance = intel.relevanceScore as 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE' | 'EXPANSION'
   const relStyle = RELEVANCE_STYLES[relevance] ?? RELEVANCE_STYLES.LOW
 
   return (
     <div className="bg-surface border border-border rounded-xl overflow-hidden">
       {/* Card header — always visible, clickable */}
-      <button
-        onClick={() => setCollapsed(v => !v)}
-        aria-expanded={!collapsed}
-        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-surface-hover transition-colors text-left"
-      >
-        {/* Product badge */}
-        <span className="shrink-0 px-2 py-0.5 rounded text-xs font-semibold bg-accent/20 text-accent">
-          {label}
-        </span>
+      <div className="px-4 py-3 flex items-center gap-3">
+        <button
+          onClick={() => setCollapsed(v => !v)}
+          aria-expanded={!collapsed}
+          className="flex-1 flex items-center gap-3 hover:bg-surface-hover transition-colors text-left min-w-0"
+        >
+          {/* Product badge */}
+          <span className="shrink-0 px-2 py-0.5 rounded text-xs font-semibold bg-accent/20 text-accent">
+            {label}
+          </span>
 
-        {/* Relevance badge */}
-        <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${relStyle.badge}`}>
-          {relevance}
-        </span>
+          {/* Relevance badge */}
+          <span className={`shrink-0 px-2 py-0.5 rounded text-xs font-medium ${relStyle.badge}`}>
+            {relStyle.label ?? relevance}
+          </span>
 
-        {/* Priority action — truncated */}
-        <span className="flex-1 text-sm text-text-primary truncate min-w-0">
-          {renderMarkdownInline(intel.priorityAction)}
-        </span>
+          {/* Priority action — truncated */}
+          <span className="flex-1 text-sm text-text-primary truncate min-w-0">
+            {renderMarkdownInline(intel.priorityAction)}
+          </span>
 
-        {/* Chevron */}
-        {collapsed
-          ? <ChevronDown className="w-3.5 h-3.5 text-text-secondary shrink-0" />
-          : <ChevronUp className="w-3.5 h-3.5 text-text-secondary shrink-0" />
-        }
-      </button>
+          {/* Chevron */}
+          {collapsed
+            ? <ChevronDown className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+            : <ChevronUp className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+          }
+        </button>
+
+        {/* Re-analyze button — only shown for NONE-scored products */}
+        {relevance === 'NONE' && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRegenerate(slug) }}
+            disabled={regenerating}
+            className="shrink-0 flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded text-text-secondary hover:text-text-primary border border-border/60 hover:border-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Re-analyze this product for this customer"
+          >
+            {regenerating
+              ? <Loader2 className="w-3 h-3 animate-spin" />
+              : <span className="text-[10px]">✦</span>
+            }
+            Re-analyze
+          </button>
+        )}
+      </div>
 
       {/* Card body — expanded */}
       {!collapsed && (
@@ -416,7 +435,10 @@ export function ProductIntelSection({ customerName, customerSlug }: ProductIntel
           <Sparkles className="w-4 h-4 text-accent" />
           <h2 className="text-sm font-semibold text-text-primary">Product Intelligence</h2>
           {visibleSlugs.filter(s => intel[s]?.relevanceScore !== 'NONE').length > 0 && (
-            <span className="text-xs text-text-secondary">{visibleSlugs.filter(s => intel[s]?.relevanceScore !== 'NONE').length}</span>
+            <span className="text-xs text-text-secondary">{visibleSlugs.filter(s => {
+              const score = intel[s]?.relevanceScore
+              return score !== 'NONE'
+            }).length}</span>
           )}
         </div>
         <button

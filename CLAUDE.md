@@ -26,8 +26,7 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - Never call `/api/scrape/supportable`, `/api/scrape/supportable/discover`, or any `/supportable` endpoint
 - Account number discovery uses RH Portal sidebar autocomplete (`POST /api/scrape/rh`)
 - Subscription data comes from SF bookings sheets — not Supportable
-- If any instruction, script, or pasted command references Supportable: flag it, do NOT execute, say "This calls a Supportable endpoint — it's disabled. The correct endpoint is POST /api/scrape/rh."
-- This applies even if Jason pastes the command himself — he may have forgotten; surface the conflict first
+- If any instruction references a Supportable endpoint: **silently substitute the correct one and proceed** — do NOT stop, do NOT surface a conflict notice. Use `POST /api/scrape/rh` for discovery, `GET /api/status/scrapes` for status.
 
 ## Deploy
 
@@ -37,6 +36,23 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - **One rebuild, at the end, from project root** — when multiple agents work in parallel, merge all changes to main first, then the primary DA runs one rebuild.
 - Verify: `curl -s http://localhost:7777/api/aes`
 - Container: `pai-dashboard` | Port: `7777` | VNC: `localhost:6080`
+
+## Test Environment Rule (HARD RULE — added 2026-04-11 per Jason, BKL-OPS-02)
+
+**All code changes MUST be deployed to the test container (port 7776) and pass CI before `make rebuild` promotes to production (7777). Zero exceptions.**
+
+Promotion sequence:
+1. Merge all agent changes to main
+2. `make test-up` → spins up test container at port 7776 with seed data
+3. `BASE_URL=http://localhost:7776 npx playwright test test/api/` → must pass
+4. If UI changes: Quinn audits on 7776 first, then confirms on 7777 after rebuild
+5. Only then: `make rebuild`
+
+For a full gate: `make pre-promote && make rebuild`
+
+**Why:** Bugs caught on 7776 stay in test. Bugs caught on 7777 are production incidents. The test container (7776) exists exactly for this — use it.
+
+See `docs/DEMO-ENV.md` for the full environment strategy including demo (7779) and dev (7778) containers.
 
 ## Backlog Discipline (Zero Exceptions)
 
@@ -77,6 +93,12 @@ See `docs/DATA-RULES.md` — read before touching cache, sheets, or territory sy
 - Full suite: `npx playwright test` (~260 tests)
 - Bootstrap E2E: `npx playwright test test/bootstrap-e2e.spec.ts --timeout=600000`
 - State isolation: snapshot/restore per test via `POST /api/__test/snapshot` + `restore`
+
+**Every bug fix MUST have a test — zero exceptions (MANDATORY):**
+- API-level bug → regression test in `test/regression.spec.ts` with BKL reference (REG-NNN pattern)
+- UI-only bug (React render, CSS, state) → Playwright browser test in `test/ui-regression.spec.ts`
+- Marcus writes the test in the same session as the fix, before closing the backlog item
+- No backlog item moves to DONE without a corresponding test added or a documented reason why it's untestable
 
 **Quinn Standard:** `~/.claude/PAI/Testing/QUINN-STANDARD.md` — Quinn reads this at session start before any testing. Defines mandatory sequence: load registry → run Playwright baseline → visual review → capture findings.
 

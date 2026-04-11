@@ -1326,6 +1326,29 @@ export function initBackgroundScheduler(opts: {
     console.log('[brief-pregen] complete')
   })()
 
+  // BKL-STARTUP-01: On cold start, seed missing product-intel summary caches.
+  // make rebuild wipes data/cache/product-intel/{slug}-summary.json files.
+  // The weekly scheduler only re-seeds on Sunday 6am ET — anything missing
+  // before that window causes Generate buttons to silently fail.
+  // Fire-and-forget: non-blocking, runs 15s after startup to let server stabilise.
+  setTimeout(async () => {
+    try {
+      const { loadProductConfig, getCachedSummary, refreshAllProducts } = await import('./product-release-radar.ts')
+      const products = loadProductConfig()
+      if (!products.length) return
+      const missing = products.filter(p => !getCachedSummary(p.slug))
+      if (!missing.length) {
+        console.log('[product-intel] startup: all product summary caches present — no seed needed')
+        return
+      }
+      console.log(`[product-intel] startup: ${missing.length}/${products.length} product summary caches missing — seeding in background`)
+      await refreshAllProducts()
+      console.log('[product-intel] startup: product summary cache seed complete')
+    } catch (e: any) {
+      console.error('[product-intel] startup: product summary cache seed failed:', e?.message ?? e)
+    }
+  }, 15_000)
+
   // Graceful shutdown — close Chromium so it doesn't orphan in containers
   async function shutdown() {
     console.log('[shutdown] closing browser context…')

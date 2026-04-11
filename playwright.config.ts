@@ -14,6 +14,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './test',
+  globalSetup: './test/globalSetup.ts',
   timeout: 30_000,
   // Retry flaky tests in CI (network timeouts, scraper race conditions)
   retries: process.env.CI ? 2 : 0,

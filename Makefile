@@ -11,10 +11,15 @@
 #   make push      Push to GHCR
 #   make rebuild   Full cycle: build → push → restart container
 #   make ps        Show container status
-#   make seed      Populate data-test/ with known fixture data
-#   make test-up   Start test container on port 7776 (ALLOW_RESET=true)
-#   make test-down Stop test container
-#   make lint      Check for empty catch blocks in dashboard/src/
+#   make seed         Populate data-test/ with known fixture data
+#   make test-up      Start test container on port 7776 (ALLOW_RESET=true)
+#   make test-down    Stop test container
+#   make demo-snapshot Freeze prod data + image for demo
+#   make demo-up      Start demo container on port 7779 (read-only)
+#   make demo-tunnel  Share demo via Cloudflare tunnel (temporary URL)
+#   make env-status   Show which containers are running
+#   make pre-promote  Run all gates before make rebuild
+#   make lint         Check for empty catch blocks in dashboard/src/
 
 IMAGE  := localhost/daily-brief-dashboard:latest
 REMOTE := ghcr.io/hornjason/daily-brief-dashboard:latest
@@ -258,6 +263,29 @@ demo-down:
 
 demo-logs:
 	podman logs -f pai-dashboard-demo
+
+# ── Demo tunnel (Cloudflare) ─────────────────────────────────────────────────
+# Requires: brew install cloudflare/cloudflare/cloudflared
+# Outputs a temporary *.trycloudflare.com URL — share with stakeholders.
+# For permanent subdomain, set up a named tunnel: cloudflared tunnel create daily-brief
+demo-tunnel:
+	@which cloudflared > /dev/null || (echo "ERROR: cloudflared not found — install with: brew install cloudflare/cloudflare/cloudflared" && exit 1)
+	@echo "Starting Cloudflare tunnel for demo container at http://localhost:7779..."
+	@echo "Press Ctrl+C or run 'make demo-tunnel-stop' to stop."
+	cloudflared tunnel --url http://localhost:7779
+
+demo-tunnel-stop:
+	@pkill -f "cloudflared tunnel" || echo "No tunnel process found"
+	@echo "Tunnel stopped"
+
+# ── Environment status ────────────────────────────────────────────────────────
+env-status:
+	@echo "━━━ DailyBriefDashboard Environments ━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@podman ps --filter "name=pai-dashboard" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || echo "(no containers running)"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "Ports: prod=7777 dev=7778 test=7776 demo=7779"
+	@echo "Tunnel active: $$(pgrep -f 'cloudflared tunnel' > /dev/null 2>&1 && echo YES || echo NO)"
 
 # ── All environments ──────────────────────────────────────────────────────────
 all-down: down dev-down demo-down

@@ -108,9 +108,9 @@ test.describe('GET /customer/:name/events', () => {
 
 // ── /customer/:name/brief ───────────────────────────────────────────────────
 
-// Use a real customer from the live server — "A10 Networks" is in Carolanne's territory.
-// Override with TEST_KNOWN_CUSTOMER env var when targeting the test container (e.g. "Acme Corp").
-const KNOWN_CUSTOMER = process.env.TEST_KNOWN_CUSTOMER ?? 'A10 Networks'
+// "Big Ten Network Services" is a real customer in the current 106-customer dataset with
+// accountNumbers populated. Override with TEST_KNOWN_CUSTOMER env var for test container.
+const KNOWN_CUSTOMER = process.env.TEST_KNOWN_CUSTOMER ?? 'Big Ten Network Services'
 const KNOWN_CUSTOMER_ENCODED = encodeURIComponent(KNOWN_CUSTOMER)
 
 test.describe('GET /customer/:name/brief', () => {

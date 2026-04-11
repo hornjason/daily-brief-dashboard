@@ -49,6 +49,8 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - `docs/INFORMATION-ARCHITECTURE-V2.md` — Information architecture (Serena)
 - `docs/VISUAL-DESIGN-SPEC.md` — Visual design (Aditi)
 - `docs/ADDING-NEW-AE.md` — AE onboarding runbook (bootstrap, post-triggers, validation)
+- `docs/DEMO-ENV.md` — Environment strategy: 4 containers (prod 7777, dev 7778, test 7776, demo 7779), promotion pipeline, tunnel setup
+- `docs/GEMINI-AUDIT.md` — Full Gemini API audit: 14 call sites, cost analysis, API triggers + data flows (section 8)
 
 ## ADRs
 

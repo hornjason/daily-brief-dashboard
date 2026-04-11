@@ -13,7 +13,7 @@ import type { PipelineRecord } from './pipeline.ts'
 import { customers, aes, CUSTOMERS_PATH } from './server-state.ts'
 import { lastCcspError } from './ccsp-scraper.ts'
 import { sfSyncError } from './sf-scraper.ts'
-import { runIntelligencePipeline, getJobStatus, getRunningJob } from './account-intelligence.ts'
+import { runIntelligencePipeline, getJobStatus, getRunningJob, getAllJobs, requeueJob, validateIntelligenceDocContent } from './account-intelligence.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
 import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS, toSlug, isCCSPCacheStale } from './cache-layer.ts'
@@ -710,6 +710,43 @@ export function registerCustomerRoutes(app: Hono): void {
     }
     const percentComplete = _batchState.total > 0 ? Math.round((_batchState.completed / _batchState.total) * 100) : 0
     return c.json({ ..._batchState, elapsedSeconds, estimatedSecondsRemaining, percentComplete })
+  })
+
+  // ── BKL-INTEL-03: Batch intelligence doc validation ──────────────────────────
+
+  app.post('/api/intelligence/validate-all', async (c) => {
+    const completeJobs = getAllJobs().filter(
+      j => j.status === 'complete' && j.companyDocUrl && j.industryDocUrl
+    )
+
+    let validated = 0
+    let flagged = 0
+    const requeued: string[] = []
+
+    for (const job of completeJobs) {
+      const docsToCheck = [
+        { docId: job.companyDocUrl!.match(/\/d\/([^/]+)\//)?.[1], docName: `${job.customerName} - Company Intelligence` },
+        { docId: job.industryDocUrl!.match(/\/d\/([^/]+)\//)?.[1], docName: `${job.customerName} - Industry Analysis` },
+      ].filter(d => d.docId)
+
+      try {
+        const results = await Promise.all(
+          docsToCheck.map(({ docId, docName }) => validateIntelligenceDocContent(docId!, docName))
+        )
+        validated += results.length
+        const hasThin = results.some(r => !r.valid)
+        if (hasThin) {
+          flagged++
+          requeueJob(job.customerName)
+          requeued.push(job.customerName)
+        }
+      } catch (e: any) {
+        console.warn(`[acct-intel] validate-all: failed to validate docs for ${job.customerName}:`, e?.message ?? e)
+      }
+    }
+
+    console.log(`[acct-intel] validate-all complete: validated=${validated} flagged=${flagged}`)
+    return c.json({ validated, flagged, requeued })
   })
 
   // ── Account Plan generation ──────────────────────────────────────────────────

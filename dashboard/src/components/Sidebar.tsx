@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -39,6 +39,8 @@ interface SidebarProps {
 export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, viewMode = 'asa', onViewModeChange }: SidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
+  const versionClickCount = useRef(0)
+  const versionClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     const stored = localStorage.getItem('sidebar-collapsed')
     return stored === null ? true : stored === 'true'
@@ -257,36 +259,25 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
           </div>
         )}
 
-        {/* Admin — navigates to dedicated AdminPage */}
-        <div className="relative group">
-          <a
-            href="/dashboard/admin"
-            onClick={(e) => {
-              e.preventDefault()
-              navigate('/dashboard/admin')
-            }}
-            aria-label="Admin"
-            className={`${btnBase} ${
-              location.pathname === '/dashboard/admin'
-                ? 'bg-accent/10 text-accent'
-                : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
-            }`}
-          >
-            <ShieldCheck className="w-4 h-4 shrink-0" />
-            {!collapsed && <span className="whitespace-nowrap">Admin</span>}
-          </a>
-          {collapsed && (
-            <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
-              Admin
-            </span>
-          )}
-        </div>
+        {/* Admin — hidden from sidebar, accessible via triple-click on version number (BKL-M43) */}
       </nav>
 
-      {/* Footer */}
+      {/* Footer — triple-click version number to access Admin (BKL-M43) */}
       {!collapsed && (
         <div className="px-5 py-4 border-t border-border">
-          <div className="text-xs text-text-secondary">PAI Dashboard v0.1</div>
+          <div
+            className="text-xs text-text-secondary cursor-default select-none"
+            onClick={() => {
+              versionClickCount.current += 1
+              if (versionClickTimer.current) clearTimeout(versionClickTimer.current)
+              if (versionClickCount.current >= 3) {
+                versionClickCount.current = 0
+                navigate('/dashboard/admin')
+              } else {
+                versionClickTimer.current = setTimeout(() => { versionClickCount.current = 0 }, 1500)
+              }
+            }}
+          >PAI Dashboard v0.1</div>
         </div>
       )}
     </aside>

@@ -7,6 +7,14 @@ import PriorityActionRow from './PriorityActionRow'
 import { stripProductName } from '../utils/productName'
 import { Grid } from 'react-window'
 
+// BKL-REG-19: Shared helper to get cases for an account, with name-match fallback
+// for customers that have no account numbers (same approach as PodKPIHeader BKL-REG-08).
+function getCasesForAccountFromMap(account: AccountInfo, casesByAccount: Map<string, SupportCase[]>): SupportCase[] {
+  const byNum = account.accountNumbers.flatMap((num) => casesByAccount.get(String(num)) ?? [])
+  if (byNum.length > 0) return byNum
+  return casesByAccount.get(`name:${account.name.toLowerCase()}`) ?? []
+}
+
 // Inline fallback — replaced when EmptyState.tsx lands from another track
 const EmptyState = ({ title, description }: { title: string; description?: string }) => (
   <div className="flex flex-col items-center py-8 text-center">
@@ -279,9 +287,7 @@ function ProductAEGroup({
       {/* Matching account cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {matching.map((account) => {
-          const acctCases = account.accountNumbers.flatMap(
-            (num) => casesByAccount.get(String(num)) ?? []
-          )
+          const acctCases = getCasesForAccountFromMap(account, casesByAccount)
           return (
             <AccountCard
               key={account.name}
@@ -542,9 +548,7 @@ function CardGrid({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {accounts.map((account) => {
-        const acctCases = account.accountNumbers.flatMap(
-          (num) => casesByAccount.get(String(num)) ?? []
-        )
+        const acctCases = getCasesForAccountFromMap(account, casesByAccount)
         return (
           <AccountCard
             key={account.name}
@@ -602,9 +606,7 @@ function VirtualCell({
   const idx = rowIndex * columnCount + columnIndex
   if (idx >= accounts.length) return null
   const account = accounts[idx]
-  const acctCases = account.accountNumbers.flatMap(
-    (num) => casesByAccount.get(String(num)) ?? []
-  )
+  const acctCases = getCasesForAccountFromMap(account, casesByAccount)
 
   return (
     <div style={{ ...style, paddingRight: COLUMN_GAP, paddingBottom: COLUMN_GAP }}>
@@ -722,13 +724,22 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
   }, [accountKey])
 
   // Pre-compute cases map — O(n) instead of O(n*m) per card (BKL-UX39)
+  // BKL-REG-19: Also index by customerName (lowercased) so customers with no
+  // accountNumbers still get their name-matched cases counted.
   const casesByAccount = useMemo(() => {
     const map = new Map<string, SupportCase[]>()
     for (const c of cases ?? []) {
       const acct = String(c.accountNumber)
-      if (!acct) continue
-      if (!map.has(acct)) map.set(acct, [])
-      map.get(acct)!.push(c)
+      if (acct) {
+        if (!map.has(acct)) map.set(acct, [])
+        map.get(acct)!.push(c)
+      }
+      // Also index by customerName for name-match fallback
+      if (c.customerName) {
+        const nameKey = `name:${c.customerName.toLowerCase()}`
+        if (!map.has(nameKey)) map.set(nameKey, [])
+        map.get(nameKey)!.push(c)
+      }
     }
     return map
   }, [cases])
@@ -771,9 +782,9 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
     return timestamps.reduce((oldest, t) => t < oldest ? t : oldest)
   })()
 
-  // Helper: get cases for an account
+  // Helper: get cases for an account (delegates to shared BKL-REG-19 helper)
   const getCasesForAccount = (account: AccountInfo): SupportCase[] =>
-    account.accountNumbers.flatMap((num) => casesByAccount.get(String(num)) ?? [])
+    getCasesForAccountFromMap(account, casesByAccount)
 
   // Group accounts by AE
   const aeGroups = useMemo(() => {

@@ -189,7 +189,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       for (const p of acct.products ?? []) {
         if (!p.endDate) continue
         const daysLeft = Math.ceil((new Date(p.endDate).getTime() - today) / 86_400_000)
-        if (daysLeft <= 90) {
+        if (daysLeft >= 0 && daysLeft <= 90) { // BKL-KPI-01: exclude already-expired subscriptions (daysLeft >= 0)
           rows.push({
             customerName: acct.name,
             productDescription: p.productDescription,
@@ -222,7 +222,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       for (const p of acct.products ?? []) {
         if (!p.endDate) continue
         const daysLeft = Math.ceil((new Date(p.endDate).getTime() - today) / 86_400_000)
-        if (daysLeft <= 90) {
+        if (daysLeft >= 0 && daysLeft <= 90) { // BKL-KPI-01: exclude already-expired subscriptions (daysLeft >= 0)
           rows.push({
             customerName: acct.name,
             productDescription: p.productDescription,

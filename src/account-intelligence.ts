@@ -93,7 +93,13 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
       model,
     })
   }
-  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const text = json.candidates?.[0]?.content?.parts?.[0]?.text
+  if (!text) {
+    const finishReason = json.candidates?.[0]?.finishReason ?? 'unknown'
+    const safetyRatings = JSON.stringify(json.candidates?.[0]?.safetyRatings ?? [])
+    throw new Error(`Gemini returned no text content (finishReason=${finishReason}, safetyRatings=${safetyRatings})`)
+  }
+  return text
 }
 
 // ── Structured Gemini call with grounding (for industry identification) ──────
@@ -105,10 +111,55 @@ async function callGeminiGroundedStructured(opts: GeminiGroundedOptions & { resp
     ...opts,
     systemPrompt: opts.systemPrompt + '\n\nIMPORTANT: Return your response as valid JSON matching this schema: ' + JSON.stringify(opts.responseSchema),
   })
-  // Extract JSON from the response (may be wrapped in ```json blocks)
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*\})/)
-  if (!jsonMatch) throw new Error('Gemini grounded response did not contain valid JSON')
-  return JSON.parse(jsonMatch[1] ?? jsonMatch[0])
+  // Extract JSON from the response — try multiple extraction strategies
+  // Strategy 1: ```json ... ``` block
+  const fenceMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
+  if (fenceMatch) return JSON.parse(fenceMatch[1])
+  // Strategy 2: first { to last } (handles grounding citations after the JSON)
+  const firstBrace = text.indexOf('{')
+  const lastBrace = text.lastIndexOf('}')
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try { return JSON.parse(text.slice(firstBrace, lastBrace + 1)) } catch { /* fall through */ }
+  }
+  // Strategy 3: strip markdown formatting and retry
+  const stripped = text.replace(/\[\d+\]/g, '').replace(/\*\*/g, '').trim()
+  const strippedBrace = stripped.indexOf('{')
+  const strippedLastBrace = stripped.lastIndexOf('}')
+  if (strippedBrace !== -1 && strippedLastBrace > strippedBrace) {
+    try { return JSON.parse(stripped.slice(strippedBrace, strippedLastBrace + 1)) } catch { /* fall through */ }
+  }
+  // Strategy 4: grounded response had no JSON — re-prompt without grounding (structured-only fallback)
+  // Vertex AI allows responseSchema on non-grounded calls. Use it as a last resort.
+  try {
+    const project  = process.env.GOOGLE_CLOUD_PROJECT
+    const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
+    const model    = getGeminiModel()
+    const token    = await getGeminiToken()
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
+    const fallbackRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(30_000),
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: opts.maxOutputTokens ?? 1024,
+          thinkingConfig: { thinkingBudget: 0 },
+          responseMimeType: 'application/json',
+          responseSchema: (opts as any).responseSchema,
+        },
+      }),
+    })
+    if (fallbackRes.ok) {
+      const fallbackJson = await fallbackRes.json() as any
+      const fallbackText = fallbackJson.candidates?.[0]?.content?.parts?.[0]?.text
+      if (fallbackText) {
+        try { return JSON.parse(fallbackText) } catch { /* fall through */ }
+      }
+    }
+  } catch { /* fall through to final error */ }
+  throw new Error('Gemini grounded response did not contain valid JSON')
 }
 
 // ── BKL-AI01: Identify industry/segment per customer ─────────────────────────
@@ -150,6 +201,37 @@ Return:
 
   console.log(`[acct-intel] ${customerName} → ${result.industry} / ${result.segment}`)
   return result
+}
+
+/**
+ * Persist a found Drive folder ID back to customers.json so future runs skip fuzzy match (BKL-DATA-03).
+ * Uses atomic write pattern (tmp + rename) with mode 0o600, same as cacheIndustryResult.
+ */
+function persistCustomerFolderId(customerName: string, folderId: string): void {
+  // Read fresh from disk to avoid stale-overwrite
+  let data: { customers: Customer[] }
+  try {
+    data = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
+  } catch {
+    data = { customers: [] }
+  }
+
+  const idx = data.customers.findIndex(c => c.name === customerName)
+  if (idx >= 0) {
+    data.customers[idx].driveFolderId = folderId
+  }
+
+  const tmp = CUSTOMERS_PATH + '.tmp'
+  writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 })
+  renameSync(tmp, CUSTOMERS_PATH)
+
+  // Update in-memory state too
+  const memIdx = customers.findIndex(c => c.name === customerName)
+  if (memIdx >= 0) {
+    customers[memIdx].driveFolderId = folderId
+  }
+
+  console.log(`[acct-intel] Persisted Drive folder ID for ${customerName}: ${folderId}`)
 }
 
 /**
@@ -563,7 +645,11 @@ async function findCustomerDriveFolder(customer: Customer): Promise<string> {
 
   const folderList = custFolders.data.files ?? []
   const match = fuzzyFindFolder(folderList, customer.name)
-  if (match) return match.id
+  if (match) {
+    // Persist found folderId to customers.json for fast path next time (BKL-DATA-03)
+    persistCustomerFolderId(customer.name, match.id)
+    return match.id
+  }
 
   // One level deeper (e.g. "Accounts" subfolder)
   for (const sub of folderList.slice(0, 10)) {
@@ -573,7 +659,11 @@ async function findCustomerDriveFolder(customer: Customer): Promise<string> {
       fields: 'files(id,name)', pageSize: 100,
     })
     const deepMatch = fuzzyFindFolder(deeper.data.files ?? [], customer.name)
-    if (deepMatch) return deepMatch.id
+    if (deepMatch) {
+      // Persist found folderId to customers.json for fast path next time (BKL-DATA-03)
+      persistCustomerFolderId(customer.name, deepMatch.id)
+      return deepMatch.id
+    }
   }
 
   throw new Error(`No Drive folder found for customer ${customer.name} under AE ${customer.ae}`)
@@ -648,6 +738,35 @@ async function ensureIntelligenceSubfolder(customerFolderId: string): Promise<st
 }
 
 /**
+ * BKL-INTEL-03: Read a Google Doc and count non-empty lines.
+ * Used to validate that generated intelligence docs have substantive content.
+ */
+export async function validateIntelligenceDocContent(
+  docId: string,
+  docName: string,
+): Promise<{ valid: boolean; lineCount: number }> {
+  const auth = makeAuth(GDRIVE_TOKEN_PATH)
+  const docs = google.docs({ version: 'v1', auth })
+  const doc = await docs.documents.get({ documentId: docId })
+
+  // Flatten all text from paragraph elements
+  const bodyContent = doc.data.body?.content ?? []
+  const lines: string[] = []
+  for (const element of bodyContent) {
+    if (element.paragraph?.elements) {
+      const lineText = element.paragraph.elements
+        .map((el: any) => el.textRun?.content ?? '')
+        .join('')
+      lines.push(lineText)
+    }
+  }
+
+  const nonEmptyLines = lines.filter(l => l.trim().length > 0).length
+  console.log(`[acct-intel] Doc "${docName}" has ${nonEmptyLines} non-empty lines`)
+  return { valid: nonEmptyLines >= 5, lineCount: nonEmptyLines }
+}
+
+/**
  * Create or update a Google Doc in the given folder.
  * If a doc with the same name exists, clears it and writes new content.
  * If not, creates a new doc.
@@ -661,63 +780,39 @@ async function upsertGoogleDoc(
   const drive = google.drive({ version: 'v3', auth })
   const docs = google.docs({ version: 'v1', auth })
 
-  // Check for existing doc
+  // BKL-INTEL-01: Delete all existing docs with this name, then create one fresh doc.
+  // pageSize:1 left duplicates — query all (up to 100) and delete every match.
   const existing = await drive.files.list({
     q: `'${folderId}' in parents and name = '${docName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.document' and trashed = false`,
-    fields: 'files(id,name)', pageSize: 1,
+    fields: 'files(id,name)', pageSize: 100,
   })
 
-  let docId: string
-
-  if (existing.data.files?.length && existing.data.files[0].id) {
-    docId = existing.data.files[0].id
-    console.log(`[acct-intel] Updating existing doc: ${docName} (${docId})`)
-
-    // Get current doc to find content length for clearing
-    const doc = await docs.documents.get({ documentId: docId })
-    const endIndex = doc.data.body?.content?.slice(-1)?.[0]?.endIndex ?? 1
-
-    // Build batch update: clear existing content, then insert new
-    const requests: any[] = []
-
-    // Delete all content except the trailing newline (index 1 to endIndex-1)
-    if (endIndex > 2) {
-      requests.push({
-        deleteContentRange: {
-          range: { startIndex: 1, endIndex: endIndex - 1 },
-        },
-      })
+  const existingFiles = existing.data.files ?? []
+  if (existingFiles.length > 0) {
+    console.log(`[acct-intel] Deleting ${existingFiles.length} existing doc(s) named "${docName}"`)
+    for (const f of existingFiles) {
+      if (f.id) {
+        await drive.files.delete({ fileId: f.id })
+      }
     }
+  }
 
-    // Insert new content at index 1
-    requests.push({
-      insertText: {
-        location: { index: 1 },
-        text: markdownContent,
-      },
-    })
+  // Create a single fresh doc
+  console.log(`[acct-intel] Creating fresh doc: ${docName}`)
+  const created = await drive.files.create({
+    requestBody: {
+      name: docName,
+      mimeType: 'application/vnd.google-apps.document',
+      parents: [folderId],
+    },
+    fields: 'id',
+  })
 
-    await docs.documents.batchUpdate({
-      documentId: docId,
-      requestBody: { requests },
-    })
-  } else {
-    // Create new doc
-    console.log(`[acct-intel] Creating new doc: ${docName}`)
+  const docId = created.data.id!
+  if (!docId) throw new Error(`Failed to create doc: ${docName}`)
 
-    const created = await drive.files.create({
-      requestBody: {
-        name: docName,
-        mimeType: 'application/vnd.google-apps.document',
-        parents: [folderId],
-      },
-      fields: 'id',
-    })
-
-    docId = created.data.id!
-    if (!docId) throw new Error(`Failed to create doc: ${docName}`)
-
-    // Insert content
+  // Insert content
+  try {
     await docs.documents.batchUpdate({
       documentId: docId,
       requestBody: {
@@ -729,6 +824,9 @@ async function upsertGoogleDoc(
         }],
       },
     })
+  } catch (e: any) {
+    console.error(`[acct-intel] batchUpdate failed for new doc ${docId} (${docName}):`, e?.message ?? e)
+    throw e
   }
 
   const url = `https://docs.google.com/document/d/${docId}/edit`
@@ -867,6 +965,21 @@ export function getRunningJob(): (IntelligenceJobStatus & { customerName?: strin
   return null
 }
 
+/** BKL-INTEL-03: Return all jobs as an array for batch validation. */
+export function getAllJobs(): Array<{ customerName: string } & IntelligenceJobStatus> {
+  return Array.from(jobs.entries()).map(([customerName, status]) => ({ customerName, ...status }))
+}
+
+/** BKL-INTEL-03: Reset a job to pending so it gets re-queued on the next batch run. */
+export function requeueJob(customerName: string): void {
+  const existing = jobs.get(customerName)
+  setJob(customerName, {
+    status: 'pending',
+    startedAt: existing?.startedAt,
+  })
+  console.log(`[acct-intel] Re-queued job for ${customerName}`)
+}
+
 /**
  * Run the full intelligence pipeline for a customer:
  *   1. Identify industry/segment (BKL-AI01)
@@ -888,6 +1001,20 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
     const age = Date.now() - new Date(cachedIntel.cachedAt).getTime()
     if (age < INTELLIGENCE_CACHE_TTL_MS && cachedIntel.company && cachedIntel.industry) {
       console.log(`[acct-intel] Skipping ${customerName} — cache is ${Math.round(age / 86400000)}d old (TTL: ${INTELLIGENCE_CACHE_TTL_DAYS}d)`)
+
+      // BKL-ENRICH-01: If customers.json is missing industry/segment (e.g., after a data wipe),
+      // re-run identifyIndustry() even though the Drive doc cache is fresh.
+      // This is a cheap single Gemini call — avoids re-generating the expensive company/industry docs.
+      if (!(customer as any).industry) {
+        try {
+          console.log(`[acct-intel] customers.json missing industry for ${customerName} despite fresh cache — re-running identifyIndustry`)
+          const industryResult = await identifyIndustry(customerName)
+          cacheIndustryResult(customerName, industryResult)
+        } catch (e: any) {
+          console.warn(`[acct-intel] identifyIndustry repair failed for ${customerName}:`, e?.message ?? e)
+        }
+      }
+
       setJob(jobId, {
         status: 'complete',
         step: 'skipped (cache fresh)',
@@ -949,6 +1076,26 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
       // Step 4: Write docs to Drive
       setJob(jobId, { ...jobs.get(jobId)!, step: 'writing docs to Drive' })
       const docUrls = await writeIntelligenceDocs(customer, companyBrief ?? '', industryAnalysis ?? '')
+
+      // BKL-INTEL-03: Validate doc content in parallel — must have >= 5 lines or re-queue next run
+      setJob(jobId, { ...jobs.get(jobId)!, step: 'validating doc content' })
+      const docsToValidate = [
+        { docId: docUrls.companyDocUrl?.match(/\/d\/([^/]+)\//)?.[1], docName: `${customerName} - Company Intelligence` },
+        { docId: docUrls.industryDocUrl?.match(/\/d\/([^/]+)\//)?.[1], docName: `${customerName} - Industry Analysis` },
+      ].filter(d => d.docId)
+
+      const validations = await Promise.all(
+        docsToValidate.map(({ docId, docName }) => validateIntelligenceDocContent(docId!, docName))
+      )
+
+      for (let i = 0; i < docsToValidate.length; i++) {
+        const { docName } = docsToValidate[i]
+        const { valid, lineCount } = validations[i]
+        if (!valid) {
+          console.warn(`[acct-intel] Doc "${docName}" for ${customerName} has only ${lineCount} lines — marking for re-generation`)
+          throw new Error(`Doc content too thin (${lineCount} lines) — re-run to regenerate`)
+        }
+      }
 
       // Dual-write local intelligence cache (ADR-008) — brief pipeline reads this
       if (JOB_CACHE_PATH) {

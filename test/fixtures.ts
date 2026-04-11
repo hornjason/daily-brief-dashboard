@@ -19,10 +19,18 @@ const SNAPSHOT_BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://lo
 // Set in playwright.config.ts or agent environment.
 const QUINN_SAFE_MODE = process.env.QUINN_SAFE_MODE === 'true'
 
+// When QUINN_MODE=true, the quinnPage fixture installs a page.route()
+// interceptor that blocks destructive POST endpoints at the browser level,
+// responding 403 instead of executing. This is the network-layer guard;
+// safePostJSON below is the API-helper-layer guard.
+const QUINN_MODE = process.env.QUINN_MODE === 'true'
+
 /** Endpoints that are NEVER safe to call from an AI agent test session */
-const QUINN_BLOCKED_POSTS = [
+export const QUINN_BLOCKED_POSTS = [
   '/api/setup/reset',
-  '/api/admin/backup/restore',
+  '/api/__test/restore',
+  '/api/bootstrap/auto',
+  '/api/bootstrap/pod',
 ] as const
 
 /** Wraps postJSON to enforce Quinn's endpoint allowlist */
@@ -62,6 +70,46 @@ export const test = base.extend<ServerStateFixtures>({
       } catch { /* ignore restore failures */ }
     }
   }, { auto: true, timeout: 5000 }],
+})
+
+// ── BKL-TEST-12: quinnPage fixture — browser-level POST block ────────
+// Extends test with a `quinnPage` fixture that, when QUINN_MODE=true,
+// installs a page.route() interceptor blocking destructive POST endpoints
+// at the Playwright network layer (responds 403 before the request reaches
+// the server). When QUINN_MODE is not set, quinnPage is the plain page
+// with no additional routing — zero overhead for non-Quinn runs.
+//
+// Usage in tests tagged @quinn:
+//   test('...', async ({ quinnPage }) => { ... })
+//
+// Activate: QUINN_MODE=true npx playwright test --grep @quinn
+
+type QuinnFixtures = { quinnPage: import('@playwright/test').Page }
+
+export const quinnTest = base.extend<QuinnFixtures>({
+  quinnPage: async ({ page }, use) => {
+    if (QUINN_MODE) {
+      // Intercept POST requests to any blocked destructive endpoint.
+      // Playwright glob: ** matches any origin prefix.
+      for (const blocked of QUINN_BLOCKED_POSTS) {
+        await page.route(`**${blocked}`, async (route) => {
+          if (route.request().method() === 'POST') {
+            console.warn(`[QUINN GUARDRAIL] Blocked POST ${route.request().url()}`)
+            await route.fulfill({
+              status: 403,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                error: `QUINN GUARDRAIL: POST ${blocked} is blocked in QUINN_MODE. This endpoint is destructive and must not be called from automated agent tests.`,
+              }),
+            })
+          } else {
+            await route.continue()
+          }
+        })
+      }
+    }
+    await use(page)
+  },
 })
 
 export { expect } from '@playwright/test'

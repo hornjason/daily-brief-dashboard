@@ -268,9 +268,9 @@ test.describe('CustomerDetailPage — case modal lifecycle', () => {
     const header = page.locator('header')
     await expect(header).toBeVisible({ timeout: 15000 })
 
-    // The decoded customer name appears as the h1 in the header
+    // When the customer is not found, the page renders "Customer not found" as the h1
     const h1 = page.locator('h1')
     await expect(h1).toBeVisible({ timeout: 5000 })
-    await expect(h1).toHaveText(fakeName)
+    await expect(h1).toHaveText('Customer not found')
   })
 })

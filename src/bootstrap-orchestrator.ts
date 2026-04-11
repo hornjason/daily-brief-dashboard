@@ -1165,6 +1165,7 @@ export function registerBootstrapRoutes(app: Hono): void {
                 if (existingCustomer) {
                   existingCustomer.driveFolderId = folderId
                   try {
+                    // BKL-DATA-03: folderId persisted to customers.json via atomic tmp+rename
                     const tmpPath = CUSTOMERS_PATH + '.tmp'
                     writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
                     renameSync(tmpPath, CUSTOMERS_PATH)

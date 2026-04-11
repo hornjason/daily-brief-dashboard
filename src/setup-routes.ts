@@ -626,7 +626,7 @@ export function registerSetupRoutes(app: Hono): void {
     }
   })
 
-  app.post('/api/__test/restore', (c) => {
+  app.post('/api/__test/restore', async (c) => {
     // ── Guard 0: production guard (BKL-TEST-11) ─────────────────────────────
     // If no snapshot exists AND real data is loaded, refuse outright.
     // This catches the scenario where an agent calls restore without ever snapshotting.
@@ -667,6 +667,24 @@ export function registerSetupRoutes(app: Hono): void {
              + 'restoring outdated state over current production data. Take a fresh snapshot.',
       }, 409)
     }
+
+    // ── Guard 3: delta guard — reject restores that diverge >50% from current data (BKL-TEST-18) ──
+    // Prevents a 2-customer test snapshot from overwriting 105-customer production data.
+    // Pass force: true in request body to override (e.g. intentional wipe-to-empty in tests).
+    try {
+      const body = await c.req.json().catch(() => ({}))
+      const forceRestore = body?.force === true
+      const snapshotCustomerCount = JSON.parse(snapshot.customers).customers?.length ?? 0
+      const currentCustomerCount = customers.length
+      const delta = Math.abs(snapshotCustomerCount - currentCustomerCount) / Math.max(currentCustomerCount, 1)
+      if (delta > 0.5 && !forceRestore) {
+        return c.json({
+          error: `Delta guard: snapshot has ${snapshotCustomerCount} customers but current data has ${currentCustomerCount}. `
+               + 'Refusing restore to prevent accidental data loss (>50% divergence). '
+               + 'Pass { force: true } in request body to override.',
+        }, 400)
+      }
+    } catch { /* if body parse fails, allow restore to proceed */ }
 
     try {
       const snap = snapshot

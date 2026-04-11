@@ -115,7 +115,7 @@ function VersionFooter() {
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
     if (clickCountRef.current >= 3) {
       clickCountRef.current = 0
-      navigate('/admin')
+      navigate('/dashboard/admin')
       return
     }
     clickTimerRef.current = setTimeout(() => { clickCountRef.current = 0 }, 1500)

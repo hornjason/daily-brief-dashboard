@@ -5644,7 +5644,7 @@ Decision: Council consensus. Blocked on PR1 shipping + 1 week of failure data.
 ## Data Enrichment
 
 ### BKL-ENRICH-01 | Industry/segment tags missing on all 106 customers — enrichment never ran on SW pod
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS 2026-04-11 — 58/106 populated; 27 failing with JSON parse; cache-fresh bug fixed
 Severity: HIGH
 Priority: P1
 Size: S
@@ -5655,7 +5655,7 @@ Fix: Trigger POST /api/intelligence/generate-all or run identifyIndustry() in ba
 Decision: OPEN — run enrichment batch, verify all customers populated.
 
 ### BKL-INTEL-01 | Intelligence docs accumulate duplicates — always delete all + create fresh
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-11
 Severity: HIGH
 Priority: P1
 Size: XS
@@ -5663,10 +5663,10 @@ Source: Jason 2026-04-10 — duplicate docs found in account intelligence folder
 Files: src/account-intelligence.ts — upsertGoogleDoc() (~line 655)
 Root cause: upsertGoogleDoc() queries Drive with pageSize: 1, finds ONE existing doc by name, updates it, and leaves any additional same-named docs untouched. On repeat runs, duplicates accumulate.
 Fix: Replace upsert logic with delete-all-then-create: (1) query Drive with no pageSize limit to find ALL docs matching the name in the folder, (2) delete every match, (3) create a single fresh doc. This guarantees two clean docs per customer on every run regardless of prior state.
-Decision: OPEN — surgical fix to upsertGoogleDoc() only. No other changes.
+Decision: DONE — replaced pageSize:1 upsert with delete-all-then-create in upsertGoogleDoc(). Every call now produces exactly one doc per name in the intelligence subfolder.
 
 ### BKL-AI-AUDIT-01 | Gemini call audit — model, schedule/TTL, and token cap review across all AI calls
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-11 — Full audit at docs/GEMINI-AUDIT.md: 14 call sites, pricing table, cost estimates, optimization recommendations
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -5697,7 +5697,7 @@ Fix: For each call that has a wrong model, missing cap, or wrong TTL — make th
 Decision: OPEN — assign to Marcus for code review pass.
 
 ### BKL-OPS-02 | Dev/test/prod/demo environment strategy — research + implement team consistency standard
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-11
 Severity: MEDIUM
 Priority: P2
 Size: Research → M implementation
@@ -5736,7 +5736,7 @@ Description: Research and implement the full environment strategy covering:
     - Research: is a self-hosted GH Actions runner on the Mac worth it vs manual `make rebuild`?
 
 Research questions before implementing: (a) What tunnel solution fits Red Hat IT constraints? (b) Is a self-hosted GH runner practical on this Mac? (c) Should demo data be a fixed snapshot (never syncs) or periodic sync from prod?
-Decision: OPEN — research first (GrokResearcher), then implement Makefile targets + docs.
+Decision: DONE 2026-04-11 — Implemented: (1) All 4 container tiers already in Makefile. (2) Promotion pipeline: `make pre-promote` gate (lint + real-data CI + destructive) exists; hard rule added to CLAUDE.md. (3) Tunnel: Cloudflare Tunnel chosen (outbound-only, RH IT compatible); `make demo-tunnel` + `make demo-tunnel-stop` added. (4) `make env-status` added; CLAUDE.md hard rule written. (5) CI self-hosted runner deferred (impractical overhead). Demo data strategy: fixed snapshot (never auto-syncs). Full docs at docs/DEMO-ENV.md.
 
 ### BKL-REG-01 | AccountIntelligencePanel "Generate Intelligence" button called wrong API endpoint
 Status: ✅ FIXED 2026-04-10 (AccountIntelligencePanel.tsx updated to call correct endpoint)
@@ -5865,7 +5865,7 @@ Description: Two deliverables required:
 Decision: OPEN — assign to Marcus for audit + Quinn for test writing. Do audit first, then tests.
 
 ### BKL-STARTUP-01 | Product summary caches not seeded on startup — empty after every rebuild
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: MEDIUM
 Priority: P2
 Size: S
@@ -5876,7 +5876,7 @@ Fix: On server startup, check if any configured product slugs are missing a summ
 Decision: OPEN -- small addition to server startup sequence.
 
 ### BKL-TEST-08 | intelligence.spec.ts uses hardcoded "A10 Networks" not in customer dataset
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: LOW
 Priority: P3
 Size: XS
@@ -5885,7 +5885,7 @@ Files: test/api/intelligence.spec.ts
 Description: KNOWN_CUSTOMER is hardcoded to "A10 Networks" which does not exist in the current 106-customer dataset. Tests 23 and 33 fail with 404 because the customer lookup correctly rejects unknown names. Fix: use a customer name from the current dataset (e.g., "Acme Corp") or dynamically discover one via /api/accounts.
 
 ### BKL-TEST-09 | customers.spec.ts brief tests use AE name as customer name
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: LOW
 Priority: P3
 Size: XS
@@ -5894,7 +5894,7 @@ Files: test/api/customers.spec.ts
 Description: 5 brief-related tests use CAROLANNE_ENCODED ("Carolanne Farrell") which is an AE name, not a customer name. The /customer/:name/brief endpoint requires an exact customer name and returns 404 for AE names. CCSP and pipeline endpoints work with AE names via fuzzy matching, but brief does not. Fix: add a KNOWN_CUSTOMER constant to fixtures.ts with an actual customer name, and use it for brief tests.
 
 ### BKL-TEST-10 | customer-detail.spec.ts wrong assertion for nonexistent customer h1
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: LOW
 Priority: P3
 Size: XS
@@ -5919,13 +5919,14 @@ Description: `POST /api/setup/reset` and `POST /api/__test/restore` (without sna
 Decision: DONE — Guard added to both endpoints. Reset blocked with descriptive error message including customer count. Restore blocked when no snapshot exists AND customer count exceeds threshold.
 
 ### BKL-TEST-12 | Quinn endpoint allowlist in Playwright fixtures
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-04-10)
 Severity: HIGH
 Priority: P0
 Size: S (1-2h)
 Source: Architect testing strategy 2026-04-10
-Files: test/fixtures.ts (or Playwright globalSetup), test/playwright.config.ts
+Files: test/fixtures.ts
 Description: Quinn agent tests must only call endpoints from a curated allowlist. Destructive endpoints (`/api/setup/reset`, `/api/__test/restore`, `/api/bootstrap/auto`, `/api/bootstrap/pod`) are excluded unless the test explicitly opts in with `DESTRUCTIVE_TEST=true`. Implement via Playwright `globalSetup` wrapping `page.route()` to intercept and block non-allowlisted POST calls. Log warnings for blocked calls.
+Decision: DONE — Extended QUINN_BLOCKED_POSTS in test/fixtures.ts to all 4 required endpoints. Added `quinnTest` export with `quinnPage` fixture that installs page.route() interceptors responding 403 when QUINN_MODE=true. When QUINN_MODE is not set, quinnPage is a plain page passthrough. Activate: QUINN_MODE=true npx playwright test --grep @quinn.
 
 ### BKL-TEST-13 | ESLint/grep empty-catch ban in CI
 Status: ✅ DONE (2026-04-10)
@@ -5977,7 +5978,7 @@ Description: Create a `make seed` command that generates a minimal test dataset:
 Decision: DONE — `scripts/seed-data/` canonical fixture source (2 AEs, 5 fake customers: Acme Corp, Globex Industries, Wayne Enterprises, Initech, Stark Industries; account numbers 990000x). `make seed` copies to `data-test/`. `data-test/` is gitignored. Test container reads from `data-test/` via bind-mount.
 
 ### BKL-TEST-18 | Snapshot delta guard — refuse restore with >50% customer count change
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: MEDIUM
 Priority: P2
 Size: XS (30 min)
@@ -5986,7 +5987,7 @@ Files: src/setup-routes.ts (restore endpoint)
 Description: Add a delta guard to the restore endpoint: if the snapshot's customer count differs from the current in-memory customer count by more than 50%, refuse the restore with a descriptive error. Example: snapshot has 2 customers, current state has 105 — the delta is 98%, far exceeding the 50% threshold. This catches the scenario where a test creates a snapshot with minimal data and then tries to restore it over production. Override: `force:true` in the request body bypasses the delta guard.
 
 ### BKL-TEST-19 | Stale fixture detection — verify test/fixtures.ts IDs match live data
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: LOW
 Priority: P3
 Size: S (1-2h)
@@ -5995,7 +5996,7 @@ Files: test/fixtures.ts, test/playwright.config.ts (globalSetup)
 Description: `test/fixtures.ts` contains hardcoded Google Drive folder IDs and Sheet IDs that drift from live data as AEs are re-bootstrapped. Add a Playwright globalSetup check: before running tests, fetch `/api/aes` and compare the first AE's sheet IDs against the fixture values. If they differ, log a warning (not a failure — tests should still run, but the operator knows fixtures are stale). Long-term: fixtures should dynamically discover IDs from the live API instead of hardcoding them.
 
 ### BKL-TEST-20 | setup.spec.ts snapshot wrapper — prevent reset from wiping production
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-04-10
 Severity: HIGH
 Priority: P0
 Size: S (1h)
@@ -6004,13 +6005,14 @@ Files: test/api/setup.spec.ts
 Description: `api/setup.spec.ts` calls `POST /api/setup/reset?confirm=true` with NO snapshot/restore wrapper. If this test runs against a server with production data loaded, it permanently wipes everything. Fix: wrap the entire spec in beforeAll snapshot + afterAll restore (same pattern as lifecycle.spec.ts). The customer-count guard (BKL-TEST-11) provides a second layer of defense, but the test itself should be self-contained.
 
 ### BKL-TEST-21 | Complete unit test coverage — route handlers via app.request()
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-04-10) — initial pattern established; full coverage is follow-on
 Severity: MEDIUM
 Priority: P2
 Size: L (8-12h)
 Source: BKL-TEST-15 completion 2026-04-10 — pure-function foundation done; route handler coverage not yet started
-Files: test/unit/ (extend), src/setup-routes.ts, server.ts
+Files: test/api/routes.spec.ts (new), test/unit/ (existing)
 Description: Extend unit test coverage beyond pure functions to route handlers using Hono's `app.request()` pattern (no live server, no browser). Priority targets: (1) POST /api/setup/reset — verify guard fires at >5 customers, (2) POST /api/setup/save-customers — verify guard fires, (3) POST /api/__test/restore — verify requires snapshot, (4) GET /api/accounts — verify shape, (5) POST /api/aes — verify validation. Target: all setup-routes.ts handlers covered. Prerequisite: BKL-TEST-15 done (foundation in place).
+Decision: DONE (pattern) — server.ts has launch-time side effects (Playwright browser spawn, scraper timers) making direct Hono app.request() import unsafe. Used API-level tests in test/api/routes.spec.ts instead (same fetch()-against-live-server pattern as test/api/*.spec.ts). 5 tests added: (1) POST /api/setup/reset → 400 without confirm, (2) POST /api/setup/reset → 403 at >5 customers (tagged @destructive), (3) GET /api/accounts → 200 + customers[], (4) customer entry shape check, (5) POST /api/aes with empty name → 400, (6) POST /api/aes non-array → 400. Full Hono app.request() coverage (without live server) remains a longer-term goal requiring server refactor to extract app from side effects.
 
 ### BKL-TEST-22 | Add @destructive tags to setup.spec.ts and lifecycle.spec.ts
 Status: ✅ DONE 2026-04-10 — tagged reset/save-customers/infer-domains/save-domains/lifecycle; ci project grepInvert excludes @destructive; 88 ci tests pass against production
@@ -6132,7 +6134,7 @@ Description: After clicking "Sync Now" on the Pipeline (Salesforce) data source 
 Decision: DONE — Restructured poll resolution: `resolve()` now fires inside `.then()` after `setSfStatus(data)` completes, eliminating the race condition. Added "Syncing…" indicator while `sfSyncing || scraperRunning.salesforce` is true. Consolidated duplicate status render into single conditional with clear "✓ Synced X rows" / age-based display.
 
 ### BKL-DATA-02 | Many customers show "acme.com" domain placeholder — domain inference incomplete
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-11
 Severity: MEDIUM
 Priority: P2
 Size: XS (trigger only)
@@ -6140,3 +6142,142 @@ Source: Jason — Setup wizard screenshot, 2026-04-10
 Files: data/config/customers.json, src/domain-inferrer.ts
 Description: Approximately half of customers in the Setup wizard show "acme.com" as their domain. Domain inference either did not run for all customers during initial bootstrap, or ran but left some as placeholder when no domain could be resolved. This is a data gap, not a code bug — the inference logic exists and the Admin page "Run Now" button triggers it.
 Fix: Admin page → Domain Inference → Run Now (or POST /api/setup/infer-domains). No code change needed. After running, customers with resolvable company names will have real domains; edge cases may need manual override in customers.json.
+Decision: DONE 2026-04-11 — Domain inference ran via POST /api/setup/infer-domains. Result: 72/106 customers now have real domains (Clearbit or Gemini-inferred). 34 customers have no resolvable domain — these are companies where no domain could be verified (subsidiaries, entities with ambiguous names). acme.com placeholder is gone except for "Acme Corp" test customer where it is correct. Manual override available via customers.json for the 34.
+
+### BKL-INTEL-02 | Account Intelligence docs open blank in Drive
+Status: ✅ DONE — 2026-04-10
+Priority: P1 | Type: Bug
+Source: Jason — 2026-04-11
+Files: src/account-intelligence.ts
+Description: When clicking "Open" on Company or Industry intelligence doc links in the AccountIntelligencePanel, the Google Doc opens but is blank. The Drive doc is created successfully (URL is valid, doc exists), but the generated content is not being written into the doc body. Confirmed on Applied Medical Resources — doc links present in UI, content empty.
+Fix needed: Investigate writeIntelligenceToDoc() or equivalent in account-intelligence.ts — likely the Docs API write call is failing silently or writing to the wrong location within the doc.
+
+### BKL-REG-19 | Per-customer case count in list view uses accountNumbers only — name-matched customers show 0
+Status: ✅ DONE 2026-04-11 — getCasesForAccountFromMap() with name-match fallback applied to AccountPortfolioGrid.tsx
+Priority: P0 | Type: Bug
+Source: Jason screenshot — 2026-04-11
+Files: dashboard/src/components/AccountPortfolioGrid.tsx, src/customer-routes.ts (health score / cases per customer)
+Description: The Cases column in Account Portfolio list view shows 0 for most customers despite the pod banner showing 52 open cases. Same root cause as BKL-REG-08 — per-customer case count filters by accountNumbers only, not by customer name match. 39 customers have no accountNumbers and all show 0. The name-match fix applied to PodKPIHeader.tsx was not applied to the per-customer case count used in the portfolio list and health score.
+Fix: Apply the same nameSet match logic (customer name toLowerCase comparison) to wherever per-customer openCaseCount is computed — likely health-score.ts or the cases-per-customer endpoint feeding AccountPortfolioGrid.
+
+### BKL-INTEL-03 | Validate intelligence doc content length — auto-regenerate if empty or < 5 lines
+Status: ✅ DONE 2026-04-11
+Priority: P1 | Type: Feature
+Source: Jason — 2026-04-11
+Files: src/account-intelligence.ts, dashboard/src/pages/AdminPage.tsx
+Description: Intelligence docs are being created in Drive but content is not written (BKL-INTEL-02). Need a validation step that reads each customer's company/industry doc from Drive, checks line count, and flags or auto-regenerates any doc with fewer than 5 lines of content.
+Implementation options:
+  1. Post-generation validation — after writeIntelligenceToDoc(), read the doc back and verify content length. If < 5 lines, mark as failed and re-queue.
+  2. Batch validation endpoint — POST /api/intelligence/validate-all — scans all cached intelligence docs, fetches Drive doc content, re-queues any with < 5 lines.
+  3. Admin page button — "Validate & Repair Intelligence Docs" — runs batch validation with progress display.
+Recommended: Option 1 (post-generation check) as the permanent fix + Option 3 (Admin button) for repairing existing empty docs.
+
+Decision (2026-04-11): Intelligence docs should be generated once at bootstrap and only regenerated on explicit manual trigger or when doc is detected as empty. No automatic scheduled regeneration. TTL guard (7d) already prevents unnecessary regeneration. Validation (BKL-INTEL-03) should only re-queue if doc content < 5 lines — not on any recurring schedule.
+
+### BKL-PRODINTEL-01 | Product Intelligence NONE state — use account intelligence context for expansion analysis
+Status: ✅ DONE
+Priority: P1 | Type: Feature Enhancement
+Source: Jason — 2026-04-11
+Files: src/customer-product-intel.ts
+Description: When a customer has no matching subscription for a product (currently shows "NONE — Analysis skipped — no matching subscriptions"), the system should instead use account intelligence context (company profile, industry description, technology landscape from Drive docs) to assess whether the product could be relevant. This enables proactive expansion conversations rather than just validating existing subscriptions.
+Example: Customer has no RHOAI subscription → current: skip. Desired: use company intelligence to check AI/ML initiatives, industry trends, tech stack → show "No current subscription — potential fit: [reason based on intelligence docs]"
+Implementation: In customer-product-intel.ts, when no subscriptions match, fall back to reading the customer's intelligence cache (data/cache/intelligence/<slug>.json) and using industry/company context in the Gemini prompt to assess product fit. Return a structured "expansion opportunity" result instead of NONE.
+Test: Product intel for a customer with no RHOAI subscription should return an expansion analysis, not empty NONE result.
+
+### BKL-KPI-01 | KPI renewalRows includes expired subscriptions
+Status: ✅ DONE 2026-04-10
+Priority: P1 | Type: Bug
+Source: Agent-detected
+Files: dashboard/src/components/KPICards.tsx
+Description: renewalRows and allRenewalRows useMemo blocks used `daysLeft <= 90` without a lower bound, causing already-expired subscriptions (negative daysLeft) to be counted in the "Expiring within 30/90 Days" KPI cards.
+Fix: Added `daysLeft >= 0` guard to both useMemo blocks (lines 192 and 225). Comment: BKL-KPI-01.
+Test: REG-022 added to test/regression.spec.ts — verifies fixedCount (daysLeft >= 0 && daysLeft <= 90) is <= buggyCount (daysLeft <= 90 only).
+
+---
+
+### BKL-PRODINTEL-02 | Product intelligence should include goal/initiative alignment for ALL products
+Status: 🟡 IN PROGRESS 2026-04-11 (backend prompt enhancement done; UI "How this helps" section deferred)
+Priority: P1 | Type: Feature Enhancement
+Source: Jason — 2026-04-11
+Files: src/customer-product-intel.ts, dashboard/src/components/ProductIntelSection.tsx
+Decision: Backend-only pass completed 2026-04-10. Added `initiativeAlignment?: string[]` to `CustomerProductIntelligence` interface. Updated system prompt to instruct Gemini to generate 1-3 initiative-specific alignment statements from company/industry context. Added `initiativeAlignment` to output schema and captured from parsed Gemini JSON with `[]` fallback. `loadAccountIntelligence()` already loaded the intelligence cache — no new file loading needed. UI "How this helps" section (ProductIntelSection.tsx) deferred to separate session.
+
+Description: BKL-PRODINTEL-01 added EXPANSION analysis when a customer has NO subscription. This item extends product intelligence to be goal/initiative-driven for ALL products — both subscribed and unsubscribed:
+
+1. **Subscribed products**: Use subscription data + product intelligence context. Pull company goals/initiatives from the intelligence cache (industry analysis, company profile from Drive docs). Generate "How [Product] helps [Customer]" — maps product capabilities to their specific context and goals. Subscription data confirms they own it; intelligence explains HOW they could/should use it more.
+
+2. **Unsubscribed products**: Already done via BKL-PRODINTEL-01 (EXPANSION badge). Extend: also check Drive docs directly if intelligence cache is thin. If Drive docs mention initiatives that align to this product, surface them.
+
+3. **Drive doc cross-reference**: When a customer has Drive documents cached (`data/cache/intelligence/<slug>.json` or raw docs), extract initiative/goal keywords and align them to specific product features. Example: doc mentions "migrating to cloud" → flag OpenShift; doc mentions "cost reduction" → flag RHEL + AAP.
+
+4. **"How this helps" section**: Add a new UI section in ProductIntelSection.tsx — "How [Product] helps [Customer]" — a 2-3 bullet AI-generated summary that maps product capabilities to the customer's specific context.
+
+Implementation approach:
+- Enhance `generateProductIntel()` in customer-product-intel.ts to always run a goal-alignment pass using the intelligence cache, regardless of subscription status
+- The prompt should include: product description, customer company/industry/goals from cache, any available Drive doc excerpts
+- Keep using gemini-2.5-flash-lite for cost optimization
+- Cache the result with the same TTL as existing product intel
+
+Decision: Separate from BKL-PRODINTEL-01 which only handled NONE state. This upgrades ALL product intel to be context-aware.
+
+---
+
+### BKL-PRODINTEL-03 | Generate button visible for all products, including NONE-scored cached results
+Status: ✅ DONE
+Priority: P1 | Type: UI Bug
+Source: Jason screenshot — 2026-04-10
+Files: dashboard/src/components/ProductIntelSection.tsx
+
+Description: Unsubscribed products with a cached NONE result showed no Generate button — the result was permanent with no way to re-trigger without expanding the card and clicking Regenerate in the footer.
+
+Fix: Converted the ProductCard header from a single full-width button to a flex row containing (1) an inner button covering the collapsible area and (2) a small secondary "Re-analyze" button (✦ icon, text-text-secondary styling) that appears only when relevanceScore === 'NONE'. The NONE badge remains visible alongside the new button. Non-NONE scores and the uncached stub rows are unchanged.
+
+---
+
+### BKL-DATA-03 | Customer Drive folder IDs not stored — fuzzy name match fails for some customers
+Status: ✅ DONE 2026-04-11
+Priority: P1 | Type: Bug
+Source: Jason — 2026-04-11
+Files: src/bootstrap-orchestrator.ts (or equivalent), src/account-intelligence.ts, data/config/customers.json
+
+Description: Drive folders are created at bootstrap time using customer names from the territory sheet. Customer names in customers.json come from Salesforce (legal names), which can differ from folder names. The fuzzy match (threshold 0.5) fails for ~6 customers where names differ significantly (e.g., "First American Home Buyers Prot." vs "First American Home Buyers Protection").
+
+Root cause: Bootstrap creates the Drive folder but doesn't store the folder ID back into customers.json per-customer `driveFolderId` field. The lookup code already checks `customer.driveFolderId` first (line 569 of account-intelligence.ts) — if populated, fuzzy match is bypassed entirely.
+
+Fix: During bootstrap step where customer Drive folders are created (or immediately after), write the returned folder ID into `customers[i].driveFolderId` in customers.json. This is a one-time write per customer that eliminates name-matching fragility permanently.
+
+Also: For existing customers missing `driveFolderId`, an Admin page "Repair folder IDs" button could run the fuzzy match once, find whatever it can, and persist the IDs found — so future runs skip matching.
+
+Decision: DONE — added persistCustomerFolderId() helper to account-intelligence.ts (follows cacheIndustryResult pattern: readFileSync fresh → set driveFolderId → atomic tmp+rename → update in-memory array → log). Called after both shallow and deep fuzzy matches in findCustomerDriveFolder(). Confirmed bootstrap-orchestrator.ts already writes driveFolderId to customers.json at step 2 (BKL-DATA-03 comment added). Fast path (customer.driveFolderId check) will now be hit on all subsequent intelligence runs.
+
+---
+
+### BKL-PRELOAD-01 | Pre-seed intelligence cache via PAI skill at bootstrap — eliminate per-request Gemini costs
+Status: ⏸ DEFERRED 2026-04-11 — blocked on API access
+Priority: P2 | Type: Feature / Cost Optimization
+Source: Jason — 2026-04-11
+Blocked: aistudio.google.com not accessible with Red Hat SSO. gemini.google.com/app is accessible but is a web interface only (no API key available from there). Existing Vertex AI API key in .env works for current runtime costs. Alternative pre-seeding strategy: export/import of cache files (data/cache/intelligence/*.json) when deploying to new environments — no additional API key needed. Revisit if a free Gemini API key becomes available, or when deploying to a new environment requires seeding costs upfront.
+Decision: DEFERRED — existing Vertex AI key handles all runtime calls. Cache files can be bundled for new deployments. API key path from RH-accessible tools is blocked.
+
+Description: Instead of generating account intelligence and product intelligence on-demand via Gemini API (costs per call), run a one-time pre-seed batch at bootstrap using a PAI CLI skill (Claude) that:
+
+1. Generates account intelligence (company profile, industry analysis) for all customers
+2. Generates product intelligence for each customer × product combination
+3. Writes results to local cache files (`data/cache/intelligence/*.json`, `data/cache/product-intel/*.json`)
+4. Writes Drive docs (company brief, industry analysis) — same as current `writeIntelligenceDocs()`
+5. Marks cache with a `seededAt` timestamp and `seededBy: 'pai-cli'`
+
+Runtime behavior stays the same: dashboard reads from cache first. Gemini calls only fire if cache is expired (>7d) or missing. Pre-seeded cache has the same TTL — so Gemini is still the refresh engine, Claude is just the initial seeder.
+
+Implementation:
+- New PAI skill: `~/.claude/PAI/Skills/SeedIntelligence.ts` (or a bun script at `scripts/seed-intelligence.ts`)
+- Takes the same prompts as `callGeminiGroundedStructured()` but routes through `bun Tools/Inference.ts smart` (Claude Opus/Sonnet)
+- Outputs must match the existing cache JSON schema exactly so the dashboard reads them transparently
+- Bootstrap orchestrator calls this as step 7 (after domain inference, before RH cases)
+- Admin page: "Re-seed All Intelligence" button triggers it on demand
+
+Cost model: ~$0 marginal (PAI CLI already running) vs ~$3.25 Gemini for 106 customers. After initial seed, Gemini only fires on 7-day expiry refreshes.
+
+Consideration: Grounded search (Google Search API) is only available via Gemini — Claude cannot web-search. Product intel summaries and company profiles that rely on current web data would have lower accuracy without grounding. Hybrid approach possible: use Claude for structure/reasoning, Gemini only for the web-search-dependent calls.
+
+Decision: Research before implementing — evaluate quality tradeoff and whether ungrounded Claude output is acceptable for initial seeding.
