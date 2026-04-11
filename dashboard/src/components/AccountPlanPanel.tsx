@@ -66,7 +66,15 @@ export function AccountPlanPanel({ customerName }: AccountPlanPanelProps) {
       const res = await fetch(`/api/customers/${encodeURIComponent(customerName)}/account-plan/generate`, {
         method: 'POST',
       })
-      const data = await res.json()
+      // Parse response — non-JSON (e.g. HTML error page) will throw and be caught below
+      let data: any
+      try {
+        data = await res.json()
+      } catch {
+        setError(`Server error (${res.status} ${res.statusText}) — check server logs`)
+        setGenerating(false)
+        return
+      }
       if (data.ok) {
         // Generation complete synchronously
         setPlan({ markdown: '', generatedAt: data.generatedAt, driveUrl: data.driveUrl ?? '' })
@@ -79,11 +87,16 @@ export function AccountPlanPanel({ customerName }: AccountPlanPanelProps) {
         }
         setGenerating(false)
       } else if (data.error) {
+        // Show the actual server error (e.g. missing config file, Drive auth failure)
         setError(data.error)
         setGenerating(false)
+      } else {
+        setError(`Unexpected response from server (status ${res.status})`)
+        setGenerating(false)
       }
-    } catch {
-      setError('Failed to start generation')
+    } catch (e: any) {
+      // Network-level failure (server down, timeout, CORS)
+      setError(`Network error: ${e?.message ?? 'Could not reach server'}`)
       setGenerating(false)
     }
   }
