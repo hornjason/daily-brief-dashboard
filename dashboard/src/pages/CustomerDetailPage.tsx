@@ -1253,9 +1253,14 @@ export function CustomerDetailPage() {
               </>
             )}
 
-            {meta?.segment && (
-              <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent border border-accent/20 font-medium">
-                {meta.segment}
+            {/* BKL-REG-15: segment always shown once meta loads, with — fallback for unpopulated data */}
+            {meta !== null && (
+              <span className={`text-xs px-2 py-0.5 rounded border font-medium ${
+                meta.segment
+                  ? 'bg-accent/10 text-accent border-accent/20'
+                  : 'bg-border/20 text-text-secondary/60 border-border/40'
+              }`}>
+                {meta.segment || '—'}
               </span>
             )}
 
