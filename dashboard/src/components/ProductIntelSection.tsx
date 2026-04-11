@@ -132,7 +132,7 @@ function ProductCard({
             <div>
               <p className="text-xs text-text-secondary font-medium mb-1.5">Feature Talking Points</p>
               <ul className="space-y-2">
-                {intel.featureTalkingPoints!.map((ftp, i) => (
+                {(intel.featureTalkingPoints ?? []).map((ftp, i) => (
                   <li key={i} className="text-sm text-text-primary flex gap-2">
                     <span className="text-text-secondary shrink-0 mt-0.5">•</span>
                     <span>
@@ -160,11 +160,11 @@ function ProductCard({
           )}
 
           {/* Roadmap Relevance */}
-          {intel.roadmapRelevance.length > 0 && (
+          {(intel.roadmapRelevance?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-text-secondary font-medium mb-1.5">Roadmap</p>
               <ul className="space-y-1">
-                {intel.roadmapRelevance.map((r, i) => (
+                {(intel.roadmapRelevance ?? []).map((r, i) => (
                   <li key={i} className="text-sm text-text-primary flex gap-2">
                     <span className="text-text-secondary shrink-0 mt-0.5">•</span>
                     <span>
@@ -179,11 +179,11 @@ function ProductCard({
           )}
 
           {/* Expansion Opportunities */}
-          {intel.expansionOpportunities.length > 0 && (
+          {(intel.expansionOpportunities?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-text-secondary font-medium mb-1.5">Opportunities</p>
               <ul className="space-y-1">
-                {intel.expansionOpportunities.map((o, i) => (
+                {(intel.expansionOpportunities ?? []).map((o, i) => (
                   <li key={i} className="text-sm text-text-primary flex gap-2">
                     <span className="text-text-secondary shrink-0 mt-0.5">•</span>
                     <span>
@@ -200,11 +200,11 @@ function ProductCard({
           )}
 
           {/* Case Alignment */}
-          {intel.caseAlignment.length > 0 && (
+          {(intel.caseAlignment?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-text-secondary font-medium mb-1.5">Case Alignment</p>
               <ul className="space-y-1">
-                {intel.caseAlignment.map((c, i) => (
+                {(intel.caseAlignment ?? []).map((c, i) => (
                   <li key={i} className="text-sm text-text-primary flex gap-2">
                     <span className="text-text-secondary shrink-0 mt-0.5">•</span>
                     <span>
