@@ -6100,3 +6100,23 @@ Source: Jason — 2026-04-10 testing session
 Files: dashboard/src/pages/CustomerDetailPage.tsx
 Description: The segment badge was rendered only when `meta?.segment` was truthy. Since 104/106 customers have no `segment` field populated in customers.json (enrichment batch BKL-ENRICH-01 not yet run), the badge was never visible. The industry field was not in the Customer data model or SSE meta event at all. Users had no way to see that the field exists but lacks data.
 Decision: DONE — Segment badge now renders whenever `meta` loads (not null), with accent styling when populated and muted '—' when empty. This makes the data gap explicit and visible. Industry field deferred — not in Customer type or SSE meta; requires BKL-ENRICH-01 to add field to data model before UI can display it.
+
+### BKL-REG-16 | Search bar / filter / by-AE / list header missing above Account Portfolio
+Status: ✅ DONE 2026-04-10
+Severity: HIGH
+Priority: P0
+Size: XS (15m)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/App.tsx
+Description: BKL-UX52 replaced AccountPortfolioGrid with AEGroupedList in the section-accounts section. AEGroupedList has no search bar, triage filter, by-AE toggle, list view toggle, or Account Portfolio section header. All those controls existed inside AccountPortfolioGrid and were lost in the replacement.
+Decision: DONE — Restored AccountPortfolioGrid in section-accounts, passing filteredAccounts, cases, events, loading, selectedProducts, aeList, aeFilterSelected, and allAccounts. AEGroupedList remains imported but is no longer used at the top-level render path. All controls restored.
+
+### BKL-REG-17 | Segment badge shows grey no-data state on customer detail page
+Status: ✅ DONE 2026-04-10
+Severity: MEDIUM
+Priority: P1
+Size: XS (10m)
+Source: Jason — 2026-04-10 testing session
+Files: dashboard/src/pages/CustomerDetailPage.tsx
+Description: BKL-REG-15 added a fallback rendering the segment badge with a grey muted style and "—" when segment is null/empty. This looked broken — a ghost badge with no real data. 104/106 customers have no segment populated so the grey badge appeared on nearly every customer detail page.
+Decision: DONE — Segment badge now only renders when meta.segment is populated (truthy). When segment is null/empty, the badge is hidden entirely. No grey ghost badge.

@@ -656,14 +656,17 @@ function Dashboard() {
               />
             </section>
 
-            {/* BKL-UX52: AE-grouped customer list with attention scores */}
+            {/* Account Portfolio — search/filter/triage/byAE controls + grid (BKL-REG-16: restore from BKL-UX52 regression) */}
             <section id="section-accounts" data-section="section-accounts">
-              <AEGroupedList
-                accounts={accountsApi.data?.customers ?? []}
+              <AccountPortfolioGrid
+                accounts={filteredAccounts}
                 cases={casesApi.data?.cases ?? []}
                 events={calendarApi.data?.events ?? []}
                 loading={accountsApi.loading}
-                onCustomerClick={(name) => navigate(`/dashboard/customer/${encodeURIComponent(name)}`)}
+                selectedProducts={productFilterSelected}
+                aeList={aeList}
+                aeFilterSelected={aeFilterSelected}
+                allAccounts={accountsApi.data?.customers ?? []}
               />
             </section>
           </main>
