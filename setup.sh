@@ -297,17 +297,17 @@ check_ghcr() {
 }
 
 detect_compose() {
+  # Informational only — startup uses podman run directly.
+  # Detected command is reported so users know what to use for manual management.
   if podman compose version >/dev/null 2>&1; then
-    COMPOSE_CMD=(podman compose)
+    ok "compose available: podman compose (for manual management)"
   elif command -v podman-compose >/dev/null 2>&1; then
-    COMPOSE_CMD=(podman-compose)
+    ok "compose available: podman-compose (for manual management)"
   elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    COMPOSE_CMD=(docker compose)
+    ok "compose available: docker compose (for manual management)"
   else
-    warn "No compose command found. Install podman-compose or docker compose and re-run."
-    COMPOSE_CMD=()
+    say "No compose tool found — that's fine, setup uses podman run directly"
   fi
-  [[ ${#COMPOSE_CMD[@]} -gt 0 ]] && ok "compose: ${COMPOSE_CMD[*]}"
 }
 
 run_preflight() {
@@ -416,6 +416,8 @@ pull_image() {
 }
 
 scaffold_compose() {
+  # Download docker-compose.yml for post-install management (podman compose up/down).
+  # Not used for initial startup — setup always uses podman run directly.
   if [[ -f docker-compose.yml ]]; then
     ok "docker-compose.yml present"
     return 0
@@ -424,29 +426,27 @@ scaffold_compose() {
   if curl -fsSL "$COMPOSE_URL" -o docker-compose.yml 2>/dev/null; then
     ok "Downloaded docker-compose.yml"
   else
-    warn "Could not download docker-compose.yml — will use podman run fallback"
+    warn "Could not download docker-compose.yml — you can fetch it later from $COMPOSE_URL"
   fi
 }
 
 start_container() {
   hdr "Starting container"
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    say "(dry-run) would run: ${COMPOSE_CMD[*]:-podman run} ..."
+    say "(dry-run) would run: podman run -d --name pai-dashboard ..."
     return 0
   fi
 
-  if [[ ${#COMPOSE_CMD[@]} -gt 0 ]]; then
-    if "${COMPOSE_CMD[@]}" up -d 2>/tmp/compose-err; then
-      ok "container started via ${COMPOSE_CMD[*]}"
-      return 0
-    fi
-    warn "compose up failed ($(cat /tmp/compose-err | tail -1)) — falling back to podman run"
+  # Always use podman run directly — reliable on every platform regardless of
+  # compose tool availability. docker-compose.yml is provided for manual
+  # management after setup (podman compose up/down/logs).
+  local vol_flag
+  if [[ "$OS_TYPE" == "linux" ]]; then
+    vol_flag="$(pwd)/data:/data:z"
+  else
+    vol_flag="$(pwd)/data:/data"
   fi
 
-  # Direct podman run fallback — mirrors docker-compose.yml exactly
-  say "Starting container via podman run..."
-  local vol_flag="./data:/data"
-  [[ "$OS_TYPE" == "linux" ]] && vol_flag="./data:/data:z"
   podman run -d \
     --name pai-dashboard \
     --restart unless-stopped \
@@ -460,7 +460,7 @@ start_container() {
     --env-file .env \
     --shm-size 2g \
     "$IMAGE_REF"
-  ok "container started via podman run"
+  ok "container started"
 }
 
 wait_healthy() {
