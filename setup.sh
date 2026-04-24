@@ -13,7 +13,7 @@ set -euo pipefail
 # ---------- Constants ----------
 
 SETUP_SCHEMA_VERSION="1.3.1"
-IMAGE_REF="ghcr.io/hornjason/daily-brief-dashboard:v${SETUP_SCHEMA_VERSION}"
+IMAGE_REF="ghcr.io/hornjason/daily-brief-dashboard:latest"
 DASHBOARD_URL="http://localhost:7777/dashboard/setup"
 HEALTH_URL="http://localhost:7777/api/aes"
 ENV_EXAMPLE_URL="https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/.env.example"
@@ -286,10 +286,8 @@ check_port() {
 }
 
 check_ghcr() {
-  # Best-effort reachability: try a manifest pull. Skip if podman missing (already caught).
-  if ! podman manifest inspect "$IMAGE_REF" >/dev/null 2>&1 \
-    && ! podman pull --quiet "$IMAGE_REF" >/dev/null 2>&1; then
-    # Only fail hard if we actively can't reach the image
+  # Lightweight reachability check — curl a known public endpoint on ghcr.io.
+  if ! curl -fsSL --max-time 10 "https://ghcr.io/v2/" >/dev/null 2>&1; then
     die "$E_GHCR_AUTH" \
       "✗ Cannot reach GHCR. Check your network connection and try again."
   fi
