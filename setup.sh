@@ -44,7 +44,6 @@ ASSUME_YES=0
 
 # Runtime state
 OS_TYPE=""
-COMPOSE_CMD=()
 
 # ---------- UI helpers ----------
 
