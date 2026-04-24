@@ -431,11 +431,8 @@ start_container() {
     return 0
   fi
 
-  # Remove any existing stopped container with the same name (idempotent rerun).
-  if podman container exists pai-dashboard 2>/dev/null; then
-    say "Removing existing stopped container..."
-    podman rm -f pai-dashboard >/dev/null 2>&1 || true
-  fi
+  # Remove any existing container with the same name (idempotent rerun).
+  podman rm -f pai-dashboard >/dev/null 2>&1 || true
 
   # Always use podman run directly — reliable on every platform regardless of
   # compose tool availability. docker-compose.yml is provided for manual
