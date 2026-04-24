@@ -495,7 +495,7 @@ print_success() {
   printf '  ✓ Setup wizard opened at %s\n' "$DASHBOARD_URL"
   printf '\n'
   printf '  Next: Complete the wizard to configure OAuth, Google Drive, and your customers.\n'
-  printf '  SETUP.md has the full reference if you get stuck.\n'
+  printf '  Full setup guide: https://github.com/hornjason/daily-brief-dashboard#readme\n'
 }
 
 # ---------- Main ----------
