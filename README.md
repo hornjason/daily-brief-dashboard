@@ -10,12 +10,18 @@ A customer intelligence dashboard for Red Hat Account Solution Architects. It ag
 ## Quick Start
 
 ```bash
-curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh -o setup.sh
-chmod +x setup.sh
-./setup.sh
+curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh | bash
 ```
 
 The installer runs preflight checks, pulls the public container image from GHCR, writes a starter `.env`, and brings the dashboard up. When it finishes, open **http://localhost:7777/dashboard/setup** to run the first-time wizard.
+
+> **Prefer to inspect before running?**
+> ```bash
+> curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh -o setup.sh
+> chmod +x setup.sh
+> ./setup.sh --dry-run   # narrate every step without making changes
+> ./setup.sh             # run for real
+> ```
 
 ### Flags
 
@@ -24,8 +30,6 @@ The installer runs preflight checks, pulls the public container image from GHCR,
 | `--doctor` | Run diagnostics only — verifies Podman is running, ports are free, disk and memory meet minimums, and the GHCR image is reachable. Makes no changes. |
 | `--dry-run` | Show every command the installer would run without executing anything. |
 | `--yes` | Skip confirmation prompts. Useful for scripted installs. |
-
-Run `./setup.sh --doctor` first if you want to confirm your machine is ready before committing to an install.
 
 ## Troubleshooting
 
