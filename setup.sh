@@ -17,6 +17,7 @@ IMAGE_REF="ghcr.io/hornjason/daily-brief-dashboard:v${SETUP_SCHEMA_VERSION}"
 DASHBOARD_URL="http://localhost:7777/dashboard/setup"
 HEALTH_URL="http://localhost:7777/api/aes"
 ENV_EXAMPLE_URL="https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/.env.example"
+COMPOSE_URL="https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/docker-compose.yml"
 MIN_MACHINE_RAM_MB=4096
 MIN_HOST_RAM_MB=4096
 MIN_DISK_MB=5120
@@ -414,6 +415,19 @@ pull_image() {
   fi
 }
 
+scaffold_compose() {
+  if [[ -f docker-compose.yml ]]; then
+    ok "docker-compose.yml present"
+    return 0
+  fi
+  say "Fetching docker-compose.yml from GitHub..."
+  if curl -fsSL "$COMPOSE_URL" -o docker-compose.yml 2>/dev/null; then
+    ok "Downloaded docker-compose.yml"
+  else
+    warn "Could not download docker-compose.yml — will use podman run fallback"
+  fi
+}
+
 start_container() {
   hdr "Starting container"
   if [[ "$DRY_RUN" -eq 1 ]]; then
@@ -503,6 +517,7 @@ main() {
 
   scaffold_dirs
   scaffold_env
+  scaffold_compose
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
     hdr "Dry-run complete"
