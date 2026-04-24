@@ -18,9 +18,9 @@ The installer runs preflight checks, pulls the public container image from GHCR,
 > **Prefer to inspect before running?**
 > ```bash
 > curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh -o setup.sh
-> chmod +x setup.sh
-> ./setup.sh --dry-run   # narrate every step without making changes
-> ./setup.sh             # run for real
+> 
+> bash setup.sh --dry-run   # narrate every step without making changes
+> bash setup.sh             # run for real
 > ```
 
 ### Flags
