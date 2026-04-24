@@ -286,15 +286,9 @@ check_port() {
 }
 
 check_ghcr() {
-  # ghcr.io/v2/ returns 401 for unauthenticated requests — that's expected and means reachable.
-  # HTTP 000 means a network-level failure (DNS, timeout, no route).
-  local status
-  status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://ghcr.io/v2/" 2>/dev/null)
-  if [[ "$status" == "000" ]] || [[ -z "$status" ]]; then
-    die "$E_GHCR_AUTH" \
-      "✗ Cannot reach GHCR. Check your network connection and try again."
-  fi
-  ok "GHCR reachable"
+  # Skipped — podman pull gives a clear error if GHCR is unreachable.
+  # A preflight curl check here is redundant and fragile (401 vs 000 vs firewall rules).
+  :
 }
 
 detect_compose() {
