@@ -12,11 +12,11 @@ set -euo pipefail
 
 # ---------- Constants ----------
 
-SETUP_SCHEMA_VERSION="1.3.0"
+SETUP_SCHEMA_VERSION="1.3.1"
 IMAGE_REF="ghcr.io/hornjason/daily-brief-dashboard:v${SETUP_SCHEMA_VERSION}"
 DASHBOARD_URL="http://localhost:7777/dashboard/setup"
 HEALTH_URL="http://localhost:7777/api/aes"
-ENV_EXAMPLE_URL="https://raw.githubusercontent.com/hornjason/asaCommandCenter/main/.env.example"
+ENV_EXAMPLE_URL="https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/.env.example"
 MIN_MACHINE_RAM_MB=4096
 MIN_HOST_RAM_MB=4096
 MIN_DISK_MB=5120
@@ -416,16 +416,37 @@ pull_image() {
 
 start_container() {
   hdr "Starting container"
-  if [[ ${#COMPOSE_CMD[@]} -eq 0 ]]; then
-    warn "No compose tool available — install podman-compose or docker compose and re-run."
-    return 1
-  fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    say "(dry-run) would run: ${COMPOSE_CMD[*]} up -d"
+    say "(dry-run) would run: ${COMPOSE_CMD[*]:-podman run} ..."
     return 0
   fi
-  "${COMPOSE_CMD[@]}" up -d
-  ok "container started"
+
+  if [[ ${#COMPOSE_CMD[@]} -gt 0 ]]; then
+    if "${COMPOSE_CMD[@]}" up -d 2>/tmp/compose-err; then
+      ok "container started via ${COMPOSE_CMD[*]}"
+      return 0
+    fi
+    warn "compose up failed ($(cat /tmp/compose-err | tail -1)) — falling back to podman run"
+  fi
+
+  # Direct podman run fallback — mirrors docker-compose.yml exactly
+  say "Starting container via podman run..."
+  local vol_flag="./data:/data"
+  [[ "$OS_TYPE" == "linux" ]] && vol_flag="./data:/data:z"
+  podman run -d \
+    --name pai-dashboard \
+    --restart unless-stopped \
+    -p 7777:7777 \
+    -p 127.0.0.1:6080:6080 \
+    -v "$vol_flag" \
+    -e PORT=7777 \
+    -e CONFIG_DIR=/data/config \
+    -e CACHE_DIR=/data/cache \
+    -e RH_PROFILE_DIR=/data/rh-profile \
+    --env-file .env \
+    --shm-size 2g \
+    "$IMAGE_REF"
+  ok "container started via podman run"
 }
 
 wait_healthy() {
