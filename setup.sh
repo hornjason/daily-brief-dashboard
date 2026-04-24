@@ -179,7 +179,6 @@ check_podman_machine_ram() {
     | grep -oE '[0-9]+$' || echo "0")"
 
   if [[ -z "$mem_mb" || "$mem_mb" -eq 0 ]]; then
-    warn "Could not read podman machine memory — skipping check."
     return 0
   fi
 
