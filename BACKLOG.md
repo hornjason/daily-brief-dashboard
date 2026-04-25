@@ -6560,3 +6560,62 @@ Size: XS
 Source: Quinn audit 2026-04-25 — cosmetic observation
 Files: dashboard/src/App.tsx or dashboard/src/components/PipelineSection.tsx
 Description: Clicking the "By AE" button in AccountPortfolioGrid causes `document.title` to change to "Pipeline | ASA Command Center" while the URL stays at /dashboard. A PipelineSection useEffect is likely setting the title regardless of whether it's the active view. Fix: only set title in useEffect when the component is the primary visible view, or move title management to a route-level effect.
+
+---
+
+## Fresh-Install / Bootstrap Data Integrity (2026-04-25)
+
+### BKL-WIZ-SF-SYNC-01 | SF Pipeline "Sync Now" shows no success/row-count feedback
+Status: ✅ DONE 2026-04-25
+Priority: P2
+Size: S
+Source: Jason review 2026-04-25
+Files: dashboard/src/pages/SetupPage.tsx
+Description: Clicking "Sync Now" for Salesforce Pipeline in the setup wizard triggers the scrape but never displays a green success message or row count. The user has no indication the sync completed or how many rows were synced. Compare to other sync buttons that show "Synced N rows." Fix: wire the POST /api/scrape/salesforce response into a success banner showing row count.
+Can we test: YES — Playwright test that clicks Sync Now, waits for success text matching /\d+ rows/ or similar.
+Decision: DONE — added sfSyncSuccess state to SetupPage.tsx; success banner "✓ Sync complete — N rows" renders under SF Pipeline card, auto-clears after 8s. REG-WIZ-SF-SYNC-01 passes. Commit 1515e77.
+
+### BKL-CACHE-STALE-01 | Dashboard shows stale cached data after customer config changes
+Status: ✅ DONE 2026-04-25
+Priority: P1
+Size: M
+Source: Jason review 2026-04-25
+Files: src/customer-routes.ts
+Description: When customers.json is changed (reset, re-bootstrap, wipe), stale L1 disk cache from the previous customer set bleeds through to the dashboard. Root cause: /api/cases/all pulled cases from disk cache without filtering against current in-memory customers. Fix: filter /api/cases/all to only return cases whose accountNumber belongs to a current customer.
+Decision: DONE — /api/cases/all in customer-routes.ts now builds account-number set from in-memory customers store and filters results. /api/accounts and morning-summary already iterated in-memory customers — no change needed. REG-CACHE-STALE-01 passes. Commit 1515e77.
+
+### BKL-BRIEF-STALE-01 | Morning brief shows customers from previous config (stale intelligence cache)
+Status: ✅ DONE 2026-04-25
+Priority: P1
+Size: M
+Source: Jason review 2026-04-25
+Files: src/customer-routes.ts
+Description: Morning brief signal list included customers no longer in customers.json. Root cause: same as BKL-CACHE-STALE-01 — stale case data fed morning-summary for removed customers.
+Decision: DONE — morning-summary already iterates in-memory customers (no stale bleed from that path). Cases filter fix (BKL-CACHE-STALE-01) resolved the remaining stale signal source. REG-BRIEF-STALE-01 passes. Commit 1515e77.
+
+### BKL-BOOTSTRAP-ACCOUNTS-01 | Accounts don't appear in account list after AE bootstrap
+Status: ✅ DONE 2026-04-25 (fixed-by existing code)
+Priority: P1
+Size: M
+Source: Jason review 2026-04-25
+Files: src/customer.ts, POST /api/accounts, bootstrap flow
+Description: After bootstrapping, account list showed stale data from previous config. Root cause was BKL-CACHE-STALE-01 (cases filter). /api/accounts already reads in-memory customers; bootstrap-orchestrator.ts already mutates in-memory store on completion.
+Decision: DONE — no code change needed. BKL-CACHE-STALE-01 fix resolved the stale bleed. REG-BOOTSTRAP-ACCOUNTS-01 passes. Commit 1515e77.
+
+### BKL-UX-SPARKLINE-01 | Dashboard sparkline polyline NaN console error on empty data series
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Quinn audit 2026-04-25 (Phase 1 gate)
+Files: dashboard/src/components/ — whichever component renders sparklines (likely KPI tiles)
+Description: Console error "<polyline> attribute points: Expected number, '0.0,NaN 40.0,NaN'" appears when a sparkline series has no data points. Cosmetic only — no user-visible breakage — but pollutes console. Fix: guard sparkline rendering against empty/NaN series — render a flat line or skip polyline when series is empty.
+Can we test: YES — unit test that renders sparkline with empty data array, verifies no NaN in rendered points attribute.
+
+### BKL-TEST-SF-SYNC-BANNER-01 | SF Sync Now success banner not testable on seed container (no SF creds)
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Quinn audit 2026-04-25 (Phase 1 gate)
+Files: test/regression.spec.ts or new test/wizard-sf-sync.spec.ts
+Description: The SF Pipeline "Sync Now" success banner (data-testid="sf-sync-success") cannot be exercised on the test container because the button is disabled without SF credentials. REG-WIZ-SF-SYNC-01 cannot exercise the success path. Fix: write a Playwright test that mocks POST /api/scrape/salesforce to return {ok:true,rowCount:47}, asserts data-testid="sf-sync-success" appears with "✓ Sync complete — 47 rows", and disappears within 8s.
+Can we test: YES — via page.route() mock for the SF scrape endpoint.
