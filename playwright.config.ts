@@ -26,6 +26,7 @@ export default defineConfig({
   testIgnore: [
     '**/bootstrap-e2e.spec.ts',
     '**/e2e-carolanne.spec.ts',
+    '**/unit/**',
   ],
   use: {
     baseURL: process.env.BASE_URL ?? 'http://localhost:7777',
