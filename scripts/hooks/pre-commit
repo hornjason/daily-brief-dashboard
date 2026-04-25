@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Pre-commit hook: require PROJECT-STATE.md update when new routes or pages are added
+# Installed via: make install-hooks
+# Skip with: git commit --no-verify
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Count new route or page files staged for this commit
+NEW_CODE=$(git diff --cached --name-status | grep "^A" | grep -E "src/routes/|dashboard/src/pages/" | wc -l | tr -d ' ')
+
+if [ "$NEW_CODE" -gt "0" ]; then
+  STATE_STAGED=$(git diff --cached --name-only | grep -c "PROJECT-STATE.md" || true)
+  if [ "$STATE_STAGED" -eq "0" ]; then
+    echo ""
+    echo "❌  New route or page files staged — PROJECT-STATE.md not updated."
+    echo ""
+    git diff --cached --name-status | grep "^A" | grep -E "src/routes/|dashboard/src/pages/"
+    echo ""
+    echo "   New endpoints and pages require a PROJECT-STATE.md update (CLAUDE.md rule)."
+    echo "   Update PROJECT-STATE.md and stage it, or skip with: git commit --no-verify"
+    echo ""
+    exit 1
+  fi
+fi
+
+exit 0

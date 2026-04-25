@@ -1,52 +1,206 @@
 {
-  "driveParentFolderId": "1TESTDRIVEPARENTFOLDERAAAAAAAAAAAA",
+  "driveParentFolderId": "1sgXV9x55ncAJE8pOpS1KSTwjD2tRV5pW",
   "products": [
     {
-      "slug": "openshift",
-      "displayName": "OpenShift Test Product",
+      "slug": "rhel",
+      "displayName": "Red Hat Enterprise Linux",
+      "shortName": "RHEL",
+      "driveFolder": "1Opayaba1NeAOZ97ekkWH7mhNKVw6ADfl",
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "RHEL",
+        "Red Hat Enterprise Linux",
+        "RH00"
+      ],
+      "caseProductPatterns": [
+        "RHEL",
+        "Red Hat Enterprise Linux"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": "https://access.redhat.com/support/policy/updates/errata",
+        "releaseNotesUrl": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/10.1_release_notes/",
+        "docsBaseUrl": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/",
+        "contentHubUrl": "https://content.redhat.com/us/en/product/products-and-cloud-services/products-rhel.html",
+        "atomFeedUrl": null
+      }
+    },
+    {
+      "slug": "ocp",
+      "displayName": "Red Hat OpenShift Container Platform",
       "shortName": "OpenShift",
-      "driveFolder": "1TESTDRIVEFOLDEROPENSHIFT000000AA",
+      "driveFolder": "1B70BVC6LgJBBiAG-QcYbU1ksZ4-AYkFr",
       "driveFolderRefreshHours": 72,
       "marketingDoc": null,
       "followLinks": true,
       "refreshIntervalHours": 168,
       "subscriptionPatterns": [
         "OpenShift",
-        "OCP"
+        "OCP",
+        "RHOCP"
       ],
       "caseProductPatterns": [
-        "OpenShift"
+        "OpenShift",
+        "Red Hat OpenShift"
       ],
       "customSources": [],
       "seeds": {
-        "lifecycleUrl": null,
-        "releaseNotesUrl": null,
-        "docsBaseUrl": null,
-        "contentHubUrl": null,
+        "lifecycleUrl": "https://access.redhat.com/support/policy/updates/openshift",
+        "releaseNotesUrl": "https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/release_notes/ocp-4-21-release-notes",
+        "docsBaseUrl": "https://docs.redhat.com/en/documentation/openshift_container_platform/",
+        "releaseNotesDocNames": [
+          "release_notes"
+        ],
+        "contentHubUrl": "https://content.redhat.com/us/en/product/products-and-cloud-services/products-openshift.html",
         "atomFeedUrl": null
       }
     },
     {
-      "slug": "ansible",
-      "displayName": "Ansible Test Product",
-      "shortName": "Ansible",
-      "driveFolder": "1TESTDRIVEFOLDERANSIBLE0000000AA",
+      "slug": "ocp-virt",
+      "displayName": "OpenShift Virtualization",
+      "shortName": "OCP Virt",
+      "driveFolder": "1rlkCohlAPoK_XZIKKHBScrA6J0i5n4XQ",
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OpenShift Virtualization",
+        "RHOCPVIRT",
+        "OpenShift Virt"
+      ],
+      "caseProductPatterns": [
+        "OpenShift Virtualization",
+        "OpenShift Virt"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": "https://access.redhat.com/support/policy/updates/openshift",
+        "releaseNotesUrl": "https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/virtualization/release-notes",
+        "docsBaseUrl": "https://docs.redhat.com/en/documentation/openshift_container_platform/",
+        "releaseNotesDocNames": [
+          "virtualization"
+        ],
+        "contentHubUrl": "https://content.redhat.com/us/en/product/products-and-cloud-services/products-openshift.html",
+        "atomFeedUrl": null
+      }
+    },
+    {
+      "slug": "aap",
+      "displayName": "Red Hat Ansible Automation Platform",
+      "shortName": "AAP",
+      "driveFolder": "1HbIn45X3DTd96HDNtU8jbClaJf9XKvRG",
       "driveFolderRefreshHours": 72,
       "marketingDoc": null,
       "followLinks": true,
       "refreshIntervalHours": 168,
       "subscriptionPatterns": [
         "Ansible",
-        "AAP"
+        "AAP",
+        "RHAAP"
       ],
       "caseProductPatterns": [
-        "Ansible"
+        "Ansible",
+        "Red Hat Ansible"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": "https://access.redhat.com/support/policy/updates/ansible-automation-platform",
+        "releaseNotesUrl": "https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.6/html/red_hat_ansible_automation_platform_2.6_release_notes/index",
+        "docsBaseUrl": "https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/",
+        "contentHubUrl": "https://content.redhat.com/us/en/product/products-and-cloud-services/products-ansible.html",
+        "atomFeedUrl": null
+      }
+    },
+    {
+      "slug": "rhel-ai",
+      "displayName": "Red Hat Enterprise Linux AI",
+      "shortName": "RHEL AI",
+      "driveFolder": "1sYI_ojaoVLiul4KfqBaA_PEbgv91YeRi",
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "RHEL AI",
+        "Red Hat Enterprise Linux AI",
+        "RHELAI"
+      ],
+      "caseProductPatterns": [
+        "RHEL AI",
+        "Red Hat Enterprise Linux AI"
       ],
       "customSources": [],
       "seeds": {
         "lifecycleUrl": null,
-        "releaseNotesUrl": null,
-        "docsBaseUrl": null,
+        "releaseNotesUrl": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux_ai/3.0/html-single/release_notes/index",
+        "docsBaseUrl": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux_ai/",
+        "releaseNotesDocNames": [
+          "release_notes"
+        ],
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      }
+    },
+    {
+      "slug": "rh-ai-inference",
+      "displayName": "Red Hat AI Inference Server",
+      "shortName": "AI Inference",
+      "driveFolder": "1Vxl0592DzNWGaJtyJ-U_a9UFEwuuOTD-",
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "AI Inference Server",
+        "Red Hat AI Inference",
+        "RHAI"
+      ],
+      "caseProductPatterns": [
+        "AI Inference Server",
+        "Red Hat AI Inference"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": "https://docs.redhat.com/en/documentation/red_hat_ai_inference_server/3.2/html-single/release_notes/index",
+        "docsBaseUrl": "https://docs.redhat.com/en/documentation/red_hat_ai_inference_server/",
+        "releaseNotesDocNames": [
+          "release_notes"
+        ],
+        "contentHubUrl": null,
+        "atomFeedUrl": null
+      }
+    },
+    {
+      "slug": "rhoai",
+      "displayName": "Red Hat OpenShift AI",
+      "shortName": "OpenShift AI",
+      "driveFolder": "1nxjClGiUYXrXUbty73dGfGdbDWUt24JB",
+      "driveFolderRefreshHours": 72,
+      "marketingDoc": null,
+      "followLinks": true,
+      "refreshIntervalHours": 168,
+      "subscriptionPatterns": [
+        "OpenShift AI",
+        "RHOAI",
+        "Red Hat OpenShift AI"
+      ],
+      "caseProductPatterns": [
+        "OpenShift AI",
+        "Red Hat OpenShift AI"
+      ],
+      "customSources": [],
+      "seeds": {
+        "lifecycleUrl": null,
+        "releaseNotesUrl": "https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.0/html-single/release_notes/index",
+        "docsBaseUrl": "https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/",
+        "releaseNotesDocNames": [
+          "release_notes"
+        ],
         "contentHubUrl": null,
         "atomFeedUrl": null
       }

@@ -1,1 +1,7 @@
-{ "jobs": [] }
+{
+  "Acme Corp": { "status": "complete", "completedAt": "2026-04-10T00:00:00.000Z" },
+  "Globex Industries": { "status": "complete", "completedAt": "2026-04-10T00:00:00.000Z" },
+  "Wayne Enterprises": { "status": "none" },
+  "Initech": { "status": "none" },
+  "Stark Industries": { "status": "none" }
+}

@@ -1,9 +1,9 @@
 {
   "customers": [
-    { "name": "Acme Corp", "domain": "acmecorp-test.example", "accountNumbers": ["9900001"] },
-    { "name": "Globex Industries", "domain": "globex-test.example", "accountNumbers": ["9900002"] },
-    { "name": "Wayne Enterprises", "domain": "wayne-test.example", "accountNumbers": ["9900003"] },
-    { "name": "Initech", "domain": "initech-test.example", "accountNumbers": ["9900004"] },
-    { "name": "Stark Industries", "domain": "stark-test.example", "accountNumbers": ["9900005"] }
+    { "name": "Acme Corp", "domain": "acmecorp-test.example", "accountNumbers": ["9900001"], "ae": "Test AE One", "segment": "Enterprise", "industry": "Technology" },
+    { "name": "Globex Industries", "domain": "globex-test.example", "accountNumbers": ["9900002"], "ae": "Test AE One", "segment": "Commercial", "industry": "Manufacturing" },
+    { "name": "Wayne Enterprises", "domain": "wayne-test.example", "accountNumbers": ["9900003"], "ae": "Test AE Two", "segment": "Enterprise", "industry": "Defense" },
+    { "name": "Initech", "domain": "initech-test.example", "accountNumbers": ["9900004"], "ae": "Test AE Two", "segment": "Commercial", "industry": "Technology" },
+    { "name": "Stark Industries", "domain": "stark-test.example", "accountNumbers": ["9900005"], "ae": "Test AE One", "segment": "Enterprise", "industry": "Aerospace" }
   ]
 }

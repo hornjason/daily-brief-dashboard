@@ -1,0 +1,23 @@
+{
+  "cases": [
+    {
+      "caseNumber": "RHC-0099001",
+      "summary": "OpenShift upgrade stuck at 4.14",
+      "severity": "2",
+      "status": "Waiting on Red Hat",
+      "product": "OpenShift Container Platform",
+      "daysOpen": 12,
+      "accountNumber": "9900001"
+    },
+    {
+      "caseNumber": "RHC-0099002",
+      "summary": "RHEL kernel panic on boot",
+      "severity": "1",
+      "status": "Waiting on Customer",
+      "product": "Red Hat Enterprise Linux",
+      "daysOpen": 3,
+      "accountNumber": "9900001"
+    }
+  ],
+  "cachedAt": "2026-04-10T00:00:00.000Z"
+}

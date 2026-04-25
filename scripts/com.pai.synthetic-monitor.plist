@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  BKL-TEST-P0-05: Synthetic Monitor LaunchAgent
+  Runs every 15 minutes on the Mac Mini.
+
+  Setup (run once on Mac Mini):
+    cp scripts/com.pai.synthetic-monitor.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.pai.synthetic-monitor.plist
+
+  Check status:
+    launchctl list | grep synthetic-monitor
+    cat /tmp/synthetic-monitor.log
+
+  Disable:
+    launchctl unload ~/Library/LaunchAgents/com.pai.synthetic-monitor.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.pai.synthetic-monitor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/bun</string>
+    <string>/Users/jasonhorn/DailyBriefDashboard/scripts/synthetic-monitor.ts</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SMOKE_URL</key>
+    <string>http://localhost:7777</string>
+    <key>STATUS_PATH</key>
+    <string>/Users/jasonhorn/DailyBriefDashboard/data/synthetic-monitor-status.json</string>
+    <key>NOTIFY_URL</key>
+    <string>http://localhost:8888/notify</string>
+    <key>HOME</key>
+    <string>/Users/jasonhorn</string>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+  </dict>
+
+  <!-- Every 15 minutes -->
+  <key>StartInterval</key>
+  <integer>900</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/synthetic-monitor.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/synthetic-monitor.err</string>
+</dict>
+</plist>

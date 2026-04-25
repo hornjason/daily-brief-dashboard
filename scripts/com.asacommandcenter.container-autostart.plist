@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Production container auto-start — starts pai-dashboard on Mac Mini login.
+
+  Setup (run once on Mac Mini after git pull):
+    cp scripts/com.asacommandcenter.container-autostart.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.asacommandcenter.container-autostart.plist
+
+  Check status:
+    launchctl list | grep container-autostart
+    cat /tmp/container-autostart.log
+
+  Disable:
+    launchctl unload ~/Library/LaunchAgents/com.asacommandcenter.container-autostart.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.asacommandcenter.container-autostart</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/jasonhorn/DailyBriefDashboard/scripts/container-autostart.sh</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>/Users/jasonhorn</string>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/container-autostart.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/tmp/container-autostart.err</string>
+</dict>
+</plist>
