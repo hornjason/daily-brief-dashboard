@@ -206,6 +206,7 @@ test-up: test-down seed
 	  -v $(CURDIR)/data-test:/data:Z \
 	  --env-file .env \
 	  -e PORT=7777 \
+	  -e OAUTH_BASE_URL=http://localhost:7776 \
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
@@ -223,6 +224,7 @@ test-rebuild: build test-down seed
 	  -v $(CURDIR)/data-test:/data:Z \
 	  --env-file .env \
 	  -e PORT=7777 \
+	  -e OAUTH_BASE_URL=http://localhost:7776 \
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
@@ -281,6 +283,7 @@ test-rebuild-live: build test-down seed-live-clean
 	  -v $(CURDIR)/data-test:/data:Z \
 	  --env-file .env \
 	  -e PORT=7777 \
+	  -e OAUTH_BASE_URL=http://localhost:7776 \
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
