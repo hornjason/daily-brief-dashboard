@@ -6530,3 +6530,33 @@ Size: XS
 Source: Pre-existing gap discovered 2026-04-25; ISC-40 documentation requirement
 Files: src/settings-api.ts, test/unit/
 Description: `recordSessionEstablished` is referenced in unit tests but not exported from `src/settings-api.ts`. Causes 1 pre-existing unit test failure (220/221 pass). Does not affect production — the function either doesn't exist or exists under a different name/module. Fix: grep for the function definition, find the correct export location, update the test import.
+
+---
+
+### BKL-ADMIN-SUPPORTABLE-01 | Admin page still renders Supportable in 4 places
+Status: 🔴 IN PROGRESS (Marcus fixing 2026-04-25)
+Priority: P1
+Size: S
+Source: Quinn audit 2026-04-25 — ISC-25 FAIL
+Files: dashboard/src/pages/AdminPage.tsx
+Description: Admin page renders Supportable in 4 locations despite Supportable being permanently disabled: (1) Health card row, (2) Manual Scrape Triggers "Supportable Discovery + Sync" button, (3) Initial Load "Supportable Full Bootstrap" entry, (4) Scheduler Config checkbox + label. All 4 must be removed. SessionHealthPanel was already cleaned by Marcus in earlier pass (REG-041) but AdminPage was out of scope.
+
+---
+
+### BKL-UX-STALE-HEALTH-01 | Stale Supportable entry appears in Session Health Panel on first load
+Status: 🟡 OPEN
+Priority: P2
+Size: XS
+Source: Quinn audit 2026-04-25 — transient observation
+Files: src/scraper-status-store.ts or similar health cache
+Description: On first dashboard load after production rebuild, Session Health Panel briefly showed a stale Supportable entry (from 7:26 AM sync, before Supportable was disabled). After live data refreshed, the entry disappeared. Root cause: health/scrape status cache on disk still has a Supportable entry from when it was active. Fix: on server start or after Supportable disable, evict the Supportable key from the scraper-status store so it cannot be served to clients.
+
+---
+
+### BKL-UI-TITLE-01 | Clicking "By AE" filter sets page title to "Pipeline" while on /dashboard
+Status: 🟡 OPEN
+Priority: P3
+Size: XS
+Source: Quinn audit 2026-04-25 — cosmetic observation
+Files: dashboard/src/App.tsx or dashboard/src/components/PipelineSection.tsx
+Description: Clicking the "By AE" button in AccountPortfolioGrid causes `document.title` to change to "Pipeline | ASA Command Center" while the URL stays at /dashboard. A PipelineSection useEffect is likely setting the title regardless of whether it's the active view. Fix: only set title in useEffect when the component is the primary visible view, or move title management to a route-level effect.

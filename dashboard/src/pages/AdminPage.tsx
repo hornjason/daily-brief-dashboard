@@ -8,16 +8,6 @@ import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface InitialLoadStatus {
-  running: boolean
-  currentCustomer: string | null
-  completedCount: number
-  totalCount: number
-  errors: { customer: string; message: string }[]
-  startedAt: string | null
-  completedAt: string | null
-}
-
 interface ScrapeStatus {
   isRunning: boolean
   lastSync: string | null
@@ -279,7 +269,6 @@ function SchedulerConfig({
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="space-y-1 divide-y divide-gray-700/50">
         <SourceScheduleRow label="CCSP" timeKey="ccspTime" enabledKey="ccspEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
-        <SourceScheduleRow label="Supportable" timeKey="supportableTime" enabledKey="supportableEnabled" floorHint="Min 12h between runs" schedCfg={cfg} onSave={onSave} />
         <SourceScheduleRow label="Territory" timeKey="territoryTime" enabledKey="territoryEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
         <SourceScheduleRow label="SF Pipeline" timeKey="sfPipelineTime" enabledKey="sfPipelineEnabled" floorHint="Min 12h between runs" schedCfg={cfg} onSave={onSave} />
         <div className="flex items-center gap-3 py-2">
@@ -308,92 +297,6 @@ function SchedulerConfig({
         </div>
         {schedulerCfg && (
           <SourceScheduleRow label="RH Cases" timeKey="rhScrape" enabledKey="rhEnabled" floorHint="Interval-based (see above)" schedCfg={cfg} onSave={onSave} isInterval />
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Initial load section ───────────────────────────────────────────────────────
-
-function InitialLoadSection({ scrapeRunning }: { scrapeRunning: boolean }) {
-  const [loadStatus, setLoadStatus] = useState<InitialLoadStatus | null>(null)
-  const [starting, setStarting] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const fetchLoadStatus = useCallback(async () => {
-    try {
-      const d = await fetch('/api/bootstrap/initial-load/status').then(r => r.json())
-      setLoadStatus(d)
-    } catch {}
-  }, [])
-
-  useEffect(() => {
-    fetchLoadStatus()
-  }, [fetchLoadStatus])
-
-  useEffect(() => {
-    if (loadStatus?.running) {
-      if (!pollRef.current) {
-        pollRef.current = setInterval(fetchLoadStatus, 5_000)
-      }
-    } else {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-    }
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
-  }, [loadStatus?.running, fetchLoadStatus])
-
-  const handleRun = async () => {
-    setStarting(true)
-    try {
-      await fetch('/api/bootstrap/initial-load', { method: 'POST' })
-      await fetchLoadStatus()
-      pollRef.current = setInterval(fetchLoadStatus, 5_000)
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  const busy = starting || loadStatus?.running
-  const disabled = !!busy || scrapeRunning
-
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <span className="text-sm font-medium text-gray-200">Supportable Full Bootstrap</span>
-          <p className="text-xs text-gray-500 mt-0.5">Crash-safe full load — resumes from last completed customer</p>
-        </div>
-        <button
-          onClick={handleRun}
-          disabled={disabled}
-          className="px-3 py-1.5 text-xs font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors shrink-0"
-        >
-          {busy ? 'Running…' : 'Run'}
-        </button>
-      </div>
-      <div className="space-y-1 text-xs text-gray-400">
-        {loadStatus?.running && loadStatus.totalCount > 0 && (
-          <div className="flex items-center gap-1.5 text-yellow-400">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
-            {loadStatus.completedCount} / {loadStatus.totalCount} customers complete
-          </div>
-        )}
-        {loadStatus?.running && loadStatus.currentCustomer && (
-          <div className="text-gray-300 truncate" title={loadStatus.currentCustomer}>Current: {loadStatus.currentCustomer}</div>
-        )}
-        {!loadStatus?.running && loadStatus?.completedAt && (
-          <div>Last run: <span className="text-gray-300">{formatRelTime(loadStatus.completedAt)}</span>
-            {loadStatus.errors.length > 0 && (
-              <span className="text-red-400 ml-2">({loadStatus.errors.length} error{loadStatus.errors.length !== 1 ? 's' : ''})</span>
-            )}
-          </div>
-        )}
-        {!loadStatus?.running && !loadStatus?.completedAt && (
-          <div className="text-gray-500">Never run</div>
-        )}
-        {scrapeRunning && !loadStatus?.running && (
-          <div className="text-yellow-600">Supportable scrape in progress — wait to finish before running initial load</div>
         )}
       </div>
     </div>
@@ -1290,15 +1193,6 @@ export function AdminPage() {
               }
             />
             <ScrapeSection
-              label="Supportable Discovery + Sync"
-              subtitle="Full discovery + scrape from source for all AEs"
-              status={status?.supportable ?? null}
-              running={!!triggerBusy['supportable']}
-              onRunNow={() => runScrape('supportable', '/api/scrape/supportable/discover')}
-              circuitBreaker={status?.circuitBreakers?.supportable}
-              queuePending={localQueued['supportable'] ?? status?.queue?.pending?.includes('supportable')}
-            />
-            <ScrapeSection
               label="CCSP"
               status={status?.ccsp ?? null}
               running={!!triggerBusy['ccsp']}
@@ -1335,12 +1229,6 @@ export function AdminPage() {
           <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
             <ContentRhSessionButton />
           </div>
-        </div>
-
-        {/* Initial load */}
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Initial Load</h2>
-          <InitialLoadSection scrapeRunning={!!status?.supportable?.isRunning} />
         </div>
 
         {/* Scheduler config */}
