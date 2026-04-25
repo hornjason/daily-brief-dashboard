@@ -974,4 +974,115 @@ test.describe('Restored-commits source-level regressions', () => {
     // The lost commit added live-session expiry tracking — `sfSessionExpired` flag.
     expect(src).toContain('sfSessionExpired')
   })
+
+  // ── REG-WIZ-FRESH-01: Step 4 informational summary in SetupPage ─────────
+  test('REG-WIZ-FRESH-01: SetupPage Step 4 renders configured summary text', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/pages/SetupPage.tsx'), 'utf8')
+    // The summary block uses this stable testid + the canonical phrasing.
+    expect(src).toContain('data-testid="wiz-step4-config-summary"')
+    expect(src).toContain('Currently configured:')
+    expect(src).toContain('use the tabs below to add, modify, or remove')
+    // Gated on at least one configured AE — must NOT render when count is 0.
+    expect(src).toContain('configuredAeCount > 0')
+  })
+
+  // ── REG-WIZ-SF-SYNC-01: SF Pipeline Sync Now success feedback ────────────
+  test('REG-WIZ-SF-SYNC-01: SetupPage SF sync surfaces success message with row count', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/pages/SetupPage.tsx'), 'utf8')
+    // State variable + UI element + content path all present.
+    expect(src).toContain('sfSyncSuccess')
+    expect(src).toContain('data-testid="sf-sync-success"')
+    expect(src).toMatch(/Sync complete\b/)
+    // The success path reads recordCount from the status endpoint.
+    expect(src).toMatch(/\brecordCount\b/)
+  })
+})
+
+// ── REG-CACHE-STALE-01 / REG-BRIEF-STALE-01 / REG-BOOTSTRAP-ACCOUNTS-01 ────
+// These three tests each replace the in-memory customer set on the server, so
+// they MUST run serially — Playwright's fullyParallel mode otherwise lets them
+// stomp each other and fail intermittently against shared server state.
+test.describe('Phase 1 stale-cache regressions (serial)', () => {
+  test.describe.configure({ mode: 'serial' })
+
+  // ── REG-CACHE-STALE-01 ──────────────────────────────────────────────────
+  test.describe('@destructive REG-CACHE-STALE-01: /api/cases/all filtered to current customers.json', () => {
+    test('cases for accounts not in customers.json are excluded', async () => {
+      const knownAcct = '99990001'
+      const aeRes = await postJSONDestructive('/api/aes', {
+        aes: [{ name: 'Stale Cache Test AE', driveFolderId: 'stale-cache-folder' }],
+      })
+      expect(aeRes.status).toBe(200)
+      const custRes = await postJSONDestructive('/api/setup/save-customers', {
+        customers: [{
+          name: 'Stale Cache Customer',
+          ae: 'Stale Cache Test AE',
+          accountNumbers: [knownAcct],
+        }],
+      })
+      expect([200, 201]).toContain(custRes.status)
+
+      const res = await fetch(`${DESTRUCTIVE_URL}/api/cases/all?includeAll=true`)
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      const cases: { accountNumber: string | number }[] = body.cases ?? []
+      // Either the cache holds zero cases (clean slate) — fine — or every
+      // returned case must belong to our single known account.
+      for (const ca of cases) {
+        expect(String(ca.accountNumber)).toBe(knownAcct)
+      }
+    })
+  })
+
+  // ── REG-BRIEF-STALE-01 ──────────────────────────────────────────────────
+  test.describe('@destructive REG-BRIEF-STALE-01: /api/morning-summary scoped to current customers', () => {
+    test('signals only reference customers in the active config', async () => {
+      const aeRes = await postJSONDestructive('/api/aes', {
+        aes: [{ name: 'Stale Brief Test AE', driveFolderId: 'stale-brief-folder' }],
+      })
+      expect(aeRes.status).toBe(200)
+      const custRes = await postJSONDestructive('/api/setup/save-customers', {
+        customers: [{
+          name: 'Stale Brief Customer',
+          ae: 'Stale Brief Test AE',
+          accountNumbers: ['99990002'],
+        }],
+      })
+      expect([200, 201]).toContain(custRes.status)
+
+      const res = await fetch(`${DESTRUCTIVE_URL}/api/morning-summary`)
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      const signals: { customer: string }[] = body.signals ?? []
+      const allowed = new Set(['Stale Brief Customer'])
+      for (const sig of signals) {
+        expect(allowed.has(sig.customer)).toBe(true)
+      }
+    })
+  })
+
+  // ── REG-BOOTSTRAP-ACCOUNTS-01 ───────────────────────────────────────────
+  test.describe('@destructive REG-BOOTSTRAP-ACCOUNTS-01: /api/accounts reflects current customers.json', () => {
+    test('returns exactly the active customer set', async () => {
+      const aeRes = await postJSONDestructive('/api/aes', {
+        aes: [{ name: 'Boot Accounts Test AE', driveFolderId: 'boot-accounts-folder' }],
+      })
+      expect(aeRes.status).toBe(200)
+      const wantedNames = ['Boot Accounts Customer A', 'Boot Accounts Customer B']
+      const custRes = await postJSONDestructive('/api/setup/save-customers', {
+        customers: wantedNames.map((name, i) => ({
+          name,
+          ae: 'Boot Accounts Test AE',
+          accountNumbers: [`9999100${i}`],
+        })),
+      })
+      expect([200, 201]).toContain(custRes.status)
+
+      const res = await fetch(`${DESTRUCTIVE_URL}/api/accounts`)
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      const got: string[] = (body.customers ?? []).map((c: { name: string }) => c.name).sort()
+      expect(got).toEqual([...wantedNames].sort())
+    })
+  })
 })

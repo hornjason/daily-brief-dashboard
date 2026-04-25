@@ -49,8 +49,9 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-          # Gemini / Vertex AI
-          GEMINI_SERVICE_ACCOUNT_KEY: ${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}
+          # Gemini / Vertex AI — SA key removed; auth flows through the
+          # @redhat.com OAuth token (cloud-platform scope) against the
+          # `domain:redhat.com → Vertex AI User` IAM binding on jhorn-pai.
           GOOGLE_CLOUD_PROJECT: ${{ secrets.GOOGLE_CLOUD_PROJECT }}
           # Salesforce
           SF_USERNAME: ${{ secrets.SF_USERNAME }}

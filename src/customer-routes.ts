@@ -395,13 +395,29 @@ export function registerCustomerRoutes(app: Hono): void {
         allCases = allCases.filter((sc) => String(sc.accountNumber) === accountFilter)
       }
 
-      // Enrich with customer name by matching accountNumber
-      const enriched = allCases.map((sc) => {
-        const matched = customers.find((cu) =>
-          (cu.accountNumbers ?? []).map(String).includes(String(sc.accountNumber))
-        )
-        return { ...sc, customerName: matched?.name ?? sc.customerName ?? 'Unknown' }
-      })
+      // BKL-CACHE-STALE-01: build an account-number set from the in-memory
+      // customer store and exclude any case whose accountNumber doesn't match
+      // a customer currently in customers.json. The disk cache may still hold
+      // cases from previous POD/AE configurations after a reset; without this
+      // filter those cases bleed through into /api/cases/all.
+      const currentAccountNums = new Set<string>()
+      for (const cu of customers) {
+        for (const num of cu.accountNumbers ?? []) {
+          currentAccountNums.add(String(num))
+        }
+      }
+
+      // Enrich with customer name by matching accountNumber, then drop
+      // cases that don't belong to a customer currently in customers.json.
+      const enriched = allCases
+        .map((sc) => {
+          const matched = customers.find((cu) =>
+            (cu.accountNumbers ?? []).map(String).includes(String(sc.accountNumber))
+          )
+          return { ...sc, customerName: matched?.name ?? sc.customerName ?? 'Unknown', _matched: !!matched }
+        })
+        .filter((sc) => sc._matched || currentAccountNums.has(String(sc.accountNumber)))
+        .map(({ _matched, ...sc }) => sc)
 
       return c.json({ cases: enriched, totalCount: enriched.length })
     } catch (e: any) {

@@ -1844,8 +1844,28 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
     )
   }
 
+  // BKL-WIZ-FRESH-INSTALL-01: informational summary at top of Step 4 so the
+  // user sees current AE/customer counts before choosing a tab. Read-only —
+  // derived from the same `aes` state already loaded from /api/aes + /customers.
+  const configuredAeCount = aes.filter(a => a.name.trim()).length
+  const configuredCustomerCount = aes.reduce(
+    (sum, a) => sum + a.customers.filter(c => c.name.trim()).length,
+    0,
+  )
+
   return (
     <div className="space-y-5">
+      {/* BKL-WIZ-FRESH-INSTALL-01: non-blocking info note showing current
+          configuration counts — only renders when ≥1 AE is configured. */}
+      {configuredAeCount > 0 && (
+        <div
+          data-testid="wiz-step4-config-summary"
+          className="text-xs text-text-secondary bg-surface/60 border border-border/40 rounded-lg px-3 py-2"
+        >
+          Currently configured: {configuredAeCount} AE{configuredAeCount !== 1 ? 's' : ''}, {configuredCustomerCount} customer{configuredCustomerCount !== 1 ? 's' : ''} — use the tabs below to add, modify, or remove.
+        </div>
+      )}
+
       {/* Tab row — at top so users pick mode before seeing config */}
       <div className="flex items-center gap-1 bg-surface rounded-lg p-1 w-fit">
         <button
@@ -2652,6 +2672,10 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   const [ccspScrapeError, setCcspScrapeError] = useState<string | null>(null)
   // ccspSyncedAt removed — derived from server ccspStatus.lastSuccess/lastScrape via isRecent()
   const [sfSyncing, setSfSyncing] = useState(false)
+  // BKL-WIZ-SF-SYNC-01: transient success message after a manual Sync Now
+  // completes successfully. Cleared on the next sync click and auto-hidden
+  // after 8s so it doesn't linger forever.
+  const [sfSyncSuccess, setSfSyncSuccess] = useState<string | null>(null)
   const [sfSyncError, setSfSyncError] = useState<string | null>(null)
   // sfSyncedAt removed — derived from server sfStatus.lastSync via isRecent()
   const [rhSyncing, setRhSyncing] = useState(false)
@@ -3026,18 +3050,23 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
 
   const handleSfSync = async () => {
     setSfSyncError(null)
+    setSfSyncSuccess(null)
     setSfSyncing(true)
     try {
       const res = await fetch('/api/refresh/pipeline', { method: 'POST' })
       const d = await res.json()
       if (d.error) { setSfSyncError(d.error); setSfSyncing(false); return }
-      // Poll status endpoint until scraper finishes, then refresh sfStatus before resolving
+      // Poll status endpoint until scraper finishes, then refresh sfStatus before resolving.
+      // BKL-WIZ-SF-SYNC-01: capture final status so we can show a transient
+      // success message with row count once the run finishes cleanly.
+      let finalStatus: { running?: boolean; lastError?: string | null; recordCount?: number } | null = null
       const poll = () => new Promise<void>((resolve) => {
         const iv = setInterval(async () => {
           try {
             const s = await fetch('/api/scrape/salesforce/status').then(r => r.json())
             if (!s.running) {
               clearInterval(iv)
+              finalStatus = s
               // Await status refresh so sfStatus is updated before setSfSyncing(false) fires
               fetch('/api/auth/salesforce/status')
                 .then(r => r.json())
@@ -3048,6 +3077,15 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
         }, 2_000)
       })
       await poll()
+      // BKL-WIZ-SF-SYNC-01: surface success feedback when the run finished
+      // without an error. Use recordCount from the status endpoint when
+      // available; otherwise fall back to a generic "Sync complete" message.
+      const fs = finalStatus as { running?: boolean; lastError?: string | null; recordCount?: number } | null
+      if (fs && !fs.lastError) {
+        const count = typeof fs.recordCount === 'number' ? fs.recordCount : null
+        setSfSyncSuccess(count !== null ? `Sync complete — ${count} rows` : 'Sync complete')
+        setTimeout(() => setSfSyncSuccess(null), 8_000)
+      }
     } catch (e: any) {
       setSfSyncError('Sync failed. Check server logs for details.')
     } finally {
@@ -3528,6 +3566,15 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
             </div>
           </div>
           {sfSyncError && <p role="alert" className="text-xs text-critical pb-2">{sfSyncError}</p>}
+          {sfSyncSuccess && (
+            <p
+              data-testid="sf-sync-success"
+              role="status"
+              className="text-xs text-success pb-2"
+            >
+              ✓ {sfSyncSuccess}
+            </p>
+          )}
 
         </div>
       </div>}
