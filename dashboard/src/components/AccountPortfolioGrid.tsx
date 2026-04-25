@@ -4,6 +4,7 @@ import { Building2, Shield, Package, Key, Calendar, X, ChevronUp, ChevronDown, U
 import { formatDate, formatRelTime } from '../lib/format'
 import HealthDot from './HealthDot'
 import PriorityActionRow from './PriorityActionRow'
+import { AEGroupedList } from './AEGroupedList'
 import { stripProductName } from '../utils/productName'
 import { Grid } from 'react-window'
 
@@ -34,7 +35,7 @@ interface AccountPortfolioGridProps {
   allAccounts?: AccountInfo[]
 }
 
-type ViewMode = 'all' | 'byAE' | 'triage' | 'list'
+type ViewMode = 'all' | 'byAE' | 'grouped' | 'triage' | 'list'
 
 function getHealthStatusFromCases(account: AccountInfo, accountCases: SupportCase[]): { color: string; label: string } {
   const hasSev1 = accountCases.some((c) => c.severity === '1')
@@ -213,15 +214,27 @@ function ProductsModal({
 
 // ── Collapsible AE Group ─────────────────────────────────────────────────────
 
+// BKL-UX-REG-01: same palette as AEGroupedList's getAttentionDotColor so byAE
+// mode and grouped mode render identical health-dot strips.
+function getAttentionDotColor(score: number): string {
+  if (score >= 70) return 'bg-red-500'
+  if (score >= 40) return 'bg-amber-500'
+  if (score > 0) return 'bg-green-500'
+  return 'bg-zinc-600'
+}
+
 function AEGroup({
   label,
   count,
   defaultCollapsed,
+  customerScores,
   children,
 }: {
   label: string
   count: number
   defaultCollapsed?: boolean
+  /** BKL-UX-REG-01: attention scores per customer — drives the health-dot strip in the collapsed header. */
+  customerScores?: number[]
   children: React.ReactNode
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false)
@@ -239,6 +252,19 @@ function AEGroup({
         )}
         <span className="text-sm font-semibold text-accent">{label}</span>
         <span className="text-xs text-text-secondary">{count} account{count !== 1 ? 's' : ''}</span>
+        {customerScores && customerScores.length > 0 && (
+          <div className="flex items-center gap-1 pl-1">
+            {customerScores.slice(0, 12).map((score, i) => (
+              <span
+                key={i}
+                className={`w-1.5 h-1.5 rounded-full shrink-0 ${getAttentionDotColor(score)}`}
+              />
+            ))}
+            {customerScores.length > 12 && (
+              <span className="text-[11px] text-text-secondary tabular-nums pl-0.5">+{customerScores.length - 12}</span>
+            )}
+          </div>
+        )}
         <div className="flex-1 h-px bg-border/50" />
       </button>
       {!collapsed && children}
@@ -467,7 +493,7 @@ function AccountCard({
             <Key className="w-3 h-3" />
           </div>
           <div className="text-sm font-bold text-text-primary group-hover/stat:text-accent transition-colors underline decoration-dotted underline-offset-2">
-            {account.totalLicenses.toLocaleString()}
+            {(account.totalLicenses ?? 0).toLocaleString()}
           </div>
           <div className="text-xs text-text-secondary">Licenses</div>
         </button>
@@ -692,7 +718,23 @@ function VirtualizedCardGrid({
 
 export function AccountPortfolioGrid({ accounts, cases, events, loading, selectedProducts = [], aeList = [], aeFilterSelected = 'all', allAccounts = [] }: AccountPortfolioGridProps) {
   const [modalAccount, setModalAccount] = useState<AccountInfo | null>(null)
-  const [viewMode, setViewMode] = useState<ViewMode>('byAE')
+  // BKL-UX109: Default to 'grouped' (list-style AE sections) for large portfolios (≥4 AEs)
+  // which gives users a scan-at-scale view; fall back to card-style 'byAE' for smaller pods.
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const aeCount = aeList.length > 0
+      ? aeList.length
+      : new Set(accounts.map(a => a.ae).filter(Boolean)).size
+    return aeCount >= 4 ? 'grouped' : 'byAE'
+  })
+  // BKL-UX109 fix: aeList is empty at mount (async load), so the lazy initializer
+  // above always picks 'byAE'. When aeList arrives, promote to 'grouped' for large
+  // portfolios unless the user has already picked a view explicitly.
+  const hasUserChosen = useRef(false)
+  useEffect(() => {
+    if (aeList.length >= 4 && !hasUserChosen.current) {
+      setViewMode('grouped')
+    }
+  }, [aeList])
   const [search, setSearch] = useState('')
   const [aeFilter, setAeFilter] = useState('')
   const [healthScores, setHealthScores] = useState<Record<string, { score: number; status: string; breakdown?: Record<string, { score: number; signal: string }> }>>({})
@@ -771,6 +813,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
     if (viewMode === 'triage') return 'triage'
     if (viewMode === 'all') return 'all'
     if (viewMode === 'list') return 'list'
+    if (viewMode === 'grouped') return 'grouped'
     // Auto-suggest triage for large portfolios, but keep byAE as user choice
     return 'byAE'
   }, [viewMode])
@@ -924,25 +967,32 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
             {/* View mode toggle */}
             <div className="flex items-center gap-0.5 bg-border/30 rounded-md p-0.5">
               <button
-                onClick={() => setViewMode('all')}
+                onClick={() => { hasUserChosen.current = true; setViewMode('all') }}
                 className={`text-xs px-2 py-0.5 rounded transition-colors ${effectiveViewMode === 'all' ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 All
               </button>
               <button
-                onClick={() => setViewMode('byAE')}
+                onClick={() => { hasUserChosen.current = true; setViewMode('byAE') }}
                 className={`text-xs px-2 py-0.5 rounded transition-colors ${effectiveViewMode === 'byAE' ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 By AE
               </button>
               <button
-                onClick={() => setViewMode('triage')}
+                onClick={() => { hasUserChosen.current = true; setViewMode('grouped') }}
+                className={`text-xs px-2 py-0.5 rounded transition-colors ${effectiveViewMode === 'grouped' ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
+                title="List view grouped by AE with health indicators"
+              >
+                Grouped
+              </button>
+              <button
+                onClick={() => { hasUserChosen.current = true; setViewMode('triage') }}
                 className={`text-xs px-2 py-0.5 rounded transition-colors ${effectiveViewMode === 'triage' ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 Triage
               </button>
               <button
-                onClick={() => setViewMode('list')}
+                onClick={() => { hasUserChosen.current = true; setViewMode('list') }}
                 className={`text-xs px-2 py-0.5 rounded transition-colors ${effectiveViewMode === 'list' ? 'bg-border text-text-primary' : 'text-text-secondary hover:text-text-primary'}`}
               >
                 List
@@ -976,7 +1026,12 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
           /* Triage view */
           <div className="space-y-6">
             {triageGroups.critical.length > 0 && (
-              <AEGroup label="Critical" count={triageGroups.critical.length} defaultCollapsed={false}>
+              <AEGroup
+                label="Critical"
+                count={triageGroups.critical.length}
+                defaultCollapsed={false}
+                customerScores={triageGroups.critical.map(a => a.attentionScore ?? 0)}
+              >
                 <CardGrid
                   accounts={triageGroups.critical}
                   casesByAccount={casesByAccount}
@@ -990,7 +1045,12 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
               </AEGroup>
             )}
             {triageGroups.attention.length > 0 && (
-              <AEGroup label="Attention" count={triageGroups.attention.length} defaultCollapsed={false}>
+              <AEGroup
+                label="Attention"
+                count={triageGroups.attention.length}
+                defaultCollapsed={false}
+                customerScores={triageGroups.attention.map(a => a.attentionScore ?? 0)}
+              >
                 <CardGrid
                   accounts={triageGroups.attention}
                   casesByAccount={casesByAccount}
@@ -1004,7 +1064,12 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
               </AEGroup>
             )}
             {triageGroups.healthy.length > 0 && (
-              <AEGroup label="Healthy" count={triageGroups.healthy.length} defaultCollapsed={true}>
+              <AEGroup
+                label="Healthy"
+                count={triageGroups.healthy.length}
+                defaultCollapsed={true}
+                customerScores={triageGroups.healthy.map(a => a.attentionScore ?? 0)}
+              >
                 <CardGrid
                   accounts={triageGroups.healthy}
                   casesByAccount={casesByAccount}
@@ -1022,7 +1087,13 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
           /* By AE view */
           <div className="space-y-6">
             {aeGroups.map(([ae, aeAccounts]) => (
-              <AEGroup key={ae} label={ae} count={aeAccounts.length} defaultCollapsed={aeGroups.length > 4}>
+              <AEGroup
+                key={ae}
+                label={ae}
+                count={aeAccounts.length}
+                defaultCollapsed={aeGroups.length > 4}
+                customerScores={aeAccounts.map(a => a.attentionScore ?? 0)}
+              >
                 <CardGrid
                   accounts={aeAccounts}
                   casesByAccount={casesByAccount}
@@ -1036,6 +1107,17 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
               </AEGroup>
             ))}
           </div>
+        ) : effectiveViewMode === 'grouped' ? (
+          /* BKL-UX109: List-style AE groups with health-dot headers, pipeline ACV, case count */
+          <AEGroupedList
+            accounts={filteredAccounts}
+            cases={cases}
+            events={events}
+            loading={loading}
+            onCustomerClick={(name) => {
+              window.location.href = `/dashboard/customer/${encodeURIComponent(name)}`
+            }}
+          />
         ) : effectiveViewMode === 'list' ? (
           /* Compact list view (BKL-UX43) */
           <div className="overflow-x-auto">

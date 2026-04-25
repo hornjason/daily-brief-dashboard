@@ -1,10 +1,47 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, Calendar, Users, X, RefreshCw, AlertCircle } from 'lucide-react'
+import { TrendingUp, Calendar, Users, X, RefreshCw, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import type { PipelineSummary, PipelineOpp, PipelineByQuarterStage } from '../types'
 import { formatRelTime, fmtCurrency as fmt } from '../lib/format'
 import { normalizeProductName, stripProductName } from '../utils/productName'
 import RelTime from './RelTime'
 import Modal from './Modal'
+import InlineSparkline from './InlineSparkline'
+
+// BKL-INGEST-07: Staleness badge — show amber "Last synced Xh ago" when cache > 6h old.
+const STALE_THRESHOLD_MS = 6 * 60 * 60 * 1000  // 6 hours
+
+function isCacheStale(cachedAt: string | null | undefined): boolean {
+  if (!cachedAt) return false
+  return Date.now() - new Date(cachedAt).getTime() > STALE_THRESHOLD_MS
+}
+
+/** Build a rolling 4-quarter ACV series for a single owner from their opp close dates. */
+function ownerQuarterSeries(opps: PipelineOpp[], owner: string): { series: number[]; labels: string[] } {
+  const qMap = new Map<string, number>()
+  for (const o of opps) {
+    if (o.owner !== owner || !o.closeDate) continue
+    const d = new Date(o.closeDate)
+    if (Number.isNaN(d.getTime())) continue
+    const q = `${d.getFullYear()}-Q${Math.ceil((d.getMonth() + 1) / 3)}`
+    qMap.set(q, (qMap.get(q) ?? 0) + o.acv)
+  }
+  const sortedKeys = [...qMap.keys()].sort((a, b) => a.localeCompare(b))
+  const recent = sortedKeys.slice(-4)
+  return {
+    series: recent.map(k => qMap.get(k) ?? 0),
+    labels: recent,
+  }
+}
+
+function trendDelta(series: number[]): number | null {
+  if (series.length < 2) return null
+  const firstNonZeroIdx = series.findIndex(v => v > 0)
+  if (firstNonZeroIdx < 0) return null
+  const first = series[firstNonZeroIdx]
+  const last = series[series.length - 1]
+  if (first === 0) return null
+  return ((last - first) / first) * 100
+}
 
 function fmtDate(iso: string): string {
   if (!iso) return '—'
@@ -146,12 +183,30 @@ interface Props {
   error?: string | null
   onRefresh?: () => void
   selectedProducts?: string[]
+  aeFilterSelected?: string
+  /** BKL-UX119: bubble "By Owner" row clicks up to the global AE filter so the
+   *  left-panel totals/bars repaint. Without this, internal activeOwner state
+   *  only affects this section's right column. */
+  onSelectOwner?: (owner: string | null) => void
 }
 
-export function PipelineSection({ data, loading, error, onRefresh, selectedProducts = [] }: Props) {
+export function PipelineSection({ data, loading, error, onRefresh, selectedProducts = [], aeFilterSelected, onSelectOwner }: Props) {
   const [activeOwner, setActiveOwner] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<'acv' | 'date' | 'stage'>('acv')
   const [selectedOpp, setSelectedOpp] = useState<PipelineOpp | null>(null)
+
+  // BKL-UX120: Sync activeOwner with global AE filter so the "By Owner" tile
+  // shows the clear button and "{Owner}'s Opps" header when the filter is set
+  // externally (e.g. via CCSP tile click). Mirrors the BKL-UX118 pattern in
+  // CloudSpendSection.
+  useEffect(() => {
+    if (!aeFilterSelected || aeFilterSelected === 'all') {
+      setActiveOwner(null)
+      return
+    }
+    const matched = data?.byOwner?.find(o => o.owner?.toLowerCase() === aeFilterSelected.toLowerCase())?.owner ?? null
+    setActiveOwner(matched)
+  }, [aeFilterSelected, data])
 
   const productActive = selectedProducts.length > 0
 
@@ -222,8 +277,22 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
         <span className="text-xs text-text-secondary">Opportunities 2026</span>
         {loading && <span className="text-xs text-text-secondary animate-pulse">Loading…</span>}
         {!loading && (
-          <span className="text-xs text-text-secondary ml-auto">
-            {data?.cachedAt ? <RelTime iso={data.cachedAt} className="text-xs text-text-secondary" /> : 'Live'}
+          <span className="text-xs text-text-secondary ml-auto flex items-center gap-2">
+            {/* BKL-INGEST-07: Staleness badge — amber pill when cache > 6h old */}
+            {data?.cachedAt && isCacheStale(data.cachedAt) && (
+              <span
+                className="text-xs font-medium text-warning bg-warning/10 border border-warning/25 rounded-full px-2 py-0.5 flex items-center gap-1"
+                title="Data may be outdated — sync is running in the background"
+                data-testid="pipeline-stale-badge"
+              >
+                <AlertCircle className="w-3 h-3" />
+                <RelTime iso={data.cachedAt} className="" />
+              </span>
+            )}
+            {data?.cachedAt && !isCacheStale(data.cachedAt) && (
+              <RelTime iso={data.cachedAt} className="text-xs text-text-secondary" />
+            )}
+            {!data?.cachedAt && 'Live'}
           </span>
         )}
         {onRefresh && (
@@ -298,7 +367,7 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
             <Users className="w-3.5 h-3.5 text-accent" />
             <span className="text-sm font-medium text-text-secondary">By Owner</span>
             {activeOwner && (
-              <button onClick={() => setActiveOwner(null)} className="ml-auto text-xs text-text-secondary hover:text-text-primary transition-colors" aria-label="Clear owner filter">
+              <button onClick={() => { setActiveOwner(null); onSelectOwner?.(null) }} className="ml-auto text-xs text-text-secondary hover:text-text-primary transition-colors" aria-label="Clear owner filter">
                 clear
               </button>
             )}
@@ -306,6 +375,48 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
           {loading ? (
             <div className="space-y-2">
               {[1,2,3,4].map(i => <div key={i} className="h-8 bg-border rounded animate-pulse-slow" />)}
+            </div>
+          ) : byOwner.length > 0 ? (
+            /* ── Compact sparkline rows — permanent default regardless of owner count ───────────── */
+            <div className="space-y-1" data-testid="pipeline-owner-compact">
+              {byOwner.map(({ owner, acv, count }) => {
+                const isActive = activeOwner === owner
+                const { series } = ownerQuarterSeries(topOpps, owner)
+                const delta = trendDelta(series)
+                const deltaColor =
+                  delta === null ? 'text-text-secondary/65'
+                  : delta > 0 ? 'text-success'
+                  : delta < 0 ? 'text-critical'
+                  : 'text-text-secondary'
+                return (
+                  <button
+                    key={owner}
+                    onClick={() => {
+                      const next = isActive ? null : owner
+                      setActiveOwner(next)
+                      onSelectOwner?.(next)
+                    }}
+                    className={`w-full flex items-center gap-2 text-left rounded px-2 py-1.5 transition-colors ${isActive ? 'bg-border/40' : 'hover:bg-border/20'}`}
+                    data-testid="pipeline-owner-compact-row"
+                    aria-expanded={isActive}
+                  >
+                    {isActive ? (
+                      <ChevronDown className="w-3 h-3 text-text-secondary shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-3 h-3 text-text-secondary shrink-0" />
+                    )}
+                    <span className={`text-xs font-medium truncate min-w-0 flex-1 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`} title={owner}>
+                      {firstNames(owner)}
+                    </span>
+                    <span className="text-xs text-text-primary shrink-0 tabular-nums font-mono">{fmt(acv)}</span>
+                    <InlineSparkline values={series} width={40} height={12} />
+                    <span className="text-[11px] text-text-secondary shrink-0 tabular-nums">{count}</span>
+                    <span className={`text-[11px] shrink-0 tabular-nums w-12 text-right ${deltaColor}`}>
+                      {delta === null ? '—' : `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           ) : (
             <div className="space-y-2">
@@ -315,7 +426,11 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
                 return (
                   <button
                     key={owner}
-                    onClick={() => setActiveOwner(isActive ? null : owner)}
+                    onClick={() => {
+                      const next = isActive ? null : owner
+                      setActiveOwner(next)
+                      onSelectOwner?.(next)
+                    }}
                     className={`w-full text-left rounded px-2 py-1.5 transition-colors ${isActive ? 'bg-border/40' : 'hover:bg-border/20'}`}
                   >
                     <div className="flex justify-between text-sm mb-1">
@@ -336,8 +451,9 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
             </div>
           )}
 
-          {/* Quarter × Stage grid */}
-          {!loading && byQuarterStage.length > 0 && (
+          {/* Quarter × Stage grid — compact is now the permanent default, so the grid
+              only shows when a specific owner is selected (acts as the inline expansion detail) */}
+          {!loading && byQuarterStage.length > 0 && activeOwner !== null && (
             <div className="mt-3 pt-3 border-t border-border/50">
               <div className="grid grid-cols-5 gap-x-1 mb-1.5">
                 <span className="text-xs text-text-secondary"></span>

@@ -1,10 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { CCSPSummary, CCSPByAE } from '../types'
 import { fmtCurrency as fmt } from '../lib/format'
 import RelTime from './RelTime'
-import { Cloud, Building2, RefreshCw, AlertCircle, Users } from 'lucide-react'
+import { Cloud, Building2, RefreshCw, AlertCircle, Users, ChevronDown, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import InlineSparkline from './InlineSparkline'
 
+
+// BKL-INGEST-07: Staleness badge — show amber "Last synced Xh ago" when cache > 6h old.
+// Cache is never blanked on expiry (stale-not-blank rule); badge signals refresh needed.
+const STALE_THRESHOLD_MS = 6 * 60 * 60 * 1000  // 6 hours
+
+function isCacheStale(cachedAt: string | null | undefined): boolean {
+  if (!cachedAt) return false
+  return Date.now() - new Date(cachedAt).getTime() > STALE_THRESHOLD_MS
+}
 
 function shortName(name: string): string {
   return name
@@ -27,7 +37,7 @@ const PARTNER_COLORS: Record<string, string> = {
   Other:     '#6B7280',
 }
 
-// Derive all unique quarters across all AEs, sorted chronologically
+// BKL-UX82: rolling 4 quarters (12 months) — most recent available in CCSP data
 function allAEQuarters(byAE: CCSPByAE[]): string[] {
   const set = new Set<string>()
   for (const ae of byAE) {
@@ -35,7 +45,8 @@ function allAEQuarters(byAE: CCSPByAE[]): string[] {
       set.add(q.quarter)
     }
   }
-  return [...set].sort((a, b) => a.localeCompare(b))
+  const sorted = [...set].sort((a, b) => a.localeCompare(b))
+  return sorted.slice(-4)
 }
 
 function fmtQuarterLabel(q: string, totalQuarters: number): string {
@@ -50,15 +61,37 @@ interface ByAETileProps {
   onSelectAE: (ae: string | null) => void
 }
 
+/** Series aligned to a shared quarter axis — missing quarters become 0 so the sparkline spans the full period. */
+function seriesForQuarters(byQuarter: { quarter: string; acv: number }[], quarters: string[]): number[] {
+  const map = new Map(byQuarter.map(q => [q.quarter, q.acv]))
+  return quarters.map(q => map.get(q) ?? 0)
+}
+
+/** Percent delta from first non-zero quarter → last quarter. Null when there's no meaningful baseline. */
+function trendDelta(series: number[]): number | null {
+  if (series.length < 2) return null
+  const firstNonZeroIdx = series.findIndex(v => v > 0)
+  if (firstNonZeroIdx < 0) return null
+  const first = series[firstNonZeroIdx]
+  const last = series[series.length - 1]
+  if (first === 0) return null
+  return ((last - first) / first) * 100
+}
+
 function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
   const byAE = data?.byAE ?? []
-  const totalSpend = byAE.reduce((sum, a) => sum + a.acv, 0)
   const maxAEAcv = byAE.reduce((m, a) => Math.max(m, a.acv), 0)
   const quarters = byAE.length > 0 ? allAEQuarters(byAE) : []
 
   // Dynamic grid columns: 1 label col + N quarter cols
   // We use a CSS grid with inline style to handle variable quarter count
   const gridCols = `5rem repeat(${quarters.length}, minmax(0, 1fr))`
+
+  // Compact sparkline rows are now the permanent default regardless of AE count.
+  const isCompact = true
+
+  // Compact-mode inline expansion — tracks which AE has its quarter detail exposed.
+  const [expandedAE, setExpandedAE] = useState<string | null>(null)
 
   return (
     <div className="bg-surface border border-border rounded-xl p-4">
@@ -82,7 +115,80 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
         </div>
       ) : byAE.length === 0 ? (
         <div className="text-xs text-text-secondary">No AE data</div>
+      ) : isCompact ? (
+        /* ── Compact sparkline rows (BKL-UX109, POD scale) ─────────────────── */
+        <div className="space-y-1" data-testid="ccsp-ae-compact">
+          {byAE.map((aeRow: CCSPByAE) => {
+            const { ae, acv, byQuarter, topAccounts } = aeRow
+            const series = seriesForQuarters(byQuarter, quarters)
+            const delta = trendDelta(series)
+            const customerCount = topAccounts?.length ?? 0
+            const isActive = activeAE === ae
+            const isExpanded = expandedAE === ae
+            const deltaColor =
+              delta === null ? 'text-text-secondary/65'
+              : delta > 0 ? 'text-success'
+              : delta < 0 ? 'text-critical'
+              : 'text-text-secondary'
+            return (
+              <div key={ae}>
+                <button
+                  onClick={() => {
+                    setExpandedAE(isExpanded ? null : ae)
+                    onSelectAE(isActive ? null : ae)
+                  }}
+                  className={`w-full flex items-center gap-2 text-left rounded px-2 py-1.5 transition-colors ${isActive ? 'bg-border/40' : 'hover:bg-border/20'}`}
+                  data-testid="ccsp-ae-compact-row"
+                  aria-expanded={isExpanded}
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="w-3 h-3 text-text-secondary shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-3 h-3 text-text-secondary shrink-0" />
+                  )}
+                  <span
+                    className={`text-xs font-medium truncate min-w-0 flex-1 ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}
+                    title={ae}
+                  >
+                    {ae.split(' ')[0]}
+                  </span>
+                  <span className="text-xs text-text-primary shrink-0 tabular-nums font-mono">{fmt(acv)}</span>
+                  <InlineSparkline values={series} width={40} height={12} />
+                  {customerCount > 0 && (
+                    <span className="text-[11px] text-text-secondary shrink-0 tabular-nums">{customerCount}</span>
+                  )}
+                  <span className={`text-[11px] shrink-0 tabular-nums w-12 text-right ${deltaColor}`}>
+                    {delta === null ? '—' : `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}%`}
+                  </span>
+                </button>
+
+                {/* Inline expansion — reuse the existing quarter detail for this AE */}
+                {isExpanded && quarters.length > 0 && (
+                  <div
+                    className="gap-x-2 py-1 px-2 bg-border/20 rounded-b border-t border-border/40"
+                    style={{ display: 'grid', gridTemplateColumns: gridCols }}
+                  >
+                    <span className="text-[11px] text-text-secondary truncate">Quarters</span>
+                    {quarters.map(q => {
+                      const qMap = new Map(byQuarter.map(qd => [qd.quarter, qd.acv]))
+                      const qAcv = qMap.get(q) ?? 0
+                      return (
+                        <div key={q} className="flex flex-col items-end min-w-0">
+                          <span className="text-[10px] text-text-secondary">{fmtQuarterLabel(q, quarters.length)}</span>
+                          <span className="text-xs text-text-primary tabular-nums font-mono">
+                            {qAcv > 0 ? fmt(qAcv) : <span className="text-text-secondary/65">—</span>}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       ) : (
+        /* ── Original full layout (under POD threshold) ────────────────────── */
         <>
           {/* Per-AE rows with progress bars */}
           <div className="space-y-2">
@@ -188,10 +294,26 @@ interface Props {
   loading: boolean
   error?: string | null
   onRefresh?: () => void
+  aeFilterSelected?: string
+  /** BKL-UX119: bubble "By AE" row clicks up to the global AE filter so the
+   *  left-panel Total Portfolio ACV + partner bars repaint. The existing
+   *  useEffect already handles the reverse direction (global → internal). */
+  onSelectAE?: (ae: string | null) => void
 }
 
-export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
+export function CloudSpendSection({ data, loading, error, onRefresh, aeFilterSelected, onSelectAE }: Props) {
   const [activeAE, setActiveAE] = useState<string | null>(null)
+
+  // BKL-UX118: Sync activeAE with global AE filter so the quarterly breakdown
+  // auto-expands and "Top Accounts" header shows the correct AE name.
+  useEffect(() => {
+    if (!aeFilterSelected || aeFilterSelected === 'all') {
+      setActiveAE(null)
+      return
+    }
+    const matched = data?.byAE?.find(a => a.ae?.toLowerCase() === aeFilterSelected.toLowerCase())?.ae ?? null
+    setActiveAE(matched)
+  }, [aeFilterSelected, data])
 
   const customers = data?.byCustomer ?? []
   const partners = data?.byPartner ?? []
@@ -240,7 +362,21 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
         {loading && <span className="text-xs text-text-secondary animate-pulse">Loading…</span>}
         {!loading && (
           <span className="text-xs text-text-secondary ml-auto flex items-center gap-2">
-            {data?.cachedAt ? <RelTime iso={data.cachedAt} className="text-xs text-text-secondary" /> : 'Live'}
+            {/* BKL-INGEST-07: Staleness badge — amber pill when cache > 6h old */}
+            {data?.cachedAt && isCacheStale(data.cachedAt) && (
+              <span
+                className="text-xs font-medium text-warning bg-warning/10 border border-warning/25 rounded-full px-2 py-0.5 flex items-center gap-1"
+                title="Data may be outdated — sync is running in the background"
+                data-testid="ccsp-stale-badge"
+              >
+                <AlertCircle className="w-3 h-3" />
+                <RelTime iso={data.cachedAt} className="" />
+              </span>
+            )}
+            {data?.cachedAt && !isCacheStale(data.cachedAt) && (
+              <RelTime iso={data.cachedAt} className="text-xs text-text-secondary" />
+            )}
+            {!data?.cachedAt && 'Live'}
             {onRefresh && (
               <button onClick={onRefresh} className="text-text-secondary hover:text-text-primary transition-colors" title="Refresh" aria-label="Refresh cloud spend data">
                 <RefreshCw className="w-3 h-3" />
@@ -314,7 +450,13 @@ export function CloudSpendSection({ data, loading, error, onRefresh }: Props) {
           data={data}
           loading={loading}
           activeAE={activeAE}
-          onSelectAE={setActiveAE}
+          onSelectAE={(ae) => {
+            // BKL-UX119: fire both — internal state drives the tile's expansion
+            // + Top Accounts filter, outer callback drives the global AE chip
+            // (→ left-panel Total Portfolio ACV + partner bars repaint via API refetch).
+            setActiveAE(ae)
+            onSelectAE?.(ae)
+          }}
         />
 
         {/* Right: Top accounts (filtered by AE when selected) */}

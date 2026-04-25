@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatRelTime } from '../lib/format'
+import { getVncUrl } from '../utils'
 import { RefreshTimerSettings } from '../components/RefreshTimerSettings'
 import { AiIntelligenceSettings } from '../components/AiIntelligenceSettings'
 import { AutomationSettings } from '../components/AutomationSettings'
 import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
+import { BootstrapConfigBlock } from '../components/BootstrapConfigBlock'
+import { useBootstrapConfig } from '../hooks/useBootstrapConfig'
 import {
   AlertCircle,
   AlertTriangle,
@@ -278,7 +281,7 @@ function Step0OAuthKeys({ onReady }: { onReady: () => void }) {
                 onChange={(e) => setPasteText(e.target.value)}
                 placeholder='Paste the contents of gcp-oauth.keys.json here...'
                 rows={6}
-                className="w-full bg-bg border border-border rounded-lg p-3 font-mono text-xs text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent resize-none"
+                className={`w-full bg-bg border rounded-lg p-3 font-mono text-xs text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent resize-none ${!pasteText.trim() ? 'bg-blue-600/40 border-blue-500/60' : 'border-border'}`}
               />
               <button
                 onClick={() => submit(pasteText)}
@@ -629,14 +632,15 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
               {step.detail && (
                 <p className={`text-xs mt-0.5 truncate max-w-lg ${step.status === 'error' ? 'text-critical/80' : 'text-text-secondary'}`} {...(step.status === 'error' ? { role: 'alert' } : {})}>{step.detail}</p>
               )}
-              {/* Tableau login prompt — only shown when reachable but session invalid */}
-              {step.name === 'Create CCSP Sheet' && step.status === 'done' && tableauSessionNeeded === true && (
+              {/* Tableau login prompt — only shown when reachable but session invalid AND no records were written.
+                  If detail shows records (e.g. "192 records"), Tableau clearly worked — suppress the stale-cache false-positive. */}
+              {step.name === 'Create CCSP Sheet' && step.status === 'done' && tableauSessionNeeded === true && !step.detail?.match(/\d+\s+records?/) && (
                 <div className="mt-1.5 flex items-center gap-2">
                   <span className="text-xs text-warning">Tableau session required to populate CCSP data</span>
                   <button
                     onClick={async () => {
                       await fetch('/api/bootstrap/tableau/open-login', { method: 'POST' })
-                      window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', 'tableau-login', 'width=1280,height=900')
+                      window.open(getVncUrl(), 'tableau-login', 'width=1280,height=900')
                     }}
                     className="text-xs bg-warning hover:bg-warning/80 text-white px-2 py-0.5 rounded"
                   >
@@ -665,13 +669,13 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
               if (stepName.toLowerCase().includes('rh portal') || stepName.toLowerCase().includes('red hat') || stepName.toLowerCase().includes('account'))
                 return 'RH Portal auth failed — scroll up to Step 3 and reconnect.'
               if (isSupportableStep(stepName))
-                return 'VPN connected? Click Retry Supportable to re-run discovery.'
+                return 'Click Retry Supportable to re-run discovery.'
               if (stepName.toLowerCase().includes('drive') || stepName.toLowerCase().includes('folder'))
                 return 'Drive folder failed — verify Google Auth is connected in Step 2.'
               if (isCcspStep(stepName))
-                return 'Connect Tableau in Step 5, then click Retry CCSP.'
+                return 'Connect Tableau in Step 3 (Connections), then click Retry CCSP.'
               if (stepName.toLowerCase().includes('pipeline') || stepName.toLowerCase().includes('salesforce'))
-                return 'Pipeline sheet failed — check Salesforce connection in Step 5.'
+                return 'Pipeline sheet failed — check Salesforce connection in Step 3 (Connections).'
               if (stepName.toLowerCase().includes('territory'))
                 return 'Territory lookup failed — verify Google Sheets access in Step 2.'
               return 'Step failed — check server logs and click "Clear stuck state" to retry.'
@@ -877,22 +881,55 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
   )
 }
 
-function AutoBootstrapForm() {
+interface AutoBootstrapFormProps {
+  /** Shared POD selection — owned by the parent AEsCustomersSection. */
+  sharedPod: string
+  setSharedPod: (pod: string) => void
+  sharedSfReportId: string
+  sharedPodSfReportMap: Record<string, string>
+  sharedTerritorySheetUrl: string
+  sharedPodOptions: ReadonlyArray<{ value: string; label: string }>
+  /** BKL-UX85: Parent Drive Folder is now rendered in BootstrapConfigBlock
+   *  (above this form, right after SF Report ID). The validated folder ID
+   *  flows down as this prop so submit logic still picks it up. */
+  sharedParentFolderId: string
+  /** BKL-UX85: push the current aeName up so BootstrapConfigBlock can render
+   *  a scaffolding preview for the single AE about to be bootstrapped. */
+  onAeNameChange?: (name: string) => void
+}
+
+function AutoBootstrapForm({
+  sharedPod: pod,
+  setSharedPod: setPod,
+  sharedSfReportId: sfReportId,
+  sharedPodSfReportMap: podSfReportMap,
+  sharedTerritorySheetUrl: territorySheetUrl,
+  sharedPodOptions: podOptions,
+  sharedParentFolderId,
+  onAeNameChange,
+}: AutoBootstrapFormProps) {
   const [aeName, setAeName] = useState('')
-  const [sfReportId, setSfReportId] = useState('')
-  const [sfReportIdError, setSfReportIdError] = useState<string | null>(null)
-  const [sfReports, setSfReports] = useState<SfReport[]>([])
   const [customerText, setCustomerText] = useState('')
-  const [parentFolderId, setParentFolderId] = useState('')
-  const [folderName, setFolderName] = useState<string | null>(null)
-  const [folderError, setFolderError] = useState<string | null>(null)
+  // BKL-UX85: parent folder is now owned by BootstrapConfigBlock via the
+  // shared config block above; this form receives the validated id as a prop.
+  const parentFolderId = sharedParentFolderId
   const [knownAes, setKnownAes] = useState<Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string; supportableSheetId?: string; ccspSheetId?: string; pipelineSheetId?: string; driveFolderId?: string }>>([])
   const [forceRebootstrap, setForceRebootstrap] = useState(false)
   const bootstrapStartingRef = useRef(false)
 
-  // Territory picker state — pod + terrNum are source of truth; territoryInput is derived
-  const [pod, setPod] = useState('')
+  // Territory picker state — `pod` is owned by the parent AEsCustomersSection;
+  // terrNum is local. territoryInput is derived from both.
+  // Reset terrNum when POD changes (POD selection now happens in shared config block above).
   const [terrNum, setTerrNum] = useState('')
+  const prevPodRef = useRef(pod)
+  useEffect(() => {
+    if (prevPodRef.current !== pod) {
+      setTerrNum('')
+      setAeName('')
+      setCustomerText('')
+      prevPodRef.current = pod
+    }
+  }, [pod])
   const [territoryError, setTerritoryError] = useState<string | null>(null)
   const [territoryLoading, setTerritoryLoading] = useState(false)
   const [podTerritoryNames, setPodTerritoryNames] = useState<{ num: string; aeName: string }[]>([])
@@ -912,41 +949,50 @@ function AutoBootstrapForm() {
     const controller = new AbortController()
     fetch('/api/bootstrap/auto/status', { signal: controller.signal })
       .then(r => r.json())
-      .then((d: AutoBootstrapState) => { if (d.running || d.completedAt) setBootstrapState(d) })
+      .then((d: AutoBootstrapState) => {
+        // Guard: API can return null entries in steps if a bootstrap was interrupted mid-run
+        const sanitized = { ...d, steps: d.steps.filter(Boolean) }
+        // BKL-UX110: only restore in-flight runs on mount. Completed runs are
+        // stale on re-entry — the user navigated away and came back, they
+        // expect the form in its default "ready to bootstrap" state, not
+        // showing leftover results from a previous run.
+        if (sanitized.running) setBootstrapState(sanitized)
+      })
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/aes', { signal: controller.signal })
       .then(r => r.json())
       .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string; supportableSheetId?: string; ccspSheetId?: string; pipelineSheetId?: string; driveFolderId?: string }> }) => setKnownAes(d.aes ?? []))
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
-    fetch('/api/sf/reports', { signal: controller.signal })
-      .then(r => r.json())
-      .then((d: { reports: SfReport[] }) => { if (d.reports?.length) setSfReports(d.reports) })
-      .catch(() => {})
+    // SF Report ID is now auto-filled from the selected POD via
+    // useBootstrapConfig — /api/sf/reports is no longer fetched here.
 
     // Restore form state after OAuth redirect — check sessionStorage directly (no URL guard).
     // The key is set just before the OAuth redirect and consumed here on first mount.
     // No URL dependency needed; the key is ephemeral and removed immediately after reading.
+    // Note: sfReportId is derived from `pod` via useBootstrapConfig, so we
+    // only need to restore `pod` for the report ID to reappear.
     const saved = sessionStorage.getItem(PENDING_KEY)
     if (saved) {
       try {
-        const { sfReportId: savedSf, parentFolderId: savedPf, pod: savedPod, terrNum: savedTn } = JSON.parse(saved)
-        if (savedSf) setSfReportId(savedSf)
-        if (savedPf) setParentFolderId(savedPf)
+        // BKL-UX85: parentFolderId is now owned by the parent via
+        // BootstrapConfigBlock — the parent's useBootstrapConfig restores
+        // podBookingsFolderId from settings.json on mount, so we no longer
+        // need to restore it here. We still restore pod + terrNum to resume
+        // the exact AE selection.
+        const { pod: savedPod, terrNum: savedTn } = JSON.parse(saved)
         if (savedPod) setPod(savedPod)
         if (savedTn) setTerrNum(savedTn)
         setAutoStartPending(true)
         sessionStorage.removeItem(PENDING_KEY)
-      } catch {}
+      } catch { /* ignore malformed restore */ }
     }
     return () => controller.abort()
   }, [])
 
-  // Auto-inherit parentFolderId from existing AEs so second AE lands in same parent
-  useEffect(() => {
-    if (parentFolderId) return  // already set — don't overwrite user input or OAuth restore
-    const inherited = knownAes.find(a => a.parentFolderId)?.parentFolderId
-    if (inherited) setParentFolderId(inherited)
-  }, [knownAes])
+  // BKL-UX85: parentFolderId is now owned by the shared BootstrapConfigBlock
+  // (above this form). Auto-inherit from existing AEs is no longer needed —
+  // settings.json persists the last-validated POD folder and the config
+  // block pre-fills from there on mount.
 
   // Derive full territory string(s) from pod + terrNum — no reverse-parsing needed
   const territoryInput = useMemo(() => {
@@ -1044,6 +1090,12 @@ function AutoBootstrapForm() {
     return () => controller.abort()
   }, [territoryInput, matchedAe])
 
+  // BKL-UX85: push the derived aeName up so the shared BootstrapConfigBlock
+  // can render its scaffolding preview for the single AE.
+  useEffect(() => {
+    onAeNameChange?.(aeName)
+  }, [aeName, onAeNameChange])
+
   // Auto-start bootstrap once all fields are populated after OAuth return redirect
   useEffect(() => {
     if (!autoStartPending) return
@@ -1052,14 +1104,8 @@ function AutoBootstrapForm() {
     startBootstrap()
   }, [autoStartPending, aeName, sfReportId, territoryInput, customerText])
 
-  function handleAeNameBlur() {
-    if (!customerText.trim()) {
-      const match = knownAes.find(a => a.name.toLowerCase() === aeName.trim().toLowerCase())
-      if (match?.accounts?.length) {
-        setCustomerText(match.accounts.join('\n'))
-      }
-    }
-  }
+  // BKL-UX85: handleAeNameBlur removed with the AE Name input — the matchedAe
+  // effect above already auto-fills customerText when territory resolves.
 
   // Start auto-bootstrap
   const startBootstrap = async () => {
@@ -1075,23 +1121,17 @@ function AutoBootstrapForm() {
       return
     }
 
-    // Q11: SF Report ID format check — extract from URL first if needed
-    const extractedReportId = (() => {
-      const raw = sfReportId.trim()
-      const urlMatch = raw.match(/\/Report\/([a-zA-Z0-9]{15,18})/)
-      if (urlMatch) return urlMatch[1]
-      const idMatch = raw.match(/^([a-zA-Z0-9]{15,18})$/)
-      if (idMatch) return idMatch[1]
-      return raw
-    })()
+    // SF Report ID is now auto-filled from the POD → report ID map — no URL
+    // extraction needed. We still validate the shape defensively in case a
+    // malformed ID ever slips into settings.json.
+    const extractedReportId = sfReportId.trim()
     if (!/^00O[a-zA-Z0-9]{12,15}$/.test(extractedReportId)) {
-      setSfReportIdError('Must start with 00O and be 15–18 characters (e.g. 00OPe000001abcDEF)')
+      setPreflightError(`Configured SF Report ID for POD "${pod}" is malformed — check settings.json`)
       bootstrapStartingRef.current = false
       return
     }
 
     setPreflightError(null)
-    setSfReportIdError(null)
 
     // Pre-check: RH Portal must be connected (needed for account discovery)
     try {
@@ -1111,10 +1151,17 @@ function AutoBootstrapForm() {
     // Pre-check: validate parent folder exists if provided
     if (parentFolderId.trim()) {
       try {
+        // BKL-UX85-FIX: parentFolderId may be a bare folder ID (no /folders/ prefix)
+        // because BootstrapConfigBlock fires onParentFolderChange(resolvedId) with just
+        // the ID. Normalize to a full URL so the server regex matches.
+        const folderVal = parentFolderId.trim()
+        const folderUrl = /\/folders\//.test(folderVal)
+          ? folderVal
+          : `https://drive.google.com/drive/folders/${folderVal}`
         const vr = await fetch('/api/aes/validate-folder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderUrl: parentFolderId.trim() }),
+          body: JSON.stringify({ folderUrl }),
         })
         const vd = await vr.json()
         if (vd.error) {
@@ -1147,8 +1194,8 @@ function AutoBootstrapForm() {
       if (d.error) {
         if (d.action === 'redirect' && d.url) {
           // Need elevated Google permissions — save form state, then redirect to bootstrap OAuth
+          // sfReportId is derived from `pod` on restore — no need to persist it.
           sessionStorage.setItem(PENDING_KEY, JSON.stringify({
-            sfReportId: sfReportId.trim(),
             parentFolderId: parentFolderId.trim(),
             pod,
             terrNum,
@@ -1179,7 +1226,7 @@ function AutoBootstrapForm() {
       try {
         const r = await fetch('/api/bootstrap/auto/status', { signal: controller.signal })
         const d: AutoBootstrapState = await r.json()
-        setBootstrapState(d)
+        setBootstrapState({ ...d, steps: d.steps.filter(Boolean) })
         // When CCSP step completes, check if Tableau login is actually needed
         const ccspStep = d.steps.find(s => s.name === 'Create CCSP Sheet')
         if (ccspStep?.status === 'done' && tableauSessionNeeded === null) {
@@ -1197,10 +1244,11 @@ function AutoBootstrapForm() {
   }, [bootstrapState?.running, starting, tableauSessionNeeded])
 
   const resetForm = () => {
-    // Q13: preserve sfReportId across AE resets — most AEs share the same SF report
-    const preservedSfReportId = sfReportId
-    setBootstrapState(null); setAeName(''); setCustomerText(''); setPod(''); setTerrNum('')
-    setSfReportId(preservedSfReportId)
+    // Q13: preserve sfReportId across AE resets — most AEs share the same SF
+    // report. sfReportId is derived from `pod` via useBootstrapConfig, so
+    // preserving pod automatically preserves the report ID. We only clear
+    // the terr-number so the next AE picks a new territory.
+    setBootstrapState(null); setAeName(''); setCustomerText(''); setTerrNum('')
     setTableauSessionNeeded(null)
     bootstrapStartingRef.current = false
   }
@@ -1236,109 +1284,40 @@ function AutoBootstrapForm() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-accent/10 border border-accent/30 rounded-xl px-4 py-3 space-y-1.5">
-        <p className="text-sm font-medium text-accent">Automated AE setup — one click to fully configured</p>
-        <p className="text-xs text-accent/80 leading-relaxed">
-          Creates a Drive folder, discovers RH Portal account numbers, and generates all data sheets automatically.
-        </p>
-      </div>
-
       <div className="grid grid-cols-1 gap-3">
+        {/* BKL-UX85: AE Name input removed — redundant with territory auto-fill.
+            The `aeName` state is still derived from matchedAe / live territory
+            lookup and used by the submit handler. */}
         <div>
-          <label className="block text-xs text-text-secondary mb-1">AE Name *</label>
-          <input
-            type="text"
-            value={aeName}
-            onChange={e => setAeName(e.target.value)}
-            onBlur={handleAeNameBlur}
-            placeholder="Jane Smith"
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs text-text-secondary mb-1">SF Report ID *</label>
-          {sfReports.length > 0 ? (
-            <select
-              value={sfReportId}
-              onChange={e => { setSfReportId(e.target.value); setSfReportIdError(null) }}
-              className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent ${sfReportIdError ? 'border-critical' : 'border-border'}`}
-            >
-              <option value="">— Select a report —</option>
-              {sfReports.map(r => (
-                <option key={r.id} value={r.id}>{r.name}</option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              value={sfReportId}
-              onChange={e => { setSfReportId(e.target.value); setSfReportIdError(null) }}
-              onBlur={() => {
-                const raw = sfReportId.trim()
-                if (!raw) return
-                const urlMatch = raw.match(/\/Report\/([a-zA-Z0-9]{15,18})/)
-                const extracted = urlMatch ? urlMatch[1] : raw
-                if (!/^00O[a-zA-Z0-9]{12,15}$/.test(extracted)) {
-                  setSfReportIdError('Must start with 00O and be 15–18 characters (e.g. 00OPe000001abcDEF)')
-                }
-              }}
-              placeholder="00OPe000001abcDEF"
-              className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent ${sfReportIdError ? 'border-critical' : 'border-border'}`}
-            />
-          )}
-          {sfReportIdError && <p className="text-xs text-critical mt-1">{sfReportIdError}</p>}
-          <p className="text-xs text-text-secondary mt-1.5">
-            Paste your Salesforce Pipeline report ID or full Lightning URL. Required columns: Opportunity Name, Account Name, Amount, Stage, Forecast Category, Close Date, Opportunity Owner.{' '}
-            <a href="/docs/SF-REPORT-SETUP.md" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Setup guide →</a>
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-xs text-text-secondary mb-0.5">Account Territories *</label>
-          <p className="text-xs text-text-secondary mb-2">Selects your territory for CCSP scoping and auto-fills AE name + customer list from the territory sheet. Select your POD then the territory number.</p>
+          <label className="block text-xs text-text-secondary mb-0.5">Account Territory *</label>
+          <p className="text-xs text-text-secondary mb-2">Selects your territory for CCSP scoping and auto-fills AE name + customer list from the territory sheet.</p>
           <div className="space-y-2">
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <p className="text-xs text-text-secondary mb-1">POD / Region</p>
-                <select
-                  value={pod}
-                  onChange={e => { setPod(e.target.value); setTerrNum('') }}
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent"
-                >
-                  <option value="">Select POD…</option>
-                  <option value="WEST_COMM_CORP_NORTHWEST">Northwest Corp</option>
-                  <option value="WEST_COMM_CORP_SOUTHWEST">Southwest Corp</option>
-                  <option value="WEST_COMM_CORP_NORTHCENTRAL">North Central Corp</option>
-                  <option value="WEST_COMM_CORP_SOUTHCENTRAL">South Central Corp</option>
-                </select>
-              </div>
-              <div className="w-48">
-                <p className="text-xs text-text-secondary mb-1">Territory</p>
-                <select
-                  value={terrNum}
-                  onChange={e => setTerrNum(e.target.value)}
-                  disabled={!pod}
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent disabled:opacity-40"
-                >
-                  <option value="">Select…</option>
-                  {podTerritoryOptions.map(opt => (
-                    <option key={opt.num} value={opt.num}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <p className="text-xs text-text-secondary mb-1">Territory</p>
+              <select
+                data-testid="territory-num-select"
+                value={terrNum}
+                onChange={e => setTerrNum(e.target.value)}
+                disabled={!pod}
+                className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent disabled:opacity-40 ${!terrNum && pod ? 'bg-blue-600/40 border-blue-500/60' : 'border-border'}`}
+              >
+                <option value="">Select…</option>
+                {podTerritoryOptions.map(opt => (
+                  <option key={opt.num} value={opt.num}>{opt.label}</option>
+                ))}
+              </select>
             </div>
             {territoryInput && (
               <p className="text-xs text-text-secondary font-mono">{territoryInput}</p>
             )}
             {matchedAe ? (
-              <p className="text-xs text-success">→ {matchedAe.name}{matchedAe.accounts?.length ? ` · ${matchedAe.accounts.length} accounts pre-loaded` : ''}</p>
+              <p data-testid="matched-ae-name" className="text-xs text-success">→ {matchedAe.name}{matchedAe.accounts?.length ? ` · ${matchedAe.accounts.length} accounts pre-loaded` : ''}</p>
             ) : territoryLoading ? (
               <p className="text-xs text-text-secondary flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Loading territory data from sheet…</p>
             ) : territoryInput && !aeName ? (
               <p className="text-xs text-warning">No AE data for this territory — enter AE name and accounts manually below</p>
             ) : territoryInput && aeName ? (
-              <p className="text-xs text-success">→ {aeName} · loaded from territory sheet</p>
+              <p data-testid="loaded-ae-name" className="text-xs text-success">→ {aeName} · loaded from territory sheet</p>
             ) : null}
             {podNamesError && (
               <p className="text-xs text-warning">{podNamesError}</p>
@@ -1363,74 +1342,21 @@ function AutoBootstrapForm() {
             </a>
           </div>
           <textarea
+            data-testid="customer-names-textarea"
             value={customerText}
             onChange={e => setCustomerText(e.target.value)}
             placeholder={"Acme Corp\nGlobex Industries\nStark Enterprises"}
             rows={5}
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent resize-y"
+            className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent resize-y ${!customerText.trim() ? 'bg-blue-600/40 border-blue-500/60' : 'border-border'}`}
           />
           {customerNames.length > 0 && (
             <p className="text-xs text-text-secondary mt-1">{customerNames.length} customer(s) — names must match Supportable exactly. Edit before starting if needed.</p>
           )}
         </div>
-
-        <div>
-          <label className="block text-xs text-text-secondary mb-1">Parent Drive Folder (optional)</label>
-          <input
-            type="text"
-            value={parentFolderId}
-            onChange={e => { setParentFolderId(e.target.value); setFolderName(null); setFolderError(null) }}
-            onBlur={async () => {
-              const val = parentFolderId.trim()
-              if (!val) { setFolderName(null); setFolderError(null); return }
-              try {
-                const r = await fetch('/api/aes/validate-folder', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ folderUrl: val }),
-                })
-                const d = await r.json()
-                if (d.error) { setFolderError('Folder not found — check the URL'); setFolderName(null) }
-                else { setFolderName(d.folderName); setFolderError(null) }
-              } catch { setFolderError('Could not reach Drive API'); setFolderName(null) }
-            }}
-            placeholder="Paste Google Drive folder URL or leave blank for My Drive root"
-            className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent ${folderError ? 'border-critical' : folderName ? 'border-success' : 'border-border'}`}
-          />
-          {folderName && <p className="text-xs text-success mt-1">✓ {folderName}</p>}
-          {folderError && <p className="text-xs text-critical mt-1">✗ {folderError}</p>}
-        </div>
       </div>
-
-      {/* Hierarchy preview — shows full structure including product intel folders */}
-      {aeName.trim() && (
-        <div className="bg-bg border border-border rounded-lg p-3 text-xs font-mono space-y-0.5">
-          <p className="text-text-secondary mb-1 font-sans text-xs font-medium">What will be created:</p>
-          <p className="text-text-primary">
-            📁 {folderName ? <span className="text-success">{folderName}</span> : parentFolderId.trim() ? <span className="text-accent">parent folder</span> : 'My Drive'}/
-          </p>
-          <p className="text-text-primary pl-4">{knownAes.length === 0 ? '├──' : '└──'} 📁 {aeName.trim()}/</p>
-          {customerNames.slice(0, 5).map((name, i) => (
-            <p key={name} className="text-text-secondary pl-8">{i < Math.min(4, customerNames.length - 1) ? '├──' : customerNames.length > 5 ? '├──' : '└──'} 📁 {name}/</p>
-          ))}
-          {customerNames.length > 5 && (
-            <p className="text-text-secondary pl-8">└── 📁 … {customerNames.length - 5} more</p>
-          )}
-          <p className="text-text-secondary pl-8">├── 📊 Supportable Sheet</p>
-          <p className="text-text-secondary pl-8">├── 📊 CCSP Sheet</p>
-          <p className="text-text-secondary pl-8">└── 📊 Pipeline Sheet</p>
-          {knownAes.length === 0 && (<>
-            <p className="text-text-primary pl-4">└── 📁 Product Intelligence/</p>
-            <p className="text-text-secondary pl-8">├── 📁 rhel/</p>
-            <p className="text-text-secondary pl-8">├── 📁 ocp/</p>
-            <p className="text-text-secondary pl-8">├── 📁 ocp-virt/</p>
-            <p className="text-text-secondary pl-8">├── 📁 aap/</p>
-            <p className="text-text-secondary pl-8">├── 📁 rhel-ai/</p>
-            <p className="text-text-secondary pl-8">├── 📁 rh-ai-inference/</p>
-            <p className="text-text-secondary pl-8">└── 📁 rhoai/</p>
-          </>)}
-        </div>
-      )}
+      {/* BKL-UX85: Parent Drive Folder input + custom hierarchy preview
+          removed here — they now live in the shared BootstrapConfigBlock
+          above the form (right after SF Report ID). */}
 
       {/* Already-bootstrapped notice — BKL-BOOT-01 */}
       {matchedAeIsBootstrapped && !forceRebootstrap && (
@@ -1454,17 +1380,9 @@ function AutoBootstrapForm() {
         </div>
       )}
 
-      {/* Q5: Prerequisites callout — shown before starting bootstrap */}
-      {(!matchedAeIsBootstrapped || forceRebootstrap) && (
-        <div className="bg-accent/5 border border-accent/20 rounded-lg px-3 py-2.5 text-xs text-text-secondary space-y-1">
-          <p className="font-medium text-text-primary text-xs">Before you start:</p>
-          <ul className="space-y-0.5 list-disc list-inside">
-            <li>This takes <span className="text-white">7–15 minutes</span> to complete</li>
-            <li>You must be connected to <span className="text-white">Red Hat VPN</span></li>
-            <li>A <span className="text-white">Tableau VNC popup</span> will appear mid-run — leave it open</li>
-          </ul>
-        </div>
-      )}
+      {/* BKL-UX85: "Before you start" prerequisites callout removed — its
+          bullets (7–15 min, Tableau VNC popup) are now folded into the
+          blue info box at the top of the Single AE tab. */}
 
       {preflightError && (
         <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2">{preflightError}</p>
@@ -1475,7 +1393,7 @@ function AutoBootstrapForm() {
           <button
             onClick={startBootstrap}
             disabled={!canStart || starting}
-            className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors bg-accent hover:bg-accent/80"
           >
             {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
             {starting ? 'Starting...' : 'Set Up AE'}
@@ -1486,8 +1404,202 @@ function AutoBootstrapForm() {
   )
 }
 
+interface PodBootstrapStatus {
+  podBootstrap: {
+    running: boolean
+    total: number
+    completed: number
+    currentAE: string | null
+    results: Array<{ name: string; status: string; error?: string; customerCount?: number }>
+    completedAt: string | null
+    error: string | null
+  }
+}
+
 function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: number) => void }) {
-  const [mode, setMode] = useState<'auto' | 'manual'>('auto')
+  const [activeTab, setActiveTab] = useState<'single-ae' | 'full-pod' | 'manage'>('single-ae')
+
+  // Shared config state — lifted from AutoBootstrapForm so it persists across tab switches
+  const {
+    selectedPod,
+    setSelectedPod,
+    sfReportId,
+    podSfReportMap,
+    podLabels,
+    territorySheetUrl,
+    territorySheetId,
+    podBookingsFolderId,
+    setPodBookingsFolderId,
+    podOptions,
+    regions,
+    selectedRegion,
+    setSelectedRegion,
+  } = useBootstrapConfig()
+
+  // BKL-UX86: Known AEs (full server records) — used to derive a safe
+  // default Parent Drive Folder from a prior successful bootstrap. The
+  // WizardAE array below intentionally strips `parentFolderId`, so we keep
+  // a parallel lightweight record here for the default-folder lookup.
+  const [knownAes, setKnownAes] = useState<Array<{ name: string; parentFolderId?: string }>>([])
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/aes', { signal: controller.signal })
+      .then(r => r.json())
+      .then((d: { aes?: Array<{ name: string; parentFolderId?: string }> }) => {
+        setKnownAes(Array.isArray(d.aes) ? d.aes : [])
+      })
+      .catch((e) => { if (e.name !== 'AbortError') setKnownAes([]) })
+    return () => controller.abort()
+  }, [])
+
+  // BKL-UX86: derive a known-good default from any AE that has a
+  // parentFolderId recorded. This value came from a prior successful
+  // bootstrap and is safe to pre-fill (unlike settings.json, which may hold
+  // a stale/wrong value — see BKL-UX84).
+  const defaultParentFolderId = useMemo(
+    () => knownAes.find(a => a.parentFolderId && a.parentFolderId.trim().length > 0)?.parentFolderId ?? '',
+    [knownAes],
+  )
+
+  // Fetch AE names for the selected POD so the BootstrapConfigBlock can render
+  // the Drive scaffolding preview with real AE names. Uses the same
+  // /api/territory-names endpoint that the Single AE tab uses.
+  const [fullPodAeNames, setFullPodAeNames] = useState<string[]>([])
+  useEffect(() => {
+    if (!selectedPod) { setFullPodAeNames([]); return }
+    const controller = new AbortController()
+    fetch(`/api/territory-names?pod=${encodeURIComponent(selectedPod)}`, { signal: controller.signal })
+      .then(r => r.json().catch(() => ({ territories: [] })))
+      .then((d: { territories?: { num: string; aeName: string }[] }) => {
+        const names = (d.territories ?? [])
+          .map(t => t.aeName)
+          .filter((n): n is string => typeof n === 'string' && n.length > 0)
+        // Dedupe in case the sheet has the same AE across multiple territories
+        setFullPodAeNames(Array.from(new Set(names)))
+      })
+      .catch((e) => { if (e.name !== 'AbortError') { setFullPodAeNames([]) } })
+    return () => controller.abort()
+  }, [selectedPod])
+
+  // Full POD bootstrap state (inline — was PodBootstrapSection)
+  const [podBootstrapState, setPodBootstrapState] = useState<PodBootstrapStatus['podBootstrap'] | null>(null)
+  const [podStarting, setPodStarting] = useState(false)
+  const [podStartError, setPodStartError] = useState<string | null>(null)
+  const [podCancelling, setPodCancelling] = useState(false)
+  const [tableauOk, setTableauOk] = useState<boolean | null>(null)
+  // BKL-UX84: the Parent Drive Folder must be validated in the CURRENT session
+  // before Bootstrap Full POD unlocks. Settings.json may hold a wrong value
+  // (e.g. a protected directory); treating it as pre-validated would let the
+  // user kick off a bootstrap that creates AE subfolders in the wrong place.
+  // This flag flips true only when BootstrapConfigBlock's onParentFolderChange
+  // fires from a successful Validate click.
+  const [podFolderValidated, setPodFolderValidated] = useState<boolean>(false)
+
+  // BKL-UX85: Single AE preview name — pushed up from AutoBootstrapForm via
+  // onAeNameChange so the shared BootstrapConfigBlock can render a scaffolding
+  // preview that shows exactly the AE folder about to be created.
+  const [singleAePreviewName, setSingleAePreviewName] = useState<string>('')
+
+  // Check Tableau status on mount (for Full POD tab warning)
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/bootstrap/tableau/session-status', { signal: controller.signal })
+      .then(r => r.json())
+      .then((d: { reachable: boolean; sessionValid: boolean }) => setTableauOk(d.sessionValid))
+      .catch(() => setTableauOk(false))
+    return () => controller.abort()
+  }, [])
+
+  // Check for existing POD bootstrap run on mount
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/bootstrap/auto/status', { signal: controller.signal })
+      .then(r => r.json())
+      .then((d: PodBootstrapStatus) => {
+        // BKL-UX110: only restore in-flight POD runs on mount. Completed runs
+        // are stale on re-entry — the user expects the form in its default
+        // state, not showing leftover results from a previous run.
+        if (d.podBootstrap && d.podBootstrap.running) {
+          setPodBootstrapState(d.podBootstrap)
+        }
+      })
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
+    return () => controller.abort()
+  }, [])
+
+  // Poll while POD bootstrap is running
+  useEffect(() => {
+    if (!podBootstrapState?.running) return
+    const controller = new AbortController()
+    const interval = setInterval(async () => {
+      try {
+        const r = await fetch('/api/bootstrap/auto/status', { signal: controller.signal })
+        const d: PodBootstrapStatus = await r.json()
+        setPodBootstrapState(d.podBootstrap)
+        if (!d.podBootstrap.running) clearInterval(interval)
+      } catch (e: any) { if (e.name !== 'AbortError') { /* ignore */ } }
+    }, 3_000)
+    return () => { controller.abort(); clearInterval(interval) }
+  }, [podBootstrapState?.running])
+
+  const startPodBootstrap = async () => {
+    if (!territorySheetId.trim() || !sfReportId.trim() || !podBookingsFolderId.trim() || !selectedPod) return
+    const podTabTitle = podOptions.find(o => o.value === selectedPod)?.label ?? selectedPod
+    setPodStarting(true)
+    setPodStartError(null)
+    try {
+      const r = await fetch('/api/bootstrap/pod', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          territorySheetId: territorySheetId.trim(),
+          sfReportId: sfReportId.trim(),
+          parentFolderId: podBookingsFolderId.trim(),
+          podTabTitle,
+        }),
+      })
+      const d = await r.json()
+      if (!r.ok || d.error) {
+        setPodStartError(d.error ?? 'Failed to start POD bootstrap')
+        return
+      }
+      setPodBootstrapState({ running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null })
+    } catch (e: any) {
+      setPodStartError(e.message ?? 'Network error')
+    } finally {
+      setPodStarting(false)
+    }
+  }
+
+  const cancelPodBootstrap = async () => {
+    setPodCancelling(true)
+    try {
+      await fetch('/api/bootstrap/cancel', { method: 'POST' })
+    } catch { /* ignore */ }
+  }
+
+  const resetPodBootstrap = async () => {
+    try {
+      const res = await fetch('/api/bootstrap/auto/reset', { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setPodStartError(d.error ?? `Reset failed (${res.status})`)
+        return
+      }
+    } catch (e: any) {
+      console.error('[bootstrap] reset failed:', e)
+    }
+    setPodBootstrapState(null)
+    setPodStartError(null)
+    setPodCancelling(false)
+  }
+
+  const podSuccessCount = podBootstrapState?.results.filter(r => r.status === 'ok' || r.status === 'skipped').length ?? 0
+  const podFailCount = podBootstrapState?.results.filter(r => r.status === 'error').length ?? 0
+  // BKL-UX84: require a fresh session-level validate of the parent folder
+  // before allowing the Bootstrap Full POD button to fire.
+  const canStartPodBootstrap = !!territorySheetId.trim() && !!sfReportId.trim() && !!podBookingsFolderId.trim() && !!selectedPod && podFolderValidated
+
   const [aes, setAes] = useState<WizardAE[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1534,7 +1646,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
 
         // Show all named AEs regardless of bootstrap state so pre-bootstrap AEs can be edited/removed
         const configuredAes = serverAes.filter(ae => ae.name)
-        if (configuredAes.length > 0) setMode('manual') // auto-switch to edit view when AEs exist
+        if (configuredAes.length > 0) setActiveTab('manage') // auto-switch to manage view when AEs exist
         if (configuredAes.length === 0) {
           setAes([makeBlankAE()])
         } else {
@@ -1734,33 +1846,269 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
 
   return (
     <div className="space-y-5">
-      {/* Mode toggle */}
+      {/* Tab row — at top so users pick mode before seeing config */}
       <div className="flex items-center gap-1 bg-surface rounded-lg p-1 w-fit">
         <button
-          onClick={() => setMode('auto')}
+          onClick={() => setActiveTab('single-ae')}
           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            mode === 'auto'
+            activeTab === 'single-ae'
               ? 'bg-accent text-white'
               : 'text-text-secondary hover:text-white'
           }`}
         >
-          Auto Setup
+          Single AE
         </button>
         <button
-          onClick={() => setMode('manual')}
+          onClick={() => setActiveTab('full-pod')}
           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            mode === 'manual'
+            activeTab === 'full-pod'
               ? 'bg-accent text-white'
               : 'text-text-secondary hover:text-white'
           }`}
         >
-          Edit / View
+          Full POD
+        </button>
+        <button
+          onClick={() => setActiveTab('manage')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            activeTab === 'manage'
+              ? 'bg-accent text-white'
+              : 'text-text-secondary hover:text-white'
+          }`}
+        >
+          Manage
         </button>
       </div>
 
-      {mode === 'auto' ? (
-        <AutoBootstrapForm />
-      ) : (
+      {/* Info box — below tabs, above config block.
+          BKL-UX85: expanded to include the "Before you start" prerequisites
+          (7–15 min, Tableau VNC popup) that previously lived in a separate
+          callout below the form. */}
+      {activeTab === 'single-ae' && (
+        <div className="bg-accent/10 border border-accent/30 rounded-xl px-4 py-3 space-y-2">
+          <p className="text-sm font-medium text-accent">Automated AE setup — one click to fully configured</p>
+          <p className="text-xs text-accent/80 leading-relaxed">
+            Creates a Drive folder, discovers RH Portal account numbers, and generates all data sheets automatically.
+          </p>
+          <ul className="text-xs text-accent/80 leading-relaxed space-y-0.5 list-disc list-inside pt-1">
+            <li>This takes <span className="text-accent font-medium">7–15 minutes</span> to complete</li>
+            <li>A <span className="text-accent font-medium">Tableau VNC popup</span> will appear mid-run — leave it open</li>
+          </ul>
+        </div>
+      )}
+      {activeTab === 'full-pod' && (
+        <div className="bg-accent/10 border border-accent/30 rounded-xl px-4 py-3 space-y-2">
+          <p className="text-sm font-medium text-accent">Bootstrap your entire POD at once</p>
+          <p className="text-xs text-accent/80 leading-relaxed">
+            The system will iterate through each AE in the territory sheet, running the full bootstrap pipeline for each one.
+          </p>
+          <ul className="text-xs text-accent/80 leading-relaxed space-y-0.5 list-disc list-inside pt-1">
+            <li>Takes significantly longer than a single AE — plan accordingly</li>
+            <li>A <span className="text-accent font-medium">Tableau VNC popup</span> will appear mid-run — leave it open</li>
+          </ul>
+        </div>
+      )}
+
+      {/* Shared config block — below tabs, hidden in Manage.
+          BKL-UX85: Parent Drive Folder now renders for BOTH single-ae and
+          full-pod (previously full-pod only). For single-ae we pass the
+          currently derived aeName (single entry) so the scaffolding preview
+          reflects the one AE about to be bootstrapped. */}
+      {activeTab !== 'manage' && (
+        <BootstrapConfigBlock
+          selectedPod={selectedPod}
+          setSelectedPod={setSelectedPod}
+          sfReportId={sfReportId}
+          podSfReportMap={podSfReportMap}
+          podLabels={podLabels}
+          territorySheetUrl={territorySheetUrl}
+          podOptions={podOptions}
+          regions={regions}
+          selectedRegion={selectedRegion}
+          setSelectedRegion={setSelectedRegion}
+          parentFolderId={defaultParentFolderId}
+          showRootFallback={!defaultParentFolderId}
+          onParentFolderChange={(folderId: string) => {
+            // BKL-UX84 / BKL-UX86: a successful Validate click (or silent
+            // auto-validate from a known-good AE folder) is the ONLY way to
+            // unlock Bootstrap Full POD. Update the shared folder id AND
+            // mark the current session as validated. For single-ae the
+            // validated id flows into AutoBootstrapForm as sharedParentFolderId.
+            setPodBookingsFolderId(folderId)
+            setPodFolderValidated(true)
+          }}
+          previewAeNames={
+            activeTab === 'full-pod'
+              ? fullPodAeNames
+              : (singleAePreviewName ? [singleAePreviewName] : [])
+          }
+        />
+      )}
+
+      {/* Single AE tab */}
+      {activeTab === 'single-ae' && (
+        <AutoBootstrapForm
+          sharedPod={selectedPod}
+          setSharedPod={setSelectedPod}
+          sharedSfReportId={sfReportId}
+          sharedPodSfReportMap={podSfReportMap}
+          sharedTerritorySheetUrl={territorySheetUrl}
+          sharedPodOptions={podOptions}
+          sharedParentFolderId={podBookingsFolderId}
+          onAeNameChange={setSingleAePreviewName}
+        />
+      )}
+
+      {/* Full POD tab */}
+      {activeTab === 'full-pod' && (
+        <div className="space-y-5">
+          {!podBookingsFolderId.trim() && (
+            <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-2.5 text-xs text-warning">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>Parent Drive Folder not configured in settings.json — <code>podBookingsFolderId</code> is required for Full POD bootstrap.</span>
+            </div>
+          )}
+
+          {tableauOk === false && (
+            <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-2.5 text-xs text-warning">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>Tableau is not connected. CCSP scrape will fail for each AE. Connect Tableau in Step 3 (Connections) first or continue knowing CCSP will be skipped.</span>
+            </div>
+          )}
+
+          {/* Input + button — hide when running or completed */}
+          {!podBootstrapState?.running && !podBootstrapState?.completedAt && (
+            <div className="space-y-3">
+              {podStartError && (
+                <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5 shrink-0" /> {podStartError}
+                </p>
+              )}
+              <div className="flex justify-end">
+                <button
+                  onClick={startPodBootstrap}
+                  disabled={!canStartPodBootstrap || podStarting}
+                  className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {podStarting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                  {podStarting ? 'Starting...' : 'Bootstrap POD'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Live progress */}
+          {podBootstrapState?.running && (
+            <div className="space-y-3" aria-live="polite">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-text-primary">
+                  {podBootstrapState.completed} / {podBootstrapState.total} AEs complete
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={cancelPodBootstrap}
+                    disabled={podCancelling}
+                    className="flex items-center gap-1.5 text-xs text-critical hover:text-critical/80 disabled:opacity-50 transition-colors"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    {podCancelling ? 'Cancelling...' : 'Cancel'}
+                  </button>
+                  <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                </div>
+              </div>
+
+              {podBootstrapState.currentAE && (
+                <div className="flex items-center gap-2 bg-accent/10 border border-accent/30 rounded-lg px-3 py-2">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-accent shrink-0" />
+                  <span className="text-sm text-accent">Bootstrapping: {podBootstrapState.currentAE}...</span>
+                </div>
+              )}
+
+              {podBootstrapState.results.length > 0 && (
+                <div className="space-y-1">
+                  {podBootstrapState.results.map((result, i) => {
+                    const isOk = result.status === 'ok' || result.status === 'skipped'
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        {isOk
+                          ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                          : result.status === 'pending' || result.status === 'retrying'
+                            ? <Loader2 className="w-4 h-4 animate-spin text-accent shrink-0" />
+                            : <XCircle className="w-4 h-4 text-critical shrink-0" />}
+                        <span className={isOk ? 'text-success' : result.status === 'error' ? 'text-critical' : 'text-text-secondary'}>{result.name}</span>
+                        {result.status === 'skipped' && <span className="text-xs text-text-secondary">(skipped)</span>}
+                        {result.customerCount !== undefined && result.customerCount > 0 && <span className="text-xs text-text-secondary">({result.customerCount} customers)</span>}
+                        {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Completion state */}
+          {podBootstrapState?.completedAt && !podBootstrapState.running && (
+            <div className="space-y-3">
+              <div className={`rounded-lg border p-4 text-sm ${podFailCount > 0 ? 'border-warning/30 bg-warning/10' : 'border-success/30 bg-success/10'}`}>
+                <p className={`font-medium ${podFailCount > 0 ? 'text-warning' : 'text-success'}`}>
+                  POD bootstrap complete — {podSuccessCount} succeeded{podFailCount > 0 ? `, ${podFailCount} failed` : ''}
+                </p>
+              </div>
+
+              {podBootstrapState.results.length > 0 && (
+                <div className="space-y-1">
+                  {podBootstrapState.results.map((result, i) => {
+                    const isOk = result.status === 'ok' || result.status === 'skipped'
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-sm">
+                        {isOk
+                          ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                          : <XCircle className="w-4 h-4 text-critical shrink-0" />}
+                        <span className={isOk ? 'text-success' : 'text-critical'}>{result.name}</span>
+                        {result.status === 'skipped' && <span className="text-xs text-text-secondary">(skipped)</span>}
+                        {result.customerCount !== undefined && result.customerCount > 0 && <span className="text-xs text-text-secondary">({result.customerCount} customers)</span>}
+                        {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {podBootstrapState.error && (
+                <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {podBootstrapState.error}
+                </p>
+              )}
+
+              <button
+                onClick={resetPodBootstrap}
+                className="text-xs text-text-secondary hover:text-text-primary underline"
+              >
+                Reset and run again
+              </button>
+            </div>
+          )}
+
+          {/* Top-level error (before any results) */}
+          {podBootstrapState?.error && !podBootstrapState.completedAt && !podBootstrapState.running && (
+            <div className="space-y-3">
+              <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {podBootstrapState.error}
+              </p>
+              <button
+                onClick={resetPodBootstrap}
+                className="text-xs text-text-secondary hover:text-text-primary underline"
+              >
+                Reset and try again
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Manage tab */}
+      {activeTab === 'manage' && (
       <>
       <p className="text-sm text-text-secondary">
         Configure your Account Executives and their customers. Each AE can have a Drive folder, Salesforce report, and Tableau dashboard.
@@ -1836,7 +2184,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                 onChange={e => updateAE(ae.id, { name: e.target.value })}
                 placeholder="Jane Smith"
                 className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent ${
-                  saveMsg?.includes(`AE #${aeIdx + 1}`) ? 'border-critical' : 'border-border'
+                  saveMsg?.includes(`AE #${aeIdx + 1}`) ? 'border-critical' : !ae.name.trim() ? 'bg-blue-600/40 border-blue-500/60' : 'border-border'
                 }`}
               />
               {saveMsg?.includes(`AE #${aeIdx + 1}`) && (
@@ -1853,7 +2201,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                   onChange={e => { updateAE(ae.id, { folderUrl: e.target.value, folderName: '', folderId: '' }); setFolderValidateError(null) }}
                   onBlur={() => validateFolder(ae.id)}
                   placeholder="https://drive.google.com/drive/folders/..."
-                  className={`flex-1 bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent ${folderValidateError && validatingFolder === null ? 'border-critical' : ae.folderName && ae.folderId ? 'border-success' : 'border-border'}`}
+                  className={`flex-1 bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent ${folderValidateError && validatingFolder === null ? 'border-critical' : ae.folderName && ae.folderId ? 'border-success' : !ae.folderUrl.trim() ? 'bg-blue-600/40 border-blue-500/60' : 'border-border'}`}
                 />
                 <button
                   onClick={() => validateFolder(ae.id)}
@@ -2091,6 +2439,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
 
 // ── Red Hat Portal ─────────────────────────────────────────────────────────────
 
+
 interface RhStatus {
   hasSession: boolean
   sessionExpired: boolean
@@ -2110,12 +2459,12 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
   // causes the first poll to immediately close the window before login even starts.
   const loginStartedRef = useRef(false)
 
-  const fetchStatus = async (signal?: AbortSignal) => {
+  const fetchStatus = async (signal?: AbortSignal): Promise<boolean> => {
     try {
       const d: RhStatus = await fetch('/api/auth/redhat/status', { signal }).then((r) => r.json())
       setStatus(d)
-      // BKL-UX60: sessionExpired can be stale while scraper is running; treat hasSession as sufficient
-      if (d.hasSession) onConnected?.()
+      // BKL-UX63: Align with Step 5 logic — require !sessionExpired for connected state
+      if (d.hasSession && !d.sessionExpired) onConnected?.()
       if (d.loginInProgress) loginStartedRef.current = true
       if (d.hasSession && !d.loginInProgress && connecting && loginStartedRef.current) {
         setConnecting(false)
@@ -2123,12 +2472,19 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
         popupRef.current = null
         fetch('/api/scrape/rh', { method: 'POST', signal }).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
       }
-    } catch (e: any) { if (e.name !== 'AbortError') { /* ignore */ } }
+      return true
+    } catch (e: any) {
+      if (e.name !== 'AbortError') { /* ignore */ }
+      return false
+    }
   }
 
   useEffect(() => {
     const controller = new AbortController()
-    fetchStatus(controller.signal)
+    // BKL-UX73: Retry once if the mount fetch fails (e.g. container restart timing window)
+    fetchStatus(controller.signal).then(ok => {
+      if (!ok) setTimeout(() => fetchStatus(controller.signal), 600)
+    })
     return () => controller.abort()
   }, [])
 
@@ -2153,11 +2509,14 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
       if (currentStatus.loginInProgress) {
         // Login already running — just open VNC tab, skip POST
         loginStartedRef.current = true
-        window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', '_blank')
+        popupRef.current = window.open(getVncUrl(), '_blank')
       } else {
         // Start a new login, then open VNC tab
         await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(e => console.warn('[rh-auth] start failed:', e))
-        window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', '_blank')
+        // Always set after explicit login start — flag is reset to false at top of handleConnect
+        // so mount-time stale-session guard (BKL-UX63) is not affected
+        loginStartedRef.current = true
+        popupRef.current = window.open(getVncUrl(), '_blank')
       }
       // Poll will detect completion and flip to Connected
     } catch {
@@ -2174,8 +2533,9 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
     fetchStatus()
   }
 
-  // BKL-UX60: Show connected view when hasSession is true (ignore sessionExpired — it can be stale)
-  if (status?.hasSession && !connecting) {
+  // BKL-UX63: Show connected view only when hasSession is true AND session is not expired
+  // (aligns with Step 5 DataSourcesSection logic)
+  if (status?.hasSession && !status?.sessionExpired && !connecting) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2">
@@ -2251,7 +2611,7 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
 
 // ── Data Sources ───────────────────────────────────────────────────────────────
 
-function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loading' | 'healthy' | 'issues') => void }) {
+function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }: { onHealthChange?: (status: 'loading' | 'healthy' | 'issues', connectedCount?: number) => void; onlyConnections?: boolean; hideConnections?: boolean }) {
   const [supportableStatus, setSupportableStatus] = useState<{
     running: boolean
     lastScrape: string | null
@@ -2264,6 +2624,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     lastSync: string | null
     rowCount: number
     syncError: string | null
+    sessionExpired?: boolean
     reportConfigured: boolean
   } | null>(null)
   const [rhStatus, setRhStatus] = useState<{
@@ -2272,6 +2633,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     lastScraped: string | null
     caseCount: number
     loginInProgress?: boolean
+    liveReachable?: boolean | null
   } | null>(null)
 
   const [ccspStatus, setCcspStatus] = useState<{
@@ -2280,6 +2642,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     lastSuccess?: string | null
     lastError: string | null
     recordCount?: number | null
+    state?: string | null
   } | null>(null)
   const [scraping, setScraping] = useState(false)
   const [scrapeError, setScrapeError] = useState<string | null>(null)
@@ -2351,12 +2714,47 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const sfVncRef = useRef<Window | null>(null)
   const [tableauConnecting, setTableauConnecting] = useState(false)
   const tableauVncRef = useRef<Window | null>(null)
+  const [rhConnecting, setRhConnecting] = useState(false)
+  const rhLoginStartedRef = useRef(false)
+  const rhConnectPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const rhVncRef = useRef<Window | null>(null)
 
   // Polling interval refs for cleanup
   const supportablePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sfPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tableauPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // BKL-RH-UX-01: Offline token input state
+  const [offlineTokenConfigured, setOfflineTokenConfigured] = useState<boolean | null>(null)
+  const [offlineTokenValue, setOfflineTokenValue] = useState('')
+  const [offlineTokenShow, setOfflineTokenShow] = useState(false)
+  const [offlineTokenSaving, setOfflineTokenSaving] = useState(false)
+  const [offlineTokenMsg, setOfflineTokenMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null)
+
+  const handleSaveOfflineToken = async () => {
+    setOfflineTokenSaving(true)
+    setOfflineTokenMsg(null)
+    try {
+      const res = await fetch('/api/settings/offline-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: offlineTokenValue }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as any
+        setOfflineTokenMsg({ type: 'error', text: d.error ?? `Save failed (${res.status})` })
+      } else {
+        setOfflineTokenMsg({ type: 'ok', text: 'Token saved' })
+        setOfflineTokenConfigured(true)
+      }
+    } catch (e: any) {
+      setOfflineTokenMsg({ type: 'error', text: e?.message ?? 'Save failed — server unreachable' })
+    } finally {
+      setOfflineTokenSaving(false)
+      setOfflineTokenValue('')
+    }
+  }
 
   const refreshAll = (signal?: AbortSignal) => {
     fetch('/api/auth/supportable/check', { method: 'POST', signal }).then(r => r.json()).then(d => setSupportableReachable(d.reachable)).catch((e) => { if (e.name !== 'AbortError') setSupportableReachable(false) })
@@ -2365,6 +2763,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
     fetch('/api/auth/salesforce/status', { signal }).then(r => r.json()).then(setSfStatus).catch((e) => { if (e.name !== 'AbortError') setSfStatus({ hasSession: false, lastSync: null, rowCount: 0, syncError: 'Unreachable', reportConfigured: false }) })
     fetch('/api/auth/redhat/status', { signal }).then(r => r.json()).then(setRhStatus).catch((e) => { if (e.name !== 'AbortError') setRhStatus({ hasSession: false, sessionExpired: false, lastScraped: null, caseCount: 0 }) })
     fetch('/api/bootstrap/tableau/session-status', { signal }).then(r => r.json()).then(setTableauStatus).catch((e) => { if (e.name !== 'AbortError') setTableauStatus({ reachable: false, sessionValid: false }) })
+    fetch('/api/settings/offline-token', { signal }).then(r => r.json()).then(d => setOfflineTokenConfigured(d.configured ?? false)).catch(() => {})
   }
 
   useEffect(() => {
@@ -2384,10 +2783,12 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       if (sfPollRef.current) clearInterval(sfPollRef.current)
       if (tableauPollRef.current) clearInterval(tableauPollRef.current)
       if (statusPollRef.current) clearInterval(statusPollRef.current)
+      if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
+      rhVncRef.current?.close()
     }
   }, [])
 
-  const VNC_URL = 'http://localhost:6080/vnc.html?autoconnect=1&resize=scale'
+  const VNC_URL = getVncUrl()
 
   const handleSupportableConnect = async () => {
     setSupportableConnecting(true)
@@ -2410,31 +2811,24 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const handleSfConnect = async () => {
     setSfConnecting(true)
 
-    // Pre-check: if already fully connected (session + lastSync), skip VNC and just re-sync
-    if (!sfConnected) {
-      try {
-        const res = await fetch('/api/auth/salesforce/status')
-        const status = await res.json()
-        setSfStatus(status)
-        const expired = status.sessionExpired || status.syncError?.toLowerCase().includes('session expired')
-        if (status.hasSession && !expired) {
-          // Session exists but lastSync is missing (e.g. after container restart).
-          // Trigger a sync to populate lastSync instead of silently bailing.
-          setSfConnecting(false)
-          await fetch('/api/scrape/salesforce', { method: 'POST' }).catch(e => console.error('[sf-auth] sync trigger failed:', e))
-          return
-        }
-      } catch { /* fall through */ }
+    // If session is already active in React state, skip VNC entirely — opening then immediately
+    // closing it looks like a bug to the user. Just trigger a sync and return.
+    if (sfSessionActive) {
+      setSfConnecting(false)
+      await fetch('/api/scrape/salesforce', { method: 'POST' }).catch(e => console.error('[sf-auth] sync trigger failed:', e))
+      return
     }
 
-    // Start login and open VNC
+    // Open VNC window synchronously FIRST — browser popup blockers fire when
+    // window.open is called after any await. Open now while still in the user gesture.
+    sfVncRef.current = window.open(VNC_URL, 'sf-vnc', 'width=1280,height=900')
+
+    // Start login flow
     try {
       const res = await fetch('/api/auth/salesforce/start', { method: 'POST' })
       const d = await res.json()
-      if (d.error) { setSfConnecting(false); return }
-    } catch { setSfConnecting(false); return }
-
-    sfVncRef.current = window.open(VNC_URL, 'sf-vnc', 'width=1280,height=900')
+      if (d.error) { sfVncRef.current?.close(); sfVncRef.current = null; setSfConnecting(false); return }
+    } catch { sfVncRef.current?.close(); sfVncRef.current = null; setSfConnecting(false); return }
 
     sfPollRef.current = setInterval(async () => {
       try {
@@ -2448,6 +2842,8 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
           setSfConnecting(false)
           sfVncRef.current?.close()
           sfVncRef.current = null
+          // Session confirmed — trigger sync so lastSync populates and status flips to Connected
+          fetch('/api/scrape/salesforce', { method: 'POST' }).catch(e => console.error('[sf-auth] post-login sync failed:', e))
         }
       } catch { /* ignore */ }
     }, 3_000)
@@ -2456,6 +2852,72 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
       setSfConnecting(false)
     }, 120_000)
+  }
+
+  const handleSfCancel = async () => {
+    if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
+    setSfConnecting(false)
+    sfVncRef.current?.close()
+    sfVncRef.current = null
+    await fetch('/api/auth/salesforce/session', { method: 'DELETE' }).catch(e => console.error('[sf-auth] cancel failed:', e))
+  }
+
+  const handleRhConnect = async () => {
+    setRhConnecting(true)
+    rhLoginStartedRef.current = false
+    try {
+      const currentStatus = await fetch('/api/auth/redhat/status').then(r => r.json())
+      setRhStatus(currentStatus)
+      // Session already valid — no VNC needed, just trigger a scrape and update UI
+      if (currentStatus.hasSession && !currentStatus.sessionExpired && !currentStatus.loginInProgress) {
+        setRhConnecting(false)
+        fetch('/api/scrape/rh', { method: 'POST' }).catch(e => console.error('[rh-auth] post-session sync failed:', e))
+        return
+      }
+      if (currentStatus.loginInProgress) {
+        rhLoginStartedRef.current = true
+        rhVncRef.current = window.open(getVncUrl(), '_blank')
+      } else {
+        await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(e => console.warn('[rh-auth] start failed:', e))
+        rhLoginStartedRef.current = true
+        rhVncRef.current = window.open(getVncUrl(), '_blank')
+      }
+      // Poll until connected
+      rhConnectPollRef.current = setInterval(async () => {
+        try {
+          const d = await fetch('/api/auth/redhat/status').then(r => r.json())
+          setRhStatus(d)
+          if (d.loginInProgress) rhLoginStartedRef.current = true
+          if (d.hasSession && !d.sessionExpired && !d.loginInProgress && rhLoginStartedRef.current) {
+            if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
+            rhConnectPollRef.current = null
+            rhVncRef.current?.close()
+            rhVncRef.current = null
+            setRhConnecting(false)
+          }
+        } catch { /* ignore */ }
+      }, 2_000)
+      // Hard timeout
+      setTimeout(() => {
+        if (rhConnectPollRef.current) { clearInterval(rhConnectPollRef.current); rhConnectPollRef.current = null }
+        rhVncRef.current?.close()
+        rhVncRef.current = null
+        setRhConnecting(false)
+      }, 120_000)
+    } catch {
+      rhVncRef.current?.close()
+      rhVncRef.current = null
+      setRhConnecting(false)
+    }
+  }
+
+  const handleRhCancel = async () => {
+    if (rhConnectPollRef.current) { clearInterval(rhConnectPollRef.current); rhConnectPollRef.current = null }
+    rhVncRef.current?.close()
+    rhVncRef.current = null
+    setRhConnecting(false)
+    await fetch('/api/auth/redhat/session', { method: 'DELETE' }).catch(e => console.error('[rh-auth] cancel failed:', e))
+    fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {})
   }
 
   const handleTableauCancel = () => {
@@ -2468,19 +2930,22 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   const handleTableauConnect = async () => {
     setTableauConnecting(true)
 
-    // Force-bypass server cache — user explicitly clicked Connect, need live result
+    // Open VNC window synchronously FIRST — browser popup blockers fire when
+    // window.open is called after any await. Open now while still in the user gesture.
+    tableauVncRef.current = window.open(VNC_URL, 'tableau-vnc', 'width=1280,height=900')
+
+    // Check if already logged in (force-bypass cache). If so, close window immediately.
     try {
       const res = await fetch('/api/bootstrap/tableau/session-status?force=true')
       const status = await res.json()
       setTableauStatus(status)
       if (status.sessionValid) {
+        tableauVncRef.current?.close()
+        tableauVncRef.current = null
         setTableauConnecting(false)
         return
       }
     } catch { /* fall through to VNC flow */ }
-
-    // Not logged in — open VNC so user can log in
-    tableauVncRef.current = window.open(VNC_URL, 'tableau-vnc', 'width=1280,height=900')
 
     // IMPORTANT: await open-login before starting wait-for-login to avoid a race
     // condition where wait-for-login sees the pre-navigation page state (stale
@@ -2499,6 +2964,10 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
       if (valid) {
         setTableauStatus({ reachable: true, sessionValid: true })
         setTimeout(() => { tableauVncRef.current?.close(); tableauVncRef.current = null }, 3000)
+      } else {
+        // Close VNC window even on failure — user has already logged in or abandoned the flow
+        tableauVncRef.current?.close()
+        tableauVncRef.current = null
       }
       setTableauConnecting(false)
     }
@@ -2661,9 +3130,10 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
   // BKL-UX60: sessionExpired can be true even while a successful scrape is running
   // (a failed queued run sets it, then a fresh run starts). Show as active when
   // hasSession is true OR the rh-cases scraper is actively running.
-  const rhSessionActive = ((rhStatus?.hasSession && !rhStatus?.sessionExpired) || scraperRunning.rh) ?? false
+  const rhSessionActive = ((rhStatus?.hasSession && !rhStatus?.sessionExpired && rhStatus?.liveReachable !== false) || scraperRunning.rh) ?? false
+  const rhExpired = !!(rhStatus?.sessionExpired)
   const rhConnected = rhSessionActive && (rhScrapeOk || scraperRunning.rh)
-  const sfExpired = sfStatus?.syncError?.toLowerCase().includes('session expired')
+  const sfExpired = (sfStatus?.sessionExpired || !!sfStatus?.syncError) ?? false
   const sfScrapeOk = !!sfStatus?.lastSync
   const sfSessionActive = (sfStatus?.hasSession && !sfExpired) ?? false
   const sfConnected = sfSessionActive && sfScrapeOk
@@ -2704,23 +3174,33 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
 
   const ccspConnected = ccspStatus?.lastScrape && !ccspStatus?.running && !ccspStatus?.lastError
   const ccspRunning = ccspStatus?.running ?? false
-  // BKL-UX61: Tableau shows "Connected" when sessionValid OR when CCSP has data
-  // (recordCount > 0 or lastSuccess is non-null). There is no standalone Tableau login.
-  const tableauConnected = (tableauStatus?.sessionValid ?? false) || (ccspStatus?.recordCount != null && ccspStatus.recordCount > 0) || !!ccspStatus?.lastSuccess
+  // Tableau shows "Connected" only when sessionValid — old records don't mean the session works.
+  // A stale session means new scrapes fail regardless of what recordCount is.
+  const tableauConnected = (tableauStatus?.sessionValid && tableauStatus?.reachable !== false) ?? false
 
   const allStatusesLoaded = rhStatus !== null && sfStatus !== null && ccspStatus !== null && tableauStatus !== null
   const anyErrors = (rhStatus && !rhConnected) || (sfStatus && !sfConnected) || (ccspStatus && !!ccspStatus.lastError) || (tableauStatus && !tableauConnected)
+  const connectedDataSources = [rhConnected, sfConnected, tableauConnected].filter(Boolean).length
 
   useEffect(() => {
     if (!onHealthChange) return
     if (!allStatusesLoaded) { onHealthChange('loading'); return }
-    onHealthChange(anyErrors ? 'issues' : 'healthy')
-  }, [allStatusesLoaded, anyErrors, onHealthChange])
+    onHealthChange(anyErrors ? 'issues' : 'healthy', connectedDataSources)
+  }, [allStatusesLoaded, anyErrors, connectedDataSources, onHealthChange])
+
+  // BKL-UX65: Fallback timeout — if statuses never fully load within 15s, force out of 'loading'
+  useEffect(() => {
+    if (!onHealthChange) return
+    const fallback = setTimeout(() => {
+      if (!allStatusesLoaded) onHealthChange('issues')
+    }, 15_000)
+    return () => clearTimeout(fallback)
+  }, [allStatusesLoaded, onHealthChange])
 
   return (
     <div className="space-y-6">
       {/* ── CONNECTIONS ── */}
-      <div>
+      {!hideConnections && <div>
         <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Connections</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 min-[1440px]:grid-cols-4 gap-3">
 
@@ -2733,77 +3213,87 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                 <p className="text-xs text-text-secondary">Support cases</p>
               </div>
               <div className="flex items-center gap-1.5">
-                {rhStatus?.loginInProgress && !rhSessionActive ? (
-                  <>
-                    <Loader2 className="w-2.5 h-2.5 animate-spin text-warning" />
-                    <span className="text-xs text-warning">Connecting</span>
-                  </>
-                ) : (
-                  <>
-                    <span className={`w-2 h-2 rounded-full ${rhSessionActive ? (scraperRunning.rh ? 'bg-warning animate-pulse' : 'bg-success') : 'bg-surface-active'}`} />
-                    <span className={`text-xs ${rhSessionActive ? (scraperRunning.rh ? 'text-warning' : 'text-success') : 'text-text-secondary'}`}>
-                      {rhSessionActive ? (scraperRunning.rh ? 'Syncing' : 'Connected') : 'Not connected'}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="mt-auto pt-3">
-              <button
-                onClick={() => document.getElementById('rh-portal')?.scrollIntoView({ behavior: 'smooth' })}
-                className="bg-surface-hover hover:bg-surface-active text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                {rhSessionActive ? 'Reconnect' : 'Connect'}
-              </button>
-            </div>
-          </div>
-
-          {/* Supportable 360 */}
-          <div className={`flex flex-col bg-surface/50 border border-border rounded-xl p-4 border-l-[3px] min-h-[160px] ${supportableConnected ? 'border-l-success' : supportableConnecting ? 'border-l-warning' : 'border-l-border'}`}>
-            <div className="flex items-center justify-between mb-1">
-              <div>
-                <p className="text-sm font-medium text-white">Supportable 360</p>
-                <p className="text-xs text-text-secondary">Supportable Subscriptions</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {supportableConnecting ? (
-                  <>
-                    <Loader2 className="w-2.5 h-2.5 animate-spin text-warning" />
-                    <span className="text-xs text-warning">Connecting</span>
-                  </>
-                ) : supportableReachable === null ? (
+                {rhStatus === null ? (
                   <>
                     <Loader2 className="w-2.5 h-2.5 animate-spin text-text-secondary" />
                     <span className="text-xs text-text-secondary">Checking...</span>
                   </>
+                ) : (rhConnecting || (rhStatus?.loginInProgress && !rhSessionActive)) ? (
+                  <>
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-warning" />
+                    <span className="text-xs text-warning">Connecting</span>
+                  </>
                 ) : (
                   <>
-                    <span className={`w-2 h-2 rounded-full ${supportableConnected ? 'bg-success' : 'bg-surface-active'}`} />
-                    <span className={`text-xs ${supportableConnected ? 'text-success' : 'text-text-secondary'}`}>
-                      {supportableConnected ? 'Connected' : 'Not connected'}
+                    <span className={`w-2 h-2 rounded-full ${rhSessionActive ? (scraperRunning.rh ? 'bg-warning animate-pulse' : 'bg-success') : rhExpired ? 'bg-critical' : 'bg-surface-active'}`} />
+                    <span className={`text-xs ${rhSessionActive ? (scraperRunning.rh ? 'text-warning' : 'text-success') : rhExpired ? 'text-critical' : 'text-text-secondary'}`}>
+                      {rhSessionActive ? (scraperRunning.rh ? 'Syncing' : rhStatus?.lastScraped ? `Connected · ${timeAgo(rhStatus.lastScraped)}` : 'Connected') : rhExpired ? 'Expired' : 'Not connected'}
                     </span>
                   </>
                 )}
               </div>
             </div>
             <div className="mt-auto pt-3">
-              {/* Q7: hint corrected — VPN alone is not enough; RH Portal session required */}
-              {!rhConnected && (
-                <div className="mb-2 text-xs text-text-secondary flex items-center gap-1">
-                  <Shield className="w-3 h-3" />
-                  <span>Requires active RH Portal session</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleRhConnect}
+                  disabled={rhConnecting}
+                  className={`disabled:opacity-40 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${rhSessionActive ? 'bg-surface-hover hover:bg-surface-active text-white' : 'bg-blue-600/40 hover:bg-blue-600/50 text-blue-300 border border-blue-500/60'}`}
+                >
+                  {rhConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                  {rhConnecting ? 'Connecting...' : rhSessionActive ? 'Reconnect' : 'Connect'}
+                </button>
+                {rhConnecting && (
+                  <button
+                    onClick={handleRhCancel}
+                    className="bg-critical/15 hover:bg-critical/20 text-critical px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+              {/* BKL-RH-UX-01: Offline token input */}
+              <div className="mt-3 border-t border-border/40 pt-3">
+                <p className="text-xs text-text-secondary mb-1.5">
+                  Offline Token
+                  {offlineTokenConfigured === true && (
+                    <span className="ml-1.5 text-success font-medium">configured</span>
+                  )}
+                  {offlineTokenConfigured === false && (
+                    <span className="ml-1.5 text-warning font-medium">not set</span>
+                  )}
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type={offlineTokenShow ? 'text' : 'password'}
+                    value={offlineTokenValue}
+                    onChange={e => { setOfflineTokenValue(e.target.value); setOfflineTokenMsg(null) }}
+                    placeholder={offlineTokenConfigured ? 'Enter new token to replace' : 'Paste REDHAT_OFFLINE_TOKEN'}
+                    className="flex-1 min-w-0 bg-surface border border-border rounded px-2 py-1 text-xs text-white placeholder:text-text-secondary/60 focus:outline-none focus:border-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setOfflineTokenShow(v => !v)}
+                    className="text-text-secondary hover:text-white px-1.5 py-1 rounded text-xs transition-colors"
+                    title={offlineTokenShow ? 'Hide token' : 'Show token'}
+                  >
+                    {offlineTokenShow ? 'Hide' : 'Show'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveOfflineToken}
+                    disabled={offlineTokenSaving || !offlineTokenValue.trim()}
+                    className="disabled:opacity-40 bg-accent/20 hover:bg-accent/30 text-accent border border-accent/40 px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                  >
+                    {offlineTokenSaving ? 'Saving…' : 'Save'}
+                  </button>
                 </div>
-              )}
-              <button
-                onClick={handleSupportableConnect}
-                disabled={!rhConnected || supportableConnecting}
-                className="bg-surface-hover hover:bg-surface-active disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
-              >
-                {supportableConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
-                {supportableConnecting ? 'Checking...' : supportableConnected ? 'Reconnect' : 'Connect'}
-              </button>
-              {supportableVpnError && <p className="text-xs text-critical mt-2">VPN not detected — connect to Red Hat VPN and try again.</p>}
+                {offlineTokenMsg && (
+                  <p className={`text-xs mt-1 ${offlineTokenMsg.type === 'ok' ? 'text-success' : 'text-critical'}`}>
+                    {offlineTokenMsg.text}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
 
@@ -2817,19 +3307,29 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
               <div className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full ${sfConnected ? 'bg-success' : (sfExpired || sfSessionActive) ? 'bg-warning' : 'bg-surface-active'}`} />
                 <span className={`text-xs ${sfConnected ? 'text-success' : (sfExpired || sfSessionActive) ? 'text-warning' : 'text-text-secondary'}`}>
-                  {sfConnected ? 'Connected' : sfExpired ? 'Expired' : sfSessionActive ? 'Session Active' : 'Not connected'}
+                  {sfConnected ? (sfStatus?.lastSync ? `Connected · ${timeAgo(sfStatus.lastSync)}` : 'Connected') : sfExpired ? 'Expired' : sfSessionActive ? 'Session Active' : 'Not connected'}
                 </span>
               </div>
             </div>
             <div className="mt-auto pt-3">
-              <button
-                onClick={handleSfConnect}
-                disabled={sfConnecting}
-                className="bg-surface-hover hover:bg-surface-active disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
-              >
-                {sfConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
-                {sfConnecting ? 'Connecting...' : sfConnected ? 'Reconnect' : 'Connect'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSfConnect}
+                  disabled={sfConnecting}
+                  className={`disabled:opacity-40 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${sfConnected ? 'bg-surface-hover hover:bg-surface-active text-white' : 'bg-blue-600/40 hover:bg-blue-600/50 text-blue-300 border border-blue-500/60'}`}
+                >
+                  {sfConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                  {sfConnecting ? 'Connecting...' : sfConnected ? 'Reconnect' : 'Connect'}
+                </button>
+                {sfConnecting && (
+                  <button
+                    onClick={handleSfCancel}
+                    className="bg-critical/15 hover:bg-critical/20 text-critical px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
               {sfStatus?.syncError && <p className="text-xs text-critical mt-2">{sfStatus.syncError}</p>}
               {!sfStatus?.reportConfigured && (
                 <p className="text-xs text-text-secondary mt-2">SF Report ID required — configure in AEs & Customers above.</p>
@@ -2860,6 +3360,16 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                     <span className="w-2 h-2 rounded-full bg-critical" />
                     <span className="text-xs text-critical">Scrape failed</span>
                   </>
+                ) : ccspStatus?.state === 'failed' ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-critical" />
+                    <span className="text-xs text-critical">Scraper failed</span>
+                  </>
+                ) : ccspStatus?.state === 'stale' ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-warning" />
+                    <span className="text-xs text-warning">Stale</span>
+                  </>
                 ) : (
                   <>
                     <span className={`w-2 h-2 rounded-full ${tableauConnected ? 'bg-success' : 'bg-surface-active'}`} />
@@ -2872,23 +3382,24 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             </div>
             <div className="mt-auto pt-3">
               {/* BKL-UX61: No standalone Tableau login — it uses RH Portal SSO.
-                  Show hint when not connected, and only expose Reconnect when already connected. */}
-              {!tableauConnected && !tableauConnecting && (
+                  Show Connect/Reconnect when RH Portal is connected (SSO available).
+                  Show hint only when RH Portal is not yet connected. */}
+              {!tableauConnecting && !rhSessionActive && (
                 <div className="text-xs text-text-secondary flex items-center gap-1">
                   <Shield className="w-3 h-3" />
                   <span>Requires Red Hat Portal session</span>
                 </div>
               )}
-              {(tableauConnected || tableauConnecting) && (
+              {(rhSessionActive || tableauConnecting) && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleTableauConnect}
-                  disabled={!rhConnected || tableauConnecting}
-                  title={!rhConnected ? 'Connect Red Hat Portal first' : undefined}
-                  className="bg-surface-hover hover:bg-surface-active disabled:opacity-40 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                  disabled={!rhSessionActive || tableauConnecting}
+                  title={!rhSessionActive ? 'Connect Red Hat Portal first' : undefined}
+                  className={`disabled:opacity-40 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${tableauConnected ? 'bg-surface-hover hover:bg-surface-active text-white' : 'bg-blue-600/40 hover:bg-blue-600/50 text-blue-300 border border-blue-500/60'}`}
                 >
                   {tableauConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
-                  {tableauConnecting ? 'Connecting...' : 'Reconnect'}
+                  {tableauConnecting ? 'Connecting...' : tableauConnected ? 'Reconnect' : 'Connect'}
                 </button>
                 {tableauConnecting && (
                   <button
@@ -2900,15 +3411,15 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                 )}
               </div>
               )}
-              {tableauConnecting && <p className="text-xs text-text-secondary mt-2">Log in to Tableau in the VNC window — the page may briefly show the RH Portal as part of SSO, then redirect to Tableau. Window closes automatically when done.</p>}
+              {tableauConnecting && <p className="text-xs text-text-secondary mt-2"><strong className="text-warning">Two steps:</strong> (1) Enter your Tableau username → Sign In. (2) The page redirects to <strong className="text-white">Red Hat SSO</strong> — enter your Red Hat employee credentials there too. Do not close or refresh the VNC window. It closes automatically when done.</p>}
             </div>
           </div>
 
         </div>
-      </div>
+      </div>}
 
-      {/* ── SYNC ── */}
-      <div>
+      {/* ── SYNC ── (hidden in connections-only / pre-flight mode) */}
+      {!onlyConnections && <div>
         <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Sync</h3>
         <div className="divide-y divide-border/50">
 
@@ -2938,40 +3449,6 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             </div>
           )}
 
-          {/* Supportable Subscriptions */}
-          <div className="flex items-center justify-between py-3">
-            <div>
-              <p className="text-sm text-white">Supportable Subscriptions</p>
-              {(supportableStatus?.lastSuccess ?? supportableStatus?.lastScrape) ? (
-                <p className="text-xs text-text-secondary">Synced {timeAgo(([supportableStatus.lastSuccess, supportableStatus.lastScrape].filter((t): t is string => !!t).sort().slice(-1)[0]) ?? '')}{supportableStatus.recordCount ? ` — ${supportableStatus.recordCount}` : ''}</p>
-              ) : (
-                <p className="text-xs text-text-secondary">Subscription data</p>
-              )}
-              {supportableStatus?.lastError && <p className="text-xs text-critical">{supportableStatus.lastError}</p>}
-              {supportableStatus?.lastError?.toLowerCase().includes('unreachable') && (
-                <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-warning/10 text-warning text-[11px] font-medium">
-                  <AlertTriangle className="w-3 h-3" />
-                  VPN required
-                </span>
-              )}
-            </div>
-            <div className="flex items-center">
-              {!rhConnected && <span className="text-xs text-text-secondary mr-3">Requires active RH Portal session</span>}
-              {rhConnected && !supportableConnected && <span className="text-xs text-text-secondary mr-3">Not reachable — check VPN</span>}
-              <SyncButton onClick={handleRunScrape} loading={scraping || scraperRunning.supportable} disabled={!rhConnected || !supportableConnected || supportableRunning || scraperRunning.supportable} label="Sync Now" />
-            </div>
-          </div>
-          {scrapeError && <p role="alert" className="text-xs text-critical pb-2">{scrapeError}</p>}
-          {supportableRunning && (
-            <div className="flex items-center gap-2 pb-2 text-xs text-warning">
-              <svg className="w-3 h-3 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-              </svg>
-              <span>{supportableSyncMsg ?? 'Sync in progress…'}</span>
-            </div>
-          )}
-
           {/* CCSP (Tableau) */}
           <div className="flex items-center justify-between py-3">
             <div>
@@ -2990,7 +3467,7 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
                 <div className="flex items-center gap-1.5 mt-1">
                   <p className="text-xs text-warning">Tableau session expired — re-authenticate via VNC to continue</p>
                   <a
-                    href="http://localhost:6080/vnc.html?autoconnect=1&resize=scale"
+                    href={getVncUrl()}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 underline whitespace-nowrap"
@@ -3006,11 +3483,12 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
             </div>
             <SyncButton onClick={handleRunCcspScrape} loading={ccspScraping || scraperRunning.ccsp} disabled={ccspRunning || scraperRunning.ccsp} label="Sync Now" />
           </div>
+          <p className="text-xs text-text-secondary pb-1">Syncs to the service-account CCSP sheet. User-created sheets require manual sharing with the service account email first.</p>
           {ccspScrapeError && isTableauSessionError(ccspScrapeError) ? (
             <div className="flex items-center gap-1.5 pb-2">
               <p className="text-xs text-warning">Tableau session expired — re-authenticate via VNC to continue</p>
               <a
-                href="http://localhost:6080/vnc.html?autoconnect=1&resize=scale"
+                href={getVncUrl()}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80 underline whitespace-nowrap"
@@ -3052,382 +3530,16 @@ function DataSourcesSection({ onHealthChange }: { onHealthChange?: (status: 'loa
           {sfSyncError && <p role="alert" className="text-xs text-critical pb-2">{sfSyncError}</p>}
 
         </div>
-      </div>
-    </div>
-  )
-}
-
-// ── POD Bootstrap ─────────────────────────────────────────────────────────────
-
-interface PodBootstrapStatus {
-  podBootstrap: {
-    running: boolean
-    total: number
-    completed: number
-    currentAE: string | null
-    results: Array<{ name: string; status: string; error?: string; customerCount?: number }>
-    completedAt: string | null
-    error: string | null
-  }
-}
-
-function PodBootstrapSection() {
-  const [territorySheetId, setTerritorySheetId] = useState('')
-  const [sfReportId, setSfReportId] = useState('')
-  const [parentFolderId, setParentFolderId] = useState('')
-  const [podTabTitle, setPodTabTitle] = useState('')
-  const [availableSfSheets, setAvailableSfSheets] = useState<Array<{ name: string; displayName: string; sheetId?: string }>>([])
-  const [sfSheetsLoading, setSfSheetsLoading] = useState(false)
-  const [tableauOk, setTableauOk] = useState<boolean | null>(null)
-  const [folderName, setFolderName] = useState<string | null>(null)
-  const [folderError, setFolderError] = useState<string | null>(null)
-  const [starting, setStarting] = useState(false)
-  const [startError, setStartError] = useState<string | null>(null)
-  const [status, setStatus] = useState<PodBootstrapStatus['podBootstrap'] | null>(null)
-  const [cancelling, setCancelling] = useState(false)
-
-  // Fetch available SF POD sheets from Drive folder on mount
-  useEffect(() => {
-    setSfSheetsLoading(true)
-    fetch('/api/sf-bookings/pod-sheets')
-      .then(r => r.json())
-      .then((d: { sheets?: Array<{ name: string; displayName: string }> }) => {
-        if (d.sheets?.length) setAvailableSfSheets(d.sheets)
-      })
-      .catch(() => { /* no SF sheets configured */ })
-      .finally(() => setSfSheetsLoading(false))
-  }, [])
-
-  // Check Tableau status on mount
-  useEffect(() => {
-    const controller = new AbortController()
-    fetch('/api/bootstrap/tableau/session-status', { signal: controller.signal })
-      .then(r => r.json())
-      .then((d: { reachable: boolean; sessionValid: boolean }) => setTableauOk(d.sessionValid))
-      .catch(() => setTableauOk(false))
-    return () => controller.abort()
-  }, [])
-
-  // Check for existing run on mount
-  useEffect(() => {
-    const controller = new AbortController()
-    fetch('/api/bootstrap/auto/status', { signal: controller.signal })
-      .then(r => r.json())
-      .then((d: PodBootstrapStatus) => {
-        if (d.podBootstrap && (d.podBootstrap.running || d.podBootstrap.completedAt)) {
-          setStatus(d.podBootstrap)
-        }
-      })
-      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
-    return () => controller.abort()
-  }, [])
-
-  // Auto-select if only one SF sheet available
-  useEffect(() => {
-    if (availableSfSheets.length === 1) setPodTabTitle(availableSfSheets[0].displayName)
-  }, [availableSfSheets])
-
-  // Poll while running
-  useEffect(() => {
-    if (!status?.running) return
-    const controller = new AbortController()
-    const interval = setInterval(async () => {
-      try {
-        const r = await fetch('/api/bootstrap/auto/status', { signal: controller.signal })
-        const d: PodBootstrapStatus = await r.json()
-        setStatus(d.podBootstrap)
-        if (!d.podBootstrap.running) clearInterval(interval)
-      } catch (e: any) { if (e.name !== 'AbortError') { /* ignore */ } }
-    }, 3_000)
-    return () => { controller.abort(); clearInterval(interval) }
-  }, [status?.running])
-
-  const startPodBootstrap = async () => {
-    if (!territorySheetId.trim() || !sfReportId.trim() || !parentFolderId.trim() || !podTabTitle) return
-    setStarting(true)
-    setStartError(null)
-    try {
-      const r = await fetch('/api/bootstrap/pod', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          territorySheetId: territorySheetId.trim(),
-          sfReportId: sfReportId.trim(),
-          parentFolderId: parentFolderId.trim(),
-          podTabTitle,
-        }),
-      })
-      const d = await r.json()
-      if (!r.ok || d.error) {
-        setStartError(d.error ?? 'Failed to start POD bootstrap')
-        return
-      }
-      setStatus({ running: true, total: 0, completed: 0, currentAE: null, results: [], completedAt: null, error: null })
-    } catch (e: any) {
-      setStartError(e.message ?? 'Network error')
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  const cancelPodBootstrap = async () => {
-    setCancelling(true)
-    try {
-      await fetch('/api/bootstrap/cancel', { method: 'POST' })
-    } catch { /* ignore */ }
-    // Don't reset cancelling — let the poll detect completion and clear the running state
-  }
-
-  const resetPodBootstrap = async () => {
-    try {
-      const res = await fetch('/api/bootstrap/auto/reset', { method: 'POST' })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        setStartError(d.error ?? `Reset failed (${res.status})`)
-        return
-      }
-    } catch (e: any) {
-      console.error('[bootstrap] reset failed:', e)
-    }
-    setStatus(null)
-    setStartError(null)
-    setCancelling(false)
-  }
-
-  const successCount = status?.results.filter(r => r.status === 'ok' || r.status === 'skipped').length ?? 0
-  const failCount = status?.results.filter(r => r.status === 'error').length ?? 0
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <p className="text-sm text-text-secondary">
-          Bootstrap your entire POD at once. Provide the Territory Sheet ID and the system will iterate through each AE in the sheet, running the full bootstrap pipeline for each one.
-        </p>
-      </div>
-
-      {/* Input + button — hide when running */}
-      {!status?.running && !status?.completedAt && (
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs text-text-secondary mb-1">Territory Sheet ID</label>
-            <input
-              type="text"
-              value={territorySheetId}
-              onChange={e => { setTerritorySheetId(e.target.value); setStartError(null) }}
-              placeholder="1abc2DEF3ghi4JKL5mno6PQR7stu8VWX9yz"
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent font-mono"
-            />
-            <p className="text-xs text-text-secondary mt-1">Google Sheet containing AE names and territory configurations.</p>
-          </div>
-
-          <div>
-            <label className="block text-xs text-text-secondary mb-1">SF Pipeline Report ID</label>
-            <input
-              type="text"
-              value={sfReportId}
-              onChange={e => { setSfReportId(e.target.value); setStartError(null) }}
-              placeholder="00OPe000001abcDEF or full Salesforce report URL"
-              className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent font-mono"
-            />
-            <p className="text-xs text-text-secondary mt-1">Salesforce pipeline report — shared across all AEs in this POD.</p>
-          </div>
-
-          <div>
-            <label className="block text-xs text-text-secondary mb-1">Parent Drive Folder</label>
-            <input
-              type="text"
-              value={parentFolderId}
-              onChange={e => { setParentFolderId(e.target.value); setStartError(null); setFolderName(null); setFolderError(null) }}
-              onBlur={async () => {
-                const val = parentFolderId.trim()
-                if (!val) { setFolderName(null); setFolderError(null); return }
-                try {
-                  const r = await fetch('/api/aes/validate-folder', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ folderUrl: val }),
-                  })
-                  const d = await r.json()
-                  if (d.error) { setFolderError('Folder not found — check the URL'); setFolderName(null) }
-                  else { setFolderName(d.folderName); setFolderError(null) }
-                } catch { setFolderError('Could not reach Drive API'); setFolderName(null) }
-              }}
-              placeholder="Drive folder URL or bare folder ID"
-              className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent font-mono ${folderError ? 'border-critical' : folderName ? 'border-success' : 'border-border'}`}
-            />
-            {folderName && <p className="text-xs text-success mt-1">✓ {folderName}</p>}
-            {folderError && <p className="text-xs text-critical mt-1">✗ {folderError}</p>}
-            {!folderName && !folderError && <p className="text-xs text-text-secondary mt-1">Drive folder where each AE's subfolder will be created.</p>}
-          </div>
-
-          <div>
-            <label className="block text-xs text-text-secondary mb-1">POD</label>
-            {sfSheetsLoading ? (
-              <div className="flex items-center gap-2 text-xs text-text-secondary py-2">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading available PODs...
-              </div>
-            ) : availableSfSheets.length > 0 ? (
-              <select
-                value={podTabTitle}
-                onChange={e => setPodTabTitle(e.target.value)}
-                className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent"
-              >
-                <option value="">Select a POD...</option>
-                {availableSfSheets.map(s => (
-                  <option key={s.sheetId ?? s.name} value={s.displayName}>{s.displayName}</option>
-                ))}
-              </select>
-            ) : (
-              <select disabled className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-text-secondary opacity-50">
-                <option>No PODs available — add sheets to shared folder</option>
-              </select>
-            )}
-            <p className="text-xs text-text-secondary mt-1">PODs are discovered from the shared SF bookings Drive folder.</p>
-          </div>
-
-          {tableauOk === false && (
-            <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-2.5 text-xs text-warning">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>Tableau is not connected. CCSP scrape will fail for each AE. Connect Tableau in Step 3 first or continue knowing CCSP will be skipped.</span>
-            </div>
-          )}
-
-          {startError && (
-            <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
-              <XCircle className="w-3.5 h-3.5 shrink-0" /> {startError}
-            </p>
-          )}
-
-          <div className="flex justify-end">
-            <button
-              onClick={startPodBootstrap}
-              disabled={!territorySheetId.trim() || !sfReportId.trim() || !parentFolderId.trim() || !podTabTitle || starting}
-              className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              {starting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-              {starting ? 'Starting...' : 'Bootstrap POD'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Live progress */}
-      {status?.running && (
-        <div className="space-y-3" aria-live="polite">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-text-primary">
-              {status.completed} / {status.total} AEs complete
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={cancelPodBootstrap}
-                disabled={cancelling}
-                className="flex items-center gap-1.5 text-xs text-critical hover:text-critical/80 disabled:opacity-50 transition-colors"
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                {cancelling ? 'Cancelling...' : 'Cancel'}
-              </button>
-              <Loader2 className="w-4 h-4 animate-spin text-accent" />
-            </div>
-          </div>
-
-          {status.currentAE && (
-            <div className="flex items-center gap-2 bg-accent/10 border border-accent/30 rounded-lg px-3 py-2">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-accent shrink-0" />
-              <span className="text-sm text-accent">Bootstrapping: {status.currentAE}...</span>
-            </div>
-          )}
-
-          {/* Per-AE results as they complete */}
-          {status.results.length > 0 && (
-            <div className="space-y-1">
-              {status.results.map((result, i) => {
-                const isOk = result.status === 'ok' || result.status === 'skipped'
-                return (
-                  <div key={i} className="flex items-center gap-2 text-sm">
-                    {isOk
-                      ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
-                      : result.status === 'pending' || result.status === 'retrying'
-                        ? <Loader2 className="w-4 h-4 animate-spin text-accent shrink-0" />
-                        : <XCircle className="w-4 h-4 text-critical shrink-0" />}
-                    <span className={isOk ? 'text-success' : result.status === 'error' ? 'text-critical' : 'text-text-secondary'}>{result.name}</span>
-                    {result.status === 'skipped' && <span className="text-xs text-text-secondary">(skipped)</span>}
-                    {result.customerCount !== undefined && result.customerCount > 0 && <span className="text-xs text-text-secondary">({result.customerCount} customers)</span>}
-                    {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Completion state */}
-      {status?.completedAt && !status.running && (
-        <div className="space-y-3">
-          <div className={`rounded-lg border p-4 text-sm ${failCount > 0 ? 'border-warning/30 bg-warning/10' : 'border-success/30 bg-success/10'}`}>
-            <p className={`font-medium ${failCount > 0 ? 'text-warning' : 'text-success'}`}>
-              POD bootstrap complete — {successCount} succeeded{failCount > 0 ? `, ${failCount} failed` : ''}
-            </p>
-          </div>
-
-          {/* Per-AE results */}
-          {status.results.length > 0 && (
-            <div className="space-y-1">
-              {status.results.map((result, i) => {
-                const isOk = result.status === 'ok' || result.status === 'skipped'
-                return (
-                  <div key={i} className="flex items-center gap-2 text-sm">
-                    {isOk
-                      ? <CheckCircle className="w-4 h-4 text-success shrink-0" />
-                      : <XCircle className="w-4 h-4 text-critical shrink-0" />}
-                    <span className={isOk ? 'text-success' : 'text-critical'}>{result.name}</span>
-                    {result.status === 'skipped' && <span className="text-xs text-text-secondary">(skipped)</span>}
-                    {result.customerCount !== undefined && result.customerCount > 0 && <span className="text-xs text-text-secondary">({result.customerCount} customers)</span>}
-                    {result.error && <span className="text-xs text-critical/70 truncate max-w-xs">- {result.error}</span>}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Error message */}
-          {status.error && (
-            <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {status.error}
-            </p>
-          )}
-
-          <button
-            onClick={resetPodBootstrap}
-            className="text-xs text-text-secondary hover:text-text-primary underline"
-          >
-            Reset and run again
-          </button>
-        </div>
-      )}
-
-      {/* Error outside of completion (e.g. top-level error before any results) */}
-      {status?.error && !status.completedAt && !status.running && (
-        <div className="space-y-3">
-          <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2 flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {status.error}
-          </p>
-          <button
-            onClick={resetPodBootstrap}
-            className="text-xs text-text-secondary hover:text-text-primary underline"
-          >
-            Reset and try again
-          </button>
-        </div>
-      )}
+      </div>}
     </div>
   )
 }
 
 // ── Main Setup Page ────────────────────────────────────────────────────────────
 
-type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'pod-bootstrap' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings'
+type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings'
+
+const DATA_SOURCE_TOTAL = 3 // Red Hat Portal, Salesforce, Tableau/CCSP — Supportable removed
 
 export default function SetupPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>(null)
@@ -3437,6 +3549,7 @@ export default function SetupPage() {
   const [aeCount, setAeCount] = useState<number | null>(null)
   const [rhOk, setRhOk] = useState<boolean | null>(null)
   const [resetting, setResetting] = useState(false)
+  const [resetError, setResetError] = useState<string | null>(null)
   const [dataSourcesHealth, setDataSourcesHealth] = useState<'loading' | 'healthy' | 'issues'>('loading')
   const [dataSourcesConnected, setDataSourcesConnected] = useState<number | null>(null)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
@@ -3475,27 +3588,61 @@ export default function SetupPage() {
     // Check RH Portal
     fetch('/api/auth/redhat/status', { signal })
       .then(r => r.json())
-      // BKL-UX60: sessionExpired can be stale; hasSession alone is sufficient
-      .then(d => { setRhOk((d.hasSession) ?? false) })
+      // BKL-UX63: Require !sessionExpired — aligns Step 3 badge with Step 5
+      .then(d => { setRhOk((d.hasSession && !d.sessionExpired) ?? false) })
       .catch((e) => { if (e.name !== 'AbortError') setRhOk(false) })
 
-    // Eagerly resolve Data Sources badge without waiting for accordion to open
-    Promise.all([
-      fetch('/api/auth/redhat/status',              { signal }).then(r => r.json()).catch(() => ({ hasSession: false })),
-      fetch('/api/auth/salesforce/status',           { signal }).then(r => r.json()).catch(() => ({ hasSession: false })),
-      fetch('/api/scrape/ccsp/status',              { signal }).then(r => r.json()).catch(() => ({ lastError: 'Unreachable' })),
-      fetch('/api/bootstrap/tableau/session-status', { signal }).then(r => r.json()).catch(() => ({ reachable: false, sessionValid: false })),
-    ]).then(([rh, sf, ccsp, tableau]) => {
-      const checks = [
-        rh.hasSession && !rh.sessionExpired,
-        sf.hasSession,
-        !ccsp.lastError && !!ccsp.lastScrape,
-        tableau.sessionValid,
-      ]
-      const connected = checks.filter(Boolean).length
-      setDataSourcesConnected(connected)
-      setDataSourcesHealth(connected < 4 ? 'issues' : 'healthy')
-    }).catch(() => { /* aborted — ignore */ })
+    // BKL-UX112: Poll the Data Sources counter on a recurring interval so the
+    // badge never goes stale while the accordion is collapsed (DataSourcesSection
+    // only mounts when the accordion is open, so its reactive onHealthChange
+    // cannot drive the counter before first expansion).
+    //
+    // The derivation below MUST match DataSourcesSection's `rhConnected` /
+    // `sfConnected` / `tableauConnected` logic exactly — single source of truth.
+    // If these ever disagree, the header counter will contradict the card colors.
+    //
+    // BKL-UX65: Keeps the 10s initial timeout behaviour — if the very first
+    // poll hasn't resolved within 10s, flip out of 'loading' into 'issues'.
+    const computeConnected = async (sig: AbortSignal) => {
+      const [rh, sf, tableau] = await Promise.all([
+        fetch('/api/auth/redhat/status',               { signal: sig }).then(r => r.json()).catch(() => ({ hasSession: false, sessionExpired: false, lastScraped: null })),
+        fetch('/api/auth/salesforce/status',           { signal: sig }).then(r => r.json()).catch(() => ({ hasSession: false, lastSync: null, syncError: null })),
+        fetch('/api/bootstrap/tableau/session-status', { signal: sig }).then(r => r.json()).catch(() => ({ reachable: false, sessionValid: false })),
+      ])
+      // Mirror DataSourcesSection's derivation exactly (SetupPage.tsx ~L3094-3143):
+      //   rhConnected    = hasSession && !sessionExpired && !!lastScraped
+      //                    (card allows scraperRunning.rh to count; parent scope
+      //                    has no access to that ref, so require lastScraped
+      //                    instead — matches steady-state card color)
+      //   sfConnected    = hasSession && !syncError(session expired) && !!lastSync
+      //   tableauConnected = sessionValid
+      const rhConnected = !!(rh.hasSession && !rh.sessionExpired && rh.lastScraped && rh.liveReachable !== false)
+      const sfExpired = sf.sessionExpired || !!sf.syncError
+      const sfConnected = !!(sf.hasSession && !sfExpired && sf.lastSync)
+      const tableauConnected = tableau.sessionValid === true && tableau.reachable !== false
+      return [rhConnected, sfConnected, tableauConnected].filter(Boolean).length
+    }
+
+    let firstResolved = false
+    const refreshConnected = async () => {
+      try {
+        const connected = await computeConnected(signal)
+        firstResolved = true
+        setDataSourcesConnected(connected)
+        setDataSourcesHealth(connected < DATA_SOURCE_TOTAL ? 'issues' : 'healthy')
+      } catch (e) {
+        if ((e as Error | undefined)?.name !== 'AbortError') { /* swallow network blips; next tick retries */ }
+      }
+    }
+    refreshConnected()
+    const timeout = setTimeout(() => {
+      if (!firstResolved) setDataSourcesHealth('issues')
+    }, 10_000)
+    // Poll the counter every 10s so the badge reflects reality while the
+    // accordion is collapsed. When the accordion is open, DataSourcesSection's
+    // own onHealthChange callback also updates this state — both paths write
+    // the same value, so there is no conflict.
+    const counterInterval = setInterval(refreshConnected, 10_000)
 
     // OAuth return: open AEs section and clean URL so the child AutoBootstrapForm can restore state
     const params = new URLSearchParams(window.location.search)
@@ -3510,7 +3657,12 @@ export default function SetupPage() {
       else fetch('/api/aes').then(r => r.json()).then(d => setAeCount((d.aes ?? []).length)).catch(() => {})
     }
     window.addEventListener('ae-saved', onAeSaved)
-    return () => { controller.abort(); window.removeEventListener('ae-saved', onAeSaved) }
+    return () => {
+      controller.abort()
+      clearTimeout(timeout)
+      clearInterval(counterInterval)
+      window.removeEventListener('ae-saved', onAeSaved)
+    }
   }, [])
 
   // First-run auto-expand logic — fires only once before user interacts with accordion.
@@ -3535,11 +3687,22 @@ export default function SetupPage() {
   const doReset = async (full: boolean) => {
     setResetting(true)
     setResetConfirm(null)
+    setResetError(null)
     try {
-      await fetch(`/api/setup/reset?confirm=true${full ? '&full=true' : ''}`, { method: 'POST' })
-    } catch {}
-    setResetting(false)
-    window.location.href = '/dashboard/setup'
+      const res = await fetch(`/api/setup/reset?confirm=true${full ? '&full=true' : ''}`, { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({})) as any
+        setResetting(false)
+        setResetError(d.error ?? `Reset failed (${res.status})`)
+        return
+      }
+    } catch (e: any) {
+      setResetting(false)
+      setResetError(e?.message ?? 'Reset failed — server unreachable')
+      return
+    }
+    // Use replace() to guarantee a full reload even if already on /dashboard/setup
+    window.location.replace('/dashboard/setup')
   }
 
   return (
@@ -3559,6 +3722,11 @@ export default function SetupPage() {
             </div>
             {/* Reset buttons — right side of flex row */}
             <div className="shrink-0 flex flex-col items-end gap-1">
+              {resetError && (
+                <div className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-2 py-1 max-w-[220px] text-right">
+                  {resetError}
+                </div>
+              )}
               {resetConfirm ? (
                 <div className="flex items-center gap-2 bg-critical/15 border border-critical/30 rounded-lg px-3 py-1.5">
                   <span className="text-xs text-critical">
@@ -3646,28 +3814,21 @@ export default function SetupPage() {
 
           <AccordionSection
             id="rh-portal"
-            title="Step 3 of 5 — Red Hat Portal"
+            title="Step 3 of 5 — Connections"
             badge={
-              rhOk === null
-                ? <StatusBadge ok={null} label="Checking..." />
-                : rhOk
-                  ? <StatusBadge ok={true} label="Connected" />
-                  : <StatusBadge ok={false} label="Required" />
+              dataSourcesHealth === 'loading'
+                ? <span className="text-xs text-text-secondary">Checking...</span>
+                : dataSourcesHealth === 'issues'
+                  ? <span className="text-xs text-warning">{dataSourcesConnected ?? 0}/{DATA_SOURCE_TOTAL} connected</span>
+                  : <span className="text-xs text-success">{DATA_SOURCE_TOTAL}/{DATA_SOURCE_TOTAL} connected</span>
             }
             isOpen={openSection === 'rh-portal'}
             onToggle={() => toggleSection('rh-portal')}
           >
-            <RedHatPortalSection onConnected={() => setRhOk(true)} />
-          </AccordionSection>
-
-          <AccordionSection
-            id="pod-bootstrap"
-            title="POD Bootstrap"
-            badge={<span className="text-xs text-text-secondary">Full-team onboarding</span>}
-            isOpen={openSection === 'pod-bootstrap'}
-            onToggle={() => toggleSection('pod-bootstrap')}
-          >
-            <PodBootstrapSection />
+            <DataSourcesSection
+              onlyConnections={true}
+              onHealthChange={(status, count) => { setDataSourcesHealth(status); if (count !== undefined) setDataSourcesConnected(count) }}
+            />
           </AccordionSection>
 
           <AccordionSection
@@ -3693,13 +3854,16 @@ export default function SetupPage() {
               dataSourcesHealth === 'loading'
                 ? <span className="text-xs text-text-secondary">Checking...</span>
                 : dataSourcesHealth === 'issues'
-                  ? <span className="text-xs text-warning">{dataSourcesConnected ?? 0}/4 connected</span>
-                  : <span className="text-xs text-success">4/4 connected</span>
+                  ? <span className="text-xs text-warning">{dataSourcesConnected ?? 0}/{DATA_SOURCE_TOTAL} connected</span>
+                  : <span className="text-xs text-success">{DATA_SOURCE_TOTAL}/{DATA_SOURCE_TOTAL} connected</span>
             }
             isOpen={openSection === 'data-sources'}
             onToggle={() => toggleSection('data-sources')}
           >
-            <DataSourcesSection onHealthChange={setDataSourcesHealth} />
+            <DataSourcesSection
+              hideConnections={true}
+              onHealthChange={(status, count) => { setDataSourcesHealth(status); if (count !== undefined) setDataSourcesConnected(count) }}
+            />
           </AccordionSection>
 
           <AccordionSection

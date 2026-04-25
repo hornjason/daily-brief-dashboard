@@ -1,15 +1,19 @@
 /**
  * BKL-UX52: AE-grouped customer list with collapsible sections.
+ * BKL-UX109: Default-collapse on first load for all users regardless of AE
+ *            count, persist toggle state in localStorage, upgrade collapsed
+ *            header to show health-dot strip, pipeline ACV, and open case
+ *            count.
  *
  * Each AE section shows:
- *   - Collapsible header: AE name + customer count pill + aggregate KPI mini-bar
+ *   - Collapsible header: AE name + customer count pill + health-dot strip
+ *     + total pipeline ACV + open case count
  *   - Customer rows sorted by attentionScore DESC within each group
  *   - AE groups sorted by max attentionScore of any member
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import type { AccountInfo, SupportCase, CalendarEvent } from '../types'
-import HealthDot from './HealthDot'
 
 interface AEGroupedListProps {
   accounts: AccountInfo[]
@@ -26,6 +30,8 @@ interface AEGroup {
   totalCases: number
   totalPipelineAcv: number
   renewalCount: number
+  /** Attention score per customer, same order as `customers` — used to render the health-dot strip. */
+  customerScores: number[]
 }
 
 function formatAcv(value: number): string {
@@ -48,14 +54,42 @@ function getAttentionLabel(score: number): string {
   return 'No data'
 }
 
+const LOCAL_STORAGE_KEY = 'ae-group-collapsed'
+const MAX_HEALTH_DOTS = 12
+
+function loadCollapsedState(): Set<string> {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
+    if (!raw) return new Set<string>()
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return new Set(parsed)
+  } catch {
+    /* ignore malformed */
+  }
+  return new Set<string>()
+}
+
+function persistCollapsedState(set: Set<string>) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([...set]))
+  } catch {
+    /* ignore quota / private-mode failures */
+  }
+}
+
 export function AEGroupedList({ accounts, cases, events, loading, onCustomerClick }: AEGroupedListProps) {
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // Persisted collapsed-AE set. Hydrated from localStorage on first render.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => loadCollapsedState())
+  // Tracks whether we've already applied the "default-collapse at ≥4 AEs" behavior.
+  // Without this, re-deriving the state on every accounts change would fight user toggles.
+  const [defaultApplied, setDefaultApplied] = useState(false)
 
   const toggleGroup = (aeName: string) => {
     setCollapsedGroups(prev => {
       const next = new Set(prev)
       if (next.has(aeName)) next.delete(aeName)
       else next.add(aeName)
+      persistCollapsedState(next)
       return next
     })
   }
@@ -118,13 +152,33 @@ export function AEGroupedList({ accounts, cases, events, loading, onCustomerClic
         }
       }
 
-      groups.push({ aeName, customers: custs, maxScore, totalCases, totalPipelineAcv, renewalCount })
+      const customerScores = custs.map(c => c.attentionScore ?? 0)
+
+      groups.push({ aeName, customers: custs, maxScore, totalCases, totalPipelineAcv, renewalCount, customerScores })
     }
 
     // Sort groups by max attention score DESC
     groups.sort((a, b) => b.maxScore - a.maxScore)
     return groups
   }, [accounts, casesByAccount])
+
+  // Default to fully collapsed on first load regardless of AE count,
+  // but only when the user has no saved state yet — we do NOT override an
+  // explicitly-saved preference.
+  useEffect(() => {
+    if (defaultApplied) return
+    if (aeGroups.length === 0) return
+
+    const raw = (() => {
+      try { return localStorage.getItem(LOCAL_STORAGE_KEY) } catch { return null }
+    })()
+    if (raw !== null) { setDefaultApplied(true); return }  // user has prior preference
+
+    const allCollapsed = new Set(aeGroups.map(g => g.aeName))
+    setCollapsedGroups(allCollapsed)
+    persistCollapsedState(allCollapsed)
+    setDefaultApplied(true)
+  }, [aeGroups, defaultApplied])
 
   if (loading) {
     return (
@@ -145,15 +199,25 @@ export function AEGroupedList({ accounts, cases, events, loading, onCustomerClic
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-testid="ae-grouped-list">
       {aeGroups.map(group => {
         const isCollapsed = collapsedGroups.has(group.aeName)
+        const visibleDots = group.customerScores.slice(0, MAX_HEALTH_DOTS)
+        const overflow = group.customerScores.length - visibleDots.length
         return (
-          <div key={group.aeName} className="border border-border rounded-lg overflow-hidden">
+          <div
+            key={group.aeName}
+            className="border border-border rounded-lg overflow-hidden"
+            data-testid="ae-group"
+            data-ae-name={group.aeName}
+            data-collapsed={isCollapsed ? 'true' : 'false'}
+          >
             {/* AE Header — collapsible */}
             <button
               onClick={() => toggleGroup(group.aeName)}
               className="w-full flex items-center gap-3 px-4 py-3 bg-surface hover:bg-surface-hover transition-colors text-left"
+              aria-expanded={!isCollapsed}
+              data-testid="ae-group-header"
             >
               {isCollapsed ? (
                 <ChevronRight className="w-4 h-4 text-text-secondary shrink-0" />
@@ -164,13 +228,28 @@ export function AEGroupedList({ accounts, cases, events, loading, onCustomerClic
               <span className="text-xs bg-zinc-700 text-zinc-300 px-2 py-0.5 rounded-full">
                 {group.customers.length}
               </span>
-              <div className="flex-1" />
-              <div className="flex items-center gap-4 text-xs text-text-secondary">
-                {group.totalCases > 0 && (
-                  <span>{group.totalCases} case{group.totalCases !== 1 ? 's' : ''}</span>
+
+              {/* Health-dot strip — one dot per customer, up to 12, then "+N" */}
+              <div className="flex items-center gap-1 pl-1" data-testid="ae-group-health-dots">
+                {visibleDots.map((score, i) => (
+                  <span
+                    key={i}
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${getAttentionDotColor(score)}`}
+                    title={`${group.customers[i]?.name ?? ''}: ${getAttentionLabel(score)} (${score})`}
+                  />
+                ))}
+                {overflow > 0 && (
+                  <span className="text-[11px] text-text-secondary tabular-nums pl-0.5">+{overflow}</span>
                 )}
+              </div>
+
+              <div className="flex-1" />
+              <div className="flex items-center gap-4 text-xs text-text-secondary tabular-nums">
                 {group.totalPipelineAcv > 0 && (
-                  <span>{formatAcv(group.totalPipelineAcv)} pipeline</span>
+                  <span data-testid="ae-group-pipeline-acv">{formatAcv(group.totalPipelineAcv)} pipeline</span>
+                )}
+                {group.totalCases > 0 && (
+                  <span data-testid="ae-group-cases">{group.totalCases} open case{group.totalCases !== 1 ? 's' : ''}</span>
                 )}
                 {group.renewalCount > 0 && (
                   <span>{group.renewalCount} renewal{group.renewalCount !== 1 ? 's' : ''}</span>
