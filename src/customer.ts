@@ -7,7 +7,8 @@ import type { Customer, CalendarEvent, EmailHighlight, DriveFile, SupportCase, C
 import type { PipelineRecord } from './pipeline.ts'
 import type { CCSPRecord } from './sheets.ts'
 import { aes } from './server-state.ts'
-import { readLatestBriefCache } from './cache-layer.ts'
+import { readLatestBriefCache, readBriefCache, writeBriefCache } from './cache-layer.ts'
+import { diffDocCorpus, shouldUseDeltaMode } from './ai-fingerprint.ts'
 import { isFreeOrTrial } from './health-score.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getAiConfig, getGeminiModel, getGeminiModelLite, getAutomationConfig } from './settings-api.ts'
@@ -607,6 +608,61 @@ interface XmlEnrichment {
   meetingPreps?: MeetingPrep[]
 }
 
+/**
+ * BKL-AI-FP-09 corpus delta: build XML sources for delta-mode synthesis.
+ *
+ * Unchanged docs are dropped — the previous brief carries forward their content.
+ * Only new + changed docs are sent in full. Removed docs are listed by name only
+ * so the model can decide whether to drop talking points that referenced them.
+ *
+ * Non-doc context (meetings, emails, cases, subscriptions, pipeline, CCSP) is
+ * passed through identical to the full-run path via the same buildXmlSources call.
+ */
+function buildDeltaXmlSources(
+  customer: Customer,
+  meetings: CalendarEvent[],
+  emails: EmailHighlight[],
+  changedDocs: DriveFile[],
+  newDocs: DriveFile[],
+  removedDocNames: string[],
+  cases: SupportCase[],
+  subscriptions: CustomerSubscription[],
+  products: ProductSubscription[],
+  pipeline: PipelineRecord[],
+  ccsp: CCSPRecord[],
+  previousBrief: string,
+  lastBriefDate: string | null,
+  lastInteraction: string,
+  enrichment?: XmlEnrichment,
+): string {
+  // Reuse the full builder for non-doc context — pass only the delta docs as the docs argument.
+  const deltaDocs = [...newDocs, ...changedDocs]
+  let xml = buildXmlSources(
+    customer, meetings, emails, deltaDocs, cases, subscriptions, products, pipeline, ccsp,
+    previousBrief, lastBriefDate, lastInteraction, enrichment,
+  )
+
+  // Prepend explicit delta tags so the synthesis prompt knows it is in delta mode.
+  let header = `<delta_mode>true</delta_mode>\n`
+  header += `<previous_brief date="${escapeXml(lastBriefDate ?? 'unknown')}">\n${previousBrief}\n</previous_brief>\n\n`
+  if (newDocs.length) {
+    header += `<new_documents count="${newDocs.length}">\n`
+    for (const d of newDocs) header += `  ${escapeXml(d.name)}\n`
+    header += `</new_documents>\n\n`
+  }
+  if (changedDocs.length) {
+    header += `<modified_documents count="${changedDocs.length}">\n`
+    for (const d of changedDocs) header += `  ${escapeXml(d.name)}\n`
+    header += `</modified_documents>\n\n`
+  }
+  if (removedDocNames.length) {
+    header += `<removed_documents count="${removedDocNames.length}">\n`
+    for (const n of removedDocNames) header += `  ${escapeXml(n)}\n`
+    header += `</removed_documents>\n\n`
+  }
+  return header + xml
+}
+
 function buildXmlSources(
   customer: Customer,
   meetings: CalendarEvent[],
@@ -1043,10 +1099,59 @@ export async function generateBrief(
       console.warn(`[brief] R26 calendar-extraction failed for ${customer.name}, continuing without:`, (prepResult.reason as any)?.message?.slice?.(0, 200) ?? 'unknown error')
     }
 
-    const xmlSources = buildXmlSources(customer, meetings, emails, docs, cases, subscriptions, products, pipeline, ccsp, previousBrief, lastBriefDate, lastInteractionDate, enrichment)
+    // ── BKL-AI-FP-09: Corpus delta check ───────────────────────────────────
+    // If the previously-cached brief includes a docCorpusSnapshot and only a
+    // small subset of docs changed, skip Steps 1+2 and synthesize directly
+    // against the previous brief + delta docs. Saves the most expensive Gemini
+    // calls when the customer's drive corpus is mostly unchanged day-over-day.
+    // DriveFile has no stable `id` field exposed on this type — use `name` as the identity key.
+    // Two docs with the same name in one corpus is treated as one bucket; modifiedTime change still triggers delta.
+    const currentSnapshot = Object.fromEntries(docs.map(d => [d.name, d.modifiedTime ?? '']))
+    const todaysCachedBrief = readBriefCache(customer.name)
+    const cachedSnapshot = todaysCachedBrief?.docCorpusSnapshot
+    const cachedBriefText = todaysCachedBrief?.text ?? previousBrief
+
+    let xmlSources: string
+    let useDeltaMode = false
+
+    if (cachedSnapshot && cachedBriefText) {
+      const corpusDiff = diffDocCorpus(cachedSnapshot, currentSnapshot)
+      useDeltaMode = shouldUseDeltaMode(corpusDiff, true)
+      if (useDeltaMode) {
+        const changedDocList = docs.filter(d => corpusDiff.changedDocs.includes(d.name))
+        const newDocList = docs.filter(d => corpusDiff.newDocs.includes(d.name))
+        // removedDocs from diffDocCorpus are fileIds — names aren't preserved in the snapshot
+        const removedNames = corpusDiff.removedDocs
+        xmlSources = buildDeltaXmlSources(
+          customer, meetings, emails,
+          changedDocList, newDocList, removedNames,
+          cases, subscriptions, products, pipeline, ccsp,
+          cachedBriefText, lastBriefDate, lastInteractionDate, enrichment,
+        )
+        console.log(`[brief] delta mode for ${customer.name}: ${corpusDiff.unchangedDocs.length} unchanged, ${corpusDiff.changedDocs.length} changed, ${corpusDiff.newDocs.length} new, ${corpusDiff.removedDocs.length} removed`)
+      }
+    }
+
+    if (!useDeltaMode) {
+      xmlSources = buildXmlSources(customer, meetings, emails, docs, cases, subscriptions, products, pipeline, ccsp, previousBrief, lastBriefDate, lastInteractionDate, enrichment)
+    }
+
+    // Delta mode bypasses Steps 1+2 — synthesize directly from delta context against previous brief.
+    if (useDeltaMode) {
+      const deltaSynthesisPrompt = `You are updating an existing customer brief. The previous brief and the changed/new/removed documents since it was generated are provided below in XML. Produce an updated brief in the same format. Preserve unchanged context from the previous brief; integrate insights from new/modified documents; drop or adjust talking points that referenced removed documents.\n\n${xmlSources!}`
+      const deltaBrief = await callLLM(
+        'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
+        deltaSynthesisPrompt,
+        'brief-synthesize-delta',
+        customer.name,
+      )
+      console.log(`[brief] delta SYNTHESIZE complete for ${customer.name}: ${deltaBrief.length} chars`)
+      writeBriefCache(customer.name, deltaBrief, { docCorpusSnapshot: currentSnapshot })
+      return deltaBrief
+    }
 
     // Step 1: EXTRACT
-    const extraction = await extractSignals(xmlSources, lastInteractionDate, customer.name)
+    const extraction = await extractSignals(xmlSources!, lastInteractionDate, customer.name)
     console.log(`[brief] Step 1 EXTRACT for ${customer.name}: ${extraction.items.length} items, ${extraction.data_gaps.length} gaps`)
 
     // Step 2: RANK (deterministic)
@@ -1081,6 +1186,9 @@ export async function generateBrief(
       customer.name,
     )
     console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
+
+    // Persist with corpus snapshot so the next generation can use BKL-AI-FP-09 delta mode.
+    writeBriefCache(customer.name, brief, { docCorpusSnapshot: currentSnapshot })
 
     return brief
   } catch (e: any) {

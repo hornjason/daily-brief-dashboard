@@ -10,6 +10,7 @@ import { recordSfSyncSuccess } from './sf-scraper.ts'
 import { recordOutcome } from './scraper-status-store.ts'
 import { recordCcspRefreshAt } from './ccsp-scraper.ts'
 import { recordSupportableRefreshAt } from './supportable-scraper.ts'
+import { emitCacheLevel } from './ingest-events.ts'
 
 // ── Module state ────────────────────────────────────────────────────────────
 let SHEETS_SYNC_PATH = ''
@@ -130,7 +131,12 @@ export async function refreshSubscriptions(force = false): Promise<void> {
         const oldestCachedAt = timestamps.length ? timestamps.reduce((a, b) => a < b ? a : b) : null
         if (oldestCachedAt) {
           const changed = await checkFilesModified([syncConfig.fileId], oldestCachedAt)
-          if (!changed) { console.log(`[refresh:subscriptions] skipped — source file unchanged`); return }
+          if (!changed) {
+            // Telemetry: source unchanged → served entirely from L1 in-memory cache.
+            emitCacheLevel({ ae: null, flow: 'sfBookings', level: 1 })
+            console.log(`[refresh:subscriptions] skipped — source file unchanged`)
+            return
+          }
         }
       }
     } catch {
@@ -161,7 +167,12 @@ export async function refreshCCSP(force = false): Promise<void> {
       aeSetChanged = !cachedMatchesCurrent
       if (cachedMatchesCurrent && cached!.cachedAt) {
         const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
-        if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
+        if (!changed) {
+          // Telemetry: source unchanged → served entirely from L1 in-memory CCSP cache.
+          emitCacheLevel({ ae: null, flow: 'ccsp', level: 1 })
+          console.log(`[refresh:ccsp] skipped — source files unchanged`)
+          return
+        }
       }
       if (aeSetChanged) {
         console.log(`[refresh:ccsp] AE set changed — forcing full refresh (BKL-CCSP-03)`)
@@ -195,7 +206,12 @@ export async function refreshPipeline(force = false): Promise<void> {
         pipelineIds.every(id => cached.fileIds!.includes(id))
       if (cachedMatchesCurrent && cached!.cachedAt) {
         const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
-        if (!changed) { console.log(`[refresh:pipeline] skipped — source files unchanged`); return }
+        if (!changed) {
+          // Telemetry: source unchanged → served entirely from L1 in-memory pipeline cache.
+          emitCacheLevel({ ae: null, flow: 'sfPipeline', level: 1 })
+          console.log(`[refresh:pipeline] skipped — source files unchanged`)
+          return
+        }
       }
     }
     const { records, fileIds } = await fetchPipelineData(pipelineIds.length ? pipelineIds : undefined)

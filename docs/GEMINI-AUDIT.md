@@ -1,5 +1,5 @@
 ---
-Last validated: 2026-04-24
+Last validated: 2026-04-25
 ---
 
 # Gemini AI Audit Report
@@ -7,7 +7,11 @@ Last validated: 2026-04-24
 **Generated:** 2026-04-10  
 **Auditor:** Marcus Webb (Principal Engineer)  
 **Scope:** All Gemini API call sites in `src/`  
-**Customer count:** 106 customers across 2 PODs  
+**Customer count:** 138 customers across 2 PODs
+**Products tracked:** 7
+**Per-doc content cap (`DOC_CONTENT_CAP`):** 8K characters
+**Total per-call content cap (`TOTAL_CONTENT_CAP`):** 80K characters
+
 
 ---
 
@@ -21,12 +25,12 @@ Last validated: 2026-04-24
 | Estimated daily cost (intelligence off) | ~$0.44/day |
 | Estimated daily cost (intelligence on) | ~$0.94/day |
 | Biggest cost driver | `doc-classify` (~65% of daily cost with intelligence off) |
-| Full 106-customer population run | ~$6.40 one-time |
+| Full 138-customer population run | ~$6.40 one-time |
 
 **Top 3 cost drivers (daily, intelligence on):**
 
 1. `doc-classify` — ~$0.41/day (no result caching, runs per-doc every brief cycle)
-2. `customer-product-intel` — ~$0.50/day (106 customers x 3 products weekly)
+2. `customer-product-intel` — ~$0.50/day (138 customers x 3 products weekly)
 3. `brief-extract` + `brief-synthesize` — ~$0.014/day (24h cache keeps this low)
 
 ---
@@ -53,7 +57,7 @@ Vertex AI pricing via Google Cloud, as of early 2026. Standard (non-batch) rates
 
 ### 3.1 Brief Pipeline
 
-| # | Call Site | File | Function | Model | Max Output Tokens | thinkingBudget | Schedule | Frequency (106 customers) | Caching | Est. Input Tokens | Est. Output Tokens | Est. Cost/Call | Est. Daily Cost |
+| # | Call Site | File | Function | Model | Max Output Tokens | thinkingBudget | Schedule | Frequency (138 customers) | Caching | Est. Input Tokens | Est. Output Tokens | Est. Cost/Call | Est. Daily Cost |
 |---|----------|------|----------|-------|-------------------|----------------|----------|--------------------------|---------|-------------------|-------------------|---------------|-----------------|
 | 1 | **brief-extract** | `customer.ts:895` | `callLLMStructured()` | flash-lite | 8,192 | 0 | On-demand (page view) + startup pre-gen | ~20/day (24h cache, not all viewed daily) | 24h per customer | ~4,000 | ~2,000 | $0.0009 | $0.018 |
 | 2 | **brief-synthesize** | `customer.ts:473` | `callLLM()` | flash-lite | 4,096 | 0 | On-demand (page view) + startup pre-gen | ~20/day (same trigger as extract) | 24h per customer | ~3,000 | ~1,500 | $0.0007 | $0.014 |
@@ -63,7 +67,7 @@ Vertex AI pricing via Google Cloud, as of early 2026. Standard (non-batch) rates
 
 ### 3.2 Account Intelligence
 
-| # | Call Site | File | Function | Model | Max Output Tokens | thinkingBudget | Schedule | Frequency (106 customers) | Caching | Est. Input Tokens | Est. Output Tokens | Est. Cost/Call |
+| # | Call Site | File | Function | Model | Max Output Tokens | thinkingBudget | Schedule | Frequency (138 customers) | Caching | Est. Input Tokens | Est. Output Tokens | Est. Cost/Call |
 |---|----------|------|----------|-------|-------------------|----------------|----------|--------------------------|---------|-------------------|-------------------|---------------|
 | 6 | **intelligence-industry** | `account-intelligence.ts:137` | `callGeminiGroundedStructured()` | flash | 8,192 | 0 | Manual trigger / bootstrap | On-demand only | Permanent (customers.json) | ~500 | ~200 | $0.0002 |
 | 7 | **intelligence-company** | `account-intelligence.ts:373` | `callGeminiGrounded()` | flash | 8,192 | 0 | Manual trigger / bootstrap | On-demand only | 7-day TTL (configurable) | ~2,000 | ~6,000 | $0.0039 |
@@ -78,7 +82,7 @@ Vertex AI pricing via Google Cloud, as of early 2026. Standard (non-batch) rates
 | 9 | **product-release-radar** | `product-release-radar.ts:313` | inline fetch | flash | 2,048 | 0 | Weekly (Sunday 6am ET) | 3/week (RHEL, OCP, AAP) | Content hash (permanent until content changes) | ~6,000 | ~1,000 | $0.0015 |
 | 10 | **product-feature-extraction** | `product-feature-radar.ts:343` | inline fetch | flash | 16,384 | 0 | Weekly (Sunday 6am ET) | 3/week | Content hash | ~8,000 | ~4,000 | $0.0036 |
 | 11 | **product-feature-enrichment** | `product-feature-radar.ts:579` | inline fetch | flash | 1,024 | 0 | Weekly (after feature extraction) | ~30/week (max 10 features x 3 products) | Content hash | ~3,000 | ~500 | $0.0008 |
-| 12 | **customer-product-intel** | `customer-product-intel.ts:361` | inline fetch | flash | 8,192 | 0 | Weekly (Sunday 6am ET) | ~318/week (106 customers x 3 products) | Content hash (permanent until product or customer data changes) | ~6,000 | ~2,000 | $0.0021 |
+| 12 | **customer-product-intel** | `customer-product-intel.ts:361` | inline fetch | flash | 8,192 | 0 | Weekly (Sunday 6am ET) | ~318/week (138 customers x 3 products) | Content hash (permanent until product or customer data changes) | ~6,000 | ~2,000 | $0.0021 |
 | 13 | **product-query (Q&A)** | `product-intelligence.ts:173` | `callGeminiGroundedRaw()` | flash-lite | 4,096 | 0 | On-demand (user asks question) | ~2/day (user-driven) | None | ~1,500 | ~1,000 | $0.0004 |
 
 ### 3.4 Account Plans
@@ -91,7 +95,7 @@ Vertex AI pricing via Google Cloud, as of early 2026. Standard (non-batch) rates
 
 ## 4. Full Population Cost Estimate
 
-A single full-populate run across all 106 customers:
+A single full-populate run across all 138 customers:
 
 ### 4.1 Account Intelligence (generate-intelligence per customer)
 
@@ -99,9 +103,9 @@ Each customer triggers 3 Gemini calls (industry ID, company intel, industry anal
 
 | Step | Model | Calls | Input Tokens/Call | Output Tokens/Call | Subtotal |
 |------|-------|-------|-------------------|-------------------|----------|
-| Industry identification | flash (grounded) | 106 | 500 | 200 | $0.02 |
-| Company intelligence | flash (grounded) | 106 | 2,000 | 6,000 | $0.41 |
-| Industry analysis | flash (grounded) | 106 | 2,000 | 6,000 | $0.41 |
+| Industry identification | flash (grounded) | 138 | 500 | 200 | $0.02 |
+| Company intelligence | flash (grounded) | 138 | 2,000 | 6,000 | $0.41 |
+| Industry analysis | flash (grounded) | 138 | 2,000 | 6,000 | $0.41 |
 | Google Search grounding | - | 318 queries | - | - | $1.59 |
 | **Subtotal** | | **318 calls** | | | **$2.43** |
 
@@ -116,21 +120,21 @@ Each customer triggers 3 Gemini calls (industry ID, company intel, industry anal
 | Feature enrichment | flash | ~30 | 3,000 | 500 | $0.023 |
 | **Subtotal** | | **~36 calls** | | | **$0.039** |
 
-### 4.3 Per-Customer Product Intelligence (106 customers x 3 products)
+### 4.3 Per-Customer Product Intelligence (138 customers x 3 products)
 
 | Step | Model | Calls | Input Tokens/Call | Output Tokens/Call | Subtotal |
 |------|-------|-------|-------------------|-------------------|----------|
 | Customer-product intel | flash | 318 | 6,000 | 2,000 | $0.67 |
 | **Subtotal** | | **318 calls** | | | **$0.67** |
 
-### 4.4 Brief Generation (all 106 customers)
+### 4.4 Brief Generation (all 138 customers)
 
 Each customer triggers extract + synthesize + ~12 doc-classify calls:
 
 | Step | Model | Calls | Input Tokens/Call | Output Tokens/Call | Subtotal |
 |------|-------|-------|-------------------|-------------------|----------|
-| Brief extract | flash-lite | 106 | 4,000 | 2,000 | $0.093 |
-| Brief synthesize | flash-lite | 106 | 3,000 | 1,500 | $0.072 |
+| Brief extract | flash-lite | 138 | 4,000 | 2,000 | $0.093 |
+| Brief synthesize | flash-lite | 138 | 3,000 | 1,500 | $0.072 |
 | Doc classify | flash-lite | ~1,272 | 2,500 | 500 | $0.429 |
 | PDF extraction (fallback) | flash-lite | ~25 | 3,000 | 1,000 | $0.013 |
 | **Subtotal** | | **~1,509 calls** | | | **$0.607** |
@@ -286,5 +290,5 @@ Each Gemini call site mapped to the HTTP endpoint(s) that trigger it, what it re
 
 | Schedule | Call Sites Triggered | Source |
 |----------|---------------------|--------|
-| Sunday 6am ET (weekly) | product-release-radar, product-feature-extraction, product-feature-enrichment, customer-product-intel (all 106 customers) | `background-scheduler.ts` cron |
+| Sunday 6am ET (weekly) | product-release-radar, product-feature-extraction, product-feature-enrichment, customer-product-intel (all 138 customers) | `background-scheduler.ts` cron |
 | Startup (15s delay) | Checks for missing product summary caches, triggers `refreshAllProducts()` if needed | `background-scheduler.ts` IIFE (BKL-STARTUP-01) |

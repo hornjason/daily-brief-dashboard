@@ -28,7 +28,7 @@ DATA   := $(CURDIR)/data
 .PHONY: up down logs build push rebuild ps setup release-patch release-minor release-major version \
        dev-snapshot dev-up dev-down dev-logs \
        seed test-up test-down test-logs lint \
-       pre-promote \
+       pre-promote smoke \
        demo-snapshot demo-up demo-down demo-logs demo-export \
        all-down all-ps
 
@@ -66,7 +66,11 @@ build:
 push:
 	podman push $(REMOTE)
 
-rebuild: build push up
+rebuild: build push up smoke
+
+# Run the production smoke spec against port 7777. Chained into `rebuild` to gate every promotion.
+smoke:
+	bunx playwright test test/smoke-prod.spec.ts --project=ci
 
 ps:
 	podman ps --filter name=pai-dashboard --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

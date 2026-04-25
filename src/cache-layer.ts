@@ -32,7 +32,9 @@ export function briefCachePath(customerName: string): string {
   return `${CACHE_DIR}/${slug}-${today}.json`
 }
 
-export function readBriefCache(customerName: string): { text: string; cachedAt: string } | null {
+export function readBriefCache(
+  customerName: string,
+): { text: string; cachedAt: string; docCorpusSnapshot?: Record<string, string> } | null {
   try {
     return JSON.parse(readFileSync(briefCachePath(customerName), 'utf-8'))
   } catch {
@@ -40,7 +42,20 @@ export function readBriefCache(customerName: string): { text: string; cachedAt: 
   }
 }
 
-export function writeBriefCache(customerName: string, text: string): void {
+/**
+ * Persist a freshly-generated brief to disk.
+ *
+ * @param customerName        Customer display name (used for slug)
+ * @param text                Brief markdown text
+ * @param opts.docCorpusSnapshot  fileId → modifiedTime map of every doc that fed this brief.
+ *   Used by BKL-AI-FP-09 corpus-delta mode on the next generation: callers diff the snapshot
+ *   against the current corpus to decide whether to short-circuit Steps 1+2 of the pipeline.
+ */
+export function writeBriefCache(
+  customerName: string,
+  text: string,
+  opts?: { docCorpusSnapshot?: Record<string, string> },
+): void {
   try {
     const path = briefCachePath(customerName)
     // Stale-overwrite guard: don't replace a longer brief with a shorter one
@@ -50,7 +65,12 @@ export function writeBriefCache(customerName: string, text: string): void {
       console.warn(`[cache] writeBriefCache: rejecting shorter brief for ${customerName} (${text.length} chars vs existing ${existing.text.length} chars)`)
       return
     }
-    writeFileSync(path, JSON.stringify({ text, cachedAt: new Date().toISOString() }), { mode: 0o600 })
+    const payload: { text: string; cachedAt: string; docCorpusSnapshot?: Record<string, string> } = {
+      text,
+      cachedAt: new Date().toISOString(),
+    }
+    if (opts?.docCorpusSnapshot) payload.docCorpusSnapshot = opts.docCorpusSnapshot
+    writeFileSync(path, JSON.stringify(payload), { mode: 0o600 })
   } catch {
     // Cache write failure is non-fatal
   }

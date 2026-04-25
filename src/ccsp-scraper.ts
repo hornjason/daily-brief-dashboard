@@ -35,6 +35,10 @@ const TABLEAU_BASE_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics
 // This renders the viz without the outer portal shell and applies all filters before the viz loads.
 const TABLEAU_EMBED_BASE = 'https://10ay.online.tableau.com/t/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 
+// Per-POD CSV cache TTL — 24h. POD-level CCSP CSV is stable enough that we don't
+// need to re-scrape per-AE within the same day; share cached data across AEs in same POD.
+const POD_CSV_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 
 const TABLEAU_SESSION_PATH = `${process.env.RH_PROFILE_DIR ?? '/data/rh-profile'}/tableau-session.json`
@@ -334,7 +338,9 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
   }
   // Direct embed URL — filter params MUST be on /t/site/views/... (not on the #/site/... hash URL,
   // where ?params would be inside the hash fragment and ignored by the server).
-  const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams}`
+  // %2C → ',' decode: URLSearchParams encodes commas in multi-value Year/Quarter params,
+  // but Tableau's CSV API requires literal commas to parse the multi-value list correctly.
+  const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams.toString().replace(/%2C/gi, ',')}`
   console.log(`[ccsp] ${ae.name}: navigating with pre-applied filters...`)
 
   await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
@@ -398,7 +404,7 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
       if (m) viewBase = `https://10ay.online.tableau.com/t/${m[1]}/views/${m[2]}`
     }
     if (viewBase && !viewBase.endsWith('.csv')) {
-      const csvUrl = `${viewBase}.csv?${filterParams}`
+      const csvUrl = `${viewBase}.csv?${filterParams.toString().replace(/%2C/gi, ',')}`
       console.log(`[ccsp] ${ae.name}: trying direct CSV URL...`)
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: 30_000 }),
@@ -453,7 +459,7 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
     try {
       // Re-navigate if we left the view for the .csv attempt
       if (!page.url().includes('OverallCloudConsumptionDashboard')) {
-        await page.goto(`${TABLEAU_EMBED_BASE}?${filterParams}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+        await page.goto(`${TABLEAU_EMBED_BASE}?${filterParams.toString().replace(/%2C/gi, ',')}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
         await page.waitForTimeout(5_000)
         await waitForVizReady(page, ae.name, 30_000)
         const tab2 = await findEl(page, 'text="Raw Data"')

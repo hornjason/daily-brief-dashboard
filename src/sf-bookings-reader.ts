@@ -37,7 +37,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? resolve(process.cwd(), 'data/cache')
-const RAW_CACHE_TTL_MS = 60 * 60 * 1000  // 1 hour
+const RAW_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours
 
 // ── POD sheet discovery from shared Drive folder ──────────────────────────────
 

@@ -33,6 +33,7 @@ import { registerBootstrapRoutes } from './src/bootstrap-orchestrator.ts'
 import { registerSheetImportRoutes } from './src/sheet-import.ts'
 import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
 import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } from './src/utils.ts'
+import { onCacheLevel, offCacheLevel, type IngestCacheEvent } from './src/ingest-events.ts'
 // ── M05 extracted modules ───────────────────────────────────────────────────
 import { initSetupRoutes, registerSetupRoutes } from './src/setup-routes.ts'
 import { initCustomerRoutes, registerCustomerRoutes } from './src/customer-routes.ts'
@@ -1156,6 +1157,35 @@ app.get('/events', (c) => {
       event: 'complete',
       data: JSON.stringify({ timestamp: new Date().toISOString() }),
     })
+  })
+})
+
+// GET /api/ingest/events — SSE stream for L1-L4 cache telemetry.
+// Each cache hit/miss in the SF Bookings, CCSP, and SF Pipeline ingest pipelines
+// fires an event consumed by the Admin telemetry dashboard.
+app.get('/api/ingest/events', (c) => {
+  return streamSSE(c, async (stream) => {
+    let closed = false
+    await stream.writeSSE({ event: 'connected', data: '{}' })
+
+    const handler = (event: IngestCacheEvent) => {
+      if (closed) return
+      stream.writeSSE({ event: 'cache-level', data: JSON.stringify(event) }).catch(() => { closed = true })
+    }
+    onCacheLevel(handler)
+
+    // Hold the stream open until the client disconnects. streamSSE rejects this
+    // promise on close; we clean up the listener in finally.
+    try {
+      await new Promise<void>((resolve) => {
+        const interval = setInterval(() => {
+          if (closed) { clearInterval(interval); resolve() }
+        }, 1000)
+      })
+    } finally {
+      closed = true
+      offCacheLevel(handler)
+    }
   })
 })
 

@@ -3,7 +3,16 @@
 /** Strip internal file paths and cap length before returning error strings to clients.
  * BKL-G30 Gap 5: maps Playwright DNS/network patterns to user-friendly messages. */
 export function sanitizeErr(e: any): string {
-  const raw = String(e?.message ?? e)
+  let raw = String(e?.message ?? e)
+  // Strip secrets that may leak through error messages before any return path:
+  //   1. JWT-shaped tokens (header.payload.signature, all base64url)
+  //   2. Bearer tokens in Authorization headers
+  raw = raw.replace(
+    /eyJ[A-Za-z0-9+/=_-]{10,}\.[A-Za-z0-9+/=_-]{10,}\.[A-Za-z0-9+/=_-]{10,}/g,
+    '[REDACTED]'
+  )
+  raw = raw.replace(/Bearer\s+[A-Za-z0-9+/=._-]{20,}/g, '[REDACTED]')
+
   // Map Playwright/DNS error patterns to user-friendly messages before truncation
   if (/ERR_NAME_NOT_RESOLVED/i.test(raw)) return 'Host not reachable — check VPN connection'
   if (/ERR_CONNECTION_REFUSED/i.test(raw)) return 'Connection refused — service may be down or VPN required'

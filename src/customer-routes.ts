@@ -13,7 +13,7 @@ import type { PipelineRecord } from './pipeline.ts'
 import { customers, aes, CUSTOMERS_PATH } from './server-state.ts'
 import { lastCcspError } from './ccsp-scraper.ts'
 import { sfSyncError } from './sf-scraper.ts'
-import { runIntelligencePipeline, getJobStatus, getRunningJob, getAllJobs, requeueJob, validateIntelligenceDocContent } from './account-intelligence.ts'
+import { runIntelligencePipeline, getJobStatus, getRunningJob, getAllJobs, requeueJob, validateIntelligenceDocContent, discoverExistingIntelDocs } from './account-intelligence.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
 import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS, toSlug, isCCSPCacheStale } from './cache-layer.ts'
@@ -596,14 +596,29 @@ export function registerCustomerRoutes(app: Hono): void {
     }
   })
 
-  app.get('/api/customer/:name/intelligence-status', (c) => {
+  app.get('/api/customer/:name/intelligence-status', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
     const status = getJobStatus(customer.name)
-    if (!status) return c.json({ status: 'none', message: 'No intelligence generation job found for this customer' })
-    return c.json(status)
+    if (status) return c.json(status)
+
+    // Drive fallback: no in-memory job, but the docs may already exist on Drive from a
+    // previous container's run. Surface them so the dashboard doesn't show "not generated"
+    // for accounts that actually have intel ready.
+    if (customer.driveFolderId) {
+      const discovered = await discoverExistingIntelDocs(customer.name, customer.driveFolderId)
+      if (discovered) {
+        return c.json({
+          status: 'complete',
+          companyDocUrl: discovered.companyDocUrl,
+          industryDocUrl: discovered.industryDocUrl,
+          discoveredAt: new Date().toISOString(),
+        })
+      }
+    }
+    return c.json({ status: 'none', message: 'No intelligence generation job found for this customer' })
   })
 
   // ── BKL-PRODINTEL-04: Expansion Opportunities (cross-product proactive recommendations) ──

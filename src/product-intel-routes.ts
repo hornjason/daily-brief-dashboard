@@ -382,9 +382,11 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // POST /api/products/:slug/intel/:customerSlug/generate — generate (or regenerate) customer intel
+  // ?force=true bypasses the content-hash cache and always regenerates.
   app.post('/api/products/:slug/intel/:customerSlug/generate', async (c) => {
     const slug         = c.req.param('slug')
     const customerSlug = c.req.param('customerSlug')
+    const force        = c.req.query('force') === 'true'
     if (!/^[a-z0-9-]+$/.test(slug) || !/^[a-z0-9-]+$/.test(customerSlug)) {
       return c.json({ error: 'Invalid slug' }, 400)
     }
@@ -424,6 +426,7 @@ export function registerProductIntelRoutes(app: Hono): void {
         opportunityNote: ctx.opportunityNote,
         productFeatures,
         productFeaturesHash,
+        force,
       })
 
       return c.json(intel)

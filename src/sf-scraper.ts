@@ -848,6 +848,27 @@ export async function runSfPipelineSync(reportId: string, profileDir: string, sh
   }
 }
 
+/**
+ * Process already-scraped SF pipeline data without re-scraping.
+ * Used by the bootstrap orchestrator when multiple AEs share the same SF report ID
+ * (cached during a single bootstrap pass to avoid redundant Chromium scrapes).
+ *
+ * @param data    Scraped SfReportRow (headers + rows) from a previous scrapeSfReport call
+ * @param sheetId Target pipeline sheet ID for the AE being processed
+ */
+export async function runSfPipelineSyncFromData(data: SfReportRow, sheetId?: string): Promise<number> {
+  sfSyncError = null
+  try {
+    await writePipelineSheet(data, sheetId)
+    lastSfSync = new Date().toISOString()
+    lastSfRowCount = data.rows.length
+    return data.rows.length
+  } catch (e: any) {
+    sfSyncError = 'SF sync failed'
+    throw e
+  }
+}
+
 export interface SfReportItem {
   id: string
   name: string

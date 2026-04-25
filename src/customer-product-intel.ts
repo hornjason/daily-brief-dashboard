@@ -360,6 +360,11 @@ export async function generateCustomerProductIntel(opts: {
   opportunityNote?: string
   productFeatures?: { name: string; status: string; description: string; tags: string[]; versionIntroduced?: string | null }[]
   productFeaturesHash?: string
+  /**
+   * When true, skip the content-hash cache check and always regenerate.
+   * Set by the route handler when ?force=true is passed.
+   */
+  force?: boolean
 }): Promise<CustomerProductIntel> {
   const { slug, productSummary, slidesText, customerName, subscriptions, supportCases, opportunityNote } = opts
 
@@ -428,15 +433,19 @@ export async function generateCustomerProductIntel(opts: {
 
   // ── Cache hit ─────────────────────────────────────────────────────────────
   const cachePath = customerIntelCachePath(slug, customerSlug)
-  try {
-    if (existsSync(cachePath)) {
-      const cached: CustomerIntelCache = JSON.parse(readFileSync(cachePath, 'utf-8'))
-      if (cached.contentHash === contentHash) {
-        console.log(`[customer-product-intel] cache hit for ${slug}/${customerSlug} (hash ${contentHash})`)
-        return cached.intel
+  if (opts.force) {
+    console.log(`[customer-product-intel] force=true — bypassing cache for ${slug}/${customerSlug}`)
+  } else {
+    try {
+      if (existsSync(cachePath)) {
+        const cached: CustomerIntelCache = JSON.parse(readFileSync(cachePath, 'utf-8'))
+        if (cached.contentHash === contentHash) {
+          console.log(`[customer-product-intel] cache hit for ${slug}/${customerSlug} (hash ${contentHash})`)
+          return cached.intel
+        }
       }
-    }
-  } catch { /* cache miss or corrupt — regenerate */ }
+    } catch { /* cache miss or corrupt — regenerate */ }
+  }
 
   // ── Build prompt ──────────────────────────────────────────────────────────
 

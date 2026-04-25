@@ -5,7 +5,8 @@ import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
-import { runSfPipelineSync, createPipelineSheet } from './sf-scraper.ts'
+import { runSfPipelineSyncFromData, createPipelineSheet, scrapeSfReport, type SfReportRow } from './sf-scraper.ts'
+import { emitCacheLevel } from './ingest-events.ts'
 import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 import { runCcspScrape, writeCcspSheet } from './ccsp-scraper.ts'
@@ -13,7 +14,7 @@ import { fetchCustomerAccountNumbers } from './sheets.ts'
 import { runRhScrapeWithState } from './scraper-manager.ts'
 import { getAiConfig } from './settings-api.ts'
 
-import { getScrapeContext, getLivePage, setLivePageBusy } from './rh-scraper.ts'
+import { getScrapeContext, getLivePage, setLivePageBusy, isLivePageBusy } from './rh-scraper.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import type { AE } from './types.ts'
@@ -29,6 +30,13 @@ const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
 const DATA_SOURCES_PATH = resolve(SRV_CONFIG_DIR, 'data-sources.json')
 const SETTINGS_PATH = resolve(SRV_CONFIG_DIR, 'settings.json')
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
+
+// SF report cache — POD bootstrap loops over AEs that often share the same sfReportId.
+// Without this cache each AE would trigger a fresh Chromium scrape of the same report.
+// 30-min TTL is short enough to stay fresh during a single bootstrap pass and long enough
+// to cover the slowest POD with ~10 AEs.
+const SF_REPORT_CACHE = new Map<string, { data: SfReportRow; cachedAt: number }>()
+const SF_REPORT_CACHE_TTL_MS = 30 * 60 * 1000
 
 // ── POD config persistence ────────────────────────────────────────────────────
 /** Save the POD bootstrap inputs to data-sources.json so they survive restarts. */
@@ -1223,6 +1231,8 @@ export function registerBootstrapRoutes(app: Hono): void {
           console.log(`[auto-bootstrap] Using SF bookings sheet ${podSheetId} for ${aeName} (territories: ${tableauTerritories.join(', ')})`)
 
           const rawSfData = await fetchSfBookingsRaw(podSheetId)
+          // Telemetry: SF bookings sheet read from Drive (L3) — there is no L4 live scrape for SF bookings.
+          emitCacheLevel({ ae: aeName, flow: 'sfBookings', level: 3, rowCount: rawSfData.dataRows.length })
           const existingCustomers = customers.filter(cx => cx.ae === aeName && !cx.inactive)
           const { results, matched, newCustomers, aliasedCustomers, ccspOnly } = deriveSfCustomersByTerritory(
             rawSfData, tableauTerritories, existingCustomers, aeName, false,
@@ -1300,6 +1310,8 @@ export function registerBootstrapRoutes(app: Hono): void {
           setStep(4, 'running')
           const currentAe = aes.find(a => a.name === aeName)!
           const ccspAe = { ...currentAe, tableauTerritories, driveFolderId: driveFolderId || currentAe.driveFolderId } as AE
+          // Telemetry: bootstrap always runs a live CCSP scrape (L4) — no upstream memo cache at this layer.
+          emitCacheLevel({ ae: aeName, flow: 'ccsp', level: 4 })
           const ccspResults = await runCcspScrape([ccspAe])
           const existingCcspId = aes.find(a => a.name === aeName)?.ccspSheetId
             ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `${aeName} CCSP`) : null)
@@ -1341,7 +1353,21 @@ export function registerBootstrapRoutes(app: Hono): void {
           if (existingPipelineId) console.log(`[auto-bootstrap] Reusing existing pipeline sheet for ${aeName}: ${existingPipelineId}`)
           // FIX N3: Persist pipelineSheetId immediately so AE retains the sheet link even if sync fails
           patchAe(aeName, { pipelineSheetId })
-          await runSfPipelineSync(sfReportId, RH_PROFILE_DIR, pipelineSheetId)
+          // SF report cache: if another AE in the same POD already scraped this report
+          // within the TTL window, reuse the data instead of running a fresh Chromium scrape.
+          const sfCached = SF_REPORT_CACHE.get(sfReportId)
+          if (sfCached && Date.now() - sfCached.cachedAt < SF_REPORT_CACHE_TTL_MS) {
+            console.log(`[auto-bootstrap] SF report ${sfReportId} cache hit — reusing scraped data for ${aeName}`)
+            // Telemetry: SF pipeline served from in-memory POD-bootstrap cache (L1).
+            emitCacheLevel({ ae: aeName, flow: 'sfPipeline', level: 1, rowCount: sfCached.data.rows.length })
+            await runSfPipelineSyncFromData(sfCached.data, pipelineSheetId)
+          } else {
+            // Telemetry: cache miss — running live Chromium scrape (L4).
+            emitCacheLevel({ ae: aeName, flow: 'sfPipeline', level: 4 })
+            const sfData = await scrapeSfReport(sfReportId, RH_PROFILE_DIR)
+            SF_REPORT_CACHE.set(sfReportId, { data: sfData, cachedAt: Date.now() })
+            await runSfPipelineSyncFromData(sfData, pipelineSheetId)
+          }
           autoBootstrapState.resources.pipelineSheet = { id: pipelineSheetId, url: `https://docs.google.com/spreadsheets/d/${pipelineSheetId}/edit` }
           setStep(5, 'done', `Sheet: ${pipelineSheetId}`)
           console.log(`[auto-bootstrap] Pipeline sheet synced: ${pipelineSheetId}`)
@@ -1459,6 +1485,13 @@ export function registerBootstrapRoutes(app: Hono): void {
     }
     const ctx = getScrapeContext()
     if (!ctx) return c.json({ reachable: false, sessionValid: false })
+    // Guard: if the live RH page is mid-SSO flow, skip the probe — navigating a sibling page
+    // through the Tableau SSO redirect chain at the same time can clobber the user's login.
+    // Return last-known cached result if we have one, else neutral "not reachable".
+    if (isLivePageBusy()) {
+      if (_tableauStatusCache) return c.json(_tableauStatusCache.result)
+      return c.json({ reachable: false, sessionValid: false })
+    }
     let page: Awaited<ReturnType<typeof ctx.newPage>> | null = null
     try {
       page = await ctx.newPage()
@@ -1525,7 +1558,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     }
 
     try {
-      await livePage.waitForFunction(checkTableauLoggedIn, { timeout: 120_000 })
+      await livePage.waitForFunction(checkTableauLoggedIn, null, { timeout: 120_000 })
 
       // Post-login settle: wait 6s for any final redirects after SSO completes,
       // then re-verify. This catches the case where SSO landing on Tableau fires

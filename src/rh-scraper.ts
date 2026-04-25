@@ -93,6 +93,22 @@ export function setContextRecoveryCallback(cb: (ctx: BrowserContext, profileDir:
  */
 export function setLivePageBusy(busy: boolean): void { _livePageBusy = busy }
 
+/**
+ * Returns true if the live RH browser page is currently in an SSO flow
+ * (mid-redirect through auth.redhat.com) or has been explicitly marked busy
+ * by another flow (e.g. Tableau login). Used to prevent session-status
+ * navigation from interfering with the Tableau SSO redirect chain.
+ */
+export function isLivePageBusy(): boolean {
+  if (_livePageBusy) return true
+  if (!_livePage) return false
+  try {
+    return _livePage.url().includes('auth.redhat.com')
+  } catch {
+    return false
+  }
+}
+
 const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000 // 8 minutes — well before SSO 30-min idle timeout
 const SESSION_STATE_FILE = 'session-state.json'
 

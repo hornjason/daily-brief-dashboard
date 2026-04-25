@@ -9,6 +9,10 @@ import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import type { Customer } from './types.ts'
+
+// Local alias — the design spec referenced "CustomerRecord"; project uses Customer.
+export type CustomerRecord = Customer
 
 const TERRITORY_SHEET_ID_FALLBACK = '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
 
@@ -182,4 +186,78 @@ export async function syncTerritorySheet(
   }
 
   return { toAdd, toRemove, unchanged }
+}
+
+/**
+ * Extract accounts for one AE from a column-oriented enterprise/TOLA territory sheet.
+ *
+ * Standard corp pod sheets put each AE in a column underneath a repeated
+ * "Account Executive" header row, with accounts listed downward. The TOLA /
+ * enterprise sheet follows the same column-oriented layout but is fed in here
+ * as a raw 2D array so callers can drive the Sheets API once and reuse the data.
+ *
+ * Matching is by AE display name (case-insensitive, trimmed) found in the row
+ * directly below the header — the same row used by syncTerritorySheet.
+ */
+export function extractEnterpriseAeAccounts(
+  sheetData: any[][],
+  aeSlug: string,
+): CustomerRecord[] {
+  if (!Array.isArray(sheetData) || sheetData.length === 0) return []
+  const target = aeSlug.trim().toLowerCase()
+  if (!target) return []
+
+  const rows: string[][] = sheetData.map(r =>
+    Array.isArray(r) ? r.map(c => String(c ?? '').trim()) : []
+  )
+
+  // Find "Account Executive" header row
+  let headerRowIdx = -1
+  for (let r = 0; r < rows.length; r++) {
+    if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
+  }
+  if (headerRowIdx === -1) return []
+
+  const aeNameRowIdx = headerRowIdx + 1
+  const accountsStartIdx = aeNameRowIdx + 1
+  const headerRow = rows[headerRowIdx] ?? []
+  const aeNameRow = rows[aeNameRowIdx] ?? []
+
+  const aeCols = headerRow
+    .map((cell, idx) => ({ cell, idx }))
+    .filter(({ cell }) => cell === 'Account Executive')
+    .map(({ idx }) => idx)
+
+  const found: CustomerRecord[] = []
+  const seen = new Set<string>()
+
+  for (const col of aeCols) {
+    const aeCell = aeNameRow[col] ?? ''
+    if (!aeCell) continue
+
+    // Strip embedded territory code like "Jane Doe\nTerr07" or "Jane Doe Terr07"
+    let aeName = aeCell
+    if (aeCell.includes('\n')) aeName = aeCell.split('\n')[0].trim()
+    else aeName = aeCell.replace(/\s*Terr\d+\s*/i, '').trim()
+
+    if (!aeName) continue
+    if (aeName.toLowerCase() !== target) continue
+
+    for (let r = accountsStartIdx; r < rows.length; r++) {
+      const cell = rows[r][col] ?? ''
+      if (!cell) continue
+      if (/^\d{1,3}$/.test(cell)) break
+      if (/^Account\s+S[Aa]/i.test(cell)) break
+      if (/^(Support|Partner Sales|\d+ of \d+)$/i.test(cell)) break
+      if (/^(Openshift|Ansible|Rhel|Ai)\s+(SSP|SSA)/i.test(cell)) break
+      const normalized = normalizeTerritoryCustomerName(cell)
+      if (!normalized) continue
+      const key = normalized.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      found.push({ name: normalized, ae: aeName, importedFrom: 'territory-sheet' })
+    }
+  }
+
+  return found
 }
