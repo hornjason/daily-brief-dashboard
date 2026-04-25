@@ -31,17 +31,18 @@ Xvfb :99 -screen 0 1280x900x24 -nolisten tcp &
 export DISPLAY=:99
 
 # BKL-M50g: Readiness probe — wait for Xvfb to be ready instead of fixed sleep
+XVFB_FAIL_THRESHOLD=10  # 10 × 0.2s — lower values cause kill-loop during Chromium automation
 XVFB_ATTEMPTS=0
-XVFB_MAX=50  # 50 × 0.2s = 10s timeout
-while ! xdpyinfo -display :99 >/dev/null 2>&1; do
+while ! test -S /tmp/.X11-unix/X99; do
   sleep 0.2
   XVFB_ATTEMPTS=$((XVFB_ATTEMPTS + 1))
-  if [ "$XVFB_ATTEMPTS" -ge "$XVFB_MAX" ]; then
-    echo "[entrypoint] WARNING: Xvfb not ready after 10s — proceeding anyway"
+  if [ "$XVFB_ATTEMPTS" -ge "$XVFB_FAIL_THRESHOLD" ]; then
+    echo "[entrypoint] WARNING: Xvfb not ready after ${XVFB_FAIL_THRESHOLD} attempts — proceeding anyway"
     break
   fi
 done
 echo "[entrypoint] Xvfb ready (${XVFB_ATTEMPTS} probes)"
+sleep 30
 
 # ── Window manager — gives VNC a visible desktop (not just a black screen) ──
 openbox &

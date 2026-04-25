@@ -534,7 +534,7 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
   }
   // Direct embed URL — filter params MUST be on /t/site/views/... (not on the #/site/... hash URL,
   // where ?params would be inside the hash fragment and ignored by the server).
-  const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams}`
+  const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams.toString().replace(/%2C/gi, ',')}`
   console.log(`[ccsp] ${ae.name}: navigating with pre-applied filters (no territory filter)...`)
 
   await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
@@ -963,7 +963,7 @@ export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFold
     throw new Error(`Browser context is closed or unresponsive (${e.message}) — re-authenticate via Setup page and retry`)
   }
   try {
-    const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams}`
+    const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams.toString().replace(/%2C/gi, ',')}`
     console.log(`[ccsp] POD pre-scrape: navigating for full dataset…`)
     await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
     await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {

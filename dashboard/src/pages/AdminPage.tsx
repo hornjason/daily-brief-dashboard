@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertCircle, X, ExternalLink } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
+import { getVncUrl } from '../utils'
 import { SessionHealthPanel } from '../components/SessionHealthPanel'
 import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
 
@@ -1308,7 +1309,7 @@ export function AdminPage() {
                 <button
                   onClick={() => {
                     fetch('/api/browser/open-tableau-login', { method: 'POST' }).catch(() => {})
-                    window.open('http://localhost:6080/vnc.html?autoconnect=1&resize=scale', '_blank')
+                    window.open(getVncUrl(), '_blank')
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
                 >

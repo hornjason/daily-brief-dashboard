@@ -6457,3 +6457,76 @@ Size: XS
 Source: Algorithm learn phase reflection 2026-04-25 — Quinn detected scopeLevel:"bootstrap" on existing tokens
 Files: dashboard/src/pages/SetupPage.tsx, src/routes/auth-routes.ts
 Description: Existing users who authenticated before the cloud-platform scope was added to NORMAL_SCOPES have tokens without Vertex AI access. The dashboard loads normally but live Gemini calls fail silently. Fix: on /dashboard/setup load, check if the current token's scopes include 'https://www.googleapis.com/auth/cloud-platform'. If missing, surface a banner: "Your Google sign-in needs to be updated to enable AI briefs — sign out and sign back in." This prevents silent Vertex AI failures for pre-scope users.
+
+---
+
+### BKL-SEC-SUPPORTABLE-01 | Supportable API routes still registered in scrape-api.ts
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Rook security scan 2026-04-25 — recovered code from mini.local retained Supportable routes
+Files: src/scrape-api.ts (lines ~252, ~337, ~361), src/rh-account-discovery.ts (line 5)
+Description: Three Supportable endpoints are still registered and callable: POST /api/scrape/supportable, GET /api/scrape/supportable/status, POST /api/scrape/supportable/discover. Account discovery also references the old Supportable discover endpoint in a comment. Supportable is permanently disabled (feedback_no_supportable.md). These routes must be removed. This is not a surgical fix — it requires removing the route handlers and updating any callers, including AdminPage.tsx and SetupPage.tsx Supportable UI (flagged by Marcus as a separate refactor item from REG-041).
+Decision: Needs coordinated pass: (1) remove route handlers from scrape-api.ts, (2) remove supportable-related UI from AdminPage.tsx + SetupPage.tsx, (3) verify no callers remain with grep. Do not do this during a test-gate session — needs a dedicated pass.
+
+---
+
+### BKL-ONBOARD-10 | Implement /api/wizard/setup-region + /api/wizard/seed-sheets
+Status: 🔴 OPEN
+Priority: P2
+Size: M
+Source: Marcus review 2026-04-25 — integration tests reference these endpoints, neither exists on local or mini.local
+Files: src/server.ts (or new src/wizard-routes.ts), test/integration/wizard-setup-region.spec.ts
+Description: Integration tests expect POST /api/wizard/setup-region (regionId persistence, idempotency), POST /api/wizard/seed-sheets (returns seed URLs), GET /api/settings/regions. None of these exist on the codebase (confirmed on both local and mini.local). This is a feature gap — needs design brief before implementation: where regions persist (settings.json?), what regionId derives from, canonical seed sheet list.
+
+---
+
+### BKL-TEST-WIZARD-01 | wizard.spec.ts section header drift vs actual SetupPage accordion
+Status: 🔴 OPEN
+Priority: P2
+Size: XS
+Source: Marcus review 2026-04-25 — tests expect "Red Hat Portal" + "POD Bootstrap" headers, actual SetupPage uses "Step N of 5 — …" accordion titles
+Files: test/ui/wizard.spec.ts, dashboard/src/pages/SetupPage.tsx
+Description: Tests look for headers "Red Hat Portal" and "POD Bootstrap" that don't exist on either local or mini.local SetupPage. The current accordion uses "Step 3 of 5 — Connections", no "POD Bootstrap" section. Either update tests to match current titles, or add the missing section headers (product call needed). Failing tests silently mark as stale until this is resolved.
+
+---
+
+### BKL-PERF-01 | Thundering herd — SF report scraped N times per POD bootstrap
+Status: ✅ DONE
+Priority: P1
+Size: M
+Source: Algorithm session 2026-04-24 — thundering herd: each AE triggers its own SF scrape in parallel
+Files: src/bootstrap-orchestrator.ts
+Description: module-level `podSfDataCache` with 30-min TTL added. Single SF report scrape per POD bootstrap; AEs 2+ read from cache. Confirmed present in recovery from mini.local.
+Decision: DONE — podSfDataCache implemented in bootstrap-orchestrator.ts. Confirmed in 2026-04-25 recovery.
+
+---
+
+### BKL-PERF-02 | Thundering herd — Tableau CCSP CSV downloaded N times per POD bootstrap
+Status: ✅ DONE
+Priority: P1
+Size: M
+Source: Algorithm session 2026-04-24 — parallel AE bootstraps each download the full POD Tableau CSV
+Files: src/ccsp-scraper.ts
+Description: module-level `_podCsvCache` added to cache Tableau CSV download per POD per session. Confirmed present in recovery from mini.local.
+Decision: DONE — _podCsvCache implemented in ccsp-scraper.ts. Confirmed in 2026-04-25 recovery.
+
+---
+
+### BKL-INGEST-BUG04 | ingest-bug04-bearer-records-success test pre-existing failure
+Status: 🟡 KNOWN-FAILURE
+Priority: P3
+Size: S
+Source: Pre-existing failure discovered during 2026-04-25 recovery; ISC-39 documentation requirement
+Files: test/unit/ingest-04-disallow-live-scrape.test.ts (or similar), src/settings-api.ts
+Description: Unit test `ingest-bug04-bearer-records-success` fails with `SyntaxError: Export named 'recordSessionEstablished' not found in module 'src/settings-api.ts'`. The `recordSessionEstablished` function is imported by a test but not exported from settings-api.ts. This was present before the April 11-23 filter-repo incident — it is not a recovery regression. Fix: either export `recordSessionEstablished` from settings-api.ts, or update the test import to the correct location.
+
+---
+
+### BKL-SETTINGS-01 | recordSessionEstablished missing export from settings-api.ts
+Status: 🟡 KNOWN-FAILURE
+Priority: P3
+Size: XS
+Source: Pre-existing gap discovered 2026-04-25; ISC-40 documentation requirement
+Files: src/settings-api.ts, test/unit/
+Description: `recordSessionEstablished` is referenced in unit tests but not exported from `src/settings-api.ts`. Causes 1 pre-existing unit test failure (220/221 pass). Does not affect production — the function either doesn't exist or exists under a different name/module. Fix: grep for the function definition, find the correct export location, update the test import.

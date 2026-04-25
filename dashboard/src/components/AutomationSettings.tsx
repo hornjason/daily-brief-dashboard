@@ -25,6 +25,9 @@ export function AutomationSettings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorField, setErrorField] = useState<string | null>(null)
+  const inputCls = (key: string, base: string) =>
+    errorField === key ? `${base} ring-critical border-critical` : base
 
   useEffect(() => {
     fetch('/api/settings/automation')
@@ -54,9 +57,10 @@ export function AutomationSettings() {
     if (rhMin < 1 || rhMin > 60) { setError('RH Portal timeout must be between 1 and 60 minutes'); setSaving(false); return }
     if (cooldownMin < 1 || cooldownMin > 60) { setError('Cooldown period must be between 1 and 60 minutes'); setSaving(false); return }
     if (draft.circuitBreakerThreshold < 1 || draft.circuitBreakerThreshold > 20) { setError('Failure threshold must be between 1 and 20'); setSaving(false); return }
-    if (draft.driveDocTextCap < 1000 || draft.driveDocTextCap > 100000) { setError('Drive doc text cap must be between 1,000 and 100,000 characters'); setSaving(false); return }
-    if (draft.briefEmailsInPrompt < 1 || draft.briefEmailsInPrompt > 50) { setError('Emails in prompt must be between 1 and 50'); setSaving(false); return }
-    if (draft.briefHistoryDays < 1 || draft.briefHistoryDays > 30) { setError('Brief history window must be between 1 and 30 days'); setSaving(false); return }
+    if (draft.driveDocTextCap < 1000 || draft.driveDocTextCap > 100000) { setError('Drive doc text cap must be between 1,000 and 100,000 characters'); setErrorField('driveDocTextCap'); setSaving(false); return }
+    if (draft.briefEmailsInPrompt < 1 || draft.briefEmailsInPrompt > 50) { setError('Emails in prompt must be between 1 and 50'); setErrorField('briefEmailsInPrompt'); setSaving(false); return }
+    if (draft.briefHistoryDays < 1 || draft.briefHistoryDays > 30) { setError('Brief history window must be between 1 and 30 days'); setErrorField('briefHistoryDays'); setSaving(false); return }
+    setErrorField(null)
 
     try {
       const res = await fetch('/api/settings/automation', {
@@ -190,7 +194,7 @@ export function AutomationSettings() {
               step={1000}
               value={draft.driveDocTextCap}
               onChange={e => setNum('driveDocTextCap', Number(e.target.value))}
-              className="w-24 bg-surface-hover border border-border rounded-lg px-2 py-1 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-accent"
+              className={inputCls('driveDocTextCap', "w-24 bg-surface-hover border border-border rounded-lg px-2 py-1 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-accent")}
             />
             <span className="text-xs text-text-secondary w-8">chars</span>
           </div>
@@ -208,7 +212,7 @@ export function AutomationSettings() {
               max={50}
               value={draft.briefEmailsInPrompt}
               onChange={e => setNum('briefEmailsInPrompt', Number(e.target.value))}
-              className="w-20 bg-surface-hover border border-border rounded-lg px-2 py-1 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-accent"
+              className={inputCls('briefEmailsInPrompt', "w-20 bg-surface-hover border border-border rounded-lg px-2 py-1 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-accent")}
             />
             <span className="text-xs text-text-secondary w-8">emails</span>
           </div>
@@ -226,7 +230,7 @@ export function AutomationSettings() {
               max={30}
               value={draft.briefHistoryDays}
               onChange={e => setNum('briefHistoryDays', Number(e.target.value))}
-              className="w-20 bg-surface-hover border border-border rounded-lg px-2 py-1 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-accent"
+              className={inputCls('briefHistoryDays', "w-20 bg-surface-hover border border-border rounded-lg px-2 py-1 text-sm text-white text-right focus:outline-none focus:ring-1 focus:ring-accent")}
             />
             <span className="text-xs text-text-secondary w-8">days</span>
           </div>

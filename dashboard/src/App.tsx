@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
+import { getVncUrl } from './utils'
 import { Sidebar } from './components/Sidebar'
 import type { DashboardViewMode } from './components/Sidebar'
 import { discoverAllProducts, stripProductName, normalizeProductName, getProductGroupMembers } from './utils/productName'
@@ -87,7 +88,7 @@ function RhSessionBanner({ status, onReconnect, onVncOpen }: { status: RhStatus;
       }
       onReconnect()
       // Open the noVNC viewer so the user can complete the login in their browser
-      const win = window.open('http://localhost:6080/vnc.html?autoconnect=true&reconnect=true', '_blank')
+      const win = window.open(getVncUrl({ reconnect: true }), '_blank')
       onVncOpen(win)
     } catch {
       setReconnecting(false)
@@ -219,7 +220,8 @@ function Dashboard() {
     return s ? `?${s}` : ''
   })()
   const ccspApi      = useApi<CCSPSummary>(`/api/ccsp${ccspQueryStr}`)
-  const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline`)
+  const pipelineQueryStr = aeFilterSelected && aeFilterSelected !== 'all' ? `?ae=${encodeURIComponent(aeFilterSelected)}` : ''
+  const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline${pipelineQueryStr}`)
   const morningSummaryApi = useApi<{ signals: Array<{ customer: string; type: string; severity: 'critical' | 'high' | 'medium'; text: string }> }>('/api/morning-summary')
   const scrapeStatus = useApi<{
     scrapers: {
