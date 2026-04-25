@@ -1,4 +1,5 @@
 name: CI
+# re-trigger after package delete 2026-04-20 / runner failure 2026-04-24
 
 on:
   pull_request:
@@ -11,9 +12,43 @@ on:
       - '.github/pull_request_template.md'
 
 jobs:
+  shellcheck:
+    name: Shellcheck
+    runs-on: [self-hosted, mac-mini-live]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: brew install shellcheck 2>/dev/null || true  # install if not present on mac-mini-live
+      - name: Run shellcheck
+        run: shellcheck scripts/setup.sh scripts/check-env-drift.sh
+
+  drift-gate:
+    name: Env drift gate (.env.example / compose / setup.sh)
+    runs-on: [self-hosted, mac-mini-live]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bats-core
+        run: brew install bats-core 2>/dev/null || true  # already installed on mac-mini-live
+      - name: Check env drift (live repo)
+        run: bash scripts/check-env-drift.sh
+      - name: Run drift BATS suite
+        run: bats test/drift.bats
+
+  bats:
+    name: BATS tests
+    runs-on: [self-hosted, mac-mini-live]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bats-core
+        run: brew install bats-core
+      - name: Run setup tests
+        run: bats test/setup.bats
+      - name: Run drift tests
+        run: bats test/drift.bats
+
   test:
     name: Unit tests & type check
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, mac-mini-live]
     steps:
       - uses: actions/checkout@v4
 
@@ -32,7 +67,7 @@ jobs:
         run: cd dashboard && bunx tsc --noEmit
 
       - name: Run unit tests
-        run: bun test src/
+        run: bun test src/ test/unit/
 
       - name: Build dashboard
         run: cd dashboard && bun run build
@@ -44,9 +79,12 @@ jobs:
           path: dashboard/dist/
           retention-days: 1
 
+      - name: Audit docs
+        run: bun scripts/audit-docs.ts
+
   publish:
     name: Build & push container image
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, mac-mini-live]
     needs: [test]
     # Only push on main branch pushes (not PRs)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -57,69 +95,65 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+        run: echo "${{ github.token }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Inject Gemini key into defaults.env
+        run: echo "GEMINI_SERVICE_ACCOUNT_KEY=${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}" >> defaults.env
 
       - name: Build and push container image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Containerfile
-          push: true
-          tags: |
-            ghcr.io/hornjason/daily-brief-dashboard:latest
-            ghcr.io/hornjason/daily-brief-dashboard:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        # Do NOT push :latest here. :latest is reserved for the release workflow's
+        # publish-stable job (updated ONLY after the release smoke gate passes), to match
+        # docker-compose.yml and README :latest references. Main-branch CI pushes a
+        # commit-sha tag plus :main-latest for internal smoke tests.
+        run: |
+          podman build \
+            -t ghcr.io/hornjason/daily-brief-dashboard:main-latest \
+            -t ghcr.io/hornjason/daily-brief-dashboard:${{ github.sha }} \
+            -f Containerfile .
+          podman push ghcr.io/hornjason/daily-brief-dashboard:main-latest
+          podman push ghcr.io/hornjason/daily-brief-dashboard:${{ github.sha }}
 
   smoke:
     name: Container smoke test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, mac-mini-live]
     needs: [publish]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Log in to GitHub Container Registry
         run: |
-          echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ github.token }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Pull published image
-        run: podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
+        run: podman pull ghcr.io/hornjason/daily-brief-dashboard:main-latest
+
+      - name: Clean up any previous smoke container
+        run: podman rm -f smoke-test 2>/dev/null || true
 
       - name: Start container
+        # Use port 7780 — production pai-dashboard owns 7777 on this runner.
+        # Podman proxy returns "proxy already running" if two containers bind same external port.
         run: |
           podman run -d --name smoke-test \
-            -p 7777:7777 \
-            ghcr.io/hornjason/daily-brief-dashboard:latest
+            -p 7780:7777 \
+            ghcr.io/hornjason/daily-brief-dashboard:main-latest
 
-      - name: Wait for healthy (up to 30s)
+      - name: Wait for /api/aes (up to 60s)
+        # Matches the release.yml smoke probe — both gates use the same readiness endpoint.
         run: |
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:7777/health; then
-              echo ""
-              echo "Health check passed on attempt $i"
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:7780/api/aes >/dev/null; then
+              echo "Boot gate passed on attempt $i"
               exit 0
             fi
             sleep 1
           done
-          echo "Health check failed after 30 seconds"
+          echo "Boot gate FAILED — /api/aes did not respond within 60 seconds"
           podman logs smoke-test
           exit 1
-
-      - name: Verify health response
-        run: |
-          BODY=$(curl -sf http://localhost:7777/health)
-          echo "Response: $BODY"
-          echo "$BODY" | grep -q '"status":"ok"' || {
-            echo "Expected {\"status\":\"ok\"} but got: $BODY"
-            exit 1
-          }
 
       - name: Shutdown container
         if: always()
@@ -127,7 +161,7 @@ jobs:
 
   e2e:
     name: Integration & E2E tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, mac-mini-live]
     needs: [test]
     timeout-minutes: 25
     steps:
@@ -141,17 +175,11 @@ jobs:
       - name: Install root dependencies
         run: bun install --frozen-lockfile
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lockb') }}
-
-      - name: Install Playwright browsers
-        run: bunx playwright install chromium --with-deps
-
       - name: Install dashboard dependencies
         run: cd dashboard && bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
 
       - name: Download dashboard build artifact
         uses: actions/download-artifact@v4
@@ -159,8 +187,61 @@ jobs:
           name: dashboard-dist-${{ github.sha }}
           path: dashboard/dist/
 
+      - name: Seed test data
+        run: |
+          # Server resolves config from: process.env.CONFIG_DIR ?? resolve(import.meta.dir, 'config')
+          # Server resolves cache from:  process.env.CACHE_DIR  ?? resolve(import.meta.dir, 'cache')
+          # Both default to {project_root}/config and {project_root}/cache (NOT data/config, data/cache).
+          mkdir -p config cache cache/intelligence
+          cp scripts/seed-data/aes.json config/aes.json
+          cp scripts/seed-data/customers.json config/customers.json
+          cp scripts/seed-data/settings.json config/settings.json
+          cp scripts/seed-data/product-intel-config.json config/product-intel-config.json
+          cp -r scripts/seed-data/cache/. cache/
+          # Brief cache files are date-stamped (slug-YYYY-MM-DD.json).
+          # Rename seed files from their hardcoded date to today's date so the
+          # server's readBriefCache() finds them and avoids calling Gemini.
+          # Also patch cachedAt timestamps to current time so TTL checks pass.
+          TODAY=$(date +%Y-%m-%d)
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          # BSD sed (macOS) requires -i '' for in-place edit; GNU sed uses -i.
+          SED_INPLACE=(sed -i '')
+          for f in cache/*-2026-04-10.json; do
+            [ -f "$f" ] || continue
+            "${SED_INPLACE[@]}" "s/2026-04-10T00:00:00.000Z/$NOW/g" "$f"
+            mv "$f" "${f%-2026-04-10.json}-${TODAY}.json"
+          done
+          for f in cache/*.json cache/intelligence/*.json; do
+            [ -f "$f" ] && "${SED_INPLACE[@]}" "s/2026-04-10T00:00:00.000Z/$NOW/g" "$f"
+          done
+
       - name: Run tests
+        env:
+          TEST_KNOWN_CUSTOMER: 'Acme Corp'
+          BASE_URL: 'http://localhost:7778'
         run: CI=true bunx playwright test --project=ci --workers=2 --reporter=list
         # --project=ci excludes @live-tagged tests and files in testIgnore (bootstrap-e2e, e2e-carolanne).
         # Covers: api/, contracts/, regression, wizard, ui/, performance, accessibility, dashboard, qa.
         # No Google credentials required. Live scraper tests run in Tier 2 (release.yml).
+        # BASE_URL=7778: playwright.config.ts starts a fresh seeded server on 7778 when CI=true and
+        # no RELEASE_GATE — avoids port conflict with prod container (pai-dashboard) on 7777.
+
+      - name: New-user flow gate
+        env:
+          TEST_KNOWN_CUSTOMER: 'Acme Corp'
+          BASE_URL: 'http://localhost:7778'
+        run: CI=true bunx playwright test test/qa-e2e-newuser.spec.ts --project=e2e-tier --workers=1 --reporter=list --timeout=90000
+        # BKL-CI-01: Runs the @destructive new-user journey that the `ci` project excludes via grepInvert.
+        # --project=e2e-tier: excludes [test] project (targets 7776 which doesn't exist in CI) and avoids
+        # running the same tests twice, which caused race conditions on shared server state.
+        # Workers=1 required — per-describe .serial inside the spec prevents parallelism.
+        # BASE_URL=7778: fresh seeded server started by playwright.config.ts webServer on Mac Mini.
+        # Timeout 90s matches council budget for this gate.
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: playwright-report/
+          retention-days: 7

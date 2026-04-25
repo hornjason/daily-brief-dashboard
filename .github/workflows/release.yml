@@ -98,6 +98,9 @@ jobs:
             echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Inject Gemini key into defaults.env
+        run: echo "GEMINI_SERVICE_ACCOUNT_KEY=${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}" >> defaults.env
+
       - name: Build and push versioned image
         uses: docker/build-push-action@v6
         with:
