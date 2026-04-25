@@ -205,18 +205,14 @@ test.describe('GET /customers — industry/segment fields (BKL-ENRICH-01)', () =
     expect(Array.isArray(body)).toBe(true)
   })
 
-  // @xfail: enrichment batch has not run — most customers lack industry/segment.
-  // Remove xfail and the fail() guard once BKL-ENRICH-01 is resolved.
-  test.fail('every customer has a non-empty industry field [xfail: BKL-ENRICH-01 — enrichment never ran on SW pod]', async () => {
+  test('every customer has a non-empty industry field', async () => {
     const { body } = await getJSON('/customers')
     const customers: unknown[] = body
     const missing = customers.filter((c: any) => !c.industry || c.industry === '')
-    // Should be 0 once enrichment runs; currently ~104 of 106 are missing
     expect(missing.length).toBe(0)
   })
 
-  // @xfail: same root cause as above.
-  test.fail('every customer has a non-empty segment field [xfail: BKL-ENRICH-01 — enrichment never ran on SW pod]', async () => {
+  test('every customer has a non-empty segment field', async () => {
     const { body } = await getJSON('/customers')
     const customers: unknown[] = body
     const missing = customers.filter((c: any) => !c.segment || c.segment === '')
