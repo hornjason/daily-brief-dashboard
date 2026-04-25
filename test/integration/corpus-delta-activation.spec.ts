@@ -175,22 +175,24 @@ test.describe('Corpus delta — activation path integration @destructive', () =>
 
     const collectAndResolve = page.evaluate(async (base) => {
       const allTypes: string[] = []
+      const allEvents: Array<Record<string, unknown>> = []
       const TERMINAL = new Set([
         'cache:hit', 'cache:bypass', 'generation:complete', 'generation:error', 'cache:miss', 'cache:cold',
       ])
-      return new Promise<{ found: boolean; types: string[] }>((resolve) => {
+      return new Promise<{ found: boolean; types: string[]; events: Array<Record<string, unknown>> }>((resolve) => {
         const es = new EventSource(`${base}/api/ai/events`)
         const t = setTimeout(() => {
           es.close()
-          resolve({ found: false, types: allTypes })
+          resolve({ found: false, types: allTypes, events: allEvents })
         }, 35000)
         es.addEventListener('ai-intel', (e) => {
-          const ev = JSON.parse((e as MessageEvent).data) as { type: string }
+          const ev = JSON.parse((e as MessageEvent).data) as Record<string, unknown> & { type: string }
           allTypes.push(ev.type)
+          allEvents.push(ev)
           if (TERMINAL.has(ev.type)) {
             clearTimeout(t)
             es.close()
-            resolve({ found: true, types: allTypes })
+            resolve({ found: true, types: allTypes, events: allEvents })
           }
         })
         es.onerror = () => { /* SSE reconnect normal */ }
@@ -224,6 +226,17 @@ test.describe('Corpus delta — activation path integration @destructive', () =>
     // EVERY brief request, and that's what we're proving here.
     if (result.types.includes('generation:complete')) {
       console.log('[delta-activation] generation:complete fired — full pipeline ran end-to-end')
+      // BKL-AI-FP-09: generation:complete must carry delta telemetry fields.
+      const completeEvent = result.events.find(e => (e as { type: string }).type === 'generation:complete') as
+        { deltaMode?: unknown; unchangedDocCount?: unknown; tokensUsed?: unknown } | undefined
+      expect(completeEvent, 'generation:complete event payload must be captured').toBeTruthy()
+      expect(typeof completeEvent!.deltaMode, 'deltaMode must be boolean on generation:complete').toBe('boolean')
+      expect(typeof completeEvent!.unchangedDocCount, 'unchangedDocCount must be number on generation:complete').toBe('number')
+      // tokensUsed is best-effort — present whenever Gemini returned usageMetadata.
+      // Live test container may emit before usage is parsed in some edge cases; assert type-shape only when defined.
+      if (completeEvent!.tokensUsed !== undefined) {
+        expect(typeof completeEvent!.tokensUsed, 'tokensUsed must be number when present').toBe('number')
+      }
     } else if (result.types.includes('cache:bypass')) {
       console.log('[delta-activation] cache:bypass fired — DISALLOW_GEMINI mode (bypass path)')
     } else if (result.types.includes('cache:hit')) {

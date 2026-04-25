@@ -561,7 +561,7 @@ export function isBriefConfigured(): boolean {
 let _lastCapturedLLMPayload: string | null = null
 export function getCapturedLLMPayload(): string | null { return _lastCapturedLLMPayload }
 
-export async function callLLM(systemPrompt: string, userPrompt: string, callType = 'brief-synthesize', customerName = 'unknown'): Promise<string> {
+export async function callLLM(systemPrompt: string, userPrompt: string, callType = 'brief-synthesize', customerName = 'unknown', usageOut?: { tokensUsed?: number }): Promise<string> {
   // BKL-AI-FP-01: test environment bypass — skip Gemini call, return fixture
   if (process.env.DISALLOW_GEMINI === 'true') {
     _lastCapturedLLMPayload = userPrompt
@@ -623,6 +623,9 @@ export async function callLLM(systemPrompt: string, userPrompt: string, callType
       outputTokens: usage.candidatesTokenCount ?? 0,
       model,
     })
+    if (usageOut) {
+      usageOut.tokensUsed = (usage.totalTokenCount ?? ((usage.promptTokenCount ?? 0) + (usage.candidatesTokenCount ?? 0)))
+    }
   }
   const finishReason = json.candidates?.[0]?.finishReason
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
@@ -1301,13 +1304,15 @@ export async function generateBrief(
       )
       emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
       const generationStart = Date.now()
+      const deltaUsage: { tokensUsed?: number } = {}
       brief = await callLLM(
         'You are a Red Hat Account Solution Architect AI assistant. Update customer intelligence briefs based on changed information.',
         deltaXml,
         'brief-delta-synthesize',
         customer.name,
+        deltaUsage,
       )
-      emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart })
+      emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart, deltaMode: true, unchangedDocCount: corpusDiff.unchangedDocs.length, tokensUsed: deltaUsage.tokensUsed })
       console.log(`[brief] delta synthesis complete: ${brief.length} chars`)
     } else {
       // Full-run: existing 3-step pipeline (extract → rank → synthesize)
@@ -1338,13 +1343,15 @@ export async function generateBrief(
       const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext)
       const generationStart = Date.now()
       emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
+      const fullUsage: { tokensUsed?: number } = {}
       brief = await callLLM(
         'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
         synthesisPrompt,
         'brief-synthesize',
         customer.name,
+        fullUsage,
       )
-      emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart })
+      emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart, deltaMode: false, unchangedDocCount: 0, tokensUsed: fullUsage.tokensUsed })
       console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
     }
 

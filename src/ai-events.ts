@@ -12,6 +12,9 @@ export type AIIntelEvent = {
   fingerprintHash?: string
   tokensUsed?: number
   durationMs?: number
+  // BKL-AI-FP-09: corpus-delta telemetry on generation:complete
+  deltaMode?: boolean
+  unchangedDocCount?: number
   timestamp: string
 }
 
