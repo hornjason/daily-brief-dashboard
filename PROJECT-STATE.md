@@ -94,6 +94,9 @@ Last updated: 2026-04-25 (OAuth-first Gemini auth shipped: cloud-platform scope 
 - `POST /api/bootstrap/auto/cancel` — Gracefully cancel a running single-AE bootstrap (sets cancellation flag, stops after current step)
 - `GET /api/bootstrap/auto/status` — Bootstrap progress
 
+### Ingest Telemetry
+- `GET /api/ingest/events` — Long-lived SSE stream; emits `event: connected` on connect, `event: cache-level` per tier hit during waterfall (ae, flow, level 1–4, rowCount, timestamp). Fire-and-forget in waterfall path. See docs/DATA-INGESTION-FLOW.md#sse-cache-level-telemetry.
+
 ### Admin & Ops
 - `POST /api/admin/restore` — Rebuild customers + cache from GSheets (BKL-RESTORE-01 ✅)
 - `GET /api/admin/gemini-usage` — Gemini cost tracking
