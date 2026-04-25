@@ -1,6 +1,6 @@
 ---
 Status: Operational
-Last validated: 2026-04-19
+Last validated: 2026-04-25
 Trigger: When AI intelligence cache hierarchy changes or new flows added
 ---
 
@@ -27,15 +27,36 @@ The brief is **lazy/on-demand** — generated when requested. The background sch
 
 ### What drives brief regeneration
 
-| Signal | How it's detected | Fingerprint impact |
-|--------|------------------|--------------------|
-| New customer email arrived | Gmail cache expires (2h TTL) → re-fetch with customer query → new email tuples | Email tuple hash changes → miss |
-| New customer meeting added | Calendar cache expires (2h TTL) → re-fetch filtered by customer name → new meeting tuples | Meeting tuple hash changes → miss |
-| Drive doc edited | Doc content cached by fileId+modifiedTime → edit changes modTime → old cache entry invalid | New doc content flows into brief inputs |
-| CCSP tier changes | CCSP data hash-guarded at ingestion → new hash written → fingerprint reads new tier | CCSP tier field changes → miss |
-| Pipeline stage changes | Pipeline data hash-guarded at ingestion → new stage written | Pipeline stage field changes → miss |
-| Support case opened/closed | Cases.json updated by RH Portal scraper → case counts shift | Open case counts (90d) change → miss |
-| **No change in any signal** | Fingerprint matches cached brief | Cached brief returned — no Gemini call |
+There are **two fingerprints** in play. Both must be unchanged for the cached brief to be served.
+
+**Route-level fingerprint** — computed in `customer-routes.ts:484-494` over all input sources (emails, meetings, docs, cases, subscriptions, products, pipeline records, CCSP records). This is the gate that decides "serve from cache vs call generateBrief()". Persisted at `inputFingerprint` in the brief cache JSON.
+
+**generateBrief-level fingerprint** — computed in `customer.ts:1213-1228` over a `BriefInputBundle`. This currently has **fewer signals** than the route-level fingerprint:
+
+```typescript
+// customer.ts:1213-1228 — actual code
+const inputBundle: BriefInputBundle = {
+  emailTuples: …, meetingTuples: …,
+  ccspTier: null,       // not available at this call site — future enhancement
+  pipelineStage: null,  // not available at this call site — future enhancement
+  openCaseCounts,
+  preferencesHash: '',  // user preferences not yet wired — future enhancement
+}
+```
+
+The route-level fingerprint covers the full input set today; the generateBrief-level bundle is the deeper gate intended for future enhancements (per-customer CCSP tier, pipeline stage, user prefs). Today both gates effectively fire on email / meeting / doc / cases changes.
+
+| Signal | Detected by | Which fingerprint? |
+|--------|-------------|--------------------|
+| New customer email arrived | Gmail cache expires (2h TTL) → re-fetch with customer query → new email tuples | Both |
+| New customer meeting added | Calendar cache expires (2h TTL) → re-fetch filtered by customer name → new meeting tuples | Both |
+| Drive doc edited | Doc content cached by fileId+modifiedTime → edit changes modTime → new fileId set in route fingerprint | Route-level (doc IDs hashed); generateBrief-level (delta gate via `docCorpusSnapshot`) |
+| Drive doc added or removed | New/missing doc ID in the fileId list | Route-level |
+| Subscription added/changed | New SKU / status / endDate in product list | Route-level |
+| New pipeline opportunity | New oppId in pipeline records | Route-level |
+| CCSP record added/changed | New (account, partner, quarter) tuple | Route-level (record set hashed); generateBrief-level (`ccspTier` reserved, not yet populated) |
+| Support case opened/closed | New caseNumber in cases list | Both (route-level: case numbers; generateBrief-level: 90d severity counts) |
+| **No change in any signal** | Both fingerprints match | Cached brief returned — no Gemini calls |
 
 **The 2h email/calendar TTL is a polling window, not a staleness signal.** It means: "check Gmail/Calendar for this customer at most every 2 hours." If new emails or meetings arrived since the last poll, the fingerprint changes and the brief regenerates. If nothing new arrived, the fingerprint is identical and the cached brief is returned.
 
@@ -177,7 +198,7 @@ flowchart TD
     DPATH --> WRITEFP
     FPATH --> WRITEFP
 
-    WRITEFP["writeBriefCache(text, fingerprint, corpusSnapshot)\nemitAIEvent(generation:complete, tokensUsed, durationMs)"]
+    WRITEFP["writeBriefCache(text, fingerprint, corpusSnapshot)\nemitAIEvent(generation:complete, durationMs)"]
     WRITEFP --> RESP["Return brief text"]
 
     subgraph SSE ["GET /api/ai/events — live observer"]
@@ -313,18 +334,25 @@ In delta mode, Steps 1 and 2 are skipped entirely. The previous brief already en
 
 ## Fingerprint Design
 
-The fingerprint is a SHA256 hash computed over a `BriefInputBundle` — a normalized, sorted representation of all signals that influence brief content. Sorting is critical: it ensures that reordered emails or meetings don't produce a false cache miss.
+Two fingerprints, two gates:
+
+**Route-level fingerprint** (`customer-routes.ts:484-494`) — the gate that prevents a Gemini-bearing pipeline run when nothing changed. Computed as SHA256 over a JSON of `{emails, meetings, docs, cases, subscriptions, products, pipeline, ccsp}` field tuples. Persisted at `inputFingerprint` in the brief cache JSON.
+
+**generateBrief-level fingerprint** (`customer.ts:1213-1230`, via `detectFingerprintDelta()`) — the deeper gate inside `generateBrief()` itself. SHA256 over a sorted `BriefInputBundle`. Sorting is critical: reordered emails or meetings must not produce a false cache miss.
 
 ```typescript
+// src/ai-fingerprint.ts — type definition
 interface BriefInputBundle {
-  emailTuples: Array<{ subject: string; sender: string; date: string }>   // sorted by date
-  meetingTuples: Array<{ title: string; attendees: string[]; date: string }> // sorted by date
-  ccspTier: string | null       // e.g. "Premium", "Standard", null
-  pipelineStage: string | null  // e.g. "Proposal", "Closed Won", null
-  openCaseCounts: Record<string, number>  // severity → count, last-90d open cases only
-  preferencesHash: string       // hash of user's brief preference settings
+  emailTuples: Array<{ subject: string; sender: string; date: string }>   // sorted by date desc
+  meetingTuples: Array<{ title: string; attendees: string[]; date: string }> // sorted by date desc
+  ccspTier: string | null                  // RESERVED — currently always null at generateBrief call site
+  pipelineStage: string | null             // RESERVED — currently always null at generateBrief call site
+  openCaseCounts: Record<string, number>   // severity → count, last-90d open cases only
+  preferencesHash: string                  // RESERVED — user preferences not yet wired (always '')
 }
 ```
+
+Three fields (`ccspTier`, `pipelineStage`, `preferencesHash`) are defined in the bundle type but currently passed as `null`/`''` at the only call site (`customer.ts:1224-1227`). The route-level fingerprint already covers CCSP and pipeline change-detection at the outer gate; surfacing them in the bundle would mainly tighten the inner gate for direct callers of `generateBrief()`. Tracked as a future enhancement, not a correctness gap.
 
 **Why not include doc content in the fingerprint?** Drive doc content is already change-driven via `fileId+modifiedTime` content-addressing. When a doc is edited, the new modTime produces a cache miss at the L3 layer — the new text flows automatically into brief inputs. The fingerprint doesn't need to hash doc text directly.
 
@@ -338,45 +366,52 @@ Both are written on every successful generation and read at the start of every c
 
 ## Event Schema (`src/ai-events.ts`)
 
+This is the actual runtime type — verified against `src/ai-events.ts` 2026-04-25.
+
 ```typescript
 type AIIntelEvent = {
   type: 'cache:cold' | 'cache:hit' | 'cache:miss' | 'cache:bypass'
        | 'cache:stale' | 'generation:start' | 'generation:complete' | 'generation:error'
-  accountId: string         // customer slug
+  accountId: string         // customer slug (toSlug of customer.name)
   flow: 'brief' | 'account-intel' | 'product-intel'
   source: 'l1' | 'l2' | 'l3' | 'l4'
-  fingerprintHash?: string  // set when fingerprint was computed
-  deltaMode?: boolean       // true when corpus delta path was taken (BKL-AI-FP-09)
-  unchangedDocCount?: number // set when deltaMode=true
-  tokensUsed?: number       // set on generation:complete
-  durationMs?: number       // set on generation:complete and generation:error
-  timestamp: string         // ISO 8601
+  fingerprintHash?: string  // set on cache:hit, generation:start, generation:complete
+  tokensUsed?: number       // RESERVED — defined in the type but not currently populated by any emitter
+  durationMs?: number       // set on generation:complete (Date.now() - generationStart)
+  timestamp: string         // ISO 8601, set by emitAIEvent
 }
 ```
 
+**Fields documented in earlier drafts but NOT present in the runtime type:**
+
+- `deltaMode?: boolean` — not in `AIIntelEvent` and not set by any emitter. Delta vs full-run is currently observable only via the server log line `[brief] delta mode: …` / `[brief] full-run: …` (see `customer.ts:1248-1250`). To make this observable on the SSE bus, add the field to `AIIntelEvent` and pass it from the `generation:start` / `generation:complete` emit calls in `customer.ts`. Tracked as a future enhancement; not currently a gap that breaks any consumer.
+- `unchangedDocCount?: number` — same status. The diff is computed (`corpusDiff.unchangedDocs.length`) but never surfaced on the bus.
+
 **Event meanings:**
 
-| Event type | When emitted | What it means |
-|------------|-------------|---------------|
-| `cache:cold` | First-ever brief request for this customer | No cached brief exists at all |
-| `cache:hit` | Fingerprint matches stored fingerprint | All inputs unchanged — returning cached brief |
-| `cache:miss` | Fingerprint changed | At least one input signal changed; brief will regenerate |
-| `cache:bypass` | `DISALLOW_GEMINI=true` is set | Test environment — returning fixture, not calling Gemini |
-| `cache:stale` | Account intel TTL expired | Account intelligence is stale; staleness marker injected; background regen triggered |
-| `generation:start` | Gemini pipeline is about to be called | Starting synthesis (full-run or delta) |
-| `generation:complete` | Brief generated successfully | Includes `tokensUsed`, `durationMs`, `deltaMode` |
-| `generation:error` | Gemini call failed | Includes `durationMs`; error logged separately |
+| Event type | When emitted | What it means | Where in code |
+|------------|-------------|---------------|---------------|
+| `cache:cold` | (reserved — type defined, no current emitter) | Would mean: first-ever brief request for this customer | `ai-events.ts:7` |
+| `cache:hit` | Fingerprint matches stored fingerprint | All inputs unchanged — returning cached brief | `customer.ts:1234` |
+| `cache:miss` | (reserved — type defined, no current emitter) | Would mean: fingerprint changed; brief will regenerate | `ai-events.ts:7` |
+| `cache:bypass` | `DISALLOW_GEMINI=true` is set when `callLLM` runs | Test environment — Gemini call replaced by fixture stub | `customer.ts:568, 1015` |
+| `cache:stale` | Account intel TTL expired during `buildXmlSources` | Account intelligence is stale; staleness marker injected; background regen triggered | `customer.ts:961` |
+| `generation:start` | Just before delta or full-run synthesis call | Starting synthesis (delta or full-run) | `customer.ts:1302, 1340` |
+| `generation:complete` | Synthesis returned successfully | Includes `durationMs`; brief about to be cached | `customer.ts:1310, 1347` |
+| `generation:error` | (reserved — type defined, no current emitter) | Would mean: Gemini call failed | `ai-events.ts:7` |
+
+**Important nuance — `cache:bypass` fires inside `callLLM` regardless of path:** because `callLLM` itself bypasses Gemini when `DISALLOW_GEMINI=true`, the bypass event fires during BOTH the full-run path (via `extractSignals` → `callLLMStructured`) AND the delta path (via `callLLM` for delta synthesis). Subscribers should treat `cache:bypass` as an indicator of test-environment short-circuit, not as a specific cache state.
 
 **Live observation:**
 ```bash
 curl -N http://localhost:7777/api/ai/events
 # → event: connected   {"timestamp":"..."}
-# → event: ai-intel    {"type":"cache:hit","accountId":"acme-corp","flow":"brief","source":"l1",...}
-# → event: ai-intel    {"type":"generation:start","accountId":"some-co","flow":"brief",...}
-# → event: ai-intel    {"type":"generation:complete","accountId":"some-co","tokensUsed":1421,"durationMs":1800,"deltaMode":true,"unchangedDocCount":17,...}
+# → event: ai-intel    {"type":"cache:hit","accountId":"acme-corp","flow":"brief","source":"l1","fingerprintHash":"…","timestamp":"…"}
+# → event: ai-intel    {"type":"generation:start","accountId":"some-co","flow":"brief","source":"l1","fingerprintHash":"…","timestamp":"…"}
+# → event: ai-intel    {"type":"generation:complete","accountId":"some-co","flow":"brief","source":"l1","fingerprintHash":"…","durationMs":1820,"timestamp":"…"}
 ```
 
-**Identifying delta vs full-run in the event stream:** look for `"deltaMode":true` in `generation:complete` events. Delta runs produce dramatically lower `tokensUsed` for customers with large doc folders.
+**Identifying delta vs full-run today:** check the server log line emitted at `customer.ts:1248-1250` (`[brief] delta mode: …` vs `[brief] full-run: …`). The SSE bus does not currently distinguish the two paths on `generation:complete`. See the field-status note above for the path to surface this.
 
 ---
 
