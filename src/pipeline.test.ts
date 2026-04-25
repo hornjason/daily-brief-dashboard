@@ -19,7 +19,7 @@ function makeRow(overrides: Partial<Record<(typeof HEADERS)[number], any>> = {})
   const defaults: Record<string, any> = {
     'Opportunity Number': 'OPP-001',
     'Account Name': 'Acme Corp',
-    'Opportunity Name': 'Acme Renewal 2026',
+    'Opportunity Name': 'Acme Deal 2026',
     'ACV Opportunity': 50000,
     'Close Date': '2026-06-30',
     'Forecast Category': 'Commit',
