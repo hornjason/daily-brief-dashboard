@@ -6611,6 +6611,14 @@ Files: dashboard/src/components/ — whichever component renders sparklines (lik
 Description: Console error "<polyline> attribute points: Expected number, '0.0,NaN 40.0,NaN'" appears when a sparkline series has no data points. Cosmetic only — no user-visible breakage — but pollutes console. Fix: guard sparkline rendering against empty/NaN series — render a flat line or skip polyline when series is empty.
 Can we test: YES — unit test that renders sparkline with empty data array, verifies no NaN in rendered points attribute.
 
+### BKL-UI-CUSTOMER-CRASH-01 | Customer detail page crashes with TypeError on seed data
+Status: ✅ DONE
+Priority: P1
+Size: XS
+Source: Quinn audit 2026-04-25 (Phase 3 re-audit)
+Files: dashboard/src/components/SubscriptionsSection.tsx:80
+Description: `p.quantity.toLocaleString()` crashed when seed customers have `quantity: undefined` in subscription data. Fix: `(p.quantity ?? 0).toLocaleString()`. One-line fix. Quinn re-audit confirmed page renders cleanly. Commit 93ca1e0.
+
 ### BKL-TEST-SF-SYNC-BANNER-01 | SF Sync Now success banner not testable on seed container (no SF creds)
 Status: 🔴 OPEN
 Priority: P2
