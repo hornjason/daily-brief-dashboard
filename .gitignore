@@ -39,6 +39,7 @@ config/oauth-state.json
 .env
 .env.local
 .env.*
+!.env.example
 
 # macOS
 .DS_Store

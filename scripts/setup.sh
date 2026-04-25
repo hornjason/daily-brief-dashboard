@@ -44,6 +44,7 @@ ASSUME_YES=0
 
 # Runtime state
 OS_TYPE=""
+# shellcheck disable=SC2034
 COMPOSE_CMD=()
 
 # ---------- UI helpers ----------
