@@ -10,7 +10,14 @@ import { recordSfSyncSuccess } from './sf-scraper.ts'
 import { recordOutcome } from './scraper-status-store.ts'
 import { recordCcspRefreshAt } from './ccsp-scraper.ts'
 import { recordSupportableRefreshAt } from './supportable-scraper.ts'
-import { emitCacheLevel } from './ingest-events.ts'
+import { emitCacheLevel } from './ingest-events.js'
+
+// ── Cache hierarchy constants (BKL-INGEST-10) ──────────────────────────────
+// L1 disk-cache TTL: if the local cache is younger than this, skip the L2
+// Drive API check entirely. The canonical cache hierarchy is:
+//   L1 (disk) → L2 (Drive modifiedTime) → L3 (live fetch)
+// Each tier must be tried in order, cheapest first.
+const INGEST_L1_TTL_MS = 24 * 60 * 60 * 1000
 
 // ── Module state ────────────────────────────────────────────────────────────
 let SHEETS_SYNC_PATH = ''
@@ -123,6 +130,18 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
 export async function refreshSubscriptions(force = false): Promise<void> {
   // Check if Supportable source sheet has changed before re-fetching all customers
   if (!force) {
+    // L1 cache check (BKL-INGEST-10) — if ALL customers' sheet caches are < 24h,
+    // no Drive call needed. L1 must be consulted before any external call.
+    const now = Date.now()
+    const allCustomersCached = customers.length > 0 && customers.every(cu => {
+      const c = readSheetCache(cu.name)
+      return c?.cachedAt && (now - new Date(c.cachedAt).getTime()) < INGEST_L1_TTL_MS
+    })
+    if (allCustomersCached) {
+      console.log('[refresh:subscriptions] L1 cache fresh for all customers — skipping Drive check')
+      emitCacheLevel({ ae: null, flow: 'sfBookings', level: 1 })
+      return
+    }
     try {
       const syncConfig = JSON.parse(readFileSync(SHEETS_SYNC_PATH, 'utf-8')) as { fileId?: string }
       if (syncConfig.fileId) {
@@ -131,12 +150,7 @@ export async function refreshSubscriptions(force = false): Promise<void> {
         const oldestCachedAt = timestamps.length ? timestamps.reduce((a, b) => a < b ? a : b) : null
         if (oldestCachedAt) {
           const changed = await checkFilesModified([syncConfig.fileId], oldestCachedAt)
-          if (!changed) {
-            // Telemetry: source unchanged → served entirely from L1 in-memory cache.
-            emitCacheLevel({ ae: null, flow: 'sfBookings', level: 1 })
-            console.log(`[refresh:subscriptions] skipped — source file unchanged`)
-            return
-          }
+          if (!changed) { console.log(`[refresh:subscriptions] skipped — source file unchanged`); return }
         }
       }
     } catch {
@@ -159,6 +173,20 @@ export async function refreshCCSP(force = false): Promise<void> {
     const currentSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
     let aeSetChanged = false
     if (!force) {
+      // L1 cache check (BKL-INGEST-10) — if CCSP disk cache < 24h AND fileIds match,
+      // no Drive call needed. L1 must be consulted before any external call.
+      const now = Date.now()
+      const l1Cached = readCCSPCache()
+      if (l1Cached?.cachedAt && (now - new Date(l1Cached.cachedAt).getTime()) < INGEST_L1_TTL_MS) {
+        const l1MatchesCurrent = l1Cached.fileIds?.length === currentSheetIds.length &&
+          currentSheetIds.every(id => l1Cached.fileIds!.includes(id))
+        if (l1MatchesCurrent) {
+          const ageHours = Math.round((now - new Date(l1Cached.cachedAt).getTime()) / 3_600_000 * 10) / 10
+          console.log(`[refresh:ccsp] L1 cache fresh (${ageHours}h old) — skipping Drive check`)
+          emitCacheLevel({ ae: null, flow: 'ccsp', level: 1 })
+          return
+        }
+      }
       const cached = readCCSPCache()
       // Mirror pipeline staleness check: if AE sheet IDs don't match cached fileIds, force refresh
       const cachedMatchesCurrent = cached?.fileIds?.length &&
@@ -167,12 +195,7 @@ export async function refreshCCSP(force = false): Promise<void> {
       aeSetChanged = !cachedMatchesCurrent
       if (cachedMatchesCurrent && cached!.cachedAt) {
         const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
-        if (!changed) {
-          // Telemetry: source unchanged → served entirely from L1 in-memory CCSP cache.
-          emitCacheLevel({ ae: null, flow: 'ccsp', level: 1 })
-          console.log(`[refresh:ccsp] skipped — source files unchanged`)
-          return
-        }
+        if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
       }
       if (aeSetChanged) {
         console.log(`[refresh:ccsp] AE set changed — forcing full refresh (BKL-CCSP-03)`)
@@ -199,6 +222,19 @@ export async function refreshPipeline(force = false): Promise<void> {
     const pipelineIds = aes.map(a => a.pipelineSheetId).filter((id): id is string => Boolean(id))
     const cached = readPipelineCache()
     if (!force) {
+      // L1 cache check (BKL-INGEST-10) — if pipeline disk cache < 24h AND fileIds
+      // match, no Drive call needed. L1 must be consulted before any external call.
+      const now = Date.now()
+      if (cached?.cachedAt && (now - new Date(cached.cachedAt).getTime()) < INGEST_L1_TTL_MS) {
+        const l1MatchesCurrent = cached.fileIds?.length === pipelineIds.length &&
+          pipelineIds.every(id => cached.fileIds!.includes(id))
+        if (l1MatchesCurrent) {
+          const ageHours = Math.round((now - new Date(cached.cachedAt).getTime()) / 3_600_000 * 10) / 10
+          console.log(`[refresh:pipeline] L1 cache fresh (${ageHours}h old) — skipping Drive check`)
+          emitCacheLevel({ ae: null, flow: 'sfPipeline', level: 1 })
+          return
+        }
+      }
       // Only use staleness check if cached fileIds exactly match current AE sheet IDs.
       // If AEs were re-bootstrapped (new sheet IDs), cached.fileIds will differ — force refresh.
       const cachedMatchesCurrent = cached?.fileIds?.length &&
@@ -206,12 +242,7 @@ export async function refreshPipeline(force = false): Promise<void> {
         pipelineIds.every(id => cached.fileIds!.includes(id))
       if (cachedMatchesCurrent && cached!.cachedAt) {
         const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
-        if (!changed) {
-          // Telemetry: source unchanged → served entirely from L1 in-memory pipeline cache.
-          emitCacheLevel({ ae: null, flow: 'sfPipeline', level: 1 })
-          console.log(`[refresh:pipeline] skipped — source files unchanged`)
-          return
-        }
+        if (!changed) { console.log(`[refresh:pipeline] skipped — source files unchanged`); return }
       }
     }
     const { records, fileIds } = await fetchPipelineData(pipelineIds.length ? pipelineIds : undefined)

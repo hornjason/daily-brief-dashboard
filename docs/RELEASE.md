@@ -1,5 +1,7 @@
 ---
-Last validated: 2026-04-24
+Status: Operational
+Last validated: 2026-04-19
+Trigger: Branch strategy changes, versioning scheme changes, rollback procedure changes
 ---
 
 # Release Management Runbook

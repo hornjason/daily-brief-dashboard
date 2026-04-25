@@ -35,6 +35,9 @@ function corpusCacheDir(): string {
 }
 
 function corpusCachePath(customerSlug: string): string {
+  if (!customerSlug || /[^a-zA-Z0-9_-]/.test(customerSlug)) {
+    throw new Error(`[customer-docs-corpus] unsafe slug for cache path: "${customerSlug}"`)
+  }
   return resolve(corpusCacheDir(), `${customerSlug}.json`)
 }
 

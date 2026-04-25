@@ -1,5 +1,7 @@
 ---
-Last validated: 2026-04-24
+Status: Operational
+Last validated: 2026-04-19
+Trigger: Salesforce report column changes, SF instance URL changes, pipeline field mapping changes
 ---
 
 # Salesforce Pipeline Report Setup

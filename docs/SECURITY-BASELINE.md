@@ -1,8 +1,5 @@
----
-Last validated: 2026-04-24
----
-
 # Security Baseline (do not regress)
+*Last validated: 2026-04-13 | Owner: DA | Trigger: Any new API endpoint, Sheets write, error response pattern, Gemini prompt assembly, or cache path function added*
 
 - `sanitizeCell()` on all Sheets writes before `valueInputOption: 'RAW'`
 - `sanitizeErr(e)` on all API error responses — never return raw `e.message`
@@ -10,3 +7,5 @@ Last validated: 2026-04-24
 - Cache/config files written with `mode: 0o600`
 - `dumpDom()` gated behind `CCSP_DEBUG=true` — never in production
 - `sanitizeText()` rejects HTML tags (returns null -> 400), does not strip
+- **Gemini prompt inputs** — all external/third-party data entering a Gemini prompt must be wrapped in `sanitizePromptInput(value, maxLen)` before interpolation. This includes: intelligence cache fields (company, industry), Drive doc filenames and content, pipeline records from external sheets, and any field not sourced from operator-controlled static config. Subscription summaries and pipeline oppNames already follow this rule — do not regress.
+- **Cache path slug guards** — every `*CachePath(slug)` function must validate the slug with `/[^a-zA-Z0-9_-]/.test(slug)` and throw before calling `resolve()`. Pattern: `if (!slug || /[^a-zA-Z0-9_-]/.test(slug)) throw new Error('[module] unsafe slug: "…"')`. Applied to: `briefCachePath`, `expansionCachePath`, `corpusCachePath`. All new cache path functions must follow this pattern.

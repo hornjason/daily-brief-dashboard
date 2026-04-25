@@ -13,11 +13,14 @@ import { getRecentHistory } from './kpi-history.ts'
 import { sanitizeErr } from './utils.ts'
 import { getGeminiModelLite } from './settings-api.ts'
 import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
+import { normalizeSettings } from './region-config.ts'
+import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts } from './territory-sync.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
 let RH_CASES_CACHE_PATH = ''
 let DATA_SOURCES_PATH = ''
+let SETTINGS_PATH = ''
 
 // ── POD summary TTL cache ─────────────────────────────────────────────────────
 interface PodSummary {
@@ -48,6 +51,7 @@ export function initDashboardRoutes(opts: {
   CACHE_DIR = opts.cacheDir
   RH_CASES_CACHE_PATH = opts.rhCasesCachePath
   DATA_SOURCES_PATH = opts.dataSourcesPath
+  SETTINGS_PATH = resolve(DATA_SOURCES_PATH, '..', 'settings.json')
 }
 
 // ── Morning synthesis cache (BKL-AI27) ────────────────────────────────────────
@@ -175,9 +179,25 @@ function podPrefixFromTabTitle(tabTitle: string): string {
   const t = tabTitle.toLowerCase()
   if (t.includes('northwest') || t.includes('nw')) return 'WEST_COMM_CORP_NORTHWEST'
   if (t.includes('southwest') || t.includes('sw')) return 'WEST_COMM_CORP_SOUTHWEST'
-  if (t.includes('north central') || t.includes('nc corp')) return 'WEST_COMM_CORP_NORTHCENTRAL'
-  if (t.includes('south central') || t.includes('sc corp')) return 'WEST_COMM_CORP_SOUTHCENTRAL'
+  if (t.includes('north central') || t.includes('nc corp')) return 'WEST_COMM_CORP_NORTH_CENTRAL'
+  if (t.includes('south central') || t.includes('sc corp')) return 'WEST_COMM_CORP_SOUTH_CENTRAL'
   return ''
+}
+
+function getSheetAndTypeForPod(pod: string): { sheetId: string; regionType: 'commercial' | 'enterprise' } {
+  try {
+    const raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+    const settings = normalizeSettings(raw)
+    for (const region of settings.regions) {
+      if (pod in region.pods) {
+        const match = region.territorySheetUrl.match(/\/spreadsheets\/d\/([\w-]+)/)
+        if (match) return { sheetId: match[1], regionType: region.type ?? 'commercial' }
+      }
+    }
+  } catch {
+    // fall through to default
+  }
+  return { sheetId: getTerritorySheetId(), regionType: 'commercial' }
 }
 
 // ── Route registration ────────────────────────────────────────────────────────
@@ -601,7 +621,16 @@ export function registerDashboardRoutes(app: Hono): void {
         fetchCalendar(customers).catch(() => []),
       ])
 
-      const sev1Count = allCases.filter((ca) => ca.severity === '1').length
+      // BKL-UI-02: apply the same attribution filter as KPICasesModal (BKL-CASES-01)
+      // so the KPI card count matches the modal body count. Cases with no matching
+      // active customer account are excluded (Portal sometimes echoes parent/subsidiary
+      // account numbers that aren't in our customer list).
+      const attributedCases = allCases.filter((ca) =>
+        customers.some((cu) =>
+          (cu.accountNumbers ?? []).map(String).includes(String(ca.accountNumber))
+        )
+      )
+      const sev1Count = attributedCases.filter((ca) => ca.severity === '1').length
 
       // Count meetings
       const today = new Date().toDateString()
@@ -645,7 +674,7 @@ export function registerDashboardRoutes(app: Hono): void {
       }
 
       return c.json({
-        openCasesTotal: allCases.length,
+        openCasesTotal: attributedCases.length,
         sev1Count,
         meetingsToday,
         meetingsThisWeek,
@@ -762,57 +791,94 @@ export function registerDashboardRoutes(app: Hono): void {
 
     try {
       const sheetsClient = google.sheets({ version: 'v4', auth })
-      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: getTerritorySheetId() })
+      const { sheetId, regionType } = getSheetAndTypeForPod(pod)
+      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: sheetId })
       const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
-      const corpTabs = tabNames.filter(t => {
-        const lower = t.toLowerCase()
-        return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
-               !lower.includes('accounts a')
-      })
 
       const territories: { num: string; aeName: string }[] = []
 
-      for (const tabTitle of corpTabs) {
-        const podPrefix = podPrefixFromTabTitle(tabTitle)
-        if (podPrefix !== pod) continue
+      if (regionType === 'enterprise') {
+        // Enterprise path: find the tab detected by isEnterpriseTab, extract AE map
+        for (const tabTitle of tabNames) {
+          const probeResp = await sheetsClient.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: `'${tabTitle}'!A1:Z25`,
+          })
+          const probeRows: string[][] = (probeResp.data.values ?? []).map((r: any[]) =>
+            r.map((cell: any) => String(cell ?? '').trim())
+          )
+          const detected = isEnterpriseTab(probeRows)
+          if (!detected) continue
 
-        const resp = await sheetsClient.spreadsheets.values.get({
-          spreadsheetId: getTerritorySheetId(),
-          range: `'${tabTitle}'!A1:Z60`,
-        })
-        const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>
-          r.map((c: any) => String(c ?? '').trim())
-        )
-
-        let headerRowIdx = -1
-        for (let r = 0; r < rows.length; r++) {
-          if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
-        }
-        if (headerRowIdx === -1) continue
-
-        const aeNameRowIdx = headerRowIdx + 1
-        const headerRow = rows[headerRowIdx] ?? []
-        const aeNameRow = rows[aeNameRowIdx] ?? []
-        const aeCols = headerRow.map((cell, idx) => ({ cell, idx }))
-          .filter(({ cell }) => cell === 'Account Executive').map(({ idx }) => idx)
-
-        for (const col of aeCols) {
-          const aeCell = aeNameRow[col] ?? ''
-          if (!aeCell) continue
-          let aeName = aeCell; let terrCode = ''
-          if (aeCell.includes('\n')) {
-            const parts = aeCell.split('\n'); aeName = parts[0].trim(); terrCode = parts[1].trim()
-          } else {
-            const terrMatch = aeCell.match(/\bTerr(\d+)\b/i)
-            if (terrMatch) { aeName = aeCell.replace(/\s*Terr\d+\s*/i, '').trim(); terrCode = terrMatch[0] }
+          // Full fetch for this enterprise tab
+          const fullResp = await sheetsClient.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: `'${tabTitle}'!A1:Z200`,
+          })
+          const fullRows: string[][] = (fullResp.data.values ?? []).map((r: any[]) =>
+            r.map((cell: any) => String(cell ?? '').trim())
+          )
+          const aeTerrMap = extractEnterpriseAeMap(fullRows)
+          for (const [aeName, terrCodes] of Object.entries(aeTerrMap)) {
+            for (const terrCode of terrCodes) {
+              const m = terrCode.match(/(\d+)/)
+              if (!m) continue
+              const num = m[1].padStart(2, '0')
+              territories.push({ num, aeName })
+            }
           }
-          if (!aeName || /^TBH$/i.test(aeName.trim())) continue
-          const terrNumMatch = terrCode.match(/(\d+)/)
-          if (!terrNumMatch) continue
-          const num = terrNumMatch[1].padStart(2, '0')
-          territories.push({ num, aeName })
+          break // Only one enterprise tab expected
         }
-        break  // Found the matching tab, no need to check others
+      } else {
+        // Commercial path (existing logic)
+        const corpTabs = tabNames.filter(t => {
+          const lower = t.toLowerCase()
+          return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
+                 !lower.includes('accounts a')
+        })
+
+        for (const tabTitle of corpTabs) {
+          const podPrefix = podPrefixFromTabTitle(tabTitle)
+          if (podPrefix !== pod) continue
+
+          const resp = await sheetsClient.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: `'${tabTitle}'!A1:Z60`,
+          })
+          const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>
+            r.map((c: any) => String(c ?? '').trim())
+          )
+
+          let headerRowIdx = -1
+          for (let r = 0; r < rows.length; r++) {
+            if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
+          }
+          if (headerRowIdx === -1) continue
+
+          const aeNameRowIdx = headerRowIdx + 1
+          const headerRow = rows[headerRowIdx] ?? []
+          const aeNameRow = rows[aeNameRowIdx] ?? []
+          const aeCols = headerRow.map((cell, idx) => ({ cell, idx }))
+            .filter(({ cell }) => cell === 'Account Executive').map(({ idx }) => idx)
+
+          for (const col of aeCols) {
+            const aeCell = aeNameRow[col] ?? ''
+            if (!aeCell) continue
+            let aeName = aeCell; let terrCode = ''
+            if (aeCell.includes('\n')) {
+              const parts = aeCell.split('\n'); aeName = parts[0].trim(); terrCode = parts[1].trim()
+            } else {
+              const terrMatch = aeCell.match(/\bTerr(\d+)\b/i)
+              if (terrMatch) { aeName = aeCell.replace(/\s*Terr\d+\s*/i, '').trim(); terrCode = terrMatch[0] }
+            }
+            if (!aeName || /^TBH$/i.test(aeName.trim())) continue
+            const terrNumMatch = terrCode.match(/(\d+)/)
+            if (!terrNumMatch) continue
+            const num = terrNumMatch[1].padStart(2, '0')
+            territories.push({ num, aeName })
+          }
+          break  // Found the matching tab, no need to check others
+        }
       }
 
       territories.sort((a, b) => a.num.localeCompare(b.num))
@@ -847,9 +913,60 @@ export function registerDashboardRoutes(app: Hono): void {
     try {
       const sheetsClient = google.sheets({ version: 'v4', auth })
 
+      // Derive the pod key from the territory string (strip _TERR\d+ suffix)
+      const podFromTerritory = requestedTerritory.replace(/_TERR\d+$/, '')
+      const { sheetId, regionType } = getSheetAndTypeForPod(podFromTerritory)
+
       // Get all tab names
-      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: getTerritorySheetId() })
+      const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: sheetId })
       const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
+
+      if (regionType === 'enterprise') {
+        // Enterprise path: find the enterprise tab, extract AE map, match by terr number
+        const terrNumMatch = requestedTerritory.match(/_TERR(\d+)$/)
+        if (!terrNumMatch) return c.json({ error: `Cannot parse territory number from ${requestedTerritory}` }, 400)
+        const requestedNum = terrNumMatch[1].padStart(2, '0')
+
+        for (const tabTitle of tabNames) {
+          const probeResp = await sheetsClient.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: `'${tabTitle}'!A1:Z25`,
+          })
+          const probeRows: string[][] = (probeResp.data.values ?? []).map((r: any[]) =>
+            r.map((cell: any) => String(cell ?? '').trim())
+          )
+          if (!isEnterpriseTab(probeRows)) continue
+
+          const fullResp = await sheetsClient.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: `'${tabTitle}'!A1:Z200`,
+          })
+          const fullRows: string[][] = (fullResp.data.values ?? []).map((r: any[]) =>
+            r.map((cell: any) => String(cell ?? '').trim())
+          )
+          const aeTerrMap = extractEnterpriseAeMap(fullRows)
+
+          for (const [aeName, terrCodes] of Object.entries(aeTerrMap)) {
+            // Match by territory number (handles both "Ter01" and "Terr01" formats)
+            const match = terrCodes.find(tc => {
+              const m = tc.match(/(\d{1,2})/)
+              return m && m[1].padStart(2, '0') === requestedNum
+            })
+            if (!match) continue
+            // Extract accounts for this AE from the enterprise sheet column (BKL-UX92)
+            const accounts = extractEnterpriseAeAccounts(fullRows, aeName)
+            console.log(`[territory-lookup] ${requestedTerritory}: ${aeName} (enterprise, ${accounts.length} accounts)`)
+            const lookupResult = { aeName, accounts, tableauTerritory: requestedTerritory }
+            territoryCacheMap.set(requestedTerritory, { data: lookupResult, cachedAt: Date.now() })
+            return c.json(lookupResult)
+          }
+          break // Only one enterprise tab expected
+        }
+
+        return c.json({ error: `Territory ${requestedTerritory} not found in enterprise sheet` }, 404)
+      }
+
+      // Commercial path (existing logic)
       const corpTabs = tabNames.filter(t => {
         const lower = t.toLowerCase()
         return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
@@ -863,7 +980,7 @@ export function registerDashboardRoutes(app: Hono): void {
         if (!requestedTerritory.startsWith(podPrefix)) continue
 
         const resp = await sheetsClient.spreadsheets.values.get({
-          spreadsheetId: getTerritorySheetId(),
+          spreadsheetId: sheetId,
           range: `'${tabTitle}'!A1:Z60`,
         })
         const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>
@@ -909,8 +1026,8 @@ export function registerDashboardRoutes(app: Hono): void {
 
           const terrNumMatch = terrCode.match(/(\d+)/)
           if (!terrNumMatch) continue
-          const terrNum = terrNumMatch[1].padStart(2, '0')
-          const tableauTerritory = `${podPrefix}_TERR${terrNum}`
+          const terrNum: string = terrNumMatch[1].padStart(2, '0')
+          const tableauTerritory: string = `${podPrefix}_TERR${terrNum}`
 
           if (tableauTerritory !== requestedTerritory) continue
 

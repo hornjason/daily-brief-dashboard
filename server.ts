@@ -6,7 +6,9 @@ import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { fetchEmail, fetchDrive, fetchCalendar, makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './src/google.ts'
-import { fetchCases } from './src/redhat.ts'
+import { fetchCases, getTokenTelemetry } from './src/redhat.ts'
+import { fetchCasesViaSolr } from './src/rh-cases-api.ts'
+import { getConfiguredTransport } from './src/case-client.ts'
 import { generateBrief, getBriefProvider, isBriefConfigured } from './src/customer.ts'
 import type { AE, Customer } from './src/types.ts'
 import { rebuildFolderMap, getWatcherState } from './src/drive-watcher.ts'
@@ -25,17 +27,17 @@ import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe
 import { initRefreshEngine, registerRefreshRoutes, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
-import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh, scheduleDomainInferenceSweep } from './src/background-scheduler.ts'
+import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
 import { initDashboardRoutes, registerDashboardRoutes } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
-import { registerBootstrapRoutes } from './src/bootstrap-orchestrator.ts'
+import { registerBootstrapRoutes, resetBootstrapStates } from './src/bootstrap-orchestrator.ts'
 // ── M04 extracted modules ───────────────────────────────────────────────────
 import { registerSheetImportRoutes } from './src/sheet-import.ts'
 import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
 import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } from './src/utils.ts'
-import { onCacheLevel, offCacheLevel, type IngestCacheEvent } from './src/ingest-events.ts'
+import { deriveConfidence, ConnectionHealthSchema } from './src/connection-health.ts'
 // ── M05 extracted modules ───────────────────────────────────────────────────
-import { initSetupRoutes, registerSetupRoutes } from './src/setup-routes.ts'
+import { initSetupRoutes, registerSetupRoutes, runStartupDriveMerge } from './src/setup-routes.ts'
 import { initCustomerRoutes, registerCustomerRoutes } from './src/customer-routes.ts'
 import { registerProductIntelRoutes } from './src/product-intel-routes.ts'
 import { initRestoreRoutes, registerRestoreRoutes } from './src/restore-routes.ts'
@@ -45,6 +47,10 @@ import { initJobPersistence } from './src/account-intelligence.ts'
 // ── BKL-UX52: Multi-pod support ───────────────────────────────────────────
 import { readPodConfig, getAeNamesForPod } from './src/pod-config.ts'
 import { computeAllAttentionScores } from './src/attention-score.ts'
+// ── Region config (for parentFolderId / Drive distribution) ───────────────
+import { normalizeSettings, getRegionById } from './src/region-config.ts'
+import { onCacheLevel, offCacheLevel, type IngestCacheEvent } from './src/ingest-events.js'
+import { onAIEvent, offAIEvent, type AIIntelEvent } from './src/ai-events.js'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -86,7 +92,19 @@ try {
   }
 } catch (e: any) { console.warn('[startup] could not read AE folder IDs:', e.message) }
 
+// Load REDHAT_OFFLINE_TOKEN from data-sources.json if not already set via .env
+// (BKL-RH-UX-01: allows token to be saved via the UI without requiring a container restart)
+try {
+  const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+  const persisted = typeof ds.redhatOfflineToken === 'string' ? ds.redhatOfflineToken : null
+  if (persisted && !process.env.REDHAT_OFFLINE_TOKEN) {
+    process.env.REDHAT_OFFLINE_TOKEN = persisted
+    console.log('[startup] REDHAT_OFFLINE_TOKEN loaded from data-sources.json')
+  }
+} catch { /* file missing at startup — skip silently */ }
+
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, 'config')
+const SETTINGS_PATH = resolve(SRV_CONFIG_DIR, 'settings.json')
 const SHEETS_TOKEN_PATH_SRV = process.env.SHEETS_TOKEN
   ?? resolve(SRV_CONFIG_DIR, '.sheets-token.json')
 const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
@@ -119,6 +137,9 @@ initCustomerRoutes({ cacheDir: CACHE_DIR, customersPath: CUSTOMERS_PATH })
 initRestoreRoutes({ cacheDir: CACHE_DIR })
 
 const app = new Hono()
+
+/** Module-level probe timestamps — records when the live reachability probe last ran per service. */
+const probeTimestamps: Record<string, string | null> = { rh: null, sf: null }
 
 // BKL-M05: Display-oriented normalizer — differs from normalizeForMatch by stripping state codes, parentheticals, and applying title case (needed for Drive folder names).
 /**
@@ -235,11 +256,38 @@ app.get('/customers', (c) => c.json(customers.filter(cu => !cu.inactive).map(cu 
 
 // GET /api/auth/redhat/status — Session health, scrape timestamps, login state
 app.get('/api/auth/redhat/status', async (c) => {
-  const status = getRhStatus(RH_SESSION_PATH)
+  // BKL-UX113: pass RH_CASES_CACHE_PATH so caseCount reads from cases.json —
+  // keeps the RH Portal tile in sync with the popout (both now read the same
+  // source of truth instead of diverging between module state and disk cache).
+  const status = getRhStatus(RH_SESSION_PATH, RH_CASES_CACHE_PATH, RH_PROFILE_DIR)
   // hasSession requires both a session file AND a live browser context —
   // the file persists across restarts but the context must be active to scrape
   const liveReachable = await liveProbe('https://access.redhat.com/support/cases', 'rh')
-  return c.json({ ...status, hasSession: status.hasSession && getScrapeContext() !== null, liveReachable })
+  probeTimestamps.rh = new Date().toISOString()
+  // BKL-INFRA-03: Surface the configured transport so the onboarding pre-flight
+  // can distinguish Bearer (no browser session required) from browser (requires
+  // a live Chromium context + valid SSO cookie).
+  const transport = getConfiguredTransport()
+  // REG-CONN-03: When transport is 'bearer', sessionExpired reflects whether the
+  // offline token is available — not whether the browser session/KEYCLOAK cookie
+  // is alive. The auth pre-flight passes via bearer token; browser session state
+  // is irrelevant and should not trigger "Session Expired" on the connections panel.
+  const sessionExpiredForTransport = transport === 'bearer'
+    ? !process.env.REDHAT_OFFLINE_TOKEN
+    : status.sessionExpired
+  const healthFields = ConnectionHealthSchema.parse({
+    transport,
+    lastProbe: probeTimestamps.rh,
+    degradedReason: null,
+    confidence: deriveConfidence(probeTimestamps.rh),
+  })
+  return c.json({
+    ...status,
+    hasSession: status.hasSession && getScrapeContext() !== null,
+    sessionExpired: sessionExpiredForTransport,
+    liveReachable,
+    ...healthFields,
+  })
 })
 
 // POST /api/auth/redhat/start — Launch headed browser for RH portal login
@@ -760,9 +808,6 @@ app.post('/api/aes', async (c) => {
       } catch (e: any) { console.warn('[wizard] cache cleanup after AE removal failed:', e.message) }
     }
 
-    // Background domain inference — fills missing domains after AE save
-    scheduleDomainInferenceSweep(5_000)
-
     return c.json({ ok: true, count: aes.length })
   } catch (e: any) {
     return c.json({ error: sanitizeErr(e) }, 500)
@@ -785,9 +830,122 @@ app.post('/api/aes/validate-folder', async (c) => {
     if (res.data.mimeType !== 'application/vnd.google-apps.folder') {
       return c.json({ error: 'URL does not point to a folder' }, 400)
     }
-    return c.json({ folderId, folderName: res.data.name ?? folderId })
+    const folderName = res.data.name ?? folderId
+
+    // ── Config subfolder + settings.json distribution (BKL-UX84) ─────────
+    // 1. Create Config/ subfolder inside the validated folder (idempotent).
+    // 2. Write current settings.json to Config/settings.json in Drive.
+    // 3. Save parentFolderId to local settings.json for the first region.
+    let configFolderId: string | undefined
+    try {
+      const listRes = await drive.files.list({
+        q: `'${folderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id,name)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      })
+      configFolderId = listRes.data.files?.[0]?.id ?? undefined
+      if (!configFolderId) {
+        const createRes = await drive.files.create({
+          requestBody: { name: 'Config', mimeType: 'application/vnd.google-apps.folder', parents: [folderId] },
+          supportsAllDrives: true,
+          fields: 'id',
+        })
+        configFolderId = createRes.data.id!
+      }
+
+      // Save parentFolderId to local settings.json FIRST (before Drive write)
+      try {
+        let rawSettings: Record<string, unknown> = {}
+        try { rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')) } catch { /* new file */ }
+        const normalized = normalizeSettings(rawSettings)
+        if (normalized.regions.length > 0) {
+          normalized.regions[0].parentFolderId = folderId
+          const out = rawSettings.regions
+            ? { ...rawSettings, regions: normalized.regions }
+            : rawSettings
+          const tmp = `${SETTINGS_PATH}.tmp`
+          writeFileSync(tmp, JSON.stringify(out, null, 2))
+          renameSync(tmp, SETTINGS_PATH)
+        }
+      } catch (e) {
+        console.warn('[validate-folder] Could not save parentFolderId to settings.json:', (e as Error).message)
+      }
+
+      // Write updated settings.json to Drive Config/ folder (re-read after local save)
+      let settingsContent: string
+      try {
+        settingsContent = readFileSync(SETTINGS_PATH, 'utf-8')
+      } catch {
+        settingsContent = '{}'
+      }
+      const existingFile = await drive.files.list({
+        q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
+        fields: 'files(id)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      })
+      if (existingFile.data.files?.length) {
+        await drive.files.update({
+          fileId: existingFile.data.files[0].id!,
+          requestBody: {},
+          media: { mimeType: 'application/json', body: settingsContent },
+        })
+      } else {
+        await drive.files.create({
+          requestBody: { name: 'settings.json', parents: [configFolderId] },
+          media: { mimeType: 'application/json', body: settingsContent },
+          supportsAllDrives: true,
+          fields: 'id',
+        })
+      }
+    } catch (e) {
+      // Config subfolder / settings distribution is best-effort; don't fail the validate
+      console.warn('[validate-folder] Config subfolder setup error:', (e as Error).message)
+      configFolderId = undefined
+    }
+
+    return c.json({ folderId, folderName, configFolderId })
   } catch (e: any) {
     return c.json({ error: sanitizeErr(e) }, 400)
+  }
+})
+
+// GET /api/settings/from-drive — fetch Config/settings.json from Drive for a region
+app.get('/api/settings/from-drive', async (c) => {
+  const regionId = c.req.query('region')
+  try {
+    let raw: Record<string, unknown>
+    try {
+      raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')) as Record<string, unknown>
+    } catch {
+      return c.json({ error: 'settings.json not found' }, 404)
+    }
+    const settings = normalizeSettings(raw)
+    const region = getRegionById(settings, regionId)
+    if (!region.parentFolderId) return c.json({ error: 'parentFolderId not set for this region' }, 404)
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+    const listRes = await drive.files.list({
+      q: `'${region.parentFolderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    })
+    const configFolderId = listRes.data.files?.[0]?.id
+    if (!configFolderId) return c.json({ error: 'Config/ folder not found in parentFolder' }, 404)
+    const fileList = await drive.files.list({
+      q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
+      fields: 'files(id)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    })
+    const fileId = fileList.data.files?.[0]?.id
+    if (!fileId) return c.json({ error: 'Config/settings.json not found in Drive' }, 404)
+    const content = await drive.files.get({ fileId, alt: 'media' } as any)
+    return c.json(content.data)
+  } catch (e: any) {
+    return c.json({ error: sanitizeErr(e) }, 500)
   }
 })
 
@@ -1160,32 +1318,59 @@ app.get('/events', (c) => {
   })
 })
 
-// GET /api/ingest/events — SSE stream for L1-L4 cache telemetry.
-// Each cache hit/miss in the SF Bookings, CCSP, and SF Pipeline ingest pipelines
-// fires an event consumed by the Admin telemetry dashboard.
 app.get('/api/ingest/events', (c) => {
   return streamSSE(c, async (stream) => {
-    let closed = false
-    await stream.writeSSE({ event: 'connected', data: '{}' })
+    await stream.writeSSE({
+      event: 'connected',
+      data: JSON.stringify({ timestamp: new Date().toISOString() }),
+    })
 
-    const handler = (event: IngestCacheEvent) => {
-      if (closed) return
-      stream.writeSSE({ event: 'cache-level', data: JSON.stringify(event) }).catch(() => { closed = true })
+    const handler = async (event: IngestCacheEvent) => {
+      try {
+        await stream.writeSSE({ event: 'cache-level', data: JSON.stringify(event) })
+      } catch {
+        // write failed — client gone; remove listener so it doesn't accumulate
+        offCacheLevel(handler)
+      }
     }
+
     onCacheLevel(handler)
 
-    // Hold the stream open until the client disconnects. streamSSE rejects this
-    // promise on close; we clean up the listener in finally.
-    try {
-      await new Promise<void>((resolve) => {
-        const interval = setInterval(() => {
-          if (closed) { clearInterval(interval); resolve() }
-        }, 1000)
-      })
-    } finally {
-      closed = true
-      offCacheLevel(handler)
+    await new Promise<void>((resolve) => {
+      c.req.raw.signal.addEventListener('abort', () => {
+        offCacheLevel(handler)
+        resolve()
+      }, { once: true })
+    })
+  })
+})
+
+// BKL-AI-FP-04: AI intelligence pipeline events SSE stream
+// Mirrors /api/ingest/events pattern — long-lived SSE stream for cache/generation lifecycle events.
+app.get('/api/ai/events', (c) => {
+  return streamSSE(c, async (stream) => {
+    await stream.writeSSE({
+      event: 'connected',
+      data: JSON.stringify({ timestamp: new Date().toISOString() }),
+    })
+
+    const handler = async (event: AIIntelEvent) => {
+      try {
+        await stream.writeSSE({ event: 'ai-intel', data: JSON.stringify(event) })
+      } catch {
+        // write failed — client gone; remove listener so it doesn't accumulate
+        offAIEvent(handler)
+      }
     }
+
+    onAIEvent(handler)
+
+    await new Promise<void>((resolve) => {
+      c.req.raw.signal.addEventListener('abort', () => {
+        offAIEvent(handler)
+        resolve()
+      }, { once: true })
+    })
   })
 })
 
@@ -1247,6 +1432,11 @@ initBackgroundScheduler({
 // ── Wave 4: Product Intel weekly refresh (Sunday 6am ET) ────────────────────
 scheduleProductIntelRefresh()
 
+// ── Drive config merge (startup, best-effort) ───────────────────────────────
+// If parentFolderId is set for any region, fetch Config/settings.json from
+// Drive and merge regions[] into local settings.json (Drive wins on regions[]).
+void runStartupDriveMerge()
+
 // ── Test-only endpoints (never active in production) ──────────────────
 if (process.env.NODE_ENV !== 'production') {
   // Snapshot current server config state for test isolation
@@ -1256,6 +1446,7 @@ if (process.env.NODE_ENV !== 'production') {
   app.post('/api/__test/snapshot', async (c) => {
     try {
       return c.json({
+        ok: true,
         aes: { aes: [...aes] },
         customers: { customers: [...customers] },
       })
@@ -1264,31 +1455,25 @@ if (process.env.NODE_ENV !== 'production') {
     }
   })
 
-  // Restore config state from snapshot (test cleanup)
-  app.post('/api/__test/restore', async (c) => {
+  // Factory reset for @destructive tests — wipes AEs and customers, preserves credentials
+  // Gated by ALLOW_RESET=true so production container never exposes this route
+  app.post('/api/__test/reset', async (c) => {
+    if (process.env.ALLOW_RESET !== 'true') {
+      return c.json({ error: 'Not available — ALLOW_RESET is not set' }, 404)
+    }
     try {
-      const snap = await c.req.json()
-      const aesData = snap.aes ?? { aes: [] }
-      const customersData = snap.customers ?? { customers: [] }
-      // BKL-TEST-03: Guard against accidental production wipe.
-      // If in-memory customers has >5 entries and restore would reduce them,
-      // require explicit { force: true } in the body.
-      const incomingCount = (customersData.customers ?? []).length
-      if (customers.length > 5 && incomingCount < customers.length && !snap.force) {
-        return c.json({
-          error: `Restore would reduce customers from ${customers.length} to ${incomingCount}. Pass { force: true } to confirm.`,
-        }, 409)
-      }
-      writeFileSync(AES_PATH + '.tmp', JSON.stringify(aesData, null, 2))
+      const emptyAes = { aes: [] }
+      const emptyCustomers = { customers: [] }
+      writeFileSync(AES_PATH + '.tmp', JSON.stringify(emptyAes, null, 2))
       renameSync(AES_PATH + '.tmp', AES_PATH)
-      writeFileSync(CUSTOMERS_PATH + '.tmp', JSON.stringify(customersData, null, 2))
+      writeFileSync(CUSTOMERS_PATH + '.tmp', JSON.stringify(emptyCustomers, null, 2))
       renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
-      // Reload in-memory state via setters (can't reassign imported bindings)
-      setAes(aesData.aes ?? [])
-      setCustomers(customersData.customers ?? [])
+      setAes([])
+      setCustomers([])
+      resetBootstrapStates()
       return c.json({ ok: true })
     } catch (e) {
-      return c.json({ error: 'restore failed' }, 500)
+      return c.json({ error: `Reset failed: ${e instanceof Error ? e.message : String(e)}` }, 500)
     }
   })
 
@@ -1489,6 +1674,43 @@ if (process.env.NODE_ENV !== 'production') {
     } catch (e: any) {
       return c.json({ error: e?.message ?? String(e) }, 500)
     }
+  })
+
+  // BKL-RH-03 Phase 1: server-side SOLR cases fetch via Bearer token (no browser).
+  // Validates an alternative to the DOM scraper; NOT wired into the production data flow.
+  // Additive-only — does not touch rh-scraper.ts / scrape-api.ts / rh-scraper-extract.ts.
+  app.post('/api/__test/solr-cases', async (c) => {
+    try {
+      const body = await c.req.json().catch(() => ({})) as {
+        accountNumbers?: unknown
+        customerName?: unknown
+        rows?: unknown
+      }
+      const accts = Array.isArray(body.accountNumbers)
+        ? body.accountNumbers.map((a) => String(a ?? ''))
+        : []
+      const rows = typeof body.rows === 'number' && body.rows > 0 ? Math.min(body.rows, 500) : 100
+      if (accts.length === 0) {
+        return c.json({ error: 'accountNumbers required (non-empty array)' }, 400)
+      }
+      const result = await fetchCasesViaSolr(accts, rows)
+      return c.json({
+        ...result,
+        customerName: typeof body.customerName === 'string' ? body.customerName : null,
+      })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // BKL-RH-03 Phase 2 (ADR-014): token telemetry for HealthProbe.
+  // Exposes auth mode, token age, lifetime, cache presence, and configured
+  // transport. Never returns the token itself. Safe to call publicly.
+  app.get('/api/status/rh-token', (c) => {
+    return c.json({
+      ...getTokenTelemetry(),
+      transport: process.env.RH_CASES_TRANSPORT ?? 'bearer',
+    })
   })
 }
 

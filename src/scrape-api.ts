@@ -5,6 +5,12 @@
 import { writeFileSync as writeFileSyncRaw, writeFileSync, mkdirSync, renameSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import type { Hono } from 'hono'
+import {
+  normalizeSettings,
+  getRegionById,
+  flattenPodSfReports,
+  flattenPodLabels,
+} from './region-config.ts'
 import { aes, customers, patchAe, patchCustomer, saveCustomers, CUSTOMERS_PATH } from './server-state.ts'
 import { createOrUpdateNotebook, isNotebookLmEnabled } from './notebooklm.ts'
 import { lastScraped } from './rh-auth.ts'
@@ -63,14 +69,14 @@ import {
   lastCcspScrape,
   lastCcspError,
 } from './ccsp-scraper.ts'
-import { getRefreshIntervals } from './settings-api.ts'
+import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { readSheetCache, readCCSPCache, readPipelineCache } from './cache-layer.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
-import { getScrapeContext, discoverAccountNumberByName } from './rh-scraper.ts'
+import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
 
 // ── Supportable kill switch ───────────────────────────────────────────────────
 // Set to true to block all Supportable scrape and discover calls.
@@ -152,6 +158,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker — user is explicitly requesting a run
   app.post('/api/scrape/rh', async (c) => {
+    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
     if (_rhScrapeRunning) return c.json({ scraper: 'rh', status: 'busy', error: 'RH scrape already in progress' }, 409)
     resetCircuitBreaker('rh')
     markRunning('rh-cases')  // BKL-ADM01: set state synchronously before the task runs
@@ -218,6 +225,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // POST /api/scrape/rh/test-discover — run name discovery for specific customers (test only, no writes)
   // Body: { customers: string[] } — list of SF alias names to search
   app.post('/api/scrape/rh/test-discover', async (c) => {
+    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
     const body = await c.req.json<{ customers?: string[] }>().catch(() => ({}))
     const names: string[] = Array.isArray(body.customers) ? body.customers : []
     if (names.length === 0) return c.json({ error: 'customers array required' }, 400)
@@ -387,7 +395,7 @@ export function registerScrapeRoutes(app: Hono): void {
                   } catch {}
                 }
               }),
-                wallTimeout(10 * 60 * 1000, 'Supportable discover (all AEs)'),
+                wallTimeout(getAutomationConfig().defaultScrapeTimeoutMs, 'Supportable discover (all AEs)'),
               ])
               await writeSupportableSheet(results, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
             } catch (e: any) { console.warn(`[scrape:discover:all] ${ae.name} failed:`, sanitizeErr(e)) }
@@ -446,7 +454,7 @@ export function registerScrapeRoutes(app: Hono): void {
             console.log(`[scrape:discover] ${done}/${total} ${name}: ${accountNumbers.length} accounts found`)
           },
           ),
-          wallTimeout(10 * 60 * 1000, 'Supportable discover'),
+          wallTimeout(getAutomationConfig().defaultScrapeTimeoutMs, 'Supportable discover'),
         ])
 
         // Write fresh sheet with all discovered+scraped results
@@ -479,6 +487,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
   app.post('/api/scrape/ccsp', async (c) => {
+    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
     // Stale-mutex auto-release: if the flag has been stuck for >15 min (container restart, crash),
     // let the request through — runCcspScrape() will reset the mutex internally.
     const ccspStale = ccspScrapeRunning && ccspScrapeStartedAt &&
@@ -761,6 +770,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // but now respect the global queue so they don't collide with other triggers.
 
   app.post('/api/scrape/all', async (c) => {
+    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
     enqueueScraperTask({
       name: 'all-scrapers',
       run: async () => {
@@ -1137,19 +1147,149 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // ── GET /api/sf-bookings/pod-sheets — list available POD sheets from Drive folder ──
+  // BKL-UX75: Accepts optional ?folderId= query param so the UI can fetch sheets
+  // immediately after the user validates a folder, before settings.json is written.
+  // Falls back to settings.json → podBookingsFolderId if no param is provided.
   app.get('/api/sf-bookings/pod-sheets', async (c) => {
-    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'settings.json')
-    let podBookingsFolderId: string | null = null
-    try {
-      const raw = readFileSync(SETTINGS_PATH, 'utf-8')
-      podBookingsFolderId = JSON.parse(raw).podBookingsFolderId ?? null
-    } catch { /* no settings */ }
+    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
+    let podBookingsFolderId: string | null = c.req.query('folderId') ?? null
+    const regionId = c.req.query('region') ?? undefined
+    if (!podBookingsFolderId) {
+      try {
+        const raw = readFileSync(SETTINGS_PATH, 'utf-8')
+        const settings = normalizeSettings(JSON.parse(raw))
+        const region = getRegionById(settings, regionId)
+        podBookingsFolderId = region.podBookingsFolderId || null
+      } catch { /* no settings */ }
+    }
     if (!podBookingsFolderId) return c.json({ sheets: [] })
     try {
       const sheets = await listPodBookingSheets(podBookingsFolderId)
       return c.json({ sheets: sheets.map(s => ({ name: s.name, displayName: s.displayName, sheetId: s.sheetId })) })
     } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 400)
+    }
+  })
+
+  // ── POST /api/sf-bookings/pod-folder — persist podBookingsFolderId to settings.json ──
+  // BKL-UX75: Called by Setup UI after the user validates a Drive folder, so subsequent
+  // loads (and sf-bookings-sync) find the folder without manual settings.json editing.
+  app.post('/api/sf-bookings/pod-folder', async (c) => {
+    let body: { folderId?: string; podKey?: string }
+    try { body = await c.req.json() } catch { body = {} }
+    const folderId = (body.folderId ?? '').trim()
+    const podKey = (body.podKey ?? '').trim()
+    if (!folderId) return c.json({ error: 'folderId required' }, 400)
+    const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config')
+    const SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
+    try {
+      mkdirSync(CONFIG_DIR, { recursive: true })
+      let settings: Record<string, unknown> = {}
+      try { settings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')) } catch { /* new file */ }
+      // If podKey provided, write to the matching region (region-aware, BKL-UX93-fix).
+      // Fall back to flat root for backwards compatibility when no podKey is given.
+      if (podKey) {
+        const normalized = normalizeSettings(settings)
+        const region = normalized.regions.find((r: any) => podKey in (r.pods ?? {}))
+        if (region) {
+          // Mutate the matching region in the original settings object
+          const regions = (settings.regions ?? []) as any[]
+          const idx = regions.findIndex((r: any) => podKey in (r.pods ?? {}))
+          if (idx >= 0) regions[idx].podBookingsFolderId = folderId
+        }
+      } else {
+        settings.podBookingsFolderId = folderId
+      }
+      const tmp = `${SETTINGS_PATH}.tmp`
+      writeFileSync(tmp, JSON.stringify(settings, null, 2))
+      renameSync(tmp, SETTINGS_PATH)
+
+      // After local save succeeds, sync updated settings to Drive Config/settings.json (best-effort)
+      try {
+        const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } = await import('./google.ts')
+        const { google } = await import('googleapis')
+        const updatedRaw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+        const updatedSettings = normalizeSettings(updatedRaw)
+        const parentFolderId = updatedSettings.regions[0]?.parentFolderId
+        if (parentFolderId) {
+          const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+          const drive = google.drive({ version: 'v3', auth })
+          const listRes = await drive.files.list({
+            q: `'${parentFolderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+            fields: 'files(id)',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          })
+          const configFolderId = listRes.data.files?.[0]?.id
+          if (configFolderId) {
+            const existingFile = await drive.files.list({
+              q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
+              fields: 'files(id)',
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            })
+            const content = readFileSync(SETTINGS_PATH, 'utf-8')
+            if (existingFile.data.files?.length) {
+              await drive.files.update({
+                fileId: existingFile.data.files[0].id!,
+                requestBody: {},
+                media: { mimeType: 'application/json', body: content },
+              })
+            } else {
+              await drive.files.create({
+                requestBody: { name: 'settings.json', parents: [configFolderId] },
+                media: { mimeType: 'application/json', body: content },
+                supportsAllDrives: true,
+                fields: 'id',
+              })
+            }
+          }
+        }
+      } catch (driveErr: any) {
+        console.warn('[sf-bookings/pod-folder] Drive settings sync error (non-fatal):', driveErr.message)
+      }
+
+      return c.json({ ok: true, podBookingsFolderId: folderId })
+    } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/settings/pod-config — POD-scoped config for the Setup UI ────
+  // BKL-ARCH-01: Region-aware. Accepts ?region=<id>, defaults to first region
+  // for backward compat. Returns flat podSfReports/podLabels maps for the
+  // requested region so the frontend can keep its existing shape.
+  app.get('/api/settings/pod-config', (c) => {
+    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
+    const regionId = c.req.query('region') ?? undefined
+    let podBookingsFolderId: string | null = null
+    let podSfReports: Record<string, string> = {}
+    let podLabels: Record<string, string> = {}
+    let territorySheetUrl: string | null = null
+    try {
+      const raw = readFileSync(SETTINGS_PATH, 'utf-8')
+      const settings = normalizeSettings(JSON.parse(raw))
+      const region = getRegionById(settings, regionId)
+      podBookingsFolderId = region.podBookingsFolderId || null
+      territorySheetUrl = region.territorySheetUrl || null
+      podSfReports = flattenPodSfReports(region)
+      podLabels = flattenPodLabels(region)
+    } catch { /* no settings file yet — return empty defaults */ }
+    return c.json({ podBookingsFolderId, podSfReports, podLabels, territorySheetUrl })
+  })
+
+  // ── GET /api/settings/regions — list available regions for the UI selector ──
+  // BKL-ARCH-01. Returns a lightweight list (id, label, type) so the frontend
+  // can render a region dropdown without pulling per-region pod config.
+  app.get('/api/settings/regions', (c) => {
+    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
+    try {
+      const raw = readFileSync(SETTINGS_PATH, 'utf-8')
+      const settings = normalizeSettings(JSON.parse(raw))
+      const regions = settings.regions.map(r => ({ id: r.id, label: r.label, type: r.type }))
+      return c.json({ regions })
+    } catch {
+      return c.json({ regions: [] })
     }
   })
 
@@ -1160,17 +1300,19 @@ export function registerScrapeRoutes(app: Hono): void {
   // Body: { aeNames?: string[] }
   //   aeNames  — optional list of AE names to sync (defaults to all AEs)
   app.post('/api/scrape/sf-bookings-sync', async (c) => {
-    let body: { aeNames?: string[] }
+    let body: { aeNames?: string[]; region?: string }
     try { body = await c.req.json() } catch { body = {} }
 
-    const { aeNames } = body
+    const { aeNames, region: regionId } = body
 
-    // Load POD bookings folder ID from settings.json
-    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config'), 'settings.json')
+    // BKL-ARCH-01: Region-aware folder lookup. Defaults to first region when no id provided.
+    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
     let podBookingsFolderId: string | null = null
     try {
       const raw = readFileSync(SETTINGS_PATH, 'utf-8')
-      podBookingsFolderId = JSON.parse(raw).podBookingsFolderId ?? null
+      const settings = normalizeSettings(JSON.parse(raw))
+      const region = getRegionById(settings, regionId)
+      podBookingsFolderId = region.podBookingsFolderId || null
     } catch { /* no settings file */ }
 
     if (!podBookingsFolderId) {

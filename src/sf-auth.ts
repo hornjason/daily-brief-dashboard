@@ -16,7 +16,7 @@ import { chromium } from '@playwright/test'
 import type { BrowserContext } from '@playwright/test'
 import { writeFileSync, existsSync } from 'node:fs'
 import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
-import { closeSfContext, adoptSfContext } from './sf-scraper.ts'
+import { closeSfContext, adoptSfContext, getSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
@@ -41,8 +41,11 @@ export interface SfAuthStatus {
 }
 
 export function getSfAuthStatus(sessionPath: string): SfAuthStatus {
+  // REG-CONN-01: hasSession requires both a session file AND a live SF browser
+  // context — mirrors how /api/auth/redhat/status handles RH in server.ts.
+  // A stale session file with no live context should report hasSession: false.
   return {
-    hasSession: existsSync(sessionPath),
+    hasSession: existsSync(sessionPath) && getSfContext() !== null,
     sessionExpired: sfSessionExpired,
     loginInProgress,
     loginTimedOut,
@@ -103,7 +106,9 @@ export async function startSfLoginBrowser(
   const sfPage = await context.newPage()
 
   // Navigate to SF login
-  sfPage.goto(SF_LOGIN_URL).catch(() => {})
+  sfPage.goto(SF_LOGIN_URL).catch((e: any) => {
+    console.warn('[sf-auth] navigation to SF login failed:', e?.message ?? e)
+  })
   console.log('[sf-auth] headed browser opened — navigating to SF login')
 
   ;(async () => {
@@ -115,6 +120,14 @@ export async function startSfLoginBrowser(
 
       try {
         const url = sfPage.url()
+
+        // Retry navigation if it failed on first attempt (profile lock timing window)
+        if (url === 'about:blank') {
+          sfPage.goto(SF_LOGIN_URL).catch((e: any) => {
+            console.warn('[sf-auth] navigation retry failed:', e?.message ?? e)
+          })
+          continue
+        }
 
         // Auto-click SSO button while on the login page
         if (url.includes('salesforce.com') && !url.includes('lightning.force.com')) {

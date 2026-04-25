@@ -37,7 +37,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? resolve(process.cwd(), 'data/cache')
-const RAW_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours
+const RAW_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours — BKL-INGEST-01: aligned with 4-level cache hierarchy L1 TTL
 
 // ── POD sheet discovery from shared Drive folder ──────────────────────────────
 
@@ -49,13 +49,46 @@ const RAW_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours
  */
 export async function listPodBookingSheets(folderId: string): Promise<Array<{ name: string; displayName: string; sheetId: string }>> {
   const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
-  const res = await drive.files.list({
+
+  // 1. Search the given folder for spreadsheets (top-level)
+  const topRes = await drive.files.list({
     q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
     fields: 'files(id, name)',
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
   })
-  const files = (res.data.files ?? []).filter(f => f.id && f.name)
+  let files = (topRes.data.files ?? []).filter(f => f.id && f.name)
+
+  // 2. If no sheets at top level, descend one level into subfolders and aggregate.
+  //    Handles the case where the user points at the parent AE folder and the POD
+  //    subscription sheets (NW/SW) live one folder deeper.
+  if (files.length === 0) {
+    const subRes = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    })
+    const subfolders = (subRes.data.files ?? []).filter(f => f.id).slice(0, 10)
+    const seen = new Set<string>()
+    const aggregated: Array<{ id: string; name: string }> = []
+    for (const sf of subfolders) {
+      const inner = await drive.files.list({
+        q: `'${sf.id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+        fields: 'files(id, name)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      })
+      for (const f of inner.data.files ?? []) {
+        if (f.id && f.name && !seen.has(f.id)) {
+          seen.add(f.id)
+          aggregated.push({ id: f.id, name: f.name })
+        }
+      }
+    }
+    files = aggregated
+  }
+
   return files.map(f => {
     const raw = f.name!
     const displayName = raw
@@ -81,10 +114,17 @@ export function matchPodSheet(
   for (const territory of territories) {
     // Split on non-alpha chars including underscore (territory codes use _ as separator)
     const words = territory.toLowerCase().split(/[\W_]+/).filter(w => w.length > 3)
+    // Generate adjacent-pair compounds to handle fused sheet names like "NorthCentral"
+    const segments = territory.replace(/_TERR\d+$/i, '').toLowerCase().split('_').filter(s => s.length > 2)
+    const compounds = segments.slice(0, -1).map((_, i) => segments[i] + segments[i + 1])
+
     const match = sheets.find(s => {
       const sLower = s.name.toLowerCase()
-      // Use word-boundary matching to prevent "west" from matching "southwest"
-      return words.some(w => new RegExp(`\\b${w}\\b`).test(sLower))
+      // Word-boundary match for individual tokens (handles Northwest, Southwest, etc.)
+      if (words.some(w => new RegExp(`\\b${w}\\b`).test(sLower))) return true
+      // Compound substring match for fused names (handles NorthCentral, SouthCentral)
+      if (compounds.some(c => sLower.includes(c))) return true
+      return false
     })
     if (match) return match.sheetId
   }

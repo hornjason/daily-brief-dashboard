@@ -7,8 +7,8 @@
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
-import { writeFileSync, existsSync, unlinkSync } from 'node:fs'
-import { join } from 'node:path'
+import { writeFileSync, existsSync, unlinkSync, readFileSync } from 'node:fs'
+import { join, resolve, dirname } from 'node:path'
 import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
 import { adoptSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
@@ -20,6 +20,8 @@ import { recordSessionEstablished } from './settings-api.ts'
 const RH_PORTAL_URL = 'https://access.redhat.com/support/cases/#/case/list'
 const LOGIN_POLL_INTERVAL_MS = 2_000
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+// Fallback TTL used only when no KEYCLOAK_SESSION cookie expiry can be read.
+const RH_SESSION_TTL_FALLBACK_MS = 12 * 60 * 60 * 1000 // 12 hours
 
 // ── Module-level state ────────────────────────────────────────────────────────
 
@@ -34,6 +36,7 @@ export let lastCaseCount = 0
 export interface RhStatus {
   hasSession: boolean
   sessionExpired: boolean
+  sessionExpiresAt: string | null  // ISO timestamp from Keycloak cookie, null if unreadable
   lastScraped: string | null
   caseCount: number
   loginInProgress: boolean
@@ -54,18 +57,99 @@ async function cleanupBrowser(): Promise<void> {
   activePage = null
   loginInProgress = false
   if (ctx) {
-    try { await ctx.close() } catch { /* already closed */ }
+    try {
+      // Close all open pages before closing the context to prevent orphaned blank tabs in VNC
+      for (const p of ctx.pages()) {
+        try { await p.close() } catch { /* already closed */ }
+      }
+      await ctx.close()
+    } catch { /* already closed */ }
   }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function getRhStatus(sessionPath: string): RhStatus {
+/**
+ * Read the real KEYCLOAK_SESSION cookie expiry from Playwright's session-state.json.
+ * Returns the earliest expiry timestamp (ms) across sso.redhat.com and auth.redhat.com,
+ * or null if the file is missing or contains no Keycloak cookies with explicit expiry.
+ * Falls back to the loggedInAt marker + RH_SESSION_TTL_FALLBACK_MS when null.
+ */
+function readKeycloakExpiry(profileDir: string): number | null {
+  try {
+    const statePath = resolve(profileDir, 'session-state.json')
+    if (!existsSync(statePath)) return null
+    const state = JSON.parse(readFileSync(statePath, 'utf-8')) as { cookies?: Array<{ name: string; domain: string; expires: number }> }
+    const cookies = state.cookies ?? []
+    const expiries = cookies
+      .filter(c => c.name === 'KEYCLOAK_SESSION' && c.expires > 0)
+      .map(c => c.expires * 1000) // Playwright stores seconds, convert to ms
+    return expiries.length ? Math.min(...expiries) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Return true if the RH Portal session has expired.
+ * Prefers the real KEYCLOAK_SESSION cookie expiry from session-state.json.
+ * Falls back to loggedInAt marker + 12h TTL if cookie data is unavailable.
+ */
+function isSessionExpired(sessionPath: string, profileDir: string): boolean {
+  try {
+    const keycloakExpiry = readKeycloakExpiry(profileDir)
+    if (keycloakExpiry !== null) return Date.now() > keycloakExpiry
+
+    // Fallback: use loggedInAt marker + fixed TTL
+    const raw = readFileSync(sessionPath, 'utf-8')
+    const parsed = JSON.parse(raw) as { loggedInAt?: string }
+    if (!parsed.loggedInAt) return false
+    const ts = Date.parse(parsed.loggedInAt)
+    return !Number.isNaN(ts) && Date.now() - ts > RH_SESSION_TTL_FALLBACK_MS
+  } catch {
+    return false
+  }
+}
+
+/**
+ * BKL-UX113: Read the open-case count from the cases.json cache so the tile
+ * (fed by getRhStatus) stays in sync with the popout (which reads cases.json
+ * directly). Falls back to lastCaseCount when the path is not supplied or the
+ * cache cannot be read. Filter matches fetchCases() in src/redhat.ts — excludes
+ * closed/resolved so both surfaces count the same "open" set.
+ */
+function readCaseCountFromCache(casesPath: string): number | null {
+  try {
+    const raw = JSON.parse(readFileSync(casesPath, 'utf-8')) as { cases?: Array<{ status?: string }> }
+    const cases = Array.isArray(raw.cases) ? raw.cases : []
+    return cases.filter((ca) => {
+      const s = (ca.status ?? '').toLowerCase()
+      return !s.includes('closed') && !s.includes('resolved')
+    }).length
+  } catch {
+    return null
+  }
+}
+
+export function getRhStatus(sessionPath: string, casesPath?: string, profileDir?: string): RhStatus {
+  const hasSession = existsSync(sessionPath)
+  const resolvedProfileDir = profileDir ?? dirname(sessionPath)
+  // Session is expired if a scrape failed (rhSessionExpired) OR the real
+  // KEYCLOAK_SESSION cookie has expired (prefers cookie expiry over fixed TTL).
+  const sessionExpired = rhSessionExpired || (hasSession && isSessionExpired(sessionPath, resolvedProfileDir))
+  // Surface raw Keycloak cookie expiry as ISO string for health-check consumers.
+  const expiryMs = readKeycloakExpiry(resolvedProfileDir)
+  const sessionExpiresAt = expiryMs ? new Date(expiryMs).toISOString() : null
+  // BKL-UX113: Prefer the disk cache count so the RH tile never diverges from
+  // the popout. lastCaseCount remains the fallback — module state resets to 0
+  // on server restart before any scrape has run, but cases.json persists.
+  const diskCount = casesPath ? readCaseCountFromCache(casesPath) : null
   return {
-    hasSession: existsSync(sessionPath),
-    sessionExpired: rhSessionExpired,
+    hasSession,
+    sessionExpired,
+    sessionExpiresAt,
     lastScraped,
-    caseCount: lastCaseCount,
+    caseCount: diskCount ?? lastCaseCount,
     loginInProgress,
     loginTimedOut,
   }
@@ -84,15 +168,19 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
 
   await cleanupBrowser()
 
+  // BKL-UX69: Set loginInProgress BEFORE releasing the profile lock so the
+  // rh-scraper heartbeat observes it and skips opening a new context during
+  // the SingletonLock window. The if-guard at the top of startLoginBrowser
+  // already handles re-entry, so moving this up is safe.
+  loginInProgress = true
+  loginTimedOut = false
+
   // Release profile dir lock so the headed login browser can use it
   await closeScrapeContext()
   // Null out CCSP/Supportable context refs so "Run Now" during auth gets a clear error
   // instead of crashing with "Target page, context or browser has been closed"
   closeSupportableContext()
   closeCcspContext()
-
-  loginInProgress = true
-  loginTimedOut = false
 
   // Remove stale SingletonLock before launching — prevents "profile locked by another process"
   // error if a previous Chromium was killed uncleanly or the scrape context was force-closed.
@@ -115,8 +203,13 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
   activeContext = context
   activePage = page
 
-  // Navigate to portal (non-blocking — login happens async)
-  page.goto(RH_PORTAL_URL).catch(() => {})
+  // Navigate to portal (non-blocking — login happens async).
+  // BKL-UX68: log navigation failures instead of silently swallowing them.
+  // The background polling loop still handles timeout via loginTimedOut, but
+  // at least the underlying error (profile lock, network, timeout) now surfaces in logs.
+  page.goto(RH_PORTAL_URL).catch((e: any) => {
+    console.warn('[rh-auth] navigation to portal failed:', e?.message ?? e)
+  })
 
   // Background polling loop — auto-saves marker on login detection
   ;(async () => {
@@ -152,6 +245,12 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
           adoptSfContext(ctx, profileDir)
           adoptSupportableContext(ctx)
           adoptCcspContext(ctx)
+
+          // BKL-UX94: Open a blank tab so VNC clears after login. The original livePage
+          // stays alive in the background — it holds sessionStorage (PKCE/SSO tokens)
+          // needed for transparent session renewal. Non-blocking, best-effort.
+          ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})
+
           recordSessionEstablished('rh-portal')
           recordSessionEstablished('salesforce')
           recordSessionEstablished('tableau')

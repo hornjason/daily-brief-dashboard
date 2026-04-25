@@ -6,5 +6,5 @@ export const BASE_CHROMIUM_ARGS = [
   '--disable-setuid-sandbox',
   '--disable-dev-shm-usage',
   '--renderer-process-limit=2',
-  '--disable-gpu-compositing',
+  '--no-restore-last-session', // BKL-UX74: prevent stale tabs (e.g. Supportable) from restoring on launch
 ]

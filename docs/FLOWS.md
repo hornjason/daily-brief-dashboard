@@ -1,7 +1,4 @@
-<!-- Moved from project root 2026-04-20. See docs/README.md for doc organization. -->
----
-Last validated: 2026-04-20
----
+*Last validated: 2026-04-11 | Owner: DA | Trigger: New flows added, existing flows change*
 
 # DailyBriefDashboard — End-to-End Flow Reference
 

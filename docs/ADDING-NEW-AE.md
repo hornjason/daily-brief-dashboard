@@ -1,8 +1,5 @@
----
-Last validated: 2026-04-24
----
-
 # Adding a New AE — Runbook
+*Last validated: 2026-04-15 | Owner: DA | Trigger: AE onboarding flow changes, new setup steps, or bootstrap sequence changes*
 
 Complete flow for onboarding a new Account Executive into the DailyBriefDashboard.
 
@@ -11,10 +8,21 @@ Complete flow for onboarding a new Account Executive into the DailyBriefDashboar
 ## Prerequisites
 
 - Google OAuth token with bootstrap scopes (`BOOTSTRAP_SCOPES` — includes Drive write)
-- Territory sheet populated with the AE's customer list
+- Territory sheet populated with the AE's customer list. **Enterprise regions (e.g. Central Enterprise – TOLA)** use a separate Google Spreadsheet with a different column-oriented layout; this is auto-detected by `isEnterpriseTab()`. The territory sheet URL must be set in `settings.json → regions[].territorySheetUrl` for the region.
 - SF Bookings sheet for the AE's POD uploaded to the shared Drive folder (`podBookingsFolderId`)
+- **Parent Drive Folder validated** — paste the AE parent folder URL (e.g. CommandCenter) in Setup → Full POD → Parent Drive Folder and click Validate. This creates `Config/settings.json` in Drive and saves `parentFolderId` to settings.json. Required before Full POD Bootstrap is enabled. **Write order**: `parentFolderId` is saved locally first, then the updated settings are written to Drive — so Drive always contains the correct values. When `podBookingsFolderId` is subsequently configured, `sf-bookings/pod-folder` also triggers a Drive settings sync.
 - RH Portal session active (for case scraping and account discovery)
 - Salesforce session active (for pipeline sync)
+
+**Drive folder structure after first bootstrap:**
+```
+[ParentFolder e.g. CommandCenter]/
+├── Config/
+│   └── settings.json      ← region/pod config distributed to new users
+├── appBackup              ← Google Sheet; runtime data (aes, customers, data-sources)
+└── [AE Name]/
+    └── [Customer Name]/   ← per-customer Drive folders
+```
 
 ---
 
@@ -150,5 +158,3 @@ After bootstrap completes, verify:
 - Then Setup page "CCSP Sync Now" will work
 - See BKL-SCRAPER-02 and BKL-SCRAPER-03 for known issues
 
-### Note on Supportable 360
-Supportable 360 is **disabled** and not used anywhere in the current system. Account discovery uses the RH Portal sidebar autocomplete. Subscription data comes from SF Bookings sheets. Do not attempt to enable or call Supportable endpoints.

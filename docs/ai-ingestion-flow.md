@@ -1,274 +1,427 @@
 ---
+Status: Operational
 Last validated: 2026-04-19
+Trigger: When AI intelligence cache hierarchy changes or new flows added
 ---
 
 # AI Intelligence Ingestion Flow
 
-This document describes the end-to-end flow for AI-driven brief generation, the
-4-tier cache hierarchy that gates Gemini calls, the fingerprint design used to
-invalidate the brief cache on signal changes, and the corpus delta mode that
-eliminates redundant Gemini work when most documents are unchanged.
+This document covers how the DailyBriefDashboard generates, caches, and re-generates AI-powered customer briefs. It mirrors the L1–L4 cache hierarchy used by the data ingestion system, extended with fingerprint-based invalidation, corpus delta mode, and real-time SSE observability.
 
-Companion docs:
-
-- `docs/DATA-INGESTION-ARCHITECTURE.md` — upstream data ingestion (RH Portal,
-  Tableau CCSP, Salesforce Bookings, Gmail, Calendar, Drive)
-- `docs/GEMINI-AUDIT.md` — per-call-site cost audit
-- `docs/adr/ADR-013.md` — formal AI cache hierarchy decision
+All features described here are shipped as of 2026-04-19 (BKL-AI-FP-01 through BKL-AI-FP-09 complete).
 
 ---
 
-## 1. Implemented Flow
+## How Brief Generation Works (Plain English)
 
-The brief pipeline is a series of cache lookups. Each tier has a different
-invalidation strategy: TTL for time-bounded freshness, content hashes for
-deterministic invalidation, and composite fingerprints for cross-signal
-invalidation.
+When a user opens a customer's detail page and requests a brief, the system:
+
+1. **Assembles inputs in parallel** — fetches the customer's recent emails (Gmail, filtered by customer name/domain), upcoming meetings (Google Calendar, filtered by customer name in attendees/title), CCSP data, pipeline stage, support cases, and Drive documents
+2. **Computes a fingerprint** over those inputs — a SHA256 hash of sorted email/meeting tuples, CCSP tier, pipeline stage, open case counts (last 90 days), and user preferences
+3. **Checks the L1 brief cache** — if the fingerprint matches the cached brief's stored fingerprint, the cached brief is returned immediately (zero Gemini cost)
+4. **If inputs changed**, checks whether corpus delta mode applies (see below). Either path writes the new brief with the updated fingerprint
+5. **Full-run path**: passes everything to the three-step Gemini pipeline (extract signals → rank → synthesize)
+6. **Delta path**: skips Steps 1+2, sends only changed/new docs plus the previous brief to Step 3 directly
+
+The brief is **lazy/on-demand** — generated when requested. The background scheduler pre-generates briefs on a schedule but uses the same fingerprint gate, so it only calls Gemini when something actually changed.
+
+### What drives brief regeneration
+
+| Signal | How it's detected | Fingerprint impact |
+|--------|------------------|--------------------|
+| New customer email arrived | Gmail cache expires (2h TTL) → re-fetch with customer query → new email tuples | Email tuple hash changes → miss |
+| New customer meeting added | Calendar cache expires (2h TTL) → re-fetch filtered by customer name → new meeting tuples | Meeting tuple hash changes → miss |
+| Drive doc edited | Doc content cached by fileId+modifiedTime → edit changes modTime → old cache entry invalid | New doc content flows into brief inputs |
+| CCSP tier changes | CCSP data hash-guarded at ingestion → new hash written → fingerprint reads new tier | CCSP tier field changes → miss |
+| Pipeline stage changes | Pipeline data hash-guarded at ingestion → new stage written | Pipeline stage field changes → miss |
+| Support case opened/closed | Cases.json updated by RH Portal scraper → case counts shift | Open case counts (90d) change → miss |
+| **No change in any signal** | Fingerprint matches cached brief | Cached brief returned — no Gemini call |
+
+**The 2h email/calendar TTL is a polling window, not a staleness signal.** It means: "check Gmail/Calendar for this customer at most every 2 hours." If new emails or meetings arrived since the last poll, the fingerprint changes and the brief regenerates. If nothing new arrived, the fingerprint is identical and the cached brief is returned.
+
+**Emails and meetings are customer-specific.** `fetchCustomerEmails` queries Gmail with a customer name/domain filter. `fetchCustomerMeetings` filters Calendar events where the customer name appears in attendees or event title. The brief does not process all emails or all calendar events — only those relevant to the specific customer.
+
+---
+
+## Drive Document Scanning
+
+### How the customer folder is found
+
+The system locates the customer's Drive folder using three priority levels:
+
+1. **Per-customer `driveFolderId`** (stored directly in customer config) — fastest, no search needed; set this when a customer has a dedicated folder not under the AE hierarchy
+2. **AE's `driveFolderId` → fuzzy-match customer subfolder** — the most common path. The system lists subfolders under the AE's Drive folder and fuzzy-matches by customer name and any configured aliases. Also searches one level deeper (e.g., `AE Folder → Accounts → Customer`) to handle nested structures
+3. **Global `AE_PARENT_FOLDER_ID` fallback** — legacy path for older account structures
+
+### What gets scanned
+
+Once the customer folder is found, the system does a **BFS (breadth-first scan)** up to `DRIVE_SUBFOLDER_DEPTH=5` levels deep, collecting all files modified in the last 2 years. Folder shortcuts are followed (targets treated as subfolders). Files are deduplicated by Drive fileId.
+
+**Adding a new file to the folder triggers re-generation.** New files have a new fileId — no cache entry exists — so their content is fetched fresh on the next brief request. There is no separate "added vs edited" path. Both result in new content flowing into the brief.
+
+### Supported file formats
+
+| Format | Extraction method | Notes |
+|--------|------------------|-------|
+| **Google Docs** | `drive.files.export(text/plain)` — Drive native | Full text, all formatting stripped |
+| **Google Slides** (Presentations) | `drive.files.export(text/plain)` — Drive native | Slide text content extracted |
+| **Google Sheets** | `drive.files.export(text/plain)` — Drive native | Cell values as plain text |
+| **PDF** | Step 1: local extraction via `unpdf` (zero token cost). Step 2: if extraction fails/empty → Gemini multimodal fallback (raw PDF bytes sent as `inlineData`) | PDFs over 15MB are skipped |
+| **PowerPoint (.pptx) / Office files** | **Not supported** — skipped silently | Upload as Google Slides or export as PDF first |
+
+All extracted text is stored in the **L3 doc content cache** keyed by `fileId+modifiedTime`, so extraction runs once per file version — not on every brief request.
+
+---
+
+## What Each Cache Tier Contains
+
+### L1 — Brief cache
+The compiled brief text, written after every successful Gemini generation. Keyed by `{slug}-{YYYY-MM-DD}.json`. Stores the brief text, the `inputFingerprint` (SHA256 hash of all inputs at generation time), and the `docCorpusSnapshot` (fileId → modifiedTime map for corpus delta detection). A 7-day wall-clock TTL acts as a safety net — after 7 days the brief regenerates unconditionally even if inputs appear unchanged.
+
+### L2 — Email cache / Meeting cache
+Per-customer cache of recent Gmail messages and Google Calendar events. Each is a flat JSON file keyed by customer slug. Expires after 2 hours, at which point the next brief request re-fetches from the live API using a customer-specific query. This TTL exists because polling Gmail/Calendar on every brief request would hit API quota limits and add significant latency.
+
+### L3 — Doc content cache
+Full extracted text of a Google Drive file attached to the customer. Keyed by `{fileId}-{modifiedTime}` — this means the cache **automatically invalidates when the file is edited in Drive**, because the modifiedTime changes. No TTL needed: the key itself is content-addressed. Used for Google Docs (exported as plain text) and PDFs (multimodal extraction).
+
+### L3 — Doc classification cache
+Gemini's label for a Drive document's type — e.g., QBR, Account Plan, EBC Notes, Technical Discovery. Same `{fileId}-{modifiedTime}` key as the doc content cache. When a doc is edited, both the content cache and the classification cache for that file are automatically invalidated. The classification determines how the brief pipeline weights and presents the document.
+
+### L4 — Industry analysis cache
+A shared industry landscape text generated by Gemini grounded search. Keyed by `{industry}-{region}` — the same industry analysis is reused for all customers in the same industry and region, avoiding redundant Gemini calls. Expires after 30 days. Industry landscape changes slowly; monthly refresh is sufficient.
+
+### L4 — Account intelligence cache
+Per-customer intelligence blob containing a company profile (specific to this customer) and industry analysis context. Stored at `data/cache/product-intel/{slug}-customer-intel/{slug}.json`. Protected by a `contentHash` computed from: Drive slides text, customer docs hash, subscriptions, support cases, account intel company profile, and product features hash. When the underlying data changes, the hash mismatches and Gemini regenerates. A 14-day wall-clock TTL acts as a safety net for cases where hash inputs drift without triggering a hash change.
+
+**Account intel vs. industry analysis:** Account intel is per-customer (company profile + context). Industry analysis is shared across all customers in the same industry. Both feed into the brief's XML context bundle.
+
+---
+
+## Brief Generation Flow
+
+This is the complete current flow. All six stages run on every brief request.
 
 ```mermaid
 flowchart TD
-    Start([Brief request<br/>GET /customer/:slug/brief]) --> FP{L1 brief<br/>fingerprint cache?<br/>7d TTL}
+    REQ["GET /api/customer/:name/brief"] --> FETCH
 
-    FP -- hit --> Return([Return cached brief])
-    FP -- miss --> Emails
+    subgraph FETCH ["① Assemble inputs — parallel"]
+        direction LR
+        E{"Email cache\n< 2h TTL?"}
+        E -->|"✅ hit"| EC["emails.json"]
+        E -->|"❌ miss"| GMAIL["Gmail API → write cache"]
 
-    Emails{L2 email cache?<br/>2h TTL}
-    Emails -- hit --> EmailsOK
-    Emails -- miss --> GmailAPI[Gmail API<br/>users.messages.list]
-    GmailAPI --> EmailsOK([emails ready])
+        M{"Meeting cache\n< 2h TTL?"}
+        M -->|"✅ hit"| MC["meetings.json"]
+        M -->|"❌ miss"| GCAL["Calendar API → write cache"]
 
-    EmailsOK --> Meetings
-    Meetings{L2 meeting cache?<br/>2h TTL}
-    Meetings -- hit --> MeetingsOK
-    Meetings -- miss --> CalendarAPI[Calendar API<br/>events.list]
-    CalendarAPI --> MeetingsOK([meetings ready])
+        CCSP["ccsp-data.json\n(hash-guarded by ingestion)"]
+        PIPE["pipeline-data.json\n(hash-guarded by ingestion)"]
+        CASES["cases.json\n(updated by RH scraper)"]
+    end
 
-    MeetingsOK --> Docs
-    Docs{L3 doc content cache?<br/>content-addressed<br/>fileId+modTime}
-    Docs -- hit --> DocsOK
-    Docs -- miss --> DriveExport[Drive export<br/>per-doc fetch]
-    DriveExport --> DocsOK([doc content ready])
+    FETCH --> FP
 
-    DocsOK --> Industry
-    Industry{L4 industry analysis?<br/>30d TTL}
-    Industry -- hit --> IndustryOK
-    Industry -- miss --> GeminiIndustry[Gemini grounded<br/>industry analysis]
-    GeminiIndustry --> IndustryOK([industry ready])
+    subgraph FP ["② Compute fingerprint — change-detection gate"]
+        BUNDLE["BriefInputBundle\n• sorted email tuples\n• sorted meeting tuples\n• CCSP tier\n• pipeline stage\n• case counts (90d severity)\n• preferences hash"]
+        DELTA["detectFingerprintDelta(prev, bundle)"]
+        BUNDLE --> DELTA
+    end
 
-    IndustryOK --> Account
-    Account{L4 account intel?<br/>14d TTL<br/>+ contentHash}
-    Account -- hit --> AccountOK
-    Account -- miss --> DriveFolder{Drive folder<br/>scan?}
-    DriveFolder -- hit --> AccountOK
-    DriveFolder -- miss --> GeminiAccount[Gemini grounded<br/>account intel]
-    GeminiAccount --> AccountOK([account intel ready])
+    DELTA --> L1{"L1 cache hit?\nfingerprint unchanged?"}
 
-    AccountOK --> Features
-    Features{L4 product features?<br/>corpusHash}
-    Features -- hit --> FeaturesOK
-    Features -- miss --> CorpusScan{Drive corpus<br/>scan?}
-    CorpusScan -- hit --> FeaturesOK
-    CorpusScan -- miss --> GeminiFeatures[Gemini structured<br/>feature extraction]
-    GeminiFeatures --> FeaturesOK([features ready])
+    L1 -->|"✅ HIT — return cached"| EVHIT["emitAIEvent(cache:hit)\nReturn cached brief"]
+    L1 -->|"❌ MISS — inputs changed"| EVMISS["emitAIEvent(cache:miss / cache:cold)"]
 
-    FeaturesOK --> Synth[Brief synthesize<br/>callLLMStructured + callLLM]
-    Synth --> Write[Write L1 brief<br/>fingerprint cache]
-    Write --> Return
+    EVMISS --> DGEMINI{"DISALLOW_GEMINI\n= true? (test env)"}
+    DGEMINI -->|yes| BYPASS["emitAIEvent(cache:bypass)\nReturn fixture stub"]
+    DGEMINI -->|no| DOCS
+
+    subgraph DOCS ["③ Load document intelligence — parallel"]
+        direction LR
+        D{"Doc content:\ncached for fileId+modTime?"}
+        D -->|"✅ hit"| DOCC["Cached text (Google Doc / PDF)"]
+        D -->|"❌ miss"| DRIV["Drive export or PDF extraction\n→ write docs/ cache"]
+
+        DC{"Doc type label:\ncached for fileId+modTime?"}
+        DC -->|"✅ hit"| DCC["Cached label (QBR, Account Plan…)"]
+        DC -->|"❌ miss"| GEMCLS["Gemini classifies doc type\n→ write doc-classifications/ cache"]
+    end
+
+    subgraph ACCTINTEL ["④ Account intelligence"]
+        AI{"intelligence/{slug}.json\n< 14d TTL?"}
+        AI -->|"✅ fresh"| AIC["Inject: company profile\n+ industry context"]
+        AI -->|"❌ stale / missing"| AIST["emitAIEvent(cache:stale)\nInject staleness marker\n→ background regen triggered"]
+    end
+
+    subgraph IND ["⑤ Industry analysis"]
+        INDC{"industry-analysis/{slug}.json\n< 30d TTL?"}
+        INDC -->|"✅ hit"| IAC["Shared industry landscape\n(same for all customers, same industry+region)"]
+        INDC -->|"❌ miss"| GEMIND["Gemini grounded call → write cache"]
+    end
+
+    DOCS --> ACCTINTEL --> IND
+
+    IND --> CORPUSDIFF["diffDocCorpus(prevSnapshot, currSnapshot)\nshouldUseDeltaMode(diff, hasPrev)?"]
+
+    CORPUSDIFF -->|"✅ DELTA\n≥3 unchanged + ≥1 changed\n+ previous brief exists"| DPATH["Corpus Delta Path\n→ see Corpus Delta Mode section"]
+    CORPUSDIFF -->|"❌ FULL-RUN\nall other cases"| FPATH
+
+    subgraph FPATH ["⑥ Full-run — three-step pipeline"]
+        S1["Step 1: Extract signals\nGemini structured output\n(reads ALL docs)"]
+        S2["Step 2: Rank\ndeterministic scorer, no LLM"]
+        S3["Step 3: Synthesize\nGemini text output"]
+        S1 --> S2 --> S3
+    end
+
+    DPATH --> WRITEFP
+    FPATH --> WRITEFP
+
+    WRITEFP["writeBriefCache(text, fingerprint, corpusSnapshot)\nemitAIEvent(generation:complete, tokensUsed, durationMs)"]
+    WRITEFP --> RESP["Return brief text"]
+
+    subgraph SSE ["GET /api/ai/events — live observer"]
+        direction LR
+        EV1["cache:cold  cache:hit  cache:miss\ncache:bypass  cache:stale"]
+        EV2["generation:start  generation:complete  generation:error"]
+    end
+
+    style L1 fill:#27ae60,color:#fff
+    style WRITEFP fill:#27ae60,color:#fff
+    style EVHIT fill:#2980b9,color:#fff
+    style EVMISS fill:#2980b9,color:#fff
+    style DGEMINI fill:#8e44ad,color:#fff
+    style BYPASS fill:#8e44ad,color:#fff
+    style AIST fill:#e67e22,color:#fff
+    style DPATH fill:#27ae60,color:#fff
+    style CORPUSDIFF fill:#16a085,color:#fff
 ```
-
-### Tier responsibilities
-
-| Tier | Purpose | Invalidation |
-|------|---------|--------------|
-| L1 | Whole-brief cache, fingerprint-keyed | composite fingerprint change OR 7d TTL |
-| L2 | Per-source raw signal cache (emails, meetings) | 2h TTL |
-| L3 | Per-document raw content + classification | content-addressed (`fileId-modTime`) |
-| L4 | Derived intelligence (industry, account, features) | TTL + content hash hybrid |
 
 ---
 
-## 2. Fingerprint Design
+## Corpus Delta Mode
 
-The L1 brief cache key is a composite fingerprint hash. It changes whenever any
-input signal changes, even within the 7-day TTL window. This makes brief
-invalidation deterministic and intra-day responsive without paying for a
-Gemini call on every page view.
+### The problem it solves
 
-**Inputs hashed into the brief fingerprint:**
+When a fingerprint miss occurs (inputs changed), the system historically sent the **complete Drive document corpus** to Gemini every time — even if only one of 20 documents changed. For a customer with 20 docs at ~1000 tokens each, that's 20,000+ tokens sent to Gemini for a change to a single file. Delta mode eliminates that waste.
 
-- **Emails (window-bounded):** sorted tuples of `(subject, sender, date)` for
-  every customer-tagged email in the active window. Sorting prevents fingerprint
-  churn from message ordering changes inside Gmail's response.
-- **Meetings (window-bounded):** sorted tuples of `(title, attendees, date)`
-  for every customer-tagged calendar event in the rolling window.
-- **CCSP tier:** the customer's current CCSP subscription tier label.
-- **Pipeline stage:** the dominant SF opportunity stage (or stage distribution
-  hash if multi-opp).
-- **Open case count by severity:** count of OPEN cases bucketed by severity,
-  restricted to the **last 90 days** of `lastUpdated`. Older cases are static
-  noise — including them would invalidate briefs every 90 days for no signal
-  change.
-- **User preferences hash:** SHA of the user-level brief preference settings
-  (tone, length, focus areas) so preference changes invalidate without a TTL
-  wait.
-
-The fingerprint is computed in `src/ai-fingerprint.ts`. The cache key is
-`{slug}-{YYYY-MM-DD}.json` plus the fingerprint hash stored inside the JSON; if
-fingerprint differs from the stored value, the entry is treated as a miss.
-
----
-
-## 3. Corpus Delta Mode
-
-Most customer Drive folders change slowly. On a typical day a customer has
-0–2 new documents and 0–1 modified documents — the rest of the corpus is
-unchanged from the prior brief. Delta mode exploits this: instead of re-sending
-the entire XML doc bundle to Gemini, we send the previous brief plus only the
-modified/new/removed documents and let Gemini patch the brief in-place.
-
-### 3.1 Activation gate
-
-Delta mode activates only when all three conditions hold. Otherwise the pipeline
-falls back to a full run.
+### How it works — end to end
 
 ```
-unchangedDocCount >= 3 AND (newDocs + changedDocs >= 1) AND hasPreviousBrief
+On every successful generation:
+  writeBriefCache saves: text + inputFingerprint + docCorpusSnapshot
+                                                       ↑
+                               { fileId: modifiedTime } for every doc in the corpus
+
+On next fingerprint miss:
+  readBriefCache returns: text + prevCorpusSnapshot
+  Build currCorpusSnapshot: { fileId: modifiedTime } for every current doc
+  diffDocCorpus(prev, curr) → { newDocs, changedDocs, removedDocs, unchangedDocs }
+  shouldUseDeltaMode(diff, hasPrev) → true/false
 ```
+
+### Activation gate
+
+Delta mode only activates when all three conditions are met:
+
+| Condition | Value | Why |
+|-----------|-------|-----|
+| Unchanged docs | ≥ 3 | Savings must justify complexity; cold/small corpus always does full-run |
+| Changed or new docs | ≥ 1 | Nothing to delta if everything changed or nothing changed |
+| Previous brief exists | true | Delta synthesizes *from* the prior brief; cold cache has no prior brief |
+
+If any condition fails → **full-run** (Steps 1 → 2 → 3).
+
+### Full-run vs delta path — what goes to Gemini
 
 ```mermaid
-flowchart TD
-    Start([Brief regen needed]) --> Prev{hasPreviousBrief?}
-    Prev -- no --> Full[Full run]
-    Prev -- yes --> Unchanged{unchangedDocCount >= 3?}
-    Unchanged -- no --> Full
-    Unchanged -- yes --> Delta{newDocs + changedDocs >= 1?}
-    Delta -- no --> NoOp[Return prior brief unchanged]
-    Delta -- yes --> DeltaRun[Delta run<br/>skip Steps 1+2]
-    Full --> Done([Brief written])
-    DeltaRun --> Done
+flowchart LR
+    subgraph FULLRUN ["Full-Run Path (Steps 1 + 2 + 3)"]
+        direction TB
+        FR_IN["All current docs (full text)\n+ emails + meetings\n+ cases + CCSP + pipeline\n+ account intel + industry analysis"]
+        FR_S1["Step 1 — Extract signals\nGemini structured output\n(identifies key themes, risks, actions)"]
+        FR_S2["Step 2 — Rank\nDeterministic scorer\n(no LLM call)"]
+        FR_S3["Step 3 — Synthesize\nGemini text output\n(full brief written from scratch)"]
+        FR_IN --> FR_S1 --> FR_S2 --> FR_S3
+    end
+
+    subgraph DELTA ["Delta Path (Step 3 only)"]
+        direction TB
+        DL_IN["<previous_brief> (full prior brief text)\n<modified_documents> (changed docs only)\n<new_documents> (new docs only)\n<removed_documents> (file IDs, no content)\n<customer_context> (name, AE, counts)\n<instructions> (update, preserve unchanged)"]
+        DL_S3["Step 3 — Delta Synthesis\nGemini text output\n(patches prior brief with delta context)"]
+        DL_IN --> DL_S3
+    end
+
+    style FR_IN fill:#c0392b,color:#fff
+    style DL_IN fill:#27ae60,color:#fff
+    style FR_S3 fill:#2980b9,color:#fff
+    style DL_S3 fill:#2980b9,color:#fff
 ```
 
-The minimum-3-unchanged requirement guards against degenerate cases (small new
-folder, mass-rename event) where delta mode would not save meaningful tokens.
-The `newDocs + changedDocs >= 1` requirement prevents a delta run that has
-nothing new to encode.
+### Gemini payload comparison
 
-### 3.2 Full-run vs delta payload
+| Element | Full-Run | Delta |
+|---------|---------|-------|
+| All Drive docs (full text) | ✅ Every doc | ❌ Omitted — unchanged docs not sent |
+| Changed docs (full text) | ✅ Included | ✅ Included in `<modified_documents>` |
+| New docs (full text) | ✅ Included | ✅ Included in `<new_documents>` |
+| Removed docs | ✅ Absent from corpus | ✅ Listed by fileId in `<removed_documents>` (no content) |
+| Previous brief | ❌ Not used | ✅ Full text in `<previous_brief>` |
+| Emails | ✅ Full list | ✅ Count only (`<email_count>`) |
+| Meetings | ✅ Full list | ✅ Count only (`<meeting_count>`) |
+| Cases | ✅ Full list | ✅ Count only (`<open_case_count>`) |
+| CCSP / Pipeline / Subscriptions | ✅ Full structured XML | ✅ Full structured XML |
+| Step 1 (signal extraction) | ✅ Runs | ❌ Skipped — prior brief already encodes unchanged signals |
+| Step 2 (ranking) | ✅ Runs | ❌ Skipped |
+| Approximate token reduction | — | ~80–90% for large corpora (1 of 20 docs changed) |
 
-| Step | Full run | Delta run |
-|------|----------|-----------|
-| Step 1 — extract per-doc signals | Yes (every doc) | **Skipped** |
-| Step 2 — synthesize raw signal bundle | Yes | **Skipped** |
-| Step 3 — generate brief markdown | XML doc bundle + signals | `<previous_brief>` + delta XML + always-included |
+### Example scenario
 
-**Why Steps 1+2 are skipped in delta mode:** the unchanged documents' signals
-are already encoded inside `<previous_brief>`. Re-running extraction on
-unchanged content would produce the same vectors and waste tokens. Step 3 is
-given the prior brief plus a structured description of what changed and is
-prompted to update only the affected sections.
+Customer Acme Corp has 18 Drive docs. AE updates the Q2 EBC Notes doc (1 doc changed). Next brief request:
 
-### 3.3 Delta XML structure
+```
+prevCorpusSnapshot: { "doc-abc": "2026-04-01", "doc-xyz": "2026-04-17", ...18 entries }
+currCorpusSnapshot: { "doc-abc": "2026-04-01", "doc-xyz": "2026-04-19", ...18 entries }
 
-```xml
-<previous_brief>{{existing brief text}}</previous_brief>
-<delta>
-  <new_documents>
-    <doc id="..." title="..." modified="...">{{full content}}</doc>
-  </new_documents>
+diffDocCorpus(prev, curr):
+  changedDocs:   ["doc-xyz"]   ← modifiedTime changed
+  unchangedDocs: ["doc-abc", ...17 more]
+  newDocs:       []
+  removedDocs:   []
+
+shouldUseDeltaMode: 17 unchanged ≥ 3 ✅ | 1 changed ≥ 1 ✅ | hasPrev ✅
+→ DELTA MODE
+
+Console: [brief] delta mode: 17 unchanged, 1 changed, 0 new, 0 removed
+
+Gemini receives:
+  <previous_brief>   ← ~500 tokens (the full prior brief)
   <modified_documents>
-    <doc id="..." title="..." modified="...">{{full content}}</doc>
+    <document name="Q2 EBC Notes">...</document>   ← 1 doc, ~800 tokens
   </modified_documents>
-  <removed_documents>
-    <doc id="..." title="..." />
-  </removed_documents>
-</delta>
-<always_included>
-  {{emails, meetings, cases, CCSP, pipeline}}
-</always_included>
+  <customer_context>...</customer_context>   ← ~100 tokens
+  <instructions>Update the brief...</instructions>
+
+Total: ~1,400 tokens vs ~18,000 tokens full-run → 92% reduction
 ```
 
-`<always_included>` is sent on every run (full or delta) because emails,
-meetings, cases, CCSP tier, and pipeline data have their own fingerprint
-contributions and are cheap to include. Only Drive doc content is gated by the
-delta path.
+### What the prior brief covers for unchanged docs
 
-**Token impact:** for customers with 20+ static docs and 1–2 changes per day,
-delta mode reduces Gemini input tokens by 80–90% on the affected brief
-regenerations. Combined with the L1 fingerprint cache, this keeps daily Gemini
-spend flat as the corpus grows.
+In delta mode, Steps 1 and 2 are skipped entirely. The previous brief already encodes the signals from unchanged documents — their key themes, risks, and action items are already in the brief text. The delta synthesis prompt instructs Gemini to preserve all content from the prior brief that isn't contradicted by the delta. Unchanged docs are not re-sent to Gemini; they're implicitly represented by the prior brief text.
 
 ---
 
-## 4. Cache Hierarchy Reference
+## Fingerprint Design
 
-| Tier | Name | Path | Invalidation |
-|------|------|------|--------------|
-| L1 | Brief cache | `{slug}-{YYYY-MM-DD}.json` | 7d TTL |
-| L2 | Email cache | `{slug}-emails.json` | 2h TTL |
-| L2 | Meeting cache | `{slug}-meetings.json` | 2h TTL |
-| L3 | Doc content cache | `docs/{fileId}-{modTime}.json` | content-addressed |
-| L3 | Doc class cache | `doc-classifications/{fileId}` | content-addressed |
-| L3 | CCSP data | `ccsp-data.json` | hash-guarded |
-| L3 | Pipeline data | `pipeline-data.json` | hash-guarded |
-| L3 | Cases | `cases.json` | scraper-controlled |
-| L4 | Industry analysis | `industry-analysis/{slug}.json` | 30d TTL |
-| L4 | Account intel | `product-intel/{slug}-customer-intel/{cslug}.json` | contentHash + 14d |
-| L4 | Product features | `product-intel/{slug}-features.json` | corpusHash |
+The fingerprint is a SHA256 hash computed over a `BriefInputBundle` — a normalized, sorted representation of all signals that influence brief content. Sorting is critical: it ensures that reordered emails or meetings don't produce a false cache miss.
 
-All paths are relative to `data/cache/`. The cache root is container-internal
-(see `docs/DEMO-ENV.md` for environment-specific mounts).
-
----
-
-## 5. Observability
-
-The pipeline emits structured cache events to a server-sent events (SSE) bus
-that the dashboard subscribes to. This makes cache behavior visible during
-debugging without re-running with verbose logs.
-
-**Endpoint:**
-
-```
-GET /api/ai/events
-```
-
-The endpoint streams `text/event-stream` and stays open for the dashboard
-session. Multiple clients can subscribe simultaneously.
-
-**Event types:**
-
-| Event | Meaning |
-|-------|---------|
-| `cache:cold` | Tier had no entry — first generation |
-| `cache:hit` | Tier returned a fresh entry |
-| `cache:miss` | Tier had an entry but it was stale or fingerprint-mismatched |
-| `cache:bypass` | Caller explicitly skipped cache (debug, force-refresh) |
-| `cache:stale` | Tier returned a stale entry as a fallback (e.g., L4 source unavailable) |
-| `generation:start` | Gemini call started |
-| `generation:complete` | Gemini call returned successfully |
-| `generation:error` | Gemini call failed (timeout, quota, parse error) |
-
-**Event schema:**
-
-```json
-{
-  "ts": "2026-04-19T12:34:56.789Z",
-  "type": "cache:hit",
-  "tier": "L1",
-  "key": "acme-corp-2026-04-19",
-  "customerSlug": "acme-corp",
-  "fingerprint": "sha256:...",
-  "durationMs": 4,
-  "meta": {
-    "ttlRemainingSec": 502341
-  }
+```typescript
+interface BriefInputBundle {
+  emailTuples: Array<{ subject: string; sender: string; date: string }>   // sorted by date
+  meetingTuples: Array<{ title: string; attendees: string[]; date: string }> // sorted by date
+  ccspTier: string | null       // e.g. "Premium", "Standard", null
+  pipelineStage: string | null  // e.g. "Proposal", "Closed Won", null
+  openCaseCounts: Record<string, number>  // severity → count, last-90d open cases only
+  preferencesHash: string       // hash of user's brief preference settings
 }
 ```
 
-`generation:*` events include the call site (`brief-extract`,
-`brief-synthesize`, `doc-classify`, etc.) and token usage when known.
-`generation:error` events include `error.code` and `error.message`.
+**Why not include doc content in the fingerprint?** Drive doc content is already change-driven via `fileId+modifiedTime` content-addressing. When a doc is edited, the new modTime produces a cache miss at the L3 layer — the new text flows automatically into brief inputs. The fingerprint doesn't need to hash doc text directly.
 
-The dashboard's AI Activity panel renders these events in real time. The same
-events are recorded to `data/cache/ai-events-{date}.jsonl` for post-hoc
-analysis.
+**The fingerprint controls *when* Gemini runs. The corpus snapshot controls *what* Gemini receives.** These are two distinct invalidation axes stored separately in the L1 cache JSON:
+- `inputFingerprint` — "did signals (email/meeting/CCSP/pipeline/cases) change?"
+- `docCorpusSnapshot` — "which docs changed since the last generation?" (used by `diffDocCorpus`)
+
+Both are written on every successful generation and read at the start of every cache miss.
+
+---
+
+## Event Schema (`src/ai-events.ts`)
+
+```typescript
+type AIIntelEvent = {
+  type: 'cache:cold' | 'cache:hit' | 'cache:miss' | 'cache:bypass'
+       | 'cache:stale' | 'generation:start' | 'generation:complete' | 'generation:error'
+  accountId: string         // customer slug
+  flow: 'brief' | 'account-intel' | 'product-intel'
+  source: 'l1' | 'l2' | 'l3' | 'l4'
+  fingerprintHash?: string  // set when fingerprint was computed
+  deltaMode?: boolean       // true when corpus delta path was taken (BKL-AI-FP-09)
+  unchangedDocCount?: number // set when deltaMode=true
+  tokensUsed?: number       // set on generation:complete
+  durationMs?: number       // set on generation:complete and generation:error
+  timestamp: string         // ISO 8601
+}
+```
+
+**Event meanings:**
+
+| Event type | When emitted | What it means |
+|------------|-------------|---------------|
+| `cache:cold` | First-ever brief request for this customer | No cached brief exists at all |
+| `cache:hit` | Fingerprint matches stored fingerprint | All inputs unchanged — returning cached brief |
+| `cache:miss` | Fingerprint changed | At least one input signal changed; brief will regenerate |
+| `cache:bypass` | `DISALLOW_GEMINI=true` is set | Test environment — returning fixture, not calling Gemini |
+| `cache:stale` | Account intel TTL expired | Account intelligence is stale; staleness marker injected; background regen triggered |
+| `generation:start` | Gemini pipeline is about to be called | Starting synthesis (full-run or delta) |
+| `generation:complete` | Brief generated successfully | Includes `tokensUsed`, `durationMs`, `deltaMode` |
+| `generation:error` | Gemini call failed | Includes `durationMs`; error logged separately |
+
+**Live observation:**
+```bash
+curl -N http://localhost:7777/api/ai/events
+# → event: connected   {"timestamp":"..."}
+# → event: ai-intel    {"type":"cache:hit","accountId":"acme-corp","flow":"brief","source":"l1",...}
+# → event: ai-intel    {"type":"generation:start","accountId":"some-co","flow":"brief",...}
+# → event: ai-intel    {"type":"generation:complete","accountId":"some-co","tokensUsed":1421,"durationMs":1800,"deltaMode":true,"unchangedDocCount":17,...}
+```
+
+**Identifying delta vs full-run in the event stream:** look for `"deltaMode":true` in `generation:complete` events. Delta runs produce dramatically lower `tokensUsed` for customers with large doc folders.
+
+---
+
+## Cache Tier Reference
+
+| Tier | What | Cache path | Invalidation strategy | Why this strategy |
+|------|------|------------|----------------------|-------------------|
+| L1 | Brief | `{slug}-{YYYY-MM-DD}.json` | **Fingerprint match** (7d TTL safety-net) | Re-generates exactly when inputs change — not before, not after 7 days of silence |
+| L2 | Emails | `{slug}-emails.json` | 2h wall-clock TTL | Gmail API quota; polling per-request not viable |
+| L2 | Meetings | `{slug}-meetings.json` | 2h wall-clock TTL | Calendar API quota + latency |
+| L3 | Doc content | `docs/{fileId}-{modTime}.json` | Content-addressed (fileId + modifiedTime) | Drive edit changes modTime → old cache entry orphaned automatically |
+| L3 | Doc classification | `doc-classifications/{fileId}-{modTime}.json` | Content-addressed | Same key as doc content — edit invalidates both together |
+| L3 | CCSP data | `ccsp-data.json` | Hash-guarded (data ingestion waterfall) | Hash written by ingestion pipeline; brief reads new hash |
+| L3 | Pipeline data | `pipeline-data.json` | Hash-guarded (data ingestion waterfall) | Same pattern as CCSP |
+| L4 | Industry analysis | `industry-analysis/{slug}.json` | 30-day TTL, shared by industry+region | Changes slowly; shared across all customers in same industry |
+| L4 | Account intel | `product-intel/…-customer-intel/{slug}.json` | `contentHash` match + 14d TTL | Hash covers slides, docs, subscriptions, cases, features; 14d safety-net |
+| L4 | Product features | `product-intel/{slug}-features.json` | `corpusHash` match | Hash over the feature corpus; miss triggers Gemini re-synthesis |
+
+---
+
+## What is still TTL-driven (by design)
+
+Some caches will always be TTL-based rather than change-driven. This is intentional — not a gap.
+
+| Cache | TTL | Why not change-driven |
+|-------|-----|----------------------|
+| Emails | 2h | Polling Gmail on every brief request would exhaust API quota. 2h polling is a practical tradeoff between freshness and API cost |
+| Meetings | 2h | Same — Calendar API quota + latency penalty on every request |
+| Industry analysis | 30d | Industry landscape changes slowly and is expensive to regenerate (Gemini grounded call). Shared across all customers in the same industry+region |
+| Account intelligence | 14d | Company profile changes slowly; regeneration is expensive (Gemini synthesis over all customer docs + subscriptions + cases) |
+
+---
+
+## Backlog
+
+All items complete as of 2026-04-19.
+
+| ID | Priority | Status | Description |
+|----|----------|--------|-------------|
+| BKL-AI-FP-01 | P0 | ✅ DONE | `DISALLOW_GEMINI` env flag + `cache:bypass` event |
+| BKL-AI-FP-02 | P2 | ✅ DONE | `detectFingerprintDelta()` pure function in `src/ai-fingerprint.ts` |
+| BKL-AI-FP-03 | P1 | ✅ DONE | Brief fingerprint at cache boundary in `generateBrief` |
+| BKL-AI-FP-04 | P2 | ✅ DONE | `src/ai-events.ts` + `GET /api/ai/events` SSE endpoint |
+| BKL-AI-FP-05 | P2 | ✅ DONE 2026-04-19 | Account intel 14d TTL + stale detection in `buildXmlSources` |
+| BKL-AI-FP-06 | P2 | ✅ DONE 2026-04-19 | 14-spec integration test suite across L1/L2/L3/L4 |
+| BKL-AI-FP-07 | P3 | ✅ DONE 2026-04-19 | ADR-013 update: AI L1–L4 tier map + fingerprint correction |
+| BKL-AI-FP-08 | P3 | ✅ DONE 2026-04-19 | Enforce `corpusHash` at product feature call sites |
+| BKL-AI-FP-09 | P2 | ✅ DONE 2026-04-19 | Corpus delta — `docCorpusSnapshot` diff, delta-aware synthesis prompt (commit `73a753b`) |

@@ -3,23 +3,18 @@
 /** Strip internal file paths and cap length before returning error strings to clients.
  * BKL-G30 Gap 5: maps Playwright DNS/network patterns to user-friendly messages. */
 export function sanitizeErr(e: any): string {
-  let raw = String(e?.message ?? e)
-  // Strip secrets that may leak through error messages before any return path:
-  //   1. JWT-shaped tokens (header.payload.signature, all base64url)
-  //   2. Bearer tokens in Authorization headers
-  raw = raw.replace(
-    /eyJ[A-Za-z0-9+/=_-]{10,}\.[A-Za-z0-9+/=_-]{10,}\.[A-Za-z0-9+/=_-]{10,}/g,
-    '[REDACTED]'
-  )
-  raw = raw.replace(/Bearer\s+[A-Za-z0-9+/=._-]{20,}/g, '[REDACTED]')
-
+  const raw = String(e?.message ?? e)
   // Map Playwright/DNS error patterns to user-friendly messages before truncation
   if (/ERR_NAME_NOT_RESOLVED/i.test(raw)) return 'Host not reachable — check VPN connection'
   if (/ERR_CONNECTION_REFUSED/i.test(raw)) return 'Connection refused — service may be down or VPN required'
   if (/ERR_TIMED_OUT|ETIMEDOUT/i.test(raw)) return 'Connection timed out — check VPN or network'
   if (/ERR_INTERNET_DISCONNECTED/i.test(raw)) return 'No internet connection'
   if (/net::ERR_/i.test(raw)) return 'Network error — check VPN connection'
-  return raw.slice(0, 200).replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]')
+  return raw
+    .replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, '[token]')
+    .replace(/Bearer\s+\S+/g, 'Bearer [redacted]')
+    .slice(0, 200)
+    .replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]')
 }
 
 /** Prefix formula-trigger characters with apostrophe to prevent injection */

@@ -1,12 +1,9 @@
-<!-- Moved from project root 2026-04-20. See docs/README.md for doc organization. -->
----
-Last validated: 2026-04-20
----
+*Last validated: 2026-04-01 | Owner: DA | Trigger: New timers added or removed | ⚠️ Re-validation needed — timer 34 (KPI Snapshot) was added after last verification*
 
 # Timer Reference
 
 Complete verified inventory of all timers in DailyBriefDashboard. 33 timers across 16 source files.
-Last verified: 2026-04-20 (Marcus Webb deep-read of all source files).
+Last verified: 2026-04-01 (Marcus Webb deep-read of all source files).
 
 ---
 

@@ -9,10 +9,21 @@ const MGMT_API = 'https://api.access.redhat.com/management/v1'
 
 let cachedToken: string | null = null
 let tokenExpiry = 0
+// BKL-RH-03 Phase 2 (ADR-014): track issuance time so we can refresh proactively
+// at 70% of the token lifetime and expose tokenAge telemetry via HealthProbe.
+let tokenIssuedAt = 0
 
-async function getToken(): Promise<string> {
+export async function getToken(): Promise<string> {
   const now = Date.now()
-  if (cachedToken && now < tokenExpiry - 60_000) return cachedToken
+  // Proactive refresh at 70% of lifetime (per ADR-014 "Token Hygiene"). Falls
+  // back to the legacy 60s-before-expiry cutoff when lifetime data is missing
+  // (cachedToken === null path skips this entirely and forces a fetch).
+  if (cachedToken && tokenIssuedAt > 0) {
+    const refreshAt = tokenIssuedAt + 0.70 * (tokenExpiry - tokenIssuedAt)
+    if (now < refreshAt) return cachedToken
+  } else if (cachedToken && now < tokenExpiry - 60_000) {
+    return cachedToken
+  }
 
   const offline = process.env.REDHAT_OFFLINE_TOKEN
   if (!offline) throw new Error('REDHAT_OFFLINE_TOKEN not set — add it to .env')
@@ -30,8 +41,31 @@ async function getToken(): Promise<string> {
 
   const data = await res.json() as { access_token: string; expires_in: number }
   cachedToken = data.access_token
+  tokenIssuedAt = now
   tokenExpiry = now + data.expires_in * 1000
   return cachedToken
+}
+
+/**
+ * BKL-RH-03 Phase 2 (ADR-014) — token telemetry for HealthProbe.
+ *
+ * Returns current authMode + token age/lifetime data so the dashboard can
+ * show staleness and the /api/status/rh-token endpoint can surface 401 risk.
+ * Never exposes the token itself.
+ */
+export function getTokenTelemetry(): {
+  authMode: 'bearer'
+  tokenAge: number | null
+  tokenLifetimeMs: number | null
+  cached: boolean
+} {
+  const now = Date.now()
+  return {
+    authMode: 'bearer',
+    tokenAge: cachedToken ? now - tokenIssuedAt : null,
+    tokenLifetimeMs: cachedToken ? tokenExpiry - tokenIssuedAt : null,
+    cached: !!cachedToken,
+  }
 }
 
 async function rhGet(url: string): Promise<any> {

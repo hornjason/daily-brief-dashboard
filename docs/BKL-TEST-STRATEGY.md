@@ -1,8 +1,5 @@
----
-Last validated: 2026-04-24
----
-
 # DailyBriefDashboard -- Enterprise Testing Strategy
+*Status: Architecture/ADR — rationale only, not active commands | Last validated: 2026-04-20 | Trigger: Testing strategy changes, new test tiers added*
 
 **Created:** 2026-04-10
 **Author:** Serena Blackwood (Architect Agent)
@@ -199,6 +196,7 @@ The fundamental constraint is: **production data and test data must never share 
 | `test/lifecycle.spec.ts` | AE create/delete lifecycle | Snapshot/restore | OK (already guarded) |
 | `test/qa-e2e-newuser.spec.ts` | Full setup wizard flow | Snapshot/restore | OK (already guarded) |
 | `test/regression.spec.ts` | Read-only regression checks | Snapshot-wrapped | OK (safe) |
+| `test/ui/customer-detail.spec.ts` | Read-only — all API calls mocked | page.route() mocks | OK (safe — no server writes) |
 
 ---
 

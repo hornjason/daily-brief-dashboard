@@ -45,6 +45,9 @@ const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../data')
 const CACHE_DIR = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
 
 function expansionCachePath(customerSlug: string): string {
+  if (!customerSlug || /[^a-zA-Z0-9_-]/.test(customerSlug)) {
+    throw new Error(`[expansion-opps] unsafe slug for cache path: "${customerSlug}"`)
+  }
   return resolve(CACHE_DIR, 'intelligence', `${customerSlug}-expansion.json`)
 }
 
@@ -89,7 +92,10 @@ function loadIntelligenceCache(customerSlug: string): { company: string; industr
 function loadDriveDocsContext(customerSlug: string): string {
   const corpus = getCachedCustomerDocsCorpus(customerSlug)
   if (!corpus || !corpus.files.length) return ''
-  return corpus.files.map(f => `[${f.name}]\n${f.textContent}`).join('\n\n').slice(0, 6000)
+  return corpus.files
+    .map(f => `[${sanitizePromptInput(f.name, 100)}]\n${sanitizePromptInput(f.textContent, 2000)}`)
+    .join('\n\n')
+    .slice(0, 6000)
 }
 
 function getCasesCount(customerSlug: string, allCases: any[]): number {
@@ -156,7 +162,7 @@ export async function generateExpansionOpportunities(customerSlug: string): Prom
       }).filter((r: any) => r.forecastCategory?.toLowerCase() !== 'closed')
     : []
   const pipelineText = pipelineRecords.length
-    ? pipelineRecords.map((r: any) => `${sanitizePromptInput(r.oppName ?? '', 200)}: $${r.acv?.toLocaleString() ?? '?'} ACV, ${r.forecastCategory}`).join('\n')
+    ? pipelineRecords.map((r: any) => `${sanitizePromptInput(r.oppName ?? '', 200)}: $${r.acv?.toLocaleString() ?? '?'} ACV, ${sanitizePromptInput(r.forecastCategory ?? '', 50)}`).join('\n')
     : 'No pipeline data'
 
   // Build available features for unsubscribed products
@@ -174,7 +180,7 @@ export async function generateExpansionOpportunities(customerSlug: string): Prom
   const productsForPrompt = unsubscribedProducts.map(p => {
     const features = productFeaturesMap[p.slug]
     const featureStr = features?.length ? `\n  Key features: ${features.join(', ')}` : ''
-    return `- ${p.displayName} (slug: ${p.slug}, short: ${p.shortName})${(p as any).description ? `\n  Description: ${(p as any).description}` : ''}${featureStr}`
+    return `- ${sanitizePromptInput(p.displayName ?? '', 100)} (slug: ${sanitizePromptInput(p.slug ?? '', 50)}, short: ${sanitizePromptInput(p.shortName ?? '', 50)})${(p as any).description ? `\n  Description: ${sanitizePromptInput((p as any).description ?? '', 300)}` : ''}${featureStr}`
   }).join('\n')
 
   // If no intelligence cache and no docs, we can't make good recommendations
@@ -210,7 +216,7 @@ ${casesCount > 0 ? `Open RH support cases: ${casesCount}` : 'No open support cas
 ${subSummary}
 
 --- Company Intelligence ---
-${intelCache ? `${intelCache.company.slice(0, 6000)}\n\n[Industry Context]\n${intelCache.industry.slice(0, 2000)}` : 'Not available'}
+${intelCache ? `${sanitizePromptInput(intelCache.company, 6000)}\n\n[Industry Context]\n${sanitizePromptInput(intelCache.industry, 2000)}` : 'Not available'}
 
 --- Customer Account Documents ---
 ${driveDocsContext || 'None cached'}
@@ -266,7 +272,7 @@ OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 1024,
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),

@@ -92,7 +92,7 @@ describe('normalizeRows', () => {
     expect(normalizeRows([])).toEqual([])
   })
 
-  test('includes ACTIVE rows and EXPIRED rows without active counterpart, excludes CANCELLED', () => {
+  test('filters out CANCELLED rows, includes EXPIRED', () => {
     const rows = [
       makeRow('RHEL', '10', 'ACTIVE'),
       makeRow('OCP', '5', 'CANCELLED'),
@@ -100,10 +100,9 @@ describe('normalizeRows', () => {
     ]
     const result = normalizeRows(rows)
     expect(result).toHaveLength(2)
-    const skus = result.map(r => r.sku)
-    expect(skus).toContain('RHEL')
-    expect(skus).toContain('AAP')
-    expect(skus).not.toContain('OCP')
+    expect(result.find(r => r.sku === 'RHEL')).toBeDefined()
+    expect(result.find(r => r.sku === 'AAP')).toBeDefined()
+    expect(result.find(r => r.sku === 'OCP')).toBeUndefined()
   })
 
   test('aggregates quantity for duplicate SKUs', () => {

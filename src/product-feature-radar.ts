@@ -67,16 +67,25 @@ const STATUS_ORDER: Record<string, number> = {
 
 // ── Cache read ────────────────────────────────────────────────────────────────
 
+const _featureCacheMap = new Map<string, ProductFeatureCache | null>()
+
 export function getFeatureCache(slug: string): ProductFeatureCache | null {
+  if (_featureCacheMap.has(slug)) return _featureCacheMap.get(slug)!
   const p = featureCachePath(slug)
+  let result: ProductFeatureCache | null = null
   try {
     if (existsSync(p)) {
-      return JSON.parse(readFileSync(p, 'utf-8')) as ProductFeatureCache
+      result = JSON.parse(readFileSync(p, 'utf-8')) as ProductFeatureCache
     }
   } catch (e: any) {
     console.warn(`[feature-radar] cache read failed for ${slug}:`, e?.message)
   }
-  return null
+  _featureCacheMap.set(slug, result)
+  return result
+}
+
+export function clearFeatureCacheMap(): void {
+  _featureCacheMap.clear()
 }
 
 // ── Feature slug generation ───────────────────────────────────────────────────
@@ -231,7 +240,7 @@ async function fetchLatestReleaseNotesContent(
 
 // ── Extraction ────────────────────────────────────────────────────────────────
 
-const CONFIG_DIR  = process.env.CONFIG_DIR ?? resolve(DATA_DIR, 'config')
+const CONFIG_DIR  = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const CONFIG_PATH = resolve(CONFIG_DIR, 'product-intel-config.json')
 
 export async function extractProductFeatures(slug: string): Promise<ProductFeatureCache | null> {
@@ -352,7 +361,7 @@ Extract ALL features including those listed in Technology Preview sections. Outp
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 16384,
+          maxOutputTokens: 10240,
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),

@@ -7,7 +7,9 @@ import { google } from 'googleapis'
 import { existsSync } from 'node:fs'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { fetchGeminiWithRetry } from './gemini-fetch.ts'
 import { getGeminiModelLite } from './settings-api.ts'
+import { readDocClassCache, writeDocClassCache } from './cache-layer.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -176,48 +178,53 @@ const EMPTY_CLASSIFICATION: DocClassification = {
 
 // ── Gemini structured call (replicated from customer.ts — not exported there) ─
 
-async function callGeminiStructured(systemPrompt: string, userPrompt: string, responseSchema: object): Promise<any> {
+export async function callGeminiStructured(systemPrompt: string, userPrompt: string, responseSchema: object): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
   const model    = getGeminiModelLite()  // BKL-AI-COST-01: doc classification is high-volume, use lite model
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
-  let token: string | null | undefined
-  const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-  if (saKeyB64) {
-    const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-    const jwtAuth = new google.auth.JWT({
-      email: keyData.client_email,
-      key:   keyData.private_key,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    })
-    token = (await jwtAuth.getAccessToken()).token
-  } else {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    token = (await auth.getAccessToken()).token
+  async function getAccessToken(): Promise<string> {
+    let t: string | null | undefined
+    const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+    if (saKeyB64) {
+      const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+      const jwtAuth = new google.auth.JWT({
+        email: keyData.client_email,
+        key:   keyData.private_key,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      })
+      t = (await jwtAuth.getAccessToken()).token
+    } else {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      t = (await auth.getAccessToken()).token
+    }
+    if (!t) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
+    return t
   }
-  if (!token) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
 
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        thinkingConfig: { thinkingBudget: 0 },
-        responseMimeType: 'application/json',
-        responseSchema,
-      },
-    }),
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024,
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: 'application/json',
+      responseSchema,
+    },
   })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status} (doc-extraction, project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
-  }
+
+  // BKL-TEST-P0-04c: shared 429-retry helper. Exhausted retries throw
+  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
+  // canonical "Gemini API error NNN (project=... location=... model=...)"
+  // message with Bearer redaction.
+  const res = await fetchGeminiWithRetry(url, getAccessToken, requestBody, {
+    callType: 'doc-classify', customerName: 'unknown', model, project, location,
+    logPrefix: '[doc-extract] callGeminiStructured',
+  })
+
   const json = await res.json() as any
   // BKL-M52: record token usage for cost tracking
   const usage = json.usageMetadata
@@ -238,7 +245,7 @@ async function callGeminiStructured(systemPrompt: string, userPrompt: string, re
 // ── Single document classification ───────────────────────────────────────────
 
 export async function classifyAndExtract(
-  doc: { name: string; modifiedTime?: string; content?: string },
+  doc: { fileId?: string; name: string; modifiedTime?: string; content?: string },
 ): Promise<DocClassification> {
   if (!doc.content || doc.content.trim().length < 50) {
     return { ...EMPTY_CLASSIFICATION }
@@ -258,20 +265,31 @@ export async function classifyAndExtract(
     }
   }
 
+  // ADR-013 Tier 3: content-addressed classification cache by (fileId, modifiedTime).
+  // Short-circuits Gemini call for stable Drive docs — no TTL, fingerprint IS the invalidation key.
+  if (doc.fileId && doc.modifiedTime) {
+    const cached = readDocClassCache(doc.fileId, doc.modifiedTime)
+    if (cached) return cached
+  }
+
   const prompt = DOC_CLASSIFICATION_PROMPT
     .replace('{doc_name}', doc.name)
     .replace('{modified_time}', doc.modifiedTime ?? 'unknown')
     .replace('{content}', doc.content.slice(0, 2000))
 
-  const result = await callGeminiStructured(SYSTEM_PROMPT, prompt, DOC_CLASSIFICATION_SCHEMA)
-  return result as DocClassification
+  const result = await callGeminiStructured(SYSTEM_PROMPT, prompt, DOC_CLASSIFICATION_SCHEMA) as DocClassification
+  if (doc.fileId && doc.modifiedTime) {
+    writeDocClassCache(doc.fileId, doc.modifiedTime, result)
+  }
+  return result
 }
 
 // ── Batch classification ─────────────────────────────────────────────────────
 
 // BKL-AI18a: Parallelize doc classification calls (was sequential)
+// ADR-013 Tier 3: fileId is threaded through so classifyAndExtract can hit the content-addressed cache.
 export async function classifyDocs(
-  docs: { name: string; modifiedTime?: string; content?: string }[],
+  docs: { fileId?: string; name: string; modifiedTime?: string; content?: string }[],
 ): Promise<Map<string, DocClassification>> {
   const results = new Map<string, DocClassification>()
 

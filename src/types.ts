@@ -84,6 +84,7 @@ export interface Renewal {
 }
 
 export interface DriveFile {
+  id?: string         // Drive fileId — needed for ADR-013 Tier 3 content-addressed cache
   name: string
   mimeType: string
   modifiedTime?: string

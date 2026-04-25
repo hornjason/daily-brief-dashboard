@@ -73,7 +73,7 @@ export interface ProductAlert {
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
 const DATA_DIR       = process.env.DATA_DIR       ?? resolve(import.meta.dir, '../data')
-const CONFIG_DIR     = process.env.CONFIG_DIR      ?? resolve(DATA_DIR, 'config')
+const CONFIG_DIR     = process.env.CONFIG_DIR      ?? resolve(import.meta.dir, '../config')
 const CACHE_DIR      = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
 const PRODUCT_INTEL_CONFIG_PATH = resolve(CONFIG_DIR, 'product-intel-config.json')
 const PRODUCT_ALERTS_PATH       = resolve(CONFIG_DIR, 'product-alerts.json')
@@ -339,7 +339,7 @@ Extract the current version, GA date, EOL date, a 2-3 sentence summary, and 3-5 
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature:     0.3,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 1024,
         thinkingConfig:  { thinkingBudget: 0 },
       },
     }),

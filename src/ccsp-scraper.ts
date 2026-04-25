@@ -1,4 +1,4 @@
-import { setLivePageBusy } from "./rh-scraper.ts"
+import { setLivePageBusy, getScrapeContext } from "./rh-scraper.ts"
 /**
  * src/ccsp-scraper.ts
  *
@@ -35,11 +35,9 @@ const TABLEAU_BASE_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics
 // This renders the viz without the outer portal shell and applies all filters before the viz loads.
 const TABLEAU_EMBED_BASE = 'https://10ay.online.tableau.com/t/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 
-// Per-POD CSV cache TTL — 24h. POD-level CCSP CSV is stable enough that we don't
-// need to re-scrape per-AE within the same day; share cached data across AEs in same POD.
-const POD_CSV_CACHE_TTL_MS = 24 * 60 * 60 * 1000
-
 import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { resolve } from 'node:path'
+import { normalizeSettings } from './region-config.ts'
 
 const TABLEAU_SESSION_PATH = `${process.env.RH_PROFILE_DIR ?? '/data/rh-profile'}/tableau-session.json`
 
@@ -69,7 +67,7 @@ async function restoreTableauSession(ctx: BrowserContext): Promise<void> {
   }
 }
 
-import type { BrowserContext, Page, ElementHandle } from '@playwright/test'
+import type { BrowserContext, Page, ElementHandle, Download } from '@playwright/test'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import type { AE } from './types.ts'
@@ -130,6 +128,26 @@ const CCSP_DEBUG = process.env.CCSP_DEBUG === 'true'
 const PER_AE_TIMEOUT_MS = 120_000  // 2 minutes
 
 let _ctx: BrowserContext | null = null
+
+// BKL-PERF-02: Lazy cache — populated after first AE's CSV download, reused for subsequent AEs
+// The Tableau CSV endpoint ignores territory filter and returns full POD data every time.
+// Caching here avoids N-1 redundant Tableau navigations in a POD bootstrap.
+// BKL-INGEST-03: TTL changed from 30 min to 24h to match all other flow TTLs (ingestion-flow.md).
+// L3 Drive CSV freshness is now also checked via modifiedTime before trusting in-memory cache.
+let _podCsvCache: { rows: Record<string, string>[]; period: string; expiresAt: number; pod: string; driveFileId?: string } | null = null
+const POD_CSV_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24h — matches all other flow TTLs
+
+// BKL-UX79: Signal from scraper → bootstrap-orchestrator that Tableau SSO expired.
+// When scrapeOneAe lands on the login page, it sets this flag so the next
+// /api/bootstrap/tableau/session-status call invalidates its cache and re-probes.
+let _tableauSessionExpired = false
+
+/** Called by the session-status endpoint to check and consume the expired flag. */
+export function consumeTableauSessionExpired(): boolean {
+  const v = _tableauSessionExpired
+  _tableauSessionExpired = false
+  return v
+}
 
 export function adoptCcspContext(ctx: BrowserContext): void {
   _ctx = ctx
@@ -203,31 +221,53 @@ async function dumpDom(page: Page, label: string): Promise<void> {
  *   April 2026 → FY2026 (Feb 2026 – Jan 2027)
  *   January 2026 → FY2025 (Feb 2025 – Jan 2026)
  *
- * Selects: current FY + previous FY (matches Jason's manual Tableau selection).
- * Quarters: all 4 quarters of previous calendar year + current calendar year
- *           quarters up to (and including) the current calendar quarter.
+ * BKL-CCSP-04: Selects last 4 completed calendar quarters only.
+ * Tableau only has data for completed quarters — the current in-progress quarter
+ * is excluded because its data is incomplete.
  *
- * Example (today = April 2026):
+ * Example (today = April 2026, Q2 in progress):
+ *   last completed = Q1 2026
+ *   quarters = ['2025-Q2', '2025-Q3', '2025-Q4', '2026-Q1']
  *   years    = ['FY2025', 'FY2026']
- *   quarters = ['2025-Q1', '2025-Q2', '2025-Q3', '2025-Q4', '2026-Q1', '2026-Q2']
  */
 export function getRollingFyWindow(): { years: string[]; quarters: string[]; label: string } {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth() + 1 // 1-12
 
-  // RH FY starts Feb 1: if Jan, we're still in previous FY
-  const currentFY = month >= 2 ? year : year - 1
-  const previousFY = currentFY - 1
-  const years = [`FY${previousFY}`, `FY${currentFY}`]
-
   // Calendar quarter (1-4) based on month
   const currentCalQ = Math.ceil(month / 3)
 
-  // All 4 quarters of previous calendar year + current year up to current quarter
+  // Last completed quarter — exclude current in-progress quarter
+  let lastQ = currentCalQ - 1
+  let lastYear = year
+  if (lastQ === 0) { lastQ = 4; lastYear = year - 1 }
+
+  // Build last 4 completed quarters going backwards from lastQ
   const quarters: string[] = []
-  for (let q = 1; q <= 4; q++) quarters.push(`${previousFY}-Q${q}`)
-  for (let q = 1; q <= currentCalQ; q++) quarters.push(`${currentFY}-Q${q}`)
+  let q = lastQ
+  let y = lastYear
+  for (let i = 0; i < 4; i++) {
+    quarters.unshift(`${y}-Q${q}`)
+    q--
+    if (q === 0) { q = 4; y-- }
+  }
+
+  // Tableau Year filter uses "FYYYYYYY" prefix format (e.g. "FY2025", "FY2026").
+  // RH FY starts Feb 1: Q1 spans Jan (previous FY) + Feb-Mar (current FY).
+  // For Q1, include both adjacent FYs — Tableau filters are OR-based.
+  const fySet = new Set<string>()
+  for (const qtr of quarters) {
+    const qY = parseInt(qtr.split('-Q')[0], 10)
+    const qNum = parseInt(qtr.split('-Q')[1], 10)
+    if (qNum === 1) {
+      fySet.add(`FY${qY - 1}`)
+      fySet.add(`FY${qY}`)
+    } else {
+      fySet.add(`FY${qY}`)
+    }
+  }
+  const years = [...fySet].sort()
 
   const label = `${quarters[0]} – ${quarters[quarters.length - 1]}`
   console.log(`[ccsp] window: years=[${years.join(', ')}] quarters=[${quarters.join(', ')}] label="${label}"`)
@@ -235,17 +275,37 @@ export function getRollingFyWindow(): { years: string[]; quarters: string[]; lab
 }
 
 /**
- * Derive POD and Subregion from a territory string.
- * "WEST_COMM_CORP_NORTHWEST_TERR01" → pod="WEST_COMM_CORP_NORTHWEST", sub="WEST_COMM_CORP"
+ * Derive POD, Subregion, Segment, Subsegment, and Region from a territory string.
+ *
+ * Commercial (5-part): WEST_COMM_CORP_NORTHWEST_TERR01
+ *   subregion = WEST_COMM_CORP         (first 3 segments)
+ *   pod       = WEST_COMM_CORP_NORTHWEST  (first 4, no suffix)
+ *   segment   = Commercial
+ *   region    = NA_COMM_COMMERCIAL
+ *
+ * Enterprise (4-part): CENTRAL_ENT_TOLA_TERR02
+ *   subregion = CENTRAL_ENT_TOLA       (first 3 segments)
+ *   pod       = CENTRAL_ENT_TOLA_POD   (first 3 + _POD suffix — required by Tableau)
+ *   segment   = Enterprise
+ *   region    = CENTRAL                (first segment)
  */
-function parseTerritoryParts(territory: string): { pod: string; subregion: string } {
+export function parseTerritoryParts(territory: string): {
+  pod: string; subregion: string; segment: string; subsegment: string; region: string
+} {
+  if (!/^[A-Z0-9_]+$/i.test(territory)) {
+    throw new Error(`Invalid territory format: ${territory}`)
+  }
   const parts = territory.split('_')
-  // Territory format: REGION_SEG_TYPE_POD_TERR##
-  // POD = everything except the last segment (TERR##)
-  // Subregion = first 3 segments (REGION_SEG_TYPE)
-  const pod = parts.slice(0, -1).join('_')
+  const segType = parts[1] ?? ''
+  const isEnterprise = segType === 'ENT'
+
   const subregion = parts.slice(0, 3).join('_')
-  return { pod, subregion }
+  // Enterprise PODs carry a _POD suffix in Tableau; commercial do not
+  const pod = isEnterprise ? subregion + '_POD' : parts.slice(0, -1).join('_')
+  const segment = isEnterprise ? 'Enterprise' : 'Commercial'
+  const region = isEnterprise ? (parts[0] ?? 'CENTRAL') : 'NA_COMM_COMMERCIAL'
+
+  return { pod, subregion, segment, subsegment: segment, region }
 }
 
 /**
@@ -308,7 +368,7 @@ async function applyFilter(
 
 // -- Per-AE scrape ------------------------------------------------------------
 
-async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
+async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Promise<CcspResult> {
   const territories = ae.tableauTerritories ?? []
   const validTerritories = territories.filter(t => {
     if (!/^[A-Z0-9_]+$/.test(t)) {
@@ -318,30 +378,164 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
     return true
   })
 
+  // Compute rolling window up front — used by both cache and live paths
+  const { years, quarters, label } = getRollingFyWindow()
+
+  // BKL-PERF-02: Use lazy cache if available — skip Tableau navigation entirely
+  // BKL-CCSP-04: Also apply quarter filter to cached rows so stale quarters don't persist
+  // BKL-PERF-04: Gate on pod match — cross-POD cache hits return 0 rows after territory filter
+  // BKL-INGEST-03: Before using in-memory cache, verify the underlying Drive CSV is < 24h old.
+  // If Drive file is stale (modifiedTime >= 24h ago), invalidate and fall through to Drive re-check.
+  const currentPod = validTerritories.length > 0 ? parseTerritoryParts(validTerritories[0]).pod : ''
+  if (_podCsvCache && Date.now() < _podCsvCache.expiresAt && validTerritories.length > 0 && _podCsvCache.pod === currentPod) {
+    // BKL-INGEST-03: Drive modifiedTime check — if we have the source file ID, verify freshness
+    let driveFileStale = false
+    if (_podCsvCache.driveFileId) {
+      try {
+        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+        const drive = google.drive({ version: 'v3', auth })
+        const metaRes = await drive.files.get({ fileId: _podCsvCache.driveFileId, fields: 'modifiedTime', supportsAllDrives: true })
+        const modifiedTime = metaRes.data.modifiedTime
+        if (modifiedTime) {
+          const ageMs = Date.now() - new Date(modifiedTime).getTime()
+          if (ageMs >= POD_CSV_CACHE_TTL_MS) {
+            console.log(`[ccsp] ${ae.name}: Drive CSV modifiedTime is ${Math.round(ageMs / 3_600_000)}h old — invalidating in-memory cache (BKL-INGEST-03)`)
+            _podCsvCache = null
+            driveFileStale = true
+          }
+        }
+      } catch (e: any) {
+        // On Drive API error: default to trusting in-memory cache (fail-open for freshness check)
+        console.warn(`[ccsp] ${ae.name}: Drive modifiedTime check failed: ${e.message} — trusting in-memory cache`)
+      }
+    }
+
+    if (!driveFileStale && _podCsvCache) {
+      const { rows: cachedRows, period } = _podCsvCache
+      const terrColName = Object.keys(cachedRows[0] ?? {}).find(k => {
+        const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+        return norm === 'account territory name' || norm === 'account territory'
+      })
+      const qtrColName = Object.keys(cachedRows[0] ?? {}).find(k =>
+        k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
+      )
+      if (terrColName) {
+        const terrSet = new Set(validTerritories)
+        const qtrSet = new Set(quarters)
+        let filtered = cachedRows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
+        if (qtrColName) {
+          const before = filtered.length
+          filtered = filtered.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
+          console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (territory + quarter filter from cache; was ${before} before quarter filter)`)
+        } else {
+          console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (territory filter only; no quarter column found)`)
+        }
+        return { aeName: ae.name, rows: filtered, accountPeriod: period }
+      }
+    }
+  }
+
+  // BKL-PERF-03: Drive cache check — skip Tableau if today's POD CSV already in subscription folder.
+  // Only runs on in-memory cache miss (Drive API is slower than memory).
+  let driveHitRows: Record<string, string>[] | null = null
+  if (podBookingsFolderId && validTerritories.length > 0) {
+    const podName = parseTerritoryParts(validTerritories[0]).pod
+    const today = new Date().toISOString().slice(0, 10)
+    const cacheFileName = `CCSP-${podName}-${today}.csv`
+    try {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const drive = google.drive({ version: 'v3', auth })
+      const listRes = await withQuotaRetry(
+        () => drive.files.list({
+          q: `name = '${cacheFileName}' and '${podBookingsFolderId}' in parents and trashed = false`,
+          fields: 'files(id, name)',
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        }),
+        'CCSP Drive cache check',
+      )
+      const cacheFile = listRes.data.files?.[0]
+      if (cacheFile?.id) {
+        const dlRes = await withQuotaRetry(
+          () => drive.files.get({ fileId: cacheFile.id!, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }),
+          'CCSP Drive cache download',
+        )
+        const csvText = typeof dlRes.data === 'string' ? dlRes.data : String(dlRes.data)
+        const cachedRows = parseCsvToObjects(csvText)
+        if (cachedRows.length > 0) {
+          console.log(`[ccsp] ${ae.name}: Drive cache hit — ${cachedRows.length} rows from ${cacheFileName}`)
+          // Populate in-memory cache for subsequent AEs in same run
+          // BKL-PERF-04: Include pod so subsequent AEs with different POD don't get a stale hit
+          // BKL-INGEST-03: Store driveFileId so in-memory cache can check Drive modifiedTime on next hit
+          if (!_podCsvCache || Date.now() > _podCsvCache.expiresAt) {
+            _podCsvCache = { rows: cachedRows, period: label, expiresAt: Date.now() + POD_CSV_CACHE_TTL_MS, pod: podName, driveFileId: cacheFile.id! }
+          }
+          driveHitRows = cachedRows
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[ccsp] ${ae.name}: Drive cache check failed: ${e.message} — falling through to Tableau`)
+    }
+  }
+
+  // If Drive cache hit, apply territory + quarter filters and return immediately
+  if (driveHitRows !== null) {
+    let rows = driveHitRows
+    if (validTerritories.length > 0) {
+      const terrColName = Object.keys(rows[0] ?? {}).find(k => {
+        const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+        return norm === 'account territory name' || norm === 'account territory'
+      })
+      if (terrColName) {
+        const terrSet = new Set(validTerritories)
+        const before = rows.length
+        rows = rows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
+        console.log(`[ccsp] ${ae.name}: Drive cache territory filter: ${before} → ${rows.length} rows`)
+      }
+    }
+    if (rows.length > 0) {
+      const qtrColName = Object.keys(rows[0]).find(k =>
+        k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
+      )
+      if (qtrColName) {
+        const qtrSet = new Set(quarters)
+        const before = rows.length
+        rows = rows.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
+        console.log(`[ccsp] ${ae.name}: Drive cache quarter filter (${quarters.join(',')}): ${before} → ${rows.length} rows`)
+      }
+    }
+    return { aeName: ae.name, rows, accountPeriod: label }
+  }
+
   // -- Build URL with filters pre-applied -------------------------------------
   // Tableau Cloud supports URL-based filtering (?FilterName=Value) — this is
   // far more reliable than clicking UI filter dropdowns inside deeply-nested
   // iframes (Main page → Data Visualization iframe → primaryContent iframe).
-  const { years, quarters, label } = getRollingFyWindow()
+  // BKL-CCSP-05: Derive Segment, Region, POD from territory string — hardcoded Commercial
+  // filters returned 0 rows for Enterprise (TOLA) territories.
+  const territoryFilters = validTerritories.length > 0
+    ? parseTerritoryParts(validTerritories[0])
+    : { pod: '', subregion: '', segment: 'Commercial', subsegment: 'Commercial', region: 'NA_COMM_COMMERCIAL' }
+
   const filterParams = new URLSearchParams()
   filterParams.set('Super Geo', 'AMERICAS')
   filterParams.set('Geo', 'NA_COMM')
-  filterParams.set('Region', 'NA_COMM_COMMERCIAL')
-  filterParams.set('Segment', 'Commercial')
+  filterParams.set('Region', territoryFilters.region)
+  filterParams.set('Segment', territoryFilters.segment)
+  filterParams.set('Subsegment', territoryFilters.subsegment)
   filterParams.set('Year', years.join(','))
   filterParams.set('Quarter', quarters.join(','))
   if (validTerritories.length > 0) {
-    const { pod, subregion } = parseTerritoryParts(validTerritories[0])
-    filterParams.set('Subregion', subregion)
-    filterParams.set('POD', pod)
-    filterParams.set('Account Territory', validTerritories.join(','))
+    filterParams.set('Subregion', territoryFilters.subregion)
+    filterParams.set('POD', territoryFilters.pod)
+    // BKL-CCSP-CSV-01: Account Territory filter removed — .csv endpoint returns empty ("\n")
+    // when territory filter is applied. POD + Subregion scope the viz correctly;
+    // territory filtering is applied client-side after download.
   }
   // Direct embed URL — filter params MUST be on /t/site/views/... (not on the #/site/... hash URL,
   // where ?params would be inside the hash fragment and ignored by the server).
-  // %2C → ',' decode: URLSearchParams encodes commas in multi-value Year/Quarter params,
-  // but Tableau's CSV API requires literal commas to parse the multi-value list correctly.
-  const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams.toString().replace(/%2C/gi, ',')}`
-  console.log(`[ccsp] ${ae.name}: navigating with pre-applied filters...`)
+  const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams}`
+  console.log(`[ccsp] ${ae.name}: navigating with pre-applied filters (no territory filter)...`)
 
   await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {
@@ -356,6 +550,7 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
     await page.$('input[type="password"], input#username, [data-testid="login"]').then(el => !!el).catch(() => false)
   if (isLoginPage) {
     console.warn(`[ccsp] ${ae.name}: Tableau session not active (on login page: ${currentUrl}) — skipping scrape`)
+    _tableauSessionExpired = true
     throw new Error('Tableau session required — log in via the VNC window and retry')
   }
 
@@ -372,7 +567,11 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
     console.log(`[ccsp] ${ae.name}: clicking Raw Data tab`)
     await rawDataTab.click()
     await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
-    await page.waitForTimeout(3_000)
+    // Tableau shows "Working on it" modal (Processing request → Computing models → Preparing result)
+    // Wait for it to disappear before attempting download
+    await page.waitForSelector('text="Working on it"', { timeout: 10_000 }).catch(() => {})
+    await page.waitForSelector('text="Working on it"', { state: 'hidden', timeout: 60_000 }).catch(() => {})
+    await page.waitForTimeout(2_000)
   } else {
     console.warn(`[ccsp] ${ae.name}: Raw Data tab not found — attempting download from current view`)
   }
@@ -390,116 +589,158 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
   // -- Extract data -----------------------------------------------------------
   let rows: Record<string, string>[] = []
 
-  // Strategy 1: direct .csv URL — Tableau Cloud serves CSV when you navigate to
-  // /t/site/views/workbook/view.csv?FilterName=Value (server-side, no UI dialog).
-  // Handles both hash (#/site/...) and direct (/t/site/...) URL formats.
+  // Strategy: Direct server-side CSV URL using TABLEAU_EMBED_BASE (/t/site/views/... format).
+  // BKL-CCSP-CSV-01 fix: The old popup download approach failed because Salesforce SSO
+  // doesn't pass through in popup windows. The original .csv URL approach returned "\n"
+  // because it was built from page.url() (fragment #/site/... format) instead of
+  // TABLEAU_EMBED_BASE (server /t/site/... format). The server ignores fragment URLs.
   try {
-    let viewBase: string | null = null
-    if (postTabUrl.match(/\/t\/[^/]+\/views\//)) {
-      // Direct /t/ format: https://10ay.../t/site/views/workbook/view?...
-      viewBase = postTabUrl.split('?')[0]
-    } else {
-      // Hash format: https://10ay.../#/site/site/views/workbook/view — convert to /t/ format
-      const m = postTabUrl.match(/#\/site\/([^/]+)\/views\/([^?#]+)/)
-      if (m) viewBase = `https://10ay.online.tableau.com/t/${m[1]}/views/${m[2]}`
+    // Construct direct CSV URL using server-side /t/site/views/... path (NOT page.url() which returns fragment)
+    // BKL-CCSP-CSV-01: Year filter (FY2025,FY2026) returns "\n" from CSV endpoint — the endpoint
+    // uses a different Year value format than the UI. Quarter filter already constrains the window.
+    const rawDataBase = TABLEAU_EMBED_BASE.replace('/CloudConsumption', '/RawData')
+    // BKL-CCSP-CSV-01: Segment/Subsegment=Commercial cause 0 rows for CORP territories — Tableau's
+    // data uses different Subsegment values per POD (e.g. 'Corporate' not 'Commercial').
+    // POD + Subregion already uniquely scope the data; Quarter scopes the time window.
+    // Diagnostic confirmed: pod-only filter returns 7715 rows; full filter returns 0.
+    const csvFilterParams = new URLSearchParams()
+    if (validTerritories.length > 0) {
+      csvFilterParams.set('Subregion', territoryFilters.subregion)
+      csvFilterParams.set('POD', territoryFilters.pod)
     }
-    if (viewBase && !viewBase.endsWith('.csv')) {
-      const csvUrl = `${viewBase}.csv?${filterParams.toString().replace(/%2C/gi, ',')}`
-      console.log(`[ccsp] ${ae.name}: trying direct CSV URL...`)
+    csvFilterParams.set('Quarter', quarters.join(','))
+    const csvParams = csvFilterParams.toString().replace(/%2C/gi, ',')  // Tableau needs literal commas
+    const csvUrl = `${rawDataBase}.csv?${csvParams}`
+
+    console.log(`[ccsp] ${ae.name}: fetching CSV from ${csvUrl}`)
+
+    let csvPath: string | null = null
+    try {
       const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 30_000 }),
+        page.waitForEvent('download', { timeout: 60_000 }),
         page.goto(csvUrl, { waitUntil: 'commit', timeout: 30_000 }).catch(() => {}),
       ])
-      const csvText = await streamToText(await download.createReadStream())
+      csvPath = await download.path()
+      console.log(`[ccsp] ${ae.name}: download captured at ${csvPath}`)
+    } catch (e: any) {
+      console.warn(`[ccsp] ${ae.name}: CSV download failed: ${e.message}`)
+    }
+
+    if (csvPath) {
+      const csvText = readFileSync(csvPath, 'utf8')
       rows = parseCsvToObjects(csvText)
-      console.log(`[ccsp] ${ae.name}: direct CSV: ${rows.length} rows (unfiltered)`)
+      console.log(`[ccsp] ${ae.name}: direct CSV: ${rows.length} rows (unfiltered POD)`)
+    }
 
-      // Post-filter by territory and quarter — Tableau's .csv endpoint ignores URL filter params
-      // and returns the full pod/subregion + all-time data set.
-      if (rows.length > 0) {
-        // Territory filter — column "Account Territory Name"
-        if (validTerritories.length > 0) {
-          const terrColName = Object.keys(rows[0]).find(k => {
-            const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
-            return norm === 'account territory name' || norm === 'account territory'
-          })
-          if (terrColName) {
-            const terrSet = new Set(validTerritories)
-            const before = rows.length
-            rows = rows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
-            console.log(`[ccsp] ${ae.name}: territory filter: ${before} → ${rows.length} rows`)
-          } else {
-            console.warn(`[ccsp] ${ae.name}: no territory column found — skipping territory filter. Columns: ${Object.keys(rows[0]).join(', ')}`)
+    // Re-navigate to main Tableau view so next AE scrape starts cleanly
+    await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+
+    // BKL-PERF-02: Cache full unfiltered rows — download returns full POD data.
+    // Subsequent AEs in same bootstrap session skip navigation entirely.
+    // BKL-PERF-04: Include pod in cache so cross-POD AEs don't get stale hits.
+    // BKL-INGEST-03: driveFileId populated after Drive cache write below — set here first without it.
+    let _newlyCreatedDriveFileId: string | undefined
+    if (rows.length > 0 && (!_podCsvCache || Date.now() > _podCsvCache.expiresAt)) {
+      const currentPodForCache = validTerritories.length > 0 ? parseTerritoryParts(validTerritories[0]).pod : ''
+      _podCsvCache = { rows, period: label, expiresAt: Date.now() + POD_CSV_CACHE_TTL_MS, pod: currentPodForCache }
+      console.log(`[ccsp] ${ae.name}: POD CSV cached — ${rows.length} rows available for remaining AEs (pod: ${currentPodForCache})`)
+    }
+
+    // BKL-PERF-03: Write Drive cache so subsequent daily runs skip Tableau entirely
+    if (podBookingsFolderId && rows.length > 0 && validTerritories.length > 0) {
+      const podName = parseTerritoryParts(validTerritories[0]).pod
+      const today = new Date().toISOString().slice(0, 10)
+      const cacheFileName = `CCSP-${podName}-${today}.csv`
+      try {
+        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+        const drive = google.drive({ version: 'v3', auth })
+        // REG-CCSP-DUP-01: delete any stale CCSP-<pod>-<date>.csv files for this POD before writing today's
+        try {
+          const staleRes = await withQuotaRetry(
+            () => drive.files.list({
+              q: `name contains 'CCSP-${podName}-' and '${podBookingsFolderId}' in parents and trashed = false`,
+              fields: 'files(id, name)',
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            }),
+            'CCSP Drive stale cache list',
+          )
+          const staleFiles = staleRes.data.files ?? []
+          for (const oldFile of staleFiles) {
+            if (!oldFile.id || !oldFile.name) continue
+            if (!oldFile.name.startsWith(`CCSP-${podName}-`) || !oldFile.name.endsWith('.csv')) continue
+            try {
+              await drive.files.delete({ fileId: oldFile.id, supportsAllDrives: true })
+              console.log(`[ccsp] deleted stale Drive cache ${oldFile.name}`)
+            } catch (delErr: any) {
+              console.warn(`[ccsp] ${ae.name}: stale cache delete failed for ${oldFile.name}: ${delErr.message} — non-fatal`)
+            }
           }
+        } catch (listErr: any) {
+          console.warn(`[ccsp] ${ae.name}: stale cache list failed: ${listErr.message} — non-fatal, proceeding to write`)
         }
-
-        // Quarter filter — column "Opportunity fiscal Year Quarter" (format: "2026-Q1")
-        const qtrColName = Object.keys(rows[0]).find(k =>
-          k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
+        const headers = Object.keys(rows[0])
+        const csvLines = [headers.join(',')]
+        for (const row of rows) {
+          csvLines.push(headers.map(h => {
+            const val = row[h] ?? ''
+            return val.includes(',') || val.includes('"') || val.includes('\n')
+              ? `"${val.replace(/"/g, '""')}"` : val
+          }).join(','))
+        }
+        const createRes = await withQuotaRetry(
+          () => drive.files.create({
+            requestBody: { name: cacheFileName, mimeType: 'text/csv', parents: [podBookingsFolderId!] },
+            media: { mimeType: 'text/csv', body: csvLines.join('\n') },
+            supportsAllDrives: true,
+            fields: 'id',
+          }),
+          'CCSP Drive cache write',
         )
-        if (qtrColName) {
-          const qtrSet = new Set(quarters)
-          const before = rows.length
-          rows = rows.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
-          console.log(`[ccsp] ${ae.name}: quarter filter (${quarters.join(',')}): ${before} → ${rows.length} rows`)
-        } else {
-          console.warn(`[ccsp] ${ae.name}: no quarter column found — skipping quarter filter`)
+        // BKL-INGEST-03: Store Drive file ID so next in-memory cache check can verify modifiedTime
+        _newlyCreatedDriveFileId = createRes.data.id ?? undefined
+        if (_newlyCreatedDriveFileId && _podCsvCache) {
+          _podCsvCache = { ..._podCsvCache, driveFileId: _newlyCreatedDriveFileId }
         }
+        console.log(`[ccsp] ${ae.name}: wrote Drive cache ${cacheFileName} (${rows.length} rows) to subscription folder`)
+      } catch (e: any) {
+        console.warn(`[ccsp] ${ae.name}: Drive cache write failed: ${e.message} — non-fatal`)
+      }
+    }
+
+    // Post-filter by territory and quarter — download returns full POD dataset
+    if (rows.length > 0) {
+      // Territory filter — column "Account Territory Name"
+      if (validTerritories.length > 0) {
+        const terrColName = Object.keys(rows[0]).find(k => {
+          const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+          return norm === 'account territory name' || norm === 'account territory'
+        })
+        if (terrColName) {
+          const terrSet = new Set(validTerritories)
+          const before = rows.length
+          rows = rows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
+          console.log(`[ccsp] ${ae.name}: territory filter: ${before} → ${rows.length} rows`)
+        } else {
+          console.warn(`[ccsp] ${ae.name}: no territory column found — skipping territory filter. Columns: ${Object.keys(rows[0]).join(', ')}`)
+        }
+      }
+
+      // Quarter filter — column "Opportunity fiscal Year Quarter" (format: "2026-Q1")
+      const qtrColName = Object.keys(rows[0]).find(k =>
+        k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
+      )
+      if (qtrColName) {
+        const qtrSet = new Set(quarters)
+        const before = rows.length
+        rows = rows.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
+        console.log(`[ccsp] ${ae.name}: quarter filter (${quarters.join(',')}): ${before} → ${rows.length} rows`)
+      } else {
+        console.warn(`[ccsp] ${ae.name}: no quarter column found — skipping quarter filter`)
       }
     }
   } catch (e: any) {
-    console.warn(`[ccsp] ${ae.name}: direct CSV failed: ${e.message} — scraping table`)
-  }
-
-  // Strategy 2: DOM table scraping — extract the visible data table directly
-  // from the viz iframe. Works for all rows visible in the viewport; Tableau
-  // renders data tables as ARIA grids ([role="grid"] / [role="row"]) in the
-  // primaryContent iframe. This is the reliable fallback.
-  if (rows.length === 0) {
-    try {
-      // Re-navigate if we left the view for the .csv attempt
-      if (!page.url().includes('OverallCloudConsumptionDashboard')) {
-        await page.goto(`${TABLEAU_EMBED_BASE}?${filterParams.toString().replace(/%2C/gi, ',')}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-        await page.waitForTimeout(5_000)
-        await waitForVizReady(page, ae.name, 30_000)
-        const tab2 = await findEl(page, 'text="Raw Data"')
-        if (tab2) { await tab2.click(); await page.waitForTimeout(3_000) }
-      }
-
-      for (const frame of page.frames()) {
-        const extracted = await frame.evaluate(() => {
-          // Tableau uses ARIA grid roles for data tables
-          const grids = Array.from(document.querySelectorAll('[role="grid"], table'))
-          for (const grid of grids) {
-            const headerCells = Array.from(grid.querySelectorAll('[role="columnheader"], th'))
-            if (headerCells.length === 0) continue
-            const headers = headerCells.map(h => h.textContent?.trim() ?? '')
-
-            const dataRows: Record<string, string>[] = []
-            const rowEls = Array.from(grid.querySelectorAll('[role="row"]:not(:has([role="columnheader"])), tr'))
-            for (const row of rowEls) {
-              const cells = Array.from(row.querySelectorAll('[role="gridcell"], td'))
-              if (cells.length === 0) continue
-              const obj: Record<string, string> = {}
-              cells.forEach((cell, i) => { obj[headers[i] ?? `col${i}`] = cell.textContent?.trim() ?? '' })
-              dataRows.push(obj)
-            }
-            if (dataRows.length > 0) return dataRows
-          }
-          return null
-        }).catch(() => null)
-
-        if (extracted?.length) {
-          rows = extracted
-          console.log(`[ccsp] ${ae.name}: DOM scrape: ${rows.length} rows from table`)
-          break
-        }
-      }
-
-      if (rows.length === 0) console.warn(`[ccsp] ${ae.name}: DOM table scrape found no rows`)
-    } catch (e: any) {
-      console.warn(`[ccsp] ${ae.name}: DOM scrape failed: ${e.message}`)
-    }
+    console.warn(`[ccsp] ${ae.name}: CSV download failed: ${e.message}`)
   }
 
   if (rows.length === 0) {
@@ -512,6 +753,22 @@ async function scrapeOneAe(page: Page, ae: AE): Promise<CcspResult> {
 // -- Public scrape entry point ------------------------------------------------
 
 export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
+  // BKL-INGEST-04: L4 live-scrape guard — blocks live Tableau scrape in test environment.
+  // Must be the first check, before any browser/network work.
+  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
+    throw new Error('[ccsp-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
+
+  // Re-sync context in case RH scraper recycled it (every 50 scrapes).
+  // If the shared context was replaced, _ctx is a stale reference — refresh it
+  // and restore Tableau cookies into the new context before proceeding.
+  const liveCtx = getScrapeContext()
+  if (liveCtx && liveCtx !== _ctx) {
+    console.log('[ccsp] context recycled by RH scraper — re-adopting')
+    _ctx = liveCtx
+    await restoreTableauSession(liveCtx)
+  }
+
   if (ccspScrapeRunning) {
     if (ccspScrapeStartedAt && (Date.now() - ccspScrapeStartedAt > STALE_MUTEX_MS)) {
       console.warn(`[ccsp] stale mutex detected (${Math.round((Date.now() - ccspScrapeStartedAt) / 60000)}min) — auto-releasing`)
@@ -529,10 +786,19 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
   markRunning('ccsp')
   const _ccspTelemetryStart = Date.now()
 
+  // BKL-PERF-03: Read podBookingsFolderId for Drive cache check/write in scrapeOneAe
+  const SETTINGS_PATH_CCSP = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
+  let podBookingsFolderId = ''
+  try {
+    const raw = JSON.parse(readFileSync(SETTINGS_PATH_CCSP, 'utf-8'))
+    podBookingsFolderId = normalizeSettings(raw).regions[0]?.podBookingsFolderId ?? ''
+  } catch { /* non-fatal — proceed without Drive cache */ }
+
   const results: CcspResult[] = []
 
   try {
     for (const ae of aes) {
+      console.log(`[ccsp] runCcspScrape: processing AE ${ae.name}`)
       if (!ae.tableauTerritories?.length) {
         console.warn(`[ccsp] ${ae.name}: no tableauTerritories configured — skipping`)
         continue
@@ -543,16 +809,22 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
       }
 
       if (!_ctx) throw new Error('Browser context not available — re-authenticate via Setup page')
-      // BKL-ADM02: health-check the context before use — a non-null but closed context
-      // throws "Target page, context or browser has been closed" on newPage().
+      // BKL-ADM02: _ctx.pages() does NOT throw on a closed context (it returns []).
+      // Use newPage() as the real liveness probe — it throws if context is closed.
+      let page: Page
       try {
-        await _ctx.pages()  // lightweight liveness probe; throws if context is closed
-      } catch {
+        page = await Promise.race([
+          _ctx.newPage(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('newPage() timed out after 30s — browser context unresponsive')), 30_000)
+          ),
+        ])
+        console.log(`[ccsp] ${ae.name}: new page created OK`)
+      } catch (e: any) {
         _ctx = null
-        throw new Error('Browser context is closed — re-authenticate via Setup page and retry')
+        throw new Error(`Browser context is closed or unresponsive (${e.message}) — re-authenticate via Setup page and retry`)
       }
-      const page = await _ctx.newPage()
-      const scrapePromise = scrapeOneAe(page, ae)
+      const scrapePromise = scrapeOneAe(page, ae, podBookingsFolderId || undefined)
       scrapePromise.catch(() => {})  // suppress orphaned rejection if timeout fires first
       try {
         const result = await Promise.race([
@@ -589,6 +861,281 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
     ccspScrapeRunning = false; setLivePageBusy(false)
     ccspScrapeStartedAt = null
   }
+}
+
+// -- BKL-PERF-02: POD-level pre-scrape + per-AE filter -----------------------
+
+/**
+ * Scrape the full CCSP POD data in one Tableau navigation.
+ * The CSV endpoint returns all territories — use filterCcspRowsForAe() per AE.
+ * Use this in POD bootstrap to avoid one browser navigation per AE.
+ */
+/**
+ * seedTerritories: pass the first AE's territories so Tableau renders the viz correctly.
+ * The CSV endpoint ignores territory params and returns full POD data regardless —
+ * seedTerritories are only used to get a working Tableau page load.
+ */
+export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFolderId?: string): Promise<{ rows: Record<string, string>[]; period: string }> {
+  // BKL-INGEST-04: L4 live-scrape guard — blocks live Tableau scrape in test environment.
+  // Must be the first check, before any browser/network work.
+  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
+    throw new Error('[ccsp-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
+
+  if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
+  // BKL-ADM02: _ctx.pages() does NOT throw on a closed context (it returns []).
+  // The real liveness probe is newPage() below — wrapped in try-catch.
+
+  const { years, quarters, label } = getRollingFyWindow()
+  const validSeedTerritories = seedTerritories.filter(t => /^[A-Z0-9_]+$/.test(t))
+
+  // -- Drive cache check: skip Tableau if today's CCSP POD CSV already exists --
+  const podName = validSeedTerritories.length > 0
+    ? parseTerritoryParts(validSeedTerritories[0]).pod
+    : 'UNKNOWN'
+  const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  const cacheFileName = `CCSP-${podName}-${today}.csv`
+
+  if (driveFolderId) {
+    try {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const drive = google.drive({ version: 'v3', auth })
+      const listRes = await withQuotaRetry(
+        () => drive.files.list({
+          q: `name = '${cacheFileName}' and '${driveFolderId}' in parents and trashed = false`,
+          fields: 'files(id, name)',
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        }),
+        'CCSP Drive cache check',
+      )
+      const cacheFile = listRes.data.files?.[0]
+      if (cacheFile?.id) {
+        console.log(`[ccsp] POD pre-scrape: found Drive cache file ${cacheFileName} (${cacheFile.id}) — downloading`)
+        const dlRes = await withQuotaRetry(
+          () => drive.files.get({ fileId: cacheFile.id!, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }),
+          'CCSP Drive cache download',
+        )
+        const csvText = typeof dlRes.data === 'string' ? dlRes.data : String(dlRes.data)
+        const cachedRows = parseCsvToObjects(csvText)
+        if (cachedRows.length > 0) {
+          console.log(`[ccsp] POD pre-scrape: Drive cache hit — ${cachedRows.length} rows from ${cacheFileName}`)
+          return { rows: cachedRows, period: label }
+        }
+        console.warn(`[ccsp] POD pre-scrape: Drive cache file had 0 rows — proceeding to Tableau`)
+      }
+    } catch (e: any) {
+      console.warn(`[ccsp] POD pre-scrape: Drive cache check failed: ${e.message} — proceeding to Tableau`)
+    }
+  }
+  // BKL-CCSP-05: Derive Segment, Region from seed territory — hardcoded Commercial
+  // filters returned 0 rows for Enterprise (TOLA) territories.
+  const seedFilters = validSeedTerritories.length > 0
+    ? parseTerritoryParts(validSeedTerritories[0])
+    : { pod: '', subregion: '', segment: 'Commercial', subsegment: 'Commercial', region: 'NA_COMM_COMMERCIAL' }
+
+  const filterParams = new URLSearchParams()
+  filterParams.set('Super Geo', 'AMERICAS')
+  filterParams.set('Geo', 'NA_COMM')
+  filterParams.set('Region', seedFilters.region)
+  filterParams.set('Segment', seedFilters.segment)
+  filterParams.set('Subsegment', seedFilters.subsegment)
+  filterParams.set('Year', years.join(','))
+  filterParams.set('Quarter', quarters.join(','))
+  // Use seed territory to scope Tableau viz to the right POD — download returns full POD data.
+  // BKL-CCSP-CSV-01: Account Territory filter removed — breaks .csv endpoint.
+  if (validSeedTerritories.length > 0) {
+    filterParams.set('Subregion', seedFilters.subregion)
+    filterParams.set('POD', seedFilters.pod)
+  }
+
+  let page: Page
+  try {
+    page = await Promise.race([
+      _ctx.newPage(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('newPage() timed out after 30s — browser context unresponsive')), 30_000)
+      ),
+    ])
+    console.log(`[ccsp] scrapePodCcspRaw: new page created OK`)
+  } catch (e: any) {
+    _ctx = null
+    throw new Error(`Browser context is closed or unresponsive (${e.message}) — re-authenticate via Setup page and retry`)
+  }
+  try {
+    const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams}`
+    console.log(`[ccsp] POD pre-scrape: navigating for full dataset…`)
+    await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {
+      console.warn(`[ccsp] POD pre-scrape: networkidle timed out — continuing`)
+    })
+    await page.waitForTimeout(3_000)
+
+    await waitForVizReady(page, 'POD')
+    await page.waitForTimeout(2_000)
+
+    const rawDataTab = await findEl(page, 'text="Raw Data"')
+    if (rawDataTab) {
+      await rawDataTab.click()
+      await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
+      await page.waitForTimeout(3_000)
+    }
+
+    let postTabUrl = page.url()
+    if (postTabUrl.includes('/CloudConsumption') && rawDataTab) {
+      postTabUrl = postTabUrl.replace('/CloudConsumption', '/RawData')
+    }
+
+    let rows: Record<string, string>[] = []
+    // BKL-CCSP-CSV-01 fix: Direct server-side CSV URL using TABLEAU_EMBED_BASE
+    // (/t/site/views/... format). The old download button approach failed because
+    // popup SSO doesn't pass through. The .csv URL works when built from the
+    // server-side path, not from page.url() (which returns fragment #/site/... format).
+    try {
+      const rawDataBase = TABLEAU_EMBED_BASE.replace('/CloudConsumption', '/RawData')
+      // BKL-CCSP-CSV-01: Use only Quarter + POD filters — Segment/Subsegment cause 0 rows for CORP territories
+      const csvFilterParamsPod = new URLSearchParams()
+      if (podName) csvFilterParamsPod.set('POD', podName)
+      csvFilterParamsPod.set('Quarter', quarters.join(','))
+      const csvParams = csvFilterParamsPod.toString().replace(/%2C/gi, ',')
+      const csvUrl = `${rawDataBase}.csv?${csvParams}`
+
+      console.log(`[ccsp] POD pre-scrape: fetching CSV from ${csvUrl}`)
+      let csvPath: string | null = null
+      try {
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 60_000 }),
+          page.goto(csvUrl, { waitUntil: 'commit', timeout: 30_000 }).catch(() => {}),
+        ])
+        csvPath = await download.path()
+        console.log(`[ccsp] POD pre-scrape: download captured at ${csvPath}`)
+      } catch (e: any) {
+        console.warn(`[ccsp] POD pre-scrape: CSV download failed: ${e.message}`)
+      }
+
+      if (csvPath) {
+        const csvText = readFileSync(csvPath, 'utf8')
+        rows = parseCsvToObjects(csvText)
+        console.log(`[ccsp] POD pre-scrape: direct CSV: ${rows.length} rows`)
+      }
+
+      // Re-navigate to main view so context is clean
+      await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
+
+      // Apply quarter filter only — NOT territory filter (that's per-AE client-side)
+      if (rows.length > 0) {
+        const qtrColName = Object.keys(rows[0]).find(k =>
+          k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
+        )
+        if (qtrColName) {
+          const qtrSet = new Set(quarters)
+          const before = rows.length
+          rows = rows.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
+          console.log(`[ccsp] POD pre-scrape: ${before} raw rows → ${rows.length} after quarter filter`)
+        }
+      }
+      console.log(`[ccsp] POD pre-scrape: ${rows.length} rows cached for all AEs`)
+    } catch (e: any) {
+      throw new Error(`POD CCSP pre-scrape failed: ${e.message}`)
+    }
+
+    if (rows.length === 0) throw new Error('POD CCSP pre-scrape: 0 rows — Tableau may not be authenticated')
+
+    // -- Drive cache write: persist raw POD rows so subsequent runs skip Tableau --
+    if (driveFolderId && rows.length > 0) {
+      try {
+        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+        const drive = google.drive({ version: 'v3', auth })
+        // REG-CCSP-DUP-01: delete any stale CCSP-<pod>-<date>.csv files for this POD before writing today's
+        try {
+          const staleRes = await withQuotaRetry(
+            () => drive.files.list({
+              q: `name contains 'CCSP-${podName}-' and '${driveFolderId}' in parents and trashed = false`,
+              fields: 'files(id, name)',
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            }),
+            'CCSP Drive stale cache list',
+          )
+          const staleFiles = staleRes.data.files ?? []
+          for (const oldFile of staleFiles) {
+            if (!oldFile.id || !oldFile.name) continue
+            if (!oldFile.name.startsWith(`CCSP-${podName}-`) || !oldFile.name.endsWith('.csv')) continue
+            try {
+              await drive.files.delete({ fileId: oldFile.id, supportsAllDrives: true })
+              console.log(`[ccsp] deleted stale Drive cache ${oldFile.name}`)
+            } catch (delErr: any) {
+              console.warn(`[ccsp] POD pre-scrape: stale cache delete failed for ${oldFile.name}: ${delErr.message} — non-fatal`)
+            }
+          }
+        } catch (listErr: any) {
+          console.warn(`[ccsp] POD pre-scrape: stale cache list failed: ${listErr.message} — non-fatal, proceeding to write`)
+        }
+        // Build CSV text from rows
+        const headers = Object.keys(rows[0])
+        const csvLines = [headers.join(',')]
+        for (const row of rows) {
+          csvLines.push(headers.map(h => {
+            const val = row[h] ?? ''
+            return val.includes(',') || val.includes('"') || val.includes('\n')
+              ? `"${val.replace(/"/g, '""')}"` : val
+          }).join(','))
+        }
+        const csvContent = csvLines.join('\n')
+        await withQuotaRetry(
+          () => drive.files.create({
+            requestBody: {
+              name: cacheFileName,
+              mimeType: 'text/csv',
+              parents: [driveFolderId],
+            },
+            media: { mimeType: 'text/csv', body: csvContent },
+            supportsAllDrives: true,
+            fields: 'id',
+          }),
+          'CCSP Drive cache write',
+        )
+        console.log(`[ccsp] POD pre-scrape: wrote Drive cache file ${cacheFileName} (${rows.length} rows)`)
+      } catch (e: any) {
+        console.warn(`[ccsp] POD pre-scrape: Drive cache write failed: ${e.message} — non-fatal`)
+      }
+    }
+
+    return { rows, period: label }
+  } finally {
+    await page.close().catch(() => {})
+  }
+}
+
+/**
+ * Filter pre-scraped POD CCSP rows for a specific AE's territories.
+ * Use after scrapePodCcspRaw() to get per-AE results without re-scraping.
+ */
+export function filterCcspRowsForAe(
+  rawRows: Record<string, string>[],
+  period: string,
+  ae: AE
+): CcspResult {
+  const territories = (ae.tableauTerritories ?? []).filter(t => /^[A-Z0-9_]+$/.test(t))
+  if (territories.length === 0 || rawRows.length === 0) {
+    return { aeName: ae.name, rows: [], accountPeriod: period }
+  }
+
+  let rows = rawRows
+  const terrColName = Object.keys(rawRows[0]).find(k => {
+    const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+    return norm === 'account territory name' || norm === 'account territory'
+  })
+  if (terrColName) {
+    const terrSet = new Set(territories)
+    const before = rows.length
+    rows = rows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
+    console.log(`[ccsp] ${ae.name}: territory filter from cache: ${before} → ${rows.length} rows`)
+  } else {
+    console.warn(`[ccsp] ${ae.name}: no territory column in cached rows — using all rows`)
+  }
+
+  return { aeName: ae.name, rows, accountPeriod: period }
 }
 
 // -- Google Sheets writer -----------------------------------------------------

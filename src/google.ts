@@ -4,7 +4,9 @@ import { resolve } from 'path'
 import type { EmailHighlight, DriveFile, CalendarEvent, Customer } from './types.ts'
 
 // Shared config path — uses CONFIG_DIR env var (container) or local config/ dir
-const CONFIG_DIR_PATH = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+// import.meta.dir is Bun-only; fall back to process.cwd() when undefined (e.g. Playwright test runner)
+const _metaDir: string | undefined = (import.meta as any).dir
+const CONFIG_DIR_PATH = process.env.CONFIG_DIR ?? resolve(_metaDir ?? process.cwd(), _metaDir ? '../config' : 'config')
 const OAUTH_KEYS_PATH    = process.env.GOOGLE_OAUTH_KEYS  ?? resolve(CONFIG_DIR_PATH, 'gcp-oauth.keys.json')
 const GMAIL_TOKEN_PATH   = process.env.GMAIL_TOKEN         ?? resolve(CONFIG_DIR_PATH, '.gmail-token.json')
 const GDRIVE_TOKEN_PATH  = process.env.GDRIVE_TOKEN        ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
@@ -229,9 +231,17 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
         .filter((c) => {
           // BKL-CAL-06: domain-only matches require corroboration to prevent false positives.
           // A single external attendee from a customer domain is insufficient — require either
-          // 2+ attendees from that domain OR a title keyword from the customer name.
-          const titleCorroboration = (name: string) =>
-            custKeywords(name).some(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(title))
+          // 2+ attendees from that domain OR title corroboration from the customer name.
+          //
+          // titleCorroboration uses the SAME ≥2-keyword threshold as the title-only path (step 3).
+          // Using .some() (any keyword) caused false positives: "red" in "Red Hat Summit" wrongly
+          // corroborated "Red Robin"; "northwest" in "Northwest Corporate Call" wrongly
+          // corroborated "Northwest Natural". Single common words are not meaningful corroboration.
+          const titleCorroboration = (name: string) => {
+            const kws = custKeywords(name)
+            const matchingKws = kws.filter(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(title))
+            return kws.length >= 2 ? matchingKws.length >= 2 : matchingKws.length >= 1
+          }
 
           // 1. Explicit domain config (exact suffix match)
           if (c.domain && externalAttendees.some((e) => e.endsWith(c.domain!))) {
@@ -261,8 +271,12 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           const matchingKws = keywords.filter(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(titleNorm))
           if (keywords.length >= 2 ? matchingKws.length >= 2 : matchingKws.length >= 1) return true
 
-          // 4. Aliases: check title against aliases too
-          if (c.aliases?.some(alias => custKeywords(alias).some(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(titleNorm)))) return true
+          // 4. Aliases: check title against aliases with same ≥2-keyword threshold
+          if (c.aliases?.some(alias => {
+            const aliasKws = custKeywords(alias)
+            const aliasMatching = aliasKws.filter(kw => new RegExp(`\\b${escRe(kw)}\\b`, 'i').test(titleNorm))
+            return aliasKws.length >= 2 ? aliasMatching.length >= 2 : aliasMatching.length >= 1
+          })) return true
 
           return false
         })

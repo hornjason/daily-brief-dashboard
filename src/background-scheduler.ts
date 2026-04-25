@@ -1,6 +1,7 @@
 import { existsSync, unlinkSync, readFileSync, writeFileSync } from 'fs'
 import { renameSync } from 'node:fs'
 import { resolve } from 'path'
+import { createHash } from 'crypto'
 import { customers, aes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { refreshAll, refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { runRhScrapeWithState, runSfSyncForAes, _rhScrapeRunning, _sfSyncRunning, ccspInFlight, setLastSkipReason } from './scraper-manager.ts'
@@ -24,6 +25,7 @@ import { renderBriefHtml } from './email-template.ts'
 import { sendBriefEmail } from './email-sender.ts'
 import { sanitizeErr, normalizeForQuery, liveProbe } from './utils.ts'
 import { isBootstrapRunning } from './bootstrap-orchestrator.ts'
+import { writeSyncStateFlow, todaySyncRan } from './sync-state.ts'
 
 // ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
 // All scrapers share one BrowserContext (SSO constraint). Running them
@@ -217,6 +219,42 @@ async function notify(title: string, message: string, priority: 'default' | 'hig
   } catch (e: any) {
     console.warn('[ntfy] scheduler notification failed:', e?.message ?? e)
   }
+}
+
+// ── BKL-INGEST-06: Retry helper for scheduled scrape failures ────────────────
+// When a scheduled scrape's run callback throws, scheduleRetry() re-enqueues
+// the same task after a back-off delay (5m → 10m → 15m). After all delays
+// are exhausted, fires an urgent ntfy push so a human can intervene via VNC.
+//
+// The retry wrapper rethrows after scheduling the retry so the scraper queue's
+// failure logging path still records the error — the queue's catch handler
+// only logs, it does not act on the error.
+export const RETRY_DELAYS = [5 * 60_000, 10 * 60_000, 15 * 60_000]
+
+export function scheduleRetry(name: string, run: () => Promise<void>, delays: number[], attempt: number): void {
+  if (attempt >= delays.length) {
+    // All retries exhausted — notify urgently so a human can investigate via VNC.
+    notify(`${name} sync failed`, `Scheduled sync failed after ${delays.length} retries — check VNC`, 'urgent').catch(() => {})
+    return
+  }
+  const delay = delays[attempt]
+  console.warn(`[${name}] retry ${attempt + 1}/${delays.length} in ${Math.round(delay / 60_000)}m`)
+  setTimeout(() => {
+    enqueueScraperTask({
+      name,
+      run: async () => {
+        try {
+          await run()
+        } catch (e: any) {
+          console.warn(`[${name}] retry ${attempt + 1} failed: ${e?.message ?? e}`)
+          scheduleRetry(name, run, delays, attempt + 1)
+          throw e
+        }
+      },
+      source: 'scheduled',
+      enqueuedAt: Date.now(),
+    })
+  }, delay)
 }
 
 // ── Session health watchdog state ────────────────────────────────────────────
@@ -416,7 +454,14 @@ async function runCcspScrapeWithDelta(aesToScrape: any[]): Promise<void> {
     try { prevRecords = JSON.parse(readFileSync(CCSP_CACHE_PATH, 'utf-8')).records ?? [] } catch {}
   }
 
-  const ccspResults = await runCcspScrape(aesToScrape)
+  let ccspResults: any[]
+  try {
+    ccspResults = await runCcspScrape(aesToScrape)
+  } catch (e: any) {
+    // BKL-INGEST-09: Mark CCSP failed in sync-state so late startup detection knows this flow ran (and failed)
+    writeSyncStateFlow('ccsp', 'failed')
+    throw e
+  }
 
   // FIX N5: Write CCSP sheets per eligible AE and refresh cache
   const eligibleAes = aesToScrape.filter((a: any) => a.tableauTerritories?.length && a.driveFolderId)
@@ -430,6 +475,9 @@ async function runCcspScrapeWithDelta(aesToScrape: any[]): Promise<void> {
     }
   }
   await refreshCCSP().catch((e: any) => console.warn('[ccsp-sync] cache refresh failed:', sanitizeErr(e)))
+
+  // BKL-INGEST-09: Mark CCSP ok in sync-state after successful scrape + cache refresh
+  writeSyncStateFlow('ccsp', 'ok')
 
   // Read new cache after scrape
   let newRecords: any[] = []
@@ -523,13 +571,25 @@ export function scheduleCcspSync(): void {
       }
 
       // BKL-M49: Enqueue through scraper queue instead of running directly
+      // BKL-INGEST-06: Wrap run with retry — failures re-enqueue with 5m→10m→15m back-off.
+      // Note: runCcspScrapeWithDelta already calls writeSyncStateFlow('ccsp', ok|failed)
+      // internally — do NOT add duplicate sync-state writes here.
       const capturedAes = aes
+      const ccspRun = async () => {
+        await runCcspScrapeWithDelta(capturedAes)
+        updateSchedulerField('ccspLastRun', new Date().toISOString())
+        console.log('[ccsp-sync] CCSP scrape complete')
+      }
       enqueueScraperTask({
         name: 'ccsp',
         run: async () => {
-          await runCcspScrapeWithDelta(capturedAes)
-          updateSchedulerField('ccspLastRun', new Date().toISOString())
-          console.log('[ccsp-sync] CCSP scrape complete')
+          try {
+            await ccspRun()
+          } catch (e: any) {
+            console.warn('[ccsp-sync] scrape failed — scheduling retry:', e?.message ?? e)
+            scheduleRetry('ccsp', ccspRun, RETRY_DELAYS, 0)
+            throw e
+          }
         },
         source: 'scheduled',
         enqueuedAt: Date.now(),
@@ -766,8 +826,6 @@ export function scheduleTerritorySync(): void {
   }, msUntil)
 }
 
-let sweepInFlight = false
-
 let _sfSessionPathForScheduler = ''
 
 export function schedulePipelineSync(sfSessionPath?: string): void {
@@ -819,12 +877,32 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
         }
 
         // BKL-M49: Enqueue SF pipeline sync through scraper queue (gated on probe)
+        // BKL-INGEST-06: Wrap run with retry — failures re-enqueue with 5m→10m→15m back-off.
+        // BKL-INGEST-09 sync-state writes happen inside pipelineRun so a successful
+        // retry still marks 'ok'; the outer catch only adds retry scheduling and rethrow.
         if (sfProbeOk) {
           const { aes: capturedAes } = await import('./server-state.ts')
+          const pipelineRun = async () => {
+            try {
+              await runSfSyncForAes(capturedAes)
+              // BKL-INGEST-09: Mark pipeline ok in sync-state after successful sync
+              writeSyncStateFlow('pipeline', 'ok')
+            } catch (e: any) {
+              // BKL-INGEST-09: Mark pipeline failed so late startup detection knows this ran
+              writeSyncStateFlow('pipeline', 'failed')
+              throw e
+            }
+          }
           enqueueScraperTask({
             name: 'sf-pipeline',
             run: async () => {
-              await runSfSyncForAes(capturedAes)
+              try {
+                await pipelineRun()
+              } catch (e: any) {
+                console.warn('[pipeline-sync] scrape failed — scheduling retry:', e?.message ?? e)
+                scheduleRetry('sf-pipeline', pipelineRun, RETRY_DELAYS, 0)
+                throw e
+              }
             },
             source: 'scheduled',
             enqueuedAt: Date.now(),
@@ -1088,9 +1166,6 @@ export function initBackgroundScheduler(opts: {
   // Validate cached account numbers — warn/clear false positives before scrapes start
   validateCachedAccountNumbers()
 
-  // Fill missing customer domains on startup (30s delay gives bootstrap time to load customers)
-  scheduleDomainInferenceSweep(30_000)
-
   // On startup: run a full refresh, then schedule per-source timers
   if (customers.length > 0) {
     refreshAll().catch((e: any) => console.error('[refresh] startup refresh failed:', e?.message ?? e))
@@ -1114,6 +1189,63 @@ export function initBackgroundScheduler(opts: {
 
   // Email brief delivery — scheduled per user config (BKL-E06)
   scheduleEmailDelivery()
+
+  // BKL-INGEST-09: Late startup detection — if today's scheduled sync missed, catch up after 60s.
+  // Container may start after 6:30am ET (CCSP schedule) and 2am ET (Pipeline schedule).
+  // We wait 60s for the server to fully stabilise before triggering catch-up scrapes.
+  if (!todaySyncRan()) {
+    console.log('[sync-state] today\'s sync has not run — scheduling catch-up in 60s')
+    setTimeout(() => {
+      // Re-check in case another startup path already triggered a sync during the 60s window
+      if (todaySyncRan()) {
+        console.log('[sync-state] catch-up: sync ran during stabilisation window — skipping')
+        return
+      }
+      console.log('[sync-state] catch-up: triggering CCSP and Pipeline via queue (source: startup)')
+      // CCSP catch-up: reuse existing enqueue pattern — only if ccspEnabled
+      const ccspCfg = getSchedulerConfig()
+      if (ccspCfg.ccspEnabled) {
+        import('./server-state.ts').then(({ aes: catchupAes }) => {
+          if (catchupAes.length === 0) {
+            console.log('[sync-state] catch-up: no AEs configured — skipping CCSP catch-up')
+            return
+          }
+          enqueueScraperTask({
+            name: 'ccsp',
+            run: async () => {
+              await runCcspScrapeWithDelta(catchupAes)
+              updateSchedulerField('ccspLastRun', new Date().toISOString())
+              console.log('[sync-state] catch-up: CCSP scrape complete')
+            },
+            source: 'startup',
+            enqueuedAt: Date.now(),
+          })
+        }).catch(e => console.warn('[sync-state] catch-up: CCSP enqueue failed:', e?.message))
+      }
+      // Pipeline catch-up: reuse existing enqueue pattern — only if sfPipelineEnabled and session present
+      const pipeCfg = getSchedulerConfig()
+      if (pipeCfg.sfPipelineEnabled) {
+        import('./server-state.ts').then(({ aes: catchupAes }) => {
+          enqueueScraperTask({
+            name: 'sf-pipeline',
+            run: async () => {
+              try {
+                await runSfSyncForAes(catchupAes)
+                writeSyncStateFlow('pipeline', 'ok')
+              } catch (e: any) {
+                writeSyncStateFlow('pipeline', 'failed')
+                throw e
+              }
+            },
+            source: 'startup',
+            enqueuedAt: Date.now(),
+          })
+        }).catch(e => console.warn('[sync-state] catch-up: pipeline enqueue failed:', e?.message))
+      }
+    }, 60_000)
+  } else {
+    console.log('[sync-state] today\'s sync already ran — skipping catch-up')
+  }
 
   // Cold-start auth-gate: On startup, wait 10s for Xvfb + Chrome to stabilise,
   // then init context. Before enqueueing scrapes, verify the session is actually
@@ -1139,23 +1271,26 @@ export function initBackgroundScheduler(opts: {
           const finalUrl = testPage.url()
           await testPage.close()
 
-          if (finalUrl.includes('access.redhat.com/support')) {
-            // Session is valid — enqueue startup scrape
-            console.log('[scraper-queue] startup: auth pre-flight PASSED — session valid, enqueueing scrape')
+          const onLoginPage = finalUrl.includes('sso.redhat.com') || finalUrl.includes('auth.redhat.com/auth/realms')
+          if (onLoginPage) {
+            // Confirmed redirect to SSO login — session is expired
+            recordScrapeExpired()
+            console.warn('[scraper-queue] startup: auth pre-flight FAILED — session expired (redirected to login). Skipping startup scrape. VNC in to re-authenticate.')
+          } else {
+            // On RH Portal or mid-SSO bounce with valid session — assume valid
+            console.log(`[scraper-queue] startup: auth pre-flight PASSED — session valid (url: ${finalUrl}), enqueueing scrape`)
             enqueueScraperTask({
               name: 'rh-cases',
               run: () => runRhScrapeWithState(),
               source: 'startup',
               enqueuedAt: Date.now(),
             })
-          } else {
-            // Session expired — redirected to login page
-            recordScrapeExpired()
-            console.warn('[scraper-queue] startup: auth pre-flight FAILED — session expired (redirected to login). Skipping startup scrape. VNC in to re-authenticate.')
           }
         } catch (e: any) {
-          recordScrapeExpired()
-          console.warn(`[scraper-queue] startup: auth pre-flight error — ${e?.message ?? e}. Skipping startup scrape.`)
+          // Navigation error (timeout, Xvfb not ready, network blip) — do NOT mark session
+          // expired. A browser crash is not evidence the session is invalid. Leave
+          // rhSessionExpired untouched so the UI stays at its last known state.
+          console.warn(`[scraper-queue] startup: auth pre-flight error — ${e?.message ?? e}. Skipping startup scrape (session state unchanged).`)
         }
       }
     }, 10_000)
@@ -1319,8 +1454,26 @@ export function initBackgroundScheduler(opts: {
         const customerNeedle = normalizeForQuery(customer.name)
         const pipelineRecords = (readPipelineCache()?.records ?? []).filter(r => normalizeForQuery(r.accountName).includes(customerNeedle) || customerNeedle.includes(normalizeForQuery(r.accountName)))
         const ccspRecords = (readCCSPCache()?.records ?? []).filter(r => normalizeForQuery(r.accountName).includes(customerNeedle) || customerNeedle.includes(normalizeForQuery(r.accountName)))
+        // BKL-ADR013-P2: compute input fingerprint so pre-generated briefs match on next request.
+        const fingerprintSource = JSON.stringify({
+          emails: emails.map(e => `${e.date}|${e.from}|${e.subject}`),
+          meetings: meetings.map(m => `${m.start}|${m.title}`),
+          docs: docs.map(d => d.id ?? `${d.name}|${d.modifiedTime ?? ''}`),
+          cases: cases.map(r => r.caseNumber),
+          subscriptions: subscriptions.map(s => `${s.subscriptionNumber}|${s.status}|${s.endDate}`),
+          products: products.map(p => `${p.sku}|${p.status}|${p.endDate ?? ''}`),
+          pipeline: pipelineRecords.map(r => r.oppId ?? r.oppNumber ?? r.accountName),
+          ccsp: ccspRecords.map(r => `${r.accountName}|${r.cloudPartner}|${r.quarter ?? ''}`),
+        })
+        const inputFingerprint = createHash('sha256').update(fingerprintSource).digest('hex')
         const text = await generateBrief(customer, meetings, emails, docs, cases, subscriptions, products, pipelineRecords, ccspRecords)
-        writeBriefCache(customer.name, text)
+        const lastEmail = emails?.[0]?.date ? new Date(emails[0].date) : undefined
+        const lastMeeting = meetings?.[0]?.start ? new Date(meetings[0].start) : undefined
+        const lastActivity = [lastEmail, lastMeeting].filter((d): d is Date => !!d).sort((a, b) => b.getTime() - a.getTime())[0]
+        // BKL-AI-FP-09: build corpus snapshot for delta detection on next miss
+        const corpusSnapshot: Record<string, string> = {}
+        for (const d of docs) { if (d.id) corpusSnapshot[d.id] = d.modifiedTime ?? '' }
+        writeBriefCache(customer.name, text, lastActivity, inputFingerprint, corpusSnapshot)
         console.log(`[brief-pregen] ${customer.name}: done`)
       } catch (e: any) {
         console.warn(`[brief-pregen] ${customer.name}: ${e.message}`)
@@ -1362,49 +1515,6 @@ export function initBackgroundScheduler(opts: {
   }
   process.on('SIGTERM', shutdown)
   process.on('SIGINT',  shutdown)
-}
-
-// ── Domain inference background sweep ───────────────────────────────────────
-
-export function scheduleDomainInferenceSweep(delayMs = 30_000): void {
-  setTimeout(async () => {
-    if (sweepInFlight) { console.log('[domain-sweep] skipping — sweep already in flight'); return }
-    sweepInFlight = true
-    try {
-      const { customers } = await import('./server-state.ts')
-      const missing = customers.filter((cx: any) => !cx.inactive && !cx.domain)
-      if (missing.length === 0) { console.log('[domain-sweep] all customers have domains'); return }
-      const { waterfallInferDomain } = await import('./domain-waterfall.ts')
-      const resolved: Array<{ name: string; domain: string; tier: string | null }> = []
-      for (let i = 0; i < missing.length; i += 3) {
-        const batch = missing.slice(i, i + 3)
-        const results = await Promise.all(batch.map(async (cu: any) => {
-          try {
-            const wf = await waterfallInferDomain(cu.name)
-            return wf.domain ? { name: cu.name, domain: wf.domain, tier: wf.tier } : null
-          } catch (e: any) { console.warn(`[domain-sweep] skipping ${cu.name}:`, e?.message); return null }
-        }))
-        for (const r of results) { if (r) resolved.push(r) }
-        if (i + 3 < missing.length) await new Promise(r => setTimeout(r, 100))
-      }
-      if (resolved.length === 0) { console.log('[domain-sweep] no domains resolved'); return }
-      const { setCustomers } = await import('./server-state.ts')
-      const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
-      for (const { name, domain, tier } of resolved) {
-        const idx = (raw.customers ?? []).findIndex((c: any) => c.name === name)
-        if (idx >= 0 && !raw.customers[idx].domain) {
-          raw.customers[idx].domain = domain
-          console.log(`[domain-sweep] ${name} → ${domain} (${tier})`)
-        }
-      }
-      const tmpPath = CUSTOMERS_PATH + '.tmp'
-      writeFileSync(tmpPath, JSON.stringify(raw, null, 2), { mode: 0o600 })
-      renameSync(tmpPath, CUSTOMERS_PATH)
-      setCustomers(raw.customers)
-      console.log('[domain-sweep] complete')
-    } catch (e: any) { console.warn('[domain-sweep] failed:', e?.message)
-    } finally { sweepInFlight = false }
-  }, delayMs)
 }
 
 // ── Product Intelligence weekly refresh — Sunday 6am ET (Wave 4) ─────────────
@@ -1459,7 +1569,8 @@ export function scheduleProductIntelRefresh(): void {
 
       // Regenerate per-customer product intel after features are fresh
       try {
-        const { buildCustomerIntelContext, generateCustomerProductIntel, toCustomerSlug: slugify } = await import('./customer-product-intel.ts')
+        const { buildCustomerIntelContext, generateCustomerProductIntel } = await import('./customer-product-intel.ts')
+        const { toSlug: slugify } = await import('./cache-layer.ts')
         const { loadProductConfig, getCachedSummary } = await import('./product-release-radar.ts')
         const { _generatingKeys } = await import('./product-intel-routes.ts') as any
         const { getCachedDriveCorpus } = await import('./product-drive-ingest.ts')

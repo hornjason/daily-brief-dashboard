@@ -92,22 +92,7 @@ export function setContextRecoveryCallback(cb: (ctx: BrowserContext, profileDir:
  * stealing the page from the user.
  */
 export function setLivePageBusy(busy: boolean): void { _livePageBusy = busy }
-
-/**
- * Returns true if the live RH browser page is currently in an SSO flow
- * (mid-redirect through auth.redhat.com) or has been explicitly marked busy
- * by another flow (e.g. Tableau login). Used to prevent session-status
- * navigation from interfering with the Tableau SSO redirect chain.
- */
-export function isLivePageBusy(): boolean {
-  if (_livePageBusy) return true
-  if (!_livePage) return false
-  try {
-    return _livePage.url().includes('auth.redhat.com')
-  } catch {
-    return false
-  }
-}
+export function isLivePageBusy(): boolean { return _livePageBusy }
 
 const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000 // 8 minutes — well before SSO 30-min idle timeout
 const SESSION_STATE_FILE = 'session-state.json'
@@ -122,11 +107,22 @@ async function clearProfileLocks(profileDir: string): Promise<void> {
 
 export async function initScrapeContext(profileDir: string): Promise<void> {
   if (_context) return // already open
+  // BKL-UX69: don't open a new context while the RH Portal login browser is
+  // in progress — prevents SingletonLock race with startLoginBrowser().
+  // Lazy import to avoid a static circular dependency (rh-auth imports from this file).
+  try {
+    const { getRhStatus } = await import('./rh-auth.ts')
+    if (getRhStatus('').loginInProgress) {
+      console.log('[rh-scraper] skipping context open — login in progress')
+      return
+    }
+  } catch { /* rh-auth unavailable — proceed */ }
   _profileDir = profileDir
   await clearProfileLocks(profileDir)
   console.log('[rh-scraper] opening persistent context…')
   _context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
+    acceptDownloads: true,
     args: [
       '--disable-blink-features=AutomationControlled',
       '--ignore-certificate-errors',
@@ -260,6 +256,26 @@ async function _autoRecover(profileDir: string): Promise<void> {
     ).catch(() => {})
   } finally {
     _recoveryInProgress = false
+  }
+}
+
+/**
+ * Pre-flight guard: confirms the browser context is alive and responsive.
+ * Callers get a fast 503 instead of a cryptic mid-scrape crash.
+ */
+export async function ensureBrowserHealthy(): Promise<void> {
+  if (!_context) throw new Error('Browser not initialized — connect via the dashboard first')
+  if (browserDegraded) throw new Error(browserDegradedReason ?? 'Browser is in degraded state')
+  try {
+    await _context.pages()[0]?.evaluate('1')
+  } catch {
+    // Page eval failed — browser process is likely dead. Attempt recovery.
+    if (_profileDir) {
+      await _autoRecover(_profileDir)
+      if (browserDegraded) throw new Error(browserDegradedReason ?? 'Browser recovery failed')
+    } else {
+      throw new Error('Browser not responsive and no profile dir available for recovery')
+    }
   }
 }
 
@@ -466,6 +482,12 @@ async function checkForSessionExpiry(page: { url(): string; waitForURL(p: string
 // ── Main scrape function ──────────────────────────────────────────────────────
 
 export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]> {
+  // BKL-INGEST-04: L4 live-scrape guard — blocks live scrape in test environment.
+  // Must be the first check, before any browser/network work.
+  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
+    throw new Error('[rh-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
+
   const { accountNumbers, profileDir, cachePath, shouldCancel, accountToCustomer } = options
 
   // Ensure long-lived context is open
@@ -984,6 +1006,9 @@ export async function discoverAccountNumberByName(
   customerName: string,
   profileDir: string,
 ): Promise<DiscoverResult> {
+  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
+    throw new Error('[rh-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
   await initScrapeContext(profileDir)
   if (!_context) return { accountNumbers: [], cases: [] }
 
@@ -1301,4 +1326,33 @@ export async function discoverAccountNumberByName(
     return { accountNumbers: [], cases: [] }
   }
   // NOTE: page intentionally NOT closed — reused for next customer in the discovery loop
+}
+
+/**
+ * BKL-RH-03 Phase 2 (ADR-014): atomic cache writer shared between the browser
+ * path (used inline in runRhScrape) and the Bearer path (called from
+ * scraper-manager.ts when BearerCaseClient returns cases).
+ *
+ * Additive export only — the browser path continues to use its own inline
+ * write logic unchanged. Same on-disk format, same mode (0o600), same .tmp +
+ * rename atomic pattern. Kept here so both transports produce byte-compatible
+ * cache files and a transport swap requires no downstream reader changes.
+ */
+export async function writeCasesCache(
+  cachePath: string,
+  accountNumbers: string[],
+  cases: SupportCase[],
+): Promise<void> {
+  await mkdir(dirname(cachePath), { recursive: true })
+  const tmp = cachePath + '.tmp'
+  await writeFile(
+    tmp,
+    JSON.stringify(
+      { scrapedAt: new Date().toISOString(), accounts: accountNumbers, cases },
+      null,
+      2,
+    ),
+    { mode: 0o600 },
+  )
+  await rename(tmp, cachePath)
 }

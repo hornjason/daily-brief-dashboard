@@ -18,10 +18,10 @@ import { getGeminiToken } from './gemini-auth.ts'
 import { makeAuth } from './google.ts'
 import { sanitizePromptInput } from './utils.ts'
 import { getGeminiModel } from './settings-api.ts'
-import { aes, customers, CUSTOMERS_PATH } from './server-state.ts'
-import { readSheetCache } from './cache-layer.ts'
+import { aes, customers, patchCustomer, CUSTOMERS_PATH } from './server-state.ts'
+import { readSheetCache, readIndustryAnalysisCache, writeIndustryAnalysisCache } from './cache-layer.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { fetchGeminiWithRetry, type GeminiFetchContext } from './gemini-fetch.ts'
+import { fetchGeminiWithRetry } from './gemini-fetch.ts'
 import type { Customer } from './types.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
@@ -29,11 +29,45 @@ import type { Customer } from './types.ts'
 const CONFIG_DIR_PATH  = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
 
-// ── BKL-AI-03: Intelligence cache TTL ────────────────────────────────────────
-const INTELLIGENCE_CACHE_TTL_DAYS = Number(process.env.INTELLIGENCE_CACHE_TTL_DAYS) || 7
-const INTELLIGENCE_CACHE_TTL_MS   = INTELLIGENCE_CACHE_TTL_DAYS * 24 * 60 * 60 * 1000
+// ── BKL-AI-03 / BKL-TOKEN-02: Intelligence cache TTL (tiered) ───────────────
+// Company intelligence changes more often (leadership, earnings, M&A) — 14d default.
+// Industry analysis is macro-level and stable — 30d default. Both env-configurable.
+const INTELLIGENCE_COMPANY_TTL_DAYS  = Number(process.env.INTELLIGENCE_COMPANY_TTL_DAYS)  || 14
+const INTELLIGENCE_INDUSTRY_TTL_DAYS = Number(process.env.INTELLIGENCE_INDUSTRY_TTL_DAYS) || 30
+const INTELLIGENCE_COMPANY_TTL_MS    = INTELLIGENCE_COMPANY_TTL_DAYS  * 24 * 60 * 60 * 1000
+const INTELLIGENCE_INDUSTRY_TTL_MS   = INTELLIGENCE_INDUSTRY_TTL_DAYS * 24 * 60 * 60 * 1000
 
-function readIntelligenceCache(customerName: string): { company: string; industry: string; industryClassification?: string; cachedAt: string; skipped?: boolean; companyDocUrl?: string; industryDocUrl?: string } | null {
+export interface IntelligenceCacheEntry {
+  company: string
+  industry: string
+  industryClassification?: string
+  cachedAt: string
+  skipped?: boolean
+  companyDocUrl?: string
+  industryDocUrl?: string
+  /**
+   * BKL-AI-INTEL-02: ISO timestamp set when the URLs in this cache entry were
+   * sourced from a Drive scan (discoverExistingIntelDocs) rather than from a
+   * full generation run. Used by the intelligence-status route to decide
+   * whether a Drive scan is stale (> 7 days) and should be re-run.
+   */
+  discoveredAt?: string
+  /**
+   * BKL-AI-INTEL-03: Marks a stub discovery cache entry written when a
+   * no-data customer's pipeline auto-fires with no existing Drive docs. The
+   * intelligence-status route uses this (via the discoveredAt staleness gate)
+   * to skip re-scanning Drive and re-triggering runIntelligencePipeline on
+   * every poll. Purely informational — the staleness gate keys on
+   * discoveredAt, not on this flag.
+   */
+  noData?: boolean
+}
+
+export function getIntelligenceCacheEntry(customerName: string): IntelligenceCacheEntry | null {
+  return readIntelligenceCache(customerName)
+}
+
+function readIntelligenceCache(customerName: string): IntelligenceCacheEntry | null {
   if (!JOB_CACHE_PATH) return null
   try {
     const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
@@ -41,6 +75,63 @@ function readIntelligenceCache(customerName: string): { company: string; industr
     if (!existsSync(p)) return null
     return JSON.parse(readFileSync(p, 'utf-8'))
   } catch { return null }
+}
+
+/**
+ * BKL-AI-INTEL-02: Write a minimal intelligence cache entry sourced from a Drive
+ * discovery scan (discoverExistingIntelDocs). Writes `discoveredAt` so the
+ * intelligence-status route can detect a stale discovery and re-scan later.
+ * Preserves any existing generated content (company/industry markdown) and
+ * industryClassification when the file already exists.
+ *
+ * This is intentionally tolerant of a missing JOB_CACHE_PATH (pre-init) and
+ * non-fatal on write failures — a failed cache write should never break the
+ * status API.
+ */
+export function writeIntelligenceDiscoveryCache(
+  customerName: string,
+  urls: { companyDocUrl?: string | null; industryDocUrl?: string | null },
+): void {
+  if (!JOB_CACHE_PATH) return
+  try {
+    const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
+    mkdirSync(intelligenceDir, { recursive: true })
+    const existing = readIntelligenceCache(customerName)
+    const now = new Date().toISOString()
+    // BKL-AI-INTEL-03: null URL explicitly means "caller looked and found
+    // nothing", so do NOT fall back to an existing URL — this is a stub write
+    // used to set discoveredAt for no-data customers. undefined means "caller
+    // didn't supply it", so preserve any existing URL.
+    const companyUrl  = urls.companyDocUrl  === null ? undefined : (urls.companyDocUrl  ?? existing?.companyDocUrl)
+    const industryUrl = urls.industryDocUrl === null ? undefined : (urls.industryDocUrl ?? existing?.industryDocUrl)
+    const isNoDataStub = urls.companyDocUrl === null && urls.industryDocUrl === null && !companyUrl && !industryUrl
+    const entry: IntelligenceCacheEntry = {
+      customerName,
+      company: existing?.company ?? '',
+      industry: existing?.industry ?? '',
+      industryClassification: existing?.industryClassification ?? '',
+      // Preserve the generation-time cachedAt if one exists; otherwise mark it
+      // as the discovery time so downstream readers always see a valid ISO.
+      cachedAt: existing?.cachedAt ?? now,
+      discoveredAt: now,
+      ...(companyUrl  ? { companyDocUrl:  companyUrl  } : {}),
+      ...(industryUrl ? { industryDocUrl: industryUrl } : {}),
+      ...(isNoDataStub ? { noData: true } : (existing?.noData ? { noData: existing.noData } : {})),
+    } as IntelligenceCacheEntry
+    writeFileSync(`${intelligenceDir}/${slug}.json`, JSON.stringify(entry), { mode: 0o600 })
+  } catch { /* non-fatal */ }
+}
+
+/**
+ * BKL-INTEL-01: Extract a Google Doc file ID from a Drive URL.
+ * Handles the canonical `https://docs.google.com/document/d/{fileId}/edit` form
+ * used by upsertGoogleDoc() in this file. Returns null for missing / unparseable URLs.
+ */
+export function extractGoogleDocId(url: string | undefined | null): string | null {
+  if (!url) return null
+  const m = url.match(/\/d\/([^/]+)\//)
+  return m?.[1] ?? null
 }
 
 // ── Gemini call with Google Search grounding ─────────────────────────────────
@@ -59,7 +150,7 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
 
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const body = JSON.stringify({
+  const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: opts.systemPrompt }] },
     contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
     tools: [{ google_search: {} }],
@@ -69,8 +160,21 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
       thinkingConfig: { thinkingBudget: 0 },
     },
   })
-  const ctx: GeminiFetchContext = { model, project, location, callType: opts.callType, customerName: opts.customerName, timeoutMs: 60_000, logPrefix: '[intelligence]' }
-  const res = await fetchGeminiWithRetry(url, getGeminiToken, body, ctx)
+
+  // BKL-TEST-P0-04c: shared 429-retry helper. Preserves the 120s per-attempt
+  // AbortSignal.timeout that callGeminiGrounded originally set (grounded calls
+  // are slow — industry analysis can take 60s+). Exhausted retries throw
+  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
+  // canonical "Gemini API error NNN (project=... location=... model=...)"
+  // message with Bearer redaction.
+  const res = await fetchGeminiWithRetry(url, getGeminiToken, requestBody, {
+    callType:     opts.callType ?? 'intelligence-grounded',
+    customerName: opts.customerName ?? 'unknown',
+    model, project, location,
+    timeoutMs: 120_000,
+    logPrefix: '[acct-intel]',
+  })
+
   const json = await res.json() as any
   // BKL-M52: record token usage for cost tracking
   const usage = json.usageMetadata
@@ -121,26 +225,32 @@ async function callGeminiGroundedStructured(opts: GeminiGroundedOptions & { resp
   }
   // Strategy 4: grounded response had no JSON — re-prompt without grounding (structured-only fallback)
   // Vertex AI allows responseSchema on non-grounded calls. Use it as a last resort.
+  // BKL-TEST-P0-04c: the fallback path now uses fetchGeminiWithRetry so a 429
+  // here no longer silently fails — previously the bare fetch had no retry,
+  // so Vertex quota pressure surfaced as "Gemini grounded response did not
+  // contain valid JSON" instead of the real rate-limit signal.
   try {
     const project  = process.env.GOOGLE_CLOUD_PROJECT
     const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
     const model    = getGeminiModel()
-    const token    = await getGeminiToken()
+    if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-    const fallbackRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(30_000),
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: opts.maxOutputTokens ?? 1024,
-          thinkingConfig: { thinkingBudget: 0 },
-          responseMimeType: 'application/json',
-          responseSchema: (opts as any).responseSchema,
-        },
-      }),
+    const fallbackBody = JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: opts.maxOutputTokens ?? 1024,
+        thinkingConfig: { thinkingBudget: 0 },
+        responseMimeType: 'application/json',
+        responseSchema: (opts as any).responseSchema,
+      },
+    })
+    const fallbackRes = await fetchGeminiWithRetry(url, getGeminiToken, fallbackBody, {
+      callType:     opts.callType ?? 'intelligence-grounded-fallback',
+      customerName: opts.customerName ?? 'unknown',
+      model, project, location,
+      timeoutMs: 30_000,
+      logPrefix: '[acct-intel] grounded-structured-fallback',
     })
     if (fallbackRes.ok) {
       const fallbackJson = await fallbackRes.json() as any
@@ -228,9 +338,14 @@ function persistCustomerFolderId(customerName: string, folderId: string): void {
 /**
  * Cache industry/segment result into customers.json for the given customer.
  * Uses atomic write pattern (tmp + rename) with mode 0o600.
+ *
+ * BKL-TOKEN-09: Skip write if customers.json already has a matching industry+segment
+ * (avoid unnecessary writes on every batch run). Uses canonical patchCustomer pattern
+ * so the write survives merge-not-replace in saveCustomers (customer-merge.ts preserves
+ * `industry`, `segment`, and any `ai*`/`intelligence*` fields).
  */
 export function cacheIndustryResult(customerName: string, result: IndustryResult): void {
-  // Read fresh from disk to avoid stale-overwrite
+  // Read fresh from disk to check current state
   let data: { customers: Customer[] }
   try {
     data = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
@@ -239,28 +354,34 @@ export function cacheIndustryResult(customerName: string, result: IndustryResult
   }
 
   const idx = data.customers.findIndex(c => c.name === customerName)
-  if (idx >= 0) {
-    // Add industry fields to the customer object
-    ;(data.customers[idx] as any).industry = result.industry
-    ;(data.customers[idx] as any).segment = result.segment
-    ;(data.customers[idx] as any).industryDescription = result.description
-    ;(data.customers[idx] as any).industryCompetitors = result.competitors
-    ;(data.customers[idx] as any).industryUpdatedAt = new Date().toISOString()
+  if (idx < 0) {
+    console.log(`[acct-intel] cacheIndustryResult: ${customerName} not in customers.json — skipping write`)
+    return
   }
 
-  const tmp = CUSTOMERS_PATH + '.tmp'
-  writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 })
-  renameSync(tmp, CUSTOMERS_PATH)
-
-  // Update in-memory state too
-  const memIdx = customers.findIndex(c => c.name === customerName)
-  if (memIdx >= 0) {
-    ;(customers[memIdx] as any).industry = result.industry
-    ;(customers[memIdx] as any).segment = result.segment
-    ;(customers[memIdx] as any).industryDescription = result.description
-    ;(customers[memIdx] as any).industryCompetitors = result.competitors
-    ;(customers[memIdx] as any).industryUpdatedAt = new Date().toISOString()
+  const existing = data.customers[idx] as any
+  // BKL-TOKEN-09: idempotency guard — skip write when nothing would change
+  if (
+    existing.industry === result.industry &&
+    existing.segment === result.segment &&
+    existing.industryDescription === result.description &&
+    Array.isArray(existing.industryCompetitors) &&
+    existing.industryCompetitors.length === result.competitors.length &&
+    existing.industryCompetitors.every((c: string, i: number) => c === result.competitors[i])
+  ) {
+    console.log(`[acct-intel] Industry already matches for ${customerName} (${result.industry}/${result.segment}) — skipping write`)
+    return
   }
+
+  // BKL-TOKEN-09: use canonical patchCustomer so saveCustomers' merge logic runs
+  // and the industry fields survive concurrent writes from territory sync / sheet import.
+  patchCustomer(customerName, {
+    industry: result.industry,
+    segment: result.segment,
+    industryDescription: result.description,
+    industryCompetitors: result.competitors,
+    industryUpdatedAt: new Date().toISOString(),
+  } as Partial<Customer>)
 
   console.log(`[acct-intel] Cached industry for ${customerName}: ${result.industry}/${result.segment}`)
 }
@@ -446,7 +567,7 @@ export async function generateCompanyIntelligence(customer: Customer, industry: 
   const brief = await callGeminiGrounded({
     systemPrompt,
     userPrompt,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 4096,
     temperature: 1.0,
     callType: 'intelligence-company',
     customerName: customer.name,
@@ -584,6 +705,16 @@ export async function generateIndustryAnalysis(customer: Customer, industry: str
   const industrySegment = `${industry} / ${segment}`
   const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
+  // BKL-TOKEN-05: Shared {industry, region} cache (30d TTL). N customers sharing
+  // the same industry/region pay for at most 1 grounded Gemini call per 30 days
+  // instead of N calls. Customer.region falls back to segment, then 'global'.
+  const region = customer.region ?? 'global'
+  const cached = readIndustryAnalysisCache(industry, region)
+  if (cached) {
+    console.log(`[acct-intel] Industry analysis cache hit for ${industry} (${region}) — skipping Gemini call`)
+    return cached.analysis
+  }
+
   const systemPrompt = INDUSTRY_ANALYSIS_SYSTEM_PROMPT
     .replace(/\{date\}/g, date)
 
@@ -596,11 +727,15 @@ export async function generateIndustryAnalysis(customer: Customer, industry: str
   const analysis = await callGeminiGrounded({
     systemPrompt,
     userPrompt,
-    maxOutputTokens: 8192,
+    maxOutputTokens: 4096,
     temperature: 1.0,
     callType: 'intelligence-analysis',
     customerName: customer.name,
   })
+
+  // BKL-TOKEN-05: Write-through to shared cache so next customer with same
+  // industry/region skips the grounded call.
+  writeIndustryAnalysisCache(industry, region, analysis)
 
   console.log(`[acct-intel] Industry analysis generated for ${customer.name} (${analysis.length} chars)`)
   return analysis
@@ -729,6 +864,95 @@ async function ensureIntelligenceSubfolder(customerFolderId: string): Promise<st
 }
 
 /**
+ * BKL-AI-INTEL-02: Read-only lookup of the "Account Intelligence" subfolder
+ * under the customer's Drive folder. Returns null when the subfolder does
+ * not exist — NEVER creates it (this is the read-only counterpart to
+ * ensureIntelligenceSubfolder, which creates on miss).
+ */
+async function findIntelligenceSubfolder(customerFolderId: string): Promise<string | null> {
+  const auth = makeAuth(GDRIVE_TOKEN_PATH)
+  const drive = google.drive({ version: 'v3', auth })
+
+  const existing = await drive.files.list({
+    q: `'${customerFolderId}' in parents and name = 'Account Intelligence' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: 'files(id,name)', pageSize: 1,
+  })
+
+  if (existing.data.files?.length && existing.data.files[0].id) {
+    return existing.data.files[0].id
+  }
+  return null
+}
+
+/**
+ * BKL-AI-INTEL-02: Scan the customer's Drive "Account Intelligence" subfolder
+ * for existing intelligence docs matching the naming convention used by
+ * writeIntelligenceDocs():
+ *   - `${customer.name} - Company Intelligence`
+ *   - `${customer.name} - Industry Analysis`
+ *
+ * Read-only: does NOT create the subfolder if absent — returns null. This is
+ * the cheap (2 Drive API `files.list` calls) fallback the intelligence-status
+ * route uses after a cache wipe to avoid triggering a full Gemini regeneration
+ * when docs already exist in Drive.
+ *
+ * Returns null on:
+ *   - customer has no resolvable Drive folder
+ *   - "Account Intelligence" subfolder does not exist
+ *   - BOTH docs missing
+ *   - any Drive API error (caller falls back to existing behavior)
+ *
+ * Returns partial URLs when only one of the two docs is found.
+ */
+export async function discoverExistingIntelDocs(
+  customer: Customer,
+): Promise<{ companyDocUrl?: string; industryDocUrl?: string } | null> {
+  try {
+    // Resolve the customer's Drive folder using the same priority chain as
+    // writeIntelligenceDocs() — per-customer driveFolderId > AE folder > fuzzy.
+    // Throws when no folder is found; caught below so discovery is best-effort.
+    const customerFolderId = await findCustomerDriveFolder(customer)
+
+    // Read-only subfolder lookup — don't create.
+    const intelFolderId = await findIntelligenceSubfolder(customerFolderId)
+    if (!intelFolderId) return null
+
+    const auth = makeAuth(GDRIVE_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+
+    const companyDocName  = `${customer.name} - Company Intelligence`
+    const industryDocName = `${customer.name} - Industry Analysis`
+    // Escape single quotes in doc names to keep the Drive query well-formed
+    // when customer names contain apostrophes (e.g. "Moody's Corporation").
+    const companyQ  = companyDocName.replace(/'/g, "\\'")
+    const industryQ = industryDocName.replace(/'/g, "\\'")
+
+    const [companyRes, industryRes] = await Promise.all([
+      drive.files.list({
+        q: `'${intelFolderId}' in parents and name = '${companyQ}' and mimeType = 'application/vnd.google-apps.document' and trashed = false`,
+        fields: 'files(id,name)', pageSize: 1,
+      }),
+      drive.files.list({
+        q: `'${intelFolderId}' in parents and name = '${industryQ}' and mimeType = 'application/vnd.google-apps.document' and trashed = false`,
+        fields: 'files(id,name)', pageSize: 1,
+      }),
+    ])
+
+    const companyId  = companyRes.data.files?.[0]?.id
+    const industryId = industryRes.data.files?.[0]?.id
+    if (!companyId && !industryId) return null
+
+    return {
+      ...(companyId  ? { companyDocUrl:  `https://docs.google.com/document/d/${companyId}/edit`  } : {}),
+      ...(industryId ? { industryDocUrl: `https://docs.google.com/document/d/${industryId}/edit` } : {}),
+    }
+  } catch (e: any) {
+    console.warn(`[acct-intel] discoverExistingIntelDocs failed for ${customer.name} (non-fatal):`, e?.message ?? e)
+    return null
+  }
+}
+
+/**
  * BKL-INTEL-03: Read a Google Doc and count non-empty lines.
  * Used to validate that generated intelligence docs have substantive content.
  */
@@ -755,6 +979,49 @@ export async function validateIntelligenceDocContent(
   const nonEmptyLines = lines.filter(l => l.trim().length > 0).length
   console.log(`[acct-intel] Doc "${docName}" has ${nonEmptyLines} non-empty lines`)
   return { valid: nonEmptyLines >= 5, lineCount: nonEmptyLines }
+}
+
+/**
+ * BKL-INTEL-09: Check whether the stored Drive docs for a customer are trashed
+ * or inaccessible. Mirrors the BKL-INTEL-01 skip-path trash check but as a
+ * reusable helper the validate-all batch loop calls before cheap line-count
+ * validation.
+ *
+ * Returns `{ trashed: true, reason }` if EITHER doc is trashed OR missing
+ * (404 / notFound from Drive). Returns `{ trashed: false }` on transient
+ * Drive errors so we don't requeue the world when Drive blips.
+ */
+export async function checkStoredDocsTrashed(
+  customerName: string,
+  companyDocUrl: string | undefined,
+  industryDocUrl: string | undefined,
+): Promise<{ trashed: boolean; reason?: string }> {
+  const companyFileId  = extractGoogleDocId(companyDocUrl)
+  const industryFileId = extractGoogleDocId(industryDocUrl)
+  if (!companyFileId && !industryFileId) return { trashed: false }
+
+  try {
+    const auth = makeAuth(GDRIVE_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+    const [companyMeta, industryMeta] = await Promise.allSettled([
+      companyFileId  ? drive.files.get({ fileId: companyFileId,  fields: 'trashed', supportsAllDrives: true } as any) : Promise.resolve(null),
+      industryFileId ? drive.files.get({ fileId: industryFileId, fields: 'trashed', supportsAllDrives: true } as any) : Promise.resolve(null),
+    ])
+    const companyTrashed  = companyMeta.status  === 'fulfilled' && (companyMeta.value  as any)?.data?.trashed === true
+    const industryTrashed = industryMeta.status === 'fulfilled' && (industryMeta.value as any)?.data?.trashed === true
+    // Treat 403/404 as effectively trashed — the stored URL is dead either way.
+    const companyMissing  = companyMeta.status  === 'rejected' && /403|404|notFound|forbidden/i.test(String((companyMeta  as any).reason?.message ?? ''))
+    const industryMissing = industryMeta.status === 'rejected' && /403|404|notFound|forbidden/i.test(String((industryMeta as any).reason?.message ?? ''))
+    if (companyTrashed || industryTrashed || companyMissing || industryMissing) {
+      const reason = `company trashed=${companyTrashed} missing=${companyMissing}, industry trashed=${industryTrashed} missing=${industryMissing}`
+      console.log(`[acct-intel] Stored doc(s) trashed/missing for ${customerName} — ${reason}`)
+      return { trashed: true, reason }
+    }
+    return { trashed: false }
+  } catch (e: any) {
+    console.warn(`[acct-intel] Drive trashed check failed for ${customerName} (non-fatal):`, e?.message ?? e)
+    return { trashed: false }
+  }
 }
 
 /**
@@ -874,56 +1141,6 @@ async function fetchCustomPromptFromDrive(customer: Customer): Promise<string | 
   }
 }
 
-/**
- * Read-only Drive folder scan — looks for already-existing company and industry
- * intelligence docs in the customer's Account Intelligence subfolder.
- *
- * Does NOT generate anything. Used by /api/customer/:name/intelligence-status as
- * a fallback when no in-memory job record exists, so a fresh container restart
- * still surfaces previously-generated docs to the dashboard.
- *
- * @param slug      Customer name / slug (used for log lines)
- * @param folderId  Customer Drive folder ID (the parent of "Account Intelligence")
- * @returns         { companyDocUrl, industryDocUrl } when both docs exist, else null
- */
-export async function discoverExistingIntelDocs(
-  slug: string,
-  folderId: string,
-): Promise<{ companyDocUrl: string; industryDocUrl: string } | null> {
-  if (!folderId) return null
-  try {
-    const auth = makeAuth(GDRIVE_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth })
-
-    // Find the "Account Intelligence" subfolder — read-only, no creation
-    const subfolders = await drive.files.list({
-      q: `'${folderId}' in parents and name = 'Account Intelligence' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id,name)', pageSize: 1,
-    })
-    const intelFolderId = subfolders.data.files?.[0]?.id
-    if (!intelFolderId) return null
-
-    // Look for both docs by suffix — names are "<Customer> - Company Intelligence" and "<Customer> - Industry Analysis"
-    const docs = await drive.files.list({
-      q: `'${intelFolderId}' in parents and mimeType = 'application/vnd.google-apps.document' and trashed = false`,
-      fields: 'files(id,name)', pageSize: 50,
-    })
-    const files = docs.data.files ?? []
-    const companyDoc = files.find(f => /Company Intelligence$/i.test(f.name ?? ''))
-    const industryDoc = files.find(f => /Industry Analysis$/i.test(f.name ?? ''))
-    if (!companyDoc?.id || !industryDoc?.id) return null
-
-    console.log(`[acct-intel] discoverExistingIntelDocs: found existing docs for ${slug}`)
-    return {
-      companyDocUrl: `https://docs.google.com/document/d/${companyDoc.id}/edit`,
-      industryDocUrl: `https://docs.google.com/document/d/${industryDoc.id}/edit`,
-    }
-  } catch (e: any) {
-    console.warn(`[acct-intel] discoverExistingIntelDocs failed for ${slug}: ${e?.message ?? e}`)
-    return null
-  }
-}
-
 export async function writeIntelligenceDocs(
   customer: Customer,
   companyBrief: string,
@@ -964,12 +1181,6 @@ export interface IntelligenceJobStatus {
   error?: string
   startedAt?: string
   completedAt?: string
-  /**
-   * Set when the docs were not generated by this process but discovered on Drive
-   * via discoverExistingIntelDocs() — distinguishes a freshly-created run from a
-   * surviving doc set found after a container restart.
-   */
-  discoveredAt?: string
 }
 
 /** In-memory job tracker keyed by customer name */
@@ -982,7 +1193,10 @@ export function initJobPersistence(cacheDir: string): void {
   try {
     const existing = JSON.parse(readFileSync(JOB_CACHE_PATH, 'utf-8')) as Record<string, IntelligenceJobStatus>
     for (const [key, val] of Object.entries(existing)) {
-      if (val.status === 'running') val.status = 'error'
+      if (val.status === 'running') {
+        val.status = 'error'
+        val.error = val.error ?? 'Interrupted by server restart — click Regenerate to retry'
+      }
       jobs.set(key, val)
     }
     console.log(`[acct-intel] Loaded ${jobs.size} persisted jobs`)
@@ -1002,7 +1216,29 @@ function setJob(id: string, status: IntelligenceJobStatus): void {
 }
 
 export function getJobStatus(customerName: string): IntelligenceJobStatus | undefined {
-  return jobs.get(customerName)
+  const existing = jobs.get(customerName)
+
+  // BKL-AI-INTEL-01: If the in-memory job entry already has doc URLs, return it as-is.
+  // This is the fast path for customers whose pipeline ran in this server lifetime.
+  if (existing?.companyDocUrl || existing?.industryDocUrl) return existing
+
+  // Fallback: read the per-customer disk cache. This covers customers whose pipeline
+  // completed in a previous server lifetime (job entry is pending/missing in memory
+  // but the cache file at data/cache/intelligence/{slug}.json has the URLs).
+  const diskIntel = readIntelligenceCache(customerName)
+  if (diskIntel?.companyDocUrl || diskIntel?.industryDocUrl) {
+    return {
+      status: 'complete',
+      companyDocUrl: diskIntel.companyDocUrl,
+      industryDocUrl: diskIntel.industryDocUrl,
+      completedAt: diskIntel.cachedAt,
+      // If a real in-memory entry exists (e.g. pending with no URLs), let its
+      // fields win so more-recent in-progress state is preserved.
+      ...(existing ?? {}),
+    }
+  }
+
+  return existing
 }
 
 export function getRunningJob(): (IntelligenceJobStatus & { customerName?: string }) | null {
@@ -1036,41 +1272,81 @@ export function requeueJob(customerName: string): void {
  *
  * Runs async — caller gets job ID immediately, polls status via getJobStatus().
  */
-export async function runIntelligencePipeline(customerName: string): Promise<string> {
+export async function runIntelligencePipeline(customerName: string, force?: boolean): Promise<string> {
   const customer = customers.find(c => c.name === customerName)
   if (!customer) throw new Error(`Customer not found: ${customerName}`)
 
   const jobId = customerName
 
-  // BKL-AI-03: TTL check — skip regeneration if cached intel is fresh
+  // BKL-AI-03 / BKL-TOKEN-02: Tiered TTL check — skip regeneration only when BOTH
+  // company intelligence and industry analysis are still within their own TTLs.
+  // Company: INTELLIGENCE_COMPANY_TTL_DAYS (default 14); Industry: INTELLIGENCE_INDUSTRY_TTL_DAYS (default 30).
   const cachedIntel = readIntelligenceCache(customerName)
-  if (cachedIntel?.cachedAt && !cachedIntel.skipped) {
+  if (!force && cachedIntel?.cachedAt && !cachedIntel.skipped) {
     const age = Date.now() - new Date(cachedIntel.cachedAt).getTime()
-    if (age < INTELLIGENCE_CACHE_TTL_MS && cachedIntel.company) {
-      console.log(`[acct-intel] Skipping ${customerName} — cache is ${Math.round(age / 86400000)}d old (TTL: ${INTELLIGENCE_CACHE_TTL_DAYS}d)`)
-
-      // BKL-ENRICH-01: If customers.json is missing industry/segment (e.g., after a data wipe),
-      // re-run identifyIndustry() even though the Drive doc cache is fresh.
-      // This is a cheap single Gemini call — avoids re-generating the expensive company/industry docs.
-      if (!(customer as any).industry) {
+    const companyFresh  = age < INTELLIGENCE_COMPANY_TTL_MS  && !!cachedIntel.company
+    const industryFresh = age < INTELLIGENCE_INDUSTRY_TTL_MS && !!cachedIntel.industry
+    if (companyFresh && industryFresh) {
+      // BKL-INTEL-01: Before skipping, verify the stored Drive docs still exist and
+      // aren't trashed. Drive files.delete() on My Drive trashes instead of permanently
+      // deleting, and earlier thin-doc cleanup (see validation block below) did not
+      // clear the cached companyDocUrl/industryDocUrl. Without this guard, the UI
+      // surfaces a "complete" job whose link opens a trashed file.
+      const companyFileId = extractGoogleDocId(cachedIntel.companyDocUrl)
+      const industryFileId = extractGoogleDocId(cachedIntel.industryDocUrl)
+      let storedDocsTrashed = false
+      if (companyFileId || industryFileId) {
         try {
-          console.log(`[acct-intel] customers.json missing industry for ${customerName} despite fresh cache — re-running identifyIndustry`)
-          const industryResult = await identifyIndustry(customerName)
-          cacheIndustryResult(customerName, industryResult)
+          const trashCheckAuth = makeAuth(GDRIVE_TOKEN_PATH)
+          const trashCheckDrive = google.drive({ version: 'v3', auth: trashCheckAuth })
+          const [companyMeta, industryMeta] = await Promise.allSettled([
+            companyFileId  ? trashCheckDrive.files.get({ fileId: companyFileId,  fields: 'trashed' }) : Promise.resolve(null),
+            industryFileId ? trashCheckDrive.files.get({ fileId: industryFileId, fields: 'trashed' }) : Promise.resolve(null),
+          ])
+          const companyTrashed  = companyMeta.status  === 'fulfilled' && (companyMeta.value  as any)?.data?.trashed === true
+          const industryTrashed = industryMeta.status === 'fulfilled' && (industryMeta.value as any)?.data?.trashed === true
+          // Treat a 404 (file permanently deleted / no longer accessible) as trashed —
+          // the stored URL is dead either way and must be regenerated.
+          const companyMissing  = companyMeta.status  === 'rejected' && /404|notFound/i.test(String((companyMeta  as any).reason?.message ?? ''))
+          const industryMissing = industryMeta.status === 'rejected' && /404|notFound/i.test(String((industryMeta as any).reason?.message ?? ''))
+          if (companyTrashed || industryTrashed || companyMissing || industryMissing) {
+            storedDocsTrashed = true
+            console.log(`[acct-intel] Stored doc(s) trashed for ${customerName} — forcing regeneration (company trashed=${companyTrashed} missing=${companyMissing}, industry trashed=${industryTrashed} missing=${industryMissing})`)
+          }
         } catch (e: any) {
-          console.warn(`[acct-intel] identifyIndustry repair failed for ${customerName}:`, e?.message ?? e)
+          // Metadata check failure is non-fatal — fall through to the normal skip
+          // so transient Drive errors don't force expensive regeneration.
+          console.warn(`[acct-intel] Drive trashed check failed for ${customerName} (non-fatal):`, e?.message ?? e)
         }
       }
 
-      setJob(jobId, {
-        status: 'complete',
-        step: 'skipped (cache fresh)',
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-        ...(cachedIntel.companyDocUrl ? { companyDocUrl: cachedIntel.companyDocUrl } : {}),
-        ...(cachedIntel.industryDocUrl ? { industryDocUrl: cachedIntel.industryDocUrl } : {}),
-      })
-      return jobId
+      if (!storedDocsTrashed) {
+        console.log(`[acct-intel] Skipping ${customerName} — cache is ${Math.round(age / 86400000)}d old (company TTL: ${INTELLIGENCE_COMPANY_TTL_DAYS}d, industry TTL: ${INTELLIGENCE_INDUSTRY_TTL_DAYS}d)`)
+
+        // BKL-ENRICH-01: If customers.json is missing industry/segment (e.g., after a data wipe),
+        // re-run identifyIndustry() even though the Drive doc cache is fresh.
+        // This is a cheap single Gemini call — avoids re-generating the expensive company/industry docs.
+        if (!(customer as any).industry) {
+          try {
+            console.log(`[acct-intel] customers.json missing industry for ${customerName} despite fresh cache — re-running identifyIndustry`)
+            const industryResult = await identifyIndustry(customerName)
+            cacheIndustryResult(customerName, industryResult)
+          } catch (e: any) {
+            console.warn(`[acct-intel] identifyIndustry repair failed for ${customerName}:`, e?.message ?? e)
+          }
+        }
+
+        setJob(jobId, {
+          status: 'complete',
+          step: 'skipped (cache fresh)',
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          ...(cachedIntel.companyDocUrl ? { companyDocUrl: cachedIntel.companyDocUrl } : {}),
+          ...(cachedIntel.industryDocUrl ? { industryDocUrl: cachedIntel.industryDocUrl } : {}),
+        })
+        return jobId
+      }
+      // storedDocsTrashed === true → fall through past this skip block to full regeneration below.
     }
   }
 
@@ -1141,7 +1417,7 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
       const industryAnalysis = industryResult2.status === 'fulfilled' ? industryResult2.value : null
       if (!companyBrief && !industryAnalysis) throw new Error('Both company and industry generation failed')
       if (companyResult.status === 'rejected') console.warn(`[acct-intel] Company intel failed for ${customerName}:`, (companyResult.reason as any)?.message)
-      if (industryResult2.status === 'rejected') console.warn(`[acct-intel] Industry analysis failed for ${customerName}:`, (industryResult2.reason as any)?.message)
+      if (industryResult2.status === 'rejected') throw (industryResult2.reason as Error ?? new Error('Industry analysis failed'))
 
       // Step 4: Write docs to Drive
       setJob(jobId, { ...jobs.get(jobId)!, step: 'writing docs to Drive' })
@@ -1158,13 +1434,28 @@ export async function runIntelligencePipeline(customerName: string): Promise<str
         docsToValidate.map(({ docId, docName }) => validateIntelligenceDocContent(docId!, docName))
       )
 
+      let firstThinCount = 0
+      const thinDocIds: string[] = []
       for (let i = 0; i < docsToValidate.length; i++) {
-        const { docName } = docsToValidate[i]
+        const { docId, docName } = docsToValidate[i]
         const { valid, lineCount } = validations[i]
         if (!valid) {
-          console.warn(`[acct-intel] Doc "${docName}" for ${customerName} has only ${lineCount} lines — marking for re-generation`)
-          throw new Error(`Doc content too thin (${lineCount} lines) — re-run to regenerate`)
+          console.warn(`[acct-intel] Doc "${docName}" for ${customerName} has only ${lineCount} lines — will delete and re-queue`)
+          thinDocIds.push(docId!)
+          if (!firstThinCount) firstThinCount = lineCount
         }
+      }
+
+      if (thinDocIds.length > 0) {
+        try {
+          const cleanupAuth = makeAuth(GDRIVE_TOKEN_PATH)
+          const cleanupDrive = google.drive({ version: 'v3', auth: cleanupAuth })
+          await Promise.allSettled(thinDocIds.map(id => cleanupDrive.files.delete({ fileId: id })))
+          console.log(`[acct-intel] Deleted ${thinDocIds.length} thin doc(s) for ${customerName}`)
+        } catch (e: any) {
+          console.warn(`[acct-intel] Thin doc cleanup failed (non-fatal):`, e?.message ?? e)
+        }
+        throw new Error(`Doc content too thin (${firstThinCount} lines) — re-run to regenerate`)
       }
 
       // Dual-write local intelligence cache (ADR-008) — brief pipeline reads this

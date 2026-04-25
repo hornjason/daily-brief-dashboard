@@ -50,16 +50,31 @@ export function getLastBackupTimestamp(): string | null {
 }
 
 /**
- * Create a "PAI Config Backup" spreadsheet in the given Drive folder.
- * Returns the new spreadsheet ID.
+ * Find an existing "PAI Config Backup" sheet in the folder, or create one.
+ * Prevents duplicate backup sheets accumulating across config wipes.
  */
 export async function createBackupSheet(parentFolderId: string): Promise<string> {
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const drive = google.drive({ version: 'v3', auth })
 
+  // Search for existing backup sheet before creating a new one
+  const existing = await drive.files.list({
+    q: `name = 'appBackup' and '${parentFolderId}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
+    fields: 'files(id,name)',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    pageSize: 1,
+  }).catch(() => null)
+
+  if (existing?.data.files?.length) {
+    const existingId = existing.data.files[0].id!
+    console.log(`[backup] Reusing existing Config Backup sheet: ${existingId}`)
+    return existingId
+  }
+
   const created = await drive.files.create({
     requestBody: {
-      name: 'PAI Config Backup',
+      name: 'appBackup',
       mimeType: 'application/vnd.google-apps.spreadsheet',
       parents: [parentFolderId],
     },

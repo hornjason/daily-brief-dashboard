@@ -418,6 +418,12 @@ export interface SfReportRow {
  * Always uses an ephemeral page to avoid navigation conflicts with the RH live page.
  */
 export async function scrapeSfReport(reportId: string, profileDir: string): Promise<SfReportRow> {
+  // BKL-INGEST-04: L4 live-scrape guard — blocks live scrape in test environment.
+  // Must be the first check, before any browser/network work.
+  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
+    throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
+
   await initSfContext(profileDir)
   if (!_context) throw new Error('[sf-scraper] failed to open browser context')
 
@@ -464,11 +470,21 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
     console.log(`[sf-scraper] page title: "${pageTitle}"`)
 
     // Check for Run Report button — some SF reports open in a paused/preview state
+    const reportFrameLocator = page.frameLocator('iframe[src*="lightningReportApp"]')
     const runBtn = page.locator('button:has-text("Run Report"), a:has-text("Run Report")')
     if (await runBtn.count().catch(() => 0) > 0) {
       console.log('[sf-scraper] Run Report button found — clicking')
       await runBtn.first().click().catch(() => {})
     }
+    // Also check inside the lightningReportApp iframe — SF often renders the "Run Report"
+    // button inside the report frame, not the main page.
+    const iframeRunBtn = reportFrameLocator.locator('button:has-text("Run Report"), a:has-text("Run Report")')
+    if (await iframeRunBtn.count().catch(() => 0) > 0) {
+      console.log('[sf-scraper] Run Report button found inside iframe — clicking')
+      await iframeRunBtn.first().click().catch(() => {})
+    }
+    // Wait for report to begin rendering after Run Report click (or on page load)
+    await page.waitForTimeout(3_000)
 
     // ── PRIMARY PATH: CSV Export (BKL-M56) ────────────────────────────────────
     // Try the SF report's built-in Export button first — downloads CSV in seconds
@@ -517,7 +533,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
     const TABLE_SELECTOR = 'table[role="treegrid"], table[role="grid"]'
 
     // Use frameLocator to wait for the report iframe and its table to appear.
-    const reportFrameLocator = page.frameLocator('iframe[src*="lightningReportApp"]')
+    // (reportFrameLocator was declared earlier, before the Run Report check.)
     const tableInFrame = await reportFrameLocator.locator(TABLE_SELECTOR).first()
       .waitFor({ state: 'attached', timeout: 120_000 })
       .then(() => true).catch(() => false)
@@ -527,6 +543,9 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
       const frameUrls = page.frames().map(f => f.url().slice(0, 100))
       console.warn(`[sf-scraper] table not found in lightningReportApp iframe after 120s`)
       console.warn(`[sf-scraper] frame URLs: ${frameUrls.join(' | ')}`)
+      // Log iframe body text for debugging what's actually rendering
+      const iframeBodyText = await reportFrameLocator.locator('body').innerText().catch(() => '(no body)').then(t => t.slice(0, 500))
+      console.warn(`[sf-scraper] iframe body text: ${iframeBodyText.replace(/\n/g, ' ')}`)
       throw new Error('Report table not found — screenshot at /data/cache/sf-debug.png')
     }
     console.log('[sf-scraper] DOM fallback: table found in lightningReportApp frame')
@@ -849,14 +868,14 @@ export async function runSfPipelineSync(reportId: string, profileDir: string, sh
 }
 
 /**
- * Process already-scraped SF pipeline data without re-scraping.
- * Used by the bootstrap orchestrator when multiple AEs share the same SF report ID
- * (cached during a single bootstrap pass to avoid redundant Chromium scrapes).
- *
- * @param data    Scraped SfReportRow (headers + rows) from a previous scrapeSfReport call
- * @param sheetId Target pipeline sheet ID for the AE being processed
+ * Write pipeline sheet using pre-scraped report data.
+ * Use this in POD bootstrap to avoid re-scraping the same report per AE.
+ * Single-AE bootstrap should use runSfPipelineSync instead.
  */
-export async function runSfPipelineSyncFromData(data: SfReportRow, sheetId?: string): Promise<number> {
+export async function runSfPipelineSyncFromData(
+  data: SfReportRow,
+  sheetId?: string
+): Promise<number> {
   sfSyncError = null
   try {
     await writePipelineSheet(data, sheetId)
@@ -881,6 +900,9 @@ export interface SfReportItem {
  * Returns reports sorted alphabetically by name, capped at 50.
  */
 export async function listSfReports(): Promise<SfReportItem[]> {
+  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
+    throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
   if (!_context) throw new Error('SF session not active — log in via Setup first')
 
   const BASE = 'https://redhatcrm.lightning.force.com'

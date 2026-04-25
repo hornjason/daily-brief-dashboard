@@ -17,7 +17,7 @@ import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
 import { sanitizePromptInput, normalizeForQuery } from './utils.ts'
 import { getAiConfig, getGeminiModel, getAutomationConfig } from './settings-api.ts'
-import { readSheetCache, readPipelineCache } from './cache-layer.ts'
+import { readSheetCache, readPipelineCache, toSlug } from './cache-layer.ts'
 import { fetchCases } from './redhat.ts'
 import { customers } from './server-state.ts'
 import { getCachedCustomerDocsCorpus } from './customer-docs-corpus.ts'
@@ -105,10 +105,6 @@ function customerIntelCachePath(slug: string, customerSlug: string): string {
   return resolve(customerIntelCacheDir(slug), `${customerSlug}.json`)
 }
 
-export function toCustomerSlug(customerName: string): string {
-  return customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-}
-
 // ── Gemini auth (mirrors product-release-radar.ts pattern) ───────────────────
 
 // ── Filtering helpers ─────────────────────────────────────────────────────────
@@ -133,13 +129,20 @@ export function customerCasesForProduct(cases: any[], product: ProductConfig): a
 
 // ── Cache read/write ──────────────────────────────────────────────────────────
 
-/** Read cached intel. Does NOT validate contentHash — returns whatever is cached. */
+/** Read cached intel. Validates corpusHash against current feature cache — returns null on mismatch to force regeneration. */
 export function getCachedCustomerProductIntel(slug: string, customerSlug: string): CustomerProductIntel | null {
   const p = customerIntelCachePath(slug, customerSlug)
   try {
     if (existsSync(p)) {
       const raw: CustomerIntelCache = JSON.parse(readFileSync(p, 'utf-8'))
-      return raw.intel ?? null
+      if (!raw.intel) return null
+      // Validate corpusHash against current feature cache
+      const featureCache = getFeatureCache(slug)
+      if (featureCache && raw.intel.productCacheHash !== featureCache.corpusHash) {
+        console.log(`[customer-product-intel] corpusHash mismatch for ${slug}/${customerSlug} — cache stale, returning null`)
+        return null
+      }
+      return raw.intel
     }
   } catch (e: any) {
     console.warn(`[customer-product-intel] cache read failed for ${slug}/${customerSlug}:`, e?.message)
@@ -360,23 +363,18 @@ export async function generateCustomerProductIntel(opts: {
   opportunityNote?: string
   productFeatures?: { name: string; status: string; description: string; tags: string[]; versionIntroduced?: string | null }[]
   productFeaturesHash?: string
-  /**
-   * When true, skip the content-hash cache check and always regenerate.
-   * Set by the route handler when ?force=true is passed.
-   */
-  force?: boolean
 }): Promise<CustomerProductIntel> {
   const { slug, productSummary, slidesText, customerName, subscriptions, supportCases, opportunityNote } = opts
 
-  const customerSlug = toCustomerSlug(customerName)
+  const customerSlug = toSlug(customerName)
 
-  // BKL-AI-COST-03: skip Gemini call if customer has zero subscriptions for this product
+  // BKL-AI-COST-05: gate customers with zero subscriptions (extends BKL-AI-COST-03)
   // BKL-PRODINTEL-01: unless intelligence cache exists — then do expansion analysis
   const productConfigs = loadProductConfig()
   const productConfig = productConfigs.find(p => p.slug === slug)
-  if (productConfig && subscriptions.length > 0) {
-    const matchingSubs = customerSubscribesTo(subscriptions, productConfig)
-    if (matchingSubs.length === 0) {
+  if (productConfig) {
+    const hasNoMatchingSubs = subscriptions.length === 0 || customerSubscribesTo(subscriptions, productConfig).length === 0
+    if (hasNoMatchingSubs) {
       // Check if intelligence cache exists — if so, run expansion analysis instead of skipping
       const expansionCacheDir = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
       const acctIntel = loadAccountIntelligence(expansionCacheDir, customerSlug)
@@ -433,19 +431,15 @@ export async function generateCustomerProductIntel(opts: {
 
   // ── Cache hit ─────────────────────────────────────────────────────────────
   const cachePath = customerIntelCachePath(slug, customerSlug)
-  if (opts.force) {
-    console.log(`[customer-product-intel] force=true — bypassing cache for ${slug}/${customerSlug}`)
-  } else {
-    try {
-      if (existsSync(cachePath)) {
-        const cached: CustomerIntelCache = JSON.parse(readFileSync(cachePath, 'utf-8'))
-        if (cached.contentHash === contentHash) {
-          console.log(`[customer-product-intel] cache hit for ${slug}/${customerSlug} (hash ${contentHash})`)
-          return cached.intel
-        }
+  try {
+    if (existsSync(cachePath)) {
+      const cached: CustomerIntelCache = JSON.parse(readFileSync(cachePath, 'utf-8'))
+      if (cached.contentHash === contentHash) {
+        console.log(`[customer-product-intel] cache hit for ${slug}/${customerSlug} (hash ${contentHash})`)
+        return cached.intel
       }
-    } catch { /* cache miss or corrupt — regenerate */ }
-  }
+    }
+  } catch { /* cache miss or corrupt — regenerate */ }
 
   // ── Build prompt ──────────────────────────────────────────────────────────
 
@@ -570,7 +564,7 @@ For initiativeAlignment: derive from the Account Intelligence section above. Eac
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         generationConfig: {
           temperature:     getAiConfig().customerIntelTemperature,
-          maxOutputTokens: 8192,
+          maxOutputTokens: 2048,
           thinkingConfig:  { thinkingBudget: 0 },
         },
       }),
@@ -660,7 +654,7 @@ export async function buildCustomerIntelContext(customerSlug: string): Promise<{
   productFeaturesFn: (slug: string) => { features: any[]; hash: string | undefined }
 }> {
   // Resolve customer by slug
-  const customer = customers.find(cu => toCustomerSlug(cu.name) === customerSlug)
+  const customer = customers.find(cu => toSlug(cu.name) === customerSlug)
   const customerName = customer?.name ?? customerSlug
 
   // Subscriptions

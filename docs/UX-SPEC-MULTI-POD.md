@@ -1,5 +1,5 @@
 ---
-Last validated: 2026-04-24
+Status: PENDING DECISION | Linked to: BKL-UX52 | Expires: when UX52 implementation complete
 ---
 
 # UX Spec: Multi-AE / Multi-Pod Dashboard Architecture

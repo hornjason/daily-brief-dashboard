@@ -7,10 +7,10 @@ import type { Customer, CalendarEvent, EmailHighlight, DriveFile, SupportCase, C
 import type { PipelineRecord } from './pipeline.ts'
 import type { CCSPRecord } from './sheets.ts'
 import { aes } from './server-state.ts'
-import { readLatestBriefCache, readBriefCache, writeBriefCache } from './cache-layer.ts'
-import { diffDocCorpus, shouldUseDeltaMode } from './ai-fingerprint.ts'
+import { readLatestBriefCache, readBriefCache, readDocContentCache, writeDocContentCache, readEmailCache, writeEmailCache, readMeetingCache, writeMeetingCache, toSlug, MS_PER_DAY } from './cache-layer.ts'
 import { isFreeOrTrial } from './health-score.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { fetchGeminiWithRetry } from './gemini-fetch.ts'
 import { getAiConfig, getGeminiModel, getGeminiModelLite, getAutomationConfig } from './settings-api.ts'
 import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
 import { classifyDocs } from './doc-extraction.ts'
@@ -22,6 +22,8 @@ import { assembleMeetingPrep } from './calendar-extraction.ts'
 import type { DocClassification } from './doc-extraction.ts'
 import type { EmailIntelligence, SilentContact } from './email-extraction.ts'
 import type { MeetingPrep } from './calendar-extraction.ts'
+import { emitAIEvent } from './ai-events.ts'
+import { detectFingerprintDelta, diffDocCorpus, shouldUseDeltaMode, type BriefInputBundle } from './ai-fingerprint.ts'
 
 const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const GMAIL_TOKEN_PATH  = process.env.GMAIL_TOKEN       ?? resolve(CONFIG_DIR_PATH, '.gmail-token.json')
@@ -31,6 +33,14 @@ const GCAL_TOKEN_PATH   = process.env.GCAL_TOKEN        ?? resolve(CONFIG_DIR_PA
 // ── Calendar: meetings for this customer (next 30 days) ──────────────────────
 
 export async function fetchCustomerMeetings(customer: Customer): Promise<CalendarEvent[]> {
+  // ADR-013 Tier 2: serve from cache when fresh (2h TTL)
+  const customerSlug = toSlug(customer.name)
+  const cached = readMeetingCache(customerSlug)
+  if (cached) {
+    console.log(`[meetings] serving from cache for ${customer.name}`)
+    return cached
+  }
+
   const auth = makeAuth(GCAL_TOKEN_PATH)
   const calendar = google.calendar({ version: 'v3', auth })
   const now = new Date()
@@ -47,7 +57,7 @@ export async function fetchCustomerMeetings(customer: Customer): Promise<Calenda
   })
 
   const items = res.data.items ?? []
-  return items
+  const meetings = items
     .filter((ev) => {
       const attendees = (ev.attendees ?? []).map((a) => a.email ?? '').join(' ')
       const title    = (ev.summary     ?? '').toLowerCase()
@@ -80,11 +90,22 @@ export async function fetchCustomerMeetings(customer: Customer): Promise<Calenda
         customers: [customer.name],
       } satisfies CalendarEvent
     })
+
+  writeMeetingCache(customerSlug, meetings)
+  return meetings
 }
 
 // ── Gmail: emails from/about this customer (last 30 days) ───────────────────
 
 export async function fetchCustomerEmails(customer: Customer): Promise<EmailHighlight[]> {
+  // ADR-013 Tier 2: serve from cache when fresh (2h TTL)
+  const customerSlug = toSlug(customer.name)
+  const cached = readEmailCache(customerSlug)
+  if (cached) {
+    console.log(`[emails] serving from cache for ${customer.name}`)
+    return cached
+  }
+
   const auth = makeAuth(GMAIL_TOKEN_PATH)
   const gmail = google.gmail({ version: 'v1', auth })
 
@@ -96,7 +117,10 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
 
   const list = await gmail.users.messages.list({ userId: 'me', q: query, maxResults: 20 })
   const messages = list.data.messages ?? []
-  if (messages.length === 0) return []
+  if (messages.length === 0) {
+    writeEmailCache(customerSlug, [])
+    return []
+  }
 
   const details = await Promise.all(
     messages.map((msg) =>
@@ -108,7 +132,7 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
     )
   )
 
-  return details.map(({ data }) => {
+  const emails = details.map(({ data }) => {
     const h = data.payload?.headers ?? []
     const get = (name: string) => h.find((x) => x.name === name)?.value ?? ''
     return {
@@ -122,6 +146,9 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
       ),
     } satisfies EmailHighlight
   })
+
+  writeEmailCache(customerSlug, emails)
+  return emails
 }
 
 // ── Drive: docs in this customer's folder ───────────────────────────────────
@@ -134,8 +161,13 @@ const EXPORTABLE_MIME_TYPES = new Set([
 ])
 const DOC_CONTENT_CAP   = 8_000   // chars per document (was 3K — too tight for meeting notes/POVs)
 const TOTAL_CONTENT_CAP = 80_000  // chars per customer across all docs (was 20K — starved briefs of context)
+const ACCT_INTEL_COMPANY_CAP  = 3_000  // chars of intel.company emitted to brief XML
+const ACCT_INTEL_INDUSTRY_CAP = 2_000  // chars of intel.industry emitted to brief XML
 const MAX_FILES_PER_CUSTOMER = 50
 const DRIVE_SUBFOLDER_DEPTH  = 5
+export const ACCT_INTEL_TTL_MS = (Number(process.env.INTELLIGENCE_COMPANY_TTL_DAYS) || 14) * MS_PER_DAY
+const FINGERPRINT_EMAIL_LIMIT   = 20  // most recent emails included in brief fingerprint
+const FINGERPRINT_MEETING_LIMIT = 10  // most recent past meetings included in brief fingerprint
 
 // Normalize name for fuzzy matching — strip legal suffixes, punctuation, lowercase
 function normalizeFolderName(name: string): string {
@@ -266,23 +298,31 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
   }
 
   // BFS: collect all files from customer folder + all subfolders (depth-limited)
+  // BKL-DRIVE-01: follow folder shortcuts into targets; dedup files by Drive fileId
+  // (a file reachable both directly and via shortcut is only collected once) and
+  // dedup folders/shortcut targets by folderId (prevents circular/duplicate traversal).
   const twoYearsAgo = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString()
   const allFiles: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string }> = []
+  const seenFileIds = new Set<string>()                              // dedup files across all folders/shortcut targets
+  const visitedFolderIds = new Set<string>([customerFolderId])       // dedup folders + shortcut targets (circular guard)
+  const FOLDER_MIME = 'application/vnd.google-apps.folder'
   const queue: Array<{ id: string; depth: number }> = [{ id: customerFolderId, depth: 0 }]
 
   while (queue.length > 0 && allFiles.length < MAX_FILES_PER_CUSTOMER) {
     const { id: folderId, depth } = queue.shift()!
 
-    // List files in this folder
+    // List files in this folder — exclude folders AND shortcuts (shortcuts are handled separately below)
     const filesRes = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and modifiedTime > '${twoYearsAgo}' and trashed = false`,
+      q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and mimeType != 'application/vnd.google-apps.shortcut' and modifiedTime > '${twoYearsAgo}' and trashed = false`,
       fields: 'files(id,name,mimeType,modifiedTime,webViewLink)',
       orderBy: 'modifiedTime desc',
       pageSize: Math.min(50, MAX_FILES_PER_CUSTOMER - allFiles.length),
     })
     for (const f of filesRes.data.files ?? []) {
+      if (!f.id || seenFileIds.has(f.id)) continue  // skip duplicates (already collected via another path)
+      seenFileIds.add(f.id)
       allFiles.push({
-        id: f.id ?? '',
+        id: f.id,
         name: f.name ?? '',
         mimeType: f.mimeType ?? '',
         modifiedTime: f.modifiedTime ?? undefined,
@@ -290,14 +330,37 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
       })
     }
 
-    // Queue subfolders if within depth limit
+    // Queue real subfolders + folder-shortcut targets if within depth limit
     if (depth < DRIVE_SUBFOLDER_DEPTH) {
-      const subRes = await drive.files.list({
-        q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: 'files(id,name)', pageSize: 20,
-      })
+      const [subRes, shortcutRes] = await Promise.all([
+        drive.files.list({
+          q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+          fields: 'files(id,name)',
+          pageSize: 20,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        }),
+        drive.files.list({
+          q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
+          fields: 'files(id,name,shortcutDetails(targetId,targetMimeType))',
+          pageSize: 20,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        }),
+      ])
       for (const sub of subRes.data.files ?? []) {
-        if (sub.id) queue.push({ id: sub.id, depth: depth + 1 })
+        if (!sub.id || visitedFolderIds.has(sub.id)) continue
+        visitedFolderIds.add(sub.id)
+        queue.push({ id: sub.id, depth: depth + 1 })
+      }
+      for (const sc of shortcutRes.data.files ?? []) {
+        const targetId = sc.shortcutDetails?.targetId
+        const targetMime = (sc.shortcutDetails as any)?.targetMimeType
+        if (!targetId || targetMime !== FOLDER_MIME) continue  // only follow shortcuts to folders
+        if (visitedFolderIds.has(targetId)) continue            // circular / already queued
+        visitedFolderIds.add(targetId)
+        queue.push({ id: targetId, depth: depth + 1 })          // treat as same-depth as a real subfolder
+        console.log(`[drive-bfs] following shortcut "${sc.name}" -> ${targetId}`)
       }
     }
   }
@@ -306,8 +369,14 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
   const EXPORT_CONCURRENCY = 5
 
   // Helper: export a single file's content (returns extracted text or null)
-  async function exportFileContent(f: { id: string; name: string; mimeType: string }): Promise<string | null> {
+  // ADR-013 Tier 3: content-addressed cache by (fileId, modifiedTime).
+  async function exportFileContent(f: { id: string; name: string; mimeType: string; modifiedTime?: string }): Promise<string | null> {
     if (EXPORTABLE_MIME_TYPES.has(f.mimeType) && f.id) {
+      // Cache hit short-circuits Drive export
+      if (f.modifiedTime) {
+        const cached = readDocContentCache(f.id, f.modifiedTime)
+        if (cached !== null) return cached
+      }
       try {
         const exportRes = await drive.files.export(
           { fileId: f.id, mimeType: 'text/plain' },
@@ -315,7 +384,11 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
         )
         const raw = String(exportRes.data ?? '').replace(/\s+/g, ' ').trim()
         const capped = raw.slice(0, DOC_CONTENT_CAP)
-        return capped.length > 50 ? capped : null
+        const content = capped.length > 50 ? capped : null
+        if (content !== null && f.modifiedTime) {
+          writeDocContentCache(f.id, f.modifiedTime, content)
+        }
+        return content
       } catch {
         return null
       }
@@ -344,6 +417,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
 
   for (const f of allFiles) {
     const file: DriveFile = {
+      id: f.id,
       name: f.name,
       mimeType: f.mimeType,
       modifiedTime: f.modifiedTime,
@@ -357,7 +431,17 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
       totalChars += preExported.length
     }
     // BKL-R25b: PDF extraction — local-first, multimodal fallback
+    // ADR-013 Tier 3: content-addressed cache by (fileId, modifiedTime) short-circuits both unpdf and multimodal paths.
     else if (f.mimeType === 'application/pdf' && totalChars < TOTAL_CONTENT_CAP && f.id) {
+      if (f.modifiedTime) {
+        const cachedPdf = readDocContentCache(f.id, f.modifiedTime)
+        if (cachedPdf !== null) {
+          file.content = cachedPdf
+          totalChars += cachedPdf.length
+          results.push(file)
+          continue
+        }
+      }
       try {
         const pdfRes = await drive.files.get(
           { fileId: f.id, alt: 'media' },
@@ -389,6 +473,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
           const capped = localText.slice(0, DOC_CONTENT_CAP)
           file.content = capped
           totalChars += capped.length
+          if (f.modifiedTime) writeDocContentCache(f.id, f.modifiedTime, capped)
         } else {
           // Step 2: Local extraction failed/empty — fall back to multimodal inlineData path
           console.log(`[docs] PDF ${f.name}: local extraction (${localText.length} chars), using multimodal fallback`)
@@ -437,6 +522,7 @@ async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> 
                 if (capped.length > 50) {
                   file.content = capped
                   totalChars += capped.length
+                  if (f.modifiedTime) writeDocContentCache(f.id, f.modifiedTime, capped)
                 }
               }
             }
@@ -471,7 +557,18 @@ export function isBriefConfigured(): boolean {
     (!!process.env.GEMINI_SERVICE_ACCOUNT_KEY || existsSync(GOOGLE_UNIFIED_TOKEN_PATH))
 }
 
-async function callLLM(systemPrompt: string, userPrompt: string, callType = 'brief-synthesize', customerName = 'unknown'): Promise<string> {
+// BKL-AI-FP-09: capture last LLM payload for test assertions (DISALLOW_GEMINI path only)
+let _lastCapturedLLMPayload: string | null = null
+export function getCapturedLLMPayload(): string | null { return _lastCapturedLLMPayload }
+
+export async function callLLM(systemPrompt: string, userPrompt: string, callType = 'brief-synthesize', customerName = 'unknown'): Promise<string> {
+  // BKL-AI-FP-01: test environment bypass — skip Gemini call, return fixture
+  if (process.env.DISALLOW_GEMINI === 'true') {
+    _lastCapturedLLMPayload = userPrompt
+    emitAIEvent({ type: 'cache:bypass', accountId: toSlug(customerName), flow: 'brief', source: 'l1' })
+    return '[GEMINI_DISABLED: fixture response for testing]'
+  }
+
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
   const model    = getGeminiModelLite()  // BKL-AI-COST-01: brief synthesis is high-volume, use lite model
@@ -479,36 +576,41 @@ async function callLLM(systemPrompt: string, userPrompt: string, callType = 'bri
 
   // Prefer service account key (works without cloud-platform OAuth scope on the user token).
   // Fall back to user OAuth token (requires cloud-platform scope).
-  let token: string | null | undefined
-  const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-  if (saKeyB64) {
-    const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-    const jwtAuth = new google.auth.JWT({
-      email: keyData.client_email,
-      key:   keyData.private_key,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    })
-    token = (await jwtAuth.getAccessToken()).token
-  } else {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    token = (await auth.getAccessToken()).token
+  async function getAccessToken(): Promise<string> {
+    let t: string | null | undefined
+    const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+    if (saKeyB64) {
+      const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+      const jwtAuth = new google.auth.JWT({
+        email: keyData.client_email,
+        key:   keyData.private_key,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      })
+      t = (await jwtAuth.getAccessToken()).token
+    } else {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      t = (await auth.getAccessToken()).token
+    }
+    if (!t) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
+    return t
   }
-  if (!token) throw new Error('Failed to get access token for Gemini — complete Google OAuth in the setup wizard (cloud-platform scope required), or set GEMINI_SERVICE_ACCOUNT_KEY in .env')
 
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: { temperature: getAiConfig().briefSynthesisTemperature, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },  // thinkingBudget=0: gemini-2.5-flash is a thinking model; thinking tokens consume output budget, leaving ~200 tokens for actual brief. Disable thinking for brief synthesis — creative writing task, not complex reasoning.
-    }),
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: { temperature: getAiConfig().briefSynthesisTemperature, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },  // thinkingBudget=0: gemini-2.5-flash is a thinking model; thinking tokens consume output budget, leaving ~200 tokens for actual brief. Disable thinking for brief synthesis — creative writing task, not complex reasoning.
   })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status} (project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
-  }
+
+  // BKL-TEST-P0-04c: shared 429-retry helper. Exhausted retries throw
+  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
+  // canonical "Gemini API error NNN (project=... location=... model=...)"
+  // message with Bearer redaction.
+  const res = await fetchGeminiWithRetry(url, getAccessToken, requestBody, {
+    callType, customerName, model, project, location,
+    logPrefix: '[brief] callLLM',
+  })
+
   const json = await res.json() as any
   // BKL-M52: record token usage for cost tracking
   const usage = json.usageMetadata
@@ -608,61 +710,6 @@ interface XmlEnrichment {
   meetingPreps?: MeetingPrep[]
 }
 
-/**
- * BKL-AI-FP-09 corpus delta: build XML sources for delta-mode synthesis.
- *
- * Unchanged docs are dropped — the previous brief carries forward their content.
- * Only new + changed docs are sent in full. Removed docs are listed by name only
- * so the model can decide whether to drop talking points that referenced them.
- *
- * Non-doc context (meetings, emails, cases, subscriptions, pipeline, CCSP) is
- * passed through identical to the full-run path via the same buildXmlSources call.
- */
-function buildDeltaXmlSources(
-  customer: Customer,
-  meetings: CalendarEvent[],
-  emails: EmailHighlight[],
-  changedDocs: DriveFile[],
-  newDocs: DriveFile[],
-  removedDocNames: string[],
-  cases: SupportCase[],
-  subscriptions: CustomerSubscription[],
-  products: ProductSubscription[],
-  pipeline: PipelineRecord[],
-  ccsp: CCSPRecord[],
-  previousBrief: string,
-  lastBriefDate: string | null,
-  lastInteraction: string,
-  enrichment?: XmlEnrichment,
-): string {
-  // Reuse the full builder for non-doc context — pass only the delta docs as the docs argument.
-  const deltaDocs = [...newDocs, ...changedDocs]
-  let xml = buildXmlSources(
-    customer, meetings, emails, deltaDocs, cases, subscriptions, products, pipeline, ccsp,
-    previousBrief, lastBriefDate, lastInteraction, enrichment,
-  )
-
-  // Prepend explicit delta tags so the synthesis prompt knows it is in delta mode.
-  let header = `<delta_mode>true</delta_mode>\n`
-  header += `<previous_brief date="${escapeXml(lastBriefDate ?? 'unknown')}">\n${previousBrief}\n</previous_brief>\n\n`
-  if (newDocs.length) {
-    header += `<new_documents count="${newDocs.length}">\n`
-    for (const d of newDocs) header += `  ${escapeXml(d.name)}\n`
-    header += `</new_documents>\n\n`
-  }
-  if (changedDocs.length) {
-    header += `<modified_documents count="${changedDocs.length}">\n`
-    for (const d of changedDocs) header += `  ${escapeXml(d.name)}\n`
-    header += `</modified_documents>\n\n`
-  }
-  if (removedDocNames.length) {
-    header += `<removed_documents count="${removedDocNames.length}">\n`
-    for (const n of removedDocNames) header += `  ${escapeXml(n)}\n`
-    header += `</removed_documents>\n\n`
-  }
-  return header + xml
-}
-
 function buildXmlSources(
   customer: Customer,
   meetings: CalendarEvent[],
@@ -677,6 +724,7 @@ function buildXmlSources(
   lastBriefDate: string | null,
   lastInteraction: string,
   enrichment?: XmlEnrichment,
+  accountIntelligence?: { company?: string; industry?: string; cachedAt?: string } | null,
 ): string {
   const fmt = (iso: string) => {
     try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
@@ -892,19 +940,32 @@ function buildXmlSources(
   }
 
   // Account intelligence (ADR-008 dual-write cache)
-  const intelligenceSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-  const intelligencePath = `${process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')}/intelligence/${intelligenceSlug}.json`
-  try {
-    if (existsSync(intelligencePath)) {
-      const intel = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
-      if (intel.company || intel.industry) {
-        xml += `<source type="account_intelligence" cached="${intel.cachedAt}">\n`
-        if (intel.company) xml += `[Company Intelligence]\n${escapeXml(String(intel.company).slice(0, 3000))}\n`
-        if (intel.industry) xml += `\n[Industry Analysis]\n${escapeXml(String(intel.industry).slice(0, 2000))}\n`
-        xml += `</source>\n\n`
+  // Prefer caller-provided intelligence object; fall back to disk read for backward compat.
+  const intelligenceSlug = toSlug(customer.name)
+  let intel: { company?: string; industry?: string; cachedAt?: string } | null = null
+  if (accountIntelligence !== undefined) {
+    intel = accountIntelligence
+  } else {
+    const intelligencePath = `${process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')}/intelligence/${intelligenceSlug}.json`
+    try {
+      if (existsSync(intelligencePath)) {
+        intel = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
       }
+    } catch { /* intelligence cache missing */ }
+  }
+  if (intel && (intel.company || intel.industry)) {
+    const age = intel.cachedAt ? Date.now() - new Date(intel.cachedAt).getTime() : Infinity
+    if (age >= ACCT_INTEL_TTL_MS) {
+      const ageDays = Math.round(age / MS_PER_DAY)
+      xml += `<source type="account_intelligence" status="stale" cached="${intel.cachedAt}">Account intelligence is stale (${ageDays}d old) — regeneration pending.</source>\n\n`
+      emitAIEvent({ type: 'cache:stale', flow: 'brief', source: 'l4', accountId: intelligenceSlug })
+    } else {
+      xml += `<source type="account_intelligence" status="fresh" cached="${intel.cachedAt}">\n`
+      if (intel.company) xml += `[Company Intelligence]\n${escapeXml(String(intel.company).slice(0, ACCT_INTEL_COMPANY_CAP))}\n`
+      if (intel.industry) xml += `\n[Industry Analysis]\n${escapeXml(String(intel.industry).slice(0, ACCT_INTEL_INDUSTRY_CAP))}\n`
+      xml += `</source>\n\n`
     }
-  } catch { /* intelligence cache missing */ }
+  }
 
   // Product intelligence — per-product SA talking points (Wave 4 Phase 2c)
   const customerSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
@@ -948,48 +1009,72 @@ function buildXmlSources(
 
 // ── Structured LLM call with responseSchema (R17) ───────────────────────────
 
-async function callLLMStructured(systemPrompt: string, userPrompt: string, responseSchema: object, callType = 'brief-extract', customerName = 'unknown'): Promise<any> {
+export async function callLLMStructured<T = any>(systemPrompt: string, userPrompt: string, responseSchema: object, callType = 'brief-extract', customerName = 'unknown'): Promise<T> {
+  // BKL-AI-FP-01: test environment bypass — skip Gemini call, return minimal valid fixture
+  if (process.env.DISALLOW_GEMINI === 'true') {
+    emitAIEvent({ type: 'cache:bypass', accountId: toSlug(customerName), flow: 'brief', source: 'l1' })
+    return { items: [], data_gaps: ['GEMINI_DISABLED'] } as unknown as T
+  }
+
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
   const model    = getGeminiModelLite()  // BKL-AI-COST-01: brief extraction is high-volume, use lite model
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
 
-  let token: string | null | undefined
-  const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-  if (saKeyB64) {
-    const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-    const jwtAuth = new google.auth.JWT({
-      email: keyData.client_email,
-      key:   keyData.private_key,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    })
-    token = (await jwtAuth.getAccessToken()).token
-  } else {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    token = (await auth.getAccessToken()).token
+  async function getAccessToken(): Promise<string> {
+    let t: string | null | undefined
+    const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
+    if (saKeyB64) {
+      const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+      const jwtAuth = new google.auth.JWT({
+        email: keyData.client_email,
+        key:   keyData.private_key,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      })
+      t = (await jwtAuth.getAccessToken()).token
+    } else {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      t = (await auth.getAccessToken()).token
+    }
+    if (!t) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
+    return t
   }
-  if (!token) throw new Error('Failed to get access token for Gemini — complete Google OAuth in the setup wizard (cloud-platform scope required), or set GEMINI_SERVICE_ACCOUNT_KEY in .env')
 
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature: getAiConfig().briefSynthesisTemperature,
-        maxOutputTokens: 8192,
-        thinkingConfig: { thinkingBudget: 0 },  // gemini-2.5-flash thinking model: disable thinking so all 8192 tokens go to structured JSON output
-        responseMimeType: 'application/json',
-        responseSchema,
-      },
-    }),
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: getAiConfig().briefSynthesisTemperature,
+      maxOutputTokens: 8192,
+      thinkingConfig: { thinkingBudget: 0 },  // gemini-2.5-flash thinking model: disable thinking so all output tokens go to structured JSON output
+      responseMimeType: 'application/json',
+      responseSchema,
+    },
   })
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status} (structured, project=${project} location=${location} model=${model}): ${err.slice(0, 300)}`)
+
+  function parseStructured(json: any): any {
+    const finishReason = json.candidates?.[0]?.finishReason
+    const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    if (!text) {
+      throw new Error(`Gemini structured call returned empty response (finishReason=${finishReason ?? 'none'}, callType=${callType}, customer=${customerName})`)
+    }
+    try {
+      return JSON.parse(text)
+    } catch {
+      throw new Error(`Gemini structured response is not valid JSON (finishReason=${finishReason ?? 'none'}, callType=${callType}, customer=${customerName}): ${text.slice(0, 200)}`)
+    }
   }
+
+  // BKL-TEST-P0-04c: shared 429-retry helper. Exhausted retries throw
+  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
+  // canonical "Gemini API error NNN (project=... location=... model=...)"
+  // message with Bearer redaction.
+  const res = await fetchGeminiWithRetry(url, getAccessToken, requestBody, {
+    callType, customerName, model, project, location,
+    logPrefix: '[brief] callLLMStructured',
+  })
+
   const json = await res.json() as any
   // BKL-M52: record token usage for cost tracking
   const usage = json.usageMetadata
@@ -1003,16 +1088,58 @@ async function callLLMStructured(systemPrompt: string, userPrompt: string, respo
       model,
     })
   }
-  const finishReason = json.candidates?.[0]?.finishReason
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  if (!text) {
-    throw new Error(`Gemini structured call returned empty response (finishReason=${finishReason ?? 'none'}, callType=${callType}, customer=${customerName})`)
-  }
-  try {
-    return JSON.parse(text)
-  } catch (parseErr: any) {
-    throw new Error(`Gemini structured response is not valid JSON (finishReason=${finishReason ?? 'none'}, callType=${callType}, customer=${customerName}): ${text.slice(0, 200)}`)
-  }
+  return parseStructured(json)
+}
+
+// ── BKL-AI-FP-09: Delta XML source builder ───────────────────────────────────
+
+function buildDeltaXmlSources(
+  customer: Customer,
+  previousBrief: string,
+  changedDocs: DriveFile[],
+  newDocs: DriveFile[],
+  removedDocIds: string[],
+  meetings: CalendarEvent[],
+  emails: EmailHighlight[],
+  cases: SupportCase[],
+  subscriptions: CustomerSubscription[],
+  products: ProductSubscription[],
+  pipeline: PipelineRecord[],
+  ccsp: CCSPRecord[],
+  lastInteraction: string,
+): string {
+  const today = new Date().toISOString().split('T')[0]
+
+  const docXml = (docs: DriveFile[], label: string) =>
+    docs.length === 0 ? '' :
+    `<${label}>\n${docs.map(d =>
+      `  <document name="${escapeXml(d.name)}">\n${escapeXml((d.content ?? '').slice(0, 3000))}\n  </document>`
+    ).join('\n')}\n</${label}>\n\n`
+
+  const removedXml = removedDocIds.length === 0 ? '' :
+    `<removed_documents>\n${removedDocIds.map(id => `  <document file_id="${escapeXml(id)}"/>`).join('\n')}\n</removed_documents>\n\n`
+
+  const upcomingCount = meetings.filter(m => new Date(m.start) >= new Date()).length
+  const openCaseCount = cases.filter(c => !(c as any).isClosed).length
+
+  const contextXml = `<customer_context synced="${today}">
+  <name>${escapeXml(customer.name)}</name>
+  <ae>${escapeXml(customer.ae ?? 'Unknown')}</ae>
+  <last_interaction>${escapeXml(lastInteraction)}</last_interaction>
+  <meeting_count>${upcomingCount} upcoming</meeting_count>
+  <email_count>${emails.length} recent</email_count>
+  <open_case_count>${openCaseCount}</open_case_count>
+</customer_context>\n\n`
+
+  return `<previous_brief>
+${escapeXml(previousBrief)}
+</previous_brief>
+
+${docXml(changedDocs, 'modified_documents')}${docXml(newDocs, 'new_documents')}${removedXml}${contextXml}<instructions>
+Update the brief in <previous_brief> to reflect the changes above. Preserve all content from the previous brief that is not contradicted or superseded by the modified and new documents. Pay particular attention to the new and modified documents — these represent updates since the last brief was generated. Remove any references to documents listed in <removed_documents>. Do not restructure or rewrite sections unaffected by the changes. Before writing, internally identify which sections are affected by the delta. Output only the updated brief — no preamble, no change log, no explanation.
+
+Preserve all content not superseded by the delta. Focus your updates on what changed.
+</instructions>`
 }
 
 // ── Signal extraction (R17 Step 1) ──────────────────────────────────────────
@@ -1072,10 +1199,62 @@ export async function generateBrief(
       .filter(Boolean)
       .sort((a, b) => new Date(b!).getTime() - new Date(a!).getTime())[0] ?? 'unknown'
 
+    // BKL-AI-FP-03: compute fingerprint of brief inputs after emails + meetings assembled.
+    // Short-circuit on fingerprint match to avoid enrichment + Gemini entirely.
+    const recentCases = (cases ?? []).filter(c => {
+      const age = Date.now() - new Date((c as any).createdDate ?? (c as any).openedAt ?? 0).getTime()
+      return !(c as any).isClosed && age < 90 * MS_PER_DAY
+    })
+    const caseCounts: Record<string, number> = {}
+    for (const c of recentCases) {
+      const sev = String(c.severity ?? 'unknown')
+      caseCounts[sev] = (caseCounts[sev] ?? 0) + 1
+    }
+    const inputBundle: BriefInputBundle = {
+      emailTuples: sortedEmails.slice(0, FINGERPRINT_EMAIL_LIMIT).map(e => ({
+        subject: e.subject ?? '',
+        sender: (e as any).from ?? '',
+        date: e.date ?? '',
+      })),
+      meetingTuples: pastMeetings.slice(0, FINGERPRINT_MEETING_LIMIT).map(m => ({
+        title: m.title ?? (m as any).summary ?? '',
+        attendees: m.attendees ?? [],
+        date: m.start ?? '',
+      })),
+      ccspTier: null,       // not available at this call site — future enhancement
+      pipelineStage: null,  // not available at this call site — future enhancement
+      openCaseCounts: caseCounts,
+      preferencesHash: '',  // user preferences not yet wired — future enhancement
+    }
+    const cachedBriefForFingerprint = readBriefCache(customer.name)
+    const fingerprintResult = detectFingerprintDelta(cachedBriefForFingerprint?.inputFingerprint, inputBundle)
+
+    if (cachedBriefForFingerprint && !fingerprintResult.changed) {
+      // L1 cache hit — inputs unchanged, return cached brief without any Gemini calls
+      emitAIEvent({ type: 'cache:hit', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
+      console.log(`[brief] fingerprint cache hit for ${customer.name} — returning cached brief (no Gemini calls)`)
+      return cachedBriefForFingerprint.text
+    }
+
+    // BKL-AI-FP-09: build corpus snapshot from current docs for delta detection
+    const currentCorpusSnapshot: Record<string, string> = {}
+    for (const doc of docs) {
+      if (doc.id) currentCorpusSnapshot[doc.id] = doc.modifiedTime ?? ''
+    }
+    const prevCorpusSnapshot = cachedBriefForFingerprint?.docCorpusSnapshot ?? {}
+    const corpusDiff = diffDocCorpus(prevCorpusSnapshot, currentCorpusSnapshot)
+    const useDelta = shouldUseDeltaMode(corpusDiff, !!previousBrief)
+    if (useDelta) {
+      console.log(`[brief] delta mode: ${corpusDiff.unchangedDocs.length} unchanged, ${corpusDiff.changedDocs.length} changed, ${corpusDiff.newDocs.length} new, ${corpusDiff.removedDocs.length} removed`)
+    } else {
+      console.log(`[brief] full-run: corpus unchanged=${corpusDiff.unchangedDocs.length} changed=${corpusDiff.changedDocs.length} new=${corpusDiff.newDocs.length} hasPrev=${!!previousBrief}`)
+    }
+
     // ── R26: Sub-pipeline enrichment — run in parallel (independent of each other)
     const enrichment: XmlEnrichment = {}
     const [docResult, emailResult, prepResult] = await Promise.allSettled([
-      classifyDocs(docs),
+      // ADR-013: map DriveFile.id → fileId so classifyAndExtract can hit the classification cache.
+      classifyDocs(docs.map(d => ({ fileId: d.id, name: d.name, modifiedTime: d.modifiedTime, content: d.content }))),
       extractEmailIntelligence(emails),
       Promise.resolve(assembleMeetingPrep(meetings, emails, cases, subscriptions)),
     ])
@@ -1099,96 +1278,75 @@ export async function generateBrief(
       console.warn(`[brief] R26 calendar-extraction failed for ${customer.name}, continuing without:`, (prepResult.reason as any)?.message?.slice?.(0, 200) ?? 'unknown error')
     }
 
-    // ── BKL-AI-FP-09: Corpus delta check ───────────────────────────────────
-    // If the previously-cached brief includes a docCorpusSnapshot and only a
-    // small subset of docs changed, skip Steps 1+2 and synthesize directly
-    // against the previous brief + delta docs. Saves the most expensive Gemini
-    // calls when the customer's drive corpus is mostly unchanged day-over-day.
-    // DriveFile has no stable `id` field exposed on this type — use `name` as the identity key.
-    // Two docs with the same name in one corpus is treated as one bucket; modifiedTime change still triggers delta.
-    const currentSnapshot = Object.fromEntries(docs.map(d => [d.name, d.modifiedTime ?? '']))
-    const todaysCachedBrief = readBriefCache(customer.name)
-    const cachedSnapshot = todaysCachedBrief?.docCorpusSnapshot
-    const cachedBriefText = todaysCachedBrief?.text ?? previousBrief
-
-    let xmlSources: string
-    let useDeltaMode = false
-
-    if (cachedSnapshot && cachedBriefText) {
-      const corpusDiff = diffDocCorpus(cachedSnapshot, currentSnapshot)
-      useDeltaMode = shouldUseDeltaMode(corpusDiff, true)
-      if (useDeltaMode) {
-        const changedDocList = docs.filter(d => corpusDiff.changedDocs.includes(d.name))
-        const newDocList = docs.filter(d => corpusDiff.newDocs.includes(d.name))
-        // removedDocs from diffDocCorpus are fileIds — names aren't preserved in the snapshot
-        const removedNames = corpusDiff.removedDocs
-        xmlSources = buildDeltaXmlSources(
-          customer, meetings, emails,
-          changedDocList, newDocList, removedNames,
-          cases, subscriptions, products, pipeline, ccsp,
-          cachedBriefText, lastBriefDate, lastInteractionDate, enrichment,
-        )
-        console.log(`[brief] delta mode for ${customer.name}: ${corpusDiff.unchangedDocs.length} unchanged, ${corpusDiff.changedDocs.length} changed, ${corpusDiff.newDocs.length} new, ${corpusDiff.removedDocs.length} removed`)
-      }
-    }
-
-    if (!useDeltaMode) {
-      xmlSources = buildXmlSources(customer, meetings, emails, docs, cases, subscriptions, products, pipeline, ccsp, previousBrief, lastBriefDate, lastInteractionDate, enrichment)
-    }
-
-    // Delta mode bypasses Steps 1+2 — synthesize directly from delta context against previous brief.
-    if (useDeltaMode) {
-      const deltaSynthesisPrompt = `You are updating an existing customer brief. The previous brief and the changed/new/removed documents since it was generated are provided below in XML. Produce an updated brief in the same format. Preserve unchanged context from the previous brief; integrate insights from new/modified documents; drop or adjust talking points that referenced removed documents.\n\n${xmlSources!}`
-      const deltaBrief = await callLLM(
-        'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
-        deltaSynthesisPrompt,
-        'brief-synthesize-delta',
-        customer.name,
-      )
-      console.log(`[brief] delta SYNTHESIZE complete for ${customer.name}: ${deltaBrief.length} chars`)
-      writeBriefCache(customer.name, deltaBrief, { docCorpusSnapshot: currentSnapshot })
-      return deltaBrief
-    }
-
-    // Step 1: EXTRACT
-    const extraction = await extractSignals(xmlSources!, lastInteractionDate, customer.name)
-    console.log(`[brief] Step 1 EXTRACT for ${customer.name}: ${extraction.items.length} items, ${extraction.data_gaps.length} gaps`)
-
-    // Step 2: RANK (deterministic)
-    const ranked = rankItems(extraction.items)
-    console.log(`[brief] Step 2 RANK: top item = ${ranked[0]?.text ?? 'none'} (score: ${ranked[0]?.score ?? 0})`)
-
-    // Step 3: SYNTHESIZE — BKL-AI22: pass upcoming meetings for meeting-prep-first briefs
-    const upcomingMeetingsFor7Days = meetings.filter(m => {
-      const t = new Date(m.start).getTime()
-      return t >= Date.now() && t <= Date.now() + 7 * 24 * 60 * 60 * 1000
-    })
-
-    // Pass intelligence context directly to synthesis — bypasses extraction ranking
-    // so strategic context (company pivot, leadership changes) always reaches the brief
-    let intelligenceContext: { company?: string; industry?: string } | undefined
+    // Read account intelligence ONCE — share between XML source emission and synthesis context.
+    let accountIntelligence: { company?: string; industry?: string; cachedAt?: string } | null = null
     try {
-      const intelligenceSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      const intelligenceSlug = toSlug(customer.name)
       const intelligencePath = `${process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')}/intelligence/${intelligenceSlug}.json`
       if (existsSync(intelligencePath)) {
-        const intel = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
-        if (intel.company || intel.industry) {
-          intelligenceContext = { company: intel.company, industry: intel.industry }
-        }
+        accountIntelligence = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
       }
-    } catch { /* intelligence cache missing — brief generates without it */ }
+    } catch { /* intelligence cache missing — brief still generates */ }
 
-    const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext)
-    const brief = await callLLM(
-      'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
-      synthesisPrompt,
-      'brief-synthesize',
-      customer.name,
-    )
-    console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
+    let brief: string
 
-    // Persist with corpus snapshot so the next generation can use BKL-AI-FP-09 delta mode.
-    writeBriefCache(customer.name, brief, { docCorpusSnapshot: currentSnapshot })
+    if (useDelta) {
+      // BKL-AI-FP-09: Delta mode — skip Steps 1+2, go directly to delta-aware synthesis
+      const changedDocFiles = docs.filter(d => d.id && corpusDiff.changedDocs.includes(d.id))
+      const newDocFiles = docs.filter(d => d.id && corpusDiff.newDocs.includes(d.id))
+      const deltaXml = buildDeltaXmlSources(
+        customer, previousBrief!, changedDocFiles, newDocFiles,
+        corpusDiff.removedDocs,
+        meetings, emails, cases, subscriptions, products, pipeline, ccsp, lastInteractionDate,
+      )
+      emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
+      const generationStart = Date.now()
+      brief = await callLLM(
+        'You are a Red Hat Account Solution Architect AI assistant. Update customer intelligence briefs based on changed information.',
+        deltaXml,
+        'brief-delta-synthesize',
+        customer.name,
+      )
+      emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart })
+      console.log(`[brief] delta synthesis complete: ${brief.length} chars`)
+    } else {
+      // Full-run: existing 3-step pipeline (extract → rank → synthesize)
+      const xmlSources = buildXmlSources(customer, meetings, emails, docs, cases, subscriptions, products, pipeline, ccsp, previousBrief, lastBriefDate, lastInteractionDate, enrichment, accountIntelligence)
+
+      // Step 1: EXTRACT
+      const extraction = await extractSignals(xmlSources, lastInteractionDate, customer.name)
+      console.log(`[brief] Step 1 EXTRACT for ${customer.name}: ${extraction.items.length} items, ${extraction.data_gaps.length} gaps`)
+
+      // Step 2: RANK (deterministic)
+      const ranked = rankItems(extraction.items)
+      console.log(`[brief] Step 2 RANK: top item = ${ranked[0]?.text ?? 'none'} (score: ${ranked[0]?.score ?? 0})`)
+
+      // Step 3: SYNTHESIZE — BKL-AI22: pass upcoming meetings for meeting-prep-first briefs
+      const upcomingMeetingsFor7Days = meetings.filter(m => {
+        const t = new Date(m.start).getTime()
+        return t >= Date.now() && t <= Date.now() + 7 * 24 * 60 * 60 * 1000
+      })
+
+      // Pass intelligence context directly to synthesis — bypasses extraction ranking
+      // so strategic context (company pivot, leadership changes) always reaches the brief.
+      // Reuses the accountIntelligence object already read above to avoid a second disk read.
+      let intelligenceContext: { company?: string; industry?: string } | undefined
+      if (accountIntelligence && (accountIntelligence.company || accountIntelligence.industry)) {
+        intelligenceContext = { company: accountIntelligence.company, industry: accountIntelligence.industry }
+      }
+
+      const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext)
+      const generationStart = Date.now()
+      emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
+      brief = await callLLM(
+        'You are a Red Hat Account Solution Architect AI assistant. Generate concise, actionable customer intelligence briefs.',
+        synthesisPrompt,
+        'brief-synthesize',
+        customer.name,
+      )
+      emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart })
+      console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
+    }
 
     return brief
   } catch (e: any) {

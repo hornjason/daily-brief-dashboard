@@ -4,6 +4,7 @@ import { resolve, dirname } from 'path'
 import { google } from 'googleapis'
 import type { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './google.ts'
+import { normalizeSettings } from './region-config.ts'
 import { customers, aes, saveAes, CUSTOMERS_PATH, AES_PATH, setAes, setCustomers } from './server-state.ts'
 import type { Customer } from './types.ts'
 import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, getScopeLevel, type StoredToken } from './oauth-scopes.ts'
@@ -12,6 +13,7 @@ import { sanitizeErr, sanitizeText } from './utils.ts'
 import { supportableScrapeRunning } from './supportable-scraper.ts'
 import { ccspScrapeRunning } from './ccsp-scraper.ts'
 import { _rhScrapeRunning } from './scraper-manager.ts'
+import { resetBootstrapStates } from './bootstrap-orchestrator.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SRV_CONFIG_DIR = ''
@@ -38,117 +40,62 @@ export function initSetupRoutes(opts: {
   ADMIN_EMAIL = opts.adminEmail
 }
 
+/**
+ * Drive config merge — fetch Config/settings.json from Drive at startup
+ * if parentFolderId is set for any region. Merges Drive regions[] into
+ * local settings.json (Drive wins on regions[], local wins on everything else).
+ * Best-effort: errors are logged but never crash the server.
+ */
+export async function runStartupDriveMerge(): Promise<void> {
+  const SETTINGS_PATH_SRV = resolve(SRV_CONFIG_DIR, 'settings.json')
+  try {
+    let raw: Record<string, unknown>
+    try {
+      raw = JSON.parse(readFileSync(SETTINGS_PATH_SRV, 'utf-8')) as Record<string, unknown>
+    } catch {
+      return // No settings.json yet — skip
+    }
+    const settings = normalizeSettings(raw)
+    const regionsWithParent = settings.regions.filter(r => r.parentFolderId)
+    if (regionsWithParent.length === 0) return
+    const region = regionsWithParent[0]
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+    const listRes = await drive.files.list({
+      q: `'${region.parentFolderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    })
+    const configFolderId = listRes.data.files?.[0]?.id
+    if (!configFolderId) return
+    const fileList = await drive.files.list({
+      q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
+      fields: 'files(id)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    })
+    const fileId = fileList.data.files?.[0]?.id
+    if (!fileId) return
+    const content = await drive.files.get({ fileId, alt: 'media' } as any)
+    const driveSettings = content.data as Record<string, unknown>
+    // Deep-merge: Drive wins on regions[], local wins on everything else
+    if (Array.isArray(driveSettings.regions)) {
+      raw.regions = driveSettings.regions
+      const tmp = `${SETTINGS_PATH_SRV}.tmp`
+      writeFileSync(tmp, JSON.stringify(raw, null, 2))
+      renameSync(tmp, SETTINGS_PATH_SRV)
+      console.log('[startup] Merged regions from Drive Config/settings.json')
+    }
+  } catch (e) {
+    console.warn('[startup] Drive config merge skipped:', (e as Error).message)
+  }
+}
+
 // ── Domain waterfall helpers (BKL-DOM-01) ────────────────────────────────────
-
-/** Legal suffixes to strip from company names before Clearbit lookup */
-const LEGAL_SUFFIXES = /,?\s*\b(Inc\.?|LLC\.?|L\.?L\.?C\.?|Corp\.?|Corporation|Ltd\.?|Limited|L\.?P\.?|Co\.?|Group|Holdings|Incorporated)\s*$/i
-
-/** Strip legal entity suffixes and normalize whitespace */
-function stripLegalSuffixes(name: string): string {
-  return name.replace(LEGAL_SUFFIXES, '').replace(/\s+/g, ' ').trim()
-}
-
-/** Simple similarity check: first word of one string appears in the other */
-function nameMatchesClearbit(query: string, resultName: string): boolean {
-  const qWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
-  const rWords = resultName.toLowerCase().split(/\s+/).filter(w => w.length > 2)
-  if (qWords.length === 0 || rWords.length === 0) return false
-  // Check if first substantive word of result appears in query or vice versa
-  return qWords.some(w => rWords.includes(w)) || rWords.some(w => qWords.includes(w))
-}
-
-interface WaterfallResult {
-  domain: string | null
-  tier: 'clearbit' | 'llm' | null
-  verified: boolean | null  // null = not checked, true = reachable, false = unreachable
-}
-
-/** Tier 1: Clearbit autocomplete (free, no key) */
-async function tier1Clearbit(companyName: string): Promise<string | null> {
-  const stripped = stripLegalSuffixes(companyName)
-  try {
-    const res = await fetch(
-      `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(stripped)}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
-    )
-    if (!res.ok) return null
-    const hits: { name: string; domain: string }[] = await res.json()
-    if (hits.length === 0) return null
-    const first = hits[0]
-    if (!first.domain) return null
-    if (!nameMatchesClearbit(stripped, first.name)) return null
-    return first.domain.toLowerCase()
-  } catch {
-    return null
-  }
-}
-
-/** Tier 2: LLM with web search via PAI Inference tool */
-async function tier2LLM(companyName: string): Promise<string | null> {
-  const INFERENCE_PATH = '/Users/jhorn/.claude/PAI/Tools/Inference.ts'
-  const systemPrompt = 'You are a company domain lookup tool. Reply with ONLY the domain (e.g. example.com), nothing else. If genuinely unknown, reply unknown.'
-  const userPrompt = `What is the primary official website domain for the company: '${companyName}'? This may be a legal entity name, subsidiary, or rebrand. Reply with ONLY the domain (e.g. 'example.com'), nothing else. If genuinely unknown, reply 'unknown'.`
-  try {
-    const proc = Bun.spawn(['bun', INFERENCE_PATH, '--level', 'fast', systemPrompt, userPrompt], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-    const output = await new Response(proc.stdout).text()
-    const exitCode = await proc.exited
-    if (exitCode !== 0) return null
-    // Parse: trim, lowercase, strip https://, www., trailing slash
-    let domain = output.trim().toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/^www\./, '')
-      .replace(/\/+$/, '')
-      .replace(/['"]/g, '')
-    // Validate it looks like a domain
-    if (domain === 'unknown' || domain === '' || !domain.includes('.')) return null
-    // Strip anything after the domain (e.g. paths)
-    domain = domain.split('/')[0]
-    if (!/^[a-z0-9]([a-z0-9\-._]{0,251}[a-z0-9])?$/.test(domain)) return null
-    return domain
-  } catch {
-    return null
-  }
-}
-
-/** Tier 3: Domain validation — HEAD request with timeout */
-async function tier3Validate(domain: string): Promise<boolean> {
-  try {
-    const res = await fetch(`https://${domain}`, {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(3000),
-      redirect: 'follow',
-    })
-    return res.ok || res.status === 301 || res.status === 302 || res.status === 403
-  } catch {
-    return false
-  }
-}
-
-/** Run the full waterfall for a single company name. Returns domain + metadata. */
-async function waterfallInferDomain(companyName: string): Promise<WaterfallResult> {
-  // Tier 1: Clearbit
-  const t1 = await tier1Clearbit(companyName)
-  if (t1) {
-    console.log(`[infer-domains] ${companyName} → tier1: ${t1}`)
-    const verified = await tier3Validate(t1)
-    return { domain: t1, tier: 'clearbit', verified }
-  }
-
-  // Tier 2: LLM fallback
-  console.log(`[infer-domains] ${companyName} → tier1 miss, trying tier2`)
-  const t2 = await tier2LLM(companyName)
-  if (t2) {
-    console.log(`[infer-domains] ${companyName} → tier2: ${t2}`)
-    const verified = await tier3Validate(t2)
-    return { domain: t2, tier: 'llm', verified }
-  }
-
-  console.log(`[infer-domains] ${companyName} → tier1+tier2 miss, no domain`)
-  return { domain: null, tier: null, verified: null }
-}
+// Extracted to src/domain-waterfall.ts (BKL-BOOT-05) — imported from there.
+import { waterfallInferDomain } from './domain-waterfall.ts'
+export type { WaterfallResult } from './domain-waterfall.ts'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -186,7 +133,9 @@ export function registerSetupRoutes(app: Hono): void {
 
     const keys = JSON.parse(readFileSync(OAUTH_KEYS_PATH, 'utf-8'))
     const { client_id, client_secret } = keys.installed ?? keys.web
-    const redirectUri = `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
+    const redirectUri = process.env.OAUTH_BASE_URL
+      ? `${process.env.OAUTH_BASE_URL}/oauth/callback`
+      : `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
 
     const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri)
 
@@ -256,7 +205,9 @@ export function registerSetupRoutes(app: Hono): void {
     try {
       const keys = JSON.parse(readFileSync(OAUTH_KEYS_PATH, 'utf-8'))
       const { client_id, client_secret } = keys.installed ?? keys.web
-      const redirectUri = `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
+      const redirectUri = process.env.OAUTH_BASE_URL
+        ? `${process.env.OAUTH_BASE_URL}/oauth/callback`
+        : `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
       const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirectUri)
 
       const { tokens } = await oauth2Client.getToken(code)
@@ -423,6 +374,7 @@ export function registerSetupRoutes(app: Hono): void {
     aes.splice(0, aes.length)
     saveAes([])
     pendingOAuthStates.clear()
+    resetBootstrapStates()
     if (process.env.AE_PARENT_FOLDER_ID) delete process.env.AE_PARENT_FOLDER_ID
     if (process.env.AE_PARENT_FOLDER_IDS) delete process.env.AE_PARENT_FOLDER_IDS
 
@@ -627,6 +579,12 @@ export function registerSetupRoutes(app: Hono): void {
   })
 
   app.post('/api/__test/restore', async (c) => {
+    // ── Guard -1: ALLOW_RESET gate ───────────────────────────────────────────
+    // This is the live handler (setup-routes wins Hono first-match over server.ts).
+    // Gate must live here — the server.ts handler is dead code for this path.
+    if (process.env.ALLOW_RESET !== 'true') {
+      return c.json({ error: 'Not available — ALLOW_RESET is not set' }, 404)
+    }
     // ── Guard 0: production guard (BKL-TEST-11) ─────────────────────────────
     // If no snapshot exists AND real data is loaded, refuse outright.
     // This catches the scenario where an agent calls restore without ever snapshotting.

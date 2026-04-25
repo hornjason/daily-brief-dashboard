@@ -26,10 +26,25 @@ import { getFeatureCache, extractProductFeatures, enrichFeatures, refreshAllFeat
 import {
   getCachedCustomerProductIntel,
   generateCustomerProductIntel,
-  toCustomerSlug,
   buildCustomerIntelContext,
 } from './customer-product-intel.ts'
+import { toSlug } from './cache-layer.ts'
 import { customers } from './server-state.ts'
+
+// ── BKL-W5-RK-F1: Startup assertion that CACHE_DIR resolves within DATA_DIR ──
+// Only fires when both env vars are explicitly set (not defaulted). If an operator
+// explicitly configures both DATA_DIR and CACHE_DIR but points CACHE_DIR outside
+// DATA_DIR, that's a misconfiguration worth catching at startup.
+if (process.env.DATA_DIR && process.env.CACHE_DIR) {
+  const _resolvedData  = resolve(process.env.DATA_DIR)
+  const _resolvedCache = resolve(process.env.CACHE_DIR)
+  if (!_resolvedCache.startsWith(_resolvedData + '/') && _resolvedCache !== _resolvedData) {
+    throw new Error(
+      `[product-intel-routes] CACHE_DIR (${_resolvedCache}) must resolve within DATA_DIR (${_resolvedData}). ` +
+      `Refusing to start with misconfigured path env vars.`
+    )
+  }
+}
 
 // ── BKL-S16: In-memory mutex for Gemini generation endpoints ──────────────────
 // Bun is single-threaded — a Set of active keys prevents concurrent duplicate calls.
@@ -250,7 +265,7 @@ export function registerProductIntelRoutes(app: Hono): void {
     ;(async () => {
       try {
         for (const customer of customerList) {
-          const customerSlug = toCustomerSlug(customer.name)
+          const customerSlug = toSlug(customer.name)
           _allCustomersBatchState.current = customer.name
           try {
             const ctx = await buildCustomerIntelContext(customerSlug)
@@ -382,11 +397,9 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // POST /api/products/:slug/intel/:customerSlug/generate — generate (or regenerate) customer intel
-  // ?force=true bypasses the content-hash cache and always regenerates.
   app.post('/api/products/:slug/intel/:customerSlug/generate', async (c) => {
     const slug         = c.req.param('slug')
     const customerSlug = c.req.param('customerSlug')
-    const force        = c.req.query('force') === 'true'
     if (!/^[a-z0-9-]+$/.test(slug) || !/^[a-z0-9-]+$/.test(customerSlug)) {
       return c.json({ error: 'Invalid slug' }, 400)
     }
@@ -426,7 +439,6 @@ export function registerProductIntelRoutes(app: Hono): void {
         opportunityNote: ctx.opportunityNote,
         productFeatures,
         productFeaturesHash,
-        force,
       })
 
       return c.json(intel)
@@ -497,6 +509,12 @@ export function registerProductIntelRoutes(app: Hono): void {
       const intelDir = resolve(CACHE_DIR, `${slug}-customer-intel`)
       const totalCustomers = customers.length
 
+      // BKL-UI-01: filter on-disk customer-intel cache by active customer slugs to avoid
+      // surfacing stale intel for customers that have since been removed. Do NOT clear the
+      // cache on customer wipe — filter at read time instead, so intel is preserved if the
+      // customer is re-added.
+      const activeCustomerSlugs = new Set(customers.map(c => toSlug(c.name)))
+
       const coverageBreakdown: Record<string, number> = { HIGH: 0, MEDIUM: 0, LOW: 0, NONE: 0 }
       const priorityActions: { action: string; confidence: string; customer: string }[] = []
       let lastUpdated: string | null = null
@@ -504,6 +522,10 @@ export function registerProductIntelRoutes(app: Hono): void {
       if (existsSync(intelDir)) {
         const files = readdirSync(intelDir).filter(f => f.endsWith('.json'))
         for (const file of files) {
+          // BKL-UI-01: cache filenames are `${customerSlug}.json` — skip any file whose
+          // customerSlug is not in the active customer list.
+          const fileCustomerSlug = file.replace(/\.json$/, '')
+          if (!activeCustomerSlugs.has(fileCustomerSlug)) continue
           try {
             const raw = JSON.parse(readFileSync(resolve(intelDir, file), 'utf-8'))
             const intel = raw.intel ?? raw
@@ -517,7 +539,7 @@ export function registerProductIntelRoutes(app: Hono): void {
               priorityActions.push({
                 action: intel.priorityAction,
                 confidence: score,
-                customer: intel.customer ?? file.replace('.json', ''),
+                customer: intel.customer ?? fileCustomerSlug.replace(/[^\w\s-]/g, ''),
               })
             }
             const ts = raw.cachedAt ?? intel.generatedAt

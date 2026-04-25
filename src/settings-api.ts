@@ -55,7 +55,7 @@ export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   territoryTime: '01:45',
   sfPipelineTime: '02:00',
   ccspEnabled: true,
-  supportableEnabled: true,
+  supportableEnabled: false, // BKL-UX67: permanently disabled
   territoryEnabled: true,
   sfPipelineEnabled: true,
   rhEnabled: true,
@@ -224,11 +224,63 @@ export function getAutomationConfig(): AutomationConfig {
   } catch { return { ...DEFAULT_AUTOMATION_CONFIG } }
 }
 
+// ── Offline token helpers ────────────────────────────────────────────────────
+
+/** Persist REDHAT_OFFLINE_TOKEN to data-sources.json so it survives container restarts. */
+export function saveOfflineToken(token: string): void {
+  let ds: Record<string, unknown> = {}
+  try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
+  const tmpPath = DATA_SOURCES_PATH + '.tmp'
+  writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, redhatOfflineToken: token }, null, 2), { mode: 0o600 })
+  renameSync(tmpPath, DATA_SOURCES_PATH)
+}
+
+/** Read the persisted offline token (returns null if not saved). */
+export function getPersistedOfflineToken(): string | null {
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    return typeof ds.redhatOfflineToken === 'string' ? ds.redhatOfflineToken : null
+  } catch { return null }
+}
+
 // ── Route registration ──────────────────────────────────────────────────────
 
 export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimers: (intervals: typeof DEFAULT_REFRESH_INTERVALS) => void }): void {
   // GET /api/session-timestamps — when each scraper session was last established
   app.get('/api/session-timestamps', (c) => c.json(getSessionTimestamps()))
+
+  // GET /api/settings/offline-token — check if token is configured (never expose the value)
+  app.get('/api/settings/offline-token', (c) => {
+    const configured = !!process.env.REDHAT_OFFLINE_TOKEN
+    return c.json({ configured })
+  })
+
+  // POST /api/settings/offline-token — save REDHAT_OFFLINE_TOKEN to config + process.env
+  app.post('/api/settings/offline-token', async (c) => {
+    let body: { token?: unknown }
+    try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
+
+    const token = body.token
+    if (typeof token !== 'string' || token.trim() === '') {
+      return c.json({ error: 'token is required and must be a non-empty string' }, 400)
+    }
+    if (/[\r\n]/.test(token)) {
+      return c.json({ error: 'token must not contain newline characters' }, 400)
+    }
+    // Sanity-check length: offline tokens are long JWTs; reject obvious garbage
+    if (token.length > 8192) {
+      return c.json({ error: 'token exceeds maximum allowed length' }, 400)
+    }
+
+    try {
+      saveOfflineToken(token.trim())
+      // Update in-memory env so the change takes effect immediately (no restart needed)
+      process.env.REDHAT_OFFLINE_TOKEN = token.trim()
+      return c.json({ ok: true })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
 
   // GET /api/settings/refresh — current refresh intervals + scheduler config
   app.get('/api/settings/refresh', (c) => {
@@ -389,6 +441,14 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
         }
         ;(updated as any)[k] = v
       }
+    }
+    // BKL-AI-COST-04: docClassifyMaxAgeDays — skip doc classification for docs older than N days (0 = unlimited)
+    if ('docClassifyMaxAgeDays' in body) {
+      const v = body.docClassifyMaxAgeDays as number
+      if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v > 365) {
+        return c.json({ error: 'docClassifyMaxAgeDays must be an integer between 0 and 365' }, 400)
+      }
+      updated.docClassifyMaxAgeDays = v
     }
 
     try {

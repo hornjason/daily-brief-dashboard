@@ -4,7 +4,10 @@ import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeStart, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
-import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage } from './rh-scraper.ts'
+import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage, writeCasesCache } from './rh-scraper.ts'
+// BKL-RH-03 Phase 2 (ADR-014): Bearer transport for recurring case refresh
+import { BearerCaseClient, getConfiguredTransport } from './case-client.ts'
+import type { SupportCase } from './types.ts'
 import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess } from './sf-scraper.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
@@ -12,6 +15,7 @@ import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper
 import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
+import { deriveConfidence, ConnectionHealthSchema } from './connection-health.ts'
 import { markRunning, recordOutcome, getScraperStatus } from './scraper-status-store.ts'
 
 // ── BKL-M50e: Scraper telemetry + history ──────────────────────────────────
@@ -119,6 +123,11 @@ export function getTelemetrySummary(): Record<string, {
 
 // ── BKL-M50c: Circuit breaker per service ────────────────────────────────────
 
+// BKL-SR03-F1: threshold/cooldownMs are read lazily via getter functions so that
+// changes saved through POST /api/settings/automation take effect on the live
+// breakers without a container restart. Do NOT bake config values into instance
+// fields at construction — the previous shape (readonly threshold/cooldownMs +
+// values pulled once at module init) is the bug this fix exists to prevent.
 class CircuitBreaker {
   private _failureCount = 0
   private _openedAt: number | null = null
@@ -126,13 +135,27 @@ class CircuitBreaker {
   _sessionExpired = false
   _sessionExpiredAt: number | null = null
   readonly name: string
-  readonly threshold: number
-  readonly cooldownMs: number
+  private readonly _getThreshold: () => number
+  private readonly _getCooldownMs: () => number
 
-  constructor(name: string, threshold = 3, cooldownMs = 5 * 60 * 1000) {
+  constructor(
+    name: string,
+    getThreshold: () => number = () => 3,
+    getCooldownMs: () => number = () => 5 * 60 * 1000,
+  ) {
     this.name = name
-    this.threshold = threshold
-    this.cooldownMs = cooldownMs
+    this._getThreshold = getThreshold
+    this._getCooldownMs = getCooldownMs
+  }
+
+  /** Current threshold — read lazily from config every call (BKL-SR03-F1). */
+  get threshold(): number {
+    return this._getThreshold()
+  }
+
+  /** Current cooldownMs — read lazily from config every call (BKL-SR03-F1). */
+  get cooldownMs(): number {
+    return this._getCooldownMs()
   }
 
   /** Returns true if the circuit is open (service should be skipped). */
@@ -148,9 +171,11 @@ class CircuitBreaker {
       this._sessionExpiredAt = null
       console.log(`[circuit-breaker] ${this.name}: session-expiry pin cleared after 4h — allowing retry`)
     }
-    if (this._failureCount < this.threshold) return false
+    const threshold = this._getThreshold()
+    const cooldownMs = this._getCooldownMs()
+    if (this._failureCount < threshold) return false
     // Check if cooldown has elapsed — if so, allow a retry (half-open)
-    if (this._openedAt && (Date.now() - this._openedAt) >= this.cooldownMs) {
+    if (this._openedAt && (Date.now() - this._openedAt) >= cooldownMs) {
       console.log(`[circuit-breaker] ${this.name}: cooldown elapsed — allowing retry (half-open)`)
       return false
     }
@@ -176,29 +201,37 @@ class CircuitBreaker {
       this._sessionExpiredAt = Date.now()
       console.warn(`[circuit-breaker] ${this.name}: session-expiry pin set — held open for 4h`)
     }
-    if (this._failureCount >= this.threshold) {
+    const threshold = this._getThreshold()
+    const cooldownMs = this._getCooldownMs()
+    if (this._failureCount >= threshold) {
       this._openedAt = Date.now()
-      console.warn(`[circuit-breaker] ${this.name}: OPEN after ${this._failureCount} failures — cooldown ${this.cooldownMs / 1000}s (last: ${reason})`)
+      console.warn(`[circuit-breaker] ${this.name}: OPEN after ${this._failureCount} failures — cooldown ${cooldownMs / 1000}s (last: ${reason})`)
     } else {
-      console.warn(`[circuit-breaker] ${this.name}: failure ${this._failureCount}/${this.threshold} (${reason})`)
+      console.warn(`[circuit-breaker] ${this.name}: failure ${this._failureCount}/${threshold} (${reason})`)
     }
   }
 
   getState(): { name: string; state: 'closed' | 'open' | 'half-open'; failures: number; lastFailure: string | null } {
     let state: 'closed' | 'open' | 'half-open' = 'closed'
-    if (this._failureCount >= this.threshold) {
-      state = (this._openedAt && (Date.now() - this._openedAt) >= this.cooldownMs) ? 'half-open' : 'open'
+    const threshold = this._getThreshold()
+    const cooldownMs = this._getCooldownMs()
+    if (this._failureCount >= threshold) {
+      state = (this._openedAt && (Date.now() - this._openedAt) >= cooldownMs) ? 'half-open' : 'open'
     }
     return { name: this.name, state, failures: this._failureCount, lastFailure: this._lastFailure }
   }
 }
 
-const _automationCfg = getAutomationConfig()
+// BKL-SR03-F1: Pass getter functions (not values) so each breaker re-reads the
+// live AutomationConfig on every check. This is what makes the "Save" button on
+// the Automation settings page take effect immediately for circuit breakers.
+const _thresholdGetter   = (): number => getAutomationConfig().circuitBreakerThreshold
+const _cooldownMsGetter  = (): number => getAutomationConfig().circuitBreakerCooldownMs
 const circuitBreakers = {
-  rh: new CircuitBreaker('rh', _automationCfg.circuitBreakerThreshold, _automationCfg.circuitBreakerCooldownMs),
-  ccsp: new CircuitBreaker('ccsp', _automationCfg.circuitBreakerThreshold, _automationCfg.circuitBreakerCooldownMs),
-  supportable: new CircuitBreaker('supportable', _automationCfg.circuitBreakerThreshold, _automationCfg.circuitBreakerCooldownMs),
-  salesforce: new CircuitBreaker('salesforce', _automationCfg.circuitBreakerThreshold, _automationCfg.circuitBreakerCooldownMs),
+  rh: new CircuitBreaker('rh', _thresholdGetter, _cooldownMsGetter),
+  ccsp: new CircuitBreaker('ccsp', _thresholdGetter, _cooldownMsGetter),
+  supportable: new CircuitBreaker('supportable', _thresholdGetter, _cooldownMsGetter),
+  salesforce: new CircuitBreaker('salesforce', _thresholdGetter, _cooldownMsGetter),
 }
 
 /** Get circuit breaker states for all services — exposed for /api/status endpoint. */
@@ -336,6 +369,9 @@ export let _rhScrapeCancelRequested = false
 export let _rhScrapeLastError: string | null = null
 export let _rhDiscoveryProgress: { done: number; total: number; current: string | null } | null = null
 const RH_STALE_MUTEX_MS = 15 * 60 * 1000  // 15 min auto-release — same as CCSP/Supportable
+
+// SF probe timestamp — records when sfLiveProbe last ran in the status endpoint
+let _sfProbeTimestamp: string | null = null
 
 // SF sync state
 export let _sfSyncRunning = false
@@ -505,18 +541,60 @@ export async function runRhScrapeWithState(): Promise<void> {
         accountToCustomer.set(String(num), c.name)
       }
     }
-    // BKL-M50c: Wrap with wall-clock timeout to prevent 7+ min stalls
-    const cases = await withTimeout(
-      runRhScrape({
-        accountNumbers,
-        profileDir: RH_PROFILE_DIR,
-        cachePath: RH_CASES_CACHE_PATH,
-        shouldCancel: () => _rhScrapeCancelRequested,
-        accountToCustomer,
-      }),
-      RH_SCRAPE_TIMEOUT_MS(),
-      'RH case scrape',
-    )
+    // BKL-RH-03 Phase 2 (ADR-014): dual-transport branch for case refresh.
+    //   'bearer'  — server-side SOLR via Bearer token (no browser); default.
+    //   'browser' — legacy Playwright path; emergency revert via RH_CASES_TRANSPORT=browser.
+    // Bootstrap/discovery above is browser-only (unchanged) — only this recurring
+    // refresh batch is transport-switchable.
+    const transport = getConfiguredTransport()
+    console.log(`[scraper-manager] rh-cases transport=${transport}`)
+
+    let cases: SupportCase[]
+    if (transport === 'bearer') {
+      const client = new BearerCaseClient()
+      const fetchedCases = await withTimeout(
+        client.fetchCases(accountNumbers, accountToCustomer),
+        RH_SCRAPE_TIMEOUT_MS(),
+        'RH case scrape (bearer)',
+      )
+      // Stale-overwrite guard (mirrors rh-scraper.ts:927-940): if Bearer
+      // returns 0 cases, prefer keeping a populated cache over wiping it to
+      // zero. A 401 / network blip must never silently empty production data.
+      if (fetchedCases.length === 0) {
+        try {
+          const { readFileSync: rfs } = await import('node:fs')
+          const existing = JSON.parse(rfs(RH_CASES_CACHE_PATH, 'utf-8'))
+          if (Array.isArray(existing?.cases) && existing.cases.length > 0) {
+            console.warn(
+              `[scraper-manager/bearer] stale-overwrite guard: bearer returned 0 cases but cache has ${existing.cases.length} — keeping existing cache`,
+            )
+            cases = existing.cases
+          } else {
+            cases = fetchedCases
+            await writeCasesCache(RH_CASES_CACHE_PATH, accountNumbers, cases)
+          }
+        } catch {
+          cases = fetchedCases
+          await writeCasesCache(RH_CASES_CACHE_PATH, accountNumbers, fetchedCases)
+        }
+      } else {
+        cases = fetchedCases
+        await writeCasesCache(RH_CASES_CACHE_PATH, accountNumbers, cases)
+      }
+    } else {
+      // BKL-M50c: Wrap with wall-clock timeout to prevent 7+ min stalls
+      cases = await withTimeout(
+        runRhScrape({
+          accountNumbers,
+          profileDir: RH_PROFILE_DIR,
+          cachePath: RH_CASES_CACHE_PATH,
+          shouldCancel: () => _rhScrapeCancelRequested,
+          accountToCustomer,
+        }),
+        RH_SCRAPE_TIMEOUT_MS(),
+        'RH case scrape (browser)',
+      )
+    }
     // Merge name-discovered cases (customers with no account number) into batch results.
     // Dedup by caseNumber so batch wins if the same case appears in both.
     if (nameDiscoveredCases.length > 0) {
@@ -726,14 +804,23 @@ export function registerScraperRoutes(app: Hono): void {
   app.get('/api/auth/salesforce/status', async (c) => {
     // BKL-T04: Live session probe — verifies SF is actually reachable, not just flagged
     const liveReachable = await sfLiveProbe()
+    _sfProbeTimestamp = new Date().toISOString()
+    const healthFields = ConnectionHealthSchema.parse({
+      transport: 'browser' as const,
+      lastProbe: _sfProbeTimestamp,
+      degradedReason: null,
+      confidence: deriveConfidence(_sfProbeTimestamp),
+    })
     return c.json({
       ...getSfAuthStatus(SF_SESSION_PATH),
       lastSync: lastSfSync,
       rowCount: lastSfRowCount,
       syncError: _sfSyncLastError,
+      sessionExpired: !!(_sfSyncLastError?.toLowerCase().includes('session expired')),
       reportConfigured: !!SF_REPORT_ID || aes.some(a => !!a.sfReportId),
       sheetConfigured: !!process.env.PIPELINE_FILE_ID,
       liveReachable,
+      ...healthFields,
     })
   })
 
@@ -805,6 +892,8 @@ export function registerScraperRoutes(app: Hono): void {
         isRunning:   _rhScrapeRunning,
         isStale:     isStale(lastScraped ?? rhStatus.lastSuccess ?? null, intervals.rhScrape),
         recordCount: rhStatus.recordCount ?? null,
+        // BKL-RH-03 Phase 2 (ADR-014): expose active transport to dashboard
+        transport:   process.env.RH_CASES_TRANSPORT ?? 'bearer',
       },
       salesforce: {
         lastSync:    lastSfSync ?? sfStatus.lastSuccess ?? null,
