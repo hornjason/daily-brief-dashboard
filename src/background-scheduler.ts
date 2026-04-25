@@ -1088,6 +1088,9 @@ export function initBackgroundScheduler(opts: {
   // Validate cached account numbers — warn/clear false positives before scrapes start
   validateCachedAccountNumbers()
 
+  // Fill missing customer domains on startup (30s delay gives bootstrap time to load customers)
+  scheduleDomainInferenceSweep(30_000)
+
   // On startup: run a full refresh, then schedule per-source timers
   if (customers.length > 0) {
     refreshAll().catch((e: any) => console.error('[refresh] startup refresh failed:', e?.message ?? e))
@@ -1351,8 +1354,6 @@ export function initBackgroundScheduler(opts: {
     }
   }, 15_000)
 
-  scheduleDomainInferenceSweep(30_000)
-
   // Graceful shutdown — close Chromium so it doesn't orphan in containers
   async function shutdown() {
     console.log('[shutdown] closing browser context…')
@@ -1396,7 +1397,9 @@ export function scheduleDomainInferenceSweep(delayMs = 30_000): void {
           console.log(`[domain-sweep] ${name} → ${domain} (${tier})`)
         }
       }
-      writeFileSync(CUSTOMERS_PATH, JSON.stringify(raw, null, 2))
+      const tmpPath = CUSTOMERS_PATH + '.tmp'
+      writeFileSync(tmpPath, JSON.stringify(raw, null, 2), { mode: 0o600 })
+      renameSync(tmpPath, CUSTOMERS_PATH)
       setCustomers(raw.customers)
       console.log('[domain-sweep] complete')
     } catch (e: any) { console.warn('[domain-sweep] failed:', e?.message)
