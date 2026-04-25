@@ -56,7 +56,7 @@ export function RefreshTimerSettings() {
 
   const fields: Array<{ key: keyof RefreshIntervals; label: string; hint: string }> = [
     { key: 'rhScrape',      label: 'RH Support Cases', hint: 'How often to scrape open cases from Red Hat portal' },
-    { key: 'subscriptions', label: 'Subscriptions',    hint: 'How often to sync product data from Supportable sheets' },
+    { key: 'subscriptions', label: 'Subscriptions',    hint: 'How often to sync product data from SF Bookings sheets' },
     { key: 'ccsp',          label: 'CCSP Spend',       hint: 'How often to refresh cloud spend data' },
   ]
 

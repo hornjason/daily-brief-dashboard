@@ -530,15 +530,13 @@ function Dashboard() {
                 {([
                   { storeKey: 'rh-cases' as const,    label: 'RH Cases',    displayKey: 'rh' },
                   { storeKey: 'ccsp' as const,         label: 'CCSP',        displayKey: 'ccsp' },
-                  { storeKey: 'supportable' as const,  label: 'Supportable', displayKey: 'supportable' },
                   { storeKey: 'sf-pipeline' as const,  label: 'Salesforce',  displayKey: 'salesforce' },
                 ] as const).map(({ storeKey, label, displayKey }) => {
                   const s = scrapeStatus.data!.scrapers[storeKey]
                   const isRunning = s.state === 'running'
                   const isStale = s.state === 'stale'
-                  const isUnreachable = storeKey === 'supportable' && scrapeStatus.data!.supportableReachable === false && !s.lastSuccess
-                  const color = isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : isStale || isUnreachable ? 'bg-warning' : 'bg-green-500'
-                  const tooltip = isRunning ? 'Currently running' : isUnreachable ? 'Not reachable — check VPN' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSuccess ? `Last sync: ${new Date(s.lastSuccess).toLocaleString()}` : 'Not yet synced'
+                  const color = isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : isStale ? 'bg-warning' : 'bg-green-500'
+                  const tooltip = isRunning ? 'Currently running' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSuccess ? `Last sync: ${new Date(s.lastSuccess).toLocaleString()}` : 'Not yet synced'
                   return (
                     <span key={displayKey} className="flex items-center gap-1" title={tooltip}>
                       <span className={`inline-block w-2 h-2 rounded-full ${color}`} />

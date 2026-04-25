@@ -340,7 +340,7 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
                   return (
                     <div key={`${ae}-${i}`}>
                       <p className="text-text-primary pl-4">{isLast ? '└──' : '├──'} 📁 {ae}/</p>
-                      <p className="text-text-secondary pl-10">├── 📄 Supportable Sheet</p>
+                      <p className="text-text-secondary pl-10">├── 📄 SF Bookings Sheet</p>
                       <p className="text-text-secondary pl-10">├── 📄 CCSP Sheet</p>
                       <p className="text-text-secondary pl-10">└── 📄 Pipeline Sheet</p>
                     </div>
@@ -349,7 +349,7 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
               ) : (
                 <>
                   <p className="text-text-primary pl-4">└── 📁 AE subfolders/</p>
-                  <p className="text-text-secondary pl-10">├── 📄 Supportable Sheet</p>
+                  <p className="text-text-secondary pl-10">├── 📄 SF Bookings Sheet</p>
                   <p className="text-text-secondary pl-10">├── 📄 CCSP Sheet</p>
                   <p className="text-text-secondary pl-10">└── 📄 Pipeline Sheet</p>
                 </>
@@ -379,7 +379,7 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
                   return (
                     <div key={`root-${ae}-${i}`}>
                       <p className="text-text-primary pl-4">{isLast ? '└──' : '├──'} 📁 {ae}/</p>
-                      <p className="text-text-secondary pl-10">├── 📄 Supportable Sheet</p>
+                      <p className="text-text-secondary pl-10">├── 📄 SF Bookings Sheet</p>
                       <p className="text-text-secondary pl-10">├── 📄 CCSP Sheet</p>
                       <p className="text-text-secondary pl-10">└── 📄 Pipeline Sheet</p>
                     </div>
@@ -388,7 +388,7 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
               ) : (
                 <>
                   <p className="text-text-primary pl-4">└── 📁 AE subfolders/</p>
-                  <p className="text-text-secondary pl-10">├── 📄 Supportable Sheet</p>
+                  <p className="text-text-secondary pl-10">├── 📄 SF Bookings Sheet</p>
                   <p className="text-text-secondary pl-10">├── 📄 CCSP Sheet</p>
                   <p className="text-text-secondary pl-10">└── 📄 Pipeline Sheet</p>
                 </>

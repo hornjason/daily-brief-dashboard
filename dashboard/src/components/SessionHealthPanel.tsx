@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Shield, Database, Activity, Cloud } from 'lucide-react'
+import { Shield, Activity, Cloud } from 'lucide-react'
 import RelTime from './RelTime'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -270,22 +270,6 @@ export function SessionHealthPanel() {
                 <div className="flex items-center gap-2 mb-2">
                   <Activity className="w-4 h-4 text-purple-400 shrink-0" />
                   <span className="text-xs font-medium text-gray-200">Tableau / CCSP</span>
-                </div>
-                <StatusBadge variant="unknown" />
-              </div>
-            )}
-            {data.supportable ? (
-              <ScraperTile
-                label="Supportable"
-                icon={Database}
-                entry={data.supportable}
-                iconClass="text-green-400"
-              />
-            ) : (
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Database className="w-4 h-4 text-green-400 shrink-0" />
-                  <span className="text-xs font-medium text-gray-200">Supportable</span>
                 </div>
                 <StatusBadge variant="unknown" />
               </div>

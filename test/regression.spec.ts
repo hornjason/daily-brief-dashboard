@@ -942,6 +942,10 @@ test.describe('REG-026: Expansion opportunities cross-product recommendations (B
 // These read source files directly to verify the post-incident restoration is in place.
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// __dirname is not defined in Bun ESM — derive from import.meta.url
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 test.describe('Restored-commits source-level regressions', () => {
   // REG-039 (skipped): the originally-spec'd assertion was that bootstrap-orchestrator

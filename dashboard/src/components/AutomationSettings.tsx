@@ -98,7 +98,7 @@ export function AutomationSettings() {
         <div className="flex items-center gap-3">
           <div className="flex-1">
             <p className="text-sm text-text-primary">Default Scrape Timeout</p>
-            <p className="text-xs text-text-secondary">Wall-clock limit for CCSP, Supportable, and SF scrapes</p>
+            <p className="text-xs text-text-secondary">Wall-clock limit for CCSP and SF scrapes</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <input
