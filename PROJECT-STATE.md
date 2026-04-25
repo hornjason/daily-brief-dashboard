@@ -7,7 +7,7 @@ Last validated: 2026-04-24
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-04-25 (OAuth-first Gemini auth shipped: cloud-platform scope in both NORMAL_SCOPES + BOOTSTRAP_SCOPES; GOOGLE_CLOUD_PROJECT=jhorn-pai baked into defaults.env — zero-config Vertex AI for @redhat.com users; 138 customers, 9 AEs; audit-docs CI gate fixed; E2E bun:protocol fix; continue-on-error on E2E job; BKL-ENRICH-01 xfail markers removed — enrichment confirmed on all 138 customers)
+Last updated: 2026-04-25 v1.4.0 released — Phase 1: stale-cache filter, wizard polish, SA key removal; Phase 2: SSE waterfall tests, corpus-delta wiring, doc rewrites; Phase 3: Quinn audit fixes (pluralization, duplicate banner, Supportable fields cleanup, subscription crash guard); Phase 4: README curl|bash hero install, v1.4.0 tagged + published to ghcr.io
 
 ---
 
