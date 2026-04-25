@@ -77,7 +77,7 @@ export function SubscriptionsSection({ products, loading, ccspCustomer = false }
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary line-clamp-2 min-w-0" title={p.productDescription}>{p.productDescription}</p>
                 <p className="text-xs text-text-secondary mt-0.5">
-                  Qty: {p.quantity.toLocaleString()}{p.sku ? ` · ${p.sku}` : ''}
+                  Qty: {(p.quantity ?? 0).toLocaleString()}{p.sku ? ` · ${p.sku}` : ''}
                 </p>
               </div>
               <div className="text-right shrink-0">
