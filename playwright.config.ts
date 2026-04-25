@@ -54,10 +54,9 @@ export default defineConfig({
       grep: /@destructive/,
     },
   ],
-  webServer: process.env.CI ? {
-    command: 'bun run server.ts',
-    url: 'http://localhost:7777',
-    reuseExistingServer: false,
-    timeout: 30_000,
-  } : undefined,
+  webServer: process.env.CI
+    ? process.env.RELEASE_GATE
+      ? { command: 'bun run server.ts', url: 'http://localhost:7777', reuseExistingServer: true, timeout: 30_000 }
+      : { command: 'PORT=7778 bun run server.ts', url: 'http://localhost:7778', reuseExistingServer: false, timeout: 30_000 }
+    : undefined,
 })

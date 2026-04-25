@@ -766,6 +766,8 @@ export function scheduleTerritorySync(): void {
   }, msUntil)
 }
 
+let sweepInFlight = false
+
 let _sfSessionPathForScheduler = ''
 
 export function schedulePipelineSync(sfSessionPath?: string): void {
@@ -1349,6 +1351,8 @@ export function initBackgroundScheduler(opts: {
     }
   }, 15_000)
 
+  scheduleDomainInferenceSweep(30_000)
+
   // Graceful shutdown — close Chromium so it doesn't orphan in containers
   async function shutdown() {
     console.log('[shutdown] closing browser context…')
@@ -1357,6 +1361,47 @@ export function initBackgroundScheduler(opts: {
   }
   process.on('SIGTERM', shutdown)
   process.on('SIGINT',  shutdown)
+}
+
+// ── Domain inference background sweep ───────────────────────────────────────
+
+export function scheduleDomainInferenceSweep(delayMs = 30_000): void {
+  setTimeout(async () => {
+    if (sweepInFlight) { console.log('[domain-sweep] skipping — sweep already in flight'); return }
+    sweepInFlight = true
+    try {
+      const { customers } = await import('./server-state.ts')
+      const missing = customers.filter((cx: any) => !cx.inactive && !cx.domain)
+      if (missing.length === 0) { console.log('[domain-sweep] all customers have domains'); return }
+      const { waterfallInferDomain } = await import('./domain-waterfall.ts')
+      const resolved: Array<{ name: string; domain: string; tier: string | null }> = []
+      for (let i = 0; i < missing.length; i += 3) {
+        const batch = missing.slice(i, i + 3)
+        const results = await Promise.all(batch.map(async (cu: any) => {
+          try {
+            const wf = await waterfallInferDomain(cu.name)
+            return wf.domain ? { name: cu.name, domain: wf.domain, tier: wf.tier } : null
+          } catch (e: any) { console.warn(`[domain-sweep] skipping ${cu.name}:`, e?.message); return null }
+        }))
+        for (const r of results) { if (r) resolved.push(r) }
+        if (i + 3 < missing.length) await new Promise(r => setTimeout(r, 100))
+      }
+      if (resolved.length === 0) { console.log('[domain-sweep] no domains resolved'); return }
+      const { setCustomers } = await import('./server-state.ts')
+      const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
+      for (const { name, domain, tier } of resolved) {
+        const idx = (raw.customers ?? []).findIndex((c: any) => c.name === name)
+        if (idx >= 0 && !raw.customers[idx].domain) {
+          raw.customers[idx].domain = domain
+          console.log(`[domain-sweep] ${name} → ${domain} (${tier})`)
+        }
+      }
+      writeFileSync(CUSTOMERS_PATH, JSON.stringify(raw, null, 2))
+      setCustomers(raw.customers)
+      console.log('[domain-sweep] complete')
+    } catch (e: any) { console.warn('[domain-sweep] failed:', e?.message)
+    } finally { sweepInFlight = false }
+  }, delayMs)
 }
 
 // ── Product Intelligence weekly refresh — Sunday 6am ET (Wave 4) ─────────────

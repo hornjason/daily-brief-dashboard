@@ -25,7 +25,7 @@ import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe
 import { initRefreshEngine, registerRefreshRoutes, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
-import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
+import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh, scheduleDomainInferenceSweep } from './src/background-scheduler.ts'
 import { initDashboardRoutes, registerDashboardRoutes } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
 import { registerBootstrapRoutes } from './src/bootstrap-orchestrator.ts'
@@ -758,6 +758,9 @@ app.post('/api/aes', async (c) => {
         console.log(`[wizard] invalidated morning-synthesis.json after removing AEs: ${removedAeNames.join(', ')}`)
       } catch (e: any) { console.warn('[wizard] cache cleanup after AE removal failed:', e.message) }
     }
+
+    // Background domain inference — fills missing domains after AE save
+    scheduleDomainInferenceSweep(5_000)
 
     return c.json({ ok: true, count: aes.length })
   } catch (e: any) {

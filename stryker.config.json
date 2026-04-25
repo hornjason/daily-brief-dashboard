@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Mutation baseline for high-value AI pipeline files. Uses command runner because the project uses Bun's native test runner (bun test), which has no first-party Stryker plugin. coverageAnalysis is off because command runner cannot map per-test coverage.",
+  "testRunner": "command",
+  "commandRunner": {
+    "command": "bun test src/ test/unit/"
+  },
+  "_sandbox_note": "inPlace=true mutates files in place to avoid sandbox copy of multi-GB browser-profile dirs (data-*/rh-profile transient lockfiles). Git tracks src/ for rollback. Safe for baseline run; do not enable in CI without dirty-tree guard.",
+  "inPlace": true,
+  "reporters": ["progress", "clear-text", "json"],
+  "coverageAnalysis": "off",
+  "mutate": [
+    "src/ai-fingerprint.ts",
+    "src/ai-events.ts"
+  ],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "thresholds": {
+    "high": 60,
+    "low": 40,
+    "break": 0
+  },
+  "timeoutMS": 30000,
+  "concurrency": 2
+}
