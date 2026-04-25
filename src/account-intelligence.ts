@@ -21,6 +21,7 @@ import { getGeminiModel } from './settings-api.ts'
 import { aes, customers, CUSTOMERS_PATH } from './server-state.ts'
 import { readSheetCache } from './cache-layer.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { fetchGeminiWithRetry, type GeminiFetchContext } from './gemini-fetch.ts'
 import type { Customer } from './types.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
@@ -57,29 +58,19 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
   const model    = getGeminiModel()
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
 
-  const token = await getGeminiToken()
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(60_000),
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: opts.systemPrompt }] },
-      contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
-      tools: [{ google_search: {} }],
-      generationConfig: {
-        temperature: opts.temperature ?? 1.0,
-        maxOutputTokens: opts.maxOutputTokens ?? 8192,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }),
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: opts.systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
+    tools: [{ google_search: {} }],
+    generationConfig: {
+      temperature: opts.temperature ?? 1.0,
+      maxOutputTokens: opts.maxOutputTokens ?? 8192,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
   })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini grounded API error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 300)}`)
-  }
+  const ctx: GeminiFetchContext = { model, project, location, callType: opts.callType, customerName: opts.customerName, timeoutMs: 60_000, logPrefix: '[intelligence]' }
+  const res = await fetchGeminiWithRetry(url, getGeminiToken, body, ctx)
   const json = await res.json() as any
   // BKL-M52: record token usage for cost tracking
   const usage = json.usageMetadata

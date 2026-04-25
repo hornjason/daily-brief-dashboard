@@ -8,6 +8,8 @@ export const NORMAL_SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/spreadsheets',
+  // Vertex AI (Gemini) — eliminates need for a separate service account key
+  'https://www.googleapis.com/auth/cloud-platform',
 ] as const
 
 export const BOOTSTRAP_SCOPES = [
@@ -16,6 +18,8 @@ export const BOOTSTRAP_SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/drive',
   'https://www.googleapis.com/auth/spreadsheets',
+  // Vertex AI (Gemini) — eliminates need for a separate service account key
+  'https://www.googleapis.com/auth/cloud-platform',
 ] as const
 
 export interface StoredToken {

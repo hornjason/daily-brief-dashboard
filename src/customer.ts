@@ -492,7 +492,7 @@ async function callLLM(systemPrompt: string, userPrompt: string, callType = 'bri
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
     token = (await auth.getAccessToken()).token
   }
-  if (!token) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
+  if (!token) throw new Error('Failed to get access token for Gemini — complete Google OAuth in the setup wizard (cloud-platform scope required), or set GEMINI_SERVICE_ACCOUNT_KEY in .env')
 
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
   const res = await fetch(url, {
@@ -912,7 +912,7 @@ async function callLLMStructured(systemPrompt: string, userPrompt: string, respo
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
     token = (await auth.getAccessToken()).token
   }
-  if (!token) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
+  if (!token) throw new Error('Failed to get access token for Gemini — complete Google OAuth in the setup wizard (cloud-platform scope required), or set GEMINI_SERVICE_ACCOUNT_KEY in .env')
 
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
   const res = await fetch(url, {

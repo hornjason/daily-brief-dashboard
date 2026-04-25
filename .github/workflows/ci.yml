@@ -97,9 +97,6 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ github.token }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Inject Gemini key into defaults.env
-        run: echo "GEMINI_SERVICE_ACCOUNT_KEY=${{ secrets.GEMINI_SERVICE_ACCOUNT_KEY }}" >> defaults.env
-
       - name: Build and push container image
         # Do NOT push :latest here. :latest is reserved for the release workflow's
         # publish-stable job (updated ONLY after the release smoke gate passes), to match
