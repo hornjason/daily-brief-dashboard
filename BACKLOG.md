@@ -6427,3 +6427,33 @@ Source: 2026-04-25 — E2E job became reachable for the first time when unit tes
 Files: test/wizard.spec.ts, test/ui/*.spec.ts, test/accessibility.spec.ts, test/bootstrap-recovery.spec.ts, test/smoke-prod.spec.ts, test/regression.spec.ts, test/navigation-regression.spec.ts, playwright.config.ts
 Description: 54 pre-existing E2E test failures surfaced when the Integration & E2E job became reachable (previously always blocked by unit test failures). Root causes include: (1) UI selector mismatches — wizard, bootstrap-recovery, and dashboard-empty-state tests look for elements that no longer exist at the expected selectors; (2) axe/WCAG violations on /dashboard and /dashboard/setup; (3) xfail tests using test.fail() counted as failures; (4) smoke-prod hitting /customers endpoint on dev server (7778) and getting empty response; (5) React "Something went wrong" crash on nonexistent customer page. CI has continue-on-error while this is addressed. Fix requires: auditing each failing spec against current UI, updating selectors, fixing the axe violations, and ensuring seed data correctly populates /customers on dev server.
 Stopped at: continue-on-error added 2026-04-25; next step is systematic triage of failing specs with Quinn
+
+---
+
+### BKL-SEC-RETRY-01 | Migrate callLLM/callLLMStructured to fetchGeminiWithRetry
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Rook audit 2026-04-25 — consistency gap with new retry infrastructure
+Files: src/customer.ts (callLLM ~line 474, callLLMStructured ~line 896)
+Description: callLLM and callLLMStructured use raw fetch() with no retry logic and no Bearer redaction on error. Unlike callGeminiGrounded (which was migrated this session), these two functions silently fail on 429 and have inconsistent error sanitization vs fetchGeminiWithRetry guarantees. Migrate both to fetchGeminiWithRetry to ensure consistent retry behavior and token redaction.
+
+---
+
+### BKL-SEC-SAKEY-01 | Add try/catch around SA key parse in callLLM/callLLMStructured
+Status: 🔴 OPEN
+Priority: P2
+Size: XS
+Source: Rook audit 2026-04-25 — partial key material could appear in logs on malformed env var
+Files: src/customer.ts (callLLM ~line 484, callLLMStructured ~line 904)
+Description: JSON.parse(Buffer.from(saKeyB64, 'base64').toString()) throws raw JS errors with no sanitization if GEMINI_SERVICE_ACCOUNT_KEY is malformed. Error could expose partial key material in server logs. Wrap in try/catch with a safe "invalid service account key format" message, consistent with gemini-auth.ts pattern.
+
+---
+
+### BKL-UX-OAUTH-SCOPE-01 | Wizard: prompt re-auth when cloud-platform scope missing from token
+Status: 🔴 OPEN
+Priority: P2
+Size: XS
+Source: Algorithm learn phase reflection 2026-04-25 — Quinn detected scopeLevel:"bootstrap" on existing tokens
+Files: dashboard/src/pages/SetupPage.tsx, src/routes/auth-routes.ts
+Description: Existing users who authenticated before the cloud-platform scope was added to NORMAL_SCOPES have tokens without Vertex AI access. The dashboard loads normally but live Gemini calls fail silently. Fix: on /dashboard/setup load, check if the current token's scopes include 'https://www.googleapis.com/auth/cloud-platform'. If missing, surface a banner: "Your Google sign-in needs to be updated to enable AI briefs — sign out and sign back in." This prevents silent Vertex AI failures for pre-scope users.

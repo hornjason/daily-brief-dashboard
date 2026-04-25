@@ -7,7 +7,7 @@ Last validated: 2026-04-24
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-04-10 (enterprise testing strategy added — BKL-TEST-11 production guard implemented, BKL-TEST-12 through BKL-TEST-20 opened; 105 customers, 9 AEs)
+Last updated: 2026-04-25 (OAuth-first Gemini auth shipped: cloud-platform scope in both NORMAL_SCOPES + BOOTSTRAP_SCOPES; GOOGLE_CLOUD_PROJECT=jhorn-pai baked into defaults.env — zero-config Vertex AI for @redhat.com users; 138 customers, 9 AEs; audit-docs CI gate fixed; E2E bun:protocol fix; continue-on-error on E2E job; BKL-ENRICH-01 xfail markers removed — enrichment confirmed on all 138 customers)
 
 ---
 
