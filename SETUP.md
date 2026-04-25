@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Daily Brief Dashboard — Setup Guide
 
 Detailed setup instructions for the Daily Brief Dashboard. See [README.md](README.md) for an overview of what the dashboard does.

@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Gemini AI Audit Report
 
 **Generated:** 2026-04-10  

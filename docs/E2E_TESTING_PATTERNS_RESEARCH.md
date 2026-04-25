@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # E2E Testing Patterns for Data-Heavy Single-User Dashboards
 
 **Research Date:** 2026-03-30

@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Gemini AI Cost Analysis & Call Inventory
 
 **Last updated:** 2026-04-10

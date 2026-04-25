@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Multi-Context Browser Architecture for Parallel Supportable Scraping
 
 **Date:** 2026-04-01

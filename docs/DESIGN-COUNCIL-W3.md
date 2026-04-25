@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Design Council — W3 Binding Design Standards
 
 **Status:** BINDING — all W3 UI items must conform to this document before implementation.

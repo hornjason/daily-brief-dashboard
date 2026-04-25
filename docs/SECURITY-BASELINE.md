@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Security Baseline (do not regress)
 
 - `sanitizeCell()` on all Sheets writes before `valueInputOption: 'RAW'`

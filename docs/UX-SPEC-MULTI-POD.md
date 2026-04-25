@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # UX Spec: Multi-AE / Multi-Pod Dashboard Architecture
 **BKL-UX52 | Status: SPEC — Pending Implementation**
 **Council Session:** 2026-04-10 | Participants: Serena (Architect), Aditi (Designer), Marcus (Engineer), Ava (Researcher)

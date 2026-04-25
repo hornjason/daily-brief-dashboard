@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Release Management Runbook
 
 How DailyBriefDashboard versions, ships, and rolls back.

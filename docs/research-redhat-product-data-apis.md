@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Research: Red Hat Product Feature Data - Programmatic Access
 
 **Date:** 2026-04-01

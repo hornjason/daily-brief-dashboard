@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Scraper Rules (do not regress)
 
 - All scrapers share one `BrowserContext` from RH SSO login

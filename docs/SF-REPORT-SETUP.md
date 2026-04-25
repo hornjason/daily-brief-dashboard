@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Salesforce Pipeline Report Setup
 
 This guide covers how to create the Salesforce Opportunities report used by the dashboard, what columns it requires, and how to schedule a daily automatic refresh.

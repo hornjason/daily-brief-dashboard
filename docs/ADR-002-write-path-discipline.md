@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # ADR-002: Write-Path Discipline for Shared State
 
 **Date:** 2026-03-29

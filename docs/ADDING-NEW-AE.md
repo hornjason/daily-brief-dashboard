@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Adding a New AE — Runbook
 
 Complete flow for onboarding a new Account Executive into the DailyBriefDashboard.

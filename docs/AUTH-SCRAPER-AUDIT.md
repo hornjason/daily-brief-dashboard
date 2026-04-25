@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Auth & Scraper Enterprise Readiness Audit
 
 **Date:** 2026-04-01

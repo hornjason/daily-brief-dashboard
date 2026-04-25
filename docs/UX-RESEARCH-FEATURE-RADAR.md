@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # UX Research Brief: Products Page Feature Radar
 
 **Author:** Aditi Sharma, UX/UI Design

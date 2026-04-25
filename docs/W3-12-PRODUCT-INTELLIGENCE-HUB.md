@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # W3-12: Product Intelligence Hub — Architecture Design
 
 **Date:** 2026-04-04 (revised 2026-04-05/06)

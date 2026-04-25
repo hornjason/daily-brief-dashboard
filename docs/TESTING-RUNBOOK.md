@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Testing Runbook
 
 ## TL;DR — Run all tests safely

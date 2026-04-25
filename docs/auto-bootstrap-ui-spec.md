@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Auto-Bootstrap UI Design Spec
 
 > Designed for DailyBriefDashboard SetupPage.tsx

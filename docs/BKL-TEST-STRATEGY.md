@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # DailyBriefDashboard -- Enterprise Testing Strategy
 
 **Created:** 2026-04-10

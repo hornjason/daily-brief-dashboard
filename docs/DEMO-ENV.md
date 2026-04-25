@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Environment Strategy
 
 **DailyBriefDashboard runs four isolated containers.** Each has a specific role and rules about what can be tested/deployed there.

@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Daily Brief Dashboard
 
 A containerized customer intelligence dashboard for Red Hat Account Executives and Solution Architects. Aggregates support cases, subscriptions, cloud spend, pipeline, and Google Workspace data into a single daily-brief view — so you walk into every customer conversation prepared.

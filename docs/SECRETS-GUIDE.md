@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Secrets Management Guide
 
 How credentials are handled in DailyBriefDashboard — what lives where, why, and how to rotate.

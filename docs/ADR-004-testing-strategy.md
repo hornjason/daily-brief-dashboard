@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # ADR-004: Testing Strategy — Test at the API Layer
 
 **Date:** 2026-03-29

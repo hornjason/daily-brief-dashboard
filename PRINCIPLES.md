@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # DailyBriefDashboard — Development Principles
 
 **Read this before designing any new feature, endpoint, or scraper change.**

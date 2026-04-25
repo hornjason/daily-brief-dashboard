@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # DailyBriefDashboard Visual Design Specification
 
 **Version**: 1.0

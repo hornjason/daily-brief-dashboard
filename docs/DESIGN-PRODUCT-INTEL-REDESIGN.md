@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Product Intelligence Page Redesign
 
 **Author:** Aditi Sharma, UX/UI Design

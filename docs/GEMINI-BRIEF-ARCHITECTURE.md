@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Gemini Brief Generation Architecture
 
 **Date:** 2026-04-01

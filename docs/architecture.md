@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 > **Note:** The root `ARCHITECTURE.md` is the authoritative deep-dive reference (intentional design decisions, scraper internals, edge cases). This file provides a concise overview suitable for onboarding.
 
 # DailyBriefDashboard — Architecture Overview

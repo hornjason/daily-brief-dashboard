@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # DailyBriefDashboard — Project State
 
 **This is the authoritative snapshot of what exists right now.**

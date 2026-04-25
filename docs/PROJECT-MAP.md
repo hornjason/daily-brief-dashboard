@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # DailyBriefDashboard — Project Map
 
 On-demand reference for agents. Not auto-loaded — read when you need orientation.
@@ -203,7 +207,6 @@ Location: `test/unit/`
 | `test/unit/slug.test.ts` | Customer slug generation |
 | `test/unit/sanitize.test.ts` | `sanitizeCell()` and `sanitizeErr()` helpers |
 | `test/unit/account-numbers.test.ts` | Account number validation and normalization |
-| `test/unit/setup-validation.test.ts` | Setup endpoint guard logic |
 
 Run with: `bun test test/unit/` (no container needed, 27 pure-function tests)
 

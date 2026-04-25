@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # ADR-001: Robust Long-Lived Session Strategy for Red Hat Portal Access
 
 **Status:** Proposed

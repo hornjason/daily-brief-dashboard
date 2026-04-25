@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Data Rules (do not regress)
 
 - Never overwrite non-empty cache with empty results (stale-overwrite guard)

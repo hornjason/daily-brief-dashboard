@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # ADR-003: Error Handling — No Silent Failures
 
 **Date:** 2026-03-29

@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Design Specification: Subscription Tier Display in KPI Modals
 
 **Version**: 1.0

@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # DailyBriefDashboard Information Architecture v2
 
 **Author:** Serena Blackwood, PAI System Design

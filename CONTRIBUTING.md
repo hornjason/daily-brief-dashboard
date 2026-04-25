@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # Contributing to Daily Brief Dashboard
 
 This guide is for developers who want to modify the code, fix bugs, or add features. If you just want to run the dashboard, see [README.md](README.md).

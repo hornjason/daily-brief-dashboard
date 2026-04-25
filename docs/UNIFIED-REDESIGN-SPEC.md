@@ -1,3 +1,7 @@
+---
+Last validated: 2026-04-24
+---
+
 # DailyBriefDashboard Unified Redesign Specification
 
 **Date:** 2026-04-01
