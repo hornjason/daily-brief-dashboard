@@ -1,17 +1,22 @@
 ---
 Last validated: 2026-04-25
 Classification: Operational
-Recovered: original source from worktree — 2026-04-25 after filter-repo git history loss
 ---
 
 # DailyBriefDashboard — Data Ingestion Flow
 
-Fallback chain is identical for all 3 timed flows:
-**① Local cache (24h TTL) → ② AE GSheet (parsed) → ③ Subscription Data GSheet (unparsed/POD) → ④ Source**
+Four-tier cache hierarchy — each flow tries L1 first and falls through only when its freshness predicate fails:
+
+```
+L1  In-process + disk cache        data/cache/*.json, 24h TTL
+L2  Per-AE GSheet in Drive         written and owned by us (subscriptions, CCSP, pipeline tabs)
+L3  POD-level GSheet in Drive      owned upstream (SF Bookings sheet, CCSP Tableau export, Pipeline export)
+L4  Live external system           Tableau Cloud, Salesforce Lightning — CCSP and Pipeline only
+```
+
+**SF Bookings is terminal at L3** — the Red Hat-owned SF Bookings GSheet in the POD GDrive folder is the authoritative source. There is no L4 live scraper for subscriptions.
 
 Every fallback level writes back to local cache before returning.
-
-SF Bookings has no live L4 scraper — its ④ Source is the Red Hat-owned SF Bookings Google Sheet (curated upstream by AEs/ops, always authoritative, no TTL needed). CCSP and SF Pipeline reach a live external system at ④.
 
 ```mermaid
 flowchart TD
@@ -22,40 +27,39 @@ flowchart TD
     %% ─── SF BOOKINGS ───────────────────────────
     subgraph SF["📋 SUBSCRIPTIONS — SF Bookings"]
         direction TB
-        SF1{"① Local cache\nsheet-cache-*.json\n< 24h TTL?"}
+        SF1{"① L1 — Local cache\nsheet-cache-*.json\n< 24h TTL?"}
         SF1 -->|✅ Hit| SF1Y["Use cache → done"]
-        SF1 -->|❌ Miss| SF2{"② AE GSheet (parsed)\nSubscriptions — AE Name\nin AE Drive folder < 24h?"}
+        SF1 -->|❌ Miss| SF2{"② L2 — AE GSheet\nSubscriptions — AE Name\nin AE Drive folder\n< 24h modifiedTime?"}
         SF2 -->|✅ Found & fresh| SF2Y["Read rows\n→ write local cache"]
-        SF2 -->|❌ Miss or stale| SF3{"③ Subscription Data GSheet\n(unparsed / POD-level)\nword-match territory keyword < 24h?"}
-        SF3 -->|✅ Found & fresh| SF3Y["Parse + filter to AE\n→ write AE GSheet\n→ write local cache"]
-        SF3 -->|❌ Miss or stale| SF4["④ Source\nSF Bookings sheet\n(Red Hat-owned Google Sheet)\nno TTL — always authoritative"]
-        SF4 --> SF4Y["Read raw rows\n→ write Subscription Data GSheet\n→ write AE GSheet\n→ write local cache"]
+        SF2 -->|❌ Miss or stale| SF3{"③ L3 — POD GDrive Bookings Folder\n(podBookingsFolderId in settings)\nDiscover sheets → match by territory\nRed Hat-owned SF Bookings GSheet\nTERMINAL — no L4"}
+        SF3 -->|✅ Found| SF3Y["Read raw rows\n→ filter by territory\n→ write AE GSheet\n→ write local cache"]
+        SF3 -->|❌ Not found| SF3E["🚨 No POD bookings folder\nconfigured — check settings.json"]
     end
 
     %% ─── CCSP ──────────────────────────────────
     subgraph CCSP["☁️ CCSP — Tableau"]
         direction TB
-        CC1{"① Local cache\nccsp-data.json\n< 24h TTL?"}
+        CC1{"① L1 — Local cache\nccsp-data.json\n< 24h TTL?"}
         CC1 -->|✅ Hit| CC1Y["Use cache → done"]
-        CC1 -->|❌ Miss| CC2{"② AE GSheet (parsed)\nAE Name CCSP\nin AE Drive folder < 24h?"}
-        CC2 -->|✅ Found| CC2Y["Read rows\n→ write local cache"]
-        CC2 -->|❌ Miss| CC3{"③ Subscription Data GSheet\n(unparsed / POD-level)\npod-name CSV < 24h?"}
-        CC3 -->|✅ Found| CC3Y["Parse + filter to AE\n→ write AE GSheet\n→ write local cache"]
-        CC3 -->|❌ Miss| CC4["④ Source\nTableau CCSP dashboard\napply POD filter\n(Region + POD from territory string)\nscrape entire POD rows"]
-        CC4 --> CC4Y["Write entire POD:\n→ Subscription Data GSheet\n→ AE GSheet\n→ local cache"]
+        CC1 -->|❌ Miss| CC2{"② L2 — AE CCSP GSheet\nAE Name CCSP\nin AE Drive folder\n< 24h modifiedTime?"}
+        CC2 -->|✅ Found & fresh| CC2Y["Read rows\n→ write local cache"]
+        CC2 -->|❌ Miss or stale| CC3{"③ L3 — POD GDrive shared folder\nTableau CSV export cached as GSheet\npod-name key < 24h modifiedTime?"}
+        CC3 -->|✅ Found & fresh| CC3Y["Parse + filter to AE territory\n→ write AE CCSP GSheet\n→ write local cache"]
+        CC3 -->|❌ Miss or stale| CC4["④ L4 — Tableau Cloud\nOverallCloudConsumptionDashboard\napply POD filter (Region + POD)\ndownload CSV from Raw Data tab"]
+        CC4 --> CC4Y["Write entire POD:\n→ POD GDrive shared GSheet\n→ AE CCSP GSheet\n→ local cache"]
     end
 
     %% ─── PIPELINE ──────────────────────────────
     subgraph PIPE["💰 PIPELINE — Salesforce"]
         direction TB
-        PP1{"① Local cache\npipeline-data.json\n< 24h TTL?"}
+        PP1{"① L1 — Local cache\npipeline-data.json\n< 24h TTL?"}
         PP1 -->|✅ Hit| PP1Y["Use cache → done"]
-        PP1 -->|❌ Miss| PP2{"② AE GSheet (parsed)\nAE Name Pipeline\nin AE Drive folder < 24h?"}
-        PP2 -->|✅ Found| PP2Y["Read rows\n→ write local cache"]
-        PP2 -->|❌ Miss| PP3{"③ Subscription Data GSheet\n(unparsed / POD-level)\nreportId-podName < 24h?"}
-        PP3 -->|✅ Found| PP3Y["Parse + filter to AE\n→ write AE GSheet\n→ write local cache"]
-        PP3 -->|❌ Miss| PP4["④ Source\nSalesforce report\n(SAML auto-login)\nscrape opp rows"]
-        PP4 --> PP4Y["Write entire POD:\n→ Subscription Data GSheet\n→ AE GSheet\n→ local cache"]
+        PP1 -->|❌ Miss| PP2{"② L2 — AE Pipeline GSheet\nAE Name Pipeline\nin AE Drive folder\n< 24h modifiedTime?"}
+        PP2 -->|✅ Found & fresh| PP2Y["Read rows\n→ write local cache"]
+        PP2 -->|❌ Miss or stale| PP3{"③ L3 — POD GDrive shared folder\nSF report export cached as GSheet\nreportId-podName < 24h modifiedTime?"}
+        PP3 -->|✅ Found & fresh| PP3Y["Parse + filter to AE territory\n→ write AE Pipeline GSheet\n→ write local cache"]
+        PP3 -->|❌ Miss or stale| PP4["④ L4 — Salesforce Lightning\nReport via SAML auto-login\n20,000px viewport hack\nscrape opp rows"]
+        PP4 --> PP4Y["Write entire POD:\n→ POD GDrive shared GSheet\n→ AE Pipeline GSheet\n→ local cache"]
     end
 ```
 
@@ -77,7 +81,7 @@ flowchart TD
     subgraph SFB["① SF Bookings — No Connection Required"]
         direction TB
         SFB1["Sheets API only\nNo browser session needed"]
-        SFB1 --> SFB2["Read source SF Bookings sheet\n→ write Subscription Data GSheet\n→ write AE GSheet\n→ write local cache"]
+        SFB1 --> SFB2["L1 hit? → done\nL2 hit (AE GSheet fresh)? → done\nL3: read POD GDrive bookings folder\n→ write AE GSheet → write local cache"]
         SFB2 --> SFB3{Success?}
         SFB3 -->|✅| SFB_OK["Mark SF Bookings ✅\nin sync-state.json"]
         SFB3 -->|❌ Retry 1-3\n5m→10m→15m| SFB4["🚨 All retries failed\nDashboard banner + ntfy push\nServe stale cache"]
@@ -103,12 +107,12 @@ flowchart TD
     subgraph CCSP_SYNC["③ CCSP — Requires: RH Portal + Tableau"]
         direction TB
         TAB1{"Tableau connection\nactive?"}
-        TAB1 -->|✅| TAB_GO["Scrape Tableau CCSP\napply POD filter\nscrape entire POD rows"]
+        TAB1 -->|✅| TAB_GO["L1 hit? → done\nL2 hit (AE CCSP GSheet fresh)? → done\nL3 hit (POD GDrive GSheet fresh)? → done\nL4: scrape Tableau CCSP\napply POD filter → download CSV"]
         TAB1 -->|❌| TAB2["Attempt Tableau reconnect\n(Connect Tableau button flow)"]
         TAB2 --> TAB3{Reconnect?}
         TAB3 -->|✅| TAB_GO
         TAB3 -->|❌| TAB_FAIL["🚨 Tableau connection failed\nCCSP skipped\nDashboard banner + ntfy push"]
-        TAB_GO --> TAB4["→ write Subscription Data GSheet\n→ write AE GSheet\n→ write local cache"]
+        TAB_GO --> TAB4["→ write POD GDrive shared GSheet\n→ write AE CCSP GSheet\n→ write local cache"]
         TAB4 --> MID1{"Mid-sync session\ndrop detected?"}
         MID1 -->|No| CCSP_OK["Mark CCSP ✅\nin sync-state.json"]
         MID1 -->|Yes| MID2["Silent reconnect attempt"]
@@ -137,8 +141,8 @@ flowchart TD
     %% ─── Pipeline ─────────────────────────────────────────
     subgraph PIPE_SYNC["⑤ Pipeline — Requires: Salesforce"]
         direction TB
-        PP1["Scrape Salesforce report\n(data fresh from 2am)\nscrape opp rows"]
-        PP1 --> PP2["→ write Subscription Data GSheet\n→ write AE GSheet\n→ write local cache"]
+        PP1["L1 hit? → done\nL2 hit (AE Pipeline GSheet fresh)? → done\nL3 hit (POD GDrive GSheet fresh)? → done\nL4: scrape Salesforce report (SAML)\n20,000px viewport → scrape opp rows"]
+        PP1 --> PP2["→ write POD GDrive shared GSheet\n→ write AE Pipeline GSheet\n→ write local cache"]
         PP2 --> PP3{Success?}
         PP3 -->|✅| PIPE_OK["Mark Pipeline ✅\nin sync-state.json"]
         PP3 -->|❌ Retry 1-3\n5m→10m→15m| PP4["🚨 All retries failed\nDashboard banner + ntfy push\nServe stale cache"]
@@ -161,7 +165,7 @@ Cache TTL expiry **never deletes data** — it marks data as stale. The dashboar
 
 ## Admin Page — Escape Hatch
 
-The Admin page "Run Now" buttons bypass the entire cache hierarchy and go straight to source (④). They reset the retry counter and mark that flow as synced for today in `sync-state.json`. Use when the scheduled sync failed or data is known stale.
+The Admin page "Run Now" buttons bypass the entire cache hierarchy and go straight to source (L3 for SF Bookings, L4 for CCSP and Pipeline). They reset the retry counter and mark that flow as synced for today in `sync-state.json`. Use when the scheduled sync failed or data is known stale.
 
 ## SSE Cache-Level Telemetry
 
@@ -186,7 +190,7 @@ curl -N http://localhost:7776/api/ingest/events
 
 **Implementation:** `src/ingest-events.ts` — exports `onCacheLevel` / `offCacheLevel` / `emitCacheLevel` / `IngestCacheEvent`. Calls to `emitCacheLevel()` are fire-and-forget in the waterfall path.
 
-**Important scope:** Telemetry fires on the ①→④ waterfall path (second+ bootstrap run, daily refresh). The **onboarding path** (first-time folder creation, new AE) reads ③ directly and writes ② — it does NOT emit cache-level events. This is expected behavior.
+**Important scope:** Telemetry fires on the L1→L4 waterfall path (second+ bootstrap run, daily refresh). The **onboarding path** (first-time folder creation, new AE) reads L3 directly and writes L2 — it does NOT emit cache-level events. This is expected behavior.
 
 ---
 
@@ -194,17 +198,15 @@ curl -N http://localhost:7776/api/ingest/events
 
 | Level | Condition | Confirmed |
 |-------|-----------|-----------|
-| **①** | Local cache present and < 24h TTL | ✅ Confirmed (~5s warm run) |
-| **②** | ① absent/stale; AE GSheet present and < 24h | ✅ Confirmed (~15s warm run) |
-| **③** | Both ① and ② absent/stale; Subscription Data GSheet present | ✅ Confirmed (27.2s cold onboarding) |
-| **④** | All higher levels missing; reads authoritative source directly | ⚠️ Prod-only — `DISALLOW_LIVE_SCRAPE` blocks ④ in test container |
+| **L1** | Local cache present and < 24h TTL | ✅ Confirmed (~5s warm run) |
+| **L2** | L1 absent/stale; AE GSheet present and < 24h modifiedTime | ✅ Confirmed (~15s warm run) |
+| **L3** | Both L1 and L2 absent/stale; POD GDrive GSheet present | ✅ Confirmed (27.2s cold onboarding) |
+| **L4** | All higher levels missing; reads live external system | ⚠️ Prod-only — `DISALLOW_LIVE_SCRAPE` blocks L4 in test container |
 
 **Baseline timings** (Carolanne Farrell, 11 customers):
 - Cold onboarding (new Drive folder): **27.2s**
-- ② warm (① wiped, sheets fresh): **~15s**
-- ① warm: **~5s**
-
-**CCSP ④ gap:** ④ telemetry for CCSP is not distinguishable from ③ without modifying `ccsp-scraper.ts`. Tracked as `BKL-INGEST-TELEMETRY-CCSP-L4`.
+- L2 warm (L1 wiped, sheets fresh): **~15s**
+- L1 warm: **~5s**
 
 ---
 
@@ -213,14 +215,15 @@ curl -N http://localhost:7776/api/ingest/events
 | Rule | Detail |
 |---|---|
 | **Local cache TTL** | 24h across all 3 flows — CCSP and Pipeline update at most 1×/day |
-| **Always hit local first** | Cache check is gate 1 every time, no exceptions |
+| **Always hit L1 first** | Cache check is gate 1 every time, no exceptions |
 | **Write-back on every fallback** | Every level that reads from a fallback writes back to local cache before returning |
-| **Fallback order** | Local → AE GSheet (parsed) → Subscription Data GSheet (POD) → Source |
-| **Source writes all levels** | ④ source pull writes Subscription Data first, then AE GSheet, then local cache |
-| **GDrive TTL** | All GDrive reads (② AE GSheet, ③ Subscription Data GSheet) check modifiedTime < 24h before using — stale = miss, fall through |
-| **SF Bookings source = no TTL** | The Red Hat-owned SF Bookings sheet is always authoritative — no freshness check, always read if ②/③ miss |
-| **SF Bookings = no live scraper** | SF Bookings ④ is a Google Sheet, not an external system. No Playwright, no Tableau, no Salesforce API. |
-| **Onboarding ≠ waterfall** | First-time AE folder creation reads ③ directly and writes ②; does not traverse ①→④ waterfall; no cache-level events emitted |
+| **Fallback order** | L1 (disk) → L2 (AE GSheet) → L3 (POD GDrive GSheet) → L4 (live system) |
+| **L3 writes all levels above** | L3 read writes L2 then L1 before returning |
+| **L4 writes all levels** | L4 scrape writes L3 (POD GSheet) first, then L2 (AE GSheet), then L1 (local cache) |
+| **GDrive TTL** | All GDrive reads (L2 AE GSheet, L3 POD GSheet) check modifiedTime < 24h before using — stale = miss, fall through |
+| **SF Bookings = terminal at L3** | The Red Hat-owned SF Bookings GSheet in `podBookingsFolderId` is always authoritative. No freshness check — always read if L1/L2 miss. No L4. |
+| **SF Bookings = no live scraper** | L3 is a Google Sheet, not an external system. No Playwright, no Tableau, no Salesforce API. |
+| **Onboarding ≠ waterfall** | First-time AE folder creation reads L3 directly and writes L2; does not traverse L1→L4 waterfall; no cache-level events emitted |
 | **SSE telemetry = waterfall only** | `emitCacheLevel()` fires during second+ bootstrap runs and daily refresh; not during onboarding |
-| **Subscription Data = unparsed POD** | Contains full POD rows, not filtered per AE |
-| **AE GSheet = parsed** | Filtered to this AE's territory only |
+| **L3 POD GSheet = unparsed** | Contains full POD rows, not filtered per AE |
+| **L2 AE GSheet = parsed** | Filtered to this AE's territory only |
