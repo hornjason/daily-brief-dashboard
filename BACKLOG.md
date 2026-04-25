@@ -6627,3 +6627,12 @@ Source: Quinn audit 2026-04-25 (Phase 1 gate)
 Files: test/regression.spec.ts or new test/wizard-sf-sync.spec.ts
 Description: The SF Pipeline "Sync Now" success banner (data-testid="sf-sync-success") cannot be exercised on the test container because the button is disabled without SF credentials. REG-WIZ-SF-SYNC-01 cannot exercise the success path. Fix: write a Playwright test that mocks POST /api/scrape/salesforce to return {ok:true,rowCount:47}, asserts data-testid="sf-sync-success" appears with "✓ Sync complete — 47 rows", and disappears within 8s.
 Can we test: YES — via page.route() mock for the SF scrape endpoint.
+
+### BKL-TEST-SEED-SMOKE-01 | Customer detail page not covered by seed smoke suite
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: LEARN phase reflection 2026-04-25 (Phase 3 re-audit found crash on seed data)
+Files: test/regression.spec.ts or test/smoke-seed.spec.ts
+Description: The pre-Quinn gate on 7776 seed data does not include a customer detail page load test. Quinn's Phase 3 audit found BKL-UI-CUSTOMER-CRASH-01 on first visit to /dashboard/customer/Acme%20Corp. A basic smoke test that navigates to a seed customer detail page and asserts it renders without AppErrorBoundary would have caught this before Quinn's cycle. Fix: add a smoke test that loads /dashboard/customer/Acme%20Corp on 7776 and asserts the page renders (no "Something went wrong" text, H1 contains customer name).
+Can we test: This IS the test.
