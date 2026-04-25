@@ -934,7 +934,7 @@ export function AccountPortfolioGrid({ accounts, cases, events, loading, selecte
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <Building2 className="w-4 h-4 text-accent" />
           <h2 className="text-sm font-semibold text-text-primary">Account Portfolio</h2>
-          <span className="text-xs text-text-secondary">{filteredAccounts.length} accounts</span>
+          <span className="text-xs text-text-secondary">{filteredAccounts.length} account{filteredAccounts.length !== 1 ? 's' : ''}</span>
           {oldestCachedAt && (
             <span className="text-xs text-text-secondary">· synced {formatRelTime(oldestCachedAt)}</span>
           )}

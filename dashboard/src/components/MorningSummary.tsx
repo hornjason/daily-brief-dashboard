@@ -204,7 +204,7 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
             <p className="text-sm text-text-secondary text-center py-4">
               {matchingCustomers && matchingCustomers.size > 0
                 ? 'No signals for selected products'
-                : `All clear across ${data.customerCount} accounts`}
+                : `All clear across ${data.customerCount} account${data.customerCount !== 1 ? 's' : ''}`}
             </p>
           ) : (
             <div className="space-y-2">

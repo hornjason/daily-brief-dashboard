@@ -1305,13 +1305,6 @@ export function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Priority Action Banner (R13 + BKL-G03) */}
-      {priorityAction && (
-        <div className="px-6 pt-4">
-          <PriorityActionBanner action={priorityAction} customerName={customerName} />
-        </div>
-      )}
-
       {/* Customer Signal Banner (BKL-F10a, BKL-F10b) — top signal with action chips */}
       {priorityAction && (
         <div className="px-6 pt-3">

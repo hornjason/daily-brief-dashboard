@@ -998,6 +998,38 @@ test.describe('Restored-commits source-level regressions', () => {
   })
 })
 
+// ── REG-PLURAL-01: AccountPortfolioGrid shows singular "account" when count = 1 ──
+// FIND-Q3-01: Grid showed "1 accounts" — pluralization was hardcoded.
+// Fix: Conditional suffix `account${count !== 1 ? 's' : ''}` in AccountPortfolioGrid.tsx.
+// This test uses the browser to verify the rendered text on the dashboard page.
+test.describe('@destructive REG-PLURAL-01: AccountPortfolioGrid singular pluralization (FIND-Q3-01)', () => {
+  test('shows "1 account" (singular) when exactly 1 customer is configured', async ({ page }) => {
+    // Step 1: Set up exactly 1 customer on the test container
+    const aeRes = await postJSONDestructive('/api/aes', {
+      aes: [{ name: 'Plural Test AE', driveFolderId: 'plural-test-folder' }],
+    })
+    expect(aeRes.status).toBe(200)
+    const custRes = await postJSONDestructive('/api/setup/save-customers', {
+      customers: [{ name: 'Plural Test Customer', ae: 'Plural Test AE', accountNumbers: ['9988001'] }],
+    })
+    expect([200, 201]).toContain(custRes.status)
+
+    // Step 2: Navigate to the dashboard on the test container
+    await page.goto(`${DESTRUCTIVE_URL}/dashboard`)
+    await page.waitForLoadState('networkidle')
+
+    // Step 3: Find the Account Portfolio count text
+    // The span contains "{n} account" or "{n} accounts"
+    const countSpan = page.locator('h2:has-text("Account Portfolio") ~ span').first()
+    await expect(countSpan).toBeVisible({ timeout: 10000 })
+    const text = await countSpan.textContent()
+
+    // Regression: must show "1 account" not "1 accounts"
+    expect(text).toMatch(/^1 account$/)
+    expect(text).not.toMatch(/^1 accounts$/)
+  })
+})
+
 // ── REG-CACHE-STALE-01 / REG-BRIEF-STALE-01 / REG-BOOTSTRAP-ACCOUNTS-01 ────
 // These three tests each replace the in-memory customer set on the server, so
 // they MUST run serially — Playwright's fullyParallel mode otherwise lets them

@@ -2296,17 +2296,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
             </div>
 
             {/* Sheet IDs */}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Supportable Sheet ID</label>
-                <input
-                  type="text"
-                  value={ae.supportableSheetId}
-                  onChange={e => updateAE(ae.id, { supportableSheetId: e.target.value })}
-                  placeholder="Google Sheet ID"
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-text-secondary mb-1">Pipeline Sheet ID</label>
                 <input
@@ -2338,7 +2328,6 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                 <thead>
                   <tr className="text-xs text-text-secondary uppercase tracking-wide border-b border-border">
                     <th className="text-left py-2 pr-2 font-medium">Customer Name</th>
-                    <th className="text-left py-2 pr-2 font-medium">Supportable Name</th>
                     <th className="text-left py-2 pr-2 font-medium">Domain</th>
                     <th className="text-left py-2 pr-2 font-medium">Account Numbers</th>
                     <th className="text-left py-2 pr-2 font-medium">Aliases</th>
@@ -2354,15 +2343,6 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
                           value={c.name}
                           onChange={e => updateCustomer(ae.id, c.id, { name: e.target.value })}
                           placeholder="Acme Corp"
-                          className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
-                        />
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="text"
-                          value={c.supportableName}
-                          onChange={e => updateCustomer(ae.id, c.id, { supportableName: e.target.value })}
-                          placeholder="If different in Supportable"
                           className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
                         />
                       </td>
