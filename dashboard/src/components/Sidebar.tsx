@@ -65,15 +65,11 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
     return () => observer.disconnect()
   }, [])
 
-  // Sync scroll-spy with active state
-  useEffect(() => {
-    if (activeSection) {
-      const item = navItems.find((n) => n.sectionId === activeSection)
-      if (item && item.label !== active) {
-        onActiveChange(item.label)
-      }
-    }
-  }, [activeSection])
+  // BKL-UI-TITLE-01: Do NOT sync scroll-spy → onActiveChange. Scroll-spy is a
+  // visual highlight only (via isActive() reading activeSection). Calling
+  // onActiveChange from layout/scroll changes (e.g., switching "By AE" view)
+  // mutates document.title via App.tsx's title useEffect, causing the title
+  // to flip to "Pipeline | ASA Command Center" while the URL stays /dashboard.
 
   function toggle() {
     setCollapsed(prev => {

@@ -27,10 +27,11 @@ export type ScraperStatusMap = Record<ScraperName, ScraperStatusEntry>
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/** Minutes after lastSuccess that a scraper is considered stale. */
-const STALE_THRESHOLDS: Record<ScraperName, number> = {
+/** Minutes after lastSuccess that a scraper is considered stale.
+ *  BKL-UX-STALE-HEALTH-01: Partial — 'supportable' is permanently disabled and
+ *  intentionally omitted so it never participates in staleness calculations. */
+const STALE_THRESHOLDS: Partial<Record<ScraperName, number>> = {
   'rh-cases':    4 * 60,   // 4 hours
-  'supportable': 24 * 60,  // 24 hours
   'ccsp':        24 * 60,  // 24 hours
   'sf-pipeline': 24 * 60,  // 24 hours
 }
@@ -40,7 +41,7 @@ function getStatusFilePath() {
   return resolve(process.env.CACHE_DIR ?? 'data/cache', 'scraper-status.json')
 }
 
-const SCRAPER_NAMES: ScraperName[] = ['rh-cases', 'supportable', 'ccsp', 'sf-pipeline']
+const SCRAPER_NAMES: ScraperName[] = ['rh-cases', 'ccsp', 'sf-pipeline']
 
 // ── In-memory store ──────────────────────────────────────────────────────────
 
@@ -57,9 +58,11 @@ function defaultEntry(): ScraperStatusEntry {
   }
 }
 
-let _store: ScraperStatusMap = {
+// BKL-UX-STALE-HEALTH-01: Partial — 'supportable' is permanently disabled and
+// intentionally never initialized. Callers that still pass 'supportable' (legacy
+// scraper modules) write to a key the store never serves via getStatus().
+let _store: Partial<ScraperStatusMap> = {
   'rh-cases':    defaultEntry(),
-  'supportable': defaultEntry(),
   'ccsp':        defaultEntry(),
   'sf-pipeline': defaultEntry(),
 }
@@ -92,6 +95,14 @@ export function initStatusStore(): void {
     }
     const raw = readFileSync(getStatusFilePath(), 'utf-8')
     const parsed = JSON.parse(raw) as Partial<ScraperStatusMap>
+    // BKL-UX-STALE-HEALTH-01: Strip retired 'supportable' key from disk before
+    // it enters memory. Older scraper-status.json files (pre-disable) carry a
+    // 'supportable' entry that would otherwise resurface in /api/scraper-status
+    // and the Session Health Panel after a restart. Supportable is permanently
+    // disabled — its disk entry must never reappear in the live store.
+    if (parsed && typeof parsed === 'object' && 'supportable' in parsed) {
+      delete (parsed as any).supportable
+    }
     // Merge parsed entries over defaults to handle partial/missing keys
     for (const name of SCRAPER_NAMES) {
       if (parsed[name] && typeof parsed[name] === 'object') {
@@ -116,6 +127,9 @@ export function recordOutcome(
 ): void {
   const now = new Date().toISOString()
   const entry = _store[name]
+  // BKL-UX-STALE-HEALTH-01: silent no-op for retired scrapers (e.g. 'supportable')
+  // whose entry was never initialized. Legacy callers stay safe.
+  if (!entry) return
 
   if (result.success) {
     entry.state = 'fresh'
@@ -141,8 +155,11 @@ export function recordOutcome(
  * Sets state 'running' and updatedAt. Persists to disk.
  */
 export function markRunning(name: ScraperName): void {
-  _store[name].state = 'running'
-  _store[name].updatedAt = new Date().toISOString()
+  const entry = _store[name]
+  // BKL-UX-STALE-HEALTH-01: silent no-op for retired scrapers (e.g. 'supportable')
+  if (!entry) return
+  entry.state = 'running'
+  entry.updatedAt = new Date().toISOString()
   persistStore()
 }
 
@@ -156,10 +173,13 @@ export function getStatus(): ScraperStatusMap {
   const result = {} as ScraperStatusMap
 
   for (const name of SCRAPER_NAMES) {
-    const entry = { ..._store[name] }
+    const stored = _store[name]
+    if (!stored) continue
+    const entry = { ...stored }
 
     if (entry.state !== 'running') {
-      const thresholdMs = STALE_THRESHOLDS[name] * 60 * 1000
+      const threshold = STALE_THRESHOLDS[name]
+      const thresholdMs = (threshold ?? 0) * 60 * 1000
       const lastSuccess = entry.lastSuccess ? new Date(entry.lastSuccess).getTime() : null
       if (!lastSuccess || (now - lastSuccess) > thresholdMs) {
         entry.state = 'stale'
@@ -175,7 +195,10 @@ export function getStatus(): ScraperStatusMap {
 /**
  * Get the status for a single scraper.
  * Applies staleness check same as getStatus().
+ * Returns a safe stale-default entry for retired scrapers (e.g. 'supportable')
+ * that have no entry in the store — preserves legacy caller compatibility
+ * without resurrecting them in /api/scraper-status (getStatus() skips them).
  */
 export function getScraperStatus(name: ScraperName): ScraperStatusEntry {
-  return getStatus()[name]
+  return getStatus()[name] ?? defaultEntry()
 }
