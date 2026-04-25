@@ -6356,3 +6356,63 @@ Decision: Research before implementing — evaluate quality tradeoff and whether
 - Source: Jason caught 2026-04-11 — accordion opens to blank content while API fetch in-flight
 - Fix: Added Loader2 spinner to AiIntelligenceSettings, AutomationSettings, RefreshTimerSettings while draft=null
 - Files: `dashboard/src/components/AiIntelligenceSettings.tsx`, `AutomationSettings.tsx`, `RefreshTimerSettings.tsx`
+
+---
+
+### BKL-INGEST-04 | Add DISALLOW_LIVE_SCRAPE env guard to scrapers
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Worktree test cleanup 2026-04-24 — test/unit/ingest-04-disallow-live-scrape.test.ts existed in worktree but guard was never implemented
+Files: src/rh-scraper.ts, src/ccsp-scraper.ts, src/sf-scraper.ts
+Description: test/unit/ingest-04-disallow-live-scrape.test.ts was a worktree-only test for a `DISALLOW_LIVE_SCRAPE=true` env guard that prevents live scraper runs (useful for CI/testing). The guard was never implemented in the scrapers. Feature would allow CI to run without hitting real portals.
+
+---
+
+### BKL-AI-FP01 | Add DISALLOW_GEMINI env guard to brief generation
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Worktree test cleanup 2026-04-24 — test/unit/ai-03-disallow-gemini.test.ts existed in worktree but guard was never implemented
+Files: src/customer.ts, src/account-intelligence.ts
+Description: test/unit/ai-03-disallow-gemini.test.ts was a worktree-only test for a `DISALLOW_GEMINI=true` env guard that prevents live Gemini API calls (useful for offline testing). The guard was never implemented. Feature would allow testing brief generation flows without hitting Vertex AI.
+
+---
+
+### BKL-INGEST-06 | Implement scheduleRetry in background-scheduler.ts
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Worktree test cleanup 2026-04-24 — test/unit/ingest-06-scheduler-retry.test.ts tested an export that was never added
+Files: src/background-scheduler.ts
+Description: test/unit/ingest-06-scheduler-retry.test.ts tested a `scheduleRetry(job, delay)` export from background-scheduler.ts that would allow manual retry scheduling of failed scrape jobs. The export was never implemented. Currently failed jobs have no retry path.
+
+---
+
+### BKL-INGEST-10 | Add L1 TTL short-circuit to refresh-engine
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Worktree test cleanup 2026-04-24 — test/unit/ingest-10-refresh-l1-ttl.test.ts tested an optimization that was never implemented
+Files: src/refresh-engine.ts (if exists), src/background-scheduler.ts
+Description: test/unit/ingest-10-refresh-l1-ttl.test.ts tested a short-circuit in refresh-engine.ts where L1 (in-memory) TTL would skip refresh if data was fresh enough. The optimization was never implemented. All refresh calls hit L2 (disk) even when L1 data is valid.
+
+---
+
+### BKL-SEC-VERTEX-01 | Fix vertex-429 P0-04b mock boundary in callLLM tests
+Status: 🔴 OPEN
+Priority: P2
+Size: M
+Source: Worktree test cleanup 2026-04-24 — BKL-TEST-P0-04b blocks removed as untestable
+Files: src/customer.ts (callLLM, callLLMStructured), test/ (new regression when fixed)
+Description: BKL-TEST-P0-04b blocks (removed in this session) tested retry behavior of `callLLM`/`callLLMStructured` but mocked `getGeminiToken` at the wrong layer — `callLLM` uses google.auth.JWT directly, so the mock never intercepted. The fix requires either (a) injecting a token-getter into callLLM for testability, or (b) refactoring callLLM to use `fetchGeminiWithRetry`. P0-04b blocks were removed as untestable until this is resolved.
+
+---
+
+### BKL-SEC-DOM-01 | Apply tier2 domain regex to tier1 Clearbit output in domain-waterfall
+Status: 🔴 OPEN
+Priority: P2
+Size: XS
+Source: Rook finding — worktree review 2026-04-24
+Files: src/domain-waterfall.ts (~line 45)
+Description: Rook finding: src/domain-waterfall.ts line ~45 — tier1 Clearbit domain output passes straight through without applying the tier2 sanitization regex. A malformed Clearbit response could yield an invalid domain. Fix: apply the same domain validation regex used in tier2 to tier1 output before returning.

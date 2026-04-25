@@ -160,6 +160,12 @@ CI will build and push a new container image with the rotated key baked in.
 
 ---
 
+## OAuth-First Gemini Authentication
+
+As of the OAuth credential update (2026-04-24), `GEMINI_SERVICE_ACCOUNT_KEY` is **optional** for users who have completed Google OAuth with the `cloud-platform` scope. OAuth handles authentication automatically via the refresh token already stored in `.env` — no separate service account key is needed. `GOOGLE_CLOUD_PROJECT` is still required for billing routing and quota enforcement; `setup.sh` now prompts for this value interactively on fresh installs. Existing users who completed OAuth before the `cloud-platform` scope was added need to re-authorize once — the setup wizard will prompt automatically when it detects the missing scope. Users who prefer the service account key path can still set `GEMINI_SERVICE_ACCOUNT_KEY` in `.env` and it will take precedence over OAuth.
+
+---
+
 ## What Team Members Need
 
 When onboarding a new Red Hat sales team member:
