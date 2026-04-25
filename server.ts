@@ -283,7 +283,9 @@ app.get('/api/auth/redhat/status', async (c) => {
   })
   return c.json({
     ...status,
-    hasSession: status.hasSession && getScrapeContext() !== null,
+    hasSession: transport === 'bearer'
+      ? !!(process.env.REDHAT_OFFLINE_TOKEN)
+      : (status.hasSession && getScrapeContext() !== null),
     sessionExpired: sessionExpiredForTransport,
     liveReachable,
     ...healthFields,
@@ -297,31 +299,8 @@ app.post('/api/auth/redhat/start', async (c) => {
       // BKL-S12: Run pre-warm as async, then hide browser AFTER it completes or times out.
       // onComplete is fire-and-forget from rh-auth.ts — making it async is safe (caller doesn't await).
       ;(async () => {
-        // Pre-warm Supportable session in background immediately after RH login.
-        // The auth.redhat.com SSO session is fresh — navigating to Supportable now
-        // auto-completes SSO and saves the Supportable session cookie to the profile,
-        // so subsequent headless bootstrap runs can access Supportable without re-auth.
-        const ctx = getScrapeContext()
-        if (ctx) {
-          const SUPPORTABLE_PREWARM_URL = 'https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1'
-          const prewarm = (async () => {
-            const p = await ctx.newPage()
-            try {
-              await p.goto(SUPPORTABLE_PREWARM_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
-              if (!p.url().includes('supportable.corp.redhat.com')) {
-                await p.waitForURL(/supportable\.corp\.redhat\.com/, { timeout: 30_000 }).catch(() => {})
-              }
-              console.log(`[supportable] pre-warm complete — session established (${p.url().includes('supportable') ? 'ok' : 'may need manual login'})`)
-            } catch (e: any) {
-              console.warn('[supportable] pre-warm failed:', e.message)
-            } finally {
-              await p.close().catch(() => {})
-            }
-          })()
-          // Wait for pre-warm to settle (cap at 32s) before hiding browser — BKL-S12
-          await Promise.race([prewarm, new Promise<void>(r => setTimeout(r, 32_000))])
-        }
-        // Pre-warm complete (or skipped/timed out) — now safe to hide the VNC window
+        // Supportable pre-warm removed — SUPPORTABLE_DISABLED=true permanently.
+        // Hide the VNC window immediately after RH Portal login.
         getLivePage()?.goto('about:blank').catch(() => {})
         console.log('[rh-auth] onComplete: enqueueing all scrapers after re-auth')
         enqueueScraperTask({

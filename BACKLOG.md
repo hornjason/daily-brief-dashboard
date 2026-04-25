@@ -6636,3 +6636,31 @@ Source: LEARN phase reflection 2026-04-25 (Phase 3 re-audit found crash on seed 
 Files: test/regression.spec.ts or test/smoke-seed.spec.ts
 Description: The pre-Quinn gate on 7776 seed data does not include a customer detail page load test. Quinn's Phase 3 audit found BKL-UI-CUSTOMER-CRASH-01 on first visit to /dashboard/customer/Acme%20Corp. A basic smoke test that navigates to a seed customer detail page and asserts it renders without AppErrorBoundary would have caught this before Quinn's cycle. Fix: add a smoke test that loads /dashboard/customer/Acme%20Corp on 7776 and asserts the page renders (no "Something went wrong" text, H1 contains customer name).
 Can we test: This IS the test.
+
+### BKL-CONN-BEARER-01 | RH Portal card shows "Not connected" when bearer token configured + no browser context
+Status: ✅ DONE 2026-04-25
+Priority: P1
+Size: XS
+Source: Council review 2026-04-25 — Step 3 Connections stability investigation
+Files: server.ts:286, test/regression.spec.ts (REG-CONN-BEARER-01)
+Description: `/api/auth/redhat/status` returned `hasSession: false` when `getScrapeContext() === null` even when bearer transport was configured (`RH_CASES_TRANSPORT=bearer` default, `REDHAT_OFFLINE_TOKEN` set). Bearer transport does not need a browser context for RH cases — the check was overly strict.
+Decision: DONE — `hasSession` now transport-aware: bearer = `!!(REDHAT_OFFLINE_TOKEN)`, browser = file + live context. Regression test REG-CONN-BEARER-01 added. Deployed in same build as BKL-CONN-PREWARM-01.
+
+### BKL-CONN-PREWARM-01 | Supportable pre-warm runs after RH Portal login causing 32s VNC instability
+Status: ✅ DONE 2026-04-25
+Priority: P1
+Size: XS
+Source: Council review 2026-04-25 — Step 3 Connections stability investigation
+Files: server.ts — onComplete callback in POST /api/auth/redhat/start
+Description: After every successful RH Portal VNC login, server.ts onComplete navigated to `supportable.corp.redhat.com:4443` and waited up to 32s for SSO. Supportable has been permanently disabled since 2026-04-08 (SUPPORTABLE_DISABLED=true). The pre-warm made VNC show Supportable pages for 32s after login, then blank — creating the impression of a failed or flaky auth flow.
+Decision: DONE — pre-warm block removed. VNC now goes blank immediately after login success (BKL-UX94 behavior preserved). No Supportable references remain in onComplete.
+
+### BKL-CONN-SF-REPORT-01 | Wizard Step 3 shows "SF Report ID required" with no wizard step to fix it
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Council review 2026-04-25 — Jason reported Salesforce "Expired" + "SF Report ID required"
+Files: dashboard/src/pages/SetupPage.tsx — Step 3 SF card, Step 2 AE form
+Description: The SF card in Step 3 shows "SF Report ID required — configure in AEs & Customers above" but Step 2 (AEs & Customers) has no visible SF Report ID field for users to fill in. The field exists in the data model (sfReportId on AE) and in the Manage AE form in Step 4, but not in Step 2 during initial wizard flow. New POD setups hit this immediately.
+Can we test: YES — Playwright test: complete Step 2 with a new AE, advance to Step 3, assert "SF Report ID required" message is absent (or that Step 2 prompts for the field).
+Decision: OPEN — needs design consideration for where to surface sfReportId input in wizard flow.

@@ -1118,3 +1118,13 @@ test.describe('Phase 1 stale-cache regressions (serial)', () => {
     })
   })
 })
+
+test('REG-CONN-BEARER-01: RH hasSession true when bearer token configured', async ({ request }) => {
+  const status = await request.get('/api/auth/redhat/status')
+  expect(status.ok()).toBeTruthy()
+  const body = await status.json()
+  // Bearer transport is the default — hasSession should be true when token is configured
+  // regardless of browser context state
+  expect(body.transport).toBe('bearer')
+  expect(body.hasSession).toBe(true)
+})
