@@ -6416,3 +6416,14 @@ Size: XS
 Source: Rook finding — worktree review 2026-04-24
 Files: src/domain-waterfall.ts (~line 45)
 Description: Rook finding: src/domain-waterfall.ts line ~45 — tier1 Clearbit domain output passes straight through without applying the tier2 sanitization regex. A malformed Clearbit response could yield an invalid domain. Fix: apply the same domain validation regex used in tier2 to tier1 output before returning.
+
+---
+
+### BKL-E2E-01 | Stabilize E2E test suite — 54 pre-existing failures
+Status: 🔴 OPEN
+Priority: P2
+Size: L
+Source: 2026-04-25 — E2E job became reachable for the first time when unit test gate was fixed
+Files: test/wizard.spec.ts, test/ui/*.spec.ts, test/accessibility.spec.ts, test/bootstrap-recovery.spec.ts, test/smoke-prod.spec.ts, test/regression.spec.ts, test/navigation-regression.spec.ts, playwright.config.ts
+Description: 54 pre-existing E2E test failures surfaced when the Integration & E2E job became reachable (previously always blocked by unit test failures). Root causes include: (1) UI selector mismatches — wizard, bootstrap-recovery, and dashboard-empty-state tests look for elements that no longer exist at the expected selectors; (2) axe/WCAG violations on /dashboard and /dashboard/setup; (3) xfail tests using test.fail() counted as failures; (4) smoke-prod hitting /customers endpoint on dev server (7778) and getting empty response; (5) React "Something went wrong" crash on nonexistent customer page. CI has continue-on-error while this is addressed. Fix requires: auditing each failing spec against current UI, updating selectors, fixing the axe violations, and ensuring seed data correctly populates /customers on dev server.
+Stopped at: continue-on-error added 2026-04-25; next step is systematic triage of failing specs with Quinn
