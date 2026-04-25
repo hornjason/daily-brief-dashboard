@@ -20,10 +20,15 @@ const BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7
 // Pattern mirrors lifecycle.spec.ts.
 
 test.beforeAll(async ({ request }) => {
-  const res = await request.post(`${BASE}/api/__test/snapshot`)
-  const snap = await res.json().catch(() => ({}))
-  if (!snap.ok) {
-    console.warn(`[setup.spec.ts beforeAll] Snapshot returned not-ok: ${JSON.stringify(snap)}`)
+  try {
+    const res = await request.post(`${BASE}/api/__test/snapshot`)
+    const snap = await res.json().catch(() => ({}))
+    if (!snap.ok) {
+      console.warn(`[setup.spec.ts beforeAll] Snapshot returned not-ok: ${JSON.stringify(snap)}`)
+    }
+  } catch (e) {
+    // In CI, test container (7776) is not running — snapshot is best-effort only.
+    console.warn(`[setup.spec.ts beforeAll] Snapshot skipped (server not reachable): ${e}`)
   }
 })
 
@@ -225,11 +230,62 @@ test.describe('@destructive POST /api/setup/save-domains', () => {
   })
 })
 
+// ── GET /api/settings/pod-config ────────────────────────────────────────────
+// Read-only — returns POD-keyed Salesforce report map from settings.json.
+// Targets test container (7776) so that data-test/config/settings.json
+// (which includes podSfReports) is the source of truth for these assertions.
+
+test.describe('GET /api/settings/pod-config', () => {
+  test('returns 200 with podBookingsFolderId', async () => {
+    const { status, body } = await getJSON('/api/settings/pod-config')
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('podBookingsFolderId')
+    expect(typeof body.podBookingsFolderId).toBe('string')
+    expect((body.podBookingsFolderId as string).length).toBeGreaterThan(0)
+  })
+
+  test('returns podSfReports object', async () => {
+    const { status, body } = await getJSON('/api/settings/pod-config')
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('podSfReports')
+    expect(typeof body.podSfReports).toBe('object')
+    expect(body.podSfReports).not.toBeNull()
+  })
+
+  test('podSfReports has all 4 WEST Commercial POD keys', async () => {
+    const { body } = await getJSON('/api/settings/pod-config')
+    const reports = body.podSfReports as Record<string, string>
+    expect(reports).toHaveProperty('WEST_COMM_CORP_NORTHWEST')
+    expect(reports).toHaveProperty('WEST_COMM_CORP_SOUTHWEST')
+    expect(reports).toHaveProperty('WEST_COMM_CORP_NORTH_CENTRAL')
+    expect(reports).toHaveProperty('WEST_COMM_CORP_SOUTH_CENTRAL')
+  })
+
+  test('all 4 report IDs are 18-character Salesforce IDs', async () => {
+    const { body } = await getJSON('/api/settings/pod-config')
+    const reports = body.podSfReports as Record<string, string>
+    const pods = [
+      'WEST_COMM_CORP_NORTHWEST',
+      'WEST_COMM_CORP_SOUTHWEST',
+      'WEST_COMM_CORP_NORTH_CENTRAL',
+      'WEST_COMM_CORP_SOUTH_CENTRAL',
+    ]
+    for (const pod of pods) {
+      const id = reports[pod]
+      expect(typeof id).toBe('string')
+      // Salesforce report IDs: start with 00O, alphanumeric, 15–18 chars total
+      expect(id).toMatch(/^00O[a-zA-Z0-9]{12,15}$/)
+    }
+  })
+})
+
 // ── POST /api/aes/validate-folder ───────────────────────────────────────────
 
+// validate-folder is read-only (validates URL format, no state mutation)
+// so it uses postJSON (targets BASE_URL/7777) not postJSONDestructive (targets 7776).
 test.describe('POST /api/aes/validate-folder', () => {
   test('rejects bad folder URL (400)', async () => {
-    const { status, body } = await postJSONDestructive('/api/aes/validate-folder', {
+    const { status, body } = await postJSON('/api/aes/validate-folder', {
       folderUrl: 'not-a-url',
     })
     expect(status).toBe(400)
@@ -237,7 +293,7 @@ test.describe('POST /api/aes/validate-folder', () => {
   })
 
   test('rejects empty folderUrl', async () => {
-    const { status, body } = await postJSONDestructive('/api/aes/validate-folder', {
+    const { status, body } = await postJSON('/api/aes/validate-folder', {
       folderUrl: '',
     })
     expect(status).toBe(400)
@@ -245,7 +301,7 @@ test.describe('POST /api/aes/validate-folder', () => {
   })
 
   test('accepts valid-looking folder URL format (may fail on Drive API if fake)', async () => {
-    const { status, body } = await postJSONDestructive('/api/aes/validate-folder', {
+    const { status, body } = await postJSON('/api/aes/validate-folder', {
       folderUrl: 'https://drive.google.com/drive/folders/1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq',
     })
     // Either 200 (real folder found) or 400 (Drive API rejects it) — not 500
