@@ -6685,3 +6685,13 @@ Files: CLAUDE.md — delegation matrix, Rook briefing template
 Description: When Rook is spawned with isolation:worktree, it gets a fresh copy of main without uncommitted changes. For pre-commit security reviews, Rook should be given explicit file paths and line ranges from the main working directory, not a worktree. The current pattern causes Rook to report "not found" on changes that DO exist.
 Can we test: YES — Rook source audit should grep for the specific new variables/functions added in the changes.
 Decision: OPEN — update CLAUDE.md Rook briefing guidance to pass explicit file paths + diff context when changes are uncommitted.
+
+### BKL-CONN-02 | sf-auth.ts login-complete path still uses fire-and-forget about:blank
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Learning reflection 2026-04-26 — Rook noted pre-existing inconsistency during connection council audit
+Files: src/sf-auth.ts — login-complete path (~line 160 after SF auth confirmed)
+Description: The sf-auth.ts login-complete path contains `ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})` — the same fire-and-forget pattern we fixed in rh-auth.ts. This path runs after SF+RH auth is confirmed successful. While less impactful (auth is already done), it's inconsistent with the fix applied to rh-auth.ts and should be aligned.
+Can we test: YES — source pattern test: confirm `await ctx.newPage()` (not .then()) in sf-auth.ts login-complete path.
+Decision: OPEN — minor consistency fix, P3 priority.
