@@ -2240,7 +2240,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   // Cached for 5 minutes — the live browser probe takes ~6s (SSO redirect settle).
   // Pass ?force=true to bypass cache (used by Connect button after login).
   let _tableauStatusCache: { result: { reachable: boolean; sessionValid: boolean }; cachedAt: number } | null = null
-  const TABLEAU_STATUS_TTL_MS = 5 * 60 * 1000
+  const TABLEAU_STATUS_TTL_MS = 60 * 1000  // BKL-SEC-CONN-02: reduced from 5min to 60s
   // BKL-UX96: Track the page opened by open-login so wait-for-login can use it
   // even when getLivePage() returns null (e.g. after context recycling).
   let _tableauOpenLoginPage: import('@playwright/test').Page | null = null
@@ -2361,7 +2361,20 @@ export function registerBootstrapRoutes(app: Hono): void {
       setLivePageBusy(false)
       // Warm the session-status cache immediately so the UI card reflects the
       // actual login result without waiting for the 5-min TTL to expire.
-      if (finalValid) _tableauStatusCache = { result: { reachable: true, sessionValid: true }, cachedAt: Date.now() }
+      if (finalValid) {
+        _tableauStatusCache = { result: { reachable: true, sessionValid: true }, cachedAt: Date.now() }
+        // BKL-UX94: Clear VNC after Tableau login — same pattern as rh-auth.ts.
+        // Open a blank tab so the VNC viewer doesn't keep showing the live Tableau page.
+        try {
+          const blankPage = await livePage.context().newPage()
+          await blankPage.bringToFront()
+          await blankPage.goto('about:blank').catch((e: any) => {
+            console.warn('[tableau-auth] about:blank navigation failed:', e?.message ?? e)
+          })
+        } catch (e: any) {
+          console.warn('[tableau-auth] blank tab open failed:', e?.message ?? e)
+        }
+      }
       return c.json({ sessionValid: finalValid })
     } catch (e: any) {
       console.warn(`[tableau] wait-for-login: timed out or failed — ${e?.message ?? e}`)
@@ -2386,17 +2399,23 @@ export function registerBootstrapRoutes(app: Hono): void {
       // BKL-UX96: Track the page so wait-for-login can use it even when getLivePage() is null
       // (e.g. after context recycling cleared _livePage)
       _tableauOpenLoginPage = page
-      await page.goto(TABLEAU_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      // Clean up about:blank pages (from BKL-UX94 VNC-clear) that cover the display
+      // BKL-CONN-VNC-TABLEAU-01: bring VNC to front BEFORE goto so user sees browser
+      // immediately instead of a black screen while the SSO redirect chain loads.
+      // Clean up about:blank pages (from BKL-UX94 VNC-clear) that cover the display.
       for (const p of ctx.pages()) {
         if (p !== page && p.url() === 'about:blank') {
           await p.close().catch(() => {})
         }
       }
       await page.bringToFront()
+      // 'commit' fires on first response bytes — returns as soon as Tableau starts
+      // loading rather than waiting for the full SSO redirect chain ('domcontentloaded'
+      // was timing out at 30s when the redirect chain took too long).
+      await page.goto(TABLEAU_URL, { waitUntil: 'commit', timeout: 30_000 })
       console.log('[tableau] opened Tableau in live VNC page — visible at localhost:6080')
       return c.json({ ok: true })
     } catch (e: any) {
+      console.error('[tableau] open-login failed:', e?.message ?? e)
       setLivePageBusy(false)
       return c.json({ error: 'Could not open Tableau — check VPN connection' }, 500)
     }

@@ -87,6 +87,15 @@ export function setContextRecoveryCallback(cb: (ctx: BrowserContext, profileDir:
 }
 
 /**
+ * Called by sf-auth.ts after SF auth ends (timeout/cancel/error) to restore
+ * the RH scraper context without reopening the VNC login flow.
+ */
+export async function reopenScrapeContextFromAuth(profileDir: string): Promise<void> {
+  _intentionalClose = false
+  await _autoRecover(profileDir)
+}
+
+/**
  * Mark the live page as busy (used by another flow like Tableau login).
  * While busy, the keep-alive will skip full-page navigation to avoid
  * stealing the page from the user.

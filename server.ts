@@ -603,6 +603,12 @@ app.post('/api/test/supportable-customer-search', async (c) => {
 // The SSO button auto-clicks; the SAML flow completes without user interaction
 // as long as the RH SSO session is active in the profile.
 app.post('/api/auth/salesforce/start', async (c) => {
+  // Guard: SF login depends on the RH SSO context being live. Without it,
+  // launching SF login closes the (already absent) RH context for nothing
+  // and leaves both connections broken until manual recovery.
+  if (!getScrapeContext()) {
+    return c.json({ error: 'No RH session — connect Red Hat Portal first' }, 400)
+  }
   try {
     await startSfLoginBrowser(SF_SESSION_PATH, RH_PROFILE_DIR, () => {
       setSfSyncLastError(null)  // BKL-UX94: clear stale error so sessionExpired resets immediately after login
@@ -623,7 +629,7 @@ app.post('/api/auth/salesforce/start', async (c) => {
 
 // DELETE /api/auth/salesforce/session — cancel in-progress login
 app.delete('/api/auth/salesforce/session', async (c) => {
-  await cancelSfLoginBrowser()
+  await cancelSfLoginBrowser(RH_PROFILE_DIR)
   return c.json({ cancelled: true })
 })
 

@@ -1,5 +1,8 @@
 // src/browser-utils.ts — Shared Chromium launch flags (no imports from other src/ modules)
 
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 /** Base Chromium flags required for container stability (2GB shm, 8GB mem) */
 export const BASE_CHROMIUM_ARGS = [
   '--no-sandbox',
@@ -7,4 +10,25 @@ export const BASE_CHROMIUM_ARGS = [
   '--disable-dev-shm-usage',
   '--renderer-process-limit=2',
   '--no-restore-last-session', // BKL-UX74: prevent stale tabs (e.g. Supportable) from restoring on launch
+  '--hide-crash-restore-bubble', // suppress "Restore pages?" infobar on Chromium relaunch
 ]
+
+/**
+ * Sanitize the persistent Chromium profile so it doesn't show the "Restore pages?"
+ * bubble on relaunch. Marks the previous exit as clean so Chromium skips the
+ * crash-restore prompt. No-op when the Preferences file doesn't exist yet.
+ */
+export function sanitizeChromiumProfile(profileDir: string): void {
+  const prefsPath = join(profileDir, 'Default', 'Preferences')
+  try {
+    if (!existsSync(prefsPath)) return
+    const prefs = JSON.parse(readFileSync(prefsPath, 'utf-8'))
+    if (prefs.profile) {
+      prefs.profile.exit_type = 'Normal'
+      prefs.profile.exited_cleanly = true
+    }
+    writeFileSync(prefsPath, JSON.stringify(prefs), { mode: 0o600 })
+  } catch {
+    // non-fatal — profile may not have Preferences yet on first run
+  }
+}

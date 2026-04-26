@@ -459,10 +459,21 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
 
     console.log(`[sf-scraper] settled on: ${page.url()}`)
 
-    // Detect session expiry — if still not on Lightning after redirect wait, session is gone
+    // Detect session expiry — but only throw SfSessionExpiredError if the browser actually
+    // landed on the SF login page or RH SSO page. A timeout, profile lock, or redirect-chain
+    // failure that leaves the browser on about:blank or elsewhere is a transient failure —
+    // it should accumulate toward the 2-failure grace period, not immediately expire the session.
+    // (BKL-CONN-SF-CLASSIFY-01)
     if (!page.url().startsWith('https://redhatcrm.lightning.force.com')) {
-      console.warn(`[sf-scraper] did not reach Lightning after redirect — session may have expired`)
-      throw new SfSessionExpiredError()
+      const currentUrl = page.url()
+      const isLoginPage = currentUrl.includes('my.salesforce.com') || currentUrl.includes('sso.redhat.com')
+      if (isLoginPage) {
+        console.warn(`[sf-scraper] login page detected at ${currentUrl} — session expired`)
+        throw new SfSessionExpiredError()
+      } else {
+        console.warn(`[sf-scraper] did not reach Lightning (at "${currentUrl}") — transient failure, grace period applies`)
+        throw new Error(`[sf-scraper] navigation did not reach Lightning: ${currentUrl}`)
+      }
     }
 
     // Log page state to understand what's rendering

@@ -16,12 +16,12 @@ import { chromium } from '@playwright/test'
 import type { BrowserContext } from '@playwright/test'
 import { writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
+import { closeScrapeContext, adoptScrapeContext, reopenScrapeContextFromAuth } from './rh-scraper.ts'
 import { closeSfContext, adoptSfContext, getSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
-import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
+import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
 import { recordSessionEstablished } from './settings-api.ts'
 
 const SF_LOGIN_URL   = 'https://redhatcrm.my.salesforce.com'
@@ -54,10 +54,18 @@ export function getSfAuthStatus(sessionPath: string): SfAuthStatus {
 }
 
 async function cleanupBrowser(): Promise<void> {
+  // BKL-CONN: cleanupBrowser ONLY closes the browser context. Module-level flags
+  // (loginInProgress, loginTimedOut, sfSessionExpired) are caller-owned. Each call
+  // site must set the flags it needs BEFORE invoking cleanupBrowser. Resetting flags
+  // here re-opened a race window during the awaited ctx.close() where a concurrent
+  // start request could pass the loginInProgress guard.
   const ctx = activeContext
   activeContext = null
-  loginInProgress = false
   if (ctx) {
+    // Close all open pages before closing the context to prevent orphaned blank tabs in VNC
+    for (const p of ctx.pages()) {
+      await p.close().catch(() => {})
+    }
     try { await ctx.close() } catch { /* already closed */ }
   }
 }
@@ -80,6 +88,13 @@ export async function startSfLoginBrowser(
 ): Promise<void> {
   if (loginInProgress) throw new Error('SF login already in progress')
 
+  // Hoist flag set BEFORE any await — closes the race window where a second
+  // start request slips past the guard during cleanup. cleanupBrowser no longer
+  // resets these flags (caller-owned), so a single set here suffices.
+  loginInProgress = true
+  sfSessionExpired = false
+  loginTimedOut = false
+
   await cleanupBrowser()
 
   // Release profile lock so the headed browser can open the same profile
@@ -93,8 +108,8 @@ export async function startSfLoginBrowser(
   // if the previous context (RH Portal) didn't release it cleanly.
   try { unlinkSync(join(profileDir, 'SingletonLock')) } catch { /* fine — file may not exist */ }
 
-  loginInProgress = true
-  loginTimedOut = false
+  // Sanitize Chromium profile preferences to suppress the "Restore pages?" bubble
+  sanitizeChromiumProfile(profileDir)
 
   let context: BrowserContext
   try {
@@ -127,6 +142,8 @@ export async function startSfLoginBrowser(
   })
   console.log('[sf-auth] headed browser opened — navigating to SF login')
 
+  let retryInFlight = false
+
   ;(async () => {
     const deadline = Date.now() + LOGIN_TIMEOUT_MS
 
@@ -137,11 +154,15 @@ export async function startSfLoginBrowser(
       try {
         const url = sfPage.url()
 
-        // Retry navigation if it failed on first attempt (profile lock timing window)
+        // Retry navigation if it failed on first attempt (profile lock timing window).
+        // Guard with retryInFlight so consecutive poll ticks don't pile up overlapping gotos.
         if (url === 'about:blank') {
-          sfPage.goto(SF_LOGIN_URL).catch((e: any) => {
-            console.warn('[sf-auth] navigation retry failed:', e?.message ?? e)
-          })
+          if (!retryInFlight) {
+            retryInFlight = true
+            sfPage.goto(SF_LOGIN_URL, { timeout: 8_000 }).catch((e: any) => {
+              console.warn('[sf-auth] navigation retry failed:', e?.message ?? e)
+            }).finally(() => { retryInFlight = false })
+          }
           continue
         }
 
@@ -174,10 +195,19 @@ export async function startSfLoginBrowser(
             writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }), { mode: 0o600 })
 
             const ctx = activeContext!
+            // BKL-UX94: clear VNC after login — blank tab BEFORE nulling refs so
+            // we still have ctx if blank tab fails.
+            try {
+              const blankPage = await ctx.newPage()
+              await blankPage.bringToFront()
+              await blankPage.goto('about:blank').catch((e: any) => {
+                console.warn('[sf-auth] about:blank navigation failed:', e?.message ?? e)
+              })
+            } catch (e: any) {
+              console.warn('[sf-auth] blank tab open failed:', e?.message ?? e)
+            }
             activeContext = null
             loginInProgress = false
-            // BKL-UX94: clear VNC after login — same pattern as rh-auth.ts
-            ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})
 
             // Re-adopt for all scrapers sharing this SSO context
             adoptScrapeContext(ctx, profileDir, rhPage)
@@ -186,7 +216,6 @@ export async function startSfLoginBrowser(
             adoptCcspContext(ctx)
             recordSessionEstablished('rh-portal')
             recordSessionEstablished('salesforce')
-            recordSessionEstablished('tableau')
 
             // Cold-start recovery: reset circuit breakers accumulated during stale auth
             resetAllCircuitBreakers()
@@ -199,11 +228,29 @@ export async function startSfLoginBrowser(
             console.warn('[sf-auth] RH portal did not load after SF login — SF only')
             writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }), { mode: 0o600 })
             const ctx = activeContext!
+            // BKL-UX94: clear VNC after login — blank tab BEFORE nulling refs so
+            // we still have ctx if blank tab fails.
+            try {
+              const blankPage = await ctx.newPage()
+              await blankPage.bringToFront()
+              await blankPage.goto('about:blank').catch((e: any) => {
+                console.warn('[sf-auth] about:blank navigation failed:', e?.message ?? e)
+              })
+            } catch (e: any) {
+              console.warn('[sf-auth] blank tab open failed:', e?.message ?? e)
+            }
             activeContext = null
             loginInProgress = false
-            // BKL-UX94: clear VNC after login — same pattern as rh-auth.ts
-            ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})
+            sfSessionExpired = false
+            // BKL-CONN-SINGLETON: ctx is still alive — adopt the SAME live ctx for
+            // the RH scraper instead of calling reopenScrapeContextFromAuth (which
+            // would launch a second Chromium against the same profileDir and race
+            // on SingletonLock). Mirrors the happy path above. RH scraper will
+            // re-navigate on its next scrape cycle.
+            adoptScrapeContext(ctx, profileDir, rhPage)
             adoptSfContext(ctx, profileDir)
+            adoptSupportableContext(ctx)
+            adoptCcspContext(ctx)
             // Still reset SF circuit breaker even if RH portal didn't load
             resetAllCircuitBreakers()
             onComplete?.()
@@ -212,19 +259,42 @@ export async function startSfLoginBrowser(
         }
       } catch {
         console.log('[sf-auth] browser closed or navigation error — cleaning up')
+        // Caller-owned flags: cleanupBrowser no longer resets these.
+        loginInProgress = false
+        // BKL-CONN-SINGLETON: cleanupBrowser FIRST (closes ctx + releases profile
+        // lock), THEN reopenScrapeContextFromAuth (which launches a new Chromium
+        // against profileDir). Reverse order races on SingletonLock.
         await cleanupBrowser()
+        await reopenScrapeContextFromAuth(profileDir).catch((e: any) => {
+          console.warn('[sf-auth] RH context recovery after browser close failed:', e?.message ?? e)
+        })
         return
       }
     }
 
+    // Caller-owned flags: cleanupBrowser no longer resets these. Keep loginTimedOut
+    // = true so the UI can surface the timeout state; clear in-progress + expired.
     loginTimedOut = true
     loginInProgress = false
+    sfSessionExpired = false
     console.warn('[sf-auth] SF login timed out')
+    // BKL-CONN-SINGLETON: cleanupBrowser FIRST so the active ctx is closed and
+    // profileDir lock is released before reopenScrapeContextFromAuth launches a
+    // new Chromium on the same profile. Reverse order races on SingletonLock.
     await cleanupBrowser()
+    await reopenScrapeContextFromAuth(profileDir).catch((e: any) => {
+      console.warn('[sf-auth] RH context recovery after timeout failed:', e?.message ?? e)
+    })
   })()
 }
 
-export async function cancelSfLoginBrowser(): Promise<void> {
+export async function cancelSfLoginBrowser(profileDir: string): Promise<void> {
+  // Caller-owned flags: cleanupBrowser no longer resets these.
   loginInProgress = false
+  loginTimedOut = false
+  sfSessionExpired = false
   await cleanupBrowser()
+  await reopenScrapeContextFromAuth(profileDir).catch((e: any) => {
+    console.warn('[sf-auth] RH context recovery after cancel failed:', e?.message ?? e)
+  })
 }

@@ -8,7 +8,8 @@ import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, 
 // BKL-RH-03 Phase 2 (ADR-014): Bearer transport for recurring case refresh
 import { BearerCaseClient, getConfiguredTransport } from './case-client.ts'
 import type { SupportCase } from './types.ts'
-import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess } from './sf-scraper.ts'
+import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess, SfSessionExpiredError } from './sf-scraper.ts'
+import { recordScrapeFailure as recordConnectionFailure, recordScrapeSuccess as recordConnectionSuccess } from './connections/scrape-outcome.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
 import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper.ts'
@@ -258,6 +259,10 @@ export function resetAllCircuitBreakers(): void {
       console.log(`[circuit-breaker] ${name}: reset by auth event`)
     }
   }
+  // Clear the SF expired flag so the status endpoint returns sessionExpired: false
+  // immediately after auth — without this, a stale true from prior scrape failures
+  // blocks the frontend VNC close condition (hasSession && !sessionExpired).
+  _sfSessionExpired = false
 }
 
 // ── BKL-M50c: Wall-clock timeout wrapper ─────────────────────────────────────
@@ -378,6 +383,10 @@ export let _sfSyncRunning = false
 export let _sfSyncStartedAt: number | null = null
 export let _sfSyncCancelRequested = false
 export let _sfSyncLastError: string | null = null
+// BKL-CONN-ARCH-01: track sf session expiry as a typed flag, not a string match
+// over the last error message. Set only on SfSessionExpiredError or on the
+// second consecutive failure (grace period via scrape-outcome.ts).
+export let _sfSessionExpired = false
 let _sfTotalRows = 0
 
 // ── Setters for cross-module state mutation (ESM live bindings) ─────────────
@@ -642,6 +651,8 @@ export async function runRhScrapeWithState(): Promise<void> {
       recordCount: cases.length,
       durationMs: Date.now() - _rhTelemetryStart,
     })
+    // BKL-CONN-ARCH-01: clear failure count for connection-state grace tracking
+    recordConnectionSuccess('rh')
 
     // BKL-M21: Post-scrape account count validation — warn if results seem partial
     const expectedAccounts = accountNumbers.length
@@ -671,6 +682,11 @@ export async function runRhScrapeWithState(): Promise<void> {
       error: sanitizeErr(e),
     })
 
+    // BKL-CONN-ARCH-01: track outcome through scrape-outcome.ts. Auth signals
+    // (SessionExpiredError) expire immediately; other errors require 2
+    // consecutive failures before treating as expired (grace period).
+    const outcome = recordConnectionFailure('rh', e)
+
     if (e instanceof SessionExpiredError) {
       _rhScrapeLastError = 'Session expired — reconnect via dashboard'
       recordScrapeExpired()
@@ -682,6 +698,11 @@ export async function runRhScrapeWithState(): Promise<void> {
       _rhScrapeLastError = sanitizeErr(e)
       circuitBreakers.rh.recordFailure(sanitizeErr(e))
       console.warn('[rh-scraper]', sanitizeErr(e))
+      // Only flip RH to expired on the second consecutive non-auth failure.
+      if (outcome.shouldExpire) {
+        console.warn(`[rh-scraper] ${outcome.failureCount} consecutive failures — treating as session expired`)
+        recordScrapeExpired()
+      }
     }
   } finally {
     _rhScrapeRunning = false
@@ -697,6 +718,14 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
     console.warn('[sf-sync] stale mutex in login callback — auto-releasing')
     _sfSyncRunning = false
     _sfSyncStartedAt = null
+  }
+  // Guard: no SF context means no session — skip immediately rather than navigate to SF,
+  // hit the login page, and throw SfSessionExpiredError (which flips _sfSessionExpired=true
+  // even when the user has never logged in). This prevents startup scrapes from overwriting
+  // a fresh login with a false "session expired" signal.
+  if (!getSfContext()) {
+    console.log('[sf-sync] no SF session — skipping sync until connected')
+    return Promise.resolve()
   }
   // BKL-SUP-02: Defer SF sync while Supportable is scraping (session collision guard)
   if (supportableScrapeRunning) {
@@ -755,16 +784,30 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
           } catch (e: any) {
             console.warn(`[sf-sync] sheet write failed for ${ae.name}:`, sanitizeErr(e))
             _sfSyncLastError = sanitizeErr(e)
+            // BKL-CONN-ARCH-01: route through scrape-outcome for grace-period
+            // tracking. Sheet-write errors are not auth signals, so this only
+            // expires after 2 consecutive failures.
+            const outcome = recordConnectionFailure('sf', e)
+            if (outcome.shouldExpire) _sfSessionExpired = true
           }
         }
       } catch (e: any) {
         console.warn(`[sf-sync] SF scrape failed for report ${reportId}:`, sanitizeErr(e))
         _sfSyncLastError = sanitizeErr(e)
+        // BKL-CONN-ARCH-01: SfSessionExpiredError flips us to expired
+        // immediately; other errors only after the second consecutive failure.
+        const outcome = recordConnectionFailure('sf', e)
+        if (outcome.shouldExpire) _sfSessionExpired = true
       }
     }
 
     // Update exported status so /api/scrape/salesforce/status reflects the run
-    if (!_sfSyncLastError && _sfTotalRows > 0) recordSfSyncSuccess(_sfTotalRows)
+    if (!_sfSyncLastError && _sfTotalRows > 0) {
+      recordSfSyncSuccess(_sfTotalRows)
+      // BKL-CONN-ARCH-01: clear failure count + sessionExpired flag on success
+      recordConnectionSuccess('sf')
+      _sfSessionExpired = false
+    }
 
     // BKL-M50e: Record telemetry for SF sync
     recordScrapeResult({
@@ -778,6 +821,9 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
   })().catch((e: any) => {
     console.error('[server] SF login callback error:', sanitizeErr(e))
     _sfSyncLastError = sanitizeErr(e)
+    // BKL-CONN-ARCH-01: track outer-promise failures through scrape-outcome too
+    const outcome = recordConnectionFailure('sf', e)
+    if (outcome.shouldExpire) _sfSessionExpired = true
   }).finally(() => {
     _sfSyncRunning = false
     _sfSyncStartedAt = null
@@ -811,12 +857,18 @@ export function registerScraperRoutes(app: Hono): void {
       degradedReason: null,
       confidence: deriveConfidence(_sfProbeTimestamp),
     })
+    const sfAuthStatus = getSfAuthStatus(SF_SESSION_PATH)
     return c.json({
-      ...getSfAuthStatus(SF_SESSION_PATH),
+      ...sfAuthStatus,
       lastSync: lastSfSync,
       rowCount: lastSfRowCount,
       syncError: _sfSyncLastError,
-      sessionExpired: !!(_sfSyncLastError?.toLowerCase().includes('session expired')),
+      // BKL-CONN-ARCH-01: typed expired flag (set by SfSessionExpiredError or
+      // 2 consecutive failures via scrape-outcome.ts) — replaces string match.
+      // BKL-CONN-DATA-RESET-01: sessionExpired only meaningful when a session exists.
+      // Without hasSession=true, _sfSessionExpired is a stale flag from a prior run
+      // (e.g. after data-only wipe deletes sf-session.json) — don't surface it as "expired."
+      sessionExpired: sfAuthStatus.hasSession ? _sfSessionExpired : false,
       reportConfigured: !!SF_REPORT_ID || aes.some(a => !!a.sfReportId),
       sheetConfigured: !!process.env.PIPELINE_FILE_ID,
       liveReachable,

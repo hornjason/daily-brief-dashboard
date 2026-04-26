@@ -50,6 +50,10 @@ export interface BootstrapConfigBlockProps {
    *  can see where bootstrap will create folders before they paste a parent.
    *  Bootstrap is still allowed with no folder (server defaults to Drive root). */
   showRootFallback?: boolean
+  /** BKL-CONN-SF-REPORT-01: when no podSfReportMap entry exists for the
+   *  selected POD, the SF Report ID becomes editable so the user can supply
+   *  their own. This callback is fired on every keystroke. */
+  onSfReportIdChange?: (id: string) => void
 }
 
 export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
@@ -68,6 +72,7 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
     onParentFolderChange,
     previewAeNames,
     showRootFallback,
+    onSfReportIdChange,
   } = props
 
   // ── Parent Drive Folder editable field state (Full POD mode only) ──────────
@@ -225,18 +230,30 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
         </select>
       </div>
 
-      {/* 3 — Auto-filled SF Report ID (read-only) */}
+      {/* 3 — SF Report ID (read-only when POD map provides it; editable otherwise) */}
       <div>
-        <label className="block text-xs text-text-secondary mb-1">SF Report ID (auto-filled)</label>
-        <input
-          type="text"
-          value={sfReportId}
-          readOnly
-          placeholder={selectedPod ? '' : 'Select a POD to auto-fill'}
-          className="w-full bg-surface/50 border border-border rounded-lg px-3 py-2 text-sm text-text-secondary font-mono cursor-not-allowed focus:outline-none"
-        />
+        <label className="block text-xs text-text-secondary mb-1">
+          {hasReportForPod ? 'SF Report ID (auto-filled)' : 'SF Report ID'}
+        </label>
+        {hasReportForPod ? (
+          <input
+            type="text"
+            value={sfReportId}
+            readOnly
+            placeholder={selectedPod ? '' : 'Select a POD to auto-fill'}
+            className="w-full bg-surface/50 border border-border rounded-lg px-3 py-2 text-sm text-text-secondary font-mono cursor-not-allowed focus:outline-none"
+          />
+        ) : (
+          <input
+            type="text"
+            value={sfReportId}
+            onChange={(e) => onSfReportIdChange?.(e.target.value)}
+            placeholder={selectedPod ? 'Paste SF Report ID' : 'Select a POD first'}
+            className="w-full bg-surface/50 border border-border rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
+          />
+        )}
         {selectedPod && !hasReportForPod && (
-          <p className="text-xs text-warning mt-1">No SF report configured for this POD — contact ops.</p>
+          <p className="text-xs text-warning mt-1">Enter your SF Report ID above, or contact ops if you don't have one.</p>
         )}
       </div>
 

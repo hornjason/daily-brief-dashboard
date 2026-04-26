@@ -22,6 +22,9 @@ export interface UseBootstrapConfigResult {
   setSelectedPod: (pod: string) => void
   /** Auto-filled Salesforce report ID for the selected POD (read-only to the UI). */
   sfReportId: string
+  /** BKL-CONN-SF-REPORT-01: manual override when no podSfReportMap entry exists
+   *  for the selected POD. The wizard input becomes editable and writes here. */
+  setSfReportIdOverride: (id: string) => void
   /** POD → SF report ID map for the active region. */
   podSfReportMap: Record<string, string>
   /** POD → label map for the active region (driven by settings.json). */
@@ -63,6 +66,7 @@ interface RegionsResponse {
 export function useBootstrapConfig(): UseBootstrapConfigResult {
   const [selectedPod, setSelectedPodState] = useState<string>('')
   const [podSfReportMap, setPodSfReportMap] = useState<Record<string, string>>({})
+  const [sfReportIdOverride, setSfReportIdOverrideState] = useState<string>('')
   const [podLabels, setPodLabels] = useState<Record<string, string>>({})
   const [territorySheetUrl, setTerritorySheetUrl] = useState<string>('')
   const [podBookingsFolderId, setPodBookingsFolderId] = useState<string>('')
@@ -143,7 +147,16 @@ export function useBootstrapConfig(): UseBootstrapConfigResult {
     setSelectedRegionState(region)
   }, [])
 
-  const sfReportId = selectedPod ? (podSfReportMap[selectedPod] ?? '') : ''
+  // BKL-CONN-SF-REPORT-01: prefer the POD map entry; otherwise fall back to a
+  // user-supplied override so the wizard isn't blocked when ops hasn't
+  // configured the POD yet.
+  const sfReportId = selectedPod
+    ? (podSfReportMap[selectedPod] ?? sfReportIdOverride)
+    : ''
+
+  const setSfReportIdOverride = useCallback((id: string) => {
+    setSfReportIdOverrideState(id)
+  }, [])
 
   // Extract bare sheet ID from territorySheetUrl
   const territorySheetId = (() => {
@@ -163,6 +176,7 @@ export function useBootstrapConfig(): UseBootstrapConfigResult {
     selectedPod,
     setSelectedPod,
     sfReportId,
+    setSfReportIdOverride,
     podSfReportMap,
     podLabels,
     territorySheetUrl,

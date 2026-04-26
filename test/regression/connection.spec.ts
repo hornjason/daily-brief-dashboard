@@ -51,18 +51,27 @@ test('REG-UI06-03: SetupPage RH indicator checks liveReachable', () => {
 })
 
 test('REG-UI06-04: SetupPage RH indicator distinguishes Expired from Not connected', () => {
-  const src = readFileSync(
+  // BKL-CONN-ARCH-01 (2026-04-26): rhExpired ternary replaced with deriveRhCard
+  // which returns sessionState: 'expired' + label 'Session expired' + dotColor 'red'
+  // (rendered through the bg-critical mapping below). The label/red mapping is
+  // preserved; expressed through the derivation instead of inline ternary.
+  const setupSrc = readFileSync(
     resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'pages', 'SetupPage.tsx'),
     'utf8',
   )
-  // Must have both 'Expired' label and bg-critical class for RH expired state
+  const stateSrc = readFileSync(
+    resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'lib', 'connection-state.ts'),
+    'utf8',
+  )
+  // The derivation returns 'Session expired' + dotColor 'red' for expired RH sessions
   expect(
-    /rhExpired\s*\?.*['"]Expired['"]/.test(src),
-    'RH dot must show "Expired" label when session is expired (BKL-UI-06)',
+    stateSrc.includes("label: 'Session expired'") && stateSrc.includes("dotColor: 'red'"),
+    'deriveRhCard must produce "Session expired" label with red dotColor (BKL-UI-06)',
   ).toBe(true)
+  // SetupPage must map dotColor 'red' to bg-critical
   expect(
-    /rhExpired\s*\?.*bg-critical/.test(src),
-    'RH dot must use bg-critical (red) for expired state (BKL-UI-06)',
+    /dotColor\s*===\s*'red'\s*\?\s*'bg-critical'/.test(setupSrc),
+    'SetupPage must map dotColor red → bg-critical (BKL-UI-06)',
   ).toBe(true)
 })
 
@@ -79,19 +88,29 @@ test('REG-UI06-05: SetupPage Tableau indicator checks reachable field', () => {
 })
 
 test('REG-UI06-06: SetupPage Tableau indicator checks ccsp scraper state', () => {
-  const src = readFileSync(
+  // BKL-CONN-ARCH-01 (2026-04-26): the inline ccspStatus.state === 'failed'/'stale'
+  // ternaries in SetupPage moved into deriveTableauCard, which now consumes the
+  // ccsp object and decides the data-state branch. The contract is preserved:
+  // 'failed' and 'stale' are still distinct branches, just expressed once in the
+  // derivation instead of repeated in JSX.
+  const stateSrc = readFileSync(
+    resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'lib', 'connection-state.ts'),
+    'utf8',
+  )
+  expect(
+    /ccsp\?\.lastError/.test(stateSrc),
+    'deriveTableauCard must check ccsp.lastError (BKL-UI-06)',
+  ).toBe(true)
+  expect(
+    /ccsp\?\.state\s*===\s*'stale'/.test(stateSrc),
+    'deriveTableauCard must check ccsp.state for stale (BKL-UI-06)',
+  ).toBe(true)
+  // SetupPage wires deriveTableauCard
+  const setupSrc = readFileSync(
     resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'pages', 'SetupPage.tsx'),
     'utf8',
   )
-  // Must check for both 'failed' and 'stale' states
-  expect(
-    /ccspStatus\?\.state\s*===\s*'failed'/.test(src),
-    'Tableau indicator must check ccspStatus.state for failed (BKL-UI-06)',
-  ).toBe(true)
-  expect(
-    /ccspStatus\?\.state\s*===\s*'stale'/.test(src),
-    'Tableau indicator must check ccspStatus.state for stale (BKL-UI-06)',
-  ).toBe(true)
+  expect(setupSrc.includes('deriveTableauCard(')).toBe(true)
 })
 
 test('REG-UI06-07: /api/auth/salesforce/status returns syncError field', async () => {

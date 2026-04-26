@@ -9,6 +9,8 @@ import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import { BootstrapConfigBlock } from '../components/BootstrapConfigBlock'
 import { useBootstrapConfig } from '../hooks/useBootstrapConfig'
+// BKL-CONN-ARCH-01: two-axis connection state derivation
+import { deriveRhCard, deriveSfCard, deriveTableauCard } from '../lib/connection-state'
 import {
   AlertCircle,
   AlertTriangle,
@@ -1459,6 +1461,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
     selectedPod,
     setSelectedPod,
     sfReportId,
+    setSfReportIdOverride,
     podSfReportMap,
     podLabels,
     territorySheetUrl,
@@ -1974,6 +1977,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
           selectedPod={selectedPod}
           setSelectedPod={setSelectedPod}
           sfReportId={sfReportId}
+          onSfReportIdChange={setSfReportIdOverride}
           podSfReportMap={podSfReportMap}
           podLabels={podLabels}
           territorySheetUrl={territorySheetUrl}
@@ -2544,14 +2548,16 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
       if (currentStatus.loginInProgress) {
         // Login already running — just open VNC tab, skip POST
         loginStartedRef.current = true
-        popupRef.current = window.open(getVncUrl(), '_blank')
+        // BKL-CONN-ARCH-01: open as named popup window, not '_blank' tab
+        popupRef.current = window.open(getVncUrl(), 'rh-vnc', 'width=1280,height=900')
       } else {
         // Start a new login, then open VNC tab
         await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(e => console.warn('[rh-auth] start failed:', e))
         // Always set after explicit login start — flag is reset to false at top of handleConnect
         // so mount-time stale-session guard (BKL-UX63) is not affected
         loginStartedRef.current = true
-        popupRef.current = window.open(getVncUrl(), '_blank')
+        // BKL-CONN-ARCH-01: open as named popup window, not '_blank' tab
+        popupRef.current = window.open(getVncUrl(), 'rh-vnc', 'width=1280,height=900')
       }
       // Poll will detect completion and flip to Connected
     } catch {
@@ -2870,6 +2876,27 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     } catch { sfVncRef.current?.close(); sfVncRef.current = null; setSfConnecting(false); return }
 
     sfPollRef.current = setInterval(async () => {
+      // BKL-CONN-WINDOW-CLOSED-01: User closed VNC popup — do final status
+      // check and stop polling so the Connect spinner doesn't hang forever.
+      if (sfVncRef.current?.closed) {
+        if (sfPollRef.current) clearInterval(sfPollRef.current)
+        sfPollRef.current = null
+        sfVncRef.current = null
+        try {
+          const res = await fetch('/api/auth/salesforce/status')
+          const status = await res.json()
+          setSfStatus(status)
+          if (status.hasSession && !status.sessionExpired && !status.loginInProgress) {
+            setSfConnecting(false)
+            fetch('/api/scrape/salesforce', { method: 'POST' }).catch(e => console.error('[sf-auth] post-login sync failed:', e))
+          } else {
+            setSfConnecting(false)
+          }
+        } catch {
+          setSfConnecting(false)
+        }
+        return
+      }
       try {
         const res = await fetch('/api/auth/salesforce/status')
         const status = await res.json()
@@ -2915,14 +2942,31 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       }
       if (currentStatus.loginInProgress) {
         rhLoginStartedRef.current = true
-        rhVncRef.current = window.open(getVncUrl(), '_blank')
+        // BKL-CONN-ARCH-01: open as named popup window, not '_blank' tab — matches SF/Tableau handlers
+        rhVncRef.current = window.open(getVncUrl(), 'rh-vnc', 'width=1280,height=900')
       } else {
         await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(e => console.warn('[rh-auth] start failed:', e))
         rhLoginStartedRef.current = true
-        rhVncRef.current = window.open(getVncUrl(), '_blank')
+        // BKL-CONN-ARCH-01: open as named popup window, not '_blank' tab — matches SF/Tableau handlers
+        rhVncRef.current = window.open(getVncUrl(), 'rh-vnc', 'width=1280,height=900')
       }
       // Poll until connected
       rhConnectPollRef.current = setInterval(async () => {
+        // BKL-CONN-WINDOW-CLOSED-02: User closed VNC popup — do final status
+        // check and stop polling so the Connect spinner doesn't hang forever.
+        if (rhVncRef.current?.closed) {
+          if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
+          rhConnectPollRef.current = null
+          rhVncRef.current = null
+          try {
+            const d = await fetch('/api/auth/redhat/status').then(r => r.json())
+            setRhStatus(d)
+            setRhConnecting(false)
+          } catch {
+            setRhConnecting(false)
+          }
+          return
+        }
         try {
           const d = await fetch('/api/auth/redhat/status').then(r => r.json())
           setRhStatus(d)
@@ -3009,6 +3053,11 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     // Fallback: poll session-status every 5s — catches cases where wait-for-login
     // detection misses the login (SSO URL variation, slow redirect chain)
     tableauPollRef.current = setInterval(async () => {
+      // BKL-CONN: detect user-closed VNC window — abort flow cleanly
+      if (tableauVncRef.current?.closed) {
+        resolveLogin(false)
+        return
+      }
       try {
         const res = await fetch('/api/bootstrap/tableau/session-status?force=true')
         const status = await res.json()
@@ -3222,7 +3271,45 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
 
   const allStatusesLoaded = rhStatus !== null && sfStatus !== null && ccspStatus !== null && tableauStatus !== null
   const anyErrors = (rhStatus && !rhConnected) || (sfStatus && !sfConnected) || (ccspStatus && !!ccspStatus.lastError) || (tableauStatus && !tableauConnected)
-  const connectedDataSources = [rhConnected, sfConnected, tableauConnected].filter(Boolean).length
+
+  // BKL-CONN-ARCH-01: two-axis card states (session × data) — pure derivation
+  // from raw status. Replaces ad-hoc ternaries that conflated session validity
+  // with data freshness (caused Tableau "Stale" with valid SSO, SF "Expired"
+  // from a single transient sync error).
+  const rhCard = deriveRhCard(
+    {
+      hasSession: rhStatus?.hasSession ?? false,
+      sessionExpired: rhStatus?.sessionExpired ?? false,
+      lastScraped: rhStatus?.lastScraped ?? null,
+      loginInProgress: rhStatus?.loginInProgress,
+      liveReachable: rhStatus?.liveReachable,
+      lastAuthenticatedAt: (rhStatus as any)?.lastAuthenticatedAt ?? null,
+    },
+    scraperRunning.rh ?? false
+  )
+  const sfCard = deriveSfCard(
+    {
+      hasSession: sfStatus?.hasSession ?? false,
+      sessionExpired: sfStatus?.sessionExpired,
+      syncError: sfStatus?.syncError,
+      lastSync: sfStatus?.lastSync,
+      loginInProgress: (sfStatus as any)?.loginInProgress,
+      lastAuthenticatedAt: (sfStatus as any)?.lastAuthenticatedAt ?? null,
+    },
+    (scraperRunning as any).sf ?? false
+  )
+  const tableauCard = deriveTableauCard(
+    tableauStatus,
+    ccspStatus
+      ? { state: ccspStatus.state ?? null, lastScrape: ccspStatus.lastScrape ?? null, lastError: ccspStatus.lastError, running: ccspStatus.running }
+      : null,
+    tableauConnecting,
+    (tableauStatus as any)?.lastAuthenticatedAt ?? null
+  )
+  const connectedCount = [rhCard, sfCard, tableauCard].filter(c => c.countsAsConnected).length
+
+  // Legacy counter — preserved for the existing onHealthChange callback contract
+  const connectedDataSources = connectedCount
 
   useEffect(() => {
     if (!onHealthChange) return
@@ -3244,7 +3331,13 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       {/* ── CONNECTIONS ── */}
       {!hideConnections && <div>
         <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Connections</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 min-[1440px]:grid-cols-4 gap-3">
+        {/* BKL-CONN-ARCH-01: ordering hint until all three primary sources connected */}
+        {connectedCount < 3 && (
+          <p className="text-xs text-text-secondary mb-3">
+            Connect your data sources in order — each one builds on the previous.
+          </p>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 min-[1440px]:grid-cols-3 gap-3">
 
           {/* Red Hat Portal */}
           {/* BKL-UX60: Show Connected when hasSession OR scraper running, Connecting when loginInProgress */}
@@ -3267,10 +3360,22 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
                   </>
                 ) : (
                   <>
-                    <span className={`w-2 h-2 rounded-full ${rhSessionActive ? (scraperRunning.rh ? 'bg-warning animate-pulse' : 'bg-success') : rhExpired ? 'bg-critical' : 'bg-surface-active'}`} />
-                    <span className={`text-xs ${rhSessionActive ? (scraperRunning.rh ? 'text-warning' : 'text-success') : rhExpired ? 'text-critical' : 'text-text-secondary'}`}>
-                      {rhSessionActive ? (scraperRunning.rh ? 'Syncing' : rhStatus?.lastScraped ? `Connected · ${timeAgo(rhStatus.lastScraped)}` : 'Connected') : rhExpired ? 'Expired' : 'Not connected'}
-                    </span>
+                    {/* BKL-CONN-ARCH-01: dot + label from rhCard derivation */}
+                    <span className={`w-2 h-2 rounded-full ${rhCard.dotPulse ? 'animate-pulse' : ''} ${
+                      rhCard.dotColor === 'green' ? 'bg-success' :
+                      rhCard.dotColor === 'blue' ? 'bg-blue-400' :
+                      rhCard.dotColor === 'amber' ? 'bg-warning' :
+                      rhCard.dotColor === 'red' ? 'bg-critical' : 'bg-surface-active'
+                    }`} />
+                    <span className={`text-xs ${
+                      rhCard.dotColor === 'green' ? 'text-success' :
+                      rhCard.dotColor === 'blue' ? 'text-blue-400' :
+                      rhCard.dotColor === 'amber' ? 'text-warning' :
+                      rhCard.dotColor === 'red' ? 'text-critical' : 'text-text-secondary'
+                    }`}>{rhCard.label}</span>
+                    {rhCard.secondaryLabel && (
+                      <span className="text-xs text-text-secondary ml-1">{rhCard.secondaryLabel}</span>
+                    )}
                   </>
                 )}
               </div>
@@ -3347,17 +3452,31 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
                 <p className="text-xs text-text-secondary">Pipeline</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${sfConnected ? 'bg-success' : (sfExpired || sfSessionActive) ? 'bg-warning' : 'bg-surface-active'}`} />
-                <span className={`text-xs ${sfConnected ? 'text-success' : (sfExpired || sfSessionActive) ? 'text-warning' : 'text-text-secondary'}`}>
-                  {sfConnected ? (sfStatus?.lastSync ? `Connected · ${timeAgo(sfStatus.lastSync)}` : 'Connected') : sfExpired ? 'Expired' : sfSessionActive ? 'Session Active' : 'Not connected'}
-                </span>
+                {/* BKL-CONN-ARCH-01: dot + label from sfCard derivation */}
+                <span className={`w-2 h-2 rounded-full ${sfCard.dotPulse ? 'animate-pulse' : ''} ${
+                  sfCard.dotColor === 'green' ? 'bg-success' :
+                  sfCard.dotColor === 'blue' ? 'bg-blue-400' :
+                  sfCard.dotColor === 'amber' ? 'bg-warning' :
+                  sfCard.dotColor === 'red' ? 'bg-critical' : 'bg-surface-active'
+                }`} />
+                <span className={`text-xs ${
+                  sfCard.dotColor === 'green' ? 'text-success' :
+                  sfCard.dotColor === 'blue' ? 'text-blue-400' :
+                  sfCard.dotColor === 'amber' ? 'text-warning' :
+                  sfCard.dotColor === 'red' ? 'text-critical' : 'text-text-secondary'
+                }`}>{sfCard.label}</span>
+                {sfCard.secondaryLabel && (
+                  <span className="text-xs text-text-secondary ml-1">{sfCard.secondaryLabel}</span>
+                )}
               </div>
             </div>
             <div className="mt-auto pt-3">
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSfConnect}
-                  disabled={sfConnecting}
+                  /* BKL-CONN-ARCH-01: gate SF on RH being connected (ordering) */
+                  disabled={sfConnecting || !rhCard.countsAsConnected}
+                  title={!rhCard.countsAsConnected ? 'Connect Red Hat Portal first' : undefined}
                   className={`disabled:opacity-40 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${sfConnected ? 'bg-surface-hover hover:bg-surface-active text-white' : 'bg-blue-600/40 hover:bg-blue-600/50 text-blue-300 border border-blue-500/60'}`}
                 >
                   {sfConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
@@ -3387,37 +3506,36 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
                 <p className="text-xs text-text-secondary">CCSP cloud spend</p>
               </div>
               <div className="flex items-center gap-1.5">
-                {tableauConnecting ? (
+                {/* BKL-CONN-ARCH-01: unified state via tableauCard derivation.
+                    Replaces stacked ternaries that conflated CCSP data state
+                    with Tableau session state (caused "Stale" with valid SSO). */}
+                {tableauCard.sessionState === 'authenticating' ? (
                   <>
-                    <Loader2 className="w-2.5 h-2.5 animate-spin text-warning" />
-                    <span className="text-xs text-warning">Connecting</span>
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-blue-400" />
+                    <span className="text-xs text-blue-400">{tableauCard.label}</span>
                   </>
-                ) : tableauStatus === null ? (
+                ) : tableauCard.label === 'Checking…' ? (
                   <>
                     <Loader2 className="w-2.5 h-2.5 animate-spin text-text-secondary" />
-                    <span className="text-xs text-text-secondary">Checking...</span>
-                  </>
-                ) : ccspStatus?.lastError ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-critical" />
-                    <span className="text-xs text-critical">Scrape failed</span>
-                  </>
-                ) : ccspStatus?.state === 'failed' ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-critical" />
-                    <span className="text-xs text-critical">Scraper failed</span>
-                  </>
-                ) : ccspStatus?.state === 'stale' ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-warning" />
-                    <span className="text-xs text-warning">Stale</span>
+                    <span className="text-xs text-text-secondary">{tableauCard.label}</span>
                   </>
                 ) : (
                   <>
-                    <span className={`w-2 h-2 rounded-full ${tableauConnected ? 'bg-success' : 'bg-surface-active'}`} />
-                    <span className={`text-xs ${tableauConnected ? 'text-success' : 'text-text-secondary'}`}>
-                      {tableauConnected ? 'Connected' : 'Not connected'}
-                    </span>
+                    <span className={`w-2 h-2 rounded-full ${tableauCard.dotPulse ? 'animate-pulse' : ''} ${
+                      tableauCard.dotColor === 'green' ? 'bg-success' :
+                      tableauCard.dotColor === 'blue' ? 'bg-blue-400' :
+                      tableauCard.dotColor === 'amber' ? 'bg-warning' :
+                      tableauCard.dotColor === 'red' ? 'bg-critical' : 'bg-surface-active'
+                    }`} />
+                    <span className={`text-xs ${
+                      tableauCard.dotColor === 'green' ? 'text-success' :
+                      tableauCard.dotColor === 'blue' ? 'text-blue-400' :
+                      tableauCard.dotColor === 'amber' ? 'text-warning' :
+                      tableauCard.dotColor === 'red' ? 'text-critical' : 'text-text-secondary'
+                    }`}>{tableauCard.label}</span>
+                    {tableauCard.secondaryLabel && (
+                      <span className="text-xs text-text-secondary ml-1">{tableauCard.secondaryLabel}</span>
+                    )}
                   </>
                 )}
               </div>
@@ -3436,8 +3554,9 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleTableauConnect}
-                  disabled={!rhSessionActive || tableauConnecting}
-                  title={!rhSessionActive ? 'Connect Red Hat Portal first' : undefined}
+                  /* BKL-CONN-ARCH-01: gate Tableau on RH being connected (ordering) */
+                  disabled={!rhCard.countsAsConnected || tableauConnecting}
+                  title={!rhCard.countsAsConnected ? 'Connect Red Hat Portal first' : undefined}
                   className={`disabled:opacity-40 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${tableauConnected ? 'bg-surface-hover hover:bg-surface-active text-white' : 'bg-blue-600/40 hover:bg-blue-600/50 text-blue-300 border border-blue-500/60'}`}
                 >
                   {tableauConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}

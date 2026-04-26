@@ -6656,14 +6656,13 @@ Description: After every successful RH Portal VNC login, server.ts onComplete na
 Decision: DONE — pre-warm block removed. VNC now goes blank immediately after login success (BKL-UX94 behavior preserved). No Supportable references remain in onComplete.
 
 ### BKL-CONN-SF-REPORT-01 | Wizard Step 3 shows "SF Report ID required" with no wizard step to fix it
-Status: 🔴 OPEN
+Status: ✅ DONE
 Priority: P2
 Size: S
 Source: Council review 2026-04-25 — Jason reported Salesforce "Expired" + "SF Report ID required"
-Files: dashboard/src/pages/SetupPage.tsx — Step 3 SF card, Step 2 AE form
-Description: The SF card in Step 3 shows "SF Report ID required — configure in AEs & Customers above" but Step 2 (AEs & Customers) has no visible SF Report ID field for users to fill in. The field exists in the data model (sfReportId on AE) and in the Manage AE form in Step 4, but not in Step 2 during initial wizard flow. New POD setups hit this immediately.
-Can we test: YES — Playwright test: complete Step 2 with a new AE, advance to Step 3, assert "SF Report ID required" message is absent (or that Step 2 prompts for the field).
-Decision: OPEN — needs design consideration for where to surface sfReportId input in wizard flow.
+Files: dashboard/src/components/BootstrapConfigBlock.tsx, dashboard/src/hooks/useBootstrapConfig.ts, dashboard/src/pages/SetupPage.tsx
+Description: sfReportId field now editable in BootstrapConfigBlock when no POD map entry exists. `onSfReportIdChange` callback prop added. Step 3 message updated to "Enter your SF Report ID above, or contact ops if you don't have one." — removes dead-end copy.
+Decision: DONE — shipped 2026-04-26 (connections-stability-council). Regression test REG-CONN-SFREPORT-01 added.
 
 ### BKL-WIZ-04 | Wizard "Set Up AE" 409 race — AE silently not saved when second AE started while first runs
 Status: ✅ DONE 2026-04-26
@@ -6687,33 +6686,166 @@ Can we test: YES — Rook source audit should grep for the specific new variable
 Decision: OPEN — update CLAUDE.md Rook briefing guidance to pass explicit file paths + diff context when changes are uncommitted.
 
 ### BKL-CONN-02 | sf-auth.ts login-complete path still uses fire-and-forget about:blank
-Status: 🔴 OPEN
+Status: ✅ DONE
 Priority: P3
 Size: XS
 Source: Learning reflection 2026-04-26 — Rook noted pre-existing inconsistency during connection council audit
-Files: src/sf-auth.ts — login-complete path (~line 160 after SF auth confirmed)
-Description: The sf-auth.ts login-complete path contains `ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})` — the same fire-and-forget pattern we fixed in rh-auth.ts. This path runs after SF+RH auth is confirmed successful. While less impactful (auth is already done), it's inconsistent with the fix applied to rh-auth.ts and should be aligned.
-Can we test: YES — source pattern test: confirm `await ctx.newPage()` (not .then()) in sf-auth.ts login-complete path.
-Decision: OPEN — minor consistency fix, P3 priority.
+Files: src/sf-auth.ts — login-complete path (lines ~180 and ~205)
+Description: Fire-and-forget `ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})` replaced with awaited try/catch + bringToFront at both completion paths (full success and SF-only). Matches rh-auth.ts pattern.
+Decision: DONE — shipped 2026-04-26 (connections-stability-council). Regression tests REG-CONN-BLANK-01, REG-CONN-BLANK-02 added.
 
 ### BKL-CONN-03 | RH Portal drops permanently when SF login is started (no recovery on timeout)
-Status: 🔴 OPEN
+Status: ✅ DONE
 Priority: P1
 Size: M
 Source: Council investigation 2026-04-26 — Jason observed RH Portal going unconnected after SF login attempt
-Files: src/sf-auth.ts — timeout handler (lines 220-223)
-Description: When SF login starts, closeScrapeContext() at line 92 kills the RH Portal headless browser context. If SF login succeeds (full happy path), adoptScrapeContext() at line 183 re-establishes it. But on timeout (line 220-223), cancel, or partial success (SF only, no RH portal), adoptScrapeContext is never called. RH Portal stays disconnected — user must manually reconnect. Pre-existing behavior, not introduced by recent fixes.
-Fix approach: After SF login timeout/cancel, attempt to reopen a headless browser context with same profileDir. If SSO cookies still valid, portal auto-auths and context is re-adopted. Falls back gracefully if cookies expired.
-Can we test: YES — API test: start SF login, cancel it, GET /api/auth/redhat/status — should still show hasSession:true if pre-existing session was valid.
-Decision: OPEN — needs careful implementation to avoid SingletonLock conflicts.
+Files: src/sf-auth.ts, src/rh-scraper.ts
+Description: `reopenScrapeContextFromAuth(profileDir)` added as public wrapper around `_autoRecover` in rh-scraper.ts. Wired into all 4 failure paths in sf-auth.ts: timeout, cancel, browser-closed catch, SF-only completion path.
+Decision: DONE — shipped 2026-04-26 (connections-stability-council). Regression tests REG-CONN-RECOVERY-01–04 added.
 
 ### BKL-CONN-04 | 1/3 connected counter requires lastScraped — freshly reconnected RH doesn't count immediately
-Status: 🔴 OPEN
+Status: ✅ DONE
 Priority: P2
 Size: S
 Source: Council investigation 2026-04-26 — counter shows lower count than card indicators immediately after reconnect
-Files: dashboard/src/pages/SetupPage.tsx — computeConnected() (line 3665)
-Description: computeConnected() requires lastScraped != null for RH to count (line 3668). After manual RH reconnect, lastScraped is null until scraper runs. User sees "1/3 connected" even though RH card shows green Connected dot. Confusing UX. Similar issue may affect SF (requires lastSync != null).
-Fix approach: computeConnected() could count hasSession && !sessionExpired (without requiring lastScraped) as a weaker "connected" signal, or add a separate "session active" vs "data synced" distinction in the header badge.
-Can we test: YES — source test: check computeConnected logic requires lastScraped; UI test: connect RH, immediately check counter before scraper runs.
-Decision: OPEN — UX decision needed before implementing.
+Files: dashboard/src/lib/connection-state.ts, dashboard/src/pages/SetupPage.tsx
+Description: computeConnected() required lastScraped != null for RH to count. Fixed via two-axis state model: counter now counts `sessionState ∈ {active, aging}` via `countsAsConnected` field — data freshness does not gate the counter.
+Decision: DONE — shipped 2026-04-26 as part of unified connection architecture redesign.
+
+---
+
+### BKL-SEC-CONN-01 | failureCounts reset on server restart — expiry grace period amnesiac
+Status: ✅ DONE 2026-04-26
+Priority: P2
+Size: S
+Source: Rook security scan 2026-04-26 (MEDIUM-1) — connection architecture redesign audit
+Files: src/connections/scrape-outcome.ts — failureCounts (in-memory map)
+Description: `failureCounts` is an in-memory object in scrape-outcome.ts. On server restart, all counts reset to 0. A connection with 1 failure before restart gets a full grace period reset — a real auth expiry can be suppressed across restart boundaries if the server restarts between failures.
+Fix: Added `FAILURE_COUNTS_PATH`, `loadFailureCountsFromDisk()` (reads at startup with 10-min TTL), `persistFailureCounts()` (fire-and-forget writeFile). Hooked into recordScrapeFailure, recordScrapeSuccess, __resetFailureCountsForTests.
+Test: REG-CONN-FAILURE-PERSIST-01 added — confirms persistence functions and call sites present in source.
+Decision: DONE — failureCounts now survives server restarts with 10-min TTL.
+
+### BKL-SEC-CONN-02 | Tableau session-status 5-min TTL cache can mask expiry
+Status: ✅ DONE 2026-04-26
+Priority: P2
+Size: S
+Source: Rook security scan 2026-04-26 (MEDIUM-2) — connection architecture redesign audit
+Files: src/bootstrap-orchestrator.ts — TABLEAU_STATUS_TTL_MS constant
+Description: The `/api/bootstrap/tableau/session-status` endpoint caches responses with a 5-minute TTL. If a Tableau session expires within the TTL window, `sessionValid: true` is returned from cache — Tableau card shows "Connected" until TTL expires. User may not be prompted to re-auth for up to 5 minutes after actual expiry.
+Fix: `TABLEAU_STATUS_TTL_MS` reduced from `5 * 60 * 1000` (300s) to `60 * 1000` (60s).
+Test: REG-CONN-TABLEAU-TTL-01 added — asserts TTL constant ≤ 60000ms.
+Decision: DONE — Tableau session expiry now surfaces within 60s.
+
+### BKL-UX-GRID-01 | Connections grid declares 4 columns at ≥1440px but only 3 cards exist
+Status: ✅ DONE 2026-04-26
+Priority: P3
+Size: XS
+Source: Quinn QA pass 2 2026-04-26 — visual review of Step 3 card layout
+Files: dashboard/src/pages/SetupPage.tsx — Connections section grid class
+Description: The card container uses `min-[1440px]:grid-cols-4` but only 3 connection cards exist (RH Portal, Salesforce, Tableau). On wide displays (≥1440px) the grid renders 4 columns with an empty 4th slot — likely a remnant from when a Supportable card existed.
+Fix: Changed `min-[1440px]:grid-cols-4` to `min-[1440px]:grid-cols-3`.
+Test: REG-UX-GRID-01 added — confirms grid-cols-3 present and grid-cols-4 absent in SetupPage source.
+Decision: DONE — connections grid correctly sized for 3 cards.
+
+### BKL-CONN-STARTUP-SCRAPE-01 | SF startup scrape sets sessionExpired=true seconds after fresh login
+Status: ✅ DONE
+Priority: P0
+Size: S
+Source: Jason report 2026-04-26 — "session expired" immediately after successful SF login
+Files: src/scraper-manager.ts — runSfSyncForAes(), test/regression/ux.spec.ts
+Description: Container startup queues an SF scrape before any session exists. The scraper opened its own headless persistent context, navigated to the SF report URL, got stuck at the SF login page, and waited 120s for `lightning.force.com`. When the user logged in via the headed browser, `adoptSfContext` switched the module-level `_context` but the in-flight headless page kept waiting. After 120s, it threw `SfSessionExpiredError` → `_sfSessionExpired = true`, overwriting the successful login. The `resetAllCircuitBreakers` fix (#BKL-CONN-VNC-CLOSE-01) cleared `_sfSessionExpired = false` at login time, but the in-flight scrape set it back to `true` seconds later.
+Fix: Guard at top of `runSfSyncForAes`: `if (!getSfContext()) return` — skips SF sync immediately when no session, preventing the startup scrape from ever attempting navigation without a live context.
+Test: REG-CONN-NO-SESSION-GUARD-01 added — confirms guard is present before `_sfSyncRunning` check.
+Decision: DONE — one guard added, regression test added, both test and production rebuilt.
+
+### BKL-CONN-VNC-CLOSE-01 | SF VNC popup never closes after successful login
+Status: ✅ DONE
+Priority: P0
+Size: XS
+Source: Jason report 2026-04-26 — VNC still open after SF SSO completes
+Files: src/scraper-manager.ts — resetAllCircuitBreakers(), test/regression/ux.spec.ts
+Description: `_sfSessionExpired` in scraper-manager.ts is set true on scrape failure. `resetAllCircuitBreakers()` (called by sf-auth.ts after auth completes) only reset circuit breaker objects — NOT `_sfSessionExpired`. The `/api/auth/salesforce/status` endpoint spreads `getSfAuthStatus()` then OVERRIDES `sessionExpired` with `_sfSessionExpired`. Frontend condition `hasSession && !sessionExpired` evaluates false, so VNC close never fires.
+Fix: Added `_sfSessionExpired = false` inside `resetAllCircuitBreakers()`.
+Test: REG-CONN-RESET-EXPIRED-01 added to test/regression/ux.spec.ts — confirms `_sfSessionExpired = false` present in function body.
+Decision: DONE — one-line fix, regression test added, rebuilt.
+
+### BKL-CONN-DATA-RESET-01 | SF shows "Session expired" immediately after data-only reset
+Status: ✅ DONE 2026-04-26
+Priority: P1
+Size: S
+Source: Jason report 2026-04-26 — data-only wipe causes SF tile to show "Session expired" even though browser session is still valid
+Files: src/scraper-manager.ts — /api/auth/salesforce/status handler
+Description: After a data-only reset, `sf-session.json` is deleted → `hasSession: false`. But `_sfSessionExpired` is still `true` from a prior scrape failure (in-memory). The status endpoint unconditionally overrode `sessionExpired` with `_sfSessionExpired`, so the UI showed "Session expired" even when no session existed to expire. Root cause: the `sessionExpired` field is only semantically meaningful when a session exists (`hasSession: true`).
+Fix: Captured `getSfAuthStatus()` result before spread; gated `sessionExpired` on `sfAuthStatus.hasSession ? _sfSessionExpired : false`. When `hasSession: false`, always returns `sessionExpired: false` → UI shows "Not connected" + "Connect" button, not misleading "Session expired."
+Test: REG-CONN-DATA-RESET-01 added — asserts conditional sessionExpired pattern in scraper-manager source.
+Decision: DONE — surgical status endpoint fix. The deeper sf-scraper misclassification (SfSessionExpiredError on non-login-page failures) is a separate P2 item to address in a future pass.
+
+### BKL-CONN-VNC-TABLEAU-01 | Tableau VNC shows black screen when Connect clicked
+Status: ✅ DONE 2026-04-26
+Priority: P0
+Size: XS
+Source: Jason report 2026-04-26 — VNC black screen during Tableau SSO redirect chain
+Files: src/bootstrap-orchestrator.ts (open-login handler), test/regression/ux.spec.ts
+Description: `POST /api/bootstrap/tableau/open-login` called `page.bringToFront()` and the about:blank cleanup loop AFTER `page.goto()`. With `waitUntil: 'domcontentloaded'` the goto waited for the full SSO redirect chain before returning (~30s+), leaving VNC black the entire time. When goto timed out, the catch block fired and `bringToFront()` was never called.
+Fix: Moved `bringToFront()` + about:blank cleanup to BEFORE `page.goto()`. Changed `waitUntil` from `'domcontentloaded'` to `'commit'` — fires on first response bytes, returning immediately when Tableau starts loading without waiting for the full SSO chain.
+Test: REG-CONN-VNC-TABLEAU-01 added to test/regression/ux.spec.ts — asserts `bringToFront()` index < `page.goto(` index in source and `waitUntil: 'commit'` is present.
+Decision: DONE — fix confirmed by Jason (Tableau loaded directly to CCSP page). All 66 REG-CONN tests pass.
+
+### BKL-CONN-SF-CLASSIFY-01 | SfSessionExpiredError thrown on non-login-page failures
+Status: ✅ DONE 2026-04-26
+Priority: P1
+Size: S
+Source: Serena council audit 2026-04-26 — connection stability pass
+Files: src/sf-scraper.ts — SfSessionExpiredError throw site (lines 462–475)
+Description: `SfSessionExpiredError` was thrown whenever the scraper failed to reach `lightning.force.com` after a 120s wait — regardless of what page the browser was actually on. This bypassed scrape-outcome.ts's 2-failure grace period (isAuthError → shouldExpire immediately). Network timeouts, profile locks, and redirect-chain hangs were misclassified as session expiry.
+Fix: Before throwing, checks `page.url()` for login-page indicators. `my.salesforce.com` or `sso.redhat.com` → genuine session expiry → `SfSessionExpiredError`. Any other URL → transient failure → generic `Error` (triggers grace-period path via failureCounts++).
+Test: REG-CONN-SF-CLASSIFY-01 added — asserts login-page URL check exists before SfSessionExpiredError throw, and that a non-SessionExpired else branch exists.
+Decision: DONE — 76/76 REG-CONN tests pass. Grace period now correctly absorbs transient navigation failures.
+
+### BKL-CONN-SF-CLASSIFY-02 | SfSessionExpiredError URL check missing login.salesforce.com domain
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Serena council audit 2026-04-26 — edge case from BKL-CONN-SF-CLASSIFY-01 fix
+Files: src/sf-scraper.ts — classifySfNavOutcome URL check
+Description: The URL-discriminating block at sf-scraper.ts:~467 checks for `my.salesforce.com` and `sso.redhat.com`. It does not cover `login.salesforce.com` (generic SF login domain used as fallback if the MyDomain redirect fails) or custom login subdomains. An SSO error page hosted on `redhat.com` (not `sso.redhat.com`) would also be treated as a transient failure rather than session expiry. Low probability, but worth closing.
+Fix: Add `login.salesforce.com` to the isLoginPage check. Consider extracting a `classifySfNavOutcome(url)` pure function so the allowlist is testable without Playwright.
+
+### BKL-TEST-PRODUCTS-HUB-01 | No regression tests for Product Hub page (/dashboard/products)
+Status: OPEN
+Priority: P3
+Size: S
+Source: Session 2026-04-26 — discovered during test env verification after data wipe
+Files: test/ui/ — new spec needed
+Description: The Product Hub page (`ProductsPage.tsx`) has no Playwright tests. We test per-customer intel stubs (`product-intel.spec.ts`) and the product filter chips on the main dashboard (`product-filter-coverage.spec.ts`), but nothing verifies that `/dashboard/products` renders the 7 TerritoryRadarCards, handles the empty-features state correctly, or shows the correct loading skeleton. A test covering the populated vs. empty state would catch rendering regressions after data wipes.
+Fix: Add `test/ui/product-hub.spec.ts` with mocked `/api/products` (7 products) + `/api/products/features` (empty and populated) asserting: (a) 7 cards visible, (b) empty features shows correct empty state per card, (c) territory summaries fetch fires for each product slug.
+
+### BKL-FEAT-STARTUP-SEED-01 | Product feature caches not seeded at startup — hub empty on fresh install
+Status: OPEN
+Priority: P2
+Size: S
+Source: Session 2026-04-26 — post-wipe test env investigation
+Files: src/background-scheduler.ts (~line 1492) — startup seeder
+Description: The startup seeder (15s after boot) runs `refreshAllProducts()` to seed missing product summaries, but never runs `refreshAllFeatures()`. Feature caches (`data/cache/product-intel/{slug}-features.json`) are only populated by: (1) manual Refresh button click, (2) slide ingest auto-trigger, or (3) Sunday 6am ET weekly schedule. A brand new user after bootstrapping AEs always has an empty Product Hub feature radar until Sunday or manual intervention.
+Fix: After `refreshAllProducts()` completes in the startup seeder, check if feature caches are missing for any product. If so, fire `refreshAllFeatures()` for those products as a follow-on fire-and-forget task. Feature extraction requires Gemini + GOOGLE_CLOUD_PROJECT to be set — guard with the same env check already in `product-feature-radar.ts:347`. Target: feature radar populated within ~5 minutes of first boot. Note: BKL-UX-PRODUCT-FOLDER-CONFIG-01 is a dependency — feature extraction is richer when the slide corpus is present; seed features AFTER corpus auto-ingest check completes.
+
+### BKL-UX-PRODUCT-FOLDER-CONFIG-01 | Product intel corpus folders should live under existing POD parentFolderId — no separate config needed
+Status: OPEN
+Priority: P2
+Size: M
+Source: Session 2026-04-26 — product hub folder flow investigation
+Files: src/product-intel-routes.ts, src/product-release-radar.ts, data/config/product-intel-config.json, src/bootstrap-orchestrator.ts
+Description: The product intel slide corpus currently stores a separate `driveParentFolderId` in `product-intel-config.json` that is completely independent of the AE bootstrap `parentFolderId`. This is wrong — the product intel subfolders (rhel/, ocp/, aap/, etc.) should live directly under the same `parentFolderId` that is validated when the first AE/POD is set up in the wizard. That folder is already known and shared by all AEs in the POD. Having a second, separately-configured parent folder is unnecessary complexity and breaks the "one folder to manage" mental model.
+Additionally: file pickup is currently manual-only (user must click "Refresh Slides"). When files are added or modified in a product subfolder, the system should auto-detect the change at startup (compare Drive file modifiedTime against cached corpus timestamp) and re-ingest without user intervention.
+The slide corpus serves TWO purposes — both degrade without it: (1) feature radar extraction (GA/Tech Preview/Roadmap items), and (2) per-customer product intel generation where slidesText is literally labeled "primary source" in the Gemini prompt for relevance scores, talking points, and expansion opportunities.
+Fix: (a) Remove `driveParentFolderId` from `product-intel-config.json`. Replace with a read from POD config `parentFolderId` (already persisted). Bootstrap pre-flight and `setup-drive-folders` route both source from there. (b) At startup, after product summary seeding, check each product's Drive folder modifiedTime against the cached corpus — if any file is newer, re-ingest automatically (fire-and-forget). (c) No UI field needed — the folder is already configured by the AE wizard step.
+
+### BKL-UX-FOLDER-LOCK-01 | Parent Drive Folder should lock after first bootstrap — not re-asked per AE or per POD run
+Status: OPEN
+Priority: P1
+Size: S
+Source: Jason 2026-04-26 — bootstrapping AEs one at a time (or adding single AEs after a POD bootstrap) re-asks for folder each time, creating split-config risk
+Files: dashboard/src/components/BootstrapConfigBlock.tsx, dashboard/src/pages/SetupPage.tsx
+Description: `BootstrapConfigBlock` always starts with an empty folder input (intentional — BKL-UX84 prevents settings.json from silently pre-filling). But `defaultParentFolderId`, derived from existing AE server records, is a known-good validated source — not settings.json. When AEs already exist with a `parentFolderId`, the component still shows an editable blank input. If the user pastes a different folder URL for AE #2 it validates fine (any accessible Drive folder passes), saves to settings.json, and creates AE #2's Drive folder under a different parent than AE #1. Result: split config — AEs pointing to different Drive trees with no warning.
+Rule (first-wins, applies to both tabs): First bootstrap — whether a single AE or a full POD — validates and locks the `parentFolderId` permanently. All subsequent bootstraps (single AEs added later, additional POD runs) use that same folder without asking. Order does not matter: POD first → single AEs added later inherit the POD folder. Single AE first → full POD bootstrap later uses that AE's folder.
+Fix: When `defaultParentFolderId` is non-empty (sourced from existing AE records, not settings.json), render the folder field locked/read-only showing the folder name + a Drive link. Auto-fire `onParentFolderChange(defaultParentFolderId)` immediately so the parent's `podBookingsFolderId` and `podFolderValidated` are set without a manual Validate click — applies to both the single-AE tab and the full-POD tab. Add an explicit "Change folder" escape hatch (warning: "Changing this will create new AE folders under a different parent — existing AEs will be unaffected but the config will be inconsistent") for the rare genuine change case. When no AEs exist (fresh install), show the editable input as-is — BKL-UX84 still applies to the very first bootstrap.

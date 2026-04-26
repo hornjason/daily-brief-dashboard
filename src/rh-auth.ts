@@ -14,7 +14,7 @@ import { adoptSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
-import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
+import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
 import { recordSessionEstablished } from './settings-api.ts'
 
 const RH_PORTAL_URL = 'https://access.redhat.com/support/cases/#/case/list'
@@ -52,10 +52,14 @@ export function isPortalUrl(url: string): boolean {
 }
 
 async function cleanupBrowser(): Promise<void> {
+  // BKL-CONN: cleanupBrowser ONLY closes the browser context. Module-level flags
+  // (loginInProgress, loginTimedOut) are caller-owned. Each call site must set
+  // the flags it needs BEFORE invoking cleanupBrowser. Resetting flags here
+  // re-opened a race window during the awaited ctx.close() where a concurrent
+  // start request could pass the loginInProgress guard.
   const ctx = activeContext
   activeContext = null
   activePage = null
-  loginInProgress = false
   if (ctx) {
     try {
       // Close all open pages before closing the context to prevent orphaned blank tabs in VNC
@@ -186,6 +190,9 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
   // error if a previous Chromium was killed uncleanly or the scrape context was force-closed.
   try { unlinkSync(join(profileDir, 'SingletonLock')) } catch { /* file doesn't exist — fine */ }
 
+  // Sanitize Chromium profile preferences to suppress the "Restore pages?" bubble
+  sanitizeChromiumProfile(profileDir)
+
   // launchPersistentContext creates profileDir if it doesn't exist
   let context: BrowserContext
   let page: Page
@@ -266,7 +273,6 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
 
           recordSessionEstablished('rh-portal')
           recordSessionEstablished('salesforce')
-          recordSessionEstablished('tableau')
 
           // Cold-start recovery: reset all circuit breakers that accumulated
           // failures while auth was stale (e.g. overnight laptop sleep)
@@ -290,14 +296,18 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
       } catch {
         // Page closed by user or navigation error
         console.log('[rh-auth] Browser closed or navigation error — cleaning up')
+        // Caller-owned flags: cleanupBrowser no longer resets these.
+        loginInProgress = false
         await cleanupBrowser()
         return
       }
     }
 
-    // Timed out
+    // Timed out — caller-owned flags: cleanupBrowser no longer resets these.
+    // Keep loginTimedOut = true so UI can surface timeout state; clear in-progress.
     console.log('[rh-auth] Login timed out after 5 minutes')
     loginTimedOut = true
+    loginInProgress = false
     await cleanupBrowser()
   })()
 }
@@ -306,6 +316,9 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
  * Cancel an in-progress login session.
  */
 export async function cancelLoginBrowser(): Promise<void> {
+  // Caller-owned flags: cleanupBrowser no longer resets these.
+  loginInProgress = false
+  loginTimedOut = false
   await cleanupBrowser()
 }
 

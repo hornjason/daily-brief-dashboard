@@ -974,6 +974,20 @@ test.describe('REG-CONN: Connection VNC flow source patterns', () => {
     expect(src).toMatch(/await sfPage\.goto\(SF_LOGIN_URL/)
   })
 
+  test('REG-CONN-SF-EXPIRED-01: startSfLoginBrowser clears sfSessionExpired before loginTimedOut = false', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'sf-auth.ts'), 'utf8')
+    // sfSessionExpired must be cleared at the top of startSfLoginBrowser before loginTimedOut = false,
+    // so the dashboard does not show "Salesforce session expired" while login is actively in progress.
+    expect(src).toMatch(/sfSessionExpired = false[\s\S]{0,80}loginTimedOut = false/)
+  })
+
+  test('REG-CONN-SF-EXPIRED-02: SF-only fallback else branch clears sfSessionExpired', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'sf-auth.ts'), 'utf8')
+    // The SF-only fallback path (RH portal didn't load) must also clear sfSessionExpired,
+    // otherwise getSfAuthStatus returns sessionExpired:true and the VNC popup never closes.
+    expect(src).toMatch(/RH portal did not load after SF login[\s\S]*?sfSessionExpired = false/)
+  })
+
   test('REG-CONN-CCSP-01: SetupPage.tsx does not immediately close VNC after pre-flight valid check', async () => {
     const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'dashboard', 'src', 'pages', 'SetupPage.tsx'), 'utf8')
     // The immediate close block (close() followed immediately by null and return inside session-status check) must be gone
@@ -999,5 +1013,382 @@ test.describe('REG-CONN: Connection VNC flow source patterns', () => {
     const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'bootstrap-orchestrator.ts'), 'utf8')
     expect(src).toContain("p.url() === 'about:blank'")
     expect(src).toContain('p.close()')
+  })
+
+  test('REG-CONN-VNC-TABLEAU-01: open-login brings VNC to front BEFORE goto and uses waitUntil:commit', async () => {
+    // BKL-CONN-VNC-TABLEAU-01: VNC was showing a black screen because bringToFront()
+    // ran AFTER page.goto(), and waitUntil:'domcontentloaded' was timing out at 30s
+    // on the full Tableau SSO redirect chain. Fix reorders so bringToFront() runs
+    // before goto, and switches waitUntil to 'commit' (fires on first response bytes).
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'bootstrap-orchestrator.ts'), 'utf8')
+
+    // Locate the open-login handler body
+    const routeStart = src.indexOf("app.post('/api/bootstrap/tableau/open-login'")
+    expect(routeStart, 'open-login route must exist in bootstrap-orchestrator.ts').toBeGreaterThan(-1)
+    // The handler ends at the next app.post/app.get registration
+    const nextRouteIdx = src.indexOf('app.', routeStart + 1)
+    const handlerBody = nextRouteIdx > routeStart ? src.slice(routeStart, nextRouteIdx) : src.slice(routeStart)
+
+    // bringToFront() must appear BEFORE page.goto( in the handler body
+    const bringIdx = handlerBody.indexOf('bringToFront()')
+    const gotoIdx = handlerBody.indexOf('page.goto(')
+    expect(bringIdx, 'bringToFront() must be present in open-login handler').toBeGreaterThan(-1)
+    expect(gotoIdx, 'page.goto( must be present in open-login handler').toBeGreaterThan(-1)
+    expect(
+      bringIdx < gotoIdx,
+      'bringToFront() must appear BEFORE page.goto( so VNC shows the browser immediately, not a black screen during SSO redirect',
+    ).toBe(true)
+
+    // The goto call must use waitUntil: 'commit' (not 'domcontentloaded')
+    expect(
+      handlerBody,
+      "open-login goto must use waitUntil: 'commit' to return on first response bytes",
+    ).toMatch(/waitUntil:\s*['"]commit['"]/)
+    expect(
+      handlerBody,
+      "open-login goto must NOT use waitUntil: 'domcontentloaded' — it timed out on Tableau SSO redirect chain",
+    ).not.toMatch(/waitUntil:\s*['"]domcontentloaded['"]/)
+  })
+})
+
+// ── BKL-CONN connection stability fixes (2026-04-26) ────────────────────────
+test.describe('Connection stability — BKL-CONN', () => {
+  const projectRoot = resolve(import.meta.dirname!, '..', '..')
+
+  test('REG-CONN-RECOVERY-01: reopenScrapeContextFromAuth exported from rh-scraper.ts', async () => {
+    const src = readFileSync(join(projectRoot, 'src/rh-scraper.ts'), 'utf-8')
+    expect(src).toContain('export async function reopenScrapeContextFromAuth')
+  })
+
+  test('REG-CONN-RECOVERY-02: sf-auth timeout path calls reopenScrapeContextFromAuth', async () => {
+    const src = readFileSync(join(projectRoot, 'src/sf-auth.ts'), 'utf-8')
+    expect(src).toContain('reopenScrapeContextFromAuth(profileDir)')
+    expect(src).toContain('loginTimedOut = true')
+  })
+
+  test('REG-CONN-RECOVERY-03: cancelSfLoginBrowser accepts profileDir param', async () => {
+    const src = readFileSync(join(projectRoot, 'src/sf-auth.ts'), 'utf-8')
+    expect(src).toMatch(/cancelSfLoginBrowser\s*\(\s*profileDir\s*:\s*string/)
+  })
+
+  test('REG-CONN-BLANK-01: sf-auth success path uses awaited blank tab', async () => {
+    const src = readFileSync(join(projectRoot, 'src/sf-auth.ts'), 'utf-8')
+    expect(src).toContain('await blankPage.bringToFront()')
+    // Ensure old fire-and-forget pattern is gone
+    expect(src).not.toContain("ctx.newPage().then(p => p.goto('about:blank'))")
+  })
+
+  test('REG-CONN-YELLOW-01: RH card session-active first-sync state via deriveRhCard', async () => {
+    // BKL-CONN-ARCH-01 (2026-04-26) replaced the inline "Session Active" yellow ternary
+    // with deriveRhCard's two-axis state: an active session with no scrape yet renders
+    // as "Connected — first sync…" with a pulsing blue dot. The yellow "Session Active"
+    // label is gone — its purpose is now expressed via {sessionState:'active', dataState:'never'}.
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(src).toContain('rhCard.label')
+    expect(src).toContain("import { deriveRhCard, deriveSfCard, deriveTableauCard }")
+  })
+
+  test('REG-CONN-SFREPORT-01: sfReportId field editable when no POD map entry', async () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/components/BootstrapConfigBlock.tsx'), 'utf-8')
+    expect(src).toContain('onSfReportIdChange')
+    expect(src).toContain('podSfReportMap')
+  })
+})
+
+// ── BKL-CONN-ARCH-01 connection architecture redesign (2026-04-26) ──────────
+test.describe('Connection Architecture — Unified State Model (BKL-CONN-ARCH-01)', () => {
+  const projectRoot = resolve(import.meta.dirname!, '..', '..')
+
+  test('REG-ARCH-01: deriveRhCard / deriveSfCard / deriveTableauCard exported from connection-state.ts', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/lib/connection-state.ts'), 'utf-8')
+    expect(src).toContain('export function deriveRhCard')
+    expect(src).toContain('export function deriveSfCard')
+    expect(src).toContain('export function deriveTableauCard')
+    expect(src).toContain('countsAsConnected')
+  })
+
+  test('REG-ARCH-02: RH Portal window.open uses popup features not _blank', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(src).not.toContain("window.open(getVncUrl(), '_blank')")
+    expect(src).toContain("'rh-vnc', 'width=1280,height=900'")
+  })
+
+  test('REG-ARCH-03: Tableau "Stale" label not used as primary card label', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    // Old pattern: ccspStatus?.state === 'stale' → "Stale" text directly in JSX.
+    // New pattern: deriveTableauCard handles this and returns "Connected — refreshing".
+    expect(src).not.toMatch(/>Stale<\/span>/)
+  })
+
+  test('REG-ARCH-04: scrape-outcome.ts exports recordScrapeFailure with grace period', () => {
+    const src = readFileSync(join(projectRoot, 'src/connections/scrape-outcome.ts'), 'utf-8')
+    expect(src).toContain('export function recordScrapeFailure')
+    expect(src).toContain('failureCounts[id] >= 2')
+    expect(src).toContain('isAuthSignal')
+  })
+
+  test('REG-ARCH-05: useVncLogin hook has window.closed detection', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/hooks/useVncLogin.ts'), 'utf-8')
+    expect(src).toContain('vncRef.current?.closed')
+    expect(src).toContain("'width=1280,height=900'")
+  })
+
+  test('REG-ARCH-06: Step 3 ordering copy present', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(src).toContain('Connect your data sources in order')
+  })
+
+  test('REG-ARCH-07: SF Connect button disabled when RH not connected', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(src).toContain('rhCard.countsAsConnected')
+  })
+
+  test('REG-ARCH-08: session aging threshold is 7 days', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/lib/connection-state.ts'), 'utf-8')
+    expect(src).toContain('7 * 24 * 60 * 60 * 1000')
+    expect(src).toContain('aging')
+  })
+
+  test('REG-ARCH-09: scraper-manager.ts uses typed _sfSessionExpired flag, not string match', () => {
+    const src = readFileSync(join(projectRoot, 'src/scraper-manager.ts'), 'utf-8')
+    expect(src).toContain('_sfSessionExpired')
+    // The old string-match form must be gone
+    expect(src).not.toContain("_sfSyncLastError?.toLowerCase().includes('session expired')")
+  })
+
+  test('REG-ARCH-10: scraper-manager.ts wires recordScrapeFailure for grace-period tracking', () => {
+    const src = readFileSync(join(projectRoot, 'src/scraper-manager.ts'), 'utf-8')
+    expect(src).toContain("from './connections/scrape-outcome.ts'")
+    expect(src).toContain("recordConnectionFailure('rh'")
+    expect(src).toContain("recordConnectionFailure('sf'")
+  })
+})
+
+// ── BKL-CONN: Connection auth stack hardening (sanitize, flags, guards) ─────
+test.describe('Connection Auth Stack — BKL-CONN', () => {
+  const projectRoot = resolve(import.meta.dirname!, '..', '..')
+
+  test('REG-CONN-SANITIZE-01: sanitizeChromiumProfile exported from browser-utils.ts', () => {
+    const src = readFileSync(join(projectRoot, 'src/browser-utils.ts'), 'utf-8')
+    expect(src).toContain('export function sanitizeChromiumProfile')
+  })
+
+  test('REG-CONN-SANITIZE-02: --hide-crash-restore-bubble in BASE_CHROMIUM_ARGS', () => {
+    const src = readFileSync(join(projectRoot, 'src/browser-utils.ts'), 'utf-8')
+    expect(src).toContain('--hide-crash-restore-bubble')
+  })
+
+  // BKL-CONN: cleanupBrowser is now caller-owned for flag resets — module-level
+  // flags must NOT appear in cleanupBrowser body (race window during awaited
+  // ctx.close()). The previous SF-FLAGS-01/02 and RH-FLAGS-01 tests asserted the
+  // opposite (flags MUST be in cleanupBrowser); they are inverted below.
+
+  test('REG-CONN-CLEANUP-01: loginInProgress assignment NOT in sf-auth.ts cleanupBrowser body', () => {
+    const src = readFileSync(join(projectRoot, 'src/sf-auth.ts'), 'utf-8')
+    const cleanupMatch = src.match(/async function cleanupBrowser\(\)[^}]*\{[\s\S]*?\n\}/)
+    expect(cleanupMatch).toBeTruthy()
+    // Strip comments before asserting — comments mention these flags as historical context.
+    const code = cleanupMatch![0]
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+    expect(code).not.toMatch(/loginInProgress\s*=/)
+    expect(code).not.toMatch(/loginTimedOut\s*=/)
+    expect(code).not.toMatch(/sfSessionExpired\s*=/)
+  })
+
+  test('REG-CONN-CLEANUP-02: loginInProgress assignment NOT in rh-auth.ts cleanupBrowser body', () => {
+    const src = readFileSync(join(projectRoot, 'src/rh-auth.ts'), 'utf-8')
+    const cleanupMatch = src.match(/async function cleanupBrowser\(\)[^}]*\{[\s\S]*?\n\}/)
+    expect(cleanupMatch).toBeTruthy()
+    const code = cleanupMatch![0]
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/[^\n]*/g, '')
+    expect(code).not.toMatch(/loginInProgress\s*=/)
+    expect(code).not.toMatch(/loginTimedOut\s*=/)
+  })
+
+  test('REG-CONN-GUARD-01: getScrapeContext guard appears in server.ts SF start route', () => {
+    const src = readFileSync(join(projectRoot, 'server.ts'), 'utf-8')
+    const routeMatch = src.match(/app\.post\('\/api\/auth\/salesforce\/start'[\s\S]*?^\}\)/m)
+    expect(routeMatch).toBeTruthy()
+    expect(routeMatch![0]).toContain('getScrapeContext()')
+    expect(routeMatch![0]).toContain('No RH session')
+  })
+
+  test('REG-CONN-TABLEAU-BLANK-01: about:blank navigation appears near Tableau login success in bootstrap-orchestrator.ts', () => {
+    const src = readFileSync(join(projectRoot, 'src/bootstrap-orchestrator.ts'), 'utf-8')
+    // Look for the tableau-auth blank tab block
+    expect(src).toContain('[tableau-auth]')
+    expect(src).toMatch(/finalValid[\s\S]{0,2000}about:blank/)
+  })
+
+  test('REG-CONN-WINDOW-CLOSED-01: sfVncRef.current?.closed check in SetupPage.tsx SF handler', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(src).toContain('sfVncRef.current?.closed')
+  })
+
+  test('REG-CONN-WINDOW-CLOSED-02: rhVncRef closed check in SetupPage.tsx RH handler', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(src).toContain('rhVncRef.current?.closed')
+  })
+
+  test('REG-CONN-TABLEAU-CLOSED-01: tableauVncRef.current?.closed check in SetupPage.tsx Tableau poll handler', () => {
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(src).toContain('tableauVncRef.current?.closed')
+    // Ensure the check is inside the setInterval poll body, paired with resolveLogin(false)
+    expect(src).toMatch(/tableauPollRef\.current = setInterval[\s\S]{0,400}tableauVncRef\.current\?\.closed[\s\S]{0,200}resolveLogin\(false\)/)
+  })
+
+  test("REG-CONN-TABLEAU-SESSION-01: recordSessionEstablished('tableau') NOT in rh-auth.ts or sf-auth.ts", () => {
+    const rhSrc = readFileSync(join(projectRoot, 'src/rh-auth.ts'), 'utf-8')
+    const sfSrc = readFileSync(join(projectRoot, 'src/sf-auth.ts'), 'utf-8')
+    expect(rhSrc).not.toContain("recordSessionEstablished('tableau')")
+    expect(sfSrc).not.toContain("recordSessionEstablished('tableau')")
+  })
+
+  test('REG-CONN-SINGLETON-01: SF-only fallback path adopts live ctx instead of relaunching', () => {
+    // BKL-CONN-SINGLETON: when SF login succeeds but RH portal fails to load,
+    // the SF-only branch must adoptScrapeContext on the live ctx — NOT call
+    // reopenScrapeContextFromAuth (which would launch a 2nd Chromium against
+    // the same profileDir and race on SingletonLock).
+    const src = readFileSync(join(projectRoot, 'src/sf-auth.ts'), 'utf-8')
+    // Locate the "RH portal did not load after SF login" branch.
+    const branchMatch = src.match(/RH portal did not load after SF login[\s\S]*?onComplete\?\.\(\)/)
+    expect(branchMatch, 'SF-only fallback branch not found').toBeTruthy()
+    const branch = branchMatch![0]
+    expect(branch).toContain('adoptScrapeContext(')
+    expect(branch).not.toContain('reopenScrapeContextFromAuth(')
+  })
+
+  test('REG-CONN-SINGLETON-02: catch block calls cleanupBrowser BEFORE reopenScrapeContextFromAuth', () => {
+    // BKL-CONN-SINGLETON: in the polling IIFE catch block (browser closed /
+    // navigation error), cleanupBrowser must close the live ctx BEFORE
+    // reopenScrapeContextFromAuth launches a new Chromium on the same profile.
+    const src = readFileSync(join(projectRoot, 'src/sf-auth.ts'), 'utf-8')
+    const catchMatch = src.match(/\}\s*catch\s*\{[\s\S]*?browser closed or navigation error[\s\S]*?return\s*\n\s*\}/)
+    expect(catchMatch, 'catch block not found').toBeTruthy()
+    const block = catchMatch![0]
+    const cleanupIdx = block.indexOf('cleanupBrowser()')
+    const reopenIdx = block.indexOf('reopenScrapeContextFromAuth(')
+    expect(cleanupIdx).toBeGreaterThan(-1)
+    expect(reopenIdx).toBeGreaterThan(-1)
+    expect(cleanupIdx).toBeLessThan(reopenIdx)
+  })
+
+  test('REG-CONN-SINGLETON-03: timeout path calls cleanupBrowser BEFORE reopenScrapeContextFromAuth', () => {
+    // BKL-CONN-SINGLETON: at the LOGIN_TIMEOUT_MS deadline path, cleanupBrowser
+    // must close the live ctx BEFORE reopenScrapeContextFromAuth launches a new
+    // Chromium on the same profile.
+    const src = readFileSync(join(projectRoot, 'src/sf-auth.ts'), 'utf-8')
+    const timeoutMatch = src.match(/loginTimedOut\s*=\s*true[\s\S]*?\}\)\(\)/)
+    expect(timeoutMatch, 'timeout block not found').toBeTruthy()
+    const block = timeoutMatch![0]
+    const cleanupIdx = block.indexOf('cleanupBrowser()')
+    const reopenIdx = block.indexOf('reopenScrapeContextFromAuth(')
+    expect(cleanupIdx).toBeGreaterThan(-1)
+    expect(reopenIdx).toBeGreaterThan(-1)
+    expect(cleanupIdx).toBeLessThan(reopenIdx)
+  })
+
+  test('REG-CONN-NO-SESSION-GUARD-01: runSfSyncForAes skips when getSfContext returns null', () => {
+    // BKL-CONN-NO-SESSION-01: without this guard, a startup SF scrape runs before login,
+    // navigates to SF report URL, fails at login page (SfSessionExpiredError), and
+    // overwrites a successful login with _sfSessionExpired=true within seconds.
+    const src = readFileSync(join(projectRoot, 'src/scraper-manager.ts'), 'utf-8')
+    const fnMatch = src.match(/function runSfSyncForAes[\s\S]*?if \(_sfSyncRunning\) return/)
+    expect(fnMatch, 'runSfSyncForAes not found').toBeTruthy()
+    const fn = fnMatch![0]
+    expect(fn).toContain('getSfContext()')
+    expect(fn).toContain('no SF session')
+  })
+
+  test('REG-CONN-RESET-EXPIRED-01: resetAllCircuitBreakers clears _sfSessionExpired', () => {
+    // BKL-CONN-RESET-EXPIRED: _sfSessionExpired in scraper-manager.ts can be true from
+    // a prior scrape failure. After SF auth completes, resetAllCircuitBreakers is called.
+    // Without clearing _sfSessionExpired there, the status endpoint returns sessionExpired:true
+    // and the frontend never closes the VNC (hasSession && !sessionExpired → false).
+    const src = readFileSync(join(projectRoot, 'src/scraper-manager.ts'), 'utf-8')
+    const fnMatch = src.match(/export function resetAllCircuitBreakers\(\)[\s\S]*?\n\}/)
+    expect(fnMatch, 'resetAllCircuitBreakers not found').toBeTruthy()
+    const fn = fnMatch![0]
+    expect(fn).toContain('_sfSessionExpired = false')
+  })
+
+  test('REG-CONN-DATA-RESET-01: SF status gates sessionExpired on hasSession (BKL-CONN-DATA-RESET-01)', () => {
+    // BKL-CONN-DATA-RESET-01: After a data-only wipe, sf-session.json is deleted so
+    // hasSession=false. _sfSessionExpired may still be true from a prior run. The
+    // status endpoint must NOT surface sessionExpired:true when no session exists —
+    // UI should show "Not connected" not "Session expired."
+    const src = readFileSync(join(projectRoot, 'src/scraper-manager.ts'), 'utf-8')
+    // Extract just the SF auth status handler body
+    const handlerMatch = src.match(/app\.get\('\/api\/auth\/salesforce\/status'[\s\S]*?\n  \}\)/)
+    expect(handlerMatch, 'SF auth status handler not found').toBeTruthy()
+    const handler = handlerMatch![0]
+    // Must reference hasSession on a captured auth-status variable
+    const hasGate = /sfAuthStatus\.hasSession/.test(handler) || /sfStatus\.hasSession/.test(handler)
+    expect(hasGate, 'sessionExpired must be gated on hasSession').toBe(true)
+    // Must NOT have an unconditional sessionExpired: _sfSessionExpired,
+    expect(handler).not.toMatch(/^\s*sessionExpired:\s*_sfSessionExpired,\s*$/m)
+  })
+
+  test('REG-CONN-FAILURE-PERSIST-01: failureCounts persisted across restarts (BKL-SEC-CONN-01)', () => {
+    // BKL-SEC-CONN-01: in-memory failureCounts reset to 0 on restart. A real auth
+    // expiry can be missed if the server restarts between two failures. Persist
+    // counts to disk with a 10-minute TTL so the grace window survives restarts.
+    const src = readFileSync(join(projectRoot, 'src/connections/scrape-outcome.ts'), 'utf-8')
+    expect(src, 'FAILURE_COUNTS_PATH constant or file literal missing').toMatch(/FAILURE_COUNTS_PATH|failure-counts\.json/)
+    expect(src).toContain('loadFailureCountsFromDisk')
+    expect(src).toContain('persistFailureCounts')
+    // Must be called inside recordScrapeFailure
+    const failureFn = src.match(/export function recordScrapeFailure[\s\S]*?\n\}/)
+    expect(failureFn, 'recordScrapeFailure not found').toBeTruthy()
+    expect(failureFn![0]).toContain('persistFailureCounts()')
+    // Must be called inside recordScrapeSuccess
+    const successFn = src.match(/export function recordScrapeSuccess[\s\S]*?\n\}/)
+    expect(successFn, 'recordScrapeSuccess not found').toBeTruthy()
+    expect(successFn![0]).toContain('persistFailureCounts()')
+  })
+
+  test('REG-CONN-TABLEAU-TTL-01: Tableau status cache TTL <= 60s (BKL-SEC-CONN-02)', () => {
+    // BKL-SEC-CONN-02: a 5-minute TTL on Tableau session status meant a real expiry
+    // could be hidden from the UI for 5 minutes. Reduce to 60s.
+    const src = readFileSync(join(projectRoot, 'src/bootstrap-orchestrator.ts'), 'utf-8')
+    const m = src.match(/TABLEAU_STATUS_TTL_MS\s*=\s*([^\n]+)/)
+    expect(m, 'TABLEAU_STATUS_TTL_MS assignment not found').toBeTruthy()
+    // Evaluate the RHS expression (e.g. "60 * 1000" or "60000")
+    const rhs = m![1].split('//')[0].trim().replace(/,$/, '')
+    // eslint-disable-next-line no-new-func
+    const value = Function(`"use strict"; return (${rhs})`)() as number
+    expect(typeof value).toBe('number')
+    expect(value).toBeLessThanOrEqual(60_000)
+  })
+
+  test('REG-UX-GRID-01: SetupPage uses 3-column grid not 4-column (BKL-UX-GRID-01)', () => {
+    // BKL-UX-GRID-01: 4-column grid at >=1440px caused cards to crowd. Standardized to 3.
+    const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(src).not.toContain('min-[1440px]:grid-cols-4')
+    expect(src).toContain('min-[1440px]:grid-cols-3')
+  })
+
+  test('REG-CONN-SF-CLASSIFY-01: SfSessionExpiredError only thrown on login-page URL, not transient failures (BKL-CONN-SF-CLASSIFY-01)', () => {
+    // BKL-CONN-SF-CLASSIFY-01: previously, any failure to reach Lightning (timeout,
+    // profile lock, incomplete redirect) threw SfSessionExpiredError — bypassing the
+    // 2-failure grace period entirely. Now we check the actual URL: only throw
+    // SfSessionExpiredError when the browser landed on a login page (my.salesforce.com
+    // or sso.redhat.com). All other non-Lightning URLs throw a generic Error so the
+    // failure accumulates toward the grace period via failureCounts.
+    const src = readFileSync(join(projectRoot, 'src/sf-scraper.ts'), 'utf-8')
+    // The login-page URL check must appear before SfSessionExpiredError is thrown
+    const sfSessionExpiredIdx = src.indexOf('throw new SfSessionExpiredError()')
+    const loginPageCheckIdx = src.indexOf('my.salesforce.com')
+    expect(loginPageCheckIdx, 'my.salesforce.com URL check not found in sf-scraper.ts').toBeGreaterThan(-1)
+    expect(loginPageCheckIdx).toBeLessThan(sfSessionExpiredIdx)
+    // A fallback generic Error (non-auth) must exist for non-login-page URLs
+    expect(src).toContain('grace period applies')
+    // The else/fallback branch must throw a plain Error, not SfSessionExpiredError
+    const graceIdx = src.indexOf('grace period applies')
+    const afterGrace = src.slice(graceIdx, graceIdx + 200)
+    expect(afterGrace).toContain('throw new Error(')
+    expect(afterGrace).not.toContain('throw new SfSessionExpiredError()')
   })
 })
