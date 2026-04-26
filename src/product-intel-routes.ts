@@ -18,6 +18,7 @@ import {
   loadProductConfig,
   loadProductIntelConfig,
   saveProductConfig,
+  getProductIntelParentFolderId,
 } from './product-release-radar.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
@@ -124,12 +125,14 @@ export function registerProductIntelRoutes(app: Hono): void {
   app.post('/api/products/setup-drive-folders', async (c) => {
     try {
       const config = loadProductIntelConfig()
-      const parentFolderId = config.driveParentFolderId
+      // BKL-UX-PRODUCT-FOLDER-CONFIG-01: source parent folder from existing
+      // AE records via the helper (was: config.driveParentFolderId).
+      const parentFolderId = getProductIntelParentFolderId()
       if (!parentFolderId) {
-        return c.json({ error: 'driveParentFolderId not set in product-intel-config.json' }, 400)
+        return c.json({ error: 'No parent folder configured — bootstrap an AE first to set the shared Drive parent folder' }, 400)
       }
       if (!isValidDriveFolderId(parentFolderId)) {
-        return c.json({ error: 'Invalid driveParentFolderId in config' }, 500)
+        return c.json({ error: 'Invalid parent folder id resolved from AE records' }, 500)
       }
 
       const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })

@@ -247,7 +247,12 @@ export function registerSetupRoutes(app: Hono): void {
         expired = e.message?.includes('invalid_grant') || e.message?.includes('Token has been expired') || e.message?.includes('invalid_token')
       }
       const scopeLevel = getScopeLevel(token as StoredToken)
-      return c.json({ authorized: !expired, expired, email, configuredAt: token.configuredAt ?? null, scopeLevel })
+      // BKL-UX-OAUTH-SCOPE-01: surface whether the stored token includes
+      // https://www.googleapis.com/auth/cloud-platform so the setup page can
+      // show a banner prompting re-auth (Gemini falls back to SA key without it).
+      const hasCloudPlatformScope = typeof (token as StoredToken).scope === 'string'
+        && (token as StoredToken).scope!.includes('cloud-platform')
+      return c.json({ authorized: !expired, expired, email, configuredAt: token.configuredAt ?? null, scopeLevel, hasCloudPlatformScope })
     } catch {
       return c.json({ authorized: false })
     }

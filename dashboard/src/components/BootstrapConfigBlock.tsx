@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { CheckCircle2, ExternalLink, Loader2, XCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, ExternalLink, Loader2, Lock, XCircle } from 'lucide-react'
 
 /**
  * Bootstrap configuration block — region + territory sheet + POD selector + auto-filled SF Report ID.
@@ -54,6 +54,15 @@ export interface BootstrapConfigBlockProps {
    *  selected POD, the SF Report ID becomes editable so the user can supply
    *  their own. This callback is fired on every keystroke. */
   onSfReportIdChange?: (id: string) => void
+  /** BKL-UX-FOLDER-LOCK-01: First-wins parent folder. When a non-empty
+   *  lockedFolderId is provided (sourced from existing AE records on the
+   *  server), the editable input + Validate button are replaced with a
+   *  locked read-only display. The component fires onParentFolderChange
+   *  on mount so the parent's podBookingsFolderId/podFolderValidated state
+   *  is set without any user action. A "Change" button drops the lock
+   *  after a confirmation warning. When empty (fresh install), the
+   *  existing editable behavior (BKL-UX84) is preserved exactly. */
+  lockedFolderId?: string
 }
 
 export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
@@ -73,7 +82,23 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
     previewAeNames,
     showRootFallback,
     onSfReportIdChange,
+    lockedFolderId,
   } = props
+
+  // BKL-UX-FOLDER-LOCK-01: lock active when a non-empty lockedFolderId is
+  // supplied AND the user has not explicitly clicked "Change" to override.
+  const [lockOverride, setLockOverride] = useState<boolean>(false)
+  const isFolderLocked = !!lockedFolderId && lockedFolderId.trim().length > 0 && !lockOverride
+
+  // BKL-UX-FOLDER-LOCK-01: when the lock is active, push the locked id up
+  // to the parent on mount (and whenever the locked id changes) so
+  // podBookingsFolderId + podFolderValidated are set without a user action.
+  useEffect(() => {
+    if (isFolderLocked && lockedFolderId) {
+      onParentFolderChange?.(lockedFolderId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFolderLocked, lockedFolderId])
 
   // ── Parent Drive Folder editable field state (Full POD mode only) ──────────
   // BKL-UX84: The field ALWAYS starts empty — never pre-filled from any
@@ -263,7 +288,44 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
       {/*   (b) persist to settings.json via POST /api/sf-bookings/pod-folder */}
       {/*   (c) notify the parent so local podBookingsFolderId state updates */}
       {/*   (d) render a Drive scaffolding preview (folder tree) below       */}
-      {parentFolderId !== undefined && (
+      {parentFolderId !== undefined && isFolderLocked && lockedFolderId && (
+        <div data-testid="parent-drive-folder-block-locked">
+          <label className="block text-xs text-text-secondary mb-1">Parent Drive Folder *</label>
+          <div className="flex items-center justify-between gap-2 bg-surface/50 border border-border rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 min-w-0 text-sm">
+              <Lock className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+              <span className="text-text-secondary shrink-0">Using existing folder:</span>
+              <a
+                href={`https://drive.google.com/drive/folders/${lockedFolderId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent underline truncate inline-flex items-center gap-1"
+                data-testid="parent-folder-locked-link"
+              >
+                <span className="truncate font-mono">{lockedFolderId}</span>
+                <ExternalLink className="w-3 h-3 shrink-0" />
+              </a>
+            </div>
+            <button
+              type="button"
+              data-testid="parent-folder-change"
+              onClick={() => {
+                const ok = typeof window !== 'undefined' && window.confirm(
+                  'Changing the parent folder will create new AE Drive folders in a different location. Existing AEs will not be moved. Continue?'
+                )
+                if (!ok) return
+                setLockOverride(true)
+                // Clear parent state so Bootstrap re-disables until re-validated.
+                onParentFolderChange?.('')
+              }}
+              className="text-xs text-text-secondary hover:text-white underline transition-colors shrink-0"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      )}
+      {parentFolderId !== undefined && !isFolderLocked && (
         <div data-testid="parent-drive-folder-block">
           <label className="block text-xs text-text-secondary mb-1">Parent Drive Folder *</label>
           <div className="flex gap-2">

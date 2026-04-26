@@ -6451,7 +6451,7 @@ Description: JSON.parse(Buffer.from(saKeyB64, 'base64').toString()) throws raw J
 ---
 
 ### BKL-UX-OAUTH-SCOPE-01 | Wizard: prompt re-auth when cloud-platform scope missing from token
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-26
 Priority: P2
 Size: XS
 Source: Algorithm learn phase reflection 2026-04-25 — Quinn detected scopeLevel:"bootstrap" on existing tokens
@@ -6803,7 +6803,7 @@ Test: REG-CONN-SF-CLASSIFY-01 added — asserts login-page URL check exists befo
 Decision: DONE — 76/76 REG-CONN tests pass. Grace period now correctly absorbs transient navigation failures.
 
 ### BKL-CONN-SF-CLASSIFY-02 | SfSessionExpiredError URL check missing login.salesforce.com domain
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-26
 Priority: P3
 Size: XS
 Source: Serena council audit 2026-04-26 — edge case from BKL-CONN-SF-CLASSIFY-01 fix
@@ -6812,7 +6812,7 @@ Description: The URL-discriminating block at sf-scraper.ts:~467 checks for `my.s
 Fix: Add `login.salesforce.com` to the isLoginPage check. Consider extracting a `classifySfNavOutcome(url)` pure function so the allowlist is testable without Playwright.
 
 ### BKL-TEST-PRODUCTS-HUB-01 | No regression tests for Product Hub page (/dashboard/products)
-Status: OPEN
+Status: ✅ DONE 2026-04-26
 Priority: P3
 Size: S
 Source: Session 2026-04-26 — discovered during test env verification after data wipe
@@ -6821,7 +6821,7 @@ Description: The Product Hub page (`ProductsPage.tsx`) has no Playwright tests. 
 Fix: Add `test/ui/product-hub.spec.ts` with mocked `/api/products` (7 products) + `/api/products/features` (empty and populated) asserting: (a) 7 cards visible, (b) empty features shows correct empty state per card, (c) territory summaries fetch fires for each product slug.
 
 ### BKL-FEAT-STARTUP-SEED-01 | Product feature caches not seeded at startup — hub empty on fresh install
-Status: OPEN
+Status: ✅ DONE 2026-04-26
 Priority: P2
 Size: S
 Source: Session 2026-04-26 — post-wipe test env investigation
@@ -6830,7 +6830,7 @@ Description: The startup seeder (15s after boot) runs `refreshAllProducts()` to 
 Fix: After `refreshAllProducts()` completes in the startup seeder, check if feature caches are missing for any product. If so, fire `refreshAllFeatures()` for those products as a follow-on fire-and-forget task. Feature extraction requires Gemini + GOOGLE_CLOUD_PROJECT to be set — guard with the same env check already in `product-feature-radar.ts:347`. Target: feature radar populated within ~5 minutes of first boot. Note: BKL-UX-PRODUCT-FOLDER-CONFIG-01 is a dependency — feature extraction is richer when the slide corpus is present; seed features AFTER corpus auto-ingest check completes.
 
 ### BKL-UX-PRODUCT-FOLDER-CONFIG-01 | Product intel corpus folders should live under existing POD parentFolderId — no separate config needed
-Status: OPEN
+Status: ✅ DONE 2026-04-26
 Priority: P2
 Size: M
 Source: Session 2026-04-26 — product hub folder flow investigation
@@ -6841,7 +6841,7 @@ The slide corpus serves TWO purposes — both degrade without it: (1) feature ra
 Fix: (a) Remove `driveParentFolderId` from `product-intel-config.json`. Replace with a read from POD config `parentFolderId` (already persisted). Bootstrap pre-flight and `setup-drive-folders` route both source from there. (b) At startup, after product summary seeding, check each product's Drive folder modifiedTime against the cached corpus — if any file is newer, re-ingest automatically (fire-and-forget). (c) No UI field needed — the folder is already configured by the AE wizard step.
 
 ### BKL-UX-FOLDER-LOCK-01 | Parent Drive Folder should lock after first bootstrap — not re-asked per AE or per POD run
-Status: OPEN
+Status: ✅ DONE 2026-04-26
 Priority: P1
 Size: S
 Source: Jason 2026-04-26 — bootstrapping AEs one at a time (or adding single AEs after a POD bootstrap) re-asks for folder each time, creating split-config risk
@@ -6849,3 +6849,12 @@ Files: dashboard/src/components/BootstrapConfigBlock.tsx, dashboard/src/pages/Se
 Description: `BootstrapConfigBlock` always starts with an empty folder input (intentional — BKL-UX84 prevents settings.json from silently pre-filling). But `defaultParentFolderId`, derived from existing AE server records, is a known-good validated source — not settings.json. When AEs already exist with a `parentFolderId`, the component still shows an editable blank input. If the user pastes a different folder URL for AE #2 it validates fine (any accessible Drive folder passes), saves to settings.json, and creates AE #2's Drive folder under a different parent than AE #1. Result: split config — AEs pointing to different Drive trees with no warning.
 Rule (first-wins, applies to both tabs): First bootstrap — whether a single AE or a full POD — validates and locks the `parentFolderId` permanently. All subsequent bootstraps (single AEs added later, additional POD runs) use that same folder without asking. Order does not matter: POD first → single AEs added later inherit the POD folder. Single AE first → full POD bootstrap later uses that AE's folder.
 Fix: When `defaultParentFolderId` is non-empty (sourced from existing AE records, not settings.json), render the folder field locked/read-only showing the folder name + a Drive link. Auto-fire `onParentFolderChange(defaultParentFolderId)` immediately so the parent's `podBookingsFolderId` and `podFolderValidated` are set without a manual Validate click — applies to both the single-AE tab and the full-POD tab. Add an explicit "Change folder" escape hatch (warning: "Changing this will create new AE folders under a different parent — existing AEs will be unaffected but the config will be inconsistent") for the rare genuine change case. When no AEs exist (fresh install), show the editable input as-is — BKL-UX84 still applies to the very first bootstrap.
+
+### BKL-SEC-SF-URL-01 | SF session classifier uses substring URL match — vulnerable to subdomain bypass
+Status: OPEN
+Priority: P2
+Size: XS
+Source: Rook scan 2026-04-26 — identified during BKL-CONN-SF-CLASSIFY-02 review
+Files: src/sf-scraper.ts ~line 469
+Description: The `isLoginPage` URL check uses `String.includes()` which matches anywhere in the URL string. A URL like `https://login.salesforce.com.attacker.com/` would falsely match `login.salesforce.com` and trigger `SfSessionExpiredError` unnecessarily. Same weakness exists for `my.salesforce.com` and `sso.redhat.com` checks added in BKL-CONN-SF-CLASSIFY-01. Direction of the false-match is conservative (unnecessary re-auth, not bypass), but it should be tightened.
+Fix: Replace `url.includes('x.com')` with `new URL(currentUrl).hostname` based checks: `hostname === 'login.salesforce.com'`, `hostname.endsWith('.my.salesforce.com')`, `hostname === 'sso.redhat.com'`. Extract to a pure `classifySfNavOutcome(url: string)` function so it's testable without Playwright. Add unit test asserting `login.salesforce.com.evil.com` classifies as transient (not expired).

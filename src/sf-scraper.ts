@@ -466,7 +466,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
     // (BKL-CONN-SF-CLASSIFY-01)
     if (!page.url().startsWith('https://redhatcrm.lightning.force.com')) {
       const currentUrl = page.url()
-      const isLoginPage = currentUrl.includes('my.salesforce.com') || currentUrl.includes('sso.redhat.com')
+      const isLoginPage = currentUrl.includes('my.salesforce.com') || currentUrl.includes('sso.redhat.com') || currentUrl.includes('login.salesforce.com')
       if (isLoginPage) {
         console.warn(`[sf-scraper] login page detected at ${currentUrl} — session expired`)
         throw new SfSessionExpiredError()

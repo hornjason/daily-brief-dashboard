@@ -1505,6 +1505,55 @@ export function initBackgroundScheduler(opts: {
     } catch (e: any) {
       console.error('[product-intel] startup: product summary cache seed failed:', e?.message ?? e)
     }
+
+    // BKL-FEAT-STARTUP-SEED-01: seed missing product feature caches after the
+    // summary seed completes. Mirrors the summary seeder pattern — fire-and-
+    // forget, env-guarded, only seeds products with no existing feature cache
+    // file. Without this, /products page Generate buttons silently fail until
+    // the next scheduled refresh.
+    if (process.env.GOOGLE_CLOUD_PROJECT) {
+      try {
+        const { loadProductConfig } = await import('./product-release-radar.ts')
+        const { getFeatureCache, refreshAllFeatures } = await import('./product-feature-radar.ts')
+        const products = loadProductConfig()
+        const featureMissingProducts = products.filter(p => getFeatureCache(p.slug) === null)
+        if (featureMissingProducts.length > 0) {
+          console.log(`[product-intel] startup: seeding features for ${featureMissingProducts.length}/${products.length} products`)
+          refreshAllFeatures().catch((e: any) => console.error('[product-intel] startup feature seed failed:', e?.message ?? e))
+        } else {
+          console.log('[product-intel] startup: all product feature caches present — no seed needed')
+        }
+      } catch (e: any) {
+        console.error('[product-intel] startup: feature seed error:', e?.message ?? e)
+      }
+    }
+
+    // BKL-UX-PRODUCT-FOLDER-CONFIG-01 (D): auto-refresh Drive corpus for
+    // products with a configured driveFolder when no cached corpus exists or
+    // the cached corpus is older than 24h. Ensures files dropped into
+    // product folders are picked up at next restart without a manual
+    // "Refresh Slides" click. Fire-and-forget per product.
+    try {
+      const { loadProductConfig } = await import('./product-release-radar.ts')
+      const { getCachedDriveCorpus, refreshDriveCorpus } = await import('./product-drive-ingest.ts')
+      const products = loadProductConfig().filter(p => !!p.driveFolder)
+      const STALE_MS = 24 * 60 * 60 * 1000
+      const now = Date.now()
+      let triggered = 0
+      for (const p of products) {
+        const cached = getCachedDriveCorpus(p.slug)
+        const stale = !cached || (cached.extractedAt && (now - new Date(cached.extractedAt).getTime() > STALE_MS))
+        if (stale) {
+          triggered++
+          refreshDriveCorpus(p.slug).catch((e: any) => console.error(`[product-intel] startup corpus refresh failed for ${p.slug}:`, e?.message ?? e))
+        }
+      }
+      if (triggered > 0) {
+        console.log(`[product-intel] startup: triggered Drive corpus refresh for ${triggered}/${products.length} product(s) with stale or missing corpus`)
+      }
+    } catch (e: any) {
+      console.error('[product-intel] startup: corpus refresh error:', e?.message ?? e)
+    }
   }, 15_000)
 
   // Graceful shutdown — close Chromium so it doesn't orphan in containers

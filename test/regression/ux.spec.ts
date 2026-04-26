@@ -1391,4 +1391,68 @@ test.describe('Connection Auth Stack — BKL-CONN', () => {
     expect(afterGrace).toContain('throw new Error(')
     expect(afterGrace).not.toContain('throw new SfSessionExpiredError()')
   })
+
+  test('REG-CONN-SF-CLASSIFY-02: isLoginPage check includes login.salesforce.com fallback domain (BKL-CONN-SF-CLASSIFY-02)', () => {
+    // BKL-CONN-SF-CLASSIFY-02: login.salesforce.com is the generic SF login domain
+    // used when MyDomain redirect fails. Without it, expired sessions that bounce
+    // to login.salesforce.com were misclassified as transient failures.
+    const src = readFileSync(join(projectRoot, 'src/sf-scraper.ts'), 'utf-8')
+    // Find the isLoginPage line and verify all three domains are checked
+    const isLoginMatch = src.match(/const isLoginPage =[^\n]+/)
+    expect(isLoginMatch, 'isLoginPage assignment not found in sf-scraper.ts').not.toBeNull()
+    const isLoginLine = isLoginMatch![0]
+    expect(isLoginLine).toContain('my.salesforce.com')
+    expect(isLoginLine).toContain('sso.redhat.com')
+    expect(isLoginLine).toContain('login.salesforce.com')
+  })
+
+  test('REG-UX-OAUTH-SCOPE-01: GET /api/auth/google/status response shape includes hasCloudPlatformScope (BKL-UX-OAUTH-SCOPE-01)', () => {
+    // BKL-UX-OAUTH-SCOPE-01: Setup page must show a banner when the stored Google
+    // token lacks cloud-platform scope, since Gemini falls back to SA key. Backend
+    // exposes hasCloudPlatformScope so the frontend can render the warning.
+    const src = readFileSync(join(projectRoot, 'src/setup-routes.ts'), 'utf-8')
+    expect(src).toContain('hasCloudPlatformScope')
+    expect(src).toMatch(/cloud-platform/)
+    // The frontend must consume the field
+    const setupPageSrc = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(setupPageSrc).toContain('hasCloudPlatformScope')
+  })
+
+  test('REG-UX-FOLDER-LOCK-01: BootstrapConfigBlock locks parent folder via lockedFolderId prop (BKL-UX-FOLDER-LOCK-01)', () => {
+    // BKL-UX-FOLDER-LOCK-01: First-wins parent folder. Once any AE has a
+    // parentFolderId, subsequent bootstraps must reuse it without re-validation.
+    const src = readFileSync(join(projectRoot, 'dashboard/src/components/BootstrapConfigBlock.tsx'), 'utf-8')
+    expect(src).toContain('lockedFolderId')
+    // useEffect must fire onParentFolderChange when lockedFolderId is set
+    expect(src).toMatch(/useEffect[\s\S]{0,400}lockedFolderId[\s\S]{0,400}onParentFolderChange/)
+    // SetupPage must pass lockedFolderId from defaultParentFolderId
+    const setupPageSrc = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
+    expect(setupPageSrc).toContain('lockedFolderId')
+  })
+
+  test('REG-FEAT-PRODUCT-FOLDER-01: product-release-radar drops driveParentFolderId, exposes getProductIntelParentFolderId (BKL-UX-PRODUCT-FOLDER-CONFIG-01)', () => {
+    // BKL-UX-PRODUCT-FOLDER-CONFIG-01: Product intel parent folder must be sourced
+    // from existing AE records, not a separate config field.
+    const src = readFileSync(join(projectRoot, 'src/product-release-radar.ts'), 'utf-8')
+    // The interface should no longer declare driveParentFolderId
+    const interfaceMatch = src.match(/export interface ProductIntelConfig[\s\S]*?\n\}/)
+    expect(interfaceMatch, 'ProductIntelConfig interface not found').not.toBeNull()
+    expect(interfaceMatch![0]).not.toContain('driveParentFolderId')
+    // The helper function must exist
+    expect(src).toMatch(/export\s+(?:async\s+)?function\s+getProductIntelParentFolderId/)
+  })
+
+  test('REG-FEAT-STARTUP-SEED-01: background-scheduler startup seeder calls refreshAllFeatures after refreshAllProducts (BKL-FEAT-STARTUP-SEED-01)', () => {
+    // BKL-FEAT-STARTUP-SEED-01: After the 15s startup product summary seed, also
+    // seed missing feature caches so files dropped into product folders are picked
+    // up at next restart without manual "Refresh Slides" click.
+    const src = readFileSync(join(projectRoot, 'src/background-scheduler.ts'), 'utf-8')
+    expect(src).toContain('refreshAllFeatures')
+    expect(src).toContain('product-feature-radar')
+    // Must appear in the same startup block as refreshAllProducts
+    const refreshAllProductsIdx = src.indexOf('refreshAllProducts')
+    const refreshAllFeaturesIdx = src.indexOf('refreshAllFeatures')
+    expect(refreshAllProductsIdx).toBeGreaterThan(-1)
+    expect(refreshAllFeaturesIdx).toBeGreaterThan(refreshAllProductsIdx)
+  })
 })

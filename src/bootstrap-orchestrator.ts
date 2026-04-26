@@ -23,7 +23,7 @@ import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import { waterfallInferDomain } from './domain-waterfall.ts'
 import type { AE } from './types.ts'
 import { sanitizeErr } from './utils.ts'
-import { loadProductIntelConfig, saveProductConfig } from './product-release-radar.ts'
+import { loadProductIntelConfig, saveProductConfig, getProductIntelParentFolderId } from './product-release-radar.ts'
 import { recordBootstrapRun } from './bootstrap-history.ts'
 import { getBackupSheetId, setBackupSheetId, createBackupSheet } from './backup-config.ts'
 import { normalizeSettings } from './region-config.ts'
@@ -1578,7 +1578,9 @@ export function registerBootstrapRoutes(app: Hono): void {
       // Pre-flight — Ensure product intel Drive folders exist under parent (silent, idempotent)
       try {
         const productIntelConfig = loadProductIntelConfig()
-        const parentId = productIntelConfig.driveParentFolderId
+        // BKL-UX-PRODUCT-FOLDER-CONFIG-01: parent folder now sourced from
+        // existing AE records via the helper, not from product-intel-config.
+        const parentId = getProductIntelParentFolderId()
         if (parentId) {
           const drivePI = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
           const updatedProducts = [...productIntelConfig.products]

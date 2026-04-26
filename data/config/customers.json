@@ -8,13 +8,13 @@
       ],
       "industry": "Technology",
       "segment": "Enterprise SaaS",
-      "industryDescription": "Acme Corp provides innovative software solutions to businesses, helping them streamline operations and improve efficiency.",
+      "industryDescription": "Acme Corp provides cloud-based software solutions for businesses to manage their customer relationships and sales processes.",
       "industryCompetitors": [
-        "Globex Corporation",
-        "Initech",
-        "Soylent Corp"
+        "Salesforce",
+        "Microsoft Dynamics 365",
+        "Oracle Siebel"
       ],
-      "industryUpdatedAt": "2026-04-11T14:21:42.485Z"
+      "industryUpdatedAt": "2026-04-26T22:02:58.023Z"
     },
     {
       "name": "Big Ten Network Services",
@@ -24,15 +24,16 @@
       "ae": "TBH",
       "discoveryFailures": 0,
       "domain": "btn.com",
-      "industry": "Media and Entertainment",
-      "segment": "Sports Broadcasting and Streaming",
-      "industryDescription": "Big Ten Network Services, also known as BTN or B1G+, provides live and on-demand streaming of collegiate sports and related content from the Big Ten Conference.",
+      "industry": "Media",
+      "segment": "Sports Broadcasting & Streaming",
+      "industryDescription": "Big Ten Network Services operates as a sports television network and streaming service dedicated to covering collegiate sports, primarily focusing on the Big Ten Conference through live and recorded events, news, and analysis across various platforms.",
       "industryCompetitors": [
         "ESPN",
-        "FOX Sports",
-        "CBS Sports"
+        "NBC Sports",
+        "FOX Sports"
       ],
-      "industryUpdatedAt": "2026-04-11T14:21:37.810Z"
+      "industryUpdatedAt": "2026-04-25T19:05:57.300Z",
+      "inactive": true
     },
     {
       "name": "First American Financial",
@@ -51,7 +52,8 @@
         "Old Republic Title",
         "Stewart Information Services"
       ],
-      "industryUpdatedAt": "2026-04-11T04:13:50.401Z"
+      "industryUpdatedAt": "2026-04-11T04:13:50.401Z",
+      "inactive": true
     },
     {
       "name": "First American Home Buyers Protection",
@@ -68,7 +70,9 @@
         "Cinch Home Services",
         "Old Republic Home Protection"
       ],
-      "industryUpdatedAt": "2026-04-11T13:17:13.033Z"
+      "industryUpdatedAt": "2026-04-11T13:17:13.033Z",
+      "domain": "firstam.com",
+      "inactive": true
     },
     {
       "name": "First American Trust",
@@ -86,7 +90,8 @@
         "Stewart Information Services",
         "Radian Group"
       ],
-      "industryUpdatedAt": "2026-04-11T04:13:49.991Z"
+      "industryUpdatedAt": "2026-04-11T04:13:49.991Z",
+      "inactive": true
     },
     {
       "name": "Fox",
@@ -106,7 +111,8 @@
         "Paramount Global",
         "Warner Bros. Discovery"
       ],
-      "industryUpdatedAt": "2026-04-11T04:13:54.440Z"
+      "industryUpdatedAt": "2026-04-11T04:13:54.440Z",
+      "inactive": true
     },
     {
       "name": "Fox News Network",
@@ -127,110 +133,9 @@
         "MSNBC",
         "NBCUniversal"
       ],
-      "industryUpdatedAt": "2026-04-11T04:13:52.977Z"
-    },
-    {
-      "name": "Fox Television Station Ll",
-      "accountNumbers": [],
-      "ae": "TBH",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:20:15.750Z",
-      "industry": "Media",
-      "segment": "Broadcast Television",
-      "industryDescription": "Fox Television Stations, LLC is a group of television stations in the United States owned and operated by Fox Corporation, focusing on local news, sports, entertainment, and syndicated content across multiple platforms.",
-      "industryCompetitors": [
-        "NBC Owned Television Stations",
-        "CBS Television Stations",
-        "ABC Owned Television Stations"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:13:55.514Z"
-    },
-    {
-      "name": "Foxcorp Attn",
-      "accountNumbers": [],
-      "ae": "TBH",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:20:25.293Z",
-      "industry": "Media",
-      "segment": "News, Sports, and Entertainment Content Production and Distribution",
-      "industryDescription": "Fox Corporation is a multinational mass media company that produces and distributes news, sports, and entertainment content through its various brands, including FOX News Media, FOX Sports, FOX Entertainment, and FOX Television Stations, alongside its streaming service, Tubi.",
-      "industryCompetitors": [
-        "Warner Bros. Discovery (CNN)",
-        "Comcast (MSNBC)",
-        "ESPN"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:14:03.897Z"
-    },
-    {
-      "name": "Latham Watkins Llp",
-      "accountNumbers": [],
-      "ae": "TBH",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:20:40.634Z",
-      "industry": "Legal Services",
-      "segment": "Global Corporate Law",
-      "industryDescription": "Latham & Watkins LLP is a multinational law firm providing integrated corporate, litigation, finance, and regulatory services to businesses and institutions worldwide.",
-      "industryCompetitors": [
-        "Kirkland & Ellis",
-        "Skadden, Arps, Slate, Meagher & Flom LLP",
-        "Wachtell, Lipton, Rosen & Katz"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:13:57.674Z"
-    },
-    {
-      "name": "Peraton Technology Services",
-      "accountNumbers": [],
-      "ae": "TBH",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:20:50.375Z",
-      "industry": "Technology",
-      "segment": "Government IT Services & National Security",
-      "industryDescription": "Peraton Technology Services is a national security company that provides advanced technology solutions and enterprise IT services primarily to U.S. federal government agencies across various domains, including space, intelligence, cyber, and defense.",
-      "industryCompetitors": [
-        "ManTech",
-        "Leidos",
-        "SAIC"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:14:00.284Z"
-    },
-    {
-      "name": "Peraton Oscomet",
-      "accountNumbers": [],
-      "ae": "TBH",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:21:00.515Z",
-      "industry": "Defense and Government Services",
-      "segment": "National Security and Intelligence Solutions",
-      "industryDescription": "Peraton Oscomet provides advanced technology solutions and services primarily to U.S. government agencies, focusing on national security, intelligence, and defense missions.",
-      "industryCompetitors": [
-        "Leidos",
-        "Booz Allen Hamilton",
-        "Northrop Grumman"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:14:04.834Z"
-    },
-    {
-      "name": "Rxlogix",
-      "accountNumbers": [],
-      "ae": "TBH",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:21:10.301Z",
-      "domain": "rxlogix.com",
-      "industry": "Healthcare",
-      "segment": "Pharmacovigilance Software / Enterprise SaaS",
-      "industryDescription": "RxLogix provides pharmacovigilance software solutions that utilize advanced machine learning and artificial intelligence to enhance drug safety and patient health for life sciences companies and regulatory agencies.",
-      "industryCompetitors": [
-        "PharmaLex",
-        "Medfiles",
-        "Ennov"
-      ],
-      "industryUpdatedAt": "2026-04-11T13:16:47.927Z"
+      "industryUpdatedAt": "2026-04-11T04:13:52.977Z",
+      "domain": "foxnews.com",
+      "inactive": true
     },
     {
       "name": "Solartis",
@@ -256,7 +161,8 @@
         "Oracle Insurance",
         "Sapiens"
       ],
-      "industryUpdatedAt": "2026-04-11T04:14:06.379Z"
+      "industryUpdatedAt": "2026-04-11T04:14:06.379Z",
+      "inactive": true
     },
     {
       "name": "Tgs Management",
@@ -278,7 +184,8 @@
         "Citadel LLC",
         "DE Shaw"
       ],
-      "industryUpdatedAt": "2026-04-11T02:50:10.421Z"
+      "industryUpdatedAt": "2026-04-11T02:50:10.421Z",
+      "inactive": true
     },
     {
       "name": "Axway",
@@ -296,7 +203,8 @@
         "Software AG",
         "IBM"
       ],
-      "industryUpdatedAt": "2026-04-11T04:14:09.621Z"
+      "industryUpdatedAt": "2026-04-11T04:14:09.621Z",
+      "inactive": true
     },
     {
       "name": "Connexity",
@@ -314,7 +222,8 @@
         "StackAdapt",
         "Demandbase One"
       ],
-      "industryUpdatedAt": "2026-04-11T14:21:38.241Z"
+      "industryUpdatedAt": "2026-04-11T14:21:38.241Z",
+      "inactive": true
     },
     {
       "name": "Consumer Cellular Incorporated",
@@ -333,22 +242,8 @@
         "Cricket Wireless",
         "TracFone Wireless"
       ],
-      "industryUpdatedAt": "2026-04-11T04:14:12.516Z"
-    },
-    {
-      "name": "Microchip Technology",
-      "accountNumbers": [],
-      "ae": "Peter Niklaus",
-      "domain": "microchip.com",
-      "industry": "Technology",
-      "segment": "Semiconductors",
-      "industryDescription": "Microchip Technology Inc. is a leading manufacturer of microcontroller, mixed-signal, analog, and Flash-IP integrated circuits, providing embedded control solutions for diverse applications across various industries.",
-      "industryCompetitors": [
-        "Analog Devices",
-        "NXP Semiconductors",
-        "Texas Instruments"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:14:14.811Z"
+      "industryUpdatedAt": "2026-04-11T04:14:12.516Z",
+      "inactive": true
     },
     {
       "name": "Microsemi Storage Solutions",
@@ -365,7 +260,9 @@
         "Intel",
         "Analog Devices"
       ],
-      "industryUpdatedAt": "2026-04-11T14:21:38.143Z"
+      "industryUpdatedAt": "2026-04-11T14:21:38.143Z",
+      "domain": "microsemi.com",
+      "inactive": true
     },
     {
       "name": "Musarubra Us",
@@ -384,7 +281,8 @@
         "Fortinet, Inc",
         "Palo Alto Networks Inc"
       ],
-      "industryUpdatedAt": "2026-04-11T13:17:56.902Z"
+      "industryUpdatedAt": "2026-04-11T13:17:56.902Z",
+      "inactive": true
     },
     {
       "name": "Nextiva",
@@ -403,7 +301,8 @@
         "8x8",
         "Dialpad"
       ],
-      "industryUpdatedAt": "2026-04-11T04:14:54.076Z"
+      "industryUpdatedAt": "2026-04-11T04:14:54.076Z",
+      "inactive": true
     },
     {
       "name": "Pnm Resources",
@@ -424,24 +323,9 @@
         "CPS Energy"
       ],
       "industryUpdatedAt": "2026-04-11T13:17:57.895Z",
-      "driveFolderId": "1obEKTJubgzp0QJf-nspK4huCaGFGRG_E"
-    },
-    {
-      "name": "Public Service Of New Mexico",
-      "accountNumbers": [],
-      "ae": "Peter Niklaus",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:21:45.578Z",
-      "industry": "Utilities",
-      "segment": "Electric and Natural Gas Utility Services",
-      "industryDescription": "Public Service Company of New Mexico (PNM) is a utility that generates, transmits, distributes, and sells electricity and natural gas within the state of New Mexico, and also markets some of its excess electrical capacity to regional users.",
-      "industryCompetitors": [
-        "Southwest Power Pool",
-        "California Independent System Operator (CAISO)",
-        "New Mexico Gas Company"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:22:33.515Z"
+      "driveFolderId": "1obEKTJubgzp0QJf-nspK4huCaGFGRG_E",
+      "domain": "pnm.com",
+      "inactive": true
     },
     {
       "name": "Tucson Electric Power",
@@ -464,25 +348,8 @@
         "Salt River Project (SRP)",
         "Arizona Public Service (APS)"
       ],
-      "industryUpdatedAt": "2026-04-11T04:15:13.953Z"
-    },
-    {
-      "name": "Aera Energy Services",
-      "accountNumbers": [],
-      "ae": "Oren Shaolian",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:29:25.860Z",
-      "domain": "aeraenergy.com",
-      "industry": "Energy",
-      "segment": "Oil and Gas Exploration and Production",
-      "industryDescription": "Aera Energy is a California-based company focused on the exploration, development, and production of crude oil and natural gas.",
-      "industryCompetitors": [
-        "Marathon Oil",
-        "Coterra Energy",
-        "Continental Resources"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:22:40.456Z"
+      "industryUpdatedAt": "2026-04-11T04:15:13.953Z",
+      "inactive": true
     },
     {
       "name": "California Resources",
@@ -500,41 +367,8 @@
         "Matador Resources",
         "SM Energy"
       ],
-      "industryUpdatedAt": "2026-04-11T04:15:21.309Z"
-    },
-    {
-      "name": "Insurance Of West",
-      "accountNumbers": [],
-      "ae": "Oren Shaolian",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:29:35.945Z",
-      "industry": "Financial Services",
-      "segment": "Insurance Brokerage",
-      "industryDescription": "Insurance Of West is an independent insurance agency offering a variety of insurance products and services to individuals and businesses.",
-      "industryCompetitors": [
-        "State Farm",
-        "GEICO",
-        "Progressive"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:15:25.831Z"
-    },
-    {
-      "name": "Internet For Assigned Names And Numbers",
-      "accountNumbers": [],
-      "ae": "Oren Shaolian",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:40:54.019Z",
-      "industry": "Internet Governance",
-      "segment": "Internet Infrastructure Coordination",
-      "industryDescription": "The Internet Corporation for Assigned Names and Numbers (ICANN) is a global non-profit organization responsible for coordinating the Internet's unique identifiers, including domain names, IP addresses, and other protocol parameters, to ensure a stable and interoperable internet.",
-      "industryCompetitors": [
-        "Internet Engineering Task Force (IETF)",
-        "World Wide Web Consortium (W3C)",
-        "Regional Internet Registries (RIRs)"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:15:23.771Z"
+      "industryUpdatedAt": "2026-04-11T04:15:21.309Z",
+      "inactive": true
     },
     {
       "name": "Korn Ferry",
@@ -557,7 +391,8 @@
         "Bain & Company",
         "Spencer Stuart"
       ],
-      "industryUpdatedAt": "2026-04-11T04:15:25.842Z"
+      "industryUpdatedAt": "2026-04-11T04:15:25.842Z",
+      "inactive": true
     },
     {
       "name": "Local Initiative Health Authority For Los Angeles County",
@@ -574,7 +409,9 @@
         "Health Net",
         "Blue Cross of California (now Anthem)"
       ],
-      "industryUpdatedAt": "2026-04-11T04:15:28.950Z"
+      "industryUpdatedAt": "2026-04-11T04:15:28.950Z",
+      "domain": "lachsa.org",
+      "inactive": true
     },
     {
       "name": "Radiology Partners",
@@ -596,42 +433,8 @@
         "Alliance HealthCare Services",
         "MedQuest Imaging"
       ],
-      "industryUpdatedAt": "2026-04-11T04:15:28.620Z"
-    },
-    {
-      "name": "Skechers U S A",
-      "accountNumbers": [],
-      "ae": "Oren Shaolian",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:41:04.085Z",
-      "domain": "skechers.com",
-      "industry": "Retail",
-      "segment": "Footwear and Apparel",
-      "industryDescription": "Skechers U.S.A., Inc. designs, develops, and markets a diverse range of lifestyle and performance footwear, apparel, and accessories for men, women, and children globally.",
-      "industryCompetitors": [
-        "Nike",
-        "Adidas",
-        "New Balance"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:15:31.354Z"
-    },
-    {
-      "name": "Skechers U S A Ii",
-      "accountNumbers": [],
-      "ae": "Oren Shaolian",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:41:22.860Z",
-      "industry": "Retail",
-      "segment": "Footwear and Apparel",
-      "industryDescription": "Skechers U.S.A., Inc. designs, develops, and markets a diverse range of footwear, apparel, and accessories for men, women, and children globally, focusing on comfort, style, and innovation at accessible price points.",
-      "industryCompetitors": [
-        "Nike",
-        "Adidas",
-        "New Balance"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:15:31.508Z"
+      "industryUpdatedAt": "2026-04-11T04:15:28.620Z",
+      "inactive": true
     },
     {
       "name": "Xifin",
@@ -653,7 +456,8 @@
         "ModMed",
         "Tebra (previously Kareo + PatientPop)"
       ],
-      "industryUpdatedAt": "2026-04-11T04:15:33.307Z"
+      "industryUpdatedAt": "2026-04-11T04:15:33.307Z",
+      "inactive": true
     },
     {
       "name": "Yardi Systems",
@@ -677,7 +481,8 @@
         "MRI Software",
         "Entrata"
       ],
-      "industryUpdatedAt": "2026-04-11T04:15:33.711Z"
+      "industryUpdatedAt": "2026-04-11T04:15:33.711Z",
+      "inactive": true
     },
     {
       "name": "Ademco",
@@ -695,42 +500,8 @@
         "DSC (Digital Security Controls)",
         "Bosch Security Systems"
       ],
-      "industryUpdatedAt": "2026-04-11T13:18:25.294Z"
-    },
-    {
-      "name": "American Traffic Solutions Consolidated",
-      "accountNumbers": [],
-      "ae": "Sherry Gayo",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:41:38.469Z",
-      "industry": "Technology",
-      "segment": "Traffic Management Solutions",
-      "industryDescription": "American Traffic Solutions Consolidated provides technology solutions for traffic management, including red-light and speed camera programs, and tolling solutions.",
-      "industryCompetitors": [
-        "Verra Mobility",
-        "Sensys Gatso Group",
-        "Redflex Traffic Systems"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:23:04.027Z"
-    },
-    {
-      "name": "American Traffic Solutions",
-      "accountNumbers": [],
-      "ae": "Sherry Gayo",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:41:48.191Z",
-      "domain": "atitraffic.com",
-      "industry": "Technology",
-      "segment": "Traffic Management Solutions",
-      "industryDescription": "American Traffic Solutions provides technology-based solutions for traffic enforcement and management, including red-light and speed camera programs, as well as tolling and parking solutions.",
-      "industryCompetitors": [
-        "Verra Mobility",
-        "Sensys Gatso Group",
-        "Redflex Traffic Systems"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:23:37.806Z"
+      "industryUpdatedAt": "2026-04-11T13:18:25.294Z",
+      "inactive": true
     },
     {
       "name": "Avnet",
@@ -750,7 +521,8 @@
         "WT Microelectronics (formerly Future Electronics)",
         "Digi-Key"
       ],
-      "industryUpdatedAt": "2026-04-11T04:16:02.908Z"
+      "industryUpdatedAt": "2026-04-11T04:16:02.908Z",
+      "inactive": true
     },
     {
       "name": "Banner Health",
@@ -781,24 +553,8 @@
         "HonorHealth",
         "Advanced ICU Care"
       ],
-      "industryUpdatedAt": "2026-04-11T03:38:29.912Z"
-    },
-    {
-      "name": "Cableone Corporate Office",
-      "accountNumbers": [],
-      "ae": "Sherry Gayo",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:41:57.866Z",
-      "industry": "Telecommunications",
-      "segment": "Broadband and Cable Services",
-      "industryDescription": "Cable One (operating under the Sparklight brand) is a broadband communications provider that offers internet, cable television, and phone services to residential and business customers in 24 U.S. states.",
-      "industryCompetitors": [
-        "AT&T",
-        "EarthLink",
-        "Cox Communications"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:23:37.899Z"
+      "industryUpdatedAt": "2026-04-11T03:38:29.912Z",
+      "inactive": true
     },
     {
       "name": "Ebocom",
@@ -821,24 +577,8 @@
         "Global Payments",
         "Worldpay"
       ],
-      "industryUpdatedAt": "2026-04-11T04:16:17.586Z"
-    },
-    {
-      "name": "Freeeport Mcmoran",
-      "accountNumbers": [],
-      "ae": "Sherry Gayo",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:42:07.845Z",
-      "industry": "Mining",
-      "segment": "Copper, Gold, and Molybdenum Mining",
-      "industryDescription": "Freeport-McMoRan is a leading international mining company that explores, develops, mines, and processes copper, gold, and molybdenum deposits around the world.",
-      "industryCompetitors": [
-        "BHP",
-        "Rio Tinto",
-        "Codelco"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:16:21.473Z"
+      "industryUpdatedAt": "2026-04-11T04:16:17.586Z",
+      "inactive": true
     },
     {
       "name": "Republic Services",
@@ -860,7 +600,8 @@
         "Waste Connections",
         "GFL Environmental"
       ],
-      "industryUpdatedAt": "2026-04-11T04:16:23.840Z"
+      "industryUpdatedAt": "2026-04-11T04:16:23.840Z",
+      "inactive": true
     },
     {
       "name": "Resideo Technologies",
@@ -879,7 +620,8 @@
         "Vivint",
         "Brinks Home"
       ],
-      "industryUpdatedAt": "2026-04-11T02:52:13.059Z"
+      "industryUpdatedAt": "2026-04-11T02:52:13.059Z",
+      "inactive": true
     },
     {
       "name": "Rsi Video Technologies",
@@ -896,33 +638,14 @@
         "Dahua Technology",
         "Axis Communications"
       ],
-      "industryUpdatedAt": "2026-04-11T14:23:46.520Z"
-    },
-    {
-      "name": "Sonora Quest Laboratories",
-      "accountNumbers": [],
-      "ae": "Sherry Gayo",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:42:17.753Z",
-      "domain": "sonoraquest.com",
-      "industry": "Healthcare",
-      "segment": "Clinical Laboratory Services",
-      "industryDescription": "Sonora Quest Laboratories is the market share leader in clinical laboratory testing in Arizona, performing diagnostic tests, and offering services like My Lab ReQuest for direct-to-consumer testing.",
-      "industryCompetitors": [
-        "Labcorp",
-        "BioReference Laboratories",
-        "TriCore Reference Laboratories"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:23:40.835Z"
+      "industryUpdatedAt": "2026-04-11T14:23:46.520Z",
+      "inactive": true
     },
     {
       "name": "Verra Mobility",
       "accountNumbers": [],
       "ae": "Sherry Gayo",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:42:28.444Z",
+      "discoveryFailures": 4,
       "domain": "verramobility.com",
       "industry": "Technology",
       "segment": "Smart Mobility Solutions",
@@ -933,7 +656,10 @@
         "Redflex"
       ],
       "industryUpdatedAt": "2026-04-11T04:16:41.114Z",
-      "driveFolderId": "1rH7TchQt5HU3sbWgH98IrMEb_DqEmaFP"
+      "driveFolderId": "1rH7TchQt5HU3sbWgH98IrMEb_DqEmaFP",
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-09T01:30:37.741Z",
+      "inactive": true
     },
     {
       "name": "Viavi Solutions",
@@ -951,24 +677,8 @@
         "EXFO",
         "NETSCOUT Systems"
       ],
-      "industryUpdatedAt": "2026-04-11T14:24:22.408Z"
-    },
-    {
-      "name": "Celestial Saturn Parent",
-      "accountNumbers": [],
-      "ae": "Amanda Mejia",
-      "discoveryFailures": 2,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:42:38.500Z",
-      "industry": "Technology",
-      "segment": "Space Exploration and Satellite Services",
-      "industryDescription": "Celestial Saturn Parent is a holding company that invests in and develops technologies for space exploration, satellite communication, and orbital services.",
-      "industryCompetitors": [
-        "SpaceX",
-        "Blue Origin",
-        "Lockheed Martin"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:24:34.818Z"
+      "industryUpdatedAt": "2026-04-11T14:24:22.408Z",
+      "inactive": true
     },
     {
       "name": "Core Logic",
@@ -987,25 +697,8 @@
         "Black Knight",
         "ATTOM"
       ],
-      "industryUpdatedAt": "2026-04-11T04:17:22.231Z"
-    },
-    {
-      "name": "Corelogic Systems",
-      "accountNumbers": [],
-      "ae": "Amanda Mejia",
-      "discoveryFailures": 2,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:42:48.426Z",
-      "domain": "corelogic.com",
-      "industry": "Financial Services",
-      "segment": "Real Estate Data & Analytics",
-      "industryDescription": "CoreLogic provides property data, analytics, and related solutions to the real estate, mortgage, and insurance industries.",
-      "industryCompetitors": [
-        "Black Knight",
-        "Verisk Analytics",
-        "CoStar Group"
-      ],
-      "industryUpdatedAt": "2026-04-11T13:20:25.674Z"
+      "industryUpdatedAt": "2026-04-11T04:17:22.231Z",
+      "inactive": true
     },
     {
       "name": "Corelogic",
@@ -1023,23 +716,8 @@
         "Equifax",
         "ATTOM"
       ],
-      "industryUpdatedAt": "2026-04-11T13:20:24.933Z"
-    },
-    {
-      "name": "Guess",
-      "accountNumbers": [],
-      "ae": "Amanda Mejia",
-      "discoveryFailures": 2,
-      "domain": "guess.com",
-      "industry": "Retail",
-      "segment": "Fashion, Apparel & Accessories",
-      "industryDescription": "Guess? Inc. designs, markets, distributes, and licenses a wide range of apparel and accessories for men, women, and children, operating through retail stores, wholesale, and licensing channels globally.",
-      "industryCompetitors": [
-        "Calvin Klein",
-        "Gucci",
-        "Uniqlo"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:17:44.441Z"
+      "industryUpdatedAt": "2026-04-11T13:20:24.933Z",
+      "inactive": true
     },
     {
       "name": "Herbalife",
@@ -1070,7 +748,8 @@
         "Nu Skin Enterprises",
         "USANA Health Sciences"
       ],
-      "industryUpdatedAt": "2026-04-11T04:17:45.637Z"
+      "industryUpdatedAt": "2026-04-11T04:17:45.637Z",
+      "inactive": true
     },
     {
       "name": "Hyundai Auto Canada",
@@ -1087,7 +766,9 @@
         "Ford Canada",
         "General Motors Canada"
       ],
-      "industryUpdatedAt": "2026-04-11T14:24:45.257Z"
+      "industryUpdatedAt": "2026-04-11T14:24:45.257Z",
+      "domain": "hyundai.ca",
+      "inactive": true
     },
     {
       "name": "Hyundai Autoever America",
@@ -1112,42 +793,8 @@
         "Calsonic Kansei Corporation",
         "Faurecia"
       ],
-      "industryUpdatedAt": "2026-04-11T04:17:48.032Z"
-    },
-    {
-      "name": "Hyundai Capital America",
-      "accountNumbers": [],
-      "ae": "Amanda Mejia",
-      "discoveryFailures": 2,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:43:23.638Z",
-      "domain": "hyundaicapitalamerica.com",
-      "industry": "Financial Services",
-      "segment": "Auto Finance",
-      "industryDescription": "Hyundai Capital America is a captive auto finance company that provides financing solutions for Hyundai, Genesis, and Kia vehicles to customers and dealerships in the U.S..",
-      "industryCompetitors": [
-        "Toyota Financial Services",
-        "Volkswagen Financial Services",
-        "Santander Consumer USA"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:17:50.107Z"
-    },
-    {
-      "name": "Hyundai Motor America",
-      "accountNumbers": [],
-      "ae": "Amanda Mejia",
-      "discoveryFailures": 2,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:43:33.271Z",
-      "industry": "Automotive",
-      "segment": "Automobile Manufacturing",
-      "industryDescription": "Hyundai Motor America is the operating subsidiary that oversees all operations of Hyundai Motor Company in Canada, Mexico, and the United States, including research and development, manufacturing, sales, marketing, and after-sales of automobiles, commercial vehicles, engines, and automotive parts.",
-      "industryCompetitors": [
-        "Toyota",
-        "Volkswagen",
-        "Honda"
-      ],
-      "industryUpdatedAt": "2026-04-11T13:18:20.336Z"
+      "industryUpdatedAt": "2026-04-11T04:17:48.032Z",
+      "inactive": true
     },
     {
       "name": "Illumina",
@@ -1166,7 +813,8 @@
         "QIAGEN",
         "Agilent Technologies"
       ],
-      "industryUpdatedAt": "2026-04-11T02:53:14.662Z"
+      "industryUpdatedAt": "2026-04-11T02:53:14.662Z",
+      "inactive": true
     },
     {
       "name": "Maxlinear",
@@ -1188,25 +836,8 @@
         "Silicon Laboratories"
       ],
       "industryUpdatedAt": "2026-04-11T13:20:35.484Z",
-      "driveFolderId": "1J3INVDN2uijRIJl_ND_KxLJR6MpW9dhV"
-    },
-    {
-      "name": "Rady Children S Hospital San Diego",
-      "accountNumbers": [],
-      "ae": "Amanda Mejia",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:43:52.683Z",
-      "domain": "rchsd.org",
-      "industry": "Healthcare",
-      "segment": "Pediatric Healthcare Services",
-      "industryDescription": "Rady Children's Hospital-San Diego is a non-profit, 511-bed (recently 543-bed) pediatric-care facility dedicated to providing comprehensive healthcare services to children and adolescents in the San Diego, southern Riverside, and Imperial counties.",
-      "industryCompetitors": [
-        "Children's Hospital Los Angeles",
-        "Children's National Hospital (Washington, D.C.)",
-        "Sharp HealthCare"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:24:51.631Z"
+      "driveFolderId": "1J3INVDN2uijRIJl_ND_KxLJR6MpW9dhV",
+      "inactive": true
     },
     {
       "name": "Scripps Health",
@@ -1227,7 +858,8 @@
         "Kaiser Permanente",
         "Blue Shield"
       ],
-      "industryUpdatedAt": "2026-04-11T03:40:15.351Z"
+      "industryUpdatedAt": "2026-04-11T03:40:15.351Z",
+      "inactive": true
     },
     {
       "name": "Sharp Healthcare",
@@ -1245,7 +877,8 @@
         "Scripps Health",
         "UC San Diego Health"
       ],
-      "industryUpdatedAt": "2026-04-11T04:18:10.334Z"
+      "industryUpdatedAt": "2026-04-11T04:18:10.334Z",
+      "inactive": true
     },
     {
       "name": "Applied Medical",
@@ -1263,7 +896,8 @@
         "Johnson & Johnson",
         "Cook Medical"
       ],
-      "industryUpdatedAt": "2026-04-11T03:40:25.184Z"
+      "industryUpdatedAt": "2026-04-11T03:40:25.184Z",
+      "inactive": true
     },
     {
       "name": "Applied Medical Resources",
@@ -1281,7 +915,9 @@
         "Johnson & Johnson",
         "CONMED"
       ],
-      "industryUpdatedAt": "2026-04-11T03:40:34.549Z"
+      "industryUpdatedAt": "2026-04-11T03:40:34.549Z",
+      "domain": "appliedmedical.com",
+      "inactive": true
     },
     {
       "name": "Blackline",
@@ -1299,7 +935,8 @@
         "FloQast",
         "OneStream"
       ],
-      "industryUpdatedAt": "2026-04-11T02:54:18.816Z"
+      "industryUpdatedAt": "2026-04-11T02:54:18.816Z",
+      "inactive": true
     },
     {
       "name": "Epson America",
@@ -1327,7 +964,9 @@
         "HP Inc."
       ],
       "industryUpdatedAt": "2026-04-11T13:21:22.472Z",
-      "driveFolderId": "1SPY6_KDrEoZQPX9W5GKBOJiWeFrCV2e1"
+      "driveFolderId": "1SPY6_KDrEoZQPX9W5GKBOJiWeFrCV2e1",
+      "domain": "epson.com",
+      "inactive": true
     },
     {
       "name": "Guitar Center",
@@ -1345,48 +984,14 @@
         "Fender Musical Instruments",
         "American Musical Supply"
       ],
-      "industryUpdatedAt": "2026-04-11T04:18:22.700Z"
-    },
-    {
-      "name": "Matson",
-      "accountNumbers": [],
-      "ae": "Alex Smith",
-      "domain": "matson.com",
-      "industry": "Transportation & Logistics",
-      "segment": "Ocean Transportation & Logistics Services",
-      "industryDescription": "Matson Inc. is an American shipping and navigation services company that provides ocean transportation and logistics services, primarily focused on the Pacific region, including Hawaii, Alaska, Guam, and Micronesia, and expedited service from China to Southern California.",
-      "industryCompetitors": [
-        "A.P. Møller - Mærsk (Maersk)",
-        "C.H. Robinson Worldwide (CHRW)",
-        "XPO Logistics"
-      ],
-      "industryUpdatedAt": "2026-04-11T03:40:42.763Z"
-    },
-    {
-      "name": "Mission Cloud Services",
-      "accountNumbers": [],
-      "ae": "Alex Smith",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:44:27.885Z",
-      "domain": "missioncloud.com",
-      "industry": "Technology",
-      "segment": "Cloud Services",
-      "industryDescription": "Mission Cloud Services is a managed services and consulting provider specializing in end-to-end cloud services, AI solutions, and software for Amazon Web Services (AWS) customers.",
-      "industryCompetitors": [
-        "Rackspace",
-        "Crayon",
-        "Megazone Cloud"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:18:24.802Z"
+      "industryUpdatedAt": "2026-04-11T04:18:22.700Z",
+      "inactive": true
     },
     {
       "name": "Queen S Development",
       "accountNumbers": [],
       "ae": "Alex Smith",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T13:44:37.728Z",
+      "discoveryFailures": 4,
       "industry": "Real Estate",
       "segment": "Residential Development",
       "industryDescription": "Queen S Development is a real estate development company focused on building and selling residential properties.",
@@ -1396,7 +1001,10 @@
         "PulteGroup"
       ],
       "industryUpdatedAt": "2026-04-11T04:18:32.485Z",
-      "driveFolderId": "154UkyId0pyvQANJIp2fTArY0-NQH-yNP"
+      "driveFolderId": "154UkyId0pyvQANJIp2fTArY0-NQH-yNP",
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-09T01:31:50.739Z",
+      "inactive": true
     },
     {
       "name": "Southwest Gas",
@@ -1414,33 +1022,14 @@
         "UGI Corporation (UGI)",
         "NewJersey Resources (NJR)"
       ],
-      "industryUpdatedAt": "2026-04-11T03:40:48.979Z"
-    },
-    {
-      "name": "Queen S Health Systems",
-      "accountNumbers": [],
-      "ae": "Alex Smith",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T14:01:13.671Z",
-      "domain": "queenshealthemporium.com",
-      "industry": "Healthcare",
-      "segment": "Integrated Healthcare System",
-      "industryDescription": "The Queen's Health Systems is a non-profit healthcare organization based in Honolulu, Hawaii, that provides a comprehensive range of medical services through its hospitals, clinics, and specialty care centers across Hawaii and the Pacific region.",
-      "industryCompetitors": [
-        "Hawaii Pacific Health",
-        "Kaiser Permanente",
-        "Mohawk Valley Health System"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:25:31.798Z"
+      "industryUpdatedAt": "2026-04-11T03:40:48.979Z",
+      "inactive": true
     },
     {
       "name": "U S Epson",
       "accountNumbers": [],
       "ae": "Alex Smith",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T14:01:24.547Z",
+      "discoveryFailures": 4,
       "industry": "Technology",
       "segment": "Printers and Imaging",
       "industryDescription": "U.S. Epson is a leading manufacturer and supplier of printers, projectors, and other imaging and robotics equipment for consumers and businesses.",
@@ -1450,7 +1039,11 @@
         "Brother International"
       ],
       "industryUpdatedAt": "2026-04-11T04:18:57.382Z",
-      "driveFolderId": "1SPY6_KDrEoZQPX9W5GKBOJiWeFrCV2e1"
+      "driveFolderId": "1SPY6_KDrEoZQPX9W5GKBOJiWeFrCV2e1",
+      "domain": "epson.com",
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-09T01:32:06.635Z",
+      "inactive": true
     },
     {
       "name": "Allegiant Air",
@@ -1475,7 +1068,8 @@
         "Frontier Airlines",
         "Southwest Airlines"
       ],
-      "industryUpdatedAt": "2026-04-11T02:55:26.000Z"
+      "industryUpdatedAt": "2026-04-11T02:55:26.000Z",
+      "inactive": true
     },
     {
       "name": "Allegiant Travel",
@@ -1495,7 +1089,9 @@
         "Frontier Airlines",
         "JetBlue Airways"
       ],
-      "industryUpdatedAt": "2026-04-11T04:18:59.220Z"
+      "industryUpdatedAt": "2026-04-11T04:18:59.220Z",
+      "domain": "allegiantair.com",
+      "inactive": true
     },
     {
       "name": "Aristocrat Technologies",
@@ -1513,7 +1109,8 @@
         "Light & Wonder",
         "Konami"
       ],
-      "industryUpdatedAt": "2026-04-11T03:41:16.675Z"
+      "industryUpdatedAt": "2026-04-11T03:41:16.675Z",
+      "inactive": true
     },
     {
       "name": "Boyd Gaming",
@@ -1531,7 +1128,8 @@
         "Caesars Entertainment",
         "Penn Entertainment"
       ],
-      "industryUpdatedAt": "2026-04-11T02:56:18.033Z"
+      "industryUpdatedAt": "2026-04-11T02:56:18.033Z",
+      "inactive": true
     },
     {
       "name": "Caesars Palace",
@@ -1547,29 +1145,17 @@
         "The Venetian Resort Las Vegas"
       ],
       "industryUpdatedAt": "2026-04-11T14:25:30.743Z",
-      "driveFolderId": "1B9a8-8sqtOaIGhiMg7rYdvRMGbx2MAsv"
-    },
-    {
-      "name": "Insight Direct Usa",
-      "accountNumbers": [],
-      "ae": "Beena Patel",
-      "industry": "Technology",
-      "segment": "IT Solutions and Services",
-      "industryDescription": "Insight Direct USA is a global technology company that provides computer hardware, software, cloud solutions, and IT services, focusing on helping organizations achieve digital transformation and optimize business outcomes.",
-      "industryCompetitors": [
-        "CDW",
-        "Connection",
-        "SHI International"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:26:03.635Z"
+      "driveFolderId": "1B9a8-8sqtOaIGhiMg7rYdvRMGbx2MAsv",
+      "inactive": true,
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T16:54:39.105Z"
     },
     {
       "name": "Insight Enterprises",
       "accountNumbers": [],
       "ae": "Beena Patel",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T14:01:51.965Z",
+      "discoveryFailures": 4,
       "domain": "insight.com",
       "industry": "Technology",
       "segment": "IT Solutions and Services",
@@ -1580,7 +1166,10 @@
         "Arrow Electronics"
       ],
       "industryUpdatedAt": "2026-04-11T04:19:35.414Z",
-      "driveFolderId": "1WzfyQAVp4J3N8wLriQkwZzFI5ewPqpUS"
+      "driveFolderId": "1WzfyQAVp4J3N8wLriQkwZzFI5ewPqpUS",
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-09T01:32:25.654Z",
+      "inactive": true
     },
     {
       "name": "Mattel",
@@ -1599,7 +1188,8 @@
         "MGA Entertainment"
       ],
       "industryUpdatedAt": "2026-04-11T04:19:49.702Z",
-      "driveFolderId": "1VV8xNOyRhZDyk9rL1n6689zs4LUQGxw-"
+      "driveFolderId": "1VV8xNOyRhZDyk9rL1n6689zs4LUQGxw-",
+      "inactive": true
     },
     {
       "name": "Mattell",
@@ -1615,24 +1205,11 @@
         "Spin Master"
       ],
       "industryUpdatedAt": "2026-04-11T04:19:53.531Z",
-      "driveFolderId": "1VV8xNOyRhZDyk9rL1n6689zs4LUQGxw-"
-    },
-    {
-      "name": "Mgm Mirage Design Warehouse",
-      "accountNumbers": [],
-      "ae": "Beena Patel",
+      "driveFolderId": "1VV8xNOyRhZDyk9rL1n6689zs4LUQGxw-",
+      "inactive": true,
       "discoveryFailures": 3,
       "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T14:02:12.704Z",
-      "industry": "Hospitality",
-      "segment": "Hotel and Casino Design & Procurement",
-      "industryDescription": "MGM Mirage Design Warehouse is involved in the design, procurement, and warehousing of furnishings and equipment for MGM Resorts International's hotels and casinos.",
-      "industryCompetitors": [
-        "Caesars Entertainment Design & Construction",
-        "Las Vegas Sands Design & Development",
-        "Wynn Design & Development"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:26:00.977Z"
+      "discoverySkippedUntil": "2026-05-10T17:33:25.920Z"
     },
     {
       "name": "Mgm Resorts",
@@ -1656,23 +1233,8 @@
         "Las Vegas Sands",
         "Wynn Resorts"
       ],
-      "industryUpdatedAt": "2026-04-11T02:57:27.383Z"
-    },
-    {
-      "name": "Pcm",
-      "accountNumbers": [],
-      "ae": "Beena Patel",
-      "discoveryFailures": 1,
-      "domain": "pcmag.com",
-      "industry": "Technology",
-      "segment": "IT Solutions and Services",
-      "industryDescription": "PCM, Inc. was a technology solutions provider that offered IT products and services to businesses, government, and educational institutions.",
-      "industryCompetitors": [
-        "CDW",
-        "Insight Enterprises",
-        "SHI International"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:26:27.095Z"
+      "industryUpdatedAt": "2026-04-11T02:57:27.383Z",
+      "inactive": true
     },
     {
       "name": "Smart City Networks Limited Partnership",
@@ -1690,22 +1252,9 @@
         "NuWave Communications",
         "VCloud"
       ],
-      "industryUpdatedAt": "2026-04-11T03:42:25.396Z"
-    },
-    {
-      "name": "Switch",
-      "accountNumbers": [],
-      "ae": "Beena Patel",
-      "domain": "switchbacktravel.com",
-      "industry": "Technology",
-      "segment": "Data Center and Cloud Infrastructure",
-      "industryDescription": "Switch, Inc. designs, constructs, and operates advanced data centers, providing colocation, telecommunications, and cloud services.",
-      "industryCompetitors": [
-        "CoreSite",
-        "CyrusOne",
-        "Equinix"
-      ],
-      "industryUpdatedAt": "2026-04-11T04:20:22.870Z"
+      "industryUpdatedAt": "2026-04-11T03:42:25.396Z",
+      "domain": "smartcitynetworks.com",
+      "inactive": true
     },
     {
       "name": "Delta Dental Of California",
@@ -1728,7 +1277,9 @@
         "USAble Life"
       ],
       "industryUpdatedAt": "2026-04-11T04:20:25.087Z",
-      "driveFolderId": "156usCR0sgDK7F9YIL2dGDSn9HPnIVL4w"
+      "driveFolderId": "156usCR0sgDK7F9YIL2dGDSn9HPnIVL4w",
+      "domain": "deltadentalins.com",
+      "inactive": true
     },
     {
       "name": "Logix Federal Credit Union",
@@ -1745,7 +1296,9 @@
         "Connexus Credit Union",
         "TDECU"
       ],
-      "industryUpdatedAt": "2026-04-11T02:57:39.666Z"
+      "industryUpdatedAt": "2026-04-11T02:57:39.666Z",
+      "domain": "logixbanking.com",
+      "inactive": true
     },
     {
       "name": "Masimo",
@@ -1780,7 +1333,8 @@
         "Philips",
         "GE Healthcare"
       ],
-      "industryUpdatedAt": "2026-04-11T02:58:18.467Z"
+      "industryUpdatedAt": "2026-04-11T02:58:18.467Z",
+      "inactive": true
     },
     {
       "name": "Molina Healthcare",
@@ -1798,7 +1352,8 @@
         "Elevance Health",
         "Cigna Group"
       ],
-      "industryUpdatedAt": "2026-04-11T03:42:42.130Z"
+      "industryUpdatedAt": "2026-04-11T03:42:42.130Z",
+      "inactive": true
     },
     {
       "name": "Pacific Life Insurance",
@@ -1815,7 +1370,9 @@
         "John Hancock",
         "Prudential"
       ],
-      "industryUpdatedAt": "2026-04-11T03:42:48.336Z"
+      "industryUpdatedAt": "2026-04-11T03:42:48.336Z",
+      "domain": "pacificlife.com",
+      "inactive": true
     },
     {
       "name": "Psemi",
@@ -1837,7 +1394,8 @@
         "Samtec",
         "MaxLinear"
       ],
-      "industryUpdatedAt": "2026-04-11T14:26:23.770Z"
+      "industryUpdatedAt": "2026-04-11T14:26:23.770Z",
+      "inactive": true
     },
     {
       "name": "Sada Systems",
@@ -1856,7 +1414,8 @@
         "Capgemini",
         "Atos"
       ],
-      "industryUpdatedAt": "2026-04-11T03:43:18.963Z"
+      "industryUpdatedAt": "2026-04-11T03:43:18.963Z",
+      "inactive": true
     },
     {
       "name": "Skyworks Solutions",
@@ -1875,7 +1434,8 @@
         "Qualcomm"
       ],
       "industryUpdatedAt": "2026-04-11T04:20:49.631Z",
-      "driveFolderId": "1wIsZp400gH-mGNbLbypxv8dZYym96pf4"
+      "driveFolderId": "1wIsZp400gH-mGNbLbypxv8dZYym96pf4",
+      "inactive": true
     },
     {
       "name": "Alteryx",
@@ -1894,7 +1454,8 @@
         "Databricks"
       ],
       "industryUpdatedAt": "2026-04-11T04:20:56.236Z",
-      "driveFolderId": "1JmoDozIDv2qgDtb32SowN5hZkrO51cgj"
+      "driveFolderId": "1JmoDozIDv2qgDtb32SowN5hZkrO51cgj",
+      "inactive": true
     },
     {
       "name": "Brightpoint",
@@ -1913,24 +1474,8 @@
         "Synnex"
       ],
       "industryUpdatedAt": "2026-04-11T14:26:38.866Z",
-      "driveFolderId": "1DtyUm0aKxFdsdnVHbvt8sqh2bTGx8W6L"
-    },
-    {
-      "name": "Harbor Freight Tools Usa",
-      "accountNumbers": [],
-      "ae": "Cameron Floyd",
-      "discoveryFailures": 3,
-      "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-04-24T14:04:03.802Z",
-      "industry": "Retail",
-      "segment": "Tool and Equipment Retail",
-      "industryDescription": "Harbor Freight Tools USA is a privately held retailer offering a wide array of tools and equipment at discounted prices to hobbyists, homeowners, and professionals through over 1,600 stores across the U.S. and an e-commerce business.",
-      "industryCompetitors": [
-        "The Home Depot",
-        "Lowe's",
-        "Northern Tool + Equipment"
-      ],
-      "industryUpdatedAt": "2026-04-11T03:06:38.516Z"
+      "driveFolderId": "1DtyUm0aKxFdsdnVHbvt8sqh2bTGx8W6L",
+      "inactive": true
     },
     {
       "name": "Hot Topic",
@@ -1952,7 +1497,8 @@
         "Zumiez",
         "BoxLunch"
       ],
-      "industryUpdatedAt": "2026-04-11T02:59:37.718Z"
+      "industryUpdatedAt": "2026-04-11T02:59:37.718Z",
+      "inactive": true
     },
     {
       "name": "Ingram Micro",
@@ -1978,7 +1524,8 @@
         "Avnet"
       ],
       "industryUpdatedAt": "2026-04-11T04:21:31.615Z",
-      "driveFolderId": "1kDPAwBsge_zVnX4V_daBp-xzSAZkZBEi"
+      "driveFolderId": "1kDPAwBsge_zVnX4V_daBp-xzSAZkZBEi",
+      "inactive": true
     },
     {
       "name": "Qad",
@@ -1997,22 +1544,8 @@
         "Microsoft Dynamics 365"
       ],
       "industryUpdatedAt": "2026-04-10T19:10:48.019Z",
-      "domain": "qad.com"
-    },
-    {
-      "name": "Topgolf Callaway Brands",
-      "accountNumbers": [],
-      "ae": "Cameron Floyd",
-      "domain": "topgolfcallawaybrands.com",
-      "industry": "Leisure & Recreation",
-      "segment": "Golf Equipment, Entertainment & Active Lifestyle",
-      "industryDescription": "Topgolf Callaway Brands is a tech-enabled modern golf and active lifestyle company that designs, manufactures, and sells golf equipment, apparel, and accessories, while also operating golf entertainment venues.",
-      "industryCompetitors": [
-        "Acushnet Holdings Corp.",
-        "TaylorMade",
-        "PING"
-      ],
-      "industryUpdatedAt": "2026-04-10T23:38:10.826Z"
+      "domain": "qad.com",
+      "inactive": true
     },
     {
       "name": "Zenith Insurance",
@@ -2033,20 +1566,8 @@
         "Odyssey Re",
         "The Travelers Companies"
       ],
-      "industryUpdatedAt": "2026-04-11T02:59:43.484Z"
-    },
-    {
-      "name": "Dako Us Logistics",
-      "ae": "TBH",
-      "industry": "Logistics and Supply Chain Technology",
-      "segment": "Fleet Management Software",
-      "industryDescription": "DAKO provides transport and fleet management software solutions for passenger transport and delivery markets, offering features like real-time location tracking, fleet telematics, and tour planning.",
-      "industryCompetitors": [
-        "BusRight",
-        "Azuga",
-        "Quartix"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:26:38.333Z"
+      "industryUpdatedAt": "2026-04-11T02:59:43.484Z",
+      "inactive": true
     },
     {
       "name": "First American Financial Corporation",
@@ -2059,7 +1580,14 @@
         "Old Republic Title",
         "Stewart Information Services"
       ],
-      "industryUpdatedAt": "2026-04-11T14:26:41.186Z"
+      "industryUpdatedAt": "2026-04-11T14:26:41.186Z",
+      "domain": "fafmc.com",
+      "accountNumbers": [
+        "12653942",
+        "9512872"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Fox Corporation",
@@ -2072,7 +1600,14 @@
         "Netflix",
         "Warner Bros. Discovery"
       ],
-      "industryUpdatedAt": "2026-04-11T14:26:51.823Z"
+      "industryUpdatedAt": "2026-04-11T14:26:51.823Z",
+      "domain": "foxnews.com",
+      "accountNumbers": [
+        "6247997",
+        "11820898"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Latham & Watkins",
@@ -2085,7 +1620,15 @@
         "Skadden, Arps, Slate, Meagher & Flom LLP",
         "Wachtell, Lipton, Rosen & Katz"
       ],
-      "industryUpdatedAt": "2026-04-11T14:26:54.535Z"
+      "industryUpdatedAt": "2026-04-11T14:26:54.535Z",
+      "domain": "lwcareers.com",
+      "discoveryFailures": 0,
+      "accountNumbers": [
+        "5691767",
+        "7238920",
+        "835498"
+      ],
+      "inactive": true
     },
     {
       "name": "Peraton",
@@ -2099,20 +1642,17 @@
         "SAIC"
       ],
       "industryUpdatedAt": "2026-04-11T14:27:01.619Z",
-      "driveFolderId": "1Qs-ZPgRA0JtBIzlK4Nzc96Z1idmRlfAq"
-    },
-    {
-      "name": "Rxlogix Corporation",
-      "ae": "TBH",
-      "industry": "Healthcare",
-      "segment": "Pharmacovigilance Software",
-      "industryDescription": "Rxlogix Corporation provides pharmacovigilance and drug safety software solutions for the life sciences industry.",
-      "industryCompetitors": [
-        "ArisGlobal",
-        "Oracle",
-        "Veeva Systems"
+      "driveFolderId": "1Qs-ZPgRA0JtBIzlK4Nzc96Z1idmRlfAq",
+      "domain": "peraton.com",
+      "accountNumbers": [
+        "11805706",
+        "9579075",
+        "701375",
+        "12403900",
+        "6162679"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:05.774Z"
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Best Western International",
@@ -2125,7 +1665,15 @@
         "Hyatt Hotels",
         "Intercontinental Hotels Group Plc"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:08.770Z"
+      "industryUpdatedAt": "2026-04-11T14:27:08.770Z",
+      "domain": "bwidrive.com",
+      "discoveryFailures": 0,
+      "accountNumbers": [
+        "1190648",
+        "823019",
+        "963707"
+      ],
+      "inactive": true
     },
     {
       "name": "Consumer Cellular, Incorporated",
@@ -2138,7 +1686,14 @@
         "Cricket Wireless",
         "TracFone Wireless"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:10.821Z"
+      "industryUpdatedAt": "2026-04-11T14:27:10.821Z",
+      "domain": "consumercellular.com",
+      "accountNumbers": [
+        "1010239",
+        "12316598"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Trellix",
@@ -2151,20 +1706,13 @@
         "CrowdStrike",
         "Palo Alto Networks"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:12.664Z"
-    },
-    {
-      "name": "Tucson Electric Power Company",
-      "ae": "Peter Niklaus",
-      "industry": "Utilities",
-      "segment": "Electric Utilities",
-      "industryDescription": "Tucson Electric Power (TEP) is an electric utility company that generates, transmits, and distributes electric power to over 442,000 customers in southern Arizona, focusing on reliable and increasingly sustainable energy solutions.",
-      "industryCompetitors": [
-        "Salt River Project",
-        "APS Energy Services",
-        "Arizona Public Service Company"
+      "industryUpdatedAt": "2026-04-11T14:27:12.664Z",
+      "domain": "trellix.com",
+      "accountNumbers": [
+        "11717332"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:23.095Z"
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "California Resources Corporation",
@@ -2178,46 +1726,13 @@
         "Magnolia Oil & Gas"
       ],
       "industryUpdatedAt": "2026-04-11T14:27:21.654Z",
-      "driveFolderId": "19v_DPJMEAwBPHebFFPYeEHIg5PIXE7LH"
-    },
-    {
-      "name": "Insurance Company Of West",
-      "ae": "Oren Shaolian",
-      "industry": "Financial Services",
-      "segment": "Property & Casualty Insurance",
-      "industryDescription": "Insurance Company of the West is a multi-line property and casualty insurance carrier that offers workers' compensation, earthquake, and personal automobile insurance, operating as a subsidiary of ICW Group.",
-      "industryCompetitors": [
-        "National General Insurance",
-        "First American",
-        "Travelers"
+      "driveFolderId": "19v_DPJMEAwBPHebFFPYeEHIg5PIXE7LH",
+      "domain": "crc.com",
+      "accountNumbers": [
+        "5566912"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:22.699Z"
-    },
-    {
-      "name": "Internet Corporation For Assigned Names And Numbers",
-      "ae": "Oren Shaolian",
-      "industry": "Internet Governance",
-      "segment": "Domain Name System (DNS) Management and IP Address Allocation",
-      "industryDescription": "ICANN is a global multistakeholder and nonprofit organization responsible for coordinating the maintenance and procedures of several databases related to the namespaces and numerical spaces of the Internet, ensuring its smooth, secure, and stable operation.",
-      "industryCompetitors": [
-        "ITU (International Telecommunication Union)",
-        "GoDaddy",
-        "The Internet Engineering Task Force (IETF)"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:27:26.566Z"
-    },
-    {
-      "name": "(la Care) Local Initiative Health Authority For Los Angeles County",
-      "ae": "Oren Shaolian",
-      "industry": "Healthcare",
-      "segment": "Managed Care Health Plans",
-      "industryDescription": "L.A. Care Health Plan is a public agency that provides health insurance to low-income and uninsured residents of Los Angeles County, primarily through Medi-Cal and other government-sponsored programs.",
-      "industryCompetitors": [
-        "Kaiser Permanente",
-        "Molina Healthcare",
-        "Health Net"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:27:26.051Z"
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Skechers U.s.a.",
@@ -2230,7 +1745,13 @@
         "Adidas",
         "New Balance"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:29.081Z"
+      "industryUpdatedAt": "2026-04-11T14:27:29.081Z",
+      "domain": "skechers.com",
+      "accountNumbers": [
+        "12761369"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Cable One",
@@ -2243,7 +1764,13 @@
         "EarthLink",
         "Cox"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:28.842Z"
+      "industryUpdatedAt": "2026-04-11T14:27:28.842Z",
+      "domain": "cableone.biz",
+      "accountNumbers": [
+        "1158833"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Freeport Mcmoran",
@@ -2256,20 +1783,13 @@
         "Rio Tinto",
         "Codelco"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:30.970Z"
-    },
-    {
-      "name": "Verra Mobility Corporation",
-      "ae": "Sherry Gayo",
-      "industry": "Technology",
-      "segment": "Smart Mobility and Transportation Solutions",
-      "industryDescription": "Verra Mobility Corporation provides smart mobility technology solutions, including automated toll and violation management, and safety camera systems, to governments, commercial fleets, and rental car companies globally.",
-      "industryCompetitors": [
-        "Kapsch TrafficCom",
-        "Conduent Transportation",
-        "Samsara"
+      "industryUpdatedAt": "2026-04-11T14:27:30.970Z",
+      "domain": "fmi.com",
+      "accountNumbers": [
+        "1298271"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:31.956Z"
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Herbalife International",
@@ -2282,20 +1802,20 @@
         "Nu Skin Enterprises",
         "Natura & Co"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:36.532Z"
-    },
-    {
-      "name": "Rady Childrens Hospital-san Diego",
-      "ae": "Amanda Mejia",
-      "industry": "Healthcare",
-      "segment": "Pediatric Healthcare Services",
-      "industryDescription": "Rady Children's Hospital-San Diego is a non-profit pediatric care facility that provides comprehensive medical services, research, and education to children and adolescents in San Diego, southern Riverside, and Imperial counties.",
-      "industryCompetitors": [
-        "Children's Hospital Los Angeles",
-        "Children's National Hospital (Washington, D.C.)",
-        "Sharp HealthCare"
+      "industryUpdatedAt": "2026-04-11T14:27:36.532Z",
+      "domain": "herbalife.com",
+      "accountNumbers": [
+        "1157997",
+        "12244829",
+        "480439",
+        "540393",
+        "5519811",
+        "6171894",
+        "689858",
+        "464327"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:35.854Z"
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Applied Medical Corporation",
@@ -2308,7 +1828,16 @@
         "Medtronic",
         "Cook Medical"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:42.603Z"
+      "industryUpdatedAt": "2026-04-11T14:27:42.603Z",
+      "domain": "appliedmedical.net",
+      "accountNumbers": [
+        "12613573",
+        "5518102",
+        "5902704",
+        "5934371"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Guitar Center Holdings",
@@ -2322,20 +1851,12 @@
         "Fender Musical Instruments"
       ],
       "industryUpdatedAt": "2026-04-11T14:27:41.036Z",
-      "driveFolderId": "1e1Txq75oj2qq7csY74tllenAtiNRkOD8"
-    },
-    {
-      "name": "Queens Development Corporation",
-      "ae": "Alex Smith",
-      "industry": "Real Estate",
-      "segment": "Urban Development",
-      "industryDescription": "Queens Development Corporation is a non-profit organization focused on urban planning, development, and revitalization projects within the borough of Queens, New York.",
-      "industryCompetitors": [
-        "New York City Economic Development Corporation",
-        "Brooklyn Navy Yard Development Corporation",
-        "Bronx Overall Economic Development Corporation"
-      ],
-      "industryUpdatedAt": "2026-04-11T14:27:52.674Z"
+      "driveFolderId": "1e1Txq75oj2qq7csY74tllenAtiNRkOD8",
+      "domain": "guitarcenter.com",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-09T05:13:31.904Z",
+      "inactive": true
     },
     {
       "name": "Southwest Gas Corporation",
@@ -2348,7 +1869,13 @@
         "UGI Corporation",
         "NewJersey Resources"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:48.472Z"
+      "industryUpdatedAt": "2026-04-11T14:27:48.472Z",
+      "domain": "swgas.com",
+      "accountNumbers": [
+        "1105535"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Boyd Gaming Corporation",
@@ -2362,7 +1889,13 @@
         "Penn Entertainment"
       ],
       "industryUpdatedAt": "2026-04-11T14:27:53.406Z",
-      "driveFolderId": "1p7Um8D2Md3HF1vWwmV8sC4bWvglD-43B"
+      "driveFolderId": "1p7Um8D2Md3HF1vWwmV8sC4bWvglD-43B",
+      "domain": "boydgaming.com",
+      "accountNumbers": [
+        "973213"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Caesars Entertainment",
@@ -2375,20 +1908,13 @@
         "Wynn Resorts",
         "Las Vegas Sands Corporation"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:55.692Z"
-    },
-    {
-      "name": "Mgm Resorts International",
-      "ae": "Beena Patel",
-      "industry": "Hospitality & Entertainment",
-      "segment": "Integrated Resorts & Casinos",
-      "industryDescription": "MGM Resorts International is a multinational hospitality, sports, and entertainment company that operates a portfolio of hotels, casinos, and entertainment venues worldwide.",
-      "industryCompetitors": [
-        "Caesars Entertainment",
-        "Las Vegas Sands",
-        "Wynn Resorts"
+      "industryUpdatedAt": "2026-04-11T14:27:55.692Z",
+      "domain": "caesars.com",
+      "accountNumbers": [
+        "790008"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:57.897Z"
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Smart City Networks, Limited Partnership",
@@ -2401,7 +1927,14 @@
         "NuWave Communications",
         "VCloud"
       ],
-      "industryUpdatedAt": "2026-04-11T14:28:12.805Z"
+      "industryUpdatedAt": "2026-04-11T14:28:12.805Z",
+      "domain": "smartcitynetworks.com",
+      "accountNumbers": [
+        "11678981",
+        "991471"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Masimo Corporation",
@@ -2415,7 +1948,18 @@
         "GE Healthcare"
       ],
       "industryUpdatedAt": "2026-04-11T14:28:15.601Z",
-      "driveFolderId": "1Jz7ioZYWsXW400ukUmS2sYQ9cj-sfvE3"
+      "driveFolderId": "1Jz7ioZYWsXW400ukUmS2sYQ9cj-sfvE3",
+      "domain": "masimo.com",
+      "discoveryFailures": 0,
+      "accountNumbers": [
+        "1025434",
+        "1436574",
+        "5250305",
+        "6350582",
+        "6450177",
+        "6889112"
+      ],
+      "inactive": true
     },
     {
       "name": "Murata Electronics North America",
@@ -2428,7 +1972,13 @@
         "Samsung Electro-Mechanics",
         "Taiyo Yuden"
       ],
-      "industryUpdatedAt": "2026-04-11T14:28:15.305Z"
+      "industryUpdatedAt": "2026-04-11T14:28:15.305Z",
+      "domain": "murata.com",
+      "accountNumbers": [
+        "816944"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Pacific Life Insurance Company",
@@ -2441,7 +1991,13 @@
         "Protective",
         "TLIC"
       ],
-      "industryUpdatedAt": "2026-04-11T14:28:20.103Z"
+      "industryUpdatedAt": "2026-04-11T14:28:20.103Z",
+      "domain": "pacificlife.com",
+      "accountNumbers": [
+        "11431296"
+      ],
+      "discoveryFailures": 0,
+      "inactive": true
     },
     {
       "name": "Zenith Insurance Company",
@@ -2454,7 +2010,78 @@
         "Odyssey Re",
         "AmTrust Financial Services"
       ],
-      "industryUpdatedAt": "2026-04-11T14:28:22.152Z"
+      "industryUpdatedAt": "2026-04-11T14:28:22.152Z",
+      "domain": "zenithinsurance.com",
+      "discoveryFailures": 0,
+      "accountNumbers": [
+        "1070374",
+        "5434459",
+        "6280884"
+      ],
+      "inactive": true
+    },
+    {
+      "name": "A10 Networks",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:26.924Z"
+    },
+    {
+      "name": "Dropbox",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:27.744Z"
+    },
+    {
+      "name": "Fred Hutchinson Cancer Center",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:28.608Z"
+    },
+    {
+      "name": "Illumio",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:29.500Z"
+    },
+    {
+      "name": "Lynden Logistics",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:30.495Z"
+    },
+    {
+      "name": "Recreational Equipment",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:31.102Z"
+    },
+    {
+      "name": "Shutterfly",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:36.665Z"
+    },
+    {
+      "name": "Crowdstrike",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:36.884Z"
+    },
+    {
+      "name": "Lifetouch",
+      "ae": "Carolanne Farrell",
+      "discoveryFailures": 3,
+      "discoveryStatus": "unresolvable",
+      "discoverySkippedUntil": "2026-05-10T17:33:37.173Z"
     }
   ]
 }

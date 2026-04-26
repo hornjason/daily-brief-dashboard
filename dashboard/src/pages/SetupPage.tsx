@@ -320,6 +320,7 @@ interface OAuthStatus {
   expired?: boolean
   email?: string
   configuredAt: string | null
+  hasCloudPlatformScope?: boolean
 }
 
 function GoogleAuthSection() {
@@ -394,6 +395,16 @@ function GoogleAuthSection() {
             Re-authorize
           </button>
         </div>
+        {/* BKL-UX-OAUTH-SCOPE-01: warn when token lacks cloud-platform scope (Vertex AI / Gemini) */}
+        {oauthStatus.hasCloudPlatformScope === false && (
+          <div className="bg-warning/10 border border-warning/30 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-warning text-lg leading-none">⚠</span>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-white">AI briefs require an updated Google sign-in</p>
+              <p className="text-sm text-text-secondary">Sign out and sign back in to enable Vertex AI access.</p>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -1986,6 +1997,7 @@ function AEsCustomersSection({ onAeCountChange }: { onAeCountChange?: (count: nu
           selectedRegion={selectedRegion}
           setSelectedRegion={setSelectedRegion}
           parentFolderId={defaultParentFolderId}
+          lockedFolderId={defaultParentFolderId}
           showRootFallback={!defaultParentFolderId}
           onParentFolderChange={(folderId: string) => {
             // BKL-UX84 / BKL-UX86: a successful Validate click (or silent

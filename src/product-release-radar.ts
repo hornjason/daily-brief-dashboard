@@ -25,7 +25,11 @@ import { getGeminiModel } from './settings-api.ts'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ProductIntelConfig {
-  driveParentFolderId?: string | null
+  // BKL-UX-PRODUCT-FOLDER-CONFIG-01: the legacy parent-folder field has been
+  // removed from this interface — the parent folder is now sourced from
+  // existing AE records via getProductIntelParentFolderId() so there is one
+  // source of truth. The field may still exist in the live config file on
+  // disk; it's just no longer read by code.
   products: ProductConfig[]
 }
 
@@ -93,6 +97,30 @@ export function loadProductIntelConfig(): ProductIntelConfig {
 
 export function loadProductConfig(): ProductConfig[] {
   return loadProductIntelConfig().products
+}
+
+/**
+ * BKL-UX-PRODUCT-FOLDER-CONFIG-01: source the product intel Drive parent
+ * folder from existing AE records. Returns the first AE's parentFolderId
+ * (the first-wins folder enforced by BKL-UX-FOLDER-LOCK-01) or null if no
+ * AE has one configured. This replaces the old
+ * ProductIntelConfig.driveParentFolderId field — there is one parent
+ * folder, sourced from AE records.
+ */
+export function getProductIntelParentFolderId(): string | null {
+  try {
+    const aesPath = resolve(CONFIG_DIR, 'aes.json')
+    const raw = readFileSync(aesPath, 'utf-8')
+    const parsed = JSON.parse(raw) as { aes?: Array<{ parentFolderId?: string | null }> }
+    const list = parsed.aes ?? []
+    for (const ae of list) {
+      const id = (ae.parentFolderId ?? '').toString().trim()
+      if (id.length > 0) return id
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 export function saveProductConfig(products: ProductConfig[]): void {

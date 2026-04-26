@@ -75,3 +75,11 @@ data-test/
 
 # Seed data source (committed — canonical test fixtures)
 # scripts/seed-data/ is intentionally tracked
+
+# Build artifacts and test outputs
+demo-image.tar
+demo-export.tar.gz
+data-snapshots/
+ctrf/
+eval/results/
+reports/mutation/
