@@ -25,7 +25,7 @@ import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
 import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
 import { initRefreshEngine, registerRefreshRoutes, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
-import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary } from './src/scraper-manager.ts'
+import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary, setSfSyncLastError } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
 import { initDashboardRoutes, registerDashboardRoutes } from './src/dashboard-routes.ts'
@@ -605,6 +605,7 @@ app.post('/api/test/supportable-customer-search', async (c) => {
 app.post('/api/auth/salesforce/start', async (c) => {
   try {
     await startSfLoginBrowser(SF_SESSION_PATH, RH_PROFILE_DIR, () => {
+      setSfSyncLastError(null)  // BKL-UX94: clear stale error so sessionExpired resets immediately after login
       // Auto-trigger a pipeline sync for each configured AE after login
       const aesWithSf = aes.filter(a => a.sfReportId && a.driveFolderId)
       if (aesWithSf.length) {

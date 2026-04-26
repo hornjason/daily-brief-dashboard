@@ -165,6 +165,8 @@ export async function startSfLoginBrowser(
             const ctx = activeContext!
             activeContext = null
             loginInProgress = false
+            // BKL-UX94: clear VNC after login — same pattern as rh-auth.ts
+            ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})
 
             // Re-adopt for all scrapers sharing this SSO context
             adoptScrapeContext(ctx, profileDir, rhPage)
@@ -188,6 +190,8 @@ export async function startSfLoginBrowser(
             const ctx = activeContext!
             activeContext = null
             loginInProgress = false
+            // BKL-UX94: clear VNC after login — same pattern as rh-auth.ts
+            ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})
             adoptSfContext(ctx, profileDir)
             // Still reset SF circuit breaker even if RH portal didn't load
             resetAllCircuitBreakers()
