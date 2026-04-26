@@ -283,9 +283,7 @@ app.get('/api/auth/redhat/status', async (c) => {
   })
   return c.json({
     ...status,
-    hasSession: transport === 'bearer'
-      ? !!(process.env.REDHAT_OFFLINE_TOKEN)
-      : (status.hasSession && getScrapeContext() !== null),
+    hasSession: status.hasSession && getScrapeContext() !== null,
     sessionExpired: sessionExpiredForTransport,
     liveReachable,
     ...healthFields,
