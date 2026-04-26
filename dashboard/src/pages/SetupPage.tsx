@@ -2973,17 +2973,14 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     // window.open is called after any await. Open now while still in the user gesture.
     tableauVncRef.current = window.open(VNC_URL, 'tableau-vnc', 'width=1280,height=900')
 
-    // Check if already logged in (force-bypass cache). If so, close window immediately.
+    // Check if already logged in. If valid, let resolveLogin handle close (3s delay).
+    // Do NOT close immediately — VNC opens synchronously before this await and closing
+    // it instantly confuses the user. The wait-for-login / 5s poll will call resolveLogin(true).
     try {
       const res = await fetch('/api/bootstrap/tableau/session-status?force=true')
-      const status = await res.json()
-      setTableauStatus(status)
-      if (status.sessionValid) {
-        tableauVncRef.current?.close()
-        tableauVncRef.current = null
-        setTableauConnecting(false)
-        return
-      }
+      const data = await res.json()
+      setTableauStatus(data)
+      // Fall through regardless — resolveLogin() closes VNC after 3s delay when session detected
     } catch { /* fall through to VNC flow */ }
 
     // IMPORTANT: await open-login before starting wait-for-login to avoid a race

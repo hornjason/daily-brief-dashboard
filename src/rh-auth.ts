@@ -225,6 +225,13 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
         const url = page.url()
 
         if (isPortalUrl(url)) {
+          // Debounce: redirect chains may momentarily touch access.redhat.com before SSO.
+          // Re-check after 500ms to confirm URL is stable.
+          await new Promise(r => setTimeout(r, 500))
+          const stableUrl = page.url()
+          if (!isPortalUrl(stableUrl)) continue
+          // URL confirmed stable — login complete
+
           // Logged in — write marker file (cookies live in profileDir automatically)
           writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }), { mode: 0o600 })
           console.log('[rh-auth] Login confirmed — profile:', profileDir)
@@ -246,10 +253,16 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
           adoptSupportableContext(ctx)
           adoptCcspContext(ctx)
 
-          // BKL-UX94: Open a blank tab so VNC clears after login. The original livePage
-          // stays alive in the background — it holds sessionStorage (PKCE/SSO tokens)
-          // needed for transparent session renewal. Non-blocking, best-effort.
-          ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})
+          // BKL-UX94: Open a blank tab so VNC clears after login. Awaited so VNC reliably shows blank.
+          try {
+            const blankPage = await ctx.newPage()
+            await blankPage.bringToFront()
+            await blankPage.goto('about:blank').catch((e: any) => {
+              console.warn('[rh-auth] about:blank navigation failed:', e?.message ?? e)
+            })
+          } catch (e: any) {
+            console.warn('[rh-auth] blank tab open failed:', e?.message ?? e)
+          }
 
           recordSessionEstablished('rh-portal')
           recordSessionEstablished('salesforce')

@@ -934,3 +934,49 @@ test.describe('REG-083: CircuitBreaker reads automation config lazily (BKL-SR03-
     ).not.toMatch(/readonly\s+cooldownMs\s*:\s*number/)
   })
 })
+
+// ── REG-CONN: Connection VNC flow source patterns ────────────────────────────
+//
+// BKL-UX94: Three surgical fixes to VNC login flows:
+//   rh-auth.ts: await about:blank navigation + bringToFront + 500ms URL stability debounce
+//   sf-auth.ts: blank existing pages + bringToFront + await sfPage.goto
+//   SetupPage.tsx: remove immediate VNC close on pre-flight valid check; let resolveLogin handle it
+
+test.describe('REG-CONN: Connection VNC flow source patterns', () => {
+  test('REG-CONN-RH-01: rh-auth.ts uses await before about:blank navigation', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'rh-auth.ts'), 'utf8')
+    expect(src).toMatch(/await\s+blankPage\.goto\(['"]about:blank/)
+  })
+
+  test('REG-CONN-RH-02: rh-auth.ts calls bringToFront on blank page', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'rh-auth.ts'), 'utf8')
+    expect(src).toContain('bringToFront()')
+  })
+
+  test('REG-CONN-RH-03: rh-auth.ts has URL stability debounce after isPortalUrl match', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'rh-auth.ts'), 'utf8')
+    expect(src).toMatch(/isPortalUrl[\s\S]{0,300}setTimeout.*500/)
+  })
+
+  test('REG-CONN-SF-01: sf-auth.ts navigates existing pages to about:blank', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'sf-auth.ts'), 'utf8')
+    expect(src).toMatch(/context\.pages\(\)/)
+    expect(src).toMatch(/goto\(['"]about:blank/)
+  })
+
+  test('REG-CONN-SF-02: sf-auth.ts calls bringToFront on sfPage', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'sf-auth.ts'), 'utf8')
+    expect(src).toContain('sfPage.bringToFront()')
+  })
+
+  test('REG-CONN-SF-03: sf-auth.ts awaits sfPage.goto not fire-and-forget', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'sf-auth.ts'), 'utf8')
+    expect(src).toMatch(/await sfPage\.goto\(SF_LOGIN_URL/)
+  })
+
+  test('REG-CONN-CCSP-01: SetupPage.tsx does not immediately close VNC after pre-flight valid check', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'dashboard', 'src', 'pages', 'SetupPage.tsx'), 'utf8')
+    // The immediate close block (close() followed immediately by null and return inside session-status check) must be gone
+    expect(src).not.toMatch(/sessionValid[\s\S]{0,50}tableauVncRef\.current\?\.close\(\)[\s\S]{0,20}tableauVncRef\.current = null[\s\S]{0,20}setTableauConnecting\(false\)[\s\S]{0,20}return/)
+  })
+})

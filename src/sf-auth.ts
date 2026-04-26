@@ -108,11 +108,22 @@ export async function startSfLoginBrowser(
   }
 
   activeContext = context
-  const sfPage = await context.newPage()
 
-  // Navigate to SF login
-  sfPage.goto(SF_LOGIN_URL).catch((e: any) => {
-    console.warn('[sf-auth] navigation to SF login failed:', e?.message ?? e)
+  // Clear all pages auto-opened by Chromium from profile history (e.g. RH portal case list tabs).
+  // Navigate to about:blank instead of closing — preserves browser-level session cookies.
+  for (const p of context.pages()) {
+    await p.goto('about:blank').catch((e: any) => {
+      console.warn('[sf-auth] failed to blank existing page:', e?.message ?? e)
+    })
+  }
+
+  const sfPage = await context.newPage()
+  await sfPage.bringToFront()
+
+  // Navigate to SF login — await with short timeout so VNC shows SF not RH portal.
+  // Poll loop retries if navigation fails (url === 'about:blank' branch at line ~130).
+  await sfPage.goto(SF_LOGIN_URL, { timeout: 8_000 }).catch((e: any) => {
+    console.warn('[sf-auth] initial SF navigation:', e?.message ?? e)
   })
   console.log('[sf-auth] headed browser opened — navigating to SF login')
 

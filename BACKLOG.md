@@ -6664,3 +6664,24 @@ Files: dashboard/src/pages/SetupPage.tsx — Step 3 SF card, Step 2 AE form
 Description: The SF card in Step 3 shows "SF Report ID required — configure in AEs & Customers above" but Step 2 (AEs & Customers) has no visible SF Report ID field for users to fill in. The field exists in the data model (sfReportId on AE) and in the Manage AE form in Step 4, but not in Step 2 during initial wizard flow. New POD setups hit this immediately.
 Can we test: YES — Playwright test: complete Step 2 with a new AE, advance to Step 3, assert "SF Report ID required" message is absent (or that Step 2 prompts for the field).
 Decision: OPEN — needs design consideration for where to surface sfReportId input in wizard flow.
+
+### BKL-WIZ-04 | Wizard "Set Up AE" 409 race — AE silently not saved when second AE started while first runs
+Status: ✅ DONE 2026-04-26
+Priority: P0
+Size: M
+Source: Jason reported Elmer Alvarez not appearing after wizard setup; council investigation 2026-04-26
+Files: dashboard/src/pages/SetupPage.tsx, test/regression.spec.ts, test/regression/ux.spec.ts
+Description: startBootstrap() posted to /api/bootstrap/auto without checking server status first. When user navigated away and back during an active bootstrap (React state reset per BKL-UX110), the form appeared fresh. User filled AE2 and clicked "Set Up AE" — server returned 409 because AE1 was still running. Tiny text-xs error appeared briefly, got lost on navigation. saveAes never reached for AE2. AE2 not persisted.
+Fix: (1) startBootstrap() now fetches /api/bootstrap/auto/status before posting — if running, shows clear error with AE name and returns. (2) Persistent 5s-poll banner renders when liveBootstrapRunning && !local running. (3) Error display upgraded from text-xs to text-sm styled alert with ⚠ icon.
+Tests: REG-WIZ-01 through REG-WIZ-07, REG-POD-01/02 (regression.spec.ts); REG-UX110-01 through REG-UX110-06 (test/regression/ux.spec.ts).
+Decision: DONE — fix shipped 2026-04-26 commit 7965235. Quinn PASS (81 tests passing). Rook clean.
+
+### BKL-DEV-01 | Rook security scans should review working-directory diff, not clean worktree
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Learning reflection 2026-04-26 — Rook got isolation:worktree, reviewed clean tree, missed uncommitted changes
+Files: CLAUDE.md — delegation matrix, Rook briefing template
+Description: When Rook is spawned with isolation:worktree, it gets a fresh copy of main without uncommitted changes. For pre-commit security reviews, Rook should be given explicit file paths and line ranges from the main working directory, not a worktree. The current pattern causes Rook to report "not found" on changes that DO exist.
+Can we test: YES — Rook source audit should grep for the specific new variables/functions added in the changes.
+Decision: OPEN — update CLAUDE.md Rook briefing guidance to pass explicit file paths + diff context when changes are uncommitted.
