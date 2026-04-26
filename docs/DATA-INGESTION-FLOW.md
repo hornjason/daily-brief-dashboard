@@ -72,13 +72,13 @@ L2 freshness rule: `modifiedTime` < 24 hours. Older = stale, fall through to L3.
 
 ### L3 — POD-level Google Sheets (24h modifiedTime, except SF Bookings)
 
-The POD's shared Drive folder contains POD-level GSheets shared by all AEs in that POD. Each is unparsed: it contains the full POD's rows, not filtered per-AE.
+All L3 data — SF Bookings sheets, CCSP CSVs, and Pipeline CSVs — lives in a **single shared Subscription Data folder** identified by `podBookingsFolderId`. This folder is independent of `parentFolderId` (the CommandCenter root) and is shared across all app instances. PODs are segmented by file naming convention, not by subfolders. Each L3 file is unparsed: it contains the full POD's rows, not filtered per-AE.
 
 | File pattern | Flow | Source upstream |
 |--------------|------|-----------------|
-| `SF Bookings — {POD}` (configured by `podBookingsFolderId`) | SF Bookings | Red Hat ops writes this |
-| `{POD-name}-CCSP-{period}` | CCSP | Tableau export (this app uploads the L4 CSV) |
-| `{reportId}-{POD-name}` | Pipeline | SF report export (this app uploads the L4 scrape) |
+| `{POD Name} POD - Subscriptions` (in `podBookingsFolderId`) | SF Bookings | Red Hat ops writes this |
+| `CCSP-{POD_NAME}-{DATE}.csv` (in `podBookingsFolderId`) | CCSP | Tableau export (this app uploads the L4 CSV) |
+| `SF-PIPELINE-{reportId}-{POD_NAME}.csv` (in `podBookingsFolderId`) | Pipeline | SF report export (this app uploads the L4 scrape) |
 
 **SF Bookings is special**: the POD GSheet is always authoritative (the canonical Red Hat-owned source). There is no L4 live scraper for subscriptions. If L1 and L2 miss, L3 is read unconditionally — no `modifiedTime` freshness check.
 

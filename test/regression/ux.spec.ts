@@ -1455,4 +1455,22 @@ test.describe('Connection Auth Stack — BKL-CONN', () => {
     expect(refreshAllProductsIdx).toBeGreaterThan(-1)
     expect(refreshAllFeaturesIdx).toBeGreaterThan(refreshAllProductsIdx)
   })
+
+  test('REG-FEAT-PRODUCT-FOLDER-REPARENT-01: setup-drive-folders verifies existing driveFolder is child of parentFolderId before skipping (BKL-UX-PRODUCT-FOLDER-REPARENT-01)', () => {
+    // BKL-UX-PRODUCT-FOLDER-REPARENT-01: When a product already has driveFolder set
+    // (from an older install with a separate driveParentFolderId), the route must
+    // verify the folder lives under the new parentFolderId via drive.files.get with
+    // fields='id,parents', and call drive.files.update with addParents (non-destructive)
+    // if it doesn't. Otherwise the folder never appears under the configured parent.
+    const src = readFileSync(join(projectRoot, 'src/product-intel-routes.ts'), 'utf-8')
+    // Source must request the parents field on the existing-folder check
+    expect(src, 'product-intel-routes.ts must request id,parents on existing driveFolder check').toContain("'id,parents'")
+    // Must call addParents (non-destructive re-parent — never removeParents)
+    expect(src, 'product-intel-routes.ts must call addParents to re-parent existing folders').toContain('addParents')
+    expect(src, 'product-intel-routes.ts must NOT use removeParents (non-destructive)').not.toContain('removeParents')
+    // Same pattern must exist in bootstrap-orchestrator.ts pre-flight block
+    const bootstrapSrc = readFileSync(join(projectRoot, 'src/bootstrap-orchestrator.ts'), 'utf-8')
+    expect(bootstrapSrc, 'bootstrap-orchestrator.ts must request id,parents on existing driveFolder check').toContain("'id,parents'")
+    expect(bootstrapSrc, 'bootstrap-orchestrator.ts must call addParents to re-parent existing folders').toContain('addParents')
+  })
 })

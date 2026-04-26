@@ -469,6 +469,7 @@ Extract ALL features including those listed in Technology Preview sections. Outp
 
     mkdirSync(CACHE_DIR, { recursive: true })
     writeFileSync(featureCachePath(slug), JSON.stringify(cache, null, 2), { mode: 0o600 })
+    _featureCacheMap.set(slug, cache)
     console.log(`[feature-radar] ${slug}: ${features.length} features extracted`)
     return cache
   } catch (e: any) {
@@ -636,6 +637,7 @@ export async function enrichFeatures(slug: string): Promise<void> {
   // Update cache with enrichedAt timestamp
   cache.enrichedAt = new Date().toISOString()
   writeFileSync(featureCachePath(slug), JSON.stringify(cache, null, 2), { mode: 0o600 })
+  _featureCacheMap.set(slug, cache)
   console.log(`[feature-radar] ${slug}: ${enrichedCount} features enriched`)
 }
 

@@ -1587,7 +1587,25 @@ export function registerBootstrapRoutes(app: Hono): void {
           let anyUpdated = false
           for (let i = 0; i < updatedProducts.length; i++) {
             const p = updatedProducts[i]
-            if (p.driveFolder) continue  // already set — skip
+            if (p.driveFolder) {
+              // BKL-UX-PRODUCT-FOLDER-REPARENT-01: verify existing folder is under parentId;
+              // if not, add parentId as an additional parent (non-destructive).
+              const meta = await drivePI.files.get({
+                fileId: p.driveFolder,
+                fields: 'id,parents',
+                supportsAllDrives: true,
+              }).catch(() => null)
+              if (meta?.data.parents && !meta.data.parents.includes(parentId)) {
+                await drivePI.files.update({
+                  fileId: p.driveFolder,
+                  addParents: parentId,
+                  supportsAllDrives: true,
+                  fields: 'id',
+                }).catch((e: any) => console.warn(`[auto-bootstrap] failed to re-parent ${p.slug}:`, e?.message))
+                console.log(`[auto-bootstrap] Re-parented ${p.slug} under ${parentId}`)
+              }
+              continue
+            }
             const safeSlug = p.slug.replace(/'/g, "\\'")
             const existing = await drivePI.files.list({
               q: `name='${safeSlug}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,

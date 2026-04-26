@@ -125,28 +125,69 @@ Playwright scraper
 
 ### 8. Bootstrap Drive Folder Structure
 
-Auto-bootstrap creates the following hierarchy under the configured **parent** Drive folder:
+The app uses **two separate Drive roots** that serve completely different purposes. They are independent — neither contains the other, and they are configured by separate IDs.
+
+#### Root 1 — Subscription Data folder (`podBookingsFolderId` in `settings.json`)
+
+A single shared Drive folder, **completely independent** of `parentFolderId`. All app instances and deployments read/write here. Its ID is preserved across all installs and never recreated. All PODs land in this one flat folder — segmented by naming convention, not subfolders.
 
 ```
-📁 {Parent Folder}/                    ← provided by user in wizard (parentFolderId)
-   └── 📁 {AE Name}/                  ← created in Step 1; ID stored as driveFolderId in aes.json
-          ├── 📁 {Customer 1}/         ← created in Step 2; ID stored in customers.json
-          ├── 📁 {Customer 2}/
-          ├── ...
-          ├── 📊 Supportable — {AE Name}   ← created in Step 4; ID stored as supportableSheetId
-          ├── 📊 {AE Name} CCSP            ← created in Step 5; ID stored as ccspSheetId
-          └── 📊 {AE Name} Pipeline        ← created in Step 6; ID stored as pipelineSheetId
+📁 Subscription Data/                       ← podBookingsFolderId in settings.json (shared, single folder)
+   ├── 📊 {POD Name} POD - Subscriptions    ← L3 SF Bookings (Red Hat ops writes; app reads only)
+   ├── 📄 CCSP-{POD_NAME}-{DATE}.csv        ← L3 CCSP (app writes after Tableau L4 scrape)
+   └── 📄 SF-PIPELINE-{reportId}-{POD_NAME}.csv ← L3 Pipeline (app writes after SF L4 scrape)
 ```
 
-**`driveFolderId` vs `parentFolderId`:**
-- `parentFolderId` — entered in the wizard; where bootstrap creates the AE subfolder. Not stored.
-- `driveFolderId` — the AE's own folder created by Step 1. Stored in `aes.json`. Used as the parent for all subsequent sheet and customer folder creation.
+- All L3 data — SF Bookings sheets, CCSP CSVs, and Pipeline CSVs — lives here.
+- Files are never deleted. New PODs/regions just add more files as the territory expands.
+- Independent of `parentFolderId` — same folder ID across every install.
+
+#### Root 2 — CommandCenter folder (`parentFolderId`, locked after first bootstrap)
+
+Per-install, **not** shared across instances. Set once on first AE bootstrap, then locked (see BKL-UX-FOLDER-LOCK-01). Stored in `aes.json` (first-wins).
+
+```
+📁 CommandCenter/                            ← parentFolderId (per-install, locked after first bootstrap)
+   ├── 📁 Config/                           ← initial scaffolding (created on first bootstrap, idempotent)
+   │     ├── 📊 appBackup                   ← spreadsheet backup of config snapshot
+   │     └── 📄 settings.json               ← config snapshot for backup/restore
+   ├── 📁 Products/                         ← initial scaffolding (created on first bootstrap, idempotent)
+   │     ├── 📁 aap/
+   │     ├── 📁 rhel/
+   │     ├── 📁 ocp/
+   │     ├── 📁 ocp-virt/
+   │     ├── 📁 rhel-ai/
+   │     ├── 📁 rh-ai-inference/
+   │     └── 📁 rhoai/
+   └── 📁 {AE Name}/                        ← per-AE folder, created by bootstrap Step 1; ID stored as driveFolderId in aes.json
+         ├── 📁 {Customer 1}/                ← created in Step 2; ID stored in customers.json
+         ├── 📁 {Customer 2}/
+         ├── ...
+         ├── 📊 Supportable — {AE Name}     ← L2, created in Step 4; ID stored as supportableSheetId
+         ├── 📊 {AE Name} CCSP              ← L2, created in Step 5; ID stored as ccspSheetId
+         └── 📊 {AE Name} Pipeline          ← L2, created in Step 6; ID stored as pipelineSheetId
+```
+
+**ID storage and identity:**
+- `parentFolderId` — the CommandCenter root. Stored in `aes.json`. First-wins: validated and locked on the first bootstrap (single-AE or POD), then reused for all subsequent AE/POD bootstraps without re-asking (BKL-UX-FOLDER-LOCK-01).
+- `podBookingsFolderId` — the Subscription Data folder. Stored in `settings.json`. Independent of `parentFolderId`; never recreated.
+- `driveFolderId` — the AE's own folder created by Step 1 under CommandCenter. Stored in `aes.json`. Used as the parent for all per-AE sheet and customer folder creation.
+
+**Initial bootstrap scaffolding (idempotent):**
+- `Config/` and `Products/` (with the seven product slug subfolders) are created once on first bootstrap. Re-runs detect existing folders by name and skip creation.
+- `appBackup` is a spreadsheet that belongs in `Config/`.
+- Product corpus folders belong under `Products/[slug]/`.
 
 Customer folder names use `normalizeCustomerName()` — strips legal suffixes (Inc, LLC, Corp), state codes (`- CA`), parentheticals. Bootstrap is idempotent: existing folder IDs are reused from `aes.json`/`customers.json` on re-runs.
 
 **Customer type has `driveFolderId?: string`** — stored on each `Customer` entry in `customers.json` after the folder is created in Step 2.
 
 **Bootstrap does NOT populate local cache:** Steps 5 and 6 write CCSP and pipeline data directly to Google Sheets. The local JSON cache files in `data/cache/` are populated separately when the dashboard loads and triggers scrapes. `api/status/scrapes` sync timestamps ARE set during bootstrap.
+
+**Known implementation gaps (pending — see BACKLOG.md):**
+- **BKL-DRIVE-SCAFFOLD-01** — `Config/` and `Products/` are not yet created as part of initial bootstrap scaffolding.
+- **BKL-DRIVE-APPBACKUP-01** — `appBackup` is currently written to the Subscription Data folder; should be in `Config/` under CommandCenter.
+- **BKL-DRIVE-PRODUCTS-ROOT-01** — Product slug folders are currently created directly under CommandCenter root; should be under `Products/`.
 
 ---
 

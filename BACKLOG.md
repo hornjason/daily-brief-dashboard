@@ -6850,6 +6850,60 @@ Description: `BootstrapConfigBlock` always starts with an empty folder input (in
 Rule (first-wins, applies to both tabs): First bootstrap — whether a single AE or a full POD — validates and locks the `parentFolderId` permanently. All subsequent bootstraps (single AEs added later, additional POD runs) use that same folder without asking. Order does not matter: POD first → single AEs added later inherit the POD folder. Single AE first → full POD bootstrap later uses that AE's folder.
 Fix: When `defaultParentFolderId` is non-empty (sourced from existing AE records, not settings.json), render the folder field locked/read-only showing the folder name + a Drive link. Auto-fire `onParentFolderChange(defaultParentFolderId)` immediately so the parent's `podBookingsFolderId` and `podFolderValidated` are set without a manual Validate click — applies to both the single-AE tab and the full-POD tab. Add an explicit "Change folder" escape hatch (warning: "Changing this will create new AE folders under a different parent — existing AEs will be unaffected but the config will be inconsistent") for the rare genuine change case. When no AEs exist (fresh install), show the editable input as-is — BKL-UX84 still applies to the very first bootstrap.
 
+## Drive Folder Scaffolding (2026-04-26)
+
+### BKL-DRIVE-SCAFFOLD-01 | `Config/` and `Products/` not created during initial bootstrap scaffolding
+Status: OPEN
+Priority: P2
+Size: S
+Source: Jason 2026-04-26 — Drive architecture review
+Files: src/bootstrap-orchestrator.ts, src/setup-drive-folders (route)
+Description: Per the agreed CommandCenter Drive architecture (ARCHITECTURE.md §8), `Config/` and `Products/` (with the seven product slug subfolders: aap, rhel, ocp, ocp-virt, rhel-ai, rh-ai-inference, rhoai) should be created as initial bootstrap scaffolding under `parentFolderId`. Currently neither is created on first AE bootstrap. Bootstrap should create both folders idempotently — detect by name, skip if present, create if missing. Applies to both single-AE and full-POD bootstrap paths.
+Fix: Add a pre-flight scaffolding step before Step 1 (AE folder creation) that idempotently ensures `Config/` and `Products/{aap,rhel,ocp,ocp-virt,rhel-ai,rh-ai-inference,rhoai}/` exist under `parentFolderId`. Re-runs must reuse existing folder IDs.
+
+### BKL-DRIVE-APPBACKUP-01 | `appBackup` written to wrong Drive folder (Subscription Data instead of `Config/`)
+Status: OPEN
+Priority: P2
+Size: S
+Source: Jason 2026-04-26 — Drive architecture review
+Files: src/bootstrap-orchestrator.ts (or wherever appBackup is created)
+Description: The `appBackup` spreadsheet is currently created in the Subscription Data folder (`podBookingsFolderId`), which is the shared L3 data root. Per the agreed architecture it belongs in `Config/` under CommandCenter (`parentFolderId`) — the per-install root. The Subscription Data folder is shared across all installs and should only hold L3 SF Bookings sheets, CCSP CSVs, and Pipeline CSVs. Requires migrating existing `appBackup` for current installs (or one-time move + ID rewrite in settings).
+Fix: Change `appBackup` creation target to `Config/` under `parentFolderId` (depends on BKL-DRIVE-SCAFFOLD-01 creating `Config/`). For existing installs, detect old `appBackup` in Subscription Data folder and either move it or recreate in `Config/` and update the stored ID.
+
+### BKL-DRIVE-PRODUCTS-ROOT-01 | Product slug folders created at CommandCenter root instead of under `Products/`
+Status: OPEN
+Priority: P2
+Size: S
+Source: Jason 2026-04-26 — Drive architecture review
+Files: src/setup-drive-folders (route), src/bootstrap-orchestrator.ts pre-flight, src/product-intel-config.ts (or equivalent)
+Description: Product slug folders (`aap/`, `rhel/`, `ocp/`, `ocp-virt/`, `rhel-ai/`, `rh-ai-inference/`, `rhoai/`) are currently created directly under CommandCenter root (`parentFolderId`). Per the agreed architecture they belong under a `Products/` parent folder. `setup-drive-folders` and the bootstrap pre-flight need updating to create/look up product folders under `Products/{slug}/`. Existing installs need a migration path (move folders or update stored IDs).
+Fix: Update `setup-drive-folders` and bootstrap pre-flight to (1) ensure `Products/` exists (BKL-DRIVE-SCAFFOLD-01), (2) create/look up each product slug folder under `Products/`, (3) migrate existing root-level slug folders by moving them into `Products/` and updating any stored folder IDs.
+
+### BKL-DRIVE-BACKUP-API-01 | No backup/restore APIs for `Config/settings.json`
+Status: OPEN
+Priority: P3
+Size: M
+Source: Jason 2026-04-26 — Drive architecture review
+Files: server.ts (new routes), src/bootstrap-orchestrator.ts (Config folder access)
+Description: The agreed architecture has `Config/settings.json` as a config snapshot for backup/restore inside CommandCenter's `Config/` folder, but no APIs exist to read or write it. The app should expose `POST /api/config/backup` (snapshot current settings.json into `Config/settings.json` on Drive) and `POST /api/config/restore` (read `Config/settings.json` from Drive and apply it locally). Enables disaster recovery and config portability between installs that share a CommandCenter.
+Fix: (1) Add `POST /api/config/backup` — reads local settings.json and writes to `Config/settings.json` on Drive with timestamp metadata. (2) Add `POST /api/config/restore` — reads `Config/settings.json` from Drive and applies to local settings.json (with confirmation/safety guard). (3) Both endpoints depend on BKL-DRIVE-SCAFFOLD-01 ensuring `Config/` exists. (4) Document in docs/SECRETS-GUIDE.md or new docs/CONFIG-BACKUP.md.
+
+### BKL-SEC-FILEMODE-01 | writeFileSync mode flag only applies on file create, not overwrite
+Status: OPEN
+Priority: P3
+Size: XS
+Source: Rook 2026-04-26 — security scan of product-feature-radar.ts
+Files: src/product-feature-radar.ts (lines 471, 638)
+Description: `writeFileSync(path, data, { mode: 0o600 })` only sets permissions when the file is created. On subsequent overwrites the existing inode keeps its prior mode. Add `fs.chmodSync(p, 0o600)` after each write to enforce 0o600 on every update.
+
+### BKL-SEC-DRIVEID-VALIDATE-01 | Bootstrap pre-flight doesn't validate parentId via isValidDriveFolderId before Drive API call
+Status: OPEN
+Priority: P3
+Size: XS
+Source: Rook 2026-04-26 — security scan of bootstrap-orchestrator.ts
+Files: src/bootstrap-orchestrator.ts (line ~1583)
+Description: `product-intel-routes.ts` gates `parentFolderId` through `isValidDriveFolderId()` before Drive calls; bootstrap orchestrator's pre-flight uses the same helper output but skips the validation. Add `if (!isValidDriveFolderId(parentId)) { skip }` before the loop for defense-in-depth.
+
 ### BKL-SEC-SF-URL-01 | SF session classifier uses substring URL match — vulnerable to subdomain bypass
 Status: OPEN
 Priority: P2
@@ -6858,3 +6912,12 @@ Source: Rook scan 2026-04-26 — identified during BKL-CONN-SF-CLASSIFY-02 revie
 Files: src/sf-scraper.ts ~line 469
 Description: The `isLoginPage` URL check uses `String.includes()` which matches anywhere in the URL string. A URL like `https://login.salesforce.com.attacker.com/` would falsely match `login.salesforce.com` and trigger `SfSessionExpiredError` unnecessarily. Same weakness exists for `my.salesforce.com` and `sso.redhat.com` checks added in BKL-CONN-SF-CLASSIFY-01. Direction of the false-match is conservative (unnecessary re-auth, not bypass), but it should be tightened.
 Fix: Replace `url.includes('x.com')` with `new URL(currentUrl).hostname` based checks: `hostname === 'login.salesforce.com'`, `hostname.endsWith('.my.salesforce.com')`, `hostname === 'sso.redhat.com'`. Extract to a pure `classifySfNavOutcome(url: string)` function so it's testable without Playwright. Add unit test asserting `login.salesforce.com.evil.com` classifies as transient (not expired).
+
+### BKL-SEC-SAKEY-VERIFY-01 | Verify SA key no longer needed — remove from .env and confirm Gemini works via OAuth only
+Status: OPEN
+Priority: P2
+Size: XS
+Source: Jason 2026-04-26 — audit determined SA key not needed for @redhat.com users; .env still has key set
+Files: .env, src/gemini-auth.ts, src/customer.ts
+Description: The April 25 audit (commit 1515e7714) removed GEMINI_SERVICE_ACCOUNT_KEY from CI and default builds. Vertex AI auth flows through the @redhat.com OAuth token (cloud-platform scope) via domain IAM binding on jhorn-pai project. However .env still contains GEMINI_SERVICE_ACCOUNT_KEY, so the instance is still using SA key auth in practice. BKL-SEC-SAKEY-01 (try/catch hardening on SA key parse) may also be moot if SA key is fully removed.
+Fix: (1) Remove GEMINI_SERVICE_ACCOUNT_KEY from .env. (2) Restart container. (3) Trigger a customer brief generation and confirm Gemini calls succeed via OAuth token. (4) If confirmed: close BKL-SEC-SAKEY-01 as moot, update docs/SECRETS-GUIDE.md. (5) The fallback code in gemini-auth.ts + customer.ts can remain for non-redhat.com users — just not exercised in this install.

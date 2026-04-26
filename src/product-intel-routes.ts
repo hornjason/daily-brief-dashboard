@@ -142,8 +142,25 @@ export function registerProductIntelRoutes(app: Hono): void {
       for (let i = 0; i < products.length; i++) {
         const product = products[i]
 
-        // Skip if already configured
+        // Skip if already configured — but verify it's a child of parentFolderId.
+        // BKL-UX-PRODUCT-FOLDER-REPARENT-01: existing folders from older installs
+        // (separate driveParentFolderId field) may not live under the new parent.
+        // Add parentFolderId as an additional parent (non-destructive — preserves content).
         if (product.driveFolder) {
+          const meta = await drive.files.get({
+            fileId: product.driveFolder,
+            fields: 'id,parents',
+            supportsAllDrives: true,
+          }).catch(() => null)
+          if (meta?.data.parents && !meta.data.parents.includes(parentFolderId)) {
+            await drive.files.update({
+              fileId: product.driveFolder,
+              addParents: parentFolderId,
+              supportsAllDrives: true,
+              fields: 'id',
+            }).catch((e: any) => console.warn(`[product-intel] setup-drive-folders: failed to re-parent ${product.slug}:`, e?.message))
+            console.log(`[product-intel] setup-drive-folders: re-parented ${product.slug} under ${parentFolderId}`)
+          }
           results.push({ slug: product.slug, driveFolder: product.driveFolder, created: false })
           continue
         }
