@@ -14,7 +14,8 @@
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext } from '@playwright/test'
-import { writeFileSync, existsSync } from 'node:fs'
+import { writeFileSync, existsSync, unlinkSync } from 'node:fs'
+import { join } from 'node:path'
 import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
 import { closeSfContext, adoptSfContext, getSfContext } from './sf-scraper.ts'
 import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
@@ -87,6 +88,10 @@ export async function startSfLoginBrowser(
   // Null out CCSP/Supportable context refs so "Run Now" during auth gets a clear error
   closeSupportableContext()
   closeCcspContext()
+
+  // Remove stale SingletonLock — prevents "profile locked by another process" error
+  // if the previous context (RH Portal) didn't release it cleanly.
+  try { unlinkSync(join(profileDir, 'SingletonLock')) } catch { /* fine — file may not exist */ }
 
   loginInProgress = true
   loginTimedOut = false
