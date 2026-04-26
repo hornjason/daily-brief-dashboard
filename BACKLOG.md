@@ -6695,3 +6695,25 @@ Files: src/sf-auth.ts — login-complete path (~line 160 after SF auth confirmed
 Description: The sf-auth.ts login-complete path contains `ctx.newPage().then(p => p.goto('about:blank')).catch(() => {})` — the same fire-and-forget pattern we fixed in rh-auth.ts. This path runs after SF+RH auth is confirmed successful. While less impactful (auth is already done), it's inconsistent with the fix applied to rh-auth.ts and should be aligned.
 Can we test: YES — source pattern test: confirm `await ctx.newPage()` (not .then()) in sf-auth.ts login-complete path.
 Decision: OPEN — minor consistency fix, P3 priority.
+
+### BKL-CONN-03 | RH Portal drops permanently when SF login is started (no recovery on timeout)
+Status: 🔴 OPEN
+Priority: P1
+Size: M
+Source: Council investigation 2026-04-26 — Jason observed RH Portal going unconnected after SF login attempt
+Files: src/sf-auth.ts — timeout handler (lines 220-223)
+Description: When SF login starts, closeScrapeContext() at line 92 kills the RH Portal headless browser context. If SF login succeeds (full happy path), adoptScrapeContext() at line 183 re-establishes it. But on timeout (line 220-223), cancel, or partial success (SF only, no RH portal), adoptScrapeContext is never called. RH Portal stays disconnected — user must manually reconnect. Pre-existing behavior, not introduced by recent fixes.
+Fix approach: After SF login timeout/cancel, attempt to reopen a headless browser context with same profileDir. If SSO cookies still valid, portal auto-auths and context is re-adopted. Falls back gracefully if cookies expired.
+Can we test: YES — API test: start SF login, cancel it, GET /api/auth/redhat/status — should still show hasSession:true if pre-existing session was valid.
+Decision: OPEN — needs careful implementation to avoid SingletonLock conflicts.
+
+### BKL-CONN-04 | 1/3 connected counter requires lastScraped — freshly reconnected RH doesn't count immediately
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Council investigation 2026-04-26 — counter shows lower count than card indicators immediately after reconnect
+Files: dashboard/src/pages/SetupPage.tsx — computeConnected() (line 3665)
+Description: computeConnected() requires lastScraped != null for RH to count (line 3668). After manual RH reconnect, lastScraped is null until scraper runs. User sees "1/3 connected" even though RH card shows green Connected dot. Confusing UX. Similar issue may affect SF (requires lastSync != null).
+Fix approach: computeConnected() could count hasSession && !sessionExpired (without requiring lastScraped) as a weaker "connected" signal, or add a separate "session active" vs "data synced" distinction in the header badge.
+Can we test: YES — source test: check computeConnected logic requires lastScraped; UI test: connect RH, immediately check counter before scraper runs.
+Decision: OPEN — UX decision needed before implementing.
