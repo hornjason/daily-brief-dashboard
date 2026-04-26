@@ -942,6 +942,9 @@ function AutoBootstrapForm({
   const [tableauSessionNeeded, setTableauSessionNeeded] = useState<boolean | null>(null)
   // Pending auto-start after OAuth return — fires once territory auto-fill has populated all fields
   const [autoStartPending, setAutoStartPending] = useState(false)
+  // BKL-UX110-FIX: live server bootstrap state — persists across React state resets
+  const [liveBootstrapRunning, setLiveBootstrapRunning] = useState(false)
+  const [liveBootstrapAeName, setLiveBootstrapAeName] = useState<string | null>(null)
 
   const PENDING_KEY = 'pai_pending_bootstrap'
 
@@ -957,6 +960,9 @@ function AutoBootstrapForm({
         // expect the form in its default "ready to bootstrap" state, not
         // showing leftover results from a previous run.
         if (sanitized.running) setBootstrapState(sanitized)
+        // BKL-UX110-FIX: always track live server state regardless of local bootstrapState
+        setLiveBootstrapRunning(sanitized.running ?? false)
+        setLiveBootstrapAeName(sanitized.aeName ?? null)
       })
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/aes', { signal: controller.signal })
@@ -1109,6 +1115,19 @@ function AutoBootstrapForm({
 
   // Start auto-bootstrap
   const startBootstrap = async () => {
+    // BKL-UX110-FIX: guard against starting a second bootstrap when one is already running server-side
+    try {
+      const statusRes = await fetch('/api/bootstrap/auto/status')
+      if (statusRes.ok) {
+        const statusData: AutoBootstrapState = await statusRes.json()
+        if (statusData.running) {
+          const runningFor = statusData.aeName ? ` (currently setting up ${statusData.aeName})` : ''
+          setPreflightError(`Another AE setup is already in progress${runningFor} — wait for it to complete.`)
+          return
+        }
+      }
+    } catch { /* network failure — fall through and let the 409 handle it */ }
+
     // E2: prevent double-trigger from autoStartPending or rapid clicks
     if (bootstrapStartingRef.current) return
     bootstrapStartingRef.current = true
@@ -1227,6 +1246,9 @@ function AutoBootstrapForm({
         const r = await fetch('/api/bootstrap/auto/status', { signal: controller.signal })
         const d: AutoBootstrapState = await r.json()
         setBootstrapState({ ...d, steps: d.steps.filter(Boolean) })
+        // BKL-UX110-FIX: keep live banner state in sync during active poll
+        setLiveBootstrapRunning(d.running ?? false)
+        setLiveBootstrapAeName(d.aeName ?? null)
         // When CCSP step completes, check if Tableau login is actually needed
         const ccspStep = d.steps.find(s => s.name === 'Create CCSP Sheet')
         if (ccspStep?.status === 'done' && tableauSessionNeeded === null) {
@@ -1384,8 +1406,21 @@ function AutoBootstrapForm({
           bullets (7–15 min, Tableau VNC popup) are now folded into the
           blue info box at the top of the Single AE tab. */}
 
+      {liveBootstrapRunning && !bootstrapState?.running && (
+        <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning">
+          <span className="mt-0.5">&#9888;</span>
+          <span>
+            AE setup is in progress{liveBootstrapAeName ? <> for <strong>{liveBootstrapAeName}</strong></> : ''}
+            {' '}&#8212; wait for it to complete before starting another.
+          </span>
+        </div>
+      )}
+
       {preflightError && (
-        <p className="text-xs text-critical bg-critical/10 border border-critical/30 rounded px-3 py-2">{preflightError}</p>
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-critical/10 border border-critical/30">
+          <span className="text-critical mt-0.5 text-base leading-none">&#9888;</span>
+          <p className="text-sm text-critical">{preflightError}</p>
+        </div>
       )}
 
       {(!matchedAeIsBootstrapped || forceRebootstrap) && (

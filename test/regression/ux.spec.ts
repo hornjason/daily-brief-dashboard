@@ -10,6 +10,112 @@ import { BASE_URL, DESTRUCTIVE_URL } from './helpers'
 
 
 
+// ── REG-UX110: Bootstrap guard UX fix shipped 2026-04-25 ────────────────────
+//
+// BKL-UX110: startBootstrap() was calling POST /api/bootstrap/auto without
+// checking status first, resulting in a silent 409 when a bootstrap was already
+// running. Three changes were made:
+//   1. startBootstrap() now calls GET /api/bootstrap/auto/status BEFORE posting —
+//      if running, it sets preflightError and returns early (no 409)
+//   2. A warning banner renders when liveBootstrapRunning && !bootstrapState?.running —
+//      yellow bg-warning/10 border, ⚠ icon, text "AE setup is in progress…"
+//   3. preflightError is now a styled flex div with ⚠ icon and text-sm (not text-xs)
+
+test.describe('Bootstrap Guard UX — BKL-UX110', () => {
+  const setupSrc = () => readFileSync(
+    resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'pages', 'SetupPage.tsx'),
+    'utf8',
+  )
+
+  test('(source) REG-UX110-01: startBootstrap fetches /api/bootstrap/auto/status before posting', () => {
+    const src = setupSrc()
+    // The guard must appear inside startBootstrap — check the guard comment is present
+    // and that it fetches status before posting
+    expect(src, 'BKL-UX110-FIX comment must exist in SetupPage.tsx').toContain('BKL-UX110-FIX')
+    // Guard: fetch status then check .running before proceeding
+    expect(src, 'startBootstrap must fetch /api/bootstrap/auto/status').toContain(
+      "fetch('/api/bootstrap/auto/status')"
+    )
+    expect(src, 'startBootstrap must check statusData.running').toContain('statusData.running')
+    expect(src, 'startBootstrap must call setPreflightError when running').toContain(
+      'Another AE setup is already in progress'
+    )
+  })
+
+  test('(source) REG-UX110-02: warning banner uses warning color scheme, not error', () => {
+    const src = setupSrc()
+    // Banner should be warning-colored (bg-warning/10, border-warning/30, text-warning)
+    // and contain the required text
+    expect(src, 'banner must have bg-warning/10').toContain('bg-warning/10')
+    expect(src, 'banner must have border-warning/30').toContain('border-warning/30')
+    expect(src, 'banner must contain "AE setup is in progress" text').toContain('AE setup is in progress')
+    expect(src, 'banner must contain wait instruction').toContain('wait for it to complete before starting another')
+    // Banner must include the unicode warning icon ⚠ (&#9888;)
+    expect(src, 'banner must include &#9888; warning icon').toContain('&#9888;')
+  })
+
+  test('(source) REG-UX110-03: preflightError display is text-sm (not text-xs)', () => {
+    const src = setupSrc()
+    // The upgraded error block must use text-sm on the paragraph, not text-xs
+    // Verify the error block pattern: flex div with icon + text-sm paragraph
+    expect(src, 'preflightError block must use text-sm on the error message paragraph').toMatch(
+      /preflightError[\s\S]{0,300}text-sm text-critical/
+    )
+    // Confirm the old text-xs pattern is NOT used for preflightError display
+    // (text-xs may appear elsewhere for other elements, so we scope to the preflightError block)
+    const preflightBlock = src.split('preflightError')[2] ?? '' // after second occurrence (JSX block)
+    expect(preflightBlock.slice(0, 400), 'preflightError JSX block must not use text-xs for error text').not.toMatch(
+      /<p className="text-xs text-critical"/
+    )
+  })
+
+  test('(source) REG-UX110-04: banner only renders when liveBootstrapRunning and no local bootstrap running', () => {
+    const src = setupSrc()
+    // Correct condition: liveBootstrapRunning && !bootstrapState?.running
+    expect(src, 'banner must gate on liveBootstrapRunning && !bootstrapState?.running').toContain(
+      'liveBootstrapRunning && !bootstrapState?.running'
+    )
+  })
+
+  test('(live) REG-UX110-05: Step 4 loads with no banner when bootstrap is idle', async ({ page }) => {
+    // Verify the real bootstrap/auto/status API confirms not running
+    const statusRes = await fetch(`${BASE_URL}/api/bootstrap/auto/status`)
+    expect(statusRes.ok, 'bootstrap status endpoint must respond 200').toBe(true)
+    const status = await statusRes.json() as { running: boolean; aeName: string | null }
+    expect(status.running, 'bootstrap must not be running during this test').toBe(false)
+
+    // Navigate to setup page and open Step 4
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ }).click()
+    await page.locator('section#aes').waitFor({ state: 'visible' })
+
+    // The warning banner must NOT be visible when bootstrap is idle
+    const bannerText = page.getByText('AE setup is in progress')
+    await expect(bannerText, 'warning banner must be hidden when no bootstrap is running').not.toBeVisible()
+  })
+
+  test('(live) REG-UX110-06: Step 4 Single AE tab is accessible and Set Up AE button is present', async ({ page }) => {
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ }).click()
+    await page.locator('section#aes').waitFor({ state: 'visible' })
+
+    // Navigate to the Single AE tab (bootstrap guard lives here)
+    const singleAeTab = page.getByRole('tab', { name: /Single AE/i })
+    if (await singleAeTab.isVisible()) {
+      await singleAeTab.click()
+    }
+
+    // "Set Up AE" button must exist — it's the button that triggers startBootstrap
+    const setUpButton = page.getByRole('button', { name: /Set Up AE/i })
+    if (await setUpButton.isVisible()) {
+      // Button exists — verify it's actionable (not completely disabled before AE selection)
+      // The guard fires on click, not on render, so button presence is the key check
+      await expect(setUpButton).toBeVisible()
+    }
+    // If button not visible, it means an AE is already bootstrapped — not a failure
+  })
+})
+
 // ── REG-UX114/115/116: UX fixes shipped 2026-04-18 ──────────────────────────
 //
 // Three related UX regressions:

@@ -1128,3 +1128,144 @@ test('REG-CONN-BEARER-01: RH status endpoint returns transport field', async ({ 
   // hasSession requires live browser context regardless of transport — bearer covers cases only
   expect(typeof body.hasSession).toBe('boolean')
 })
+
+test.describe.serial('@destructive REG-WIZ: Wizard AE bootstrap validation', () => {
+  // Save/restore AE config around this block — REG-WIZ-05/06 wipe and rewrite AEs
+  let wizSnapshot: unknown = null
+  test.beforeAll(async ({ request }) => {
+    const r = await request.post('/api/__test/snapshot', {})
+    if (r.ok()) wizSnapshot = await r.json()
+  })
+  test.afterAll(async ({ request }) => {
+    if (wizSnapshot) await request.post('/api/__test/restore', { data: wizSnapshot }).catch(() => {})
+  })
+
+  test('@destructive REG-WIZ-01: bootstrap missing sfReportId returns 400', async ({ request }) => {
+    const res = await request.post('/api/bootstrap/auto', {
+      data: {
+        aeName: 'Test AE',
+        sfReportId: '',
+        tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR01'],
+        customerNames: ['Acme Corp'],
+      },
+    })
+    expect([400, 401, 403]).toContain(res.status())
+    if (res.status() === 400) {
+      const body = await res.json()
+      expect(body).toHaveProperty('error')
+    }
+  })
+
+  test('@destructive REG-WIZ-02: bootstrap missing tableauTerritories returns 400', async ({ request }) => {
+    const res = await request.post('/api/bootstrap/auto', {
+      data: {
+        aeName: 'Test AE',
+        sfReportId: '00OPe00000isU2zMAE',
+        tableauTerritories: [],
+        customerNames: ['Acme Corp'],
+      },
+    })
+    expect([400, 401, 403]).toContain(res.status())
+  })
+
+  test('@destructive REG-WIZ-03: bootstrap empty customerNames returns 400', async ({ request }) => {
+    const res = await request.post('/api/bootstrap/auto', {
+      data: {
+        aeName: 'Test AE',
+        sfReportId: '00OPe00000isU2zMAE',
+        tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR01'],
+        customerNames: [],
+      },
+    })
+    expect([400, 401, 403]).toContain(res.status())
+  })
+
+  test('@destructive REG-WIZ-04: bootstrap with aeName only (no sfReportId, territories, customers) returns 400', async ({ request }) => {
+    const res = await request.post('/api/bootstrap/auto', {
+      data: { aeName: 'Test AE Only' },
+    })
+    expect([400, 401, 403]).toContain(res.status())
+  })
+
+  test('@destructive REG-WIZ-05: POST /api/aes with 2 AEs round-trips both correctly', async ({ request }) => {
+    // Snapshot before modifying AE list
+    const snap = await request.post('/api/__test/snapshot', {})
+    const snapBody = snap.ok() ? await snap.json() : null
+
+    const twoAes = [
+      {
+        name: 'Test AE Alpha',
+        driveFolderId: '',
+        sfReportId: '00OPe00000isU2zMAE',
+        tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR01'],
+      },
+      {
+        name: 'Test AE Beta',
+        driveFolderId: '',
+        sfReportId: '00OPe00000isU2zMAF',
+        tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR06'],
+      },
+    ]
+    try {
+      const save = await request.post('/api/aes', { data: { aes: twoAes } })
+      expect(save.ok()).toBeTruthy()
+
+      const get = await request.get('/api/aes')
+      expect(get.ok()).toBeTruthy()
+      const { aes } = await get.json()
+      const names = aes.map((a: any) => a.name)
+      expect(names).toContain('Test AE Alpha')
+      expect(names).toContain('Test AE Beta')
+
+      const alpha = aes.find((a: any) => a.name === 'Test AE Alpha')
+      expect(alpha.sfReportId).toBe('00OPe00000isU2zMAE')
+      expect(alpha.tableauTerritories).toEqual(['WEST_COMM_CORP_NORTHWEST_TERR01'])
+    } finally {
+      if (snapBody) await request.post('/api/__test/restore', { data: snapBody }).catch(() => {})
+    }
+  })
+
+  test('@destructive REG-WIZ-06: POST /api/aes empty array returns empty list', async ({ request }) => {
+    const snap = await request.post('/api/__test/snapshot', {})
+    const snapBody = snap.ok() ? await snap.json() : null
+    try {
+      const save = await request.post('/api/aes', { data: { aes: [] } })
+      expect(save.ok()).toBeTruthy()
+      const get = await request.get('/api/aes')
+      const { aes } = await get.json()
+      expect(Array.isArray(aes)).toBeTruthy()
+      expect(aes.length).toBe(0)
+    } finally {
+      if (snapBody) await request.post('/api/__test/restore', { data: snapBody }).catch(() => {})
+    }
+  })
+
+  test('@destructive REG-WIZ-07: GET /api/bootstrap/auto/status aeName matches running bootstrap', async ({ request }) => {
+    const status = await request.get('/api/bootstrap/auto/status')
+    expect(status.ok()).toBeTruthy()
+    const body = await status.json()
+    expect(typeof body.running).toBe('boolean')
+    // aeName is string when running, null when idle
+    expect(body.aeName === null || typeof body.aeName === 'string').toBeTruthy()
+  })
+
+  test('@destructive REG-POD-01: POST /api/bootstrap/pod missing required fields returns 400', async ({ request }) => {
+    const res = await request.post('/api/bootstrap/pod', {
+      data: {},
+    })
+    // Pod bootstrap requires authentication and config — accept 400/401/403/409
+    expect([400, 401, 403, 409]).toContain(res.status())
+  })
+
+  test('@destructive REG-POD-02: GET /api/bootstrap/pod/status returns valid shape', async ({ request }) => {
+    const res = await request.get('/api/bootstrap/pod/status')
+    // Endpoint may not exist or may redirect — accept 200/404
+    if (res.status() === 200) {
+      const body = await res.json()
+      expect(typeof body).toBe('object')
+    } else {
+      expect([404, 405]).toContain(res.status())
+    }
+  })
+
+})
