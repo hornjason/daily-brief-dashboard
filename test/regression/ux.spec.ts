@@ -979,4 +979,25 @@ test.describe('REG-CONN: Connection VNC flow source patterns', () => {
     // The immediate close block (close() followed immediately by null and return inside session-status check) must be gone
     expect(src).not.toMatch(/sessionValid[\s\S]{0,50}tableauVncRef\.current\?\.close\(\)[\s\S]{0,20}tableauVncRef\.current = null[\s\S]{0,20}setTableauConnecting\(false\)[\s\S]{0,20}return/)
   })
+
+  test('REG-CONN-CCSP-02: SetupPage.tsx handleTableauConnect calls open-login before session-status?force=true', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'dashboard', 'src', 'pages', 'SetupPage.tsx'), 'utf8')
+    // Extract the handleTableauConnect function body up through the open-login call
+    const fnMatch = src.match(/handleTableauConnect\s*=\s*async[^}]+?open-login[^}]+?}/s)
+    expect(fnMatch).toBeTruthy()
+    const fnBody = fnMatch![0]
+    const forceCheckIdx = fnBody.indexOf('session-status?force=true')
+    const openLoginIdx = fnBody.indexOf('open-login')
+    // session-status?force=true should NOT appear before open-login in the function
+    // (it may appear in the 5s poll which follows open-login — that's fine)
+    if (forceCheckIdx !== -1 && openLoginIdx !== -1) {
+      expect(forceCheckIdx).toBeGreaterThan(openLoginIdx)
+    }
+  })
+
+  test('REG-CONN-CCSP-03: open-login in bootstrap-orchestrator.ts cleans up about:blank pages', async () => {
+    const src = readFileSync(join(resolve(import.meta.dirname!, '..', '..'), 'src', 'bootstrap-orchestrator.ts'), 'utf8')
+    expect(src).toContain("p.url() === 'about:blank'")
+    expect(src).toContain('p.close()')
+  })
 })

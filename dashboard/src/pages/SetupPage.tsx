@@ -2973,20 +2973,12 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     // window.open is called after any await. Open now while still in the user gesture.
     tableauVncRef.current = window.open(VNC_URL, 'tableau-vnc', 'width=1280,height=900')
 
-    // Check if already logged in. If valid, let resolveLogin handle close (3s delay).
-    // Do NOT close immediately — VNC opens synchronously before this await and closing
-    // it instantly confuses the user. The wait-for-login / 5s poll will call resolveLogin(true).
-    try {
-      const res = await fetch('/api/bootstrap/tableau/session-status?force=true')
-      const data = await res.json()
-      setTableauStatus(data)
-      // Fall through regardless — resolveLogin() closes VNC after 3s delay when session detected
-    } catch { /* fall through to VNC flow */ }
-
     // IMPORTANT: await open-login before starting wait-for-login to avoid a race
     // condition where wait-for-login sees the pre-navigation page state (stale
     // Tableau URL or the initial domcontentloaded before SSO redirect) and returns
     // a false-positive sessionValid: true — which immediately closes the VNC window.
+    // open-login also navigates the live page to Tableau and brings it to front,
+    // so VNC shows Tableau content immediately (not the about:blank from BKL-UX94).
     try {
       await fetch('/api/bootstrap/tableau/open-login', { method: 'POST' })
     } catch { /* fall through — wait-for-login will handle the error state */ }

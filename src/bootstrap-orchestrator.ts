@@ -2387,6 +2387,12 @@ export function registerBootstrapRoutes(app: Hono): void {
       // (e.g. after context recycling cleared _livePage)
       _tableauOpenLoginPage = page
       await page.goto(TABLEAU_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      // Clean up about:blank pages (from BKL-UX94 VNC-clear) that cover the display
+      for (const p of ctx.pages()) {
+        if (p !== page && p.url() === 'about:blank') {
+          await p.close().catch(() => {})
+        }
+      }
       await page.bringToFront()
       console.log('[tableau] opened Tableau in live VNC page — visible at localhost:6080')
       return c.json({ ok: true })
