@@ -1008,30 +1008,67 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toMatch(/export function getIap\b/)
     expect(src).toMatch(/export async function releaseIap\b/)
     expect(src).toMatch(/export function isIapAlive\b/)
+    // tableau-auth.ts now owns Tableau login — assert the module exists
+    const tableauSrc = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
+    expect(tableauSrc).toMatch(/export async function startTableauLoginBrowser\b/)
+    expect(tableauSrc).toMatch(/export async function waitForTableauLogin\b/)
+    expect(tableauSrc).toMatch(/export async function checkTableauSessionFromCookies\b/)
   })
 
-  test('REG-CONN-TABLEAU-CTX-02: bootstrap-orchestrator routes Tableau login through IAP, not _livePage', () => {
+  test('REG-CONN-TABLEAU-CTX-02: bootstrap-orchestrator routes Tableau login through tableau-auth.ts', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
-    // Imports IAP API
-    expect(src).toContain("from './interactive-auth-page.ts'")
-    expect(src).toMatch(/\bacquireIap\b/)
-    expect(src).toMatch(/\breleaseIap\b/)
-    // The deprecated tracker for the live-page-as-IAP is gone
-    expect(src).not.toMatch(/\b_tableauOpenLoginPage\b/)
-    // open-login no longer pins the live page busy — IAP is its own page
-    expect(src).not.toMatch(/setLivePageBusy\(true\)/)
-    // wait-for-login wraps the body in try { ... } finally { await releaseIap() }
-    // so the IAP is closed on success, error, and timeout.
+    // Imports tableau-auth.ts API (not interactive-auth-page.ts for Tableau login)
+    expect(src).toContain("from './tableau-auth.ts'")
+    expect(src).toMatch(/\bstartTableauLoginBrowser\b/)
+    expect(src).toMatch(/\bwaitForTableauLogin\b/)
+    expect(src).toMatch(/\bcheckTableauSessionFromCookies\b/)
+    // Old IAP-based Tableau routing is gone
+    expect(src).not.toMatch(/acquireIap\s*\(\s*\)/)
+    expect(src).not.toMatch(/releaseIap\s*\(\s*\)/)
+    // wait-for-login uses waitForTableauLogin with explicit 90s timeout (under Bun's 120s idle)
     const waitFor = src.indexOf("'/api/bootstrap/tableau/wait-for-login'")
     expect(waitFor).toBeGreaterThan(-1)
-    const slice = src.slice(waitFor, waitFor + 4000)
-    expect(slice).toMatch(/getIap\s*\(\s*\)/)
-    expect(slice).toMatch(/finally\s*\{[\s\S]*?releaseIap\s*\(\s*\)/)
+    const slice = src.slice(waitFor, waitFor + 1000)
+    expect(slice).toMatch(/waitForTableauLogin\s*\(90_000\)/)
   })
 
   test('REG-CONN-TABLEAU-CTX-03: rh-scraper exposes isLivePageHealthy probe', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf8')
     expect(src).toMatch(/export async function isLivePageHealthy\s*\(\s*\)\s*:\s*Promise<boolean>/)
+  })
+
+  // ── REG-UX94-01: SF auth happy-path clears VNC before nulling context ──────
+  // BKL-UX94: sf-auth.ts must open a blank tab (about:blank) BEFORE setting
+  // activeContext = null on the happy path, so the VNC viewer shows a blank tab.
+  test('REG-UX94-01: sf-auth happy-path VNC clear precedes activeContext null', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-auth.ts'), 'utf8')
+    // Anchor on the BKL-UX94 comment that marks the VNC clear block
+    const anchor = src.indexOf('// BKL-UX94: clear VNC after login')
+    expect(anchor).toBeGreaterThan(-1)
+    // about:blank navigation must appear after the anchor
+    const blankTabIdx = src.indexOf("goto('about:blank')", anchor)
+    expect(blankTabIdx).toBeGreaterThan(-1)
+    // activeContext = null must appear after the blank tab navigation
+    const nullCtxIdx = src.indexOf('activeContext = null', blankTabIdx)
+    expect(nullCtxIdx).toBeGreaterThan(blankTabIdx)
+    // Must be in the same code block (within 400 chars)
+    expect(nullCtxIdx - blankTabIdx).toBeLessThan(400)
+  })
+
+  // ── REG-SFCACHE-02: SF L4 scrape writes back to Drive cache ─────────────────
+  // BKL-SFCACHE-01 fix: after L4 scrape, writeSfDriveCache must fire to populate
+  // the L3 Drive cache so next bootstrap uses Drive instead of hitting SF again.
+  test('REG-SFCACHE-02: bootstrap L4 scrape calls writeSfDriveCache after sync', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    // L4 branch: scrapeSfReport → runSfPipelineSyncFromData(liveData) → writeSfDriveCache(liveData)
+    const syncIdx = src.indexOf('await runSfPipelineSyncFromData(liveData,')
+    expect(syncIdx).toBeGreaterThan(-1)
+    const writeIdx = src.indexOf('await writeSfDriveCache(liveData,')
+    expect(writeIdx).toBeGreaterThan(-1)
+    // writeSfDriveCache must come AFTER runSfPipelineSyncFromData in the L4 path
+    expect(writeIdx).toBeGreaterThan(syncIdx)
+    // Must be in the same L4 code block (within 500 chars — accounts for podSfDataCache + if-guard between them)
+    expect(writeIdx - syncIdx).toBeLessThan(500)
   })
 })
 
@@ -1334,7 +1371,7 @@ test.describe('Tableau auth isolation (BKL-CONN-TABLEAU-CTX-01)', () => {
     // but we assert the shape is correct)
   })
 
-  test('REG-CONN-TABLEAU-CTX-02: session-status responds in under 500ms (no browser open)', async ({ request }) => {
+  test('REG-CONN-TABLEAU-CTX-04: session-status responds in under 500ms (no browser open)', async ({ request }) => {
     const start = Date.now()
     const res = await request.get('/api/bootstrap/tableau/session-status?force=true')
     const elapsed = Date.now() - start

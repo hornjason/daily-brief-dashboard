@@ -138,12 +138,12 @@ Decision: DONE — Three fixes applied 2026-03-31:
 ## Bugs
 
 ### BKL-SFCACHE-02 — SF L3 write-back fires after fix; add regression log assertion
-- Status: OPEN
+- Status: ✅ DONE 2026-04-27
 - Priority: P2
 - Detail: After BKL-SFCACHE-01 fix, verify `[pod-bootstrap] SF Drive cache written` log appears after L4 scrape. No automated test yet — proxy is checking for CSV file in pod Drive folder post-bootstrap.
 
 ### BKL-UX94-TEST — Add automated test for SF auth VNC auto-close
-- Status: OPEN
+- Status: ✅ DONE 2026-04-27
 - Priority: P2
 - Detail: SF happy-path blank-tab clear (sf-auth.ts) can't be tested via Playwright CI — requires live headed browser with authenticated RH session. Proxy test: stub `onComplete` + mock `ctx.newPage()`, verify `about:blank` navigation fires on happy path. Add to regression.spec.ts with REG tag.
 
