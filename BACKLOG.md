@@ -4777,7 +4777,7 @@ Root cause fix needed: The snapshot endpoint reads from DISK, not from the autho
 Workaround in place (2026-04-08): QUINN-STANDARD.md updated to ban `npx playwright test`. Safe baseline is `npx playwright test test/api/` only. Lifecycle and new-user specs require explicit Jason approval.
 
 ### BKL-UI-SETUP-ROUTING-01 | Setup, Products, Admin routes return 404 on direct URL
-Status: 🔴 OPEN
+Status: ✅ DONE (partial) — 2026-04-27 Quinn council confirms /dashboard/setup, /dashboard/admin, /dashboard/products all work correctly via SPA routing. The 404 only affects bare /setup, /admin, /products paths (without /dashboard/ prefix) — low priority, not user-visible since sidebar links use /dashboard/* paths. BKL-SEC-SUPPORTABLE-02 unblocked (can test at /dashboard/setup).
 Priority: P2
 Size: S
 Source: Quinn QA 2026-04-26 during BKL-SEC-SUPPORTABLE-01 gate
@@ -6942,3 +6942,48 @@ Source: Jason 2026-04-26 — audit determined SA key not needed for @redhat.com 
 Files: .env, src/gemini-auth.ts, src/customer.ts
 Description: The April 25 audit (commit 1515e7714) removed GEMINI_SERVICE_ACCOUNT_KEY from CI and default builds. Vertex AI auth flows through the @redhat.com OAuth token (cloud-platform scope) via domain IAM binding on jhorn-pai project. However .env still contains GEMINI_SERVICE_ACCOUNT_KEY, so the instance is still using SA key auth in practice. BKL-SEC-SAKEY-01 (try/catch hardening on SA key parse) may also be moot if SA key is fully removed.
 Fix: (1) Remove GEMINI_SERVICE_ACCOUNT_KEY from .env. (2) Restart container. (3) Trigger a customer brief generation and confirm Gemini calls succeed via OAuth token. (4) If confirmed: close BKL-SEC-SAKEY-01 as moot, update docs/SECRETS-GUIDE.md. (5) The fallback code in gemini-auth.ts + customer.ts can remain for non-redhat.com users — just not exercised in this install.
+
+---
+
+### BKL-SEC-ADMINPAGE-SUPPORTABLE-01 | AdminPage.tsx retains Supportable state plumbing for a disabled scraper
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook council scan 2026-04-27
+Files: dashboard/src/pages/AdminPage.tsx (lines ~26, 55, 59, 64, 88, 263-265, 855, 871, 993-996, 1081)
+Description: AdminPage still has supportable: ScrapeStatus in state type, supportableEnabled/supportableTime/supportableLastRun in default config, supportable label in the scraper label map, and status aggregation code pulling scrapers['supportable']?.state. Supportable is permanently disabled (CLAUDE.md). This is dead state that creates a false impression the scraper is active and adds surface area for future confusion. Not an active vulnerability in a single-user localhost app.
+Fix: Remove supportable field from AdminPage state type, default config, label map, and status aggregation. Mirror the cleanup already done in SetupPage.tsx.
+
+---
+
+### BKL-SEC-CIRCUIT-BREAKER-SUPPORTABLE-01 | Dormant Supportable circuit breaker entry in scraper-status API
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Quinn council audit 2026-04-27
+Files: src/scraper-manager.ts (circuit breaker registry)
+Description: GET /api/scraper-status returns circuitBreakers.supportable: {state:"closed", failures:0, lastFailure:null}. The UI hides it correctly but the API key remains, which will confuse future agents grepping for Supportable residue. Note: scraper-manager.ts is a protected scraper file — requires explicit Jason confirmation before modifying.
+Fix: Remove 'supportable' entry from the circuit-breaker registry in scraper-manager.ts after getting explicit sign-off. Do not touch any other scraper logic.
+
+---
+
+### BKL-DATA-AE-SUPPORTABLE-SHEET-ID-01 | supportableSheetId field still present in aes.json per-AE config
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Quinn council audit 2026-04-27
+Files: data/config/aes.json, src/types.ts (AeConfig type)
+Description: /api/aes response includes supportableSheetId per AE (e.g. "1HcGqHoR..."). Supportable is permanently disabled. These IDs are dead config. The UI doesn't read them but they remain in the AeConfig type and aes.json. Recommend stripping on next config migration to fully retire the surface.
+Fix: Remove supportableSheetId from AeConfig type in types.ts and from aes.json. Update any patchAe() calls that set supportableSheetId.
+
+---
+
+### BKL-TEST-FIXTURE-DRIFT-01 | Fixture AE "Carolanne Farrell" not in current AE roster
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Quinn council audit 2026-04-27 — globalSetup logs FIXTURE DRIFT warning
+Files: test/fixtures.ts (CAROLANNE constant), playwright.config.ts (globalSetup)
+Description: The CAROLANNE fixture constant references "Carolanne Farrell" who is no longer in the current 9-AE roster (TBH, Peter Niklaus, Oren Shaolian, Sherry Gayo, Amanda Mejia, Alex Smith, Beena Patel, O'Neil Hopson, Cameron Floyd). globalSetup logs a FIXTURE DRIFT warning on every test run. Update the fixture to use a current AE name, or make the globalSetup warning non-fatal with a better error message.
+Fix: Update CAROLANNE (or rename) to reference a current AE name that has full bootstrap data.
+
