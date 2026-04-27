@@ -3018,6 +3018,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
 
   const handleRhCancel = async () => {
     if (rhConnectPollRef.current) { clearInterval(rhConnectPollRef.current); rhConnectPollRef.current = null }
+    if (rhTimeoutRef.current) { clearTimeout(rhTimeoutRef.current); rhTimeoutRef.current = null }
     rhVncRef.current?.close()
     rhVncRef.current = null
     setRhConnecting(false)

@@ -7430,6 +7430,15 @@ Description: An 8s setTimeout that calls setSfSyncSuccess(null) is not stored in
 Fix: Store in sfSuccessTimeoutRef, clear in unmount.
 Can we test: Code inspection only.
 
+### BKL-CONN-RH-CANCEL-TIMEOUT-01 | handleRhCancel does not clear rhTimeoutRef
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: XS
+Source: Rook fifth audit 2026-04-27 (LOW)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: handleRhCancel cleared rhConnectPollRef and rhVncRef but not rhTimeoutRef. The 120s hard timeout kept running after cancel, firing setRhConnecting(false) redundantly. Asymmetric with handleSfCancel (which clears sfTimeoutRef) and handleTableauCancel (which clears tableauTimeoutRef).
+Resolution: Added rhTimeoutRef clear to handleRhCancel inline.
+
 ### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
 Status: 🔴 OPEN
 Priority: P3
