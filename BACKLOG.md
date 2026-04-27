@@ -7034,3 +7034,14 @@ Files: src/bootstrap-orchestrator.ts (line 74)
 Description: SCAFFOLD_PRODUCT_SLUGS was a parallel const list duplicating the canonical slug list from products.json. If a new product was added to products.json, the scaffolder would not create its folder.
 Fix: Derive slugs from loadProductIntelConfig().products.map(p => p.slug).
 
+---
+
+### BKL-SEC-SLUG-VALIDATE-01 | Product slugs in product-intel-config.json not validated at load time
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-04-27 (BKL-DRIVE-SCAFFOLD-SLUGS-01 review)
+Files: src/bootstrap-orchestrator.ts (ensureConfigAndProductsScaffold), data/config/product-intel-config.json
+Description: Since BKL-DRIVE-SCAFFOLD-SLUGS-01, scaffold slug names come from product-intel-config.json at runtime. The slug values are passed unsanitized to the Drive folder name field (via findOrCreateFolder). If a malformed config slug contained /, control chars, or 1000+ chars, it would propagate to Drive. Also, duplicate slugs would cause extra findOrCreateFolder calls (idempotent but wasteful). Not exploitable today (config is admin-written), but defense in depth is warranted.
+Fix: Add slug shape validator (/^[a-z0-9-]{1,64}$/) at product config load time (or inside ensureConfigAndProductsScaffold before the loop). Deduplicate slugs before iteration.
+Can we test: YES — unit test that malformed slug in product-intel-config.json is rejected/skipped without crashing the scaffolder.
