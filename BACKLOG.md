@@ -6967,14 +6967,14 @@ Fix: Remove 'supportable' entry from the circuit-breaker registry in scraper-man
 
 ---
 
-### BKL-DATA-AE-SUPPORTABLE-SHEET-ID-01 | supportableSheetId field still present in aes.json per-AE config
-Status: 🔴 OPEN
+### BKL-DATA-AE-SUPPORTABLE-SHEET-ID-01 | supportableSheetId field — rename to subscriptionSheetId
+Status: 🔴 OPEN (scope updated 2026-04-27 — field is ACTIVE, not dead)
 Priority: P3
-Size: XS
+Size: M
 Source: Quinn council audit 2026-04-27
-Files: data/config/aes.json, src/types.ts (AeConfig type)
-Description: /api/aes response includes supportableSheetId per AE (e.g. "1HcGqHoR..."). Supportable is permanently disabled. These IDs are dead config. The UI doesn't read them but they remain in the AeConfig type and aes.json. Recommend stripping on next config migration to fully retire the surface.
-Fix: Remove supportableSheetId from AeConfig type in types.ts and from aes.json. Update any patchAe() calls that set supportableSheetId.
+Files: src/types.ts, src/bootstrap-orchestrator.ts (~8 references), src/scrape-api.ts (~4 references), src/background-scheduler.ts (~2 references), data/config/aes.json
+Description: `supportableSheetId` is NOT dead config. It stores the subscription data sheet ID used by sf-bookings-sync (`writeSupportableSheet`) and is read in bootstrap orchestrator, scrape-api, and background-scheduler to persist and access SF bookings data. The name is a legacy — it used to point to a Supportable sheet, now it holds the per-AE subscription data sheet. The field should be RENAMED (not removed) to `subscriptionSheetId` across all usages.
+Fix: Rename supportableSheetId→subscriptionSheetId in: AeConfig type (types.ts), all patchAe() callers, all readers in bootstrap-orchestrator.ts/scrape-api.ts/background-scheduler.ts. Also rename writeSupportableSheet→writeSubscriptionSheet in supportable-scraper.ts. Requires: data migration in aes.json (rename key) and careful scraper-file changes (protected — needs Jason sign-off for scraper changes).
 
 ---
 
