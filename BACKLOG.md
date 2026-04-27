@@ -7241,7 +7241,7 @@ Resolution (2026-04-27 Wave 3): Shipped 6 surgical fixes in `src/tableau-auth.ts
 Regressions: `REG-TABLEAU-HARDENING-01` (env reads), `REG-TABLEAU-HARDENING-02` (zero-cookie returns false).
 
 ### BKL-DOM-CLEARBIT-01 | Clearbit nameMatchesClearbit too permissive — maps Uber Technologies → ub3r.host
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27
 Priority: P2
 Size: S
 Source: Jason observed 2026-04-27 (Elmer bootstrap domain inference)
@@ -7249,9 +7249,10 @@ Files: src/domain-waterfall.ts (nameMatchesClearbit)
 Description: Clearbit autocomplete returned a hit for "Uber Technologies" → "ub3r.host" (a startup, not Uber). The `nameMatchesClearbit` function uses word-overlap which passes because both share the word "uber" (case-insensitive). This corrupts the auto-saved domain for the customer. Similar false positives likely exist for other short brand names.
 Can we test: YES — unit test with "Uber Technologies" input asserting no match on ub3r.host.
 Fix approach: Tighten match — require first substantive word of the query to be at least 5 chars, OR require Levenshtein distance < threshold between stripped company name and Clearbit result name.
+Decision: DONE 2026-04-27 — nameMatchesClearbit tightened to first-token anchor (qWords[0] in rWords or rWords[0] in qWords). REG-DOM-01/03 verify. Commit 2be13e647.
 
 ### BKL-DOM-INFER-RACE-01 | Domain inference IIFE — 7 race conditions and correctness bugs (Rook audit 2026-04-27)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27
 Priority: P1
 Size: L
 Source: Rook Blackburn audit 2026-04-27 triggered by Jason observing missing inference results for Elmer
@@ -7266,9 +7267,10 @@ Description: Rook audited the full domain inference system. 7 findings:
   7. [Low] Clearbit nameMatchesClearbit false positives beyond Uber: any shared 3-char word passes (Apple Federal CU → apple.com, United Health Services → united.com). Needs Jaccard threshold or first-token-must-match.
 Can we test: YES — unit tests for findings 3, 7; integration tests for 1, 2, 5 via multi-AE POD bootstrap.
 Fix order: 3 → 1 (await IIFE + captureRef) → 4 (120s ceiling) → 5 (update 409 gate) → 2 (mutex on write) → 6 (warn logging) → 7 (tighten nameMatch).
+Decision: DONE 2026-04-27 — All 7 findings implemented. Two audit passes (council + Rook). Rook pass-3 GREEN on all 7 verification points. REG-DOM-01 through REG-DOM-04 passing. Committed 2be13e647. Residuals tracked as BKL-DOM-INF-02 (AbortController) and BKL-DOM-INF-05 (UI surfacing).
 
 ### BKL-DOM-INFER-DISPLAY-01 | Domain inference results not shown in bootstrap UI for Elmer (second POD AE)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27
 Priority: P2
 Size: S
 Source: Jason observed 2026-04-27 (Elmer bootstrap)
