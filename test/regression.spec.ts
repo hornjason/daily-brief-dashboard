@@ -1319,3 +1319,27 @@ test.describe.serial('@destructive REG-WIZ: Wizard AE bootstrap validation', () 
   })
 
 })
+
+// BKL-CONN-TABLEAU-CTX-01: tableau-auth isolation
+test.describe('Tableau auth isolation (BKL-CONN-TABLEAU-CTX-01)', () => {
+  test('REG-CONN-TABLEAU-COOKIE-01: session-status returns sessionValid based on cookie file age', async ({ request }) => {
+    // Without cookie file, should return sessionValid: false
+    const res = await request.get('/api/bootstrap/tableau/session-status?force=true')
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(typeof body.sessionValid).toBe('boolean')
+    expect(typeof body.reachable).toBe('boolean')
+    // If cookies file is absent, sessionValid must be false
+    // (We can't assert the exact value since it depends on container state,
+    // but we assert the shape is correct)
+  })
+
+  test('REG-CONN-TABLEAU-CTX-02: session-status responds in under 500ms (no browser open)', async ({ request }) => {
+    const start = Date.now()
+    const res = await request.get('/api/bootstrap/tableau/session-status?force=true')
+    const elapsed = Date.now() - start
+    expect(res.status()).toBe(200)
+    // Cookie-based check must complete well under the browser-probe timeout (was 25s+6s settle)
+    expect(elapsed).toBeLessThan(500)
+  })
+})

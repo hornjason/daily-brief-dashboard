@@ -142,6 +142,11 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Priority: P2
 - Detail: After BKL-SFCACHE-01 fix, verify `[pod-bootstrap] SF Drive cache written` log appears after L4 scrape. No automated test yet — proxy is checking for CSV file in pod Drive folder post-bootstrap.
 
+### BKL-UX94-TEST — Add automated test for SF auth VNC auto-close
+- Status: OPEN
+- Priority: P2
+- Detail: SF happy-path blank-tab clear (sf-auth.ts) can't be tested via Playwright CI — requires live headed browser with authenticated RH session. Proxy test: stub `onComplete` + mock `ctx.newPage()`, verify `about:blank` navigation fires on happy path. Add to regression.spec.ts with REG tag.
+
 ### BKL-IAP-RACE — acquireIap concurrent call leaks orphan page
 - Status: OPEN
 - Priority: P3
@@ -7084,7 +7089,7 @@ Can we test: YES — unit test that malformed slug in product-intel-config.json 
 ---
 
 ### BKL-CONN-TABLEAU-CTX-01 | Tableau VNC connect corrupts shared browser context — breaks CCSP + SF bootstrap
-Status: 🟡 IN PROGRESS (Marcus, 2026-04-27)
+Status: ✅ DONE 2026-04-27
 Priority: P1
 Size: M
 Source: Jason 2026-04-27 (reproduced twice in same session)
@@ -7115,3 +7120,53 @@ Source: Jason 2026-04-27
 Files: dashboard/src/pages/SetupPage.tsx, src/bootstrap-orchestrator.ts
 Description: When bootstrap hangs mid-step (e.g. waiting for browser context that never responds), the UI cancel button does nothing. The cancel endpoint returns {"ok":true} but the bootstrap loop is blocked inside an await that never resolves. The API cancel flag is set but the running loop never checks it because it's stuck. Fix: add AbortController or per-step timeout wrapping every await in the bootstrap loop so cancellation signals can interrupt a hung step within a few seconds. Also: the cancel button should disable itself and show a spinner when clicked — currently it looks broken (nothing happens visually).
 Can we test: YES — trigger a bootstrap step that intentionally hangs, click cancel, assert bootstrap.running becomes false within 10s.
+
+---
+
+### BKL-CONN-TABLEAU-CTX-02 | Update BKL-CONN-TABLEAU-CTX-01 status — isolated context implemented
+Status: ✅ DONE 2026-04-27
+Priority: P0
+Size: L
+Source: Serena council audit 2026-04-27 (post-implementation verification)
+Files: src/tableau-auth.ts (NEW), src/bootstrap-orchestrator.ts, src/sf-auth.ts, test/regression.spec.ts
+Description: Full implementation of isolated `launchPersistentContext` Tableau auth (BKL-CONN-TABLEAU-CTX-01 root fix). IAP approach was Page-level isolation only — insufficient because BrowserContext is one OS renderer partition. Real fix: separate Chromium process via `launchPersistentContext(TABLEAU_AUTH_PROFILE_DIR)` in new module `tableau-auth.ts`. All 3 orchestrator routes migrated (session-status → cookie freshness + HEAD probe, open-login → startTableauLoginBrowser, wait-for-login → waitForTableauLogin with 90s timeout). SF double-blank-tab bug also fixed. Two medium follow-ups logged as BKL-CONN-TABLEAU-REACHABLE-01 and BKL-CONN-TABLEAU-IDLE-01.
+Decision: DONE — all 6 ISC audit criteria pass (Serena second audit). Ready for Quinn E2E gate.
+
+---
+
+### BKL-CONN-TABLEAU-REACHABLE-01 | session-status always returns reachable=true (VPN-down UX regression)
+Status: ✅ DONE 2026-04-27
+Priority: P2
+Size: S
+Source: Serena post-implementation audit 2026-04-27 (Issue B)
+Files: src/bootstrap-orchestrator.ts (session-status route)
+Description: Replacing browser probe with cookie-only check lost the reachability distinction (VPN down vs session expired). Users off VPN see "Connect to Tableau" CTA but clicking it opens a blank Chromium window with no useful error. Fix applied same session: added Node-side HEAD probe to `https://10ay.online.tableau.com` with 3s AbortSignal.timeout. Sets `reachable` from fetch result; `sessionValid` from cookie freshness. Preserves three-state UX without browser coupling.
+Decision: DONE — fixed in same commit as BKL-CONN-TABLEAU-CTX-02.
+
+---
+
+### BKL-CONN-TABLEAU-IDLE-01 | wait-for-login hangs up to 5min; Bun idleTimeout=120s kills it at 2min
+Status: ✅ DONE 2026-04-27
+Priority: P2
+Size: S
+Source: Serena post-implementation audit 2026-04-27 (Issue C)
+Files: src/bootstrap-orchestrator.ts (wait-for-login route), server.ts (idleTimeout: 120)
+Description: waitForTableauLogin() default was 5min; Bun server.ts idleTimeout is 120s. Long-poll connection would be killed silently at 120s. Fixed by passing 90_000ms (90s) explicitly to waitForTableauLogin() in the route — safely under the 120s idle timeout with 30s margin. Client-side: if wait-for-login returns sessionValid:false after 90s, user can retry via Connect button.
+Decision: DONE — one-line fix in same commit as BKL-CONN-TABLEAU-CTX-02.
+
+---
+
+### BKL-TABLEAU-HARDENING-01 | tableau-auth.ts hardening backlog (6 low-severity findings)
+Status: 🔴 OPEN
+Priority: P3
+Size: M
+Source: Serena post-implementation audit 2026-04-27 (Findings 1-6)
+Files: src/tableau-auth.ts
+Description: Six low-severity hardening items from Serena's second audit:
+  1. _closeContext flag mutation — split loginInProgress reset from context close to prevent brittle re-set pattern
+  2. Stale-PID detection — check for lingering Chromium on TABLEAU_AUTH_PROFILE_DIR at container startup
+  3. Env-configurable TABLEAU_COOKIE_AGE_MS — 8h hardcoded; should be env var with docs
+  4. Parent dir permission assertion — RH_PROFILE_DIR should not be world-readable
+  5. Structured harvest telemetry — replace console.log with structured log object (cookie count, domains, age)
+  6. Zero-cookie harvest as login failure — currently returns true with no cookies; should surface error
+Can we test: YES — items 1/3/6 testable via unit tests; items 2/4/5 need container-level validation.

@@ -17,8 +17,8 @@ import { runRhScrapeWithState } from './scraper-manager.ts'
 import { enqueueScraperTask } from './background-scheduler.ts'
 import { getAiConfig } from './settings-api.ts'
 
-import { getScrapeContext, isLivePageBusy } from './rh-scraper.ts'
-import { acquireIap, getIap, releaseIap, isIapAlive } from './interactive-auth-page.ts'
+import { getScrapeContext } from './rh-scraper.ts'
+import { startTableauLoginBrowser, waitForTableauLogin, checkTableauSessionFromCookies } from './tableau-auth.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import { waterfallInferDomain } from './domain-waterfall.ts'
@@ -2351,46 +2351,25 @@ export function registerBootstrapRoutes(app: Hono): void {
     if (consumeTableauSessionExpired()) {
       _tableauStatusCache = null
     }
-    // BKL-UX101 / BKL-CONN-TABLEAU-CTX-01: if an interactive auth flow is in
-    // progress (Tableau login on the IAP, or any legacy flow holding the live
-    // page busy), skip the probe to avoid interfering with the SSO redirect chain.
-    if (force && (isIapAlive() || isLivePageBusy())) {
-      return _tableauStatusCache
-        ? c.json(_tableauStatusCache.result)
-        : c.json({ reachable: true, sessionValid: false })
-    }
     if (!force && _tableauStatusCache && Date.now() - _tableauStatusCache.cachedAt < TABLEAU_STATUS_TTL_MS) {
       return c.json(_tableauStatusCache.result)
     }
-    const ctx = getScrapeContext()
-    if (!ctx) return c.json({ reachable: false, sessionValid: false })
-    let page: Awaited<ReturnType<typeof ctx.newPage>> | null = null
+    // BKL-CONN-TABLEAU-CTX-01: probe via Node-side HEAD + cookie freshness.
+    // No browser opened — zero shared-context risk. HEAD probe determines reachability
+    // (VPN check); cookie freshness determines session validity.
+    let reachable = true
     try {
-      page = await ctx.newPage()
-      await page.goto(TABLEAU_URL, { waitUntil: 'domcontentloaded', timeout: 25_000 })
-      // Wait for SAML redirect chain to settle — SSO relay pages fire domcontentloaded
-      // mid-redirect; 6s gives the full chain time to land on the final Tableau URL
-      await page.waitForTimeout(6_000)
-      const url = page.url()
-      // Only flag as login page if we didn't land on the Tableau domain,
-      // or if there's actually a password/login form visible (not just /auth in the URL)
-      const hasLoginForm = await page.evaluate(() => {
-        return Array.from(document.querySelectorAll('input[type="password"], input#username, [data-testid="login"]')).some(el => {
-          const s = window.getComputedStyle(el)
-          return s.display !== 'none' && s.visibility !== 'hidden' && (el as HTMLElement).offsetParent !== null
-        })
-      }).catch(() => false)
-      const onLoginPage = !url.startsWith('https://10ay.online.tableau.com') || hasLoginForm
-      const result = { reachable: true, sessionValid: !onLoginPage }
-      _tableauStatusCache = { result, cachedAt: Date.now() }
-      return c.json(result)
+      await fetch('https://10ay.online.tableau.com', {
+        method: 'HEAD',
+        signal: AbortSignal.timeout(3_000),
+      })
     } catch {
-      const result = { reachable: false, sessionValid: false }
-      _tableauStatusCache = { result, cachedAt: Date.now() }
-      return c.json(result)
-    } finally {
-      await page?.close().catch(() => {})
+      reachable = false
     }
+    const sessionValid = reachable ? await checkTableauSessionFromCookies() : false
+    const result = { reachable, sessionValid }
+    _tableauStatusCache = { result, cachedAt: Date.now() }
+    return c.json(result)
   })
 
   // GET /api/bootstrap/tableau/wait-for-login — long-poll that resolves when the live page
@@ -2400,83 +2379,19 @@ export function registerBootstrapRoutes(app: Hono): void {
   // domcontentloaded on 10ay.online.tableau.com fires BEFORE SSO redirects the page
   // to the login form — causing a false-positive that closes the VNC window immediately.
   app.get('/api/bootstrap/tableau/wait-for-login', async (c) => {
-    // BKL-CONN-TABLEAU-CTX-01: read the IAP that open-login acquired. SSO cookies
-    // are Context-level so the scrape context inherits the login result automatically
-    // when releaseIap() closes the page in the finally block below.
-    const iap = getIap()
-    if (!iap) {
-      console.log('[tableau] wait-for-login: no IAP available')
-      return c.json({ sessionValid: false })
+    // BKL-CONN-TABLEAU-CTX-01: waitForTableauLogin polls the isolated Chromium context.
+    // On success, it harvests cookies to TABLEAU_SESSION_PATH and closes the isolated
+    // context — VNC clears automatically when the context closes.
+    // BKL-CONN-TABLEAU-CTX-01: 90s timeout stays safely under Bun's idleTimeout=120s.
+    // The client re-polls wait-for-login if it times out — no 5-minute HTTP hang.
+    const sessionValid = await waitForTableauLogin(90_000)
+    if (sessionValid) {
+      _tableauStatusCache = { result: { reachable: true, sessionValid: true }, cachedAt: Date.now() }
+      console.log('[tableau] login confirmed — cookies harvested, isolated context closed')
+    } else {
+      console.warn('[tableau] wait-for-login: timed out or failed')
     }
-
-    try {
-      await iap.waitForTimeout(8_000)
-
-      const settledUrl = iap.url()
-      console.log(`[tableau] wait-for-login: settled on ${settledUrl}`)
-
-      const alreadyValid = await iap.evaluate(() => {
-        const onTableau = window.location.hostname.includes('10ay.online.tableau.com')
-        const noLoginForm = !Array.from(document.querySelectorAll('input[type="password"], input#username, [data-testid="login"]')).some(el => {
-          const s = window.getComputedStyle(el)
-          return s.display !== 'none' && s.visibility !== 'hidden' && (el as HTMLElement).offsetParent !== null
-        })
-        return onTableau && noLoginForm
-      }).catch(() => false)
-
-      if (alreadyValid) {
-        console.log('[tableau] wait-for-login: already valid after settle')
-        _tableauStatusCache = { result: { reachable: true, sessionValid: true }, cachedAt: Date.now() }
-        return c.json({ sessionValid: true })
-      }
-      console.log('[tableau] wait-for-login: not yet valid — watching for login completion (120s timeout)')
-
-      // Not yet logged in — wait for the user to complete login in the VNC window.
-      // At this point we know the SSO redirect has happened and a login form is
-      // showing (or we're on an SSO provider page). Watch for the page to land
-      // back on Tableau with no login form — that signals successful login.
-      const checkTableauLoggedIn = () => {
-        const onTableau = window.location.hostname.includes('10ay.online.tableau.com')
-        const noLoginForm = !Array.from(document.querySelectorAll('input[type="password"], input#username, [data-testid="login"]')).some(el => {
-          const s = window.getComputedStyle(el)
-          return s.display !== 'none' && s.visibility !== 'hidden' && (el as HTMLElement).offsetParent !== null
-        })
-        return onTableau && noLoginForm
-      }
-
-      try {
-        await iap.waitForFunction(checkTableauLoggedIn, null, { timeout: 120_000 })
-
-        // Post-login settle: wait 6s for any final redirects after SSO completes,
-        // then re-verify. This catches the case where SSO landing on Tableau fires
-        // domcontentloaded before a secondary redirect (e.g. consent page).
-        await iap.waitForTimeout(6_000)
-        const finalValid = await iap.evaluate(() => {
-          const onTableau = window.location.hostname.includes('10ay.online.tableau.com')
-          const noLoginForm = !Array.from(document.querySelectorAll('input[type="password"], input#username, [data-testid="login"]')).some(el => {
-            const s = window.getComputedStyle(el)
-            return s.display !== 'none' && s.visibility !== 'hidden' && (el as HTMLElement).offsetParent !== null
-          })
-          return onTableau && noLoginForm
-        }).catch(() => false)
-
-        console.log(`[tableau] wait-for-login: login detected, finalValid=${finalValid}`)
-        // Warm the session-status cache immediately so the UI card reflects the
-        // actual login result without waiting for the 5-min TTL to expire.
-        if (finalValid) {
-          _tableauStatusCache = { result: { reachable: true, sessionValid: true }, cachedAt: Date.now() }
-        }
-        return c.json({ sessionValid: finalValid })
-      } catch (e: any) {
-        console.warn(`[tableau] wait-for-login: timed out or failed — ${e?.message ?? e}`)
-        return c.json({ sessionValid: false })
-      }
-    } finally {
-      // BKL-CONN-TABLEAU-CTX-01: always release the IAP — closes the dedicated
-      // page on success, error, and timeout. Cookies remain on the shared context.
-      // BKL-UX94: closing the IAP also clears the VNC viewer (no manual blank tab needed).
-      await releaseIap()
-    }
+    return c.json({ sessionValid })
   })
 
   // POST /api/bootstrap/tableau/open-login — opens a dedicated IAP for Tableau
@@ -2484,23 +2399,13 @@ export function registerBootstrapRoutes(app: Hono): void {
   // BKL-CONN-TABLEAU-CTX-01: uses the IAP (not _livePage) so the SSO redirect
   // chain cannot corrupt the scraper anchor page or hang sister scrapers.
   app.post('/api/bootstrap/tableau/open-login', async (c) => {
-    const ctx = getScrapeContext()
-    if (!ctx) return c.json({ error: 'No RH session — connect Red Hat Portal first' }, 400)
+    // BKL-CONN-TABLEAU-CTX-01: isolated context — no longer requires active RH session
     try {
-      const page = await acquireIap(ctx, TABLEAU_URL)
-      // BKL-CONN-VNC-TABLEAU-01: bring VNC to front so user sees the browser
-      // immediately. Clean up about:blank pages that would cover the display.
-      for (const p of ctx.pages()) {
-        if (p !== page && p.url() === 'about:blank') {
-          await p.close().catch(() => {})
-        }
-      }
-      await page.bringToFront()
-      console.log('[tableau] opened Tableau in IAP — visible at localhost:6080')
+      await startTableauLoginBrowser()
+      console.log('[tableau] isolated Chromium launched for Tableau login — visible at localhost:6080')
       return c.json({ ok: true })
     } catch (e: any) {
       console.error('[tableau] open-login failed:', e?.message ?? e)
-      await releaseIap()
       return c.json({ error: 'Could not open Tableau — check VPN connection' }, 500)
     }
   })
