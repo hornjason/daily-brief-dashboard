@@ -221,6 +221,17 @@ export async function startSfLoginBrowser(
             resetAllCircuitBreakers()
             console.log('[sf-auth] auth restored — circuit breakers reset, all scrapers re-adopted')
 
+            // BKL-UX94: clear VNC after login
+            try {
+              const blankPage = await ctx.newPage()
+              await blankPage.bringToFront()
+              await blankPage.goto('about:blank').catch((e: any) => {
+                console.warn('[sf-auth] about:blank navigation failed:', e?.message ?? e)
+              })
+            } catch (e: any) {
+              console.warn('[sf-auth] blank tab open failed:', e?.message ?? e)
+            }
+
             onComplete?.()
             return
           } else {
