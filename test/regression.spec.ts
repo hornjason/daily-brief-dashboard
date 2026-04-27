@@ -975,6 +975,16 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toContain('sfSessionExpired')
   })
 
+  // ── REG-INTEL-DRIVE-FOLDER-01: pipeline survives missing Drive folder ───
+  test('REG-INTEL-DRIVE-FOLDER-01: writeIntelligenceDocs failure is non-fatal', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/account-intelligence.ts'), 'utf8')
+    // Step 4 call must be wrapped in try/catch so steps 1-3 content is preserved
+    // when the customer has no Drive folder (BKL-INTEL-DRIVE-FOLDER).
+    expect(src).toMatch(/writeIntelligenceDocs[\s\S]{0,400}catch[^)]*driveErr/)
+    // Doc validation must skip when no Drive doc URLs were produced
+    expect(src).toMatch(/docUrls\.companyDocUrl \|\| docUrls\.industryDocUrl/)
+  })
+
   // ── REG-WIZ-FRESH-01: Step 4 informational summary in SetupPage ─────────
   test('REG-WIZ-FRESH-01: SetupPage Step 4 renders configured summary text', () => {
     const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/pages/SetupPage.tsx'), 'utf8')

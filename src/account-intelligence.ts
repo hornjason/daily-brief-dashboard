@@ -1375,16 +1375,24 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
         console.warn(`[acct-intel] Industry analysis failed for ${customerName} — continuing without it:`, (industryResult2.reason as Error)?.message ?? industryResult2.reason)
       }
 
-      // Step 4: Write docs to Drive
+      // Step 4: Write docs to Drive (non-fatal if Drive folder not found — BKL-INTEL-DRIVE-FOLDER)
       setJob(jobId, { ...jobs.get(jobId)!, step: 'writing docs to Drive' })
-      const docUrls = await writeIntelligenceDocs(customer, companyBrief ?? '', industryAnalysis ?? '')
+      let docUrls: { companyDocUrl?: string; industryDocUrl?: string; folderId?: string } = {}
+      try {
+        docUrls = await writeIntelligenceDocs(customer, companyBrief ?? '', industryAnalysis ?? '')
+      } catch (driveErr: any) {
+        console.warn(`[acct-intel] Drive write failed for ${customerName} — caching without doc URLs:`, driveErr?.message ?? driveErr)
+      }
 
       // BKL-INTEL-03: Validate doc content in parallel — must have >= 5 lines or re-queue next run
+      // Only validate when Drive docs were actually created (BKL-INTEL-DRIVE-FOLDER)
       setJob(jobId, { ...jobs.get(jobId)!, step: 'validating doc content' })
-      const docsToValidate = [
-        { docId: docUrls.companyDocUrl?.match(/\/d\/([^/]+)\//)?.[1], docName: `${customerName} - Company Intelligence` },
-        { docId: docUrls.industryDocUrl?.match(/\/d\/([^/]+)\//)?.[1], docName: `${customerName} - Industry Analysis` },
-      ].filter(d => d.docId)
+      const docsToValidate = (docUrls.companyDocUrl || docUrls.industryDocUrl)
+        ? [
+            { docId: docUrls.companyDocUrl?.match(/\/d\/([^/]+)\//)?.[1], docName: `${customerName} - Company Intelligence` },
+            { docId: docUrls.industryDocUrl?.match(/\/d\/([^/]+)\//)?.[1], docName: `${customerName} - Industry Analysis` },
+          ].filter(d => d.docId)
+        : []
 
       const validations = await Promise.all(
         docsToValidate.map(({ docId, docName }) => validateIntelligenceDocContent(docId!, docName))

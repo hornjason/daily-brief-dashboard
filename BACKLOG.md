@@ -6279,6 +6279,30 @@ Files: src/account-intelligence.ts, test/regression.spec.ts
 Description: The no-data early-return block at line 1357 gated the full pipeline (company intelligence + industry analysis + Drive doc writes) on `accountNumbers.length === 0 && subscriptions.length === 0`. None of the generation steps actually use account numbers or subscriptions — they only need `customerName` and `industry`. Result: any customer imported from SF bookings without RH Portal scraping would never get Drive docs created.
 Fix: Removed the entire early-return guard block (lines 1353–1397). All customers now flow into the full pipeline. Added REG-INTEL-NO-ACCT-01 regression test.
 
+### BKL-INTEL-DRIVE-FOLDER | Intelligence pipeline fails entirely when customer Drive folder not found
+Status: 🔵 OPEN
+Priority: P1 | Type: Bug Fix
+Source: Quinn — 2026-04-27 (Musarubra Us / Trellix fail with "No Drive folder found under AE Peter Niklaus")
+Files: src/account-intelligence.ts (findCustomerDriveFolder ~line 756, writeIntelligenceDocs call ~line 1426)
+Description: Steps 1–3 (identifyIndustry, generateCompanyIntelligence, generateIndustryAnalysis) succeed and produce content. Step 4 (writeIntelligenceDocs) calls findCustomerDriveFolder which throws if no driveFolderId and no matching subfolder under the AE's Drive. This causes the entire pipeline job to error even though intelligence content was already generated. Any customer with `ae` set to an AE who lacks a Drive folder (or whose subfolder doesn't fuzzy-match the customer name) will fail permanently.
+Fix: Wrap the Drive write step — if findCustomerDriveFolder throws, cache intelligence content locally without docUrls and mark job as "complete (no Drive folder)" rather than error. Intelligence content is still usable for briefs; Drive doc creation can be retried later when folder is created.
+
+### BKL-GEMINI-TIMEOUT-COMPOUND | gemini-fetch.ts timeout retry compounds to ~14min wall time under Vertex outage
+Status: 🔵 OPEN
+Priority: P2 | Type: Reliability
+Source: Rook — 2026-04-27
+Files: src/gemini-fetch.ts
+Description: The TimeoutError/AbortError retry loop (up to 2 extra tries × 120s each = 360s) precedes the 429 exponential backoff loop (4 retries × ~30s). Timeout errors on the 429 retry fetches escape the handler and propagate as raw DOMException. Worst-case per-call: ~870s (~14min) holding a fetch socket + AbortSignal + closure. Under batch intelligence (many customers in parallel), a Vertex outage can starve the event loop.
+Fix: (1) Cap timeout retries to 1 for grounded calls (120s× 2 is enough). (2) Wrap the 429 retry fetch in the same `isTimeoutError` guard or add an overall call deadline (~5min). (3) Add concurrency cap upstream in runIntelligencePipeline.
+
+### BKL-SF-ADOPT-RACE | sf-auth.ts context can leak if adoptScrapeContext throws after activeContext=null
+Status: 🔵 OPEN
+Priority: P2 | Type: Reliability
+Source: Rook — 2026-04-27
+Files: src/sf-auth.ts
+Description: In both login completion paths (happy + fallback), `activeContext = null` is set BEFORE the four `adopt*` calls. If any adopt call throws, the catch block at line 266 runs `cleanupBrowser()` which is now a no-op (activeContext is null). The context the scraper just adopted is alive but untracked.
+Fix: Move `activeContext = null` to AFTER all adopt* calls succeed, or wrap the adopt block in a try/catch that runs `cleanupBrowser(ctx)` directly on the local ctx variable.
+
 ### BKL-PRODINTEL-01 | Product Intelligence NONE state — use account intelligence context for expansion analysis
 Status: ✅ DONE
 Priority: P1 | Type: Feature Enhancement
