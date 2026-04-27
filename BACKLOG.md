@@ -6441,7 +6441,7 @@ Stopped at: continue-on-error added 2026-04-25; next step is systematic triage o
 ---
 
 ### BKL-SEC-RETRY-01 | Migrate callLLM/callLLMStructured to fetchGeminiWithRetry
-Status: 🔴 OPEN
+Status: ✅ DONE — verified 2026-04-26. Both callLLM (line 609) and callLLMStructured (line 1076) already use fetchGeminiWithRetry. Migrated in a prior session.
 Priority: P2
 Size: S
 Source: Rook audit 2026-04-25 — consistency gap with new retry infrastructure

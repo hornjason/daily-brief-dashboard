@@ -60,6 +60,65 @@ function readPodConfig(): { territorySheetId: string; sfReportId: string; parent
   } catch { return null }
 }
 
+// ── BKL-DRIVE-SCAFFOLD-01 ────────────────────────────────────────────────────
+/**
+ * Idempotently scaffold `Config/` and `Products/<slug>` folders under the
+ * AE/POD parentFolderId. Runs once per bootstrap, before AE Drive folder
+ * creation (Step 0). Non-fatal: any Drive API failure is logged and
+ * swallowed so the wider bootstrap can continue.
+ *
+ * Note: folder IDs are logged only — they are NOT persisted to settings.json
+ * or any config file in this pass. BKL-DRIVE-PRODUCTS-ROOT-01 will wire the
+ * product folder IDs into products.json in a follow-up.
+ */
+const SCAFFOLD_PRODUCT_SLUGS = ['rhel', 'ocp', 'ocp-virt', 'aap', 'rhel-ai', 'rh-ai-inference', 'rhoai'] as const
+
+async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<void> {
+  if (!parentFolderId) return
+  console.log(`[auto-bootstrap:scaffold] ensuring Config/ and Products/ under parentFolderId=${parentFolderId}`)
+  try {
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+
+    const findOrCreateFolder = async (name: string, parentId: string): Promise<string | null> => {
+      const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      const existing = await withQuotaRetry(
+        () => drive.files.list({
+          q: `name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+          fields: 'files(id, name)',
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        })
+      ).catch(() => ({ data: { files: [] as Array<{ id?: string | null }> } }))
+      if (existing.data.files?.length) {
+        return existing.data.files[0].id ?? null
+      }
+      const created = await withQuotaRetry(
+        () => drive.files.create({
+          requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+          supportsAllDrives: true,
+          fields: 'id',
+        })
+      ).catch(() => null)
+      return created?.data.id ?? null
+    }
+
+    const configFolderId = await findOrCreateFolder('Config', parentFolderId)
+    const productsFolderId = await findOrCreateFolder('Products', parentFolderId)
+    if (productsFolderId) {
+      for (const slug of SCAFFOLD_PRODUCT_SLUGS) {
+        const slugId = await findOrCreateFolder(slug, productsFolderId)
+        if (!slugId) {
+          console.warn(`[auto-bootstrap:scaffold] failed to ensure Products/${slug} (non-blocking)`)
+        }
+      }
+    }
+    console.log(`[auto-bootstrap:scaffold] done — configFolderId=${configFolderId ?? 'null'} productsFolderId=${productsFolderId ?? 'null'}`)
+  } catch (e: any) {
+    console.warn('[auto-bootstrap:scaffold] failed (non-blocking):', e?.message ?? e)
+  }
+}
+
 async function notify(title: string, message: string, priority: 'default' | 'high' | 'urgent' = 'default'): Promise<void> {
   try {
     await fetch(`https://ntfy.sh/${NTFY_TOPIC}`, {
@@ -801,6 +860,10 @@ export async function bootstrapPOD(opts: {
   console.log(`[pod-bootstrap] Found ${aeEntries.length} AEs in territory sheet: ${aeEntries.map(a => a.aeName).join(', ')}`)
   // Persist POD config so it survives server restarts and can seed future re-runs
   savePodConfig({ territorySheetId, sfReportId, parentFolderId, podTabTitle })
+
+  // BKL-DRIVE-SCAFFOLD-01: Idempotently scaffold Config/ and Products/<slug> under parentFolderId.
+  // Runs once per POD bootstrap, before per-AE Drive folder creation. Non-fatal.
+  await ensureConfigAndProductsScaffold(parentFolderId)
 
   // BKL-BACKUP-01: Create config backup sheet if not already configured (best-effort)
   if (!getBackupSheetId() && parentFolderId) {
@@ -1573,6 +1636,13 @@ export function registerBootstrapRoutes(app: Hono): void {
         autoBootstrapCancelRequested = false
         console.log(`[auto-bootstrap] Cancelled by user after completing some steps for ${aeName}`)
         return true
+      }
+
+      // BKL-DRIVE-SCAFFOLD-01: Idempotently scaffold Config/ and Products/<slug> under parentFolderId
+      // before AE Drive folder creation (Step 0). Idempotent + non-fatal — safe to run per-AE in
+      // POD batches (the bootstrapPOD function also calls it once up-front; per-AE invocations no-op).
+      if (parentFolderId) {
+        await ensureConfigAndProductsScaffold(parentFolderId)
       }
 
       // Pre-flight — Ensure product intel Drive folders exist under parent (silent, idempotent)
