@@ -157,8 +157,13 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Priority: P3
 - Detail: `page.on('crash')` and `page.on('close')` are attached after `await ctx.newPage()` resolves. Renderer crash in that gap leaves `_iap` pointing at a dead page. Move listener attach to immediately after newPage() call. Source: Rook scan 2026-04-27.
 
-### BKL-HEALTH-TIMER-LEAK — setTimeout not cleared in isLivePageHealthy happy path
+### BKL-CANCEL-STEP3-OVERLAP — tid3 watchdog can false-cancel Step 3 after Step 2 completes
 - Status: OPEN
+- Priority: P2
+- Detail: In the combined SF-bookings try/catch (bootstrap-orchestrator.ts), `tid3` starts before the try block alongside `tid2`. If `tid3` fires in the window between `setStep(2,'done')` and `setStep(3,'running')` (e.g., slow `findExistingSheet` call), it marks Step 3 as error and sets `autoBootstrapCancelRequested = true`, then the success path overwrites with done but `checkCancelled()` still aborts the run. Fix: move `tid3 = makeStepTimeout(3, ...)` to just before the Step 3 sheet-write block (line ~2032) rather than the top of the combined try. Source: Serena Wave 2 audit 2026-04-27.
+
+### BKL-HEALTH-TIMER-LEAK — setTimeout not cleared in isLivePageHealthy happy path
+- Status: ✅ DONE 2026-04-27
 - Priority: P3
 - Detail: `Promise.race` in `isLivePageHealthy` (rh-scraper.ts) leaves a dangling 2s timer when evaluate wins — causes unhandledRejection log noise in Bun. Fix: clear timer in finally block. Source: Rook scan 2026-04-27.
 
@@ -7113,7 +7118,7 @@ Related: BKL-SFCACHE-02 (SF L3 write-back regression log assertion) remains 🔴
 ---
 
 ### BKL-BOOTSTRAP-CANCEL-01 | Bootstrap cancel button unresponsive when step is hung
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27
 Priority: P2
 Size: S
 Source: Jason 2026-04-27

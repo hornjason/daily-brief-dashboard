@@ -112,14 +112,17 @@ export function isLivePageBusy(): boolean { return _livePageBusy }
 export async function isLivePageHealthy(): Promise<boolean> {
   const page = _livePage
   if (!page || page.isClosed()) return false
+  let tid: ReturnType<typeof setTimeout> | undefined
   try {
     await Promise.race([
       page.evaluate(() => 1),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+      new Promise((_, reject) => { tid = setTimeout(() => reject(new Error('timeout')), 2000) }),
     ])
     return true
   } catch {
     return false
+  } finally {
+    clearTimeout(tid)
   }
 }
 

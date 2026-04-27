@@ -1070,6 +1070,32 @@ test.describe('Restored-commits source-level regressions', () => {
     // Must be in the same L4 code block (within 500 chars — accounts for podSfDataCache + if-guard between them)
     expect(writeIdx - syncIdx).toBeLessThan(500)
   })
+
+  // ── REG-CANCEL-01: bootstrap per-step timeout wired ──────────────────────
+  test('REG-CANCEL-01: bootstrap-orchestrator has per-step 90s timeout', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    expect(src).toContain('STEP_TIMEOUT_MS')
+    expect(src).toContain('makeStepTimeout')
+    expect(src).toMatch(/STEP_TIMEOUT_MS\s*=\s*90_000/)
+  })
+
+  // ── REG-CANCEL-02: cancel button has cancelling state ────────────────────
+  test('REG-CANCEL-02: SetupPage cancel button has cancelling visual state', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/pages/SetupPage.tsx'), 'utf8')
+    expect(src).toContain('cancelling')
+    expect(src).toContain('Cancelling…')
+    expect(src).toMatch(/disabled=\{cancelling\}/)
+  })
+
+  // ── REG-TIMER-LEAK-01: isLivePageHealthy clears dangling timer ───────────
+  test('REG-TIMER-LEAK-01: isLivePageHealthy clears 2s race timer in finally', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf8')
+    const fnIdx = src.indexOf('async function isLivePageHealthy')
+    expect(fnIdx).toBeGreaterThan(-1)
+    const slice = src.slice(fnIdx, fnIdx + 600)
+    expect(slice).toContain('clearTimeout')
+    expect(slice).toContain('finally')
+  })
 })
 
 // ── REG-CONN-TABLEAU-CTX-01 (live): browser context usable after wait-for-login ──

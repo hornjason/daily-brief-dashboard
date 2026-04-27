@@ -272,6 +272,9 @@ export function resetBootstrapStates(): void {
 // BKL-WIZ-02: Single-AE cancellation flag — checked between bootstrap steps for graceful stop
 let autoBootstrapCancelRequested = false
 
+// BKL-BOOTSTRAP-CANCEL-01: Per-step watchdog timeout — fires if a step hangs on a network call
+const STEP_TIMEOUT_MS = 90_000
+
 // ── POD Bootstrap ───────────────────────────────────────────────────────────
 
 interface PodAeResult {
@@ -1613,6 +1616,16 @@ export function registerBootstrapRoutes(app: Hono): void {
       }
     }
 
+    // BKL-BOOTSTRAP-CANCEL-01: Per-step watchdog — fires if a step is still 'running' after 90s
+    const makeStepTimeout = (idx: number, label: string): ReturnType<typeof setTimeout> =>
+      setTimeout(() => {
+        if (autoBootstrapState.steps[idx]?.status === 'running') {
+          console.warn(`[auto-bootstrap] Step ${idx} (${label}) timed out after ${STEP_TIMEOUT_MS / 1000}s`)
+          setStep(idx, 'error', `Step timed out after ${STEP_TIMEOUT_MS / 1000}s`)
+          autoBootstrapCancelRequested = true
+        }
+      }, STEP_TIMEOUT_MS)
+
     // Hard timeout: scales with AE count (min 60 min, +30 min per AE)
     const autoTimeoutMin = Math.max(60, aes.length * 30)
     const bootstrapTimeoutId = setTimeout(() => {
@@ -1721,6 +1734,7 @@ export function registerBootstrapRoutes(app: Hono): void {
       let driveFolderId = existingAe?.driveFolderId ?? ''
 
       // Step 1 — Create Drive Folder (skip if already exists)
+      const tid0 = makeStepTimeout(0, 'Create Drive Folder')
       try {
         setStep(0, 'running')
         if (driveFolderId) {
@@ -1802,6 +1816,8 @@ export function registerBootstrapRoutes(app: Hono): void {
         setStep(0, 'error', e.message)
         autoBootstrapState.error = `Drive folder creation failed: ${e.message}`
         console.error('[auto-bootstrap] Drive folder creation failed:', e.message)
+      } finally {
+        clearTimeout(tid0)
       }
 
       if (checkCancelled()) return
@@ -1811,6 +1827,7 @@ export function registerBootstrapRoutes(app: Hono): void {
         setStep(1, 'skipped', 'Skipped: Drive folder creation failed')
         console.log('[auto-bootstrap] Skipping customer folders — no Drive folder')
       } else {
+        const tid1 = makeStepTimeout(1, 'Create Customer Folders')
         try {
           setStep(1, 'running', `0/${customerNames.length} folders…`)
           const drive2 = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
@@ -1871,6 +1888,8 @@ export function registerBootstrapRoutes(app: Hono): void {
           setStep(1, 'error', e.message)
           autoBootstrapState.error = `Customer folder creation failed: ${e.message}`
           console.error('[auto-bootstrap] Customer folder creation failed:', e.message)
+        } finally {
+          clearTimeout(tid1)
         }
       }
 
@@ -1913,6 +1932,8 @@ export function registerBootstrapRoutes(app: Hono): void {
         //   L2 = AE Supportable sheet modifiedTime < 24h → read rows directly (skip L3)
         //   L3 = POD-level SF bookings sheet via fetchSfBookingsRaw() (L1 local cache inside)
         //   Pattern mirrors CCSP L2 check at this file's CCSP section below.
+        const tid2 = makeStepTimeout(2, 'Read SF Bookings')
+        const tid3 = makeStepTimeout(3, 'Write Subscriptions')
         try {
           setStep(2, 'running', `reading SF bookings sheet…`)
           setStep(3, 'running', 'waiting for SF data…')
@@ -1988,6 +2009,9 @@ export function registerBootstrapRoutes(app: Hono): void {
           setStep(3, 'error', 'SF sheet read failed — no results to write')
           console.error('[auto-bootstrap] SF bookings read failed:', e.message)
           autoBootstrapState.error = `SF bookings read failed: ${e.message}`
+        } finally {
+          clearTimeout(tid2)
+          clearTimeout(tid3)
         }
       } else {
         // No SF bookings sheet found for this AE's territory — skip subscription steps.
@@ -2036,6 +2060,7 @@ export function registerBootstrapRoutes(app: Hono): void {
         setStep(4, 'skipped', 'Skipped: Drive folder creation failed')
         console.log('[auto-bootstrap] Skipping CCSP sheet — no Drive folder')
       } else {
+        const tid4 = makeStepTimeout(4, 'Create CCSP Sheet')
         try {
           setStep(4, 'running')
           const currentAe = aes.find(a => a.name === aeName)!
@@ -2108,6 +2133,8 @@ export function registerBootstrapRoutes(app: Hono): void {
           setStep(4, 'error', e.message)
           autoBootstrapState.error = `CCSP sheet failed: ${e.message}`
           console.error('[auto-bootstrap] CCSP sheet failed:', e.message)
+        } finally {
+          clearTimeout(tid4)
         }
       }
 
@@ -2118,6 +2145,7 @@ export function registerBootstrapRoutes(app: Hono): void {
         setStep(5, 'error', 'Pipeline sheet skipped: Drive folder was not created in step 1')
         console.log('[auto-bootstrap] Skipping Pipeline sheet — no Drive folder')
       } else {
+        const tid5 = makeStepTimeout(5, 'Sync Pipeline Sheet')
         try {
           setStep(5, 'running')
           // BKL-POD-03: Verify Drive folder still exists before attempting pipeline sheet create
@@ -2227,6 +2255,8 @@ export function registerBootstrapRoutes(app: Hono): void {
           setStep(5, 'error', e.message)
           autoBootstrapState.error = `Pipeline sync failed: ${e.message}`
           console.error('[auto-bootstrap] Pipeline sync failed:', e.message)
+        } finally {
+          clearTimeout(tid5)
         }
       }
 

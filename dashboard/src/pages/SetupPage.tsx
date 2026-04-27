@@ -566,6 +566,7 @@ function RetryStepButton({ label, endpoint, body }: { label: string; endpoint: s
 
 function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state: AutoBootstrapState; onReset?: () => void; tableauSessionNeeded?: boolean | null }) {
   const hasError = state.steps.some(s => s.status === 'error')
+  const [cancelling, setCancelling] = useState(false)
 
   // BKL-G15: Elapsed time counter (mm:ss) during bootstrap execution
   const [elapsed, setElapsed] = useState('')
@@ -611,11 +612,14 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
           {state.running && (
             <button
               onClick={async () => {
+                setCancelling(true)
                 await fetch('/api/bootstrap/auto/cancel', { method: 'POST' }).catch(e => console.error('[bootstrap] cancel failed:', e))
+                setCancelling(false)
               }}
-              className="text-xs text-warning hover:text-warning/80 underline"
+              disabled={cancelling}
+              className="text-xs text-warning hover:text-warning/80 underline disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Cancel
+              {cancelling ? 'Cancelling…' : 'Cancel'}
             </button>
           )}
         </div>
