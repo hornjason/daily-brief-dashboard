@@ -7306,6 +7306,16 @@ Files: src/bootstrap-orchestrator.ts
 Description: When 120s timeout wins the race, no log is emitted and capturedState.resources.domainInference is never written (orphan may write it later). Should log warning when timeout fires and skip the late write. Fixed in second Marcus pass with timedOut flag.
 Resolution: timedOut flag gates the capturedState write; console.warn fires when timeout wins.
 
+### BKL-CONN-VNC-POPUP-TIMEOUT-01 | SF VNC popup not closed when 120s frontend timeout fires
+Status: ✅ DONE 2026-04-27
+Priority: P2
+Size: XS
+Source: Jason report 2026-04-27 — popup stayed open after second SSO (RH session expired during SF login)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: The 120s safety timeout in handleSfConnect cleared the poll interval and set sfConnecting=false but never called sfVncRef.current?.close(). Result: if login + RH portal re-auth took >120s, the VNC popup remained open showing a black screen after the backend completed. User saw it as "stuck hanging."
+Can we test: NO — requires 120s real wait; would slow CI unacceptably. Pattern verified by code inspection against existing close calls at lines 2876, 2888, 2905.
+Resolution: Added sfVncRef.current?.close() + sfVncRef.current = null to the 120s timeout callback.
+
 ### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
 Status: 🔴 OPEN
 Priority: P3

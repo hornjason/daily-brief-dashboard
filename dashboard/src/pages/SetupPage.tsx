@@ -2895,6 +2895,8 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
 
     setTimeout(() => {
       if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
+      sfVncRef.current?.close()
+      sfVncRef.current = null
       setSfConnecting(false)
     }, 120_000)
   }

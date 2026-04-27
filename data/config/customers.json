@@ -24,15 +24,15 @@
       "ae": "TBH",
       "discoveryFailures": 0,
       "domain": "btn.com",
-      "industry": "Media",
-      "segment": "Sports Broadcasting & Streaming",
-      "industryDescription": "Big Ten Network Services operates as a sports television network and streaming service dedicated to covering collegiate sports, primarily focusing on the Big Ten Conference through live and recorded events, news, and analysis across various platforms.",
+      "industry": "Media and Entertainment",
+      "segment": "Sports Broadcasting and Streaming",
+      "industryDescription": "Big Ten Network Services operates a sports network dedicated to covering collegiate sports sanctioned by the Big Ten Conference, offering live and recorded event telecasts, news, analysis programs, and premium video content through various platforms, including its linear TV channel and streaming services like the FOX Sports App and B1G+.",
       "industryCompetitors": [
         "ESPN",
-        "NBC Sports",
-        "FOX Sports"
+        "Fox Sports",
+        "NBC Sports"
       ],
-      "industryUpdatedAt": "2026-04-25T19:05:57.300Z",
+      "industryUpdatedAt": "2026-04-27T20:19:22.258Z",
       "inactive": true
     },
     {
@@ -273,15 +273,15 @@
       ],
       "ae": "Peter Niklaus",
       "discoveryFailures": 0,
-      "industry": "Cybersecurity",
-      "segment": "Enterprise Cybersecurity Software",
-      "industryDescription": "Musarubra US, operating as Trellix and Skyhigh Security, provides AI-powered cybersecurity solutions including extended detection and response (XDR), cloud security, data security, and endpoint protection for businesses and government organizations globally.",
+      "industry": "Technology",
+      "segment": "Cybersecurity",
+      "industryDescription": "Musarubra US, operating as Skyhigh Security and Trellix, is a cybersecurity company that offers cloud-native security solutions and services, including Secure Service Edge (SSE), cloud access security broker (CASB), secure web gateway, and extended detection and response (XDR) platforms, to protect organizations' data and systems.",
       "industryCompetitors": [
-        "CrowdStrike Holdings, Inc",
-        "Fortinet, Inc",
-        "Palo Alto Networks Inc"
+        "Zscaler",
+        "Rapid7",
+        "Palo Alto Networks"
       ],
-      "industryUpdatedAt": "2026-04-11T13:17:56.902Z",
+      "industryUpdatedAt": "2026-04-27T19:15:20.829Z",
       "inactive": true
     },
     {
@@ -994,13 +994,13 @@
       "discoveryFailures": 4,
       "industry": "Real Estate",
       "segment": "Residential Development",
-      "industryDescription": "Queen S Development is a real estate development company focused on building and selling residential properties.",
+      "industryDescription": "Queen S Development specializes in the acquisition, development, and management of residential properties, focusing on creating modern and sustainable living spaces.",
       "industryCompetitors": [
-        "Lennar",
+        "Lennar Corporation",
         "D.R. Horton",
         "PulteGroup"
       ],
-      "industryUpdatedAt": "2026-04-11T04:18:32.485Z",
+      "industryUpdatedAt": "2026-04-27T19:22:59.527Z",
       "driveFolderId": "154UkyId0pyvQANJIp2fTArY0-NQH-yNP",
       "discoveryStatus": "unresolvable",
       "discoverySkippedUntil": "2026-05-09T01:31:50.739Z",
@@ -1699,14 +1699,14 @@
       "name": "Trellix",
       "ae": "Peter Niklaus",
       "industry": "Technology",
-      "segment": "Cybersecurity",
-      "industryDescription": "Trellix is a cybersecurity company that provides an open and native extended detection and response (XDR) platform to help organizations protect against and respond to advanced cyber threats.",
+      "segment": "Cybersecurity (Extended Detection and Response - XDR)",
+      "industryDescription": "Trellix is a cybersecurity company that provides an open and native extended detection and response (XDR) platform, leveraging AI and machine learning to protect organizations from advanced threats by integrating endpoint, cloud, collaboration, data, user, application, and infrastructure security capabilities.",
       "industryCompetitors": [
-        "Microsoft Defender for Business",
         "CrowdStrike",
-        "Palo Alto Networks"
+        "Palo Alto Networks",
+        "Microsoft"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:12.664Z",
+      "industryUpdatedAt": "2026-04-27T19:15:21.470Z",
       "domain": "trellix.com",
       "accountNumbers": [
         "11717332"
@@ -1843,14 +1843,14 @@
       "name": "Guitar Center Holdings",
       "ae": "Alex Smith",
       "industry": "Retail",
-      "segment": "Musical Instrument and Supplies Stores",
-      "industryDescription": "Guitar Center Holdings is a privately-held American retailer that sells musical instruments, equipment, and accessories through its stores and e-commerce platforms, also offering services like repairs, rentals, and lessons.",
+      "segment": "Musical Instrument & Supplies Retail",
+      "industryDescription": "Guitar Center Holdings is the largest musical instrument retailer in the U.S., operating an omnichannel model that includes physical stores, e-commerce, and services such as lessons, rentals, and repairs for musicians of all levels.",
       "industryCompetitors": [
-        "Sweetwater Sound",
-        "Musician's Friend",
-        "Fender Musical Instruments"
+        "Sweetwater",
+        "Amazon",
+        "Best Buy"
       ],
-      "industryUpdatedAt": "2026-04-11T14:27:41.036Z",
+      "industryUpdatedAt": "2026-04-27T19:20:57.604Z",
       "driveFolderId": "1e1Txq75oj2qq7csY74tllenAtiNRkOD8",
       "domain": "guitarcenter.com",
       "discoveryFailures": 3,
@@ -2025,7 +2025,16 @@
       "ae": "Carolanne Farrell",
       "discoveryFailures": 3,
       "discoveryStatus": "unresolvable",
-      "discoverySkippedUntil": "2026-05-10T17:33:26.924Z"
+      "discoverySkippedUntil": "2026-05-10T17:33:26.924Z",
+      "industry": "Technology",
+      "segment": "Cybersecurity & Application Delivery",
+      "industryDescription": "A10 Networks provides secure application services and solutions, including advanced load balancing, DDoS protection, and robust firewall solutions, to ensure the availability, performance, and security of critical applications and infrastructure for enterprises, service providers, and government entities.",
+      "industryCompetitors": [
+        "F5",
+        "Cisco",
+        "Fortinet"
+      ],
+      "industryUpdatedAt": "2026-04-27T19:18:41.599Z"
     },
     {
       "name": "Dropbox",
