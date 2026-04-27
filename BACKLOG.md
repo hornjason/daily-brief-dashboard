@@ -6892,7 +6892,7 @@ Description: The `appBackup` spreadsheet is currently created in the Subscriptio
 Fix: Change `appBackup` creation target to `Config/` under `parentFolderId` (depends on BKL-DRIVE-SCAFFOLD-01 creating `Config/`). For existing installs, detect old `appBackup` in Subscription Data folder and either move it or recreate in `Config/` and update the stored ID.
 
 ### BKL-DRIVE-PRODUCTS-ROOT-01 | Product slug folders created at CommandCenter root instead of under `Products/`
-Status: OPEN
+Status: ✅ DONE 2026-04-27 — bootstrap pre-flight uses slugParentId (productsFolderId from perAeScaffold, falls back to parentId). setup-drive-folders route finds/creates Products/ subfolder first, uses productsFolderId for all slug lookups/creates. Quinn confirmed: POST returns 7 Drive IDs all created:false (idempotent lookup under Products/). Rook: PASS-WITH-NOTES (no security issues). REG-PRODUCTS-SLUG-PARENT-01 source assertion added.
 Priority: P2
 Size: S
 Source: Jason 2026-04-26 — Drive architecture review

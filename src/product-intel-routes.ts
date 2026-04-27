@@ -139,36 +139,59 @@ export function registerProductIntelRoutes(app: Hono): void {
       const products = [...config.products]
       const results: { slug: string; driveFolder: string; created: boolean }[] = []
 
+      // BKL-DRIVE-PRODUCTS-ROOT-01: slug folders go under Products/ subfolder, not CommandCenter root.
+      // Find Products/ under parentFolderId (created by ensureConfigAndProductsScaffold during bootstrap).
+      let productsFolderId = parentFolderId
+      const productsSearch = await drive.files.list({
+        q: `name='Products' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      }).catch(() => ({ data: { files: [] } }))
+      if (productsSearch.data.files?.length) {
+        productsFolderId = productsSearch.data.files[0].id!
+      } else {
+        const created = await drive.files.create({
+          requestBody: { name: 'Products', mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] },
+          supportsAllDrives: true,
+          fields: 'id',
+        }).catch(() => null)
+        if (created?.data.id) {
+          productsFolderId = created.data.id
+        } else {
+          console.warn('[product-intel] setup-drive-folders: failed to create Products/ folder — falling back to CommandCenter root')
+        }
+      }
+
       for (let i = 0; i < products.length; i++) {
         const product = products[i]
 
-        // Skip if already configured — but verify it's a child of parentFolderId.
+        // Skip if already configured — but verify it's a child of productsFolderId.
         // BKL-UX-PRODUCT-FOLDER-REPARENT-01: existing folders from older installs
-        // (separate driveParentFolderId field) may not live under the new parent.
-        // Add parentFolderId as an additional parent (non-destructive — preserves content).
+        // may not live under Products/. Add productsFolderId as an additional parent (non-destructive).
         if (product.driveFolder) {
           const meta = await drive.files.get({
             fileId: product.driveFolder,
             fields: 'id,parents',
             supportsAllDrives: true,
           }).catch(() => null)
-          if (meta?.data.parents && !meta.data.parents.includes(parentFolderId)) {
+          if (meta?.data.parents && !meta.data.parents.includes(productsFolderId)) {
             await drive.files.update({
               fileId: product.driveFolder,
-              addParents: parentFolderId,
+              addParents: productsFolderId,
               supportsAllDrives: true,
               fields: 'id',
             }).catch((e: any) => console.warn(`[product-intel] setup-drive-folders: failed to re-parent ${product.slug}:`, e?.message))
-            console.log(`[product-intel] setup-drive-folders: re-parented ${product.slug} under ${parentFolderId}`)
+            console.log(`[product-intel] setup-drive-folders: re-parented ${product.slug} under Products/ (${productsFolderId})`)
           }
           results.push({ slug: product.slug, driveFolder: product.driveFolder, created: false })
           continue
         }
 
-        // Check if folder already exists in parent (same pattern as bootstrap-orchestrator.ts lines 347-360)
+        // Check if folder already exists under Products/
         const safeName = product.slug.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
         const existing = await drive.files.list({
-          q: `name='${safeName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+          q: `name='${safeName}' and '${productsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
           fields: 'files(id, name)',
           supportsAllDrives: true,
           includeItemsFromAllDrives: true,
@@ -178,13 +201,13 @@ export function registerProductIntelRoutes(app: Hono): void {
           const folderId = existing.data.files[0].id!
           products[i] = { ...product, driveFolder: folderId }
           results.push({ slug: product.slug, driveFolder: folderId, created: false })
-          console.log(`[product-intel] setup-drive-folders: reusing existing folder for ${product.slug} (${folderId})`)
+          console.log(`[product-intel] setup-drive-folders: reusing existing folder for ${product.slug} under Products/ (${folderId})`)
         } else {
           const folder = await drive.files.create({
             requestBody: {
               name: product.slug,
               mimeType: 'application/vnd.google-apps.folder',
-              parents: [parentFolderId],
+              parents: [productsFolderId],
             },
             supportsAllDrives: true,
             fields: 'id',
@@ -192,7 +215,7 @@ export function registerProductIntelRoutes(app: Hono): void {
           const folderId = folder.data.id!
           products[i] = { ...product, driveFolder: folderId }
           results.push({ slug: product.slug, driveFolder: folderId, created: true })
-          console.log(`[product-intel] setup-drive-folders: created folder for ${product.slug} (${folderId})`)
+          console.log(`[product-intel] setup-drive-folders: created folder for ${product.slug} under Products/ (${folderId})`)
         }
       }
 

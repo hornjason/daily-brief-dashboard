@@ -1646,17 +1646,19 @@ export function registerBootstrapRoutes(app: Hono): void {
       // BKL-DRIVE-SCAFFOLD-01: Idempotently scaffold Config/ and Products/<slug> under parentFolderId
       // before AE Drive folder creation (Step 0). Idempotent + non-fatal — safe to run per-AE in
       // POD batches (the bootstrapPOD function also calls it once up-front; per-AE invocations no-op).
+      let perAeScaffold: { configFolderId: string; productsFolderId: string } | null = null
       if (parentFolderId) {
-        const _scaffoldResult = await ensureConfigAndProductsScaffold(parentFolderId)
-        void _scaffoldResult
+        perAeScaffold = await ensureConfigAndProductsScaffold(parentFolderId)
       }
 
-      // Pre-flight — Ensure product intel Drive folders exist under parent (silent, idempotent)
+      // Pre-flight — Ensure product intel Drive folders exist under Products/ (BKL-DRIVE-PRODUCTS-ROOT-01)
       try {
         const productIntelConfig = loadProductIntelConfig()
         // BKL-UX-PRODUCT-FOLDER-CONFIG-01: parent folder now sourced from
         // existing AE records via the helper, not from product-intel-config.
         const parentId = getProductIntelParentFolderId()
+        // BKL-DRIVE-PRODUCTS-ROOT-01: slug folders go under Products/ subfolder, not CommandCenter root.
+        const slugParentId = perAeScaffold?.productsFolderId ?? parentId
         if (parentId) {
           const drivePI = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
           const updatedProducts = [...productIntelConfig.products]
@@ -1664,27 +1666,27 @@ export function registerBootstrapRoutes(app: Hono): void {
           for (let i = 0; i < updatedProducts.length; i++) {
             const p = updatedProducts[i]
             if (p.driveFolder) {
-              // BKL-UX-PRODUCT-FOLDER-REPARENT-01: verify existing folder is under parentId;
-              // if not, add parentId as an additional parent (non-destructive).
+              // BKL-UX-PRODUCT-FOLDER-REPARENT-01: verify existing folder is under slugParentId;
+              // if not, add slugParentId as an additional parent (non-destructive).
               const meta = await drivePI.files.get({
                 fileId: p.driveFolder,
                 fields: 'id,parents',
                 supportsAllDrives: true,
               }).catch(() => null)
-              if (meta?.data.parents && !meta.data.parents.includes(parentId)) {
+              if (meta?.data.parents && !meta.data.parents.includes(slugParentId ?? parentId)) {
                 await drivePI.files.update({
                   fileId: p.driveFolder,
-                  addParents: parentId,
+                  addParents: slugParentId ?? parentId,
                   supportsAllDrives: true,
                   fields: 'id',
                 }).catch((e: any) => console.warn(`[auto-bootstrap] failed to re-parent ${p.slug}:`, e?.message))
-                console.log(`[auto-bootstrap] Re-parented ${p.slug} under ${parentId}`)
+                console.log(`[auto-bootstrap] Re-parented ${p.slug} under ${slugParentId ?? parentId}`)
               }
               continue
             }
             const safeSlug = p.slug.replace(/'/g, "\\'")
             const existing = await drivePI.files.list({
-              q: `name='${safeSlug}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+              q: `name='${safeSlug}' and '${slugParentId ?? parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
               fields: 'files(id)',
               supportsAllDrives: true,
               includeItemsFromAllDrives: true,
@@ -1695,7 +1697,7 @@ export function registerBootstrapRoutes(app: Hono): void {
               console.log(`[auto-bootstrap] Product folder found for ${p.slug}: ${existing.data.files[0].id}`)
             } else {
               const created = await drivePI.files.create({
-                requestBody: { name: p.slug, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+                requestBody: { name: p.slug, mimeType: 'application/vnd.google-apps.folder', parents: [slugParentId ?? parentId] },
                 supportsAllDrives: true,
                 fields: 'id',
               }).catch(() => null)

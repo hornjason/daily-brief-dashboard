@@ -1473,4 +1473,12 @@ test.describe('Connection Auth Stack — BKL-CONN', () => {
     expect(bootstrapSrc, 'bootstrap-orchestrator.ts must request id,parents on existing driveFolder check').toContain("'id,parents'")
     expect(bootstrapSrc, 'bootstrap-orchestrator.ts must call addParents to re-parent existing folders').toContain('addParents')
   })
+
+  test('REG-PRODUCTS-SLUG-PARENT-01: product slug folders created under Products/ subfolder (BKL-DRIVE-PRODUCTS-ROOT-01)', () => {
+    const src = readFileSync(join(projectRoot, 'src/product-intel-routes.ts'), 'utf-8')
+    expect(src, 'product-intel-routes.ts must search for Products/ folder').toContain("name='Products'")
+    expect(src, 'product-intel-routes.ts must use productsFolderId as slug parent').toContain('productsFolderId')
+    const bootstrapSrc = readFileSync(join(projectRoot, 'src/bootstrap-orchestrator.ts'), 'utf-8')
+    expect(bootstrapSrc, 'bootstrap-orchestrator.ts must use slugParentId for slug folder queries').toContain('slugParentId')
+  })
 })
