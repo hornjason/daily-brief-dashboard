@@ -2751,6 +2751,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   // Polling interval refs for cleanup
   const sfPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tableauPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const tableauTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sfTimeoutFiredRef = useRef(false)
 
@@ -2808,9 +2809,11 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     return () => {
       if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
       if (tableauPollRef.current) clearInterval(tableauPollRef.current)
+      if (tableauTimeoutRef.current) { clearTimeout(tableauTimeoutRef.current); tableauTimeoutRef.current = null }
       if (statusPollRef.current) clearInterval(statusPollRef.current)
       if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
       rhVncRef.current?.close()
+      rhVncRef.current = null
       sfVncRef.current?.close()
       sfVncRef.current = null
       tableauVncRef.current?.close()
@@ -2917,6 +2920,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
 
   const handleSfCancel = async () => {
     if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
+    sfTimeoutFiredRef.current = false
     setSfConnecting(false)
     sfVncRef.current?.close()
     sfVncRef.current = null
@@ -3068,8 +3072,9 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       } catch { /* retry next tick */ }
     }, 5_000)
 
-    // Hard cap — stop polling after 120s regardless
-    setTimeout(() => resolveLogin(false), 120_000)
+    // Hard cap — stop polling after 120s regardless.
+    // BKL-CONN-TABLEAU-TIMEOUT-REF-01: store timer ID so unmount cleanup can clear it.
+    tableauTimeoutRef.current = setTimeout(() => resolveLogin(false), 120_000)
   }
 
   const handleRhSync = async () => {

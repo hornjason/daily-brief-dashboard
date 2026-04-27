@@ -296,11 +296,18 @@ export async function startSfLoginBrowser(
 
 export async function cancelSfLoginBrowser(profileDir: string): Promise<void> {
   // Caller-owned flags: cleanupBrowser no longer resets these.
+  // BKL-CONN-CANCEL-REOPEN-01: capture loginInProgress BEFORE reset so we only
+  // re-open the RH context when a login was actually in flight. SetupPage unmount
+  // calls DELETE /api/auth/salesforce/session on every navigation away — without
+  // this guard, a headless Chromium would launch on every Settings exit.
+  const wasInProgress = loginInProgress
   loginInProgress = false
   loginTimedOut = false
   sfSessionExpired = false
   await cleanupBrowser()
-  await reopenScrapeContextFromAuth(profileDir).catch((e: any) => {
-    console.warn('[sf-auth] RH context recovery after cancel failed:', e?.message ?? e)
-  })
+  if (wasInProgress) {
+    await reopenScrapeContextFromAuth(profileDir).catch((e: any) => {
+      console.warn('[sf-auth] RH context recovery after cancel failed:', e?.message ?? e)
+    })
+  }
 }

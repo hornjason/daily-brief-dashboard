@@ -7336,6 +7336,43 @@ Description: When RH session expires during SF login, sf-auth.ts navigates to RH
 Can we test: Hard to test without a real expired RH session. Suggest log-level check in CI.
 Fix direction: Add a rhPortalSsoRequired signal to sf-auth.ts status; log [sf-auth] RH SSO required — second login prompt in VNC before opening rhPage.
 
+### BKL-CONN-CANCEL-REOPEN-01 | cancelSfLoginBrowser always calls reopenScrapeContextFromAuth even when no login was in progress
+Status: ✅ DONE 2026-04-27
+Priority: P2
+Size: XS
+Source: Rook second audit 2026-04-27 (LOW)
+Files: src/sf-auth.ts, dashboard/src/pages/SetupPage.tsx
+Description: cancelSfLoginBrowser unconditionally calls reopenScrapeContextFromAuth regardless of whether a login was active. The unmount cleanup now calls DELETE /api/auth/salesforce/session on every SetupPage exit — even when no SF auth is in flight — causing a spurious headless Chromium launch each time the user navigates away from the Connections page.
+Fix direction: In cancelSfLoginBrowser, capture whether loginInProgress was true before resetting flags; only call reopenScrapeContextFromAuth if it was.
+Can we test: YES — call DELETE /api/auth/salesforce/session with no login in progress; verify no new browser process spawned (check process count or logs).
+
+### BKL-CONN-CANCEL-RESET-01 | sfTimeoutFiredRef not reset in handleSfCancel
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: XS
+Source: Rook second audit 2026-04-27 (LOW)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: handleSfCancel does not reset sfTimeoutFiredRef.current = false. If the 120s timer fires during a cancel, a subsequent Connect click would find the ref still true and the poll callback would exit immediately on every tick. handleSfConnect resets it at the start, so the window is only the 120s-fires-during-cancel race, but it should be cleared in cancel for correctness.
+Can we test: Code inspection confirms the fix.
+
+### BKL-CONN-UNMOUNT-RH-NULL-01 | rhVncRef not nulled after close in unmount cleanup
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: XS
+Source: Rook second audit 2026-04-27 (SUGGESTION)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: rhVncRef.current?.close() is called in unmount but rhVncRef.current = null is not set, inconsistent with sfVncRef and tableauVncRef cleanup pattern. No functional leak on unmount.
+Can we test: Code inspection only.
+
+### BKL-CONN-TABLEAU-TIMEOUT-REF-01 | Tableau 120s login timeout not stored in ref — cannot clear on unmount
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: S
+Source: Rook second audit 2026-04-27 (SUGGESTION)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: handleTableauConnect sets setTimeout(() => resolveLogin(false), 120_000) but the timer ID is not stored. If user navigates away before 120s, the timer fires in a dead component closure. Benign (resolves a Promise only) but unclean. Fix: store timer ID in a tableauTimeoutRef and clear it in the unmount effect.
+Can we test: Code inspection only.
+
 ### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
 Status: 🔴 OPEN
 Priority: P3
