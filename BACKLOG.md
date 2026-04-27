@@ -7373,6 +7373,33 @@ Files: dashboard/src/pages/SetupPage.tsx
 Description: handleTableauConnect sets setTimeout(() => resolveLogin(false), 120_000) but the timer ID is not stored. If user navigates away before 120s, the timer fires in a dead component closure. Benign (resolves a Promise only) but unclean. Fix: store timer ID in a tableauTimeoutRef and clear it in the unmount effect.
 Can we test: Code inspection only.
 
+### BKL-CONN-RH-TIMEOUT-REF-01 | handleRhConnect 120s timeout uses bare setTimeout — not clearable on unmount
+Status: ✅ DONE 2026-04-27
+Priority: P2
+Size: XS
+Source: Rook third audit 2026-04-27 (MEDIUM)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: handleRhConnect sets a 120s bare setTimeout at line ~2991 with no ref storage. If SetupPage unmounts while RH VNC login is in progress, rhConnectPollRef and rhVncRef are cleaned up but the timeout fires in a detached closure and calls setRhConnecting(false) on an unmounted component. Same pattern fixed for Tableau (BKL-CONN-TABLEAU-TIMEOUT-REF-01) and SF (Finding 2). Fix: add rhTimeoutRef = useRef, store timer ID, clear in unmount.
+Can we test: Code inspection confirms the pattern.
+
+### BKL-CONN-TABLEAU-REENTRY-01 | handleTableauConnect has no re-entry guard — rapid double-click creates orphaned poll/timeout
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: XS
+Source: Rook third audit 2026-04-27 (LOW)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: handleTableauConnect has no guard at entry (unlike handleSfConnect which checks `if (sfPollRef.current) return`). A rapid double-click creates two concurrent resolveLogin closures sharing the same refs; the second call overwrites tableauPollRef.current and tableauVncRef.current, orphaning the first call's poll and timeout. Fix: add `if (tableauPollRef.current) return` at the top of handleTableauConnect.
+Can we test: Code inspection confirms the fix.
+
+### BKL-CONN-SF-TIMEOUT-REF-01 | handleSfConnect 120s timer not stored in ref — Cancel then re-Connect can disrupt second session
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: S
+Source: Rook third audit 2026-04-27 (LOW)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: The 120s setTimeout in handleSfConnect is not stored in a ref. If user clicks Cancel then re-clicks Connect within 120s, the first timer fires and closes the VNC window and calls DELETE /api/auth/salesforce/session mid-session. Same pattern fixed for Tableau. Fix: add sfTimeoutRef = useRef, store timer ID, clear in handleSfCancel and unmount.
+Can we test: Code inspection confirms the fix.
+
 ### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
 Status: 🔴 OPEN
 Priority: P3

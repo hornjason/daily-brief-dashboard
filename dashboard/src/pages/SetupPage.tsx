@@ -2752,8 +2752,10 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   const sfPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tableauPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tableauTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rhTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sfTimeoutFiredRef = useRef(false)
+  const sfTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // BKL-RH-UX-01: Offline token input state
   const [offlineTokenConfigured, setOfflineTokenConfigured] = useState<boolean | null>(null)
@@ -2810,6 +2812,8 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
       if (tableauPollRef.current) clearInterval(tableauPollRef.current)
       if (tableauTimeoutRef.current) { clearTimeout(tableauTimeoutRef.current); tableauTimeoutRef.current = null }
+      if (rhTimeoutRef.current) { clearTimeout(rhTimeoutRef.current); rhTimeoutRef.current = null }
+      if (sfTimeoutRef.current) { clearTimeout(sfTimeoutRef.current); sfTimeoutRef.current = null }
       if (statusPollRef.current) clearInterval(statusPollRef.current)
       if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
       rhVncRef.current?.close()
@@ -2907,7 +2911,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       } catch { /* ignore */ }
     }, 3_000)
 
-    setTimeout(() => {
+    sfTimeoutRef.current = setTimeout(() => {
       sfTimeoutFiredRef.current = true
       if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
       sfVncRef.current?.close()
@@ -2920,6 +2924,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
 
   const handleSfCancel = async () => {
     if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
+    if (sfTimeoutRef.current) { clearTimeout(sfTimeoutRef.current); sfTimeoutRef.current = null }
     sfTimeoutFiredRef.current = false
     setSfConnecting(false)
     sfVncRef.current?.close()
@@ -2988,7 +2993,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
         } catch { /* ignore */ }
       }, 2_000)
       // Hard timeout
-      setTimeout(() => {
+      rhTimeoutRef.current = setTimeout(() => {
         if (rhConnectPollRef.current) { clearInterval(rhConnectPollRef.current); rhConnectPollRef.current = null }
         rhVncRef.current?.close()
         rhVncRef.current = null
@@ -3018,6 +3023,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   }
 
   const handleTableauConnect = async () => {
+    if (tableauPollRef.current) return  // already in progress — ignore re-entrant click
     setTableauConnecting(true)
 
     // Open VNC window synchronously FIRST — browser popup blockers fire when
