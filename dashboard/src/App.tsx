@@ -230,7 +230,6 @@ function Dashboard() {
       'supportable': { state: string; lastSuccess: string | null; lastError: string | null }
       'sf-pipeline': { state: string; lastSuccess: string | null; lastError: string | null }
     }
-    supportableReachable: boolean
   }>('/api/scraper-status')
 
   // ── KPI history for sparklines (BKL-R30) ─────────────────────────────────

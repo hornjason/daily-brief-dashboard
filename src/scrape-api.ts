@@ -74,12 +74,6 @@ import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets,
 import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
 
-// ── Supportable kill switch ───────────────────────────────────────────────────
-// Set to true to block all Supportable scrape and discover calls.
-// Account discovery uses RH Portal (POST /api/scrape/rh) exclusively.
-// Re-enable by setting this to false and rebuilding.
-const SUPPORTABLE_DISABLED = true
-
 // ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
 /** Rejects after `ms` milliseconds with an informative error. */
 function wallTimeout(ms: number, label: string): Promise<never> {
@@ -743,30 +737,12 @@ export function registerScrapeRoutes(app: Hono): void {
   // GET /api/scraper-status — centralized status map from ScraperStatusStore
   // Returns ScraperStatusMap with staleness applied per scraper threshold,
   // plus circuit breaker states and scheduler queue state.
-  // Includes supportableReachable: live VPN check cached for 60s.
-  let _supportableReachableCache: { value: boolean; at: number } | null = null
   app.get('/api/scraper-status', async (c) => {
-    // Cached VPN reachability check (60s TTL) — avoids live HTTP on every poll
-    if (!_supportableReachableCache || Date.now() - _supportableReachableCache.at > 60_000) {
-      try {
-        await fetch('https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1', {
-          method: 'HEAD',
-          signal: AbortSignal.timeout(5_000),
-          redirect: 'manual',
-          // @ts-ignore — Bun-specific TLS option
-          tls: { rejectUnauthorized: false },
-        })
-        _supportableReachableCache = { value: true, at: Date.now() }
-      } catch {
-        _supportableReachableCache = { value: false, at: Date.now() }
-      }
-    }
     return c.json({
       scrapers: getStatus(),
       circuitBreakers: getCircuitBreakerStates(),
       queue: getScraperQueueStatus(),
       browserRestartNeeded: detectBrowserCrash(),
-      supportableReachable: _supportableReachableCache.value,
       rhDiscoveryProgress: _rhDiscoveryProgress,
     })
   })

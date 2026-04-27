@@ -676,13 +676,10 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
           {hasError && (() => {
             const failedSteps = state.steps.filter(s => s.status === 'error')
             if (failedSteps.length === 0) return null
-            const isSupportableStep = (name: string) => name.toLowerCase().includes('supportable') || name.toLowerCase().includes('discover account')
             const isCcspStep = (name: string) => name.toLowerCase().includes('ccsp') || name.toLowerCase().includes('tableau')
             const hintFor = (stepName: string): string => {
               if (stepName.toLowerCase().includes('rh portal') || stepName.toLowerCase().includes('red hat') || stepName.toLowerCase().includes('account'))
                 return 'RH Portal auth failed — scroll up to Step 3 and reconnect.'
-              if (isSupportableStep(stepName))
-                return 'Click Retry Supportable to re-run discovery.'
               if (stepName.toLowerCase().includes('drive') || stepName.toLowerCase().includes('folder'))
                 return 'Drive folder failed — verify Google Auth is connected in Step 2.'
               if (isCcspStep(stepName))
@@ -693,7 +690,6 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
                 return 'Territory lookup failed — verify Google Sheets access in Step 2.'
               return 'Step failed — check server logs and click "Clear stuck state" to retry.'
             }
-            const hasSupportableFailure = failedSteps.some(s => isSupportableStep(s.name))
             const hasCcspFailure = failedSteps.some(s => isCcspStep(s.name))
             return (
               <div className="mb-3 space-y-2">
@@ -704,22 +700,13 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
                     </p>
                   ))}
                 </div>
-                {(hasSupportableFailure || hasCcspFailure) && state.aeName && (
+                {hasCcspFailure && state.aeName && (
                   <div className="flex gap-2 flex-wrap">
-                    {hasSupportableFailure && (
-                      <RetryStepButton
-                        label="Retry Supportable"
-                        endpoint="/api/scrape/supportable/discover"
-                        body={{ aeName: state.aeName }}
-                      />
-                    )}
-                    {hasCcspFailure && (
-                      <RetryStepButton
-                        label="Retry CCSP"
-                        endpoint="/api/scrape/ccsp"
-                        body={{}}
-                      />
-                    )}
+                    <RetryStepButton
+                      label="Retry CCSP"
+                      endpoint="/api/scrape/ccsp"
+                      body={{}}
+                    />
                   </div>
                 )}
               </div>
@@ -2665,13 +2652,6 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
 // ── Data Sources ───────────────────────────────────────────────────────────────
 
 function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }: { onHealthChange?: (status: 'loading' | 'healthy' | 'issues', connectedCount?: number) => void; onlyConnections?: boolean; hideConnections?: boolean }) {
-  const [supportableStatus, setSupportableStatus] = useState<{
-    running: boolean
-    lastScrape: string | null
-    lastSuccess?: string | null
-    lastError: string | null
-    recordCount?: number | null
-  } | null>(null)
   const [sfStatus, setSfStatus] = useState<{
     hasSession: boolean
     lastSync: string | null
@@ -2697,10 +2677,6 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     recordCount?: number | null
     state?: string | null
   } | null>(null)
-  const [scraping, setScraping] = useState(false)
-  const [scrapeError, setScrapeError] = useState<string | null>(null)
-  const [supportableSyncMsg, setSupportableSyncMsg] = useState<string | null>(null)
-  const supportablePollMsgRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [ccspScraping, setCcspScraping] = useState(false)
   const [ccspScrapeError, setCcspScrapeError] = useState<string | null>(null)
   // ccspSyncedAt removed — derived from server ccspStatus.lastSuccess/lastScrape via isRecent()
@@ -2718,8 +2694,8 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   // BKL-G22: Poll /api/scraper-status so Sync buttons reflect live running state
   // even when a scrape was triggered externally or on page load mid-run.
   const [scraperRunning, setScraperRunning] = useState<{
-    rh: boolean; supportable: boolean; ccsp: boolean; salesforce: boolean
-  }>({ rh: false, supportable: false, ccsp: false, salesforce: false })
+    rh: boolean; ccsp: boolean; salesforce: boolean
+  }>({ rh: false, ccsp: false, salesforce: false })
   const scraperPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   useEffect(() => {
     const fetchScraperStatus = () => {
@@ -2729,7 +2705,6 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
           const s = d.scrapers ?? {}
           setScraperRunning({
             rh:         s['rh-cases']?.state === 'running',
-            supportable: s['supportable']?.state === 'running',
             ccsp:        s['ccsp']?.state === 'running',
             salesforce:  s['sf-pipeline']?.state === 'running',
           })
@@ -2755,18 +2730,11 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     if (prev.ccsp && !scraperRunning.ccsp) {
       fetch('/api/scrape/ccsp/status').then(r => r.json()).then(setCcspStatus).catch(() => {})
     }
-    if (prev.supportable && !scraperRunning.supportable) {
-      fetch('/api/scrape/supportable/status').then(r => r.json()).then(setSupportableStatus).catch(() => {})
-    }
     prevScraperRunning.current = scraperRunning
   }, [scraperRunning])
 
   // Connection flow state
   const [tableauStatus, setTableauStatus] = useState<{ reachable: boolean; sessionValid: boolean } | null>(null)
-  const [supportableReachable, setSupportableReachable] = useState<boolean | null>(null)
-  const [supportableVpnError, setSupportableVpnError] = useState(false)
-  const [supportableConnecting, setSupportableConnecting] = useState(false)
-  const supportableVncRef = useRef<Window | null>(null)
   const [sfConnecting, setSfConnecting] = useState(false)
   const sfVncRef = useRef<Window | null>(null)
   const [tableauConnecting, setTableauConnecting] = useState(false)
@@ -2777,7 +2745,6 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   const rhVncRef = useRef<Window | null>(null)
 
   // Polling interval refs for cleanup
-  const supportablePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sfPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tableauPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -2814,8 +2781,6 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   }
 
   const refreshAll = (signal?: AbortSignal) => {
-    fetch('/api/auth/supportable/check', { method: 'POST', signal }).then(r => r.json()).then(d => setSupportableReachable(d.reachable)).catch((e) => { if (e.name !== 'AbortError') setSupportableReachable(false) })
-    fetch('/api/scrape/supportable/status', { signal }).then(r => r.json()).then(setSupportableStatus).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/scrape/ccsp/status', { signal }).then(r => r.json()).then(setCcspStatus).catch((e) => { if (e.name !== 'AbortError') setCcspStatus({ running: false, lastScrape: null, lastError: 'Unreachable' }) })
     fetch('/api/auth/salesforce/status', { signal }).then(r => r.json()).then(setSfStatus).catch((e) => { if (e.name !== 'AbortError') setSfStatus({ hasSession: false, lastSync: null, rowCount: 0, syncError: 'Unreachable', reportConfigured: false }) })
     fetch('/api/auth/redhat/status', { signal }).then(r => r.json()).then(setRhStatus).catch((e) => { if (e.name !== 'AbortError') setRhStatus({ hasSession: false, sessionExpired: false, lastScraped: null, caseCount: 0 }) })
@@ -2836,7 +2801,6 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   // Cleanup polling intervals on unmount
   useEffect(() => {
     return () => {
-      if (supportablePollRef.current) clearInterval(supportablePollRef.current)
       if (sfPollRef.current) clearInterval(sfPollRef.current)
       if (tableauPollRef.current) clearInterval(tableauPollRef.current)
       if (statusPollRef.current) clearInterval(statusPollRef.current)
@@ -2846,24 +2810,6 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   }, [])
 
   const VNC_URL = getVncUrl()
-
-  const handleSupportableConnect = async () => {
-    setSupportableConnecting(true)
-    setSupportableVpnError(false)
-    try {
-      const res = await fetch('/api/auth/supportable/check', { method: 'POST' })
-      const { reachable } = await res.json()
-      if (reachable) {
-        setSupportableReachable(true)
-      } else {
-        setSupportableVpnError(true)
-      }
-    } catch {
-      setSupportableVpnError(true)
-    } finally {
-      setSupportableConnecting(false)
-    }
-  }
 
   const handleSfConnect = async () => {
     setSfConnecting(true)
@@ -3158,34 +3104,6 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     }
   }
 
-  const handleRunScrape = async () => {
-    setScrapeError(null)
-    setScraping(true)
-    try {
-      const res = await fetch('/api/refresh/subscriptions', { method: 'POST' })
-      const d = await res.json()
-      if (d.error) { setScrapeError(d.error); setScraping(false); return }
-      // Poll status endpoint until scraper finishes
-      const poll = () => new Promise<void>((resolve) => {
-        const iv = setInterval(async () => {
-          try {
-            const s = await fetch('/api/scrape/supportable/status').then(r => r.json())
-            if (!s.running) {
-              clearInterval(iv)
-              setSupportableStatus(s)
-              resolve()
-            }
-          } catch { clearInterval(iv); resolve() }
-        }, 2_000)
-      })
-      await poll()
-    } catch (e: any) {
-      setScrapeError('Sync failed — check server logs for details.')
-    } finally {
-      setScraping(false)
-    }
-  }
-
   const handleRunCcspScrape = async () => {
     setCcspScrapeError(null)
     setCcspScraping(true)
@@ -3240,34 +3158,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   const sfScrapeOk = !!sfStatus?.lastSync
   const sfSessionActive = (sfStatus?.hasSession && !sfExpired) ?? false
   const sfConnected = sfSessionActive && sfScrapeOk
-  const supportableConnected = supportableReachable === true
-  const supportableRunning = supportableStatus?.running ?? false
-  const supportableErrored = !!supportableStatus?.lastError || (!supportableStatus?.lastScrape && !supportableStatus?.running)
 
-  // Poll for status message while supportable scrape is running
-  useEffect(() => {
-    if (supportableRunning) {
-      supportablePollMsgRef.current = setInterval(async () => {
-        const s = await fetch('/api/scrape/supportable/status').then(r => r.json()).catch(() => null)
-        setSupportableSyncMsg(s?.statusMessage ?? null)
-        if (!s?.running) {
-          clearInterval(supportablePollMsgRef.current!)
-          supportablePollMsgRef.current = null
-          setSupportableSyncMsg(null)
-          setSupportableStatus(s)
-        }
-      }, 1_500)
-    } else {
-      if (supportablePollMsgRef.current) {
-        clearInterval(supportablePollMsgRef.current)
-        supportablePollMsgRef.current = null
-      }
-      setSupportableSyncMsg(null)
-    }
-    return () => {
-      if (supportablePollMsgRef.current) clearInterval(supportablePollMsgRef.current)
-    }
-  }, [supportableRunning])
   // BKL-CCSP-01: Detect Tableau session expiry errors from backend
   const isTableauSessionError = (err: string | null | undefined): boolean => {
     if (!err) return false

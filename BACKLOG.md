@@ -4776,6 +4776,16 @@ Root cause fix needed: The snapshot endpoint reads from DISK, not from the autho
 
 Workaround in place (2026-04-08): QUINN-STANDARD.md updated to ban `npx playwright test`. Safe baseline is `npx playwright test test/api/` only. Lifecycle and new-user specs require explicit Jason approval.
 
+### BKL-UI-SETUP-ROUTING-01 | Setup, Products, Admin routes return 404 on direct URL
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Quinn QA 2026-04-26 during BKL-SEC-SUPPORTABLE-01 gate
+Files: src/server.ts (SPA fallback), dashboard/src/App.tsx (client-side routes), dashboard/src/components/Sidebar.tsx (nav links)
+Description: Direct navigation to /setup, /products, /admin returns 404 from the server. Sidebar nav clicks for Setup and Products do not change the URL (stay on /dashboard). The server SPA fallback is likely not covering these paths, or the sidebar renders anchor tags with broken hrefs instead of router links. Blocks: BKL-SEC-SUPPORTABLE-02 (cannot Quinn-verify SetupPage cleanup until the page is reachable).
+
+---
+
 ### BKL-UI-04 | ASA/Product toggle invisible in collapsed sidebar — single unlabeled "A" button
 Status: ✅ DONE 2026-04-07 — Fixed in commit e0d2773: collapsed sidebar now shows stacked A/P buttons with active-state ring and tooltips
 Severity: MEDIUM
@@ -6461,13 +6471,24 @@ Description: Existing users who authenticated before the cloud-platform scope wa
 ---
 
 ### BKL-SEC-SUPPORTABLE-01 | Supportable API routes still registered in scrape-api.ts
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-26 (partial — see BKL-SEC-SUPPORTABLE-02 for remaining SetupPage cleanup)
 Priority: P1
 Size: S
 Source: Rook security scan 2026-04-25 — recovered code from mini.local retained Supportable routes
-Files: src/scrape-api.ts (lines ~252, ~337, ~361), src/rh-account-discovery.ts (line 5)
-Description: Three Supportable endpoints are still registered and callable: POST /api/scrape/supportable, GET /api/scrape/supportable/status, POST /api/scrape/supportable/discover. Account discovery also references the old Supportable discover endpoint in a comment. Supportable is permanently disabled (feedback_no_supportable.md). These routes must be removed. This is not a surgical fix — it requires removing the route handlers and updating any callers, including AdminPage.tsx and SetupPage.tsx Supportable UI (flagged by Marcus as a separate refactor item from REG-041).
-Decision: Needs coordinated pass: (1) remove route handlers from scrape-api.ts, (2) remove supportable-related UI from AdminPage.tsx + SetupPage.tsx, (3) verify no callers remain with grep. Do not do this during a test-gate session — needs a dedicated pass.
+Files: src/scrape-api.ts, dashboard/src/pages/SetupPage.tsx, dashboard/src/App.tsx
+Description: HTTP routes for /api/scrape/supportable were already absent. Removed: SUPPORTABLE_DISABLED dead constant, _supportableReachableCache VPN fetch, supportableReachable field from scraper-status response, Retry Supportable button from SetupPage.tsx, dead type field from App.tsx. Verified: Quinn (dead button absent, zero console errors), Rook (no orphaned endpoint calls in removed scope).
+Decision: Remaining SetupPage.tsx Supportable connection panel (state, polling, /api/scrape/supportable/status fetch) deferred to BKL-SEC-SUPPORTABLE-02 — requires SetupPage routing fix first so Quinn can verify.
+
+---
+
+### BKL-SEC-SUPPORTABLE-02 | SetupPage.tsx Supportable connection panel still live
+Status: 🔴 OPEN
+Priority: P2
+Size: M
+Source: Rook scan 2026-04-26 during BKL-SEC-SUPPORTABLE-01 pass
+Files: dashboard/src/pages/SetupPage.tsx (lines ~2655, 2689, 2708-2719, 2746, 2753-2851, 3159, 3230-3238), src/scraper-manager.ts (line 895)
+Description: SetupPage.tsx still has a full Supportable connection panel: supportableStatus state polling /api/scrape/supportable/status (returns 404), supportableReachable state calling /api/auth/supportable/check, handleSupportableConnect function, derived supportableConnected/Running/Errored values, and a poll timer. The /api/auth/supportable/check endpoint still exists in scraper-manager.ts (protected file). Cannot test cleanup until SetupPage routing bug is fixed (BKL-UI-SETUP-ROUTING-01) — page doesn't render at /setup.
+Blocked by: BKL-UI-SETUP-ROUTING-01
 
 ---
 
