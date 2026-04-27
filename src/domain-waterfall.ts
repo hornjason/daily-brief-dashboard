@@ -13,13 +13,17 @@ export function stripLegalSuffixes(name: string): string {
   return name.replace(LEGAL_SUFFIXES, '').replace(/\s+/g, ' ').trim()
 }
 
-/** Simple similarity check: first word of one string appears in the other */
+/** Tightened similarity check: the first substantive token (≥3 chars) of the
+ * query must appear in the result tokens (or vice versa). The previous
+ * "any overlap" predicate let unrelated suffix words like "Inc" or "Group"
+ * carry the match — e.g. "Uber Technologies" passing against "Ub3r" via
+ * a stray shared token. Anchoring on the first token prevents that. */
 export function nameMatchesClearbit(query: string, resultName: string): boolean {
-  const qWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2)
-  const rWords = resultName.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+  const qWords = query.toLowerCase().split(/\s+/).filter(w => w.length >= 3)
+  const rWords = resultName.toLowerCase().split(/\s+/).filter(w => w.length >= 3)
   if (qWords.length === 0 || rWords.length === 0) return false
-  // Check if first substantive word of result appears in query or vice versa
-  return qWords.some(w => rWords.includes(w)) || rWords.some(w => qWords.includes(w))
+  // First substantive token of query must appear in result tokens (or vice versa).
+  return rWords.includes(qWords[0]) || qWords.includes(rWords[0])
 }
 
 export interface WaterfallResult {

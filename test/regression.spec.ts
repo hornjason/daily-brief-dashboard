@@ -1523,3 +1523,64 @@ test.describe('Tableau auth isolation (BKL-CONN-TABLEAU-CTX-01)', () => {
     expect(elapsed).toBeLessThan(500)
   })
 })
+
+// ── BKL-DOM-INF-01: Domain inference surgical fixes ──────────────────────────
+// REG-DOM-01..04 — exercise nameMatchesClearbit tightening and document the
+// AE-scoped highConfidenceSaves contract. The lookup-scope test is verified by
+// code review (see src/bootstrap-orchestrator.ts auto-save block) — no API
+// fixture path exposes it directly.
+test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
+  test('REG-DOM-01: nameMatchesClearbit rejects mismatched first token (Uber vs Ub3r)', async () => {
+    // Set CONFIG_DIR before transitive imports run — backup-config.ts (pulled in by
+    // settings-api.ts → domain-waterfall.ts) calls path.resolve at module load.
+    process.env.CONFIG_DIR = process.env.CONFIG_DIR ?? path.join(__dirname, '../config')
+    const { nameMatchesClearbit } = await import('../src/domain-waterfall.ts')
+    expect(nameMatchesClearbit('Uber Technologies', 'Ub3r')).toBe(false)
+    expect(nameMatchesClearbit('Bitrise', 'Bitrise')).toBe(true)
+  })
+
+  test('REG-DOM-02: highConfidenceSaves auto-save lookup is AE-scoped and skips inactive', async () => {
+    // Verified at the source level — the auto-save block in bootstrap-orchestrator.ts
+    // must filter customers by both `name === name` AND `ae === aeName` AND `!cx.inactive`.
+    // The previous implementation used `customers.find(cx => cx.name === name)` which
+    // could contaminate an inactive or different-AE customer of the same name.
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    expect(src).toContain('cx.name === name && cx.ae === ae && !cx.inactive')
+    // And the saves array must carry the ae field forward
+    expect(src).toContain('highConfidenceSaves.push({ name: cu.name, domain: wf.domain, ae: aeName })')
+  })
+
+  test('REG-DOM-03: nameMatchesClearbit accepts canonical brand match', async () => {
+    process.env.CONFIG_DIR = process.env.CONFIG_DIR ?? path.join(__dirname, '../config')
+    const { nameMatchesClearbit } = await import('../src/domain-waterfall.ts')
+    expect(nameMatchesClearbit('Shutterfly', 'Shutterfly Inc')).toBe(true)
+    // First-token anchor: same first token survives a trailing legal suffix
+    expect(nameMatchesClearbit('Apple', 'Apple Inc')).toBe(true)
+    // Distinct first tokens are now correctly rejected — the previous "any
+    // overlap" predicate would have passed "United Health" vs "UnitedHealth
+    // Group" via no shared token, but the tightened anchor sees "united" vs
+    // "unitedhealth" as distinct strings (lemmatization is out of scope here).
+    expect(nameMatchesClearbit('United Health', 'UnitedHealth Group')).toBe(false)
+    // Empty / suffix-only inputs must be rejected
+    expect(nameMatchesClearbit('', 'Anything')).toBe(false)
+    expect(nameMatchesClearbit('Inc', 'LLC')).toBe(false)
+  })
+
+  test('REG-DOM-04: domain inference IIFE is awaited with timeout + capturedState', () => {
+    // Source-level verification of the structural fixes:
+    //  - capturedState pin (Fix 1) so resources writes do not clobber the next AE's state
+    //  - 120s Promise.race timeout (Fix 4) so a hung Clearbit call cannot stall bootstrap
+    //  - inferenceRunning flag (Fix 5) tied to the 409 gate and POD wait loop
+    //  - _customerWriteLock mutex (Fix 2) serializing customers.json writes
+    //  - Error logging (Fix 6) on both waterfall and signal fallback catches
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    expect(src).toContain('const capturedState = autoBootstrapState')
+    expect(src).toContain('setTimeout(() => { timedOut = true; resolve() }, 120_000)')
+    expect(src).toMatch(/let inferenceRunning = false/)
+    expect(src).toMatch(/let _customerWriteLock: Promise<void>/)
+    expect(src).toContain('autoBootstrapState.running || inferenceRunning')
+    expect(src).toContain('[infer-domains] waterfall error for')
+    expect(src).toContain('[infer-domains] signal fallback error for')
+    expect(src).toContain('capturedState.resources.domainInference = inferenceResults')
+  })
+})

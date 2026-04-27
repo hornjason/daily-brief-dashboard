@@ -259,6 +259,18 @@ export let autoBootstrapState: AutoBootstrapState = {
   running: false, aeName: null, steps: [], error: null, completedAt: null, resources: {}
 }
 
+// BKL-DOM-INF-01: Module-level guards for the post-bootstrap domain inference IIFE.
+// `inferenceRunning` lets the 409 gate and POD wait loop see in-progress inference
+// even after autoBootstrapState.running has flipped to false (the state machine
+// marks the bootstrap "complete" before kicking off inference today — but inference
+// still mutates customers.json and resources.domainInference, so callers must wait).
+// `_customerWriteLock` is a simple promise-chain mutex serializing writes to
+// customers.json from the auto-save block — concurrent IIFEs across overlapping
+// AE bootstraps could otherwise interleave read-modify-write and silently drop
+// updates.
+let inferenceRunning = false
+let _customerWriteLock: Promise<void> = Promise.resolve()
+
 /** BKL-W2-17: Exposed so background-scheduler can include bootstrap in isAnyScraperRunning() guard. */
 export function isBootstrapRunning(): boolean { return autoBootstrapState.running || podBootstrapState.running }
 
@@ -1095,8 +1107,10 @@ export async function bootstrapPOD(opts: {
       console.log(`[pod-bootstrap] Updated sfReportId for ${aeName}`)
     }
 
-    // Wait for any in-progress single-AE bootstrap to finish before starting the next
-    while (autoBootstrapState.running) {
+    // Wait for any in-progress single-AE bootstrap to finish before starting the next.
+    // BKL-DOM-INF-01: also wait on the post-bootstrap domain inference IIFE — it mutates
+    // customers.json and would race with the next AE's bootstrap if we let it overlap.
+    while (autoBootstrapState.running || inferenceRunning) {
       await new Promise(r => setTimeout(r, 3000))
     }
 
@@ -1518,7 +1532,9 @@ export function registerBootstrapRoutes(app: Hono): void {
   })
 
   app.post('/api/bootstrap/auto', async (c) => {
-    if (autoBootstrapState.running) return c.json({ error: 'Auto-bootstrap already in progress' }, 409)
+    // BKL-DOM-INF-01: include inferenceRunning so a follow-up POD AE bootstrap can't
+    // start while the previous AE's domain inference is still mutating customers.json.
+    if (autoBootstrapState.running || inferenceRunning) return c.json({ error: 'Auto-bootstrap already in progress' }, 409)
 
     const body = await c.req.json<{
       aeName?: string
@@ -2260,59 +2276,82 @@ export function registerBootstrapRoutes(app: Hono): void {
         }
       }
 
-      // BKL-F05: Auto-run domain inference for bootstrapped customers after all steps complete.
-      // Non-blocking — runs after bootstrap marks complete, stores results in resources.
-      ;(async () => {
-        const aeCustomers = customers.filter(cx => !cx.inactive && cx.ae === aeName)
-        if (aeCustomers.length === 0) return
-        console.log(`[auto-bootstrap] Running domain inference for ${aeCustomers.length} customers…`)
-        const inferenceResults: NonNullable<typeof autoBootstrapState.resources.domainInference> = []
-        const highConfidenceSaves: { name: string; domain: string }[] = []
+      // BKL-F05 / BKL-DOM-INF-01: Auto-run domain inference for bootstrapped customers
+      // after all steps complete. Awaited with a 120s wall-clock cap so a hung Clearbit
+      // or LLM call cannot leave bootstrap stuck. capturedState anchors writes to the
+      // state object that owned this run — autoBootstrapState is reassigned on the next
+      // bootstrap, and the old IIFE was writing to whatever the latest reference happened
+      // to be at the time it landed.
+      const capturedState = autoBootstrapState
+      inferenceRunning = true
+      let timedOut = false
+      try {
+        await Promise.race([
+          (async () => {
+            const aeCustomers = customers.filter(cx => !cx.inactive && cx.ae === aeName)
+            if (aeCustomers.length === 0) return
+            console.log(`[auto-bootstrap] Running domain inference for ${aeCustomers.length} customers…`)
+            const inferenceResults: NonNullable<typeof capturedState.resources.domainInference> = []
+            const highConfidenceSaves: { name: string; domain: string; ae: string }[] = []
 
-        for (let i = 0; i < aeCustomers.length; i += 3) {
-          const batch = aeCustomers.slice(i, i + 3)
-          await Promise.all(batch.map(async cu => {
-            // Waterfall first — works without signals (Clearbit → LLM → validate)
-            if (!cu.domain) {
-              const wf = await waterfallInferDomain(cu.name).catch(() => ({ domain: null, tier: null, verified: null }))
-              if (wf.domain) {
-                // Save all waterfall results — blank is worse than a fixable guess.
-                // User can correct low-confidence domains in the Setup wizard.
-                const autoSave = wf.domain !== null
-                const confidence = (wf.tier === 'clearbit' || wf.verified === true) ? 'high' : 'low'
-                inferenceResults.push({ customerName: cu.name, domain: wf.domain, confidence, sources: [wf.tier ?? 'web'] as string[] })
-                if (autoSave) highConfidenceSaves.push({ name: cu.name, domain: wf.domain })
-                return
-              }
+            for (let i = 0; i < aeCustomers.length; i += 3) {
+              const batch = aeCustomers.slice(i, i + 3)
+              await Promise.all(batch.map(async cu => {
+                // Waterfall first — works without signals (Clearbit → LLM → validate)
+                if (!cu.domain) {
+                  const wf = await waterfallInferDomain(cu.name).catch((e: any) => { console.warn(`[infer-domains] waterfall error for ${cu.name}:`, e?.message ?? e); return { domain: null, tier: null, verified: null } })
+                  if (wf.domain) {
+                    // Save all waterfall results — blank is worse than a fixable guess.
+                    // User can correct low-confidence domains in the Setup wizard.
+                    const autoSave = wf.domain !== null
+                    const confidence = (wf.tier === 'clearbit' || wf.verified === true) ? 'high' : 'low'
+                    inferenceResults.push({ customerName: cu.name, domain: wf.domain, confidence, sources: [wf.tier ?? 'web'] as string[] })
+                    if (autoSave) highConfidenceSaves.push({ name: cu.name, domain: wf.domain, ae: aeName })
+                    return
+                  }
+                }
+                // Signal fallback (Gmail/Calendar) — used when signals exist
+                const r = await inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e: any) => { console.warn(`[infer-domains] signal fallback error for ${cu.name}:`, e?.message ?? e); return null })
+                if (!r || r.candidates.length === 0) return
+                const top = r.candidates[0]
+                const confidence = isHighConfidenceDomain(top) ? 'high' : 'low'
+                inferenceResults.push({ customerName: r.customerName, domain: top.domain, confidence, sources: top.sources })
+                if (confidence === 'high') highConfidenceSaves.push({ name: r.customerName, domain: top.domain, ae: aeName })
+              }))
             }
-            // Signal fallback (Gmail/Calendar) — used when signals exist
-            const r = await inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch(() => null)
-            if (!r || r.candidates.length === 0) return
-            const top = r.candidates[0]
-            const confidence = isHighConfidenceDomain(top) ? 'high' : 'low'
-            inferenceResults.push({ customerName: r.customerName, domain: top.domain, confidence, sources: top.sources })
-            if (confidence === 'high') highConfidenceSaves.push({ name: r.customerName, domain: top.domain })
-          }))
-        }
 
-        // Auto-save high-confidence domains to customers.json
-        if (highConfidenceSaves.length > 0) {
-          for (const { name, domain } of highConfidenceSaves) {
-            const cu = customers.find(cx => cx.name === name)
-            if (cu && !cu.domain) cu.domain = domain
-          }
-          try {
-            writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-            renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
-            console.log(`[auto-bootstrap] Auto-saved ${highConfidenceSaves.length} high-confidence domain(s)`)
-          } catch (e: any) { console.warn('[auto-bootstrap] domain auto-save failed:', e.message) }
-        }
+            // Auto-save high-confidence domains to customers.json — AE-scoped lookup so a
+            // matching name under a different AE (or an inactive customer) cannot be
+            // contaminated by this run. Serialized through _customerWriteLock so concurrent
+            // inference IIFEs across overlapping bootstraps do not lose writes.
+            if (!timedOut && highConfidenceSaves.length > 0) {
+              _customerWriteLock = _customerWriteLock.then(async () => {
+                for (const { name, domain, ae } of highConfidenceSaves) {
+                  const cu = customers.find(cx => cx.name === name && cx.ae === ae && !cx.inactive)
+                  if (cu && !cu.domain) cu.domain = domain
+                }
+                try {
+                  writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers }, null, 2), { mode: 0o600 })
+                  renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+                  console.log(`[auto-bootstrap] Auto-saved ${highConfidenceSaves.length} high-confidence domain(s)`)
+                } catch (e: any) { console.warn('[auto-bootstrap] domain auto-save failed:', e.message) }
+              })
+              await _customerWriteLock
+            }
 
-        if (inferenceResults.length > 0) {
-          autoBootstrapState.resources.domainInference = inferenceResults
-          console.log(`[auto-bootstrap] Domain inference complete: ${highConfidenceSaves.length} auto-saved, ${inferenceResults.length - highConfidenceSaves.length} need review`)
+            if (!timedOut && inferenceResults.length > 0) {
+              capturedState.resources.domainInference = inferenceResults
+              console.log(`[auto-bootstrap] Domain inference complete: ${highConfidenceSaves.length} auto-saved, ${inferenceResults.length - highConfidenceSaves.length} need review`)
+            }
+          })(),
+          new Promise<void>(resolve => setTimeout(() => { timedOut = true; resolve() }, 120_000)),
+        ]).catch((e: any) => console.warn(`[auto-bootstrap] domain inference failed for ${aeName}:`, e.message))
+        if (timedOut) {
+          console.warn(`[auto-bootstrap] domain inference timed out after 120s for ${aeName} — results not saved`)
         }
-      })().catch((e: any) => console.warn('[auto-bootstrap] domain inference failed:', e.message))
+      } finally {
+        inferenceRunning = false
+      }
 
       autoBootstrapState.running = false
       autoBootstrapState.completedAt = new Date().toISOString()

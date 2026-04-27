@@ -7239,3 +7239,77 @@ Resolution (2026-04-27 Wave 3): Shipped 6 surgical fixes in `src/tableau-auth.ts
   5. Stale lock detection emits `console.warn('[tableau-auth] stale lock file removed')` when `SingletonLock` is unlinked.
   6. Structured harvest telemetry: `console.info` with cookie count + comma-joined unique domains on success.
 Regressions: `REG-TABLEAU-HARDENING-01` (env reads), `REG-TABLEAU-HARDENING-02` (zero-cookie returns false).
+
+### BKL-DOM-CLEARBIT-01 | Clearbit nameMatchesClearbit too permissive — maps Uber Technologies → ub3r.host
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Jason observed 2026-04-27 (Elmer bootstrap domain inference)
+Files: src/domain-waterfall.ts (nameMatchesClearbit)
+Description: Clearbit autocomplete returned a hit for "Uber Technologies" → "ub3r.host" (a startup, not Uber). The `nameMatchesClearbit` function uses word-overlap which passes because both share the word "uber" (case-insensitive). This corrupts the auto-saved domain for the customer. Similar false positives likely exist for other short brand names.
+Can we test: YES — unit test with "Uber Technologies" input asserting no match on ub3r.host.
+Fix approach: Tighten match — require first substantive word of the query to be at least 5 chars, OR require Levenshtein distance < threshold between stripped company name and Clearbit result name.
+
+### BKL-DOM-INFER-RACE-01 | Domain inference IIFE — 7 race conditions and correctness bugs (Rook audit 2026-04-27)
+Status: 🔴 OPEN
+Priority: P1
+Size: L
+Source: Rook Blackburn audit 2026-04-27 triggered by Jason observing missing inference results for Elmer
+Files: src/bootstrap-orchestrator.ts (domain inference IIFE ~2263-2315, state reset ~1580, POD loop ~1047-1193), src/domain-waterfall.ts
+Description: Rook audited the full domain inference system. 7 findings:
+  1. [Critical] IIFE writes to next AE's state via reassigned `let autoBootstrapState` binding. AE1's IIFE fires non-blocking, then Elmer's bootstrap reassigns autoBootstrapState. When AE1's IIFE writes at line 2312, it goes to Elmer's state object — AE1's domains appear under Elmer, Elmer's results lost.
+  2. [High] customers.json write race: IIFE mutates `customers` in-memory and writes JSON while next AE's bootstrap may be reading it. Lost-update risk + partial snapshot writes.
+  3. [High] highConfidenceSaves domain auto-save not scoped by AE — `customers.find(cx => cx.name === name)` has no ae filter. If two AEs share a customer name, wrong AE gets the domain. Fix: add `&& cx.ae === aeName` to line 2301.
+  4. [Medium] Awaiting the IIFE (the fix for #1) lengthens running=true window by ~30-90s/AE. Should wrap IIFE in Promise.race with 120s ceiling to prevent hung inference blocking bootstrap completion.
+  5. [Medium] 409 bootstrap-start gate only checks running flag — not inference-in-flight. A fresh bootstrap can be accepted during the IIFE race window.
+  6. [Low] Silent .catch at lines 2277, 2289 masks inference failures — no log, no surfaced error in state.
+  7. [Low] Clearbit nameMatchesClearbit false positives beyond Uber: any shared 3-char word passes (Apple Federal CU → apple.com, United Health Services → united.com). Needs Jaccard threshold or first-token-must-match.
+Can we test: YES — unit tests for findings 3, 7; integration tests for 1, 2, 5 via multi-AE POD bootstrap.
+Fix order: 3 → 1 (await IIFE + captureRef) → 4 (120s ceiling) → 5 (update 409 gate) → 2 (mutex on write) → 6 (warn logging) → 7 (tighten nameMatch).
+
+### BKL-DOM-INFER-DISPLAY-01 | Domain inference results not shown in bootstrap UI for Elmer (second POD AE)
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Jason observed 2026-04-27 (Elmer bootstrap)
+Files: src/bootstrap-orchestrator.ts (domain inference IIFE), dashboard/src/pages/SetupPage.tsx (bootstrap polling)
+Description: Domain inference runs correctly (confirmed in logs — 10 domains auto-saved for Elmer's 12 customers). However results are not visible in the UI because: (1) domain inference IIFE is non-blocking — fires then immediately sets running=false; (2) UI polls, sees running=false, captures state, stops polling; (3) inference IIFE hasn't written results yet. Fix: await the inference IIFE before setting running=false (makes inference blocking, adds ~30-60s per AE). Audit first — there may be a wider race condition with autoBootstrapState resets between AEs.
+Can we test: YES — after bootstrap, check that autoBootstrapState.resources.domainInference is populated before running=false is set.
+Resolution (2026-04-27 BKL-DOM-INF-01): DONE — awaiting the IIFE before running=false is set. UI now sees inference results before polling stops.
+
+### BKL-DOM-INF-02 | AbortController for waterfall/signal inference — abort orphan on 120s timeout
+Status: 🔴 OPEN
+Priority: P2
+Size: M
+Source: Rook+Council second audit 2026-04-27 (residual from BKL-DOM-INF-01 fix)
+Files: src/bootstrap-orchestrator.ts (inference IIFE), src/domain-waterfall.ts (tier1/tier2/tier3 fetches)
+Description: Promise.race timeout resolves the race but does NOT abort the in-flight IIFE. Orphan inference continues running, can still write customers.json via _customerWriteLock and write capturedState.resources.domainInference after inferenceRunning=false flips. Proper fix: thread an AbortController into waterfallInferDomain/inferCustomerDomain fetch calls, abort it when timeout fires. The 15s AbortSignal.timeout per-call in domain-waterfall.ts covers individual calls but there's no parent abort for the whole IIFE.
+Can we test: YES — unit test that verifies inferenceRunning=false only after all writes complete (or after abort).
+
+### BKL-DOM-INF-03 | try/finally around inferenceRunning flag — already implemented
+Status: ✅ DONE 2026-04-27
+Priority: P2
+Size: XS
+Source: Rook+Council second audit 2026-04-27
+Files: src/bootstrap-orchestrator.ts
+Description: No try/finally around inferenceRunning=true/await/false — if anything between the flag set and await throws synchronously, inferenceRunning stays true forever and permanently blocks bootstraps. Fixed in second Marcus pass (2026-04-27): wrapped in try/finally.
+Resolution: try { await Promise.race } finally { inferenceRunning = false } implemented.
+
+### BKL-DOM-INF-04 | Timeout-win warning log + gate capturedState write
+Status: ✅ DONE 2026-04-27
+Priority: P2
+Size: XS
+Source: Council second audit 2026-04-27
+Files: src/bootstrap-orchestrator.ts
+Description: When 120s timeout wins the race, no log is emitted and capturedState.resources.domainInference is never written (orphan may write it later). Should log warning when timeout fires and skip the late write. Fixed in second Marcus pass with timedOut flag.
+Resolution: timedOut flag gates the capturedState write; console.warn fires when timeout wins.
+
+### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook second audit 2026-04-27
+Files: src/bootstrap-orchestrator.ts, dashboard/src/pages/SetupPage.tsx
+Description: Inference errors are logged to console but never surfaced in autoBootstrapState or the UI. Users can't tell if inference failed for a customer. Add inferenceWarning field to state resources, show in bootstrap status card.
+Can we test: YES — mock a waterfall failure, verify inferenceWarning field is populated.
+
