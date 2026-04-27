@@ -6503,7 +6503,7 @@ Description: Integration tests expect POST /api/wizard/setup-region (regionId pe
 ---
 
 ### BKL-TEST-WIZARD-01 | wizard.spec.ts section header drift vs actual SetupPage accordion
-Status: 🔴 OPEN
+Status: ✅ DONE — confirmed resolved in prior session. Marcus verified test/wizard.spec.ts already uses "Step N of 5 —" headers matching current SetupPage. No code change needed 2026-04-27.
 Priority: P2
 Size: XS
 Source: Marcus review 2026-04-25 — tests expect "Red Hat Portal" + "POD Bootstrap" headers, actual SetupPage uses "Step N of 5 — …" accordion titles
@@ -6650,7 +6650,7 @@ Description: The SF Pipeline "Sync Now" success banner (data-testid="sf-sync-suc
 Can we test: YES — via page.route() mock for the SF scrape endpoint.
 
 ### BKL-TEST-SEED-SMOKE-01 | Customer detail page not covered by seed smoke suite
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27 — @smoke customer-detail test added to smoke-prod.spec.ts. GET-only, dynamic customer name, asserts no AppErrorBoundary + H1 present + zero pageerrors. 7/7 smoke pass on prod. Quinn+Rook: CLEAN.
 Priority: P2
 Size: S
 Source: LEARN phase reflection 2026-04-25 (Phase 3 re-audit found crash on seed data)
@@ -6883,7 +6883,7 @@ Description: Per the agreed CommandCenter Drive architecture (ARCHITECTURE.md §
 Fix: Add a pre-flight scaffolding step before Step 1 (AE folder creation) that idempotently ensures `Config/` and `Products/{aap,rhel,ocp,ocp-virt,rhel-ai,rh-ai-inference,rhoai}/` exist under `parentFolderId`. Re-runs must reuse existing folder IDs.
 
 ### BKL-DRIVE-APPBACKUP-01 | `appBackup` written to wrong Drive folder (Subscription Data instead of `Config/`)
-Status: OPEN
+Status: ✅ DONE 2026-04-27 — `createBackupSheet` now targets `scaffoldResult.configFolderId` (Config/ subfolder) with fallback to `parentFolderId`. tsc clean, 38/38 tests pass on 7776, Quinn PASS, Rook PASS-WITH-NOTES (no security issues). `POST /api/admin/backup` returns 200 ok:true on prod.
 Priority: P2
 Size: S
 Source: Jason 2026-04-26 — Drive architecture review
@@ -6979,11 +6979,35 @@ Fix: Remove supportableSheetId from AeConfig type in types.ts and from aes.json.
 ---
 
 ### BKL-TEST-FIXTURE-DRIFT-01 | Fixture AE "Carolanne Farrell" not in current AE roster
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27 — CAROLANNE→TBH in fixtures.ts + globalSetup.ts. e2e-carolanne.spec.ts assertions derive from constant (no hardcoded strings). FIXTURE DRIFT warning gone on prod.
 Priority: P3
 Size: XS
 Source: Quinn council audit 2026-04-27 — globalSetup logs FIXTURE DRIFT warning
 Files: test/fixtures.ts (CAROLANNE constant), playwright.config.ts (globalSetup)
 Description: The CAROLANNE fixture constant references "Carolanne Farrell" who is no longer in the current 9-AE roster (TBH, Peter Niklaus, Oren Shaolian, Sherry Gayo, Amanda Mejia, Alex Smith, Beena Patel, O'Neil Hopson, Cameron Floyd). globalSetup logs a FIXTURE DRIFT warning on every test run. Update the fixture to use a current AE name, or make the globalSetup warning non-fatal with a better error message.
 Fix: Update CAROLANNE (or rename) to reference a current AE name that has full bootstrap data.
+
+---
+
+### BKL-SEC-SUP-RESIDUE-API-01 | Supportable branch still active in `/api/scrape/all` + dead imports in scrape-api.ts
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Rook security scan 2026-04-27 (build cycle: BKL-DRIVE-APPBACKUP-01)
+Files: src/scrape-api.ts
+Description: Despite Supportable being permanently disabled, `scrape-api.ts` still imports `runSupportableScrape`, `writeSupportableSheet`, `supportableScrapeRunning`, `supportableScrapeStartedAt`, `SupportableCustomer` and runs a full Supportable step inside `/api/scrape/all`. The `ScrapeResult.scraper` union type includes `'supportable'`. Rook flag: violates CLAUDE.md "Supportable permanently disabled — zero exceptions." Note: `writeSupportableSheet` is also used by sf-bookings-sync for subscription data — confirm whether that usage should be renamed or kept.
+Fix: Remove `supportable` branch from `/api/scrape/all`, drop dead imports. Narrow `ScrapeResult.scraper` type to `'rh' | 'ccsp' | 'salesforce'`. If `writeSupportableSheet` serves sf-bookings-sync, rename it (e.g. `writeSubscriptionSheet`) to make intent clear. Read SCRAPER-RULES.md before modifying — scraper files are protected.
+Can we test: YES — regression test asserting `POST /api/scrape/all` response never includes `scraper:'supportable'` in results.
+
+---
+
+### BKL-UI-SUP-RESIDUE-SETUP-01 | SetupPage.tsx still references supportableSheetId and Supportable copy
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Rook security scan 2026-04-27 (build cycle: BKL-DRIVE-APPBACKUP-01)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: After the Supportable panel removal, SetupPage.tsx still references `supportableSheetId` in the AE form object (lines 55, 467, 1280, 1391, 1697, 1826), `supportableName` per-customer field (lines 65, 455, 1706, 1846), "had no Supportable matches" user-facing copy (lines 809-816), and "names must match Supportable exactly" hint (line 1375). Critical: `matchedAeIsBootstrapped` gate (line 1280) requires `supportableSheetId` to be non-empty — freshly bootstrapped AEs without a Supportable sheet ID may be flagged as not-bootstrapped, which is a UX regression.
+Fix: Remove `supportableSheetId` from `matchedAeIsBootstrapped` gate. Scrub all user-facing "Supportable" copy. Drop `supportableName` field from submit payload unless sf-bookings matching still requires it.
+Can we test: YES — regression test asserting setup page renders without any "Supportable" text content visible to user.
 

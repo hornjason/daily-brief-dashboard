@@ -73,8 +73,8 @@ function readPodConfig(): { territorySheetId: string; sfReportId: string; parent
  */
 const SCAFFOLD_PRODUCT_SLUGS = ['rhel', 'ocp', 'ocp-virt', 'aap', 'rhel-ai', 'rh-ai-inference', 'rhoai'] as const
 
-async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<void> {
-  if (!parentFolderId) return
+async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<{ configFolderId: string; productsFolderId: string } | null> {
+  if (!parentFolderId) return null
   console.log(`[auto-bootstrap:scaffold] ensuring Config/ and Products/ under parentFolderId=${parentFolderId}`)
   try {
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
@@ -114,8 +114,11 @@ async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<
       }
     }
     console.log(`[auto-bootstrap:scaffold] done — configFolderId=${configFolderId ?? 'null'} productsFolderId=${productsFolderId ?? 'null'}`)
+    if (!configFolderId || !productsFolderId) return null
+    return { configFolderId, productsFolderId }
   } catch (e: any) {
     console.warn('[auto-bootstrap:scaffold] failed (non-blocking):', e?.message ?? e)
+    return null
   }
 }
 
@@ -863,12 +866,14 @@ export async function bootstrapPOD(opts: {
 
   // BKL-DRIVE-SCAFFOLD-01: Idempotently scaffold Config/ and Products/<slug> under parentFolderId.
   // Runs once per POD bootstrap, before per-AE Drive folder creation. Non-fatal.
-  await ensureConfigAndProductsScaffold(parentFolderId)
+  const scaffoldResult = await ensureConfigAndProductsScaffold(parentFolderId)
 
-  // BKL-BACKUP-01: Create config backup sheet if not already configured (best-effort)
+  // BKL-BACKUP-01 / BKL-DRIVE-APPBACKUP-01: Create config backup sheet in Config/ subfolder.
+  // Fall back to parentFolderId if scaffold didn't run (no auth, existing install, etc.)
+  const backupTargetFolder = scaffoldResult?.configFolderId ?? parentFolderId
   if (!getBackupSheetId() && parentFolderId) {
     try {
-      const backupId = await createBackupSheet(parentFolderId)
+      const backupId = await createBackupSheet(backupTargetFolder)
       setBackupSheetId(backupId)
       console.log(`[backup] Config Backup sheet created: ${backupId}`)
     } catch (e: any) {
@@ -1642,7 +1647,8 @@ export function registerBootstrapRoutes(app: Hono): void {
       // before AE Drive folder creation (Step 0). Idempotent + non-fatal — safe to run per-AE in
       // POD batches (the bootstrapPOD function also calls it once up-front; per-AE invocations no-op).
       if (parentFolderId) {
-        await ensureConfigAndProductsScaffold(parentFolderId)
+        const _scaffoldResult = await ensureConfigAndProductsScaffold(parentFolderId)
+        void _scaffoldResult
       }
 
       // Pre-flight — Ensure product intel Drive folders exist under parent (silent, idempotent)
