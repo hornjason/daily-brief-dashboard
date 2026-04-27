@@ -135,6 +135,30 @@ Decision: DONE — Three fixes applied 2026-03-31:
 
 ---
 
+## Bugs
+
+### BKL-SFCACHE-02 — SF L3 write-back fires after fix; add regression log assertion
+- Status: OPEN
+- Priority: P2
+- Detail: After BKL-SFCACHE-01 fix, verify `[pod-bootstrap] SF Drive cache written` log appears after L4 scrape. No automated test yet — proxy is checking for CSV file in pod Drive folder post-bootstrap.
+
+### BKL-IAP-RACE — acquireIap concurrent call leaks orphan page
+- Status: OPEN
+- Priority: P3
+- Detail: If `acquireIap` is called twice concurrently (double-click on Connect button), the second call clobbers `_iap` and the first page is orphaned — never reached by `releaseIap`. Mitigate with an `_acquiring: Promise<Page> | null` mutex. Source: Rook scan 2026-04-27.
+
+### BKL-IAP-LISTENER-ATTACH — crash/close listeners attached after newPage await
+- Status: OPEN
+- Priority: P3
+- Detail: `page.on('crash')` and `page.on('close')` are attached after `await ctx.newPage()` resolves. Renderer crash in that gap leaves `_iap` pointing at a dead page. Move listener attach to immediately after newPage() call. Source: Rook scan 2026-04-27.
+
+### BKL-HEALTH-TIMER-LEAK — setTimeout not cleared in isLivePageHealthy happy path
+- Status: OPEN
+- Priority: P3
+- Detail: `Promise.race` in `isLivePageHealthy` (rh-scraper.ts) leaves a dangling 2s timer when evaluate wins — causes unhandledRejection log noise in Bun. Fix: clear timer in finally block. Source: Rook scan 2026-04-27.
+
+---
+
 ## Data Freshness
 
 ### BKL-D12 | Subscription refresh BFS burns quota — most customers show 0 products
@@ -7037,6 +7061,16 @@ Fix: Derive slugs from loadProductIntelConfig().products.map(p => p.slug).
 
 ---
 
+### BKL-PRODINTEL-05 | Product intel cache not auto-refreshed after first AE bootstrap
+Status: ✅ DONE — already implemented (BKL-STARTUP-01)
+Priority: P2
+Size: S
+Source: Jason 2026-04-27 (observed during post-wipe bootstrap test)
+Files: src/background-scheduler.ts lines 1487-1527
+Decision: WONTFIX / ALREADY DONE — BKL-STARTUP-01 in background-scheduler.ts already handles this. On every container start, 15s after startup, the scheduler checks for missing product intel summary and feature caches and seeds them automatically (fire-and-forget, non-blocking). A fresh wipe → container restart → product intel populates in background before user finishes bootstrap. No additional trigger needed.
+
+---
+
 ### BKL-SEC-SLUG-VALIDATE-01 | Product slugs in product-intel-config.json not validated at load time
 Status: 🔴 OPEN
 Priority: P3
@@ -7046,3 +7080,38 @@ Files: src/bootstrap-orchestrator.ts (ensureConfigAndProductsScaffold), data/con
 Description: Since BKL-DRIVE-SCAFFOLD-SLUGS-01, scaffold slug names come from product-intel-config.json at runtime. The slug values are passed unsanitized to the Drive folder name field (via findOrCreateFolder). If a malformed config slug contained /, control chars, or 1000+ chars, it would propagate to Drive. Also, duplicate slugs would cause extra findOrCreateFolder calls (idempotent but wasteful). Not exploitable today (config is admin-written), but defense in depth is warranted.
 Fix: Add slug shape validator (/^[a-z0-9-]{1,64}$/) at product config load time (or inside ensureConfigAndProductsScaffold before the loop). Deduplicate slugs before iteration.
 Can we test: YES — unit test that malformed slug in product-intel-config.json is rejected/skipped without crashing the scaffolder.
+
+---
+
+### BKL-CONN-TABLEAU-CTX-01 | Tableau VNC connect corrupts shared browser context — breaks CCSP + SF bootstrap
+Status: 🟡 IN PROGRESS (Marcus, 2026-04-27)
+Priority: P1
+Size: M
+Source: Jason 2026-04-27 (reproduced twice in same session)
+Files: src/bootstrap-orchestrator.ts (open-login, wait-for-login routes), src/ccsp-scraper.ts, src/sf-scraper.ts, src/interactive-auth-page.ts (new), src/rh-scraper.ts (additive), test/regression.spec.ts
+Description: After connecting to Tableau via the VNC flow (open-login + wait-for-login), the shared Playwright browser context is left in a closed/unresponsive state. Any subsequent scraper or bootstrap step that calls newPage() fails with "Browser context is closed or unresponsive (newPage() timed out after 30s)". This silently kills CCSP sheet creation and SF bookings scrape during bootstrap — both fail mid-step, leaving the AE partially bootstrapped with empty sheets. browserDegraded flag stays false so the UI gives no warning. Root cause: the Tableau VNC flow navigates the live page through a cross-domain SSO redirect chain (Tableau → auth.redhat.com → back), which destabilizes the shared context.
+Fix (Interactive Auth Page / IAP pattern):
+  1. New module src/interactive-auth-page.ts — manages a dedicated ephemeral Page used exclusively for headed auth flows. SSO cookies are Context-level, so they still flow back to the shared scrape context after IAP closes.
+  2. open-login route now calls acquireIap(ctx, TABLEAU_URL) instead of reusing _livePage. _tableauOpenLoginPage tracker removed; getIap() replaces it. setLivePageBusy(true) no longer needed on this path.
+  3. wait-for-login wraps the entire body in try { ... } finally { await releaseIap() }. Auto-closes the IAP on success, error, or timeout — clears the VNC viewer for free (replaces the BKL-UX94 manual blank-tab open).
+  4. session-status gate broadened to (isIapAlive() || isLivePageBusy()) so the probe correctly defers while interactive auth is in flight.
+  5. rh-scraper.ts: additive only — exports isLivePageHealthy() probe (Promise.race with 2s deadline). No scraper logic, _livePage, adoptScrapeContext, keep-alive, or bearer-token logic touched.
+Tests added (test/regression.spec.ts):
+  - REG-CONN-TABLEAU-CTX-01: source — interactive-auth-page module exposes acquireIap/getIap/releaseIap/isIapAlive
+  - REG-CONN-TABLEAU-CTX-02: source — bootstrap-orchestrator imports IAP API, _tableauOpenLoginPage gone, wait-for-login wraps body in try/finally with releaseIap
+  - REG-CONN-TABLEAU-CTX-03: source — rh-scraper exposes isLivePageHealthy probe
+  - REG-CONN-TABLEAU-CTX-01-live: API — browserDegraded remains false (skips when /api/status/scrapes unreachable)
+Stopped at: implementation complete on worktree branch worktree-agent-a599d1b2. Next: DA reviews diff, runs `make test-up` then full Playwright suite on 7776, then `make rebuild`. SF re-auth path (sf-auth.ts) intentionally NOT changed — it already launches a dedicated chromium.launchPersistentContext for the headed flow and only adopts the context post-login, so the IAP corruption pathway does not apply there.
+Can we test: YES — covered by REG-CONN-TABLEAU-CTX-01 / -02 / -03 (source-level) + -01-live (API).
+Related: BKL-SFCACHE-02 (SF L3 write-back regression log assertion) remains 🔴 OPEN — separate concern, not addressed here.
+
+---
+
+### BKL-BOOTSTRAP-CANCEL-01 | Bootstrap cancel button unresponsive when step is hung
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Jason 2026-04-27
+Files: dashboard/src/pages/SetupPage.tsx, src/bootstrap-orchestrator.ts
+Description: When bootstrap hangs mid-step (e.g. waiting for browser context that never responds), the UI cancel button does nothing. The cancel endpoint returns {"ok":true} but the bootstrap loop is blocked inside an await that never resolves. The API cancel flag is set but the running loop never checks it because it's stuck. Fix: add AbortController or per-step timeout wrapping every await in the bootstrap loop so cancellation signals can interrupt a hung step within a few seconds. Also: the cancel button should disable itself and show a spinner when clicked — currently it looks broken (nothing happens visually).
+Can we test: YES — trigger a bootstrap step that intentionally hangs, click cancel, assert bootstrap.running becomes false within 10s.

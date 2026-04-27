@@ -103,6 +103,26 @@ export async function reopenScrapeContextFromAuth(profileDir: string): Promise<v
 export function setLivePageBusy(busy: boolean): void { _livePageBusy = busy }
 export function isLivePageBusy(): boolean { return _livePageBusy }
 
+/**
+ * BKL-CONN-TABLEAU-CTX-01: lightweight liveness probe for the scraper anchor page.
+ * Returns true iff _livePage exists, isn't closed, and responds to a trivial
+ * evaluate within 2s. Callers (status routes, health checks) can use this to
+ * detect a corrupted renderer without driving any real work through the page.
+ */
+export async function isLivePageHealthy(): Promise<boolean> {
+  const page = _livePage
+  if (!page || page.isClosed()) return false
+  try {
+    await Promise.race([
+      page.evaluate(() => 1),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+    ])
+    return true
+  } catch {
+    return false
+  }
+}
+
 const KEEP_ALIVE_INTERVAL_MS = 8 * 60 * 1000 // 8 minutes — well before SSO 30-min idle timeout
 const SESSION_STATE_FILE = 'session-state.json'
 

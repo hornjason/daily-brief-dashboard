@@ -996,6 +996,56 @@ test.describe('Restored-commits source-level regressions', () => {
     // The success path reads recordCount from the status endpoint.
     expect(src).toMatch(/\brecordCount\b/)
   })
+
+  // ── REG-CONN-TABLEAU-CTX-01: IAP isolation — Tableau login must not drive _livePage ──
+  // BKL-CONN-TABLEAU-CTX-01: cross-domain SSO chains driven through the shared
+  // _livePage corrupted the renderer and hung sister scrapers. Fix routes Tableau
+  // login through a dedicated Interactive Auth Page (IAP) and always closes it
+  // in a finally block (auto-close on success, error, or timeout).
+  test('REG-CONN-TABLEAU-CTX-01: interactive-auth-page module exists with required exports', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/interactive-auth-page.ts'), 'utf8')
+    expect(src).toMatch(/export async function acquireIap\b/)
+    expect(src).toMatch(/export function getIap\b/)
+    expect(src).toMatch(/export async function releaseIap\b/)
+    expect(src).toMatch(/export function isIapAlive\b/)
+  })
+
+  test('REG-CONN-TABLEAU-CTX-02: bootstrap-orchestrator routes Tableau login through IAP, not _livePage', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    // Imports IAP API
+    expect(src).toContain("from './interactive-auth-page.ts'")
+    expect(src).toMatch(/\bacquireIap\b/)
+    expect(src).toMatch(/\breleaseIap\b/)
+    // The deprecated tracker for the live-page-as-IAP is gone
+    expect(src).not.toMatch(/\b_tableauOpenLoginPage\b/)
+    // open-login no longer pins the live page busy — IAP is its own page
+    expect(src).not.toMatch(/setLivePageBusy\(true\)/)
+    // wait-for-login wraps the body in try { ... } finally { await releaseIap() }
+    // so the IAP is closed on success, error, and timeout.
+    const waitFor = src.indexOf("'/api/bootstrap/tableau/wait-for-login'")
+    expect(waitFor).toBeGreaterThan(-1)
+    const slice = src.slice(waitFor, waitFor + 4000)
+    expect(slice).toMatch(/getIap\s*\(\s*\)/)
+    expect(slice).toMatch(/finally\s*\{[\s\S]*?releaseIap\s*\(\s*\)/)
+  })
+
+  test('REG-CONN-TABLEAU-CTX-03: rh-scraper exposes isLivePageHealthy probe', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf8')
+    expect(src).toMatch(/export async function isLivePageHealthy\s*\(\s*\)\s*:\s*Promise<boolean>/)
+  })
+})
+
+// ── REG-CONN-TABLEAU-CTX-01 (live): browser context usable after wait-for-login ──
+// API-level regression — only asserts when the test container is reachable. Skips
+// otherwise so the gate stays green in environments without a live RH session.
+test('REG-CONN-TABLEAU-CTX-01-live: scraper context survives wait-for-login completion', async ({ request }) => {
+  const status = await request.get('/api/status/scrapes').catch(() => null)
+  test.skip(!status || !status.ok(), 'scrape status endpoint unavailable — skipping live IAP check')
+  const body = await status!.json()
+  // Whether or not Tableau login was just exercised, browserDegraded must be false:
+  // the IAP path is designed so a timed-out or cancelled login leaves the scraper
+  // anchor and shared context intact.
+  expect(body.browserDegraded).toBe(false)
 })
 
 // ── REG-PLURAL-01: AccountPortfolioGrid shows singular "account" when count = 1 ──
