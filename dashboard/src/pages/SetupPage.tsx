@@ -2752,6 +2752,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   const sfPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const tableauPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const sfTimeoutFiredRef = useRef(false)
 
   // BKL-RH-UX-01: Offline token input state
   const [offlineTokenConfigured, setOfflineTokenConfigured] = useState<boolean | null>(null)
@@ -2805,11 +2806,18 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   // Cleanup polling intervals on unmount
   useEffect(() => {
     return () => {
-      if (sfPollRef.current) clearInterval(sfPollRef.current)
+      if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
       if (tableauPollRef.current) clearInterval(tableauPollRef.current)
       if (statusPollRef.current) clearInterval(statusPollRef.current)
       if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
       rhVncRef.current?.close()
+      sfVncRef.current?.close()
+      sfVncRef.current = null
+      tableauVncRef.current?.close()
+      tableauVncRef.current = null
+      // BKL-CONN-UNMOUNT-VNC-01: cancel server-side SF login loop on navigation —
+      // cancelSfLoginBrowser is idempotent so calling unconditionally is safe.
+      fetch('/api/auth/salesforce/session', { method: 'DELETE' }).catch(() => {})
     }
   }, [])
 
@@ -2819,6 +2827,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     if (sfPollRef.current) return  // already polling — ignore re-entrant click
     setSfConnecting(true)
     sfLoginStartedRef.current = false
+    sfTimeoutFiredRef.current = false
 
     // If session is already active in React state, skip VNC entirely — opening then immediately
     // closing it looks like a bug to the user. Just trigger a sync and return.
@@ -2841,6 +2850,8 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     } catch { sfVncRef.current?.close(); sfVncRef.current = null; setSfConnecting(false); return }
 
     sfPollRef.current = setInterval(async () => {
+      // Guard against benign double-fire when 120s timeout and a poll tick race.
+      if (sfTimeoutFiredRef.current) return
       // BKL-CONN-WINDOW-CLOSED-01: User closed VNC popup — do final status
       // check and stop polling so the Connect spinner doesn't hang forever.
       if (sfVncRef.current?.closed) {
@@ -2894,10 +2905,13 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
     }, 3_000)
 
     setTimeout(() => {
+      sfTimeoutFiredRef.current = true
       if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
       sfVncRef.current?.close()
       sfVncRef.current = null
       setSfConnecting(false)
+      // Cancel server-side login loop so it doesn't keep running for ~5 more minutes.
+      fetch('/api/auth/salesforce/session', { method: 'DELETE' }).catch(() => {})
     }, 120_000)
   }
 

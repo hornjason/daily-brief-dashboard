@@ -7316,6 +7316,26 @@ Description: The 120s safety timeout in handleSfConnect cleared the poll interva
 Can we test: NO — requires 120s real wait; would slow CI unacceptably. Pattern verified by code inspection against existing close calls at lines 2876, 2888, 2905.
 Resolution: Added sfVncRef.current?.close() + sfVncRef.current = null to the 120s timeout callback.
 
+### BKL-CONN-UNMOUNT-VNC-01 | sfVncRef and tableauVncRef not closed on SetupPage unmount
+Status: ✅ DONE 2026-04-27
+Priority: P2
+Size: S
+Source: Rook council audit 2026-04-27 (finding #5, HIGH)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: The unmount cleanup useEffect (~line 2806) closes rhVncRef but not sfVncRef or tableauVncRef. If user navigates away from SetupPage while SF or Tableau login is in progress, the VNC popup stays open (orphaned), sfPollRef is cleared so polling stops, and server-side loginInProgress stays true until the 5-minute sf-auth.ts timeout expires. Same class of bug as BKL-CONN-VNC-POPUP-TIMEOUT-01.
+Can we test: YES — mount SetupPage, trigger SF connect, navigate away, verify no orphaned VNC window (Playwright navigation test).
+Fix direction: Add sfVncRef.current?.close(); sfVncRef.current = null; and tableauVncRef equivalent to the unmount return function.
+
+### BKL-CONN-DOUBLE-SSO-UX-01 | Double-SSO during SF login not surfaced to UI
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: S
+Source: Rook council audit 2026-04-27 (finding #3, MEDIUM)
+Files: src/sf-auth.ts, dashboard/src/pages/SetupPage.tsx
+Description: When RH session expires during SF login, sf-auth.ts navigates to RH portal which triggers a second SSO in the VNC browser. User sees VNC "restart" from an RH SSO page with no explanation. The loginInProgress flag stays true throughout so no server hang, but UX is confusing. No log or status signal distinguishes "waiting for RH SSO" from "waiting for SF SSO."
+Can we test: Hard to test without a real expired RH session. Suggest log-level check in CI.
+Fix direction: Add a rhPortalSsoRequired signal to sf-auth.ts status; log [sf-auth] RH SSO required — second login prompt in VNC before opening rhPage.
+
 ### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
 Status: 🔴 OPEN
 Priority: P3

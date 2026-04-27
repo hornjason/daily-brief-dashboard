@@ -178,7 +178,7 @@ export async function startSfLoginBrowser(
 
         // SF login complete — now navigate to RH portal to re-establish RH scraper session
         if (url.startsWith('https://redhatcrm.lightning.force.com')) {
-          console.log('[sf-auth] SF login confirmed — navigating to RH portal to re-adopt RH scraper')
+          console.log('[sf-auth] SF login confirmed — opening RH portal in VNC to re-adopt RH scraper (second SSO may appear if RH session expired)')
           sfSessionExpired = false
 
           // Open a new page for RH portal — same context has SSO cookies so it auto-auths
