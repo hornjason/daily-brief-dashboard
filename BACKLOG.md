@@ -7400,6 +7400,36 @@ Files: dashboard/src/pages/SetupPage.tsx
 Description: The 120s setTimeout in handleSfConnect is not stored in a ref. If user clicks Cancel then re-clicks Connect within 120s, the first timer fires and closes the VNC window and calls DELETE /api/auth/salesforce/session mid-session. Same pattern fixed for Tableau. Fix: add sfTimeoutRef = useRef, store timer ID, clear in handleSfCancel and unmount.
 Can we test: Code inspection confirms the fix.
 
+### BKL-CONN-TABLEAU-CANCEL-TIMEOUT-01 | handleTableauCancel does not clear tableauTimeoutRef
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: XS
+Source: Rook fourth audit 2026-04-27 (LOW)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: handleTableauCancel clears tableauPollRef and closes tableauVncRef but does not clear tableauTimeoutRef. The 120s timeout continues running after cancel and fires resolveLogin(false) redundantly — no resource leak, but adds a stale setState call after cancel.
+Fix: Add tableauTimeoutRef clear to handleTableauCancel.
+Can we test: Code inspection only.
+
+### BKL-CONN-SYNC-POLL-UNMOUNT-01 | handleRhSync/handleSfSync/handleRunCcspScrape inner intervals not cleared on unmount
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: S
+Source: Rook fourth audit 2026-04-27 (LOW)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: The progress-poll intervals inside handleRhSync, handleSfSync, handleRunCcspScrape are local variables not registered to component-level refs. If SetupPage unmounts while a sync is in progress, these intervals keep firing setState on the unmounted component. Bounded by scraper runtime (30–120s). React 18 suppresses the warning, no crash.
+Fix: Promote inner iv vars to component-level refs (rhSyncPollRef, sfSyncPollRef, ccspSyncPollRef), clear in unmount.
+Can we test: Code inspection confirms the pattern.
+
+### BKL-CONN-SF-SUCCESS-TIMEOUT-01 | SF sync success hide setTimeout not stored in ref
+Status: ✅ DONE 2026-04-27
+Priority: P3
+Size: XS
+Source: Rook fourth audit 2026-04-27 (SUGGESTION)
+Files: dashboard/src/pages/SetupPage.tsx
+Description: An 8s setTimeout that calls setSfSyncSuccess(null) is not stored in a ref. If component unmounts during those 8s, the callback fires setState on an unmounted component. React 18 no-crash but generates a warning.
+Fix: Store in sfSuccessTimeoutRef, clear in unmount.
+Can we test: Code inspection only.
+
 ### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
 Status: 🔴 OPEN
 Priority: P3

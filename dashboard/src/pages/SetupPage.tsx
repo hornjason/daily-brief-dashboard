@@ -2756,6 +2756,12 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const sfTimeoutFiredRef = useRef(false)
   const sfTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // BKL-CONN-SYNC-POLL-UNMOUNT-01: refs for inner sync poll intervals so unmount cleanup can clear them
+  const rhSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const sfSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const ccspSyncPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // BKL-CONN-SF-SUCCESS-TIMEOUT-01: ref for SF sync success hide timeout
+  const sfSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // BKL-RH-UX-01: Offline token input state
   const [offlineTokenConfigured, setOfflineTokenConfigured] = useState<boolean | null>(null)
@@ -2816,6 +2822,10 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       if (sfTimeoutRef.current) { clearTimeout(sfTimeoutRef.current); sfTimeoutRef.current = null }
       if (statusPollRef.current) clearInterval(statusPollRef.current)
       if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
+      if (rhSyncPollRef.current) { clearInterval(rhSyncPollRef.current); rhSyncPollRef.current = null }
+      if (sfSyncPollRef.current) { clearInterval(sfSyncPollRef.current); sfSyncPollRef.current = null }
+      if (ccspSyncPollRef.current) { clearInterval(ccspSyncPollRef.current); ccspSyncPollRef.current = null }
+      if (sfSuccessTimeoutRef.current) { clearTimeout(sfSuccessTimeoutRef.current); sfSuccessTimeoutRef.current = null }
       rhVncRef.current?.close()
       rhVncRef.current = null
       sfVncRef.current?.close()
@@ -3017,6 +3027,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
 
   const handleTableauCancel = () => {
     if (tableauPollRef.current) { clearInterval(tableauPollRef.current); tableauPollRef.current = null }
+    if (tableauTimeoutRef.current) { clearTimeout(tableauTimeoutRef.current); tableauTimeoutRef.current = null }
     setTableauConnecting(false)
     tableauVncRef.current?.close()
     tableauVncRef.current = null
@@ -3100,12 +3111,14 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
             const s = await fetch('/api/scrape/rh/status').then(r => r.json())
             if (!s.running) {
               clearInterval(iv)
+              rhSyncPollRef.current = null
               // Refresh displayed data
               fetch('/api/auth/redhat/status').then(r => r.json()).then(setRhStatus).catch(() => {})
               resolve()
             }
-          } catch { clearInterval(iv); resolve() }
+          } catch { clearInterval(iv); rhSyncPollRef.current = null; resolve() }
         }, 2_000)
+        rhSyncPollRef.current = iv
       })
       await poll()
     } catch (e: any) {
@@ -3133,6 +3146,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
             const s = await fetch('/api/scrape/salesforce/status').then(r => r.json())
             if (!s.running) {
               clearInterval(iv)
+              sfSyncPollRef.current = null
               finalStatus = s
               // Await status refresh so sfStatus is updated before setSfSyncing(false) fires
               fetch('/api/auth/salesforce/status')
@@ -3140,8 +3154,9 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
                 .then(data => { setSfStatus(data); resolve() })
                 .catch(() => resolve())
             }
-          } catch { clearInterval(iv); resolve() }
+          } catch { clearInterval(iv); sfSyncPollRef.current = null; resolve() }
         }, 2_000)
+        sfSyncPollRef.current = iv
       })
       await poll()
       // BKL-WIZ-SF-SYNC-01: surface success feedback when the run finished
@@ -3151,7 +3166,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       if (fs && !fs.lastError) {
         const count = typeof fs.recordCount === 'number' ? fs.recordCount : null
         setSfSyncSuccess(count !== null ? `Sync complete — ${count} rows` : 'Sync complete')
-        setTimeout(() => setSfSyncSuccess(null), 8_000)
+        sfSuccessTimeoutRef.current = setTimeout(() => { setSfSyncSuccess(null); sfSuccessTimeoutRef.current = null }, 8_000)
       }
     } catch (e: any) {
       setSfSyncError('Sync failed. Check server logs for details.')
@@ -3174,11 +3189,13 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
             const s = await fetch('/api/scrape/ccsp/status').then(r => r.json())
             if (!s.running) {
               clearInterval(iv)
+              ccspSyncPollRef.current = null
               setCcspStatus(s)
               resolve()
             }
-          } catch { clearInterval(iv); resolve() }
+          } catch { clearInterval(iv); ccspSyncPollRef.current = null; resolve() }
         }, 2_000)
+        ccspSyncPollRef.current = iv
       })
       await poll()
     } catch (e: any) {
