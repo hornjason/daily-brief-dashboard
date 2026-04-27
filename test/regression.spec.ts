@@ -1096,6 +1096,33 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(slice).toContain('clearTimeout')
     expect(slice).toContain('finally')
   })
+
+  // ── REG-IAP-RACE-01: acquireIap has promise mutex ─────────────────────────
+  // BKL-IAP-RACE: concurrent acquireIap callers raced past the !_iap guard,
+  // creating two pages and orphaning one. Fix adds a module-scope _acquiring
+  // promise mutex so racers share the same in-flight creation promise.
+  test('REG-IAP-RACE-01: interactive-auth-page has _acquiring promise mutex', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/interactive-auth-page.ts'), 'utf8')
+    expect(src).toContain('_acquiring')
+  })
+
+  // ── REG-TABLEAU-HARDENING-01: cookie age env-overridable ─────────────────
+  // BKL-TABLEAU-HARDENING-01: TABLEAU_COOKIE_AGE_MS must be env-configurable
+  // so test/staging environments can shorten the SSO TTL for faster reauth.
+  test('REG-TABLEAU-HARDENING-01: tableau-auth reads TABLEAU_COOKIE_AGE_MS from env', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
+    expect(src).toContain('process.env.TABLEAU_COOKIE_AGE_MS')
+  })
+
+  // ── REG-TABLEAU-HARDENING-02: zero-cookie harvest returns false ──────────
+  // BKL-TABLEAU-HARDENING-01: when waitForTableauLogin sees no login form but
+  // cookies fail to harvest (count == 0), we must return false instead of
+  // silently claiming success. Verify the warn message + the return false path.
+  test('REG-TABLEAU-HARDENING-02: tableau-auth returns false on 0 cookies harvested', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
+    expect(src).toContain('0 cookies harvested')
+    expect(src).toContain('return false')
+  })
 })
 
 // ── REG-CONN-TABLEAU-CTX-01 (live): browser context usable after wait-for-login ──

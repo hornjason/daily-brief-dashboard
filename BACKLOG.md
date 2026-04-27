@@ -148,14 +148,26 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Detail: SF happy-path blank-tab clear (sf-auth.ts) can't be tested via Playwright CI — requires live headed browser with authenticated RH session. Proxy test: stub `onComplete` + mock `ctx.newPage()`, verify `about:blank` navigation fires on happy path. Add to regression.spec.ts with REG tag.
 
 ### BKL-IAP-RACE — acquireIap concurrent call leaks orphan page
-- Status: OPEN
+- Status: ✅ DONE 2026-04-27
 - Priority: P3
 - Detail: If `acquireIap` is called twice concurrently (double-click on Connect button), the second call clobbers `_iap` and the first page is orphaned — never reached by `releaseIap`. Mitigate with an `_acquiring: Promise<Page> | null` mutex. Source: Rook scan 2026-04-27.
+- Resolution: Added module-scope `_acquiring: Promise<Page> | null` mutex in `src/interactive-auth-page.ts`. Concurrent callers now share the in-flight creation promise; `_acquiring` is cleared in a `finally` block so the next call gets a fresh slot. Regression: `REG-IAP-RACE-01`.
 
 ### BKL-IAP-LISTENER-ATTACH — crash/close listeners attached after newPage await
-- Status: OPEN
+- Status: ✅ DONE 2026-04-27
 - Priority: P3
 - Detail: `page.on('crash')` and `page.on('close')` are attached after `await ctx.newPage()` resolves. Renderer crash in that gap leaves `_iap` pointing at a dead page. Move listener attach to immediately after newPage() call. Source: Rook scan 2026-04-27.
+- Resolution: Verified — listeners are attached synchronously immediately after `ctx.newPage()` resolves and BEFORE `_iap = page` assignment. Within the new mutex closure ordering is: `newPage()` → `page.on('crash')` → `page.on('close')` → `_iap = page` → `goto()`. No intervening await between `newPage` and the listener calls. No code change required beyond the mutex wrap.
+
+### BKL-TABLEAU-ENV-VALIDATION — parseInt on TABLEAU_COOKIE_AGE_MS accepts negatives/partial numerics
+- Status: OPEN
+- Priority: P3
+- Detail: `parseInt(process.env.TABLEAU_COOKIE_AGE_MS ?? '')` parses `"1abc"` as `1` and accepts negatives (negative age → all sessions appear stale → forced re-auth loop). Fix: use `Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT` with a console.warn when the env value is rejected. Operator trust boundary — not externally exploitable. Source: Rook Wave 3 scan 2026-04-27.
+
+### BKL-TABLEAU-LOCK-PATH — SingletonLock unlink has no path-containment assertion
+- Status: OPEN
+- Priority: P3
+- Detail: `unlinkSync(join(TABLEAU_AUTH_PROFILE_DIR, 'SingletonLock'))` in tableau-auth.ts doesn't verify the resolved path stays inside the profile dir (symlink escape possible if env var is crafted). Fix: `resolve` both paths and assert containment before unlinking. Operator trust boundary only. Source: Rook Wave 3 scan 2026-04-27.
 
 ### BKL-CANCEL-STEP3-OVERLAP — tid3 watchdog can false-cancel Step 3 after Step 2 completes
 - Status: OPEN
@@ -7162,7 +7174,7 @@ Decision: DONE — one-line fix in same commit as BKL-CONN-TABLEAU-CTX-02.
 ---
 
 ### BKL-TABLEAU-HARDENING-01 | tableau-auth.ts hardening backlog (6 low-severity findings)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27
 Priority: P3
 Size: M
 Source: Serena post-implementation audit 2026-04-27 (Findings 1-6)
@@ -7175,3 +7187,11 @@ Description: Six low-severity hardening items from Serena's second audit:
   5. Structured harvest telemetry — replace console.log with structured log object (cookie count, domains, age)
   6. Zero-cookie harvest as login failure — currently returns true with no cookies; should surface error
 Can we test: YES — items 1/3/6 testable via unit tests; items 2/4/5 need container-level validation.
+Resolution (2026-04-27 Wave 3): Shipped 6 surgical fixes in `src/tableau-auth.ts`:
+  1. Env-overridable cookie age: `parseInt(process.env.TABLEAU_COOKIE_AGE_MS ?? '') || 8h`.
+  2. `_closeContext` returns `Promise<boolean>` — `true` on >0 cookies harvested, `false` on 0 cookies (with warn).
+  3. `waitForTableauLogin` checks the boolean — returns `false` immediately on zero-cookie harvest instead of falsely claiming success.
+  4. Profile dir created with `mkdirSync(TABLEAU_AUTH_PROFILE_DIR, { recursive: true })` before `launchPersistentContext`.
+  5. Stale lock detection emits `console.warn('[tableau-auth] stale lock file removed')` when `SingletonLock` is unlinked.
+  6. Structured harvest telemetry: `console.info` with cookie count + comma-joined unique domains on success.
+Regressions: `REG-TABLEAU-HARDENING-01` (env reads), `REG-TABLEAU-HARDENING-02` (zero-cookie returns false).

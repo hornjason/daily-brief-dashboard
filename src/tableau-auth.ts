@@ -12,7 +12,7 @@
  */
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
-import { writeFileSync, existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { writeFileSync, existsSync, readFileSync, unlinkSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
 
@@ -21,7 +21,7 @@ const TABLEAU_SESSION_PATH = `${process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 const LOGIN_POLL_INTERVAL_MS = 2_000
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
-const TABLEAU_COOKIE_AGE_MS = 8 * 60 * 60 * 1000  // 8 hours — same as Tableau SSO TTL
+const TABLEAU_COOKIE_AGE_MS = parseInt(process.env.TABLEAU_COOKIE_AGE_MS ?? '') || 8 * 60 * 60 * 1000  // 8 hours — same as Tableau SSO TTL (env-overridable)
 // Match ccsp-scraper.ts cookie filter exactly (line 48): includes('tableau.com') || includes('online.tableau')
 const TABLEAU_COOKIE_DOMAINS = ['tableau.com', 'online.tableau']
 
@@ -49,12 +49,13 @@ export async function checkTableauSessionFromCookies(): Promise<boolean> {
   }
 }
 
-async function _closeContext(opts: { harvest: boolean }): Promise<void> {
+async function _closeContext(opts: { harvest: boolean }): Promise<boolean> {
   const ctx = activeContext
   activeContext = null
   activePage = null
   loginInProgress = false
-  if (!ctx) return
+  let harvested = false
+  if (!ctx) return false
   if (opts.harvest) {
     try {
       const state = await ctx.storageState()
@@ -68,8 +69,11 @@ async function _closeContext(opts: { harvest: boolean }): Promise<void> {
           { mode: 0o600 }
         )
         console.log(`[tableau-auth] harvested ${tableauCookies.length} cookies → ${TABLEAU_SESSION_PATH}`)
+        const domains = [...new Set(tableauCookies.map(c => c.domain))].join(', ')
+        console.info(`[tableau-auth] harvested ${tableauCookies.length} cookies from domains: ${domains}`)
+        harvested = true
       } else {
-        console.warn('[tableau-auth] no Tableau cookies to harvest after login')
+        console.warn('[tableau-auth] _closeContext: 0 cookies harvested — login may have failed')
       }
     } catch (e: any) {
       console.warn('[tableau-auth] cookie harvest failed:', e?.message ?? e)
@@ -81,6 +85,7 @@ async function _closeContext(opts: { harvest: boolean }): Promise<void> {
     }
     await ctx.close()
   } catch { /* already closed */ }
+  return harvested
 }
 
 /**
@@ -101,7 +106,11 @@ export async function startTableauLoginBrowser(): Promise<void> {
   }
 
   try {
-    try { unlinkSync(join(TABLEAU_AUTH_PROFILE_DIR, 'SingletonLock')) } catch { /* fine — file may not exist */ }
+    mkdirSync(TABLEAU_AUTH_PROFILE_DIR, { recursive: true })
+    try {
+      unlinkSync(join(TABLEAU_AUTH_PROFILE_DIR, 'SingletonLock'))
+      console.warn('[tableau-auth] stale lock file removed')
+    } catch { /* fine — file may not exist */ }
     sanitizeChromiumProfile(TABLEAU_AUTH_PROFILE_DIR)
 
     const ctx = await chromium.launchPersistentContext(TABLEAU_AUTH_PROFILE_DIR, {
@@ -162,7 +171,8 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
 
       if (noLoginForm) {
         console.log('[tableau-auth] login detected — harvesting cookies')
-        await _closeContext({ harvest: true })
+        const harvested = await _closeContext({ harvest: true })
+        if (!harvested) return false
         return true
       }
     } catch {

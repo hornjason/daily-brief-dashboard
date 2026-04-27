@@ -16,15 +16,27 @@
 import type { BrowserContext, Page } from '@playwright/test'
 
 let _iap: Page | null = null
+let _acquiring: Promise<Page> | null = null
 
 export async function acquireIap(ctx: BrowserContext, url: string): Promise<Page> {
-  await releaseIap()
-  const page = await ctx.newPage()
-  page.on('crash', () => { _iap = null })
-  page.on('close', () => { if (_iap === page) _iap = null })
-  _iap = page
-  await page.goto(url, { waitUntil: 'commit' })
-  return page
+  // Concurrency guard: if another caller is already creating an IAP, return that promise
+  // so we don't double-create pages and orphan the first one.
+  if (_acquiring) return _acquiring
+  _acquiring = (async () => {
+    try {
+      await releaseIap()
+      const page = await ctx.newPage()
+      // Attach listeners synchronously before any further await + before _iap assignment
+      page.on('crash', () => { _iap = null })
+      page.on('close', () => { if (_iap === page) _iap = null })
+      _iap = page
+      await page.goto(url, { waitUntil: 'commit' })
+      return page
+    } finally {
+      _acquiring = null
+    }
+  })()
+  return _acquiring
 }
 
 export function getIap(): Page | null {
