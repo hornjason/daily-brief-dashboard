@@ -2740,6 +2740,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   const [tableauStatus, setTableauStatus] = useState<{ reachable: boolean; sessionValid: boolean } | null>(null)
   const [sfConnecting, setSfConnecting] = useState(false)
   const sfVncRef = useRef<Window | null>(null)
+  const sfLoginStartedRef = useRef(false)
   const [tableauConnecting, setTableauConnecting] = useState(false)
   const tableauVncRef = useRef<Window | null>(null)
   const [rhConnecting, setRhConnecting] = useState(false)
@@ -2815,7 +2816,9 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   const VNC_URL = getVncUrl()
 
   const handleSfConnect = async () => {
+    if (sfPollRef.current) return  // already polling — ignore re-entrant click
     setSfConnecting(true)
+    sfLoginStartedRef.current = false
 
     // If session is already active in React state, skip VNC entirely — opening then immediately
     // closing it looks like a bug to the user. Just trigger a sync and return.
@@ -2834,6 +2837,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       const res = await fetch('/api/auth/salesforce/start', { method: 'POST' })
       const d = await res.json()
       if (d.error) { sfVncRef.current?.close(); sfVncRef.current = null; setSfConnecting(false); return }
+      sfLoginStartedRef.current = true
     } catch { sfVncRef.current?.close(); sfVncRef.current = null; setSfConnecting(false); return }
 
     sfPollRef.current = setInterval(async () => {
@@ -2863,6 +2867,20 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
         const status = await res.json()
         setSfStatus(status)
         const expired = status.sessionExpired || status.syncError?.toLowerCase().includes('session expired')
+        // Close VNC as soon as login flow ends (loginInProgress → false)
+        // regardless of whether hasSession is true yet — server-side adoption can lag
+        // up to 20s and the user has already visually completed login at this point.
+        if (!status.loginInProgress && sfLoginStartedRef.current) {
+          if (sfPollRef.current) clearInterval(sfPollRef.current)
+          sfPollRef.current = null
+          sfVncRef.current?.close()
+          sfVncRef.current = null
+          setSfConnecting(false)
+          if (status.hasSession && !expired) {
+            fetch('/api/scrape/salesforce', { method: 'POST' }).catch(e => console.error('[sf-auth] post-login sync failed:', e))
+          }
+          return
+        }
         if (status.hasSession && !expired) {
           if (sfPollRef.current) clearInterval(sfPollRef.current)
           sfPollRef.current = null
@@ -2890,6 +2908,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   }
 
   const handleRhConnect = async () => {
+    if (rhConnectPollRef.current) return  // already polling — ignore re-entrant click
     setRhConnecting(true)
     rhLoginStartedRef.current = false
     try {
@@ -2932,12 +2951,19 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
           const d = await fetch('/api/auth/redhat/status').then(r => r.json())
           setRhStatus(d)
           if (d.loginInProgress) rhLoginStartedRef.current = true
-          if (d.hasSession && !d.sessionExpired && !d.loginInProgress && rhLoginStartedRef.current) {
+          // Close VNC as soon as login flow ends (loginInProgress → false)
+          // regardless of whether hasSession is true yet — server-side adoption can lag
+          // up to 20s and the user has already visually completed login at this point.
+          if (!d.loginInProgress && rhLoginStartedRef.current) {
             if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
             rhConnectPollRef.current = null
             rhVncRef.current?.close()
             rhVncRef.current = null
             setRhConnecting(false)
+            if (d.hasSession && !d.sessionExpired) {
+              fetch('/api/scrape/rh', { method: 'POST' }).catch(e => console.error('[rh-auth] post-login sync failed:', e))
+            }
+            return
           }
         } catch { /* ignore */ }
       }, 2_000)

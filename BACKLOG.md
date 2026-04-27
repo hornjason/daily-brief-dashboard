@@ -147,6 +147,12 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Priority: P2
 - Detail: SF happy-path blank-tab clear (sf-auth.ts) can't be tested via Playwright CI — requires live headed browser with authenticated RH session. Proxy test: stub `onComplete` + mock `ctx.newPage()`, verify `about:blank` navigation fires on happy path. Add to regression.spec.ts with REG tag.
 
+### BKL-SF-PAGE-CLOSE — sfPage not closed after SF login completion
+- Status: ✅ DONE 2026-04-27
+- Priority: P2
+- Detail: sfPage not closed after SF login completion; VNC showed lingering SF tab. Fix: close sfPage in both login completion paths after blank-tab sequence.
+- Resolution: Added `await sfPage.close().catch(() => {})` immediately after the `blankPage.goto('about:blank')` block in both completion paths in `src/sf-auth.ts` (happy path post-RH-portal confirmation, and fallback path when RH portal didn't load). Context (`ctx`) remains alive for scraper adoption — only the SF login tab is closed. Regression: `REG-SF-PAGE-CLOSE-01`.
+
 ### BKL-IAP-RACE — acquireIap concurrent call leaks orphan page
 - Status: ✅ DONE 2026-04-27
 - Priority: P3
@@ -163,6 +169,12 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Status: OPEN
 - Priority: P3
 - Detail: `parseInt(process.env.TABLEAU_COOKIE_AGE_MS ?? '')` parses `"1abc"` as `1` and accepts negatives (negative age → all sessions appear stale → forced re-auth loop). Fix: use `Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT` with a console.warn when the env value is rejected. Operator trust boundary — not externally exploitable. Source: Rook Wave 3 scan 2026-04-27.
+
+### BKL-INTEL-DRIVE-TIMEOUT — Account intelligence pipeline fails with DOMException TimeoutError on Drive write
+- Status: ✅ DONE 2026-04-27
+- Priority: P1
+- Detail: Intelligence generation completes successfully (all 3 steps, full synthesis) but the final Drive write step throws `DOMException: TimeoutError` (code 23). Observed on A10 Networks in test env 2026-04-27. CCSP context was lost (`No browser context`) just before the pipeline ran — possible shared browser context degradation. The generated data is lost (cache not written) so the page re-triggers on next load. Source: Jason reported 2026-04-27.
+- Resolution: Root cause was the 120s `AbortSignal.timeout` in `fetchGeminiWithRetry` firing on the slow `generateIndustryAnalysis` grounded call — propagated as `DOMException: TimeoutError`, then re-thrown as fatal by `Promise.allSettled` industry-rejection branch in `runIntelligencePipeline`, killing the pipeline AFTER the company brief had already generated. Two surgical fixes: (1) `src/account-intelligence.ts` — industry rejection now `console.warn`s and continues with `industryAnalysis = null` (matches existing company-side handling); (2) `src/gemini-fetch.ts` — `fetchGeminiWithRetry` now retries up to 2 times on `TimeoutError`/`AbortError` with a fresh per-attempt `AbortSignal.timeout`. 429 retry path unchanged. Regression tests REG-INTEL-TIMEOUT-01/02 added in `test/regression.spec.ts` source-inspection block.
 
 ### BKL-TABLEAU-LOCK-PATH — SingletonLock unlink has no path-containment assertion
 - Status: OPEN
@@ -6258,6 +6270,14 @@ Files: src/account-intelligence.ts
 Description: The BKL-AI-04 no-data early-exit guard skipped the entire intelligence pipeline for customers with no account numbers and no subscriptions. This was correct for Drive doc generation (which needs subscription data), but incorrectly also skipped `identifyIndustry()` which only needs the customer name. Result: 36 customers never got industry/segment populated.
 Fix: Added `identifyIndustry()` call inside the no-data guard path, before writing the stub cache. Runs for any customer missing industry data regardless of account/subscription state. Industry result is also written into the stub cache JSON.
 Decision: Minimal surgical fix — identifyIndustry runs in the no-data path before the stub write and early return. No restructuring of the async pipeline block.
+
+### BKL-INTEL-05 | Intelligence pipeline skips Drive doc generation for customers without account numbers
+Status: ✅ DONE 2026-04-27
+Priority: P1 | Type: Bug Fix
+Source: Jason — 2026-04-27 (McAfee: "create intelligence docs does nothing")
+Files: src/account-intelligence.ts, test/regression.spec.ts
+Description: The no-data early-return block at line 1357 gated the full pipeline (company intelligence + industry analysis + Drive doc writes) on `accountNumbers.length === 0 && subscriptions.length === 0`. None of the generation steps actually use account numbers or subscriptions — they only need `customerName` and `industry`. Result: any customer imported from SF bookings without RH Portal scraping would never get Drive docs created.
+Fix: Removed the entire early-return guard block (lines 1353–1397). All customers now flow into the full pipeline. Added REG-INTEL-NO-ACCT-01 regression test.
 
 ### BKL-PRODINTEL-01 | Product Intelligence NONE state — use account intelligence context for expansion analysis
 Status: ✅ DONE

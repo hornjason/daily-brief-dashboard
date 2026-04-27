@@ -1,6 +1,6 @@
 ---
 Status: Operational
-Last validated: 2026-04-25
+Last validated: 2026-04-27
 Trigger: When the data waterfall, cache hierarchy, or SSE telemetry changes
 ---
 
@@ -20,7 +20,7 @@ The dashboard never reads from external systems on every request. Instead, every
 |------|---------------------|-----|-------|
 | **L1** | In-process + on-disk cache (`data/cache/*.json`) | 24h | This app |
 | **L2** | Per-AE Google Sheet inside the AE's Drive folder | 24h modifiedTime | This app (we write it) |
-| **L3** | POD-level Google Sheet inside the POD's shared Drive folder | 24h modifiedTime (CCSP / Pipeline) / always-authoritative (SF Bookings) | Upstream (Red Hat ops / Tableau export / SF report export) |
+| **L3** | SF Bookings: POD GSheet in shared Drive folder. CCSP + Pipeline: date-named CSV files in the same shared folder (`podBookingsFolderId`) | date-based for CCSP/Pipeline (today's file exists) / always-authoritative for SF Bookings | Upstream (Red Hat ops writes SF Bookings GSheet; this app writes CCSP/Pipeline CSVs from L4) |
 | **L4** | Live external system (Tableau Cloud, Salesforce Lightning) | live | Tableau / Salesforce |
 
 When a customer detail page loads, the request reads from L1 (disk cache) first. If L1 is missing or older than 24 hours, it tries L2. If L2 is missing or stale, it tries L3. If L3 is missing or stale, it falls through to L4 (live scrape). **Every tier that successfully reads data writes it back to all higher tiers before returning.** That means an L4 scrape produces an L3 sheet, an L2 sheet, and an L1 cache file in one pass — the next request hits L1.
@@ -70,7 +70,7 @@ Each AE config (`aes.json`) carries the `supportableSheetId` / `ccspSheetId` / `
 
 L2 freshness rule: `modifiedTime` < 24 hours. Older = stale, fall through to L3.
 
-### L3 — POD-level Google Sheets (24h modifiedTime, except SF Bookings)
+### L3 — POD-level shared Drive folder (podBookingsFolderId)
 
 All L3 data — SF Bookings sheets, CCSP CSVs, and Pipeline CSVs — lives in a **single shared Subscription Data folder** identified by `podBookingsFolderId`. This folder is independent of `parentFolderId` (the CommandCenter root) and is shared across all app instances. PODs are segmented by file naming convention, not by subfolders. Each L3 file is unparsed: it contains the full POD's rows, not filtered per-AE.
 
@@ -92,7 +92,37 @@ For CCSP and Pipeline, L3 freshness rule: `modifiedTime` < 24 hours. Older = sta
 | **Salesforce Lightning** (configured report) | Pipeline | `sf-scraper.ts:scrapeSfReport` — SAML auto-login, 20,000px viewport hack, scrape opp rows from rendered report | L1 missing/stale, L2 missing/stale, L3 missing/stale |
 | **(no L4)** | SF Bookings | terminal at L3 | n/a |
 
-L4 is the most expensive path: opens a browser, runs a real session, parses the rendered output. Once L4 returns rows, the refresh path writes back to L3 (POD GSheet), L2 (AE GSheet), and L1 (disk cache) before returning — so the next request hits L1.
+L4 is the most expensive path: opens a browser, runs a real session, parses the rendered output. Once L4 returns rows, the refresh path writes back to L3 (POD Drive file — CCSP and Pipeline write a CSV; SF Bookings has no L4), L2 (AE GSheet), and L1 (disk cache) before returning — so the next request hits L1.
+
+---
+
+## L1–L4 Tier Overview
+
+The fall-through pattern in one diagram. Every tier hit writes back to all higher tiers before returning — so the next request lands at L1.
+
+```mermaid
+flowchart LR
+    REQ["Refresh trigger\n(scheduler / route / bootstrap)"] --> L1{"L1 — Disk cache\ndata/cache/...\n24h TTL"}
+
+    L1 -->|"✅ HIT"| DONE1["Return data\n(zero Drive / scraper calls)"]
+    L1 -->|"❌ MISS"| L2{"L2 — AE GSheet\nper-AE Drive folder\n24h modifiedTime"}
+
+    L2 -->|"✅ HIT"| WRITE2["Read rows → write L1\nReturn data"]
+    L2 -->|"❌ MISS"| L3{"L3 — POD shared folder\npodBookingsFolderId\nSF Bookings GSheet — always-authoritative\nCCSP CSV — 24h modifiedTime\nPipeline CSV — 24h modifiedTime"}
+
+    L3 -->|"✅ HIT"| WRITE3["Filter to AE territory\nwrite L2 → write L1\nReturn data"]
+    L3 -->|"❌ MISS — CCSP and Pipeline only"| L4["L4 — Live scrape\nTableau (CCSP)\nSF Lightning (Pipeline)"]
+
+    L4 --> WRITE4["Write POD file to L3\nFilter to AE → write L2\nWrite L1\nReturn data"]
+
+    style L1 fill:#27ae60,color:#fff
+    style L2 fill:#2980b9,color:#fff
+    style L3 fill:#16a085,color:#fff
+    style L4 fill:#c0392b,color:#fff
+    style DONE1 fill:#2980b9,color:#fff
+```
+
+**SF Bookings is terminal at L3** — no L4 scraper exists for subscriptions. If L1 and L2 miss, L3 is always authoritative regardless of `modifiedTime`.
 
 ---
 
@@ -124,10 +154,10 @@ flowchart TD
         CC1 -->|✅ Hit| CC1Y["emitCacheLevel(ccsp, L1, ae=null)\nreturn — done"]
         CC1 -->|❌ Miss/stale/AE-set-changed| CC2{"② L2 — AE CCSP GSheet\n{AE Name} CCSP\nin AE Drive folder\nmodifiedTime < 24h?"}
         CC2 -->|✅ Found & fresh| CC2Y["emitCacheLevel(ccsp, L2, rowCount)\nRead rows → write L1"]
-        CC2 -->|❌ Miss or stale| CC3{"③ L3 — POD CCSP GSheet\nin POD shared Drive folder\nmodifiedTime < 24h?"}
+        CC2 -->|❌ Miss or stale| CC3{"③ L3 — POD CCSP CSV\nin podBookingsFolderId\ntoday's file exists?"}
         CC3 -->|✅ Found & fresh| CC3Y["emitCacheLevel(ccsp, L3)\nParse + filter to AE territory\n→ write L2 → write L1"]
         CC3 -->|❌ Miss or stale| CC4["④ L4 — Tableau Cloud\nOverall Cloud Consumption Dashboard\napply POD filter (Region + POD)\ndownload CSV from Raw Data tab"]
-        CC4 --> CC4Y["emitCacheLevel(ccsp, L4)\nWrite POD CSV → L3 GSheet\nFilter to AE → L2 GSheet\nWrite L1\nGuard: _podCsvCache prevents double-fetch within 24h"]
+        CC4 --> CC4Y["emitCacheLevel(ccsp, L4)\nWrite POD CSV to L3 (Drive file)\nFilter to AE → L2 GSheet\nWrite L1\nGuard: _podCsvCache prevents double-fetch within 24h"]
     end
 
     %% ─── PIPELINE ──────────────────────────────
@@ -137,10 +167,10 @@ flowchart TD
         PP1 -->|✅ Hit| PP1Y["emitCacheLevel(sfPipeline, L1, ae=null)\nreturn — done"]
         PP1 -->|❌ Miss/stale/AE-set-changed| PP2{"② L2 — AE Pipeline GSheet\n{AE Name} Pipeline\nin AE Drive folder\nmodifiedTime < 24h?"}
         PP2 -->|✅ Found & fresh| PP2Y["emitCacheLevel(sfPipeline, L2, rowCount)\nRead rows → write L1"]
-        PP2 -->|❌ Miss or stale| PP3{"③ L3 — POD Pipeline GSheet\n{reportId}-{POD name}\nmodifiedTime < 24h?"}
+        PP2 -->|❌ Miss or stale| PP3{"③ L3 — POD Pipeline CSV\nin podBookingsFolderId\ntoday's file exists?"}
         PP3 -->|✅ Found & fresh| PP3Y["emitCacheLevel(sfPipeline, L3)\nParse + filter to AE territory\n→ write L2 → write L1"]
         PP3 -->|❌ Miss or stale| PP4["④ L4 — Salesforce Lightning\nReport via SAML auto-login\n20,000px viewport hack\nscrape opp rows from rendered DOM"]
-        PP4 --> PP4Y["emitCacheLevel(sfPipeline, L4)\nWrite POD scrape → L3 GSheet\nFilter to AE → L2 GSheet\nWrite L1\nGuard: podSfDataCache prevents double-fetch within 30 min"]
+        PP4 --> PP4Y["emitCacheLevel(sfPipeline, L4)\nWrite POD CSV to L3 (Drive file)\nFilter to AE → L2 GSheet\nWrite L1\nGuard: podSfDataCache prevents double-fetch within 30 min"]
     end
 
     style SF1 fill:#27ae60,color:#fff
@@ -288,7 +318,7 @@ type IngestCacheEvent = {
 | sfBookings | 3 | `bootstrap-orchestrator.ts:1845, 1850` | L2 stale or empty — falling through to L3 | AE name | absent |
 | ccsp | 1 | `refresh-engine.ts:186` / `bootstrap-orchestrator.ts:889, 1957` | L1 disk cache < 24h, AE-set matches | null or AE name | absent |
 | ccsp | 2 | `bootstrap-orchestrator.ts:895, 1977` | AE CCSP sheet < 24h | AE name | row count |
-| ccsp | 3 | `bootstrap-orchestrator.ts:1989` | L2 missing/stale — pulling from POD GSheet | AE name | absent |
+| ccsp | 3 | `bootstrap-orchestrator.ts:1989` | L2 missing/stale — pulling from POD Drive file (CSV) | AE name | absent |
 | ccsp | 4 | (Tableau scrape path) | Live Tableau download | n/a | n/a |
 | sfPipeline | 1 | `refresh-engine.ts:234` / `bootstrap-orchestrator.ts:864, 2050` | L1 disk cache < 24h, AE-set matches | null or AE name | absent |
 | sfPipeline | 2 | `bootstrap-orchestrator.ts:870, 2059` | AE Pipeline sheet < 24h | AE name | row count |
@@ -389,7 +419,7 @@ Without these mitigations, a 4-AE POD bootstrap would scrape Tableau 4 times and
 |-------|-----------|-----------|
 | **L1** | Local cache present and < 24h TTL | ✅ Confirmed (~5s warm run) |
 | **L2** | L1 absent/stale; AE GSheet present and < 24h modifiedTime | ✅ Confirmed (~15s warm run) |
-| **L3** | Both L1 and L2 absent/stale; POD GDrive GSheet present | ✅ Confirmed (27.2s cold onboarding) |
+| **L3** | Both L1 and L2 absent/stale; POD Drive file present (SF Bookings GSheet or CCSP/Pipeline CSV) | ✅ Confirmed (27.2s cold onboarding) |
 | **L4** | All higher levels missing; reads live external system | ⚠️ Prod-only — `DISALLOW_LIVE_SCRAPE` blocks L4 in test container |
 
 **Baseline timings** (Carolanne Farrell, 11 customers, 1 POD):
@@ -406,15 +436,15 @@ Without these mitigations, a 4-AE POD bootstrap would scrape Tableau 4 times and
 | **L1 TTL is always 24h** | Across all 3 waterfall flows |
 | **Always check L1 first** | Cache check is gate 1 every time, no exceptions |
 | **Write back on every fallback** | Every level that reads from a fallback writes back to ALL higher tiers before returning |
-| **Fallback order** | L1 (disk) → L2 (AE GSheet) → L3 (POD GSheet) → L4 (live scrape) |
+| **Fallback order** | L1 (disk) → L2 (AE GSheet) → L3 (POD Drive file) → L4 (live scrape) |
 | **L3 read writes L2 and L1** | Filtered rows land in AE GSheet; raw cache lands in `data/cache/` |
-| **L4 scrape writes L3, L2, L1** | POD GSheet first (so other AEs can hit L3), then per-AE L2, then L1 |
+| **L4 scrape writes L3, L2, L1** | POD Drive file first (CCSP/Pipeline: CSV; SF Bookings has no L4), then per-AE L2 GSheet, then L1 |
 | **GDrive `modifiedTime` is the freshness signal** | Every L2/L3 read checks `modifiedTime` < 24h before using (except SF Bookings L3) |
 | **SF Bookings is terminal at L3** | The Red Hat-owned SF Bookings GSheet in `podBookingsFolderId` is always authoritative — no `modifiedTime` check, no L4 |
 | **SF Bookings has no live scraper** | L3 is a Google Sheet, not an external system — no Playwright, no Tableau, no Salesforce |
 | **Onboarding ≠ waterfall** | First-time AE folder creation reads L3 directly and writes L2; no cache-level events |
 | **SSE telemetry = waterfall only** | `emitCacheLevel()` fires during second-and-later bootstrap runs and daily refresh; not during onboarding |
-| **L3 POD GSheet is unparsed** | Contains the full POD's rows, not filtered per-AE |
+| **L3 POD Drive file is unparsed** | Contains the full POD's rows, not filtered per-AE (SF Bookings GSheet; CCSP/Pipeline CSV) |
 | **L2 AE GSheet is parsed** | Filtered to this AE's territory only |
 | **AE-set change forces refresh** | If `cached.fileIds` doesn't match the current AE set's sheet IDs, L1 is treated as stale (CCSP and Pipeline) |
 | **Empty results never overwrite populated cache** | Quota failures returning `[]` are detected; existing cache preserved (except when AE set genuinely changed) |

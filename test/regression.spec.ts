@@ -986,6 +986,19 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toContain('configuredAeCount > 0')
   })
 
+  // ── REG-VNC-CLOSE-01: VNC popup auto-closes when login flow ends ─────────
+  // Fix: SF and RH polls now close the VNC window as soon as loginInProgress
+  // transitions to false (regardless of hasSession), because hasSession can lag
+  // server-side adoption by up to 20s after the user has visually logged in.
+  test('REG-VNC-CLOSE-01: SetupPage SF/RH polls close VNC on loginInProgress→false', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/pages/SetupPage.tsx'), 'utf8')
+    // SF side: tracking ref must exist and be set after start fetch succeeds
+    expect(src).toContain('sfLoginStartedRef')
+    // Both polls must close on loginInProgress=false rather than waiting on hasSession
+    expect(src).toMatch(/!status\.loginInProgress && sfLoginStartedRef\.current/)
+    expect(src).toMatch(/!d\.loginInProgress && rhLoginStartedRef\.current/)
+  })
+
   // ── REG-WIZ-SF-SYNC-01: SF Pipeline Sync Now success feedback ────────────
   test('REG-WIZ-SF-SYNC-01: SetupPage SF sync surfaces success message with row count', () => {
     const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/pages/SetupPage.tsx'), 'utf8')
@@ -1055,6 +1068,32 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(nullCtxIdx - blankTabIdx).toBeLessThan(400)
   })
 
+  // BKL-SF-PAGE-CLOSE: sf-auth.ts must close the SF login tab (sfPage) after the
+  // blank-tab sequence so the VNC viewer doesn't show a lingering "Home | Salesforce"
+  // tab. The close must appear in BOTH login completion paths (happy path +
+  // RH-portal-fallback), and must NOT close the context — only sfPage.
+  test('REG-SF-PAGE-CLOSE-01: sf-auth closes sfPage in both login completion paths', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-auth.ts'), 'utf8')
+    // Must contain at least two sfPage.close() calls (one per completion path)
+    const matches = src.match(/sfPage\.close\(\)/g) ?? []
+    expect(matches.length).toBeGreaterThanOrEqual(2)
+    // Each sfPage.close() must follow a blank-tab sequence (about:blank goto)
+    // and precede the activeContext = null assignment in the same block.
+    const blankIdx1 = src.indexOf("goto('about:blank')")
+    expect(blankIdx1).toBeGreaterThan(-1)
+    const closeIdx1 = src.indexOf('sfPage.close()', blankIdx1)
+    expect(closeIdx1).toBeGreaterThan(blankIdx1)
+    const nullIdx1 = src.indexOf('activeContext = null', closeIdx1)
+    expect(nullIdx1).toBeGreaterThan(closeIdx1)
+    // Second occurrence (fallback path)
+    const blankIdx2 = src.indexOf("goto('about:blank')", nullIdx1)
+    expect(blankIdx2).toBeGreaterThan(-1)
+    const closeIdx2 = src.indexOf('sfPage.close()', blankIdx2)
+    expect(closeIdx2).toBeGreaterThan(blankIdx2)
+    const nullIdx2 = src.indexOf('activeContext = null', closeIdx2)
+    expect(nullIdx2).toBeGreaterThan(closeIdx2)
+  })
+
   // ── REG-SFCACHE-02: SF L4 scrape writes back to Drive cache ─────────────────
   // BKL-SFCACHE-01 fix: after L4 scrape, writeSfDriveCache must fire to populate
   // the L3 Drive cache so next bootstrap uses Drive instead of hitting SF again.
@@ -1122,6 +1161,47 @@ test.describe('Restored-commits source-level regressions', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
     expect(src).toContain('0 cookies harvested')
     expect(src).toContain('return false')
+  })
+
+  // ── REG-INTEL-TIMEOUT-01 ─────────────────────────────────────────────────
+  // BKL-INTEL-DRIVE-TIMEOUT: industry analysis rejection must be non-fatal —
+  // company brief should still get written. The old fatal `throw (industryResult2.reason ...
+  // ?? new Error('Industry analysis failed'))` path must be gone, replaced by a
+  // console.warn near the industry rejection.
+  test('REG-INTEL-TIMEOUT-01: account-intelligence industry failure is non-fatal', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/account-intelligence.ts'), 'utf8')
+    // Old fatal throw message must be gone.
+    expect(src).not.toContain("new Error('Industry analysis failed')")
+    // Industry rejection branch must warn instead of throw.
+    const industryRejectIdx = src.indexOf("industryResult2.status === 'rejected'")
+    expect(industryRejectIdx).toBeGreaterThan(-1)
+    const window = src.slice(industryRejectIdx, industryRejectIdx + 400)
+    expect(window).toContain('console.warn')
+    expect(window).toContain('continuing without it')
+  })
+
+  // ── REG-INTEL-TIMEOUT-02 ─────────────────────────────────────────────────
+  // BKL-INTEL-DRIVE-TIMEOUT: fetchGeminiWithRetry must retry on timeout/abort.
+  // The 429 retry path is preserved separately — this only asserts that the
+  // timeout/abort branch exists in source.
+  test('REG-INTEL-TIMEOUT-02: gemini-fetch retries on TimeoutError / AbortError', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/gemini-fetch.ts'), 'utf8')
+    // Must reference at least one of the two AbortSignal.timeout error names.
+    expect(src).toMatch(/TimeoutError|AbortError/)
+    // Must log the timeout retry attempt.
+    expect(src).toContain('timeout on attempt')
+  })
+
+  // ── REG-INTEL-NO-ACCT-01 ─────────────────────────────────────────────────
+  // The full intelligence pipeline (identifyIndustry, generateCompanyIntelligence,
+  // generateIndustryAnalysis, writeIntelligenceDocs) only needs the company name
+  // and industry classification — not account numbers or subscription rows.
+  // The old early-return guard that skipped customers without accountNumbers/
+  // subscriptions and wrote a `skipped: true` stub must be gone.
+  test('REG-INTEL-NO-ACCT-01 — intelligence pipeline runs for customers without account numbers', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/account-intelligence.ts'), 'utf8')
+    expect(src).not.toMatch(/skipReason.*No account numbers or subscriptions/)
+    expect(src).not.toMatch(/accountNumbers\.length === 0 && subscriptions\.length === 0/)
   })
 })
 

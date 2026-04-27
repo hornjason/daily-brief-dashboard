@@ -206,8 +206,8 @@ export async function startSfLoginBrowser(
             } catch (e: any) {
               console.warn('[sf-auth] blank tab open failed:', e?.message ?? e)
             }
+            await sfPage.close().catch(() => {})
             activeContext = null
-            loginInProgress = false
 
             // Re-adopt for all scrapers sharing this SSO context
             adoptScrapeContext(ctx, profileDir, rhPage)
@@ -219,6 +219,9 @@ export async function startSfLoginBrowser(
 
             // Cold-start recovery: reset circuit breakers accumulated during stale auth
             resetAllCircuitBreakers()
+            // BKL-CONN-UI: flip loginInProgress AFTER context adoption so the UI never
+            // observes the gap where loginInProgress=false but hasSession=false.
+            loginInProgress = false
             console.log('[sf-auth] auth restored — circuit breakers reset, all scrapers re-adopted')
 
             onComplete?.()
@@ -239,8 +242,8 @@ export async function startSfLoginBrowser(
             } catch (e: any) {
               console.warn('[sf-auth] blank tab open failed:', e?.message ?? e)
             }
+            await sfPage.close().catch(() => {})
             activeContext = null
-            loginInProgress = false
             sfSessionExpired = false
             // BKL-CONN-SINGLETON: ctx is still alive — adopt the SAME live ctx for
             // the RH scraper instead of calling reopenScrapeContextFromAuth (which
@@ -253,6 +256,9 @@ export async function startSfLoginBrowser(
             adoptCcspContext(ctx)
             // Still reset SF circuit breaker even if RH portal didn't load
             resetAllCircuitBreakers()
+            // BKL-CONN-UI: flip loginInProgress AFTER context adoption so the UI never
+            // observes the gap where loginInProgress=false but hasSession=false.
+            loginInProgress = false
             onComplete?.()
             return
           }

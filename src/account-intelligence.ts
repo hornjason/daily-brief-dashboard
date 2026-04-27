@@ -1350,52 +1350,6 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
     }
   }
 
-  // BKL-AI-04: Skip customers with no data — no Gemini call needed
-  const accountNumbers = customer.accountNumbers ?? []
-  const sheetData = readSheetCache(customerName)
-  const subscriptions = sheetData?.rows ?? []
-  if (accountNumbers.length === 0 && subscriptions.length === 0) {
-    // BKL-INTEL-04: identifyIndustry only needs the company name — run it even for no-data customers
-    if (!(customer as any).industry) {
-      setJob(jobId, { ...jobs.get(jobId)!, status: 'running', step: 'identifying industry (no-data path)', startedAt: new Date().toISOString() })
-      try {
-        const industryResult = await identifyIndustry(customerName)
-        cacheIndustryResult(customerName, industryResult)
-        console.log(`[acct-intel] Industry identified for ${customerName} (no-data path): ${industryResult.industry}`)
-      } catch (e: any) {
-        console.warn(`[acct-intel] identifyIndustry failed for ${customerName}:`, e?.message ?? e)
-      }
-    }
-
-    const existingCache = readIntelligenceCache(customerName)
-    if (!existingCache?.skipped) {
-      console.log(`[acct-intel] Skipping ${customerName} — no account numbers or subscriptions; writing stub`)
-      if (JOB_CACHE_PATH) {
-        try {
-          const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
-          mkdirSync(intelligenceDir, { recursive: true })
-          const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-          // Preserve existing company/industry docs if present (customer may have lost account numbers after initial run)
-          writeFileSync(`${intelligenceDir}/${slug}.json`, JSON.stringify({
-            customerName,
-            company: existingCache?.company ?? '',
-            industry: existingCache?.industry ?? '',
-            industryClassification: (customer as any).industry ?? existingCache?.industryClassification ?? '',
-            cachedAt: new Date().toISOString(),
-            skipped: true,
-            skipReason: 'No account numbers or subscriptions',
-            ...(existingCache?.companyDocUrl ? { companyDocUrl: existingCache.companyDocUrl } : {}),
-            ...(existingCache?.industryDocUrl ? { industryDocUrl: existingCache.industryDocUrl } : {}),
-          }), { mode: 0o600 })
-        } catch (e: any) { console.warn('[acct-intel] Stub cache write failed:', e.message) }
-      }
-    } else {
-      console.log(`[acct-intel] Skipping ${customerName} — no data, stub already cached`)
-    }
-    setJob(jobId, { status: 'complete', step: 'skipped (no data)', startedAt: new Date().toISOString(), completedAt: new Date().toISOString() })
-    return jobId
-  }
-
   // Set initial status
   setJob(jobId, { status: 'running', step: 'identifying industry', startedAt: new Date().toISOString() })
 
@@ -1417,7 +1371,9 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
       const industryAnalysis = industryResult2.status === 'fulfilled' ? industryResult2.value : null
       if (!companyBrief && !industryAnalysis) throw new Error('Both company and industry generation failed')
       if (companyResult.status === 'rejected') console.warn(`[acct-intel] Company intel failed for ${customerName}:`, (companyResult.reason as any)?.message)
-      if (industryResult2.status === 'rejected') throw (industryResult2.reason as Error ?? new Error('Industry analysis failed'))
+      if (industryResult2.status === 'rejected') {
+        console.warn(`[acct-intel] Industry analysis failed for ${customerName} — continuing without it:`, (industryResult2.reason as Error)?.message ?? industryResult2.reason)
+      }
 
       // Step 4: Write docs to Drive
       setJob(jobId, { ...jobs.get(jobId)!, step: 'writing docs to Drive' })

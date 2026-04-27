@@ -99,11 +99,39 @@ export async function fetchGeminiWithRetry(
 ): Promise<Response> {
   const logPrefix = context.logPrefix ?? '[gemini-fetch]'
 
-  // ── Initial attempt ────────────────────────────────────────────────────────
+  // ── Initial attempt (with up to 2 retries on TimeoutError / AbortError) ────
+  // BKL-INTEL-DRIVE-TIMEOUT: Vertex grounded calls (industry analysis) can
+  // legitimately exceed the 120s per-attempt AbortSignal — when that happens
+  // the original implementation propagated the DOMException straight out and
+  // killed the whole pipeline. Retry up to 2 times with a fresh timeout signal
+  // per attempt; non-timeout errors still propagate immediately.
+  function isTimeoutError(e: unknown): boolean {
+    const name = (e as { name?: string })?.name
+    return name === 'TimeoutError' || name === 'AbortError'
+  }
+
   let token: string
   try { token = await getAccessToken() }
   catch (e) { throw new Error(`Gemini auth failure (project=${context.project}): ${redactBearer(String((e as Error).message ?? e))}`) }
-  const res = await fetch(url, buildInit(token, body, context))
+
+  let res: Response
+  let timeoutAttempt = 0
+  while (true) {
+    try {
+      res = await fetch(url, buildInit(token, body, context))
+      break
+    } catch (e) {
+      if (isTimeoutError(e) && timeoutAttempt < 2) {
+        timeoutAttempt++
+        console.log(`${logPrefix} timeout on attempt ${timeoutAttempt} — retrying`)
+        // Re-acquire the token in case the long stall outlived it.
+        try { token = await getAccessToken() }
+        catch (ae) { throw new Error(`Gemini auth failure on timeout retry (project=${context.project}): ${redactBearer(String((ae as Error).message ?? ae))}`) }
+        continue
+      }
+      throw e
+    }
+  }
 
   if (res.ok) return res
 
