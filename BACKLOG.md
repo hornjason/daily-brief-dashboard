@@ -7011,3 +7011,26 @@ Description: After the Supportable panel removal, SetupPage.tsx still references
 Fix: Remove `supportableSheetId` from `matchedAeIsBootstrapped` gate. Scrub all user-facing "Supportable" copy. Drop `supportableName` field from submit payload unless sf-bookings matching still requires it.
 Can we test: YES — regression test asserting setup page renders without any "Supportable" text content visible to user.
 
+---
+
+### BKL-DRIVE-SCAFFOLD-CACHE-01 | Persist configFolderId and productsFolderId to config instead of re-discovering on every call
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Serena council review 2026-04-27 (post-BKL-DRIVE-PRODUCTS-ROOT-01 ship)
+Files: src/bootstrap-orchestrator.ts (lines 76-123, 869, 1651), src/product-intel-routes.ts (lines 144-164), data/config/ (new drive-scaffold.json or extend data-sources.json)
+Description: ensureConfigAndProductsScaffold re-runs drive.files.list for Config/, Products/, and 7 product slugs on every invocation. The POD bootstrap calls it once at line 869 then again per-AE at line 1651 — for a 30-AE POD, roughly 270 redundant Drive API calls just to confirm folders that were already confirmed once. The setup-drive-folders route also re-discovers Products/ on every call. This is a quota, latency, and failure-surface cost. Config files ARE the persistence layer for this app — discovered Drive IDs should be cached the same way podConfig, backupSheetId, and AE driveFolderId already are.
+Fix: (1) Extend data-sources.json or add data/config/drive-scaffold.json with { configFolderId, productsFolderId, productSlugFolderIds } keyed by parentFolderId. (2) Modify ensureConfigAndProductsScaffold to read cached IDs first; do single cheap files.get verify; fall back to list-or-create and update cache on 404 or miss. (3) Apply cache-first pattern in setup-drive-folders for productsFolderId. (4) For 30-AE POD, reduces scaffold Drive calls from ~270 to ~9.
+Can we test: YES — unit test asserting ensureConfigAndProductsScaffold reads from cache file on second call without making Drive API calls.
+
+---
+
+### BKL-DRIVE-SCAFFOLD-SLUGS-01 | SCAFFOLD_PRODUCT_SLUGS hardcoded constant duplicated products.json
+Status: ✅ DONE 2026-04-27 — Replaced SCAFFOLD_PRODUCT_SLUGS const with loadProductIntelConfig().products.map(p => p.slug) inside ensureConfigAndProductsScaffold. Single source of truth. tsc clean.
+Priority: P3
+Size: XS
+Source: Serena council review 2026-04-27
+Files: src/bootstrap-orchestrator.ts (line 74)
+Description: SCAFFOLD_PRODUCT_SLUGS was a parallel const list duplicating the canonical slug list from products.json. If a new product was added to products.json, the scaffolder would not create its folder.
+Fix: Derive slugs from loadProductIntelConfig().products.map(p => p.slug).
+

@@ -71,10 +71,10 @@ function readPodConfig(): { territorySheetId: string; sfReportId: string; parent
  * or any config file in this pass. BKL-DRIVE-PRODUCTS-ROOT-01 will wire the
  * product folder IDs into products.json in a follow-up.
  */
-const SCAFFOLD_PRODUCT_SLUGS = ['rhel', 'ocp', 'ocp-virt', 'aap', 'rhel-ai', 'rh-ai-inference', 'rhoai'] as const
-
 async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<{ configFolderId: string; productsFolderId: string } | null> {
   if (!parentFolderId) return null
+  // BKL-DRIVE-SCAFFOLD-SLUGS-01: derive slugs from products.json — single source of truth
+  const productSlugs = loadProductIntelConfig().products.map(p => p.slug)
   console.log(`[auto-bootstrap:scaffold] ensuring Config/ and Products/ under parentFolderId=${parentFolderId}`)
   try {
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
@@ -106,7 +106,7 @@ async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<
     const configFolderId = await findOrCreateFolder('Config', parentFolderId)
     const productsFolderId = await findOrCreateFolder('Products', parentFolderId)
     if (productsFolderId) {
-      for (const slug of SCAFFOLD_PRODUCT_SLUGS) {
+      for (const slug of productSlugs) {
         const slugId = await findOrCreateFolder(slug, productsFolderId)
         if (!slugId) {
           console.warn(`[auto-bootstrap:scaffold] failed to ensure Products/${slug} (non-blocking)`)
