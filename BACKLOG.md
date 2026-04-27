@@ -6451,7 +6451,7 @@ Description: callLLM and callLLMStructured use raw fetch() with no retry logic a
 ---
 
 ### BKL-SEC-SAKEY-01 | Add try/catch around SA key parse in callLLM/callLLMStructured
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-26 — MOOT: GEMINI_SERVICE_ACCOUNT_KEY removed from .env (BKL-SEC-SAKEY-VERIFY-01). SA key parse path is never reached. Fallback code in gemini-auth.ts + customer.ts remains for non-redhat.com users only.
 Priority: P2
 Size: XS
 Source: Rook audit 2026-04-25 — partial key material could appear in logs on malformed env var
@@ -6926,7 +6926,7 @@ Files: src/bootstrap-orchestrator.ts (line ~1583)
 Description: `product-intel-routes.ts` gates `parentFolderId` through `isValidDriveFolderId()` before Drive calls; bootstrap orchestrator's pre-flight uses the same helper output but skips the validation. Add `if (!isValidDriveFolderId(parentId)) { skip }` before the loop for defense-in-depth.
 
 ### BKL-SEC-SF-URL-01 | SF session classifier uses substring URL match — vulnerable to subdomain bypass
-Status: OPEN
+Status: ✅ DONE 2026-04-26 — classifySfNavUrl() added to sf-scraper.ts using new URL().hostname exact/endsWith matching. 10 unit tests added in sf-scraper.test.ts. Rook: CLEAN, bypass confirmed blocked.
 Priority: P2
 Size: XS
 Source: Rook scan 2026-04-26 — identified during BKL-CONN-SF-CLASSIFY-02 review
@@ -6935,7 +6935,7 @@ Description: The `isLoginPage` URL check uses `String.includes()` which matches 
 Fix: Replace `url.includes('x.com')` with `new URL(currentUrl).hostname` based checks: `hostname === 'login.salesforce.com'`, `hostname.endsWith('.my.salesforce.com')`, `hostname === 'sso.redhat.com'`. Extract to a pure `classifySfNavOutcome(url: string)` function so it's testable without Playwright. Add unit test asserting `login.salesforce.com.evil.com` classifies as transient (not expired).
 
 ### BKL-SEC-SAKEY-VERIFY-01 | Verify SA key no longer needed — remove from .env and confirm Gemini works via OAuth only
-Status: OPEN
+Status: ✅ DONE 2026-04-26 — GEMINI_SERVICE_ACCOUNT_KEY removed from .env via Edit (no Write tool). Container restarted via make up. Gemini calls confirmed succeeding via OAuth: "Company intelligence generated for Big Ten Network Services (20644 chars)" with zero auth errors. BKL-SEC-SAKEY-01 closed as moot.
 Priority: P2
 Size: XS
 Source: Jason 2026-04-26 — audit determined SA key not needed for @redhat.com users; .env still has key set
