@@ -8,7 +8,7 @@
  * Cache path: data/cache/product-intel/{slug}-features.json
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
@@ -469,6 +469,7 @@ Extract ALL features including those listed in Technology Preview sections. Outp
 
     mkdirSync(CACHE_DIR, { recursive: true })
     writeFileSync(featureCachePath(slug), JSON.stringify(cache, null, 2), { mode: 0o600 })
+    chmodSync(featureCachePath(slug), 0o600)
     _featureCacheMap.set(slug, cache)
     console.log(`[feature-radar] ${slug}: ${features.length} features extracted`)
     return cache
@@ -637,6 +638,7 @@ export async function enrichFeatures(slug: string): Promise<void> {
   // Update cache with enrichedAt timestamp
   cache.enrichedAt = new Date().toISOString()
   writeFileSync(featureCachePath(slug), JSON.stringify(cache, null, 2), { mode: 0o600 })
+  chmodSync(featureCachePath(slug), 0o600)
   _featureCacheMap.set(slug, cache)
   console.log(`[feature-radar] ${slug}: ${enrichedCount} features enriched`)
 }

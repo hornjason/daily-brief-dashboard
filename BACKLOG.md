@@ -6910,7 +6910,7 @@ Description: The agreed architecture has `Config/settings.json` as a config snap
 Fix: (1) Add `POST /api/config/backup` — reads local settings.json and writes to `Config/settings.json` on Drive with timestamp metadata. (2) Add `POST /api/config/restore` — reads `Config/settings.json` from Drive and applies to local settings.json (with confirmation/safety guard). (3) Both endpoints depend on BKL-DRIVE-SCAFFOLD-01 ensuring `Config/` exists. (4) Document in docs/SECRETS-GUIDE.md or new docs/CONFIG-BACKUP.md.
 
 ### BKL-SEC-FILEMODE-01 | writeFileSync mode flag only applies on file create, not overwrite
-Status: OPEN
+Status: ✅ DONE 2026-04-27 — Added chmodSync(path, 0o600) after both writeFileSync calls in product-feature-radar.ts (lines 471, 639). tsc clean.
 Priority: P3
 Size: XS
 Source: Rook 2026-04-26 — security scan of product-feature-radar.ts
