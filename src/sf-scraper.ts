@@ -39,6 +39,25 @@ const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000  // 10 minutes — more aggressive
 const SESSION_STATE_FILE = 'sf-session-state.json'
 
 /**
+ * Classify a navigation URL as 'login' (SF login or RH SSO landing) vs 'transient'
+ * (anything else — about:blank, partial redirects, unrelated pages).
+ *
+ * Uses hostname-based matching via `new URL()` to prevent substring bypasses
+ * like `https://login.salesforce.com.attacker.com/` from being misclassified
+ * as a login page. (BKL-SEC-SF-URL-01)
+ */
+export function classifySfNavUrl(url: string): 'login' | 'transient' {
+  let hostname = ''
+  try { hostname = new URL(url).hostname } catch { /* invalid URL — not a login page */ }
+  if (hostname === 'login.salesforce.com'
+    || hostname.endsWith('.my.salesforce.com')
+    || hostname === 'sso.redhat.com') {
+    return 'login'
+  }
+  return 'transient'
+}
+
+/**
  * Attempt CSV export from a Salesforce Lightning report page.
  * Tries multiple UI paths to find and click the Export button.
  * Returns the parsed CSV data or null if export fails.
@@ -466,7 +485,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
     // (BKL-CONN-SF-CLASSIFY-01)
     if (!page.url().startsWith('https://redhatcrm.lightning.force.com')) {
       const currentUrl = page.url()
-      const isLoginPage = currentUrl.includes('my.salesforce.com') || currentUrl.includes('sso.redhat.com') || currentUrl.includes('login.salesforce.com')
+      const isLoginPage = classifySfNavUrl(currentUrl) === 'login'
       if (isLoginPage) {
         console.warn(`[sf-scraper] login page detected at ${currentUrl} — session expired`)
         throw new SfSessionExpiredError()
