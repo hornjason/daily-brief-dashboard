@@ -6874,7 +6874,7 @@ Fix: When `defaultParentFolderId` is non-empty (sourced from existing AE records
 ## Drive Folder Scaffolding (2026-04-26)
 
 ### BKL-DRIVE-SCAFFOLD-01 | `Config/` and `Products/` not created during initial bootstrap scaffolding
-Status: OPEN
+Status: ✅ DONE 2026-04-26 — ensureConfigAndProductsScaffold() added to bootstrap-orchestrator.ts. Idempotent find-or-create for Config/, Products/, and 7 product slug subfolders. Called from bootstrapPOD and per-AE /api/bootstrap/auto. Verified on 7776 live Drive: configFolderId=1vx7C6Wm... productsFolderId=1KJPo9Dg... 37/37 tests pass.
 Priority: P2
 Size: S
 Source: Jason 2026-04-26 — Drive architecture review
