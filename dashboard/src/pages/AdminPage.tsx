@@ -23,7 +23,6 @@ interface CircuitBreakerState {
 
 interface AllScrapeStatus {
   rh: ScrapeStatus
-  supportable: ScrapeStatus
   ccsp: ScrapeStatus
   salesforce: ScrapeStatus
   circuitBreakers?: Record<string, CircuitBreakerState>
@@ -52,16 +51,13 @@ interface GeminiUsageSummary {
 
 interface SchedulerCfg {
   ccspTime: string
-  supportableTime: string
   territoryTime: string
   sfPipelineTime: string
   ccspEnabled: boolean
-  supportableEnabled: boolean
   territoryEnabled: boolean
   sfPipelineEnabled: boolean
   rhEnabled: boolean
   ccspLastRun: string | null
-  supportableLastRun: string | null
   territoryLastRun: string | null
   sfPipelineLastRun: string | null
   rhLastRun: string | null
@@ -85,7 +81,7 @@ function ScrapeSection({
   onRunNow: () => void
   running: boolean
   circuitBreaker?: CircuitBreakerState
-  /** true = pending (generic), string = pending with detail (e.g. "waiting on supportable") */
+  /** true = pending (generic), string = pending with detail (e.g. "waiting on ccsp") */
   queuePending?: boolean | string
   /** Optional extra action buttons rendered at the card bottom */
   extraActions?: ReactNode
@@ -260,9 +256,9 @@ function SchedulerConfig({
   }
 
   const cfg = schedulerCfg ?? {
-    ccspTime: '06:30', supportableTime: '07:00', territoryTime: '01:45', sfPipelineTime: '02:00',
-    ccspEnabled: true, supportableEnabled: true, territoryEnabled: true, sfPipelineEnabled: true, rhEnabled: true,
-    ccspLastRun: null, supportableLastRun: null, territoryLastRun: null, sfPipelineLastRun: null, rhLastRun: null,
+    ccspTime: '06:30', territoryTime: '01:45', sfPipelineTime: '02:00',
+    ccspEnabled: true, territoryEnabled: true, sfPipelineEnabled: true, rhEnabled: true,
+    ccspLastRun: null, territoryLastRun: null, sfPipelineLastRun: null, rhLastRun: null,
   }
 
   return (
@@ -852,7 +848,7 @@ function ScrapeHistorySection() {
       fetch('/api/status/telemetry/history')
         .then(r => r.json())
         .then((d: Record<string, ScrapeLogEntry[]>) => {
-          // Take last 10 per service before merging so infrequent scrapers (CCSP, Supportable) always appear
+          // Take last 10 per service before merging so infrequent scrapers (CCSP) always appear
           const all = Object.values(d).flatMap((entries) =>
             [...entries].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10)
           )
@@ -868,7 +864,7 @@ function ScrapeHistorySection() {
   if (history.length === 0) return null
 
   const SERVICE_LABELS: Record<string, string> = {
-    rh: 'RH Cases', ccsp: 'CCSP', supportable: 'Supportable', salesforce: 'Salesforce',
+    rh: 'RH Cases', ccsp: 'CCSP', salesforce: 'Salesforce',
   }
   const STATUS_COLORS: Record<string, string> = {
     success: 'text-green-400', failure: 'text-red-400', skipped: 'text-yellow-400', timeout: 'text-orange-400',
@@ -990,11 +986,6 @@ export function AdminPage() {
           lastSync:  scrapers['rh-cases']?.lastSuccess ?? null,
           lastError: scrapers['rh-cases']?.lastError ?? null,
         },
-        supportable: {
-          isRunning: scrapers['supportable']?.state === 'running',
-          lastSync:  scrapers['supportable']?.lastSuccess ?? null,
-          lastError: scrapers['supportable']?.lastError ?? null,
-        },
         ccsp: {
           isRunning: scrapers['ccsp']?.state === 'running',
           lastSync:  scrapers['ccsp']?.lastSuccess ?? null,
@@ -1078,7 +1069,6 @@ export function AdminPage() {
     // Map UI key → scraper queue name
     const keyToQueueName: Record<string, string> = {
       rh: 'rh-cases',
-      supportable: 'supportable',
       ccsp: 'ccsp',
       salesforce: 'sf-pipeline',
     }

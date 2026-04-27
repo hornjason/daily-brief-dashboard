@@ -3783,3 +3783,21 @@ test('REG-ALLOW-RESET-01: POST /api/__test/restore returns 404 on production por
   const body = await res.json().catch(() => null)
   expect(body?.error).toContain('ALLOW_RESET')
 })
+
+// ── REG-SUP-DEAD-01: /api/scrape/all must not include a supportable step (BKL-SEC-SUP-RESIDUE-API-01) ──
+// Supportable is permanently disabled. The /api/scrape/all pipeline must never enqueue
+// or report a 'supportable' scraper. This guards against re-introduction of the dead branch.
+test('@destructive REG-SUP-DEAD-01: scrape/all response never includes supportable scraper (BKL-SEC-SUP-RESIDUE-API-01)', async () => {
+  const res = await fetch(`${DESTRUCTIVE_URL}/api/scrape/all`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  // Accept any status — 200 (queued), 409 (already running), even 503 (browser unhealthy).
+  // We only care that the response body never mentions a 'supportable' scraper result.
+  const body = await res.json().catch(() => ({}))
+  if (Array.isArray((body as any).results)) {
+    const scrapers = (body as any).results.map((r: any) => r.scraper)
+    expect(scrapers, 'scrape/all results must not include supportable').not.toContain('supportable')
+  }
+})

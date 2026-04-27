@@ -51,12 +51,8 @@ import {
   recordSfSyncSuccess,
 } from './sf-scraper.ts'
 import {
-  runSupportableScrape,
   writeSupportableSheet,
-  supportableScrapeRunning,
-  supportableScrapeStartedAt,
 } from './supportable-scraper.ts'
-import type { SupportableCustomer } from './supportable-scraper.ts'
 import {
   runCcspScrape,
   writeCcspSheet,
@@ -66,7 +62,7 @@ import {
   lastCcspError,
 } from './ccsp-scraper.ts'
 import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
-import { refreshSubscriptions, refreshCCSP, refreshPipeline } from './refresh-engine.ts'
+import { refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { readSheetCache, readCCSPCache, readPipelineCache } from './cache-layer.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
@@ -112,7 +108,7 @@ function detectBrowserCrash(): boolean {
 // ── Standardized response shape ─────────────────────────────────────────────
 
 export interface ScrapeResult {
-  scraper: 'rh' | 'supportable' | 'ccsp' | 'salesforce'
+  scraper: 'rh' | 'ccsp' | 'salesforce'
   status: 'ok' | 'partial' | 'error' | 'busy' | 'skipped'
   recordsWritten: number
   accountsScraped?: number
@@ -248,10 +244,6 @@ export function registerScrapeRoutes(app: Hono): void {
     const ccspStale = ccspScrapeRunning && ccspScrapeStartedAt &&
       (Date.now() - ccspScrapeStartedAt > 15 * 60 * 1000)
     if (ccspStale) console.warn(`[scrape:ccsp] stale mutex detected (${Math.round((Date.now() - ccspScrapeStartedAt!) / 60000)}min) — allowing request through`)
-    // BKL-SUP-02: Block CCSP manual trigger while Supportable is scraping (session collision guard)
-    if (supportableScrapeRunning) {
-      return c.json({ queued: false, reason: 'Supportable scrape in progress — retry after it completes' }, 409)
-    }
     // ARCHITECTURE.md §9: check BOTH mutex guards (skip if stale)
     if ((ccspScrapeRunning || ccspInFlight) && !ccspStale) return c.json({ scraper: 'ccsp', status: 'busy', error: 'CCSP scrape already in progress' }, 409)
     resetCircuitBreaker('ccsp')
@@ -538,57 +530,11 @@ export function registerScrapeRoutes(app: Hono): void {
             },
           },
           {
-            name: 'supportable',
-            run: async () => {
-              // Stale-mutex passthrough: if stuck >15 min, let runSupportableScrape() handle reset
-              const supStale = supportableScrapeRunning && supportableScrapeStartedAt &&
-                (Date.now() - supportableScrapeStartedAt > 15 * 60 * 1000)
-              if (supportableScrapeRunning && !supStale) { console.log('[scrape:all] supportable: busy — skipping'); return }
-              const { customers } = await import('./server-state.ts')
-              if (!customers.length) { console.log('[scrape:all] supportable: no customers — skipping'); return }
-              const _supTelemetryStart = Date.now()
-              let totalRecords = 0
-              try {
-                for (const ae of aes) {
-                  const aeCustomers = customers.filter(cu => cu.ae === ae.name && cu.accountNumbers?.length)
-                  if (!aeCustomers.length) continue
-                  try {
-                    const scrapeResults = await runSupportableScrape(aeCustomers as SupportableCustomer[])
-                    totalRecords += scrapeResults.reduce((sum, r) => sum + (r.subscriptions?.length ?? 0), 0)
-                    await writeSupportableSheet(scrapeResults, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
-                  } catch (e: any) {
-                    console.warn(`[scrape:all:supportable] ${ae.name} failed:`, sanitizeErr(e))
-                  }
-                }
-                await refreshSubscriptions().catch(() => {})
-                recordScrapeResult({
-                  timestamp: new Date().toISOString(),
-                  service: 'supportable',
-                  durationMs: Date.now() - _supTelemetryStart,
-                  recordCount: totalRecords,
-                  status: 'success',
-                })
-              } catch (e: any) {
-                recordScrapeResult({
-                  timestamp: new Date().toISOString(),
-                  service: 'supportable',
-                  durationMs: Date.now() - _supTelemetryStart,
-                  recordCount: 0,
-                  status: 'failure',
-                  error: sanitizeErr(e),
-                })
-                throw e
-              }
-            },
-          },
-          {
             name: 'ccsp',
             run: async () => {
               // Stale-mutex passthrough: if stuck >15 min, let runCcspScrape() handle reset
               const ccspStaleAll = ccspScrapeRunning && ccspScrapeStartedAt &&
                 (Date.now() - ccspScrapeStartedAt > 15 * 60 * 1000)
-              // BKL-SUP-02: Skip CCSP in scrape:all while Supportable is running (session collision guard)
-              if (supportableScrapeRunning) { console.log('[scrape:all] ccsp: supportable scrape in progress — skipping to avoid session collision'); return }
               if ((ccspScrapeRunning || ccspInFlight) && !ccspStaleAll) { console.log('[scrape:all] ccsp: busy — skipping'); return }
               const eligibleAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
               if (!eligibleAes.length) { console.log('[scrape:all] ccsp: no eligible AEs — skipping'); return }

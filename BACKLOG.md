@@ -6946,7 +6946,7 @@ Fix: (1) Remove GEMINI_SERVICE_ACCOUNT_KEY from .env. (2) Restart container. (3)
 ---
 
 ### BKL-SEC-ADMINPAGE-SUPPORTABLE-01 | AdminPage.tsx retains Supportable state plumbing for a disabled scraper
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27 — Removed supportable from AllScrapeStatus type, SchedulerCfg, defaults, SERVICE_LABELS, status mapping, queue mapping. AdminPage.tsx has 0 supportable refs. 37/37 tests pass. Quinn: no Supportable text in Admin DOM. Rook: PASS-WITH-NOTES.
 Priority: P3
 Size: S
 Source: Rook council scan 2026-04-27
@@ -6990,7 +6990,7 @@ Fix: Update CAROLANNE (or rename) to reference a current AE name that has full b
 ---
 
 ### BKL-SEC-SUP-RESIDUE-API-01 | Supportable branch still active in `/api/scrape/all` + dead imports in scrape-api.ts
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27 — Removed supportable step from /api/scrape/all, dropped runSupportableScrape/supportableScrapeRunning/supportableScrapeStartedAt/SupportableCustomer imports, narrowed ScrapeResult.scraper to 'rh'|'ccsp'|'salesforce'. writeSupportableSheet kept (active in sf-bookings-sync). REG-SUP-DEAD-01 regression test added. 37/37 pass. Rook: PASS-WITH-NOTES.
 Priority: P2
 Size: S
 Source: Rook security scan 2026-04-27 (build cycle: BKL-DRIVE-APPBACKUP-01)
@@ -7002,7 +7002,7 @@ Can we test: YES — regression test asserting `POST /api/scrape/all` response n
 ---
 
 ### BKL-UI-SUP-RESIDUE-SETUP-01 | SetupPage.tsx still references supportableSheetId and Supportable copy
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27 — Removed supportableSheetId from matchedAeIsBootstrapped gate (now uses ccspSheetId+pipelineSheetId+driveFolderId). Replaced user-facing "Supportable" copy: unmatched msg and "names must match" hint. supportableName kept (server-side setup-routes.ts:541 consumes it). Quinn: 0 "Supportable" text in SetupPage DOM. Bundle grep confirms phrases removed. Rook: PASS-WITH-NOTES.
 Priority: P2
 Size: S
 Source: Rook security scan 2026-04-27 (build cycle: BKL-DRIVE-APPBACKUP-01)

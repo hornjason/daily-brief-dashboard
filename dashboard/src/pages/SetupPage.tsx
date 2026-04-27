@@ -806,14 +806,14 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
               return (
                 <div className="mt-2 bg-warning/10 border border-warning/30/50 rounded-lg px-3 py-2">
                   <p className="text-xs text-warning font-medium">
-                    {unmatched.length} customer{unmatched.length !== 1 ? 's' : ''} had no Supportable matches:
+                    {unmatched.length} customer{unmatched.length !== 1 ? 's' : ''} were not matched to an AE:
                   </p>
                   <ul className="mt-0.5 list-disc list-inside">
                     {unmatched.map(name => (
                       <li key={name} className="text-xs text-warning">{name}</li>
                     ))}
                   </ul>
-                  <p className="text-xs text-text-secondary mt-1">Check that the name exactly matches what Supportable shows. Edit the customer list and re-run to correct.</p>
+                  <p className="text-xs text-text-secondary mt-1">Check that the name exactly matches the AE configuration. Edit the customer list and re-run to correct.</p>
                 </div>
               )
             }
@@ -1277,7 +1277,7 @@ function AutoBootstrapForm({
   const customerNames = customerText.split('\n').map(s => s.trim()).filter(Boolean)
   const territories = territoryInput.split(',').map(s => s.trim()).filter(Boolean)
   const canStart = aeName.trim() && sfReportId.trim() && territories.length > 0 && customerNames.length > 0
-  const matchedAeIsBootstrapped = !!(matchedAe?.supportableSheetId && matchedAe?.ccspSheetId && matchedAe?.pipelineSheetId && matchedAe?.driveFolderId)
+  const matchedAeIsBootstrapped = !!(matchedAe?.ccspSheetId && matchedAe?.pipelineSheetId && matchedAe?.driveFolderId)
 
   if (autoStartPending) {
     return (
@@ -1372,7 +1372,7 @@ function AutoBootstrapForm({
             className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent resize-y ${!customerText.trim() ? 'bg-blue-600/40 border-blue-500/60' : 'border-border'}`}
           />
           {customerNames.length > 0 && (
-            <p className="text-xs text-text-secondary mt-1">{customerNames.length} customer(s) — names must match Supportable exactly. Edit before starting if needed.</p>
+            <p className="text-xs text-text-secondary mt-1">{customerNames.length} customer(s) — names must match AE configuration exactly. Edit before starting if needed.</p>
           )}
         </div>
       </div>
@@ -1386,9 +1386,8 @@ function AutoBootstrapForm({
           <p className="font-medium text-success flex items-center gap-1.5">
             <CheckCircle className="w-3.5 h-3.5" /> {matchedAe!.name} is already fully bootstrapped
           </p>
-          <p className="text-text-secondary">All 4 sheet IDs are in place — Supportable, CCSP, Pipeline, and Drive folder. No re-bootstrap needed.</p>
+          <p className="text-text-secondary">CCSP, Pipeline, and Drive folder are in place. No re-bootstrap needed.</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono text-text-secondary pt-1">
-            <span>Supportable: <span className="text-text-primary">{matchedAe!.supportableSheetId?.slice(0, 20)}…</span></span>
             <span>CCSP: <span className="text-text-primary">{matchedAe!.ccspSheetId?.slice(0, 20)}…</span></span>
             <span>Pipeline: <span className="text-text-primary">{matchedAe!.pipelineSheetId?.slice(0, 20)}…</span></span>
             <span>Drive: <span className="text-text-primary">{matchedAe!.driveFolderId?.slice(0, 20)}…</span></span>
