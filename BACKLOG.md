@@ -6918,7 +6918,7 @@ Files: src/product-feature-radar.ts (lines 471, 638)
 Description: `writeFileSync(path, data, { mode: 0o600 })` only sets permissions when the file is created. On subsequent overwrites the existing inode keeps its prior mode. Add `fs.chmodSync(p, 0o600)` after each write to enforce 0o600 on every update.
 
 ### BKL-SEC-DRIVEID-VALIDATE-01 | Bootstrap pre-flight doesn't validate parentId via isValidDriveFolderId before Drive API call
-Status: OPEN
+Status: ✅ DONE 2026-04-27 — Added isValidDriveFolderId(parentId) check before product intel pre-flight loop in bootstrap-orchestrator.ts. 1-line surgical fix. Matches product-intel-routes.ts pattern.
 Priority: P3
 Size: XS
 Source: Rook 2026-04-26 — security scan of bootstrap-orchestrator.ts

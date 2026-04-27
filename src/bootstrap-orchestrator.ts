@@ -22,7 +22,7 @@ import { refreshPipeline } from './refresh-engine.ts'
 import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import { waterfallInferDomain } from './domain-waterfall.ts'
 import type { AE } from './types.ts'
-import { sanitizeErr } from './utils.ts'
+import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 import { loadProductIntelConfig, saveProductConfig, getProductIntelParentFolderId } from './product-release-radar.ts'
 import { recordBootstrapRun } from './bootstrap-history.ts'
 import { getBackupSheetId, setBackupSheetId, createBackupSheet } from './backup-config.ts'
@@ -1659,7 +1659,8 @@ export function registerBootstrapRoutes(app: Hono): void {
         const parentId = getProductIntelParentFolderId()
         // BKL-DRIVE-PRODUCTS-ROOT-01: slug folders go under Products/ subfolder, not CommandCenter root.
         const slugParentId = perAeScaffold?.productsFolderId ?? parentId
-        if (parentId) {
+        // BKL-SEC-DRIVEID-VALIDATE-01: defense-in-depth — validate parentId before Drive calls
+        if (parentId && isValidDriveFolderId(parentId)) {
           const drivePI = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
           const updatedProducts = [...productIntelConfig.products]
           let anyUpdated = false
