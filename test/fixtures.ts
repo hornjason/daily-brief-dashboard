@@ -195,17 +195,23 @@ export function buildCase(overrides: Partial<Record<string, unknown>> = {}) {
   }
 }
 
-// ── Carolanne's real config (used by e2e-carolanne.spec.ts) ──────────
-// These are the authoritative IDs pulled from the live test suite.
+// ── Reference AE config (used by e2e-carolanne.spec.ts) ──────────────
+// BKL-TEST-FIXTURE-DRIFT-01: The previous "Carolanne Farrell" identity is
+// no longer in the live AE roster, which produced a FIXTURE DRIFT warning
+// from globalSetup on every run. Re-pointed to "TBH" — first AE in the
+// current roster (data/config/aes.json), with full config (sfReportId,
+// tableauTerritories, all three sheet IDs). The export name CAROLANNE is
+// retained because multiple specs (e2e-carolanne.spec.ts,
+// test/api/intelligence.spec.ts, test/api/customers.spec.ts) import it.
 
 export const CAROLANNE = {
-  name: 'Carolanne Farrell',
-  driveFolderId: '1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq',
-  sfReportId: '00OPe00000isU2zMAE',
-  tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR01'],
-  supportableSheetId: '1wXrSZIp6ip4cSE1w31Q76_ia9BoGdrpO5CN6kVga63o',
-  pipelineSheetId: '10H8Nl8oQQg1x9Zt0p5cys7JJp0b4ObfzhB-pPMot3BM',
-  ccspSheetId: '11JxHACopxfffQqJDu30WrHtXg49SqipGTje9IIsZA6U',
+  name: 'TBH',
+  driveFolderId: '1NE2RwB5_dcoI321Dn8-1Y4IyS8LPyUZ8',
+  sfReportId: '00OPe00000k5m9ZMAQ',
+  tableauTerritories: ['WEST_COMM_CORP_SOUTHWEST_TERR01'],
+  supportableSheetId: '1HcGqHoR6tsK-dK2hipC3vwNMu8I_OV27OixwgOsEixY',
+  pipelineSheetId: '1uLUThdFEz_WTfePNP40V_y5ES8TJTbTMCecwbtdDcLk',
+  ccspSheetId: '1me9Vz4rTpo2g9dz11vsVLuxAq77MlZ9t__07CPds-Bc',
 }
 
 // ── RH session mock payloads ─────────────────────────────────────────

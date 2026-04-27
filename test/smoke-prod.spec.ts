@@ -134,6 +134,50 @@ test.describe('Smoke — production gate (BKL-TEST-P0-03)', () => {
       .toHaveLength(0)
   })
 
+  test('customer detail page loads without crashing @smoke', async ({ page }) => {
+    // BKL-TEST-SEED-SMOKE-01: Quinn's council audit found a crash on the
+    // /dashboard/customer/:name route on seed data that should have been
+    // caught by smoke. Pick the first available customer and verify the
+    // detail page renders without surfacing the AppErrorBoundary fallback,
+    // shows the customer name in an H1, and emits zero pageerror events.
+    const listRes = await fetch(`${BASE}/customers`)
+    expect(listRes.status).toBe(200)
+    const customers = await listRes.json()
+    expect(Array.isArray(customers)).toBe(true)
+    if (customers.length === 0 && BASE.includes('7776')) {
+      console.log('Smoke: 0 customers on test container — skipping detail check')
+      return
+    }
+    expect(customers.length).toBeGreaterThanOrEqual(1)
+
+    const name = customers[0].name
+    expect(typeof name).toBe('string')
+    expect(name.length).toBeGreaterThan(0)
+
+    const pageErrors: string[] = []
+    page.on('pageerror', (err) => {
+      pageErrors.push(err.message ?? String(err))
+    })
+
+    await page.goto(`${BASE}/dashboard/customer/${encodeURIComponent(name)}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    })
+
+    // AppErrorBoundary fallback contains "Something went wrong" — its presence
+    // means the page tree threw during render.
+    await expect(page.getByText('Something went wrong')).toHaveCount(0)
+
+    // The customer name must render as an H1 once data loads. Allow a brief
+    // settle window for the SPA to mount the detail view.
+    await expect(page.locator('h1', { hasText: name })).toBeVisible({ timeout: 15_000 })
+
+    expect(
+      pageErrors,
+      `Unexpected pageerror events: ${pageErrors.join(' | ')}`,
+    ).toHaveLength(0)
+  })
+
   test('circuit breakers are all closed', async () => {
     const res = await fetch(`${BASE}/api/status/scrapes`)
     expect(res.status).toBe(200)

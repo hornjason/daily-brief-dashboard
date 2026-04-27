@@ -34,13 +34,15 @@ test.describe('1. Carolanne AE config — exact ID round-trip', () => {
     expect(body.aes).toHaveLength(1)
     const ae = body.aes[0]
 
-    expect(ae.name).toBe('Carolanne Farrell')
-    expect(ae.driveFolderId).toBe('1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq')
-    expect(ae.sfReportId).toBe('00OPe00000isU2zMAE')
-    expect(ae.tableauTerritories).toEqual(['WEST_COMM_CORP_NORTHWEST_TERR01'])
-    expect(ae.supportableSheetId).toBe('1wXrSZIp6ip4cSE1w31Q76_ia9BoGdrpO5CN6kVga63o')
-    expect(ae.pipelineSheetId).toBe('10H8Nl8oQQg1x9Zt0p5cys7JJp0b4ObfzhB-pPMot3BM')
-    expect(ae.ccspSheetId).toBe('11JxHACopxfffQqJDu30WrHtXg49SqipGTje9IIsZA6U')
+    // BKL-TEST-FIXTURE-DRIFT-01: assert against the CAROLANNE constant
+    // (currently "TBH"), not the legacy hardcoded Carolanne Farrell IDs.
+    expect(ae.name).toBe(CAROLANNE.name)
+    expect(ae.driveFolderId).toBe(CAROLANNE.driveFolderId)
+    expect(ae.sfReportId).toBe(CAROLANNE.sfReportId)
+    expect(ae.tableauTerritories).toEqual(CAROLANNE.tableauTerritories)
+    expect(ae.supportableSheetId).toBe(CAROLANNE.supportableSheetId)
+    expect(ae.pipelineSheetId).toBe(CAROLANNE.pipelineSheetId)
+    expect(ae.ccspSheetId).toBe(CAROLANNE.ccspSheetId)
   })
 
   test('POST /api/aes is idempotent — re-saving same config returns ok', async ({ request }) => {
@@ -58,7 +60,7 @@ test.describe('1. Carolanne AE config — exact ID round-trip', () => {
     const body = await res.json()
     const territories = body.aes[0].tableauTerritories
     expect(Array.isArray(territories)).toBe(true)
-    expect(territories[0]).toBe('WEST_COMM_CORP_NORTHWEST_TERR01')
+    expect(territories[0]).toBe(CAROLANNE.tableauTerritories[0])
   })
 
   test('POST /api/aes — rejects missing name', async ({ request }) => {
@@ -483,7 +485,7 @@ test.describe('10. Accounts and customers endpoints', () => {
     const res = await request.get(`${BASE}/api/accounts`)
     const body = await res.json()
     for (const c of body.customers) {
-      expect(c.ae).toBe('Carolanne Farrell')
+      expect(c.ae).toBe(CAROLANNE.name)
     }
   })
 
