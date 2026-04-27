@@ -231,7 +231,6 @@ const _cooldownMsGetter  = (): number => getAutomationConfig().circuitBreakerCoo
 const circuitBreakers = {
   rh: new CircuitBreaker('rh', _thresholdGetter, _cooldownMsGetter),
   ccsp: new CircuitBreaker('ccsp', _thresholdGetter, _cooldownMsGetter),
-  supportable: new CircuitBreaker('supportable', _thresholdGetter, _cooldownMsGetter),
   salesforce: new CircuitBreaker('salesforce', _thresholdGetter, _cooldownMsGetter),
 }
 
@@ -240,13 +239,12 @@ export function getCircuitBreakerStates(): Record<string, ReturnType<CircuitBrea
   return {
     rh: circuitBreakers.rh.getState(),
     ccsp: circuitBreakers.ccsp.getState(),
-    supportable: circuitBreakers.supportable.getState(),
     salesforce: circuitBreakers.salesforce.getState(),
   }
 }
 
 /** Reset a single circuit breaker — used when auth is re-established. */
-export function resetCircuitBreaker(service: 'rh' | 'ccsp' | 'supportable' | 'salesforce'): void {
+export function resetCircuitBreaker(service: 'rh' | 'ccsp' | 'salesforce'): void {
   circuitBreakers[service].recordSuccess()
   console.log(`[circuit-breaker] ${service}: reset by auth event`)
 }

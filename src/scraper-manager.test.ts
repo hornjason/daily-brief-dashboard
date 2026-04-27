@@ -29,20 +29,19 @@ describe('CircuitBreaker — initial state', () => {
     resetAllCircuitBreakers()
   })
 
-  test('all four breakers start closed after resetAllCircuitBreakers', () => {
+  test('all three breakers start closed after resetAllCircuitBreakers', () => {
     const states = getCircuitBreakerStates()
     expect(states.rh.state).toBe('closed')
     expect(states.ccsp.state).toBe('closed')
-    expect(states.supportable.state).toBe('closed')
     expect(states.salesforce.state).toBe('closed')
   })
 
-  test('getCircuitBreakerStates returns all 4 expected service keys', () => {
+  test('getCircuitBreakerStates returns exactly 3 active service keys (BKL-SEC-CIRCUIT-BREAKER-SUPPORTABLE-01)', () => {
     const states = getCircuitBreakerStates()
     expect(Object.keys(states)).toContain('rh')
     expect(Object.keys(states)).toContain('ccsp')
-    expect(Object.keys(states)).toContain('supportable')
     expect(Object.keys(states)).toContain('salesforce')
+    expect(Object.keys(states)).not.toContain('supportable')
   })
 
   test('each breaker entry has expected shape fields', () => {
@@ -79,12 +78,11 @@ describe('CircuitBreaker — resetCircuitBreaker', () => {
 })
 
 describe('CircuitBreaker — resetAllCircuitBreakers', () => {
-  test('resets all 4 breakers to closed state', () => {
+  test('resets all 3 breakers to closed state', () => {
     resetAllCircuitBreakers()
     const states = getCircuitBreakerStates()
     expect(states.rh.state).toBe('closed')
     expect(states.ccsp.state).toBe('closed')
-    expect(states.supportable.state).toBe('closed')
     expect(states.salesforce.state).toBe('closed')
   })
 
@@ -93,7 +91,6 @@ describe('CircuitBreaker — resetAllCircuitBreakers', () => {
     const states = getCircuitBreakerStates()
     expect(states.rh.failures).toBe(0)
     expect(states.ccsp.failures).toBe(0)
-    expect(states.supportable.failures).toBe(0)
     expect(states.salesforce.failures).toBe(0)
   })
 })

@@ -6957,13 +6957,14 @@ Fix: Remove supportable field from AdminPage state type, default config, label m
 ---
 
 ### BKL-SEC-CIRCUIT-BREAKER-SUPPORTABLE-01 | Dormant Supportable circuit breaker entry in scraper-status API
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-27
 Priority: P3
 Size: XS
 Source: Quinn council audit 2026-04-27
-Files: src/scraper-manager.ts (circuit breaker registry)
+Files: src/scraper-manager.ts (circuit breaker registry), src/scraper-manager.test.ts
 Description: GET /api/scraper-status returns circuitBreakers.supportable: {state:"closed", failures:0, lastFailure:null}. The UI hides it correctly but the API key remains, which will confuse future agents grepping for Supportable residue. Note: scraper-manager.ts is a protected scraper file — requires explicit Jason confirmation before modifying.
 Fix: Remove 'supportable' entry from the circuit-breaker registry in scraper-manager.ts after getting explicit sign-off. Do not touch any other scraper logic.
+Decision: DONE — removed `supportable` from circuitBreakers object, getCircuitBreakerStates(), and resetCircuitBreaker type union. Updated scraper-manager.test.ts to assert supportable is absent. Rook: clean PASS (type-safe, no injection vectors). Quinn: PASS on scope — circuitBreakers API shows only rh/ccsp/salesforce. Residual supportable in /api/status/scrapes top-level is pre-existing status telemetry from a prior session (not this item's scope).
 
 ---
 
