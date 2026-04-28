@@ -58,6 +58,15 @@ async function saveTableauSession(ctx: BrowserContext): Promise<void> {
 async function restoreTableauSession(ctx: BrowserContext): Promise<void> {
   try {
     if (!existsSync(TABLEAU_SESSION_PATH)) return
+    // Only inject disk cookies if the shared context has no live Tableau session.
+    // After Option B login (SSO in shared context), the context already has the right
+    // cookies — overwriting them with a stale file would break the live session.
+    const existing = await ctx.cookies()
+    const hasLiveTableau = existing.some(c => c.domain.includes('tableau.com') || c.domain.includes('online.tableau'))
+    if (hasLiveTableau) {
+      console.log('[ccsp] shared context already has Tableau cookies — skipping disk restore')
+      return
+    }
     const saved = JSON.parse(readFileSync(TABLEAU_SESSION_PATH, 'utf-8'))
     if (!saved.cookies?.length) return
     await ctx.addCookies(saved.cookies)

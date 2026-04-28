@@ -1051,6 +1051,28 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toMatch(/startsWith\(['"]<!DOCTYPE|startsWith\(['"]<html/)
   })
 
+  test('REG-CCSP-SSO-06: startTableauLoginBrowser uses shared context, not isolated profile', () => {
+    // Option B: Tableau SSO must complete in the shared scrape context (ADR-015).
+    // The isolated launchPersistentContext(TABLEAU_AUTH_PROFILE_DIR) call must NOT
+    // be in the startTableauLoginBrowser code path.
+    const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
+    expect(src).toContain('getScrapeContext')
+    expect(src).toContain('setLivePageBusy')
+    // startTableauLoginBrowser body must not launch an isolated persistent context
+    const fnStart = src.indexOf('export async function startTableauLoginBrowser')
+    const fnEnd = src.indexOf('\nexport ', fnStart + 1)
+    const fnBody = src.slice(fnStart, fnEnd === -1 ? fnStart + 2000 : fnEnd)
+    expect(fnBody).not.toContain('launchPersistentContext')
+  })
+
+  test('REG-CCSP-SSO-07: restoreTableauSession gates on zero live Tableau cookies', () => {
+    // Option B: restoreTableauSession must not overwrite live cookies from a shared-context
+    // SSO login. It must check for existing Tableau cookies before injecting from disk.
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf8')
+    expect(src).toContain('hasLiveTableau')
+    expect(src).toContain('skipping disk restore')
+  })
+
   // ── REG-INTEL-DRIVE-FOLDER-01: pipeline survives missing Drive folder ───
   test('REG-INTEL-DRIVE-FOLDER-01: writeIntelligenceDocs failure is non-fatal', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/account-intelligence.ts'), 'utf8')

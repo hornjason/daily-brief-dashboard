@@ -15,6 +15,7 @@ import type { BrowserContext, Page } from '@playwright/test'
 import { writeFileSync, existsSync, readFileSync, unlinkSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
+import { getScrapeContext, setLivePageBusy } from './rh-scraper.ts'
 
 const TABLEAU_AUTH_PROFILE_DIR = process.env.TABLEAU_AUTH_PROFILE_DIR ?? '/data/rh-profile-tableau-auth'
 const TABLEAU_SESSION_PATH = `${process.env.RH_PROFILE_DIR ?? '/data/rh-profile'}/tableau-session.json`
@@ -88,11 +89,13 @@ export async function probeTableauSession(): Promise<boolean> {
 
 async function _closeContext(opts: { harvest: boolean }): Promise<boolean> {
   const ctx = activeContext
+  const page = activePage
   activeContext = null
   activePage = null
   loginInProgress = false
+  setLivePageBusy(false)
   let harvested = false
-  if (!ctx) return false
+  if (!ctx || !page) return false
   if (opts.harvest) {
     try {
       const state = await ctx.storageState()
@@ -116,12 +119,8 @@ async function _closeContext(opts: { harvest: boolean }): Promise<boolean> {
       console.warn('[tableau-auth] cookie harvest failed:', e?.message ?? e)
     }
   }
-  try {
-    for (const p of ctx.pages()) {
-      await p.close().catch(() => {})
-    }
-    await ctx.close()
-  } catch { /* already closed */ }
+  // Close only our page — never close the shared context
+  try { await page.close() } catch { /* already closed */ }
   return harvested
 }
 
@@ -132,44 +131,29 @@ async function _closeContext(opts: { harvest: boolean }): Promise<boolean> {
  */
 export async function startTableauLoginBrowser(): Promise<void> {
   if (loginInProgress) throw new Error('Tableau login already in progress')
-
-  // Race-free: set flag BEFORE any await
   loginInProgress = true
 
-  // Close any stale isolated context from a prior aborted run
-  if (activeContext) {
-    await _closeContext({ harvest: false })
-    loginInProgress = true  // re-set after _closeContext clears it
+  const sharedCtx = getScrapeContext()
+  if (!sharedCtx) {
+    loginInProgress = false
+    throw new Error('Shared scrape context not ready — initialize browser first')
   }
 
   try {
-    mkdirSync(TABLEAU_AUTH_PROFILE_DIR, { recursive: true })
-    try {
-      unlinkSync(join(TABLEAU_AUTH_PROFILE_DIR, 'SingletonLock'))
-      console.warn('[tableau-auth] stale lock file removed')
-    } catch { /* fine — file may not exist */ }
-    sanitizeChromiumProfile(TABLEAU_AUTH_PROFILE_DIR)
-
-    const ctx = await chromium.launchPersistentContext(TABLEAU_AUTH_PROFILE_DIR, {
-      headless: false,
-      args: [...BASE_CHROMIUM_ARGS],
-    })
-
-    activeContext = ctx
-    // Close any tabs restored from a previous persistent-context session — they cause
-    // extra windows in VNC that interfere with SSO and confuse the login poll.
-    for (const p of ctx.pages()) {
-      await p.close().catch(() => {})
-    }
-    const page = await ctx.newPage()
+    setLivePageBusy(true)
+    activeContext = sharedCtx  // reference only — we do NOT own this context
+    const page = await sharedCtx.newPage()
     activePage = page
 
     page.goto(TABLEAU_URL).catch((e: any) => {
       console.warn('[tableau-auth] initial navigation failed:', e?.message ?? e)
     })
-    console.log('[tableau-auth] isolated Chromium launched — visible at localhost:6080')
+    console.log('[tableau-auth] shared context Chromium launched — visible at localhost:6080')
   } catch (e) {
     loginInProgress = false
+    setLivePageBusy(false)
+    activeContext = null
+    activePage = null
     throw e
   }
 }
