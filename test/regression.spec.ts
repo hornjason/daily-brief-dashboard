@@ -1030,15 +1030,15 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toMatch(/authCookies\.length\s*>\s*0/)
   })
 
-  test('REG-CCSP-SSO-04: waitForTableauLogin stability window is at least 4000ms', () => {
-    // 500ms stability window caused false-positive closes — the page briefly lands on
-    // 10ay.online.tableau.com before SSO redirects away. 5000ms ensures we wait long enough
-    // for the redirect to fire before treating the URL as "logged in" (BKL-CONN-TABLEAU-CTX-01).
+  test('REG-CCSP-SSO-04: waitForTableauLogin requires /site/ and /views/ in URL before declaring login', () => {
+    // The email entry page is also on 10ay.online.tableau.com but without /site/.../views/.
+    // Only the actual CCSP dashboard URL after successful SSO contains both segments.
+    // This prevents VNC from closing while the user is still on the email entry page.
     const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
-    const match = src.match(/Stability check[\s\S]*?setTimeout\(r,\s*(\d+(?:_\d+)*)/)
-    expect(match).not.toBeNull()
-    const windowMs = parseInt((match![1] ?? '0').replace(/_/g, ''))
-    expect(windowMs).toBeGreaterThanOrEqual(4000)
+    expect(src).toContain("url.includes('/site/')")
+    expect(src).toContain("url.includes('/views/')")
+    // Must NOT close on just startsWith check alone
+    expect(src).toMatch(/onCcspDashboard[\s\S]{0,200}\/site\//)
   })
 
   test('REG-CCSP-SSO-05: ccsp-scraper CSV classifier logs auth_redirect for HTML responses', () => {

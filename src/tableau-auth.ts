@@ -145,6 +145,15 @@ export async function startTableauLoginBrowser(): Promise<void> {
     const page = await sharedCtx.newPage()
     activePage = page
 
+    // Track any new page the SSO flow opens (popup, new tab) and redirect it back
+    // to TABLEAU_URL so focus stays on the Tableau login flow, not an orphaned tab.
+    sharedCtx.on('page', (newPage) => {
+      if (!loginInProgress) return
+      console.log('[tableau-auth] SSO opened new tab — redirecting to Tableau login URL')
+      newPage.goto(TABLEAU_URL).catch(() => {})
+      activePage = newPage
+    })
+
     page.goto(TABLEAU_URL).catch((e: any) => {
       console.warn('[tableau-auth] initial navigation failed:', e?.message ?? e)
     })
@@ -180,23 +189,23 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
 
     try {
       const url = page.url()
-      const onTableau = url.startsWith('https://10ay.online.tableau.com')
-      if (!onTableau) continue
+      // Must be on the actual CCSP dashboard URL — not the email entry page or any other
+      // 10ay.online.tableau.com page. The email entry page never contains '/site/.../views/'.
+      // After successful SSO, Tableau redirects back to the original URL which always has
+      // '/site/redhatanalytics/views/' in the path.
+      const onCcspDashboard = url.startsWith('https://10ay.online.tableau.com') &&
+        url.includes('/site/') && url.includes('/views/')
+      if (!onCcspDashboard) continue
 
-      // Stability check: wait 5s then re-confirm — SSO redirect chain takes 2-4s to
-      // leave 10ay.online.tableau.com; 500ms was a false-positive window (BKL-CONN-TABLEAU-CTX-01)
-      await new Promise(r => setTimeout(r, 5_000))
+      // Stability check: wait 3s then re-confirm URL hasn't changed (still on dashboard)
+      await new Promise(r => setTimeout(r, 3_000))
       if (page.url() !== url) continue
 
-      const noLoginForm = await page.evaluate(() => {
-        const els = Array.from(document.querySelectorAll('input[type="password"], input#username, [data-testid="login"]'))
-        return !els.some(el => {
-          const s = window.getComputedStyle(el)
-          return s.display !== 'none' && s.visibility !== 'hidden' && (el as HTMLElement).offsetParent !== null
-        })
-      }).catch(() => false)
+      // Positive check: Tableau viz glass pane must be present — confirms viz actually loaded
+      const hasVizContent = await page.$('.tab-glassPane, iframe[id^="tableau"], .tab-content')
+        .then(el => !!el).catch(() => false)
 
-      if (noLoginForm) {
+      if (hasVizContent) {
         console.log('[tableau-auth] login detected — harvesting cookies')
         const harvested = await _closeContext({ harvest: true })
         if (!harvested) return false
