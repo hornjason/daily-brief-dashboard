@@ -662,7 +662,27 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
     if (csvPath) {
       const csvText = readFileSync(csvPath, 'utf8')
       rows = parseCsvToObjects(csvText)
-      console.log(`[ccsp] ${ae.name}: direct CSV: ${rows.length} rows (unfiltered POD)`)
+      // Classify response so "0 rows" failures are diagnosable (BKL-CONN-TABLEAU-CTX-01)
+      if (rows.length === 0) {
+        const trimmed = csvText.trim()
+        if (trimmed === '' || trimmed === '\n') {
+          console.warn(`[ccsp] ${ae.name}: csv_empty — endpoint returned blank body (filter mismatch or auth)`)
+        } else if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
+          console.warn(`[ccsp] ${ae.name}: auth_redirect — CSV endpoint returned HTML (SSO redirect, session invalid in shared context)`)
+        } else {
+          console.warn(`[ccsp] ${ae.name}: csv_zero_rows — parsed 0 rows from non-empty body: ${trimmed.slice(0, 120)}`)
+        }
+      } else {
+        const firstRow = rows[0] ?? {}
+        const cols = Object.keys(firstRow)
+        const hasAccount = cols.some(c => /account|customer|company/i.test(c))
+        const hasAcv = cols.some(c => /acv/i.test(c))
+        if (!hasAccount || !hasAcv) {
+          console.warn(`[ccsp] ${ae.name}: csv_summary_view — ${rows.length} rows but missing required columns; cols: [${cols.slice(0, 8).join(', ')}]`)
+        } else {
+          console.log(`[ccsp] ${ae.name}: csv_ok — ${rows.length} rows (unfiltered POD)`)
+        }
+      }
     }
 
     // Re-navigate to main Tableau view so next AE scrape starts cleanly
@@ -1050,7 +1070,18 @@ export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFold
       if (csvPath) {
         const csvText = readFileSync(csvPath, 'utf8')
         rows = parseCsvToObjects(csvText)
-        console.log(`[ccsp] POD pre-scrape: direct CSV: ${rows.length} rows`)
+        if (rows.length === 0) {
+          const trimmed = csvText.trim()
+          if (trimmed === '' || trimmed === '\n') {
+            console.warn(`[ccsp] POD pre-scrape: csv_empty — blank body (filter mismatch or auth)`)
+          } else if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
+            console.warn(`[ccsp] POD pre-scrape: auth_redirect — HTML body (SSO redirect, session invalid)`)
+          } else {
+            console.warn(`[ccsp] POD pre-scrape: csv_zero_rows — 0 rows from non-empty body: ${trimmed.slice(0, 120)}`)
+          }
+        } else {
+          console.log(`[ccsp] POD pre-scrape: csv_ok — ${rows.length} rows`)
+        }
       }
 
       // Re-navigate to main view so context is clean

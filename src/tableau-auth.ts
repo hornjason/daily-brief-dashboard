@@ -35,7 +35,7 @@ export function isTableauLoginInProgress(): boolean {
 
 /**
  * Check if Tableau session cookies on disk are present and fresh.
- * Used by session-status probe instead of opening a browser tab.
+ * Used as a fast pre-check before launching the live probe.
  */
 export async function checkTableauSessionFromCookies(): Promise<boolean> {
   try {
@@ -49,6 +49,40 @@ export async function checkTableauSessionFromCookies(): Promise<boolean> {
     return authCookies.length > 0
   } catch {
     return false
+  }
+}
+
+/**
+ * Live probe: launch a headless isolated browser, restore saved cookies, navigate to
+ * the CCSP dashboard URL, and confirm we land on 10ay.online.tableau.com without hitting
+ * the SSO login wall. Returns true only if the session is genuinely active.
+ * Uses the isolated TABLEAU_AUTH_PROFILE_DIR — zero shared-context risk.
+ */
+export async function probeTableauSession(): Promise<boolean> {
+  if (loginInProgress) return false  // don't interfere with active login
+  let ctx = null
+  try {
+    ctx = await chromium.launchPersistentContext(TABLEAU_AUTH_PROFILE_DIR, {
+      headless: true,
+      args: [...BASE_CHROMIUM_ARGS],
+    })
+    // Restore saved cookies into probe context
+    if (existsSync(TABLEAU_SESSION_PATH)) {
+      try {
+        const saved = JSON.parse(readFileSync(TABLEAU_SESSION_PATH, 'utf-8'))
+        if (saved.cookies?.length) await ctx.addCookies(saved.cookies)
+      } catch { /* non-fatal */ }
+    }
+    const page = await ctx.newPage()
+    await page.goto(TABLEAU_URL, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+    await page.waitForTimeout(2_000)
+    const url = page.url()
+    return url.startsWith('https://10ay.online.tableau.com') &&
+      !url.includes('/auth') && !url.includes('/login')
+  } catch {
+    return false
+  } finally {
+    try { await (ctx as any)?.close() } catch { /* ignore */ }
   }
 }
 
@@ -122,6 +156,11 @@ export async function startTableauLoginBrowser(): Promise<void> {
     })
 
     activeContext = ctx
+    // Close any tabs restored from a previous persistent-context session — they cause
+    // extra windows in VNC that interfere with SSO and confuse the login poll.
+    for (const p of ctx.pages()) {
+      await p.close().catch(() => {})
+    }
     const page = await ctx.newPage()
     activePage = page
 
@@ -160,8 +199,9 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
       const onTableau = url.startsWith('https://10ay.online.tableau.com')
       if (!onTableau) continue
 
-      // Stability check: wait 500ms then re-confirm
-      await new Promise(r => setTimeout(r, 500))
+      // Stability check: wait 5s then re-confirm — SSO redirect chain takes 2-4s to
+      // leave 10ay.online.tableau.com; 500ms was a false-positive window (BKL-CONN-TABLEAU-CTX-01)
+      await new Promise(r => setTimeout(r, 5_000))
       if (page.url() !== url) continue
 
       const noLoginForm = await page.evaluate(() => {

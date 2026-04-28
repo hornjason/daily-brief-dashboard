@@ -3,6 +3,9 @@ dashboard/node_modules
 dashboard/dist
 cache/
 data/
+data-dev/
+data-test/
+data-snapshots/
 .env
 *.log
 .git

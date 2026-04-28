@@ -1019,6 +1019,38 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toMatch(/isLoginPage[\s\S]{0,1000}Date\.now\(\)/)
   })
 
+  test('REG-CCSP-SSO-03: checkTableauSessionFromCookies rejects XSRF-TOKEN-only cookies', () => {
+    // Regression for BKL-CONN-TABLEAU-CTX-01 — a single XSRF-TOKEN cookie (from an abandoned
+    // login attempt) must not return sessionValid=true. The filter now requires at least 1
+    // non-XSRF-TOKEN cookie before declaring a session valid.
+    const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
+    expect(src).toMatch(/XSRF-TOKEN/)
+    expect(src).toMatch(/authCookies\s*=\s*saved\.cookies\.filter/)
+    expect(src).toMatch(/c\.name\s*!==\s*['"]XSRF-TOKEN['"]/)
+    expect(src).toMatch(/authCookies\.length\s*>\s*0/)
+  })
+
+  test('REG-CCSP-SSO-04: waitForTableauLogin stability window is at least 4000ms', () => {
+    // 500ms stability window caused false-positive closes — the page briefly lands on
+    // 10ay.online.tableau.com before SSO redirects away. 5000ms ensures we wait long enough
+    // for the redirect to fire before treating the URL as "logged in" (BKL-CONN-TABLEAU-CTX-01).
+    const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
+    const match = src.match(/Stability check[\s\S]*?setTimeout\(r,\s*(\d+(?:_\d+)*)/)
+    expect(match).not.toBeNull()
+    const windowMs = parseInt((match![1] ?? '0').replace(/_/g, ''))
+    expect(windowMs).toBeGreaterThanOrEqual(4000)
+  })
+
+  test('REG-CCSP-SSO-05: ccsp-scraper CSV classifier logs auth_redirect for HTML responses', () => {
+    // Regression for BKL-CONN-TABLEAU-CTX-01 — "0 rows" is now classified into
+    // auth_redirect / csv_empty / csv_zero_rows / csv_ok so failures are diagnosable.
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf8')
+    expect(src).toContain('auth_redirect')
+    expect(src).toContain('csv_empty')
+    expect(src).toContain('csv_ok')
+    expect(src).toMatch(/startsWith\(['"]<!DOCTYPE|startsWith\(['"]<html/)
+  })
+
   // ── REG-INTEL-DRIVE-FOLDER-01: pipeline survives missing Drive folder ───
   test('REG-INTEL-DRIVE-FOLDER-01: writeIntelligenceDocs failure is non-fatal', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/account-intelligence.ts'), 'utf8')

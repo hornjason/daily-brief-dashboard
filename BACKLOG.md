@@ -7620,3 +7620,46 @@ Fix for Problem 1 (core fix): When SSO page is detected, instead of throwing imm
 Fix for Problem 2 (status fix): Wire consumeTableauSessionExpired() (line 146) into scraper-manager CCSP status block as sessionExpired field. Frontend shows auth-needed state when true.
 
 Can we test: YES — regression test that scraper-manager CCSP status surfaces sessionExpired; manual VNC flow test on 7776 after fix.
+
+### BKL-CCSP-STATUS-02 | CCSP "connected" badge ignores tableauSessionExpired and 0 recordCount
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Live observation 2026-04-28 — test container shows CCSP green after 0-record scrape
+Files: dashboard/src/pages/SetupPage.tsx line 3243
+Description: ccspConnected = lastScrape && !running && !lastError — never checks tableauSessionExpired or recordCount. A scrape that ran, hit SSO, and returned 0 records still shows "connected" green because lastScrape is set and lastError is null.
+
+Fix: Update ccspConnected logic to also check:
+1. !tableauSessionExpired (from the API's ccsp.tableauSessionExpired field — needs to be threaded from /api/status/scrapes into the CCSP status state, or read from /api/scrape/ccsp/status)
+2. (recordCount ?? 0) > 0 OR this is the first ever scrape (no prior data)
+
+The tableauSessionExpired field is already in the /api/status/scrapes CCSP block (shipped in BKL-CCSP-STATUS-01). Frontend just needs to read it and wire it into ccspConnected.
+
+Can we test: YES — source-grep test that ccspConnected includes tableauSessionExpired check.
+
+### BKL-CCSP-SHARED-CTX-01 | Tableau SSO must complete in the shared scrape context — isolated login + cookie bridge fails
+Status: 🔴 OPEN — PROPOSED FIX (ADR-015), awaiting Jason sign-off
+Priority: P0
+Size: M
+Source: Architectural review 2026-04-28 — Serena Blackwood + Rayford
+Files: src/tableau-auth.ts, src/ccsp-scraper.ts, docs/adr/ADR-015-tableau-sso-shared-context.md
+Description: The current architecture has Tableau SSO login completing in an isolated persistent Chromium context (TABLEAU_AUTH_PROFILE_DIR), then bridging cookies via a JSON file to the shared scrape context. This bridge is fundamentally broken: Tableau Cloud's VizQL session is bound to the originating browser's JS environment (localStorage, IndexedDB, tabid, sessionId). Re-injecting cookies into a different Chromium profile produces a session that passes the URL check but fails on CSV requests — the shared context re-triggers SSO.
+
+This is the root cause of CCSP returning 0 records after a successful VNC login.
+
+Architectural truth from CLAUDE.md/ADR-001: "Shared browser context is intentional — isolation breaks Tableau SSO."
+
+Fix (per ADR-015): Move Tableau SSO login to complete in the shared context. Open a new page on the shared context, navigate to TABLEAU_URL, wait for user to complete SSO in VNC. On success, the shared context has the correct Okta tokens and VizQL session state for CCSP scraping.
+
+Cookie seeding workaround (short-term): Copy prod tableau-session.json → data-test/rh-profile/tableau-session.json to seed test container after wipe. This restores the cookie age check to "valid" but does NOT fix the underlying VizQL session issue.
+
+Can we test: YES — after Option B is implemented, trigger CCSP scrape on 7776 and verify csv_ok (non-zero rows) appears in container logs.
+
+AUTONOMOUS WORK DONE (2026-04-28 while Jason sleeping):
+- Added CSV response classifier (auth_redirect/csv_empty/csv_summary_view/csv_ok) to ccsp-scraper.ts at both CSV fetch paths — now we can distinguish auth failure from filter failure
+- Added REG-CCSP-SSO-03/04/05 regression tests (all green)
+- Added ADR-015 documenting Option B decision for Jason's sign-off
+- Containerignore fix: data-dev/ data-test/ data-snapshots/ were being copied into image (1.1GB), causing build disk errors — excluded from .containerignore
+- VNC stability fixes: 5s stability window (was 500ms), close restored persistent context pages on login launch
+
+NEXT: Jason approves ADR-015 → Marcus implements Option B → Quinn validates VNC flow on 7776 → single end-to-end CCSP scrape confirms csv_ok
