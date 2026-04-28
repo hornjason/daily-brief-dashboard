@@ -43,7 +43,10 @@ export async function checkTableauSessionFromCookies(): Promise<boolean> {
     const saved = JSON.parse(readFileSync(TABLEAU_SESSION_PATH, 'utf-8'))
     if (!saved.cookies?.length || !saved.savedAt) return false
     const age = Date.now() - Date.parse(saved.savedAt)
-    return age < TABLEAU_COOKIE_AGE_MS
+    if (age >= TABLEAU_COOKIE_AGE_MS) return false
+    // XSRF-TOKEN alone is not a valid auth session — require at least one auth cookie
+    const authCookies = saved.cookies.filter((c: any) => c.name !== 'XSRF-TOKEN')
+    return authCookies.length > 0
   } catch {
     return false
   }
