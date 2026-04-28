@@ -125,7 +125,7 @@ const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
 
 const CCSP_DEBUG = process.env.CCSP_DEBUG === 'true'
 
-const PER_AE_TIMEOUT_MS = 120_000  // 2 minutes
+const PER_AE_TIMEOUT_MS = 6 * 60_000  // 6 minutes — accommodates SSO wait + viz load
 
 let _ctx: BrowserContext | null = null
 
