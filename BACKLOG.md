@@ -7665,22 +7665,20 @@ AUTONOMOUS WORK DONE (2026-04-28 while Jason sleeping):
 NEXT: Jason approves ADR-015 → Marcus implements Option B → Quinn validates VNC flow on 7776 → single end-to-end CCSP scrape confirms csv_ok
 
 ### BKL-CONN-TABLEAU-TIMEOUT-VNC-01 | Tableau VNC closes at 90s — too short for full SAML chain
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-28
 Priority: P1
 Size: S
 Source: Session 2026-04-28 (Jason empirical SSO testing)
-Files: src/bootstrap-orchestrator.ts, dashboard/src/pages/SetupPage.tsx
-Description: The wait-for-login endpoint times out after 90s. The full Tableau login chain (email entry → Tableau redirects to auth.redhat.com → SAML assertion → credential entry → redirect back → Tableau loads) takes 2-4 minutes. The frontend treats the 90s timeout as failure and closes VNC. Fix: raise timeout to 5 minutes, and close VNC on auth-marker detection (`.tab-glassPane` present), not on the clock.
-Acceptance: Tableau VNC stays open until `.tab-glassPane` is visible or 5 min hard ceiling. Credential prompt inside VNC stays up and usable for full SAML chain.
+Files: dashboard/src/pages/SetupPage.tsx
+Decision: Converted single wait-for-login fetch to while(!loginResolved) re-poll loop. {sessionValid:false} from server now triggers re-poll, not resolveLogin(false). Hard cap raised 120s→300s. Commit f93a08ec7.
 
 ### BKL-CONN-TABLEAU-EMAIL-AUTOFILL-01 | Tableau login requires manual email entry — should auto-fill
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-28
 Priority: P2
 Size: S
 Source: Session 2026-04-28
 Files: src/tableau-auth.ts
-Description: Every Tableau VNC login requires Jason to manually type his email in the Tableau email entry page before the SAML redirect fires. We can auto-fill the known Red Hat email address and click Next programmatically, leaving only the credential entry step (PIN+token) for the user. Reduces manual steps from 3 (email, Next, credentials) to 1 (credentials).
-Acceptance: When VNC opens for Tableau, email field is auto-filled and Next is auto-clicked. User sees the SSO credential screen immediately.
+Decision: TABLEAU_USER_EMAIL env var. waitForTableauLogin fills email input + clicks submit when on email entry page (URL lacks /site/+/views/). Non-fatal — skipped gracefully if unset. Commit f93a08ec7.
 
 ### BKL-ARCH-LEADER-FLAG-01 | Leader flag: one instance does L4 scrapes, all others read Drive only
 Status: 🔴 OPEN
