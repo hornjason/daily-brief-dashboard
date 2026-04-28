@@ -793,14 +793,15 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
   }
 
   // Re-sync context in case RH scraper recycled it (every 50 scrapes).
-  // If the shared context was replaced, _ctx is a stale reference — refresh it
-  // and restore Tableau cookies into the new context before proceeding.
+  // If the shared context was replaced, _ctx is a stale reference — refresh it.
   const liveCtx = getScrapeContext()
   if (liveCtx && liveCtx !== _ctx) {
     console.log('[ccsp] context recycled by RH scraper — re-adopting')
     _ctx = liveCtx
-    await restoreTableauSession(liveCtx)
   }
+  // Always refresh Tableau cookies at scrape start — picks up any fresh login
+  // that completed after context was adopted (e.g. user logged in via VNC).
+  if (_ctx) await restoreTableauSession(_ctx)
 
   if (ccspScrapeRunning) {
     if (ccspScrapeStartedAt && (Date.now() - ccspScrapeStartedAt > STALE_MUTEX_MS)) {
