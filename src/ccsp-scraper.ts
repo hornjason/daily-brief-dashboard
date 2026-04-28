@@ -955,6 +955,11 @@ export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFold
     throw new Error('[ccsp-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
   }
 
+  if (process.env.IS_LEADER !== 'true') {
+    console.log('[ccsp] scrapePodCcspRaw: non-leader instance — L4 not permitted; returning empty')
+    return { rows: [], period: getRollingFyWindow().label }
+  }
+
   if (!_ctx) throw new Error('No browser context — connect Red Hat Portal first')
   // BKL-ADM02: _ctx.pages() does NOT throw on a closed context (it returns []).
   // The real liveness probe is newPage() below — wrapped in try-catch.

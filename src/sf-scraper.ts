@@ -24,6 +24,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts
 import { sanitizeCell } from './utils.ts'
 import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
+import { getScrapeContext } from './rh-scraper.ts'
 
 export class SfSessionExpiredError extends Error {
   constructor() {
@@ -380,6 +381,12 @@ export function adoptSfContext(context: BrowserContext, profileDir: string): voi
     KEEP_ALIVE_INTERVAL_MS,
   )
   console.log('[sf-scraper] adopted RH login context — SSO session shared')
+  // BKL-CONN-SF-AUTO-01: clear SF circuit breaker on re-adoption so recovery
+  // doesn't get blocked by failures accumulated while the context was dead.
+  // Lazy import avoids a static circular dependency with scraper-manager.
+  import('./scraper-manager.ts')
+    .then(m => m.resetCircuitBreaker('salesforce'))
+    .catch(() => { /* non-fatal — breaker will clear on first success */ })
 }
 
 export async function closeSfContext(): Promise<void> {
@@ -403,6 +410,13 @@ async function persistSessionState(): Promise<void> {
 // ── Keep-alive ────────────────────────────────────────────────────────────────
 
 async function keepAlive(): Promise<void> {
+  // BKL-CONN-SF-AUTO-01: lazy self-heal — if RH recycled the shared context,
+  // our cached _context is a stale reference. Mirrors ccsp-scraper.ts:762-770.
+  const liveCtx = getScrapeContext()
+  if (liveCtx && liveCtx !== _context) {
+    console.log('[sf-scraper] keep-alive: context swapped by RH — re-adopting live context')
+    _context = liveCtx
+  }
   if (!_context) return
   // Always use an ephemeral page — we must not navigate the RH live page away
   const page = await _context.newPage().catch(() => null)
@@ -441,6 +455,17 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
   // Must be the first check, before any browser/network work.
   if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
     throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
+  if (process.env.IS_LEADER !== 'true') {
+    throw new Error('[sf-scraper] IS_LEADER not set — live SF scrape not permitted on non-leader instance')
+  }
+  // BKL-CONN-SF-AUTO-01: lazy self-heal — if RH recycled the shared context,
+  // our cached _context is a stale reference. Mirrors ccsp-scraper.ts:762-770.
+  const liveCtx = getScrapeContext()
+  if (liveCtx && liveCtx !== _context) {
+    console.log('[sf-scraper] scrape: context swapped by RH — re-adopting live context')
+    _context = liveCtx
+    _profileDir = profileDir
   }
 
   await initSfContext(profileDir)
@@ -932,6 +957,9 @@ export interface SfReportItem {
 export async function listSfReports(): Promise<SfReportItem[]> {
   if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
     throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
+  if (process.env.IS_LEADER !== 'true') {
+    throw new Error('[sf-scraper] IS_LEADER not set — live SF report list not permitted on non-leader instance')
   }
   if (!_context) throw new Error('SF session not active — log in via Setup first')
 
