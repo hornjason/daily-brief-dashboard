@@ -4,15 +4,15 @@ import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeStart, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
-import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage, writeCasesCache } from './rh-scraper.ts'
+import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage, writeCasesCache, setContextRecoveryCallback } from './rh-scraper.ts'
 // BKL-RH-03 Phase 2 (ADR-014): Bearer transport for recurring case refresh
 import { BearerCaseClient, getConfiguredTransport } from './case-client.ts'
 import type { SupportCase } from './types.ts'
-import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess, SfSessionExpiredError } from './sf-scraper.ts'
+import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess, SfSessionExpiredError, adoptSfContext } from './sf-scraper.ts'
 import { recordScrapeFailure as recordConnectionFailure, recordScrapeSuccess as recordConnectionSuccess } from './connections/scrape-outcome.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
-import { ccspScrapeRunning, lastCcspScrape, lastCcspError } from './ccsp-scraper.ts'
+import { ccspScrapeRunning, lastCcspScrape, lastCcspError, adoptCcspContext, peekTableauSessionExpired } from './ccsp-scraper.ts'
 import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
@@ -358,6 +358,25 @@ export function initScraperManager(opts: {
   RH_CASES_CACHE_PATH = opts.rhCasesCachePath
   SF_SESSION_PATH = opts.sfSessionPath
   SF_REPORT_ID = opts.sfReportId
+
+  // BKL-CONN-SF-AUTO-01: Wire the RH context recovery callback so that when
+  // the shared Chromium context is auto-recovered or recycled, sister scrapers
+  // (SF and CCSP) re-adopt the new live context instead of holding stale refs.
+  // Supportable is permanently disabled — do not include it.
+  setContextRecoveryCallback((ctx, profileDir) => {
+    try {
+      if (getSfContext() !== ctx) {
+        adoptSfContext(ctx, profileDir)
+      }
+    } catch (e: any) {
+      console.warn('[scraper-manager] sf re-adopt failed:', e?.message ?? e)
+    }
+    try {
+      adoptCcspContext(ctx)
+    } catch (e: any) {
+      console.warn('[scraper-manager] ccsp re-adopt failed:', e?.message ?? e)
+    }
+  })
 }
 
 // ── Scraper state ───────────────────────────────────────────────────────────
@@ -930,11 +949,12 @@ export function registerScraperRoutes(app: Hono): void {
         recordCount: supportableStatus.recordCount ?? null,
       },
       ccsp: {
-        lastSync:    lastCcspScrape ?? ccspStatus.lastSuccess ?? null,
-        lastError:   lastCcspError ? lastCcspError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
-        isRunning:   ccspScrapeRunning || ccspInFlight,
-        isStale:     isStale(lastCcspScrape ?? ccspStatus.lastSuccess ?? null, intervals.ccsp),
-        recordCount: ccspStatus.recordCount ?? null,
+        lastSync:      lastCcspScrape ?? ccspStatus.lastSuccess ?? null,
+        lastError:     lastCcspError ? lastCcspError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
+        isRunning:     ccspScrapeRunning || ccspInFlight,
+        isStale:       isStale(lastCcspScrape ?? ccspStatus.lastSuccess ?? null, intervals.ccsp),
+        recordCount:          ccspStatus.recordCount ?? null,
+        tableauSessionExpired: peekTableauSessionExpired(),
       },
       rh: {
         lastSync:    lastScraped ?? rhStatus.lastSuccess ?? null,

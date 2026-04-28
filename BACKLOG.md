@@ -7448,3 +7448,175 @@ Files: src/bootstrap-orchestrator.ts, dashboard/src/pages/SetupPage.tsx
 Description: Inference errors are logged to console but never surfaced in autoBootstrapState or the UI. Users can't tell if inference failed for a customer. Add inferenceWarning field to state resources, show in bootstrap status card.
 Can we test: YES — mock a waterfall failure, verify inferenceWarning field is populated.
 
+### BKL-DOM-INF-06 | Domain inference batch: serial processing (concurrency=1)
+Status: ⏸ SUPERSEDED by BKL-DOM-BATCH-01
+Priority: P1
+Source: Council investigation 2026-04-27 — superseded by batch approach 2026-04-27
+
+### BKL-DOM-INF-07 | Clearbit: scan top-3 hits, not just hits[0]
+Status: ⏸ DEFERRED — Clearbit is now a fallback-only tier; top-3 scan lower priority
+Priority: P3
+Source: Council investigation 2026-04-27
+
+### BKL-DOM-INF-08 | tier3Validate: redirect:follow — SSRF hardening
+Status: ⏸ SUPERSEDED by BKL-DOM-BATCH-01 (Rook's simpler two-fix approach: isPublicDomain filter + redirect:manual)
+Priority: P2
+Source: Rook audit 2026-04-27 — simplified scope confirmed 2026-04-27
+
+### BKL-DOM-INF-09 | Don't save domain if tier3Validate returns false
+Status: ⏸ DEFERRED — tier3Validate skipped in auto-bootstrap path per design decision 2026-04-27
+Priority: P3
+Source: Council 2026-04-27
+
+### BKL-DOM-INF-10 | Fire-and-forget domain inference
+Status: ⏸ DEFERRED — batch inference completes in ~2s; blocking is correct at this speed. Decision 2026-04-27.
+Priority: P3
+Source: Council 2026-04-27
+
+### BKL-DOM-INF-11 | Add Wikidata tier
+Status: ⏸ DEFERRED — Gemini Flash-Lite batch resolves 96% without Wikidata. Revisit if coverage degrades.
+Priority: P3
+Source: Council 2026-04-27
+
+### BKL-DOM-INF-12 | Add Wikipedia infobox fallback
+Status: ⏸ DEFERRED — depends on Wikidata (INF-11); not needed at current coverage levels.
+Priority: P3
+Source: Council 2026-04-27
+
+### BKL-DOM-INF-13 | Surface unresolvable domains as "needs manual entry" in UI
+Status: 🔴 OPEN
+Priority: P3
+Size: M
+Source: Council investigation 2026-04-27 (Serena + user request)
+Files: src/bootstrap-orchestrator.ts, src/customers-routes.ts, dashboard/src/pages/SetupPage.tsx, dashboard/src/pages/HomePage.tsx
+Description: Companies like Condor Bidco are shell entities with no web presence — genuinely unresolvable by any tier. Currently these silently get no domain with no UI feedback. Fix: (1) add `needs_manual_domain: true` field to customer record when all tiers miss and domain remains null after inference; (2) show a badge on affected customer cards in HomePage ("Domain needed"); (3) link badge to Setup wizard domain field pre-focused on that customer. Condor Bidco is the known test case.
+Can we test: YES — mock all tiers returning null, verify needs_manual_domain=true written; verify badge renders.
+
+### BKL-DOM-BATCH-01 | Batch domain inference — Gemini Flash-Lite per-AE batch with fallback chain
+Status: ✅ DONE 2026-04-27
+Priority: P1
+Size: M
+Source: Council investigation + live testing 2026-04-27 (validated 22/23 in ~2.5s)
+Files: src/domain-waterfall.ts (new batchInferDomains function), src/bootstrap-orchestrator.ts (lines 2285-2363)
+Description: Replace the current per-company waterfall loop with a batch Gemini Flash-Lite approach. Tested and validated: 22/23 customers resolved in ~2.5s total across 2 AEs.
+
+Architecture:
+1. One Gemini Flash-Lite batch call per AE — all customer names in one prompt → JSON map {name: domain|null}. Chunk at 20 names per call if AE has >20 customers.
+2. Gemini retry — for any nulls from step 1, retry with a second batch call containing only the unresolved names. Second shot at hard cases (division names, legal entities).
+3. Clearbit fallback — for any still-null after retry, call tier1Clearbit per company.
+4. Signal fallback (last ditch) — for any still-null after Clearbit, run inferCustomerDomain (Gmail/Calendar). Last resort only.
+5. All 4 steps wrapped in a 60s outer Promise.race cap per AE — whatever resolves saves, the rest drops and bootstrap moves on.
+
+Security (Rook — YELLOW→GREEN fixes):
+- Add isPublicDomain() filter before any domain is used: rejects private IPs (10.x/172.16-31.x/192.168.x/127.x/169.254.x), localhost variants, and malformed strings.
+- Change tier3Validate redirect:'follow' → redirect:'manual' (tier3Validate is not called in auto-bootstrap path but fix applies for any manual validation path).
+- tier3Validate NOT called during auto-bootstrap — skip liveness check; bad domains fixable in Setup wizard.
+
+Other changes:
+- batchInferDomains() added to domain-waterfall.ts (exported, reusable)
+- Revert Marcus's fire-and-forget changes: autoBootstrapState.running=false goes back to AFTER inference completes
+- Filter !cx.domain upfront before building batch prompt — skip already-resolved customers
+- Timeout cap lowered from 120s → 60s
+- Structured log per AE: input count, resolved, source breakdown (gemini/clearbit/signal), total ms
+- Model: getGeminiModelLite() (Flash-Lite), not getGeminiModel()
+- JSON parse robustness: strip markdown fences, validate each entry is string|null, drop malformed entries to null
+
+Regression tests required (per CLAUDE.md rule):
+- REG-DOM-BATCH-01: batch resolves known companies correctly (REI, Taylor Fresh Foods, Intrado, Uber)
+- REG-DOM-BATCH-02: Gemini failure falls through to Clearbit-only path
+- REG-DOM-BATCH-03: partial JSON response treats missing entries as null and retries them
+- REG-DOM-BATCH-04: already-resolved customers (cu.domain set) are skipped in batch prompt
+- REG-DOM-BATCH-05: 60s cap fires correctly; running=false only after inference completes
+
+Can we test: YES — all 5 regression tests above; bootstrap Elmer+Carolanne on 7776 and verify domains.
+
+### BKL-CONN-SF-AUTO-01 | SF + CCSP don't auto-recover after shared browser context crash/recycle
+Status: ✅ DONE 2026-04-27
+Decision: Implementation council-reviewed 4/4 PASS 2026-04-27. All 8 regression tests (REG-CONN-SF-AUTO-01-04 + REG-DOM-BATCH-01-04) green under ci project. Promoted to prod.
+Priority: P1
+Size: M
+Source: Council investigation 2026-04-27 (Serena + Marcus + Quinn + full arch review)
+Files: src/scraper-manager.ts (callback registration), src/sf-scraper.ts (lazy self-heal), src/rh-scraper.ts (recycle path notification)
+Description: When the shared Chromium browser context crashes or is recycled (every 50 scrapes), SF and CCSP lose their sessions and do not auto-recover. RH Portal auto-recovers via its own disconnect handler; Tableau uses an isolated profile + disk cookies (unaffected). SF requires manual VNC re-login each time.
+
+Root cause: Three compounding gaps —
+1. setContextRecoveryCallback in rh-scraper.ts is exported but never called anywhere. _onContextRecovered fires into a void on every crash/recovery.
+2. sf-scraper.ts holds a cached _context reference set once at adoptSfContext time and never refreshes it — unlike ccsp-scraper.ts which lazily calls getScrapeContext() at every scrape entry (lines 763-768).
+3. Context recycle path (rh-scraper.ts:943-980) silently closes and relaunches context without firing the recovery callback to siblings.
+Additionally: SF keep-alive failing on dead context fires _onSessionExpired → 4-hour circuit breaker pin → forces manual VNC re-login even for a self-recoverable dead reference.
+
+Three surgical changes (no scraper logic changes, wiring only):
+A. background-scheduler.ts (init, ~6 lines): Register setContextRecoveryCallback to call adoptSfContext + adoptCcspContext on every RH context recovery event.
+B. sf-scraper.ts (keepAlive + scrape entry, ~5 lines): At top of keepAlive() and scrapeSfReport, refresh from getScrapeContext() if cached _context is null or closed. Mirrors ccsp-scraper.ts:763-768 exactly.
+C. rh-scraper.ts (~3 lines at line 975): After context recycle relaunch, fire _onContextRecovered so siblings are notified same as crash-recovery path.
+
+Guards to add in adoptSfContext:
+- Skip if incoming ctx is same reference already held (no-op)
+- Skip if loginInProgress === true (don't stomp in-flight VNC login)
+- Reset SF circuit breaker on successful re-adoption
+
+Important: Do NOT gate auto-adoption on .sf-session.json existence. SSO session lives in Chromium profile dir cookies, not the marker file.
+
+Optional follow-ups (separate items, do not bundle):
+- Drop 4h SF circuit breaker pin to ~5min for dead-context failures vs true SSO expiry
+- Single connection status source of truth (eliminate UI flicker from split status sources)
+- Browser-level liveness probe (_context.browser()?.isConnected())
+
+Regression tests required:
+- REG-CONN-SF-AUTO-01: after RH context restored, getSfAuthStatus.hasSession === true without SF login flow
+- REG-CONN-SF-AUTO-02: no adoption when getSfContext() already non-null (no-op / same ref)
+- REG-CONN-SF-AUTO-03: no crash/adoption when loginInProgress === true
+- Post-edit: verify existing TABLEAU-CTX grep tests still pass after new SF imports in rh-scraper.ts scope
+
+Can we test: YES — simulate disconnect, assert SF context restored without VNC. Live test: 7776 bootstrap then kill context, verify auto-recovery.
+
+
+### BKL-CASES-MATCH-01 | REG-021 failing: cases not matching accounts by accountNumber or name
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: CI regression run 2026-04-27 (post BKL-CONN-SF-AUTO-01 + BKL-DOM-BATCH-01 promote)
+Files: src/routes/cases.ts or cases cache, /api/accounts response
+Description: REG-021 checks that all cases from /api/cases/all match at least one account from /api/accounts by accountNumber or customerName. Currently 32 cases present (real account numbers: 5856163, 1530865, 1025778) but /api/accounts returns 10 customers with empty accountNumbers arrays (A10 Networks [], Dropbox []). matchedIds.size = 0.
+Root cause: accountNumbers empty on accounts — either not populated from CCSP scrape or mapping lost.
+Pre-existing: Not introduced by CONN-SF-AUTO or DOM-BATCH changes (those don't touch cases/accounts pipeline).
+
+Can we test: YES — REG-021 is already the test. Fix requires populating accountNumbers in /api/accounts response.
+
+### BKL-INTEL-TIMEOUT-01 | Account intelligence pipeline stalls on Vertex AI slow-latency days
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Live observation 2026-04-28 — A10 Networks intelligence took 6+ min (still running)
+Files: src/account-intelligence.ts (lines 164-174), src/gemini-fetch.ts (retry logic)
+Description: Each of the 3 Gemini grounded calls in the intelligence pipeline uses a 120s per-attempt timeout with up to 2 retries (fetchGeminiWithRetry). On a Vertex slow-latency day, worst case is 3 calls × 3 attempts × 120s = ~18 min wall time per customer. No outer cap on the full pipeline exists.
+
+Observed: Company intelligence generated (20409 chars) successfully on attempt 1, then timeout on attempt 2 — the second of 3 calls — causing the pipeline to stall visibly for 6+ min.
+
+Options to evaluate:
+1. Reduce per-attempt timeout: 120s → 60s for grounded calls (Flash is fast enough; 120s was conservative)
+2. Add outer Promise.race cap on the full generateAccountIntelligence call (e.g. 3-4 min hard ceiling)
+3. Reduce retry count from 2 → 1 for timeout errors (saves one 120s burn per slow call)
+4. Combination: 60s timeout + 1 retry + 4 min outer cap
+
+Can we test: YES — unit test that fetchGeminiWithRetry respects reduced timeout; integration observation on next bootstrap.
+
+### BKL-CCSP-STATUS-01 | CCSP shows "connected" and closes VNC before user can log in to Tableau
+Status: ✅ DONE 2026-04-28
+Priority: P1
+Size: M
+Source: Live observation 2026-04-28 — 0 CCSP records after bootstrap, status shows connected, VNC closes before username can be entered
+Files: src/ccsp-scraper.ts (lines 31, 36, 546-554), src/scraper-manager.ts (lines 940-956)
+Description: Two compounding problems:
+
+Problem 1 — VNC window closes immediately on SSO detection:
+When CCSP navigates to 10ay.online.tableau.com and hits the Tableau SSO login page (sso.online.tableau.com/public/idp/SSO), it throws "Tableau session required" immediately, which closes the page and the VNC window. User cannot type their username before it disappears. SSO flow: user enters username → Red Hat SSO completes → lands on 10ay.online.tableau.com. But scraper never gives the user time to complete that flow.
+
+Problem 2 — Connection status shows "connected" when session is dead:
+_tableauSessionExpired is set but scraper-manager never reads it. Circuit breaker doesn't trip because scraper exits cleanly. Dashboard shows green "connected" with 0 records.
+
+Fix for Problem 1 (core fix): When SSO page is detected, instead of throwing immediately — keep the page open and poll for successful redirect to 10ay.online.tableau.com for up to 5 minutes. Emit a log/status signal so the UI can show "waiting for Tableau login via VNC." Once the URL changes to 10ay.online.tableau.com (user completed SSO), save the new cookies, continue the scrape.
+
+Fix for Problem 2 (status fix): Wire consumeTableauSessionExpired() (line 146) into scraper-manager CCSP status block as sessionExpired field. Frontend shows auth-needed state when true.
+
+Can we test: YES — regression test that scraper-manager CCSP status surfaces sessionExpired; manual VNC flow test on 7776 after fix.

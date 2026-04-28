@@ -149,6 +149,11 @@ export function consumeTableauSessionExpired(): boolean {
   return v
 }
 
+/** Non-consuming read — safe for polling status endpoints that may be called repeatedly. */
+export function peekTableauSessionExpired(): boolean {
+  return _tableauSessionExpired
+}
+
 export function adoptCcspContext(ctx: BrowserContext): void {
   _ctx = ctx
   console.log('[ccsp] adopted shared browser context')
@@ -549,9 +554,37 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
     currentUrl.includes('/auth') || currentUrl.includes('/login') ||
     await page.$('input[type="password"], input#username, [data-testid="login"]').then(el => !!el).catch(() => false)
   if (isLoginPage) {
-    console.warn(`[ccsp] ${ae.name}: Tableau session not active (on login page: ${currentUrl}) — skipping scrape`)
+    console.log(`[ccsp] ${ae.name}: Tableau SSO detected — waiting up to 5 min for manual login via VNC`)
     _tableauSessionExpired = true
-    throw new Error('Tableau session required — log in via the VNC window and retry')
+    const deadline = Date.now() + 5 * 60 * 1000
+    let loggedIn = false
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(2_000)
+      const url = page.url()
+      if (!url.startsWith('https://10ay.online.tableau.com')) continue
+      await page.waitForTimeout(1_500)
+      if (page.url() !== url) continue
+      const noLoginForm = await page.evaluate(() => {
+        const els = Array.from(document.querySelectorAll('input[type="password"], input#username, [data-testid="login"]'))
+        return !els.some(el => {
+          const s = window.getComputedStyle(el)
+          return s.display !== 'none' && s.visibility !== 'hidden' && (el as HTMLElement).offsetParent !== null
+        })
+      }).catch(() => false)
+      const hasTableauContent = await page.$('.tab-glassPane, iframe[id^="tableau"]').then(el => !!el).catch(() => false)
+      if (noLoginForm && hasTableauContent) {
+        console.log(`[ccsp] ${ae.name}: Tableau login detected — saving cookies and continuing`)
+        if (_ctx) await saveTableauSession(_ctx)
+        _tableauSessionExpired = false
+        loggedIn = true
+        break
+      }
+    }
+    if (!loggedIn) {
+      console.warn(`[ccsp] ${ae.name}: Tableau login timed out after 5 min — skipping scrape`)
+      _tableauSessionExpired = true
+      throw new Error('Tableau session required — log in via the VNC window and retry')
+    }
   }
 
   console.log(`[ccsp] ${ae.name}: page loaded, waiting for viz to render...`)

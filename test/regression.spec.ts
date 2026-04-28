@@ -975,6 +975,50 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toContain('sfSessionExpired')
   })
 
+  // ── BKL-CONN-SF-AUTO-01: SF/CCSP auto-recovery wiring ──────────────────────
+
+  test('REG-CONN-SF-AUTO-01: scraper-manager wires setContextRecoveryCallback', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf8')
+    expect(src).toMatch(/setContextRecoveryCallback\s*\(/)
+    expect(src).toContain('adoptSfContext')
+    expect(src).toContain('adoptCcspContext')
+  })
+
+  test('REG-CONN-SF-AUTO-02: sf-scraper adoptSfContext has same-ref no-op guard', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf8')
+    expect(src).toMatch(/adoptSfContext[\s\S]{0,400}_context\s*===\s*context[\s\S]{0,40}return/)
+  })
+
+  test('REG-CONN-SF-AUTO-03: sf-scraper refreshes context via getScrapeContext', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf8')
+    expect(src).toContain("from './rh-scraper.ts'")
+    expect(src).toContain('getScrapeContext')
+    const matches = src.match(/getScrapeContext\s*\(\s*\)/g) ?? []
+    expect(matches.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('REG-CONN-SF-AUTO-04: rh-scraper recycle path fires _onContextRecovered', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf8')
+    const matches = src.match(/_onContextRecovered\s*\(/g) ?? []
+    expect(matches.length).toBeGreaterThanOrEqual(2)
+  })
+
+  // ── BKL-CCSP-STATUS-01: CCSP SSO wait + session status wiring ─────────────
+
+  test('REG-CCSP-SSO-01: scraper-manager uses peekTableauSessionExpired (non-consuming) in ccsp status', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf8')
+    expect(src).toContain('peekTableauSessionExpired')
+    expect(src).toMatch(/tableauSessionExpired\s*:\s*peekTableauSessionExpired\s*\(\s*\)/)
+  })
+
+  test('REG-CCSP-SSO-02: ccsp-scraper SSO detection polls with timeout instead of immediately throwing', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf8')
+    expect(src).toContain('Date.now() < deadline')
+    expect(src).toContain('saveTableauSession')
+    expect(src).toContain('peekTableauSessionExpired')
+    expect(src).toMatch(/isLoginPage[\s\S]{0,1000}Date\.now\(\)/)
+  })
+
   // ── REG-INTEL-DRIVE-FOLDER-01: pipeline survives missing Drive folder ───
   test('REG-INTEL-DRIVE-FOLDER-01: writeIntelligenceDocs failure is non-fatal', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/account-intelligence.ts'), 'utf8')
@@ -1546,8 +1590,10 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
     // could contaminate an inactive or different-AE customer of the same name.
     const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
     expect(src).toContain('cx.name === name && cx.ae === ae && !cx.inactive')
-    // And the saves array must carry the ae field forward
-    expect(src).toContain('highConfidenceSaves.push({ name: cu.name, domain: wf.domain, ae: aeName })')
+    // And the saves array must carry the ae field forward (BKL-DOM-BATCH-01:
+    // batch path pushes `domain` directly; signal fallback pushes `top.domain`).
+    expect(src).toContain('highConfidenceSaves.push({ name: cu.name, domain, ae: aeName })')
+    expect(src).toContain('highConfidenceSaves.push({ name: r.customerName, domain: top.domain, ae: aeName })')
   })
 
   test('REG-DOM-03: nameMatchesClearbit accepts canonical brand match', async () => {
@@ -1566,21 +1612,49 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
     expect(nameMatchesClearbit('Inc', 'LLC')).toBe(false)
   })
 
-  test('REG-DOM-04: domain inference IIFE is awaited with timeout + capturedState', () => {
-    // Source-level verification of the structural fixes:
-    //  - capturedState pin (Fix 1) so resources writes do not clobber the next AE's state
-    //  - 120s Promise.race timeout (Fix 4) so a hung Clearbit call cannot stall bootstrap
-    //  - inferenceRunning flag (Fix 5) tied to the 409 gate and POD wait loop
-    //  - _customerWriteLock mutex (Fix 2) serializing customers.json writes
-    //  - Error logging (Fix 6) on both waterfall and signal fallback catches
+  test('REG-DOM-04: domain inference is awaited inline with 60s timeout + capturedState', () => {
+    // Source-level verification of the structural fixes (BKL-DOM-BATCH-01):
+    //  - capturedState pin so resources writes do not clobber the next AE's state
+    //  - 60s Promise.race timeout so a hung call cannot stall bootstrap
+    //  - inferenceRunning flag tied to the 409 gate and POD wait loop
+    //  - _customerWriteLock mutex serializing customers.json writes
+    //  - Error logging on the signal fallback catch
     const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
     expect(src).toContain('const capturedState = autoBootstrapState')
-    expect(src).toContain('setTimeout(() => { timedOut = true; resolve() }, 120_000)')
+    expect(src).toContain('setTimeout(() => { inferenceTimedOut = true; resolve() }, 60_000)')
     expect(src).toMatch(/let inferenceRunning = false/)
     expect(src).toMatch(/let _customerWriteLock: Promise<void>/)
     expect(src).toContain('autoBootstrapState.running || inferenceRunning')
-    expect(src).toContain('[infer-domains] waterfall error for')
     expect(src).toContain('[infer-domains] signal fallback error for')
     expect(src).toContain('capturedState.resources.domainInference = inferenceResults')
+  })
+
+  // ── BKL-DOM-BATCH-01: batch domain inference replaces per-company waterfall ──
+
+  test('REG-DOM-BATCH-01: batchInferDomains is exported from domain-waterfall.ts', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/domain-waterfall.ts'), 'utf8')
+    expect(src).toMatch(/export\s+async\s+function\s+batchInferDomains\s*\(/)
+  })
+
+  test('REG-DOM-BATCH-02: tier3Validate uses redirect: manual (not follow)', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/domain-waterfall.ts'), 'utf8')
+    expect(src).toContain("redirect: 'manual'")
+    expect(src).not.toContain("redirect: 'follow'")
+  })
+
+  test('REG-DOM-BATCH-03: isPublicDomain rejects loopback / link-local / localhost', async () => {
+    process.env.CONFIG_DIR = process.env.CONFIG_DIR ?? path.join(__dirname, '../config')
+    const { isPublicDomain } = await import('../src/domain-waterfall.ts')
+    expect(isPublicDomain('127.0.0.1')).toBe(false)
+    expect(isPublicDomain('169.254.169.254')).toBe(false)
+    expect(isPublicDomain('localhost')).toBe(false)
+    expect(isPublicDomain('foo.local')).toBe(false)
+    expect(isPublicDomain('rei.com')).toBe(true)
+  })
+
+  test('REG-DOM-BATCH-04: bootstrap inference uses 60s timeout (not 120s)', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    expect(src).toContain('60_000')
+    expect(src).not.toMatch(/inferenceTimedOut = true; resolve\(\) \}, 120_000/)
   })
 })
