@@ -25,6 +25,7 @@ const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 const TABLEAU_COOKIE_AGE_MS = parseInt(process.env.TABLEAU_COOKIE_AGE_MS ?? '') || 8 * 60 * 60 * 1000  // 8 hours — same as Tableau SSO TTL (env-overridable)
 // Match ccsp-scraper.ts cookie filter exactly (line 48): includes('tableau.com') || includes('online.tableau')
 const TABLEAU_COOKIE_DOMAINS = ['tableau.com', 'online.tableau']
+const TABLEAU_USER_EMAIL = process.env.TABLEAU_USER_EMAIL ?? ''
 
 let activeContext: BrowserContext | null = null
 let activePage: Page | null = null
@@ -194,6 +195,31 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
 
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, LOGIN_POLL_INTERVAL_MS))
+
+    // Auto-fill email if env var is set and we're on the email entry page
+    if (TABLEAU_USER_EMAIL && loginInProgress && page) {
+      try {
+        const url = page.url()
+        const onEmailPage = !url.includes('/site/') || !url.includes('/views/')
+        if (onEmailPage) {
+          const emailInput = await page.$('input[name="email"], input[type="email"], input[placeholder*="mail" i]')
+            .catch(() => null)
+          if (emailInput) {
+            const currentVal = await emailInput.inputValue().catch(() => '')
+            if (!currentVal) {
+              await emailInput.fill(TABLEAU_USER_EMAIL)
+              await new Promise(r => setTimeout(r, 300))
+              const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Sign in"), button:has-text("Next")')
+                .catch(() => null)
+              if (submitBtn) {
+                await submitBtn.click().catch(() => {})
+                console.log(`[tableau-auth] auto-filled email ${TABLEAU_USER_EMAIL} and clicked submit`)
+              }
+            }
+          }
+        }
+      } catch { /* non-fatal — user can type manually */ }
+    }
 
     if (!loginInProgress || activePage !== page) return false
 

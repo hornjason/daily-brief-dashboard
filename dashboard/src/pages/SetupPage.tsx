@@ -3069,11 +3069,22 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
       setTableauConnecting(false)
     }
 
-    // Primary: server-side Playwright URL detection
-    fetch('/api/bootstrap/tableau/wait-for-login')
-      .then(r => r.json())
-      .then(status => resolveLogin(status.sessionValid))
-      .catch(() => resolveLogin(false))
+    // Primary: server-side Playwright URL detection — re-polls on 90s timeout
+    // until loginResolved is true (success, hard cap, or VNC closed by user).
+    const pollWaitForLogin = async () => {
+      while (!loginResolved) {
+        try {
+          const r = await fetch('/api/bootstrap/tableau/wait-for-login')
+          const status = await r.json()
+          if (status.sessionValid) { resolveLogin(true); return }
+          // 90s server timeout — re-poll if still waiting
+        } catch {
+          // network error — re-poll after brief delay
+          await new Promise(res => setTimeout(res, 2_000))
+        }
+      }
+    }
+    pollWaitForLogin()
 
     // Fallback: poll session-status every 5s — catches cases where wait-for-login
     // detection misses the login (SSO URL variation, slow redirect chain)
@@ -3092,7 +3103,7 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
 
     // Hard cap — stop polling after 120s regardless.
     // BKL-CONN-TABLEAU-TIMEOUT-REF-01: store timer ID so unmount cleanup can clear it.
-    tableauTimeoutRef.current = setTimeout(() => resolveLogin(false), 120_000)
+    tableauTimeoutRef.current = setTimeout(() => resolveLogin(false), 300_000)
   }
 
   const handleRhSync = async () => {
