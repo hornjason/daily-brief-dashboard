@@ -521,6 +521,12 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
     return { aeName: ae.name, rows, accountPeriod: label }
   }
 
+  // IS_LEADER guard — non-leader instances cap at L3; only leader may do live Tableau scrape (L4)
+  if (process.env.IS_LEADER !== 'true') {
+    console.log(`[ccsp] ${ae.name}: non-leader instance — L4 (live Tableau scrape) not permitted; returning empty`)
+    return { aeName: ae.name, rows: [], accountPeriod: label }
+  }
+
   // -- Build URL with filters pre-applied -------------------------------------
   // Tableau Cloud supports URL-based filtering (?FilterName=Value) — this is
   // far more reliable than clicking UI filter dropdowns inside deeply-nested
@@ -819,6 +825,10 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
   // Must be the first check, before any browser/network work.
   if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
     throw new Error('[ccsp-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
+  }
+
+  if (process.env.IS_LEADER !== 'true') {
+    console.log('[ccsp] IS_LEADER not set — this instance will cap at L3 for all AEs')
   }
 
   // Re-sync context in case RH scraper recycled it (every 50 scrapes).
