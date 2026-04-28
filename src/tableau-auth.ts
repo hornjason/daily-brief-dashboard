@@ -142,6 +142,16 @@ export async function startTableauLoginBrowser(): Promise<void> {
   try {
     setLivePageBusy(true)
     activeContext = sharedCtx  // reference only — we do NOT own this context
+
+    // Clear Tableau cookies so SSO always starts fresh — prevents old/seeded cookies
+    // from navigating directly to the dashboard and falsely triggering login detection.
+    const existingCookies = await sharedCtx.cookies()
+    const nonTableauCookies = existingCookies.filter(c =>
+      !TABLEAU_COOKIE_DOMAINS.some(d => c.domain.includes(d))
+    )
+    await sharedCtx.clearCookies()
+    if (nonTableauCookies.length > 0) await sharedCtx.addCookies(nonTableauCookies)
+
     const page = await sharedCtx.newPage()
     activePage = page
 
@@ -218,8 +228,7 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
     }
   }
 
-  console.warn('[tableau-auth] login timed out')
-  await _closeContext({ harvest: false })
+  console.warn('[tableau-auth] wait-for-login: poll cycle timed out — VNC stays open, client re-polls')
   return false
 }
 

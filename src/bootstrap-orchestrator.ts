@@ -2495,6 +2495,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   // chain cannot corrupt the scraper anchor page or hang sister scrapers.
   app.post('/api/bootstrap/tableau/open-login', async (c) => {
     // BKL-CONN-TABLEAU-CTX-01: isolated context — no longer requires active RH session
+    _tableauStatusCache = null  // force fresh probe on next status check
     try {
       await startTableauLoginBrowser()
       console.log('[tableau] isolated Chromium launched for Tableau login — visible at localhost:6080')

@@ -7663,3 +7663,45 @@ AUTONOMOUS WORK DONE (2026-04-28 while Jason sleeping):
 - VNC stability fixes: 5s stability window (was 500ms), close restored persistent context pages on login launch
 
 NEXT: Jason approves ADR-015 → Marcus implements Option B → Quinn validates VNC flow on 7776 → single end-to-end CCSP scrape confirms csv_ok
+
+### BKL-CONN-TABLEAU-TIMEOUT-VNC-01 | Tableau VNC closes at 90s — too short for full SAML chain
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Session 2026-04-28 (Jason empirical SSO testing)
+Files: src/bootstrap-orchestrator.ts, dashboard/src/pages/SetupPage.tsx
+Description: The wait-for-login endpoint times out after 90s. The full Tableau login chain (email entry → Tableau redirects to auth.redhat.com → SAML assertion → credential entry → redirect back → Tableau loads) takes 2-4 minutes. The frontend treats the 90s timeout as failure and closes VNC. Fix: raise timeout to 5 minutes, and close VNC on auth-marker detection (`.tab-glassPane` present), not on the clock.
+Acceptance: Tableau VNC stays open until `.tab-glassPane` is visible or 5 min hard ceiling. Credential prompt inside VNC stays up and usable for full SAML chain.
+
+### BKL-CONN-TABLEAU-EMAIL-AUTOFILL-01 | Tableau login requires manual email entry — should auto-fill
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Session 2026-04-28
+Files: src/tableau-auth.ts
+Description: Every Tableau VNC login requires Jason to manually type his email in the Tableau email entry page before the SAML redirect fires. We can auto-fill the known Red Hat email address and click Next programmatically, leaving only the credential entry step (PIN+token) for the user. Reduces manual steps from 3 (email, Next, credentials) to 1 (credentials).
+Acceptance: When VNC opens for Tableau, email field is auto-filled and Next is auto-clicked. User sees the SSO credential screen immediately.
+
+### BKL-ARCH-LEADER-FLAG-01 | Leader flag: one instance does L4 scrapes, all others read Drive only
+Status: 🔴 OPEN
+Priority: P1
+Size: L
+Source: Session 2026-04-28 (Jason architecture decision)
+Description: For 50-user deployment, one instance (Mac Mini or designated host) is the L4 scraper. It runs CCSP/SF L4 scrapes and writes results to Google Drive (L3). All other instances read Drive only — no SSO or browser session needed beyond one-time Drive OAuth. Non-leader wizard Step 3 (RH/SF/Tableau logins) is hidden entirely. Leader instance is set via LEADER=true in .env. Design per Serena council review 2026-04-28.
+Acceptance: LEADER=true instance runs all L4 scrapes on schedule. LEADER=false instances skip Step 3, show Drive-only connection status, never touch Tableau/SF/RH scraper endpoints.
+
+### BKL-ARCH-HEARTBEAT-01 | Session heartbeat: periodic lightweight navigation to keep sessions alive overnight
+Status: 🔴 OPEN
+Priority: P1
+Size: M
+Source: Session 2026-04-28 (Serena council review)
+Description: Tableau and SF sessions expire in ~2h of idle. Leader instance needs periodic lightweight page navigation (not full scrape) to reset the server-side idle timeout. Fixed 90-minute interval per Serena recommendation (cookie expires=-1, adaptive scheduling impossible). Each heartbeat navigates to the service URL and asserts on an auth marker (DOM element only present when authenticated). Uses SessionMutex to avoid racing active scrapes. Logs every heartbeat outcome.
+Acceptance: Sessions survive overnight without manual re-login on leader instance. Heartbeat logs visible in admin panel. Full scrape still succeeds after overnight heartbeat-kept sessions.
+
+### BKL-CONN-TABLEAU-SSO-SHARE-01 | Investigate why auth.redhat.com session not auto-satisfying Tableau SAML after SF login
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Session 2026-04-28 (empirical testing — SSO credential prompt appeared despite recent auth.redhat.com login)
+Description: After SF login establishes shared context (which includes auth.redhat.com session), Tableau's SAML redirect to auth.redhat.com should auto-authenticate without credential prompt. Today's test showed credential prompt still appearing. Need to confirm: (1) auth.redhat.com session IS present in shared context at time of Tableau SAML redirect, (2) the session is being sent in the SAML request, (3) Tableau's SSO realm matches the one established by SF login. May be a session TTL issue (2h expired) or a cookie domain issue.
+Acceptance: After SF login completes, Tableau SAML redirect auto-authenticates without credential prompt. User only needs to type Tableau email, then lands on dashboard.

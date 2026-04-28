@@ -108,11 +108,12 @@ describe('deriveTableauCard', () => {
     expect(c.countsAsConnected).toBe(false)
   })
 
-  test('session valid, no CCSP data → Connected first sync, COUNTED (fixes Stale bug)', () => {
+  test('session valid, no CCSP data → verifying CCSP (amber, not counted)', () => {
     const c = deriveTableauCard({ sessionValid: true, reachable: true }, { state: null, lastScrape: null, lastError: null }, false)
     expect(c.sessionState).toBe('active')
-    expect(c.label).toBe('Connected — first sync…')
-    expect(c.countsAsConnected).toBe(true)  // KEY BUG FIX: was showing 'Stale' before
+    expect(c.label).toBe('Session active — verifying CCSP…')
+    expect(c.countsAsConnected).toBe(false)
+    expect(c.dotColor).toBe('amber')
   })
 
   test('session valid, CCSP stale → Connected — refreshing, COUNTED (fixes Stale bug)', () => {
@@ -128,7 +129,7 @@ describe('deriveTableauCard', () => {
     expect(c.countsAsConnected).toBe(true)
   })
 
-  test('session valid, CCSP scrape failed → Connected — sync failed, counted', () => {
+  test('session valid, CCSP scrape failed → Connected — sync failed, NOT counted (no verified download)', () => {
     const c = deriveTableauCard(
       { sessionValid: true, reachable: true },
       { state: 'failed', lastScrape: null, lastError: 'Sheet not found' },
@@ -136,7 +137,7 @@ describe('deriveTableauCard', () => {
     )
     expect(c.dataState).toBe('failed')
     expect(c.label).toBe('Connected — sync failed')
-    expect(c.countsAsConnected).toBe(true)
+    expect(c.countsAsConnected).toBe(false)
   })
 
   test('connecting = true → Logging in, not counted', () => {

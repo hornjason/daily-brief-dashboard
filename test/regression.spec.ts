@@ -1073,6 +1073,63 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toContain('skipping disk restore')
   })
 
+  test('REG-CCSP-SSO-08: deriveTableauCard countsAsConnected false when ccsp.lastScrape null', async () => {
+    const { deriveTableauCard } = await import('../dashboard/src/lib/connection-state')
+    const card = deriveTableauCard(
+      { sessionValid: true, reachable: true },
+      { state: 'stale', lastScrape: null, lastError: null, running: false },
+      false,
+      null
+    )
+    expect(card.countsAsConnected).toBe(false)
+    expect(card.dotColor).not.toBe('green')
+  })
+
+  test('REG-CCSP-SSO-09: deriveTableauCard countsAsConnected true when ccsp.lastScrape set', async () => {
+    const { deriveTableauCard } = await import('../dashboard/src/lib/connection-state')
+    const card = deriveTableauCard(
+      { sessionValid: true, reachable: true },
+      { state: 'fresh', lastScrape: '2026-01-01T00:00:00Z', lastError: null, running: false },
+      false,
+      null
+    )
+    expect(card.countsAsConnected).toBe(true)
+    expect(card.dotColor).toBe('green')
+  })
+
+  test('ISC-13: deriveTableauCard with ccsp.lastScrape null returns countsAsConnected false', async () => {
+    const { deriveTableauCard } = await import('../dashboard/src/lib/connection-state')
+    const card = deriveTableauCard(
+      { sessionValid: true, reachable: true },
+      { state: null, lastScrape: null, lastError: null, running: false },
+      false,
+      null
+    )
+    expect(card.countsAsConnected).toBe(false)
+  })
+
+  test('ISC-14: deriveTableauCard with ccsp.lastScrape set returns countsAsConnected true', async () => {
+    const { deriveTableauCard } = await import('../dashboard/src/lib/connection-state')
+    const card = deriveTableauCard(
+      { sessionValid: true, reachable: true },
+      { state: null, lastScrape: '2026-01-01T00:00:00Z', lastError: null, running: false },
+      false,
+      null
+    )
+    expect(card.countsAsConnected).toBe(true)
+    expect(card.dotColor).toBe('green')
+  })
+
+  test('ISC-15: startTableauLoginBrowser uses shared context not launchPersistentContext', () => {
+    // Covered by REG-CCSP-SSO-06 — this test documents the invariant explicitly.
+    const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
+    const fnStart = src.indexOf('export async function startTableauLoginBrowser')
+    const fnEnd = src.indexOf('\nexport ', fnStart + 1)
+    const fnBody = src.slice(fnStart, fnEnd === -1 ? fnStart + 2000 : fnEnd)
+    expect(fnBody).toContain('getScrapeContext')
+    expect(fnBody).not.toContain('launchPersistentContext')
+  })
+
   // ── REG-INTEL-DRIVE-FOLDER-01: pipeline survives missing Drive folder ───
   test('REG-INTEL-DRIVE-FOLDER-01: writeIntelligenceDocs failure is non-fatal', () => {
     const src = fs.readFileSync(path.join(__dirname, '../src/account-intelligence.ts'), 'utf8')

@@ -170,5 +170,21 @@ export function deriveTableauCard(
   }
   // else: dataState stays 'never', label stays 'Connected — first sync…'
 
-  return { sessionState, dataState, label: dataLabel, secondaryLabel, dotColor, dotPulse, countsAsConnected: true }
+  // Only count as connected after at least one successful CCSP download.
+  // Cookie freshness alone is not sufficient — seeded/old cookies may be present
+  // without ever having successfully downloaded CCSP data.
+  const hasVerifiedDownload = !!(ccsp?.lastScrape)
+  if (!hasVerifiedDownload && !ccsp?.running && !ccsp?.lastError) {
+    return {
+      sessionState,
+      dataState: 'never',
+      label: 'Session active — verifying CCSP…',
+      secondaryLabel: null,
+      dotColor: 'amber',
+      dotPulse: false,
+      countsAsConnected: false,
+    }
+  }
+
+  return { sessionState, dataState, label: dataLabel, secondaryLabel, dotColor, dotPulse, countsAsConnected: hasVerifiedDownload }
 }
