@@ -166,8 +166,7 @@ export async function startTableauLoginBrowser(): Promise<void> {
     _activeSsoPopupHandler = (newPage: Page) => {
       if (!loginInProgress) return
       if (newPage === activePage) return
-      console.log('[tableau-auth] SSO opened popup — closing it; original tab continues SSO flow')
-      setTimeout(() => newPage.close().catch(() => {}), 500)
+      console.log('[tableau-auth] SSO opened new tab — letting it proceed (auth may need it)')
     }
     sharedCtx.on('page', _activeSsoPopupHandler)
 
