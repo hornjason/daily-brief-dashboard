@@ -116,7 +116,7 @@ export default defineConfig({
   webServer: process.env.CI ? {
     command: 'bun run server.ts',
     url: 'http://localhost:7777',
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 30_000,
   } : undefined,
 })
