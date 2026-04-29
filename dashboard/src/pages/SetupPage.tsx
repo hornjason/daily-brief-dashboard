@@ -3543,9 +3543,11 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
                 <button
                   onClick={handleTableauConnect}
                   /* BKL-CONN-ARCH-01: gate Tableau on RH being connected (ordering) */
-                  disabled={!rhCard.countsAsConnected || tableauConnecting}
-                  title={!rhCard.countsAsConnected ? 'Connect Red Hat Portal first' : undefined}
-                  className={`disabled:opacity-40 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${tableauConnected ? 'bg-surface-hover hover:bg-surface-active text-white' : 'bg-blue-600/40 hover:bg-blue-600/50 text-blue-300 border border-blue-500/60'}`}
+                  /* BKL-STAB-01: disable when session already valid — clicking Connect on a live session
+                     opens a stale Tableau page in the shared context, poisoning newPage() for all scrapes */
+                  disabled={!rhCard.countsAsConnected || tableauConnecting || tableauConnected}
+                  title={!rhCard.countsAsConnected ? 'Connect Red Hat Portal first' : tableauConnected ? 'Tableau session is active — disconnect first to reconnect' : undefined}
+                  className={`disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${tableauConnected ? 'bg-surface/40 text-text-secondary border border-border' : 'bg-blue-600/40 hover:bg-blue-600/50 text-blue-300 border border-blue-500/60'}`}
                 >
                   {tableauConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
                   {tableauConnecting ? 'Connecting...' : tableauConnected ? 'Reconnect' : 'Connect'}
