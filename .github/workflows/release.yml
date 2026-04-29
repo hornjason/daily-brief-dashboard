@@ -111,12 +111,24 @@ jobs:
 
       - name: Publish release to public repo
         env:
-          GH_TOKEN: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
+          DEPLOY_TOKEN: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
+          VERSION: ${{ steps.version.outputs.tag }}
         run: |
-          gh release create ${{ steps.version.outputs.tag }} \
-            --repo hornjason/daily-brief-dashboard \
-            --title "${{ steps.version.outputs.tag }}" \
-            --generate-notes \
-            scripts/setup.sh \
-            .env.example \
-            docker-compose.yml
+          # Create the release
+          RELEASE=$(curl -sf -X POST \
+            -H "Authorization: token $DEPLOY_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/hornjason/daily-brief-dashboard/releases \
+            -d "{\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"generate_release_notes\":true}")
+          UPLOAD_URL=$(echo "$RELEASE" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].split('{')[0])")
+
+          # Upload assets
+          for file in scripts/setup.sh .env.example docker-compose.yml; do
+            name=$(basename "$file")
+            curl -sf -X POST \
+              -H "Authorization: token $DEPLOY_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              "$UPLOAD_URL?name=$name" \
+              --data-binary "@$file"
+            echo "Uploaded $name"
+          done
