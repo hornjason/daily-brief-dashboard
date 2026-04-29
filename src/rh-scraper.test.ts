@@ -34,6 +34,7 @@ function createMockPage(options?: { keycloakAvailable?: boolean; tokenValue?: st
     waitForSelector: mock(() => Promise.resolve()),
     waitForTimeout: mock(() => Promise.resolve()),
     close: mock(() => Promise.resolve()),
+    isClosed: () => false,
     on: mock(() => {}),
     evaluate: mock((fn: Function, arg?: any) => {
       // Simulate keycloak evaluate responses

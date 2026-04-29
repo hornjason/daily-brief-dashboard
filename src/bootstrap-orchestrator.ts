@@ -8,7 +8,7 @@ import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
 import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
-import { runCcspScrape, writeCcspSheet, consumeTableauSessionExpired, parseTerritoryParts, checkCcspL3Exists } from './ccsp-scraper.ts'
+import { runCcspScrape, writeCcspSheet, consumeTableauSessionExpired, parseTerritoryParts } from './ccsp-scraper.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { fetchCustomerAccountNumbers, normalizeRows } from './sheets.ts'
 import { writeSheetCache, readPipelineCache, readCCSPCache } from './cache-layer.ts'

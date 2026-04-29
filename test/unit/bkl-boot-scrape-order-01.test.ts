@@ -65,8 +65,13 @@ describe('BKL-BOOT-SCRAPE-ORDER-01: Test B — startup catch-up skipped when no 
   })
 })
 
-describe('BKL-BOOT-SCRAPE-ORDER-01: Test C — bootstrap CCSP step skips runCcspScrape when L3 exists today', () => {
-  test('checkCcspL3Exists is exported from ccsp-scraper.ts', () => {
+describe('BKL-BOOT-SCRAPE-ORDER-01: Test C — bootstrap CCSP step always writes sheet (BKL-BOOT-CCSP-SHEET-SKIP-01 fix)', () => {
+  // BKL-BOOT-CCSP-SHEET-SKIP-01: The checkCcspL3Exists pre-check was removed from
+  // bootstrap-orchestrator because it short-circuited BEFORE writeCcspSheet ran,
+  // meaning the AE's CCSP sheet was never written on L3 cache hits. Bootstrap now
+  // always runs the full CCSP step (runCcspScrape → writeCcspSheet).
+
+  test('checkCcspL3Exists is still exported from ccsp-scraper.ts (used by scrapePodCcspRaw)', () => {
     expect(CCSP_TS).toContain('export async function checkCcspL3Exists')
   })
 
@@ -77,28 +82,14 @@ describe('BKL-BOOT-SCRAPE-ORDER-01: Test C — bootstrap CCSP step skips runCcsp
   test('checkCcspL3Exists short-circuits on missing inputs (fail-closed to false)', () => {
     const startIdx = CCSP_TS.indexOf('export async function checkCcspL3Exists')
     const fnSlice = CCSP_TS.slice(startIdx, startIdx + 1200)
-    // Must guard on missing folder id, missing territories
     expect(fnSlice).toContain('if (!podBookingsFolderId) return false')
     expect(fnSlice).toContain('if (territories.length === 0) return false')
   })
 
-  test('Bootstrap orchestrator imports checkCcspL3Exists and short-circuits CCSP step', () => {
-    expect(BOOTSTRAP_ORCH_TS).toContain('checkCcspL3Exists')
-    expect(BOOTSTRAP_ORCH_TS).toContain('CCSP L3 hit today — skipping L4 Tableau scrape')
-  })
-
-  test('L3 short-circuit calls setStep(4, "done") and skips runCcspScrape branch', () => {
-    const idx = BOOTSTRAP_ORCH_TS.indexOf('CCSP L3 hit today — skipping L4 Tableau scrape')
-    expect(idx).toBeGreaterThan(-1)
-    const slice = BOOTSTRAP_ORCH_TS.slice(idx, idx + 600)
-    expect(slice).toContain("setStep(4, 'done'")
-    // The runCcspScrape call must live inside the else-branch (i.e. not in this slice
-    // before the closing brace of the if-true short-circuit block).
-    const elseIdx = slice.indexOf('} else {')
-    const ccspCallIdx = slice.indexOf('runCcspScrape([ccspAe])')
-    if (ccspCallIdx >= 0) {
-      expect(ccspCallIdx).toBeGreaterThan(elseIdx)
-    }
+  test('Bootstrap orchestrator calls writeCcspSheet in the CCSP step', () => {
+    // Pre-check block removed — bootstrap always writes the sheet
+    expect(BOOTSTRAP_ORCH_TS).toContain('writeCcspSheet')
+    expect(BOOTSTRAP_ORCH_TS).not.toContain('CCSP L3 hit today — skipping L4 Tableau scrape')
   })
 })
 
