@@ -456,8 +456,8 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
   if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
     throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
   }
-  if (process.env.IS_LEADER !== 'true') {
-    throw new Error('[sf-scraper] IS_LEADER not set — live SF scrape not permitted on non-leader instance')
+  if (process.env.NODE_ROLE !== 'primary') {
+    throw new Error('[sf-scraper] NODE_ROLE not primary — live SF scrape not permitted on non-leader instance')
   }
   // BKL-CONN-SF-AUTO-01: lazy self-heal — if RH recycled the shared context,
   // our cached _context is a stale reference. Mirrors ccsp-scraper.ts:762-770.
@@ -958,8 +958,8 @@ export async function listSfReports(): Promise<SfReportItem[]> {
   if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
     throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
   }
-  if (process.env.IS_LEADER !== 'true') {
-    throw new Error('[sf-scraper] IS_LEADER not set — live SF report list not permitted on non-leader instance')
+  if (process.env.NODE_ROLE !== 'primary') {
+    throw new Error('[sf-scraper] NODE_ROLE not primary — live SF report list not permitted on non-leader instance')
   }
   if (!_context) throw new Error('SF session not active — log in via Setup first')
 

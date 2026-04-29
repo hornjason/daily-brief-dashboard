@@ -211,6 +211,7 @@ test-up: test-down seed
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
 	  -e ALLOW_RESET=true \
+	  -e NODE_ROLE= \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard-test \
@@ -229,6 +230,7 @@ test-rebuild: build test-down seed
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
 	  -e ALLOW_RESET=true \
+	  -e NODE_ROLE= \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard-test \
@@ -269,6 +271,7 @@ test-up-live: test-down seed-live-clean
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
 	  -e ALLOW_RESET=true \
+	  -e NODE_ROLE= \
 	  $(if $(OAUTH_BASE_URL),-e OAUTH_BASE_URL=$(OAUTH_BASE_URL),) \
 	  --shm-size=2g \
 	  --memory=8g \
@@ -288,6 +291,7 @@ test-rebuild-live: build test-down seed-live-clean
 	  -e CACHE_DIR=/data/cache \
 	  -e RH_PROFILE_DIR=/data/rh-profile \
 	  -e ALLOW_RESET=true \
+	  -e NODE_ROLE= \
 	  --shm-size=2g \
 	  --memory=8g \
 	  --name pai-dashboard-test \
