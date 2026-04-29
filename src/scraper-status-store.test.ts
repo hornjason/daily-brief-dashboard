@@ -45,12 +45,13 @@ describe('getScraperStatus — initial state', () => {
     expect(status.consecutiveFailures).toBeGreaterThanOrEqual(0)
   })
 
-  test('getStatus returns entries for all 4 scrapers', () => {
+  test('getStatus returns entries for all 3 active scrapers (supportable retired)', () => {
     const all = getStatus()
     expect(all['rh-cases']).toBeDefined()
-    expect(all['supportable']).toBeDefined()
     expect(all['ccsp']).toBeDefined()
     expect(all['sf-pipeline']).toBeDefined()
+    // supportable is permanently disabled — must NOT appear in status store
+    expect(all['supportable']).toBeUndefined()
   })
 })
 
@@ -94,37 +95,37 @@ describe('recordOutcome — success', () => {
 
 describe('recordOutcome — failure', () => {
   beforeEach(() => {
-    // Reset to a known good state first
-    recordOutcome('supportable', { success: true, recordCount: 0 })
+    // Reset to a known good state first (supportable retired — use ccsp)
+    recordOutcome('ccsp', { success: true, recordCount: 0 })
   })
 
   test('transitions state to failed on failure', () => {
-    recordOutcome('supportable', { success: false, error: 'Session expired' })
-    const status = getScraperStatus('supportable')
+    recordOutcome('ccsp', { success: false, error: 'Session expired' })
+    const status = getScraperStatus('ccsp')
     expect(status.state).toBe('failed')
   })
 
   test('sets lastError on failure', () => {
-    recordOutcome('supportable', { success: false, error: 'Session expired' })
-    const status = getScraperStatus('supportable')
+    recordOutcome('ccsp', { success: false, error: 'Session expired' })
+    const status = getScraperStatus('ccsp')
     expect(status.lastError).not.toBeNull()
     // Error is sanitized but should still contain meaningful content
     expect(typeof status.lastError).toBe('string')
   })
 
   test('consecutiveFailures increments on each failure', () => {
-    recordOutcome('supportable', { success: false, error: 'err A' })
-    const after1 = getScraperStatus('supportable').consecutiveFailures
-    recordOutcome('supportable', { success: false, error: 'err B' })
-    const after2 = getScraperStatus('supportable').consecutiveFailures
+    recordOutcome('ccsp', { success: false, error: 'err A' })
+    const after1 = getScraperStatus('ccsp').consecutiveFailures
+    recordOutcome('ccsp', { success: false, error: 'err B' })
+    const after2 = getScraperStatus('ccsp').consecutiveFailures
     expect(after2).toBe(after1 + 1)
   })
 
   test('two consecutive failures increments consecutiveFailures by 2', () => {
-    recordOutcome('supportable', { success: true, recordCount: 0 }) // reset
-    recordOutcome('supportable', { success: false, error: 'fail 1' })
-    recordOutcome('supportable', { success: false, error: 'fail 2' })
-    const status = getScraperStatus('supportable')
+    recordOutcome('ccsp', { success: true, recordCount: 0 }) // reset
+    recordOutcome('ccsp', { success: false, error: 'fail 1' })
+    recordOutcome('ccsp', { success: false, error: 'fail 2' })
+    const status = getScraperStatus('ccsp')
     expect(status.consecutiveFailures).toBe(2)
   })
 })
