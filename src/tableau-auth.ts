@@ -197,12 +197,13 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
   }
 
   const deadline = Date.now() + timeoutMs
+  let emailAutoFilled = false
 
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, LOGIN_POLL_INTERVAL_MS))
 
     // Auto-fill email if env var is set and we're on the email entry page
-    if (TABLEAU_USER_EMAIL && loginInProgress && page) {
+    if (!emailAutoFilled && TABLEAU_USER_EMAIL && loginInProgress && page) {
       try {
         const url = page.url()
         const onEmailPage = !url.includes('/site/') || !url.includes('/views/')
@@ -219,6 +220,7 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
               if (submitBtn) {
                 await submitBtn.click().catch(() => {})
                 console.log(`[tableau-auth] auto-filled email ${TABLEAU_USER_EMAIL} and clicked submit`)
+                emailAutoFilled = true
               }
             }
           }
@@ -241,11 +243,14 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
       })
       if (!dashboardPage) continue
 
-      const url = dashboardPage.url()
+      let url = ''
+      try { url = dashboardPage.url() } catch { continue }
 
       // Stability check: wait 3s then re-confirm URL hasn't changed (still on dashboard)
       await new Promise(r => setTimeout(r, 3_000))
-      if (dashboardPage.url() !== url) continue
+      let currentUrl = url
+      try { currentUrl = dashboardPage.url() } catch { continue }
+      if (currentUrl !== url) continue
 
       // Positive check: Tableau viz glass pane must be present — confirms viz actually loaded
       const hasVizContent = await dashboardPage.$('.tab-glassPane, iframe[id^="tableau"], .tab-content')
@@ -257,10 +262,15 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
         if (!harvested) return false
         return true
       }
-    } catch {
-      // Page closed or crashed
-      await _closeContext({ harvest: false })
-      return false
+    } catch (e: any) {
+      const msg = e?.message ?? ''
+      // Only close session on true destruction — not transient navigation errors
+      if (msg.includes('closed') || msg.includes('destroyed') || msg.includes('crashed')) {
+        await _closeContext({ harvest: false })
+        return false
+      }
+      // Transient navigation error — log and continue polling
+      console.warn('[tableau-auth] poll cycle error (transient — continuing):', msg)
     }
   }
 
