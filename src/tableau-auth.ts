@@ -229,21 +229,26 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
     if (!loginInProgress) return false
 
     try {
-      const url = page.url()
-      // Must be on the actual CCSP dashboard URL — not the email entry page or any other
-      // 10ay.online.tableau.com page. The email entry page never contains '/site/.../views/'.
-      // After successful SSO, Tableau redirects back to the original URL which always has
-      // '/site/redhatanalytics/views/' in the path.
-      const onCcspDashboard = url.startsWith('https://10ay.online.tableau.com') &&
-        url.includes('/site/') && url.includes('/views/')
-      if (!onCcspDashboard) continue
+      // Tableau SSO often opens the final dashboard in a new tab while activePage stays
+      // on about:blank. Scan all pages in the context for the dashboard URL pattern and
+      // use whichever page matches for both the URL stability check and viz content check.
+      const isCcspDashboardUrl = (u: string) =>
+        u.startsWith('https://10ay.online.tableau.com') &&
+        u.includes('/site/') && u.includes('/views/')
+
+      const dashboardPage = ctx.pages().find(p => {
+        try { return isCcspDashboardUrl(p.url()) } catch { return false }
+      })
+      if (!dashboardPage) continue
+
+      const url = dashboardPage.url()
 
       // Stability check: wait 3s then re-confirm URL hasn't changed (still on dashboard)
       await new Promise(r => setTimeout(r, 3_000))
-      if (page.url() !== url) continue
+      if (dashboardPage.url() !== url) continue
 
       // Positive check: Tableau viz glass pane must be present — confirms viz actually loaded
-      const hasVizContent = await page.$('.tab-glassPane, iframe[id^="tableau"], .tab-content')
+      const hasVizContent = await dashboardPage.$('.tab-glassPane, iframe[id^="tableau"], .tab-content')
         .then(el => !!el).catch(() => false)
 
       if (hasVizContent) {
