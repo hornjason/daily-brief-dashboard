@@ -203,10 +203,17 @@ export async function startSfLoginBrowser(
             const ctx = activeContext!
             // BKL-UX94: clear VNC after login — blank tab BEFORE nulling refs so
             // we still have ctx if blank tab fails.
+            // BKL-CONN-SF-ADOPT-01: ctx.newPage() can hang under concurrent CCSP load —
+            // wrap in 15s timeout so adoption always completes even if blank tab fails.
             try {
-              const blankPage = await ctx.newPage()
+              const blankPage = await Promise.race([
+                ctx.newPage(),
+                new Promise<never>((_, reject) =>
+                  setTimeout(() => reject(new Error('newPage timed out after 15s')), 15_000)
+                ),
+              ])
               await blankPage.bringToFront()
-              await blankPage.goto('about:blank').catch((e: any) => {
+              await blankPage.goto('about:blank', { timeout: 5_000 }).catch((e: any) => {
                 console.warn('[sf-auth] about:blank navigation failed:', e?.message ?? e)
               })
             } catch (e: any) {
@@ -247,10 +254,17 @@ export async function startSfLoginBrowser(
             const ctx = activeContext!
             // BKL-UX94: clear VNC after login — blank tab BEFORE nulling refs so
             // we still have ctx if blank tab fails.
+            // BKL-CONN-SF-ADOPT-01: ctx.newPage() can hang under concurrent CCSP load —
+            // wrap in 15s timeout so adoption always completes even if blank tab fails.
             try {
-              const blankPage = await ctx.newPage()
+              const blankPage = await Promise.race([
+                ctx.newPage(),
+                new Promise<never>((_, reject) =>
+                  setTimeout(() => reject(new Error('newPage timed out after 15s')), 15_000)
+                ),
+              ])
               await blankPage.bringToFront()
-              await blankPage.goto('about:blank').catch((e: any) => {
+              await blankPage.goto('about:blank', { timeout: 5_000 }).catch((e: any) => {
                 console.warn('[sf-auth] about:blank navigation failed:', e?.message ?? e)
               })
             } catch (e: any) {

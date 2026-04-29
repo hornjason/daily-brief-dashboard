@@ -318,6 +318,7 @@ export async function ensureBrowserHealthy(): Promise<void> {
  * causes transparent SSO renewal to fail on any newly-created page.
  */
 export function adoptScrapeContext(context: BrowserContext, profileDir: string, livePage: Page): void {
+  console.log('[rh-scraper] adoptScrapeContext called — context valid:', !!context, 'livePage closed:', livePage.isClosed())
   if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
   // Close any previously held page before replacing
   _livePage?.close().catch(() => {})
@@ -973,6 +974,14 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
         )
         _scrapesSinceRecycle = 0
         console.log(`[browser] Context recycled successfully (heap was ${heapMB}MB)`)
+        // BKL-CONN-SF-AUTO-01: notify sister scrapers (SF, CCSP) so they
+        // re-adopt the new live context. Without this, SF holds a dead ref
+        // until manual VNC re-login. Mirrors the _autoRecover hook fire above.
+        if (_onContextRecovered && _context && _profileDir) {
+          try { _onContextRecovered(_context, _profileDir) }
+          catch (e: any) { console.warn('[rh-scraper] context recovery callback error:', e?.message) }
+          console.log('[rh-scraper] recycle: sister scrapers re-adopted')
+        }
       }
     } catch (e: any) {
       console.error('[browser] Context recycling failed:', e?.message ?? e)

@@ -14,7 +14,7 @@ import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
 import { writeFileSync, existsSync, readFileSync, unlinkSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
+import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile, closeTableauTabs, safeCookieOp } from './browser-utils.ts'
 import { getScrapeContext, setLivePageBusy } from './rh-scraper.ts'
 
 const TABLEAU_AUTH_PROFILE_DIR = process.env.TABLEAU_AUTH_PROFILE_DIR ?? '/data/rh-profile-tableau-auth'
@@ -98,13 +98,18 @@ async function _closeContext(opts: { harvest: boolean }): Promise<boolean> {
     try { ctx.off('page', _activeSsoPopupHandler) } catch { /* ignore */ }
     _activeSsoPopupHandler = null
   }
-  loginInProgress = false
-  setLivePageBusy(false)
+  // loginInProgress and setLivePageBusy are cleared AFTER tab cleanup (below) —
+  // releasing before tabs are closed allows concurrent CCSP scrapes to slip through
+  // and hit ctx.cookies() with Tableau tabs still present (BKL-CONN-TABLEAU-CCSP-HANG-01).
   let harvested = false
-  if (!ctx || !page) return false
+  if (!ctx || !page) {
+    loginInProgress = false
+    setLivePageBusy(false)
+    return false
+  }
   if (opts.harvest) {
     try {
-      const state = await ctx.storageState()
+      const state = await safeCookieOp(ctx, '_closeContext harvest', c => c.storageState(), { cookies: [], origins: [] })
       const tableauCookies = state.cookies.filter(c =>
         TABLEAU_COOKIE_DOMAINS.some(d => c.domain.includes(d))
       )
@@ -125,8 +130,28 @@ async function _closeContext(opts: { harvest: boolean }): Promise<boolean> {
       console.warn('[tableau-auth] cookie harvest failed:', e?.message ?? e)
     }
   }
+  // Close any Tableau dashboard tabs opened by SSO that were not activePage.
+  // These tabs are left open after waitForTableauLogin() returns, causing ctx.cookies()
+  // to hang in restoreTableauSession when CCSP scrape runs immediately after.
+  if (ctx) {
+    const isSsoTab = (u: string) =>
+      u.startsWith('https://10ay.online.tableau.com') && u.includes('/site/') && u.includes('/views/')
+    for (const p of ctx.pages()) {
+      if (p === page) continue  // activePage is closed below
+      try {
+        if (isSsoTab(p.url())) {
+          await p.close()
+          console.log('[tableau-auth] closed SSO Tableau dashboard tab')
+        }
+      } catch { /* ignore — tab may already be closed */ }
+    }
+  }
   // Close only our page — never close the shared context
   try { await page.close() } catch { /* already closed */ }
+  // Release mutex after all cleanup — any concurrent access before this point
+  // would encounter open Tableau tabs and potentially hang on ctx.cookies().
+  loginInProgress = false
+  setLivePageBusy(false)
   return harvested
 }
 
@@ -151,12 +176,13 @@ export async function startTableauLoginBrowser(): Promise<void> {
 
     // Clear Tableau cookies so SSO always starts fresh — prevents old/seeded cookies
     // from navigating directly to the dashboard and falsely triggering login detection.
-    const existingCookies = await sharedCtx.cookies()
+    await closeTableauTabs(sharedCtx, 'startTableauLoginBrowser')
+    const existingCookies = await safeCookieOp(sharedCtx, 'startTableauLoginBrowser cookies', c => c.cookies(), [])
     const nonTableauCookies = existingCookies.filter(c =>
       !TABLEAU_COOKIE_DOMAINS.some(d => c.domain.includes(d))
     )
-    await sharedCtx.clearCookies()
-    if (nonTableauCookies.length > 0) await sharedCtx.addCookies(nonTableauCookies)
+    await safeCookieOp(sharedCtx, 'startTableauLoginBrowser clearCookies', c => c.clearCookies(), undefined)
+    if (nonTableauCookies.length > 0) await safeCookieOp(sharedCtx, 'startTableauLoginBrowser addCookies', c => c.addCookies(nonTableauCookies), undefined)
 
     const page = await sharedCtx.newPage()
     activePage = page
@@ -270,7 +296,8 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
     }
   }
 
-  console.warn('[tableau-auth] wait-for-login: poll cycle timed out — VNC stays open, client re-polls')
+  console.warn('[tableau-auth] wait-for-login: poll cycle timed out — closing context to prevent tab leak')
+  await _closeContext({ harvest: false })
   return false
 }
 

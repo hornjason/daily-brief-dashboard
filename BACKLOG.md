@@ -1434,6 +1434,156 @@ Fix:
 
 ---
 
+### BKL-BOOT-CCSP-SHEET-SKIP-01 — L3 short-circuit skipped CCSP sheet write for second AE
+- **Status:** DONE 2026-04-29
+- **Priority:** P0
+- **Symptom:** Second AE (Elmer) bootstrapped with L3 hit but never appeared in CCSP dashboard. No `ccspSheetId` saved.
+- **Root cause:** `checkCcspL3Exists` pre-check in bootstrap set step 4 done and returned early, skipping `runCcspScrape` and `writeCcspSheet`. Drive CSV exists = skip everything, including sheet write.
+- **Fix:** Removed `checkCcspL3Exists` pre-check entirely. `runCcspScrape` already handles L3 via `_podCsvCache` (no Tableau scrape when in-memory cache warm) and Drive CSV check internally. Sheet write now always happens.
+
+### BKL-CONN-TABLEAU-CCSP-HANG-01 — CCSP L4 bootstrap hang after Tableau SSO login
+- **Status:** DONE 2026-04-29
+- **Priority:** P0
+- **Symptom:** Bootstrap step 4 (Create CCSP Sheet) timed out at 300s. Zero `[ccsp]` logs after the L3 marker.
+- **Root cause:** `waitForTableauLogin` closes `activePage` but leaves the SSO new tab (Tableau dashboard) open in the shared context. `runCcspScrape` → `restoreTableauSession` → `ctx.cookies()` hangs with this live Tableau tab present.
+- **Fix:** (1) `_closeContext` now closes SSO Tableau tabs after cookie harvest; (2) `restoreTableauSession` wraps `ctx.cookies()` in 10s timeout as defense-in-depth; (3) mutex (`loginInProgress`/`setLivePageBusy`) release moved to AFTER tab cleanup so no concurrent scrape slips through.
+- **Regression test:** Manual CCSP scrape immediately after Tableau login should produce `[ccsp] runCcspScrape: processing AE` within 15s (no 300s hang).
+
+### BKL-CONN-TABLEAU-SSO-PREDICATE-01 — `_closeContext` SSO tab predicate too broad (council P2)
+- **Status:** OPEN
+- **Priority:** P2
+- **Symptom:** `_closeContext` closes any page matching `10ay.online.tableau.com/site/.*/views/` — this would also close an active CCSP scrape page if a Tableau login completes concurrently.
+- **Recommendation (Serena):** Track pages opened during login explicitly in a Set; close only those pages, not URL-matched pages.
+- **When to fix:** Before enabling concurrent logins or multi-AE parallel scrapes.
+
+### BKL-CONN-TABLEAU-STORAGE-STATE-TIMEOUT-01 — `ctx.storageState()` undefended in `_closeContext` (council P2)
+- **Status:** OPEN
+- **Priority:** P2
+- **Symptom:** `_closeContext` calls `ctx.storageState()` without a timeout. If context is wedged at harvest time, `waitForTableauLogin` hangs indefinitely.
+- **Recommendation (Serena):** Apply same `Promise.race` timeout pattern used for `ctx.cookies()` in `restoreTableauSession`.
+- **When to fix:** If `ctx.storageState()` hang is observed in production logs.
+
+---
+
+### BKL-CONN-TABLEAU-CDP-AUDIT-01 — Structural fix: `safeCookieOp` utility + full CDP call audit (council P0/P1 sweep)
+- **Status:** OPEN
+- **Priority:** P0**
+- **Source:** Serena council audit 2026-04-29 — scraper-wide CDP hang vulnerability sweep
+- **Symptom:** 13 unguarded CDP Network-domain calls across 5 files can each hang indefinitely when a Tableau tab is open in the shared context. The band-aid pattern (guarding individual call sites) is unsustainable — each patch reveals the next hanging call.
+- **Root cause:** CDP serializes Network-domain calls against pending network activity on any page in the context. Tableau tabs hold live WebSockets permanently. Every `ctx.cookies()`, `ctx.addCookies()`, `ctx.storageState()`, `ctx.clearCookies()` is a potential hang site.
+- **Durable fix:** Build `safeCookieOp<T>(ctx, label, op, fallback, timeoutMs)` + `closeTableauTabs(ctx, label)` in `browser-utils.ts`. Mechanically replace every raw CDP call across all scraper files. Make raw CDP calls a lint failure (ESLint `no-restricted-syntax`).
+- **P0 instances (will hang bootstrap now):**
+  - `tableau-auth.ts:112` — `ctx.storageState()` in `_closeContext` harvest fires while SSO tab is still open
+  - `tableau-auth.ts:179,183,184` — `ctx.cookies()` / `clearCookies()` / `addCookies()` in `startTableauLoginBrowser` unguarded
+  - `ccsp-scraper.ts:658,985` — `saveTableauSession` calls `ctx.storageState()` with no timeout (line 658 fires mid-scrape with live Tableau page)
+  - `tableau-auth.ts:296` — `waitForTableauLogin` timeout exit returns `false` without calling `_closeContext` — leaks SSO Tableau tab permanently into shared context
+- **P1 instances (conditional hangs):**
+  - `rh-scraper.ts:382,951` — `persistSessionState` during scrape and context recycle
+  - `sf-scraper.ts:405` — SF session persistence after scrape
+  - `scrape-api.ts:735` — HTTP endpoint blocks entire request
+  - `tableau-auth.ts:202-208` — `startTableauLoginBrowser` catch path leaks page without closing it
+- **Files:** `tableau-auth.ts`, `ccsp-scraper.ts`, `rh-scraper.ts`, `sf-scraper.ts`, `scrape-api.ts`, `browser-utils.ts`
+
+---
+
+### BKL-CONN-TABLEAU-LOGIN-TIMEOUT-LEAK-01 — `waitForTableauLogin` timeout exit leaks SSO Tableau tab (council P0)
+- **Status:** OPEN
+- **Priority:** P0
+- **Source:** Serena council audit 2026-04-29
+- **Symptom:** When the 5-minute Tableau login poll times out, `waitForTableauLogin` returns `false` at line 296 without calling `_closeContext`. The SSO Tableau dashboard tab remains open in the shared context indefinitely. Any subsequent CCSP bootstrap inherits this leaked tab and hangs on CDP calls.
+- **Fix:** Replace `return false` at timeout exit (`tableau-auth.ts:296`) with `await _closeContext({ harvest: false }); return false`.
+- **File:** `tableau-auth.ts:296`
+
+---
+
+### BKL-ARCH-SCRAPER-01 — Full scraper architectural consistency audit (all scrapers)
+- **Status:** DONE (audit complete 2026-04-29 — implementation tracked in child items below)
+- **Priority:** P1
+- **Source:** Jason request 2026-04-29 — eliminate scraper snowflakes, standardize patterns
+- **Audit findings:** Serena council audit 2026-04-29. 8 cross-cutting gaps found across all scrapers. See child items BKL-ARCH-SCRAPER-02 through BKL-ARCH-SCRAPER-09 for each wave.
+
+---
+
+### BKL-ARCH-SCRAPER-02 — Wave 1: Standardize scraper service naming (P0)
+- **Status:** OPEN
+- **Priority:** P0
+- **Source:** Serena audit 2026-04-29 (CC-1)
+- **Symptom:** Same scraper referred to by different identifiers at every layer — `rh-cases` in status store, `rh` in circuit breaker and API, `sf-pipeline` in status store, `salesforce` in circuit breaker and API. Every debug grep and dashboard query requires mental translation. Status routes do triple-fallback chains because names don't align.
+- **Fix:** Pick one canonical name per scraper (`rh-cases`, `ccsp`, `sf-pipeline`). Update: `circuitBreakers` map keys in `scraper-manager.ts:231-235`, telemetry `service` fields, `/api/status/scrapes` and `/api/scraper-status` keys. Mechanical rename, zero behavior delta.
+- **Files:** `scraper-manager.ts`, `scraper-status-store.ts`, `scrape-api.ts`, `background-scheduler.ts`
+
+---
+
+### BKL-ARCH-SCRAPER-03 — Wave 2: Single source of truth for scraper status (P1)
+- **Status:** OPEN
+- **Priority:** P1
+- **Source:** Serena audit 2026-04-29 (CC-3)
+- **Symptom:** Three sources of truth per scraper: (1) module-level `export let last*Scrape` in scraper file, (2) `_*ScrapeLastError` in `scraper-manager.ts`, (3) `ScraperStatusEntry` in `scraper-status-store.ts` (persisted). Only (3) survives container restart. Status route uses `??` chains across all three. Behavior changes invisibly post-restart.
+- **Fix:** Delete module-level status exports from scraper files. Read everything from `scraper-status-store.ts` via `getScraperStatus(name)`. Requires Wave 1 (naming) to land first.
+- **Files:** `rh-scraper.ts`, `ccsp-scraper.ts`, `sf-scraper.ts`, `scraper-manager.ts`, `scrape-api.ts`
+
+---
+
+### BKL-ARCH-SCRAPER-04 — Wave 3: Move mutex ownership into scraper modules (P1)
+- **Status:** OPEN
+- **Priority:** P1
+- **Source:** Serena audit 2026-04-29 (CC-2)
+- **Symptom:** CCSP has its mutex inside the scraper (correct). RH and SF have their mutex only in `scraper-manager.ts`. Direct calls to `runRhScrape()` or `scrapeSfReport()` bypass the running guard entirely — no protection against concurrent execution.
+- **Fix:** Add `_rhScrapeRunning` + stale-mutex check to `rh-scraper.ts:runRhScrape`. Add `_sfSyncRunning` to `sf-scraper.ts:scrapeSfReport`. Mirror the CCSP pattern (mutex + `startedAt` + `STALE_MUTEX_MS` + finally release). Requires Wave 2 to land first.
+- **Files:** `rh-scraper.ts`, `sf-scraper.ts`, `scraper-manager.ts`
+
+---
+
+### BKL-ARCH-SCRAPER-05 — Wave 4: CCSP typed error class for Tableau session expiry (P0)
+- **Status:** OPEN
+- **Priority:** P0
+- **Source:** Serena audit 2026-04-29 (CC-4)
+- **Symptom:** CCSP has no typed `TableauSessionExpiredError` class. Session expiry uses a string flag `_tableauSessionExpired` set/consumed via `consumeTableauSessionExpired()`. `recordConnectionFailure('ccsp', e)` cannot branch on `instanceof` — uses string parsing instead. Grace-period semantics are inconsistent with RH and SF.
+- **Fix:** Add `class TableauSessionExpiredError extends Error` to `ccsp-scraper.ts`. Replace `_tableauSessionExpired` boolean setter sites with `throw new TableauSessionExpiredError()`. Keep the boolean as a derived signal in the catch block.
+- **Files:** `ccsp-scraper.ts`, `scraper-manager.ts` (update `recordConnectionFailure` branch)
+
+---
+
+### BKL-ARCH-SCRAPER-06 — Wave 5: Extract shared scraper helpers (P2)
+- **Status:** OPEN
+- **Priority:** P2
+- **Source:** Serena audit 2026-04-29 (CC-5, CC-6)
+- **Symptom:** (a) Stale-overwrite guard (`keepIfNonEmpty`) duplicated 5 times across all scrapers. (b) Live-scrape leader/test guard (`DISALLOW_LIVE_SCRAPE` + `IS_LEADER`) duplicated 6 times with inconsistent behavior (SF throws, CCSP returns empty silently).
+- **Fix:** Extract `keepIfNonEmpty(cachePath, newRows)` helper. Extract `assertLiveScrapeAllowed(serviceName)` helper. Both go in a new `scraper-utils.ts` or appended to `browser-utils.ts`.
+- **Files:** `rh-scraper.ts`, `ccsp-scraper.ts`, `sf-scraper.ts`, new `scraper-utils.ts`
+
+---
+
+### BKL-ARCH-SCRAPER-07 — Wave 6: Wire login-handoff to sister context re-adoption (P1)
+- **Status:** OPEN
+- **Priority:** P1
+- **Source:** Serena audit 2026-04-29 (CC-7)
+- **Symptom:** `setContextRecoveryCallback` fires on disconnect and 50-scrape recycle, but NOT on fresh login handoff via `adoptScrapeContext`. After a fresh RH login, SF and CCSP hold the old context reference until their next scrape self-heals via lazy `getScrapeContext() !== _ctx` check.
+- **Fix:** In `rh-scraper.ts:adoptScrapeContext`, call `_onContextRecovered?.(context, profileDir)` after assignments. One line.
+- **Files:** `rh-scraper.ts`
+
+---
+
+### BKL-ARCH-SCRAPER-08 — Wave 7: Session persistence symmetry (P1)
+- **Status:** OPEN
+- **Priority:** P1
+- **Source:** Serena audit 2026-04-29
+- **Symptom:** (a) SF writes `sf-session-state.json` via `persistSessionState` but never reads it — `restoreSfSession` does not exist. File is a write-only audit trail. (b) CCSP persists cookie-subset format `{ cookies, savedAt }` vs RH full `storageState()` format — not standardized.
+- **Fix:** (a) Add `restoreSfSession()` to `sf-scraper.ts` and call it from `initSfContext`. (b) Document CCSP subset format as intentional (Tableau-domain cookies only) or align with RH format.
+- **Files:** `sf-scraper.ts`
+
+---
+
+### BKL-ARCH-SCRAPER-09 — Wave 8: Remove Supportable from live execution path (P1)
+- **Status:** OPEN
+- **Priority:** P1
+- **Source:** Serena audit 2026-04-29
+- **Symptom:** Supportable is permanently disabled per CLAUDE.md, but `adoptSupportableContext(ctx)` is still called in `background-scheduler.ts:1270` and `scheduleSupportableSync()` is still registered at line 1190. ~1300 lines of dead code on the live runtime path. Supportable bugs can still surface at startup even though the feature is disabled.
+- **Fix:** Remove `adoptSupportableContext` call and `scheduleSupportableSync()` registration from `background-scheduler.ts`. Keep the file in tree as historical reference.
+- **Files:** `background-scheduler.ts`
+
+---
+
 ## Previously Verified Done
 
 ### BKL-D01 | Tableau connect card in Data Sources
@@ -7735,7 +7885,8 @@ Acceptance: Setting IS_LEADER=True or IS_LEADER=1 logs a clear warning and treat
 Can we test: YES — unit test that verifies IS_LEADER='True' guard logs warning and returns non-leader result.
 
 ### BKL-BOOT-SCRAPE-ORDER-01 | Bootstrap scrape discipline — auth-only Step 3, sequential bootstrap, suppress background scrapers until first AE done
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-04-29 (extended fix)
+Commit: 92b2113ff + 2026-04-29 (heartbeat + post-auth flush AE guard)
 Priority: P0
 Size: M
 Source: Session 2026-04-29 (Jason architecture review — browser contention root cause)
@@ -7753,3 +7904,13 @@ Files: src/sf-auth.ts, src/rh-scraper.ts
 Description: After SF login completes and logs "RH portal confirmed — adopting shared context", the rh-scraper and sf-scraper adoption logs do NOT appear. The RH Portal session drops to hasSession:false and the shared context is lost. Root cause unknown — adoptScrapeContext appears to be called but the rh-scraper adoption log is absent, and no exception surfaces. Hypothesis: sfPage.close() or the blank tab navigation is invalidating ctx before adoptScrapeContext runs, OR a disconnect handler is firing immediately on context adoption clearing it.
 Acceptance: After SF login success, RH Portal remains hasSession:true, sf-scraper shows adopted log, Tableau connect still works without re-logging into RH Portal.
 Can we test: YES — regression test that after startSfLoginBrowser completes, getScrapeContext() is non-null and getSfContext() is non-null.
+
+### BKL-UX-WIPE-CONN-RESET-01 | Wipe does not reset connection status UI — user sees stale "Connected" state
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Session 2026-04-29 (Jason observed SF "not connected" after wipe despite UI showing connected)
+Files: server.ts (POST /api/setup/reset handler), dashboard/src/ (connections state)
+Description: After a data wipe (POST /api/setup/reset), the shared browser context is destroyed but the UI connection indicators (RH Portal, SF, Tableau) remain showing their pre-wipe state. User proceeds to connect SF without realising RH Portal context is gone — SF adoption then hangs silently. The wipe endpoint must broadcast a connections-reset event (or the reset response must clear connection state) so all three indicators reset to "Not Connected" immediately.
+Acceptance: After wipe, all three connection indicators show "Not Connected". User must re-connect RH Portal first before SF and Tableau will work.
+Can we test: YES — after POST /api/setup/reset, GET /api/status/connections returns hasSession:false for all three.

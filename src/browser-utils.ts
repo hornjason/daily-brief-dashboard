@@ -1,5 +1,6 @@
 // src/browser-utils.ts — Shared Chromium launch flags (no imports from other src/ modules)
 
+import type { BrowserContext } from '@playwright/test'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -31,4 +32,48 @@ export function sanitizeChromiumProfile(profileDir: string): void {
   } catch {
     // non-fatal — profile may not have Preferences yet on first run
   }
+}
+
+/**
+ * Close any open Tableau dashboard tabs in the given context.
+ * Prevents CDP Network-domain calls from hanging due to live Tableau WebSocket connections
+ * (BKL-CONN-TABLEAU-CDP-AUDIT-01). Safe to call before any ctx.cookies() / ctx.addCookies() /
+ * ctx.storageState() / ctx.clearCookies() call.
+ */
+export async function closeTableauTabs(ctx: BrowserContext, label: string): Promise<number> {
+  const isTableauTab = (u: string) => u.startsWith('https://10ay.online.tableau.com')
+  let closed = 0
+  for (const p of ctx.pages()) {
+    try {
+      if (isTableauTab(p.url())) {
+        await p.close()
+        closed++
+      }
+    } catch { /* already closed */ }
+  }
+  if (closed > 0) console.log(`[tab-janitor] ${label}: closed ${closed} Tableau tab(s)`)
+  return closed
+}
+
+/**
+ * Wrap a CDP Network-domain call in a timeout race.
+ * If the call hangs past timeoutMs, logs a warning and returns the fallback value.
+ * Call closeTableauTabs() before this when Tableau tabs may be present.
+ */
+export async function safeCookieOp<T>(
+  ctx: BrowserContext,
+  label: string,
+  op: (ctx: BrowserContext) => Promise<T>,
+  fallback: T,
+  timeoutMs = 10_000,
+): Promise<T> {
+  return Promise.race([
+    op(ctx),
+    new Promise<T>(resolve =>
+      setTimeout(() => {
+        console.warn(`[safe-cookie] ${label}: timed out after ${timeoutMs}ms — using fallback`)
+        resolve(fallback)
+      }, timeoutMs)
+    ),
+  ])
 }

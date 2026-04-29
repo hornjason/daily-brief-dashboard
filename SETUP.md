@@ -1,5 +1,5 @@
 ---
-Last validated: 2026-04-24
+Last validated: 2026-04-27
 ---
 
 # Daily Brief Dashboard — Setup Guide
@@ -28,13 +28,9 @@ This is the easiest path. The container packages everything — no need to insta
 
 ### Step 1: Pull the Container Image
 
-The image is hosted on GitHub Container Registry (private). You need a GitHub Personal Access Token (PAT) with `read:packages` scope.
-
-Create a PAT at [github.com/settings/tokens](https://github.com/settings/tokens) → **Generate new token (classic)** → check `read:packages`.
+The image is public on GitHub Container Registry — no authentication required.
 
 ```bash
-podman login ghcr.io -u YOUR_GITHUB_USERNAME
-# paste your PAT when prompted for password
 podman pull ghcr.io/hornjason/daily-brief-dashboard:latest
 ```
 

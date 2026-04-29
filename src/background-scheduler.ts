@@ -114,15 +114,20 @@ export async function flushScrapersAfterAuth(): Promise<void> {
   console.log('[scraper-queue] post-auth flush: enqueueing all 4 scrapers')
 
   // RH first — populates account numbers consumed by Supportable
-  enqueueScraperTask({
-    name: 'rh-cases',
-    run: async () => {
-      await runRhScrapeWithState()
-      updateSchedulerField('rhLastRun', new Date().toISOString())
-    },
-    source: 'manual',
-    enqueuedAt: Date.now(),
-  })
+  // BKL-BOOT-SCRAPE-ORDER-01: skip if no AEs configured (same guard as catch-up and heartbeat)
+  if (aes && aes.length > 0) {
+    enqueueScraperTask({
+      name: 'rh-cases',
+      run: async () => {
+        await runRhScrapeWithState()
+        updateSchedulerField('rhLastRun', new Date().toISOString())
+      },
+      source: 'manual',
+      enqueuedAt: Date.now(),
+    })
+  } else {
+    console.log('[scraper-queue] post-auth flush: no AEs configured — skipping rh-cases')
+  }
 
   // SF pipeline — independent of RH, can queue after RH
   const { aes: capturedAes } = await import('./server-state.ts')
@@ -1314,6 +1319,8 @@ export function initBackgroundScheduler(opts: {
       // Timer 3: RH scraper — enqueue through scraper queue (BKL-M49)
       if (!schedulerCfg.rhEnabled) {
         console.log('[rh-scraper] tick: RH Cases disabled — skipping')
+      } else if (!aes || aes.length === 0) {
+        console.log('[rh-scraper] tick: no AEs configured — skipping')
       } else {
         const rhIntervalMs = intervals.rhScrape * 60 * 1000
         const rhLastMs = lastScraped ? new Date(lastScraped).getTime() : 0

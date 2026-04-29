@@ -2057,28 +2057,6 @@ export function registerBootstrapRoutes(app: Hono): void {
             ?? null
 
           // ─── BKL-BOOT-SCRAPE-ORDER-01: L3-existence short-circuit ───────────
-          // On fresh bootstrap, if today's CCSP-${pod}-${YYYY-MM-DD}.csv already exists
-          // in the POD's Subscription Data folder (L3), skip the L4 Tableau scrape entirely.
-          // Prevents Tableau navigation from running concurrent with SF/RH bootstrap steps
-          // and crashing the shared Chromium context.
-          let ccspPodBookingsFolderId = ''
-          try {
-            const firstTerritory = tableauTerritories[0]
-            const rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
-            const normalized = normalizeSettings(rawSettings)
-            const podKey = firstTerritory?.replace(/_TERR\d+$/, '')
-            const region = podKey
-              ? (normalized.regions.find(r => podKey in r.pods) ?? normalized.regions[0])
-              : normalized.regions[0]
-            ccspPodBookingsFolderId = region?.podBookingsFolderId ?? ''
-          } catch { /* no settings — proceed without L3 short-circuit */ }
-          if (await checkCcspL3Exists(ccspAe, ccspPodBookingsFolderId || undefined)) {
-            console.log(`[bootstrap] ${aeName}: CCSP L3 hit today — skipping L4 Tableau scrape`)
-            emitCacheLevel({ ae: aeName, flow: 'ccsp', level: 3 })
-            setStep(4, 'done', 'Skipped L4 Tableau — today\'s CCSP CSV already on Drive (L3 hit)')
-            console.log(`[auto-bootstrap] CCSP step done via L3 short-circuit for ${aeName}`)
-          } else {
-
           // ─── BKL-CACHE-HIER-01: 4-level CCSP cache hierarchy ───────────────
           // L1 = on-disk ccsp-data.json cachedAt<24h + includes this AE's sheet ID
           // L2 = AE CCSP sheet modifiedTime<24h → read rows directly (no CSV parse, no territory filter)
@@ -2139,7 +2117,6 @@ export function registerBootstrapRoutes(app: Hono): void {
           setStep(4, 'done', ccspMsg)
           if (totalCcspRows === 0) console.warn(`[auto-bootstrap] CCSP sheet created with 0 records — no territory data found; check territory mapping and Tableau filters`)
           else console.log(`[auto-bootstrap] CCSP sheet ${existingCcspId ? 'updated' : 'created'}: ${sheetId} (${totalCcspRows} records)`)
-          } // end BKL-BOOT-SCRAPE-ORDER-01 else (L3 short-circuit not taken)
         } catch (e: any) {
           setStep(4, 'error', e.message)
           autoBootstrapState.error = `CCSP sheet failed: ${e.message}`
