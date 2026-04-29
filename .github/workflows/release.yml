@@ -88,3 +88,35 @@ jobs:
           podman push ghcr.io/hornjason/daily-brief-dashboard:${{ steps.version.outputs.tag }}
           podman push ghcr.io/hornjason/daily-brief-dashboard:stable
           podman push ghcr.io/hornjason/daily-brief-dashboard:latest
+
+  publish-public-release:
+    name: Publish to daily-brief-dashboard
+    runs-on: [self-hosted, mac-mini-live]
+    needs: [publish-release]
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish release to public repo
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
+        run: |
+          gh release create ${{ steps.version.outputs.tag }} \
+            --repo hornjason/daily-brief-dashboard \
+            --title "${{ steps.version.outputs.tag }}" \
+            --generate-notes \
+            scripts/setup.sh \
+            .env.example \
+            docker-compose.yml
