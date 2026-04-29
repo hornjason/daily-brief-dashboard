@@ -252,16 +252,12 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
       try { currentUrl = dashboardPage.url() } catch { continue }
       if (currentUrl !== url) continue
 
-      // Positive check: Tableau viz glass pane must be present — confirms viz actually loaded
-      const hasVizContent = await dashboardPage.$('.tab-glassPane, iframe[id^="tableau"], .tab-content')
-        .then(el => !!el).catch(() => false)
-
-      if (hasVizContent) {
-        console.log('[tableau-auth] login detected — harvesting cookies')
-        const harvested = await _closeContext({ harvest: true })
-        if (!harvested) return false
-        return true
-      }
+      // URL match + 3s stability is sufficient — viz selector checks were false-negative
+      // prone across Tableau versions (BKL-CONN-TABLEAU-SSO-TAB-LOOP-01)
+      console.log('[tableau-auth] login detected — harvesting cookies')
+      const harvested = await _closeContext({ harvest: true })
+      if (!harvested) return false
+      return true
     } catch (e: any) {
       const msg = e?.message ?? ''
       // Only close session on true destruction — not transient navigation errors
