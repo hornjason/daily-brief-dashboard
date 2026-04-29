@@ -1575,13 +1575,14 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-10 — Rename IS_LEADER → NODE_ROLE=primary; non-leader as default (P1)
-- **Status:** 🟡 IN PROGRESS
+- **Status:** ✅ DONE 2026-04-29
 - **Priority:** P1
 - **Source:** Jason 2026-04-29
 - **Symptom:** `IS_LEADER=true` sits in `.env` by default, making every copy of this repo a leader instance. The variable name is self-documenting, revealing the leader/non-leader scrape architecture to anyone reading the config.
 - **Fix:** (1) Rename env var `IS_LEADER` → `NODE_ROLE` with value `primary`. (2) Guard check becomes `process.env.NODE_ROLE === 'primary'`. (3) Remove `IS_LEADER=true` from `.env` so default is non-leader. (4) Update `.env.example` to have it commented out with a vague description. (5) Update all 5 guard sites in `ccsp-scraper.ts` and `sf-scraper.ts`.
 - **Files:** `src/ccsp-scraper.ts`, `src/sf-scraper.ts`, `.env`, `.env.example`
-- **Stopped at:** IN PROGRESS — briefing Marcus
+- **Decision:** Renamed IS_LEADER → NODE_ROLE=primary. All 5 guard sites updated. Removed from .env default. Test containers always non-leader via -e NODE_ROLE= Makefile override.
+- **Closed:** 2026-04-29 ✅ DONE
 
 ### BKL-ARCH-SCRAPER-09 — Wave 8: Remove Supportable from live execution path (P1)
 - **Status:** OPEN
