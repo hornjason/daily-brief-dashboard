@@ -32,6 +32,7 @@ const LOGIN_POLL_INTERVAL_MS = 2_000
 let activeContext: BrowserContext | null = null
 let loginInProgress = false
 let loginTimedOut = false
+let _adopting = false
 export let sfSessionExpired = false
 
 export interface SfAuthStatus {
@@ -149,7 +150,10 @@ export async function startSfLoginBrowser(
 
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, LOGIN_POLL_INTERVAL_MS))
-      if (!loginInProgress || activeContext !== context) return
+      if (!loginInProgress || activeContext !== context) {
+        console.warn('[sf-auth] poll aborted — loginInProgress=' + loginInProgress + ' contextChanged=' + (activeContext !== context))
+        return
+      }
 
       try {
         const url = sfPage.url()
@@ -192,6 +196,8 @@ export async function startSfLoginBrowser(
 
           if (rhPage.url().includes('access.redhat.com/support')) {
             console.log('[sf-auth] RH portal confirmed — adopting shared context for both scrapers')
+            console.log('[sf-auth] adoption — ctx valid: ' + !!activeContext + ' rhPage closed: ' + (rhPage?.isClosed() ?? true))
+            _adopting = true
             writeFileSync(sessionPath, JSON.stringify({ loggedInAt: new Date().toISOString() }), { mode: 0o600 })
 
             const ctx = activeContext!
@@ -209,10 +215,17 @@ export async function startSfLoginBrowser(
             await sfPage.close().catch(() => {})
             activeContext = null
 
+            // BKL-CONN-SF-ADOPT-01: instrumentation — confirm ctx and rhPage state at adoption time
+            console.log('[sf-auth] adoption — ctx valid:', !!ctx, 'rhPage closed:', rhPage.isClosed())
+
             // Re-adopt for all scrapers sharing this SSO context
+            console.log('[sf-auth] calling adoptScrapeContext…')
             adoptScrapeContext(ctx, profileDir, rhPage)
+            console.log('[sf-auth] calling adoptSfContext…')
             adoptSfContext(ctx, profileDir)
+            console.log('[sf-auth] calling adoptSupportableContext…')
             adoptSupportableContext(ctx)
+            console.log('[sf-auth] calling adoptCcspContext…')
             adoptCcspContext(ctx)
             recordSessionEstablished('rh-portal')
             recordSessionEstablished('salesforce')
@@ -222,6 +235,7 @@ export async function startSfLoginBrowser(
             // BKL-CONN-UI: flip loginInProgress AFTER context adoption so the UI never
             // observes the gap where loginInProgress=false but hasSession=false.
             loginInProgress = false
+            _adopting = false
             console.log('[sf-auth] auth restored — circuit breakers reset, all scrapers re-adopted')
 
             onComplete?.()
@@ -267,6 +281,7 @@ export async function startSfLoginBrowser(
         console.log('[sf-auth] browser closed or navigation error — cleaning up')
         // Caller-owned flags: cleanupBrowser no longer resets these.
         loginInProgress = false
+        _adopting = false
         // BKL-CONN-SINGLETON: cleanupBrowser FIRST (closes ctx + releases profile
         // lock), THEN reopenScrapeContextFromAuth (which launches a new Chromium
         // against profileDir). Reverse order races on SingletonLock.
@@ -295,6 +310,14 @@ export async function startSfLoginBrowser(
 }
 
 export async function cancelSfLoginBrowser(profileDir: string): Promise<void> {
+  // BKL-CONN-SF-ADOPT-01: if cancel arrives during the adoption window (between
+  // "RH portal confirmed" and final loginInProgress=false), defer. Adoption is
+  // synchronous from here on and will clean up its own state. Cancelling now
+  // would null activeContext and trip the poll guard, silently aborting adoption.
+  if (_adopting) {
+    console.log('[sf-auth] cancel requested during adoption window — deferring')
+    return
+  }
   // Caller-owned flags: cleanupBrowser no longer resets these.
   // BKL-CONN-CANCEL-REOPEN-01: capture loginInProgress BEFORE reset so we only
   // re-open the RH context when a login was actually in flight. SetupPage unmount
