@@ -30,6 +30,7 @@ const TABLEAU_USER_EMAIL = process.env.TABLEAU_USER_EMAIL ?? ''
 let activeContext: BrowserContext | null = null
 let activePage: Page | null = null
 let loginInProgress = false
+let _activeSsoPopupHandler: ((page: Page) => void) | null = null
 
 export function isTableauLoginInProgress(): boolean {
   return loginInProgress
@@ -93,6 +94,10 @@ async function _closeContext(opts: { harvest: boolean }): Promise<boolean> {
   const page = activePage
   activeContext = null
   activePage = null
+  if (_activeSsoPopupHandler && ctx) {
+    try { ctx.off('page', _activeSsoPopupHandler) } catch { /* ignore */ }
+    _activeSsoPopupHandler = null
+  }
   loginInProgress = false
   setLivePageBusy(false)
   let harvested = false
@@ -158,12 +163,13 @@ export async function startTableauLoginBrowser(): Promise<void> {
 
     // Track any new page the SSO flow opens (popup, new tab) and redirect it back
     // to TABLEAU_URL so focus stays on the Tableau login flow, not an orphaned tab.
-    sharedCtx.on('page', (newPage) => {
+    _activeSsoPopupHandler = (newPage: Page) => {
       if (!loginInProgress) return
-      console.log('[tableau-auth] SSO opened new tab — redirecting to Tableau login URL')
-      newPage.goto(TABLEAU_URL).catch(() => {})
-      activePage = newPage
-    })
+      if (newPage === activePage) return
+      console.log('[tableau-auth] SSO opened popup — closing it; original tab continues SSO flow')
+      setTimeout(() => newPage.close().catch(() => {}), 500)
+    }
+    sharedCtx.on('page', _activeSsoPopupHandler)
 
     page.goto(TABLEAU_URL).catch((e: any) => {
       console.warn('[tableau-auth] initial navigation failed:', e?.message ?? e)
@@ -221,7 +227,7 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
       } catch { /* non-fatal — user can type manually */ }
     }
 
-    if (!loginInProgress || activePage !== page) return false
+    if (!loginInProgress) return false
 
     try {
       const url = page.url()

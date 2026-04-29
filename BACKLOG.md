@@ -7173,6 +7173,17 @@ Related: BKL-SFCACHE-02 (SF L3 write-back regression log assertion) remains 🔴
 
 ---
 
+### BKL-BOOT-07 | CCSP step 4 bootstrap timeout too short for L4 Tableau scrape
+Status: ✅ DONE 2026-04-28
+Priority: P1
+Size: S
+Source: Jason 2026-04-28
+Files: src/bootstrap-orchestrator.ts
+Description: Bootstrap step 4 (Create CCSP Sheet) had a 90s watchdog timeout via STEP_TIMEOUT_MS=90_000. When the CCSP cache hierarchy falls through to L4 (fresh Tableau scrape), the scrape takes 2-3 minutes and the 90s timeout fires, marking the step as error and cancelling the rest of bootstrap. This happens when: (a) no in-memory L1 cache, (b) no existing AE sheet (L2), and (c) no same-day POD CSV in Drive (L3). Fix: added optional timeoutMs param to makeStepTimeout(); CCSP step now passes 300_000 (5 minutes).
+Can we test: YES — delete AE Drive folders so L4 is triggered, run bootstrap, verify CCSP step completes without timeout.
+
+---
+
 ### BKL-BOOTSTRAP-CANCEL-01 | Bootstrap cancel button unresponsive when step is hung
 Status: ✅ DONE 2026-04-27
 Priority: P2
@@ -7681,12 +7692,12 @@ Files: src/tableau-auth.ts
 Decision: TABLEAU_USER_EMAIL env var. waitForTableauLogin fills email input + clicks submit when on email entry page (URL lacks /site/+/views/). Non-fatal — skipped gracefully if unset. Commit f93a08ec7.
 
 ### BKL-ARCH-LEADER-FLAG-01 | Leader flag: one instance does L4 scrapes, all others read Drive only
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-04-28
 Priority: P1
 Size: L
 Source: Session 2026-04-28 (Jason architecture decision)
-Description: For 50-user deployment, one instance (Mac Mini or designated host) is the L4 scraper. It runs CCSP/SF L4 scrapes and writes results to Google Drive (L3). All other instances read Drive only — no SSO or browser session needed beyond one-time Drive OAuth. Non-leader wizard Step 3 (RH/SF/Tableau logins) is hidden entirely. Leader instance is set via LEADER=true in .env. Design per Serena council review 2026-04-28.
-Acceptance: LEADER=true instance runs all L4 scrapes on schedule. LEADER=false instances skip Step 3, show Drive-only connection status, never touch Tableau/SF/RH scraper endpoints.
+Files: src/ccsp-scraper.ts, src/sf-scraper.ts, .env, .env.example
+Decision: IS_LEADER=true env var. Guards added at exact L4 entry points: `scrapeOneAe` (line ~525), `scrapePodCcspRaw` (line ~958), `scrapeSfReport` (line ~459), `listSfReports` (line ~961). Default unset = non-leader (fail-closed). Rook verified no coercion risk. L4 tested end-to-end — Carolanne hit live Tableau scrape (7714 rows), Elmer hit L1 cache (310 rows). BKL-SEC-IS-LEADER-CASE-01 logged for case-sensitivity follow-up.
 
 ### BKL-ARCH-HEARTBEAT-01 | Session heartbeat: periodic lightweight navigation to keep sessions alive overnight
 Status: 🔴 OPEN
@@ -7703,3 +7714,32 @@ Size: S
 Source: Session 2026-04-28 (empirical testing — SSO credential prompt appeared despite recent auth.redhat.com login)
 Description: After SF login establishes shared context (which includes auth.redhat.com session), Tableau's SAML redirect to auth.redhat.com should auto-authenticate without credential prompt. Today's test showed credential prompt still appearing. Need to confirm: (1) auth.redhat.com session IS present in shared context at time of Tableau SAML redirect, (2) the session is being sent in the SAML request, (3) Tableau's SSO realm matches the one established by SF login. May be a session TTL issue (2h expired) or a cookie domain issue.
 Acceptance: After SF login completes, Tableau SAML redirect auto-authenticates without credential prompt. User only needs to type Tableau email, then lands on dashboard.
+
+### BKL-CONN-TABLEAU-SSO-TAB-LOOP-01 | Tableau SSO new tab loop causes wait-for-login to always time out
+Status: ✅ DONE 2026-04-28
+Priority: P0
+Size: S
+Source: Session 2026-04-28 (Serena council diagnosis)
+Files: src/tableau-auth.ts
+Description: `sharedCtx.on('page')` handler redirected every new SSO popup back to TABLEAU_URL, triggering another SSO redirect → another tab → loop × 3. Each iteration mutated `activePage`. `waitForTableauLogin`'s `activePage !== page` guard always failed on the stale reference, so 300s timeout fired every time even after successful login.
+Decision: Handler now closes any popup tab (with 500ms delay) instead of redirecting. `_activeSsoPopupHandler` stored at module level for cleanup. `ctx.off('page', handler)` called in `_closeContext`. Stale-reference guard `activePage !== page` removed — only `!loginInProgress` checked. Serena architecture review confirmed: Red Hat SSO is redirect-based, not popup-driven; closing popups preserves the original tab's SSO flow.
+
+### BKL-SEC-IS-LEADER-CASE-01 | IS_LEADER env var case-sensitive — 'True'/'TRUE'/'1' silently treated as non-leader
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Rook scan 2026-04-28 (post tableau-auth SSO fix)
+Files: src/ccsp-scraper.ts, src/sf-scraper.ts
+Description: `process.env.IS_LEADER !== 'true'` is strict string equality. Any mis-cased value ('True', 'TRUE', '1', 'yes') causes the node to silently behave as a non-leader — L4 scrapes are blocked with no error surfaced. Can cause a correctly-provisioned leader to appear non-functional with no diagnostic output. Fix: normalize to lowercase at read time, log a warning if IS_LEADER is set to anything other than 'true' or empty.
+Acceptance: Setting IS_LEADER=True or IS_LEADER=1 logs a clear warning and treats as non-leader (no silent wrong behavior). Only IS_LEADER=true enables L4. Doc updated in .env.example.
+Can we test: YES — unit test that verifies IS_LEADER='True' guard logs warning and returns non-leader result.
+
+### BKL-CONN-SF-ADOPT-01 | SF re-login breaks RH Portal session — context not re-adopted
+Status: 🔴 OPEN
+Priority: P0
+Size: M
+Source: Session 2026-04-28 (empirical testing — RH portal dropped to not-connected after SF login)
+Files: src/sf-auth.ts, src/rh-scraper.ts
+Description: After SF login completes and logs "RH portal confirmed — adopting shared context", the rh-scraper and sf-scraper adoption logs do NOT appear. The RH Portal session drops to hasSession:false and the shared context is lost. Root cause unknown — adoptScrapeContext appears to be called but the rh-scraper adoption log is absent, and no exception surfaces. Hypothesis: sfPage.close() or the blank tab navigation is invalidating ctx before adoptScrapeContext runs, OR a disconnect handler is firing immediately on context adoption clearing it.
+Acceptance: After SF login success, RH Portal remains hasSession:true, sf-scraper shows adopted log, Tableau connect still works without re-logging into RH Portal.
+Can we test: YES — regression test that after startSfLoginBrowser completes, getScrapeContext() is non-null and getSfContext() is non-null.
