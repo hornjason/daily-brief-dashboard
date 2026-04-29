@@ -8,12 +8,11 @@ import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
 import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
-import { runCcspScrape, writeCcspSheet, consumeTableauSessionExpired, parseTerritoryParts } from './ccsp-scraper.ts'
+import { runCcspScrape, writeCcspSheet, consumeTableauSessionExpired, parseTerritoryParts, checkCcspL3Exists } from './ccsp-scraper.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { fetchCustomerAccountNumbers, normalizeRows } from './sheets.ts'
 import { writeSheetCache, readPipelineCache, readCCSPCache } from './cache-layer.ts'
 import type { PipelineRecord } from './pipeline.ts'
-import { runRhScrapeWithState } from './scraper-manager.ts'
 import { enqueueScraperTask } from './background-scheduler.ts'
 import { getAiConfig } from './settings-api.ts'
 
@@ -1305,39 +1304,11 @@ export async function bootstrapPOD(opts: {
       .catch(e => console.warn('[pod-bootstrap] brief pregen trigger failed:', e?.message))
   }
 
-  // BKL-BOOT-06: Auto-trigger account discovery after POD bootstrap completes.
-  // runRhScrapeWithState with no account numbers searches RH Portal by customer name
-  // for all customers missing account numbers — the right discovery mechanism for new customers.
-  if (succeeded.length > 0) {
-    try {
-      enqueueScraperTask({
-        name: 'rh-cases',
-        run: () => runRhScrapeWithState(),
-        source: 'manual',
-        enqueuedAt: Date.now(),
-      })
-      console.log('[pod-bootstrap] BKL-BOOT-06: enqueued post-bootstrap RH cases scrape (pass 1 — account discovery)')
-    } catch (e: any) {
-      console.warn('[pod-bootstrap] Failed to enqueue post-bootstrap RH scrape (pass 1):', e?.message)
-    }
-
-    // BKL-BOOT-07: Second pass — fetch cases for accounts discovered in pass 1.
-    // Pass 1 runs name-search and stores account numbers in customers.json.
-    // Pass 2 runs 10 minutes later with those account numbers to fetch support cases.
-    setTimeout(() => {
-      try {
-        enqueueScraperTask({
-          name: 'rh-cases',
-          run: () => runRhScrapeWithState(),
-          source: 'manual',
-          enqueuedAt: Date.now(),
-        })
-        console.log('[pod-bootstrap] BKL-BOOT-07: enqueued post-bootstrap RH cases scrape (pass 2 — case fetch after account discovery)')
-      } catch (e: any) {
-        console.warn('[pod-bootstrap] Failed to enqueue post-bootstrap RH scrape (pass 2):', e?.message)
-      }
-    }, 10 * 60 * 1000)
-  }
+  // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — it runs on its own timer
+  // (background-scheduler), not during bootstrap. Triggering it here previously raced
+  // SF/CCSP scrapes on the shared Chromium context. Account discovery and case fetch
+  // will happen at the next scheduled RH cases run.
+  // (Previously BKL-BOOT-06 / BKL-BOOT-07 enqueued two passes here — removed.)
 
   return { succeeded, skipped, failed }
 }
@@ -1632,15 +1603,15 @@ export function registerBootstrapRoutes(app: Hono): void {
       }
     }
 
-    // BKL-BOOTSTRAP-CANCEL-01: Per-step watchdog — fires if a step is still 'running' after 90s
-    const makeStepTimeout = (idx: number, label: string): ReturnType<typeof setTimeout> =>
+    // BKL-BOOTSTRAP-CANCEL-01: Per-step watchdog — fires if a step is still 'running' after timeout
+    const makeStepTimeout = (idx: number, label: string, timeoutMs = STEP_TIMEOUT_MS): ReturnType<typeof setTimeout> =>
       setTimeout(() => {
         if (autoBootstrapState.steps[idx]?.status === 'running') {
-          console.warn(`[auto-bootstrap] Step ${idx} (${label}) timed out after ${STEP_TIMEOUT_MS / 1000}s`)
-          setStep(idx, 'error', `Step timed out after ${STEP_TIMEOUT_MS / 1000}s`)
+          console.warn(`[auto-bootstrap] Step ${idx} (${label}) timed out after ${timeoutMs / 1000}s`)
+          setStep(idx, 'error', `Step timed out after ${timeoutMs / 1000}s`)
           autoBootstrapCancelRequested = true
         }
-      }, STEP_TIMEOUT_MS)
+      }, timeoutMs)
 
     // Hard timeout: scales with AE count (min 60 min, +30 min per AE)
     const autoTimeoutMin = Math.max(60, aes.length * 30)
@@ -2076,7 +2047,7 @@ export function registerBootstrapRoutes(app: Hono): void {
         setStep(4, 'skipped', 'Skipped: Drive folder creation failed')
         console.log('[auto-bootstrap] Skipping CCSP sheet — no Drive folder')
       } else {
-        const tid4 = makeStepTimeout(4, 'Create CCSP Sheet')
+        const tid4 = makeStepTimeout(4, 'Create CCSP Sheet', 300_000)
         try {
           setStep(4, 'running')
           const currentAe = aes.find(a => a.name === aeName)!
@@ -2084,6 +2055,29 @@ export function registerBootstrapRoutes(app: Hono): void {
           const existingCcspId = aes.find(a => a.name === aeName)?.ccspSheetId
             ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `${aeName} CCSP`) : null)
             ?? null
+
+          // ─── BKL-BOOT-SCRAPE-ORDER-01: L3-existence short-circuit ───────────
+          // On fresh bootstrap, if today's CCSP-${pod}-${YYYY-MM-DD}.csv already exists
+          // in the POD's Subscription Data folder (L3), skip the L4 Tableau scrape entirely.
+          // Prevents Tableau navigation from running concurrent with SF/RH bootstrap steps
+          // and crashing the shared Chromium context.
+          let ccspPodBookingsFolderId = ''
+          try {
+            const firstTerritory = tableauTerritories[0]
+            const rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+            const normalized = normalizeSettings(rawSettings)
+            const podKey = firstTerritory?.replace(/_TERR\d+$/, '')
+            const region = podKey
+              ? (normalized.regions.find(r => podKey in r.pods) ?? normalized.regions[0])
+              : normalized.regions[0]
+            ccspPodBookingsFolderId = region?.podBookingsFolderId ?? ''
+          } catch { /* no settings — proceed without L3 short-circuit */ }
+          if (await checkCcspL3Exists(ccspAe, ccspPodBookingsFolderId || undefined)) {
+            console.log(`[bootstrap] ${aeName}: CCSP L3 hit today — skipping L4 Tableau scrape`)
+            emitCacheLevel({ ae: aeName, flow: 'ccsp', level: 3 })
+            setStep(4, 'done', 'Skipped L4 Tableau — today\'s CCSP CSV already on Drive (L3 hit)')
+            console.log(`[auto-bootstrap] CCSP step done via L3 short-circuit for ${aeName}`)
+          } else {
 
           // ─── BKL-CACHE-HIER-01: 4-level CCSP cache hierarchy ───────────────
           // L1 = on-disk ccsp-data.json cachedAt<24h + includes this AE's sheet ID
@@ -2145,6 +2139,7 @@ export function registerBootstrapRoutes(app: Hono): void {
           setStep(4, 'done', ccspMsg)
           if (totalCcspRows === 0) console.warn(`[auto-bootstrap] CCSP sheet created with 0 records — no territory data found; check territory mapping and Tableau filters`)
           else console.log(`[auto-bootstrap] CCSP sheet ${existingCcspId ? 'updated' : 'created'}: ${sheetId} (${totalCcspRows} records)`)
+          } // end BKL-BOOT-SCRAPE-ORDER-01 else (L3 short-circuit not taken)
         } catch (e: any) {
           setStep(4, 'error', e.message)
           autoBootstrapState.error = `CCSP sheet failed: ${e.message}`
@@ -2403,20 +2398,10 @@ export function registerBootstrapRoutes(app: Hono): void {
 
       console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
 
-      // BKL-BOOT-06: Auto-trigger account discovery after single-AE bootstrap completes.
-      // runRhScrapeWithState searches RH Portal by customer name for customers missing
-      // account numbers — the Sync Now button stays greyed out until this runs.
-      try {
-        enqueueScraperTask({
-          name: 'rh-cases',
-          run: () => runRhScrapeWithState(),
-          source: 'manual',
-          enqueuedAt: Date.now(),
-        })
-        console.log(`[auto-bootstrap] BKL-BOOT-06: enqueued post-bootstrap RH cases scrape for ${aeName}`)
-      } catch (e: any) {
-        console.warn('[auto-bootstrap] Failed to enqueue post-bootstrap RH scrape:', e?.message)
-      }
+      // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — do not trigger during bootstrap.
+      // The next scheduled run will pick up account discovery + case fetch for the new AE.
+      // (Previously BKL-BOOT-06 enqueued an rh-cases scrape here — removed to keep the
+      // shared Chromium context unloaded during the fragile bootstrap window.)
 
       notify('Bootstrap Complete', `All steps complete for ${aeName}`, 'high').catch(() => {})
     })()

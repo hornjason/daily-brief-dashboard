@@ -1201,15 +1201,19 @@ export function initBackgroundScheduler(opts: {
         console.log('[sync-state] catch-up: sync ran during stabilisation window — skipping')
         return
       }
-      console.log('[sync-state] catch-up: triggering CCSP and Pipeline via queue (source: startup)')
-      // CCSP catch-up: reuse existing enqueue pattern — only if ccspEnabled
-      const ccspCfg = getSchedulerConfig()
-      if (ccspCfg.ccspEnabled) {
-        import('./server-state.ts').then(({ aes: catchupAes }) => {
-          if (catchupAes.length === 0) {
-            console.log('[sync-state] catch-up: no AEs configured — skipping CCSP catch-up')
-            return
-          }
+      // BKL-BOOT-SCRAPE-ORDER-01: Top-level guard — if no AEs are configured yet
+      // (fresh container, before bootstrap), skip ALL catch-up scrapes entirely.
+      // Without this guard, catch-up fires CCSP/pipeline against an empty AE list
+      // while the user is mid-bootstrap, racing the shared Chromium context.
+      import('./server-state.ts').then(({ aes: catchupAes }) => {
+        if (!catchupAes || catchupAes.length === 0) {
+          console.log('[sync-state] catch-up skipped — no AEs configured yet')
+          return
+        }
+        console.log('[sync-state] catch-up: triggering CCSP and Pipeline via queue (source: startup)')
+        // CCSP catch-up: reuse existing enqueue pattern — only if ccspEnabled
+        const ccspCfg = getSchedulerConfig()
+        if (ccspCfg.ccspEnabled) {
           enqueueScraperTask({
             name: 'ccsp',
             run: async () => {
@@ -1220,12 +1224,10 @@ export function initBackgroundScheduler(opts: {
             source: 'startup',
             enqueuedAt: Date.now(),
           })
-        }).catch(e => console.warn('[sync-state] catch-up: CCSP enqueue failed:', e?.message))
-      }
-      // Pipeline catch-up: reuse existing enqueue pattern — only if sfPipelineEnabled and session present
-      const pipeCfg = getSchedulerConfig()
-      if (pipeCfg.sfPipelineEnabled) {
-        import('./server-state.ts').then(({ aes: catchupAes }) => {
+        }
+        // Pipeline catch-up: reuse existing enqueue pattern — only if sfPipelineEnabled and session present
+        const pipeCfg = getSchedulerConfig()
+        if (pipeCfg.sfPipelineEnabled) {
           enqueueScraperTask({
             name: 'sf-pipeline',
             run: async () => {
@@ -1240,8 +1242,8 @@ export function initBackgroundScheduler(opts: {
             source: 'startup',
             enqueuedAt: Date.now(),
           })
-        }).catch(e => console.warn('[sync-state] catch-up: pipeline enqueue failed:', e?.message))
-      }
+        }
+      }).catch(e => console.warn('[sync-state] catch-up: server-state import failed:', e?.message))
     }, 60_000)
   } else {
     console.log('[sync-state] today\'s sync already ran — skipping catch-up')

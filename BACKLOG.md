@@ -7734,6 +7734,16 @@ Description: `process.env.IS_LEADER !== 'true'` is strict string equality. Any m
 Acceptance: Setting IS_LEADER=True or IS_LEADER=1 logs a clear warning and treats as non-leader (no silent wrong behavior). Only IS_LEADER=true enables L4. Doc updated in .env.example.
 Can we test: YES — unit test that verifies IS_LEADER='True' guard logs warning and returns non-leader result.
 
+### BKL-BOOT-SCRAPE-ORDER-01 | Bootstrap scrape discipline — auth-only Step 3, sequential bootstrap, suppress background scrapers until first AE done
+Status: 🟡 IN PROGRESS
+Priority: P0
+Size: M
+Source: Session 2026-04-29 (Jason architecture review — browser contention root cause)
+Files: server.ts, src/bootstrap-orchestrator.ts, src/scraper-manager.ts (or background-scheduler.ts)
+Description: Step 3 (Connections) triggers scraping immediately on auth — SF onComplete fires runSfSyncForAes, startup catch-up fires CCSP/pipeline/RH cases before any AE exists. This causes shared Chromium contention (newPage() 30s timeout) on fresh containers. Correct design: (1) Step 3 = auth only, zero scraping; (2) catch-up suppressed until at least one AE has bootstrapComplete:true; (3) bootstrap drives SF → CCSP sequentially, each step waits for L3 write before proceeding; (4) CCSP checks for today's CCSP Drive CSV before doing L4; (5) RH Cases not run during initial bootstrap.
+Acceptance: Fresh container: connect RH Portal + SF → no scraping fires. Start bootstrap → SF runs → writes L3 → CCSP runs (L3 hit skips L4, L3 miss does L4) → writes L3 → done. RH Cases not triggered. No browser contention. CCSP does not call newPage() while SF is using the browser.
+Can we test: YES — regression test that (a) SF onComplete does NOT call runSfSyncForAes, (b) catch-up skipped when aes.json empty, (c) bootstrap CCSP step checks today's Drive CSV before L4.
+
 ### BKL-CONN-SF-ADOPT-01 | SF re-login breaks RH Portal session — context not re-adopted
 Status: 🔴 OPEN
 Priority: P0

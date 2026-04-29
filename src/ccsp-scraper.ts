@@ -130,6 +130,45 @@ export let ccspScrapeStartedAt: number | null = null
 export function recordCcspRefreshAt(): void {
   lastCcspScrape = new Date().toISOString()
 }
+
+/**
+ * BKL-BOOT-SCRAPE-ORDER-01: L3 existence check — does today's `CCSP-${pod}-${YYYY-MM-DD}.csv`
+ * exist in the POD's Subscription Data Drive folder? Used by bootstrap to skip the heavy
+ * L4 Tableau scrape when an L3 cache is already on Drive.
+ *
+ * Mirrors the exact lookup used in scrapeOneAe (line ~455 of this file): same filename
+ * convention, same Drive query. Does NOT download or parse — existence only.
+ *
+ * Returns true only on a confirmed Drive hit. Returns false on miss, error, or missing inputs
+ * — callers fall through to the normal L1→L2→L3→L4 path inside runCcspScrape.
+ */
+export async function checkCcspL3Exists(ae: AE, podBookingsFolderId: string | undefined): Promise<boolean> {
+  if (!podBookingsFolderId) return false
+  const territories = (ae.tableauTerritories ?? []).filter(Boolean)
+  if (territories.length === 0) return false
+  try {
+    const podName = parseTerritoryParts(territories[0]).pod
+    if (!podName) return false
+    const today = new Date().toISOString().slice(0, 10)
+    const cacheFileName = `CCSP-${podName}-${today}.csv`
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+    const listRes = await withQuotaRetry(
+      () => drive.files.list({
+        q: `name = '${cacheFileName}' and '${podBookingsFolderId}' in parents and trashed = false`,
+        fields: 'files(id, name)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      }),
+      'CCSP L3 existence check',
+    )
+    return Boolean(listRes.data.files && listRes.data.files.length > 0)
+  } catch (e: any) {
+    // Fail-open to false: on any Drive error, defer to runCcspScrape's own resilient path
+    console.warn('[ccsp] checkCcspL3Exists: Drive error — falling through to L4:', e?.message ?? e)
+    return false
+  }
+}
 const STALE_MUTEX_MS = 15 * 60 * 1000  // 15 minutes
 
 const CCSP_DEBUG = process.env.CCSP_DEBUG === 'true'

@@ -612,14 +612,11 @@ app.post('/api/auth/salesforce/start', async (c) => {
   try {
     await startSfLoginBrowser(SF_SESSION_PATH, RH_PROFILE_DIR, () => {
       setSfSyncLastError(null)  // BKL-UX94: clear stale error so sessionExpired resets immediately after login
-      // Auto-trigger a pipeline sync for each configured AE after login
-      const aesWithSf = aes.filter(a => a.sfReportId && a.driveFolderId)
-      if (aesWithSf.length) {
-        runSfSyncForAes(aesWithSf)
-      } else if (SF_REPORT_ID && process.env.PIPELINE_FILE_ID) {
-        // Fallback to env vars for backwards compatibility
-        runSfPipelineSync(SF_REPORT_ID, RH_PROFILE_DIR, process.env.PIPELINE_FILE_ID).catch((e: any) => console.error('[sf-sync] env fallback failed:', e?.message ?? e))
-      }
+      // BKL-BOOT-SCRAPE-ORDER-01: SF auth completing only establishes the session.
+      // Data sync is driven by bootstrap, not auth — do not add scraping here.
+      // Previously this fired runSfSyncForAes() which kicked off a heavy Lightning
+      // report scrape concurrent with bootstrap CCSP, crashing the shared Chromium.
+      console.log('[sf-auth] session established — data sync deferred to bootstrap/scheduler')
     })
     return c.json({ started: true })
   } catch (e: any) {
