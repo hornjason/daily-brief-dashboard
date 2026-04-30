@@ -192,10 +192,11 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
     previewAeNames && previewAeNames.length > 0 ? previewAeNames : []
 
   const hasReportForPod = selectedPod.length > 0 && Boolean(podSfReportMap[selectedPod])
+  const hasPodSfReports = Object.values(podSfReportMap).some(id => !!id)
   const showRegionSelector = !!regions && regions.length > 1 && !!setSelectedRegion
 
   // Selected region label (used in the territory sheet row when multi-region)
-  const selectedRegionLabel = regions?.find(r => r.id === selectedRegion)?.label ?? 'Territory Sheet'
+  const selectedRegionLabel = regions?.find(r => r.id === selectedRegion)?.label ?? ''
 
   return (
     <div className="space-y-3">
@@ -224,7 +225,7 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
             onChange={() => { /* single option per region — driven by region selector */ }}
             className={`flex-1 bg-surface border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent ${territorySheetUrl ? 'border-border' : 'bg-blue-600/40 border-blue-500/60'}`}
           >
-            <option value={territorySheetUrl}>{selectedRegionLabel} Territory Sheet</option>
+            <option value={territorySheetUrl}>{selectedRegionLabel ? `${selectedRegionLabel} Territory Sheet` : 'Territory Sheet'}</option>
           </select>
           <a
             href={territorySheetUrl}
@@ -239,48 +240,52 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
       </div>
 
       {/* 2 — POD dropdown (auto-fills SF Report ID on change) */}
-      <div>
-        <label className="block text-xs text-text-secondary mb-1">POD / Region *</label>
-        <select
-          data-testid="pod-select"
-          value={selectedPod}
-          onChange={e => setSelectedPod(e.target.value)}
-          className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent ${selectedPod ? 'border-border' : 'bg-blue-600/40 border-blue-500/60'}`}
-        >
-          <option value="">Select POD…</option>
-          {podOptions.map(opt => {
-            const label = (podLabels && podLabels[opt.value]) ? podLabels[opt.value] : opt.label
-            return <option key={opt.value} value={opt.value}>{label}</option>
-          })}
-        </select>
-      </div>
+      {hasPodSfReports && (
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">POD / Region *</label>
+          <select
+            data-testid="pod-select"
+            value={selectedPod}
+            onChange={e => setSelectedPod(e.target.value)}
+            className={`w-full bg-surface border rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent ${selectedPod ? 'border-border' : 'bg-blue-600/40 border-blue-500/60'}`}
+          >
+            <option value="">Select POD…</option>
+            {podOptions.map(opt => {
+              const label = (podLabels && podLabels[opt.value]) ? podLabels[opt.value] : opt.label
+              return <option key={opt.value} value={opt.value}>{label}</option>
+            })}
+          </select>
+        </div>
+      )}
 
-      {/* 3 — SF Report ID (read-only when POD map provides it; editable otherwise) */}
-      <div>
-        <label className="block text-xs text-text-secondary mb-1">
-          {hasReportForPod ? 'SF Report ID (auto-filled)' : 'SF Report ID'}
-        </label>
-        {hasReportForPod ? (
-          <input
-            type="text"
-            value={sfReportId}
-            readOnly
-            placeholder={selectedPod ? '' : 'Select a POD to auto-fill'}
-            className="w-full bg-surface/50 border border-border rounded-lg px-3 py-2 text-sm text-text-secondary font-mono cursor-not-allowed focus:outline-none"
-          />
-        ) : (
-          <input
-            type="text"
-            value={sfReportId}
-            onChange={(e) => onSfReportIdChange?.(e.target.value)}
-            placeholder={selectedPod ? 'Paste SF Report ID' : 'Select a POD first'}
-            className="w-full bg-surface/50 border border-border rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
-          />
-        )}
-        {selectedPod && !hasReportForPod && (
-          <p className="text-xs text-warning mt-1">Enter your SF Report ID above, or contact ops if you don't have one.</p>
-        )}
-      </div>
+      {/* 3 — SF Report ID (hidden when no region has SF report IDs configured) */}
+      {hasPodSfReports && (
+        <div>
+          <label className="block text-xs text-text-secondary mb-1">
+            {hasReportForPod ? 'SF Report ID (auto-filled)' : 'SF Report ID'}
+          </label>
+          {hasReportForPod ? (
+            <input
+              type="text"
+              value={sfReportId}
+              readOnly
+              placeholder={selectedPod ? '' : 'Select a POD to auto-fill'}
+              className="w-full bg-surface/50 border border-border rounded-lg px-3 py-2 text-sm text-text-secondary font-mono cursor-not-allowed focus:outline-none"
+            />
+          ) : (
+            <input
+              type="text"
+              value={sfReportId}
+              onChange={(e) => onSfReportIdChange?.(e.target.value)}
+              placeholder={selectedPod ? 'Paste SF Report ID' : 'Select a POD first'}
+              className="w-full bg-surface/50 border border-border rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
+            />
+          )}
+          {selectedPod && !hasReportForPod && (
+            <p className="text-xs text-warning mt-1">Enter your SF Report ID above, or contact ops if you don't have one.</p>
+          )}
+        </div>
+      )}
 
       {/* 4 — Parent Drive Folder (editable, Full POD mode only) ─────────── */}
       {/* Editable URL/ID field + Validate button. On successful validate we: */}

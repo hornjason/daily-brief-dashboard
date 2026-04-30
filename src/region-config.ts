@@ -186,6 +186,30 @@ export function derivePodKeywordMap(region: RegionConfig): Record<string, string
       keywords.add('south central')
       keywords.add('sc')
     }
+
+    // For pod keys ending in bare _POD (no number): use geographic segments before _POD
+    if (last === 'pod') {
+      // Find geographic segments: skip leading directional (e.g. 'southeast', 'northeast')
+      // and type segments ('ent', 'comm', 'corp'), use what's left before 'pod'
+      const geoSegments = segments.slice(0, -1).filter(s =>
+        !['east', 'west', 'north', 'south', 'central', 'northeast', 'northwest',
+          'southeast', 'southwest', 'ent', 'comm', 'corp'].includes(s)
+      )
+      if (geoSegments.length > 0) {
+        const geoKey = geoSegments.join(' ')      // e.g. "nc sc"
+        const slashKey = geoSegments.join('/')    // e.g. "nc/sc"
+        keywords.add(geoKey)
+        keywords.add(slashKey)
+      }
+    }
+
+    // For pod keys ending in _POD01, _POD02, etc.: add unpadded "pod N" variant
+    const podNumMatch = last.match(/^pod0?(\d+)$/)
+    if (podNumMatch) {
+      keywords.add(`pod ${podNumMatch[1]}`)    // "pod 1", "pod 2", etc.
+      keywords.add(`pod${podNumMatch[1]}`)     // "pod1", "pod2" (no space)
+    }
+
     out[key] = Array.from(keywords)
   }
   return out

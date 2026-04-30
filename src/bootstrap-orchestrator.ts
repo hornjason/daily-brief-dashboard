@@ -705,6 +705,19 @@ export function requestPodBootstrapCancel(): boolean {
 }
 
 /**
+ * Derive a pod key from an East-style territory code embedded in an AE cell.
+ * East codes: "East_Comm_Corp_Pod1_Terr01" → "EAST_COMM_CORP_POD01"
+ * Returns empty string if the code doesn't contain a recognizable pod prefix.
+ */
+function podKeyFromTerritoryCode(terrCode: string): string {
+  const withoutTerr = terrCode.replace(/_?Terr?\d+$/i, '')
+  if (!withoutTerr) return ''
+  let key = withoutTerr.toUpperCase().replace(/-/g, '_')
+  key = key.replace(/POD(\d)$/, (_, d) => `POD0${d}`)
+  return key
+}
+
+/**
  * Read the territory sheet and extract a map of AE name → { territories, customerNames }.
  * Reuses the same parsing logic as territory-sync.ts but returns raw AE-level data
  * rather than a diff against the current customer list.
@@ -718,17 +731,15 @@ async function readAEsFromTerritorySheet(
 
   const sheetsClient = google.sheets({ version: 'v4', auth })
   const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: territorySheetId })
-  const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
+  const tabNames = (meta.data.sheets ?? [])
+    .filter(s => !s.properties?.hidden)
+    .map(s => s.properties?.title ?? '')
 
-  // When a specific POD tab is requested, skip the corp/commercial pre-filter so
+  // When a specific POD tab is requested, skip the pre-filter so
   // enterprise tabs (e.g. "TOLA") are not excluded before the pod-name filter runs.
   const candidateTabs = podTabTitle
     ? tabNames
-    : tabNames.filter(t => {
-        const lower = t.toLowerCase()
-        return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
-               !lower.includes('accounts a')
-      })
+    : tabNames.filter(t => !t.toLowerCase().includes('accounts a') && !t.toLowerCase().includes('territory pods'))
 
   // When a POD is selected, restrict to matching tab using word-level match.
   // Accepts either an exact tab name OR a Drive sheet displayName (e.g. "Northwest", "TOLA").
@@ -740,7 +751,8 @@ async function readAEsFromTerritorySheet(
       })
     : candidateTabs
 
-  // Same pod-prefix logic as territory-sync.ts
+  // West-style fallback: derive pod key from tab title for cells that
+  // contain only a bare "Terr01" without a full embedded code.
   const podPrefixFromTab = (tabTitle: string): string => {
     const t = tabTitle.toLowerCase()
     if (t.includes('northwest') || t.includes('nw')) return 'WEST_COMM_CORP_NORTHWEST'
@@ -755,9 +767,7 @@ async function readAEsFromTerritorySheet(
   const aeMap = new Map<string, { territories: Set<string>; customerNames: Set<string> }>()
 
   for (const tabTitle of filteredTabs) {
-    const podPrefix = podPrefixFromTab(tabTitle)
-    if (!podPrefix) continue
-
+    const tabFallbackPodKey = podPrefixFromTab(tabTitle)
     const resp = await sheetsClient.spreadsheets.values.get({
       spreadsheetId: territorySheetId,
       range: `'${tabTitle}'!A1:Z60`,
@@ -795,14 +805,18 @@ async function readAEsFromTerritorySheet(
       if (aeCell.includes('\n')) {
         terrCode = aeCell.split('\n')[1].trim()
       } else {
-        const terrMatch = aeCell.match(/\bTerr(\d+)\b/i)
+        const terrMatch = aeCell.match(/Terr(\d+)/i)
         if (terrMatch) terrCode = terrMatch[0]
       }
 
+      // Derive pod key from territory code (works for East-style full codes).
+      // Falls back to tab-title-derived West key for bare "TerrNN" cells.
+      const derivedPodKey = podKeyFromTerritoryCode(terrCode) || tabFallbackPodKey
+      if (!derivedPodKey) continue
       const terrNumMatch = terrCode.match(/(\d+)/)
       if (!terrNumMatch) continue
       const terrNum = terrNumMatch[1].padStart(2, '0')
-      const tableauTerritory = `${podPrefix}_TERR${terrNum}`
+      const tableauTerritory = `${derivedPodKey}_TERR${terrNum}`
 
       // Ensure AE entry exists in map
       if (!aeMap.has(aeName)) {

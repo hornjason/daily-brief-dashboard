@@ -118,7 +118,7 @@ export function isEnterpriseTab(rows: string[][]): boolean {
       const c = String(cell ?? '').trim()
       if (!hasAeHeader && /^account executive$/i.test(c)) hasAeHeader = true
       // Match "Ter01" (single-r) and "Terr01" (double-r) territory codes
-      if (!hasTerrCode && /\bTerr?\d{1,2}\b/i.test(c)) hasTerrCode = true
+      if (!hasTerrCode && /Terr?\d+/i.test(c)) hasTerrCode = true
       if (hasAeHeader && hasTerrCode) return true
     }
   }
@@ -159,14 +159,14 @@ export function extractEnterpriseAeMap(rows: string[][]): Record<string, string[
         const parts = rawAeCell.split('\n')
         aeName = parts[0].trim()
         // Extract primary territory number from second part
-        const terrMatch = parts[1]?.trim().match(/\bTerr?(\d{1,2})\b/i)
+        const terrMatch = parts[1]?.trim().match(/Terr?(\d+)/i)
         if (terrMatch) terrCode = `Terr${terrMatch[1].padStart(2, '0')}`
       } else {
         aeName = rawAeCell
         // Territory code is within the next 1-3 rows at the same column
         for (let r = headerRow + 2; r <= headerRow + 4 && r < rows.length; r++) {
           const candidate = String(rows[r]?.[col] ?? '').trim()
-          const m = candidate.match(/\bTerr?\d{1,2}\b/i)
+          const m = candidate.match(/Terr?\d+/i)
           if (m) { terrCode = m[0]; break }
         }
       }
@@ -220,7 +220,7 @@ export function extractEnterpriseAeAccounts(rows: string[][], aeName: string): s
         accountsStartRow = headerRow + 2
         for (let r = headerRow + 2; r <= headerRow + 4 && r < rows.length; r++) {
           const candidate = String(rows[r]?.[col] ?? '').trim()
-          if (candidate.match(/\bTerr?\d{1,2}\b/i)) {
+          if (candidate.match(/Terr?\d+/i)) {
             accountsStartRow = r + 1
             break
           }

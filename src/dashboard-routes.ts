@@ -184,6 +184,22 @@ function podPrefixFromTabTitle(tabTitle: string): string {
   return ''
 }
 
+/**
+ * Derive a pod key from an East-style territory code embedded in an AE cell.
+ * East codes: "East_Comm_Corp_Pod1_Terr01" → "EAST_COMM_CORP_POD01"
+ * Returns empty string if the code doesn't contain a recognizable pod prefix.
+ */
+function podKeyFromTerritoryCode(terrCode: string): string {
+  // Strip _Terr\d+ suffix (with or without leading underscore)
+  const withoutTerr = terrCode.replace(/_?Terr?\d+$/i, '')
+  if (!withoutTerr) return ''
+  // Uppercase and normalize
+  let key = withoutTerr.toUpperCase().replace(/-/g, '_')
+  // Zero-pad single digit after POD: POD1 → POD01
+  key = key.replace(/POD(\d)$/, (_, d) => `POD0${d}`)
+  return key
+}
+
 function getSheetAndTypeForPod(pod: string): { sheetId: string; regionType: 'commercial' | 'enterprise' } {
   try {
     const raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
@@ -793,7 +809,9 @@ export function registerDashboardRoutes(app: Hono): void {
       const sheetsClient = google.sheets({ version: 'v4', auth })
       const { sheetId, regionType } = getSheetAndTypeForPod(pod)
       const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: sheetId })
-      const tabNames = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
+      const tabNames = (meta.data.sheets ?? [])
+        .filter(s => !s.properties?.hidden)
+        .map(s => s.properties?.title ?? '')
 
       const territories: { num: string; aeName: string }[] = []
 
@@ -830,17 +848,53 @@ export function registerDashboardRoutes(app: Hono): void {
           break // Only one enterprise tab expected
         }
       } else {
-        // Commercial path (existing logic)
-        const corpTabs = tabNames.filter(t => {
-          const lower = t.toLowerCase()
-          return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
-                 !lower.includes('accounts a')
-        })
+        // Commercial path: scan ALL tabs for "Account Executive" header,
+        // then derive pod key from territory code in the AE cell.
+        for (const tabTitle of tabNames) {
+          if (tabTitle.toLowerCase().includes('accounts a')) continue
 
-        for (const tabTitle of corpTabs) {
-          const podPrefix = podPrefixFromTabTitle(tabTitle)
-          if (podPrefix !== pod) continue
+          const probeResp = await sheetsClient.spreadsheets.values.get({
+            spreadsheetId: sheetId,
+            range: `'${tabTitle}'!A1:Z10`,
+          })
+          const probeRows: string[][] = (probeResp.data.values ?? []).map((r: any[]) =>
+            r.map((cell: any) => String(cell ?? '').trim())
+          )
 
+          // Find "Account Executive" header row
+          let headerRowIdx = -1
+          for (let r = 0; r < probeRows.length; r++) {
+            if (probeRows[r].some(cell => /^account executive$/i.test(cell))) { headerRowIdx = r; break }
+          }
+          if (headerRowIdx === -1) continue
+
+          const aeNameRow = probeRows[headerRowIdx + 1] ?? []
+          const headerRow = probeRows[headerRowIdx] ?? []
+          const aeCols = headerRow
+            .map((cell, idx) => ({ cell, idx }))
+            .filter(({ cell }) => /^account executive$/i.test(cell))
+            .map(({ idx }) => idx)
+
+          // Determine pod key for this tab — try territory-code derivation first, fall back to tab-title keywords
+          let tabPodKey = ''
+          for (const col of aeCols) {
+            const aeCell = aeNameRow[col] ?? ''
+            if (!aeCell) continue
+            // East-style: code embedded in cell (with or without \n)
+            const terrCodeMatch = aeCell.match(/([A-Za-z][A-Za-z_]+_Terr?\d+)/i)
+            if (terrCodeMatch) {
+              tabPodKey = podKeyFromTerritoryCode(terrCodeMatch[1])
+              if (tabPodKey) break
+            }
+          }
+          // Fallback: tab-title keyword match for West-style tabs
+          if (!tabPodKey) {
+            tabPodKey = podPrefixFromTabTitle(tabTitle)
+          }
+
+          if (tabPodKey !== pod) continue
+
+          // Full fetch for this tab
           const resp = await sheetsClient.spreadsheets.values.get({
             spreadsheetId: sheetId,
             range: `'${tabTitle}'!A1:Z60`,
@@ -849,26 +903,27 @@ export function registerDashboardRoutes(app: Hono): void {
             r.map((c: any) => String(c ?? '').trim())
           )
 
-          let headerRowIdx = -1
+          let fullHeaderIdx = -1
           for (let r = 0; r < rows.length; r++) {
-            if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
+            if (rows[r].some(cell => /^account executive$/i.test(cell))) { fullHeaderIdx = r; break }
           }
-          if (headerRowIdx === -1) continue
+          if (fullHeaderIdx === -1) continue
 
-          const aeNameRowIdx = headerRowIdx + 1
-          const headerRow = rows[headerRowIdx] ?? []
-          const aeNameRow = rows[aeNameRowIdx] ?? []
-          const aeCols = headerRow.map((cell, idx) => ({ cell, idx }))
-            .filter(({ cell }) => cell === 'Account Executive').map(({ idx }) => idx)
+          const fullAeNameRow = rows[fullHeaderIdx + 1] ?? []
+          const fullHeaderRow = rows[fullHeaderIdx] ?? []
+          const fullAeCols = fullHeaderRow
+            .map((cell, idx) => ({ cell, idx }))
+            .filter(({ cell }) => /^account executive$/i.test(cell))
+            .map(({ idx }) => idx)
 
-          for (const col of aeCols) {
-            const aeCell = aeNameRow[col] ?? ''
+          for (const col of fullAeCols) {
+            const aeCell = fullAeNameRow[col] ?? ''
             if (!aeCell) continue
             let aeName = aeCell; let terrCode = ''
             if (aeCell.includes('\n')) {
-              const parts = aeCell.split('\n'); aeName = parts[0].trim(); terrCode = parts[1].trim()
+              const parts = aeCell.split('\n'); aeName = parts[0].trim(); terrCode = parts[1]?.trim() ?? ''
             } else {
-              const terrMatch = aeCell.match(/\bTerr(\d+)\b/i)
+              const terrMatch = aeCell.match(/Terr(\d+)/i)
               if (terrMatch) { aeName = aeCell.replace(/\s*Terr\d+\s*/i, '').trim(); terrCode = terrMatch[0] }
             }
             if (!aeName || /^TBH$/i.test(aeName.trim())) continue
@@ -877,7 +932,7 @@ export function registerDashboardRoutes(app: Hono): void {
             const num = terrNumMatch[1].padStart(2, '0')
             territories.push({ num, aeName })
           }
-          break  // Found the matching tab, no need to check others
+          break
         }
       }
 
