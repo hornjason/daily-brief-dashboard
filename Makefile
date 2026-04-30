@@ -673,6 +673,7 @@ sync-up: sync-down
 	  -v $(SYNC_DATA_DIR):/data:rw,Z \
 	  --env-file $(SYNC_ENV_FILE) \
 	  -e NODE_ROLE=primary \
+	  -e SYNC_DAEMON=true \
 	  -e TABLEAU_USER_EMAIL=jhorn@redhat.com \
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
@@ -681,8 +682,7 @@ sync-up: sync-down
 	  --memory=4g \
 	  --restart=unless-stopped \
 	  --name pai-sync-l3 \
-	  localhost/daily-brief-dashboard:latest \
-	  bun scripts/sync-l3-daemon.ts
+	  localhost/daily-brief-dashboard:latest
 	@echo "Sync daemon running"
 
 sync-down:
@@ -703,6 +703,7 @@ sync-up-vnc: sync-down
 	  -v $(SYNC_DATA_DIR):/data:rw,Z \
 	  --env-file $(SYNC_ENV_FILE) \
 	  -e NODE_ROLE=primary \
+	  -e SYNC_DAEMON=true \
 	  -e TABLEAU_USER_EMAIL=jhorn@redhat.com \
 	  -e CONFIG_DIR=/data/config \
 	  -e CACHE_DIR=/data/cache \
@@ -710,8 +711,7 @@ sync-up-vnc: sync-down
 	  --shm-size=2g \
 	  --memory=4g \
 	  --name pai-sync-l3 \
-	  localhost/daily-brief-dashboard:latest \
-	  bun scripts/sync-l3-daemon.ts
+	  localhost/daily-brief-dashboard:latest
 	@echo "Sync daemon running with VNC at http://localhost:6082"
 
 # ── All environments ──────────────────────────────────────────────────────────

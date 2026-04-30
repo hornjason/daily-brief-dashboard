@@ -63,6 +63,13 @@ done) &
 # --web path serves the noVNC static files; proxies WebSocket → VNC :5900
 websockify --web /usr/share/novnc 6080 localhost:5900 &
 
-# ── Application server ────────────────────────────────────────────────────────
+# ── Application server or sync daemon ────────────────────────────────────────
+# SYNC_DAEMON=true → run the L3 sync daemon instead of the app server.
+# Both share the same image; the daemon needs Xvfb (above) for Playwright.
+if [ "${SYNC_DAEMON}" = "true" ] && [ -f /app/scripts/sync-l3-daemon.ts ]; then
+  echo "[entrypoint] SYNC_DAEMON=true — starting L3 sync daemon"
+  exec bun run scripts/sync-l3-daemon.ts
+fi
+
 bun run scripts/preflight.ts
 exec bun run server.ts
