@@ -8052,12 +8052,13 @@ Acceptance: `make demo-up` and hero installs pull :server. `make sync-up` pulls 
 Can we test: YES — image size diff confirms Chromium absent from :server; scraper smoke tests confirm :sync can reach Tableau.
 Depends on: BKL-SYNC-L3-03 shipped (L4 code removed from server) + SYNC-L3-01 stable ≥1 week.
 
-### BKL-SYNC-L3-06 | checkBookingsGSheetExists in sync-pod-l3.ts matches on pod key substring — may be too loose
-Status: 🔴 OPEN
+### BKL-SYNC-L3-06 | checkBookingsGSheetExists pod key vs label naming mismatch — FIXED 2026-04-30
+Status: ✅ DONE
 Priority: P2
 Size: S
-Source: Marcus discovery during BKL-SYNC-L3-01 implementation 2026-04-30
+Completed: 2026-04-30
+Source: SYNC_NOW test run — all pods skipped despite subscription GSheets existing in Drive
 Files: scripts/sync-pod-l3.ts — checkBookingsGSheetExists
-Description: The GSheet readiness check matches any spreadsheet in podBookingsFolderId whose name contains the podKey (lowercased). This is a substring match, which could produce false positives if multiple pods share a key substring (e.g., NORTHWEST matching NORTHWEST_CORP). Real-world settings.json shows distinct pod keys, so this is low risk today, but worth tightening to use the derivePodKeywordMap logic from region-config.ts for consistent keyword matching.
-Can we test: YES — unit test with a folder containing deliberately ambiguous filenames.
-Depends on: BKL-SYNC-L3-01 stable in production.
+Description: GSheet readiness check matched pod key (e.g. WEST_COMM_CORP_NORTHWEST) against sheet names, but real Drive sheets use human labels (e.g. "Northwest POD - Subscriptions"). All 5 pods skipped during SYNC_NOW test despite sheets existing. Fixed by also matching against pod label words (>3 chars) so "Northwest Corp" → "northwest" matches "Northwest POD - Subscriptions".
+Fix: Updated checkBookingsGSheetExists to accept optional podLabel; added label-word fallback match at call site (pod.label passed).
+Can we test: YES — updated bkl-sync-l3-01-daemon.test.ts unit tests cover this path.

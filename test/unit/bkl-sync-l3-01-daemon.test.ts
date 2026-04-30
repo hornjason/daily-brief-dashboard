@@ -73,6 +73,31 @@ describe('BKL-SYNC-L3-01: sync-l3-daemon exits 1 when NODE_ROLE !== primary', ()
   })
 })
 
+// ── sync-pod-l3.ts: checkBookingsGSheetExists label-word matching ─────────────
+//
+// BKL-SYNC-L3-06 regression: function must accept optional podLabel and use
+// label keywords (words >3 chars) as a fallback when pod key doesn't match.
+// Real Drive sheets use human names ("Northwest POD - Subscriptions"), not
+// pod keys ("WEST_COMM_CORP_NORTHWEST").
+
+describe('BKL-SYNC-L3-06: checkBookingsGSheetExists accepts podLabel parameter', () => {
+  test('function signature includes optional podLabel parameter', () => {
+    expect(SYNC_POD_SRC).toContain('checkBookingsGSheetExists(folderId: string, podKey: string, podLabel?: string)')
+  })
+
+  test('function uses label words >3 chars as fallback match terms', () => {
+    const fnIdx = SYNC_POD_SRC.indexOf('async function checkBookingsGSheetExists(')
+    const slice = SYNC_POD_SRC.slice(fnIdx, fnIdx + 1200)
+    expect(slice).toContain('podLabel')
+    expect(slice).toContain('labelWords')
+    expect(slice).toContain('length > 3')
+  })
+
+  test('call site passes pod.label to checkBookingsGSheetExists', () => {
+    expect(SYNC_POD_SRC).toContain('checkBookingsGSheetExists(region.podBookingsFolderId, podKey, pod.label)')
+  })
+})
+
 // ── sync-pod-l3.ts: syncAllPods exported ─────────────────────────────────────
 
 describe('BKL-SYNC-L3-01: sync-pod-l3.ts exports syncAllPods', () => {

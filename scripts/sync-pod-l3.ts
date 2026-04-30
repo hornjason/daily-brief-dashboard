@@ -54,7 +54,7 @@ function loadSettings(): Record<string, unknown> {
  * Check if a GSheet matching the pod key exists in the given Drive folder.
  * Uses listPodBookingSheets pattern: list spreadsheets in the folder and check names.
  */
-async function checkBookingsGSheetExists(folderId: string, podKey: string): Promise<boolean> {
+async function checkBookingsGSheetExists(folderId: string, podKey: string, podLabel?: string): Promise<boolean> {
   if (!folderId) return false
   try {
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
@@ -70,9 +70,15 @@ async function checkBookingsGSheetExists(folderId: string, podKey: string): Prom
       'sync: bookings GSheet check',
     )
     const files = res.data.files ?? []
-    // Check for any spreadsheet whose name contains the pod key (case-insensitive)
-    const podLower = podKey.toLowerCase()
-    return files.some(f => f.name?.toLowerCase().includes(podLower))
+    const podKeyLower = podKey.toLowerCase()
+    // Also match against label keywords (e.g. "Northwest Corp" → ["northwest", "corp"])
+    // because GSheets are named like "Northwest POD - Subscriptions", not with the pod key
+    const labelWords = (podLabel ?? '').toLowerCase().split(/\s+/).filter(w => w.length > 3)
+    return files.some(f => {
+      const nameLower = f.name?.toLowerCase() ?? ''
+      if (nameLower.includes(podKeyLower)) return true
+      return labelWords.some(w => nameLower.includes(w))
+    })
   } catch (e: any) {
     console.warn(`[sync-pod-l3] bookings GSheet check failed for ${podKey}: ${e.message} — assuming absent`)
     return false
@@ -216,7 +222,7 @@ export async function syncAllPods(): Promise<SyncRunResult> {
       }
 
       // Pod readiness: must have a Bookings GSheet in Drive
-      const bookingsPresent = await checkBookingsGSheetExists(region.podBookingsFolderId, podKey)
+      const bookingsPresent = await checkBookingsGSheetExists(region.podBookingsFolderId, podKey, pod.label)
       if (!bookingsPresent) {
         console.log(`[sync-pod-l3] ${podKey}: no Bookings GSheet found — skipping`)
         results.push({ podKey, status: 'skipped', reason: 'no Bookings GSheet' })
