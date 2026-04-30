@@ -25,10 +25,12 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../src/goog
 
 export interface PodResult {
   podKey: string
-  status: 'ok' | 'skipped' | 'error'
+  status: 'ok' | 'warn' | 'skipped' | 'error'
   reason?: string
   ccspRows?: number
   sfRows?: number
+  ccspDelta?: number   // current - previous ccspRows; undefined if no prior data
+  sfDelta?: number     // current - previous sfRows; undefined if no prior data
 }
 
 export interface SyncRunResult {
@@ -135,26 +137,88 @@ async function writeSyncStatusToDrive(folderId: string, result: SyncRunResult): 
   }
 }
 
+// ── Prev sync-status loader ───────────────────────────────────────────────────
+
+/**
+ * Load the previous sync-status.json from Drive and return a map of
+ * podKey → { ccspRows, sfRows } for delta computation. Non-fatal: returns
+ * empty map on any failure.
+ */
+async function loadPrevSyncStatus(folderId: string): Promise<Map<string, { ccspRows?: number; sfRows?: number }>> {
+  const result = new Map<string, { ccspRows?: number; sfRows?: number }>()
+  if (!folderId) return result
+  try {
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    if (!auth) return result
+    const drive = google.drive({ version: 'v3', auth })
+    const listRes = await withQuotaRetry(
+      () => drive.files.list({
+        q: `name = 'sync-status.json' and '${folderId}' in parents and trashed = false`,
+        fields: 'files(id)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      }),
+      'prev sync-status list',
+    )
+    const fileId = listRes.data.files?.[0]?.id
+    if (!fileId) return result
+    const dlRes = await withQuotaRetry(
+      () => drive.files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }),
+      'prev sync-status download',
+    )
+    const text = typeof dlRes.data === 'string' ? dlRes.data : JSON.stringify(dlRes.data)
+    const parsed = JSON.parse(text) as { results?: Array<{ podKey: string; ccspRows?: number; sfRows?: number }> }
+    for (const r of parsed.results ?? []) {
+      result.set(r.podKey, { ccspRows: r.ccspRows, sfRows: r.sfRows })
+    }
+  } catch {
+    // non-fatal — no prior data is fine
+  }
+  return result
+}
+
 // ── Email ─────────────────────────────────────────────────────────────────────
 
 async function sendSyncEmail(result: SyncRunResult): Promise<void> {
   const okCount = result.results.filter(r => r.status === 'ok').length
+  const warnCount = result.results.filter(r => r.status === 'warn').length
   const skippedCount = result.results.filter(r => r.status === 'skipped').length
   const errorCount = result.results.filter(r => r.status === 'error').length
   const dateStr = result.completedAt.slice(0, 10)
   const hasErrors = errorCount > 0
 
   const subject = hasErrors
-    ? `L3 Sync FAILED — ${dateStr} | ${okCount} synced, ${skippedCount} skipped, ${errorCount} errors`
-    : `L3 Sync Complete — ${dateStr} | ${okCount} pods synced, ${skippedCount} skipped`
+    ? `L3 Sync FAILED - ${dateStr} | ${okCount} synced, ${warnCount} warned, ${skippedCount} skipped, ${errorCount} errors`
+    : warnCount > 0
+      ? `L3 Sync Complete - ${dateStr} | ${okCount} pods synced, ${warnCount} warned, ${skippedCount} skipped`
+      : `L3 Sync Complete - ${dateStr} | ${okCount} pods synced, ${skippedCount} skipped`
+
+  const fmtDelta = (d: number | undefined): string => {
+    if (d == null) return '—'
+    if (d === 0) return '<span style="color:#6b7280">0</span>'
+    if (d > 0) return `<span style="color:#16a34a">+${d}</span>`
+    return `<span style="color:#d97706">${d}</span>`
+  }
 
   const rows = result.results.map(r => {
     if (r.status === 'ok') {
       return `<tr>
         <td style="padding:4px 8px;font-family:monospace">${r.podKey}</td>
         <td style="padding:4px 8px;text-align:center">${r.ccspRows ?? '—'}</td>
-        <td style="padding:4px 8px;text-align:center">${r.sfRows ?? '—'}</td>
+        <td style="padding:4px 8px;text-align:center">${r.sfRows == null || r.sfRows < 0 ? '—' : r.sfRows}</td>
+        <td style="padding:4px 8px;text-align:center">${fmtDelta(r.ccspDelta)}</td>
+        <td style="padding:4px 8px;text-align:center">${fmtDelta(r.sfDelta)}</td>
         <td style="padding:4px 8px;color:#16a34a">OK</td>
+      </tr>`
+    }
+    if (r.status === 'warn') {
+      return `<tr>
+        <td style="padding:4px 8px;font-family:monospace">${r.podKey}</td>
+        <td style="padding:4px 8px;text-align:center;color:#d97706">${r.ccspRows ?? '—'}</td>
+        <td style="padding:4px 8px;text-align:center">${r.sfRows == null || r.sfRows < 0 ? '—' : r.sfRows}</td>
+        <td style="padding:4px 8px;text-align:center">${fmtDelta(r.ccspDelta)}</td>
+        <td style="padding:4px 8px;text-align:center">${fmtDelta(r.sfDelta)}</td>
+        <td style="padding:4px 8px;color:#d97706">⚠️ WARN — CCSP returned 0 rows</td>
       </tr>`
     }
     if (r.status === 'skipped') {
@@ -162,11 +226,15 @@ async function sendSyncEmail(result: SyncRunResult): Promise<void> {
         <td style="padding:4px 8px;font-family:monospace">${r.podKey}</td>
         <td style="padding:4px 8px;text-align:center">—</td>
         <td style="padding:4px 8px;text-align:center">—</td>
+        <td style="padding:4px 8px;text-align:center">—</td>
+        <td style="padding:4px 8px;text-align:center">—</td>
         <td style="padding:4px 8px;color:#d97706">⚠️ SKIPPED — ${r.reason ?? ''}</td>
       </tr>`
     }
     return `<tr>
       <td style="padding:4px 8px;font-family:monospace">${r.podKey}</td>
+      <td style="padding:4px 8px;text-align:center">—</td>
+      <td style="padding:4px 8px;text-align:center">—</td>
       <td style="padding:4px 8px;text-align:center">—</td>
       <td style="padding:4px 8px;text-align:center">—</td>
       <td style="padding:4px 8px;color:#dc2626">❌ ERROR — ${r.reason ?? ''}</td>
@@ -183,6 +251,8 @@ async function sendSyncEmail(result: SyncRunResult): Promise<void> {
         <th style="padding:6px 8px;text-align:left">Pod</th>
         <th style="padding:6px 8px">CCSP Rows</th>
         <th style="padding:6px 8px">SF Rows</th>
+        <th style="padding:6px 8px">CCSP &#916;</th>
+        <th style="padding:6px 8px">SF &#916;</th>
         <th style="padding:6px 8px;text-align:left">Status</th>
       </tr>
     </thead>
@@ -213,14 +283,13 @@ export async function syncAllPods(): Promise<SyncRunResult> {
 
   console.log(`[sync-pod-l3] starting sync across ${regions.length} region(s)`)
 
+  // Determine primary folder for prev-status lookup (first region with a podBookingsFolderId)
+  const primaryFolderId = regions.find(r => r.podBookingsFolderId)?.podBookingsFolderId ?? ''
+  const prevStatus = await loadPrevSyncStatus(primaryFolderId)
+
   const results: PodResult[] = []
-  let primaryFolderId = ''
 
   for (const region of regions) {
-    if (!primaryFolderId && region.podBookingsFolderId) {
-      primaryFolderId = region.podBookingsFolderId
-    }
-
     for (const [podKey, pod] of Object.entries(region.pods)) {
       console.log(`[sync-pod-l3] processing ${podKey}…`)
 
@@ -255,7 +324,11 @@ export async function syncAllPods(): Promise<SyncRunResult> {
         const sfRows = await runSfPodSync(pod.sfReportId, podKey, region.podBookingsFolderId)
         console.log(`[sync-pod-l3] ${podKey}: SF rows=${sfRows}`)
 
-        results.push({ podKey, status: 'ok', ccspRows, sfRows })
+        const prev = prevStatus.get(podKey)
+        const ccspDelta = (prev?.ccspRows != null && ccspRows != null) ? ccspRows - prev.ccspRows : undefined
+        const sfDelta = (prev?.sfRows != null && sfRows != null && sfRows >= 0) ? sfRows - prev.sfRows : undefined
+        const podStatus: PodResult['status'] = (ccspRows === 0) ? 'warn' : 'ok'
+        results.push({ podKey, status: podStatus, ccspRows, sfRows, ccspDelta, sfDelta })
       } catch (e: any) {
         console.error(`[sync-pod-l3] ${podKey}: error: ${e.message}`)
         results.push({ podKey, status: 'error', reason: e.message })
@@ -281,9 +354,10 @@ export async function syncAllPods(): Promise<SyncRunResult> {
   }
 
   const okCount = results.filter(r => r.status === 'ok').length
+  const warnCount = results.filter(r => r.status === 'warn').length
   const skippedCount = results.filter(r => r.status === 'skipped').length
   const errorCount = results.filter(r => r.status === 'error').length
-  console.log(`[sync-pod-l3] done — ok=${okCount} skipped=${skippedCount} errors=${errorCount}`)
+  console.log(`[sync-pod-l3] done — ok=${okCount} warn=${warnCount} skipped=${skippedCount} errors=${errorCount}`)
 
   return runResult
 }

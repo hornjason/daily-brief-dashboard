@@ -106,7 +106,7 @@ async function runSyncCycle(): Promise<void> {
     try {
       await sendBriefEmail(
         ALERT_EMAIL,
-        `L3 Sync Daemon — Fatal Error ${new Date().toISOString().slice(0, 10)}`,
+        `L3 Sync Daemon - Fatal Error ${new Date().toISOString().slice(0, 10)}`,
         `<html><body><p>The sync cycle threw a fatal error:</p><pre>${e.message}</pre></body></html>`,
       )
     } catch (emailErr: any) {
@@ -178,7 +178,7 @@ async function main(): Promise<void> {
       try {
         await sendBriefEmail(
           ALERT_EMAIL,
-          `L3 Sync Daemon — Keepalive Failed ${new Date().toISOString().slice(0, 10)}`,
+          `L3 Sync Daemon - Keepalive Failed ${new Date().toISOString().slice(0, 10)}`,
           `<html><body><p>The SSO keepalive failed — sessions may expire before the next sync.</p><pre>${e.message}</pre></body></html>`,
         )
       } catch (emailErr: any) {
