@@ -158,6 +158,49 @@ All L3 files live in `podBookingsFolderId` — one shared folder per region, har
 
 These conventions apply across all regions — use them when creating new SF reports, Drive folders, and CCSP territory configs so wiring up a new region is mechanical and repeatable.
 
+> **All L3 files live in one shared `podBookingsFolderId` per region.** All regions currently share the same folder ID (`14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo`). Hero installs read from it; the primary Mac Mini writes to it. This is hardcoded in every `settings.json` — prod, test, seed, and demo all use the same value.
+
+---
+
+### File naming reference — all known pods
+
+Three file types must be present in `podBookingsFolderId` for a region to be selectable. The existence check matches on prefix (any date suffix accepted) so a region configured yesterday doesn't flip to "Coming Soon" before today's scrape runs.
+
+#### West Commercial — `west-commercial`
+
+| Pod key | Pod label | Bookings GSheet | CCSP CSV prefix | SF Pipeline CSV prefix |
+|---|---|---|---|---|
+| `WEST_COMM_CORP_NORTHWEST` | Northwest Corp | `West Commercial - Northwest Corp - SF Bookings` | `CCSP-WEST_COMM_CORP_NORTHWEST-` | `SF-PIPELINE-WEST_COMM_CORP_NORTHWEST-` |
+| `WEST_COMM_CORP_SOUTHWEST` | Southwest Corp | `West Commercial - Southwest Corp - SF Bookings` | `CCSP-WEST_COMM_CORP_SOUTHWEST-` | `SF-PIPELINE-WEST_COMM_CORP_SOUTHWEST-` |
+| `WEST_COMM_CORP_NORTH_CENTRAL` | North Central Corp | `West Commercial - North Central Corp - SF Bookings` | `CCSP-WEST_COMM_CORP_NORTH_CENTRAL-` | `SF-PIPELINE-WEST_COMM_CORP_NORTH_CENTRAL-` |
+| `WEST_COMM_CORP_SOUTH_CENTRAL` | South Central Corp | `West Commercial - South Central Corp - SF Bookings` | `CCSP-WEST_COMM_CORP_SOUTH_CENTRAL-` | `SF-PIPELINE-WEST_COMM_CORP_SOUTH_CENTRAL-` |
+
+#### Central Enterprise – TOLA — `central-enterprise-tola`
+
+| Pod key | Pod label | Bookings GSheet | CCSP CSV prefix | SF Pipeline CSV prefix |
+|---|---|---|---|---|
+| `CENTRAL_ENT_TOLA` | TOLA | `Central Enterprise - TOLA - SF Bookings` | `CCSP-CENTRAL_ENT_TOLA-` | `SF-PIPELINE-CENTRAL_ENT_TOLA-` |
+
+#### East Enterprise — `east-enterprise` *(Coming Soon — not yet in settings.json)*
+
+Pod keys will derive from territory sheet codes (e.g., `Southeast_Ent_NC_SC_Terr01` → `SOUTHEAST_ENT_NC_SC_POD`). Add to `settings.json` when ops configures the region, then fill in this table.
+
+| Pod key | Pod label | Bookings GSheet | CCSP CSV prefix | SF Pipeline CSV prefix |
+|---|---|---|---|---|
+| `SOUTHEAST_ENT_NC_SC_POD` | SE NC/SC *(example)* | `East Enterprise - NC SC - SF Bookings` | `CCSP-SOUTHEAST_ENT_NC_SC_POD-` | `SF-PIPELINE-SOUTHEAST_ENT_NC_SC_POD-` |
+| *(TBD)* | *(TBD)* | *(TBD)* | *(TBD)* | *(TBD)* |
+
+#### East Commercial — `east-commercial` *(Coming Soon — not yet in settings.json)*
+
+Pod keys use a numbered pattern (e.g., `EAST_COMM_CORP_POD01`, `EAST_COMM_CORP_POD02`). Add to `settings.json` when ops configures the region.
+
+| Pod key | Pod label | Bookings GSheet | CCSP CSV prefix | SF Pipeline CSV prefix |
+|---|---|---|---|---|
+| `EAST_COMM_CORP_POD01` | Corp Pod 1 *(example)* | `East Commercial - Corp Pod 1 - SF Bookings` | `CCSP-EAST_COMM_CORP_POD01-` | `SF-PIPELINE-EAST_COMM_CORP_POD01-` |
+| *(TBD)* | *(TBD)* | *(TBD)* | *(TBD)* | *(TBD)* |
+
+---
+
 ### Pod filter keys (`enabledPods` in `settings.json`)
 ```
 ${regionId}.${podKey}
@@ -168,24 +211,31 @@ ${regionId}.${podKey}
 
 Region IDs are the existing `id` slugs from `settings.json`. Qualified keys prevent collisions when East regions ship with overlapping pod name segments.
 
-### SF Pipeline reports — naming in Salesforce when you create them
+### SF Pipeline reports — naming in Salesforce (L4 primary only)
+
+`sfReportId` is used exclusively by the primary Mac Mini to pull live data from Salesforce and write the SF Pipeline CSV to `podBookingsFolderId`. Hero installs never use the report ID — they read the CSV output.
+
 ```
 DBD - {Region Label} - {Pod Label}
 ```
 - `DBD - West Commercial - Northwest Corp`
-- `DBD - East Enterprise - Carolina Reapers`
-- `DBD - East Commercial - Rough Riders`
+- `DBD - West Commercial - Southwest Corp`
+- `DBD - West Commercial - North Central Corp`
+- `DBD - West Commercial - South Central Corp`
+- `DBD - Central Enterprise - TOLA`
+- `DBD - East Enterprise - {Pod Label}` ← create when ready
+- `DBD - East Commercial - {Pod Label}` ← create when ready
 
 "DBD" prefix makes them findable in Salesforce. Once created, copy the 18-char report ID → paste into `settings.json` under `pods.{POD_KEY}.sfReportId`.
 
 ### SF Bookings / Subscription Data Drive folder — naming in Drive
+
+One shared folder per region. Currently all regions share the same folder — if East regions get their own folder, create it as:
 ```
 {Region Label} - Subscription Data
 ```
-- `West Commercial - Subscription Data` ← exists
-- `East Enterprise - Subscription Data` ← create when ready
-
-Folder ID goes into `settings.json regions[].podBookingsFolderId`. One per region, shared across all AEs and all install types.
+- `West Commercial - Subscription Data` ← folder ID `14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo`
+- `East Enterprise - Subscription Data` ← create when ready, paste ID into `settings.json`
 
 ### CCSP territory codes (`tableauTerritories` per AE)
 No manual naming needed — derived automatically from territory sheet row codes via `podKeyFromTerritoryCode()`. When Tableau is set up for East, the territory codes come from the sheet and are handled by existing logic.
@@ -194,13 +244,22 @@ No manual naming needed — derived automatically from territory sheet row codes
 
 ### Checklist: flipping a region from "Coming Soon" → selectable in Step 0
 
-| Field | Location | Action |
-|---|---|---|
-| `territorySheetUrl` | `settings.json regions[].territorySheetUrl` | Already set for all regions |
-| `podBookingsFolderId` | `settings.json regions[].podBookingsFolderId` | Create Drive folder `{Region} - Subscription Data` → paste ID |
-| At least one `sfReportId` | `settings.json regions[].pods.{KEY}.sfReportId` | Create SF report `DBD - {Region} - {Pod}` → paste ID |
+A region is **selectable** when all three file types are present in `podBookingsFolderId` (prefix match — any date suffix). If any is missing, the region shows "Coming Soon" with a note listing what's absent.
 
-No code change required. The `selectable` flag in `/api/regions/catalog` derives from these three fields automatically.
+| Required file | Existence check | Who creates it | Status |
+|---|---|---|---|
+| Bookings GSheet | Any GSheet matching `{Region} - {Pod} - SF Bookings` | Ops (upstream, permanent) | West + TOLA ✓ |
+| CCSP CSV | Any file matching `CCSP-{POD_KEY}-*.csv` | Primary (daily Tableau scrape) | West + TOLA ✓ |
+| SF Pipeline CSV | Any file matching `SF-PIPELINE-{POD_KEY}-*.csv` | Primary (daily SF scrape) | West + TOLA ✓ |
+
+**`sfReportId` in `settings.json` is NOT a selectable gate** — it's an L4 config for the primary scraper only. Hero installs don't need it to function.
+
+To add a new region:
+1. Add region + pod definitions to all `settings.json` files (prod `data/config/`, test `data-test/config/`, seed `scripts/seed-data/`, demo `data-demo/config/`)
+2. Set `territorySheetUrl` for the region
+3. Create the Bookings GSheet in Drive → confirm it matches naming convention
+4. Let the primary run once → CCSP + SF Pipeline CSVs appear in the folder
+5. Region flips from "Coming Soon" → selectable automatically — no code change
 
 ---
 

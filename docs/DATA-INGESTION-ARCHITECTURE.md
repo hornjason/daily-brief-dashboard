@@ -45,6 +45,8 @@ The pipeline thinks in four tiers. Not every flow uses every tier — the model 
 
 This is the customer-subscriptions flow. SF Bookings sheets in a shared POD Drive folder are the source of truth for which customers an AE has and what they bought.
 
+File naming: `{Region} - {Pod} - SF Bookings` (GSheet in `podBookingsFolderId`) — for exact names per region/pod see **[docs/HERO-INSTALL.md § File naming reference](HERO-INSTALL.md#file-naming-reference--all-known-pods)**.
+
 ```
 Salesforce (system of record)                                      L4
         ↓  AEs / ops curate weekly
@@ -94,7 +96,9 @@ data/cache/ccsp-data.json   +   ccsp-delta.json (per-customer ΔACV)  L1 (disk)
 - L1/L2 cache refresh: `refresh-engine.ts :: refreshCCSP()` on heartbeat (default interval, see `RefreshTimerSettings`)
 - AE-set change forces full refresh (BKL-CCSP-03) — empty result is valid for a brand-new AE set, so the "don't overwrite cache with empty" guard is skipped
 
-**L3 for existing regions (hero install path).** For any region with `podBookingsFolderId` configured, the primary scrape writes `CCSP-${podName}-${YYYY-MM-DD}.csv` to that Drive folder daily. Hero installs (L3-only, no Tableau access) read this L3 CSV directly via `checkCcspL3Exists()` + `scrapeOneAe()` L3 branch in `ccsp-scraper.ts:514`. As long as the primary instance ran today, hero installs get full CCSP data without ever touching Tableau — L4 is simply never reached. Regions without a `podBookingsFolderId` or whose L3 CSV is >24h old will show no CCSP data.
+**L3 for existing regions (hero install path).** For any region with `podBookingsFolderId` configured, the primary scrape writes `CCSP-${podName}-${YYYY-MM-DD}.csv` to that Drive folder daily. Hero installs (L3-only, no Tableau access) read this L3 CSV directly via `checkCcspL3Exists()` + `scrapeOneAe()` L3 branch in `ccsp-scraper.ts:514`. As long as the primary instance ran today, hero installs get full CCSP data without ever touching Tableau — L4 is simply never reached.
+
+File naming: `CCSP-{POD_KEY}-{YYYY-MM-DD}.csv` — for exact pod key values per region see **[docs/HERO-INSTALL.md § File naming reference](HERO-INSTALL.md#file-naming-reference--all-known-pods)**.
 
 ### 2.3 SF Pipeline (opportunities)
 
@@ -116,6 +120,8 @@ data/cache/pipeline-data.json                                       L1 (disk)
 **Refresh:**
 - L4 scrape: daily 2am ET (`schedulePipelineSync` in `background-scheduler.ts:773`) — gated on (a) presence of SF session, (b) SF Lightning pre-flight HTTP probe (8s, status <400)
 - L1 cache: `refresh-engine.ts :: refreshPipeline()` — manual via `POST /api/refresh/pipeline`, post-bootstrap auto-trigger from `bootstrap-orchestrator.ts:1349`
+
+**L3 hero install path.** Primary writes `SF-PIPELINE-{POD_KEY}-{YYYY-MM-DD}.csv` to `podBookingsFolderId` daily. Hero installs read this CSV directly — `sfReportId` is L4-only (used by primary to pull from Salesforce; not required by hero installs). File naming per pod: **[docs/HERO-INSTALL.md § File naming reference](HERO-INSTALL.md#file-naming-reference--all-known-pods)**.
 
 ### 2.4 RH Cases — two parallel transports
 
