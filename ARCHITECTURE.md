@@ -88,6 +88,45 @@ RH Portal SSO login → BrowserContext created
 
 **What was removed:** The `SYNC_NOW=true bun run sync-pod-l3.ts` standalone invocation path was deleted. It failed with `SingletonLock: File exists` when the daemon was running (SF worked; CCSP did not — SF uses ephemeral sub-contexts). `make sync-now` is the only supported manual trigger.
 
+**Runtime behavior — three timers:**
+
+*Startup sequence:*
+1. `initScrapeContext(PROFILE_DIR)` — opens persistent Chromium context on `/data/rh-profile`, restores SSO cookies
+2. `adoptCcspContext(ctx)` — wires the CCSP scraper's module-level `_ctx` to the shared RH context (required; distinct from `getScrapeContext()`)
+3. `initSfContext(PROFILE_DIR)` — opens SF Playwright context (non-fatal if it fails; SF shares the RH profile)
+4. Boot cleanup — deletes any stale `/data/cache/sync-trigger` from a prior daemon crash
+
+*Timer 1 — SSO keepalive (every 2h):* Opens a new page, navigates Tableau and SF Lightning home. Detects redirect to login/auth and emails if session expired.
+
+*Timer 2 — trigger poller (every 30s):* Checks for `/data/cache/sync-trigger`. If present: deletes it atomically, runs `syncAllPods()` using live contexts. Discards trigger if a sync is already running.
+
+*Timer 3 — daily sync (5:30am ET = 09:30 UTC):* Calls `scheduleNextSync()` → `setTimeout` → `runSyncCycle()` → `syncAllPods()`. Self-reschedules for next day after each run.
+
+**Per-pod sync steps (inside `syncAllPods()`):**
+1. Skip pods with no `sfReportId` or no Bookings GSheet in Drive
+2. **CCSP** — fetches rolling 4 completed calendar quarters from Tableau (e.g. 2025-Q2 → 2026-Q1 via `getRollingFyWindow()`). Downloads as CSV, deletes stale Drive cache file, writes fresh `CCSP-{POD_NAME}-{DATE}.csv`
+3. **SF Pipeline** — downloads the pre-built nightly scheduled Salesforce report (you configure this in SF). Writes `SF-PIPELINE-{reportId}-{POD_NAME}-{DATE}.csv`. Skips if today's file already exists.
+4. After all pods: writes `sync-status.json` to Drive (first region's `podBookingsFolderId`), sends summary email
+
+**Email notifications (all sent to jhorn@redhat.com):**
+
+| Trigger | Subject |
+|---|---|
+| Sync succeeded | `L3 Sync Complete — {date} \| {N} pods synced, {N} skipped` |
+| Sync had errors | `L3 Sync FAILED — {date} \| {N} synced, {N} skipped, {N} errors` |
+| Keepalive detected expired session | `L3 Sync Daemon — Keepalive Failed {date}` |
+| `syncAllPods()` threw unexpectedly | `L3 Sync Daemon — Fatal Error {date}` |
+
+The sync summary email includes an HTML table: one row per pod with pod key, CCSP row count, SF row count, and OK/SKIPPED/ERROR status.
+
+**How to check status:**
+```bash
+make sync-logs    # stream live daemon logs
+make sync-status  # recent log tail (last ~50 lines, filtered)
+make sync-now     # trigger an immediate sync
+```
+Drive: open any pod's bookings folder → `sync-status.json` — contains `completedAt` timestamp and per-pod results array.
+
 ---
 
 ### 4. Config Written Back to Disk During Runtime
