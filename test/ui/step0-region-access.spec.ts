@@ -6,32 +6,46 @@
  * as selectable regions, no East regions, and no `enabledRegions` key — so
  * Step 0 renders on first load.
  *
- * Snapshot/restore wraps every test to keep settings.json clean — POSTing
- * to /api/regions/access mutates the file.
+ * Settings cleanup: POST /api/regions/access mutates settings.json, which the
+ * snapshot/restore API does NOT cover (it only handles aes/customers). We reset
+ * settings.json by copying the seed file directly on the host before each test.
+ * The test container mounts data-test/ as a volume so the host copy is immediately
+ * visible to the server on the next request — no restart required.
  */
 import { test, expect } from '@playwright/test'
+import { copyFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const SEED_SETTINGS = resolve(__dirname, '../../scripts/seed-data/settings.json')
+const TEST_SETTINGS = resolve(__dirname, '../../data-test/config/settings.json')
 
 const BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
 const SETUP_URL = `${BASE}/dashboard/setup`
 
+test.describe.configure({ mode: 'serial' })
+
 test.describe('@destructive BKL-HERO-01 Phase 1 — Step 0 Region & Pod Access', () => {
-  test.beforeEach(async ({ request }) => {
+  // Serial mode: tests run on a single worker in order so state resets are safe.
+  //
+  // beforeEach copies the clean seed settings.json (no enabledRegions key) over
+  // the test container's live settings.json via the host-mounted volume. The
+  // server reads settings from disk on every request, so the next page load sees
+  // the clean state immediately — no server restart required.
+  test.beforeEach(async () => {
     try {
-      const r = await request.post(`${BASE}/api/__test/snapshot`)
-      const d = await r.json().catch(() => ({}))
-      if (!d.ok) console.warn(`[step0 beforeEach] snapshot not-ok: ${JSON.stringify(d)}`)
+      copyFileSync(SEED_SETTINGS, TEST_SETTINGS)
     } catch (e) {
-      console.warn(`[step0 beforeEach] snapshot skipped: ${e}`)
+      console.warn(`[step0 beforeEach] settings reset skipped: ${e}`)
     }
   })
 
-  test.afterEach(async ({ request }) => {
+  test.afterAll(async () => {
     try {
-      const r = await request.post(`${BASE}/api/__test/restore`, { data: { force: true } })
-      const d = await r.json().catch(() => ({}))
-      if (!d.ok) console.error(`[step0 afterEach] restore failed: ${JSON.stringify(d)}`)
+      copyFileSync(SEED_SETTINGS, TEST_SETTINGS)
     } catch (e) {
-      console.error(`[step0 afterEach] restore error: ${e}`)
+      console.warn(`[step0 afterAll] settings cleanup skipped: ${e}`)
     }
   })
 
