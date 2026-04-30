@@ -9,6 +9,7 @@ import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import { BootstrapConfigBlock } from '../components/BootstrapConfigBlock'
 import { useBootstrapConfig } from '../hooks/useBootstrapConfig'
+import { Step0RegionAccess } from '../components/Step0RegionAccess'
 // BKL-CONN-ARCH-01: two-axis connection state derivation
 import { deriveRhCard, deriveSfCard, deriveTableauCard } from '../lib/connection-state'
 import {
@@ -3713,6 +3714,15 @@ export default function SetupPage() {
   const [dataSourcesHealth, setDataSourcesHealth] = useState<'loading' | 'healthy' | 'issues'>('loading')
   const [dataSourcesConnected, setDataSourcesConnected] = useState<number | null>(null)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
+  // BKL-HERO-01 Phase 1 — Step 0 region access state.
+  // `enabledRegionsState`: undefined = still loading OR not yet saved (first boot).
+  //                        string[]  = persisted selection (any length, including []).
+  // First-boot trigger: server response had no `enabledRegions` key — strictly undefined,
+  //                     not empty []. Empty [] is BKL-HERO-02 territory.
+  const [step0Loaded, setStep0Loaded] = useState(false)
+  const [step0FirstBoot, setStep0FirstBoot] = useState(false)
+  const [step0EnabledRegions, setStep0EnabledRegions] = useState<string[] | undefined>(undefined)
+  const [step0EnabledPods, setStep0EnabledPods] = useState<string[] | undefined>(undefined)
 
   // Dynamic page title
   useEffect(() => {
@@ -3751,6 +3761,21 @@ export default function SetupPage() {
       // BKL-UX63: Require !sessionExpired — aligns Step 3 badge with Step 5
       .then(d => { setRhOk((d.hasSession && !d.sessionExpired) ?? false) })
       .catch((e) => { if (e.name !== 'AbortError') setRhOk(false) })
+
+    // BKL-HERO-01 Phase 1 — check Step 0 first-boot state.
+    // First boot = `enabledRegions` key absent from settings.json (strictly undefined).
+    fetch('/api/regions/access', { signal })
+      .then(r => r.json())
+      .then((d: { enabledRegions?: string[]; enabledPods?: string[] }) => {
+        const isFirstBoot = !('enabledRegions' in d)
+        setStep0FirstBoot(isFirstBoot)
+        if (Array.isArray(d.enabledRegions)) setStep0EnabledRegions(d.enabledRegions)
+        if (Array.isArray(d.enabledPods)) setStep0EnabledPods(d.enabledPods)
+        setStep0Loaded(true)
+      })
+      .catch((e) => {
+        if (e.name !== 'AbortError') setStep0Loaded(true)
+      })
 
     // BKL-UX112: Poll the Data Sources counter on a recurring interval so the
     // badge never goes stale while the accordion is collapsed (DataSourcesSection
@@ -3942,6 +3967,20 @@ export default function SetupPage() {
 
         {/* Accordion sections */}
         <div className="space-y-3">
+          {/* BKL-HERO-01 Phase 1 — Step 0 Region & Pod Access (first-boot only) */}
+          {step0Loaded && step0FirstBoot && (
+            <Step0RegionAccess
+              initialEnabledRegions={step0EnabledRegions}
+              initialEnabledPods={step0EnabledPods}
+              onSave={(regions, pods) => {
+                setStep0EnabledRegions(regions)
+                setStep0EnabledPods(pods)
+                // Stay rendered as a summary (component handles internal collapse).
+                // Once saved, the next reload will see `enabledRegions` set and Step 0 won't render.
+              }}
+            />
+          )}
+
           <AccordionSection
             id="oauth-keys"
             title="Step 1 of 5 — OAuth Keys"

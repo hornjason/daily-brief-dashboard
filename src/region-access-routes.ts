@@ -66,6 +66,22 @@ export function registerRegionAccessRoutes(app: Hono, settingsPath: string): voi
     }
   })
 
+  // GET /api/regions/access — current persisted selection (Phase 1 first-boot detection)
+  // Returns the raw fields exactly as they appear in settings.json so the frontend
+  // can distinguish `undefined` (first boot) from `[]` (deliberately cleared).
+  app.get('/api/regions/access', (c) => {
+    try {
+      let raw: Record<string, unknown> = {}
+      try { raw = JSON.parse(readFileSync(settingsPath, 'utf-8')) } catch { /* new file */ }
+      const out: { enabledRegions?: unknown; enabledPods?: unknown } = {}
+      if ('enabledRegions' in raw) out.enabledRegions = raw.enabledRegions
+      if ('enabledPods' in raw) out.enabledPods = raw.enabledPods
+      return c.json(out)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
   // POST /api/regions/access — validate + persist enabledRegions/enabledPods
   app.post('/api/regions/access', async (c) => {
     let body: { enabledRegions?: unknown; enabledPods?: unknown }
