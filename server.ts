@@ -22,6 +22,8 @@ import type { SupportableCustomer } from './src/supportable-scraper.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
 import { initCacheLayer, registerCacheRoutes, readSheetCache, readPipelineCache, toSlug } from './src/cache-layer.ts'
 import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
+import { registerNodeRoleRoutes } from './src/node-role-routes.ts'
+import { registerRegionAccessRoutes } from './src/region-access-routes.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
 import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
 import { initRefreshEngine, registerRefreshRoutes, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
@@ -1101,6 +1103,10 @@ app.get('/admin', async (c) => {
 // ── Customer detail routes (extracted to src/customer-routes.ts) ─────────────
 
 registerSettingsRoutes(app, { rescheduleRefreshTimers })
+
+// BKL-HERO-01 Phase 0 — node-role + region-access endpoints
+registerNodeRoleRoutes(app)
+registerRegionAccessRoutes(app, SETTINGS_PATH)
 
 // ── Env var status (BKL-SR02) — lets UI warn when env overrides config settings
 app.get('/api/env/gemini-model', (c) => {
