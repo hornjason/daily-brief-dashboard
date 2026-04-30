@@ -991,3 +991,116 @@ export async function listSfReports(): Promise<SfReportItem[]> {
   }
   return reports
 }
+
+/**
+ * BKL-SYNC-L3-01: Pod-level SF Pipeline sync. Scrapes SF report and writes
+ * SF-PIPELINE-{reportId}-{podKey}-{date}.csv to podBookingsFolderId.
+ * Returns row count. Skips write if today's file already exists in Drive.
+ *
+ * Mirrors the Drive cache check pattern from scrapePodCcspRaw and the write
+ * pattern from writeSfDriveCache in bootstrap-orchestrator.ts.
+ */
+export async function runSfPodSync(
+  reportId: string,
+  podKey: string,
+  podBookingsFolderId: string,
+): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10)
+  const cacheFileName = `SF-PIPELINE-${reportId}-${podKey}-${today}.csv`
+
+  // Drive cache check: skip scrape if today's file already exists
+  try {
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    if (auth) {
+      const drive = google.drive({ version: 'v3', auth })
+      const listRes = await withQuotaRetry(
+        () => drive.files.list({
+          q: `name = '${cacheFileName}' and '${podBookingsFolderId}' in parents and trashed = false`,
+          fields: 'files(id, name)',
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        }),
+        'SF pod sync Drive cache check',
+      )
+      const existing = listRes.data.files?.[0]
+      if (existing?.id) {
+        console.log(`[sf-pod-sync] ${podKey}: Drive cache hit — ${cacheFileName} already exists, skipping scrape`)
+        // Download to get row count
+        try {
+          const dlRes = await withQuotaRetry(
+            () => drive.files.get({ fileId: existing.id!, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }),
+            'SF pod sync cache download',
+          )
+          const csvText = typeof dlRes.data === 'string' ? dlRes.data : String(dlRes.data)
+          const parsed = parseCsvToSfReport(csvText)
+          return parsed.rows.length
+        } catch {
+          return 0
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[sf-pod-sync] ${podKey}: Drive cache check failed: ${e?.message} — proceeding to live scrape`)
+  }
+
+  // Live scrape
+  if (!_profileDir) throw new Error('[sf-pod-sync] _profileDir not set — call initSfContext first')
+  const data = await scrapeSfReport(reportId, _profileDir)
+
+  // Write to Drive — mirrors writeSfDriveCache from bootstrap-orchestrator.ts
+  try {
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    if (auth) {
+      const drive = google.drive({ version: 'v3', auth })
+
+      // Delete stale SF-PIPELINE-<reportId>-<podKey>-*.csv files
+      try {
+        const staleRes = await withQuotaRetry(
+          () => drive.files.list({
+            q: `name contains 'SF-PIPELINE-${reportId}-${podKey}-' and '${podBookingsFolderId}' in parents and trashed = false`,
+            fields: 'files(id, name)',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          }),
+          'SF pod sync stale cache list',
+        )
+        for (const oldFile of staleRes.data.files ?? []) {
+          if (!oldFile.id || !oldFile.name) continue
+          if (!oldFile.name.startsWith(`SF-PIPELINE-${reportId}-${podKey}-`) || !oldFile.name.endsWith('.csv')) continue
+          try {
+            await drive.files.delete({ fileId: oldFile.id, supportsAllDrives: true })
+            console.log(`[sf-pod-sync] ${podKey}: deleted stale cache ${oldFile.name}`)
+          } catch (delErr: any) {
+            console.warn(`[sf-pod-sync] ${podKey}: stale delete failed for ${oldFile.name}: ${delErr.message} — non-fatal`)
+          }
+        }
+      } catch (listErr: any) {
+        console.warn(`[sf-pod-sync] ${podKey}: stale list failed: ${listErr.message} — non-fatal`)
+      }
+
+      // Build CSV
+      const escape = (val: string): string =>
+        val.includes(',') || val.includes('"') || val.includes('\n')
+          ? `"${val.replace(/"/g, '""')}"` : val
+      const csvLines = [data.headers.map(escape).join(',')]
+      for (const row of data.rows) {
+        csvLines.push(row.map(c => escape(c ?? '')).join(','))
+      }
+
+      await withQuotaRetry(
+        () => drive.files.create({
+          requestBody: { name: cacheFileName, mimeType: 'text/csv', parents: [podBookingsFolderId] },
+          media: { mimeType: 'text/csv', body: csvLines.join('\n') },
+          supportsAllDrives: true,
+          fields: 'id',
+        }),
+        'SF pod sync Drive write',
+      )
+      console.log(`[sf-pod-sync] ${podKey}: Drive cache written: ${cacheFileName} (${data.rows.length} rows)`)
+    }
+  } catch (e: any) {
+    console.warn(`[sf-pod-sync] ${podKey}: Drive write failed: ${e?.message} — non-fatal, returning row count anyway`)
+  }
+
+  return data.rows.length
+}

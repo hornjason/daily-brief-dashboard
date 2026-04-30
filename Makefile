@@ -48,7 +48,8 @@ MAC_MINI_DIR  ?= ~/DailyBriefDashboard
        demo-snapshot demo-up demo-down demo-logs demo-export \
        demo-deploy demo-status demo-restart demo-setup-tunnel \
        pai-sync-remote demo-full-refresh \
-       all-down all-ps
+       all-down all-ps \
+       sync-up sync-down sync-logs sync-status sync-up-vnc
 
 up: down
 	podman run -d \
@@ -660,6 +661,58 @@ env-status:
 	@echo ""
 	@echo "Ports: prod=7777 dev=7778 test=7776 demo=7779"
 	@echo "Tunnel active: $$(pgrep -f 'cloudflared tunnel' > /dev/null 2>&1 && echo YES || echo NO)"
+
+# ── Sync daemon (Mac Mini primary — long-running, SSO-warm) ──────────────────
+SYNC_DATA_DIR ?= $(CURDIR)/data-sync
+SYNC_ENV_FILE ?= $(CURDIR)/.env
+
+sync-up: sync-down
+	@test -f $(SYNC_DATA_DIR)/config/settings.json || \
+	  (echo "ERROR: Bootstrap $(SYNC_DATA_DIR)/config/settings.json first" && exit 1)
+	podman run -d \
+	  -v $(SYNC_DATA_DIR):/data:rw,Z \
+	  --env-file $(SYNC_ENV_FILE) \
+	  -e NODE_ROLE=primary \
+	  -e TABLEAU_USER_EMAIL=jhorn@redhat.com \
+	  -e CONFIG_DIR=/data/config \
+	  -e CACHE_DIR=/data/cache \
+	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  --shm-size=2g \
+	  --memory=4g \
+	  --restart=unless-stopped \
+	  --name pai-sync-l3 \
+	  localhost/daily-brief-dashboard:latest \
+	  bun scripts/sync-l3-daemon.ts
+	@echo "Sync daemon running"
+
+sync-down:
+	podman stop pai-sync-l3 2>/dev/null || true
+	podman rm   pai-sync-l3 2>/dev/null || true
+
+sync-logs:
+	podman logs -f pai-sync-l3
+
+sync-status:
+	@podman ps --filter name=pai-sync-l3 --format 'table {{.Names}}\t{{.Status}}'
+
+sync-up-vnc: sync-down
+	@test -f $(SYNC_DATA_DIR)/config/settings.json || \
+	  (echo "ERROR: Bootstrap $(SYNC_DATA_DIR)/config/settings.json first" && exit 1)
+	podman run -d \
+	  -p 127.0.0.1:6082:6080 \
+	  -v $(SYNC_DATA_DIR):/data:rw,Z \
+	  --env-file $(SYNC_ENV_FILE) \
+	  -e NODE_ROLE=primary \
+	  -e TABLEAU_USER_EMAIL=jhorn@redhat.com \
+	  -e CONFIG_DIR=/data/config \
+	  -e CACHE_DIR=/data/cache \
+	  -e RH_PROFILE_DIR=/data/rh-profile \
+	  --shm-size=2g \
+	  --memory=4g \
+	  --name pai-sync-l3 \
+	  localhost/daily-brief-dashboard:latest \
+	  bun scripts/sync-l3-daemon.ts
+	@echo "Sync daemon running with VNC at http://localhost:6082"
 
 # ── All environments ──────────────────────────────────────────────────────────
 all-down: down dev-down demo-down

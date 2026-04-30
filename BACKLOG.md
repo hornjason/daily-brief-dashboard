@@ -7974,27 +7974,38 @@ Acceptance: After wipe, all three connection indicators show "Not Connected". Us
 Can we test: YES — after POST /api/setup/reset, GET /api/status/connections returns hasSession:false for all three.
 
 
-### BKL-SYNC-L3-01 | Standalone L3 sync script — headless pod data sync for primary Mac Mini
-Status: 🔴 OPEN
+### BKL-SYNC-L3-01 | L3 sync daemon — long-running headless pod data sync for primary Mac Mini
+Status: ✅ DONE — 2026-04-30
 Priority: P0
-Size: S
-Source: Session 2026-04-30 (Jason — primary should be headless sync daemon, no server needed)
-Files: scripts/sync-pod-l3.ts (new), src/sf-scraper.ts (runSfPodSync wrapper)
-Description: Standalone bun script that reads settings.json as sole source of truth, iterates all regions/pods, checks pod readiness (sfReportId set + Bookings GSheet present in podBookingsFolderId), then scrapes CCSP via scrapePodCcspRaw(['{podKey}_TERR01'], folderId) and SF Pipeline via new runSfPodSync(reportId, podKey, folderId). No server, no GUI, no AEs, no bootstrap. Runs on cron at 5:30am ET daily. podBookingsFolderId is a constant — not a gate. Skips pods missing sfReportId or Bookings GSheet with a log warning. Both CCSP and SF writes already skip if today's file exists in Drive.
-Acceptance: Script runs headlessly, writes CCSP-{podKey}-{date}.csv and SF-PIPELINE-{id}-{podKey}-{date}.csv for all configured pods to podBookingsFolderId. Skipped pods logged. No server required.
-Can we test: YES — dry-run with DISALLOW_LIVE_SCRAPE=1 to verify settings.json iteration + readiness check logic without live scrapes; integration test by checking Drive folder for today's files after a real run.
-Depends on: Tableau session active, SF session active, Google Drive auth present.
+Size: M
+Source: Session 2026-04-30 (Jason — primary should be headless sync daemon, no server needed; revised 2026-04-30 after Serena council review — ephemeral cron model rejected due to SSO TTL; revised to long-running daemon with internal scheduler)
+Files: scripts/sync-l3-daemon.ts (new entrypoint ~120 lines), scripts/sync-pod-l3.ts (new per-run sync loop ~80 lines), src/sf-scraper.ts (runSfPodSync wrapper ~20 lines), Makefile (sync-up/sync-down/sync-logs/sync-status targets)
+Description: Long-running daemon container (no HTTP server, no AEs, no GUI) that holds a warm Playwright browser context and runs two internal timers:
+  Timer 1 — SSO keepalive every 2h: visits Tableau dashboard URL + SF report URL to prevent RH SSO cookie expiry (4–10h idle TTL makes ephemeral cron unworkable).
+  Timer 2 — Daily sync at 5:30am ET: calls sync-pod-l3.ts logic, iterates all regions/pods, checks pod readiness (sfReportId set + Bookings GSheet present in podBookingsFolderId), scrapes CCSP via scrapePodCcspRaw(['{podKey}_TERR01'], folderId) and SF Pipeline via runSfPodSync(reportId, podKey, folderId). Writes sync-status.json to Drive after each run. Sends summary email to jhorn@redhat.com via existing email-sender.ts (Gmail API) with row counts per pod — one email per run regardless of outcome (success or failure, per-pod try/catch).
+  Role-as-entrypoint: container CMD is `bun scripts/sync-l3-daemon.ts` — NODE_ROLE=primary stays as defense-in-depth guard inside per-scraper functions only.
+  Volume: data-sync/ (separate from data/ and data-demo/) — holds Chromium profile, settings.json (regions/pods only, no AEs), OAuth token, sync-status staging, logs.
+  Makefile targets: sync-up (long-running, restart=unless-stopped), sync-down, sync-logs, sync-status.
+Acceptance: Daemon starts, keepalive pings Tableau every 2h without errors, sync runs at 5:30am ET and writes CCSP-{podKey}-{date}.csv + SF-PIPELINE-{id}-{podKey}-{date}.csv to Drive, sync-status.json updated, email received with row counts.
+Can we test: YES — dry-run with DISALLOW_LIVE_SCRAPE=1 to verify settings.json iteration + readiness check logic; keepalive test by inspecting Tableau page visits in logs; integration test by checking Drive folder for today's files after a real run.
+Depends on: BKL-SYNC-L3-02 shipped; Tableau + SF sessions active (BKL-SYNC-L3-04 for initial SSO setup); Google Drive auth present.
+Decision: DONE — scripts/sync-l3-daemon.ts, scripts/sync-pod-l3.ts, runSfPodSync in sf-scraper.ts, Makefile sync-up/down/logs/status/up-vnc targets all shipped. Unit test bkl-sync-l3-01-daemon.test.ts: 15/15 pass. SYNC_NOW=true dry-run completed without crash, summary email sent. tsc clean on touched files.
 
-### BKL-SYNC-L3-02 | Gate L4 schedulers behind NODE_ROLE=primary check
-Status: 🔴 OPEN
+### BKL-SYNC-L3-02 | Gate L4 schedulers at initBackgroundScheduler() startup + role-as-entrypoint
+Status: ✅ DONE — 2026-04-30
 Priority: P1
 Size: S
-Source: Session 2026-04-30 (hero installs must never start L4 scrape schedulers)
+Source: Session 2026-04-30 (hero installs must never start L4 scrape schedulers; revised 2026-04-30 after Serena council review — gate at scheduler startup not per-scraper, plus late-startup catch-up block)
 Files: src/background-scheduler.ts, server.ts
-Description: scheduleCcspSync() and schedulePipelineSync() must only start when NODE_ROLE=primary. Currently they start unconditionally. Gate both calls in server.ts startup behind process.env.NODE_ROLE === 'primary'. Hero installs (NODE_ROLE unset) never attempt L4 scrapes. Primary Mac Mini (full server, NODE_ROLE=primary) continues to use schedulers until BKL-SYNC-L3-01 is deployed and verified stable.
-Acceptance: Hero install container starts without scheduling any L4 scrape. Primary container still schedules both. No change to scraper logic.
-Can we test: YES — unit test that with NODE_ROLE unset, scheduleCcspSync and schedulePipelineSync are never called on startup.
-Depends on: None. Can ship in same PR as BKL-HERO-01.
+Description: Gate all L4 scheduler paths at initBackgroundScheduler() startup using a single isPrimary predicate — not scattered per-scraper. Two changes:
+  1. L3 reader paths (RH cases heartbeat, subs refresh, CCSP heartbeat, Drive watcher, KPI snapshot, email delivery) register only when !isPrimary (hero installs).
+  2. L4 writer paths (territory sync, pipeline scheduled sync, CCSP scheduled sync) register only when isPrimary — transitional only until SYNC-L3-01 ships and is verified stable ≥1 week.
+  3. Late-startup catch-up block (background-scheduler.ts lines 1198–1255) must also be gated behind isPrimary — currently fires pipeline catch-ups on every hero startup and throws.
+  4. Per-scraper NODE_ROLE guards in ccsp-scraper.ts and sf-scraper.ts stay untouched as defense-in-depth.
+  Note: In the new daemon model, the primary never calls initBackgroundScheduler() at all (its CMD is sync-l3-daemon.ts, not server.ts). The gate in server.ts is still needed for the transitional period and as future protection.
+Acceptance: Hero install starts with zero L4 scheduler registrations and zero catch-up attempts. Late-startup catch-up block never fires on hero. Primary (if running server.ts) still registers L4 paths. Unit test verifies both branches.
+Can we test: YES — unit test both isPrimary branches; grep confirms catch-up block is gated; Playwright smoke confirms hero starts cleanly without L4 errors in logs.
+Depends on: None. Ship first.
 
 ### BKL-SYNC-L3-03 | Remove L4 schedulers + Refresh Timer from app (deferred)
 Status: 🔄 DEFERRED
@@ -8006,3 +8017,47 @@ Description: After BKL-SYNC-L3-01 has run in production for ≥1 week without is
 Acceptance: No L4 scrape schedulers in server. Refresh Timer section gone from all installs. No regressions in L3 read path.
 Can we test: YES — grep confirms no scheduleCcspSync/schedulePipelineSync calls remain; Playwright confirms Refresh Timer section absent.
 Depends on: BKL-SYNC-L3-01 stable in production ≥1 week.
+
+### BKL-SYNC-L3-04 | One-time SSO setup playbook for primary sync daemon
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Session 2026-04-30 (Serena council review — Mac Mini needs documented initial auth sequence before daemon can run autonomously)
+Files: docs/HERO-INSTALL.md (new section), Makefile (sync-up-vnc target for one-time auth mode)
+Description: Document and implement the one-time SSO bootstrap sequence for the Mac Mini sync daemon:
+  1. Start sync container with VNC port exposed: make sync-up-vnc (adds -p 127.0.0.1:6082:6080 to sync-up)
+  2. Open VNC at http://mini.local:6082
+  3. Navigate to Tableau dashboard URL — complete RH SSO login (email autofill handles email field)
+  4. Navigate to SF Lightning report URL — complete OAuth flow
+  5. Verify keepalive log shows successful ping within 2h
+  6. Redeploy without VNC: make sync-down && make sync-up
+  Recovery path (when keepalive emails about SSO expiry): same sequence, step 1–4 only.
+  Add HERO-INSTALL.md section: "Primary Node — Initial Auth Setup" with step-by-step runbook.
+Acceptance: After following runbook, daemon runs keepalive without SSO errors for 24h. Recovery path documented and tested once.
+Can we test: YES — keepalive logs show Tableau + SF URL visits succeeding for 24h without redirect to login page.
+Depends on: BKL-SYNC-L3-01 shipped and running on Mac Mini.
+
+### BKL-SYNC-L3-05 | Split container image: server (no Chromium) vs sync (with Chromium)
+Status: 🔄 DEFERRED
+Priority: P2
+Size: L
+Source: Session 2026-04-30 (Serena council review — hero installs need zero Playwright/Chromium; image split is the architectural payoff)
+Files: Containerfile (or Dockerfile), Makefile, CI release pipeline
+Description: Since hero installs run zero L4 scrapes and need no browser, the full ~1.4GB image (Chromium included) is wasteful. Split into two images:
+  daily-brief-dashboard:server — no Chromium, no Playwright, ~600MB. Default for hero installs.
+  daily-brief-dashboard:sync — full image with Chromium, ~1.4GB. Used only by Mac Mini sync daemon.
+  Both built from same base; sync image adds Chromium layer on top.
+  Most users never download Chromium. CI publishes both tags.
+Acceptance: `make demo-up` and hero installs pull :server. `make sync-up` pulls :sync. Both function correctly. CI publishes both on release.
+Can we test: YES — image size diff confirms Chromium absent from :server; scraper smoke tests confirm :sync can reach Tableau.
+Depends on: BKL-SYNC-L3-03 shipped (L4 code removed from server) + SYNC-L3-01 stable ≥1 week.
+
+### BKL-SYNC-L3-06 | checkBookingsGSheetExists in sync-pod-l3.ts matches on pod key substring — may be too loose
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Marcus discovery during BKL-SYNC-L3-01 implementation 2026-04-30
+Files: scripts/sync-pod-l3.ts — checkBookingsGSheetExists
+Description: The GSheet readiness check matches any spreadsheet in podBookingsFolderId whose name contains the podKey (lowercased). This is a substring match, which could produce false positives if multiple pods share a key substring (e.g., NORTHWEST matching NORTHWEST_CORP). Real-world settings.json shows distinct pod keys, so this is low risk today, but worth tightening to use the derivePodKeywordMap logic from region-config.ts for consistent keyword matching.
+Can we test: YES — unit test with a folder containing deliberately ambiguous filenames.
+Depends on: BKL-SYNC-L3-01 stable in production.
