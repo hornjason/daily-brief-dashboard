@@ -7973,3 +7973,36 @@ Description: After a data wipe (POST /api/setup/reset), the shared browser conte
 Acceptance: After wipe, all three connection indicators show "Not Connected". User must re-connect RH Portal first before SF and Tableau will work.
 Can we test: YES — after POST /api/setup/reset, GET /api/status/connections returns hasSession:false for all three.
 
+
+### BKL-SYNC-L3-01 | Standalone L3 sync script — headless pod data sync for primary Mac Mini
+Status: 🔴 OPEN
+Priority: P0
+Size: S
+Source: Session 2026-04-30 (Jason — primary should be headless sync daemon, no server needed)
+Files: scripts/sync-pod-l3.ts (new), src/sf-scraper.ts (runSfPodSync wrapper)
+Description: Standalone bun script that reads settings.json as sole source of truth, iterates all regions/pods, checks pod readiness (sfReportId set + Bookings GSheet present in podBookingsFolderId), then scrapes CCSP via scrapePodCcspRaw(['{podKey}_TERR01'], folderId) and SF Pipeline via new runSfPodSync(reportId, podKey, folderId). No server, no GUI, no AEs, no bootstrap. Runs on cron at 5:30am ET daily. podBookingsFolderId is a constant — not a gate. Skips pods missing sfReportId or Bookings GSheet with a log warning. Both CCSP and SF writes already skip if today's file exists in Drive.
+Acceptance: Script runs headlessly, writes CCSP-{podKey}-{date}.csv and SF-PIPELINE-{id}-{podKey}-{date}.csv for all configured pods to podBookingsFolderId. Skipped pods logged. No server required.
+Can we test: YES — dry-run with DISALLOW_LIVE_SCRAPE=1 to verify settings.json iteration + readiness check logic without live scrapes; integration test by checking Drive folder for today's files after a real run.
+Depends on: Tableau session active, SF session active, Google Drive auth present.
+
+### BKL-SYNC-L3-02 | Gate L4 schedulers behind NODE_ROLE=primary check
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Session 2026-04-30 (hero installs must never start L4 scrape schedulers)
+Files: src/background-scheduler.ts, server.ts
+Description: scheduleCcspSync() and schedulePipelineSync() must only start when NODE_ROLE=primary. Currently they start unconditionally. Gate both calls in server.ts startup behind process.env.NODE_ROLE === 'primary'. Hero installs (NODE_ROLE unset) never attempt L4 scrapes. Primary Mac Mini (full server, NODE_ROLE=primary) continues to use schedulers until BKL-SYNC-L3-01 is deployed and verified stable.
+Acceptance: Hero install container starts without scheduling any L4 scrape. Primary container still schedules both. No change to scraper logic.
+Can we test: YES — unit test that with NODE_ROLE unset, scheduleCcspSync and schedulePipelineSync are never called on startup.
+Depends on: None. Can ship in same PR as BKL-HERO-01.
+
+### BKL-SYNC-L3-03 | Remove L4 schedulers + Refresh Timer from app (deferred)
+Status: 🔄 DEFERRED
+Priority: P2
+Size: M
+Source: Session 2026-04-30 (after sync script stable, clean up server)
+Files: src/background-scheduler.ts, server.ts, dashboard/src/pages/SetupPage.tsx
+Description: After BKL-SYNC-L3-01 has run in production for ≥1 week without issues: remove scheduleCcspSync, schedulePipelineSync from the server entirely; remove the Refresh Timer & Settings section from SetupPage.tsx (not just hide — delete). This is the final cleanup phase once the standalone script is the canonical L3 write path.
+Acceptance: No L4 scrape schedulers in server. Refresh Timer section gone from all installs. No regressions in L3 read path.
+Can we test: YES — grep confirms no scheduleCcspSync/schedulePipelineSync calls remain; Playwright confirms Refresh Timer section absent.
+Depends on: BKL-SYNC-L3-01 stable in production ≥1 week.

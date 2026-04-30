@@ -1,6 +1,6 @@
 # Hero Install — Design & Setup Guide
 
-<!-- doc-type: design-spec | status: signed-off | owner: jason | updated: 2026-04-29 | council: Serena reviewed 2026-04-29 -->
+<!-- doc-type: design-spec | status: council-review-pending | owner: jason | updated: 2026-04-30 | council: Serena reviewed 2026-04-29 (hero wizard); sync-script pending review 2026-04-30 -->
 
 ## What is a hero install?
 
@@ -17,12 +17,75 @@ All L3 data lives in a **single shared `podBookingsFolderId`** per region — ha
 
 ## Node Role Architecture
 
-| `.env` setting | Role | Scrapes |
+| `.env` setting | Role | What it runs |
 |---|---|---|
-| `NODE_ROLE` unset | Hero install (L3-only) | None — reads from shared Drive L3 folder |
-| `NODE_ROLE=primary` | Mac Mini (L4 leader) | Tableau, SF Lightning — writes L3 CSVs to Drive |
+| `NODE_ROLE` unset | Hero install (L3-only) | Full app server — reads from shared Drive L3 folder, no scrapers |
+| `NODE_ROLE=primary` | Mac Mini sync daemon | **No server, no GUI, no AEs** — runs `scripts/sync-pod-l3.ts` on cron only |
 
 **Never set `NODE_ROLE=primary` as a default.** Only the designated Mac Mini carries it.
+
+The primary Mac Mini's only job is writing L3 files to `podBookingsFolderId` daily. It does not run the dashboard server, does not need AEs configured, and does not run the setup wizard. It is a headless sync daemon.
+
+---
+
+## L3 Sync Script — `scripts/sync-pod-l3.ts` *(BKL-SYNC-L3-01)*
+
+Standalone cron script. No server. No AE data. Reads `settings.json` as the sole source of truth.
+
+### Pod readiness check (per pod, before scraping)
+
+`podBookingsFolderId` is a constant — same folder for all regions, always set. The check is whether a **pod is ops-ready**:
+
+| Check | Source | Skip if missing |
+|---|---|---|
+| `sfReportId` set | `settings.json pods[key].sfReportId` | Pod not wired in Salesforce yet |
+| Bookings GSheet exists in folder | Drive file list in `podBookingsFolderId` | Subscription data source not ready |
+
+Both must be present. If either is missing → log `"pod {podKey} not configured — skipping"` and move on.
+
+### Script flow
+
+```
+startup
+  load settings.json → normalizeRegions()
+  init browser → RH Portal → Tableau session (shared context)
+  init SF Lightning session
+  init Google Drive auth
+
+for each region in settings.json:
+  folderId = podBookingsFolderId   // constant — no check
+
+  for each pod in region.pods:
+    if !pod.sfReportId → skip
+    if no Bookings GSheet in folderId → skip
+
+    // CCSP
+    scrapePodCcspRaw(['{podKey}_TERR01'], folderId)
+    → writes CCSP-{podKey}-{date}.csv
+    → skips automatically if today's file already exists
+
+    // SF Pipeline
+    runSfPodSync(pod.sfReportId, podKey, folderId)   // new ~20-line wrapper
+    → writes SF-PIPELINE-{id}-{podKey}-{date}.csv
+```
+
+### Cron schedule (Mac Mini)
+```bash
+# 5:30am ET daily — before hero installs refresh at 6:30am
+30 9 * * * cd /app && bun scripts/sync-pod-l3.ts >> logs/pod-l3-sync.log 2>&1
+```
+*(9:30 UTC = 5:30am ET)*
+
+### New code required
+
+| Item | Size | File |
+|---|---|---|
+| `scripts/sync-pod-l3.ts` | ~80 lines | New standalone cron script |
+| `runSfPodSync(reportId, podKey, folderId)` | ~20 lines | New thin wrapper in `src/sf-scraper.ts` |
+
+### What the primary does NOT need
+
+No Express server · No setup wizard · No AE bootstrap · No refresh engine · No RH Cases scraper · No territory sync · No dashboard UI
 
 ---
 
@@ -287,7 +350,29 @@ To add a new region:
 
 ## What Needs to Be Built
 
-Phased implementation per Serena's council review (2026-04-29). See `BACKLOG.md` BKL-HERO-01 and BKL-HERO-02.
+Two parallel workstreams that together deliver the complete hero install system. See `BACKLOG.md` for full acceptance criteria.
+
+### BKL-SYNC-L3-01 — Standalone L3 sync script *(primary Mac Mini)*
+
+| Phase | Item | Description |
+|---|---|---|
+| 0 | `runSfPodSync()` | ~20-line wrapper in `src/sf-scraper.ts`; takes `(reportId, podKey, folderId)`; calls existing Drive write with explicit podKey |
+| 1 | `scripts/sync-pod-l3.ts` | ~80-line cron script; reads settings.json; pod readiness check; calls `scrapePodCcspRaw` + `runSfPodSync` per pod |
+| 2 | Cron on Mac Mini | `crontab -e` entry; 5:30am ET daily; stdout → `logs/pod-l3-sync.log` |
+
+### BKL-SYNC-L3-02 — Gate L4 schedulers behind `isL3Only` *(app server)*
+
+Hero installs must never attempt to start `scheduleCcspSync()` or `schedulePipelineSync()`. Gate both behind `NODE_ROLE === 'primary'` check on server startup. Primary Mac Mini currently uses the full server — schedulers keep running there until BKL-SYNC-L3-01 is deployed and verified.
+
+### BKL-SYNC-L3-03 — Remove schedulers + Refresh Timer *(deferred)*
+
+After BKL-SYNC-L3-01 is stable on the Mac Mini: remove `scheduleCcspSync`, `schedulePipelineSync`, and the Refresh Timer section from the app entirely. Deferred until sync script has run in production for ≥1 week.
+
+---
+
+### BKL-HERO-01 — Hero install wizard *(app server — hero installs)*
+
+Phased implementation per Serena's council review (2026-04-29).
 
 ### BKL-HERO-01 (in scope)
 
