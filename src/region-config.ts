@@ -86,6 +86,19 @@ export function getRegionById(settings: NormalizedSettings, regionId?: string): 
   return regions.find(r => r.id === regionId) ?? regions[0]
 }
 
+/**
+ * BKL-HERO-01 Phase 0 — single source of truth for "is the pod filter active".
+ *
+ * `enabledPods` activates filtering only when present AND non-empty. `undefined`,
+ * `null`, and `[]` all mean "no filter, show everything" — this is the
+ * backward-compatibility guarantee for every legacy install (including every
+ * existing primary install today). Inline-checking at call sites drifts; always
+ * import this function.
+ */
+export function isPodFilterActive(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length > 0
+}
+
 /** { podKey: sfReportId } — mirrors the legacy `podSfReports` shape for one region. */
 export function flattenPodSfReports(region: RegionConfig): Record<string, string> {
   const out: Record<string, string> = {}
