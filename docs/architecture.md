@@ -16,12 +16,14 @@ A personal operations dashboard for Account Solution Architects managing a Red H
 
 | `NODE_ROLE` env var | Role | What runs | What it does |
 |---|---|---|---|
-| unset | **Hero install (L3-only)** | Full app server + dashboard | Reads CCSP + Pipeline CSVs from shared Drive folder. No scrapers. RH Cases via Bearer token only. |
-| `primary` | **Mac Mini sync daemon** | `scripts/sync-pod-l3.ts` on cron only | Scrapes Tableau (CCSP) + SF (Pipeline) for all pods in settings.json. Writes L3 CSVs to `podBookingsFolderId` daily. **No server. No GUI. No AEs.** |
+| unset | **Hero install (L3-only)** | Full app server + dashboard (`bun server.ts`) | Reads CCSP + Pipeline CSVs from shared Drive folder. No scrapers. No browser. RH Cases via Bearer token only. |
+| `primary` | **Mac Mini sync daemon** | `scripts/sync-l3-daemon.ts` (long-running, no server) | Holds warm Playwright browser context. SSO keepalive every 2h. Scrapes Tableau (CCSP) + SF (Pipeline) for all pods at 5:30am ET. Writes L3 CSVs to `podBookingsFolderId`. Sends email summary. **No server. No GUI. No AEs.** |
 
-The primary does not run the dashboard server or setup wizard. It is a headless sync daemon whose only job is keeping the shared Drive folder current so all hero installs have fresh data. Role is determined entirely by `NODE_ROLE=primary` in `.env`.
+**Role-as-entrypoint:** the container CMD declares the role. Hero → `bun server.ts`. Primary → `bun scripts/sync-l3-daemon.ts`. `NODE_ROLE=primary` is retained as a defense-in-depth guard inside per-scraper functions only, not as the primary control flow. This prevents any future code path from accidentally running L4 scrapes on a hero install regardless of how the scheduler is structured.
 
-**Sync script** (`scripts/sync-pod-l3.ts`) iterates `settings.json regions → pods`, checks pod readiness (sfReportId set + Bookings GSheet present in folder), then runs `scrapePodCcspRaw` + `runSfPodSync` per pod. Cron: 5:30am ET daily. Full spec: `docs/HERO-INSTALL.md § L3 Sync Script`.
+**Why long-running (not ephemeral cron):** RH SSO session cookies (Tableau + SF Lightning) expire in 4–10h idle. An ephemeral container running once daily would arrive to an expired session with no offline-refresh path. The daemon holds the browser context warm between runs via a 2h keepalive ping. Chromium profile persists in the `data-sync/` volume across restarts.
+
+**Sync daemon** (`scripts/sync-l3-daemon.ts`) runs two internal timers. Timer 1: SSO keepalive every 2h visits Tableau + SF report URLs to prevent cookie expiry. Timer 2: daily sync at 5:30am ET calls `scripts/sync-pod-l3.ts` logic — iterates `settings.json regions → pods`, checks pod readiness, runs `scrapePodCcspRaw` + `runSfPodSync`, writes `sync-status.json` to Drive, sends summary email. No host crontab — the daemon IS the cron. Full spec: `docs/HERO-INSTALL.md § L3 Sync Daemon`.
 
 Hero install wizard hides L4-only sections via `isL3Only` flag (`NODE_ROLE !== 'primary'`). Full wizard design: `docs/HERO-INSTALL.md`.
 

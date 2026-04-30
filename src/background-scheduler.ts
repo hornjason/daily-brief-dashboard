@@ -27,6 +27,12 @@ import { sanitizeErr, normalizeForQuery, liveProbe } from './utils.ts'
 import { isBootstrapRunning } from './bootstrap-orchestrator.ts'
 import { writeSyncStateFlow, todaySyncRan } from './sync-state.ts'
 
+// ── BKL-SYNC-L3-02: Primary-node predicate — gates L4 writer scheduler paths ──
+// NODE_ROLE=primary → this node is the L4 leader (Mac Mini sync daemon).
+// NODE_ROLE unset   → hero install, L3-only; must NOT register L4 writer schedulers
+// or the catch-up block (they throw on every hero restart when NODE_ROLE is unset).
+const isPrimary = process.env.NODE_ROLE === 'primary'
+
 // ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
 // All scrapers share one BrowserContext (SSO constraint). Running them
 // concurrently causes "Target page, context or browser has been closed" errors.
@@ -1177,14 +1183,17 @@ export function initBackgroundScheduler(opts: {
     rescheduleRefreshTimers(getRefreshIntervals())
   }
 
-  // Territory syncs daily at 1:45am ET (before pipeline at 2am)
-  scheduleTerritorySync()
+  // L4 writer schedulers — primary node only (BKL-SYNC-L3-02)
+  if (isPrimary) {
+    // Territory syncs daily at 1:45am ET (before pipeline at 2am)
+    scheduleTerritorySync()
 
-  // Pipeline syncs daily at 2am ET (SF report generated at 1am ET)
-  schedulePipelineSync(opts.sfSessionPath)
+    // Pipeline syncs daily at 2am ET (SF report generated at 1am ET)
+    schedulePipelineSync(opts.sfSessionPath)
 
-  // CCSP scrape daily at 6:30am ET
-  scheduleCcspSync()
+    // CCSP scrape daily at 6:30am ET
+    scheduleCcspSync()
+  }
 
   // Supportable batch rotation daily at 7am ET (ADR-008)
   scheduleSupportableSync()
@@ -1195,10 +1204,9 @@ export function initBackgroundScheduler(opts: {
   // Email brief delivery — scheduled per user config (BKL-E06)
   scheduleEmailDelivery()
 
-  // BKL-INGEST-09: Late startup detection — if today's scheduled sync missed, catch up after 60s.
-  // Container may start after 6:30am ET (CCSP schedule) and 2am ET (Pipeline schedule).
-  // We wait 60s for the server to fully stabilise before triggering catch-up scrapes.
-  if (!todaySyncRan()) {
+  // BKL-INGEST-09 / BKL-SYNC-L3-02: Late startup catch-up — primary node only.
+  // Hero installs must NOT run catch-up: no L4 credentials, throws on every restart.
+  if (isPrimary && !todaySyncRan()) {
     console.log('[sync-state] today\'s sync has not run — scheduling catch-up in 60s')
     setTimeout(() => {
       // Re-check in case another startup path already triggered a sync during the 60s window

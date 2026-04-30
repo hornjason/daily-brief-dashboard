@@ -1,6 +1,6 @@
 # Hero Install — Design & Setup Guide
 
-<!-- doc-type: design-spec | status: council-review-pending | owner: jason | updated: 2026-04-30 | council: Serena reviewed 2026-04-29 (hero wizard); sync-script pending review 2026-04-30 -->
+<!-- doc-type: design-spec | status: council-approved | owner: jason | updated: 2026-04-30 | council: Serena reviewed 2026-04-29 (hero wizard) + 2026-04-30 (sync daemon architecture, NODE_ROLE gate, SSO TTL) -->
 
 ## What is a hero install?
 
@@ -19,18 +19,41 @@ All L3 data lives in a **single shared `podBookingsFolderId`** per region — ha
 
 | `.env` setting | Role | What it runs |
 |---|---|---|
-| `NODE_ROLE` unset | Hero install (L3-only) | Full app server — reads from shared Drive L3 folder, no scrapers |
-| `NODE_ROLE=primary` | Mac Mini sync daemon | **No server, no GUI, no AEs** — runs `scripts/sync-pod-l3.ts` on cron only |
+| `NODE_ROLE` unset | Hero install (L3-only) | Full app server — reads from shared Drive L3 folder, no scrapers, no browser |
+| `NODE_ROLE=primary` | Mac Mini sync daemon | **No server, no GUI, no AEs** — runs `scripts/sync-l3-daemon.ts` (long-running, internal scheduler) |
 
 **Never set `NODE_ROLE=primary` as a default.** Only the designated Mac Mini carries it.
 
-The primary Mac Mini's only job is writing L3 files to `podBookingsFolderId` daily. It does not run the dashboard server, does not need AEs configured, and does not run the setup wizard. It is a headless sync daemon.
+The primary Mac Mini's only job is writing L3 files to `podBookingsFolderId` daily. It does not run the dashboard server, does not need AEs configured, and does not run the setup wizard. It is a long-running headless daemon that holds a warm browser context for RH SSO and fires the daily sync internally at 5:30am ET.
+
+**Role-as-entrypoint:** the container CMD declares the role. Hero install → `bun server.ts`. Primary → `bun scripts/sync-l3-daemon.ts`. `NODE_ROLE=primary` is retained as a defense-in-depth guard inside per-scraper functions, not as the primary control flow.
 
 ---
 
-## L3 Sync Script — `scripts/sync-pod-l3.ts` *(BKL-SYNC-L3-01)*
+## L3 Sync Daemon — `scripts/sync-l3-daemon.ts` *(BKL-SYNC-L3-01)*
 
-Standalone cron script. No server. No AE data. Reads `settings.json` as the sole source of truth.
+Long-running daemon. No server. No AE data. Reads `settings.json` as the sole source of truth. Holds a warm Playwright browser context to keep RH SSO cookies alive between daily runs (SSO idle TTL is 4–10h — an ephemeral cron approach expires before the next run).
+
+### `data-sync/config/settings.json` — daemon's only config
+
+Regions and pods only. No AEs, no customers:
+
+```json
+{
+  "regions": [
+    {
+      "id": "west-commercial",
+      "pods": {
+        "POD01": { "sfReportId": "00O..." },
+        "POD02": { "sfReportId": "00O..." }
+      },
+      "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo"
+    }
+  ]
+}
+```
+
+Add a new region entry here when a new pod comes online. No code changes required.
 
 ### Pod readiness check (per pod, before scraping)
 
@@ -41,51 +64,72 @@ Standalone cron script. No server. No AE data. Reads `settings.json` as the sole
 | `sfReportId` set | `settings.json pods[key].sfReportId` | Pod not wired in Salesforce yet |
 | Bookings GSheet exists in folder | Drive file list in `podBookingsFolderId` | Subscription data source not ready |
 
-Both must be present. If either is missing → log `"pod {podKey} not configured — skipping"` and move on.
+Both must be present. If either is missing → log `"pod {podKey} not configured — skipping"` and include in email summary.
 
-### Script flow
+### Daemon internals — two timers
 
 ```
 startup
   load settings.json → normalizeRegions()
-  init browser → RH Portal → Tableau session (shared context)
-  init SF Lightning session
+  init browser → Tableau + SF SSO session (persistent Chromium profile in data-sync/)
   init Google Drive auth
 
-for each region in settings.json:
-  folderId = podBookingsFolderId   // constant — no check
+Timer 1 — SSO keepalive (every 2h):
+  visit Tableau dashboard URL   → prevents RH SSO cookie expiry
+  visit SF Lightning report URL → keeps SF session alive
+  if either visit redirects to login → log error + send alert email
 
-  for each pod in region.pods:
-    if !pod.sfReportId → skip
-    if no Bookings GSheet in folderId → skip
-
-    // CCSP
+Timer 2 — Daily sync (5:30am ET via setTimeout reschedule loop):
+  for each region → for each pod:
+    if !pod.sfReportId || no Bookings GSheet → skip, note in results
     scrapePodCcspRaw(['{podKey}_TERR01'], folderId)
-    → writes CCSP-{podKey}-{date}.csv
-    → skips automatically if today's file already exists
-
-    // SF Pipeline
-    runSfPodSync(pod.sfReportId, podKey, folderId)   // new ~20-line wrapper
-    → writes SF-PIPELINE-{id}-{podKey}-{date}.csv
+      → writes CCSP-{podKey}-{date}.csv (auto-skips if today's file exists)
+    runSfPodSync(pod.sfReportId, podKey, folderId)
+      → writes SF-PIPELINE-{id}-{podKey}-{date}.csv
+  write sync-status.json to Drive (last-run, files written, skipped pods + reason)
+  send summary email to jhorn@redhat.com (one email per run, success or failure)
 ```
 
-### Cron schedule (Mac Mini)
-```bash
-# 5:30am ET daily — before hero installs refresh at 6:30am
-30 9 * * * cd /app && bun scripts/sync-pod-l3.ts >> logs/pod-l3-sync.log 2>&1
+### Email summary format
+
+**Subject:** `L3 Sync Complete — 2026-04-30 | 3 pods synced, 1 skipped`
+
+**Body:**
 ```
-*(9:30 UTC = 5:30am ET)*
+West Commercial — POD01   CCSP: 847 rows    SF Pipeline: 312 rows
+West Commercial — POD02   CCSP: 1,203 rows  SF Pipeline: 489 rows
+TOLA — POD01              CCSP: 2,104 rows  SF Pipeline: 701 rows
+East Commercial — POD02   ⚠️ SKIPPED — SF report ID not configured
+
+Completed: 2026-04-30 06:02:14 ET
+```
+
+On failure, subject changes to `L3 Sync FAILED — 2026-04-30 | pod X: <reason>`.
+
+### Makefile targets (Mac Mini)
+
+```makefile
+make sync-up      # start daemon (long-running, --restart=unless-stopped)
+make sync-down    # stop + remove container
+make sync-logs    # tail daemon logs
+make sync-status  # show container state + last sync-status.json
+make sync-up-vnc  # one-time auth mode: adds VNC port 6082 for initial SSO setup
+```
+
+No host crontab. The daemon IS the cron — internal `setTimeout` reschedule loop.
 
 ### New code required
 
 | Item | Size | File |
 |---|---|---|
-| `scripts/sync-pod-l3.ts` | ~80 lines | New standalone cron script |
+| `scripts/sync-l3-daemon.ts` | ~120 lines | Daemon entrypoint — two timers, SSO keepalive, email |
+| `scripts/sync-pod-l3.ts` | ~80 lines | Per-run sync loop — called by daemon at 5:30am ET |
 | `runSfPodSync(reportId, podKey, folderId)` | ~20 lines | New thin wrapper in `src/sf-scraper.ts` |
+| `make sync-up/down/logs/status/sync-up-vnc` | ~30 lines | New Makefile targets |
 
 ### What the primary does NOT need
 
-No Express server · No setup wizard · No AE bootstrap · No refresh engine · No RH Cases scraper · No territory sync · No dashboard UI
+No HTTP server · No setup wizard · No AE bootstrap · No refresh engine · No RH Cases scraper · No territory sync · No dashboard UI · No host crontab
 
 ---
 
@@ -352,21 +396,30 @@ To add a new region:
 
 Two parallel workstreams that together deliver the complete hero install system. See `BACKLOG.md` for full acceptance criteria.
 
-### BKL-SYNC-L3-01 — Standalone L3 sync script *(primary Mac Mini)*
+### BKL-SYNC-L3-02 — Gate L4 schedulers at `initBackgroundScheduler()` startup *(ship first)*
+
+Gate all L4 scheduler paths with a single `isPrimary` predicate at `initBackgroundScheduler()` startup. L3 reader paths (heartbeat, RH cases, subs, email delivery) register only on hero. L4 writer paths (territory sync, pipeline, CCSP scheduled sync) register only on primary. Late-startup catch-up block (lines 1198–1255) also gated behind `isPrimary` — currently fires on every hero restart and throws. Per-scraper guards in `ccsp-scraper.ts` and `sf-scraper.ts` stay as defense-in-depth.
+
+### BKL-SYNC-L3-01 — L3 sync daemon *(primary Mac Mini — after SYNC-L3-02)*
 
 | Phase | Item | Description |
 |---|---|---|
-| 0 | `runSfPodSync()` | ~20-line wrapper in `src/sf-scraper.ts`; takes `(reportId, podKey, folderId)`; calls existing Drive write with explicit podKey |
-| 1 | `scripts/sync-pod-l3.ts` | ~80-line cron script; reads settings.json; pod readiness check; calls `scrapePodCcspRaw` + `runSfPodSync` per pod |
-| 2 | Cron on Mac Mini | `crontab -e` entry; 5:30am ET daily; stdout → `logs/pod-l3-sync.log` |
+| 0 | `runSfPodSync()` | ~20-line wrapper in `src/sf-scraper.ts`; takes `(reportId, podKey, folderId)` |
+| 1 | `scripts/sync-pod-l3.ts` | ~80-line per-run sync loop; pod readiness check; `scrapePodCcspRaw` + `runSfPodSync` per pod; writes sync-status.json; sends summary email |
+| 2 | `scripts/sync-l3-daemon.ts` | ~120-line daemon entrypoint; Timer 1 = SSO keepalive every 2h; Timer 2 = calls sync-pod-l3 logic at 5:30am ET |
+| 3 | Makefile targets | `sync-up`, `sync-down`, `sync-logs`, `sync-status`, `sync-up-vnc` |
 
-### BKL-SYNC-L3-02 — Gate L4 schedulers behind `isL3Only` *(app server)*
+### BKL-SYNC-L3-04 — One-time SSO setup playbook *(after SYNC-L3-01 on Mac Mini)*
 
-Hero installs must never attempt to start `scheduleCcspSync()` or `schedulePipelineSync()`. Gate both behind `NODE_ROLE === 'primary'` check on server startup. Primary Mac Mini currently uses the full server — schedulers keep running there until BKL-SYNC-L3-01 is deployed and verified.
+Initial auth sequence for the Mac Mini sync daemon: `make sync-up-vnc` → open VNC at port 6082 → auth Tableau (email autofill handles email field, complete SSO popup) → auth SF Lightning → verify keepalive log → `make sync-down && make sync-up` (removes VNC port). Recovery path when keepalive emails about expiry: repeat steps 1–4.
 
-### BKL-SYNC-L3-03 — Remove schedulers + Refresh Timer *(deferred)*
+### BKL-SYNC-L3-03 — Remove schedulers + Refresh Timer *(deferred, after SYNC-L3-01 stable ≥1 week)*
 
-After BKL-SYNC-L3-01 is stable on the Mac Mini: remove `scheduleCcspSync`, `schedulePipelineSync`, and the Refresh Timer section from the app entirely. Deferred until sync script has run in production for ≥1 week.
+Remove `scheduleCcspSync`, `schedulePipelineSync`, and the Refresh Timer section from the app entirely. Final cleanup once sync daemon is the canonical L3 write path.
+
+### BKL-SYNC-L3-05 — Split container image: server vs sync *(deferred, after SYNC-L3-03)*
+
+`daily-brief-dashboard:server` (no Chromium, ~600MB) for hero installs. `daily-brief-dashboard:sync` (with Chromium, ~1.4GB) for Mac Mini only. Most users never download Chromium.
 
 ---
 
