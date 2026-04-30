@@ -12,6 +12,17 @@ A personal operations dashboard for Account Solution Architects managing a Red H
 
 ---
 
+## Node Roles
+
+| `NODE_ROLE` env var | Role | Description |
+|---|---|---|
+| unset | **Hero install (L3-only)** | Reads CCSP + Pipeline data from shared Drive CSVs written by the primary. No Tableau or SF browser scrape. RH Cases via Bearer token only. |
+| `primary` | **Primary (Mac Mini)** | Runs all L4 scrapers (Tableau, SF Lightning). Writes CCSP + Pipeline CSVs to shared `podBookingsFolderId` on Drive daily. |
+
+Hero installs run the same container image — role is determined entirely by whether `NODE_ROLE=primary` is set in `.env`. Wizard UI hides L4-only sections (`isL3Only` flag) when `NODE_ROLE` is unset. Full design: `docs/HERO-INSTALL.md`.
+
+---
+
 ## Runtime
 
 | Component | Technology |
@@ -50,15 +61,16 @@ Playwright scrapes a Salesforce Lightning report directly from the DOM. REST API
 
 **Schedule:** Syncs daily at 2am ET via a `setTimeout` reschedule loop (container-safe; no system cron). SF report generates at 1am ET.
 
-### 3. Red Hat Portal (`src/rh-scraper.ts`, `src/rh-auth.ts`)
-Playwright scrapes `access.redhat.com/support/cases` for open support cases. Requires an active SSO session maintained in a persistent Chromium profile (`RH_PROFILE_DIR`).
+### 3. Red Hat Cases (`src/case-client.ts`, `src/rh-cases-api.ts`, `src/rh-scraper.ts`)
+Support cases are fetched via one of two transports, selected by `RH_CASES_TRANSPORT` env var:
 
-- Session stored in `.rh-session.json`; scrape context initialized on startup if session exists
-- Scrape interval: configurable (default 4 hours)
-- Session expiry detected via `SessionExpiredError`; triggers UI notification to re-authenticate
+- **Bearer (default):** `BearerCaseClient` in `case-client.ts` calls `fetchCasesViaSolr()` — POST to `access.redhat.com/hydra/rest/search/v2/cases` using a short-lived JWT from `REDHAT_OFFLINE_TOKEN`. No browser, no Playwright, no VNC. Works on hero installs. Stale-overwrite guard: if Bearer returns 0 cases, the existing cache is preserved rather than wiped.
+- **Browser (emergency fallback):** Set `RH_CASES_TRANSPORT=browser` in `.env` and restart (no rebuild). Playwright scrapes `access.redhat.com/support/cases` via a persistent Chromium profile (`RH_PROFILE_DIR`). Requires an active SSO session; session expiry triggers a UI notification.
+
+Scrape interval: configurable (default 4 hours). Cases cached at `data/cache/cases.json`.
 
 ### 4. Red Hat Subscription API (`src/redhat.ts`)
-Direct API calls to `api.access.redhat.com` using an offline token (`REDHAT_OFFLINE_TOKEN`) for subscription and case data that doesn't require browser auth.
+Direct API calls to `api.access.redhat.com` using an offline token (`REDHAT_OFFLINE_TOKEN`) for subscription and case data. Also provides `getToken()` used by the Bearer cases path.
 
 ### 5. Gmail + Calendar + AI Brief (`src/customer.ts`, `src/google.ts`)
 Google OAuth token used to fetch recent customer emails and upcoming calendar events for the daily brief. Filtered to customer domain/name to exclude internal Red Hat noise.

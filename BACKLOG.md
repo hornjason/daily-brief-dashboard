@@ -7906,6 +7906,53 @@ Description: Step 3 (Connections) triggers scraping immediately on auth — SF o
 Acceptance: Fresh container: connect RH Portal + SF → no scraping fires. Start bootstrap → SF runs → writes L3 → CCSP runs (L3 hit skips L4, L3 miss does L4) → writes L3 → done. RH Cases not triggered. No browser contention. CCSP does not call newPage() while SF is using the browser.
 Can we test: YES — regression test that (a) SF onComplete does NOT call runSfSyncForAes, (b) catch-up skipped when aes.json empty, (c) bootstrap CCSP step checks today's Drive CSV before L4.
 
+### BKL-HERO-01 | Hero Install Wizard — L3-only setup flow (Step 0 + Step 3 + isL3Only gating)
+Status: 🔴 OPEN
+Priority: P1
+Size: L
+Source: Session 2026-04-29 (design signed off by Jason)
+Files: dashboard/src/pages/SetupPage.tsx, dashboard/src/components/BootstrapConfigBlock.tsx, src/settings-api.ts, src/server-state.ts
+Description: Implement the hero install wizard design per docs/HERO-INSTALL.md. Five net-new items:
+  1. Step 0 — first-boot region/pod selector screen; writes enabledRegions + enabledPods to settings.json; skipped on subsequent boots; editable from Admin › Region Access
+  2. Step 3 — RH API Token UI; paste REDHAT_OFFLINE_TOKEN in form field; app validates (getToken()) + writes to .env; replaces current Connections step for L3
+  3. isL3Only flag — server exposes NODE_ROLE !== 'primary'; frontend conditionally hides Data Sources, Refresh Timer, Automation sections
+  4. Step 4 filter — Region/POD dropdowns pre-filtered to enabledRegions/enabledPods from settings.json
+  5. "Open Dashboard" button relocation — move from Refresh Timer section to end of Step 4 (since Refresh Timer hidden on L3)
+Acceptance:
+  - First boot on fresh container with no NODE_ROLE shows Step 0 region/pod picker
+  - Step 0 skipped on subsequent boots; Edit link in Admin re-shows it
+  - Step 3 token field validates and writes REDHAT_OFFLINE_TOKEN to .env
+  - Step 4 POD dropdown shows only pods matching enabledPods
+  - Data Sources, Refresh Timer, Automation sections absent from wizard on L3 install
+  - Primary (NODE_ROLE=primary) sees full 5-step wizard unchanged
+  - East regions show as Coming Soon (not selectable) until sfReportId + podBookingsFolderId configured
+Can we test: YES — Playwright spec: (1) fresh container, NODE_ROLE unset → Step 0 visible; (2) after save, reload → Step 0 absent; (3) NODE_ROLE=primary → Step 0 absent, Data Sources visible
+
+Council corrections (Serena 2026-04-29):
+  - Token storage: data-sources.json via existing saveOfflineToken() path, NOT .env (prior .env write incident documented)
+  - Step 3 replaces entire Connections card body for L3 (confirmed by Jason)
+  - AI Settings kept visible on L3 (Gemini brief generation works on hero installs)
+  - Admin › Region Access deferred to BKL-HERO-02
+
+Naming conventions (confirmed 2026-04-29):
+  - enabledPods format: ${regionId}.${podKey} (e.g. west-commercial.WEST_COMM_CORP_NORTHWEST)
+  - SF reports named: DBD - {Region Label} - {Pod Label}
+  - Subscription Data Drive folder: {Region Label} - Subscription Data
+
+### BKL-HERO-02 | Hero Install — Admin › Region Access edit screen
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Session 2026-04-29 (deferred from BKL-HERO-01 to control scope)
+Files: dashboard/src/pages/AdminPage.tsx, dashboard/src/components/Step0RegionAccess.tsx (after BKL-HERO-01 ships)
+Description: Add an "Edit Regions" screen under Admin that re-mounts the Step0RegionAccess component, allowing users to change their enabled regions/pods without a full wizard reset. Depends on BKL-HERO-01 shipping first (component must exist).
+Acceptance:
+  - Admin page has a "Region Access" section
+  - Clicking Edit opens the Step0RegionAccess component pre-populated with current selections
+  - Saving updates enabledRegions/enabledPods in settings.json
+  - No wizard reset required
+Can we test: YES — Playwright: navigate to Admin, click Edit Regions, change selection, save, reload AEs section → POD dropdown reflects new selection
+
 ### BKL-CONN-SF-ADOPT-01 | SF re-login breaks RH Portal session — context not re-adopted
 Status: 🔴 OPEN
 Priority: P0

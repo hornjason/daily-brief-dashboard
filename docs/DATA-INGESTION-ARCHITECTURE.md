@@ -94,6 +94,8 @@ data/cache/ccsp-data.json   +   ccsp-delta.json (per-customer ΔACV)  L1 (disk)
 - L1/L2 cache refresh: `refresh-engine.ts :: refreshCCSP()` on heartbeat (default interval, see `RefreshTimerSettings`)
 - AE-set change forces full refresh (BKL-CCSP-03) — empty result is valid for a brand-new AE set, so the "don't overwrite cache with empty" guard is skipped
 
+**L3 for existing regions (hero install path).** For any region with `podBookingsFolderId` configured, the primary scrape writes `CCSP-${podName}-${YYYY-MM-DD}.csv` to that Drive folder daily. Hero installs (L3-only, no Tableau access) read this L3 CSV directly via `checkCcspL3Exists()` + `scrapeOneAe()` L3 branch in `ccsp-scraper.ts:514`. As long as the primary instance ran today, hero installs get full CCSP data without ever touching Tableau — L4 is simply never reached. Regions without a `podBookingsFolderId` or whose L3 CSV is >24h old will show no CCSP data.
+
 ### 2.3 SF Pipeline (opportunities)
 
 ```
@@ -152,7 +154,7 @@ data/cache/cases.json                                               L1 (disk)
 
 **Why this path exists.** The browser scrape is heavy (Playwright, persistent Chromium, SSO renewal). The offline token is a refresh-only credential issued from the Red Hat SSO console; it survives indefinitely until revoked. Bearer-auth has sufficient privileges to reach the same SOLR endpoint the DOM scraper hits. No Playwright. No VNC re-auth. No 8-minute keep-alive loop.
 
-**Phase status (per `src/rh-cases-api.ts:14`):** "Phase 1 — fetch-only, validates the API path. No wiring into production data flow — that is a later phase." `BearerCaseClient` is implemented and the success-stamping regression test (BKL-BUG-04) passes, but it is not the default RH ingest path in production. Toggling between paths is a design decision still pending — the missing original doc may have specified it.
+**Phase status — Bearer is the production default (Phase 2 complete, ADR-014).** `src/case-client.ts::getConfiguredTransport()` returns `'bearer'` by default; `RH_CASES_TRANSPORT=browser` in `.env` reverts to the legacy Playwright path without a rebuild. `scraper-manager.ts:575` branches on `transport` — bearer calls `BearerCaseClient.fetchCases()` with a stale-overwrite guard (0-case response preserves existing cache rather than wiping it). The browser path remains live as an emergency fallback. The comment in `src/rh-cases-api.ts:14` pre-dates Phase 2 and is now stale — that file is Phase 1 fetch-only; the routing and abstraction layer live in `case-client.ts` (Phase 2).
 
 **Account number cap.** SOLR query bounded to 1000 accounts per call (BKL-SEC-13) — `rh-cases-api.ts:103`.
 
@@ -280,7 +282,7 @@ This is why CLAUDE.md says "Config files mutated at runtime is intentional — c
 
 The original document was lost. Rebuilding from source captures the state of the code today. Three areas the original may have specified but I could not infer with confidence:
 
-1. **The cutover plan from browser-based RH scrape to Bearer-token transport.** Phase 1 is implemented; the routing logic that picks browser vs Bearer at runtime is not present in source today. The original doc may have proposed a feature flag or a migration order.
+1. ~~**The cutover plan from browser-based RH scrape to Bearer-token transport.**~~ **Resolved (Phase 2 / ADR-014).** Bearer is the production default. `RH_CASES_TRANSPORT=browser` is the emergency revert. Routing lives in `case-client.ts::getConfiguredTransport()` + `scraper-manager.ts:575`.
 2. **Account Intelligence weekly batch timing.** The weekly Sunday 6am ET refresh exists for product feature radar; the per-customer account-intelligence batch trigger lives in `account-intelligence.ts`, but its cadence relative to the ingestion flows is not documented.
 3. **The `emitCacheLevel` consumer.** The producer infrastructure (`ingest-events.ts`) exists. No dashboard route or SSE endpoint subscribes to it today. The original doc likely described where the L1–L4 telemetry was meant to surface.
 

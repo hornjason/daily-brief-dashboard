@@ -28,12 +28,12 @@ When a customer detail page loads, the request reads from L1 (disk cache) first.
 There are three independent flows:
 
 1. **SF Bookings (subscriptions)** — terminal at L3. The Red Hat-owned SF Bookings GSheet in the POD's shared Drive folder is authoritative; there is no live scraper for subscriptions.
-2. **CCSP cloud spend** — full L1→L4 waterfall. L4 is a Tableau Cloud scrape that downloads a CSV from the Overall Cloud Consumption Dashboard.
+2. **CCSP cloud spend** — L1→L4 waterfall; L4 falls through only when L3 is missing or stale. For regions with `podBookingsFolderId` configured, the primary Mac Mini instance writes today's `CCSP-${pod}-${date}.csv` to Drive each morning — hero installs and secondary instances read this L3 file directly (no Tableau access needed). L4 is a Tableau Cloud scrape that downloads from the Overall Cloud Consumption Dashboard.
 3. **SF Pipeline** — full L1→L4 waterfall. L4 is a Salesforce Lightning report scrape (SAML auto-login + 20,000 px viewport hack).
 
 Plus one special source that does **not** flow through the L1–L4 waterfall:
 
-- **RH Portal cases** — scraped on a separate schedule by `rh-scraper.ts` and cached at `data/cache/cases.json`. The brief pipeline reads this file directly.
+- **RH Portal cases** — Bearer-token SOLR fetch (default) or Playwright browser scrape (fallback). Runs on a separate schedule via `scraper-manager.ts`; controlled by `RH_CASES_TRANSPORT` env var (default `bearer`). Requires `REDHAT_OFFLINE_TOKEN` in `.env`. No browser needed for the default path — works on hero installs. Cached at `data/cache/cases.json`.
 
 ---
 

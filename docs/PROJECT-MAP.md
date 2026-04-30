@@ -150,6 +150,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - `BACKLOG.md` — All items with status
 - `docs/FLOWS.md` — User + data flows
 - `docs/ADDING-NEW-AE.md` — Complete runbook for onboarding a new AE (bootstrap → validation)
+- `docs/HERO-INSTALL.md` — Hero install design: L3-only wizard flow (Step 0–4), data sources, what's built vs. pending, flow diagrams
 - `docs/MAC-MINI-DEMO-SETUP.md` — Mac Mini setup: demo environment, CI runner, stability asset (nightly tests, post-deploy smoke, visual regression, multi-arch builds)
 
 ## Data Pipeline Summary
@@ -158,10 +159,13 @@ Full inventory in `ARCHITECTURE.md` §17. Quick reference:
 
 | Pipeline | Type | Schedule / Trigger |
 |---|---|---|
-| RH Cases + Account Discovery | Browser scrape | Heartbeat interval (default 4h, configurable) |
-| CCSP / Tableau | Browser scrape | Daily 6:30 AM ET |
-| SF Pipeline | Browser scrape | Daily 2:00 AM ET |
+| RH Cases | Bearer token SOLR (default) or browser scrape fallback | Heartbeat interval (default 4h, configurable) |
+| CCSP / Tableau | Browser scrape (primary only) → writes L3 CSV to Drive | Daily 6:30 AM ET |
+| SF Pipeline | Browser scrape (primary only) → writes L3 CSV to Drive | Daily 2:00 AM ET |
+| SF Bookings | POD GSheet read (no scraper) | On bootstrap / refresh |
 | Account Intelligence | Gemini + grounding | Post-bootstrap + Admin "Generate All" |
+
+**Hero installs (L3-only):** CCSP and Pipeline read from shared Drive CSVs written by the primary Mac Mini. No Tableau or SF scraper runs. RH Cases uses Bearer token only. See `docs/HERO-INSTALL.md`.
 | Customer Briefs | Gemini | On-demand; input fingerprint cache (7d safety-net TTL) — Gemini only on input change (ADR013-P2) |
 | Product Intelligence | Gemini + Drive corpus | Weekly Sunday 6:00 AM ET |
 | Morning Synthesis | Gemini | On-demand, 4h cache |
