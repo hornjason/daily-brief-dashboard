@@ -4,3 +4,7 @@ data/
 .git/
 .claude/
 test/
+data-dev/
+data-test/
+data-sync/
+data-demo/

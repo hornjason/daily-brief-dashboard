@@ -115,14 +115,24 @@ describe('BKL-SYNC-L3-01: sync-pod-l3.ts exports syncAllPods', () => {
 
   test('syncAllPods returns SyncRunResult with completedAt and results', () => {
     const fnIdx = SYNC_POD_SRC.indexOf('export async function syncAllPods(')
-    const slice = SYNC_POD_SRC.slice(fnIdx, fnIdx + 2500)
+    // Slice covers the full function body including the SyncRunResult construction at the end
+    const slice = SYNC_POD_SRC.slice(fnIdx, fnIdx + 4000)
     expect(slice).toContain('completedAt')
     expect(slice).toContain('results')
   })
 
-  test('SYNC_NOW env var triggers immediate run', () => {
-    expect(SYNC_POD_SRC).toContain("process.env.SYNC_NOW === 'true'")
-    expect(SYNC_POD_SRC).toContain('syncAllPods()')
+  // ADR-006 §2 H2: SYNC_NOW standalone path removed; daemon trigger mechanism replaces it.
+  test('SYNC_NOW standalone path is removed (ADR-006 H2)', () => {
+    expect(SYNC_POD_SRC).not.toContain("process.env.SYNC_NOW === 'true'")
+  })
+
+  // ADR-006 §2 H1: precondition assertion must be first logic in syncAllPods().
+  test('syncAllPods asserts browser contexts initialized (ADR-006 H1)', () => {
+    const fnIdx = SYNC_POD_SRC.indexOf('export async function syncAllPods(')
+    const slice = SYNC_POD_SRC.slice(fnIdx, fnIdx + 600)
+    expect(slice).toContain('getScrapeContext()')
+    expect(slice).toContain('getSfContext()')
+    expect(slice).toContain('must be invoked through the sync daemon')
   })
 })
 

@@ -5,9 +5,9 @@
  * pipeline syncs, writes a sync-status.json summary to Drive, and sends a summary
  * email to jhorn@redhat.com.
  *
- * Called by sync-l3-daemon.ts at 5:30am ET. Also directly runnable:
- *   bun scripts/sync-pod-l3.ts
- * With SYNC_NOW=true the sync runs immediately on import (for manual testing).
+ * Called by sync-l3-daemon.ts at 5:30am ET, or via `make sync-now` (daemon trigger).
+ * Do NOT run standalone — requires initialized browser contexts from the daemon.
+ * See ADR-006 and ARCHITECTURE.md §3a for the SingletonLock rationale.
  */
 
 import { resolve } from 'node:path'
@@ -16,7 +16,8 @@ import { google } from 'googleapis'
 import { normalizeSettings } from '../src/region-config.ts'
 import type { RegionConfig } from '../src/region-config.ts'
 import { scrapePodCcspRaw } from '../src/ccsp-scraper.ts'
-import { runSfPodSync } from '../src/sf-scraper.ts'
+import { initScrapeContext, getScrapeContext } from '../src/rh-scraper.ts'
+import { runSfPodSync, initSfContext, getSfContext } from '../src/sf-scraper.ts'
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../src/google.ts'
 
@@ -197,6 +198,15 @@ async function sendSyncEmail(result: SyncRunResult): Promise<void> {
 // ── Main sync loop ─────────────────────────────────────────────────────────────
 
 export async function syncAllPods(): Promise<SyncRunResult> {
+  // ADR-006 §2 H1 — Precondition: both browser contexts must be initialized by the daemon.
+  // syncAllPods() is a thin orchestrator; it does not initialize its own contexts.
+  // Calling it without initialized contexts will fail with a Chromium SingletonLock error.
+  if (!getScrapeContext() || !getSfContext()) {
+    throw new Error(
+      '[sync-pod] syncAllPods() called without initialized browser contexts — must be invoked through the sync daemon, not standalone',
+    )
+  }
+
   const raw = loadSettings()
   const normalized = normalizeSettings(raw)
   const regions: RegionConfig[] = normalized.regions
@@ -278,17 +288,7 @@ export async function syncAllPods(): Promise<SyncRunResult> {
   return runResult
 }
 
-// ── Immediate run support (SYNC_NOW=true) ─────────────────────────────────────
-
-if (process.env.SYNC_NOW === 'true') {
-  console.log('[sync-pod-l3] SYNC_NOW=true — running sync immediately')
-  syncAllPods()
-    .then(result => {
-      console.log('[sync-pod-l3] completed:', JSON.stringify(result, null, 2))
-      process.exit(0)
-    })
-    .catch(err => {
-      console.error('[sync-pod-l3] fatal error:', err)
-      process.exit(1)
-    })
-}
+// ADR-006 §2 H2 — SYNC_NOW standalone path removed.
+// Manual immediate sync is achieved exclusively via the daemon trigger mechanism:
+//   make sync-now   (→ podman exec pai-sync-l3 touch /data/cache/sync-trigger)
+// This prevents Chromium SingletonLock conflicts when the daemon is running.

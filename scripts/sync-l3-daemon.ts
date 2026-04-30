@@ -11,7 +11,9 @@
  */
 
 import { resolve } from 'node:path'
+import { existsSync, unlinkSync } from 'node:fs'
 import { initScrapeContext, getScrapeContext } from '../src/rh-scraper.ts'
+import { adoptCcspContext } from '../src/ccsp-scraper.ts'
 import { initSfContext } from '../src/sf-scraper.ts'
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { syncAllPods } from './sync-pod-l3.ts'
@@ -135,6 +137,8 @@ async function main(): Promise<void> {
   console.log('[sync-daemon] initializing browser contexts…')
   try {
     await initScrapeContext(PROFILE_DIR)
+    const ctx = getScrapeContext()
+    if (ctx) adoptCcspContext(ctx)
     console.log('[sync-daemon] RH browser context initialized')
   } catch (e: any) {
     console.error('[sync-daemon] RH context init failed:', e.message)
@@ -147,6 +151,19 @@ async function main(): Promise<void> {
   } catch (e: any) {
     // SF init failure is non-fatal at startup — SF shares the RH profile
     console.warn('[sync-daemon] SF context init warning (non-fatal):', e.message)
+  }
+
+  // ADR-006 §2 H5 — Boot cleanup: delete any stale trigger file from a prior run.
+  // Prevents replaying a trigger that was written before the last daemon restart.
+  const CACHE_DIR = process.env.CACHE_DIR ?? '/data/cache'
+  const TRIGGER_FILE = `${CACHE_DIR}/sync-trigger`
+  if (existsSync(TRIGGER_FILE)) {
+    try {
+      unlinkSync(TRIGGER_FILE)
+      console.log('[sync-daemon] deleted stale trigger file from prior run')
+    } catch (e: any) {
+      console.warn('[sync-daemon] could not delete stale trigger file:', e.message)
+    }
   }
 
   console.log('[sync-daemon] started — keepalive every 2h, sync at 5:30am ET')
@@ -170,7 +187,44 @@ async function main(): Promise<void> {
     }
   }, KEEPALIVE_INTERVAL_MS)
 
-  // Timer 2: daily sync at 5:30am ET
+  // Timer 2: file-based trigger — poll every 30s for /data/cache/sync-trigger
+  // Lets external callers request an immediate sync using the daemon's already-initialized
+  // browser contexts (avoids Chromium SingletonLock conflicts from separate processes).
+  // ADR-006 §2 H3: trigger file is deleted BEFORE sync starts (atomic consumption — prevents
+  // duplicate trigger if sync takes longer than the 30s polling interval).
+  // ADR-006 §2 H4: concurrent guard via syncRunning — trigger discarded if sync in progress.
+  let syncRunning = false
+  setInterval(async () => {
+    if (!existsSync(TRIGGER_FILE)) return
+    // H4: if a sync is already running when the trigger fires, log and discard.
+    if (syncRunning) {
+      console.log('[sync-daemon] trigger fired but sync already running — discarding')
+      try { unlinkSync(TRIGGER_FILE) } catch { /* best-effort cleanup */ }
+      return
+    }
+    // H3: delete trigger BEFORE starting sync (atomic consumption).
+    try {
+      unlinkSync(TRIGGER_FILE)
+    } catch (e: any) {
+      console.error('[sync-daemon] failed to delete trigger file:', e.message)
+      return
+    }
+    console.log('[sync-daemon] trigger file detected — running immediate sync')
+    syncRunning = true
+    try {
+      const result = await syncAllPods()
+      const ok = result.results.filter(r => r.status === 'ok').length
+      const skipped = result.results.filter(r => r.status === 'skipped').length
+      const errors = result.results.filter(r => r.status === 'error').length
+      console.log(`[sync-daemon] trigger sync complete — ok=${ok} skipped=${skipped} errors=${errors}`)
+    } catch (e: any) {
+      console.error('[sync-daemon] trigger sync threw unexpectedly:', e.message)
+    } finally {
+      syncRunning = false
+    }
+  }, 30_000)
+
+  // Timer 3: daily sync at 5:30am ET
   scheduleNextSync()
 }
 

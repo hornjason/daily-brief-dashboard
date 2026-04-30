@@ -49,7 +49,7 @@ MAC_MINI_DIR  ?= ~/DailyBriefDashboard
        demo-deploy demo-status demo-restart demo-setup-tunnel \
        pai-sync-remote demo-full-refresh \
        all-down all-ps \
-       sync-up sync-down sync-logs sync-status sync-up-vnc
+       sync-up sync-down sync-logs sync-status sync-now sync-up-vnc
 
 up: down
 	podman run -d \
@@ -526,7 +526,7 @@ demo-up: demo-down
 	@test -f $(CURDIR)/data-demo/config/aes.json || (echo "ERROR: Run 'make demo-snapshot' first" && exit 1)
 	podman run -d \
 	  -p 7779:7777 \
-	  -p 127.0.0.1:6082:6080 \
+	  -p 6082:6080 \
 	  -v $(CURDIR)/data-demo:/data:rw,Z \
 	  --env-file .env \
 	  -e PORT=7777 \
@@ -695,11 +695,16 @@ sync-logs:
 sync-status:
 	@podman ps --filter name=pai-sync-l3 --format 'table {{.Names}}\t{{.Status}}'
 
+sync-now:
+	@echo "Triggering immediate sync via daemon…"
+	podman exec pai-sync-l3 touch /data/cache/sync-trigger
+	@echo "Sync queued — watch logs: make sync-logs"
+
 sync-up-vnc: sync-down
 	@test -f $(SYNC_DATA_DIR)/config/settings.json || \
 	  (echo "ERROR: Bootstrap $(SYNC_DATA_DIR)/config/settings.json first" && exit 1)
 	podman run -d \
-	  -p 127.0.0.1:6082:6080 \
+	  -p 6082:6080 \
 	  -v $(SYNC_DATA_DIR):/data:rw,Z \
 	  --env-file $(SYNC_ENV_FILE) \
 	  -e NODE_ROLE=primary \

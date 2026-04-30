@@ -66,6 +66,30 @@ RH Portal SSO login → BrowserContext created
 
 ---
 
+### 3a. Sync Daemon as Single Profile Owner (ADR-006, 2026-04-30)
+
+**The physical constraint:** Chromium enforces a `SingletonLock` file inside any persistent profile directory it opens. At most one OS process may hold a given profile dir at a time. The persistent profile at `/data/rh-profile` carries the SAML/OAuth cookies required for Tableau SSO passthrough — it cannot be cloned, shared, or opened by a second process.
+
+**The invariant:** The L3 sync daemon (`scripts/sync-l3-daemon.ts`) is the sole process that may open `/data/rh-profile`. No other script, no `podman exec bun run ...` invocation, and no standalone caller may open this directory while the daemon is running.
+
+**`syncAllPods()` requires initialized contexts:** `scripts/sync-pod-l3.ts` is a thin orchestrator. It does not initialize browser contexts — it asserts at the top of `syncAllPods()` that both `getScrapeContext()` (RH) and `getSfContext()` (SF) are non-null. Calling it without initialized contexts throws a clear error naming the daemon as the required entry point. This makes the contract explicit rather than implicit, preventing future agents or developers from accidentally reintroducing a standalone invocation.
+
+**Trigger mechanism for manual immediate sync:**
+- Touch `/data/cache/sync-trigger` inside the container, OR
+- Run `make sync-now` (wraps the above `podman exec` call)
+- The daemon polls every 30s; worst-case latency is 30s before the sync starts
+- The trigger file is deleted atomically (before the sync starts) to prevent duplicate firing
+
+**Why file-based trigger (not HTTP or signal):**
+- Survives daemon restarts — file persists if daemon is mid-restart when `make sync-now` runs
+- No new port, no new attack surface (ARCHITECTURE.md §2: no auth middleware standing rule)
+- SIGUSR1 rejected: not persistent across restarts, awkward from sibling containers, no acknowledgement
+- HTTP is the right next step when an admin UI exists (deferred to that milestone)
+
+**What was removed:** The `SYNC_NOW=true bun run sync-pod-l3.ts` standalone invocation path was deleted. It failed with `SingletonLock: File exists` when the daemon was running (SF worked; CCSP did not — SF uses ephemeral sub-contexts). `make sync-now` is the only supported manual trigger.
+
+---
+
 ### 4. Config Written Back to Disk During Runtime
 
 **Pattern:** `aes.json` and `customers.json` are read at startup and written back during bootstrap, scrape, and setup wizard flows. The server mutates its own config files.
