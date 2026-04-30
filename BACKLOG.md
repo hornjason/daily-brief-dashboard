@@ -7972,3 +7972,4 @@ Files: server.ts (POST /api/setup/reset handler), dashboard/src/ (connections st
 Description: After a data wipe (POST /api/setup/reset), the shared browser context is destroyed but the UI connection indicators (RH Portal, SF, Tableau) remain showing their pre-wipe state. User proceeds to connect SF without realising RH Portal context is gone — SF adoption then hangs silently. The wipe endpoint must broadcast a connections-reset event (or the reset response must clear connection state) so all three indicators reset to "Not Connected" immediately.
 Acceptance: After wipe, all three connection indicators show "Not Connected". User must re-connect RH Portal first before SF and Tableau will work.
 Can we test: YES — after POST /api/setup/reset, GET /api/status/connections returns hasSession:false for all three.
+

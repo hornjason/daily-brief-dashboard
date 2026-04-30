@@ -183,21 +183,29 @@ Three file types must be present in `podBookingsFolderId` for a region to be sel
 
 #### East Enterprise — `east-enterprise` *(Coming Soon — not yet in settings.json)*
 
-Pod keys will derive from territory sheet codes (e.g., `Southeast_Ent_NC_SC_Terr01` → `SOUTHEAST_ENT_NC_SC_POD`). Add to `settings.json` when ops configures the region, then fill in this table.
+Territory codes use underscores throughout — confirmed against actual Tableau territory values.
 
-| Pod key | Pod label | Bookings GSheet | CCSP CSV prefix | SF Pipeline CSV prefix |
+| Pod key | Pod label | Territory code | CCSP CSV prefix | SF Pipeline CSV prefix |
 |---|---|---|---|---|
-| `SOUTHEAST_ENT_NC_SC_POD` | SE NC/SC *(example)* | `East Enterprise - NC SC - SF Bookings` | `CCSP-SOUTHEAST_ENT_NC_SC_POD-` | `SF-PIPELINE-SOUTHEAST_ENT_NC_SC_POD-` |
-| *(TBD)* | *(TBD)* | *(TBD)* | *(TBD)* | *(TBD)* |
+| `NORTHEAST_ENT_MID_ATLANTIC` | Mid-Atlantic Maulers | `Northeast_Ent_Mid_Atlantic_Terr##` | `CCSP-NORTHEAST_ENT_MID_ATLANTIC_POD-` | `SF-PIPELINE-{id}-NORTHEAST_ENT_MID_ATLANTIC-` |
+| `NORTHEAST_ENT_NEW_ENGLAND` | New England Boston Tech Party | `Northeast_Ent_New_England_Terr##` | `CCSP-NORTHEAST_ENT_NEW_ENGLAND_POD-` | `SF-PIPELINE-{id}-NORTHEAST_ENT_NEW_ENGLAND-` |
+| `NORTHEAST_ENT_STRATEGIC_NORTH` | Strategic N Yardgoats | `Northeast_Ent_Strategic_North_Terr##` | `CCSP-NORTHEAST_ENT_STRATEGIC_NORTH_POD-` | `SF-PIPELINE-{id}-NORTHEAST_ENT_STRATEGIC_NORTH-` |
+| `NORTHEAST_ENT_STRATEGIC_SOUTH` | Strategic S Money Badgers | `Northeast_Ent_Strategic_South_Terr##` | `CCSP-NORTHEAST_ENT_STRATEGIC_SOUTH_POD-` | `SF-PIPELINE-{id}-NORTHEAST_ENT_STRATEGIC_SOUTH-` |
+| `SOUTHEAST_ENT_GA` | SE GA HeavyHitters | `Southeast_Ent_GA_Terr##` | `CCSP-SOUTHEAST_ENT_GA_POD-` | `SF-PIPELINE-{id}-SOUTHEAST_ENT_GA-` |
+| `SOUTHEAST_ENT_GREAT_LAKES` | SE Great Lakes Guardians | `Southeast_Ent_Great_Lakes_Terr##` | `CCSP-SOUTHEAST_ENT_GREAT_LAKES_POD-` | `SF-PIPELINE-{id}-SOUTHEAST_ENT_GREAT_LAKES-` |
+| `SOUTHEAST_ENT_NC_SC` | SE NC/SC Carolina Reapers | `Southeast_Ent_NC_SC_Terr##` | `CCSP-SOUTHEAST_ENT_NC_SC_POD-` | `SF-PIPELINE-{id}-SOUTHEAST_ENT_NC_SC-` |
+| `SOUTHEAST_ENT_VA_AL_TN` | SE VA/AL/TN The Untouchables | `Southeast_Ent_VA_AL_TN_Terr##` | `CCSP-SOUTHEAST_ENT_VA_AL_TN_POD-` | `SF-PIPELINE-{id}-SOUTHEAST_ENT_VA_AL_TN-` |
 
 #### East Commercial — `east-commercial` *(Coming Soon — not yet in settings.json)*
 
-Pod keys use a numbered pattern (e.g., `EAST_COMM_CORP_POD01`, `EAST_COMM_CORP_POD02`). Add to `settings.json` when ops configures the region.
+Pod keys confirmed from territory sheet. Pod 4 tab is hidden/inactive — skipped.
 
-| Pod key | Pod label | Bookings GSheet | CCSP CSV prefix | SF Pipeline CSV prefix |
+| Pod key | Pod label | Territory code | CCSP CSV prefix | SF Pipeline CSV prefix |
 |---|---|---|---|---|
-| `EAST_COMM_CORP_POD01` | Corp Pod 1 *(example)* | `East Commercial - Corp Pod 1 - SF Bookings` | `CCSP-EAST_COMM_CORP_POD01-` | `SF-PIPELINE-EAST_COMM_CORP_POD01-` |
-| *(TBD)* | *(TBD)* | *(TBD)* | *(TBD)* | *(TBD)* |
+| `EAST_COMM_CORP_POD01` | Rough Riders | `East_Comm_Corp_Pod1_Terr##` | `CCSP-EAST_COMM_CORP_POD01-` | `SF-PIPELINE-{id}-EAST_COMM_CORP_POD01-` |
+| `EAST_COMM_CORP_POD02` | Big Apple Ballers | `East_Comm_Corp_Pod2_Terr##` | `CCSP-EAST_COMM_CORP_POD02-` | `SF-PIPELINE-{id}-EAST_COMM_CORP_POD02-` |
+| `EAST_COMM_CORP_POD03` | Pythons | `East_Comm_Corp_Pod3_Terr##` | `CCSP-EAST_COMM_CORP_POD03-` | `SF-PIPELINE-{id}-EAST_COMM_CORP_POD03-` |
+| `EAST_COMM_CORP_POD05` | Mad Hatters | `East_Comm_Corp_Pod5_Terr##` | `CCSP-EAST_COMM_CORP_POD05-` | `SF-PIPELINE-{id}-EAST_COMM_CORP_POD05-` |
 
 ---
 
@@ -215,18 +223,32 @@ Region IDs are the existing `id` slugs from `settings.json`. Qualified keys prev
 
 `sfReportId` is used exclusively by the primary Mac Mini to pull live data from Salesforce and write the SF Pipeline CSV to `podBookingsFolderId`. Hero installs never use the report ID — they read the CSV output.
 
-```
-DBD - {Region Label} - {Pod Label}
-```
-- `DBD - West Commercial - Northwest Corp`
-- `DBD - West Commercial - Southwest Corp`
-- `DBD - West Commercial - North Central Corp`
-- `DBD - West Commercial - South Central Corp`
-- `DBD - Central Enterprise - TOLA`
-- `DBD - East Enterprise - {Pod Label}` ← create when ready
-- `DBD - East Commercial - {Pod Label}` ← create when ready
+The report name in Salesforce is for human findability only — the code uses the 18-char report ID, not the name. Name them however makes sense to find them in Salesforce. Once created, copy the report ID → paste into `settings.json` under `pods.{POD_KEY}.sfReportId`.
 
-"DBD" prefix makes them findable in Salesforce. Once created, copy the 18-char report ID → paste into `settings.json` under `pods.{POD_KEY}.sfReportId`.
+**West Commercial (existing):**
+- West Commercial - Northwest Corp
+- West Commercial - Southwest Corp
+- West Commercial - North Central Corp
+- West Commercial - South Central Corp
+
+**Central Enterprise – TOLA (existing):**
+- Central Enterprise - TOLA
+
+**East Commercial (create these):**
+- East Commercial - Rough Riders → pod key `EAST_COMM_CORP_POD01`
+- East Commercial - Big Apple Ballers → pod key `EAST_COMM_CORP_POD02`
+- East Commercial - Pythons → pod key `EAST_COMM_CORP_POD03`
+- East Commercial - Mad Hatters → pod key `EAST_COMM_CORP_POD05`
+
+**East Enterprise (create when ready):**
+- East Enterprise - Mid-Atlantic Maulers → pod key `NORTHEAST_ENT_MID_ATLANTIC`
+- East Enterprise - New England Boston Tech Party → pod key `NORTHEAST_ENT_NEW_ENGLAND`
+- East Enterprise - Strategic N Yardgoats → pod key `NORTHEAST_ENT_STRATEGIC_NORTH`
+- East Enterprise - Strategic S Money Badgers → pod key `NORTHEAST_ENT_STRATEGIC_SOUTH`
+- East Enterprise - SE GA HeavyHitters → pod key `SOUTHEAST_ENT_GA`
+- East Enterprise - SE Great Lakes Guardians → pod key `SOUTHEAST_ENT_GREAT_LAKES`
+- East Enterprise - SE NC/SC Carolina Reapers → pod key `SOUTHEAST_ENT_NC_SC`
+- East Enterprise - SE VA/AL/TN The Untouchables → pod key `SOUTHEAST_ENT_VA_AL_TN`
 
 ### SF Bookings / Subscription Data Drive folder — naming in Drive
 
