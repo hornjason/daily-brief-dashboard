@@ -10,6 +10,7 @@ import CopyButton from '../components/CopyButton'
 import { BootstrapConfigBlock } from '../components/BootstrapConfigBlock'
 import { useBootstrapConfig } from '../hooks/useBootstrapConfig'
 import { Step0RegionAccess } from '../components/Step0RegionAccess'
+import { HeroStep3Connections } from '../components/HeroStep3Connections'
 // BKL-CONN-ARCH-01: two-axis connection state derivation
 import { deriveRhCard, deriveSfCard, deriveTableauCard } from '../lib/connection-state'
 import {
@@ -4078,6 +4079,9 @@ export default function SetupPage() {
               />
             </AccordionSection>
           )}
+
+          {/* BKL-HERO-01 Phase 3 — L3 hero installs: RH offline token in place of Data Sources */}
+          {isL3Only && <HeroStep3Connections />}
 
           {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs.
               The "Open Dashboard" link inside this section disappears on L3 by

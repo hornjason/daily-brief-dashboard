@@ -47,6 +47,24 @@ export async function getToken(): Promise<string> {
 }
 
 /**
+ * BKL-HERO-01 Phase 3 — validate a candidate offline token by attempting a token
+ * exchange against SSO. Throws on non-2xx. Does NOT mutate module state
+ * (cachedToken, tokenExpiry, tokenIssuedAt).
+ */
+export async function validateOfflineToken(candidate: string): Promise<void> {
+  const res = await fetch(SSO_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: 'rhsm-api',
+      refresh_token: candidate,
+    }),
+  })
+  if (!res.ok) throw new Error(`Token validation failed (${res.status})`)
+}
+
+/**
  * BKL-RH-03 Phase 2 (ADR-014) — token telemetry for HealthProbe.
  *
  * Returns current authMode + token age/lifetime data so the dashboard can

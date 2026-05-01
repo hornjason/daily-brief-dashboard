@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import type { Hono } from 'hono'
 import { sanitizeErr } from './utils.ts'
 import { backupNow } from './backup-config.ts'
+import { validateOfflineToken } from './redhat.ts'
 
 /** Fire-and-forget backup after data-sources.json write. */
 function _triggerBackup(): void {
@@ -273,12 +274,14 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
     }
 
     try {
+      // BKL-HERO-01 Phase 3: validate before saving — fail loud at paste time
+      await validateOfflineToken(token.trim())
       saveOfflineToken(token.trim())
       // Update in-memory env so the change takes effect immediately (no restart needed)
       process.env.REDHAT_OFFLINE_TOKEN = token.trim()
       return c.json({ ok: true })
     } catch (e: any) {
-      return c.json({ error: sanitizeErr(e) }, 500)
+      return c.json({ error: sanitizeErr(e) }, 400)
     }
   })
 
