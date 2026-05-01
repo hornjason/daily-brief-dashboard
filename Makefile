@@ -45,6 +45,7 @@ MAC_MINI_DIR  ?= ~/DailyBriefDashboard
        pre-promote install-hooks onboarding-check onboarding-check-nightly \
        smoke smoke-alert \
        monitor-once \
+       update-snapshots \
        demo-snapshot demo-up demo-down demo-logs demo-export \
        demo-deploy demo-status demo-restart demo-setup-tunnel \
        pai-sync-remote demo-full-refresh \
@@ -354,6 +355,49 @@ smoke:
 	  (curl -s -X POST http://localhost:8888/notify \
 	    -H "Content-Type: application/json" \
 	    -d '{"message": "Production smoke test FAILED after rebuild — check logs", "voice_id": "fTtv3eikoepIosk8dTZ5", "voice_enabled": true}' ; exit 1)
+
+# ── Visual snapshot baseline update ──────────────────────────────────────────
+# Regenerates Playwright visual baseline PNGs for wizard-e2e.spec.ts.
+# Seeds config/ and cache/ from scripts/seed-data/, starts a Bun server on 7778,
+# runs the wizard-e2e project with --update-snapshots, then shuts down the server.
+#
+# Run this locally whenever the wizard UI changes intentionally:
+#   make update-snapshots
+# Then commit the PNG files under test/snapshots/wizard/ along with the code change.
+# CI fails if the PNGs are stale (pixel diff > maxDiffPixelRatio: 0.02).
+update-snapshots:
+	@echo "Seeding config/ and cache/ from scripts/seed-data/..."
+	@mkdir -p $(CURDIR)/config $(CURDIR)/cache $(CURDIR)/cache/intelligence
+	@cp $(CURDIR)/scripts/seed-data/aes.json         $(CURDIR)/config/aes.json
+	@cp $(CURDIR)/scripts/seed-data/customers.json   $(CURDIR)/config/customers.json
+	@cp $(CURDIR)/scripts/seed-data/settings.json    $(CURDIR)/config/settings.json
+	@cp $(CURDIR)/scripts/seed-data/product-intel-config.json $(CURDIR)/config/product-intel-config.json
+	@cp $(CURDIR)/scripts/seed-data/data-sources.json $(CURDIR)/config/data-sources.json
+	@cp -r $(CURDIR)/scripts/seed-data/cache/. $(CURDIR)/cache/
+	@echo "Building dashboard..."
+	@cd dashboard && bun run build 2>/dev/null || true
+	@echo "Starting Bun server on port 7778..."
+	@PORT=7778 BASE_URL=http://localhost:7778 bun run server.ts &
+	@SERVER_PID=$$!; \
+	trap "kill $$SERVER_PID 2>/dev/null || true" EXIT INT TERM; \
+	echo "Waiting for server to be ready on port 7778..."; \
+	for i in $$(seq 1 30); do \
+	  curl -sf http://localhost:7778/health > /dev/null 2>&1 && echo "Server ready after $$i seconds" && break; \
+	  sleep 1; \
+	done; \
+	curl -sf http://localhost:7778/health > /dev/null || (echo "Server failed to start" && exit 1); \
+	echo "Running wizard-e2e with --update-snapshots..."; \
+	BASE_URL=http://localhost:7778 bunx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e --update-snapshots --reporter=list; \
+	EXIT_CODE=$$?; \
+	kill $$SERVER_PID 2>/dev/null || true; \
+	if [ $$EXIT_CODE -eq 0 ]; then \
+	  echo ""; \
+	  echo "Snapshot baselines updated in test/snapshots/wizard/"; \
+	  echo "Commit them along with your UI changes."; \
+	else \
+	  echo "Some tests failed — check output above. Snapshot files may still have been written."; \
+	fi; \
+	exit $$EXIT_CODE
 
 # ── Install git hooks ────────────────────────────────────────────────────────
 # Run once after cloning: make install-hooks
