@@ -7289,6 +7289,17 @@ Fix: Update CAROLANNE (or rename) to reference a current AE name that has full b
 
 ---
 
+### BKL-TEST-STALE-SUPPORTABLE-01 | Stale Supportable assertions in auth.spec.ts + bootstrap.spec.ts produce permanent red noise
+Status: 🔴 OPEN
+Priority: P2
+Size: XS
+Source: Quinn QA BKL-ARCH-03 gate 2026-05-01
+Files: test/api/auth.spec.ts (line 84), test/api/bootstrap.spec.ts (line 66)
+Description: Two test assertions reference Supportable endpoints that were intentionally removed. auth.spec.ts:84 expects a `supportable` key in a status response. bootstrap.spec.ts:66 calls GET /api/scrape/supportable/status and expects 200 (gets 404). Both fail on every ci run, masking real failures. Quinn flagged during BKL-ARCH-03 regression gate — 103/107 pass, these 2 are permanent noise.
+Fix: Delete the supportable assertions in both files. Do NOT add `skip` — the tests are wrong, not flaky.
+
+---
+
 ### BKL-SEC-SUP-RESIDUE-API-01 | Supportable branch still active in `/api/scrape/all` + dead imports in scrape-api.ts
 Status: ✅ DONE 2026-04-27 — Removed supportable step from /api/scrape/all, dropped runSupportableScrape/supportableScrapeRunning/supportableScrapeStartedAt/SupportableCustomer imports, narrowed ScrapeResult.scraper to 'rh'|'ccsp'|'salesforce'. writeSupportableSheet kept (active in sf-bookings-sync). REG-SUP-DEAD-01 regression test added. 37/37 pass. Rook: PASS-WITH-NOTES.
 Priority: P2
@@ -8344,14 +8355,14 @@ Solution: Route all status reads through getStatus() with a single fallback poli
 ---
 
 ### BKL-ARCH-03 | server.ts — 1,704 lines despite M02-M05 route extractions (ADR-005 violation)
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-01
 Priority: P1
 Size: M
 Source: Serena architecture audit 2026-05-01
 Files: server.ts (42 endpoints remain), all *-routes.ts files (flat registerXRoutes(app) pattern)
 Description: ADR-005 prescribed sub-routers mounted via app.route(). Actual extraction used registerXRoutes(app) — flat registration against root app. server.ts still owns 42 endpoints across 5+ domains. Nothing constrains what URL prefix a module owns.
 Solution: Convert all 16 *-routes.ts exports from registerXRoutes(app): void to createXRouter(): Hono factories. Mount via app.route('/', createXRouter()) — route paths inside modules unchanged. Two dep cases: createSettingsRouter({ rescheduleRefreshTimers }) and createRegionAccessRouter({ settingsPath }). init* functions stay separate. GitHub Issue: hornjason/asaCommandCenter#4
-Stopped at: Briefing Marcus — worktree implementation. Next: Marcus reports Playwright + tsc results; DA signs off; make rebuild; Quinn+Rook parallel.
+Commit: 398d840b0 — 16 modules converted, Quinn 103/107 pass, Rook PASS no new findings.
 
 ---
 

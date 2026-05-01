@@ -74,11 +74,14 @@ Pick next candidate       start Phase 1 for the next item in the order table abo
 | BKL-ARCH-06 atomic-write | ✅ | #1 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-07 Drive traversal | ✅ | #2 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-01 customer matching | ✅ | #3 ✅ CLOSED | ✅ DONE 2026-05-01 |
-| BKL-ARCH-03 server.ts routers | ✅ | #4 ✅ ready-for-agent | — |
+| BKL-ARCH-03 server.ts routers | ✅ | #4 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-05 polling hook | ❌ | — | — |
 | BKL-ARCH-08 bootstrap split | ❌ | — | — (blocked) |
 
-**Next action:** `implement BKL-ARCH-03` — Marcus works from the agent brief on issue #4.
+**BKL-ARCH-03 commit:** 398d840b0 — 16 route modules converted, createXRouter() factories, ADR-005 fulfilled.
+
+**Next action:** `/grill-with-docs` for BKL-ARCH-05 — usePolledStatus hook (interface not yet designed).
+Note: BKL-ARCH-08 (bootstrap split) is now unblocked — depends on 06 ✅, 07 ✅, 01 ✅, 03 ✅.
 
 **BKL-ARCH-01 commit:** 10f218ef2 — customer-folder.ts created, 3 callers migrated, 9 unit tests.
 
