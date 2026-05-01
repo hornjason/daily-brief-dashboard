@@ -2,7 +2,8 @@
 // Captures daily KPI snapshots from cached data sources and stores up to 90 days
 // of history for sparkline rendering on the dashboard.
 
-import { readFileSync, writeFileSync as writeFileSyncRaw, renameSync, mkdirSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, existsSync, readdirSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { join, resolve } from 'path'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'cache')
@@ -160,10 +161,7 @@ export function writeSnapshot(snapshot: DailySnapshot): void {
   history.snapshots.sort((a, b) => a.date.localeCompare(b.date))
 
   // Atomic write with mode 0o600
-  mkdirSync(CACHE_DIR, { recursive: true })
-  const tmpPath = HISTORY_PATH + '.tmp'
-  writeFileSyncRaw(tmpPath, JSON.stringify(history, null, 2), { mode: 0o600 })
-  renameSync(tmpPath, HISTORY_PATH)
+  writeJsonAtomic(HISTORY_PATH, history)
 }
 
 /**

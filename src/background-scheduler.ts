@@ -1,5 +1,5 @@
 import { existsSync, unlinkSync, readFileSync, writeFileSync } from 'fs'
-import { renameSync } from 'node:fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { customers, aes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
@@ -185,9 +185,7 @@ export async function flushScrapersAfterAuth(): Promise<void> {
                 const merged = new Set([...(existing.accountNumbers ?? []), ...accountNumbers])
                 existing.accountNumbers = [...merged]
                 try {
-                  const tmpPath = CUSTOMERS_PATH + '.tmp'
-                  writeFileSync(tmpPath, JSON.stringify({ customers: currentCustomers }, null, 2), { mode: 0o600 })
-                  renameSync(tmpPath, CUSTOMERS_PATH)
+                  writeJsonAtomic(CUSTOMERS_PATH, { customers: currentCustomers })
                 } catch {}
               }
             },
@@ -792,11 +790,8 @@ export function scheduleTerritorySync(): void {
       // Auto-add new customers
       if (result.toAdd.length > 0) {
         console.log(`[territory-sync] adding ${result.toAdd.length} new customers`)
-        const { writeFileSync: writeFileSyncRaw, renameSync } = await import('fs')
         const updated = [...currentCustomers, ...result.toAdd]
-        const tmpPath = CUSTOMERS_PATH + '.tmp'
-        writeFileSyncRaw(tmpPath, JSON.stringify({ customers: updated }, null, 2), { mode: 0o600 })
-        renameSync(tmpPath, CUSTOMERS_PATH)
+        writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
         // Update in-memory state
         const { setCustomers } = await import('./server-state.ts')
         setCustomers(updated)
@@ -1099,10 +1094,7 @@ export function validateCachedAccountNumbers(): void {
 
   if (autoCleared && currentCustomers.length > 0) {
     try {
-      const { writeFileSync, renameSync } = require('node:fs')
-      const tmpPath = CUSTOMERS_PATH + '.tmp'
-      writeFileSync(tmpPath, JSON.stringify({ customers: currentCustomers }, null, 2), { mode: 0o600 })
-      renameSync(tmpPath, CUSTOMERS_PATH)
+      writeJsonAtomic(CUSTOMERS_PATH, { customers: currentCustomers })
       console.warn(`[startup-validation] Cleared bad account numbers and saved customers.json`)
     } catch (e: any) {
       console.warn(`[startup-validation] Failed to save cleared accounts: ${e?.message}`)

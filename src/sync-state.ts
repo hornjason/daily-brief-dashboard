@@ -19,7 +19,8 @@
  * }
  */
 
-import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -95,10 +96,7 @@ export function writeSyncStateFlow(
       flows:     { ...existing.flows, [flow]: status },
       updatedAt: new Date().toISOString(),
     }
-    // Atomic write: write to .tmp then rename
-    const tmpPath = SYNC_STATE_PATH + '.tmp'
-    writeFileSync(tmpPath, JSON.stringify(next, null, 2), { mode: 0o600 })
-    renameSync(tmpPath, SYNC_STATE_PATH)
+    writeJsonAtomic(SYNC_STATE_PATH, next)
     console.log(`[sync-state] ${flow} → ${status} (date: ${today})`)
   } catch (e: any) {
     console.warn(`[sync-state] writeSyncStateFlow failed: ${e.message}`)

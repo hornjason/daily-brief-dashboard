@@ -8280,3 +8280,142 @@ Files: scripts/sync-pod-l3.ts — checkBookingsGSheetExists
 Description: GSheet readiness check matched pod key (e.g. WEST_COMM_CORP_NORTHWEST) against sheet names, but real Drive sheets use human labels (e.g. "Northwest POD - Subscriptions"). All 5 pods skipped during SYNC_NOW test despite sheets existing. Fixed by also matching against pod label words (>3 chars) so "Northwest Corp" → "northwest" matches "Northwest POD - Subscriptions".
 Fix: Updated checkBookingsGSheetExists to accept optional podLabel; added label-word fallback match at call site (pod.label passed).
 Can we test: YES — updated bkl-sync-l3-01-daemon.test.ts unit tests cover this path.
+
+---
+
+## Architecture Deepening — Serena Audit 2026-05-01
+
+Source: /improve-codebase-architecture explore run. Serena walked the full src/ and dashboard/src/ codebase. Candidates ordered by friction severity. None touch protected patterns (shared _ctx, no-auth, in-memory mutex, runtime config, sync daemon profile lock).
+
+---
+
+### BKL-ARCH-01 | Customer-name / folder-matching logic — replicated 5 times
+Status: 🔴 OPEN
+Priority: P1
+Size: L
+Source: Serena architecture audit 2026-05-01
+Files: src/customer.ts, src/account-intelligence.ts, src/account-plan.ts, src/bootstrap-orchestrator.ts, src/sheets.ts::normalizeForMatch, src/customer-routes.ts
+Description: Five normalizers and three near-identical fuzzyFindFolder/folderMatchScore/normalizeFolderName triplets. Each caller carries its own scoring and traversal. Comments like "differs from normalizeForMatch by..." document divergence rather than resolve it. A folder-matching bug must be patched in 3-4 places.
+Solution: Extract a single CustomerFolderResolver module (one normalizer, one scorer, one BFS traverser) into src/lib/customer-name.ts. Collapses ~150 lines of duplicate logic.
+
+---
+
+### BKL-ARCH-02 | Scraper status — split across disk store + in-memory module variables
+Status: 🔴 OPEN
+Priority: P1
+Size: M
+Source: Serena architecture audit 2026-05-01
+Files: src/scraper-status-store.ts, src/rh-auth.ts, src/ccsp-scraper.ts, src/supportable-scraper.ts, src/sf-scraper.ts, src/scraper-manager.ts, src/scrape-api.ts
+Description: ARCHITECTURE.md §13 itself needs a table to explain which field comes from which tier. Callers replicate the fallback policy (lastSync = lastScraped ?? rhStatus.lastSuccess ?? null) in three different consumers. Every scraper exports the same five-fingerprint shape (last*, *Running, *Error, adopt*Context) five times.
+Solution: Route all status reads through getStatus() with a single fallback policy in the store. Introduce a ScraperRegistry for context adoption — collapses the 4-line adoption block into one call.
+
+---
+
+### BKL-ARCH-03 | server.ts — 1,704 lines despite M02-M05 route extractions (ADR-005 violation)
+Status: 🔴 OPEN
+Priority: P1
+Size: M
+Source: Serena architecture audit 2026-05-01
+Files: server.ts (42 endpoints remain), all *-routes.ts files (flat registerXRoutes(app) pattern)
+Description: ADR-005 prescribed sub-routers mounted via app.route(). Actual extraction used registerXRoutes(app) — flat registration against root app. server.ts still owns 42 endpoints across 5+ domains. Nothing constrains what URL prefix a module owns.
+Solution: Convert all *-routes.ts to return Hono sub-routers and mount via app.route('/api/domain', router). server.ts becomes a thin mount file.
+
+---
+
+### BKL-ARCH-04 | SetupPage.tsx — 4,171-line wizard with embedded sub-components and polling
+Status: 🔴 OPEN
+Priority: P2
+Size: XL
+Source: Serena architecture audit 2026-05-01
+Files: dashboard/src/pages/SetupPage.tsx (4,171 lines)
+Description: Six wizard steps, four polling hooks, AutoBootstrapForm, AEsCustomersSection, DataSourcesSection — all in one file. Components defined here have no test surface; they cannot be rendered without the full Setup context.
+Solution: Extract each step (Step0–Step6, DataSources, AE/Customer config) to its own component file with explicit props. Each becomes individually testable. Quinn can audit one step at a time.
+
+---
+
+### BKL-ARCH-05 | Polling lifecycle — hand-rolled in 5 components, no usePolledStatus seam
+Status: 🔴 OPEN
+Priority: P2
+Size: M
+Source: Serena architecture audit 2026-05-01
+Files: dashboard/src/components/AccountIntelligencePanel.tsx, AccountPlanPanel.tsx, SessionHealthPanel.tsx, dashboard/src/pages/AdminPage.tsx, SetupPage.tsx
+Description: Each component hand-rolls the same lifecycle: useRef<setInterval>, fetch-on-mount, start-on-running, stop-on-terminal, clear-on-unmount, abort controller. The cleanup bug (pollRef.current = null forgotten) exists in at least one copy.
+Solution: Extract usePolledStatus(url, { intervalMs, until }) hook. Absorbs all five. Lifecycle bug fixed once, everywhere.
+
+---
+
+### BKL-ARCH-06 | Atomic file write — tmp + renameSync pattern replicated ~20 times
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Serena architecture audit 2026-05-01
+Files: src/account-intelligence.ts, src/backup-config.ts, src/bootstrap-history.ts, src/background-scheduler.ts, src/bootstrap-orchestrator.ts, src/customer-routes.ts, src/drive-sources.ts, src/kpi-history.ts, src/region-access-routes.ts, src/restore-routes.ts (only site with named helper), src/server-state.ts, src/sync-state.ts
+Description: ADR-002 mandates .tmp + atomic rename for all config writes. 20 call sites hand-roll it. Only restore-routes.ts::atomicWriteJSON extracts it but doesn't export it. Variants drift: some set mode: 0o600, some don't; some catch errors, some don't.
+Solution: Export atomicWriteJson(path, data, { mode }) from src/lib/atomic-write.ts. Makes ADR-002 a type-level guarantee. New config files can't accidentally skip the .tmp step.
+
+---
+
+### BKL-ARCH-07 | Drive folder traversal — 5 hand-rolled BFS implementations
+Status: 🔴 OPEN
+Priority: P1
+Size: L
+Source: Serena architecture audit 2026-05-01
+Files: src/sheets.ts::getSpreadsheetIdsUnderRoot, src/customer.ts (224-343), src/account-intelligence.ts (767-799), src/account-plan.ts (108-130), src/bootstrap-orchestrator.ts (174,399,459,1755,1782), src/sf-bookings-reader.ts::listPodBookingSheets
+Description: Every Drive operation reimplements drive.files.list with q=..., page-size handling, optional shortcut following, optional descent, optional TTL cache. Some honor supportsAllDrives: true, some don't. The inconsistency is the class of bug that causes Drive discovery gaps.
+Solution: Extract DriveFolderClient to src/lib/drive-client.ts with findChildFolder, ensureChildFolder, listSpreadsheetsUnder, findSheetByName. Absorbs all five hand-rolled traversers.
+
+---
+
+### BKL-ARCH-08 | bootstrap-orchestrator.ts — 2,695 lines holding 4 orthogonal concerns
+Status: 🔴 OPEN
+Priority: P2
+Size: XL
+Source: Serena architecture audit 2026-05-01
+Files: src/bootstrap-orchestrator.ts (2,695 lines)
+Description: One file holds: bootstrap state machine, step-by-step orchestration (Steps 1-6), Drive cache hierarchy (L1/L2/L3 freshness), SF/CCSP per-AE pipeline writes, Tableau session login, settings.json scaffolding, and re-implementations of helpers that exist elsewhere. ADR-005's 500-line cap is violated 5x. No isolated test surface.
+Solution: Split into bootstrap-state.ts (state machine), bootstrap-steps.ts (Steps 1-6 as discrete functions), cache-hierarchy.ts (L1/L2/L3 freshness). Delegate traversal to BKL-ARCH-01 and BKL-ARCH-07. Orchestrator shrinks to thin sequencer.
+Note: BKL-ARCH-01, BKL-ARCH-06, BKL-ARCH-07 should be done first — this item depends on those shared lib modules existing.
+
+---
+
+### BKL-CCSP-RETRY-01 | CCSP scraper retry logic with exponential backoff
+Status: 🟡 IN PROGRESS
+Priority: P1
+Size: M
+Source: Council debate 2026-05-01 (Serena + Marcus + Ava)
+Files: scripts/sync-pod-l3.ts (lines 312-320 — CCSP call site), src/ccsp-scraper.ts (peekTableauSessionExpired export)
+Description: CCSP scrape fails silently on transient Tableau viz-not-ready and on auth expiry with no retry. Today's sync: all 5 PODs failed with "CSV download failed: Timeout 60000ms exceeded". Last good CCSP data Apr 29.
+Solution (council-designed):
+  - Add withCcspRetry() wrapper in sync-pod-l3.ts wrapping scrapePodCcspRaw() call
+  - 3 retries max, exponential backoff: 120s / 300s / 600s
+  - Tear down + rebuild browser context on every retry attempt
+  - On each failure: check peekTableauSessionExpired() → if true, throw typed AUTH_EXPIRED error immediately (no retry)
+  - AUTH_EXPIRED caught at sync-pod-l3 loop → emit dashboard notification → break (halt all remaining PODs — auth is shared session state)
+  - Transient failures retry independently per POD (POD-isolated)
+  - Suppress failure email on intermediate retries; fire only after full exhaustion
+  - AUTH_EXPIRED fires immediate email/notification (requires manual re-auth)
+  - Write retry_in_progress { attempt, next_retry_at } to sync-status.json during retries
+  - On success after retry: write recovered: true to sync-status.json for audit trail
+  - viz-ready gate (waitForVizReady) stays inside scrapePodCcspRaw — already covered, no change needed
+
+---
+
+### BKL-CCSP-RETRY-02 | Keepalive too shallow — home page nav doesn't prove viz session works
+Status: 🟡 IN PROGRESS
+Priority: P1
+Size: S
+Source: Diagnosis 2026-05-01
+Files: scripts/sync-l3-daemon.ts (doKeepalive function ~line 62)
+Description: doKeepalive() navigates to Tableau home page and checks the final URL for signin/auth redirect. But Tableau can serve the home page with stale cookies without redirecting — the MFA wall only appears when accessing viz endpoints. So keepalive passes while scraping fails. Need to check for login form presence on the page after navigation.
+Solution: After navigating to Tableau in doKeepalive(), check for login form (input[type=password], input#username) — same check scrapeOneAe uses. If found, throw with auth-expired message so the keepalive failure email fires with a clear "Tableau auth expired" subject.
+
+---
+
+### BKL-CCSP-RETRY-03 | Viz timeout bypasses auth detection — CSV download timeout doesn't set _tableauSessionExpired
+Status: 🟡 IN PROGRESS
+Priority: P1
+Size: S
+Source: Diagnosis 2026-05-01
+Files: src/ccsp-scraper.ts (scrapePodCcspRaw ~line 1155)
+Description: In the POD pre-scrape path, when the viz doesn't load in 45s and the CSV download times out, the code logs a warning and returns 0 rows. The _tableauSessionExpired flag is never checked or set on this code path. The login detection only runs in scrapeOneAe (the per-AE path), not in scrapePodCcspRaw. So a timeout caused by auth expiry is invisible to the retry wrapper's auth check.
+Solution: After CSV download fails in scrapePodCcspRaw, check the current page URL and login form presence. If login form detected, call the internal setter to mark _tableauSessionExpired = true before throwing. The withCcspRetry wrapper in sync-pod-l3.ts will then catch it as AUTH_EXPIRED.

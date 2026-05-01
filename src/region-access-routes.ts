@@ -13,7 +13,8 @@
  * Atomic write pattern (read fresh, write tmp, renameSync) mirrors
  * server.ts:840–850 (validate-folder route). No `await` between read and write.
  */
-import { readFileSync, writeFileSync, renameSync } from 'fs'
+import { readFileSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import type { Hono } from 'hono'
 import { normalizeSettings, type RegionConfig } from './region-config.ts'
 import { sanitizeErr } from './utils.ts'
@@ -122,9 +123,7 @@ export function registerRegionAccessRoutes(app: Hono, settingsPath: string): voi
 
       // Atomic write — preserve all other top-level fields via spread.
       const out = { ...rawSettings, enabledRegions, enabledPods }
-      const tmp = `${settingsPath}.tmp`
-      writeFileSync(tmp, JSON.stringify(out, null, 2))
-      renameSync(tmp, settingsPath)
+      writeJsonAtomic(settingsPath, out)
       return c.json({ ok: true })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)

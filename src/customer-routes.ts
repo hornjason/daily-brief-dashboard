@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'fs'
-import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { streamSSE } from 'hono/streaming'
@@ -619,8 +619,7 @@ export function registerCustomerRoutes(app: Hono): void {
               const updated = customers.map((cu) =>
                 cu.name === customer.name ? { ...cu, accountNumbers: discovered } : cu
               )
-              writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2), { mode: 0o600 })
-              renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+              writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
               customers.splice(0, customers.length, ...updated)
             } catch (e: any) { console.warn('[discovery] account numbers persist failed:', e.message) }
           }

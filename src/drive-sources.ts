@@ -1,6 +1,7 @@
 // ── Drive data-source routes (M04 — extracted from server.ts) ───────────────
 import { Hono } from 'hono'
-import { readFileSync, writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { readFileSync, writeFileSync as writeFileSyncRaw } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth } from './google.ts'
@@ -320,9 +321,7 @@ export function registerDriveSourcesRoutes(app: Hono): void {
       // BKL-G27: preserve AI-enriched fields that live only in customers.json
       const existing = readExistingCustomers(CUSTOMERS_PATH)
       const imported = mergeCustomers(incoming as Record<string, any>[], existing)
-      const tmpPath = CUSTOMERS_PATH + '.tmp'
-      writeFileSyncRaw(tmpPath, JSON.stringify({ customers: imported }, null, 2), { mode: 0o600 })
-      renameSync(tmpPath, CUSTOMERS_PATH)
+      writeJsonAtomic(CUSTOMERS_PATH, { customers: imported })
       customers.splice(0, customers.length, ...imported as any[])
       return c.json({ imported: imported.length, source })
     } catch (e: any) {

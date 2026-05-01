@@ -1,6 +1,7 @@
 // ── Sheet import helpers & routes (M04 — extracted from server.ts) ──────────
 import { Hono } from 'hono'
-import { readFileSync, writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { readFileSync, writeFileSync as writeFileSyncRaw } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth } from './google.ts'
@@ -38,9 +39,7 @@ async function importSheetRows(
   // BKL-G27: preserve AI-enriched fields that live only in customers.json
   const existing = readExistingCustomers(CUSTOMERS_PATH)
   const customers = mergeCustomers(incoming as Record<string, any>[], existing)
-  const tmpPath = CUSTOMERS_PATH + '.tmp'
-  writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-  renameSync(tmpPath, CUSTOMERS_PATH)
+  writeJsonAtomic(CUSTOMERS_PATH, { customers })
   const syncedAt = new Date().toISOString()
   writeFileSyncRaw(SHEETS_SYNC_PATH, JSON.stringify({ fileId, fileName, columnMap, syncedAt }, null, 2), { mode: 0o600 })
   return { customers, syncedAt }

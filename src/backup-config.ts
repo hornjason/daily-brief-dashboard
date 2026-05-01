@@ -3,7 +3,8 @@
 // Fire-and-forget by design — never blocks a save, never throws to callers.
 
 import { google } from 'googleapis'
-import { readFileSync, writeFileSync, renameSync } from 'fs'
+import { readFileSync } from 'fs'
+import { writeJsonAtomic, writeFileAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 
@@ -36,9 +37,7 @@ export function setBackupSheetId(id: string): void {
     let ds: Record<string, unknown> = {}
     try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
     ds.backupSheetId = id
-    const tmp = DATA_SOURCES_PATH + '.tmp'
-    writeFileSync(tmp, JSON.stringify(ds, null, 2), { mode: 0o600 })
-    renameSync(tmp, DATA_SOURCES_PATH)
+    writeJsonAtomic(DATA_SOURCES_PATH, ds)
   } catch (e: any) {
     console.warn('[backup] failed to persist backupSheetId:', e.message)
   }
@@ -208,9 +207,7 @@ export async function restoreFromBackup(): Promise<{ ok: boolean; sections: stri
       const jsonBlob = rows[1][1]
       // Validate it's parseable JSON before writing
       JSON.parse(jsonBlob)
-      const tmp = path + '.tmp'
-      writeFileSync(tmp, jsonBlob, { mode: 0o600 })
-      renameSync(tmp, path)
+      writeFileAtomic(path, jsonBlob)
       sections.push(tab)
     } catch (e: any) {
       errors.push(`${tab}: ${e.message}`)

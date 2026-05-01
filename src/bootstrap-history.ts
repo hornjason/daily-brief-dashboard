@@ -2,7 +2,8 @@
  * Bootstrap run history — appends a record to bootstrap-history.json on each
  * AE bootstrap completion. Keeps last 50 runs per AE (rolling window).
  */
-import { readFileSync, writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { readFileSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 
 const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -39,9 +40,7 @@ export function recordBootstrapRun(run: BootstrapRun): void {
     history[key] = history[key].slice(-MAX_RUNS_PER_AE)
   }
   try {
-    const tmp = HISTORY_PATH + '.tmp'
-    writeFileSyncRaw(tmp, JSON.stringify(history, null, 2), { mode: 0o600 })
-    renameSync(tmp, HISTORY_PATH)
+    writeJsonAtomic(HISTORY_PATH, history)
   } catch (e: any) {
     console.warn('[bootstrap-history] write failed:', e.message)
   }

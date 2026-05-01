@@ -1,6 +1,7 @@
 // ── Auto-bootstrap + Tableau routes (M03 — extracted from server.ts) ────────
 import { Hono } from 'hono'
-import { writeFileSync as writeFileSyncRaw, readFileSync, renameSync } from 'fs'
+import { writeFileSync as writeFileSyncRaw, readFileSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
@@ -43,9 +44,7 @@ function savePodConfig(cfg: { territorySheetId: string; sfReportId: string; pare
   try {
     let ds: Record<string, unknown> = {}
     try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch { /* fresh file */ }
-    const tmp = DATA_SOURCES_PATH + '.tmp'
-    writeFileSyncRaw(tmp, JSON.stringify({ ...ds, podConfig: cfg }, null, 2), { mode: 0o600 })
-    renameSync(tmp, DATA_SOURCES_PATH)
+    writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, podConfig: cfg })
     console.log('[pod-bootstrap] POD config saved to data-sources.json')
   } catch (e: any) {
     console.warn('[pod-bootstrap] Could not save POD config:', e?.message)
@@ -1867,9 +1866,7 @@ export function registerBootstrapRoutes(app: Hono): void {
                   existingCustomer.driveFolderId = folderId
                   try {
                     // BKL-DATA-03: folderId persisted to customers.json via atomic tmp+rename
-                    const tmpPath = CUSTOMERS_PATH + '.tmp'
-                    writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-                    renameSync(tmpPath, CUSTOMERS_PATH)
+                    writeJsonAtomic(CUSTOMERS_PATH, { customers })
                   } catch (e: any) { console.warn('[bootstrap] customer folder ID persist failed:', e.message) }
                 }
                 // Do NOT create territory-sheet customer records — territory sheet is AE→territory map only.
@@ -1997,9 +1994,7 @@ export function registerBootstrapRoutes(app: Hono): void {
             const cx = customers.find(c => c.name === name)
             if (cx) cx.ccspCustomer = true
           }
-          const tmpPath = CUSTOMERS_PATH + '.tmp'
-          writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-          renameSync(tmpPath, CUSTOMERS_PATH)
+          writeJsonAtomic(CUSTOMERS_PATH, { customers })
 
           supportableScrapeResults = results
           setStep(2, 'done', `${matched.length}/${results.length} customers with subscriptions`)
@@ -2342,8 +2337,7 @@ export function registerBootstrapRoutes(app: Hono): void {
                   if (cu && !cu.domain) cu.domain = domain
                 }
                 try {
-                  writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-                  renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+                  writeJsonAtomic(CUSTOMERS_PATH, { customers })
                   console.log(`[auto-bootstrap] Domain inference complete for ${aeName}: ${highConfidenceSaves.length} saved, ${inferenceResults.length - highConfidenceSaves.length} unresolved`)
                 } catch (e: any) { console.warn('[auto-bootstrap] domain auto-save failed:', e.message) }
               })
@@ -2652,9 +2646,7 @@ export function registerBootstrapRoutes(app: Hono): void {
             const idx = customers.findIndex(c => c.name === cu.name)
             if (idx >= 0) {
               customers[idx] = { ...customers[idx], accountNumbers: r.accountNumbers }
-              const tmpPath = CUSTOMERS_PATH + '.tmp'
-              writeFileSyncRaw(tmpPath, JSON.stringify({ customers }, null, 2), { mode: 0o600 })
-              renameSync(tmpPath, CUSTOMERS_PATH)
+              writeJsonAtomic(CUSTOMERS_PATH, { customers })
             }
             // Write Supportable sheet incrementally
             if (ae) {

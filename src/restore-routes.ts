@@ -13,7 +13,8 @@
  * intelligence files, or any scraper state.
  */
 
-import { writeFileSync, renameSync, mkdirSync, existsSync, readFileSync } from 'fs'
+import { mkdirSync, existsSync, readFileSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import type { Hono } from 'hono'
@@ -103,13 +104,6 @@ async function repopulateAliasesFromSfBookings(): Promise<void> {
   }
 
   console.log(`[restore] BKL-RESTORE-02: alias repopulation complete — ${totalAliased} customers updated`)
-}
-
-// ── Atomic write helper ──────────────────────────────────────────────────────
-function atomicWriteJSON(filePath: string, data: unknown): void {
-  const tmp = filePath + '.tmp'
-  writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 })
-  renameSync(tmp, filePath)
 }
 
 // ── Result types ─────────────────────────────────────────────────────────────
@@ -216,7 +210,7 @@ async function restoreFromSupportableSheet(
     const slug = toSlug(tab)
     if (!slug) continue
     const cachePath = resolve(CACHE_DIR, `${slug}-sheets.json`)
-    atomicWriteJSON(cachePath, { rows: normalized, cachedAt: new Date().toISOString() })
+    writeJsonAtomic(cachePath, { rows: normalized, cachedAt: new Date().toISOString() })
     subscriptionFiles++
   }
 
@@ -485,7 +479,7 @@ export function registerRestoreRoutes(app: Hono): void {
     // ── Write CCSP cache ────────────────────────────────────────────────────
     const ccspFileIds = targetAes.map(ae => ae.ccspSheetId).filter((id): id is string => Boolean(id))
     if (allCCSPRecords.length > 0) {
-      atomicWriteJSON(
+      writeJsonAtomic(
         resolve(CACHE_DIR, 'ccsp-data.json'),
         { records: allCCSPRecords, cachedAt: new Date().toISOString(), fileIds: ccspFileIds },
       )
@@ -507,7 +501,7 @@ export function registerRestoreRoutes(app: Hono): void {
         return true
       })
       const pipelineFileIds = targetAes.map(ae => ae.pipelineSheetId).filter((id): id is string => Boolean(id))
-      atomicWriteJSON(
+      writeJsonAtomic(
         resolve(CACHE_DIR, 'pipeline-data.json'),
         { records: deduped, cachedAt: new Date().toISOString(), fileIds: pipelineFileIds },
       )

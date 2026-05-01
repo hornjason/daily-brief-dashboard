@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { readFileSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import type { Hono } from 'hono'
 import { sanitizeErr } from './utils.ts'
 import { backupNow } from './backup-config.ts'
@@ -79,9 +80,7 @@ export function updateSchedulerField(field: string, value: unknown): void {
   try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
   const config = { ...DEFAULT_SCHEDULER_CONFIG, ...(ds.schedulerConfig ?? {} as any) }
   ;(config as any)[field] = value
-  const tmpPath = DATA_SOURCES_PATH + '.tmp'
-  writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, schedulerConfig: config }, null, 2), { mode: 0o600 })
-  renameSync(tmpPath, DATA_SOURCES_PATH)
+  writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, schedulerConfig: config })
   _triggerBackup()
 }
 
@@ -116,9 +115,7 @@ export function recordSessionEstablished(service: SessionService): void {
     let ds: Record<string, unknown> = {}
     try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
     ds[SESSION_KEYS[service]] = new Date().toISOString()
-    const tmpPath = DATA_SOURCES_PATH + '.tmp'
-    writeFileSyncRaw(tmpPath, JSON.stringify(ds, null, 2), { mode: 0o600 })
-    renameSync(tmpPath, DATA_SOURCES_PATH)
+    writeJsonAtomic(DATA_SOURCES_PATH, ds)
     _triggerBackup()
   } catch (e: any) {
     console.warn(`[session-timestamps] failed to record ${service}:`, e.message)
@@ -231,9 +228,7 @@ export function getAutomationConfig(): AutomationConfig {
 export function saveOfflineToken(token: string): void {
   let ds: Record<string, unknown> = {}
   try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
-  const tmpPath = DATA_SOURCES_PATH + '.tmp'
-  writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, redhatOfflineToken: token }, null, 2), { mode: 0o600 })
-  renameSync(tmpPath, DATA_SOURCES_PATH)
+  writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, redhatOfflineToken: token })
 }
 
 /** Read the persisted offline token (returns null if not saved). */
@@ -349,9 +344,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch { /* file missing — start fresh */ }
       const merged: Record<string, unknown> = { ...ds, refreshIntervals: updated }
       if (configChanged) merged.schedulerConfig = currentConfig
-      const tmpPath = DATA_SOURCES_PATH + '.tmp'
-      writeFileSyncRaw(tmpPath, JSON.stringify(merged, null, 2), { mode: 0o600 })
-      renameSync(tmpPath, DATA_SOURCES_PATH)
+      writeJsonAtomic(DATA_SOURCES_PATH, merged)
       _triggerBackup()
       deps.rescheduleRefreshTimers(updated)
       return c.json({ intervals: updated, schedulerConfig: getSchedulerConfig() })
@@ -377,9 +370,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
     }
     try {
       const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
-      const tmpPath = DATA_SOURCES_PATH + '.tmp'
-      writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, weather: updated }, null, 2), { mode: 0o600 })
-      renameSync(tmpPath, DATA_SOURCES_PATH)
+      writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, weather: updated })
       _triggerBackup()
       _weatherCache = null // invalidate cache on settings change
       return c.json(updated)
@@ -457,9 +448,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
     try {
       let ds: Record<string, unknown> = {}
       try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
-      const tmpPath = DATA_SOURCES_PATH + '.tmp'
-      writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, aiConfig: updated }, null, 2), { mode: 0o600 })
-      renameSync(tmpPath, DATA_SOURCES_PATH)
+      writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, aiConfig: updated })
       _triggerBackup()
       return c.json({ config: updated })
     } catch (e: any) {
@@ -522,9 +511,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
     try {
       let ds: Record<string, unknown> = {}
       try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
-      const tmpPath = DATA_SOURCES_PATH + '.tmp'
-      writeFileSyncRaw(tmpPath, JSON.stringify({ ...ds, automationConfig: updated }, null, 2), { mode: 0o600 })
-      renameSync(tmpPath, DATA_SOURCES_PATH)
+      writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, automationConfig: updated })
       _triggerBackup()
       return c.json({ config: updated })
     } catch (e: any) {

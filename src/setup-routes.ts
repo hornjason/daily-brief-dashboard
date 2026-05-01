@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, unlinkSync, statSync } from 'fs'
-import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { readFileSync, writeFileSync, writeFileSync as writeFileSyncRaw, mkdirSync, readdirSync, existsSync, unlinkSync, statSync } from 'fs'
+import { writeJsonAtomic, writeFileAtomic } from './lib/atomic-write.ts'
 import { resolve, dirname } from 'path'
 import { google } from 'googleapis'
 import type { Hono } from 'hono'
@@ -82,9 +82,7 @@ export async function runStartupDriveMerge(): Promise<void> {
     // Deep-merge: Drive wins on regions[], local wins on everything else
     if (Array.isArray(driveSettings.regions)) {
       raw.regions = driveSettings.regions
-      const tmp = `${SETTINGS_PATH_SRV}.tmp`
-      writeFileSync(tmp, JSON.stringify(raw, null, 2))
-      renameSync(tmp, SETTINGS_PATH_SRV)
+      writeJsonAtomic(SETTINGS_PATH_SRV, raw)
       console.log('[startup] Merged regions from Drive Config/settings.json')
     }
   } catch (e) {
@@ -493,8 +491,7 @@ export function registerSetupRoutes(app: Hono): void {
     })
 
     try {
-      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: updated }, null, 2), { mode: 0o600 })
-      renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+      writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
       customers.splice(0, customers.length, ...updated)
       return c.json({ ok: true, updated: body.domains.length })
     } catch (e: any) {
@@ -545,8 +542,7 @@ export function registerSetupRoutes(app: Hono): void {
         body.customers[i] = cleaned as Customer
       }
 
-      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', JSON.stringify({ customers: body.customers }, null, 2), { mode: 0o600 })
-      renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+      writeJsonAtomic(CUSTOMERS_PATH, { customers: body.customers })
       customers.splice(0, customers.length, ...body.customers)
       return c.json({ ok: true, count: body.customers.length })
     } catch (e: any) {
@@ -652,14 +648,12 @@ export function registerSetupRoutes(app: Hono): void {
     try {
       const snap = snapshot
       // Restore AEs
-      writeFileSyncRaw(AES_PATH + '.tmp', snap.aes, { mode: 0o600 })
-      renameSync(AES_PATH + '.tmp', AES_PATH)
+      writeFileAtomic(AES_PATH, snap.aes)
       const restoredAes = JSON.parse(snap.aes).aes ?? []
       setAes(restoredAes)
       aes.splice(0, aes.length, ...restoredAes)
       // Restore customers
-      writeFileSyncRaw(CUSTOMERS_PATH + '.tmp', snap.customers, { mode: 0o600 })
-      renameSync(CUSTOMERS_PATH + '.tmp', CUSTOMERS_PATH)
+      writeFileAtomic(CUSTOMERS_PATH, snap.customers)
       const restoredCustomers = JSON.parse(snap.customers).customers ?? []
       setCustomers(restoredCustomers)
       customers.splice(0, customers.length, ...restoredCustomers)
