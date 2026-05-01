@@ -72,15 +72,16 @@ Pick next candidate       start Phase 1 for the next item in the order table abo
 | Item | Interface designed | GitHub Issue | Triage state |
 |---|---|---|---|
 | BKL-ARCH-06 atomic-write | ✅ | #1 ✅ CLOSED | ✅ DONE 2026-05-01 |
-| BKL-ARCH-07 Drive traversal | ✅ | #2 | ✅ ready-for-agent |
+| BKL-ARCH-07 Drive traversal | ✅ | #2 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-01 customer matching | ❌ | — | — |
 | BKL-ARCH-03 server.ts routers | ❌ | — | — |
 | BKL-ARCH-05 polling hook | ❌ | — | — |
 | BKL-ARCH-08 bootstrap split | ❌ | — | — (blocked) |
 
-**Next action:** `implement BKL-ARCH-07` — issue #2 is ready-for-agent.
+**Next action:** `/grill-with-docs` for BKL-ARCH-01 — interface not yet designed.
 
 **BKL-ARCH-06 commit:** c5d9ff605 — 35 call sites migrated, 13 unit tests, src/lib/atomic-write.ts live.
+**BKL-ARCH-07 commit:** d1848268e — 5-method singleton, 14 unit tests, 5 callers migrated, ADR-0016 enforced.
 
 ---
 
