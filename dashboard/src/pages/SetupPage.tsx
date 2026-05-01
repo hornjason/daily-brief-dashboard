@@ -9,7 +9,9 @@ import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import { BootstrapConfigBlock } from '../components/BootstrapConfigBlock'
 import { useBootstrapConfig } from '../hooks/useBootstrapConfig'
+import { Step0RegionAccess } from '../components/Step0RegionAccess'
 import { filterPodOptions } from '../utils/regionFilter'
+import { HeroStep3Connections } from '../components/HeroStep3Connections'
 // BKL-CONN-ARCH-01: two-axis connection state derivation
 import { deriveRhCard, deriveSfCard, deriveTableauCard } from '../lib/connection-state'
 import {
@@ -1476,9 +1478,7 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
     setSelectedRegion,
   } = useBootstrapConfig()
 
-  // BKL-HERO-01 Phase 4: filter podOptions to only the pods the user selected
-  // in Step 0. step0EnabledPods is populated from GET /api/regions/access on
-  // mount (see SetupPage initial-state useEffect). Empty / undefined = no filter.
+  // BKL-HERO-01 Phase 4: filter pod dropdown to user's Step 0 selection
   const filteredPodOptions = filterPodOptions(podOptions, step0EnabledPods)
 
   // BKL-UX86: Known AEs (full server records) — used to derive a safe
@@ -3719,9 +3719,17 @@ export default function SetupPage() {
   const [dataSourcesHealth, setDataSourcesHealth] = useState<'loading' | 'healthy' | 'issues'>('loading')
   const [dataSourcesConnected, setDataSourcesConnected] = useState<number | null>(null)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
-  // BKL-HERO-01 Phase 4: pods enabled in Step 0. Populated from /api/regions/access
-  // on mount. undefined = not yet loaded; [] = no filter (all pods shown).
+  // BKL-HERO-01 Phase 1 — Step 0 region access state.
+  // `enabledRegionsState`: undefined = still loading OR not yet saved (first boot).
+  //                        string[]  = persisted selection (any length, including []).
+  // First-boot trigger: server response had no `enabledRegions` key — strictly undefined,
+  //                     not empty []. Empty [] is BKL-HERO-02 territory.
+  const [step0Loaded, setStep0Loaded] = useState(false)
+  const [step0FirstBoot, setStep0FirstBoot] = useState(false)
+  const [step0EnabledRegions, setStep0EnabledRegions] = useState<string[] | undefined>(undefined)
   const [step0EnabledPods, setStep0EnabledPods] = useState<string[] | undefined>(undefined)
+  // BKL-HERO-01 Phase 2 — defaults false = primary/L4 path is safe default during fetch
+  const [isL3Only, setIsL3Only] = useState(false)
 
   // Dynamic page title
   useEffect(() => {
@@ -3754,20 +3762,36 @@ export default function SetupPage() {
       .then(d => { setAeCount((d.aes ?? []).length) })
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
 
-    // BKL-HERO-01 Phase 4: load enabled pods from Step 0 selection
-    fetch('/api/regions/access', { signal })
-      .then(r => r.json())
-      .then((d: { enabledRegions?: string[]; enabledPods?: string[] }) => {
-        if (Array.isArray(d.enabledPods)) setStep0EnabledPods(d.enabledPods)
-      })
-      .catch((e) => { if (e.name !== 'AbortError') { /* ignore — no filter applied */ } })
-
     // Check RH Portal
     fetch('/api/auth/redhat/status', { signal })
       .then(r => r.json())
       // BKL-UX63: Require !sessionExpired — aligns Step 3 badge with Step 5
       .then(d => { setRhOk((d.hasSession && !d.sessionExpired) ?? false) })
       .catch((e) => { if (e.name !== 'AbortError') setRhOk(false) })
+
+    // BKL-HERO-01 Phase 1 — check Step 0 first-boot state.
+    // First boot = `enabledRegions` key absent from settings.json (strictly undefined).
+    fetch('/api/regions/access', { signal })
+      .then(r => r.json())
+      .then((d: { enabledRegions?: string[]; enabledPods?: string[] }) => {
+        const isFirstBoot = !('enabledRegions' in d)
+        setStep0FirstBoot(isFirstBoot)
+        if (Array.isArray(d.enabledRegions)) setStep0EnabledRegions(d.enabledRegions)
+        if (Array.isArray(d.enabledPods)) setStep0EnabledPods(d.enabledPods)
+        setStep0Loaded(true)
+      })
+      .catch((e) => {
+        if (e.name !== 'AbortError') setStep0Loaded(true)
+      })
+
+    // BKL-HERO-01 Phase 2 — isL3Only gating
+    // Hero installs (NODE_ROLE unset) hide L4-only sections.
+    // Default (false) = render everything — safe for primary/L4 and during fetch.
+    // 404/network errors keep the safe default.
+    fetch('/api/node-role', { signal })
+      .then(r => r.json())
+      .then((d: { isL3Only: boolean }) => { if (typeof d.isL3Only === 'boolean') setIsL3Only(d.isL3Only) })
+      .catch((e) => { if (e.name !== 'AbortError') { /* non-fatal — stay on default false */ } })
 
     // BKL-UX112: Poll the Data Sources counter on a recurring interval so the
     // badge never goes stale while the accordion is collapsed (DataSourcesSection
@@ -3959,6 +3983,20 @@ export default function SetupPage() {
 
         {/* Accordion sections */}
         <div className="space-y-3">
+          {/* BKL-HERO-01 Phase 1 — Step 0 Region & Pod Access (first-boot only) */}
+          {step0Loaded && step0FirstBoot && (
+            <Step0RegionAccess
+              initialEnabledRegions={step0EnabledRegions}
+              initialEnabledPods={step0EnabledPods}
+              onSave={(regions, pods) => {
+                setStep0EnabledRegions(regions)
+                setStep0EnabledPods(pods)
+                // Stay rendered as a summary (component handles internal collapse).
+                // Once saved, the next reload will see `enabledRegions` set and Step 0 won't render.
+              }}
+            />
+          )}
+
           <AccordionSection
             id="oauth-keys"
             title="Step 1 of 5 — OAuth Keys"
@@ -4024,44 +4062,55 @@ export default function SetupPage() {
             <AEsCustomersSection onAeCountChange={setAeCount} step0EnabledPods={step0EnabledPods} />
           </AccordionSection>
 
-          <AccordionSection
-            id="data-sources"
-            title="Step 5 of 5 — Data Sources"
-            badge={
-              dataSourcesHealth === 'loading'
-                ? <span className="text-xs text-text-secondary">Checking...</span>
-                : dataSourcesHealth === 'issues'
-                  ? <span className="text-xs text-warning">{dataSourcesConnected ?? 0}/{DATA_SOURCE_TOTAL} connected</span>
-                  : <span className="text-xs text-success">{DATA_SOURCE_TOTAL}/{DATA_SOURCE_TOTAL} connected</span>
-            }
-            isOpen={openSection === 'data-sources'}
-            onToggle={() => toggleSection('data-sources')}
-          >
-            <DataSourcesSection
-              hideConnections={true}
-              onHealthChange={(status, count) => { setDataSourcesHealth(status); if (count !== undefined) setDataSourcesConnected(count) }}
-            />
-          </AccordionSection>
+          {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs */}
+          {!isL3Only && (
+            <AccordionSection
+              id="data-sources"
+              title="Step 5 of 5 — Data Sources"
+              badge={
+                dataSourcesHealth === 'loading'
+                  ? <span className="text-xs text-text-secondary">Checking...</span>
+                  : dataSourcesHealth === 'issues'
+                    ? <span className="text-xs text-warning">{dataSourcesConnected ?? 0}/{DATA_SOURCE_TOTAL} connected</span>
+                    : <span className="text-xs text-success">{DATA_SOURCE_TOTAL}/{DATA_SOURCE_TOTAL} connected</span>
+              }
+              isOpen={openSection === 'data-sources'}
+              onToggle={() => toggleSection('data-sources')}
+            >
+              <DataSourcesSection
+                hideConnections={true}
+                onHealthChange={(status, count) => { setDataSourcesHealth(status); if (count !== undefined) setDataSourcesConnected(count) }}
+              />
+            </AccordionSection>
+          )}
 
-          <AccordionSection
-            id="settings"
-            title="Refresh Timer & Settings"
-            badge={<span className="text-xs text-text-secondary">Optional</span>}
-            isOpen={openSection === 'settings'}
-            onToggle={() => toggleSection('settings')}
-          >
-            <div className="space-y-4">
-              <RefreshTimerSettings />
-              {/* BKL-E04: Morning Brief Email delivery settings */}
-              <EmailSettingsSection />
-              <a
-                href="/dashboard"
-                className="block w-full text-center bg-accent hover:bg-accent/80 text-white px-6 py-3 rounded-xl font-semibold text-base transition-colors"
-              >
-                Open Dashboard
-              </a>
-            </div>
-          </AccordionSection>
+          {/* BKL-HERO-01 Phase 3 — L3 hero installs: RH offline token in place of Data Sources */}
+          {isL3Only && <HeroStep3Connections />}
+
+          {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs.
+              The "Open Dashboard" link inside this section disappears on L3 by
+              design — Phase 5 adds a dedicated placement after AEs for L3. */}
+          {!isL3Only && (
+            <AccordionSection
+              id="settings"
+              title="Refresh Timer & Settings"
+              badge={<span className="text-xs text-text-secondary">Optional</span>}
+              isOpen={openSection === 'settings'}
+              onToggle={() => toggleSection('settings')}
+            >
+              <div className="space-y-4">
+                <RefreshTimerSettings />
+                {/* BKL-E04: Morning Brief Email delivery settings */}
+                <EmailSettingsSection />
+                <a
+                  href="/dashboard"
+                  className="block w-full text-center bg-accent hover:bg-accent/80 text-white px-6 py-3 rounded-xl font-semibold text-base transition-colors"
+                >
+                  Open Dashboard
+                </a>
+              </div>
+            </AccordionSection>
+          )}
 
           <AccordionSection
             id="ai-settings"
@@ -4073,15 +4122,18 @@ export default function SetupPage() {
             <AiIntelligenceSettings />
           </AccordionSection>
 
-          <AccordionSection
-            id="automation-settings"
-            title="Automation & Limits"
-            badge={<span className="text-xs text-text-secondary">Optional</span>}
-            isOpen={openSection === 'automation-settings'}
-            onToggle={() => toggleSection('automation-settings')}
-          >
-            <AutomationSettings />
-          </AccordionSection>
+          {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs */}
+          {!isL3Only && (
+            <AccordionSection
+              id="automation-settings"
+              title="Automation & Limits"
+              badge={<span className="text-xs text-text-secondary">Optional</span>}
+              isOpen={openSection === 'automation-settings'}
+              onToggle={() => toggleSection('automation-settings')}
+            >
+              <AutomationSettings />
+            </AccordionSection>
+          )}
         </div>
 
         {/* Quick link to dashboard */}
