@@ -14,6 +14,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { driveClient } from './lib/drive-client.ts'
+import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
@@ -750,32 +751,6 @@ export interface IntelligenceDocUrls {
 }
 
 /**
- * Find the customer's Drive folder using the same priority chain as _fetchCustomerDocsImpl
- * in src/customer.ts: per-customer driveFolderId > AE folder > fuzzy match.
- */
-async function findCustomerDriveFolder(customer: Customer): Promise<string> {
-  if (customer.driveFolderId) return customer.driveFolderId
-
-  const ae = aes.find(a => a.name === customer.ae)
-  const aeFolderId = ae?.driveFolderId
-  if (!aeFolderId) throw new Error(`No Drive folder found for customer ${customer.name} — no per-customer or AE folder ID`)
-
-  // BFS up to 2 levels (handles "AE/Accounts/<customer>" layouts), fuzzy-matched.
-  // ADR-0016: drive-client supplies supportsAllDrives unconditionally.
-  const matchId = await driveClient.findDescendantFolder(aeFolderId, customer.name, {
-    fuzzy: true,
-    maxDepth: 2,
-  })
-  if (matchId) {
-    // Persist found folderId to customers.json for fast path next time (BKL-DATA-03)
-    persistCustomerFolderId(customer.name, matchId)
-    return matchId
-  }
-
-  throw new Error(`No Drive folder found for customer ${customer.name} under AE ${customer.ae}`)
-}
-
-/**
  * Find or create "Account Intelligence" subfolder inside the customer's Drive folder.
  * ADR-0016: drive-client supplies supportsAllDrives unconditionally.
  */
@@ -832,6 +807,7 @@ export async function discoverExistingIntelDocs(
     // writeIntelligenceDocs() — per-customer driveFolderId > AE folder > fuzzy.
     // Throws when no folder is found; caught below so discovery is best-effort.
     const customerFolderId = await findCustomerDriveFolder(customer)
+    persistCustomerFolderId(customer.name, customerFolderId)
 
     // Read-only subfolder lookup — don't create.
     const intelFolderId = await findIntelligenceSubfolder(customerFolderId)
@@ -1019,6 +995,7 @@ async function upsertGoogleDoc(
 async function fetchCustomPromptFromDrive(customer: Customer): Promise<string | null> {
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
+    persistCustomerFolderId(customer.name, customerFolderId)
     const auth = makeAuth(GDRIVE_TOKEN_PATH)
     const drive = google.drive({ version: 'v3', auth })
 
@@ -1069,6 +1046,7 @@ export async function writeIntelligenceDocs(
   console.log(`[acct-intel] Writing intelligence docs for ${customer.name}`)
 
   const customerFolderId = await findCustomerDriveFolder(customer)
+  persistCustomerFolderId(customer.name, customerFolderId)
   const intelFolderId = await ensureIntelligenceSubfolder(customerFolderId)
 
   const companyDocName = `${customer.name} - Company Intelligence`

@@ -16,8 +16,9 @@ import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
 import { makeAuth } from './google.ts'
 import { driveClient } from './lib/drive-client.ts'
+import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { getGeminiModel } from './settings-api.ts'
-import { aes, customers } from './server-state.ts'
+import { customers } from './server-state.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { toSlug } from './cache-layer.ts'
 import type { Customer } from './types.ts'
@@ -67,25 +68,6 @@ REQUIRED SECTIONS — every plan MUST include all of these:
 export async function ensureAccountPlansSubfolder(customerFolderId: string): Promise<string> {
   // ADR-0016: drive-client supplies supportsAllDrives unconditionally.
   return driveClient.ensureChildFolder(customerFolderId, 'Account Plans')
-}
-
-// ── Drive folder lookup (reuses same logic as account-intelligence.ts) ───────
-
-async function findCustomerDriveFolder(customer: Customer): Promise<string> {
-  if (customer.driveFolderId) return customer.driveFolderId
-
-  const ae = aes.find(a => a.name === customer.ae)
-  const aeFolderId = ae?.driveFolderId
-  if (!aeFolderId) throw new Error(`No Drive folder found for customer ${customer.name} — no per-customer or AE folder ID`)
-
-  // ADR-0016: drive-client supplies supportsAllDrives + 2-level fuzzy descent unconditionally.
-  const matchId = await driveClient.findDescendantFolder(aeFolderId, customer.name, {
-    fuzzy: true,
-    maxDepth: 2,
-  })
-  if (matchId) return matchId
-
-  throw new Error(`No Drive folder found for customer ${customer.name} under AE ${customer.ae}`)
 }
 
 // ── Upload markdown to Drive as a Google Doc ─────────────────────────────────

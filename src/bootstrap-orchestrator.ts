@@ -6,6 +6,7 @@ import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import { driveClient } from './lib/drive-client.ts'
+import { normalizeCustomerName } from './lib/customer-folder.ts'
 import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
 import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
@@ -132,42 +133,6 @@ async function notify(title: string, message: string, priority: 'default' | 'hig
   } catch (e: any) {
     console.warn('[ntfy] notification failed:', e?.message ?? e)
   }
-}
-
-// BKL-M05: Display-oriented normalizer — differs from normalizeForMatch by stripping state codes, parentheticals, and applying title case (needed for Drive folder names).
-/**
- * Normalize a customer name for use as a Drive folder name and search key.
- * Strips state suffixes, legal entity suffixes, and parentheticals; applies title case.
- * Input:  "DROPBOX, INC. - CA"  →  Output: "Dropbox"
- * Input:  "FRED HUTCHINSON CANCER CENTER"  →  Output: "Fred Hutchinson Cancer Center"
- * Input:  "A10 NETWORKS, INC."  →  Output: "A10 Networks"
- */
-function normalizeCustomerName(raw: string): string {
-  let name = raw.trim()
-  // Strip state suffix " - XX" or " - XX/XX"
-  name = name.replace(/\s+-\s+[A-Z]{2}(\/[A-Z]{2})?$/, '')
-  // Strip parentheticals like "(REI)" or "(HostGator)"
-  name = name.replace(/\s*\([^)]*\)\s*$/, '')
-  // Strip legal entity suffixes (with or without leading comma)
-  const legalSuffixes = [
-    /,?\s+L\.?L\.?P\.?$/i,
-    /,?\s+P\.?T\.?Y\.?\s+LTD\.?$/i,
-    /,?\s+L\.?P\.?$/i,
-    /,?\s+INC\.?$/i,
-    /,?\s+LLC\.?$/i,
-    /,?\s+LTD\.?$/i,
-    /,?\s+CORP\.?$/i,
-    /,?\s+CO\.?$/i,
-    /,?\s+PLC\.?$/i,
-  ]
-  for (const re of legalSuffixes) name = name.replace(re, '')
-  name = name.trim().replace(/,+$/, '').trim()
-  // Title case: preserve words with digits (A10, H2O) or internal dots (U.S.) or already mixed case
-  name = name.split(/\s+/).map(word => {
-    if (/\d/.test(word) || /[a-z]/.test(word) || /\.[a-zA-Z]/.test(word)) return word
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  }).join(' ')
-  return name
 }
 
 // BKL-W2-12: Search for an existing Google Sheet by name inside a Drive folder before creating a new one.
