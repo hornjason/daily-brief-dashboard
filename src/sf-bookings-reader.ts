@@ -31,6 +31,7 @@
 
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { driveClient } from './lib/drive-client.ts'
 import type { SupportableResult } from './supportable-scraper.ts'
 import type { Customer } from './types.ts'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -48,49 +49,14 @@ const RAW_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours — BKL-INGEST-01: ali
  * so dropdowns show clean labels like "Northwest" instead of "Northwest POD - Subscriptions".
  */
 export async function listPodBookingSheets(folderId: string): Promise<Array<{ name: string; displayName: string; sheetId: string }>> {
-  const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
-
-  // 1. Search the given folder for spreadsheets (top-level)
-  const topRes = await drive.files.list({
-    q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
-    fields: 'files(id, name)',
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-  })
-  let files = (topRes.data.files ?? []).filter(f => f.id && f.name)
-
-  // 2. If no sheets at top level, descend one level into subfolders and aggregate.
-  //    Handles the case where the user points at the parent AE folder and the POD
-  //    subscription sheets (NW/SW) live one folder deeper.
-  if (files.length === 0) {
-    const subRes = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id, name)',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    })
-    const subfolders = (subRes.data.files ?? []).filter(f => f.id).slice(0, 10)
-    const seen = new Set<string>()
-    const aggregated: Array<{ id: string; name: string }> = []
-    for (const sf of subfolders) {
-      const inner = await drive.files.list({
-        q: `'${sf.id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
-        fields: 'files(id, name)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      })
-      for (const f of inner.data.files ?? []) {
-        if (f.id && f.name && !seen.has(f.id)) {
-          seen.add(f.id)
-          aggregated.push({ id: f.id, name: f.name })
-        }
-      }
-    }
-    files = aggregated
+  // ADR-0016: drive-client supplies supportsAllDrives unconditionally.
+  // Top-level first; if empty, descend one level into subfolders.
+  let pairs = await driveClient.listSpreadsheetsUnder(folderId, { maxDepth: 0 })
+  if (pairs.length === 0) {
+    pairs = await driveClient.listSpreadsheetsUnder(folderId, { maxDepth: 1 })
   }
 
-  return files.map(f => {
-    const raw = f.name!
+  return pairs.map(({ id, name: raw }) => {
     const displayName = raw
       .replace(/\b(POD|SF Bookings|Bookings|Subscriptions|Subscription|Report|Export|Sheet|Data)\b/gi, '')
       .replace(/\b\d{4}\b/g, '')       // strip years
@@ -98,7 +64,7 @@ export async function listPodBookingSheets(folderId: string): Promise<Array<{ na
       .replace(/\s{2,}/g, ' ')
       .trim()
       || raw  // fallback to raw if everything was stripped
-    return { name: raw, displayName, sheetId: f.id! }
+    return { name: raw, displayName, sheetId: id }
   })
 }
 

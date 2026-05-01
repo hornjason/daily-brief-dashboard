@@ -5,6 +5,7 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
+import { driveClient } from './lib/drive-client.ts'
 import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
 import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
@@ -170,11 +171,11 @@ function normalizeCustomerName(raw: string): string {
 }
 
 // BKL-W2-12: Search for an existing Google Sheet by name inside a Drive folder before creating a new one.
-async function findExistingSheet(drive: any, folderId: string, name: string): Promise<string | null> {
+// ADR-0016: drive-client supplies supportsAllDrives unconditionally.
+// `drive` arg retained for caller-call-site compatibility but is unused.
+async function findExistingSheet(_drive: unknown, folderId: string, name: string): Promise<string | null> {
   try {
-    const q = `name='${name.replace(/'/g, "\\'")}' and '${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`
-    const res = await drive.files.list({ q, fields: 'files(id,name)', pageSize: 1 })
-    return res.data.files?.[0]?.id ?? null
+    return await driveClient.findSheetByName(folderId, name)
   } catch {
     return null
   }
@@ -1748,58 +1749,41 @@ export function registerBootstrapRoutes(app: Hono): void {
           // parentFolderId, then use it as the effective parent for the AE folder.
           // Hierarchy: parentFolderId / POD Name / AE Name / customer folders
           // Single-AE bootstrap without podName skips the POD layer.
+          // ADR-0016: drive-client supplies supportsAllDrives unconditionally.
           let effectiveParentId = parentFolderId
           if (podName && parentFolderId) {
-            const safePodName = podName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-            const existingPod = await drive.files.list({
-              q: `name='${safePodName}' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-              fields: 'files(id, name)',
-              supportsAllDrives: true,
-              includeItemsFromAllDrives: true,
-            }).catch(() => ({ data: { files: [] } }))
-            if (existingPod.data.files?.length) {
-              effectiveParentId = existingPod.data.files[0].id!
-              console.log(`[auto-bootstrap] Reusing existing POD folder: ${podName} (${effectiveParentId})`)
-            } else {
-              const podFolder = await drive.files.create({
-                requestBody: {
-                  name: podName,
-                  mimeType: 'application/vnd.google-apps.folder',
-                  parents: [parentFolderId],
-                },
-                supportsAllDrives: true,
-                fields: 'id',
-              })
-              effectiveParentId = podFolder.data.id!
-              console.log(`[auto-bootstrap] Created POD folder: ${podName} (${effectiveParentId})`)
+            try {
+              effectiveParentId = await driveClient.ensureChildFolder(parentFolderId, podName)
+              console.log(`[auto-bootstrap] POD folder ready: ${podName} (${effectiveParentId})`)
+            } catch (e: any) {
+              console.warn(`[auto-bootstrap] POD folder ensure failed: ${e?.message} — falling back to parentFolderId`)
+              effectiveParentId = parentFolderId
             }
           }
 
-          // BKL-M27: Check if folder already exists in parent before creating
+          // BKL-M27: Find-or-create AE folder under effective parent.
           if (effectiveParentId) {
-            const safeName = aeName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-            const existing = await drive.files.list({
-              q: `name='${safeName}' and '${effectiveParentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-              fields: 'files(id, name, webViewLink)',
-              supportsAllDrives: true,
-              includeItemsFromAllDrives: true,
-            }).catch(() => ({ data: { files: [] } }))
-            if (existing.data.files?.length) {
-              driveFolderId = existing.data.files[0].id!
-              autoBootstrapState.resources.driveFolder = { id: driveFolderId, url: existing.data.files[0].webViewLink ?? `https://drive.google.com/drive/folders/${driveFolderId}` }
+            try {
+              driveFolderId = await driveClient.ensureChildFolder(effectiveParentId, aeName)
+              autoBootstrapState.resources.driveFolder = {
+                id: driveFolderId,
+                url: `https://drive.google.com/drive/folders/${driveFolderId}`,
+              }
               const updated = aes.map(a => a.name === aeName ? { ...a, driveFolderId } : a)
               saveAes(updated)
-              setStep(0, 'done', `Folder: ${driveFolderId} (reused existing)`)
-              console.log(`[auto-bootstrap] Reusing existing folder: ${aeName} (${driveFolderId})`)
+              setStep(0, 'done', `Folder: ${driveFolderId}`)
+              console.log(`[auto-bootstrap] AE folder ready: ${aeName} (${driveFolderId})`)
+            } catch (e: any) {
+              console.warn(`[auto-bootstrap] AE folder ensure failed: ${e?.message}`)
             }
           }
 
           if (!driveFolderId) {
+            // No effective parent — create AE folder at Drive root via legacy direct call
             const folder = await drive.files.create({
               requestBody: {
                 name: aeName,
                 mimeType: 'application/vnd.google-apps.folder',
-                ...(effectiveParentId ? { parents: [effectiveParentId] } : {}),
               },
               supportsAllDrives: true,
               fields: 'id,webViewLink',
@@ -1809,7 +1793,7 @@ export function registerBootstrapRoutes(app: Hono): void {
             const updated = aes.map(a => a.name === aeName ? { ...a, driveFolderId } : a)
             saveAes(updated)
             setStep(0, 'done', `Folder: ${driveFolderId}`)
-            console.log(`[auto-bootstrap] Drive folder created: ${driveFolderId}`)
+            console.log(`[auto-bootstrap] Drive folder created at root: ${driveFolderId}`)
           }
         }
       } catch (e: any) {
@@ -1830,7 +1814,6 @@ export function registerBootstrapRoutes(app: Hono): void {
         const tid1 = makeStepTimeout(1, 'Create Customer Folders')
         try {
           setStep(1, 'running', `0/${customerNames.length} folders…`)
-          const drive2 = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
           const folderResources: Record<string, { id: string; url: string }> = {}
           for (let i = 0; i < customerNames.length; i++) {
             const cname = customerNames[i]
@@ -1838,30 +1821,9 @@ export function registerBootstrapRoutes(app: Hono): void {
               const existingCustomer = customers.find(cx => cx.name === cname)
               let folderId = existingCustomer?.driveFolderId ?? ''
               if (!folderId) {
-                // BKL-M27: Check if customer folder already exists before creating
-                const safeCname = cname.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-                const existingFolder = await drive2.files.list({
-                  q: `name='${safeCname}' and '${driveFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-                  fields: 'files(id, name)',
-                  supportsAllDrives: true,
-                  includeItemsFromAllDrives: true,
-                }).catch(() => ({ data: { files: [] } }))
-
-                if (existingFolder.data.files?.length) {
-                  folderId = existingFolder.data.files[0].id!
-                  console.log(`[bootstrap] Reusing existing folder: ${cname} (${folderId})`)
-                } else {
-                  const res = await drive2.files.create({
-                    requestBody: {
-                      name: cname,
-                      mimeType: 'application/vnd.google-apps.folder',
-                      parents: [driveFolderId],
-                    },
-                    supportsAllDrives: true,
-                    fields: 'id',
-                  })
-                  folderId = res.data.id!
-                }
+                // BKL-M27: find-or-create customer folder via drive-client (ADR-0016).
+                folderId = await driveClient.ensureChildFolder(driveFolderId, cname)
+                console.log(`[bootstrap] Customer folder ready: ${cname} (${folderId})`)
                 if (existingCustomer) {
                   existingCustomer.driveFolderId = folderId
                   try {

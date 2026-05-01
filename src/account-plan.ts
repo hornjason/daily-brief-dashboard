@@ -15,6 +15,7 @@ import { resolve } from 'path'
 import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
 import { makeAuth } from './google.ts'
+import { driveClient } from './lib/drive-client.ts'
 import { getGeminiModel } from './settings-api.ts'
 import { aes, customers } from './server-state.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
@@ -64,33 +65,8 @@ REQUIRED SECTIONS — every plan MUST include all of these:
  * into the brief pipeline.
  */
 export async function ensureAccountPlansSubfolder(customerFolderId: string): Promise<string> {
-  const auth = makeAuth(GDRIVE_TOKEN_PATH)
-  const drive = google.drive({ version: 'v3', auth })
-
-  // Check for existing subfolder
-  const existing = await drive.files.list({
-    q: `'${customerFolderId}' in parents and name = 'Account Plans' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-    fields: 'files(id,name)', pageSize: 1,
-  })
-
-  if (existing.data.files?.length && existing.data.files[0].id) {
-    console.log(`[acct-plan] Found existing Account Plans subfolder`)
-    return existing.data.files[0].id
-  }
-
-  // Create new subfolder
-  const created = await drive.files.create({
-    requestBody: {
-      name: 'Account Plans',
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [customerFolderId],
-    },
-    fields: 'id',
-  })
-
-  if (!created.data.id) throw new Error('Failed to create Account Plans subfolder')
-  console.log(`[acct-plan] Created Account Plans subfolder: ${created.data.id}`)
-  return created.data.id
+  // ADR-0016: drive-client supplies supportsAllDrives unconditionally.
+  return driveClient.ensureChildFolder(customerFolderId, 'Account Plans')
 }
 
 // ── Drive folder lookup (reuses same logic as account-intelligence.ts) ───────
@@ -98,68 +74,18 @@ export async function ensureAccountPlansSubfolder(customerFolderId: string): Pro
 async function findCustomerDriveFolder(customer: Customer): Promise<string> {
   if (customer.driveFolderId) return customer.driveFolderId
 
-  const auth = makeAuth(GDRIVE_TOKEN_PATH)
-  const drive = google.drive({ version: 'v3', auth })
-
   const ae = aes.find(a => a.name === customer.ae)
   const aeFolderId = ae?.driveFolderId
   if (!aeFolderId) throw new Error(`No Drive folder found for customer ${customer.name} — no per-customer or AE folder ID`)
 
-  const custFolders = await drive.files.list({
-    q: `'${aeFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-    fields: 'files(id,name)', pageSize: 200,
+  // ADR-0016: drive-client supplies supportsAllDrives + 2-level fuzzy descent unconditionally.
+  const matchId = await driveClient.findDescendantFolder(aeFolderId, customer.name, {
+    fuzzy: true,
+    maxDepth: 2,
   })
-
-  const folderList = custFolders.data.files ?? []
-  const match = fuzzyFindFolder(folderList, customer.name)
-  if (match) return match.id
-
-  // One level deeper
-  for (const sub of folderList.slice(0, 10)) {
-    if (!sub.id) continue
-    const deeper = await drive.files.list({
-      q: `'${sub.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id,name)', pageSize: 100,
-    })
-    const deepMatch = fuzzyFindFolder(deeper.data.files ?? [], customer.name)
-    if (deepMatch) return deepMatch.id
-  }
+  if (matchId) return matchId
 
   throw new Error(`No Drive folder found for customer ${customer.name} under AE ${customer.ae}`)
-}
-
-function normalizeFolderName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/,?\s+(inc|llc|ltd|corp|corporation|incorporated|limited|co|group|holdings|international|technologies|logistics|solutions|services|foods|systems|global|networks|software|health sciences|cancer center|cancer research)\.?\s*$/gi, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .trim()
-}
-
-function folderMatchScore(folderName: string, customerName: string): number {
-  const fn = normalizeFolderName(folderName)
-  const cn = normalizeFolderName(customerName)
-  if (fn === cn) return 1
-  if (fn.includes(cn) || cn.includes(fn)) return 0.9
-  const fWords = new Set(fn.split(/\s+/).filter(w => w.length > 2))
-  const cWords = cn.split(/\s+/).filter(w => w.length > 2)
-  if (fWords.size === 0 || cWords.length === 0) return 0
-  const overlap = cWords.filter(w => fWords.has(w)).length
-  return overlap / Math.max(fWords.size, cWords.length)
-}
-
-function fuzzyFindFolder(
-  folders: { id?: string | null; name?: string | null }[],
-  customerName: string,
-): { id: string; name: string } | undefined {
-  let bestScore = 0
-  let bestFolder: { id: string; name: string } | undefined
-  for (const f of folders) {
-    if (!f.id || !f.name) continue
-    const score = folderMatchScore(f.name, customerName)
-    if (score > bestScore) { bestScore = score; bestFolder = { id: f.id, name: f.name } }
-  }
-  return bestScore >= 0.5 ? bestFolder : undefined
 }
 
 // ── Upload markdown to Drive as a Google Doc ─────────────────────────────────

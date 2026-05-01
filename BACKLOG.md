@@ -8356,13 +8356,31 @@ Solution: Export atomicWriteJson(path, data, { mode }) from src/lib/atomic-write
 ---
 
 ### BKL-ARCH-07 | Drive folder traversal — 5 hand-rolled BFS implementations
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-01
 Priority: P1
 Size: L
 Source: Serena architecture audit 2026-05-01
-Files: src/sheets.ts::getSpreadsheetIdsUnderRoot, src/customer.ts (224-343), src/account-intelligence.ts (767-799), src/account-plan.ts (108-130), src/bootstrap-orchestrator.ts (174,399,459,1755,1782), src/sf-bookings-reader.ts::listPodBookingSheets
+Files: src/sheets.ts, src/account-intelligence.ts, src/account-plan.ts, src/bootstrap-orchestrator.ts, src/sf-bookings-reader.ts
 Description: Every Drive operation reimplements drive.files.list with q=..., page-size handling, optional shortcut following, optional descent, optional TTL cache. Some honor supportsAllDrives: true, some don't. The inconsistency is the class of bug that causes Drive discovery gaps.
-Solution: Extract DriveFolderClient to src/lib/drive-client.ts with findChildFolder, ensureChildFolder, listSpreadsheetsUnder, findSheetByName. Absorbs all five hand-rolled traversers.
+Decision: DONE — src/lib/drive-client.ts created with 5-method singleton (findDescendantFolder, ensureChildFolder, listSpreadsheetsUnder, listFilesUnder, findSheetByName). 5 callers migrated. ADR-0016 enforced (supportsAllDrives always-on). Pagination handled internally. 14 unit tests. customer.ts not migrated — see BKL-ARCH-07b. GitHub issue #2 closed.
+
+### BKL-ARCH-07b | customer.ts BFS — followFolderShortcuts not yet in DriveFolderClient
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Marcus BKL-ARCH-07 implementation 2026-05-01
+Files: src/customer.ts (BFS file collection), src/lib/drive-client.ts (listFilesUnder)
+Description: customer.ts BFS (account intelligence file collection) follows folder-shortcuts — when a shortcut pointing to a folder is found, its target is enqueued at the same depth as a real subfolder (BKL-DRIVE-01). listFilesUnder in drive-client.ts does not yet support this. Migrating customer.ts without this option would silently drop files reachable only via folder-shortcuts.
+Solution: Add followFolderShortcuts option to listFilesUnder (default false). Then migrate customer.ts BFS to driveClient.listFilesUnder({ followFolderShortcuts: true, maxFiles, modifiedAfter, maxDepth }).
+
+### BKL-ARCH-07c | account-intelligence + account-plan doc upsert Drive calls not migrated
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Marcus BKL-ARCH-07 implementation 2026-05-01
+Files: src/account-intelligence.ts (findIntelligenceSubfolder, upsertIntelligenceDoc), src/account-plan.ts (upsertAccountPlanDoc)
+Description: Several Drive call sites in account-intelligence and account-plan handle Doc creation/upsert, not folder traversal. They were out of scope for BKL-ARCH-07 but are candidates for follow-up consolidation into drive-client.ts (e.g. findDocByName, upsertDoc methods).
+Solution: Evaluate whether Doc upsert operations are common enough to warrant module methods. Low priority — these use supportsAllDrives correctly already.
 
 ---
 

@@ -1,6 +1,7 @@
 import { google } from 'googleapis'
 import { resolve } from 'path'
 import { makeAuth, withQuotaRetry } from './google.ts'
+import { driveClient } from './lib/drive-client.ts'
 import type { Customer, SheetRow, ProductSubscription } from './types.ts'
 import { aes, patchAe } from './server-state.ts'
 
@@ -16,54 +17,19 @@ function getParentFolderIds(): string[] {
   return raw.split(',').map(s => s.trim()).filter(Boolean)
 }
 
-// Find all spreadsheets under a root folder at any depth using BFS folder traversal.
-// Uses 'in parents' (direct children) at each level — proven reliable vs 'in ancestors'
-// which can silently return empty on some Drive configurations.
-async function getSpreadsheetIdsUnderRoot(
-  drive: ReturnType<typeof google.drive>,
-  rootId: string,
-): Promise<string[]> {
+// Find all spreadsheets under a root folder at any depth.
+// Delegates BFS + Shared-Drive flag handling to driveClient (ADR-0016).
+// In-process TTL cache stays here — caching is outside the drive-client module.
+async function getSpreadsheetIdsUnderRoot(rootId: string): Promise<string[]> {
   const cached = rootSpreadsheetsCache.get(rootId)
   if (cached && Date.now() < cached.expires) return cached.ids
 
-  const ids: string[] = []
-  const folderQueue: string[] = [rootId]
-  const visited = new Set<string>([rootId])
-
-  while (folderQueue.length > 0) {
-    const folderId = folderQueue.shift()!
-
-    // Spreadsheets directly in this folder
-    const sheetsRes = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`,
-      fields: 'files(id)', pageSize: 100,
-    }).catch(() => ({ data: { files: [] as { id?: string }[] } }))
-    for (const f of (sheetsRes.data.files ?? [])) {
-      if (f.id) ids.push(f.id)
-    }
-
-    // Shortcuts pointing to spreadsheets
-    const shortcutRes = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
-      fields: 'files(id,shortcutDetails)', pageSize: 100,
-    }).catch(() => ({ data: { files: [] as any[] } }))
-    for (const f of (shortcutRes.data.files ?? [])) {
-      const targetMime = f.shortcutDetails?.targetMimeType ?? ''
-      const targetId   = f.shortcutDetails?.targetId ?? ''
-      if (targetMime === 'application/vnd.google-apps.spreadsheet' && targetId) ids.push(targetId)
-    }
-
-    // Subfolders to visit next
-    const foldersRes = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id)', pageSize: 100,
-    }).catch(() => ({ data: { files: [] as { id?: string }[] } }))
-    for (const f of (foldersRes.data.files ?? [])) {
-      if (f.id && !visited.has(f.id)) {
-        visited.add(f.id)
-        folderQueue.push(f.id)
-      }
-    }
+  let ids: string[]
+  try {
+    const sheets = await driveClient.listSpreadsheetsUnder(rootId)
+    ids = sheets.map((s) => s.id)
+  } catch {
+    ids = []
   }
 
   rootSpreadsheetsCache.set(rootId, { ids, expires: Date.now() + 5 * 60_000 })
@@ -335,11 +301,9 @@ export async function fetchCustomerSheetRaw(customer: Customer): Promise<{ tab: 
   } else {
     const rootIds = getParentFolderIds()
     if (!rootIds.length) return { tab: '', headers: [], rows: [] }
-    const driveAuth = makeAuth(GDRIVE_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth: driveAuth })
     spreadsheetIds = []
     for (const rootId of rootIds) {
-      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(drive, rootId))
+      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(rootId))
     }
   }
   const allMeta = await Promise.all(
@@ -429,12 +393,9 @@ export async function fetchCCSPData(
     const rootIds = getParentFolderIds()
     if (!rootIds.length) return { records: [], fileIds: [] }
 
-    const driveAuth = makeAuth(GDRIVE_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth: driveAuth })
-
     const spreadsheetIds: string[] = []
     for (const rootId of rootIds) {
-      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(drive, rootId))
+      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(rootId))
     }
 
     const allMeta = await Promise.all(
@@ -507,9 +468,7 @@ export async function fetchCCSPData(
       if (driveFolderId) {
         console.warn(`[ccsp-read] known sheet empty — searching AE Drive folder ${driveFolderId} for alternative CCSP sheet`)
         try {
-          const driveAuth = makeAuth(GDRIVE_TOKEN_PATH)
-          const drive = google.drive({ version: 'v3', auth: driveAuth })
-          const candidateIds = await getSpreadsheetIdsUnderRoot(drive, driveFolderId)
+          const candidateIds = await getSpreadsheetIdsUnderRoot(driveFolderId)
 
           // Filter: only spreadsheets with "ccsp" in the filename
           const candidateMeta = await Promise.all(
@@ -628,11 +587,9 @@ export async function fetchCustomerSheetData(customer: Customer, knownSheetIds?:
   } else {
     const rootIds = getParentFolderIds()
     if (!rootIds.length) return []
-    const driveAuth = makeAuth(GDRIVE_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth: driveAuth })
     spreadsheetIds = []
     for (const rootId of rootIds) {
-      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(drive, rootId))
+      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(rootId))
     }
   }
   if (spreadsheetIds.length === 0) return []
@@ -698,11 +655,9 @@ export async function fetchCustomerAccountNumbers(customer: Customer, knownSheet
   } else {
     const rootIds = getParentFolderIds()
     if (!rootIds.length) return []
-    const driveAuth = makeAuth(GDRIVE_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth: driveAuth })
     spreadsheetIds = []
     for (const rootId of rootIds) {
-      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(drive, rootId))
+      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(rootId))
     }
   }
 
