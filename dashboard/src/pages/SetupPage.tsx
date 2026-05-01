@@ -4062,6 +4062,18 @@ export default function SetupPage() {
             <AEsCustomersSection onAeCountChange={setAeCount} step0EnabledPods={step0EnabledPods} />
           </AccordionSection>
 
+          {/* BKL-HERO-01 Phase 5 — L3 hero: "Open Dashboard" after AEs when ≥1 AE configured */}
+          {isL3Only && aeCount !== null && aeCount > 0 && (
+            <div data-testid="hero-open-dashboard" className="mt-2">
+              <a
+                href="/dashboard"
+                className="block w-full text-center bg-accent hover:bg-accent/80 text-white px-6 py-3 rounded-xl font-semibold text-base transition-colors"
+              >
+                Open Dashboard
+              </a>
+            </div>
+          )}
+
           {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs */}
           {!isL3Only && (
             <AccordionSection
