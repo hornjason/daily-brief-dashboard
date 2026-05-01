@@ -72,13 +72,13 @@ Pick next candidate       start Phase 1 for the next item in the order table abo
 | Item | Interface designed | GitHub Issue | Triage state |
 |---|---|---|---|
 | BKL-ARCH-06 atomic-write | ✅ | #1 ✅ CLOSED | ✅ DONE 2026-05-01 |
-| BKL-ARCH-07 Drive traversal | ✅ | #2 | needs-triage |
+| BKL-ARCH-07 Drive traversal | ✅ | #2 | ✅ ready-for-agent |
 | BKL-ARCH-01 customer matching | ❌ | — | — |
 | BKL-ARCH-03 server.ts routers | ❌ | — | — |
 | BKL-ARCH-05 polling hook | ❌ | — | — |
 | BKL-ARCH-08 bootstrap split | ❌ | — | — (blocked) |
 
-**Next action:** `/triage #2` — post durable agent brief on issue #2, flip to ready-for-agent.
+**Next action:** `implement BKL-ARCH-07` — issue #2 is ready-for-agent.
 
 **BKL-ARCH-06 commit:** c5d9ff605 — 35 call sites migrated, 13 unit tests, src/lib/atomic-write.ts live.
 
