@@ -112,6 +112,18 @@ export default defineConfig({
         baseURL: 'http://mini.local:7779',
       },
     },
+    {
+      // Wizard E2E + visual regression — hard-blocking gate (continue-on-error: false in CI).
+      // Runs against a Bun server seeded at port 7778 — no live Google/RH credentials needed.
+      // Update baselines: make update-snapshots
+      name: 'wizard-e2e',
+      testMatch: ['**/wizard-e2e.spec.ts'],
+      // Snapshots stored under test/snapshots/wizard/ to isolate from visual-baseline.spec.ts
+      snapshotPathTemplate: 'test/snapshots/wizard/{arg}{ext}',
+      use: {
+        baseURL: process.env.BASE_URL ?? 'http://localhost:7778',
+      },
+    },
   ],
   webServer: process.env.CI ? {
     command: 'bun run server.ts',

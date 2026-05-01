@@ -246,3 +246,72 @@ jobs:
           name: playwright-report-${{ github.sha }}
           path: playwright-report/
           retention-days: 7
+
+  wizard-e2e:
+    name: Wizard E2E + visual regression
+    runs-on: [self-hosted, mac-mini-live]
+    needs: [test]
+    # Hard-blocking — wizard failures must block merges (no BKL-E2E-01 debt here).
+    continue-on-error: false
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          cache: true
+
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Download dashboard build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-dist-${{ github.sha }}
+          path: dashboard/dist/
+
+      - name: Seed test data
+        run: |
+          # Server resolves config from: process.env.CONFIG_DIR ?? resolve(import.meta.dir, 'config')
+          # Server resolves cache from:  process.env.CACHE_DIR  ?? resolve(import.meta.dir, 'cache')
+          # Both default to {project_root}/config and {project_root}/cache.
+          mkdir -p config cache cache/intelligence
+          cp scripts/seed-data/aes.json config/aes.json
+          cp scripts/seed-data/customers.json config/customers.json
+          cp scripts/seed-data/settings.json config/settings.json
+          cp scripts/seed-data/product-intel-config.json config/product-intel-config.json
+          cp scripts/seed-data/data-sources.json config/data-sources.json
+          cp -r scripts/seed-data/cache/. cache/
+          # Brief cache files are date-stamped — rename seed files to today's date so
+          # readBriefCache() finds them and TTL checks pass.
+          TODAY=$(date +%Y-%m-%d)
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          SED_INPLACE=(sed -i '')
+          for f in cache/*-2026-04-10.json; do
+            [ -f "$f" ] || continue
+            "${SED_INPLACE[@]}" "s/2026-04-10T00:00:00.000Z/$NOW/g" "$f"
+            mv "$f" "${f%-2026-04-10.json}-${TODAY}.json"
+          done
+          for f in cache/*.json cache/intelligence/*.json; do
+            [ -f "$f" ] && "${SED_INPLACE[@]}" "s/2026-04-10T00:00:00.000Z/$NOW/g" "$f"
+          done
+
+      - name: Run wizard E2E tests
+        env:
+          BASE_URL: 'http://localhost:7778'
+        run: CI=true bunx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e --workers=1 --reporter=list
+
+      - name: Upload wizard E2E report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wizard-e2e-report-${{ github.sha }}
+          path: playwright-report/
+          retention-days: 7
