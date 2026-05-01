@@ -285,7 +285,6 @@ test.describe('4. Step 4 of 5 — AEs & Customers', () => {
 
 test.describe('5. Regression guard — deprecated text absent from wizard', () => {
   test('no "Tableau" text in wizard DOM', async ({ page }) => {
-    test.skip(true, 'Blocked on issue #7 — SetupPage.tsx still contains "Tableau VNC popup" text in Single AE info box')
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
     // Open all accordion sections so the full DOM is rendered
@@ -309,7 +308,6 @@ test.describe('5. Regression guard — deprecated text absent from wizard', () =
   })
 
   test('no "VNC" text in wizard DOM', async ({ page }) => {
-    test.skip(true, 'Blocked on issue #7 — SetupPage.tsx still contains "Tableau VNC popup" text in Single AE info box')
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
     for (const label of [
@@ -327,7 +325,6 @@ test.describe('5. Regression guard — deprecated text absent from wizard', () =
   })
 
   test('no "7–15 minutes" or "7-15 minutes" time estimate in wizard DOM', async ({ page }) => {
-    test.skip(true, 'Blocked on issue #7 — SetupPage.tsx still contains "7–15 minutes" text in Single AE info box')
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
     for (const label of [
