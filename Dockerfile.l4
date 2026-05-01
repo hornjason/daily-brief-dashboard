@@ -1,0 +1,103 @@
+# ── Dockerfile.l4 — L4 Daemon Image ───────────────────────────────────────────
+# Produced by: make build-l4 (tags daily-brief-l4-daemon:latest)
+#
+# Contains: CCSP/Tableau scraper, SF OAuth scraper, browser runtime,
+#           daily L3 sync script.
+#
+# Does NOT contain: dashboard UI, API server, RH Hydra scraper (pure HTTP).
+#
+# ADR-016: Two-Dockerfile Container Split (hero install vs L4 daemon).
+# BKL-ARCH-L4-SPLIT: Phase 3.
+# Runs only on the Mac Mini primary node (NODE_ROLE=primary, SYNC_DAEMON=true).
+
+# ── Stage 1: Builder ──────────────────────────────────────────────────────────
+FROM oven/bun:1-slim AS builder
+
+WORKDIR /app
+
+# Install root dependencies only
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
+
+# Copy L4-relevant source files only
+COPY server.ts ./server.ts
+COPY src ./src
+COPY scripts ./scripts
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
+# Full browser runtime — Playwright + Chromium + VNC for Tableau SSO.
+FROM oven/bun:1-slim AS runtime
+
+WORKDIR /app
+
+# Install Chromium system dependencies + noVNC stack for Tableau SSO login
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libc6 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libexpat1 \
+    libfontconfig1 \
+    libgbm1 \
+    libgcc1 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libstdc++6 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxcursor1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxi6 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
+    libxtst6 \
+    lsb-release \
+    wget \
+    xdg-utils \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
+    openbox \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy L4 source from builder
+COPY --from=builder /app/server.ts ./server.ts
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/node_modules ./node_modules
+
+# Install Playwright Chromium browser binary
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN bunx playwright install chromium --no-shell
+
+# ── Runtime paths ──────────────────────────────────────────────────────────────
+ENV CONFIG_DIR=/data/config
+ENV CACHE_DIR=/data/cache
+ENV RH_PROFILE_DIR=/data/rh-profile
+ENV NODE_ROLE=primary
+ENV SYNC_DAEMON=true
+
+EXPOSE 6080
+
+# Default environment
+COPY defaults.env /app/defaults.env
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]

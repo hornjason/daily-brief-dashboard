@@ -30,15 +30,17 @@
 #   make install-hooks  Install git hooks (run once after clone)
 #   make lint         Check for empty catch blocks in dashboard/src/
 
-IMAGE  := localhost/daily-brief-dashboard:latest
-REMOTE := ghcr.io/hornjason/daily-brief-dashboard:latest
-DATA   := $(CURDIR)/data
+IMAGE      := localhost/daily-brief-dashboard:latest
+REMOTE     := ghcr.io/hornjason/daily-brief-dashboard:latest
+IMAGE_L4   := localhost/daily-brief-l4-daemon:latest
+REMOTE_L4  := ghcr.io/hornjason/daily-brief-l4-daemon:latest
+DATA       := $(CURDIR)/data
 
 # ── Mac Mini demo machine ─────────────────────────────────────────────────────
 MAC_MINI_HOST ?= jasonhorn@mini.local
 MAC_MINI_DIR  ?= ~/DailyBriefDashboard
 
-.PHONY: up down logs build push rebuild ps setup release-patch release-minor release-major version \
+.PHONY: up down logs build build-l4 push rebuild ps setup release-patch release-minor release-major version \
        dev-snapshot dev-up dev-down dev-logs \
        seed test-up test-rebuild test-up-live test-rebuild-live test-down test-logs \
        test-snapshot test-restore test-check lint \
@@ -84,7 +86,17 @@ build:
 	  echo "   Run from: $(shell git worktree list 2>/dev/null | head -1 | awk '{print $$1}')"; \
 	  exit 1; \
 	fi
-	podman build -t $(IMAGE) -t $(REMOTE) .
+	podman build -f Dockerfile.hero -t $(IMAGE) -t $(REMOTE) .
+
+# ── L4 daemon image (Mac Mini primary node only) ──────────────────────────────
+# BKL-ARCH-L4-SPLIT (ADR-016): L4 scraper image — Playwright + Chromium + browser scrapers.
+# Does NOT contain dashboard UI or API server.
+build-l4:
+	@if echo "$(CURDIR)" | grep -q '\.claude/worktrees'; then \
+	  echo "❌  make build-l4 must be run from the project root, not a git worktree"; \
+	  exit 1; \
+	fi
+	podman build -f Dockerfile.l4 -t $(IMAGE_L4) -t $(REMOTE_L4) .
 
 push:
 	podman push $(REMOTE)

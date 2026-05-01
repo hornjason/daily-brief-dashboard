@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-01
+updated: 2026-05-02
 ---
 
 # DailyBriefDashboard Domain Context
@@ -78,6 +78,16 @@ _Avoid_: "team", "group", "squad"
 - The **primary node** writes **L4 data** → **L3 shared folder** via the **L3 sync daemon**
 - **Hero installs** read **L3 data** from the **L3 shared folder** (never directly from source systems)
 - A **POD** groups multiple **AEs** and maps to a set of **L3 shared folder** subfolders
+
+### Build targets
+
+**Dockerfile.hero** (also: hero install image):
+The container image built for hero installs. Contains the full dashboard UI, RH Hydra API scraper, Drive reader, and all scheduling for L3-sourced data. Does NOT contain L4 scrapers (CCSP/Tableau, SF OAuth), browser runtime, or Playwright. Built with `make build`.
+_Avoid_: "standard image", "base image", "non-primary image"
+
+**Dockerfile.l4** (also: L4 daemon image):
+The container image built for the primary node. Contains only the L4 scrapers (CCSP/Tableau, SF OAuth), browser runtime, and the daily sync script. Does NOT contain the dashboard UI, API server, or RH Hydra scraper. Built with `make build-l4`.
+_Avoid_: "sync image", "scraper image", "primary image"
 
 ### Drive client module
 

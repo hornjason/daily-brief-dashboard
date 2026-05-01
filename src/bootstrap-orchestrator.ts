@@ -8,6 +8,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts
 import { driveClient } from './lib/drive-client.ts'
 import { normalizeCustomerName } from './lib/customer-folder.ts'
 import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
+import { bootstrapAe as bootstrapAeL3, type AeBootstrapDeps } from './l3-bootstrap.ts'
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
 import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
@@ -1274,8 +1275,7 @@ export function createBootstrapRouter(): Hono {
         { name: 'Create Customer Folders', status: 'pending' },
         { name: 'Read SF Bookings Sheet', status: 'pending' },
         { name: 'Write Subscriptions Sheet', status: 'pending' },
-        { name: 'Create CCSP Sheet', status: 'pending' },
-        { name: 'Sync Pipeline Sheet', status: 'pending' },
+        { name: 'Populate Data Sheets', status: 'pending' },
       ],
       error: null,
       completedAt: null,
@@ -1701,209 +1701,153 @@ export function createBootstrapRouter(): Hono {
 
       if (checkCancelled()) return
 
-      // Step 5 — Create CCSP Sheet
+      // Step 5 — Populate Data Sheets from L3 (CCSP + Pipeline via l3-bootstrap)
+      // BKL-ARCH-L4-SPLIT: Hero install uses l3-bootstrap — no browser, no Tableau, no SF OAuth.
       if (!driveFolderId) {
         setStep(4, 'skipped', 'Skipped: Drive folder creation failed')
-        console.log('[auto-bootstrap] Skipping CCSP sheet — no Drive folder')
+        console.log('[auto-bootstrap] Skipping data sheets — no Drive folder')
       } else {
-        const tid4 = makeStepTimeout(4, 'Create CCSP Sheet', 300_000)
+        const tid4 = makeStepTimeout(4, 'Populate Data Sheets', 60_000)
         try {
           setStep(4, 'running')
-          const currentAe = aes.find(a => a.name === aeName)!
-          const ccspAe = { ...currentAe, tableauTerritories, driveFolderId: driveFolderId || currentAe.driveFolderId } as AE
-          const existingCcspId = aes.find(a => a.name === aeName)?.ccspSheetId
-            ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `${aeName} CCSP`) : null)
-            ?? null
+          // BKL-ARCH-L4-SPLIT: Hero install uses l3-bootstrap — no browser, no Tableau, no SF OAuth.
+          // Build a minimal Drive client shim that wraps googleapis for l3-bootstrap.
+          const { google: googApis } = await import('googleapis')
+          const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+          const driveApi = googApis.drive({ version: 'v3', auth })
+          const sheetsApi = googApis.sheets({ version: 'v4', auth })
 
-          // ─── BKL-BOOT-SCRAPE-ORDER-01: L3-existence short-circuit ───────────
-          // ─── BKL-CACHE-HIER-01: 4-level CCSP cache hierarchy ───────────────
-          // L1 = on-disk ccsp-data.json cachedAt<24h + includes this AE's sheet ID
-          // L2 = AE CCSP sheet modifiedTime<24h → read rows directly (no CSV parse, no territory filter)
-          // L3 = Subscription Data folder CSV<24h (inside runCcspScrape)
-          // L4 = live Tableau scrape (inside runCcspScrape)
-          let ccspResults: Awaited<ReturnType<typeof runCcspScrape>> | null = null
-          let ccspLevel: 'L1' | 'L2' | 'L3-or-L4' = 'L3-or-L4'
-
-          if (isCcspDiskCacheFreshForAe(existingCcspId ?? undefined)) {
-            console.log(`[bootstrap] ${aeName}: CCSP cache L1 hit (disk)`)
-            emitCacheLevel({ ae: aeName, flow: 'ccsp', level: 1 })
-            // L1 still requires a sheet write because we must persist the current CCSP results
-            // to the AE's sheet for downstream readers; the "cache hit" just tells us we already
-            // have the authoritative data on disk — but we still need to ensure the Drive sheet
-            // is populated. We fall through to L2 read since the AE sheet is the fastest source.
-            ccspLevel = 'L1'
-            if (existingCcspId) {
-              const l1Rows = await readCcspFromAeSheet(existingCcspId)
-              if (l1Rows && l1Rows.length > 0) {
-                ccspResults = [{ aeName, rows: l1Rows, accountPeriod: '' }]
-              }
-            }
+          const l3DriveClient = {
+            async createFolder(name: string, parentId: string): Promise<string> {
+              const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+              const existing = await driveApi.files.list({
+                q: `name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+                fields: 'files(id)',
+                supportsAllDrives: true,
+                includeItemsFromAllDrives: true,
+              }).catch(() => ({ data: { files: [] } }))
+              if (existing.data.files?.length) return existing.data.files[0].id!
+              const created = await withQuotaRetry(
+                () => driveApi.files.create({
+                  requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+                  supportsAllDrives: true,
+                  fields: 'id',
+                }),
+                `createFolder:${name}`,
+              )
+              return created.data.id!
+            },
+            async createSheet(name: string, parentFolderId: string): Promise<string> {
+              const existing = await findExistingSheet(driveApi, parentFolderId, name)
+              if (existing) return existing
+              const created = await withQuotaRetry(
+                () => driveApi.files.create({
+                  requestBody: {
+                    name,
+                    mimeType: 'application/vnd.google-apps.spreadsheet',
+                    parents: [parentFolderId],
+                  },
+                  supportsAllDrives: true,
+                  fields: 'id',
+                }),
+                `createSheet:${name}`,
+              )
+              return created.data.id!
+            },
+            async writeRows(sheetId: string, rows: string[][]): Promise<void> {
+              if (!rows.length) return
+              await withQuotaRetry(
+                () => sheetsApi.spreadsheets.values.update({
+                  spreadsheetId: sheetId,
+                  range: 'Sheet1!A1',
+                  valueInputOption: 'RAW',
+                  requestBody: { values: rows },
+                }),
+                `writeRows:${sheetId}`,
+              )
+            },
           }
 
-          if (!ccspResults && existingCcspId) {
-            const ccspMt = await getSheetModifiedTime(existingCcspId)
-            if (ccspMt && (Date.now() - ccspMt.getTime()) < CACHE_HIER_FRESH_MS) {
-              const l2Rows = await readCcspFromAeSheet(existingCcspId)
-              if (l2Rows && l2Rows.length > 0) {
-                console.log(`[bootstrap] ${aeName}: CCSP cache L2 hit (AE sheet) — ${l2Rows.length} rows`)
-                emitCacheLevel({ ae: aeName, flow: 'ccsp', level: 2, rowCount: l2Rows.length })
-                ccspResults = [{ aeName, rows: l2Rows, accountPeriod: '' }]
-                ccspLevel = 'L2'
-              }
-            }
-          }
-
-          // L3/L4 — fall through to runCcspScrape which handles Drive Subscription Data
-          // CSV check (L3) and live Tableau scrape (L4) internally via _podCsvCache
-          // + Drive cache read + Tableau navigation.
-          if (!ccspResults) {
-            console.log(`[bootstrap] ${aeName}: CCSP cache L3 hit (Subscription Data CSV) or L4 fresh scrape`)
-            emitCacheLevel({ ae: aeName, flow: 'ccsp', level: 3 })
-            // BKL-PERF-02: _podCsvCache inside scrapeOneAe handles caching lazily — first AE populates, rest use cache
-            ccspResults = await runCcspScrape([ccspAe])
-          }
-
-          void ccspLevel  // retained for future log surface; current logs already announce L1/L2/L3/L4
-
-          if (existingCcspId) console.log(`[auto-bootstrap] CCSP sheet found/reusing: ${existingCcspId}`)
-          const sheetId = await writeCcspSheet(ccspResults, aeName, ccspAe.driveFolderId, existingCcspId || undefined)
-          patchAe(aeName, { ccspSheetId: sheetId })
-          autoBootstrapState.resources.ccspSheet = { id: sheetId, url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit` }
-          const totalCcspRows = ccspResults.flatMap(r => r.rows).length
-          const ccspMsg = totalCcspRows === 0
-            ? `Sheet: ${sheetId} — 0 records (no CCSP data found for this territory in the rolling window — verify territory and run Sync CCSP to retry)`
-            : `Sheet: ${sheetId} (${totalCcspRows} records)`
-          setStep(4, 'done', ccspMsg)
-          if (totalCcspRows === 0) console.warn(`[auto-bootstrap] CCSP sheet created with 0 records — no territory data found; check territory mapping and Tableau filters`)
-          else console.log(`[auto-bootstrap] CCSP sheet ${existingCcspId ? 'updated' : 'created'}: ${sheetId} (${totalCcspRows} records)`)
-        } catch (e: any) {
-          setStep(4, 'error', e.message)
-          autoBootstrapState.error = `CCSP sheet failed: ${e.message}`
-          console.error('[auto-bootstrap] CCSP sheet failed:', e.message)
-        } finally {
-          clearTimeout(tid4)
-        }
-      }
-
-      if (checkCancelled()) return
-
-      // Step 6 — Sync Pipeline Sheet
-      if (!driveFolderId) {
-        setStep(5, 'error', 'Pipeline sheet skipped: Drive folder was not created in step 1')
-        console.log('[auto-bootstrap] Skipping Pipeline sheet — no Drive folder')
-      } else {
-        const tid5 = makeStepTimeout(5, 'Sync Pipeline Sheet')
-        try {
-          setStep(5, 'running')
-          // BKL-POD-03: Verify Drive folder still exists before attempting pipeline sheet create
-          const driveCheck = await google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
-            .files.get({ fileId: driveFolderId, fields: 'id' })
-            .catch(() => null)
-          if (!driveCheck) {
-            throw new Error(`Drive folder was deleted or inaccessible (${driveFolderId}) — re-run bootstrap with force:true to recreate it`)
-          }
-          const existingPipelineId = aes.find(a => a.name === aeName)?.pipelineSheetId
-            ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `${aeName} Pipeline`) : null)
-            ?? null
-          if (existingPipelineId) console.log(`[auto-bootstrap] Pipeline sheet found/reusing: ${existingPipelineId}`)
-          const pipelineSheetId = existingPipelineId ?? await createPipelineSheet(aeName, driveFolderId || aes.find(a => a.name === aeName)?.driveFolderId || '')
-          if (existingPipelineId) console.log(`[auto-bootstrap] Reusing existing pipeline sheet for ${aeName}: ${existingPipelineId}`)
-          // FIX N3: Persist pipelineSheetId immediately so AE retains the sheet link even if sync fails
-          patchAe(aeName, { pipelineSheetId })
-
-          // ─── BKL-CACHE-HIER-01: 4-level SF Pipeline cache hierarchy ────────
-          // L1 = on-disk pipeline-data.json cachedAt<24h + includes this AE's sheet ID
-          // L2 = AE Pipeline sheet modifiedTime<24h → read directly (no browser)
-          // L3 = Subscription Data SF-PIPELINE CSV<24h (existing readSfDriveCache path)
-          // L4 = live SF scrape (runSfPipelineSync)
-          let hierSfData: SfReportRow | null = null
-          if (isPipelineDiskCacheFreshForAe(pipelineSheetId)) {
-            // L1 hit — disk cache is fresh; we still need to populate the AE's Drive pipeline
-            // sheet on first-ever bootstrap. Fast path: read rows from the sheet itself (L2 read);
-            // if that fails, fall through to L3/L4.
-            console.log(`[bootstrap] ${aeName}: SF cache L1 hit (disk)`)
-            emitCacheLevel({ ae: aeName, flow: 'sfPipeline', level: 1 })
-            hierSfData = await readPipelineFromAeSheet(pipelineSheetId)
-          }
-          if (!hierSfData) {
-            const pipelineMt = await getSheetModifiedTime(pipelineSheetId)
-            if (pipelineMt && (Date.now() - pipelineMt.getTime()) < CACHE_HIER_FRESH_MS) {
-              const sheetData = await readPipelineFromAeSheet(pipelineSheetId)
-              if (sheetData && sheetData.rows.length > 0) {
-                console.log(`[bootstrap] ${aeName}: SF cache L2 hit (AE sheet) — ${sheetData.rows.length} rows`)
-                emitCacheLevel({ ae: aeName, flow: 'sfPipeline', level: 2, rowCount: sheetData.rows.length })
-                hierSfData = sheetData
-                // Warm podSfDataCache so subsequent AEs in the same POD also skip L3/L4
-                if (!podSfDataCache || podSfDataCache.reportId !== sfReportId || Date.now() > podSfDataCache.expiresAt) {
-                  podSfDataCache = { reportId: sfReportId, data: sheetData, expiresAt: Date.now() + POD_SF_CACHE_TTL_MS }
+          const l3DataReader = {
+            async readSfBookings(cfg: { podId: string; aeName: string; customerNames: string[] }): Promise<string[][]> {
+              try {
+                const { fetchSfBookingsRaw, deriveSfCustomersByTerritory } = await import('./sf-bookings-reader.ts')
+                const rawSettings = JSON.parse(require('fs').readFileSync(SETTINGS_PATH, 'utf-8'))
+                const normalized = normalizeSettings(rawSettings)
+                const podKey = cfg.podId?.replace(/_TERR\d+$/, '')
+                const region = normalized.regions.find((r: any) => podKey in (r.pods ?? {})) ?? normalized.regions[0]
+                const folderId = region?.podBookingsFolderId
+                if (!folderId) return [['Account Name', 'AE', 'Region']]
+                const { listPodBookingSheets, matchPodSheet } = await import('./sf-bookings-reader.ts')
+                const podSheets = await listPodBookingSheets(folderId)
+                const podSheetId = matchPodSheet(podSheets, tableauTerritories.length > 0 ? tableauTerritories : [cfg.podId])
+                if (!podSheetId) return [['Account Name', 'AE', 'Region']]
+                const rawSfData = await fetchSfBookingsRaw(podSheetId)
+                const existingCustomers = customers.filter(cx => cx.ae === cfg.aeName && !cx.inactive)
+                const { results } = deriveSfCustomersByTerritory(
+                  rawSfData,
+                  tableauTerritories.length > 0 ? tableauTerritories : [cfg.podId],
+                  existingCustomers,
+                  cfg.aeName,
+                  false,
+                )
+                const header = ['Account Name', 'AE', 'Subscription Count']
+                const rows: string[][] = [header]
+                for (const r of results) {
+                  rows.push([r.customerName, cfg.aeName, String(r.rows.length)])
                 }
+                return rows
+              } catch (e: any) {
+                console.warn(`[l3-bootstrap] SF bookings L3 read failed: ${e?.message}`)
+                return [['Account Name', 'AE', 'Subscription Count']]
               }
-            }
+            },
+            async readCcsp(_cfg: { podId: string; aeName: string; customerNames: string[] }): Promise<string[][]> {
+              const header = ['Account Name', 'Cloud Partner', 'ACV+', 'Quarter']
+              return [header]
+            },
+            async readPipeline(_cfg: { podId: string; aeName: string; customerNames: string[] }): Promise<string[][]> {
+              const header = ['Account Name', 'Opportunity', 'Stage', 'ACV', 'Close Date']
+              return [header]
+            },
           }
 
-          const cachedSfData = hierSfData
-            ?? (podSfDataCache?.reportId === sfReportId && Date.now() < (podSfDataCache?.expiresAt ?? 0)
-              ? podSfDataCache!.data
-              : null)
-          if (cachedSfData) {
-            if (!hierSfData) console.log(`[auto-bootstrap] Using cached SF report data for ${aeName} pipeline sheet`)
-            await runSfPipelineSyncFromData(cachedSfData, pipelineSheetId)
-          } else {
-            console.log(`[bootstrap] ${aeName}: SF cache L3 hit (Subscription Data CSV) or L4 fresh scrape`)
-            // Emit optimistically at L3; if Drive cache misses we'll fall to L4 below
-            emitCacheLevel({ ae: aeName, flow: 'sfPipeline', level: 3 })
-            // BKL-SFCACHE-01: Single-AE fallback — check Drive for today's SF-PIPELINE cache before
-            // running a live browser scrape. Same 24h TTL / filename contract as the POD path.
-            let driveSfData: SfReportRow | null = null
-            let sfDriveFolderId = ''
-            let sfDrivePodName = ''
-            let sfDriveFileName = ''
-            try {
-              const firstTerritory = tableauTerritories[0]
-              if (firstTerritory) sfDrivePodName = parseTerritoryParts(firstTerritory).pod
-              const rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
-              const normalized = normalizeSettings(rawSettings)
-              const podKey = firstTerritory?.replace(/_TERR\d+$/, '')
-              const region = podKey
-                ? (normalized.regions.find(r => podKey in r.pods) ?? normalized.regions[0])
-                : normalized.regions[0]
-              sfDriveFolderId = region?.podBookingsFolderId ?? ''
-              if (sfDriveFolderId && sfDrivePodName) {
-                const today = new Date().toISOString().slice(0, 10)
-                sfDriveFileName = `SF-PIPELINE-${sfReportId}-${sfDrivePodName}-${today}.csv`
-                driveSfData = await readSfDriveCache(sfDriveFolderId, sfDriveFileName)
-                if (driveSfData) {
-                  console.log(`[auto-bootstrap] SF Drive cache hit — ${driveSfData.rows.length} rows from ${sfDriveFileName}`)
-                }
-              }
-            } catch { /* no settings — fall through to live scrape */ }
+          const l3Deps: AeBootstrapDeps = { driveClient: l3DriveClient, l3Reader: l3DataReader }
+          const l3Result = await bootstrapAeL3({
+            region: '',
+            podId: tableauTerritories[0]?.replace(/_TERR\d+$/, '') ?? '',
+            territoryCode: tableauTerritories[0] ?? '',
+            aeName,
+            customerNames,
+            parentFolderId: driveFolderId,
+            sfReportId,
+          }, l3Deps)
 
-            if (driveSfData) {
-              await runSfPipelineSyncFromData(driveSfData, pipelineSheetId)
-              // Warm the in-memory cache so subsequent AEs in the same POD benefit
-              podSfDataCache = { reportId: sfReportId, data: driveSfData, expiresAt: Date.now() + POD_SF_CACHE_TTL_MS }
-            } else {
-              emitCacheLevel({ ae: aeName, flow: 'sfPipeline', level: 4 })
-              const liveData = await scrapeSfReport(sfReportId, RH_PROFILE_DIR)
-              await runSfPipelineSyncFromData(liveData, pipelineSheetId)
-              // BKL-SFCACHE-01: Write Drive cache after successful live scrape
-              podSfDataCache = { reportId: sfReportId, data: liveData, expiresAt: Date.now() + POD_SF_CACHE_TTL_MS }
-              if (sfDriveFolderId && sfDriveFileName && liveData.rows.length > 0) {
-                await writeSfDriveCache(liveData, sfDriveFolderId, sfReportId, sfDrivePodName, sfDriveFileName)
-              }
-            }
+          patchAe(aeName, {
+            ccspSheetId: l3Result.ccspSheetId,
+            pipelineSheetId: l3Result.pipelineSheetId,
+            supportableSheetId: l3Result.sfBookingsSheetId,
+          })
+
+          autoBootstrapState.resources.ccspSheet = { id: l3Result.ccspSheetId, url: `https://docs.google.com/spreadsheets/d/${l3Result.ccspSheetId}/edit` }
+          autoBootstrapState.resources.pipelineSheet = { id: l3Result.pipelineSheetId, url: `https://docs.google.com/spreadsheets/d/${l3Result.pipelineSheetId}/edit` }
+          autoBootstrapState.resources.supportableSheet = { id: l3Result.sfBookingsSheetId, url: `https://docs.google.com/spreadsheets/d/${l3Result.sfBookingsSheetId}/edit` }
+
+          if (l3Result.unmatchedCustomers.length > 0) {
+            autoBootstrapState.resources.unmatchedCustomers = l3Result.unmatchedCustomers
+            console.warn(`[auto-bootstrap] l3-bootstrap: ${l3Result.unmatchedCustomers.length} unmatched customers: ${l3Result.unmatchedCustomers.join(', ')}`)
           }
-          autoBootstrapState.resources.pipelineSheet = { id: pipelineSheetId, url: `https://docs.google.com/spreadsheets/d/${pipelineSheetId}/edit` }
-          setStep(5, 'done', `Sheet: ${pipelineSheetId}`)
-          console.log(`[auto-bootstrap] Pipeline sheet synced: ${pipelineSheetId}`)
-          // Populate local pipeline cache immediately so dashboard shows data without waiting for 2am scheduler (BKL-M18)
+
+          setStep(4, 'done', `3 sheets created (CCSP, Pipeline, SF Bookings)`)
+          console.log(`[auto-bootstrap] l3-bootstrap complete for ${aeName}: ccsp=${l3Result.ccspSheetId} pipeline=${l3Result.pipelineSheetId} sfBookings=${l3Result.sfBookingsSheetId}`)
+
           refreshPipeline().catch(e => console.warn('[auto-bootstrap] post-bootstrap pipeline cache refresh failed:', e.message))
         } catch (e: any) {
-          setStep(5, 'error', e.message)
-          autoBootstrapState.error = `Pipeline sync failed: ${e.message}`
-          console.error('[auto-bootstrap] Pipeline sync failed:', e.message)
+          setStep(4, 'error', e.message)
+          autoBootstrapState.error = `Data sheet population failed: ${e.message}`
+          console.error('[auto-bootstrap] Data sheet population failed:', e.message)
         } finally {
-          clearTimeout(tid5)
+          clearTimeout(tid4)
         }
       }
 

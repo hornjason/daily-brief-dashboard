@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["bun-types"]
+  },
+  "include": ["server.ts", "src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dashboard",
+    "src/ccsp-scraper.ts",
+    "src/sf-scraper.ts",
+    "src/tableau-auth.ts",
+    "src/supportable-scraper.ts",
+    "src/browser-utils.ts"
+  ]
+}

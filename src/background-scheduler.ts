@@ -9,9 +9,21 @@ import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
 import { lastScraped, recordScrapeExpired, getRhStatus } from './rh-auth.ts'
 import { initScrapeContext, getScrapeContext, closeScrapeContext } from './rh-scraper.ts'
-import { adoptSfContext, initSfSyncFromCache } from './sf-scraper.ts'
-import { adoptSupportableContext, runSupportableDiscoverAndScrape, writeSupportableSheet, supportableScrapeRunning } from './supportable-scraper.ts'
-import { adoptCcspContext, runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './ccsp-scraper.ts'
+// BKL-ARCH-L4-SPLIT: sf-scraper, supportable-scraper, ccsp-scraper, and tableau-auth are
+// L4-only modules — they belong in Dockerfile.l4, not the hero install image.
+// These imports are intentionally removed so the hero module graph contains no browser-session code.
+// The constants below are kept for backward-compat with isAnyScraperRunning() — they remain false
+// in the hero install since those scrapers never run.
+const adoptSfContext = (_ctx: any, _dir: string): void => {}
+const initSfSyncFromCache = (_fn: any): void => {}
+const adoptSupportableContext = (_ctx: any): void => {}
+const runSupportableDiscoverAndScrape = async (..._args: any[]): Promise<any[]> => []
+const writeSupportableSheet = async (..._args: any[]): Promise<string> => ''
+const supportableScrapeRunning = false
+const adoptCcspContext = (_ctx: any): void => {}
+const runCcspScrape = async (..._args: any[]): Promise<any[]> => []
+const writeCcspSheet = async (..._args: any[]): Promise<string> => ''
+const ccspScrapeRunning = false
 import { syncTerritorySheet } from './territory-sync.ts'
 import { initDriveWatcher, checkDriveChanges } from './drive-watcher.ts'
 import { captureSnapshot, writeSnapshot } from './kpi-history.ts'
@@ -148,72 +160,9 @@ export async function flushScrapersAfterAuth(): Promise<void> {
     })
   }
 
-  // CCSP — independent of RH, can queue after RH
-  const ccspConfig = getSchedulerConfig()
-  if (ccspConfig.ccspEnabled) {
-    enqueueScraperTask({
-      name: 'ccsp',
-      run: async () => {
-        const { aes: aesForCcsp } = await import('./server-state.ts')
-        await runCcspScrape(aesForCcsp)
-        updateSchedulerField('ccspLastRun', new Date().toISOString())
-      },
-      source: 'manual',
-      enqueuedAt: Date.now(),
-    })
-  }
-
-  // Supportable last — depends on RH account numbers
-  // BKL-G30 Gap 6: probe VPN before enqueueing to avoid silent DNS failures
-  const suppConfig = getSchedulerConfig()
-  if (suppConfig.supportableEnabled) {
-    const suppVpnOk = await liveProbe('https://supportable.corp.redhat.com:4443/', 'supportable-vpn', 5000)
-    if (!suppVpnOk) {
-      console.warn('[scraper-queue:supportable] VPN not reachable — skipping post-auth Supportable enqueue')
-    } else {
-    enqueueScraperTask({
-      name: 'supportable',
-      run: async () => {
-        const { customers: currentCustomers, aes: currentAes } = await import('./server-state.ts')
-        if (currentCustomers.length > 0) {
-          const results = await runSupportableDiscoverAndScrape(
-            currentCustomers,
-            (done, total, name, accountNumbers) => {
-              // Persist newly discovered account numbers to customers.json
-              const existing = currentCustomers.find(cx => cx.name === name)
-              if (existing && accountNumbers.length > 0) {
-                const merged = new Set([...(existing.accountNumbers ?? []), ...accountNumbers])
-                existing.accountNumbers = [...merged]
-                try {
-                  writeJsonAtomic(CUSTOMERS_PATH, { customers: currentCustomers })
-                } catch {}
-              }
-            },
-          )
-          // Split results by AE and write a sheet per AE
-          for (const ae of currentAes) {
-            const aeResults = results.filter(r => {
-              const cx = currentCustomers.find(c => c.name === r.customerName)
-              return cx?.ae === ae.name
-            })
-            if (aeResults.length > 0 && aeResults.some(r => r.accountNumbers.length > 0)) {
-              try {
-                const spreadsheetId = await writeSupportableSheet(aeResults, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
-                patchAe(ae.name, { supportableSheetId: spreadsheetId })
-              } catch (e: any) {
-                console.warn(`[scraper-queue:supportable] sheet write failed for ${ae.name}:`, sanitizeErr(e))
-              }
-            }
-          }
-          await refreshSubscriptions().catch(() => {})
-          updateSchedulerField('supportableLastRun', new Date().toISOString())
-        }
-      },
-      source: 'manual',
-      enqueuedAt: Date.now(),
-    })
-    } // end else (suppVpnOk)
-  }
+  // BKL-ARCH-L4-SPLIT: CCSP and Supportable post-auth enqueue removed.
+  // These scrapers run in Dockerfile.l4 only (Mac Mini primary node).
+  // Hero installs flush only RH Cases and SF Pipeline on re-auth.
 }
 
 // ── ntfy.sh push notification helper ─────────────────────────────────────────
@@ -1183,12 +1132,10 @@ export function initBackgroundScheduler(opts: {
     // Pipeline syncs daily at 2am ET (SF report generated at 1am ET)
     schedulePipelineSync(opts.sfSessionPath)
 
-    // CCSP scrape daily at 6:30am ET
-    scheduleCcspSync()
+    // BKL-ARCH-L4-SPLIT: scheduleCcspSync() removed — CCSP runs in Dockerfile.l4 only
   }
 
-  // Supportable batch rotation daily at 7am ET (ADR-008)
-  scheduleSupportableSync()
+  // BKL-ARCH-L4-SPLIT: scheduleSupportableSync() removed — Supportable runs in Dockerfile.l4 only
 
   // KPI daily snapshot at 8am ET (R05 — after all morning syncs complete)
   scheduleKpiSnapshot()
@@ -1215,21 +1162,8 @@ export function initBackgroundScheduler(opts: {
           console.log('[sync-state] catch-up skipped — no AEs configured yet')
           return
         }
-        console.log('[sync-state] catch-up: triggering CCSP and Pipeline via queue (source: startup)')
-        // CCSP catch-up: reuse existing enqueue pattern — only if ccspEnabled
-        const ccspCfg = getSchedulerConfig()
-        if (ccspCfg.ccspEnabled) {
-          enqueueScraperTask({
-            name: 'ccsp',
-            run: async () => {
-              await runCcspScrapeWithDelta(catchupAes)
-              updateSchedulerField('ccspLastRun', new Date().toISOString())
-              console.log('[sync-state] catch-up: CCSP scrape complete')
-            },
-            source: 'startup',
-            enqueuedAt: Date.now(),
-          })
-        }
+        console.log('[sync-state] catch-up: triggering Pipeline via queue (source: startup)')
+        // BKL-ARCH-L4-SPLIT: CCSP catch-up removed — CCSP runs in Dockerfile.l4 only
         // Pipeline catch-up: reuse existing enqueue pattern — only if sfPipelineEnabled and session present
         const pipeCfg = getSchedulerConfig()
         if (pipeCfg.sfPipelineEnabled) {
@@ -1265,9 +1199,8 @@ export function initBackgroundScheduler(opts: {
       await initScrapeContext(opts.rhProfileDir)
       const ctx = getScrapeContext()
       if (ctx) {
-        adoptSfContext(ctx, opts.rhProfileDir)
-        adoptSupportableContext(ctx)
-        adoptCcspContext(ctx)
+        // BKL-ARCH-L4-SPLIT: adoptSfContext/adoptCcspContext/adoptSupportableContext removed —
+        // SF OAuth, CCSP, and Supportable browser contexts run in Dockerfile.l4 only.
 
         // Auth pre-flight: check if the session is actually valid
         try {

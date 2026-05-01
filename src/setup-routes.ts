@@ -10,8 +10,11 @@ import type { Customer } from './types.ts'
 import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, getScopeLevel, type StoredToken } from './oauth-scopes.ts'
 import { inferCustomerDomain } from './domains.ts'
 import { sanitizeErr, sanitizeText } from './utils.ts'
-import { supportableScrapeRunning } from './supportable-scraper.ts'
-import { ccspScrapeRunning } from './ccsp-scraper.ts'
+// BKL-ARCH-L4-SPLIT: supportable-scraper and ccsp-scraper are L4-only modules.
+// The scrape guard below uses static false stubs so reset is always unblocked in the hero install.
+// L4 daemon (primary node) never calls /api/setup/reset.
+const supportableScrapeRunning = false
+const ccspScrapeRunning = false
 import { _rhScrapeRunning } from './scraper-manager.ts'
 import { resetBootstrapStates } from './bootstrap-orchestrator.ts'
 

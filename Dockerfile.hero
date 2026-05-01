@@ -1,0 +1,78 @@
+# ── Dockerfile.hero — Hero Install Image ──────────────────────────────────────
+# Produced by: make build (tags daily-brief-dashboard:latest)
+#
+# Contains: dashboard UI, API server, RH Hydra case scraper (pure HTTP),
+#           Drive reader, L3-sourced schedulers (territory sync, SF pipeline read).
+#
+# Does NOT contain: CCSP/Tableau scraper, SF OAuth scraper, Playwright, Chromium,
+#                   browser context management, browser-utils.
+#
+# ADR-016: Two-Dockerfile Container Split (hero install vs L4 daemon).
+# BKL-ARCH-L4-SPLIT: Phase 3.
+
+# ── Stage 1: Builder ──────────────────────────────────────────────────────────
+# Installs all dependencies and builds the React/Vite frontend
+FROM oven/bun:1-slim AS builder
+
+WORKDIR /app
+
+# Install root dependencies
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
+
+# Install dashboard dependencies
+COPY dashboard/package.json dashboard/bun.lock* ./dashboard/
+RUN cd dashboard && bun install --frozen-lockfile
+
+# Copy all source files
+COPY . .
+
+# Build the React/Vite frontend
+RUN cd dashboard && bun run build
+
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
+# No Playwright, no Chromium, no VNC — hero install is a pure HTTP server.
+FROM oven/bun:1-slim AS runtime
+
+WORKDIR /app
+
+# Install only the minimal system dependencies for a Node/Bun HTTP server
+# (no xvfb, no x11vnc, no novnc, no openbox — those are for the browser scrapers)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy built frontend and server source from builder
+COPY --from=builder /app/dashboard/dist ./dashboard/dist
+COPY --from=builder /app/server.ts ./server.ts
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/docs ./docs
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy account plan config (sample, questions PDF, playbook) for AI generation
+COPY --from=builder /app/config/account-plan /app/config/account-plan
+
+# ── Runtime paths ──────────────────────────────────────────────────────────────
+# All persistent state lives under /data so a single volume mount covers
+# config, cache, and the RH browser profile.
+#
+#   podman/docker run -v /host/pai-data:/data:Z ...
+#   or use: make up
+#
+ENV PORT=7777
+ENV CONFIG_DIR=/data/config
+ENV CACHE_DIR=/data/cache
+ENV RH_PROFILE_DIR=/data/rh-profile
+
+EXPOSE 7777
+
+# Default environment — loaded by entrypoint.sh, overridden by user's --env-file
+COPY defaults.env /app/defaults.env
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]

@@ -652,22 +652,7 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
               {step.detail && (
                 <p className={`text-xs mt-0.5 truncate max-w-lg ${step.status === 'error' ? 'text-critical/80' : 'text-text-secondary'}`} {...(step.status === 'error' ? { role: 'alert' } : {})}>{step.detail}</p>
               )}
-              {/* Tableau login prompt — only shown when reachable but session invalid AND no records were written.
-                  If detail shows records (e.g. "192 records"), Tableau clearly worked — suppress the stale-cache false-positive. */}
-              {step.name === 'Create CCSP Sheet' && step.status === 'done' && tableauSessionNeeded === true && !step.detail?.match(/\d+\s+records?/) && (
-                <div className="mt-1.5 flex items-center gap-2">
-                  <span className="text-xs text-warning">Tableau session required to populate CCSP data</span>
-                  <button
-                    onClick={async () => {
-                      await fetch('/api/bootstrap/tableau/open-login', { method: 'POST' })
-                      window.open(getVncUrl(), 'tableau-login', 'width=1280,height=900')
-                    }}
-                    className="text-xs bg-warning hover:bg-warning/80 text-white px-2 py-0.5 rounded"
-                  >
-                    Open Tableau
-                  </button>
-                </div>
-              )}
+              {/* BKL-ARCH-L4-SPLIT: Tableau login prompt removed — CCSP step no longer part of hero bootstrap */}
             </div>
           </div>
         ))}
@@ -683,21 +668,21 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
           {hasError && (() => {
             const failedSteps = state.steps.filter(s => s.status === 'error')
             if (failedSteps.length === 0) return null
-            const isCcspStep = (name: string) => name.toLowerCase().includes('ccsp') || name.toLowerCase().includes('tableau')
             const hintFor = (stepName: string): string => {
               if (stepName.toLowerCase().includes('rh portal') || stepName.toLowerCase().includes('red hat') || stepName.toLowerCase().includes('account'))
                 return 'RH Portal auth failed — scroll up to Step 3 and reconnect.'
               if (stepName.toLowerCase().includes('drive') || stepName.toLowerCase().includes('folder'))
                 return 'Drive folder failed — verify Google Auth is connected in Step 2.'
-              if (isCcspStep(stepName))
-                return 'Connect Tableau in Step 3 (Connections), then click Retry CCSP.'
+              if (stepName.toLowerCase().includes('populate') || stepName.toLowerCase().includes('data sheets'))
+                return 'Data sheet population failed — verify Google Auth is connected in Step 2.'
               if (stepName.toLowerCase().includes('pipeline') || stepName.toLowerCase().includes('salesforce'))
                 return 'Pipeline sheet failed — check Salesforce connection in Step 3 (Connections).'
               if (stepName.toLowerCase().includes('territory'))
                 return 'Territory lookup failed — verify Google Sheets access in Step 2.'
               return 'Step failed — check server logs and click "Clear stuck state" to retry.'
             }
-            const hasCcspFailure = failedSteps.some(s => isCcspStep(s.name))
+            // BKL-ARCH-L4-SPLIT: hasCcspFailure removed — CCSP step is no longer part of hero bootstrap
+            const hasCcspFailure = false
             return (
               <div className="mb-3 space-y-2">
                 <div className="space-y-1">
@@ -1256,16 +1241,7 @@ function AutoBootstrapForm({
         // BKL-UX110-FIX: keep live banner state in sync during active poll
         setLiveBootstrapRunning(d.running ?? false)
         setLiveBootstrapAeName(d.aeName ?? null)
-        // When CCSP step completes, check if Tableau login is actually needed
-        const ccspStep = d.steps.find(s => s.name === 'Create CCSP Sheet')
-        if (ccspStep?.status === 'done' && tableauSessionNeeded === null) {
-          fetch('/api/bootstrap/tableau/session-status', { signal: controller.signal })
-            .then(r => r.json())
-            .then(({ reachable, sessionValid }: { reachable: boolean; sessionValid: boolean }) => {
-              setTableauSessionNeeded(reachable && !sessionValid)
-            })
-            .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
-        }
+        // BKL-ARCH-L4-SPLIT: CCSP/Tableau session check removed — no Tableau step in hero bootstrap
         if (!d.running) clearInterval(interval)
       } catch (e: any) { if (e.name !== 'AbortError') { /* ignore */ } }
     }, 2_000)
@@ -1408,9 +1384,8 @@ function AutoBootstrapForm({
         </div>
       )}
 
-      {/* BKL-UX85: "Before you start" prerequisites callout removed — its
-          bullets (7–15 min, Tableau VNC popup) are now folded into the
-          blue info box at the top of the Single AE tab. */}
+      {/* BKL-UX85 / BKL-ARCH-L4-SPLIT: "Before you start" prerequisites callout removed.
+          Bootstrap is now under 1 minute with no Tableau VNC step. */}
 
       {liveBootstrapRunning && !bootstrapState?.running && (
         <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-warning/10 border border-warning/30 text-sm text-warning">
@@ -1946,9 +1921,8 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
       </div>
 
       {/* Info box — below tabs, above config block.
-          BKL-UX85: expanded to include the "Before you start" prerequisites
-          (7–15 min, Tableau VNC popup) that previously lived in a separate
-          callout below the form. */}
+          BKL-ARCH-L4-SPLIT: Updated to reflect hero-install bootstrap (no Tableau/CCSP):
+          under 1 minute, Drive folder + L3 sheet population only. */}
       {activeTab === 'single-ae' && (
         <div className="bg-accent/10 border border-accent/30 rounded-xl px-4 py-3 space-y-2">
           <p className="text-sm font-medium text-accent">Automated AE setup — one click to fully configured</p>
@@ -1956,8 +1930,7 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
             Creates a Drive folder, discovers RH Portal account numbers, and generates all data sheets automatically.
           </p>
           <ul className="text-xs text-accent/80 leading-relaxed space-y-0.5 list-disc list-inside pt-1">
-            <li>This takes <span className="text-accent font-medium">7–15 minutes</span> to complete</li>
-            <li>A <span className="text-accent font-medium">Tableau VNC popup</span> will appear mid-run — leave it open</li>
+            <li>This takes <span className="text-accent font-medium">under 1 minute</span> — creates your Drive folder and populates sheets from shared data</li>
           </ul>
         </div>
       )}
@@ -1968,8 +1941,7 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
             The system will iterate through each AE in the territory sheet, running the full bootstrap pipeline for each one.
           </p>
           <ul className="text-xs text-accent/80 leading-relaxed space-y-0.5 list-disc list-inside pt-1">
-            <li>Takes significantly longer than a single AE — plan accordingly</li>
-            <li>A <span className="text-accent font-medium">Tableau VNC popup</span> will appear mid-run — leave it open</li>
+            <li>Takes longer than a single AE — plan accordingly</li>
           </ul>
         </div>
       )}
