@@ -8321,6 +8321,17 @@ Solution: Extract intelligenceCachePath(slug) function following the same guard 
 
 ---
 
+### BKL-OPS-SMOKE-01 | make rebuild smoke check false-fails on healthy container — timing issue
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Rayford observation 2026-05-01 (fired on BKL-ARCH-06, BKL-ARCH-07, BKL-ARCH-01)
+Files: Makefile
+Description: The smoke check in make rebuild times out and exits 1 even when the container is healthy. Direct curl to /health returns {status: ok} within seconds of the smoke failure. Has fired 3 consecutive sessions. The health check likely needs a longer timeout or a retry loop.
+Solution: Increase smoke check timeout or add retry loop (e.g. wait-for-it style: curl with --retry 10 --retry-delay 2). Confirm the fix by running make rebuild and verifying smoke passes cleanly.
+
+---
+
 ### BKL-ARCH-02 | Scraper status — split across disk store + in-memory module variables
 Status: 🔴 OPEN
 Priority: P1
