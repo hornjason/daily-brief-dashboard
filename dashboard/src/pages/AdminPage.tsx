@@ -6,6 +6,7 @@ import { getVncUrl } from '../utils'
 import { SessionHealthPanel } from '../components/SessionHealthPanel'
 import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
 import { Step0RegionAccess } from '../components/Step0RegionAccess'
+import { useNodeRole } from '../hooks/useNodeRole'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -229,10 +230,13 @@ function SchedulerConfig({
   intervals,
   schedulerCfg,
   onSave,
+  isL3Only = false,
 }: {
   intervals: RefreshIntervals | null
   schedulerCfg: SchedulerCfg | null
   onSave: (fields: Record<string, unknown>) => Promise<string | null>
+  /** BKL-HERO-13: hide CCSP + RH Cases scheduler rows in L3 hero mode */
+  isL3Only?: boolean
 }) {
   const [rhMinutes, setRhMinutes] = useState<string>('')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -265,34 +269,40 @@ function SchedulerConfig({
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="space-y-1 divide-y divide-gray-700/50">
-        <SourceScheduleRow label="CCSP" timeKey="ccspTime" enabledKey="ccspEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
+        {/* BKL-HERO-13: CCSP scheduler row is L4-only */}
+        {!isL3Only && (
+          <SourceScheduleRow label="CCSP" timeKey="ccspTime" enabledKey="ccspEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
+        )}
         <SourceScheduleRow label="Territory" timeKey="territoryTime" enabledKey="territoryEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
         <SourceScheduleRow label="SF Pipeline" timeKey="sfPipelineTime" enabledKey="sfPipelineEnabled" floorHint="Min 12h between runs" schedCfg={cfg} onSave={onSave} />
-        <div className="flex items-center gap-3 py-2">
-          <label className="text-xs text-gray-400 w-40 shrink-0">
-            RH Cases interval
-            <span className="block text-gray-500">30 min floor</span>
-          </label>
-          <div className="flex-1 flex items-center gap-1.5">
-            <input
-              type="number"
-              min={30}
-              value={rhMinutes}
-              onChange={e => { setRhMinutes(e.target.value); setSaveError(null); setSaved(false) }}
-              className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
-            />
-            <span className="text-xs text-gray-500">min</span>
+        {/* BKL-HERO-13: RH Cases interval input is L4-only */}
+        {!isL3Only && (
+          <div className="flex items-center gap-3 py-2">
+            <label className="text-xs text-gray-400 w-40 shrink-0">
+              RH Cases interval
+              <span className="block text-gray-500">30 min floor</span>
+            </label>
+            <div className="flex-1 flex items-center gap-1.5">
+              <input
+                type="number"
+                min={30}
+                value={rhMinutes}
+                onChange={e => { setRhMinutes(e.target.value); setSaveError(null); setSaved(false) }}
+                className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
+              />
+              <span className="text-xs text-gray-500">min</span>
+            </div>
+            <button
+              onClick={handleRhSave}
+              disabled={saving}
+              className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors shrink-0 ml-auto"
+            >
+              {saving ? '...' : saved ? 'Saved' : 'Save'}
+            </button>
+            {saveError && <span className="text-xs text-red-400">{saveError}</span>}
           </div>
-          <button
-            onClick={handleRhSave}
-            disabled={saving}
-            className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors shrink-0 ml-auto"
-          >
-            {saving ? '...' : saved ? 'Saved' : 'Save'}
-          </button>
-          {saveError && <span className="text-xs text-red-400">{saveError}</span>}
-        </div>
-        {schedulerCfg && (
+        )}
+        {!isL3Only && schedulerCfg && (
           <SourceScheduleRow label="RH Cases" timeKey="rhScrape" enabledKey="rhEnabled" floorHint="Interval-based (see above)" schedCfg={cfg} onSave={onSave} isInterval />
         )}
       </div>
@@ -983,6 +993,7 @@ function RegionAccessSection() {
 
 export function AdminPage() {
   const navigate = useNavigate()
+  const { isL3Only } = useNodeRole()
   const [status, setStatus] = useState<AllScrapeStatus | null>(null)
   const [intervals, setIntervals] = useState<RefreshIntervals | null>(null)
   const [schedulerCfg, setSchedulerCfg] = useState<SchedulerCfg | null>(null)
@@ -1167,9 +1178,12 @@ export function AdminPage() {
               ← Back to Setup
             </button>
           </div>
-          <div className="mt-2 bg-red-900/50 border border-red-700/60 rounded-md px-4 py-2.5 text-xs text-red-300">
-            <span className="font-semibold">Break-glass page.</span> Manual scrape triggers may take several minutes and require an active Red Hat Portal session. Not for normal use.
-          </div>
+          {/* BKL-HERO-09: hide RH-Portal-tied break-glass banner in L3 hero mode */}
+          {!isL3Only && (
+            <div className="mt-2 bg-red-900/50 border border-red-700/60 rounded-md px-4 py-2.5 text-xs text-red-300">
+              <span className="font-semibold">Break-glass page.</span> Manual scrape triggers may take several minutes and require an active Red Hat Portal session. Not for normal use.
+            </div>
+          )}
         </div>
 
         {/* BKL-W2-13: Browser crash banner */}
@@ -1197,39 +1211,44 @@ export function AdminPage() {
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Manual Scrape Triggers</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            <ScrapeSection
-              label="RH Cases"
-              status={status?.rh ?? null}
-              running={!!triggerBusy['rh']}
-              onRunNow={() => runScrape('rh', '/api/scrape/rh')}
-              circuitBreaker={status?.circuitBreakers?.rh}
-              queuePending={localQueued['rh'] ?? status?.queue?.pending?.includes('rh-cases')}
-              subtitle={
-                status?.rhDiscoveryProgress
-                  ? `Discovering ${status.rhDiscoveryProgress.done}/${status.rhDiscoveryProgress.total}${status.rhDiscoveryProgress.current ? ` — ${status.rhDiscoveryProgress.current}` : ''}`
-                  : undefined
-              }
-            />
-            <ScrapeSection
-              label="CCSP"
-              status={status?.ccsp ?? null}
-              running={!!triggerBusy['ccsp']}
-              onRunNow={() => runScrape('ccsp', '/api/scrape/ccsp')}
-              circuitBreaker={status?.circuitBreakers?.ccsp}
-              queuePending={localQueued['ccsp'] ?? status?.queue?.pending?.includes('ccsp')}
-              extraActions={
-                <button
-                  onClick={() => {
-                    fetch('/api/browser/open-tableau-login', { method: 'POST' }).catch(() => {})
-                    window.open(getVncUrl(), '_blank')
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Open VNC Login
-                </button>
-              }
-            />
+            {/* BKL-HERO-11: RH Cases + CCSP scrape triggers are L4-only */}
+            {!isL3Only && (
+              <ScrapeSection
+                label="RH Cases"
+                status={status?.rh ?? null}
+                running={!!triggerBusy['rh']}
+                onRunNow={() => runScrape('rh', '/api/scrape/rh')}
+                circuitBreaker={status?.circuitBreakers?.rh}
+                queuePending={localQueued['rh'] ?? status?.queue?.pending?.includes('rh-cases')}
+                subtitle={
+                  status?.rhDiscoveryProgress
+                    ? `Discovering ${status.rhDiscoveryProgress.done}/${status.rhDiscoveryProgress.total}${status.rhDiscoveryProgress.current ? ` — ${status.rhDiscoveryProgress.current}` : ''}`
+                    : undefined
+                }
+              />
+            )}
+            {!isL3Only && (
+              <ScrapeSection
+                label="CCSP"
+                status={status?.ccsp ?? null}
+                running={!!triggerBusy['ccsp']}
+                onRunNow={() => runScrape('ccsp', '/api/scrape/ccsp')}
+                circuitBreaker={status?.circuitBreakers?.ccsp}
+                queuePending={localQueued['ccsp'] ?? status?.queue?.pending?.includes('ccsp')}
+                extraActions={
+                  <button
+                    onClick={() => {
+                      fetch('/api/browser/open-tableau-login', { method: 'POST' }).catch(() => {})
+                      window.open(getVncUrl(), '_blank')
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Open VNC Login
+                  </button>
+                }
+              />
+            )}
             <ScrapeSection
               label="SF Pipeline"
               status={status?.salesforce ?? null}
@@ -1241,18 +1260,20 @@ export function AdminPage() {
           </div>
         </div>
 
-        {/* Browser Sessions */}
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Browser Sessions</h2>
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <ContentRhSessionButton />
+        {/* Browser Sessions — BKL-HERO-12: L4-only (RH Portal session UI) */}
+        {!isL3Only && (
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Browser Sessions</h2>
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+              <ContentRhSessionButton />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Scheduler config */}
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Scheduler Config</h2>
-          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} />
+          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} isL3Only={isL3Only} />
         </div>
 
         {/* AI Settings — intelligence toggle */}

@@ -8021,6 +8021,156 @@ Files: test/fixtures.ts
 Description: TBH AE entry in test fixtures is out of sync with current data shape. Non-blocking but causes intermittent fixture mismatch warnings in CI. Update TBH fixture data to match current aes.json schema.
 
 
+### BKL-HERO-05 | L3 hero: RH Portal "Connect" banner shows at top of dashboard
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/App.tsx:99-117
+Description: Amber warning banner "Red Hat Portal not connected — cases last synced Xd ago" with [Connect] button renders on dashboard for L3 hero installs. Clicking [Connect] opens VNC popup for RH Portal login — a flow L3 installs cannot and should not use. RH data on L3 comes from Drive cache written by the L4 leader. Gate the entire RHSessionBanner component behind !isL3Only.
+Acceptance: On L3 (NODE_ROLE unset), RHSessionBanner is absent from the DOM. On L4 (NODE_ROLE=primary), banner renders normally.
+Can we test: YES — Playwright test mocking /api/node-role asserts banner absent on L3 and present on L4.
+
+### BKL-HERO-06 | L3 hero: KPI Cards shows "Connect Red Hat Portal in Settings" hint
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/components/KPICards.tsx:423-425
+Description: Below the Cases KPI card, hint text "Connect Red Hat Portal in Settings to sync support cases" is visible on L3 installs. The Settings page on L3 uses HeroStep3Connections (token-only) and has no RH Portal connect flow. The hint sends users to a setting that doesn't exist. Gate behind !isL3Only (or !rhHasSession && !isL3Only).
+Acceptance: Hint text absent on L3. Hint still visible on L4 when RH is disconnected.
+Can we test: YES — Playwright test on L3 asserts hint text has count 0.
+
+### BKL-HERO-07 | L3 hero: Cloud Spend (CCSP) panel renders with no data
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/components/CloudSpendSection.tsx
+Description: CCSP panel renders on the main dashboard for L3 installs. CCSP scraper does not run on L3 — panel will be permanently empty in production. Empty state is worse than no state because user wonders why it's empty. Hide entire panel when isL3Only.
+Acceptance: CloudSpendSection absent on L3. Still renders on L4.
+Can we test: YES — Playwright test on L3 asserts CCSP section absent.
+
+### BKL-HERO-08 | L3 hero: Pipeline (Tableau) panel — gate Tableau-derived sub-metrics
+Status: 🔴 OPEN
+Priority: P2
+Size: M
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/components/ (Pipeline/Tableau section)
+Description: Pipeline panel visible on dashboard. SF bookings data (which syncs on L3) is fine; Tableau-derived metrics will not populate. Verify data source for each sub-panel and gate Tableau-only content behind !isL3Only or hasTableau.
+Acceptance: SF-derived pipeline metrics still visible on L3. Tableau-specific sections hidden.
+Can we test: YES — after implementation, Playwright test on L3 verifies SF metrics present, Tableau metrics absent.
+
+### BKL-HERO-09 | L3 hero: Admin top "Manual scrape requires active feed session" warning banner
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (top warning banner)
+Description: Red warning banner at top of Admin page warns about manual scrape triggers needing "an active feed like Portal session" — a concept that doesn't apply to L3. Misleading context. Gate behind !isL3Only.
+Acceptance: Warning banner absent on Admin page on L3. Present on L4.
+Can we test: YES — Playwright on L3 asserts banner text absent.
+
+### BKL-HERO-10 | L3 hero: Admin Data Source Health tiles show RH Portal + Tableau as permanently red
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (DATA SOURCE HEALTH section)
+Description: Three health tiles: RH Portal, Tableau, Salesforce. On L3, RH Portal and Tableau tiles are permanently red — they are not wired on L3 nodes. This creates a permanent false alarm. Salesforce tile is appropriate (SF bookings sync on L3). Per-tile gate: render RH Portal and Tableau tiles only when !isL3Only. Salesforce stays.
+Acceptance: On L3, only Salesforce health tile visible. On L4, all three tiles visible.
+Can we test: YES — Playwright on L3 asserts RH Portal and Tableau health tiles absent.
+
+### BKL-HERO-11 | L3 hero: Admin Manual Scrape Triggers shows RH Cases + CCSP [Run Now] buttons
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (MANUAL SCRAPE TRIGGERS section)
+Description: Admin page shows [Run Now] buttons for RH Cases, CCSP, and SF Pipeline. RH Cases and CCSP do not run on L3 — triggering them will fail or produce incorrect behavior. SF Pipeline is appropriate. Per-tile gate: hide RH Cases and CCSP trigger tiles on L3, keep SF Pipeline.
+Acceptance: On L3, only SF Pipeline trigger visible in MANUAL SCRAPE TRIGGERS. On L4, all three visible.
+Can we test: YES — Playwright on L3 asserts RH Cases and CCSP trigger buttons absent.
+
+### BKL-HERO-12 | L3 hero: Admin Browser Sessions section shows "Save Content RH Session" control
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (BROWSER SESSIONS section)
+Description: Admin page shows Browser Sessions section with "Save Content RH Session" button. L3 has no browser session — no Chrome profile, no VNC scraper. Button is dead and misleading. Gate entire BROWSER SESSIONS section behind !isL3Only.
+Acceptance: Browser Sessions section absent on Admin page on L3.
+Can we test: YES — Playwright on L3 asserts browser sessions section absent.
+
+### BKL-HERO-13 | L3 hero: Admin Scheduler Limits shows CCSP + RH Cases rows
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (SCHEDULER LIMITS section)
+Description: Scheduler Limits section shows rows for CCSP, Territory, SF Pipeline, and RH Cases — each with enable toggle and cadence. On L3, CCSP and RH Cases schedulers do not run. Showing them implies they do. Gate CCSP and RH Cases rows behind !isL3Only. SF Pipeline and Territory stay visible.
+Acceptance: On L3, only SF Pipeline and Territory scheduler rows visible.
+Can we test: YES — Playwright on L3 asserts CCSP and RH Cases scheduler rows absent.
+
+### BKL-HERO-14 | L3 hero: Admin Run Domain Inference — verify L3 compatibility before gating
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (DOMAIN INFERENCE section)
+Description: "Run Domain Inference" button on Admin. Domain inference may only use LLM + Drive data (fine on L3) or may depend on L4 scrape data. Verify dependency before deciding whether to gate. If LLM-only: keep on L3. If L4-data-dependent: gate behind !isL3Only.
+Acceptance: Decision made and implemented.
+Can we test: YES after decision.
+
+### BKL-HERO-15 | L3 hero: Admin NotebookLM controls likely leader-only
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (NOTEBOOKLM section)
+Description: NotebookLM section with [Create All Notebooks] button may be inappropriate on L3 — if it writes to Drive folders shared by all nodes, running it from every L3 hero install could create duplicate notebooks. Treat as leader-only (gate behind !isL3Only) unless confirmed safe to run from L3.
+Acceptance: NotebookLM section absent on L3. Visible on L4.
+Can we test: YES — Playwright on L3 asserts section absent.
+
+### BKL-HERO-16 | L3 hero: Admin Generate All Account Intelligence — architectural decision needed
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (ACCOUNT INTELLIGENCE section)
+Description: "Generate All Account Intelligence" [Generate All] button — intelligence pipeline writes briefs to Drive. Architectural question: should this run from every L3 hero install, or only from the L4 leader? If all nodes generate their own briefs, keep. If leader-only, gate behind !isL3Only. Decision needed before implementation.
+Acceptance: Decision made and implemented. If leader-only: section absent on L3.
+Can we test: YES after decision.
+
+### BKL-HERO-17 | L3 hero: Admin Gemini Usage panel — clarify "this node" vs fleet
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/AdminPage.tsx (GEMINI API USAGE section)
+Description: Gemini API Usage panel shows today/this-month token counters. On L3, counters reflect local-node usage only. User may expect fleet aggregate. Keep the panel but add label "this node" to make scope clear, or hide if L3 brief generation doesn't happen locally.
+Acceptance: Panel label clearly indicates node-local usage.
+Can we test: YES — text assertion.
+
+### BKL-HERO-18 | L3 hero: Customer detail page audit pending test data
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Quinn L3 hero audit 2026-05-01
+Files: dashboard/src/pages/ (customer detail page)
+Description: Customer detail page was not audited — test container has Carolanne Farrell with zero customers so no customer detail URL was reachable. Likely contains L4-specific UI: RH Cases section with [Run Now], Tableau pipeline sub-panel, CCSP sub-panel. Re-run audit after test data (or prod 7777 with ci project) has customers loaded.
+Acceptance: Customer detail audit completed; all L4-specific elements gated on isL3Only.
+Can we test: YES after data is loaded.
+
+### BKL-HERO-19 | useNodeRole() shared hook — eliminate duplicate /api/node-role fetches
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn L3 hero audit 2026-05-01 (implementation recommendation)
+Files: dashboard/src/hooks/useNodeRole.ts (new), dashboard/src/pages/SetupPage.tsx, dashboard/src/App.tsx, dashboard/src/components/KPICards.tsx, dashboard/src/pages/AdminPage.tsx
+Description: SetupPage already fetches /api/node-role on mount and stores isL3Only in state. App.tsx, KPICards, AdminPage all need the same value for P1 gating. Create useNodeRole() hook that fetches once (or reads a module-level cache to avoid duplicate fetches) so all consumers share the same value without duplicating the fetch.
+Acceptance: Single /api/node-role fetch per page load (not per component). All P1 gate consumers use useNodeRole().
+Can we test: YES — network tab assertion (1 /api/node-role call per page), unit test for hook.
+
 ### BKL-CONN-SF-ADOPT-01 | SF re-login breaks RH Portal session — context not re-adopted
 Status: 🔴 OPEN
 Priority: P0

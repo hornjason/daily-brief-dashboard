@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Shield, Activity, Cloud } from 'lucide-react'
 import RelTime from './RelTime'
+import { useNodeRole } from '../hooks/useNodeRole'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,7 @@ function ScraperTile({
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export function SessionHealthPanel() {
+  const { isL3Only } = useNodeRole()
   const [data, setData] = useState<HealthData | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -236,16 +238,19 @@ export function SessionHealthPanel() {
           </>
         ) : (
           <>
-            {data.rh ? (
-              <RhTile rh={data.rh} />
-            ) : (
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="w-4 h-4 text-red-400 shrink-0" />
-                  <span className="text-xs font-medium text-gray-200">RH Portal</span>
+            {/* BKL-HERO-10: hide RH Portal tile in L3 hero mode */}
+            {!isL3Only && (
+              data.rh ? (
+                <RhTile rh={data.rh} />
+              ) : (
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="w-4 h-4 text-red-400 shrink-0" />
+                    <span className="text-xs font-medium text-gray-200">RH Portal</span>
+                  </div>
+                  <StatusBadge variant="unknown" />
                 </div>
-                <StatusBadge variant="unknown" />
-              </div>
+              )
             )}
             {data.sf ? (
               <SfTile sf={data.sf} />
@@ -258,21 +263,24 @@ export function SessionHealthPanel() {
                 <StatusBadge variant="unknown" />
               </div>
             )}
-            {data.ccsp ? (
-              <ScraperTile
-                label="Tableau / CCSP"
-                icon={Activity}
-                entry={data.ccsp}
-                iconClass="text-purple-400"
-              />
-            ) : (
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Activity className="w-4 h-4 text-purple-400 shrink-0" />
-                  <span className="text-xs font-medium text-gray-200">Tableau / CCSP</span>
+            {/* BKL-HERO-10: hide Tableau/CCSP tile in L3 hero mode */}
+            {!isL3Only && (
+              data.ccsp ? (
+                <ScraperTile
+                  label="Tableau / CCSP"
+                  icon={Activity}
+                  entry={data.ccsp}
+                  iconClass="text-purple-400"
+                />
+              ) : (
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Activity className="w-4 h-4 text-purple-400 shrink-0" />
+                    <span className="text-xs font-medium text-gray-200">Tableau / CCSP</span>
+                  </div>
+                  <StatusBadge variant="unknown" />
                 </div>
-                <StatusBadge variant="unknown" />
-              </div>
+              )
             )}
           </>
         )}

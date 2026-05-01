@@ -123,6 +123,8 @@ interface KPICardsProps {
   allAccounts?: AccountInfo[]
   /** Case-to-product matching function from App */
   caseMatchesProducts?: (caseProduct: string | string[], selectedLabels: string[]) => boolean
+  /** BKL-HERO-06: hide RH-Portal-only hints when running in L3 hero mode */
+  isL3Only?: boolean
 }
 
 function rhTimeAgo(isoString: string): string {
@@ -135,7 +137,7 @@ function rhTimeAgo(isoString: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory, selectedProducts, allCases, allAccounts, caseMatchesProducts }: KPICardsProps) {
+export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory, selectedProducts, allCases, allAccounts, caseMatchesProducts, isL3Only = false }: KPICardsProps) {
   const [casesOpen, setCasesOpen] = useState(false)
   const [sev1Open, setSev1Open] = useState(false)
 
@@ -421,7 +423,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       </div>
 
       {/* Hint when RH Portal not connected */}
-      {rhHasSession === false && (kpis?.openCasesTotal ?? 0) === 0 && (
+      {rhHasSession === false && !isL3Only && (kpis?.openCasesTotal ?? 0) === 0 && (
         <p className="text-xs text-text-secondary mt-1 ml-1">Connect Red Hat Portal in Settings to sync support cases</p>
       )}
 
