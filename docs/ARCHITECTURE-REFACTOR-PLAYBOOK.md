@@ -76,14 +76,15 @@ Pick next candidate       start Phase 1 for the next item in the order table abo
 | BKL-ARCH-01 customer matching | ✅ | #3 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-03 server.ts routers | ✅ | #4 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-05 polling hook | ✅ | #5 ✅ CLOSED | ✅ DONE 2026-05-01 |
-| BKL-ARCH-08 bootstrap split | ❌ | — | — (blocked) |
+| BKL-ARCH-08 bootstrap split | ✅ | #6 ✅ CLOSED | ✅ DONE 2026-05-01 |
+
+**BKL-ARCH-08 commit:** TBD — bootstrap-state.ts + cache-hierarchy.ts, 13 unit tests, 25/0 API Playwright on 7776.
 
 **BKL-ARCH-03 commit:** 398d840b0 — 16 route modules converted, createXRouter() factories, ADR-005 fulfilled.
 
-**BKL-ARCH-05 commit:** (pending) — `usePolledStatus` hook, 6 contexts migrated, SetupPage null bug fixed.
+**BKL-ARCH-05 commit:** c4c1af802 — `usePolledStatus` hook, 6 contexts migrated, SetupPage null bug fixed.
 
-**Next action:** `/grill-with-docs` for BKL-ARCH-08 — bootstrap-orchestrator split (now unblocked: depends on 06 ✅, 07 ✅, 01 ✅, 03 ✅).
-Note: BKL-ARCH-08 (bootstrap split) is now unblocked — depends on 06 ✅, 07 ✅, 01 ✅, 03 ✅.
+**Architecture refactor complete.** All 6 BKL-ARCH candidates shipped. Next phase: two-container split (scraper container writes to L3 Drive; main app reads Drive only). Start with `/grill-with-docs`.
 
 **BKL-ARCH-01 commit:** 10f218ef2 — customer-folder.ts created, 3 callers migrated, 9 unit tests.
 

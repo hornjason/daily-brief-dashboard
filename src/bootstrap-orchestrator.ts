@@ -14,7 +14,7 @@ import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets,
 import { runCcspScrape, writeCcspSheet, consumeTableauSessionExpired, parseTerritoryParts } from './ccsp-scraper.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { fetchCustomerAccountNumbers, normalizeRows } from './sheets.ts'
-import { writeSheetCache, readPipelineCache, readCCSPCache } from './cache-layer.ts'
+import { writeSheetCache, readPipelineCache } from './cache-layer.ts'
 import type { PipelineRecord } from './pipeline.ts'
 import { enqueueScraperTask } from './background-scheduler.ts'
 import { getAiConfig } from './settings-api.ts'
@@ -31,6 +31,23 @@ import { recordBootstrapRun } from './bootstrap-history.ts'
 import { getBackupSheetId, setBackupSheetId, createBackupSheet } from './backup-config.ts'
 import { normalizeSettings } from './region-config.ts'
 import { emitCacheLevel } from './ingest-events.js'
+import {
+  autoBootstrapState,
+  podBootstrapState,
+  bootstrapFlags,
+  lockState,
+} from './bootstrap-state.ts'
+import type { AutoBootstrapStep } from './bootstrap-state.ts'
+export { autoBootstrapState, podBootstrapState } from './bootstrap-state.ts'
+import {
+  CACHE_HIER_FRESH_MS,
+  isPipelineDiskCacheFreshForAe,
+  isCcspDiskCacheFreshForAe,
+  getSheetModifiedTime,
+  readCcspFromAeSheet,
+  readPipelineFromAeSheet,
+  readSfBookingsFromAeSheet,
+} from './lib/cache-hierarchy.ts'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
@@ -188,96 +205,20 @@ function isJunkCustomerName(name: string): boolean {
   return false
 }
 
-// ── Interfaces ───────────────────────────────────────────────────────────────
-
-interface AutoBootstrapStep {
-  name: string
-  status: 'pending' | 'running' | 'done' | 'error' | 'skipped'
-  detail?: string
-  startedAt?: string
-  completedAt?: string
-  durationMs?: number
-}
-
-interface AutoBootstrapResources {
-  driveFolder?: { id: string; url: string }
-  customerFolders?: Record<string, { id: string; url: string }>
-  supportableSheet?: { id: string; url: string }
-  ccspSheet?: { id: string; url: string }
-  pipelineSheet?: { id: string; url: string }
-  unmatchedCustomers?: string[]  // customer names with 0 Supportable account matches
-  junkFiltered?: string[]        // names rejected by junk filter before bootstrap
-  domainInference?: { customerName: string; domain: string; confidence: 'high' | 'low'; sources: string[] }[]  // BKL-F05: auto-inferred domains
-}
-
-interface AutoBootstrapState {
-  running: boolean
-  aeName: string | null
-  steps: AutoBootstrapStep[]
-  error: string | null
-  completedAt: string | null
-  resources: AutoBootstrapResources
-}
-
-export let autoBootstrapState: AutoBootstrapState = {
-  running: false, aeName: null, steps: [], error: null, completedAt: null, resources: {}
-}
-
-// BKL-DOM-INF-01: Module-level guards for the post-bootstrap domain inference IIFE.
-// `inferenceRunning` lets the 409 gate and POD wait loop see in-progress inference
-// even after autoBootstrapState.running has flipped to false (the state machine
-// marks the bootstrap "complete" before kicking off inference today — but inference
-// still mutates customers.json and resources.domainInference, so callers must wait).
-// `_customerWriteLock` is a simple promise-chain mutex serializing writes to
-// customers.json from the auto-save block — concurrent IIFEs across overlapping
-// AE bootstraps could otherwise interleave read-modify-write and silently drop
-// updates.
-let inferenceRunning = false
-let _customerWriteLock: Promise<void> = Promise.resolve()
-
 /** BKL-W2-17: Exposed so background-scheduler can include bootstrap in isAnyScraperRunning() guard. */
 export function isBootstrapRunning(): boolean { return autoBootstrapState.running || podBootstrapState.running }
 
 /** Clear both bootstrap states — called by /api/setup/reset so UI doesn't show stale last-run details after a wipe. */
 export function resetBootstrapStates(): void {
-  autoBootstrapState = { running: false, steps: [], aeName: null, completedAt: null, error: null, resources: {} }
-  podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
-  autoBootstrapCancelRequested = false
+  Object.assign(autoBootstrapState, { running: false, steps: [], aeName: null, completedAt: null, error: null, resources: {} })
+  Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
+  bootstrapFlags.autoBootstrapCancelRequested = false
 }
-
-// BKL-WIZ-02: Single-AE cancellation flag — checked between bootstrap steps for graceful stop
-let autoBootstrapCancelRequested = false
 
 // BKL-BOOTSTRAP-CANCEL-01: Per-step watchdog timeout — fires if a step hangs on a network call
 const STEP_TIMEOUT_MS = 90_000
 
 // ── POD Bootstrap ───────────────────────────────────────────────────────────
-
-interface PodAeResult {
-  name: string
-  status: 'skipped' | 'ok' | 'error' | 'pending' | 'retrying'
-  error?: string
-  customerCount?: number
-  startedAt?: string
-  completedAt?: string
-  durationMs?: number
-}
-
-interface PodBootstrapState {
-  running: boolean
-  total: number
-  completed: number
-  currentAE: string | null
-  results: PodAeResult[]
-  startedAt: string | null
-  completedAt: string | null
-  totalDurationMs?: number
-  error: string | null
-}
-
-export let podBootstrapState: PodBootstrapState = {
-  running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null,
-}
 
 /** BKL-WIZ-02: Cancellation flag — checked between AE steps in the POD bootstrap loop. */
 let podBootstrapCancelled = false
@@ -440,225 +381,6 @@ async function readSfDriveCache(
     return parsed.rows.length > 0 ? parsed : null
   } catch (e: any) {
     console.warn(`[pod-bootstrap] SF Drive cache read failed: ${e?.message} — non-fatal`)
-    return null
-  }
-}
-
-// ─── BKL-CACHE-HIER-01: 4-level cache hierarchy helpers (CCSP + SF pipeline) ───
-// Level 1: on-disk local cache, cachedAt < 24h → use directly (no Drive)
-// Level 2: AE Drive sheet (ccspSheetId / pipelineSheetId), modifiedTime < 24h → read rows
-// Level 3: Subscription Data folder CSV < 24h (existing scraper paths handle this)
-// Level 4: fresh source pull (Tableau for CCSP / Salesforce for SF) — existing paths
-
-/** BKL-CACHE-HIER-01: 24h threshold shared by every Level 1/Level 2 check. */
-const CACHE_HIER_FRESH_MS = 24 * 60 * 60 * 1000
-
-/**
- * BKL-CACHE-HIER-01: Level 1 check for SF pipeline — on-disk `pipeline-data.json`
- * is fresh (cachedAt < 24h) AND includes this AE's pipelineSheetId in fileIds.
- * Non-fatal: any failure returns false and the caller falls through.
- */
-function isPipelineDiskCacheFreshForAe(pipelineSheetId: string | undefined): boolean {
-  if (!pipelineSheetId) return false
-  try {
-    const cached = readPipelineCache()
-    if (!cached?.cachedAt) return false
-    const age = Date.now() - new Date(cached.cachedAt).getTime()
-    if (!Number.isFinite(age) || age >= CACHE_HIER_FRESH_MS) return false
-    const fileIds = cached.fileIds ?? []
-    return fileIds.includes(pipelineSheetId)
-  } catch {
-    return false
-  }
-}
-
-/**
- * BKL-CACHE-HIER-01: Level 1 check for CCSP — on-disk `ccsp-data.json`
- * is fresh (cachedAt < 24h) AND includes this AE's ccspSheetId in fileIds.
- * Non-fatal: any failure returns false and the caller falls through.
- */
-function isCcspDiskCacheFreshForAe(ccspSheetId: string | undefined): boolean {
-  if (!ccspSheetId) return false
-  try {
-    const cached = readCCSPCache()
-    if (!cached?.cachedAt) return false
-    const age = Date.now() - new Date(cached.cachedAt).getTime()
-    if (!Number.isFinite(age) || age >= CACHE_HIER_FRESH_MS) return false
-    const fileIds = cached.fileIds ?? []
-    return fileIds.includes(ccspSheetId)
-  } catch {
-    return false
-  }
-}
-
-/**
- * BKL-CACHE-HIER-01: Level 2 helper — fetch a Drive file's modifiedTime.
- * Uses drive.files.get with fields: 'id,modifiedTime' — the lightest possible call.
- * Returns null on any failure (non-fatal, caller falls through to Level 3).
- */
-async function getSheetModifiedTime(sheetId: string): Promise<Date | null> {
-  try {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    if (!auth) return null
-    const drive = google.drive({ version: 'v3', auth })
-    const res = await withQuotaRetry(
-      () => drive.files.get({ fileId: sheetId, fields: 'id,modifiedTime', supportsAllDrives: true }),
-      'cache-hier modifiedTime',
-    )
-    const mt = res.data.modifiedTime
-    if (!mt) return null
-    const d = new Date(mt)
-    return isNaN(d.getTime()) ? null : d
-  } catch {
-    return null
-  }
-}
-
-/**
- * BKL-CACHE-HIER-01: Level 2 read for an AE's existing CCSP sheet.
- * The sheet is already parsed + territory-filtered by a prior bootstrap run — no CSV
- * parsing or territory filter needed. Returns rows as Record<string, string>[] matching
- * the shape runCcspScrape() would emit (so downstream writers/normalizers are identical).
- * Returns null on any failure — caller falls through to Level 3 non-fatally.
- */
-async function readCcspFromAeSheet(ccspSheetId: string): Promise<Record<string, string>[] | null> {
-  try {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    if (!auth) return null
-    const sheets = google.sheets({ version: 'v4', auth })
-    // CCSP sheet tab is always 'CCSP Data' (writeCcspSheet enforces this).
-    const res = await withQuotaRetry(
-      () => sheets.spreadsheets.values.get({ spreadsheetId: ccspSheetId, range: `'CCSP Data'!A:AM` }),
-      'cache-hier CCSP sheet read',
-    )
-    const raw = (res.data.values ?? []) as string[][]
-    if (raw.length < 2) return null
-    const headers = raw[0].map(h => String(h ?? ''))
-    const out: Record<string, string>[] = []
-    for (let i = 1; i < raw.length; i++) {
-      const row = raw[i]
-      if (!row || !row.some(v => v != null && String(v).trim() !== '')) continue
-      const obj: Record<string, string> = {}
-      for (let c = 0; c < headers.length; c++) {
-        obj[headers[c]] = String(row[c] ?? '')
-      }
-      out.push(obj)
-    }
-    return out.length > 0 ? out : null
-  } catch {
-    return null
-  }
-}
-
-/**
- * BKL-CACHE-HIER-01: Level 2 read for an AE's existing SF Pipeline sheet.
- * The sheet is already parsed from a prior SF report scrape — no browser session
- * needed. Returns data as the SfReportRow shape runSfPipelineSyncFromData expects
- * (headers + rows). Returns null on any failure — caller falls through to Level 3.
- */
-async function readPipelineFromAeSheet(pipelineSheetId: string): Promise<SfReportRow | null> {
-  try {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    if (!auth) return null
-    const sheets = google.sheets({ version: 'v4', auth })
-    // SF pipeline scraper always writes to a 'Pipeline' tab (see fetchPipelineData).
-    const res = await withQuotaRetry(
-      () => sheets.spreadsheets.values.get({ spreadsheetId: pipelineSheetId, range: `'Pipeline'!A1:Z5000` }),
-      'cache-hier Pipeline sheet read',
-    )
-    const raw = (res.data.values ?? []) as string[][]
-    if (raw.length < 2) return null
-    const headers = raw[0].map(h => String(h ?? ''))
-    const rows: string[][] = []
-    for (let i = 1; i < raw.length; i++) {
-      const row = raw[i]
-      if (!row || !row.some(v => v != null && String(v).trim() !== '')) continue
-      rows.push(row.map(c => String(c ?? '')))
-    }
-    return rows.length > 0 ? { headers, rows } : null
-  } catch {
-    return null
-  }
-}
-
-/**
- * BKL-INGEST-02: Level 2 read for an AE's existing Supportable (SF Bookings) sheet.
- * The sheet is already parsed + territory-filtered by a prior bootstrap run — no
- * POD-level SF bookings sheet read needed. Reconstructs SupportableResult[] from
- * the sheet's multi-tab structure:
- *   - 'Accounts' tab → customer names + account numbers
- *   - One tab per customer → subscription rows (CSV_HEADERS format)
- * Returns null on any failure — caller falls through to Level 3 (L3 = read the
- * POD-level SF bookings source sheet via fetchSfBookingsRaw).
- */
-async function readSfBookingsFromAeSheet(supportableSheetId: string): Promise<import('./supportable-scraper.ts').SupportableResult[] | null> {
-  try {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    if (!auth) return null
-    const sheetsClient = google.sheets({ version: 'v4', auth })
-
-    // Read Accounts tab — the directory of customers in this sheet.
-    const accountsRes = await withQuotaRetry(
-      () => sheetsClient.spreadsheets.values.get({ spreadsheetId: supportableSheetId, range: `'Accounts'!A1:C1000` }),
-      'cache-hier SF bookings Accounts read',
-    )
-    const accountsRaw = (accountsRes.data.values ?? []) as string[][]
-    if (accountsRaw.length < 2) return null  // header-only or empty
-
-    // Skip header row; row shape is [Account Name, Account ID(s), Alias].
-    const accountEntries: Array<{ customerName: string; accountNumbers: string[] }> = []
-    for (let i = 1; i < accountsRaw.length; i++) {
-      const row = accountsRaw[i] ?? []
-      const customerName = String(row[0] ?? '').trim()
-      if (!customerName) continue
-      const accountNumbers = String(row[1] ?? '')
-        .split(',')
-        .map(s => s.trim())
-        .filter(s => s.length > 0)
-      accountEntries.push({ customerName, accountNumbers })
-    }
-    if (accountEntries.length === 0) return null
-
-    // Read each customer's subscription tab.
-    const results: import('./supportable-scraper.ts').SupportableResult[] = []
-    for (const entry of accountEntries) {
-      const tab = entry.customerName.slice(0, 100)  // matches writeSupportableSheet tab naming
-      // Escape single quotes in tab names for Sheets A1 notation (e.g. "O'Reilly" → "O''Reilly").
-      // Without this, the range string `'O'Reilly'!A1:ZZ5000` terminates after the first quote
-      // and the API returns a 400 for the malformed range.
-      const safeTab = tab.replace(/'/g, "''")
-      try {
-        const tabRes = await withQuotaRetry(
-          () => sheetsClient.spreadsheets.values.get({ spreadsheetId: supportableSheetId, range: `'${safeTab}'!A1:ZZ5000` }),
-          `cache-hier SF bookings tab read (${tab})`,
-        )
-        const tabRaw = (tabRes.data.values ?? []) as string[][]
-        if (tabRaw.length < 1) {
-          // Tab missing or empty — include customer with no rows so downstream accounting still sees the match.
-          results.push({ customerName: entry.customerName, accountNumbers: entry.accountNumbers, rows: [] })
-          continue
-        }
-        const headers = (tabRaw[0] ?? []).map(h => String(h ?? ''))
-        const rows: Record<string, string>[] = []
-        for (let i = 1; i < tabRaw.length; i++) {
-          const row = tabRaw[i] ?? []
-          if (!row.some(v => v != null && String(v).trim() !== '')) continue
-          const obj: Record<string, string> = {}
-          for (let c = 0; c < headers.length; c++) {
-            obj[headers[c]] = String(row[c] ?? '')
-          }
-          rows.push(obj)
-        }
-        results.push({ customerName: entry.customerName, accountNumbers: entry.accountNumbers, rows })
-      } catch (e: any) {
-        // Tab read failed (e.g. deleted, quota) — skip this customer, keep the rest.
-        console.warn(`[bootstrap] L2 SF bookings read failed for ${tab}: ${sanitizeErr(e)}`)
-        results.push({ customerName: entry.customerName, accountNumbers: entry.accountNumbers, rows: [] })
-      }
-    }
-    return results.length > 0 ? results : null
-  } catch (e: any) {
-    console.warn(`[bootstrap] L2 SF bookings read failed for sheet ${supportableSheetId}: ${sanitizeErr(e)}`)
     return null
   }
 }
@@ -881,7 +603,7 @@ export async function bootstrapPOD(opts: {
 
   // Initialize POD bootstrap state for status endpoint
   const podStartedAt = new Date().toISOString()
-  podBootstrapState = {
+  Object.assign(podBootstrapState, {
     running: true,
     total: aeEntries.length,
     completed: 0,
@@ -890,7 +612,7 @@ export async function bootstrapPOD(opts: {
     startedAt: podStartedAt,
     completedAt: null,
     error: null,
-  }
+  })
 
   // Dynamic timeout: 30 min per AE
   const podTimeoutMs = aeEntries.length * 30 * 60 * 1000
@@ -1088,7 +810,7 @@ export async function bootstrapPOD(opts: {
     // Wait for any in-progress single-AE bootstrap to finish before starting the next.
     // BKL-DOM-INF-01: also wait on the post-bootstrap domain inference IIFE — it mutates
     // customers.json and would race with the next AE's bootstrap if we let it overlap.
-    while (autoBootstrapState.running || inferenceRunning) {
+    while (autoBootstrapState.running || bootstrapFlags.inferenceRunning) {
       await new Promise(r => setTimeout(r, 3000))
     }
 
@@ -1351,9 +1073,9 @@ export function createBootstrapRouter(): Hono {
 
   // POST /api/bootstrap/auto/reset — clear a stuck bootstrap state
   router.post('/api/bootstrap/auto/reset', (c) => {
-    autoBootstrapState = { running: false, steps: [], aeName: '', completedAt: null, error: null, resources: {} }
-    autoBootstrapCancelRequested = false
-    podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
+    Object.assign(autoBootstrapState, { running: false, steps: [], aeName: '', completedAt: null, error: null, resources: {} })
+    bootstrapFlags.autoBootstrapCancelRequested = false
+    Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
     console.log('[auto-bootstrap] State reset by user request')
     return c.json({ ok: true })
   })
@@ -1363,7 +1085,7 @@ export function createBootstrapRouter(): Hono {
     if (!autoBootstrapState.running) {
       return c.json({ error: 'No single-AE bootstrap is currently running' }, 400)
     }
-    autoBootstrapCancelRequested = true
+    bootstrapFlags.autoBootstrapCancelRequested = true
     console.log('[auto-bootstrap] Cancellation requested by user')
     return c.json({ ok: true, message: 'Cancellation requested — bootstrap will stop after the current step' })
   })
@@ -1418,7 +1140,7 @@ export function createBootstrapRouter(): Hono {
     // Without this, two simultaneous POSTs both pass the guard above, then both set running=true
     // after the await — a TOCTOU race. Claiming here with total:0/results:[] is an "initializing"
     // marker; bootstrapPOD() overwrites these fields once it reads the territory sheet.
-    podBootstrapState = { running: true, total: 0, completed: 0, currentAE: null, results: [], startedAt: new Date().toISOString(), completedAt: null, error: null }
+    Object.assign(podBootstrapState, { running: true, total: 0, completed: 0, currentAE: null, results: [], startedAt: new Date().toISOString(), completedAt: null, error: null })
 
     const body = await c.req.json<{ territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }>().catch(() => ({} as { territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }))
     const rawTerritorySheet = (body.territorySheetId ?? '').trim()
@@ -1432,20 +1154,20 @@ export function createBootstrapRouter(): Hono {
       : ''
 
     if (!territorySheetId) {
-      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
+      Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
       return c.json({ error: 'territorySheetId is required' }, 400)
     }
     // Validate sheet ID format (alphanumeric + hyphens + underscores, typical Google Sheet IDs)
     if (!/^[a-zA-Z0-9_-]{44}$/.test(territorySheetId)) {
-      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
+      Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
       return c.json({ error: 'Invalid territorySheetId format' }, 400)
     }
     if (!sfReportId || !isValidSfId(sfReportId)) {
-      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
+      Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
       return c.json({ error: 'sfReportId is required — provide a Salesforce report URL or bare ID' }, 400)
     }
     if (!parentFolderId || !/^[a-zA-Z0-9_-]{10,}$/.test(parentFolderId)) {
-      podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
+      Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
       return c.json({ error: 'parentFolderId is required — provide a Google Drive folder URL or bare ID' }, 400)
     }
 
@@ -1485,7 +1207,7 @@ export function createBootstrapRouter(): Hono {
   router.post('/api/bootstrap/auto', async (c) => {
     // BKL-DOM-INF-01: include inferenceRunning so a follow-up POD AE bootstrap can't
     // start while the previous AE's domain inference is still mutating customers.json.
-    if (autoBootstrapState.running || inferenceRunning) return c.json({ error: 'Auto-bootstrap already in progress' }, 409)
+    if (autoBootstrapState.running || bootstrapFlags.inferenceRunning) return c.json({ error: 'Auto-bootstrap already in progress' }, 409)
 
     const body = await c.req.json<{
       aeName?: string
@@ -1542,9 +1264,9 @@ export function createBootstrapRouter(): Hono {
     }
 
     // BKL-WIZ-02: Reset cancellation flag at the start of each new bootstrap run
-    autoBootstrapCancelRequested = false
+    bootstrapFlags.autoBootstrapCancelRequested = false
 
-    autoBootstrapState = {
+    Object.assign(autoBootstrapState, {
       running: true,
       aeName,
       steps: [
@@ -1558,7 +1280,7 @@ export function createBootstrapRouter(): Hono {
       error: null,
       completedAt: null,
       resources: { junkFiltered: junkFiltered.length > 0 ? junkFiltered : undefined },
-    }
+    })
 
     const bootstrapStartMs = Date.now()
     const stepStartMs: Record<number, number> = {}
@@ -1589,7 +1311,7 @@ export function createBootstrapRouter(): Hono {
         if (autoBootstrapState.steps[idx]?.status === 'running') {
           console.warn(`[auto-bootstrap] Step ${idx} (${label}) timed out after ${timeoutMs / 1000}s`)
           setStep(idx, 'error', `Step timed out after ${timeoutMs / 1000}s`)
-          autoBootstrapCancelRequested = true
+          bootstrapFlags.autoBootstrapCancelRequested = true
         }
       }, timeoutMs)
 
@@ -1611,7 +1333,7 @@ export function createBootstrapRouter(): Hono {
     ;(async () => {
       // BKL-WIZ-02: Check cancellation between steps and mark remaining pending steps as cancelled
       const checkCancelled = (): boolean => {
-        if (!autoBootstrapCancelRequested) return false
+        if (!bootstrapFlags.autoBootstrapCancelRequested) return false
         for (const step of autoBootstrapState.steps) {
           if (step.status === 'pending') step.status = 'cancelled'
         }
@@ -1619,7 +1341,7 @@ export function createBootstrapRouter(): Hono {
         autoBootstrapState.completedAt = new Date().toISOString()
         autoBootstrapState.error = 'Cancelled by user'
         clearTimeout(bootstrapTimeoutId)
-        autoBootstrapCancelRequested = false
+        bootstrapFlags.autoBootstrapCancelRequested = false
         console.log(`[auto-bootstrap] Cancelled by user after completing some steps for ${aeName}`)
         return true
       }
@@ -2192,7 +1914,7 @@ export function createBootstrapRouter(): Hono {
       // consistent running flag through the whole inference pass. capturedState
       // anchors writes to the state object that owned this run.
       const capturedState = autoBootstrapState
-      inferenceRunning = true
+      bootstrapFlags.inferenceRunning = true
       let inferenceTimedOut = false
       try {
         await Promise.race([
@@ -2256,10 +1978,10 @@ export function createBootstrapRouter(): Hono {
 
             // Auto-save high-confidence domains to customers.json — AE-scoped lookup so a
             // matching name under a different AE (or an inactive customer) cannot be
-            // contaminated by this run. Serialized through _customerWriteLock so concurrent
+            // contaminated by this run. Serialized through lockState.customerWriteLock so concurrent
             // inference across overlapping bootstraps does not lose writes.
             if (!inferenceTimedOut && highConfidenceSaves.length > 0) {
-              _customerWriteLock = _customerWriteLock.then(async () => {
+              lockState.customerWriteLock = lockState.customerWriteLock.then(async () => {
                 for (const { name, domain, ae } of highConfidenceSaves) {
                   const cu = customers.find(cx => cx.name === name && cx.ae === ae && !cx.inactive)
                   if (cu && !cu.domain) cu.domain = domain
@@ -2269,7 +1991,7 @@ export function createBootstrapRouter(): Hono {
                   console.log(`[auto-bootstrap] Domain inference complete for ${aeName}: ${highConfidenceSaves.length} saved, ${inferenceResults.length - highConfidenceSaves.length} unresolved`)
                 } catch (e: any) { console.warn('[auto-bootstrap] domain auto-save failed:', e.message) }
               })
-              await _customerWriteLock
+              await lockState.customerWriteLock
             }
 
             if (!inferenceTimedOut && inferenceResults.length > 0) {
@@ -2284,7 +2006,7 @@ export function createBootstrapRouter(): Hono {
       } catch (e: any) {
         console.warn(`[auto-bootstrap] domain inference failed for ${aeName}:`, e?.message ?? e)
       } finally {
-        inferenceRunning = false
+        bootstrapFlags.inferenceRunning = false
       }
 
       autoBootstrapState.running = false

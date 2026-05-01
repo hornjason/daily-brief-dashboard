@@ -8495,14 +8495,22 @@ Solution: Evaluate whether Doc upsert operations are common enough to warrant mo
 ---
 
 ### BKL-ARCH-08 | bootstrap-orchestrator.ts — 2,695 lines holding 4 orthogonal concerns
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-01
 Priority: P2
 Size: XL
 Source: Serena architecture audit 2026-05-01
-Files: src/bootstrap-orchestrator.ts (2,695 lines)
+Files: src/bootstrap-orchestrator.ts, src/bootstrap-state.ts (NEW), src/lib/cache-hierarchy.ts (NEW)
 Description: One file holds: bootstrap state machine, step-by-step orchestration (Steps 1-6), Drive cache hierarchy (L1/L2/L3 freshness), SF/CCSP per-AE pipeline writes, Tableau session login, settings.json scaffolding, and re-implementations of helpers that exist elsewhere. ADR-005's 500-line cap is violated 5x. No isolated test surface.
-Solution: Split into bootstrap-state.ts (state machine), bootstrap-steps.ts (Steps 1-6 as discrete functions), cache-hierarchy.ts (L1/L2/L3 freshness). Delegate traversal to BKL-ARCH-01 and BKL-ARCH-07. Orchestrator shrinks to thin sequencer.
-Note: BKL-ARCH-01, BKL-ARCH-06, BKL-ARCH-07 should be done first — this item depends on those shared lib modules existing.
+Solution: Split into bootstrap-state.ts (state machine + shared types) and cache-hierarchy.ts (L1/L2/L3 freshness). Option B (container-object mutation) resolved TypeScript export let reassignment constraint. 13 unit tests, Playwright API 25/0 on 7776.
+
+### BKL-SEC-CACHE-HIER-LOG-01 | cache-hierarchy.ts logs raw Sheet ID in catch block
+Status: 🔵 OPEN
+Priority: P3
+Size: S
+Source: Rook scan 2026-05-01 (BKL-ARCH-08 review)
+Files: src/lib/cache-hierarchy.ts:229
+Description: catch block logs raw `supportableSheetId` (a Drive capability token). Low severity — localhost-only app, no external log sink. But deviates from project log hygiene pattern.
+Solution: Truncate to last 6 chars: `...${supportableSheetId.slice(-6)}` for consistency with sanitizeErr usage pattern.
 
 ---
 
