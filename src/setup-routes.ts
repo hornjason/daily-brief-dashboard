@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, writeFileSync as writeFileSyncRaw, mkdirSy
 import { writeJsonAtomic, writeFileAtomic } from './lib/atomic-write.ts'
 import { resolve, dirname } from 'path'
 import { google } from 'googleapis'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './google.ts'
 import { normalizeSettings } from './region-config.ts'
 import { customers, aes, saveAes, CUSTOMERS_PATH, AES_PATH, setAes, setCustomers } from './server-state.ts'
@@ -109,12 +109,13 @@ function isValidDomain(value: unknown): boolean {
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-export function registerSetupRoutes(app: Hono): void {
+export function createSetupRouter(): Hono {
+  const router = new Hono()
 
   // ── Google OAuth browser flow ─────────────────────────────────────────────
 
   // GET /oauth/start — Redirect browser to Google consent screen
-  app.get('/oauth/start', (c) => {
+  router.get('/oauth/start', (c) => {
     if (!existsSync(OAUTH_KEYS_PATH)) {
       return c.html(`<html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
         <h2 style="color:#f1f5f9">OAuth Keys Not Found</h2>
@@ -154,7 +155,7 @@ export function registerSetupRoutes(app: Hono): void {
   })
 
   // GET /oauth/callback — Handle Google redirect, exchange code for tokens
-  app.get('/oauth/callback', async (c) => {
+  router.get('/oauth/callback', async (c) => {
     const code  = c.req.query('code')
     const state = c.req.query('state')
     const error = c.req.query('error')
@@ -229,7 +230,7 @@ export function registerSetupRoutes(app: Hono): void {
   })
 
   // GET /api/oauth/status — Check if unified Google token exists
-  app.get('/api/oauth/status', async (c) => {
+  router.get('/api/oauth/status', async (c) => {
     if (!existsSync(GOOGLE_UNIFIED_TOKEN_PATH)) return c.json({ authorized: false })
     try {
       const token = JSON.parse(readFileSync(GOOGLE_UNIFIED_TOKEN_PATH, 'utf-8'))
@@ -259,7 +260,7 @@ export function registerSetupRoutes(app: Hono): void {
   // ── Setup wizard routes ───────────────────────────────────────────────────
 
   // GET /api/setup/check-auth — Check Google OAuth token availability
-  app.get('/api/setup/check-auth', async (c) => {
+  router.get('/api/setup/check-auth', async (c) => {
     const check = (filename: string) => existsSync(resolve(SRV_CONFIG_DIR, filename))
     const unified = check('.google-token.json')
     const hasFile = {
@@ -294,12 +295,12 @@ export function registerSetupRoutes(app: Hono): void {
   })
 
   // GET /api/setup/oauth-keys-status — Check if OAuth keys file exists
-  app.get('/api/setup/oauth-keys-status', (c) => {
+  router.get('/api/setup/oauth-keys-status', (c) => {
     return c.json({ exists: existsSync(OAUTH_KEYS_PATH) })
   })
 
   // GET /api/setup/preflight — Return onboarding readiness checks
-  app.get('/api/setup/preflight', (c) => {
+  router.get('/api/setup/preflight', (c) => {
     const checks = [
       { name: 'Environment file',  ok: existsSync('.env') || existsSync('/data/.env'),                         detail: '.env file present' },
       { name: 'RH Portal token',   ok: !!process.env.REDHAT_OFFLINE_TOKEN,                                    detail: 'REDHAT_OFFLINE_TOKEN configured' },
@@ -311,7 +312,7 @@ export function registerSetupRoutes(app: Hono): void {
   })
 
   // POST /api/setup/upload-oauth-keys — Save uploaded GCP OAuth keys JSON
-  app.post('/api/setup/upload-oauth-keys', async (c) => {
+  router.post('/api/setup/upload-oauth-keys', async (c) => {
     try {
       const body = await c.req.json()
       if (!body || typeof body !== 'object') return c.json({ error: 'Invalid JSON' }, 400)
@@ -337,7 +338,7 @@ export function registerSetupRoutes(app: Hono): void {
   // POST /api/setup/reset — Clear all config and cache for a clean setup
   // ?full=true also removes the OAuth keys file (simulate brand new user)
   // Production guard (BKL-TEST-11): blocks reset when real data is loaded
-  app.post('/api/setup/reset', (c) => {
+  router.post('/api/setup/reset', (c) => {
     console.warn('[reset] Factory reset triggered at', new Date().toISOString())
     if (c.req.query('confirm') !== 'true') {
       return c.json({ error: 'Destructive operation requires ?confirm=true' }, 400)
@@ -387,7 +388,7 @@ export function registerSetupRoutes(app: Hono): void {
   // POST /api/setup/infer-domains — waterfall domain inference (BKL-DOM-01)
   // Tier 1: Clearbit autocomplete (free) → Tier 2: LLM fallback → Tier 3: validation
   // Falls back to existing Gmail/Calendar/Supportable signal inference if waterfall finds nothing
-  app.post('/api/setup/infer-domains', async (c) => {
+  router.post('/api/setup/infer-domains', async (c) => {
     if (customers.length === 0) return c.json({ error: 'No customers configured' }, 400)
     try {
       const results = []
@@ -470,7 +471,7 @@ export function registerSetupRoutes(app: Hono): void {
 
   // POST /api/setup/save-domains — persist inferred/edited domains to customers.json
   // Accepts optional domainOverride per customer (bypasses BLOCKLIST for that domain)
-  app.post('/api/setup/save-domains', async (c) => {
+  router.post('/api/setup/save-domains', async (c) => {
     const body = await c.req.json<{ domains: { name: string; domain: string; domainOverride?: string }[] }>()
     if (!body.domains?.length) return c.json({ error: 'No domains provided' }, 400)
 
@@ -500,7 +501,7 @@ export function registerSetupRoutes(app: Hono): void {
   })
 
   // POST /api/setup/save-customers — replace entire customer list from Setup UI
-  app.post('/api/setup/save-customers', async (c) => {
+  router.post('/api/setup/save-customers', async (c) => {
     try {
       const body = await c.req.json<{ customers: Customer[] }>()
       if (!Array.isArray(body.customers)) return c.json({ error: 'customers must be an array' }, 400)
@@ -561,7 +562,7 @@ export function registerSetupRoutes(app: Hono): void {
   const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000  // 24 hours
   const SNAPSHOT_PATH = resolve(dirname(AES_PATH), '__test_snapshot.json')
 
-  app.post('/api/__test/snapshot', (c) => {
+  router.post('/api/__test/snapshot', (c) => {
     try {
       // BKL-TEST-03: Serialize in-memory state, not disk state.
       // Disk can be stale when AEs are added via bootstrap without a restart.
@@ -579,7 +580,7 @@ export function registerSetupRoutes(app: Hono): void {
     }
   })
 
-  app.post('/api/__test/restore', async (c) => {
+  router.post('/api/__test/restore', async (c) => {
     // ── Guard -1: ALLOW_RESET gate ───────────────────────────────────────────
     // This is the live handler (setup-routes wins Hono first-match over server.ts).
     // Gate must live here — the server.ts handler is dead code for this path.
@@ -664,4 +665,6 @@ export function registerSetupRoutes(app: Hono): void {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
+
+  return router
 }

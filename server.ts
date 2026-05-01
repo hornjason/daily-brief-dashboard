@@ -20,30 +20,30 @@ import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
 import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning, adoptSupportableContext } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
-import { initCacheLayer, registerCacheRoutes, readSheetCache, readPipelineCache, toSlug } from './src/cache-layer.ts'
-import { initSettingsApi, registerSettingsRoutes } from './src/settings-api.ts'
-import { registerNodeRoleRoutes } from './src/node-role-routes.ts'
-import { registerRegionAccessRoutes } from './src/region-access-routes.ts'
+import { initCacheLayer, createCacheRouter, readSheetCache, readPipelineCache, toSlug } from './src/cache-layer.ts'
+import { initSettingsApi, createSettingsRouter } from './src/settings-api.ts'
+import { createNodeRoleRouter } from './src/node-role-routes.ts'
+import { createRegionAccessRouter } from './src/region-access-routes.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
 import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
-import { initRefreshEngine, registerRefreshRoutes, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
-import { initScraperManager, registerScraperRoutes, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary, setSfSyncLastError } from './src/scraper-manager.ts'
-import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
+import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
+import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary, setSfSyncLastError } from './src/scraper-manager.ts'
+import { initScrapeApi, createScrapeRouter } from './src/scrape-api.ts'
 import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
-import { initDashboardRoutes, registerDashboardRoutes } from './src/dashboard-routes.ts'
+import { initDashboardRoutes, createDashboardRouter } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
-import { registerBootstrapRoutes, resetBootstrapStates } from './src/bootstrap-orchestrator.ts'
+import { createBootstrapRouter, resetBootstrapStates } from './src/bootstrap-orchestrator.ts'
 // ── M04 extracted modules ───────────────────────────────────────────────────
-import { registerSheetImportRoutes } from './src/sheet-import.ts'
-import { registerDriveSourcesRoutes } from './src/drive-sources.ts'
+import { createSheetImportRouter } from './src/sheet-import.ts'
+import { createDriveSourcesRouter } from './src/drive-sources.ts'
 import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } from './src/utils.ts'
 import { deriveConfidence, ConnectionHealthSchema } from './src/connection-health.ts'
 // ── M05 extracted modules ───────────────────────────────────────────────────
-import { initSetupRoutes, registerSetupRoutes, runStartupDriveMerge } from './src/setup-routes.ts'
-import { initCustomerRoutes, registerCustomerRoutes } from './src/customer-routes.ts'
-import { registerProductIntelRoutes } from './src/product-intel-routes.ts'
-import { initRestoreRoutes, registerRestoreRoutes } from './src/restore-routes.ts'
-import { registerBackupRoutes } from './src/backup-routes.ts'
+import { initSetupRoutes, createSetupRouter, runStartupDriveMerge } from './src/setup-routes.ts'
+import { initCustomerRoutes, createCustomerRouter } from './src/customer-routes.ts'
+import { createProductIntelRouter } from './src/product-intel-routes.ts'
+import { initRestoreRoutes, createRestoreRouter } from './src/restore-routes.ts'
+import { createBackupRouter } from './src/backup-routes.ts'
 import { getGeminiUsageSummary } from './src/gemini-cost-tracker.ts'
 import { initJobPersistence } from './src/account-intelligence.ts'
 // ── BKL-UX52: Multi-pod support ───────────────────────────────────────────
@@ -238,13 +238,13 @@ app.get('/health', (c) => c.json({
   ccspSession: !!getScrapeContext(),   // ccsp shares RH SSO context
 }))
 
-registerCacheRoutes(app)
-registerDashboardRoutes(app)
-registerSetupRoutes(app)
-registerCustomerRoutes(app)
+app.route('/', createCacheRouter())
+app.route('/', createDashboardRouter())
+app.route('/', createSetupRouter())
+app.route('/', createCustomerRouter())
 // ── Wave 4: Product Intelligence routes ─────────────────────────────────────
-registerProductIntelRoutes(app)
-registerRestoreRoutes(app)
+app.route('/', createProductIntelRouter())
+app.route('/', createRestoreRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
@@ -633,10 +633,10 @@ app.delete('/api/auth/salesforce/session', async (c) => {
 })
 
 // ── Scraper routes (M02 — registered from scraper-manager.ts) ──────────────
-registerScraperRoutes(app)
+app.route('/', createScraperRouter())
 
 // ── Unified scrape API (BKL-M25 — registered from scrape-api.ts) ───────────
-registerScrapeRoutes(app)
+app.route('/', createScrapeRouter())
 
 // ── BKL-M50e: Scraper telemetry routes ──────────────────────────────────────
 
@@ -647,11 +647,11 @@ app.get('/api/status/telemetry', (c) => c.json(getTelemetrySummary()))
 app.get('/api/status/telemetry/history', (c) => c.json(getTelemetryLog()))
 
 // ── Auto-bootstrap + Tableau routes (M03 — registered from bootstrap-orchestrator.ts) ──
-registerBootstrapRoutes(app)
+app.route('/', createBootstrapRouter())
 
 // ── Drive data-sources + Sheet import routes (M04 — registered from drive-sources.ts + sheet-import.ts) ──
-registerDriveSourcesRoutes(app)
-registerSheetImportRoutes(app)
+app.route('/', createDriveSourcesRouter())
+app.route('/', createSheetImportRouter())
 
 
 // ── Dashboard API endpoints ──────────────────────────────────────────────────
@@ -671,7 +671,7 @@ app.get('/api/territory/notifications', async (c) => {
 })
 
 // ── Config backup routes (BKL-BACKUP-01) ────────────────────────────────────
-registerBackupRoutes(app)
+app.route('/', createBackupRouter())
 
 // ── Gemini cost tracking (BKL-M52) ──────────────────────────────────────────
 
@@ -1102,11 +1102,11 @@ app.get('/admin', async (c) => {
 
 // ── Customer detail routes (extracted to src/customer-routes.ts) ─────────────
 
-registerSettingsRoutes(app, { rescheduleRefreshTimers })
+app.route('/', createSettingsRouter({ rescheduleRefreshTimers }))
 
 // BKL-HERO-01 Phase 0 — node-role + region-access endpoints
-registerNodeRoleRoutes(app)
-registerRegionAccessRoutes(app, SETTINGS_PATH)
+app.route('/', createNodeRoleRouter())
+app.route('/', createRegionAccessRouter({ settingsPath: SETTINGS_PATH }))
 
 // ── Env var status (BKL-SR02) — lets UI warn when env overrides config settings
 app.get('/api/env/gemini-model', (c) => {
@@ -1250,7 +1250,7 @@ app.get('/api/drive/ls/:folderId', async (c) => {
 })
 
 // ── Refresh routes (M02 — registered from refresh-engine.ts) ────────────────
-registerRefreshRoutes(app)
+app.route('/', createRefreshRouter())
 
 // ── Sheet data + debug routes (extracted to src/customer-routes.ts) ──────────
 

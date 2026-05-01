@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, existsSync, statSync } from 'fs'
 import { readdir } from 'fs/promises'
 import { resolve } from 'path'
 import { google } from 'googleapis'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import { aes, customers } from './server-state.ts'
 import { toSlug, readPipelineCache, readLatestBriefCache, readSheetCache } from './cache-layer.ts'
 import { computeAllHealthScores, isFreeOrTrial } from './health-score.ts'
@@ -218,11 +218,12 @@ function getSheetAndTypeForPod(pod: string): { sheetId: string; regionType: 'com
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-export function registerDashboardRoutes(app: Hono): void {
+export function createDashboardRouter(): Hono {
+  const router = new Hono()
 
   // ── Health Score endpoints (R04) ──────────────────────────────────────────
 
-  app.get('/api/health-scores', (c) => {
+  router.get('/api/health-scores', (c) => {
     try {
       const scores = computeAllHealthScores(customers, RH_CASES_CACHE_PATH)
       return c.json(scores)
@@ -231,7 +232,7 @@ export function registerDashboardRoutes(app: Hono): void {
     }
   })
 
-  app.get('/api/health-scores/:name', (c) => {
+  router.get('/api/health-scores/:name', (c) => {
     try {
       const name = decodeURIComponent(c.req.param('name'))
       const customer = customers.find(
@@ -249,7 +250,7 @@ export function registerDashboardRoutes(app: Hono): void {
 
   // ── Morning Summary + Priority Action (R06/R13) ──────────────────────────
 
-  app.get('/api/morning-summary', async (c) => {
+  router.get('/api/morning-summary', async (c) => {
     try {
       if (!customers.length) return c.json({ signals: [], summary: 'No customers configured.', customerCount: 0 })
 
@@ -385,7 +386,7 @@ export function registerDashboardRoutes(app: Hono): void {
     }
   })
 
-  app.get('/api/customer/:name/priority-action', (c) => {
+  router.get('/api/customer/:name/priority-action', (c) => {
     try {
       const customerName = decodeURIComponent(c.req.param('name'))
       const customer = customers.find(cu => cu.name.toLowerCase() === customerName.toLowerCase())
@@ -428,7 +429,7 @@ export function registerDashboardRoutes(app: Hono): void {
   })
 
   // ── Stakeholder engagement (R31) ──────────────────────────────────────────
-  app.get('/api/customer/:name/stakeholder-engagement', async (c) => {
+  router.get('/api/customer/:name/stakeholder-engagement', async (c) => {
     try {
       const customerName = decodeURIComponent(c.req.param('name'))
       const customer = customers.find(cu => cu.name.toLowerCase() === customerName.toLowerCase())
@@ -478,7 +479,7 @@ export function registerDashboardRoutes(app: Hono): void {
   })
 
   // ── Temporal delta (R33) ──────────────────────────────────────────────────
-  app.get('/api/customer/:name/temporal-delta', async (c) => {
+  router.get('/api/customer/:name/temporal-delta', async (c) => {
     try {
       const customerName = decodeURIComponent(c.req.param('name'))
       const slug = toSlug(customerName)
@@ -584,7 +585,7 @@ export function registerDashboardRoutes(app: Hono): void {
   })
 
   // ── BKL-M39: Dashboard freshness endpoint ─────────────────────────────────
-  app.get('/api/status/freshness', (c) => {
+  router.get('/api/status/freshness', (c) => {
     const freshness: Record<string, string | null> = {}
 
     // Read lastRun timestamps from schedulerConfig in data-sources.json
@@ -618,7 +619,7 @@ export function registerDashboardRoutes(app: Hono): void {
   })
 
   // ── R05: KPI history / sparkline data ────────────────────────────────────
-  app.get('/api/kpis/history', (c) => {
+  router.get('/api/kpis/history', (c) => {
     const days = parseInt(c.req.query('days') ?? '30', 10)
     try {
       const history = getRecentHistory(Math.min(Math.max(days, 1), 90))
@@ -629,7 +630,7 @@ export function registerDashboardRoutes(app: Hono): void {
   })
 
   // ── GET /api/kpis — Aggregated KPIs for the dashboard ────────────────────
-  app.get('/api/kpis', async (c) => {
+  router.get('/api/kpis', async (c) => {
     try {
       // Fetch cases and calendar in parallel
       const [allCases, calendarEvents] = await Promise.all([
@@ -714,7 +715,7 @@ export function registerDashboardRoutes(app: Hono): void {
   })
 
   // ── GET /api/pod/summary — Aggregated POD-level KPIs ─────────────────────
-  app.get('/api/pod/summary', (c) => {
+  router.get('/api/pod/summary', (c) => {
     try {
       // Serve from 30s TTL cache
       if (_podSummaryCache && Date.now() - _podSummaryCache.at < POD_SUMMARY_TTL) {
@@ -790,7 +791,7 @@ export function registerDashboardRoutes(app: Hono): void {
 
   // ── GET /api/territory-names?pod=WEST_COMM_CORP_NORTHWEST ────────────────
   // Returns all territories for a POD with AE names — used to populate the territory dropdown.
-  app.get('/api/territory-names', async (c) => {
+  router.get('/api/territory-names', async (c) => {
     const pod = c.req.query('pod')?.trim()
     if (!pod || !/^[A-Z0-9_]+$/.test(pod)) return c.json({ error: 'Invalid pod format' }, 400)
 
@@ -950,7 +951,7 @@ export function registerDashboardRoutes(app: Hono): void {
   // ── GET /api/territory-lookup?territory=WEST_COMM_CORP_NORTHWEST_TERR01 ──
   // Reads the territory Google Sheet live and returns { aeName, accounts } for
   // the requested territory. Does not require aes.json to be populated.
-  app.get('/api/territory-lookup', async (c) => {
+  router.get('/api/territory-lookup', async (c) => {
     const requestedTerritory = c.req.query('territory')?.trim()
     if (!requestedTerritory || !/^[A-Z0-9_]+$/.test(requestedTerritory)) return c.json({ error: 'Invalid territory format' }, 400)
 
@@ -1112,4 +1113,6 @@ export function registerDashboardRoutes(app: Hono): void {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
+
+  return router
 }

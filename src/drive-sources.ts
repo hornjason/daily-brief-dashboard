@@ -20,9 +20,10 @@ const DATA_SOURCES_PATH_MODULE = process.env.CONFIG_DIR
 
 // ── Route registration ──────────────────────────────────────────────────────
 
-export function registerDriveSourcesRoutes(app: Hono): void {
+export function createDriveSourcesRouter(): Hono {
+  const router = new Hono()
   // GET /api/data-sources/status — List connected AE folders
-  app.get('/api/data-sources/status', (c) => {
+  router.get('/api/data-sources/status', (c) => {
     try {
       const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH_MODULE, 'utf-8'))
       // Migrate old single-folder format
@@ -35,7 +36,7 @@ export function registerDriveSourcesRoutes(app: Hono): void {
 
   // POST /api/data-sources/check-files — Check each connected AE folder for required files
   // Returns per-folder presence of [AE Name] Supportable, CCSP, and Pipeline files.
-  app.post('/api/data-sources/check-files', async (c) => {
+  router.post('/api/data-sources/check-files', async (c) => {
     const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
     if (!parentIds.length) return c.json({ error: 'No AE folders connected.' }, 400)
 
@@ -145,7 +146,7 @@ export function registerDriveSourcesRoutes(app: Hono): void {
   })
 
   // POST /api/data-sources/add-folder — Connect an AE Drive folder
-  app.post('/api/data-sources/add-folder', async (c) => {
+  router.post('/api/data-sources/add-folder', async (c) => {
     const { folderUrl } = await c.req.json<{ folderUrl: string }>()
     if (!folderUrl) return c.json({ error: 'folderUrl required' }, 400)
 
@@ -189,7 +190,7 @@ export function registerDriveSourcesRoutes(app: Hono): void {
   })
 
   // DELETE /api/data-sources/remove-folder — Remove a connected AE folder
-  app.delete('/api/data-sources/remove-folder', async (c) => {
+  router.delete('/api/data-sources/remove-folder', async (c) => {
     const { folderId } = await c.req.json<{ folderId: string }>()
     if (!folderId) return c.json({ error: 'folderId required' }, 400)
     if (!/^[a-zA-Z0-9_-]{10,}$/.test(folderId)) return c.json({ error: 'Invalid folder ID format' }, 400)
@@ -211,7 +212,7 @@ export function registerDriveSourcesRoutes(app: Hono): void {
   })
 
   // GET /api/data-sources/preview — Scan connected AE folders, report what was found
-  app.get('/api/data-sources/preview', async (c) => {
+  router.get('/api/data-sources/preview', async (c) => {
     const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
     if (!parentIds.length) return c.json({ aeFolders: [] })
 
@@ -276,7 +277,7 @@ export function registerDriveSourcesRoutes(app: Hono): void {
 
   // POST /api/sheets/bootstrap-preview — Preview accounts discovered from AE folders or explicit URL.
   // Discovery order: (1) pipeline file by name, (2) explicit fileId, (3) territory spreadsheet tabs.
-  app.post('/api/sheets/bootstrap-preview', async (c) => {
+  router.post('/api/sheets/bootstrap-preview', async (c) => {
     const body = await c.req.json<{ fileId?: string }>().catch(() => ({}))
     const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
 
@@ -300,7 +301,7 @@ export function registerDriveSourcesRoutes(app: Hono): void {
   })
 
   // POST /api/sheets/bootstrap — Import discovered accounts into customers.json.
-  app.post('/api/sheets/bootstrap', async (c) => {
+  router.post('/api/sheets/bootstrap', async (c) => {
     const body = await c.req.json<{ fileId?: string }>().catch(() => ({}))
     const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
 
@@ -328,4 +329,6 @@ export function registerDriveSourcesRoutes(app: Hono): void {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
+
+  return router
 }

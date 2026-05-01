@@ -3,7 +3,7 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { streamSSE } from 'hono/streaming'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import { fetchCalendar, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { fetchCases, fetchCustomerCases, fetchCustomerSubscriptions, fetchCaseLatestComment } from './redhat.ts'
 import { fetchCustomerMeetings, fetchCustomerEmails, fetchCustomerDocs, generateBrief } from './customer.ts'
@@ -171,12 +171,13 @@ function filterToSingleAE(records: PipelineRecord[], aeParam: string): PipelineR
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-export function registerCustomerRoutes(app: Hono): void {
+export function createCustomerRouter(): Hono {
+  const router = new Hono()
 
   // ── Customer data endpoints ───────────────────────────────────────────────
 
   // GET /api/briefs — Brief summaries for all customers (from cache)
-  app.get('/api/briefs', (c) => {
+  router.get('/api/briefs', (c) => {
     const result: Record<string, { overview: string; talkingPoints: string[]; openCasesNote: string; cachedAt: string; date: string }> = {}
     for (const customer of customers) {
       const cached = readLatestBriefCache(customer.name)
@@ -191,7 +192,7 @@ export function registerCustomerRoutes(app: Hono): void {
   // BKL-BOOT-AI: Triggered after bootstrap to warm brief cache for all newly bootstrapped customers.
   // Returns immediately; generation runs in background at 10s/customer to stay within Drive API quota.
   // NOTE: registered BEFORE /api/briefs/:name pattern routes to avoid slug collision
-  app.post('/api/briefs/pregen-all', async (c) => {
+  router.post('/api/briefs/pregen-all', async (c) => {
     // Per-POD dedup: two concurrent requests for the same POD would otherwise
     // each spin up a background loop over the same customer list. Caller may
     // pass podId via JSON body or `?podId=` query; absent that, dedupe globally.
@@ -277,7 +278,7 @@ export function registerCustomerRoutes(app: Hono): void {
   // GET /api/ccsp — Cloud spend data aggregated from CCSP Raw Data tabs
   // Optional ?products=OCP,RHEL filters records by productOfferingGroup before aggregating (LOG-06)
   // Optional ?ae=AE+Name filters records to a single AE (case-insensitive exact match)
-  app.get('/api/ccsp', async (c) => {
+  router.get('/api/ccsp', async (c) => {
     const force = c.req.query('force') === 'true'
     const productsParam = c.req.query('products')
     const aeParam = c.req.query('ae') ?? null
@@ -333,7 +334,7 @@ export function registerCustomerRoutes(app: Hono): void {
     }
   })
 
-  app.get('/api/pipeline', async (c) => {
+  router.get('/api/pipeline', async (c) => {
     const force = c.req.query('force') === 'true'
     const aeParam = c.req.query('ae') ?? null
     const cached = readPipelineCache()
@@ -362,7 +363,7 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /api/calendar — Calendar events with range filter; ?all=true returns every event
-  app.get('/api/calendar', async (c) => {
+  router.get('/api/calendar', async (c) => {
     const range = (c.req.query('range') ?? 'week') as 'today' | 'week'
     const includeAll = c.req.query('all') === 'true'
     // Short-circuit if Google OAuth token doesn't exist yet
@@ -384,7 +385,7 @@ export function registerCustomerRoutes(app: Hono): void {
   // GET /api/cases/all — Support cases across ALL accounts
   // ?includeAll=true returns closed/resolved cases too (default: open only)
   // ?account=NNNN filters to a specific account number
-  app.get('/api/cases/all', async (c) => {
+  router.get('/api/cases/all', async (c) => {
     try {
       const includeAll = c.req.query('includeAll') === 'true'
       const accountFilter = c.req.query('account')
@@ -426,7 +427,7 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /api/cases/:caseNumber/latest-comment — most recent comment for a case
-  app.get('/api/cases/:caseNumber/latest-comment', async (c) => {
+  router.get('/api/cases/:caseNumber/latest-comment', async (c) => {
     const caseNumber = c.req.param('caseNumber')
     if (!/^\d{8}$/.test(caseNumber)) return c.json({ error: 'Invalid case number — must be 8 digits' }, 400)
     const comment = await fetchCaseLatestComment(caseNumber).catch(() => null)
@@ -436,7 +437,7 @@ export function registerCustomerRoutes(app: Hono): void {
   // ── Customer detail endpoints ─────────────────────────────────────────────
 
   // GET /customer/:name/brief — Customer brief from cache
-  app.get('/customer/:name/brief', async (c) => {
+  router.get('/customer/:name/brief', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
@@ -525,7 +526,7 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /customer/:name/ccsp — CCSP cloud spend for a single customer (from cache)
-  app.get('/customer/:name/ccsp', (c) => {
+  router.get('/customer/:name/ccsp', (c) => {
     const rawName = decodeURIComponent(c.req.param('name')).toLowerCase()
     const cached = readCCSPCache()
     // BKL-CCSP-03: treat stale cache (AE set changed) as empty
@@ -556,7 +557,7 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /customer/:name/pipeline — Pipeline opps for a single customer (from cache)
-  app.get('/customer/:name/pipeline', (c) => {
+  router.get('/customer/:name/pipeline', (c) => {
     const rawName = decodeURIComponent(c.req.param('name')).toLowerCase()
     const cached = readPipelineCache()
     if (!cached) return c.json({ totalAcv: 0, openCount: 0, opps: [], closedOpps: [], cachedAt: null })
@@ -585,7 +586,7 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /customer/:name/events — SSE stream of customer data sections
-  app.get('/customer/:name/events', (c) => {
+  router.get('/customer/:name/events', (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find(
       (cu) => cu.name.toLowerCase() === rawName.toLowerCase()
@@ -652,7 +653,7 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /customer/:name/sheetdata — Sheet data with cache support
-  app.get('/customer/:name/sheetdata', async (c) => {
+  router.get('/customer/:name/sheetdata', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
@@ -675,7 +676,7 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /customer/:name/sheetdebug — Raw sheet rows before normalization
-  app.get('/customer/:name/sheetdebug', async (c) => {
+  router.get('/customer/:name/sheetdebug', async (c) => {
     if (process.env.NODE_ENV === 'production') return c.json({ error: 'Not available' }, 404)
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
@@ -690,7 +691,7 @@ export function registerCustomerRoutes(app: Hono): void {
 
   // ── Account Intelligence (BKL-AI01–AI04) ──────────────────────────────────
 
-  app.post('/api/customer/:name/generate-intelligence', async (c) => {
+  router.post('/api/customer/:name/generate-intelligence', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
@@ -721,7 +722,7 @@ export function registerCustomerRoutes(app: Hono): void {
   // the fire on recent startedAt, and a stub discoveredAt cache write (below)
   // shortcuts subsequent polls before they reach the Drive scan.
   const INTEL_RETRY_COOLDOWN_MS = 10 * 60 * 1000
-  app.get('/api/customer/:name/intelligence-status', async (c) => {
+  router.get('/api/customer/:name/intelligence-status', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
@@ -836,7 +837,7 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // ── BKL-PRODINTEL-04: Expansion Opportunities (cross-product proactive recommendations) ──
-  app.get('/api/customer/:name/expansion-opportunities', (c) => {
+  router.get('/api/customer/:name/expansion-opportunities', (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
@@ -846,7 +847,7 @@ export function registerCustomerRoutes(app: Hono): void {
     return c.json(cached)
   })
 
-  app.post('/api/customer/:name/expansion-opportunities', async (c) => {
+  router.post('/api/customer/:name/expansion-opportunities', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
@@ -861,14 +862,14 @@ export function registerCustomerRoutes(app: Hono): void {
   })
 
   // GET /api/intelligence/status — global intelligence run status (polled by AdminPage)
-  app.get('/api/intelligence/status', (c) => {
+  router.get('/api/intelligence/status', (c) => {
     const running = getRunningJob()
     return c.json(running ?? { status: 'idle' })
   })
 
   // ── BKL-AI06: Batch intelligence generation ──────────────────────────────
 
-  app.post('/api/intelligence/generate-all', (c) => {
+  router.post('/api/intelligence/generate-all', (c) => {
     if (!getAiConfig().intelligenceEnabled) {
       return c.json({ error: 'Intelligence generation is disabled — set intelligenceEnabled=true in AI settings to enable' }, 503)
     }
@@ -954,7 +955,7 @@ export function registerCustomerRoutes(app: Hono): void {
     return c.json({ message: 'Batch generation started', total: customerList.length })
   })
 
-  app.get('/api/intelligence/generate-all/status', (c) => {
+  router.get('/api/intelligence/generate-all/status', (c) => {
     const startedAt = _batchState.startedAt ? new Date(_batchState.startedAt).getTime() : null
     const elapsedMs = startedAt && _batchState.running ? Date.now() - startedAt : null
     const elapsedSeconds = elapsedMs !== null ? Math.floor(elapsedMs / 1000) : null
@@ -969,7 +970,7 @@ export function registerCustomerRoutes(app: Hono): void {
 
   // ── BKL-INTEL-03: Batch intelligence doc validation ──────────────────────────
 
-  app.post('/api/intelligence/validate-all', async (c) => {
+  router.post('/api/intelligence/validate-all', async (c) => {
     const completeJobs = getAllJobs().filter(
       j => j.status === 'complete' && j.companyDocUrl && j.industryDocUrl
     )
@@ -1033,7 +1034,7 @@ export function registerCustomerRoutes(app: Hono): void {
 
   const _accountPlanInFlight = new Set<string>()
 
-  app.post('/api/customers/:id/account-plan/generate', async (c) => {
+  router.post('/api/customers/:id/account-plan/generate', async (c) => {
     const rawName = decodeURIComponent(c.req.param('id'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
       || customers.find((cu) => toSlug(cu.name) === rawName)
@@ -1057,7 +1058,7 @@ export function registerCustomerRoutes(app: Hono): void {
     }
   })
 
-  app.get('/api/customers/:id/account-plan', (c) => {
+  router.get('/api/customers/:id/account-plan', (c) => {
     const rawName = decodeURIComponent(c.req.param('id'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
       || customers.find((cu) => toSlug(cu.name) === rawName)
@@ -1071,7 +1072,7 @@ export function registerCustomerRoutes(app: Hono): void {
 
   // ── BKL-AI16: Product Q&A — grounded Gemini query for RHEL / OCP / AAP ─────
 
-  app.post('/api/product-query', async (c) => {
+  router.post('/api/product-query', async (c) => {
     let body: any
     try {
       body = await c.req.json()
@@ -1106,4 +1107,6 @@ export function registerCustomerRoutes(app: Hono): void {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
+
+  return router
 }

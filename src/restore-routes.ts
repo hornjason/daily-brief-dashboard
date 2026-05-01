@@ -17,7 +17,7 @@ import { mkdirSync, existsSync, readFileSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import { aes, customers, saveCustomers } from './server-state.ts'
 import { toSlug, sheetCachePath, invalidateCCSPCache, isCCSPCacheStale } from './cache-layer.ts'
@@ -331,8 +331,9 @@ async function restoreFromPipelineSheet(
 
 // ── Route registration ──────────────────────────────────────────────────────
 
-export function registerRestoreRoutes(app: Hono): void {
-  app.post('/api/admin/restore', async (c) => {
+export function createRestoreRouter(): Hono {
+  const router = new Hono()
+  router.post('/api/admin/restore', async (c) => {
     const startTime = Date.now()
     console.log(`[restore] POST /api/admin/restore started at ${new Date().toISOString()}`)
 
@@ -518,4 +519,6 @@ export function registerRestoreRoutes(app: Hono): void {
       results,
     } satisfies RestoreResponse)
   })
+
+  return router
 }

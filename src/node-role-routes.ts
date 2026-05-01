@@ -6,12 +6,14 @@
  * Timer, Automation & Limits sections). Read-only, no caching — the env
  * var does not change at runtime.
  */
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 
-export function registerNodeRoleRoutes(app: Hono): void {
+export function createNodeRoleRouter(): Hono {
+  const router = new Hono()
   // GET /api/node-role — { isL3Only: boolean }
   // isL3Only = true when NODE_ROLE is anything other than 'primary' (including unset).
-  app.get('/api/node-role', (c) => {
+  router.get('/api/node-role', (c) => {
     return c.json({ isL3Only: process.env.NODE_ROLE !== 'primary' })
   })
+  return router
 }

@@ -5,7 +5,7 @@
  * Separate from product-intelligence.ts (BKL-AI16 Q&A routes in customer-routes.ts).
  */
 
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
@@ -71,10 +71,11 @@ let _allCustomersBatchState: {
   completedAt: null,
 }
 
-export function registerProductIntelRoutes(app: Hono): void {
+export function createProductIntelRouter(): Hono {
+  const router = new Hono()
 
   // GET /api/products — all cached summaries (no fetch, reads cache only)
-  app.get('/api/products', (c) => {
+  router.get('/api/products', (c) => {
     try {
       const summaries = getAllProductSummaries()
       return c.json(summaries)
@@ -86,7 +87,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // GET /api/products/config — full product config array (for admin UI)
   // NOTE: registered BEFORE /api/products/:slug — Hono matches in registration order
-  app.get('/api/products/config', (c) => {
+  router.get('/api/products/config', (c) => {
     try {
       const config = loadProductConfig()
       return c.json(config)
@@ -98,7 +99,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // GET /api/products/alerts — unacknowledged + all product alerts
   // NOTE: must be registered BEFORE /api/products/:slug to avoid ":slug" matching "alerts"
-  app.get('/api/products/alerts', (c) => {
+  router.get('/api/products/alerts', (c) => {
     try {
       const alerts = getProductAlerts()
       return c.json(alerts)
@@ -109,7 +110,7 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // POST /api/products/alerts/:id/acknowledge
-  app.post('/api/products/alerts/:id/acknowledge', async (c) => {
+  router.post('/api/products/alerts/:id/acknowledge', async (c) => {
     const id = c.req.param('id')
     try {
       acknowledgeAlert(id)
@@ -122,7 +123,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // POST /api/products/setup-drive-folders — bootstrap Drive subfolders for each product
   // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "setup-drive-folders"
-  app.post('/api/products/setup-drive-folders', async (c) => {
+  router.post('/api/products/setup-drive-folders', async (c) => {
     try {
       const config = loadProductIntelConfig()
       // BKL-UX-PRODUCT-FOLDER-CONFIG-01: source parent folder from existing
@@ -229,7 +230,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // POST /api/products/ingest-slides — ingest Drive corpus for a product
   // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "ingest-slides"
-  app.post('/api/products/ingest-slides', async (c) => {
+  router.post('/api/products/ingest-slides', async (c) => {
     let body: { slug?: string }
     try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
     const slug = body?.slug
@@ -255,7 +256,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // GET /api/products/slides-status — read cached Drive corpus without calling Drive
   // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "slides-status"
-  app.get('/api/products/slides-status', (c) => {
+  router.get('/api/products/slides-status', (c) => {
     const slug = c.req.query('slug')
     if (!slug) return c.json({ error: 'slug query param is required' }, 400)
     try {
@@ -269,7 +270,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // GET /api/products/intel/generate-all-customers/status — batch generation status
   // NOTE: registered BEFORE /api/products/:slug and BEFORE /:customerSlug to avoid slug collision
-  app.get('/api/products/intel/generate-all-customers/status', (c) => {
+  router.get('/api/products/intel/generate-all-customers/status', (c) => {
     return c.json({
       running: _allCustomersBatchState.running,
       current: _allCustomersBatchState.current,
@@ -283,7 +284,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // POST /api/products/intel/generate-all-customers — regenerate intel for all customers x all products
   // NOTE: registered BEFORE /api/products/:slug and BEFORE /:customerSlug to avoid slug collision
-  app.post('/api/products/intel/generate-all-customers', async (c) => {
+  router.post('/api/products/intel/generate-all-customers', async (c) => {
     const batchKey = 'intel:batch:all-customers'
     if (_generatingKeys.has(batchKey)) {
       return c.json({ error: 'Batch generation already running', state: _allCustomersBatchState }, 409)
@@ -361,7 +362,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // POST /api/products/intel/:customerSlug/generate-all — generate intel for ALL products sequentially
   // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "intel"
-  app.post('/api/products/intel/:customerSlug/generate-all', async (c) => {
+  router.post('/api/products/intel/:customerSlug/generate-all', async (c) => {
     const customerSlug = c.req.param('customerSlug')
     if (!/^[a-z0-9-]+$/.test(customerSlug)) {
       return c.json({ error: 'Invalid customerSlug' }, 400)
@@ -424,7 +425,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // GET /api/products/:slug/intel/:customerSlug — cached customer intel (no generation)
   // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "intel"
-  app.get('/api/products/:slug/intel/:customerSlug', (c) => {
+  router.get('/api/products/:slug/intel/:customerSlug', (c) => {
     const slug         = c.req.param('slug')
     const customerSlug = c.req.param('customerSlug')
     if (!/^[a-z0-9-]+$/.test(slug) || !/^[a-z0-9-]+$/.test(customerSlug)) return c.json({ error: 'Invalid slug' }, 400)
@@ -440,7 +441,7 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // POST /api/products/:slug/intel/:customerSlug/generate — generate (or regenerate) customer intel
-  app.post('/api/products/:slug/intel/:customerSlug/generate', async (c) => {
+  router.post('/api/products/:slug/intel/:customerSlug/generate', async (c) => {
     const slug         = c.req.param('slug')
     const customerSlug = c.req.param('customerSlug')
     if (!/^[a-z0-9-]+$/.test(slug) || !/^[a-z0-9-]+$/.test(customerSlug)) {
@@ -497,7 +498,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // GET /api/products/features — all products' feature caches
   // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "features"
-  app.get('/api/products/features', (c) => {
+  router.get('/api/products/features', (c) => {
     try {
       const products = loadProductConfig()
       const caches: any[] = []
@@ -514,7 +515,7 @@ export function registerProductIntelRoutes(app: Hono): void {
 
   // POST /api/products/features/refresh-all — extract + enrich features for all products
   // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "features"
-  app.post('/api/products/features/refresh-all', async (c) => {
+  router.post('/api/products/features/refresh-all', async (c) => {
     const mutexKey = 'refresh-all'
     if (_generatingKeys.has(mutexKey)) {
       return c.json({ error: 'Feature refresh-all already in progress' }, 409)
@@ -538,7 +539,7 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // GET /api/products/:slug/territory-summary — aggregate customer intel for a product across territory
-  app.get('/api/products/:slug/territory-summary', (c) => {
+  router.get('/api/products/:slug/territory-summary', (c) => {
     const slug = c.req.param('slug')
     if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)
     try {
@@ -629,7 +630,7 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // GET /api/products/:slug/features — feature cache for a single product
-  app.get('/api/products/:slug/features', (c) => {
+  router.get('/api/products/:slug/features', (c) => {
     const slug = c.req.param('slug')
     if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)
     try {
@@ -643,7 +644,7 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // POST /api/products/:slug/features/refresh — extract + enrich features for one product
-  app.post('/api/products/:slug/features/refresh', async (c) => {
+  router.post('/api/products/:slug/features/refresh', async (c) => {
     const slug = c.req.param('slug')
     const mutexKey = `features:${slug}`
     if (_generatingKeys.has(mutexKey)) {
@@ -665,7 +666,7 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // GET /api/products/:slug — single cached summary or 404
-  app.get('/api/products/:slug', (c) => {
+  router.get('/api/products/:slug', (c) => {
     const slug = c.req.param('slug')
     try {
       // Validate slug against known config
@@ -684,7 +685,7 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // POST /api/products/:slug/refresh — fetch + synthesize, return updated summary
-  app.post('/api/products/:slug/refresh', async (c) => {
+  router.post('/api/products/:slug/refresh', async (c) => {
     const slug = c.req.param('slug')
     const mutexKey = `refresh:${slug}`
     if (_generatingKeys.has(mutexKey)) {
@@ -703,7 +704,7 @@ export function registerProductIntelRoutes(app: Hono): void {
   })
 
   // PATCH /api/products/:slug/sources — update customSources and/or followLinks for a product
-  app.patch('/api/products/:slug/sources', async (c) => {
+  router.patch('/api/products/:slug/sources', async (c) => {
     const slug = c.req.param('slug')
     try {
       const products = loadProductConfig()
@@ -733,4 +734,6 @@ export function registerProductIntelRoutes(app: Hono): void {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
+
+  return router
 }

@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import type { Customer } from './types.ts'
 import { aes, customers } from './server-state.ts'
 import { readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, isCCSPCacheStale } from './cache-layer.ts'
@@ -263,21 +263,23 @@ export async function refreshPipeline(force = false): Promise<void> {
 
 // ── Route registration ──────────────────────────────────────────────────────
 
-export function registerRefreshRoutes(app: Hono): void {
-  app.post('/api/refresh', async (c) => {
+export function createRefreshRouter(): Hono {
+  const router = new Hono()
+  router.post('/api/refresh', async (c) => {
     const result = await refreshAll()
     return c.json({ ...result, refreshedAt: new Date().toISOString() })
   })
-  app.post('/api/refresh/pipeline', async (c) => {
+  router.post('/api/refresh/pipeline', async (c) => {
     await refreshPipeline(true)
     return c.json({ ok: true, refreshedAt: new Date().toISOString() })
   })
-  app.post('/api/refresh/subscriptions', async (c) => {
+  router.post('/api/refresh/subscriptions', async (c) => {
     await refreshSubscriptions(true)
     return c.json({ ok: true, refreshedAt: new Date().toISOString() })
   })
-  app.post('/api/refresh/ccsp', async (c) => {
+  router.post('/api/refresh/ccsp', async (c) => {
     await refreshCCSP(true)
     return c.json({ ok: true, refreshedAt: new Date().toISOString() })
   })
+  return router
 }

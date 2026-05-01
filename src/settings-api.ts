@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import { sanitizeErr } from './utils.ts'
 import { backupNow } from './backup-config.ts'
 import { validateOfflineToken } from './redhat.ts'
@@ -241,18 +241,19 @@ export function getPersistedOfflineToken(): string | null {
 
 // ── Route registration ──────────────────────────────────────────────────────
 
-export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimers: (intervals: typeof DEFAULT_REFRESH_INTERVALS) => void }): void {
+export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals: typeof DEFAULT_REFRESH_INTERVALS) => void }): Hono {
+  const router = new Hono()
   // GET /api/session-timestamps — when each scraper session was last established
-  app.get('/api/session-timestamps', (c) => c.json(getSessionTimestamps()))
+  router.get('/api/session-timestamps', (c) => c.json(getSessionTimestamps()))
 
   // GET /api/settings/offline-token — check if token is configured (never expose the value)
-  app.get('/api/settings/offline-token', (c) => {
+  router.get('/api/settings/offline-token', (c) => {
     const configured = !!process.env.REDHAT_OFFLINE_TOKEN
     return c.json({ configured })
   })
 
   // POST /api/settings/offline-token — save REDHAT_OFFLINE_TOKEN to config + process.env
-  app.post('/api/settings/offline-token', async (c) => {
+  router.post('/api/settings/offline-token', async (c) => {
     let body: { token?: unknown }
     try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
 
@@ -281,7 +282,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
   })
 
   // GET /api/settings/refresh — current refresh intervals + scheduler config
-  app.get('/api/settings/refresh', (c) => {
+  router.get('/api/settings/refresh', (c) => {
     return c.json({
       intervals: getRefreshIntervals(),
       defaults: DEFAULT_REFRESH_INTERVALS,
@@ -290,7 +291,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
   })
 
   // POST /api/settings/refresh — update refresh intervals
-  app.post('/api/settings/refresh', async (c) => {
+  router.post('/api/settings/refresh', async (c) => {
     const body = await c.req.json<Record<string, unknown>>().catch(() => ({}))
     const ALLOWED_KEYS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_REFRESH_INTERVALS))
     const filtered: Record<string, unknown> = {}
@@ -355,9 +356,9 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
 
   // ── Weather settings + proxy ──────────────────────────────────────────────
 
-  app.get('/api/settings/weather', (c) => c.json(getWeatherSettings()))
+  router.get('/api/settings/weather', (c) => c.json(getWeatherSettings()))
 
-  app.post('/api/settings/weather', async (c) => {
+  router.post('/api/settings/weather', async (c) => {
     const body = await c.req.json<Partial<WeatherSettings>>().catch(() => ({}))
     const current = getWeatherSettings()
     const rawZip = typeof body.zipCode === 'string' ? body.zipCode.trim() : current.zipCode
@@ -381,9 +382,9 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
 
   // ── AI & Intelligence settings ────────────────────────────────────────────
 
-  app.get('/api/settings/ai', (c) => c.json({ config: getAiConfig(), defaults: DEFAULT_AI_CONFIG }))
+  router.get('/api/settings/ai', (c) => c.json({ config: getAiConfig(), defaults: DEFAULT_AI_CONFIG }))
 
-  app.post('/api/settings/ai', async (c) => {
+  router.post('/api/settings/ai', async (c) => {
     const body = await c.req.json<Partial<AiConfig>>().catch(() => ({}))
     const current = getAiConfig()
     const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'])
@@ -458,9 +459,9 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
 
   // ── Automation & Limits settings ─────────────────────────────────────────
 
-  app.get('/api/settings/automation', (c) => c.json({ config: getAutomationConfig(), defaults: DEFAULT_AUTOMATION_CONFIG }))
+  router.get('/api/settings/automation', (c) => c.json({ config: getAutomationConfig(), defaults: DEFAULT_AUTOMATION_CONFIG }))
 
-  app.post('/api/settings/automation', async (c) => {
+  router.post('/api/settings/automation', async (c) => {
     const body = await c.req.json<Partial<AutomationConfig>>().catch(() => ({}))
     const current = getAutomationConfig()
     const updated: AutomationConfig = { ...current }
@@ -519,7 +520,7 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
     }
   })
 
-  app.get('/api/weather', async (c) => {
+  router.get('/api/weather', async (c) => {
     const settings = getWeatherSettings()
     if (!settings.enabled || !settings.zipCode) return c.json({ enabled: false })
 
@@ -547,4 +548,6 @@ export function registerSettingsRoutes(app: Hono, deps: { rescheduleRefreshTimer
       return c.json({ enabled: true, error: 'unavailable' })
     }
   })
+
+  return router
 }

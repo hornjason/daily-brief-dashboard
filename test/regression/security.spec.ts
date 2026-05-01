@@ -133,12 +133,12 @@ test.describe('REG-080: product-intel-routes.ts startup CACHE_DIR confinement ch
     const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'product-intel-routes.ts'), 'utf8')
     // Find the top-level startup confinement block — identified by resolve(process.env.CACHE_DIR)
     const assertionIdx = src.indexOf('resolve(process.env.CACHE_DIR)')
-    const registerIdx  = src.indexOf('export function registerProductIntelRoutes(')
+    const registerIdx  = src.indexOf('export function createProductIntelRouter(')
     expect(assertionIdx, 'startup confinement assertion (resolve(process.env.CACHE_DIR)) must exist').toBeGreaterThan(0)
-    expect(registerIdx, 'registerProductIntelRoutes must exist').toBeGreaterThan(0)
+    expect(registerIdx, 'createProductIntelRouter must exist').toBeGreaterThan(0)
     expect(
       assertionIdx,
-      'confinement check must run at module load (before registerProductIntelRoutes definition)'
+      'confinement check must run at module load (before createProductIntelRouter definition)'
     ).toBeLessThan(registerIdx)
   })
 })

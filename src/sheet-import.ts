@@ -69,9 +69,10 @@ export { importSheetRows, buildCustomer }
 
 // ── Route registration ──────────────────────────────────────────────────────
 
-export function registerSheetImportRoutes(app: Hono): void {
+export function createSheetImportRouter(): Hono {
+  const router = new Hono()
   // GET /api/sheets/status — Check if a sheet is connected
-  app.get('/api/sheets/status', (c) => {
+  router.get('/api/sheets/status', (c) => {
     try {
       const sync = JSON.parse(readFileSync(SHEETS_SYNC_PATH, 'utf-8'))
       return c.json({ connected: true, fileId: sync.fileId, fileName: sync.fileName, syncedAt: sync.syncedAt })
@@ -81,7 +82,7 @@ export function registerSheetImportRoutes(app: Hono): void {
   })
 
   // GET /api/sheets/list — List available Google Sheets from Drive
-  app.get('/api/sheets/list', async (c) => {
+  router.get('/api/sheets/list', async (c) => {
     try {
       const auth = makeAuth(GDRIVE_TOKEN_PATH_SRV)
       const drive = google.drive({ version: 'v3', auth })
@@ -98,7 +99,7 @@ export function registerSheetImportRoutes(app: Hono): void {
   })
 
   // GET /api/sheets/headers — Read header row from a specific sheet
-  app.get('/api/sheets/headers', async (c) => {
+  router.get('/api/sheets/headers', async (c) => {
     const fileId = c.req.query('fileId')
     if (!fileId) return c.json({ error: 'fileId required' }, 400)
     if (!/^[a-zA-Z0-9_-]{10,60}$/.test(fileId)) return c.json({ error: 'Invalid file ID' }, 400)
@@ -117,7 +118,7 @@ export function registerSheetImportRoutes(app: Hono): void {
   })
 
   // POST /api/sheets/import — Import customers from a Google Sheet
-  app.post('/api/sheets/import', async (c) => {
+  router.post('/api/sheets/import', async (c) => {
     const body = await c.req.json() as { fileId: string; fileName: string; columnMap: Record<string, number | string | null> }
     const { fileId, fileName, columnMap } = body
     if (!fileId || !columnMap) return c.json({ error: 'fileId and columnMap required' }, 400)
@@ -133,7 +134,7 @@ export function registerSheetImportRoutes(app: Hono): void {
   })
 
   // POST /api/sheets/sync — Re-sync from the previously connected sheet
-  app.post('/api/sheets/sync', async (c) => {
+  router.post('/api/sheets/sync', async (c) => {
     let syncConfig: { fileId: string; fileName: string; columnMap: Record<string, number | string | null> }
     try {
       syncConfig = JSON.parse(readFileSync(SHEETS_SYNC_PATH, 'utf-8'))
@@ -148,4 +149,6 @@ export function registerSheetImportRoutes(app: Hono): void {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
+
+  return router
 }

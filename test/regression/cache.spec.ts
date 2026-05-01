@@ -372,9 +372,9 @@ test('REG-TOKEN-10: pregen-all fetches are OUT of per-AE /api/bootstrap/auto han
   // And both fetches must live inside bootstrapPOD so they fire once per POD run
   const podStart = src.indexOf('export async function bootstrapPOD')
   expect(podStart, 'bootstrapPOD function not found').toBeGreaterThan(-1)
-  // bootstrapPOD returns the handler registration block — scan until registerBootstrapRoutes
-  const podEnd = src.indexOf('export function registerBootstrapRoutes', podStart)
-  expect(podEnd, 'registerBootstrapRoutes not found after bootstrapPOD').toBeGreaterThan(podStart)
+  // bootstrapPOD returns the handler registration block — scan until createBootstrapRouter
+  const podEnd = src.indexOf('export function createBootstrapRouter', podStart)
+  expect(podEnd, 'createBootstrapRouter not found after bootstrapPOD').toBeGreaterThan(podStart)
   const podBody = src.slice(podStart, podEnd)
   expect(podBody, 'intelligence/generate-all must be fetched from bootstrapPOD (post-loop)')
     .toMatch(/\/api\/intelligence\/generate-all/)
@@ -386,8 +386,8 @@ test('REG-TOKEN-10-b: bootstrapPOD pregen fetches sit AFTER the per-AE for-loop 
   const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'bootstrap-orchestrator.ts'), 'utf-8')
   const podStart = src.indexOf('export async function bootstrapPOD')
   expect(podStart, 'bootstrapPOD function not found').toBeGreaterThan(-1)
-  const podEnd = src.indexOf('export function registerBootstrapRoutes', podStart)
-  expect(podEnd, 'registerBootstrapRoutes not found after bootstrapPOD').toBeGreaterThan(podStart)
+  const podEnd = src.indexOf('export function createBootstrapRouter', podStart)
+  expect(podEnd, 'createBootstrapRouter not found after bootstrapPOD').toBeGreaterThan(podStart)
   const podBody = src.slice(podStart, podEnd)
 
   // The canonical POD AE loop header — "for (let i = 0; i < aeEntries.length; i++)"

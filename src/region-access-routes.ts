@@ -15,7 +15,7 @@
  */
 import { readFileSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import { normalizeSettings, type RegionConfig } from './region-config.ts'
 import { sanitizeErr } from './utils.ts'
 
@@ -53,9 +53,11 @@ function buildCatalogRegion(region: RegionConfig): CatalogRegion {
   return out
 }
 
-export function registerRegionAccessRoutes(app: Hono, settingsPath: string): void {
+export function createRegionAccessRouter(deps: { settingsPath: string }): Hono {
+  const { settingsPath } = deps
+  const router = new Hono()
   // GET /api/regions/catalog — list of regions with selectable flag + pod list
-  app.get('/api/regions/catalog', (c) => {
+  router.get('/api/regions/catalog', (c) => {
     try {
       let raw: Record<string, unknown> = {}
       try { raw = JSON.parse(readFileSync(settingsPath, 'utf-8')) } catch { /* missing → empty regions */ }
@@ -70,7 +72,7 @@ export function registerRegionAccessRoutes(app: Hono, settingsPath: string): voi
   // GET /api/regions/access — current persisted selection (Phase 1 first-boot detection)
   // Returns the raw fields exactly as they appear in settings.json so the frontend
   // can distinguish `undefined` (first boot) from `[]` (deliberately cleared).
-  app.get('/api/regions/access', (c) => {
+  router.get('/api/regions/access', (c) => {
     try {
       let raw: Record<string, unknown> = {}
       try { raw = JSON.parse(readFileSync(settingsPath, 'utf-8')) } catch { /* new file */ }
@@ -84,7 +86,7 @@ export function registerRegionAccessRoutes(app: Hono, settingsPath: string): voi
   })
 
   // POST /api/regions/access — validate + persist enabledRegions/enabledPods
-  app.post('/api/regions/access', async (c) => {
+  router.post('/api/regions/access', async (c) => {
     let body: { enabledRegions?: unknown; enabledPods?: unknown }
     try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
 
@@ -129,4 +131,5 @@ export function registerRegionAccessRoutes(app: Hono, settingsPath: string): voi
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
+  return router
 }

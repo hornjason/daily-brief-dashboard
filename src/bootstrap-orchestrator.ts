@@ -1300,9 +1300,10 @@ const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/view
 
 // ── Route registration ───────────────────────────────────────────────────────
 
-export function registerBootstrapRoutes(app: Hono): void {
+export function createBootstrapRouter(): Hono {
+  const router = new Hono()
 
-  app.get('/api/bootstrap/auto/status', (c) => {
+  router.get('/api/bootstrap/auto/status', (c) => {
     const sanitizeDetail = (s: string | null | undefined) =>
       s ? s.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : s
     const sanitized: Record<string, unknown> = {
@@ -1339,7 +1340,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   })
 
   // BKL-WIZ-02: POST /api/bootstrap/cancel — request cancellation of a running POD bootstrap
-  app.post('/api/bootstrap/cancel', (c) => {
+  router.post('/api/bootstrap/cancel', (c) => {
     const cancelled = requestPodBootstrapCancel()
     if (!cancelled) {
       return c.json({ ok: false, error: 'No POD bootstrap is currently running' }, 400)
@@ -1349,7 +1350,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   })
 
   // POST /api/bootstrap/auto/reset — clear a stuck bootstrap state
-  app.post('/api/bootstrap/auto/reset', (c) => {
+  router.post('/api/bootstrap/auto/reset', (c) => {
     autoBootstrapState = { running: false, steps: [], aeName: '', completedAt: null, error: null, resources: {} }
     autoBootstrapCancelRequested = false
     podBootstrapState = { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null }
@@ -1358,7 +1359,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   })
 
   // BKL-WIZ-02: POST /api/bootstrap/auto/cancel — request graceful cancellation of single-AE bootstrap
-  app.post('/api/bootstrap/auto/cancel', (c) => {
+  router.post('/api/bootstrap/auto/cancel', (c) => {
     if (!autoBootstrapState.running) {
       return c.json({ error: 'No single-AE bootstrap is currently running' }, 400)
     }
@@ -1368,7 +1369,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   })
 
   // GET /api/bootstrap/pod/tabs — List corp tabs from a territory sheet
-  app.get('/api/bootstrap/pod/tabs', async (c) => {
+  router.get('/api/bootstrap/pod/tabs', async (c) => {
     const rawSheetId = (c.req.query('sheetId') ?? '').trim()
     const urlMatch = rawSheetId.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{10,})/)
     const sheetId = urlMatch ? urlMatch[1] : rawSheetId
@@ -1400,7 +1401,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   })
 
   // GET /api/bootstrap/pod/config — Return last saved POD bootstrap config
-  app.get('/api/bootstrap/pod/config', (c) => {
+  router.get('/api/bootstrap/pod/config', (c) => {
     const cfg = readPodConfig()
     if (!cfg) return c.json({ config: null })
     return c.json({ config: cfg })
@@ -1408,7 +1409,7 @@ export function registerBootstrapRoutes(app: Hono): void {
 
   // POST /api/bootstrap/pod — Bootstrap all AEs in the POD from a territory sheet
   // Fire-and-forget: returns immediately, poll /api/bootstrap/auto/status for progress
-  app.post('/api/bootstrap/pod', async (c) => {
+  router.post('/api/bootstrap/pod', async (c) => {
     if (autoBootstrapState.running || podBootstrapState.running) {
       return c.json({ error: 'A bootstrap is already in progress' }, 409)
     }
@@ -1474,14 +1475,14 @@ export function registerBootstrapRoutes(app: Hono): void {
   })
 
   // POST /api/oauth/dismiss-downgrade — user has seen the reduce-permissions banner
-  app.post('/api/oauth/dismiss-downgrade', (c) => {
+  router.post('/api/oauth/dismiss-downgrade', (c) => {
     try {
       writeFileSyncRaw(OAUTH_STATE_PATH, JSON.stringify({ pendingDowngrade: false, dismissedAt: new Date().toISOString() }, null, 2), { mode: 0o600 })
     } catch (e: any) { console.warn('[oauth] dismiss write failed:', e.message) }
     return c.json({ ok: true })
   })
 
-  app.post('/api/bootstrap/auto', async (c) => {
+  router.post('/api/bootstrap/auto', async (c) => {
     // BKL-DOM-INF-01: include inferenceRunning so a follow-up POD AE bootstrap can't
     // start while the previous AE's domain inference is still mutating customers.json.
     if (autoBootstrapState.running || inferenceRunning) return c.json({ error: 'Auto-bootstrap already in progress' }, 409)
@@ -2337,7 +2338,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   // — see src/interactive-auth-page.ts. _livePage is reserved for the scraper SSO anchor;
   // driving cross-domain SSO chains through it corrupted the renderer and hung sister scrapers.
 
-  app.get('/api/bootstrap/tableau/session-status', async (c) => {
+  router.get('/api/bootstrap/tableau/session-status', async (c) => {
     const force = c.req.query('force') === 'true'
     // BKL-UX79: If scraper detected an expired session since last status check, invalidate cache immediately
     if (consumeTableauSessionExpired()) {
@@ -2370,7 +2371,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   // chain to settle (6s) before re-verifying. Without the settle delay, the initial
   // domcontentloaded on 10ay.online.tableau.com fires BEFORE SSO redirects the page
   // to the login form — causing a false-positive that closes the VNC window immediately.
-  app.get('/api/bootstrap/tableau/wait-for-login', async (c) => {
+  router.get('/api/bootstrap/tableau/wait-for-login', async (c) => {
     // BKL-CONN-TABLEAU-CTX-01: waitForTableauLogin polls the isolated Chromium context.
     // On success, it harvests cookies to TABLEAU_SESSION_PATH and closes the isolated
     // context — VNC clears automatically when the context closes.
@@ -2390,7 +2391,7 @@ export function registerBootstrapRoutes(app: Hono): void {
   // login so the user can complete SSO via the VNC viewer at localhost:6080.
   // BKL-CONN-TABLEAU-CTX-01: uses the IAP (not _livePage) so the SSO redirect
   // chain cannot corrupt the scraper anchor page or hang sister scrapers.
-  app.post('/api/bootstrap/tableau/open-login', async (c) => {
+  router.post('/api/bootstrap/tableau/open-login', async (c) => {
     // BKL-CONN-TABLEAU-CTX-01: isolated context — no longer requires active RH session
     _tableauStatusCache = null  // force fresh probe on next status check
     try {
@@ -2405,7 +2406,7 @@ export function registerBootstrapRoutes(app: Hono): void {
 
   // ── Tableau territory discovery ────────────────────────────────────────────
 
-  app.get('/api/bootstrap/tableau/territories', async (c) => {
+  router.get('/api/bootstrap/tableau/territories', async (c) => {
     const ctx = getScrapeContext()
     if (!ctx) return c.json({ error: 'No RH session — connect Red Hat Portal first' }, 400)
 
@@ -2501,7 +2502,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     completedAt: null as string | null,
   }
 
-  app.get('/api/bootstrap/initial-load/status', (c) => {
+  router.get('/api/bootstrap/initial-load/status', (c) => {
     return c.json({
       ...initialLoadState,
       errors: initialLoadState.errors.map(e => ({
@@ -2511,7 +2512,7 @@ export function registerBootstrapRoutes(app: Hono): void {
     })
   })
 
-  app.post('/api/bootstrap/initial-load', async (c) => {
+  router.post('/api/bootstrap/initial-load', async (c) => {
     const { supportableScrapeRunning } = await import('./supportable-scraper.ts')
     if (initialLoadState.running) return c.json({ error: 'Initial load already running' }, 409)
     if (supportableScrapeRunning) return c.json({ error: 'Supportable scrape already in progress — wait for it to finish' }, 409)
@@ -2611,4 +2612,6 @@ export function registerBootstrapRoutes(app: Hono): void {
 
     return c.json({ started: true, total: toRun.length, skipped: skipped.length })
   })
+
+  return router
 }

@@ -5,7 +5,7 @@
 import { writeFileSync as writeFileSyncRaw, writeFileSync, mkdirSync, readFileSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import {
   normalizeSettings,
   getRegionById,
@@ -135,7 +135,8 @@ export function initScrapeApi(opts: {
 
 // ── Route registration ──────────────────────────────────────────────────────
 
-export function registerScrapeRoutes(app: Hono): void {
+export function createScrapeRouter(): Hono {
+  const router = new Hono()
 
   // ╭──────────────────────────────────────────────────────────────────────────╮
   // │  RH Portal cases                                                        │
@@ -144,7 +145,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // POST /api/scrape/rh — full pipeline: scrape RH Portal cases → local cache
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker — user is explicitly requesting a run
-  app.post('/api/scrape/rh', async (c) => {
+  router.post('/api/scrape/rh', async (c) => {
     try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
     if (_rhScrapeRunning) return c.json({ scraper: 'rh', status: 'busy', error: 'RH scrape already in progress' }, 409)
     resetCircuitBreaker('rh')
@@ -159,7 +160,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // GET /api/scrape/rh/status
-  app.get('/api/scrape/rh/status', (c) => {
+  router.get('/api/scrape/rh/status', (c) => {
     const intervals = getRefreshIntervals()
     const now = Date.now()
     const store = getScraperStatus('rh-cases')
@@ -178,7 +179,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // DELETE /api/scrape/rh/cancel
-  app.delete('/api/scrape/rh/cancel', (c) => {
+  router.delete('/api/scrape/rh/cancel', (c) => {
     if (!_rhScrapeRunning) return c.json({ ok: false, reason: 'No RH scrape in progress' })
     setRhScrapeCancelRequested(true)
     console.log('[scrape:rh] cancel requested via API')
@@ -186,7 +187,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // GET /api/scrape/rh/debug-fields?name=X — return raw Solr fields for first doc matching name
-  app.get('/api/scrape/rh/debug-fields', async (c) => {
+  router.get('/api/scrape/rh/debug-fields', async (c) => {
     const name = c.req.query('name') ?? ''
     if (!name) return c.json({ error: 'name query param required' }, 400)
     const ctx = getScrapeContext()
@@ -211,7 +212,7 @@ export function registerScrapeRoutes(app: Hono): void {
 
   // POST /api/scrape/rh/test-discover — run name discovery for specific customers (test only, no writes)
   // Body: { customers: string[] } — list of SF alias names to search
-  app.post('/api/scrape/rh/test-discover', async (c) => {
+  router.post('/api/scrape/rh/test-discover', async (c) => {
     try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
     const body = await c.req.json<{ customers?: string[] }>().catch(() => ({}))
     const names: string[] = Array.isArray(body.customers) ? body.customers : []
@@ -238,7 +239,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // POST /api/scrape/ccsp — full pipeline: Tableau scrape → sheet → cache
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
-  app.post('/api/scrape/ccsp', async (c) => {
+  router.post('/api/scrape/ccsp', async (c) => {
     try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
     // Stale-mutex auto-release: if the flag has been stuck for >15 min (container restart, crash),
     // let the request through — runCcspScrape() will reset the mutex internally.
@@ -301,7 +302,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // GET /api/scrape/ccsp/status
-  app.get('/api/scrape/ccsp/status', (c) => {
+  router.get('/api/scrape/ccsp/status', (c) => {
     const store = getScraperStatus('ccsp')
     const ccspCache = readCCSPCache()
     return c.json({
@@ -324,7 +325,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // POST /api/scrape/salesforce — full pipeline: SF report → sheet → cache
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
-  app.post('/api/scrape/salesforce', async (c) => {
+  router.post('/api/scrape/salesforce', async (c) => {
     resetCircuitBreaker('salesforce')
     const aesWithSf = aes.filter(a => a.sfReportId && a.driveFolderId)
     if (!aesWithSf.length && !SF_REPORT_ID) return c.json({ error: 'No AEs with sfReportId configured' }, 400)
@@ -487,7 +488,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // GET /api/scrape/salesforce/status
-  app.get('/api/scrape/salesforce/status', (c) => {
+  router.get('/api/scrape/salesforce/status', (c) => {
     const store = getScraperStatus('sf-pipeline')
     return c.json({
       isRunning: _sfSyncRunning,
@@ -503,7 +504,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // DELETE /api/scrape/salesforce/cancel
-  app.delete('/api/scrape/salesforce/cancel', (c) => {
+  router.delete('/api/scrape/salesforce/cancel', (c) => {
     if (!_sfSyncRunning) return c.json({ ok: false, reason: 'No SF sync in progress' })
     setSfSyncCancelRequested(true)
     console.log('[scrape:salesforce] cancel requested via API')
@@ -517,7 +518,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // scraper queue. They run sequentially within the task (same as before),
   // but now respect the global queue so they don't collide with other triggers.
 
-  app.post('/api/scrape/all', async (c) => {
+  router.post('/api/scrape/all', async (c) => {
     try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
     enqueueScraperTask({
       name: 'all-scrapers',
@@ -665,7 +666,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // GET /api/scrape/queue — queue status for admin visibility (BKL-M49)
-  app.get('/api/scrape/queue', (c) => {
+  router.get('/api/scrape/queue', (c) => {
     return c.json(getScraperQueueStatus())
   })
 
@@ -674,7 +675,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // ╰──────────────────────────────────────────────────────────────────────────╯
 
   // GET /api/scrape/telemetry — full scrape history log with summary stats
-  app.get('/api/scrape/telemetry', (c) => {
+  router.get('/api/scrape/telemetry', (c) => {
     return c.json({
       log: getTelemetryLog(),
       summary: getTelemetrySummary(),
@@ -684,7 +685,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // GET /api/scraper-status — centralized status map from ScraperStatusStore
   // Returns ScraperStatusMap with staleness applied per scraper threshold,
   // plus circuit breaker states and scheduler queue state.
-  app.get('/api/scraper-status', async (c) => {
+  router.get('/api/scraper-status', async (c) => {
     return c.json({
       scrapers: getStatus(),
       circuitBreakers: getCircuitBreakerStates(),
@@ -698,7 +699,7 @@ export function registerScrapeRoutes(app: Hono): void {
 
   /** Restart the shared Playwright browser context without a full container rebuild.
    *  Kills zombie Chrome processes, signals the scraper queue to relaunch the context. */
-  app.post('/api/browser/restart', async (c) => {
+  router.post('/api/browser/restart', async (c) => {
     try {
       // Kill any zombie/stuck chrome processes
       Bun.spawnSync(['pkill', '-f', 'chrome'], { stderr: 'ignore' })
@@ -711,7 +712,7 @@ export function registerScrapeRoutes(app: Hono): void {
 
   /** Open a Chromium window to the Tableau login page in the VNC display.
    *  Use this when the Tableau session has expired and you need to re-authenticate. */
-  app.post('/api/browser/open-tableau-login', async (c) => {
+  router.post('/api/browser/open-tableau-login', async (c) => {
     try {
       const TABLEAU_LOGIN = 'https://10ay.online.tableau.com/#/site/redhatanalytics/signin'
       // Launch Chromium directly on the VNC display for manual login
@@ -729,7 +730,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   /** Save content.redhat.com cookies from the shared browser context for use in product intelligence scraping. */
-  app.post('/api/browser/save-content-rh-session', async (c) => {
+  router.post('/api/browser/save-content-rh-session', async (c) => {
     try {
       const ctx = getScrapeContext()
       if (!ctx) return c.json({ ok: false, error: 'No active browser context — connect Red Hat Portal first' }, 400)
@@ -749,7 +750,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // ── BKL-AI11: NotebookLM routes ─────────────────────────────────────────────
 
   // GET /api/notebooklm/status — is the feature enabled?
-  app.get('/api/notebooklm/status', (c) => c.json({
+  router.get('/api/notebooklm/status', (c) => c.json({
     enabled: isNotebookLmEnabled(),
     message: isNotebookLmEnabled()
       ? 'NotebookLM integration active'
@@ -757,7 +758,7 @@ export function registerScrapeRoutes(app: Hono): void {
   }))
 
   // POST /api/customer/:name/notebook — create or update notebook for one customer
-  app.post('/api/customer/:name/notebook', async (c) => {
+  router.post('/api/customer/:name/notebook', async (c) => {
     if (!isNotebookLmEnabled()) {
       return c.json({ error: 'NotebookLM not enabled — set NOTEBOOKLM_ENABLED=true in .env' }, 503)
     }
@@ -793,7 +794,7 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // POST /api/admin/notebooks/create-all — batch create notebooks for all customers
-  app.post('/api/admin/notebooks/create-all', async (c) => {
+  router.post('/api/admin/notebooks/create-all', async (c) => {
     if (!isNotebookLmEnabled()) {
       return c.json({ error: 'NotebookLM not enabled — set NOTEBOOKLM_ENABLED=true in .env' }, 503)
     }
@@ -834,7 +835,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-UX75: Accepts optional ?folderId= query param so the UI can fetch sheets
   // immediately after the user validates a folder, before settings.json is written.
   // Falls back to settings.json → podBookingsFolderId if no param is provided.
-  app.get('/api/sf-bookings/pod-sheets', async (c) => {
+  router.get('/api/sf-bookings/pod-sheets', async (c) => {
     const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
     let podBookingsFolderId: string | null = c.req.query('folderId') ?? null
     const regionId = c.req.query('region') ?? undefined
@@ -858,7 +859,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // ── POST /api/sf-bookings/pod-folder — persist podBookingsFolderId to settings.json ──
   // BKL-UX75: Called by Setup UI after the user validates a Drive folder, so subsequent
   // loads (and sf-bookings-sync) find the folder without manual settings.json editing.
-  app.post('/api/sf-bookings/pod-folder', async (c) => {
+  router.post('/api/sf-bookings/pod-folder', async (c) => {
     let body: { folderId?: string; podKey?: string }
     try { body = await c.req.json() } catch { body = {} }
     const folderId = (body.folderId ?? '').trim()
@@ -941,7 +942,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-ARCH-01: Region-aware. Accepts ?region=<id>, defaults to first region
   // for backward compat. Returns flat podSfReports/podLabels maps for the
   // requested region so the frontend can keep its existing shape.
-  app.get('/api/settings/pod-config', (c) => {
+  router.get('/api/settings/pod-config', (c) => {
     const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
     const regionId = c.req.query('region') ?? undefined
     let podBookingsFolderId: string | null = null
@@ -963,7 +964,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // ── GET /api/settings/regions — list available regions for the UI selector ──
   // BKL-ARCH-01. Returns a lightweight list (id, label, type) so the frontend
   // can render a region dropdown without pulling per-region pod config.
-  app.get('/api/settings/regions', (c) => {
+  router.get('/api/settings/regions', (c) => {
     const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
     try {
       const raw = readFileSync(SETTINGS_PATH, 'utf-8')
@@ -981,7 +982,7 @@ export function registerScrapeRoutes(app: Hono): void {
   //
   // Body: { aeNames?: string[] }
   //   aeNames  — optional list of AE names to sync (defaults to all AEs)
-  app.post('/api/scrape/sf-bookings-sync', async (c) => {
+  router.post('/api/scrape/sf-bookings-sync', async (c) => {
     let body: { aeNames?: string[]; region?: string }
     try { body = await c.req.json() } catch { body = {} }
 
@@ -1146,4 +1147,6 @@ export function registerScrapeRoutes(app: Hono): void {
     const totalCustomers = summary.reduce((s, r) => s + r.customersTotal, 0)
     return c.json({ aes: targetAes.length, customersTotal: totalCustomers, customersMatched: totalMatched, summary })
   })
+
+  return router
 }

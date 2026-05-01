@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs'
 import { writeFile, rename } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeStart, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
 import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage, writeCasesCache, setContextRecoveryCallback } from './rh-scraper.ts'
@@ -858,13 +858,14 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
 }
 
 // ── Route registration ──────────────────────────────────────────────────────
-// BKL-M25: Scrape-specific routes moved to src/scrape-api.ts (registerScrapeRoutes).
+// BKL-M25: Scrape-specific routes moved to src/scrape-api.ts (createScrapeRouter).
 // Routes kept here are auth/status helpers that are NOT scrape triggers.
 
-export function registerScraperRoutes(app: Hono): void {
+export function createScraperRouter(): Hono {
+  const router = new Hono()
 
   // GET /api/auth/salesforce/status — auth + sync status for SF (kept: auth surface)
-  app.get('/api/auth/salesforce/status', async (c) => {
+  router.get('/api/auth/salesforce/status', async (c) => {
     // BKL-T04: Live session probe — verifies SF is actually reachable, not just flagged
     const liveReachable = await sfLiveProbe()
     _sfProbeTimestamp = new Date().toISOString()
@@ -894,7 +895,7 @@ export function registerScraperRoutes(app: Hono): void {
   })
 
   // GET /api/sf/reports — list available SF pipeline reports (requires active SF session)
-  app.get('/api/sf/reports', async (c) => {
+  router.get('/api/sf/reports', async (c) => {
     if (!getSfContext()) {
       return c.json({ reports: [], error: 'SF session not active', source: null })
     }
@@ -909,7 +910,7 @@ export function registerScraperRoutes(app: Hono): void {
   })
 
   // POST /api/auth/supportable/check — VPN reachability probe (no browser tabs)
-  app.post('/api/auth/supportable/check', async (c) => {
+  router.post('/api/auth/supportable/check', async (c) => {
     try {
       await fetch('https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1', {
         method: 'HEAD',
@@ -925,7 +926,7 @@ export function registerScraperRoutes(app: Hono): void {
 
   // GET /api/status/scrapes — per-scraper sync status (lastSync, lastError, isRunning, isStale)
   // Used by the dashboard to show staleness indicators per data section.
-  app.get('/api/status/scrapes', (c) => {
+  router.get('/api/status/scrapes', (c) => {
     const intervals = getRefreshIntervals()
     const now = Date.now()
 
@@ -981,6 +982,8 @@ export function registerScraperRoutes(app: Hono): void {
       lastSkipReasons: getLastSkipReasons(),
     })
   })
+
+  return router
 }
 
 // ── Exported for use in server.ts login callbacks ───────────────────────────

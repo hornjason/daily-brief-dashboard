@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
-import type { Hono } from 'hono'
+import { Hono } from 'hono'
 import type { CCSPRecord } from './sheets.ts'
 import type { PipelineRecord } from './pipeline.ts'
 import type { ProductSubscription, EmailHighlight, CalendarEvent } from './types.ts'
@@ -443,9 +443,10 @@ export function cleanOrphanedCacheFiles(currentCustomerNames: string[]): void {
 }
 
 // ── Route registration ──────────────────────────────────────────────────────
-export function registerCacheRoutes(app: Hono): void {
+export function createCacheRouter(): Hono {
+  const router = new Hono()
   // GET /api/cache/status — last-modified time and byte size for each data cache file
-  app.get('/api/cache/status', (c) => {
+  router.get('/api/cache/status', (c) => {
     const sources = [
       { key: 'ccsp',      path: `${CACHE_DIR}/ccsp-data.json` },
       { key: 'pipeline',  path: `${CACHE_DIR}/pipeline-data.json` },
@@ -469,4 +470,6 @@ export function registerCacheRoutes(app: Hono): void {
     }
     return c.json(result)
   })
+
+  return router
 }
