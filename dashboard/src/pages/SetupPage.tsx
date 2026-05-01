@@ -2822,12 +2822,15 @@ function DataSourcesSection({ onHealthChange, onlyConnections, hideConnections }
   useEffect(() => {
     return () => {
       if (sfPollRef.current) { clearInterval(sfPollRef.current); sfPollRef.current = null }
-      if (tableauPollRef.current) clearInterval(tableauPollRef.current)
+      // BKL-ARCH-05: null assignments after clearInterval — without these the
+      // refs remain non-null and re-mount handlers see "already polling" guards
+      // even though the interval is gone.
+      if (tableauPollRef.current) { clearInterval(tableauPollRef.current); tableauPollRef.current = null }
       if (tableauTimeoutRef.current) { clearTimeout(tableauTimeoutRef.current); tableauTimeoutRef.current = null }
       if (rhTimeoutRef.current) { clearTimeout(rhTimeoutRef.current); rhTimeoutRef.current = null }
       if (sfTimeoutRef.current) { clearTimeout(sfTimeoutRef.current); sfTimeoutRef.current = null }
-      if (statusPollRef.current) clearInterval(statusPollRef.current)
-      if (rhConnectPollRef.current) clearInterval(rhConnectPollRef.current)
+      if (statusPollRef.current) { clearInterval(statusPollRef.current); statusPollRef.current = null }
+      if (rhConnectPollRef.current) { clearInterval(rhConnectPollRef.current); rhConnectPollRef.current = null }
       if (rhSyncPollRef.current) { clearInterval(rhSyncPollRef.current); rhSyncPollRef.current = null }
       if (sfSyncPollRef.current) { clearInterval(sfSyncPollRef.current); sfSyncPollRef.current = null }
       if (ccspSyncPollRef.current) { clearInterval(ccspSyncPollRef.current); ccspSyncPollRef.current = null }

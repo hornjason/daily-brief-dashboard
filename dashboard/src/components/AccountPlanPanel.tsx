@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { FileText, Download, RefreshCw, ChevronDown, ChevronUp, Eye, AlertCircle } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
 import { MarkdownPreviewModal } from './MarkdownPreviewModal'
+import { usePolledStatus } from '../hooks/usePolledStatus'
 
 interface AccountPlanPanelProps {
   customerName: string
@@ -13,6 +14,13 @@ interface PlanData {
   driveUrl: string
 }
 
+interface PlanResponse {
+  notGenerated?: boolean
+  markdown?: string
+  generatedAt?: string
+  driveUrl?: string
+}
+
 export function AccountPlanPanel({ customerName }: AccountPlanPanelProps) {
   const [collapsed, setCollapsed] = useState(true)
   const [plan, setPlan] = useState<PlanData | null>(null)
@@ -20,44 +28,43 @@ export function AccountPlanPanel({ customerName }: AccountPlanPanelProps) {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Fetch current state on mount
   useEffect(() => {
     fetch(`/api/customers/${encodeURIComponent(customerName)}/account-plan`)
       .then(r => r.json())
-      .then((d: any) => {
+      .then((d: PlanResponse) => {
         if (d.notGenerated) {
           setNotGenerated(true)
           setPlan(null)
         } else if (d.markdown) {
-          setPlan({ markdown: d.markdown, generatedAt: d.generatedAt, driveUrl: d.driveUrl ?? '' })
+          setPlan({ markdown: d.markdown, generatedAt: d.generatedAt ?? '', driveUrl: d.driveUrl ?? '' })
           setNotGenerated(false)
         }
       })
       .catch(() => {})
   }, [customerName])
 
-  // Poll while generating
+  // BKL-ARCH-05: unified polled-status hook. Latches off once markdown is present.
+  const { data: planStatus } = usePolledStatus<PlanResponse>(
+    `/api/customers/${encodeURIComponent(customerName)}/account-plan`,
+    {
+      intervalMs: 3000,
+      enabled: generating,
+      until: d => !!d?.markdown,
+    },
+  )
+
   useEffect(() => {
-    if (!generating) {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-      return
-    }
-    pollRef.current = setInterval(() => {
-      fetch(`/api/customers/${encodeURIComponent(customerName)}/account-plan`)
-        .then(r => r.json())
-        .then((d: any) => {
-          if (d.markdown) {
-            setPlan({ markdown: d.markdown, generatedAt: d.generatedAt, driveUrl: d.driveUrl ?? '' })
-            setNotGenerated(false)
-            setGenerating(false)
-          }
-        })
-        .catch(() => {})
-    }, 3000)
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
-  }, [generating, customerName])
+    if (!planStatus?.markdown) return
+    setPlan({
+      markdown: planStatus.markdown,
+      generatedAt: planStatus.generatedAt ?? '',
+      driveUrl: planStatus.driveUrl ?? '',
+    })
+    setNotGenerated(false)
+    setGenerating(false)
+  }, [planStatus])
 
   async function handleGenerate() {
     setGenerating(true)

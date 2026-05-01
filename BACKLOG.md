@@ -8444,7 +8444,7 @@ Solution: Extract each step (Step0–Step6, DataSources, AE/Customer config) to 
 ---
 
 ### BKL-ARCH-05 | Polling lifecycle — hand-rolled in 5 components, no usePolledStatus seam
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-01
 Priority: P2
 Size: M
 Source: Serena architecture audit 2026-05-01

@@ -1,13 +1,14 @@
 // BKL-M50d: Session Health Panel
 // At-a-glance session health for all data sources.
-// Fetches RH Portal, Salesforce, and scraper-status in parallel.
-// Polls every 30 seconds while mounted.
+// BKL-ARCH-05: migrated to usePolledStatus — 3 independent 30s polls instead
+// of one combined Promise.all. Each tile updates as its source returns.
 
-import { useState, useEffect, useRef } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { Shield, Activity, Cloud } from 'lucide-react'
 import RelTime from './RelTime'
 import { useNodeRole } from '../hooks/useNodeRole'
+import { usePolledStatus } from '../hooks/usePolledStatus'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -192,36 +193,36 @@ function ScraperTile({
 
 // ── Main panel ────────────────────────────────────────────────────────────────
 
+interface ScraperStatusResponse {
+  scrapers?: Record<string, ScraperEntry>
+}
+
 export function SessionHealthPanel() {
   const { isL3Only } = useNodeRole()
-  const [data, setData] = useState<HealthData | null>(null)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { data: rhStatus } = usePolledStatus<RhStatus>(
+    '/api/auth/redhat/status',
+    { intervalMs: 30_000 },
+  )
+  const { data: sfStatus } = usePolledStatus<SfStatus>(
+    '/api/auth/salesforce/status',
+    { intervalMs: 30_000 },
+  )
+  const { data: scraperStatus } = usePolledStatus<ScraperStatusResponse>(
+    '/api/scraper-status',
+    { intervalMs: 30_000 },
+  )
 
-  const fetchAll = async () => {
-    try {
-      const [rhRes, sfRes, scraperRes] = await Promise.all([
-        fetch('/api/auth/redhat/status').then(r => r.json()).catch(() => null),
-        fetch('/api/auth/salesforce/status').then(r => r.json()).catch(() => null),
-        fetch('/api/scraper-status').then(r => r.json()).catch(() => null),
-      ])
-      setData({
-        rh: rhRes,
-        sf: sfRes,
-        ccsp: scraperRes?.scrapers?.ccsp ?? null,
-        supportable: scraperRes?.scrapers?.supportable ?? null,
-      })
-    } catch {
-      // leave previous data in place on transient error
+  // Initial render shows skeletons until at least one source returns. After
+  // that, we render whatever has loaded — independent tiles, no all-or-nothing.
+  const data: HealthData | null = useMemo(() => {
+    if (rhStatus === null && sfStatus === null && scraperStatus === null) return null
+    return {
+      rh: rhStatus,
+      sf: sfStatus,
+      ccsp: scraperStatus?.scrapers?.ccsp ?? null,
+      supportable: scraperStatus?.scrapers?.supportable ?? null,
     }
-  }
-
-  useEffect(() => {
-    fetchAll()
-    intervalRef.current = setInterval(fetchAll, 30_000)
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [])
+  }, [rhStatus, sfStatus, scraperStatus])
 
   const isLoading = data === null
 

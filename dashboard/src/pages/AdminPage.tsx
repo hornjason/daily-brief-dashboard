@@ -7,6 +7,7 @@ import { SessionHealthPanel } from '../components/SessionHealthPanel'
 import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
 import { Step0RegionAccess } from '../components/Step0RegionAccess'
 import { useNodeRole } from '../hooks/useNodeRole'
+import { usePolledStatus } from '../hooks/usePolledStatus'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -452,35 +453,33 @@ function NotebookLMSection() {
 function BatchIntelligenceSection() {
   const [batchState, setBatchState] = useState<BatchIntelState | null>(null)
   const [starting, setStarting] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const fetchBatchStatus = useCallback(async () => {
-    try {
-      const d = await fetch('/api/intelligence/generate-all/status').then(r => r.json())
-      setBatchState(d)
-    } catch {}
+  // BKL-ARCH-05: usePolledStatus replaces ad-hoc setInterval+useRef.
+  // No `until` — batch can run multiple times across the page lifetime.
+  const { data: polledBatch } = usePolledStatus<BatchIntelState>(
+    '/api/intelligence/generate-all/status',
+    { intervalMs: 3_000, enabled: !!batchState?.running },
+  )
+
+  // Initial load (one-shot, before any batch is started).
+  useEffect(() => {
+    fetch('/api/intelligence/generate-all/status')
+      .then(r => r.json())
+      .then((d: BatchIntelState) => setBatchState(d))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
-    fetchBatchStatus()
-  }, [fetchBatchStatus])
-
-  useEffect(() => {
-    if (batchState?.running) {
-      if (!pollRef.current) {
-        pollRef.current = setInterval(fetchBatchStatus, 3_000)
-      }
-    } else {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-    }
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
-  }, [batchState?.running, fetchBatchStatus])
+    if (polledBatch) setBatchState(polledBatch)
+  }, [polledBatch])
 
   const handleGenerate = async () => {
     setStarting(true)
     try {
       await fetch('/api/intelligence/generate-all', { method: 'POST' })
-      await fetchBatchStatus()
+      // Re-fetch status immediately so `running` flips true and polling activates.
+      const d = await fetch('/api/intelligence/generate-all/status').then(r => r.json()).catch(() => null)
+      if (d) setBatchState(d)
     } finally {
       setStarting(false)
     }
@@ -1014,12 +1013,27 @@ export function AdminPage() {
   const [docAgeSaving, setDocAgeSaving] = useState(false)
   // localQueued value: true = queued (no detail), or string = "waiting on <scraper>"
 
+  // BKL-ARCH-05: usePolledStatus replaces ad-hoc setInterval. Always-on at 5s.
+  // The complex shape mapping is preserved as a useMemo over the raw response.
+  interface RawScraperStatus {
+    scrapers?: Record<string, { state?: string; lastSuccess?: string | null; lastError?: string | null }>
+    circuitBreakers?: Record<string, CircuitBreakerState>
+    queue?: { running: string | null; pending: string[]; isAnyRunning: boolean }
+    browserRestartNeeded?: boolean
+    rhDiscoveryProgress?: { done: number; total: number; current: string | null } | null
+  }
+  const { data: rawStatus } = usePolledStatus<RawScraperStatus>(
+    '/api/scraper-status',
+    { intervalMs: 5_000 },
+  )
+
+  // Imperative re-fetch helper for runScrape() — fires a single fresh request
+  // off the polling cadence so the UI reflects the queued state immediately.
   const fetchStatus = useCallback(async () => {
     try {
       const d = await fetch('/api/scraper-status').then(r => r.json())
-      // Map unified /api/scraper-status response shape to AllScrapeStatus
       const scrapers = d.scrapers ?? {}
-      const mapped: AllScrapeStatus = {
+      setStatus({
         rh: {
           isRunning: scrapers['rh-cases']?.state === 'running',
           lastSync:  scrapers['rh-cases']?.lastSuccess ?? null,
@@ -1038,11 +1052,37 @@ export function AdminPage() {
         circuitBreakers: d.circuitBreakers,
         queue: d.queue,
         browserRestartNeeded: d.browserRestartNeeded,
-      }
-      mapped.rhDiscoveryProgress = d.rhDiscoveryProgress ?? null
-      setStatus(mapped)
+        rhDiscoveryProgress: d.rhDiscoveryProgress ?? null,
+      })
     } catch {}
   }, [])
+
+  // Sync polled raw status into mapped state shape used by the rest of the page.
+  useEffect(() => {
+    if (!rawStatus) return
+    const scrapers = rawStatus.scrapers ?? {}
+    setStatus({
+      rh: {
+        isRunning: scrapers['rh-cases']?.state === 'running',
+        lastSync:  scrapers['rh-cases']?.lastSuccess ?? null,
+        lastError: scrapers['rh-cases']?.lastError ?? null,
+      },
+      ccsp: {
+        isRunning: scrapers['ccsp']?.state === 'running',
+        lastSync:  scrapers['ccsp']?.lastSuccess ?? null,
+        lastError: scrapers['ccsp']?.lastError ?? null,
+      },
+      salesforce: {
+        isRunning: scrapers['sf-pipeline']?.state === 'running',
+        lastSync:  scrapers['sf-pipeline']?.lastSuccess ?? null,
+        lastError: scrapers['sf-pipeline']?.lastError ?? null,
+      },
+      circuitBreakers: rawStatus.circuitBreakers,
+      queue: rawStatus.queue,
+      browserRestartNeeded: rawStatus.browserRestartNeeded,
+      rhDiscoveryProgress: rawStatus.rhDiscoveryProgress ?? null,
+    })
+  }, [rawStatus])
 
   const fetchIntervals = useCallback(async () => {
     try {
@@ -1053,11 +1093,8 @@ export function AdminPage() {
   }, [])
 
   useEffect(() => {
-    fetchStatus()
     fetchIntervals()
-    const poll = setInterval(fetchStatus, 5_000)
-    return () => clearInterval(poll)
-  }, [fetchStatus, fetchIntervals])
+  }, [fetchIntervals])
 
   // BKL-M52: fetch Gemini usage on mount
   useEffect(() => {
@@ -1078,27 +1115,15 @@ export function AdminPage() {
       .catch(() => {})
   }, [])
 
-  // Intelligence job status polling (every 3s when running)
+  // BKL-ARCH-05: usePolledStatus replaces ad-hoc setInterval.
+  // `until` latches polling off once the job is no longer running.
+  const { data: polledIntelStatus } = usePolledStatus<IntelligenceJobStatus>(
+    '/api/intelligence/status',
+    { intervalMs: 3_000, until: d => d.status !== 'running' },
+  )
   useEffect(() => {
-    let pollInterval: ReturnType<typeof setInterval> | null = null
-
-    const fetchIntelStatus = () => {
-      fetch('/api/intelligence/status')
-        .then(r => r.json())
-        .then((d: IntelligenceJobStatus) => {
-          setIntelJobStatus(d)
-          if (d.status !== 'running' && pollInterval) {
-            clearInterval(pollInterval)
-            pollInterval = null
-          }
-        })
-        .catch(() => {})
-    }
-
-    fetchIntelStatus()
-    pollInterval = setInterval(fetchIntelStatus, 3_000)
-    return () => { if (pollInterval) clearInterval(pollInterval) }
-  }, [])
+    if (polledIntelStatus) setIntelJobStatus(polledIntelStatus)
+  }, [polledIntelStatus])
 
   // BKL-G21: clear localQueued entries once polling confirms the scraper is running
   // or it's no longer in the queue's pending list (completed / dropped)

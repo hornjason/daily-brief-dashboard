@@ -75,12 +75,14 @@ Pick next candidate       start Phase 1 for the next item in the order table abo
 | BKL-ARCH-07 Drive traversal | ✅ | #2 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-01 customer matching | ✅ | #3 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-03 server.ts routers | ✅ | #4 ✅ CLOSED | ✅ DONE 2026-05-01 |
-| BKL-ARCH-05 polling hook | ❌ | — | — |
+| BKL-ARCH-05 polling hook | ✅ | #5 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-08 bootstrap split | ❌ | — | — (blocked) |
 
 **BKL-ARCH-03 commit:** 398d840b0 — 16 route modules converted, createXRouter() factories, ADR-005 fulfilled.
 
-**Next action:** `/grill-with-docs` for BKL-ARCH-05 — usePolledStatus hook (interface not yet designed).
+**BKL-ARCH-05 commit:** (pending) — `usePolledStatus` hook, 6 contexts migrated, SetupPage null bug fixed.
+
+**Next action:** `/grill-with-docs` for BKL-ARCH-08 — bootstrap-orchestrator split (now unblocked: depends on 06 ✅, 07 ✅, 01 ✅, 03 ✅).
 Note: BKL-ARCH-08 (bootstrap split) is now unblocked — depends on 06 ✅, 07 ✅, 01 ✅, 03 ✅.
 
 **BKL-ARCH-01 commit:** 10f218ef2 — customer-folder.ts created, 3 callers migrated, 9 unit tests.

@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Sparkles, FileText, ExternalLink, ChevronDown, ChevronUp, RefreshCw, AlertCircle } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
+import { usePolledStatus } from '../hooks/usePolledStatus'
 
 interface AccountIntelligencePanelProps {
   customerName: string
@@ -20,7 +21,6 @@ export function AccountIntelligencePanel({ customerName }: AccountIntelligencePa
   const [collapsed, setCollapsed] = useState(true)
   const [status, setStatus] = useState<IntelligenceStatus | null>(null)
   const [generating, setGenerating] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Fetch initial status on mount
   useEffect(() => {
@@ -33,23 +33,23 @@ export function AccountIntelligencePanel({ customerName }: AccountIntelligencePa
       .catch(() => {})
   }, [customerName])
 
-  // Poll every 3s while running, cleanup on unmount
+  // BKL-ARCH-05: unified polled-status hook replaces ad-hoc setInterval+useRef.
+  const { data: polledStatus } = usePolledStatus<IntelligenceStatus>(
+    `/api/customer/${encodeURIComponent(customerName)}/intelligence-status`,
+    {
+      intervalMs: 3000,
+      enabled: generating,
+      until: d => d.status === 'complete' || d.status === 'error',
+    },
+  )
+
   useEffect(() => {
-    if (!generating) {
-      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-      return
+    if (!polledStatus) return
+    setStatus(polledStatus)
+    if (polledStatus.status === 'complete' || polledStatus.status === 'error') {
+      setGenerating(false)
     }
-    pollRef.current = setInterval(() => {
-      fetch(`/api/customer/${encodeURIComponent(customerName)}/intelligence-status`)
-        .then(r => r.json())
-        .then((d: IntelligenceStatus) => {
-          setStatus(d)
-          if (d.status === 'complete' || d.status === 'error') setGenerating(false)
-        })
-        .catch(() => {})
-    }, 3000)
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
-  }, [generating, customerName])
+  }, [polledStatus])
 
   async function handleGenerate() {
     setGenerating(true)
