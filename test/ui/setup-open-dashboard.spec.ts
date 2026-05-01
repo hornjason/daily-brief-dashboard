@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test'
  * We mock /api/regions/access to control enabledPods state.
  */
 
-test.describe('BKL-HERO-01 Phase 5: hero Open Dashboard button', () => {
+test.describe('@destructive BKL-HERO-01 Phase 5: hero Open Dashboard button', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('T1 — L3 + AEs present: Open Dashboard button visible after AEs section', async ({ page }) => {

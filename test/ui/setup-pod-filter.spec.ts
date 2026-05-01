@@ -19,7 +19,7 @@ import { test, expect } from '@playwright/test'
 const BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
 const SETUP_URL = `${BASE}/dashboard/setup`
 
-test.describe('BKL-HERO-01 Phase 4: POD filter in Step 4', () => {
+test.describe('@destructive BKL-HERO-01 Phase 4: POD filter in Step 4', () => {
   test.describe.configure({ mode: 'serial' })
 
   /**
