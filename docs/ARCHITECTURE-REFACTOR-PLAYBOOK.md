@@ -78,7 +78,7 @@ Pick next candidate       start Phase 1 for the next item in the order table abo
 | BKL-ARCH-05 polling hook | ✅ | #5 ✅ CLOSED | ✅ DONE 2026-05-01 |
 | BKL-ARCH-08 bootstrap split | ✅ | #6 ✅ CLOSED | ✅ DONE 2026-05-01 |
 
-**BKL-ARCH-08 commit:** TBD — bootstrap-state.ts + cache-hierarchy.ts, 13 unit tests, 25/0 API Playwright on 7776.
+**BKL-ARCH-08 commit:** b15da9db3 — bootstrap-state.ts + cache-hierarchy.ts, 13 unit tests, 25/0 API Playwright on 7776.
 
 **BKL-ARCH-03 commit:** 398d840b0 — 16 route modules converted, createXRouter() factories, ADR-005 fulfilled.
 
