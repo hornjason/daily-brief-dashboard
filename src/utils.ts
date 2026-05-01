@@ -13,6 +13,7 @@ export function sanitizeErr(e: any): string {
   return raw
     .replace(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, '[token]')
     .replace(/Bearer\s+\S+/g, 'Bearer [redacted]')
+    .replace(/<[^>]*>/g, '')
     .slice(0, 200)
     .replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]')
 }

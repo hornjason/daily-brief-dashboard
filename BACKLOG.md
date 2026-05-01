@@ -1,3 +1,10 @@
+---
+doc-type: backlog
+status: active
+owner: jason
+updated: 2026-05-01
+---
+
 # DailyBriefDashboard — Canonical Backlog
 
 **This is the single source of truth for all open, completed, and deferred work.**
@@ -5097,6 +5104,37 @@ Files: dashboard/src/pages/SetupPage.tsx — PodBootstrapSection
 Description: Once Territory Sheet ID, SF Report ID, and Parent Drive Folder are all filled in, show a Google Drive folder preview (similar to the single-AE bootstrap folder preview) so the user can confirm they've selected the right parent folder before clicking Bootstrap POD. Should use the same Drive folder name lookup pattern already used in AutoBootstrapForm.
 Decision: DONE — Added folderName/folderError state + onBlur handler calling /api/aes/validate-folder in PodBootstrapSection. Border turns green + shows "✓ FolderName" on success; red + error on failure. Matches existing AutoBootstrapForm pattern exactly.
 
+### BKL-SEC-09 | podKeyFromQualified — trailing-dot / double-dot edge cases silently produce empty key
+Status: 🔴 OPEN
+Severity: LOW (no security impact — fail-closed behavior)
+Priority: P3
+Size: XS
+Source: Rook scan 2026-04-30 BKL-HERO-01 Phase 4
+Files: dashboard/src/utils/regionFilter.ts
+
+Description: `podKeyFromQualified("WEST.")` returns `""` and `podKeyFromQualified("a.b.c")` returns `"b.c"` — neither will match any real pod key, so the pod is silently dropped from the filtered set. This is fail-safe (restrictive, not permissive) but undocumented. If pod keys ever legitimately contained dots this would silently misconfigure the filter. Recommended guard: `if (idx === -1 || idx === qualifiedKey.length - 1) return qualifiedKey` to make the no-match behavior explicit.
+
+### BKL-SEC-10 | sanitizeErr lacks HTML-strip pass — React escaping is the only defense
+Status: ✅ DONE 2026-05-01
+Severity: MEDIUM
+Priority: P2
+Size: XS
+Source: Rook scan 2026-05-01 BKL-HERO-01 Phase 3-5 gate
+Files: src/utils.ts (sanitizeErr)
+
+Description: `sanitizeErr` stripped JWT patterns, Bearer tokens, and file paths but did not strip HTML tags. In `HeroStep3Connections.tsx`, the server error string is rendered via React JSX (`{saveError}`), which escapes HTML by default — providing actual defense. However `sanitizeErr` should be the reliable defense layer, not React's rendering behavior. A future refactor rendering the error via `dangerouslySetInnerHTML` or a different context would silently lose the protection. Fix: added `.replace(/<[^>]*>/g, '')` to `sanitizeErr` before the `.slice(0, 200)` call. Verified `sanitizeText` already does this same strip at line 30.
+Decision: DONE — one-liner added to sanitizeErr in same Rook-gate session. Test: existing `sanitizeErr` usages unaffected; HTML tags now stripped before returning to client.
+
+### BKL-SEC-11 | Pre-try 400 paths in POST /api/settings/* return strings without sanitizeErr
+Status: 🔴 OPEN
+Severity: LOW
+Priority: P3
+Size: S
+Source: Rook scan 2026-05-01 BKL-HERO-01 Phase 3-5 gate
+Files: src/settings-api.ts (POST /api/settings/offline-token lines 268-274, POST /api/settings/refresh lines 309-341)
+
+Description: All POST /api/settings/* handlers use `sanitizeErr(e)` in their `catch` blocks. However, the pre-try validation paths (early-exit 400 responses before the `try` block) return hand-written string literals directly without going through `sanitizeErr`. These strings are safe as written (derived from `const` arrays, not user input). The risk is structural: a future developer adding a pre-try 400 that includes an `e.message` or user-derived value would bypass sanitization. Recommendation: document the contract ("pre-try 400 returns MUST use only const-derived strings") or wrap pre-try paths in a helper that enforces sanitization. No active vulnerability — purely structural.
+
 ### BKL-SEC-08 | HeroStep3Connections — token not cleared from state on save (hygiene)
 Status: ✅ DONE 2026-04-30
 Severity: LOW
@@ -7917,7 +7955,7 @@ Acceptance: Fresh container: connect RH Portal + SF → no scraping fires. Start
 Can we test: YES — regression test that (a) SF onComplete does NOT call runSfSyncForAes, (b) catch-up skipped when aes.json empty, (c) bootstrap CCSP step checks today's Drive CSV before L4.
 
 ### BKL-HERO-01 | Hero Install Wizard — L3-only setup flow (Step 0 + Step 3 + isL3Only gating)
-Status: 🟡 IN PROGRESS — Phases 0-3 shipped 2026-04-30; Phases 4-5 remaining
+Status: ✅ DONE 2026-05-01
 Priority: P1
 Size: L
 Source: Session 2026-04-29 (design signed off by Jason)
@@ -7948,6 +7986,8 @@ Naming conventions (confirmed 2026-04-29):
   - enabledPods format: ${regionId}.${podKey} (e.g. west-commercial.WEST_COMM_CORP_NORTHWEST)
   - SF reports named: DBD - {Region Label} - {Pod Label}
   - Subscription Data Drive folder: {Region Label} - Subscription Data
+
+Decision: DONE — All 5 phases shipped 2026-04-30 to 2026-05-01. Phase 0 (backend), Phase 1 (Step 0 region picker), Phase 2 (isL3Only gating), Phase 3 (RH token form + validateOfflineToken), Phase 4 (POD dropdown filter), Phase 5 (Open Dashboard hero button). 28 Playwright tests added across 5 spec files. Quinn 28/28 PASS. Rook: no Critical/High findings; BKL-SEC-10 (sanitizeErr HTML-strip) patched same session; BKL-SEC-09 and BKL-SEC-11 logged as open. Pre-existing failures: REG-001 (seed data mismatch, pre-existing) and REG-BOOT-03 (@live test requires primary role).
 
 ### BKL-HERO-02 | Hero Install — Admin › Region Access edit screen
 Status: 🔴 OPEN
