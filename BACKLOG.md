@@ -8289,14 +8289,35 @@ Source: /improve-codebase-architecture explore run. Serena walked the full src/ 
 
 ---
 
-### BKL-ARCH-01 | Customer-name / folder-matching logic — replicated 5 times
-Status: 🔴 OPEN
+### BKL-ARCH-01 | Customer-name / folder-matching logic — replicated 5 times\nStatus: 🔵 IN PROGRESS
 Priority: P1
 Size: L
 Source: Serena architecture audit 2026-05-01
 Files: src/customer.ts, src/account-intelligence.ts, src/account-plan.ts, src/bootstrap-orchestrator.ts, src/sheets.ts::normalizeForMatch, src/customer-routes.ts
 Description: Five normalizers and three near-identical fuzzyFindFolder/folderMatchScore/normalizeFolderName triplets. Each caller carries its own scoring and traversal. Comments like "differs from normalizeForMatch by..." document divergence rather than resolve it. A folder-matching bug must be patched in 3-4 places.
 Solution: Extract a single CustomerFolderResolver module (one normalizer, one scorer, one BFS traverser) into src/lib/customer-name.ts. Collapses ~150 lines of duplicate logic.
+
+---
+
+### BKL-SEC-12 | customer-folder.ts throw messages include customer name/AE — leak risk
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook scan 2026-05-01 (BKL-ARCH-01 session)
+Files: src/lib/customer-folder.ts
+Description: Two throw paths in findCustomerDriveFolder embed customer.name and customer.ae in the message text. Currently these errors are caught internally and never reach HTTP responses. But as a shared public export, any future caller that passes the error directly to c.json() without sanitizeErr would leak customer identity in a 500 response.
+Solution: Replace customer.name/ae in throw messages with generic text, or add JSDoc warning that callers must wrap errors with sanitizeErr before returning to clients.
+
+---
+
+### BKL-SEC-13 | account-intelligence.ts intelligence cache slug uses strip-only pattern — missing throw guard
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook scan 2026-05-01 (BKL-ARCH-01 session)
+Files: src/account-intelligence.ts
+Description: Intelligence cache path construction uses inline strip regex (not throw guard). Path traversal is blocked by the strip. But the pattern deviates from the Security Baseline (BKL-SEC-02 established that cache path functions must use resolve() + throw guard). An empty customerName would produce an empty slug and a malformed path like /cache/intelligence/.json — caught at FS layer but not explicitly.
+Solution: Extract intelligenceCachePath(slug) function following the same guard pattern as briefCachePath in cache-layer.ts. Throw on empty or unsafe slug before constructing the path. Closes BKL-SEC-02 for this module.
 
 ---
 
