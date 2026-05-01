@@ -8344,13 +8344,80 @@ Solution: Route all status reads through getStatus() with a single fallback poli
 ---
 
 ### BKL-ARCH-03 | server.ts — 1,704 lines despite M02-M05 route extractions (ADR-005 violation)
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P1
 Size: M
 Source: Serena architecture audit 2026-05-01
 Files: server.ts (42 endpoints remain), all *-routes.ts files (flat registerXRoutes(app) pattern)
 Description: ADR-005 prescribed sub-routers mounted via app.route(). Actual extraction used registerXRoutes(app) — flat registration against root app. server.ts still owns 42 endpoints across 5+ domains. Nothing constrains what URL prefix a module owns.
-Solution: Convert all *-routes.ts to return Hono sub-routers and mount via app.route('/api/domain', router). server.ts becomes a thin mount file.
+Solution: Convert all 16 *-routes.ts exports from registerXRoutes(app): void to createXRouter(): Hono factories. Mount via app.route('/', createXRouter()) — route paths inside modules unchanged. Two dep cases: createSettingsRouter({ rescheduleRefreshTimers }) and createRegionAccessRouter({ settingsPath }). init* functions stay separate. GitHub Issue: hornjason/asaCommandCenter#4
+Stopped at: Briefing Marcus — worktree implementation. Next: Marcus reports Playwright + tsc results; DA signs off; make rebuild; Quinn+Rook parallel.
+
+---
+
+### BKL-ARCH-09 | Extract auth routes (RH + SF) from server.ts → auth-routes.ts
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Files: server.ts (lines ~260–636: 5 inline routes), new src/auth-routes.ts
+Description: 5 auth routes remain inline in server.ts: GET/POST/DELETE /api/auth/redhat/* and POST/DELETE /api/auth/salesforce/*. All carry non-trivial handlers (60–250 lines each). Extracting to auth-routes.ts gives the auth domain a testable seam. Depends on BKL-ARCH-03 (sub-router pattern) being done first.
+Depends on: BKL-ARCH-03
+
+---
+
+### BKL-ARCH-10 | Extract AE management routes from server.ts → ae-routes.ts
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Files: server.ts (lines ~695–897: 3 inline routes), new src/ae-routes.ts
+Description: GET /api/aes, POST /api/aes (100-line handler), POST /api/aes/validate-folder (98-line handler) remain inline. AE management is a distinct domain. Extraction gives it a testable seam. Depends on BKL-ARCH-03.
+Depends on: BKL-ARCH-03
+
+---
+
+### BKL-ARCH-11 | Consolidate settings/config inline routes into settings-api.ts
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Files: server.ts (lines ~898–1212: 6 inline routes), src/settings-api.ts
+Description: 6 inline routes scattered through server.ts belong in settings-api.ts: /api/settings/from-drive, /api/config, /api/config/test, /api/env/gemini-model, GET+PUT /api/settings/email. These are already semantically owned by the settings domain — consolidation eliminates the split. Depends on BKL-ARCH-03.
+Depends on: BKL-ARCH-03
+
+---
+
+### BKL-ARCH-12 | Extract admin/monitoring/drive inline routes → admin-routes.ts
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Files: server.ts (8 inline routes), new src/admin-routes.ts
+Description: 8 inline routes with no natural home: /api/status/telemetry, /api/status/telemetry/history, /api/admin/gemini-usage, /api/version, /api/drive-watcher/status, /api/drive-watcher/rebuild, /api/drive/ls/:folderId, /debug/sheet-tabs/:fileId. Grouping into admin-routes.ts clears ~200 lines of inline handlers from server.ts. Depends on BKL-ARCH-03.
+Depends on: BKL-ARCH-03
+
+---
+
+### BKL-ARCH-13 | Extract territory/pods/accounts inline routes → territory-routes.ts
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Files: server.ts (3 inline routes), new src/territory-routes.ts
+Description: /api/territory/notifications, /api/pods, /api/accounts remain inline. Territory is already a concept in the domain (PODs, region access, AE config). Depends on BKL-ARCH-03.
+Depends on: BKL-ARCH-03
+
+---
+
+### BKL-ARCH-14 | Extract SSE/events inline routes → events-routes.ts
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Files: server.ts (lines ~1275–1337+: 3 SSE routes), new src/events-routes.ts
+Description: /events, /api/ingest/events, /api/ai/events are all SSE (server-sent events) streams with large inline handlers. Extracting to events-routes.ts isolates the SSE pattern, gives it a seam, and removes ~200 lines from server.ts. Depends on BKL-ARCH-03.
+Depends on: BKL-ARCH-03
 
 ---
 
