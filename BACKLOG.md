@@ -5068,13 +5068,13 @@ Files: src/cache-layer.ts (sheetCachePath function)
 Description: readSheetCache(cu.name) constructs a file path using toSlug(customerName). The safety guarantee depends entirely on toSlug producing only safe filesystem characters. If toSlug has an edge case (e.g., name with only special characters), it could produce an unexpected path. The invariant is implicit — no explicit bounds check or allowlist guard at the sheetCachePath level. Fix: add an explicit regex check inside sheetCachePath: if the slug is empty or contains `..` or `/`, throw rather than silently construct a bad path. Low practical risk (customer names come from internal config), but worth hardening.
 
 ### BKL-SEC-03 | sanitizeErr regex doesn't mask .json config paths in 500 responses
-Status: ✅ DONE — 2026-04-08
+Status: 🔁 REOPENED 2026-05-01 — fix was never applied; marked DONE incorrectly on 2026-04-08
 Severity: LOW
 Priority: P3
 Size: S
-Source: Rook security scan 2026-04-07 Phase 2 (src/utils.ts sanitizeErr)
+Source: Rook security scan 2026-04-07 Phase 2 (src/utils.ts sanitizeErr); re-surfaced Rook scan 2026-05-01 BKL-HERO-01 Phase 3
 Files: src/utils.ts
-Description: sanitizeErr strips .ts/.js file paths from error messages but doesn't mask .json paths or absolute non-code paths (e.g., /app/config/customers.json). A file-not-found error on a config file could leak internal container directory structure. Fix: broaden the sanitizeErr regex to also strip absolute paths: `s/\/[^\s:]+/[path]/g` or similar. Low practical impact on a localhost app, but worth fixing for defense-in-depth.
+Description: sanitizeErr regex at utils.ts:18 uses `.replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]')` — alternation matches `.js` before `.json` so `/data/data-sources.json` produces `[file]on` (suffix leaks). Fix: put `json` before `js` in alternation, or use broader absolute-path strip: `.replace(/\/[^\s:]+/g, '[path]')`. Low practical impact on localhost-only app.
 
 ### BKL-SEC-04 | POST /api/bootstrap/pod — TOCTOU race in 409 conflict guard
 Status: ✅ DONE 2026-04-07 — Fixed in commit 862c99c: lock claimed synchronously before first await, released on validation failure
@@ -7990,7 +7990,7 @@ Naming conventions (confirmed 2026-04-29):
 Decision: DONE — All 5 phases shipped 2026-04-30 to 2026-05-01. Phase 0 (backend), Phase 1 (Step 0 region picker), Phase 2 (isL3Only gating), Phase 3 (RH token form + validateOfflineToken), Phase 4 (POD dropdown filter), Phase 5 (Open Dashboard hero button). 28 Playwright tests added across 5 spec files. Quinn 28/28 PASS. Rook: no Critical/High findings; BKL-SEC-10 (sanitizeErr HTML-strip) patched same session; BKL-SEC-09 and BKL-SEC-11 logged as open. Pre-existing failures: REG-001 (seed data mismatch, pre-existing) and REG-BOOT-03 (@live test requires primary role).
 
 ### BKL-HERO-02 | Hero Install — Admin › Region Access edit screen
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-01
 Priority: P2
 Size: S
 Source: Session 2026-04-29 (deferred from BKL-HERO-01 to control scope)
@@ -8002,6 +8002,24 @@ Acceptance:
   - Saving updates enabledRegions/enabledPods in settings.json
   - No wizard reset required
 Can we test: YES — Playwright: navigate to Admin, click Edit Regions, change selection, save, reload AEs section → POD dropdown reflects new selection
+Decision: DONE — RegionAccessSection function component added to AdminPage.tsx. Fetches GET /api/regions/access on mount, mounts Step0RegionAccess pre-populated. 3 Playwright tests passing. Quinn + Rook gates run in same session.
+
+### BKL-HERO-03 | Test spec gap — NODE_ROLE=primary suppresses rh-token-input
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Quinn scan 2026-05-01 BKL-HERO-01 Phase 3
+Files: test/ui/setup-l3-gating.spec.ts (or hero-step3.spec.ts)
+Description: No assertion verifies that `data-testid="rh-token-input"` is absent when NODE_ROLE=primary. The L3-only gating logic is tested from the positive path (NODE_ROLE unset → component renders) but not the negative path (NODE_ROLE=primary → component absent). Add one assertion to cover suppression.
+
+### BKL-HERO-04 | Fixture drift — TBH AE data stale in test fixtures
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Quinn scan 2026-05-01 BKL-HERO-01 Phase 3
+Files: test/fixtures.ts
+Description: TBH AE entry in test fixtures is out of sync with current data shape. Non-blocking but causes intermittent fixture mismatch warnings in CI. Update TBH fixture data to match current aes.json schema.
+
 
 ### BKL-CONN-SF-ADOPT-01 | SF re-login breaks RH Portal session — context not re-adopted
 Status: 🔴 OPEN
