@@ -5,6 +5,7 @@ import { formatRelTime } from '../lib/format'
 import { getVncUrl } from '../utils'
 import { SessionHealthPanel } from '../components/SessionHealthPanel'
 import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
+import { Step0RegionAccess } from '../components/Step0RegionAccess'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -953,6 +954,33 @@ function ContentRhSessionButton() {
   )
 }
 
+// BKL-HERO-02 — Region Access section for Admin page
+function RegionAccessSection() {
+  const [initialRegions, setInitialRegions] = useState<string[] | undefined>(undefined)
+  const [initialPods, setInitialPods] = useState<string[] | undefined>(undefined)
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/regions/access')
+      .then(r => r.json())
+      .then((d: { enabledRegions?: string[]; enabledPods?: string[] }) => {
+        if (Array.isArray(d.enabledRegions)) setInitialRegions(d.enabledRegions)
+        if (Array.isArray(d.enabledPods)) setInitialPods(d.enabledPods)
+      })
+      .finally(() => setLoaded(true))
+  }, [])
+
+  if (!loaded) return <p className="text-sm text-text-secondary">Loading...</p>
+
+  return (
+    <Step0RegionAccess
+      initialEnabledRegions={initialRegions}
+      initialEnabledPods={initialPods}
+      onSave={() => {/* AdminPage re-reads on next mount; no local state to update */}}
+    />
+  )
+}
+
 export function AdminPage() {
   const navigate = useNavigate()
   const [status, setStatus] = useState<AllScrapeStatus | null>(null)
@@ -1381,6 +1409,12 @@ export function AdminPage() {
 
         {/* Product Intelligence Sources */}
         <ProductSourcesAdmin />
+
+        {/* BKL-HERO-02 — Region Access edit (hero L3 installs) */}
+        <div data-testid="admin-region-access">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Region Access</h2>
+          <RegionAccessSection />
+        </div>
 
         {/* BKL-BACKUP-01: Config Backup */}
         <div>
