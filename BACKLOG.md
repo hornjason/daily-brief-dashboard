@@ -5097,6 +5097,16 @@ Files: dashboard/src/pages/SetupPage.tsx — PodBootstrapSection
 Description: Once Territory Sheet ID, SF Report ID, and Parent Drive Folder are all filled in, show a Google Drive folder preview (similar to the single-AE bootstrap folder preview) so the user can confirm they've selected the right parent folder before clicking Bootstrap POD. Should use the same Drive folder name lookup pattern already used in AutoBootstrapForm.
 Decision: DONE — Added folderName/folderError state + onBlur handler calling /api/aes/validate-folder in PodBootstrapSection. Border turns green + shows "✓ FolderName" on success; red + error on failure. Matches existing AutoBootstrapForm pattern exactly.
 
+### BKL-SEC-08 | HeroStep3Connections — token not cleared from state on save (hygiene)
+Status: ✅ DONE 2026-04-30
+Severity: LOW
+Priority: P3
+Size: XS
+Source: Rook scan 2026-04-30 BKL-HERO-01 Phase 3
+Files: dashboard/src/components/HeroStep3Connections.tsx
+
+Description: Token textarea value remained in React state after successful save. If user clicked [Edit] after saving, the raw token would re-render in the DOM. `setToken('')` added at line 53 immediately after `setSummaryMode(true)`. Fixed inline same session.
+
 ### BKL-SEC-07 | Expansion Opportunities — prompt injection hardening (P2 x3)
 Status: 🔴 OPEN 2026-04-11
 Severity: MEDIUM (P2)
@@ -7907,7 +7917,7 @@ Acceptance: Fresh container: connect RH Portal + SF → no scraping fires. Start
 Can we test: YES — regression test that (a) SF onComplete does NOT call runSfSyncForAes, (b) catch-up skipped when aes.json empty, (c) bootstrap CCSP step checks today's Drive CSV before L4.
 
 ### BKL-HERO-01 | Hero Install Wizard — L3-only setup flow (Step 0 + Step 3 + isL3Only gating)
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS — Phases 0-3 shipped 2026-04-30; Phases 4-5 remaining
 Priority: P1
 Size: L
 Source: Session 2026-04-29 (design signed off by Jason)

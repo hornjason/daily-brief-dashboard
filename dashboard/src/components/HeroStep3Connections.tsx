@@ -50,6 +50,7 @@ export function HeroStep3Connections({ onSave }: HeroStep3Props) {
       if (!res.ok) {
         throw new Error(body.error ?? `Save failed (${res.status})`)
       }
+      setToken('')
       setSummaryMode(true)
       onSave?.()
     } catch (e: any) {
@@ -64,7 +65,7 @@ export function HeroStep3Connections({ onSave }: HeroStep3Props) {
     return (
       <section className="bg-surface rounded-xl border border-border overflow-hidden">
         <div className="px-6 py-4">
-          <h2 className="text-base font-semibold text-white mb-1">Step 3 of 5 — Red Hat Connection</h2>
+          <h2 className="text-base font-semibold text-white mb-1">Red Hat Connection</h2>
         </div>
         <div className="px-6 pb-6 pt-4 flex items-center gap-2 text-text-secondary text-sm">
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -108,7 +109,7 @@ export function HeroStep3Connections({ onSave }: HeroStep3Props) {
       className="bg-surface rounded-xl border border-border overflow-hidden"
     >
       <div className="px-6 py-4 border-b border-border">
-        <h2 className="text-base font-semibold text-white mb-1">Step 3 of 5 — Red Hat Connection</h2>
+        <h2 className="text-base font-semibold text-white mb-1">Red Hat Connection</h2>
         <p className="text-sm text-text-secondary">
           Enter your Red Hat offline token to enable RH Cases.
         </p>
