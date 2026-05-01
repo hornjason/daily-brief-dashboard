@@ -4027,7 +4027,10 @@ export default function SetupPage() {
             <GoogleAuthSection />
           </AccordionSection>
 
-          <AccordionSection
+          {/* BKL-HERO-01 Phase 3 — L3 hero installs: RH offline token replaces Connections step */}
+          {isL3Only && <HeroStep3Connections />}
+
+          {!isL3Only && <AccordionSection
             id="rh-portal"
             title="Step 3 of 5 — Connections"
             badge={
@@ -4044,7 +4047,7 @@ export default function SetupPage() {
               onlyConnections={true}
               onHealthChange={(status, count) => { setDataSourcesHealth(status); if (count !== undefined) setDataSourcesConnected(count) }}
             />
-          </AccordionSection>
+          </AccordionSection>}
 
           <AccordionSection
             id="aes"
@@ -4095,9 +4098,6 @@ export default function SetupPage() {
               />
             </AccordionSection>
           )}
-
-          {/* BKL-HERO-01 Phase 3 — L3 hero installs: RH offline token in place of Data Sources */}
-          {isL3Only && <HeroStep3Connections />}
 
           {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs.
               The "Open Dashboard" link inside this section disappears on L3 by
