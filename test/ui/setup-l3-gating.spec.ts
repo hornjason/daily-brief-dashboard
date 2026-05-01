@@ -92,7 +92,30 @@ test.describe('@destructive BKL-HERO-01 Phase 2: SetupPage L3 gating', () => {
     ).toBeVisible({ timeout: 10_000 })
   })
 
-  test('T5 — Primary (L4) install renders all four sections', async ({ page }) => {
+  test('T5 — L3 hero install hides Step 3 Connections accordion', async ({ page }) => {
+    await mockNodeRole(page, true)
+    await page.goto(SETUP_PATH)
+    await waitForSetupReady(page)
+
+    // On L3 the Connections accordion is replaced by HeroStep3Connections.
+    // The standard "Step 3 of 5 — Connections" button must not be in the DOM.
+    await expect(page.locator('#rh-portal')).toHaveCount(0)
+    await expect(page.locator('button:has-text("Step 3 of 5 — Connections")')).toHaveCount(0)
+  })
+
+  test('T6 — L3 hero install shows HeroStep3Connections in Step 3 position', async ({ page }) => {
+    await mockNodeRole(page, true)
+    await page.goto(SETUP_PATH)
+    await waitForSetupReady(page)
+
+    // HeroStep3Connections renders after Google Auth (Step 2) and before AEs (Step 4).
+    // The component shows either form mode (hero-step3-connections) or summary mode (hero-step3-summary).
+    await expect(
+      page.locator('[data-testid="hero-step3-connections"], [data-testid="hero-step3-summary"]')
+    ).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('T7 — Primary (L4) install renders all four sections', async ({ page }) => {
     // The test container is NODE_ROLE-unset, so the real endpoint would
     // return isL3Only:true. Mock it to simulate a primary install.
     await mockNodeRole(page, false)
@@ -105,7 +128,8 @@ test.describe('@destructive BKL-HERO-01 Phase 2: SetupPage L3 gating', () => {
     await expect(page.locator('#automation-settings')).toHaveCount(1)
 
     // Headings visible (collapsed-but-present is fine — accordion header is a button).
-    await expect(page.locator('button:has-text("Step 5 of 5 — Data Sources")')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('button:has-text("Step 3 of 5 — Connections")')).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('button:has-text("Step 5 of 5 — Data Sources")')).toBeVisible()
     await expect(page.locator('button:has-text("Refresh Timer & Settings")')).toBeVisible()
     await expect(page.locator('button:has-text("Automation & Limits")')).toBeVisible()
     await expect(page.locator('button:has-text("AI & Intelligence Settings")')).toBeVisible()
