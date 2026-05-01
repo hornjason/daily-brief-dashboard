@@ -8022,7 +8022,7 @@ Description: TBH AE entry in test fixtures is out of sync with current data shap
 
 
 ### BKL-HERO-05 | L3 hero: RH Portal "Connect" banner shows at top of dashboard
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-05-01)
 Priority: P1
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8032,7 +8032,7 @@ Acceptance: On L3 (NODE_ROLE unset), RHSessionBanner is absent from the DOM. On 
 Can we test: YES — Playwright test mocking /api/node-role asserts banner absent on L3 and present on L4.
 
 ### BKL-HERO-06 | L3 hero: KPI Cards shows "Connect Red Hat Portal in Settings" hint
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-05-01)
 Priority: P1
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8062,7 +8062,7 @@ Acceptance: SF-derived pipeline metrics still visible on L3. Tableau-specific se
 Can we test: YES — after implementation, Playwright test on L3 verifies SF metrics present, Tableau metrics absent.
 
 ### BKL-HERO-09 | L3 hero: Admin top "Manual scrape requires active feed session" warning banner
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-05-01)
 Priority: P1
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8072,7 +8072,7 @@ Acceptance: Warning banner absent on Admin page on L3. Present on L4.
 Can we test: YES — Playwright on L3 asserts banner text absent.
 
 ### BKL-HERO-10 | L3 hero: Admin Data Source Health tiles show RH Portal + Tableau as permanently red
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-05-01)
 Priority: P1
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8082,7 +8082,7 @@ Acceptance: On L3, only Salesforce health tile visible. On L4, all three tiles v
 Can we test: YES — Playwright on L3 asserts RH Portal and Tableau health tiles absent.
 
 ### BKL-HERO-11 | L3 hero: Admin Manual Scrape Triggers shows RH Cases + CCSP [Run Now] buttons
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-05-01)
 Priority: P1
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8092,7 +8092,7 @@ Acceptance: On L3, only SF Pipeline trigger visible in MANUAL SCRAPE TRIGGERS. O
 Can we test: YES — Playwright on L3 asserts RH Cases and CCSP trigger buttons absent.
 
 ### BKL-HERO-12 | L3 hero: Admin Browser Sessions section shows "Save Content RH Session" control
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-05-01)
 Priority: P1
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8102,7 +8102,7 @@ Acceptance: Browser Sessions section absent on Admin page on L3.
 Can we test: YES — Playwright on L3 asserts browser sessions section absent.
 
 ### BKL-HERO-13 | L3 hero: Admin Scheduler Limits shows CCSP + RH Cases rows
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-05-01)
 Priority: P2
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8162,7 +8162,7 @@ Acceptance: Customer detail audit completed; all L4-specific elements gated on i
 Can we test: YES after data is loaded.
 
 ### BKL-HERO-19 | useNodeRole() shared hook — eliminate duplicate /api/node-role fetches
-Status: 🔴 OPEN
+Status: ✅ DONE (2026-05-01)
 Priority: P1
 Size: S
 Source: Quinn L3 hero audit 2026-05-01 (implementation recommendation)
