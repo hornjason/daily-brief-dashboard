@@ -8177,7 +8177,7 @@ Acceptance: Single /api/node-role fetch per page load (not per component). All P
 Can we test: YES — network tab assertion (1 /api/node-role call per page), unit test for hook.
 
 ### BKL-HERO-20 | Hero purity: missing Playwright assertions that L4 UI is absent
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P1
 Size: S
 Source: Issue #7 post-mortem 2026-05-01 — worktree merge restored CCSP/Browser Sessions; Quinn gate caught it but CI did not
