@@ -8878,7 +8878,7 @@ Solution: Add `if (body.recipientEmail.length > 254) return c.json({ error: 'Ema
 Can we test: YES — regression test: PUT /api/settings/email with 255-char email returns 400.
 
 ### BKL-PROCESS-01 | Child issue promotion at parent issue close — external traceability
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: M
 Source: Jason design discussion 2026-05-02 — closing the loop between GitHub issues and mid-implementation BKL discoveries
@@ -8888,7 +8888,7 @@ Description: When working a GitHub issue, mid-implementation discoveries (Rook f
 Acceptance criteria:
 - [x] `Issue: #N` field added as a convention in BACKLOG.md item template — all 9 promoted items updated 2026-05-02
 - [x] dev-loop SKILL.md updated with close-gate step (Step 12) — scan for open BKL items with `Issue: #N`, sort XS vs S+, promote S+ via /triage 2026-05-02
-- [ ] /triage agent brief template updated with `Parent issue context` section
+- [x] /triage agent brief template updated with `Parent issue context` section — ~/.claude/skills/triage/AGENT-BRIEF.md updated 2026-05-02
 - [x] Parent issue close comment format documented and used — first run on issue #9 (2026-05-02): 8 child issues created (#18–#26 except #19), findings comment posted, BACKLOG.md entries updated with Issue: #N fields
 - [x] At least one real close cycle tested end-to-end — issue #9 first run complete 2026-05-02
 
