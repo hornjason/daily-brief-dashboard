@@ -720,6 +720,8 @@ export function registerScrapeRoutes(app: Hono): void {
   /** Open a Chromium window to the Tableau login page in the VNC display.
    *  Use this when the Tableau session has expired and you need to re-authenticate. */
   app.post('/api/browser/open-tableau-login', async (c) => {
+    // BKL-HERO-21: guard — Chromium only installed in L4 image
+    if (process.env.NODE_ROLE !== 'primary') return c.json({ error: 'Not available on hero nodes' }, 404)
     try {
       const TABLEAU_LOGIN = 'https://10ay.online.tableau.com/#/site/redhatanalytics/signin'
       // Launch Chromium directly on the VNC display for manual login

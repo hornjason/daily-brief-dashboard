@@ -11,7 +11,7 @@
  * Run against production (read-only tests only — reset test excluded):
  *   npx playwright test test/api/routes.spec.ts --project=ci
  */
-import { test, expect, getJSON, postJSON } from '../fixtures'
+import { test, expect, getJSON, postJSON, postJSONDestructive } from '../fixtures'
 
 // ── POST /api/setup/reset — production guard ─────────────────────────────────
 
@@ -62,6 +62,18 @@ test.describe('GET /api/accounts', () => {
     expect(first).toHaveProperty('accountNumbers')
     expect(first).toHaveProperty('ae')
     expect(Array.isArray(first.accountNumbers)).toBe(true)
+  })
+})
+
+// ── POST /api/browser/open-tableau-login — L3 hero guard (BKL-HERO-21) ───────
+
+test.describe('POST /api/browser/open-tableau-login — L3 hero guard', () => {
+  test('returns 404 on hero (L3) node — Chromium not installed @destructive', async () => {
+    // The test container runs without NODE_ROLE=primary → hero node → 404.
+    const { status, body } = await postJSONDestructive('/api/browser/open-tableau-login', {})
+    expect(status).toBe(404)
+    expect(body).toHaveProperty('error')
+    expect(body.error).toContain('hero')
   })
 })
 

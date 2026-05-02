@@ -5074,7 +5074,7 @@ Priority: P3
 Size: S
 Source: Rook security scan 2026-04-07 Phase 2 (src/utils.ts sanitizeErr); re-surfaced Rook scan 2026-05-01 BKL-HERO-01 Phase 3
 Files: src/utils.ts
-Description: sanitizeErr regex at utils.ts:18 uses `.replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]')` — alternation matches `.js` before `.json` so `/data/data-sources.json` produces `[file]on` (suffix leaks). Fix: put `json` before `js` in alternation, or use broader absolute-path strip: `.replace(/\/[^\s:]+/g, '[path]')`. Low practical impact on localhost-only app.
+Description: sanitizeErr regex at utils.ts:18 uses `.replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]')` — alternation matches `.js` before `.json` so `/data/data-sources.json` produces `[file]on` (suffix leaks). Also: requires a leading `/` so relative paths like `config/customers.json` pass through unmasked. Fix: put `json` before `js` in alternation AND drop the leading-slash requirement; or use broader path strip: `.replace(/(?:\/|[a-zA-Z]:[\\/])[\w./\\-]+\.(ts|js|json|key|pem)/g, '[path]')`. Rook MED-01 2026-05-02.
 
 ### BKL-SEC-04 | POST /api/bootstrap/pod — TOCTOU race in 409 conflict guard
 Status: ✅ DONE 2026-04-07 — Fixed in commit 862c99c: lock claimed synchronously before first await, released on validation failure
@@ -8197,7 +8197,7 @@ Acceptance: After SF login success, RH Portal remains hasSession:true, sf-scrape
 Can we test: YES — regression test that after startSfLoginBrowser completes, getScrapeContext() is non-null and getSfContext() is non-null.
 
 ### BKL-HERO-21 | POST /api/browser/open-tableau-login unguarded on hero nodes (advisory)
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Rook security scan 2026-05-02 — issue #7 L4 removal
@@ -8228,6 +8228,16 @@ Description: BKL-UX-WIPE-CONN-RESET-01 fixed RH/SF session files. Two sibling se
 Solution: Extend clearSessionFiles() to also unlink TABLEAU_SESSION_PATH and CONTENT_RH_SESSION_PATH (pass their paths through initScraperManager or read from env). Invalidate _tableauStatusCache on reset (export a resetTableauStatusCache() from bootstrap-orchestrator.ts or add a reset hook).
 Can we test: YES — after POST /api/setup/reset, GET /api/bootstrap/tableau/session-status should not return sessionValid:true from stale cache.
 
+
+### BKL-UX-WIPE-CONN-RESET-03 | clearSessionFiles() silently swallows unlink errors — failed session reset undetectable
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook MED-02 scan 2026-05-02
+Files: src/scraper-manager.ts (clearSessionFiles)
+Description: Both `try { unlinkSync(...) } catch {}` calls use empty catch — EACCES, EBUSY, EROFS all swallowed silently. If unlink fails after a wipe, the connection status reset fails invisibly (user sees "wiped" but session lingers). Not exploitable but masks correctness-relevant failures.
+Solution: Log on failure: `catch (e) { console.warn('[clearSessionFiles] failed to unlink RH session:', sanitizeErr(e)) }`. Optionally surface in the wipe API response.
+Can we test: YES — inject a non-existent path constant and verify no throw; harder to test EACCES without mock.
 
 ### BKL-SYNC-L3-01 | L3 sync daemon — long-running headless pod data sync for primary Mac Mini
 Status: ✅ DONE — 2026-04-30
