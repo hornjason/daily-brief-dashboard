@@ -107,6 +107,7 @@ import { markRunning, recordOutcome } from './scraper-status-store.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
 import { filterRowsForAe } from './ccsp-row-filter.ts'
 import { tryMemoryCache, tryDriveCache, writeCaches } from './ccsp-cache.ts'
+import { fetchPodCsv } from './ccsp-tableau-fetch.ts'
 
 /**
  * Search for a VISIBLE element across all frames in the page.
@@ -203,22 +204,11 @@ let _ctx: BrowserContext | null = null
 // Issue #15 Step 2: in-memory + Drive cache moved to src/ccsp-cache.ts.
 // `_podCsvCache` and `POD_CSV_CACHE_TTL_MS` are now owned there (single owner).
 
-// BKL-UX79: Signal from scraper → bootstrap-orchestrator that Tableau SSO expired.
-// When scrapeOneAe lands on the login page, it sets this flag so the next
-// /api/bootstrap/tableau/session-status call invalidates its cache and re-probes.
-let _tableauSessionExpired = false
-
-/** Called by the session-status endpoint to check and consume the expired flag. */
-export function consumeTableauSessionExpired(): boolean {
-  const v = _tableauSessionExpired
-  _tableauSessionExpired = false
-  return v
-}
-
-/** Non-consuming read — safe for polling status endpoints that may be called repeatedly. */
-export function peekTableauSessionExpired(): boolean {
-  return _tableauSessionExpired
-}
+// Issue #15 Step 3: _tableauSessionExpired flag and accessors moved to
+// src/ccsp-tableau-fetch.ts (single owner of the SSO recovery handshake).
+// Re-export for backward compatibility — bootstrap-orchestrator.ts and
+// scraper-manager.ts continue to import from './ccsp-scraper.ts'.
+export { consumeTableauSessionExpired, peekTableauSessionExpired } from './ccsp-tableau-fetch.ts'
 
 export function adoptCcspContext(ctx: BrowserContext): void {
   _ctx = ctx
@@ -485,220 +475,68 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
     return { aeName: ae.name, rows: [], accountPeriod: label }
   }
 
-  // -- Build URL with filters pre-applied -------------------------------------
-  // Tableau Cloud supports URL-based filtering (?FilterName=Value) — this is
-  // far more reliable than clicking UI filter dropdowns inside deeply-nested
-  // iframes (Main page → Data Visualization iframe → primaryContent iframe).
-  // BKL-CCSP-05: Derive Segment, Region, POD from territory string — hardcoded Commercial
-  // filters returned 0 rows for Enterprise (TOLA) territories.
+  // -- Live Tableau fetch (Issue #15 Step 3 — extracted to ccsp-tableau-fetch.ts) -----
+  // BKL-CCSP-05: territory string drives Region/Segment/POD derivation.
+  // Tableau URL build, page navigation, SSO recovery handshake, CSV download,
+  // and response classification all live in fetchPodCsv. The shared BrowserContext
+  // is NOT acquired there — caller passes the page (ADR-015 invariant intact).
   const territoryFilters = validTerritories.length > 0
     ? parseTerritoryParts(validTerritories[0])
     : { pod: '', subregion: '', segment: 'Commercial', subsegment: 'Commercial', region: 'NA_COMM_COMMERCIAL' }
 
-  const filterParams = new URLSearchParams()
-  filterParams.set('Super Geo', 'AMERICAS')
-  filterParams.set('Geo', 'NA_COMM')
-  filterParams.set('Region', territoryFilters.region)
-  filterParams.set('Segment', territoryFilters.segment)
-  filterParams.set('Subsegment', territoryFilters.subsegment)
-  filterParams.set('Year', years.join(','))
-  filterParams.set('Quarter', quarters.join(','))
-  if (validTerritories.length > 0) {
-    filterParams.set('Subregion', territoryFilters.subregion)
-    filterParams.set('POD', territoryFilters.pod)
-    // BKL-CCSP-CSV-01: Account Territory filter removed — .csv endpoint returns empty ("\n")
-    // when territory filter is applied. POD + Subregion scope the viz correctly;
-    // territory filtering is applied client-side after download.
-  }
-  // Direct embed URL — filter params MUST be on /t/site/views/... (not on the #/site/... hash URL,
-  // where ?params would be inside the hash fragment and ignored by the server).
-  const tableauUrl = `${TABLEAU_EMBED_BASE}?${filterParams.toString().replace(/%2C/gi, ',')}`
-  console.log(`[ccsp] ${ae.name}: navigating with pre-applied filters (no territory filter)...`)
-
-  await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-  await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {
-    console.warn(`[ccsp] ${ae.name}: networkidle timed out — continuing anyway`)
-  })
-  await page.waitForTimeout(3_000)
-
-  // Detect login wall — Tableau redirects to SSO/login when session is invalid
-  const currentUrl = page.url()
-  const isLoginPage = !currentUrl.includes('10ay.online.tableau.com') ||
-    currentUrl.includes('/auth') || currentUrl.includes('/login') ||
-    await page.$('input[type="password"], input#username, [data-testid="login"]').then(el => !!el).catch(() => false)
-  if (isLoginPage) {
-    console.log(`[ccsp] ${ae.name}: Tableau SSO detected — waiting up to 5 min for manual login via VNC`)
-    _tableauSessionExpired = true
-    const deadline = Date.now() + 5 * 60 * 1000
-    let loggedIn = false
-    while (Date.now() < deadline) {
-      await page.waitForTimeout(2_000)
-      const url = page.url()
-      if (!url.startsWith('https://10ay.online.tableau.com')) continue
-      await page.waitForTimeout(1_500)
-      if (page.url() !== url) continue
-      const noLoginForm = await page.evaluate(() => {
-        const els = Array.from(document.querySelectorAll('input[type="password"], input#username, [data-testid="login"]'))
-        return !els.some(el => {
-          const s = window.getComputedStyle(el)
-          return s.display !== 'none' && s.visibility !== 'hidden' && (el as HTMLElement).offsetParent !== null
-        })
-      }).catch(() => false)
-      const hasTableauContent = await page.$('.tab-glassPane, iframe[id^="tableau"]').then(el => !!el).catch(() => false)
-      if (noLoginForm && hasTableauContent) {
-        console.log(`[ccsp] ${ae.name}: Tableau login detected — saving cookies and continuing`)
-        if (_ctx) await saveTableauSession(_ctx)
-        _tableauSessionExpired = false
-        loggedIn = true
-        break
-      }
-    }
-    if (!loggedIn) {
-      console.warn(`[ccsp] ${ae.name}: Tableau login timed out after 5 min — skipping scrape`)
-      _tableauSessionExpired = true
-      throw new Error('Tableau session required — log in via the VNC window and retry')
-    }
-  }
-
-  console.log(`[ccsp] ${ae.name}: page loaded, waiting for viz to render...`)
-  if (CCSP_DEBUG) await dumpDom(page, `${ae.name}-loaded`)
-
-  // Wait for Raw Data tab to appear — indicates viz has fully rendered
-  await waitForVizReady(page, ae.name)
-
-  // -- Navigate to Raw Data tab -----------------------------------------------
-  await page.waitForTimeout(2_000)
-  const rawDataTab = await findEl(page, 'text="Raw Data"')
-  if (rawDataTab) {
-    console.log(`[ccsp] ${ae.name}: clicking Raw Data tab`)
-    await rawDataTab.click()
-    await page.waitForLoadState('networkidle', { timeout: 30_000 }).catch(() => {})
-    // Tableau shows "Working on it" modal (Processing request → Computing models → Preparing result)
-    // Wait for it to disappear before attempting download
-    await page.waitForSelector('text="Working on it"', { timeout: 10_000 }).catch(() => {})
-    await page.waitForSelector('text="Working on it"', { state: 'hidden', timeout: 60_000 }).catch(() => {})
-    await page.waitForTimeout(2_000)
-  } else {
-    console.warn(`[ccsp] ${ae.name}: Raw Data tab not found — attempting download from current view`)
-  }
-
-  // Log URL after tab click — if still on CloudConsumption, force the RawData view path.
-  // Tableau's Vizql sometimes changes the viz inside the iframe without updating the
-  // top-level page URL (especially on the 2nd+ AE in the same session).
-  let postTabUrl = page.url()
-  if (postTabUrl.includes('/CloudConsumption') && rawDataTab) {
-    console.log(`[ccsp] ${ae.name}: URL still on CloudConsumption after Raw Data click — using RawData path`)
-    postTabUrl = postTabUrl.replace('/CloudConsumption', '/RawData')
-  }
-  console.log(`[ccsp] ${ae.name}: URL after tab: ${postTabUrl}`)
-
-  // -- Extract data -----------------------------------------------------------
   let rows: Record<string, string>[] = []
-
-  // Strategy: Direct server-side CSV URL using TABLEAU_EMBED_BASE (/t/site/views/... format).
-  // BKL-CCSP-CSV-01 fix: The old popup download approach failed because Salesforce SSO
-  // doesn't pass through in popup windows. The original .csv URL approach returned "\n"
-  // because it was built from page.url() (fragment #/site/... format) instead of
-  // TABLEAU_EMBED_BASE (server /t/site/... format). The server ignores fragment URLs.
   try {
-    // Construct direct CSV URL using server-side /t/site/views/... path (NOT page.url() which returns fragment)
-    // BKL-CCSP-CSV-01: Year filter (FY2025,FY2026) returns "\n" from CSV endpoint — the endpoint
-    // uses a different Year value format than the UI. Quarter filter already constrains the window.
-    const rawDataBase = TABLEAU_EMBED_BASE.replace('/CloudConsumption', '/RawData')
-    // BKL-CCSP-CSV-01: Segment/Subsegment=Commercial cause 0 rows for CORP territories — Tableau's
-    // data uses different Subsegment values per POD (e.g. 'Corporate' not 'Commercial').
-    // POD + Subregion already uniquely scope the data; Quarter scopes the time window.
-    // Diagnostic confirmed: pod-only filter returns 7715 rows; full filter returns 0.
-    const csvFilterParams = new URLSearchParams()
-    if (validTerritories.length > 0) {
-      csvFilterParams.set('Subregion', territoryFilters.subregion)
-      csvFilterParams.set('POD', territoryFilters.pod)
-    }
-    csvFilterParams.set('Quarter', quarters.join(','))
-    const csvParams = csvFilterParams.toString().replace(/%2C/gi, ',')  // Tableau needs literal commas
-    const csvUrl = `${rawDataBase}.csv?${csvParams}`
-
-    console.log(`[ccsp] ${ae.name}: fetching CSV from ${csvUrl}`)
-
-    let csvPath: string | null = null
-    try {
-      const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 60_000 }),
-        page.goto(csvUrl, { waitUntil: 'commit', timeout: 30_000 }).catch(() => {}),
-      ])
-      csvPath = await download.path()
-      console.log(`[ccsp] ${ae.name}: download captured at ${csvPath}`)
-    } catch (e: any) {
-      console.warn(`[ccsp] ${ae.name}: CSV download failed: ${e.message}`)
-    }
-
-    if (csvPath) {
-      const csvText = readFileSync(csvPath, 'utf8')
-      rows = parseCsvToObjects(csvText)
-      // Classify response so "0 rows" failures are diagnosable (BKL-CONN-TABLEAU-CTX-01)
-      if (rows.length === 0) {
-        const trimmed = csvText.trim()
-        if (trimmed === '' || trimmed === '\n') {
-          console.warn(`[ccsp] ${ae.name}: csv_empty — endpoint returned blank body (filter mismatch or auth)`)
-        } else if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-          console.warn(`[ccsp] ${ae.name}: auth_redirect — CSV endpoint returned HTML (SSO redirect, session invalid in shared context)`)
-        } else {
-          console.warn(`[ccsp] ${ae.name}: csv_zero_rows — parsed 0 rows from non-empty body: ${trimmed.slice(0, 120)}`)
-        }
-      } else {
-        const firstRow = rows[0] ?? {}
-        const cols = Object.keys(firstRow)
-        const hasAccount = cols.some(c => /account|customer|company/i.test(c))
-        const hasAcv = cols.some(c => /acv/i.test(c))
-        if (!hasAccount || !hasAcv) {
-          console.warn(`[ccsp] ${ae.name}: csv_summary_view — ${rows.length} rows but missing required columns; cols: [${cols.slice(0, 8).join(', ')}]`)
-        } else {
-          console.log(`[ccsp] ${ae.name}: csv_ok — ${rows.length} rows (unfiltered POD)`)
-        }
-      }
-    }
-
-    // Re-navigate to main Tableau view so next AE scrape starts cleanly
-    await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
-
-    // Issue #15 Step 2: cache write-back (memory + Drive) extracted to src/ccsp-cache.ts.
-    //   - BKL-PERF-02 / BKL-PERF-04: in-memory POD-keyed cache.
-    //   - BKL-PERF-03: Drive cache write CCSP-<pod>-<today>.csv.
-    //   - REG-CCSP-DUP-01: stale-sibling deletion.
-    //   - BKL-INGEST-03: stamps driveFileId onto in-memory entry post-write.
-    if (rows.length > 0 && validTerritories.length > 0) {
-      const writePod = parseTerritoryParts(validTerritories[0]).pod
-      await writeCaches(writePod, rows, label, podBookingsFolderId)
-    }
-
-    // Post-filter by territory and quarter — download returns full POD dataset
-    // Issue #15 Step 1: extracted to filterRowsForAe (pure). Diagnostic warnings
-    // for missing columns stay here (out of the pure function).
-    if (rows.length > 0) {
-      const beforeKeys = Object.keys(rows[0])
-      const hasTerrCol = beforeKeys.some(k => {
-        const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
-        return norm === 'account territory name' || norm === 'account territory'
-      })
-      const hasQtrCol = beforeKeys.some(k =>
-        k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
-      )
-      if (validTerritories.length > 0 && !hasTerrCol) {
-        console.warn(`[ccsp] ${ae.name}: no territory column found — skipping territory filter. Columns: ${beforeKeys.join(', ')}`)
-      }
-      if (!hasQtrCol) {
-        console.warn(`[ccsp] ${ae.name}: no quarter column found — skipping quarter filter`)
-      }
-      const before = rows.length
-      rows = filterRowsForAe(rows, validTerritories, quarters)
-      console.log(`[ccsp] ${ae.name}: post-fetch filter (territory+quarter ${quarters.join(',')}): ${before} → ${rows.length} rows`)
+    const fetched = await fetchPodCsv({
+      page,
+      aeName: ae.name,
+      territoryFilters,
+      validTerritories,
+      years,
+      quarters,
+    })
+    rows = fetched.rows
+    // Save freshened Tableau cookies after successful manual login during the fetch.
+    if (fetched.loggedInDuringFetch && _ctx) {
+      await saveTableauSession(_ctx)
     }
   } catch (e: any) {
-    console.warn(`[ccsp] ${ae.name}: CSV download failed: ${e.message}`)
+    console.warn(`[ccsp] ${ae.name}: live Tableau fetch failed: ${e.message}`)
+    throw e
+  }
+
+  // Issue #15 Step 2: cache write-back (memory + Drive) lives in ccsp-cache.writeCaches.
+  //   - BKL-PERF-02 / BKL-PERF-04: in-memory POD-keyed cache.
+  //   - BKL-PERF-03: Drive cache write CCSP-<pod>-<today>.csv.
+  //   - REG-CCSP-DUP-01: stale-sibling deletion.
+  //   - BKL-INGEST-03: stamps driveFileId onto in-memory entry post-write.
+  if (rows.length > 0 && validTerritories.length > 0) {
+    await writeCaches(territoryFilters.pod, rows, label, podBookingsFolderId)
+  }
+
+  // Post-filter by territory and quarter — download returns full POD dataset.
+  // Issue #15 Step 1: extracted to filterRowsForAe (pure). Diagnostic warnings
+  // for missing columns stay here (out of the pure function).
+  if (rows.length > 0) {
+    const beforeKeys = Object.keys(rows[0])
+    const hasTerrCol = beforeKeys.some(k => {
+      const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+      return norm === 'account territory name' || norm === 'account territory'
+    })
+    const hasQtrCol = beforeKeys.some(k =>
+      k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter'),
+    )
+    if (validTerritories.length > 0 && !hasTerrCol) {
+      console.warn(`[ccsp] ${ae.name}: no territory column found — skipping territory filter. Columns: ${beforeKeys.join(', ')}`)
+    }
+    if (!hasQtrCol) {
+      console.warn(`[ccsp] ${ae.name}: no quarter column found — skipping quarter filter`)
+    }
+    const before = rows.length
+    rows = filterRowsForAe(rows, validTerritories, quarters)
+    console.log(`[ccsp] ${ae.name}: post-fetch filter (territory+quarter ${quarters.join(',')}): ${before} → ${rows.length} rows`)
   }
 
   if (rows.length === 0) {
-    if (CCSP_DEBUG) await dumpDom(page, `${ae.name}-no-data`)
     console.warn(`[ccsp] ${ae.name}: could not extract data — returning empty result`)
   }
   return { aeName: ae.name, rows, accountPeriod: label }

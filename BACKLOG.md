@@ -8647,6 +8647,15 @@ Files: test/unit/ingest-bug04-bearer-records-success.test.ts
 Description: Test fails with "Export named 'recordSessionEstablished' not found in module 'src/settings-api.ts'" when run as part of `bun test test/unit/` — passes in isolation. Likely a Bun module cache + file-load-order interaction with settings-api.ts re-exports.
 Solution: Investigate module resolution order; may need a re-export fix in settings-api.ts or test isolation.
 
+### BKL-ARCH-17 | scrapePodCcspRaw duplicates URL-build/navigation/CSV logic now in ccsp-tableau-fetch.ts
+Status: OPEN
+Priority: P3
+Size: S
+Source: Marcus #15 step-3 investigation 2026-05-02
+Files: src/ccsp-scraper.ts (scrapePodCcspRaw function), src/ccsp-tableau-fetch.ts (fetchPodCsv)
+Description: `scrapePodCcspRaw` (out of scope for #15) still contains the original URL-build, page.goto, viz-wait, and CSV-download logic that is now also in `fetchPodCsv`. Also duplicates `findEl`, `waitForVizReady`, `dumpDom` helpers. Out of scope for #15 per brief.
+Solution: Route `scrapePodCcspRaw` through `fetchPodCsv` to eliminate duplicate helpers and URL-build code. Dependent on #15 step-4 completion.
+
 ### BKL-ARCH-16 | regression.spec.ts test-ordering pollution — REG-001 and REG-024 fail in full suite, pass in isolation
 Status: OPEN
 Priority: P2
