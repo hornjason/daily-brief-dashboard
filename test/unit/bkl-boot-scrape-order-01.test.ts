@@ -17,6 +17,9 @@ import { resolve } from 'node:path'
 
 const ROOT = resolve(import.meta.dir, '../..')
 const SERVER_TS = readFileSync(resolve(ROOT, 'server.ts'), 'utf-8')
+// BKL-ARCH-09: SF auth routes were extracted from server.ts into src/auth-routes.ts.
+// Test A reads from auth-routes.ts to find the startSfLoginBrowser call and its onComplete callback.
+const AUTH_ROUTES_TS = readFileSync(resolve(ROOT, 'src/auth-routes.ts'), 'utf-8')
 const BOOTSTRAP_ORCH_TS = readFileSync(resolve(ROOT, 'src/bootstrap-orchestrator.ts'), 'utf-8')
 const BG_SCHED_TS = readFileSync(resolve(ROOT, 'src/background-scheduler.ts'), 'utf-8')
 const CCSP_TS = readFileSync(resolve(ROOT, 'src/ccsp-scraper.ts'), 'utf-8')
@@ -26,10 +29,10 @@ describe('BKL-BOOT-SCRAPE-ORDER-01: Test A — SF onComplete does not trigger sc
     // Locate the SF login startSfLoginBrowser block and confirm it does not call
     // runSfSyncForAes / runSfPipelineSync inside the callback (executable lines only,
     // not comment lines that explain what was removed).
-    const startIdx = SERVER_TS.indexOf('await startSfLoginBrowser(SF_SESSION_PATH')
+    const startIdx = AUTH_ROUTES_TS.indexOf('await startSfLoginBrowser(SF_SESSION_PATH')
     expect(startIdx).toBeGreaterThan(-1)
     // Slice ~1500 chars covering the callback body and onwards
-    const slice = SERVER_TS.slice(startIdx, startIdx + 1500)
+    const slice = AUTH_ROUTES_TS.slice(startIdx, startIdx + 1500)
     // Strip comment lines (// ...) before checking for executable calls
     const codeOnly = slice
       .split('\n')
@@ -41,7 +44,7 @@ describe('BKL-BOOT-SCRAPE-ORDER-01: Test A — SF onComplete does not trigger sc
   })
 
   test('Comment marker present documenting the rationale', () => {
-    expect(SERVER_TS).toContain('Data sync is driven by bootstrap, not auth')
+    expect(AUTH_ROUTES_TS).toContain('Data sync is driven by bootstrap, not auth')
   })
 })
 

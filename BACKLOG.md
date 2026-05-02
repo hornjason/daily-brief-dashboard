@@ -8403,7 +8403,7 @@ Commit: 398d840b0 — 16 modules converted, Quinn 103/107 pass, Rook PASS no new
 ---
 
 ### BKL-ARCH-09 | Extract auth routes (RH + SF) from server.ts → auth-routes.ts
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
@@ -8827,3 +8827,12 @@ Source: 2026-05-02 — make build failed with "no space left on device" writing 
 Files: Makefile (build target), Dockerfile.hero.dockerignore (new)
 Description: Git worktrees from prior agent runs accumulate at .claude/worktrees/ with full node_modules (1GB+). When podman copies these into the container overlay during `COPY . .`, the overlay layer fills up and the build fails. Two fixes applied: (1) created Dockerfile.hero.dockerignore matching .dockerignore to ensure podman excludes .claude/ when -f Dockerfile.hero is specified; (2) manually pruned 20 stale worktrees. But the root issue recurs if worktrees accumulate again. Fix: add `git worktree prune` or force-remove stale worktrees to Makefile `build` target pre-check. Or add periodic worktree cleanup script.
 Can we test: YES — verify make build succeeds after worktrees exceed 500MB.
+
+### BKL-SEC-19 | bootstrap-orchestrator.ts — writeScaffoldCache missing isValidDriveFolderId guard
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-02 (BKL-DRIVE-SCAFFOLD-CACHE-01 post-ship review)
+Files: src/bootstrap-orchestrator.ts (writeScaffoldCache, readScaffoldCache)
+Description: writeScaffoldCache(parentFolderId, entry) writes parentFolderId directly as a JSON key without validation. isValidDriveFolderId() already exists in utils.ts. Add guard at function entry. Also validate entry.configFolderId and entry.productsFolderId with the same helper. readScaffoldCache lookup should similarly validate the key before returning entry.
+Can we test: YES — unit test: writeScaffoldCache with invalid parentFolderId should silently skip write; readScaffoldCache with invalid key should return undefined.
