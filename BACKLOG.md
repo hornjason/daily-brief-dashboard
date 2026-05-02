@@ -8575,3 +8575,83 @@ Source: Diagnosis 2026-05-01
 Files: src/ccsp-scraper.ts (scrapePodCcspRaw ~line 1155)
 Description: In the POD pre-scrape path, when the viz doesn't load in 45s and the CSV download times out, the code logs a warning and returns 0 rows. The _tableauSessionExpired flag is never checked or set on this code path. The login detection only runs in scrapeOneAe (the per-AE path), not in scrapePodCcspRaw. So a timeout caused by auth expiry is invisible to the retry wrapper's auth check.
 Solution: After CSV download fails in scrapePodCcspRaw, check the current page URL and login form presence. If login form detected, call the internal setter to mark _tableauSessionExpired = true before throwing. The withCcspRetry wrapper in sync-pod-l3.ts will then catch it as AUTH_EXPIRED.
+
+---
+
+### BKL-ARCH-09 | wizard-e2e test-13 pre-existing failure — "Red Hat Connection" accordion not visible
+Status: OPEN
+Priority: P2
+Size: S
+Source: Marcus #12 — confirmed via git stash pre/post; Quinn confirmed on prod 2026-05-02
+Files: test/wizard-e2e.spec.ts (test-13), dashboard/src/pages/SetupPage.tsx
+Description: wizard-e2e test-13 "expanding Connections shows Red Hat Connection section" fails on main. The test clicks the Step 3 accordion button and expects `page.locator('[data-testid="hero-step3-summary"]')` to be visible. The accordion button may not be rendering as expected in the test environment, or the test ID is mismatched. Fails identically before and after the DataSourcesSection deletion — not caused by recent changes. Causes 16 downstream wizard-e2e tests to be skipped due to serial cascade.
+Solution: Read the current Step 3 accordion markup in SetupPage.tsx, confirm the data-testid attribute exists on the expected element, update the test selector if it drifted. Run wizard-e2e against 7776 to confirm fix.
+
+---
+
+### BKL-ARCH-10 | cache-layer.ts — invalidateBriefCaches is unexported dead function
+Status: OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-02 (issue #13 cleanup)
+Files: src/cache-layer.ts
+Description: invalidateBriefCaches export was removed in issue #13 (zero callers). The function body was left in place as an unexported dead function. drive-watcher.ts referenced it in comments only, never imported it. Should be deleted entirely.
+Solution: Delete the invalidateBriefCaches function body from cache-layer.ts. Confirm zero callers with grep before deleting.
+
+---
+
+### BKL-ARCH-11 | REG-TOKEN-10 stale anchor — app.post vs router.post
+Status: OPEN
+Priority: P3
+Size: XS
+Source: Marcus #14 investigation 2026-05-02
+Files: test/regression/cache.spec.ts (~line 359)
+Description: REG-TOKEN-10 searches for `app.post('/api/bootstrap/auto'` but the source uses `router.post('/api/bootstrap/auto'` since the Hono route extraction (BKL-ARCH-03). Test has been failing since that refactor.
+Solution: Update the anchor string from `app.post(` to `router.post(` in the REG-TOKEN-10 test block.
+
+---
+
+### BKL-ARCH-12 | AutoBootstrapStep status union missing 'cancelled'
+Status: OPEN
+Priority: P2
+Size: XS
+Source: Marcus #14 investigation 2026-05-02
+Files: src/bootstrap-orchestrator.ts (~line 1338)
+Description: Cancel path sets `step.status = 'cancelled'` but the `AutoBootstrapStep['status']` union type does not include `'cancelled'`. TS2322 type error. Possibly intentional per BKL-WIZ-02 but union must be widened to match runtime behavior.
+Solution: Add `'cancelled'` to the AutoBootstrapStep status union type in its definition.
+
+### BKL-ARCH-13 | Pre-existing tsc errors (42) in unrelated files masking new breakage
+Status: OPEN
+Priority: P3
+Size: M
+Source: Marcus #15 step-1 investigation 2026-05-02
+Files: src/settings-api.ts (Partial<T>|{} index errors), src/setup-routes.ts (unsafe Customer cast ~line 546), src/sheet-import.ts (Record→typed assignment ~line 45), src/supportable-scraper.ts (GaxiosResponse→void ~line 1252+)
+Description: 42 pre-existing TypeScript errors exist across 4 unrelated files. These mask any new tsc breakage introduced by PRs. `npx tsc --noEmit` is unreliable as a gate until these are cleared.
+Solution: Fix each file independently; aim to get tsc clean so it can be a real CI gate.
+
+### BKL-ARCH-14 | filterCcspRowsForAe (line ~1268) missing quarter filter; candidate for delegation to filterRowsForAe
+Status: OPEN
+Priority: P3
+Size: XS
+Source: Marcus #15 step-1 investigation 2026-05-02
+Files: src/ccsp-scraper.ts (~line 1268)
+Description: The exported `filterCcspRowsForAe` convenience wrapper does territory filtering only — no quarter filter. Used externally (likely from scrapePodCcspRaw callers). Once step-4 of #15 ships and filterRowsForAe is stable, this wrapper can optionally take a `quarters` param and delegate. Out of scope for #15.
+Solution: Evaluate after #15 completes; may be a 3-line update.
+
+### BKL-ARCH-15 | test/unit/ingest-bug04-bearer-records-success.test.ts — intermittent failure in full suite
+Status: OPEN
+Priority: P3
+Size: S
+Source: Marcus #15 step-1 investigation 2026-05-02
+Files: test/unit/ingest-bug04-bearer-records-success.test.ts
+Description: Test fails with "Export named 'recordSessionEstablished' not found in module 'src/settings-api.ts'" when run as part of `bun test test/unit/` — passes in isolation. Likely a Bun module cache + file-load-order interaction with settings-api.ts re-exports.
+Solution: Investigate module resolution order; may need a re-export fix in settings-api.ts or test isolation.
+
+### BKL-ARCH-16 | regression.spec.ts test-ordering pollution — REG-001 and REG-024 fail in full suite, pass in isolation
+Status: OPEN
+Priority: P2
+Size: M
+Source: DA #15 step-1 Playwright gate 2026-05-02
+Files: test/regression.spec.ts (REG-001 line 82, REG-024 line 814)
+Description: REG-001 ("tableauTerritories preserved after round-trip save") and REG-024 ("identifyIndustry for no-account customers") both pass in isolation but fail when the full regression suite runs concurrently (2 workers). Earlier @destructive tests corrupt AE/customer state before these tests execute. Confirmed pre-existing on main (before any #15 changes).
+Solution: Add snapshot/restore guards to REG-001 and REG-024, or run them in a serial group. REG-001 is straightforward — it just needs its own beforeEach snapshot. REG-024 is a @live test that triggers a long intelligence pipeline; may need its own dedicated suite file with serial execution.

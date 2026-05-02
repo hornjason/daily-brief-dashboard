@@ -105,6 +105,7 @@ import { sanitizeErr, sanitizeCell } from './utils.ts'
 import { patchAe } from './server-state.ts'
 import { markRunning, recordOutcome } from './scraper-status-store.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
+import { filterRowsForAe } from './ccsp-row-filter.ts'
 
 /**
  * Search for a VISIBLE element across all frames in the page.
@@ -486,21 +487,18 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
 
     if (!driveFileStale && _podCsvCache) {
       const { rows: cachedRows, period } = _podCsvCache
+      // Issue #15 Step 1: extracted to filterRowsForAe (pure)
       const terrColName = Object.keys(cachedRows[0] ?? {}).find(k => {
         const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
         return norm === 'account territory name' || norm === 'account territory'
       })
-      const qtrColName = Object.keys(cachedRows[0] ?? {}).find(k =>
-        k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
-      )
       if (terrColName) {
-        const terrSet = new Set(validTerritories)
-        const qtrSet = new Set(quarters)
-        let filtered = cachedRows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
+        const filtered = filterRowsForAe(cachedRows, validTerritories, quarters)
+        const qtrColName = Object.keys(cachedRows[0] ?? {}).find(k =>
+          k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
+        )
         if (qtrColName) {
-          const before = filtered.length
-          filtered = filtered.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
-          console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (territory + quarter filter from cache; was ${before} before quarter filter)`)
+          console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (territory + quarter filter from cache)`)
         } else {
           console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (territory filter only; no quarter column found)`)
         }
@@ -553,31 +551,11 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
   }
 
   // If Drive cache hit, apply territory + quarter filters and return immediately
+  // Issue #15 Step 1: extracted to filterRowsForAe (pure)
   if (driveHitRows !== null) {
-    let rows = driveHitRows
-    if (validTerritories.length > 0) {
-      const terrColName = Object.keys(rows[0] ?? {}).find(k => {
-        const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
-        return norm === 'account territory name' || norm === 'account territory'
-      })
-      if (terrColName) {
-        const terrSet = new Set(validTerritories)
-        const before = rows.length
-        rows = rows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
-        console.log(`[ccsp] ${ae.name}: Drive cache territory filter: ${before} → ${rows.length} rows`)
-      }
-    }
-    if (rows.length > 0) {
-      const qtrColName = Object.keys(rows[0]).find(k =>
-        k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
-      )
-      if (qtrColName) {
-        const qtrSet = new Set(quarters)
-        const before = rows.length
-        rows = rows.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
-        console.log(`[ccsp] ${ae.name}: Drive cache quarter filter (${quarters.join(',')}): ${before} → ${rows.length} rows`)
-      }
-    }
+    const before = driveHitRows.length
+    const rows = filterRowsForAe(driveHitRows, validTerritories, quarters)
+    console.log(`[ccsp] ${ae.name}: Drive cache filter (territory+quarter): ${before} → ${rows.length} rows`)
     return { aeName: ae.name, rows, accountPeriod: label }
   }
 
@@ -837,35 +815,26 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
     }
 
     // Post-filter by territory and quarter — download returns full POD dataset
+    // Issue #15 Step 1: extracted to filterRowsForAe (pure). Diagnostic warnings
+    // for missing columns stay here (out of the pure function).
     if (rows.length > 0) {
-      // Territory filter — column "Account Territory Name"
-      if (validTerritories.length > 0) {
-        const terrColName = Object.keys(rows[0]).find(k => {
-          const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
-          return norm === 'account territory name' || norm === 'account territory'
-        })
-        if (terrColName) {
-          const terrSet = new Set(validTerritories)
-          const before = rows.length
-          rows = rows.filter(r => terrSet.has((r[terrColName] ?? '').trim()))
-          console.log(`[ccsp] ${ae.name}: territory filter: ${before} → ${rows.length} rows`)
-        } else {
-          console.warn(`[ccsp] ${ae.name}: no territory column found — skipping territory filter. Columns: ${Object.keys(rows[0]).join(', ')}`)
-        }
-      }
-
-      // Quarter filter — column "Opportunity fiscal Year Quarter" (format: "2026-Q1")
-      const qtrColName = Object.keys(rows[0]).find(k =>
+      const beforeKeys = Object.keys(rows[0])
+      const hasTerrCol = beforeKeys.some(k => {
+        const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+        return norm === 'account territory name' || norm === 'account territory'
+      })
+      const hasQtrCol = beforeKeys.some(k =>
         k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
       )
-      if (qtrColName) {
-        const qtrSet = new Set(quarters)
-        const before = rows.length
-        rows = rows.filter(r => qtrSet.has((r[qtrColName] ?? '').trim()))
-        console.log(`[ccsp] ${ae.name}: quarter filter (${quarters.join(',')}): ${before} → ${rows.length} rows`)
-      } else {
+      if (validTerritories.length > 0 && !hasTerrCol) {
+        console.warn(`[ccsp] ${ae.name}: no territory column found — skipping territory filter. Columns: ${beforeKeys.join(', ')}`)
+      }
+      if (!hasQtrCol) {
         console.warn(`[ccsp] ${ae.name}: no quarter column found — skipping quarter filter`)
       }
+      const before = rows.length
+      rows = filterRowsForAe(rows, validTerritories, quarters)
+      console.log(`[ccsp] ${ae.name}: post-fetch filter (territory+quarter ${quarters.join(',')}): ${before} → ${rows.length} rows`)
     }
   } catch (e: any) {
     console.warn(`[ccsp] ${ae.name}: CSV download failed: ${e.message}`)
