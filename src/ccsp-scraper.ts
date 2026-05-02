@@ -105,7 +105,7 @@ import { sanitizeErr, sanitizeCell } from './utils.ts'
 import { patchAe } from './server-state.ts'
 import { markRunning, recordOutcome } from './scraper-status-store.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
-import { filterRowsForAe } from './ccsp-row-filter.ts'
+import { filterRowsForAe, warnFilterColumnGaps } from './ccsp-row-filter.ts'
 import { tryMemoryCache, tryDriveCache, writeCaches } from './ccsp-cache.ts'
 import { fetchPodCsv } from './ccsp-tableau-fetch.ts'
 
@@ -514,23 +514,10 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
   }
 
   // Post-filter by territory and quarter — download returns full POD dataset.
-  // Issue #15 Step 1: extracted to filterRowsForAe (pure). Diagnostic warnings
-  // for missing columns stay here (out of the pure function).
+  // Issue #15 Step 1: pure filter in filterRowsForAe; column-gap diagnostics
+  // in warnFilterColumnGaps (csv_summary_view regression signal preserved).
   if (rows.length > 0) {
-    const beforeKeys = Object.keys(rows[0])
-    const hasTerrCol = beforeKeys.some(k => {
-      const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
-      return norm === 'account territory name' || norm === 'account territory'
-    })
-    const hasQtrCol = beforeKeys.some(k =>
-      k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter'),
-    )
-    if (validTerritories.length > 0 && !hasTerrCol) {
-      console.warn(`[ccsp] ${ae.name}: no territory column found — skipping territory filter. Columns: ${beforeKeys.join(', ')}`)
-    }
-    if (!hasQtrCol) {
-      console.warn(`[ccsp] ${ae.name}: no quarter column found — skipping quarter filter`)
-    }
+    warnFilterColumnGaps(rows, validTerritories, ae.name)
     const before = rows.length
     rows = filterRowsForAe(rows, validTerritories, quarters)
     console.log(`[ccsp] ${ae.name}: post-fetch filter (territory+quarter ${quarters.join(',')}): ${before} → ${rows.length} rows`)

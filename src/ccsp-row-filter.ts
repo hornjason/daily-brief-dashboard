@@ -60,3 +60,36 @@ export function filterRowsForAe(
 
   return out
 }
+
+/**
+ * Side-effect helper — emits diagnostic warnings when the live Tableau CSV
+ * arrives without the territory or quarter columns we need to filter on.
+ *
+ * Kept here (not in `filterRowsForAe`) because the pure filter must remain
+ * console-free for unit testing. The orchestrator in `ccsp-scraper.ts` calls
+ * this once before delegating to the pure filter, preserving the existing
+ * `csv_summary_view` regression-detection signal for production logs.
+ *
+ * No-op on empty input.
+ */
+export function warnFilterColumnGaps(
+  rows: Record<string, string>[],
+  validTerritories: string[],
+  aeName: string,
+): void {
+  if (rows.length === 0) return
+  const keys = Object.keys(rows[0])
+  const hasTerr = keys.some(k => {
+    const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+    return norm === 'account territory name' || norm === 'account territory'
+  })
+  const hasQtr = keys.some(k =>
+    k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter'),
+  )
+  if (validTerritories.length > 0 && !hasTerr) {
+    console.warn(`[ccsp] ${aeName}: no territory column found — skipping territory filter. Columns: ${keys.join(', ')}`)
+  }
+  if (!hasQtr) {
+    console.warn(`[ccsp] ${aeName}: no quarter column found — skipping quarter filter`)
+  }
+}
