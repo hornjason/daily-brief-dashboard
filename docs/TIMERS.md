@@ -51,7 +51,7 @@ Same pattern as Subscriptions. Reads CCSP Google Sheets (written previously by T
 
 ### 3. RH Scraper Tick — 15min tick, 4h scrape cadence
 
-**⚠ This is NOT a simple 4-hour setInterval.** It is a 15-minute heartbeat that checks elapsed time since the last successful scrape. The actual scrape only fires when elapsed time ≥ configured interval (default 4h). This is a deliberate workaround for Bun's unreliable long-interval timer behavior (see `docs/adr/ADR-007.md`).
+**⚠ This is NOT a simple 4-hour setInterval.** It is a 15-minute heartbeat that checks elapsed time since the last successful scrape. The actual scrape only fires when elapsed time ≥ configured interval (default 4h). This is a deliberate workaround for Bun's unreliable long-interval timer behavior (see `docs/archive/adr/ADR-007.md`).
 
 **Data flow:** Red Hat Portal (live Playwright scrape) → `data/cache/cases.json`
 

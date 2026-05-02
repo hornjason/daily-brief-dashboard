@@ -12,7 +12,26 @@ import { bootstrapAe as bootstrapAeL3, type AeBootstrapDeps } from './l3-bootstr
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
 import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
-import { runCcspScrape, writeCcspSheet, consumeTableauSessionExpired, parseTerritoryParts } from './ccsp-scraper.ts'
+// BKL-ARCH-L4-SPLIT: ccsp-scraper and tableau-auth are L4-only modules — they belong
+// in Dockerfile.l4, not the hero install image. These imports are intentionally replaced
+// with no-op stubs so the hero module graph contains no browser-session code. The L4
+// daemon container has its own paths into these scrapers; bootstrap-orchestrator routes
+// in the hero image short-circuit through these stubs.
+const runCcspScrape = async (..._args: any[]): Promise<any[]> => { throw new Error('[L4-stub] runCcspScrape invoked on hero install') }
+const writeCcspSheet = async (..._args: any[]): Promise<string> => { throw new Error('[L4-stub] writeCcspSheet invoked on hero install') }
+const consumeTableauSessionExpired = (): boolean => { console.warn('[L4-stub] consumeTableauSessionExpired invoked on hero install'); return false }
+const parseTerritoryParts = (territory: string): {
+  pod: string; subregion: string; segment: string; subsegment: string; region: string
+} => {
+  const parts = territory.split('_')
+  return {
+    pod: parts[0] ?? '',
+    subregion: parts[3] ?? '',
+    segment: parts[2] ?? '',
+    subsegment: parts[4] ?? '',
+    region: parts[0] ?? '',
+  }
+}
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { fetchCustomerAccountNumbers, normalizeRows } from './sheets.ts'
 import { writeSheetCache, readPipelineCache } from './cache-layer.ts'
@@ -21,7 +40,11 @@ import { enqueueScraperTask } from './background-scheduler.ts'
 import { getAiConfig } from './settings-api.ts'
 
 import { getScrapeContext } from './rh-scraper.ts'
-import { startTableauLoginBrowser, waitForTableauLogin, checkTableauSessionFromCookies, probeTableauSession } from './tableau-auth.ts'
+// BKL-ARCH-L4-SPLIT: tableau-auth stubbed (see comment above on ccsp-scraper)
+const startTableauLoginBrowser = async (): Promise<void> => { console.warn('[L4-stub] startTableauLoginBrowser invoked on hero install') }
+const waitForTableauLogin = async (_timeoutMs?: number): Promise<boolean> => { console.warn('[L4-stub] waitForTableauLogin invoked on hero install'); return false }
+const checkTableauSessionFromCookies = async (): Promise<boolean> => { console.warn('[L4-stub] checkTableauSessionFromCookies invoked on hero install'); return false }
+const probeTableauSession = async (): Promise<boolean> => { console.warn('[L4-stub] probeTableauSession invoked on hero install'); return false }
 import { refreshPipeline } from './refresh-engine.ts'
 import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import { batchInferDomains, isPublicDomain, tier1Clearbit } from './domain-waterfall.ts'

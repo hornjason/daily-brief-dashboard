@@ -470,5 +470,5 @@ They reset the retry counter and mark that flow as synced for today in `sync-sta
 - `docs/ai-ingestion-flow.md` — AI brief pipeline (separate cache hierarchy: brief / email / meeting / doc / industry / account intel)
 - `docs/SCRAPER-RULES.md` — rules for modifying any scraper file (read first if touching `*-scraper.ts`)
 - `docs/DATA-RULES.md` — rules for cache, sheets, and territory sync
-- `docs/adr/ADR-013.md` — Tier-2/Tier-3 cache hierarchy ADR
+- `docs/archive/adr/ADR-013.md` — Tier-2/Tier-3 cache hierarchy ADR
 - `docs/PROJECT-MAP.md` — module index for finding the actual code

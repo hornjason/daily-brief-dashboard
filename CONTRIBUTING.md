@@ -1,5 +1,8 @@
 ---
-Last validated: 2026-04-24
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-01
 ---
 
 # Contributing to Daily Brief Dashboard
@@ -100,15 +103,42 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) before making changes. Key things that l
 
 ## Making Changes
 
-### Workflow
+### Skill-driven development workflow
 
-1. Read [ARCHITECTURE.md](ARCHITECTURE.md) and [BACKLOG.md](BACKLOG.md) for context
-2. Create a branch: `git checkout -b feature/your-feature`
-3. Make your changes — surgical fixes only, minimal scope
-4. Test locally: `bun --watch server.ts` + verify in browser
-5. Run tests: `bunx playwright test`
-6. Build and verify in container: `make rebuild`
-7. Push and open a PR
+New features and architecture refactors use a structured skill pipeline. Each skill picks up where the previous left off:
+
+```
+/grill-with-docs               → clarify requirements; enforces ARCHITECTURE.md + ADR terminology inline
+/improve-codebase-architecture → (existing code) find shallow modules, design deep interfaces
+/to-prd                        → write PRD from conversation context, publish to GitHub Issues
+/to-issues                     → break PRD into vertical-slice issues (tracer bullets)
+/triage                        → review each issue, post durable agent brief → ready-for-agent
+/tdd                           → implement red-green-refactor per issue, tests at interface boundary
+```
+
+**When to use which:**
+- `/grill-with-docs` — use this (not `/grill-me`) for all feature work here; cross-checks against `ARCHITECTURE.md` intentional patterns and `docs/archive/adr/`, updates `CONTEXT.md` inline
+- `/improve-codebase-architecture` — before building on existing code; finds deepening candidates; skip for greenfield
+- `/to-prd` — after grilling; synthesizes context into a PRD on GitHub Issues (`hornjason/asaCommandCenter`)
+- `/to-issues` — for large features (6+ slices); skip for small single-file items
+- `/triage` — after issues exist; posts the agent brief that Marcus works from
+- `/tdd` — Marcus's implementation loop; one test → one impl, never bulk-test-then-bulk-impl
+
+**Issue tracker:** `hornjason/asaCommandCenter` GitHub Issues. Label vocabulary in `docs/agents/triage-labels.md`.
+
+**Architecture backlog:** 8 deepening candidates in `BACKLOG.md` (BKL-ARCH-01 through BKL-ARCH-08). Suggested execution order: #6 → #7 → #1 → #3 → #5 → #8.
+
+### Simple bug fix / small change workflow
+
+For surgical fixes and changes under ~10 lines that don't require a PRD:
+
+1. Read [ARCHITECTURE.md](ARCHITECTURE.md) and verify the bug in source before touching anything
+2. Create a branch: `git checkout -b fix/your-fix`
+3. Make the surgical change — minimal scope, no bonus refactoring
+4. Write a regression test (see Testing below) — mandatory before marking done
+5. Run tests on 7776: `make build && make test-down && make test-up && npx playwright test test/api/ --project=test`
+6. `make rebuild` to promote to production (7777)
+7. Run CI regression check: `npx playwright test test/api/ --project=ci`
 
 ### Testing
 
@@ -217,11 +247,12 @@ Full details in `docs/SECRETS-GUIDE.md`. Quick reference:
 
 ## Filing Bugs
 
-Check [BACKLOG.md](BACKLOG.md) first — the issue may already be tracked. If not:
+Check [BACKLOG.md](BACKLOG.md) and [GitHub Issues](https://github.com/hornjason/asaCommandCenter/issues) first — the issue may already be tracked. If not:
 
-1. Open an issue on [GitHub](https://github.com/hornjason/asaCommandCenter/issues)
+1. Open an issue on [GitHub](https://github.com/hornjason/asaCommandCenter/issues) with label `bug` + `needs-triage`
 2. Include: what you expected, what happened, and `podman logs pai-dashboard` output
 3. Tag with severity: Critical (data loss/security), High (broken feature), Medium (degraded), Low (cosmetic)
+4. Run `/triage` to move it to `ready-for-agent` with a durable agent brief before handing to Marcus
 
 ## Pull Requests
 

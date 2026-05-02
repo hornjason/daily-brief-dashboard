@@ -53,7 +53,7 @@ These look like anti-patterns but are intentional — do not suggest alternative
 | `ARCHITECTURE.md` | System design, data flows, intentional patterns |
 | `PRINCIPLES.md` | Why the code looks the way it does |
 | `BACKLOG.md` | All open bugs, features, tech debt |
-| `docs/adr/ADR-013.md` | Cache layer architecture (critical for any data/brief work) |
+| `docs/archive/adr/ADR-013.md` | Cache layer architecture (critical for any data/brief work) |
 | `docs/TESTING-RUNBOOK.md` | Full five-layer testing reference |
 | `docs/SCRAPER-RULES.md` | Scraper constraints (read before touching any scraper) |
 | `docs/DATA-RULES.md` | Data pipeline rules (read before touching cache or sheets) |

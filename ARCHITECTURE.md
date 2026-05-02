@@ -119,13 +119,161 @@ RH Portal SSO login → BrowserContext created
 
 The sync summary email includes an HTML table: one row per pod with pod key, CCSP row count, SF row count, and OK/SKIPPED/ERROR status.
 
-**How to check status:**
-```bash
-make sync-logs    # stream live daemon logs
-make sync-status  # recent log tail (last ~50 lines, filtered)
-make sync-now     # trigger an immediate sync
+**Container identity:** The sync daemon runs as a **separate podman container named `pai-sync-l3`** — it is NOT a process inside `pai-dashboard`. Same image (`daily-brief-dashboard:latest`), launched with `SYNC_DAEMON=true` and `NODE_ROLE=primary`. It mounts `data-sync/` (not `data/`) and exposes no ports.
+
 ```
-Drive: open any pod's bookings folder → `sync-status.json` — contains `completedAt` timestamp and per-pod results array.
+pai-dashboard   ← app server, port 7777
+pai-sync-l3     ← sync daemon, no port, SYNC_DAEMON=true
+```
+
+**How to check status (Mac Mini — run from project root):**
+```bash
+# SSH to Mac Mini first
+ssh jasonhorn@100.97.86.25    # via Tailscale (preferred)
+ssh ssh.jasonhorn.io          # via Cloudflare tunnel (fallback)
+
+# Check if container exists and is running
+podman ps -a --filter name=pai-sync-l3
+# Nothing → never started; run: make sync-up
+# Exited  → crashed; run: make sync-up to recreate
+# Up      → healthy; check logs below
+
+# Then from the project root
+make sync-up      # start (or restart) the daemon container
+make sync-logs    # stream live daemon logs (tail -f style)
+make sync-status  # recent log tail (last ~50 lines, filtered)
+make sync-now     # trigger an immediate sync (30s max latency)
+```
+
+**Prerequisite for `make sync-up`:** `data-sync/config/settings.json` must exist (bootstrapped separately from the main `data/` volume). The Makefile exits with an error if this file is missing.
+
+**Log patterns to watch for in `make sync-logs`:**
+
+| Log line | Meaning | Action |
+|---|---|---|
+| `L3 Sync Complete — {date} \| {N} pods synced` | Healthy run | None |
+| `L3 Sync FAILED — {date} \| {N} errors` | Partial/full failure | Check per-pod output; check CCSP/SF session state |
+| `L3 Sync Daemon — Keepalive Failed {date}` | RH or SF session expired | Re-auth via VNC (`http://mac.tail2fe7c7.ts.net:6080/vnc.html`) |
+| `L3 Sync Daemon — Fatal Error {date}` | Crash in `syncAllPods()` | Check daemon container logs; restart if needed |
+
+**Drive status check:** Open any pod's bookings folder → `sync-status.json` — contains `completedAt` timestamp and per-pod results array.
+
+**Never do:**
+- Do NOT run `SYNC_NOW=true bun run sync-pod-l3.ts` directly — that path is deleted
+- Do NOT run `podman exec bun run sync-pod-l3.ts` while daemon is running — SingletonLock on `/data/rh-profile` will throw
+- `make sync-now` is the ONLY supported manual trigger
+
+---
+
+**Container image & runtime stack:**
+
+`pai-sync-l3` is NOT a slim purpose-built container. It runs the full `daily-brief-dashboard:latest` image — the same image as `pai-dashboard`. The `SYNC_DAEMON=true` env var is the only difference.
+
+`entrypoint.sh` always boots the complete VNC display stack first, regardless of mode:
+```
+Xvfb :99        ← virtual display (Playwright needs this — headless:false renders here)
+openbox         ← window manager (gives VNC a visible desktop)
+x11vnc          ← VNC server with auto-respawn loop
+websockify      ← noVNC WebSocket bridge (port 6080 — not exposed in standard sync-up)
+→ SYNC_DAEMON=true? exec bun run scripts/sync-l3-daemon.ts
+→ else:          exec bun run server.ts  (never reaches this in pai-sync-l3)
+```
+
+The full server (`server.ts`), React frontend, and all API routes are present in the image but never started. What runs in the daemon is: the daemon process, all scraper modules (CCSP/Tableau + SF), Drive/Sheets clients, and the email sender.
+
+**Built on:** Bun (TypeScript runtime), Playwright/Chromium, full dashboard codebase.
+
+`make sync-up-vnc` is a variant that exposes port 6082 → VNC. Used during re-auth sessions when you need browser access inside the daemon container.
+
+---
+
+**Troubleshooting runbook:**
+
+**Symptom: Not in `podman ps` at all**
+```bash
+podman ps -a --filter name=pai-sync-l3
+# Shows nothing → container was never created or was rm'd
+make sync-up    # create and start it
+```
+
+**Symptom: Container shows `Exited` status**
+```bash
+podman logs pai-sync-l3 --tail 30    # read why it exited before restarting
+```
+Most common cause: RH context init failed (stale cookies → redirect to login on first Chromium open). If you see:
+```
+[sync-daemon] RH context init failed: ...
+```
+→ Cookies in `/data-sync/rh-profile` are expired. The daemon calls `process.exit(1)` on this — it cannot recover without re-auth. See **Re-auth procedure** below.
+
+**Symptom: Keepalive failure email / `Keepalive Failed` in logs**
+```
+[sync-daemon] keepalive FAILED: Tableau session expired — redirected to ...
+[sync-daemon] keepalive FAILED: SF session expired — redirected to ...
+```
+The daemon is still running but SSO cookies are stale. The next sync will fail. Re-auth now before the daily sync fires. See **Re-auth procedure** below.
+
+**Symptom: Sync ran but specific pods show ERROR in email**
+Check the per-pod error in the summary email HTML table. Common causes:
+- `sfReportId` not set for that pod in `data-sync/config/settings.json` → pod skipped or errored
+- Tableau view for that pod's region not accessible (CCSP) → check Tableau session
+- SF report not yet generated (SF scheduled reports run nightly) → wait, or check SF directly
+
+**Symptom: No daily sync email (sync silently not running)**
+```bash
+make sync-status    # check container is still Up
+make sync-logs      # look for: "[sync-daemon] next sync in Xm"
+```
+If container is Up but no next-sync log entry: daemon may have crashed internally without exiting. `make sync-down && make sync-up` to restart cleanly.
+
+**Symptom: `make sync-now` does nothing / sync doesn't start**
+```bash
+podman ps --filter name=pai-sync-l3    # confirm container is Up
+make sync-logs                          # watch for trigger file detection
+```
+If container is Up and you see no `[sync-daemon] trigger file detected` within 30s, check:
+```bash
+podman exec pai-sync-l3 ls /data/cache/sync-trigger    # did the touch land?
+```
+If the file is there but not consumed, the daemon's trigger poller may be stuck — restart.
+
+---
+
+**Re-auth procedure (session expired):**
+
+The daemon stores SSO cookies in a persistent Chromium profile at `/data-sync/rh-profile`. When Keycloak/SAML sessions expire (RH Portal: 8h absolute; SF/Tableau: varies), those cookies go stale and must be renewed by logging in again inside the daemon's browser.
+
+1. **Stop the current daemon** (releases the SingletonLock on the profile):
+   ```bash
+   make sync-down
+   ```
+
+2. **Start the VNC variant** (same daemon but with port 6082 exposed):
+   ```bash
+   make sync-up-vnc
+   ```
+
+3. **Open VNC in browser:**
+   ```
+   http://mac.tail2fe7c7.ts.net:6082/vnc.html    (Tailscale required)
+   ```
+
+4. **Inside VNC — log in to each service:**
+   - Open Chromium → navigate to RH Portal → complete SSO login
+   - Navigate to Tableau → confirm it loads without redirect to login
+   - Navigate to SF Lightning home → confirm it loads
+
+5. **Stop VNC variant, start standard daemon:**
+   ```bash
+   make sync-down
+   make sync-up        # now has fresh cookies; no VNC port exposed
+   ```
+
+6. **Verify recovery:**
+   ```bash
+   make sync-logs      # watch for: "[sync-daemon] keepalive OK"
+   make sync-now       # trigger an immediate sync to confirm data flows
+   ```
 
 ---
 

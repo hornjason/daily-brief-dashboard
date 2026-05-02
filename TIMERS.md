@@ -1,7 +1,7 @@
 # Timer Reference
 
-Complete verified inventory of all timers in DailyBriefDashboard. 33 timers across 16 source files.
-Last verified: 2026-04-01 (Marcus Webb deep-read of all source files).
+Complete verified inventory of all timers in DailyBriefDashboard. 33 server-side timers across 16 source files + 3 sync daemon timers in `scripts/sync-l3-daemon.ts` (Group 7).
+Last verified: 2026-04-01 (server timers, Marcus Webb). Sync daemon timers added 2026-04-30.
 
 ---
 
@@ -49,7 +49,7 @@ Same pattern as Subscriptions. Reads CCSP Google Sheets (written previously by T
 
 ### 3. RH Scraper Tick — 15min tick, 4h scrape cadence
 
-**⚠ This is NOT a simple 4-hour setInterval.** It is a 15-minute heartbeat that checks elapsed time since the last successful scrape. The actual scrape only fires when elapsed time ≥ configured interval (default 4h). This is a deliberate workaround for Bun's unreliable long-interval timer behavior (see `docs/adr/ADR-007.md`).
+**⚠ This is NOT a simple 4-hour setInterval.** It is a 15-minute heartbeat that checks elapsed time since the last successful scrape. The actual scrape only fires when elapsed time ≥ configured interval (default 4h). This is a deliberate workaround for Bun's unreliable long-interval timer behavior (see `docs/archive/adr/ADR-007.md`).
 
 **Data flow:** Red Hat Portal (live Playwright scrape) → `data/cache/cases.json`
 
@@ -242,6 +242,36 @@ Not a timer — checks `Date.now() - cachedAt` on each request. No background wo
 | Territory 1:45am Sync (#33) | `territoryTime` / `territoryEnabled` | 01:45 ET / enabled |
 
 Settings stored in `data/config/data-sources.json` under `refreshIntervals` (timers 1-3) and `schedulerConfig` (timers 7, 31-33). Changing refresh intervals calls `rescheduleRefreshTimers()` which clears and recreates Timers 1 and 2, and immediately takes effect on Timer 3's next tick. Scheduler config enable/disable flags are checked at the start of each timer's callback -- disabled timers still reschedule but skip the actual scrape work. Floor enforcement (min hours between runs) is validated server-side on the POST endpoint.
+
+---
+
+## Group 7 — Sync Daemon Timers (`pai-sync-l3` container only)
+
+These run inside `scripts/sync-l3-daemon.ts` in the separate `pai-sync-l3` podman container. They are **not** present in the main `pai-dashboard` server. None are configurable at runtime.
+
+| # | Name | File | Interval | Configurable |
+|---|------|------|----------|-------------|
+| D1 | SSO Keepalive | `scripts/sync-l3-daemon.ts` | 2h (`setInterval`) | No |
+| D2 | Trigger Poller | `scripts/sync-l3-daemon.ts` | 30s (`setInterval`) | No |
+| D3 | Daily Sync | `scripts/sync-l3-daemon.ts` | 5:30am ET (`setTimeout` reschedule loop) | No |
+
+### D1 — SSO Keepalive (every 2h)
+
+Navigates Tableau CCSP dashboard and SF Lightning home inside the daemon's shared Chromium context. Detects session expiry by checking if the final URL contains `signin`, `auth`, `login`, or `sso`. On failure: logs error and sends alert email to `jhorn@redhat.com` with subject `L3 Sync Daemon - Keepalive Failed {date}`. Daemon continues running — next sync will fail if session is not renewed.
+
+**Non-obvious:** fires independently of sync cycle. A keepalive failure does not abort a running sync — it only emails and logs. The next `syncAllPods()` call will fail when it tries to navigate inside a dead context.
+
+### D2 — Trigger Poller (every 30s)
+
+Polls for `/data/cache/sync-trigger` file. When found: deletes the file atomically (before sync starts, preventing duplicate fire), then calls `syncAllPods()`. Discards trigger if a sync is already running (`syncRunning` boolean mutex). Maximum latency from `make sync-now` to sync start: 30s.
+
+**Non-obvious:** trigger file is deleted BEFORE sync starts (not after). If the daemon crashes mid-sync, the trigger is already gone — no replay on restart.
+
+### D3 — Daily Sync (5:30am ET)
+
+Uses `setTimeout` reschedule loop (same pattern as server-side scheduler timers). `scheduleNextSync()` calculates `getMsUntil530amET()` — targets 09:30 UTC, handles crossing midnight. After each run, reschedules for the next day. EST/EDT handled automatically (UTC target is fixed; local time shifts around it).
+
+**Non-obvious:** if the daemon starts after 09:30 UTC, it schedules for the next day — no same-day catchup run. Use `make sync-now` to trigger immediately after a late start.
 
 ---
 

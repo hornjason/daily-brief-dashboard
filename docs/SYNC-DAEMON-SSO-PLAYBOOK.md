@@ -41,7 +41,11 @@ make sync-up-vnc  # restart with VNC on port 6082
 
 ### Step 2 — Open VNC in browser
 
-Navigate to: `http://mini.local:6082/vnc.html`
+Navigate to:
+```
+http://mac.tail2fe7c7.ts.net:6082/vnc.html   (remote — Tailscale, works anywhere)
+http://mini.local:6082/vnc.html              (local LAN only)
+```
 
 Click **Connect** (no password required).
 
@@ -129,4 +133,4 @@ within 2 hours of the next start.
 | `Sync FAILED` email with auth error | Same as above |
 | Container not running | `make sync-up` (cookies still valid if down <8h) |
 | Mac Mini rebooted | `make sync-up` — launchd plist auto-runs this at login |
-| Daemon watchdog email `L3 Sync Daemon DOWN` | `ssh mini.local` → `make sync-up` from `~/DailyBriefDashboard` |
+| Daemon watchdog email `L3 Sync Daemon DOWN` | `ssh jasonhorn@100.97.86.25` (Tailscale) or `ssh ssh.jasonhorn.io` → `make sync-up` from project root |

@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-01
+---
+
 # DailyBriefDashboard — Project Instructions
 
 ## Read Before Touching Code
@@ -57,6 +64,32 @@ For a full gate: `make build && make test-down && make test-up` then tests, then
 **Why:** Bugs caught on 7776 stay in test. Bugs caught on 7777 are production incidents. The test container (7776) exists exactly for this — use it.
 
 See `docs/DEMO-ENV.md` for the full environment strategy including demo (7779) and dev (7778) containers.
+
+## Agent Skills — Engineering Pipeline
+
+Six skills form the standard workflow from idea to shipped code. See `~/.claude/CLAUDE.md §Engineering Skill Pipeline` for full detail.
+
+```
+/grill-me → /improve-codebase-architecture → /to-prd → /to-issues → /triage → /tdd
+```
+
+**GitHub Issues** (`hornjason/asaCommandCenter`, private):
+- Issue tracker config: `docs/agents/issue-tracker.md`
+- Triage label mapping: `docs/agents/triage-labels.md`
+- Domain/ADR layout: `docs/agents/domain.md`
+- BKL-ARCH-06 PRD: https://github.com/hornjason/asaCommandCenter/issues/1
+
+**Label creation commands** (run once to finish setup):
+```bash
+gh label create "needs-info" --repo hornjason/asaCommandCenter --color "e4e669"
+gh label create "ready-for-agent" --repo hornjason/asaCommandCenter --color "0075ca"
+gh label create "ready-for-human" --repo hornjason/asaCommandCenter --color "d4c5f9"
+gh label create "wontfix" --repo hornjason/asaCommandCenter --color "ffffff"
+gh label create "bug" --repo hornjason/asaCommandCenter --color "d73a4a"
+gh label create "enhancement" --repo hornjason/asaCommandCenter --color "a2eeef"
+```
+
+**Architecture backlog:** 8 deepening candidates (BKL-ARCH-01 through BKL-ARCH-08) logged in `BACKLOG.md`. Suggested execution order: #6 → #7 → #1 → #3 → #5 → #8. Interface design for #6 complete; PRD at issue #1.
 
 ## Backlog Discipline (Zero Exceptions)
 
@@ -130,6 +163,18 @@ Full documentation: `docs/ADDING-NEW-AE.md`
 
 **Validation:** Check `aes.json` for 4 sheet IDs, `customers.json` for account numbers, `/api/intelligence/generate-all/status` for pipeline progress, then open a customer detail page to trigger brief generation.
 
+## Documentation
+
+**Start here when you don't know which doc to read:** `DOCS.md` at project root — "I need to..." navigation table maps every common need to the exact doc and section.
+
+**Quick pointers for common agent needs:**
+- Architecture decisions + design rules → `ARCHITECTURE.md`
+- Sync daemon ops + troubleshooting → `ARCHITECTURE.md §3a`
+- Data flow end to end → `ARCHITECTURE.md §6` + `docs/DATA-INGESTION-ARCHITECTURE.md`
+- Open items + bugs → `BACKLOG.md`
+- All timers → `TIMERS.md`
+- ADRs (archived, read-only) → `docs/archive/adr/`
+
 ## Project Map
 
-For module inventory, API endpoints, ADR index, design specs, timer reference, and doc catalog: `docs/PROJECT-MAP.md`
+For module inventory, API endpoints, design specs, timer reference, and doc catalog: `docs/PROJECT-MAP.md`

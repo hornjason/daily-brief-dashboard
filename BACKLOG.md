@@ -8664,3 +8664,87 @@ Source: DA #15 step-1 Playwright gate 2026-05-02
 Files: test/regression.spec.ts (REG-001 line 82, REG-024 line 814)
 Description: REG-001 ("tableauTerritories preserved after round-trip save") and REG-024 ("identifyIndustry for no-account customers") both pass in isolation but fail when the full regression suite runs concurrently (2 workers). Earlier @destructive tests corrupt AE/customer state before these tests execute. Confirmed pre-existing on main (before any #15 changes).
 Solution: Add snapshot/restore guards to REG-001 and REG-024, or run them in a serial group. REG-001 is straightforward — it just needs its own beforeEach snapshot. REG-024 is a @live test that triggers a long intelligence pipeline; may need its own dedicated suite file with serial execution.
+
+---
+
+### BKL-ARCH-L4-SPLIT-FOLLOWUP-01 | SetupPage.tsx — Tableau URL/territory inputs still render in AE config form
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn gate 2026-05-01 (post-rebuild for issue #7)
+Files: dashboard/src/pages/SetupPage.tsx (lines 2014, 2153, 2293–2314)
+Description: Marcus removed Tableau from the bootstrap progress UI but not from the AE config step. Still rendering unconditionally: (1) "Tableau is not connected" warning (line 2014), (2) Tableau URL input (line 2153), (3) Tableau territory input (lines 2293–2314). Hero install wizard must show zero Tableau content.
+Solution: Remove or gate behind isPrimary. Acceptance: wizard-e2e Tableau-zero assertion passes (0 occurrences in rendered DOM).
+Can we test: YES — test/wizard-e2e.spec.ts line 287 asserts toBe(0).
+
+---
+
+### BKL-ARCH-L4-SPLIT-FOLLOWUP-02 | SetupPage.tsx — VNC popup buttons still render in wizard
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn gate 2026-05-01 (post-rebuild for issue #7)
+Files: dashboard/src/pages/SetupPage.tsx (lines 2532, 2540, 2840)
+Description: "Open VNC" and "Open VNC Login" buttons still rendered; window.open(..., 'rh-vnc'/'sf-vnc'/'tableau-vnc') calls present. Hero install must not surface VNC.
+Solution: Remove or gate behind isPrimary. Acceptance: wizard-e2e VNC-zero assertion passes.
+Can we test: YES — test/wizard-e2e.spec.ts line 310 asserts toBe(0).
+
+---
+
+### BKL-ARCH-L4-SPLIT-FOLLOWUP-03 | Prod container running NODE_ROLE=primary — should be unset for hero install
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Quinn gate 2026-05-01
+Files: Makefile (up target / env vars)
+Description: pai-dashboard prod container has NODE_ROLE=primary, routing it to L4 leader behavior. Per architecture decision, NODE_ROLE unset = hero install (L3-only); NODE_ROLE=primary = Mac Mini leader only. Local dev workstation should run as hero install.
+Solution: Remove NODE_ROLE from the local prod container config. Reserve NODE_ROLE=primary for Mac Mini only.
+Can we test: YES — /api/node-role must return {"isL3Only":true} on local prod.
+
+---
+
+### BKL-WIZARD-E2E-01 | wizard-e2e.spec.ts ships unconditional failing assertions while issue #7 is incomplete
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Quinn gate 2026-05-01
+Files: test/wizard-e2e.spec.ts (lines 281–310)
+Description: Spec has a comment noting Tableau/VNC removal is blocked on issue #7, but assertions (expect(tableauCount).toBe(0), expect(vncCount).toBe(0)) are NOT skipped. CI wizard-e2e job will fail on push with current bundle.
+Solution: Ship FOLLOWUP-01+02 first (preferred). Alternatively add test.skip() until they land. Keep CI honest.
+Can we test: YES — npx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e against 7776.
+
+---
+
+### BKL-SEC-14 | l3-bootstrap.ts — aeName and customerNames not validated before Drive folder creation
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook scan 2026-05-01 (issue #7 review)
+Files: src/l3-bootstrap.ts:102
+Description: bootstrapAe() passes aeName and customerNames directly into driveClient.createFolder with no length/control-char guard. Today's only caller derives these from validated AE config — not currently exploitable. Defense-in-depth guard needed for future callers.
+Solution: Guard inside bootstrapAe: if (!aeName || aeName.length > 200 || /[\x00-\x1f]/.test(aeName)) throw. Same for customerNames[i].
+Can we test: YES — unit test in test/unit/l3-bootstrap.test.ts.
+
+---
+
+### BKL-SEC-15 | setup-routes.ts — OAuth token write missing mkdirSync guard on parent directory
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook scan 2026-05-01 (issue #7 review)
+Files: src/setup-routes.ts:218-220
+Description: /oauth/callback handler writes token with correct 0o600 mode but assumes parent dir exists. Unlike upload-oauth-keys handler (line 332-333) which calls mkdirSync first, callback path could fail silently on fresh install or after full reset that wipes /data/config.
+Solution: Add mkdirSync(dirname(GOOGLE_UNIFIED_TOKEN_PATH), { recursive: true }) before the write. Mirror pattern on line 332.
+Can we test: YES — unit test simulating missing parent dir.
+
+---
+
+### BKL-SEC-16 | ci.yml — github.token interpolated into shell command line rather than env-var pattern
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook scan 2026-05-01 (issue #8 review)
+Files: .github/workflows/ci.yml:98,125
+Description: Token interpolated directly into shell command line. Low risk (GitHub masks it), but inconsistent with release.yml:114 which already uses the safer env: DEPLOY_TOKEN pattern.
+Solution: env: GH_TOKEN: ${{ github.token }} then echo "$GH_TOKEN" | podman login.
+Can we test: YES — CI run shows no token in logs.

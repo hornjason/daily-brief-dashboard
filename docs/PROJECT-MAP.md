@@ -55,20 +55,20 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 
 ## ADRs
 
-- `docs/adr/ADR-001-session-architecture.md` — Long-lived RH Portal sessions
-- `docs/adr/ADR-002-write-path-discipline.md` — No concurrent state mutation
-- `docs/adr/ADR-003-error-handling.md` — No silent failures, sanitized errors
-- `docs/archive/ADR-004-testing-strategy.md` — API-layer testing (superseded by docs/adr/ADR-004.md)
-- `docs/adr/ADR-005-code-organization.md` — Module boundaries
-- `docs/adr/ADR-004.md` — Sequential background refresh (numbering conflict — do not renumber)
-- `docs/adr/ADR-006.md` — Test snapshot/restore endpoints
-- `docs/adr/ADR-007.md` — Bun runtime, long-interval timer heartbeat
-- `docs/adr/ADR-009.md` — Brief cache: content-hash + 4h TTL invalidation
-- `docs/adr/ADR-010.md` — Account intelligence: dual-write cache pattern (Drive + local JSON)
-- `docs/adr/ADR-011.md` — Confidence Score: 0-100 composite replacing separate Renewal Risk
-- `docs/adr/ADR-012.md` — Product Intelligence Hub: Drive optional, feature injection into customer intel, cap expansion, 7-product bootstrap scaffold
-- `docs/adr/ADR-013.md` — Data Ingestion Tier Standard: 4-tier cache model (Live/Time-boxed/Content-addressed/Long-lived); Tier 3 is canonical pattern
-- `docs/adr/ADR-014.md` — Dual-Transport Architecture for RH Portal Case Refresh (Bearer token primary, browser fallback; 2026-04-18)
+- `docs/archive/adr/ADR-001-session-architecture.md` — Long-lived RH Portal sessions
+- `docs/archive/adr/ADR-002-write-path-discipline.md` — No concurrent state mutation
+- `docs/archive/adr/ADR-003-error-handling.md` — No silent failures, sanitized errors
+- `docs/archive/ADR-004-testing-strategy.md` — API-layer testing (superseded by docs/archive/adr/ADR-004.md)
+- `docs/archive/adr/ADR-005-code-organization.md` — Module boundaries
+- `docs/archive/adr/ADR-004.md` — Sequential background refresh (numbering conflict — do not renumber)
+- `docs/archive/adr/ADR-006.md` — Test snapshot/restore endpoints
+- `docs/archive/adr/ADR-007.md` — Bun runtime, long-interval timer heartbeat
+- `docs/archive/adr/ADR-009.md` — Brief cache: content-hash + 4h TTL invalidation
+- `docs/archive/adr/ADR-010.md` — Account intelligence: dual-write cache pattern (Drive + local JSON)
+- `docs/archive/adr/ADR-011.md` — Confidence Score: 0-100 composite replacing separate Renewal Risk
+- `docs/archive/adr/ADR-012.md` — Product Intelligence Hub: Drive optional, feature injection into customer intel, cap expansion, 7-product bootstrap scaffold
+- `docs/archive/adr/ADR-013.md` — Data Ingestion Tier Standard: 4-tier cache model (Live/Time-boxed/Content-addressed/Long-lived); Tier 3 is canonical pattern
+- `docs/archive/adr/ADR-014.md` — Dual-Transport Architecture for RH Portal Case Refresh (Bearer token primary, browser fallback; 2026-04-18)
 
 ## Frontend Utilities
 

@@ -67,6 +67,31 @@ podman ps | grep pai-dashboard               # confirm container running
 
 ---
 
+### L3 Sync Daemon (`pai-sync-l3`) — Manual Start Required
+
+The L3 sync daemon is a **separate container** from `pai-dashboard`. It has no LaunchAgent — it must be started manually after each reboot or reinstall.
+
+```bash
+# Check if running
+podman ps -a --filter name=pai-sync-l3
+# Nothing → not started; Exited → crashed
+
+# Start it (requires data-sync/config/settings.json to exist)
+make sync-up
+
+# Verify it initialized correctly
+make sync-logs    # watch for: "[sync-daemon] started — keepalive every 2h, sync at 5:30am ET"
+```
+
+**What it does:** Holds a warm Chromium browser context for RH SSO + Tableau + SF. Runs a daily sync at 5:30am ET that writes CCSP CSVs and SF Pipeline CSVs to Drive (shared `podBookingsFolderId`). Hero installs on other machines read from these files.
+
+**Prerequisite:** `data-sync/config/settings.json` must exist and have `podBookingsFolderId` configured. The Makefile exits with an error if this file is missing.
+
+**Full runbook:** `ARCHITECTURE.md §3a` — container contents, all failure modes, troubleshooting, re-auth procedure.
+**SSO re-auth:** `docs/SYNC-DAEMON-SSO-PLAYBOOK.md`
+
+---
+
 ### Remote Access When Traveling: Tailscale (Recommended)
 
 The Cloudflare SSH tunnel (`ssh.jasonhorn.io`) requires a browser auth click every 24 hours.

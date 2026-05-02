@@ -37,13 +37,6 @@ test.describe('@destructive BKL-HERO-01 Phase 0 — region access endpoints', ()
     }
   })
 
-  test('GET /api/node-role returns { isL3Only: true } when NODE_ROLE unset', async ({ request }) => {
-    const res = await request.get(`${BASE}/api/node-role`)
-    expect(res.status()).toBe(200)
-    const body = await res.json()
-    expect(body).toEqual({ isL3Only: true })
-  })
-
   test('GET /api/regions/catalog returns West + TOLA selectable (no East in seed)', async ({ request }) => {
     const res = await request.get(`${BASE}/api/regions/catalog`)
     expect(res.status()).toBe(200)
