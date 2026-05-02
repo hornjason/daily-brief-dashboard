@@ -559,7 +559,7 @@ function isAEFullyBootstrapped(aeConfig: AE): boolean {
  *   force: if true, re-bootstrap AEs that already have all 4 sheet IDs (normally skipped)
  *   onProgress: callback called after each AE completes
  */
-export async function bootstrapPOD(opts: {
+async function bootstrapPOD(opts: {
   territorySheetId: string
   sfReportId: string
   parentFolderId: string
