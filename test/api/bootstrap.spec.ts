@@ -60,19 +60,6 @@ test.describe('POST /api/bootstrap/auto/reset', () => {
   })
 })
 
-// ── GET /api/scrape/supportable/status ───────────────────────────────────
-
-test.describe('GET /api/scrape/supportable/status', () => {
-  test('returns shape { running, lastScrape, lastError }', async () => {
-    const { status, body } = await getJSON('/api/scrape/supportable/status')
-    expect(status).toBe(200)
-    expect(body).toHaveProperty('running')
-    expect(body).toHaveProperty('lastScrape')
-    expect(body).toHaveProperty('lastError')
-    expect(typeof body.running).toBe('boolean')
-  })
-})
-
 // ── POST /api/bootstrap/auto without Google auth ────────────────────────────
 
 test.describe('POST /api/bootstrap/auto — auth guard', () => {

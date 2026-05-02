@@ -131,7 +131,16 @@ function readPodConfig(): { territorySheetId: string; sfReportId: string; parent
 async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<{ configFolderId: string; productsFolderId: string } | null> {
   if (!parentFolderId) return null
   // BKL-DRIVE-SCAFFOLD-SLUGS-01: derive slugs from products.json — single source of truth
-  const productSlugs = loadProductIntelConfig().products.map(p => p.slug)
+  // BKL-SEC-SLUG-VALIDATE-01: validate slug shape before passing to Drive; deduplicate
+  const SLUG_RE = /^[a-z0-9-]{1,64}$/
+  const rawSlugs = loadProductIntelConfig().products.map(p => p.slug)
+  const productSlugs = [...new Set(rawSlugs.filter(s => {
+    if (!SLUG_RE.test(s)) {
+      console.warn(`[auto-bootstrap:scaffold] skipping invalid slug "${s}" (must match /^[a-z0-9-]{1,64}$/)`)
+      return false
+    }
+    return true
+  }))]
   console.log(`[auto-bootstrap:scaffold] ensuring Config/ and Products/ under parentFolderId=${parentFolderId}`)
   try {
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)

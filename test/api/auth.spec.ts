@@ -81,11 +81,10 @@ test.describe('GET /api/scraper-status', () => {
     expect(typeof body.scrapers).toBe('object')
   })
 
-  test('scrapers map includes rh-cases, supportable, ccsp, sf-pipeline keys', async () => {
+  test('scrapers map includes rh-cases, ccsp, sf-pipeline keys', async () => {
     const { body } = await getJSON('/api/scraper-status')
     const scrapers = body?.scrapers ?? {}
     expect(scrapers).toHaveProperty('rh-cases')
-    expect(scrapers).toHaveProperty('supportable')
     expect(scrapers).toHaveProperty('ccsp')
     expect(scrapers).toHaveProperty('sf-pipeline')
   })

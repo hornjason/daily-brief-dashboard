@@ -7285,7 +7285,7 @@ Fix: Update CAROLANNE (or rename) to reference a current AE name that has full b
 ---
 
 ### BKL-TEST-STALE-SUPPORTABLE-01 | Stale Supportable assertions in auth.spec.ts + bootstrap.spec.ts produce permanent red noise
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Removed `supportable` key assertion from auth.spec.ts:84; removed GET /api/scrape/supportable/status describe block from bootstrap.spec.ts:65-74. Deleted, not skipped.
 Priority: P2
 Size: XS
 Source: Quinn QA BKL-ARCH-03 gate 2026-05-01
@@ -7353,7 +7353,7 @@ Decision: WONTFIX / ALREADY DONE — BKL-STARTUP-01 in background-scheduler.ts a
 ---
 
 ### BKL-SEC-SLUG-VALIDATE-01 | Product slugs in product-intel-config.json not validated at load time
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Added /^[a-z0-9-]{1,64}$/ guard + dedup to ensureConfigAndProductsScaffold in bootstrap-orchestrator.ts. Invalid slugs log a warning and are skipped. 10 unit tests in test/unit/slug-validate.test.ts (10/10 pass).
 Priority: P3
 Size: XS
 Source: Rook scan 2026-04-27 (BKL-DRIVE-SCAFFOLD-SLUGS-01 review)
