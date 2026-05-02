@@ -1210,7 +1210,7 @@ export function AdminPage() {
 
         {/* Gemini API cost tracking (BKL-M52) */}
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Gemini API Usage</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Gemini API Usage (this node)</h2>
           <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
             {geminiUsage === null ? (
               <div className="text-xs text-gray-500">Loading...</div>

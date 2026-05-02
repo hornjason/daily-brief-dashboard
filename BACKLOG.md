@@ -8047,7 +8047,7 @@ Acceptance: Hint text absent on L3. Hint still visible on L4 when RH is disconne
 Can we test: YES — Playwright test on L3 asserts hint text has count 0.
 
 ### BKL-HERO-07 | L3 hero: Cloud Spend (CCSP) panel renders with no data
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8147,7 +8147,7 @@ Acceptance: Decision made and implemented. If leader-only: section absent on L3.
 Can we test: YES after decision.
 
 ### BKL-HERO-17 | L3 hero: Admin Gemini Usage panel — clarify "this node" vs fleet
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Quinn L3 hero audit 2026-05-01

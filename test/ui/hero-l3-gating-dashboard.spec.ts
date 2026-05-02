@@ -86,4 +86,21 @@ test.describe('@destructive BKL-HERO-05/06: Dashboard L3 gating', () => {
       page.locator('text=Red Hat Portal not connected')
     ).toBeVisible({ timeout: 10_000 })
   })
+
+  test('T8 — Cloud Spend section absent on L3 hero install (BKL-HERO-07)', async ({ page }) => {
+    await mockNodeRole(page, true)
+    await page.goto(DASHBOARD_PATH)
+    await waitForDashboardReady(page)
+
+    await expect(page.locator('#section-cloudspend')).toHaveCount(0)
+    await expect(page.locator('text=Cloud Spend (CCSP)')).toHaveCount(0)
+  })
+
+  test('T9 — Cloud Spend section present on L4 install (BKL-HERO-07 parity)', async ({ page }) => {
+    await mockNodeRole(page, false)
+    await page.goto(DASHBOARD_PATH)
+    await waitForDashboardReady(page)
+    // Wait for data fetch to settle; section renders when accounts exist
+    await expect(page.locator('#section-cloudspend')).toBeVisible({ timeout: 10_000 })
+  })
 })

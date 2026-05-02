@@ -219,6 +219,8 @@ function Dashboard() {
     const s = params.toString()
     return s ? `?${s}` : ''
   })()
+  const nodeRoleApi  = useApi<{ isL3Only: boolean }>('/api/node-role')
+  const isL3Only     = nodeRoleApi.data?.isL3Only ?? true
   const ccspApi      = useApi<CCSPSummary>(`/api/ccsp${ccspQueryStr}`)
   const pipelineQueryStr = aeFilterSelected && aeFilterSelected !== 'all' ? `?ae=${encodeURIComponent(aeFilterSelected)}` : ''
   const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline${pipelineQueryStr}`)
@@ -637,8 +639,8 @@ function Dashboard() {
               <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} selectedProducts={productFilterSelected} />
             </section>
 
-            {/* Cloud Spend — hide when AE filter yields no customers */}
-            {filteredAccounts.length > 0 && (
+            {/* Cloud Spend — hide on L3 (CCSP scraper not available) and when AE filter yields no customers */}
+            {!isL3Only && filteredAccounts.length > 0 && (
               <section id="section-cloudspend" data-section="section-cloudspend">
                 <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
               </section>
