@@ -768,6 +768,17 @@ const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/view
 // startAccountDiscovery() removed — account discovery now handled by RH Cases scraper
 // (runRhScrapeWithState in scraper-manager.ts searches by customer name when accountNumbers is empty)
 
+// ── Tableau status cache (module-scope for reset on wipe) ────────────────────
+
+let _tableauStatusCache: { result: { reachable: boolean; sessionValid: boolean }; cachedAt: number } | null = null
+
+/** BKL-UX-WIPE-CONN-RESET-02: Invalidate cached Tableau session status so the next
+ *  /api/bootstrap/tableau/session-status call does a live probe rather than returning
+ *  stale sessionValid:true after a wipe. */
+export function resetTableauStatusCache(): void {
+  _tableauStatusCache = null
+}
+
 // ── Route registration ───────────────────────────────────────────────────────
 
 export function createBootstrapRouter(): Hono {
@@ -1746,7 +1757,7 @@ export function createBootstrapRouter(): Hono {
   //
   // Cached for 5 minutes — the live browser probe takes ~6s (SSO redirect settle).
   // Pass ?force=true to bypass cache (used by Connect button after login).
-  let _tableauStatusCache: { result: { reachable: boolean; sessionValid: boolean }; cachedAt: number } | null = null
+  // _tableauStatusCache promoted to module scope (BKL-UX-WIPE-CONN-RESET-02) for reset on wipe.
   const TABLEAU_STATUS_TTL_MS = 60 * 1000  // BKL-SEC-CONN-02: reduced from 5min to 60s
   // BKL-CONN-TABLEAU-CTX-01: Tableau login uses a dedicated Interactive Auth Page (IAP)
   // — see src/interactive-auth-page.ts. _livePage is reserved for the scraper SSO anchor;

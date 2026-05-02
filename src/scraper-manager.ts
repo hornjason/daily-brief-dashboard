@@ -419,6 +419,11 @@ export function setSfSyncLastError(v: string | null): void { _sfSyncLastError = 
 export function clearSessionFiles(): void {
   try { if (RH_SESSION_PATH && existsSync(RH_SESSION_PATH)) unlinkSync(RH_SESSION_PATH) } catch {}
   try { if (SF_SESSION_PATH && existsSync(SF_SESSION_PATH)) unlinkSync(SF_SESSION_PATH) } catch {}
+  // BKL-UX-WIPE-CONN-RESET-02: also clear Tableau + content-RH session files
+  const tableauPath = RH_PROFILE_DIR ? resolve(RH_PROFILE_DIR, 'tableau-session.json') : ''
+  const contentRhPath = RH_PROFILE_DIR ? resolve(RH_PROFILE_DIR, 'content-rh-session.json') : ''
+  try { if (tableauPath && existsSync(tableauPath)) unlinkSync(tableauPath) } catch {}
+  try { if (contentRhPath && existsSync(contentRhPath)) unlinkSync(contentRhPath) } catch {}
 }
 
 // ── RH scrape orchestration ─────────────────────────────────────────────────

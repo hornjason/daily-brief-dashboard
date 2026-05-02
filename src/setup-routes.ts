@@ -16,7 +16,7 @@ import { sanitizeErr, sanitizeText } from './utils.ts'
 const supportableScrapeRunning = false
 const ccspScrapeRunning = false
 import { _rhScrapeRunning, clearSessionFiles } from './scraper-manager.ts'
-import { resetBootstrapStates } from './bootstrap-orchestrator.ts'
+import { resetBootstrapStates, resetTableauStatusCache } from './bootstrap-orchestrator.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SRV_CONFIG_DIR = ''
@@ -383,7 +383,8 @@ export function createSetupRouter(): Hono {
     saveAes([])
     pendingOAuthStates.clear()
     resetBootstrapStates()
-    clearSessionFiles()  // BKL-UX-WIPE-CONN-RESET-01: reset connection status
+    clearSessionFiles()       // BKL-UX-WIPE-CONN-RESET-01/02: reset all session files
+    resetTableauStatusCache() // BKL-UX-WIPE-CONN-RESET-02: force fresh probe on next status check
     if (process.env.AE_PARENT_FOLDER_ID) delete process.env.AE_PARENT_FOLDER_ID
     if (process.env.AE_PARENT_FOLDER_IDS) delete process.env.AE_PARENT_FOLDER_IDS
 

@@ -8219,7 +8219,7 @@ Commit: 6746e3258 (SEC batch) + follow-on commit.
 ---
 
 ### BKL-UX-WIPE-CONN-RESET-02 | Tableau + content-RH session files not cleared on wipe — stale Tableau "Connected" state
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: S
 Source: Rook scan 2026-05-02 (BKL-UX-WIPE-CONN-RESET-01 pattern sibling)
