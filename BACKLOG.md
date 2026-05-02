@@ -8403,7 +8403,7 @@ Commit: 398d840b0 — 16 modules converted, Quinn 103/107 pass, Rook PASS no new
 ---
 
 ### BKL-ARCH-09 | Extract auth routes (RH + SF) from server.ts → auth-routes.ts
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-02 — src/auth-routes.ts created (221 lines). server.ts: 1712→1559 lines (−153). 25/25 Playwright pass, 7/7 smoke. Commit: 2a223ab1c.
 Priority: P2
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
