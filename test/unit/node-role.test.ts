@@ -2,13 +2,14 @@
 //
 // Unit tests for the node-role policy module.
 
-import { test, expect, describe, beforeEach, afterEach } from 'bun:test'
+import { test, expect, describe, beforeEach, afterEach, spyOn } from 'bun:test'
 import {
   getRole,
   isPrimary,
   assertPrimary,
   ifPrimary,
   __setRoleForTest,
+  _parseRole,
   WrongRoleError,
 } from '../../src/lib/node-role.ts'
 
@@ -118,5 +119,51 @@ describe('node-role: WrongRoleError', () => {
     expect(e).toBeInstanceOf(Error)
     expect(e.name).toBe('WrongRoleError')
     expect(e.operation).toBe('foo')
+  })
+})
+
+// BKL-SEC-IS-LEADER-CASE-01: _parseRole normalizes env var and warns on mis-cased values.
+describe('node-role: _parseRole (BKL-SEC-IS-LEADER-CASE-01)', () => {
+  test('exact "primary" → primary role, no warning', () => {
+    const warnSpy = spyOn(console, 'warn')
+    expect(_parseRole('primary')).toBe('primary')
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  test('"Primary" (capital P) → hero role, logs warning', () => {
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
+    expect(_parseRole('Primary')).toBe('hero')
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(warnSpy.mock.calls[0][0]).toMatch(/NODE_ROLE="Primary".*treating as hero/i)
+    warnSpy.mockRestore()
+  })
+
+  test('"PRIMARY" (all caps) → hero role, logs warning', () => {
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
+    expect(_parseRole('PRIMARY')).toBe('hero')
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    warnSpy.mockRestore()
+  })
+
+  test('"1" → hero role, logs warning', () => {
+    const warnSpy = spyOn(console, 'warn').mockImplementation(() => {})
+    expect(_parseRole('1')).toBe('hero')
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    warnSpy.mockRestore()
+  })
+
+  test('undefined → hero role, no warning (unset env is normal hero-install state)', () => {
+    const warnSpy = spyOn(console, 'warn')
+    expect(_parseRole(undefined)).toBe('hero')
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  test('empty string → hero role, no warning', () => {
+    const warnSpy = spyOn(console, 'warn')
+    expect(_parseRole('')).toBe('hero')
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 })

@@ -41,8 +41,16 @@ export class WrongRoleError extends Error {
 // — it never flips at runtime in production. Tests override via
 // __setRoleForTest below.
 
+/** BKL-SEC-IS-LEADER-CASE-01: Exported only for unit tests. Production code uses isPrimary() / getRole(). */
+export function _parseRole(raw: string | undefined): NodeRole {
+  if (raw !== undefined && raw !== '' && raw !== 'primary') {
+    console.warn(`[node-role] NODE_ROLE="${raw}" is not "primary" — treating as hero. Only NODE_ROLE=primary (exact, lowercase) enables L4 scrapes.`)
+  }
+  return raw === 'primary' ? 'primary' : 'hero'
+}
+
 function readRoleFromEnv(): NodeRole {
-  return process.env.NODE_ROLE === 'primary' ? 'primary' : 'hero'
+  return _parseRole(process.env.NODE_ROLE)
 }
 
 let _role: NodeRole = readRoleFromEnv()

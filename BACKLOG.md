@@ -6688,7 +6688,7 @@ Description: test/unit/ai-03-disallow-gemini.test.ts was a worktree-only test fo
 ---
 
 ### BKL-INGEST-06 | Implement scheduleRetry in background-scheduler.ts
-Status: 🔴 OPEN
+Status: ✅ DONE — verified 2026-05-02. scheduleRetry already implemented at background-scheduler.ts:194 and used at lines 550, 860. Test file ingest-06-scheduler-retry.test.ts passes (12/12 across both INGEST-06 + INGEST-10).
 Priority: P3
 Size: S
 Source: Worktree test cleanup 2026-04-24 — test/unit/ingest-06-scheduler-retry.test.ts tested an export that was never added
@@ -6698,12 +6698,7 @@ Description: test/unit/ingest-06-scheduler-retry.test.ts tested a `scheduleRetry
 ---
 
 ### BKL-INGEST-10 | Add L1 TTL short-circuit to refresh-engine
-Status: 🔴 OPEN
-Priority: P3
-Size: S
-Source: Worktree test cleanup 2026-04-24 — test/unit/ingest-10-refresh-l1-ttl.test.ts tested an optimization that was never implemented
-Files: src/refresh-engine.ts (if exists), src/background-scheduler.ts
-Description: test/unit/ingest-10-refresh-l1-ttl.test.ts tested a short-circuit in refresh-engine.ts where L1 (in-memory) TTL would skip refresh if data was fresh enough. The optimization was never implemented. All refresh calls hit L2 (disk) even when L1 data is valid.
+Status: ✅ DONE — verified 2026-05-02. refresh-engine.ts exists; L1 TTL short-circuit implemented and tested. ingest-10-refresh-l1-ttl.test.ts passes (12/12 across both INGEST-06 + INGEST-10).
 
 ---
 
@@ -7944,7 +7939,7 @@ Description: `sharedCtx.on('page')` handler redirected every new SSO popup back 
 Decision: Handler now closes any popup tab (with 500ms delay) instead of redirecting. `_activeSsoPopupHandler` stored at module level for cleanup. `ctx.off('page', handler)` called in `_closeContext`. Stale-reference guard `activePage !== page` removed — only `!loginInProgress` checked. Serena architecture review confirmed: Red Hat SSO is redirect-based, not popup-driven; closing popups preserves the original tab's SSO flow.
 
 ### BKL-SEC-IS-LEADER-CASE-01 | IS_LEADER env var case-sensitive — 'True'/'TRUE'/'1' silently treated as non-leader
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Added _parseRole() to node-role.ts with strict equality + console.warn on mis-cased NODE_ROLE. 6 new tests in node-role.test.ts (17/17 pass). Closes BKL-SEC-IS-LEADER-CASE-01.
 Priority: P1
 Size: S
 Source: Rook scan 2026-04-28 (post tableau-auth SSO fix)
