@@ -5,9 +5,6 @@ import { formatRelTime } from '../lib/format'
 import { getVncUrl } from '../utils'
 import { SessionHealthPanel } from '../components/SessionHealthPanel'
 import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
-import { Step0RegionAccess } from '../components/Step0RegionAccess'
-import { useNodeRole } from '../hooks/useNodeRole'
-import { usePolledStatus } from '../hooks/usePolledStatus'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -27,7 +24,6 @@ interface CircuitBreakerState {
 interface AllScrapeStatus {
   rh: ScrapeStatus
   ccsp: ScrapeStatus
-  salesforce: ScrapeStatus
   circuitBreakers?: Record<string, CircuitBreakerState>
   queue?: { running: string | null; pending: string[]; isAnyRunning: boolean }
   browserRestartNeeded?: boolean
@@ -55,14 +51,11 @@ interface GeminiUsageSummary {
 interface SchedulerCfg {
   ccspTime: string
   territoryTime: string
-  sfPipelineTime: string
   ccspEnabled: boolean
   territoryEnabled: boolean
-  sfPipelineEnabled: boolean
   rhEnabled: boolean
   ccspLastRun: string | null
   territoryLastRun: string | null
-  sfPipelineLastRun: string | null
   rhLastRun: string | null
 }
 
@@ -231,13 +224,10 @@ function SchedulerConfig({
   intervals,
   schedulerCfg,
   onSave,
-  isL3Only = false,
 }: {
   intervals: RefreshIntervals | null
   schedulerCfg: SchedulerCfg | null
   onSave: (fields: Record<string, unknown>) => Promise<string | null>
-  /** BKL-HERO-13: hide CCSP + RH Cases scheduler rows in L3 hero mode */
-  isL3Only?: boolean
 }) {
   const [rhMinutes, setRhMinutes] = useState<string>('')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -262,48 +252,41 @@ function SchedulerConfig({
   }
 
   const cfg = schedulerCfg ?? {
-    ccspTime: '06:30', territoryTime: '01:45', sfPipelineTime: '02:00',
-    ccspEnabled: true, territoryEnabled: true, sfPipelineEnabled: true, rhEnabled: true,
-    ccspLastRun: null, territoryLastRun: null, sfPipelineLastRun: null, rhLastRun: null,
+    ccspTime: '06:30', territoryTime: '01:45',
+    ccspEnabled: true, territoryEnabled: true, rhEnabled: true,
+    ccspLastRun: null, territoryLastRun: null, rhLastRun: null,
   }
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="space-y-1 divide-y divide-gray-700/50">
-        {/* BKL-HERO-13: CCSP scheduler row is L4-only */}
-        {!isL3Only && (
-          <SourceScheduleRow label="CCSP" timeKey="ccspTime" enabledKey="ccspEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
-        )}
+        <SourceScheduleRow label="CCSP" timeKey="ccspTime" enabledKey="ccspEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
         <SourceScheduleRow label="Territory" timeKey="territoryTime" enabledKey="territoryEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
-        <SourceScheduleRow label="SF Pipeline" timeKey="sfPipelineTime" enabledKey="sfPipelineEnabled" floorHint="Min 12h between runs" schedCfg={cfg} onSave={onSave} />
-        {/* BKL-HERO-13: RH Cases interval input is L4-only */}
-        {!isL3Only && (
-          <div className="flex items-center gap-3 py-2">
-            <label className="text-xs text-gray-400 w-40 shrink-0">
-              RH Cases interval
-              <span className="block text-gray-500">30 min floor</span>
-            </label>
-            <div className="flex-1 flex items-center gap-1.5">
-              <input
-                type="number"
-                min={30}
-                value={rhMinutes}
-                onChange={e => { setRhMinutes(e.target.value); setSaveError(null); setSaved(false) }}
-                className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
-              />
-              <span className="text-xs text-gray-500">min</span>
-            </div>
-            <button
-              onClick={handleRhSave}
-              disabled={saving}
-              className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors shrink-0 ml-auto"
-            >
-              {saving ? '...' : saved ? 'Saved' : 'Save'}
-            </button>
-            {saveError && <span className="text-xs text-red-400">{saveError}</span>}
+        <div className="flex items-center gap-3 py-2">
+          <label className="text-xs text-gray-400 w-40 shrink-0">
+            RH Cases interval
+            <span className="block text-gray-500">30 min floor</span>
+          </label>
+          <div className="flex-1 flex items-center gap-1.5">
+            <input
+              type="number"
+              min={30}
+              value={rhMinutes}
+              onChange={e => { setRhMinutes(e.target.value); setSaveError(null); setSaved(false) }}
+              className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-gray-400"
+            />
+            <span className="text-xs text-gray-500">min</span>
           </div>
-        )}
-        {!isL3Only && schedulerCfg && (
+          <button
+            onClick={handleRhSave}
+            disabled={saving}
+            className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors shrink-0 ml-auto"
+          >
+            {saving ? '...' : saved ? 'Saved' : 'Save'}
+          </button>
+          {saveError && <span className="text-xs text-red-400">{saveError}</span>}
+        </div>
+        {schedulerCfg && (
           <SourceScheduleRow label="RH Cases" timeKey="rhScrape" enabledKey="rhEnabled" floorHint="Interval-based (see above)" schedCfg={cfg} onSave={onSave} isInterval />
         )}
       </div>
@@ -453,33 +436,35 @@ function NotebookLMSection() {
 function BatchIntelligenceSection() {
   const [batchState, setBatchState] = useState<BatchIntelState | null>(null)
   const [starting, setStarting] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // BKL-ARCH-05: usePolledStatus replaces ad-hoc setInterval+useRef.
-  // No `until` — batch can run multiple times across the page lifetime.
-  const { data: polledBatch } = usePolledStatus<BatchIntelState>(
-    '/api/intelligence/generate-all/status',
-    { intervalMs: 3_000, enabled: !!batchState?.running },
-  )
-
-  // Initial load (one-shot, before any batch is started).
-  useEffect(() => {
-    fetch('/api/intelligence/generate-all/status')
-      .then(r => r.json())
-      .then((d: BatchIntelState) => setBatchState(d))
-      .catch(() => {})
+  const fetchBatchStatus = useCallback(async () => {
+    try {
+      const d = await fetch('/api/intelligence/generate-all/status').then(r => r.json())
+      setBatchState(d)
+    } catch {}
   }, [])
 
   useEffect(() => {
-    if (polledBatch) setBatchState(polledBatch)
-  }, [polledBatch])
+    fetchBatchStatus()
+  }, [fetchBatchStatus])
+
+  useEffect(() => {
+    if (batchState?.running) {
+      if (!pollRef.current) {
+        pollRef.current = setInterval(fetchBatchStatus, 3_000)
+      }
+    } else {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    }
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
+  }, [batchState?.running, fetchBatchStatus])
 
   const handleGenerate = async () => {
     setStarting(true)
     try {
       await fetch('/api/intelligence/generate-all', { method: 'POST' })
-      // Re-fetch status immediately so `running` flips true and polling activates.
-      const d = await fetch('/api/intelligence/generate-all/status').then(r => r.json()).catch(() => null)
-      if (d) setBatchState(d)
+      await fetchBatchStatus()
     } finally {
       setStarting(false)
     }
@@ -963,36 +948,8 @@ function ContentRhSessionButton() {
   )
 }
 
-// BKL-HERO-02 — Region Access section for Admin page
-function RegionAccessSection() {
-  const [initialRegions, setInitialRegions] = useState<string[] | undefined>(undefined)
-  const [initialPods, setInitialPods] = useState<string[] | undefined>(undefined)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    fetch('/api/regions/access')
-      .then(r => r.json())
-      .then((d: { enabledRegions?: string[]; enabledPods?: string[] }) => {
-        if (Array.isArray(d.enabledRegions)) setInitialRegions(d.enabledRegions)
-        if (Array.isArray(d.enabledPods)) setInitialPods(d.enabledPods)
-      })
-      .finally(() => setLoaded(true))
-  }, [])
-
-  if (!loaded) return <p className="text-sm text-text-secondary">Loading...</p>
-
-  return (
-    <Step0RegionAccess
-      initialEnabledRegions={initialRegions}
-      initialEnabledPods={initialPods}
-      onSave={() => {/* AdminPage re-reads on next mount; no local state to update */}}
-    />
-  )
-}
-
 export function AdminPage() {
   const navigate = useNavigate()
-  const { isL3Only } = useNodeRole()
   const [status, setStatus] = useState<AllScrapeStatus | null>(null)
   const [intervals, setIntervals] = useState<RefreshIntervals | null>(null)
   const [schedulerCfg, setSchedulerCfg] = useState<SchedulerCfg | null>(null)
@@ -1013,27 +970,12 @@ export function AdminPage() {
   const [docAgeSaving, setDocAgeSaving] = useState(false)
   // localQueued value: true = queued (no detail), or string = "waiting on <scraper>"
 
-  // BKL-ARCH-05: usePolledStatus replaces ad-hoc setInterval. Always-on at 5s.
-  // The complex shape mapping is preserved as a useMemo over the raw response.
-  interface RawScraperStatus {
-    scrapers?: Record<string, { state?: string; lastSuccess?: string | null; lastError?: string | null }>
-    circuitBreakers?: Record<string, CircuitBreakerState>
-    queue?: { running: string | null; pending: string[]; isAnyRunning: boolean }
-    browserRestartNeeded?: boolean
-    rhDiscoveryProgress?: { done: number; total: number; current: string | null } | null
-  }
-  const { data: rawStatus } = usePolledStatus<RawScraperStatus>(
-    '/api/scraper-status',
-    { intervalMs: 5_000 },
-  )
-
-  // Imperative re-fetch helper for runScrape() — fires a single fresh request
-  // off the polling cadence so the UI reflects the queued state immediately.
   const fetchStatus = useCallback(async () => {
     try {
       const d = await fetch('/api/scraper-status').then(r => r.json())
+      // Map unified /api/scraper-status response shape to AllScrapeStatus
       const scrapers = d.scrapers ?? {}
-      setStatus({
+      const mapped: AllScrapeStatus = {
         rh: {
           isRunning: scrapers['rh-cases']?.state === 'running',
           lastSync:  scrapers['rh-cases']?.lastSuccess ?? null,
@@ -1044,45 +986,14 @@ export function AdminPage() {
           lastSync:  scrapers['ccsp']?.lastSuccess ?? null,
           lastError: scrapers['ccsp']?.lastError ?? null,
         },
-        salesforce: {
-          isRunning: scrapers['sf-pipeline']?.state === 'running',
-          lastSync:  scrapers['sf-pipeline']?.lastSuccess ?? null,
-          lastError: scrapers['sf-pipeline']?.lastError ?? null,
-        },
         circuitBreakers: d.circuitBreakers,
         queue: d.queue,
         browserRestartNeeded: d.browserRestartNeeded,
-        rhDiscoveryProgress: d.rhDiscoveryProgress ?? null,
-      })
+      }
+      mapped.rhDiscoveryProgress = d.rhDiscoveryProgress ?? null
+      setStatus(mapped)
     } catch {}
   }, [])
-
-  // Sync polled raw status into mapped state shape used by the rest of the page.
-  useEffect(() => {
-    if (!rawStatus) return
-    const scrapers = rawStatus.scrapers ?? {}
-    setStatus({
-      rh: {
-        isRunning: scrapers['rh-cases']?.state === 'running',
-        lastSync:  scrapers['rh-cases']?.lastSuccess ?? null,
-        lastError: scrapers['rh-cases']?.lastError ?? null,
-      },
-      ccsp: {
-        isRunning: scrapers['ccsp']?.state === 'running',
-        lastSync:  scrapers['ccsp']?.lastSuccess ?? null,
-        lastError: scrapers['ccsp']?.lastError ?? null,
-      },
-      salesforce: {
-        isRunning: scrapers['sf-pipeline']?.state === 'running',
-        lastSync:  scrapers['sf-pipeline']?.lastSuccess ?? null,
-        lastError: scrapers['sf-pipeline']?.lastError ?? null,
-      },
-      circuitBreakers: rawStatus.circuitBreakers,
-      queue: rawStatus.queue,
-      browserRestartNeeded: rawStatus.browserRestartNeeded,
-      rhDiscoveryProgress: rawStatus.rhDiscoveryProgress ?? null,
-    })
-  }, [rawStatus])
 
   const fetchIntervals = useCallback(async () => {
     try {
@@ -1093,8 +1004,11 @@ export function AdminPage() {
   }, [])
 
   useEffect(() => {
+    fetchStatus()
     fetchIntervals()
-  }, [fetchIntervals])
+    const poll = setInterval(fetchStatus, 5_000)
+    return () => clearInterval(poll)
+  }, [fetchStatus, fetchIntervals])
 
   // BKL-M52: fetch Gemini usage on mount
   useEffect(() => {
@@ -1115,15 +1029,27 @@ export function AdminPage() {
       .catch(() => {})
   }, [])
 
-  // BKL-ARCH-05: usePolledStatus replaces ad-hoc setInterval.
-  // `until` latches polling off once the job is no longer running.
-  const { data: polledIntelStatus } = usePolledStatus<IntelligenceJobStatus>(
-    '/api/intelligence/status',
-    { intervalMs: 3_000, until: d => d.status !== 'running' },
-  )
+  // Intelligence job status polling (every 3s when running)
   useEffect(() => {
-    if (polledIntelStatus) setIntelJobStatus(polledIntelStatus)
-  }, [polledIntelStatus])
+    let pollInterval: ReturnType<typeof setInterval> | null = null
+
+    const fetchIntelStatus = () => {
+      fetch('/api/intelligence/status')
+        .then(r => r.json())
+        .then((d: IntelligenceJobStatus) => {
+          setIntelJobStatus(d)
+          if (d.status !== 'running' && pollInterval) {
+            clearInterval(pollInterval)
+            pollInterval = null
+          }
+        })
+        .catch(() => {})
+    }
+
+    fetchIntelStatus()
+    pollInterval = setInterval(fetchIntelStatus, 3_000)
+    return () => { if (pollInterval) clearInterval(pollInterval) }
+  }, [])
 
   // BKL-G21: clear localQueued entries once polling confirms the scraper is running
   // or it's no longer in the queue's pending list (completed / dropped)
@@ -1134,7 +1060,6 @@ export function AdminPage() {
     const keyToQueueName: Record<string, string> = {
       rh: 'rh-cases',
       ccsp: 'ccsp',
-      salesforce: 'sf-pipeline',
     }
     setLocalQueued(prev => {
       const next = { ...prev }
@@ -1203,12 +1128,9 @@ export function AdminPage() {
               ← Back to Setup
             </button>
           </div>
-          {/* BKL-HERO-09: hide RH-Portal-tied break-glass banner in L3 hero mode */}
-          {!isL3Only && (
-            <div className="mt-2 bg-red-900/50 border border-red-700/60 rounded-md px-4 py-2.5 text-xs text-red-300">
-              <span className="font-semibold">Break-glass page.</span> Manual scrape triggers may take several minutes and require an active Red Hat Portal session. Not for normal use.
-            </div>
-          )}
+          <div className="mt-2 bg-red-900/50 border border-red-700/60 rounded-md px-4 py-2.5 text-xs text-red-300">
+            <span className="font-semibold">Break-glass page.</span> Manual scrape triggers may take several minutes and require an active Red Hat Portal session. Not for normal use.
+          </div>
         </div>
 
         {/* BKL-W2-13: Browser crash banner */}
@@ -1236,69 +1158,54 @@ export function AdminPage() {
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Manual Scrape Triggers</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            {/* BKL-HERO-11: RH Cases + CCSP scrape triggers are L4-only */}
-            {!isL3Only && (
-              <ScrapeSection
-                label="RH Cases"
-                status={status?.rh ?? null}
-                running={!!triggerBusy['rh']}
-                onRunNow={() => runScrape('rh', '/api/scrape/rh')}
-                circuitBreaker={status?.circuitBreakers?.rh}
-                queuePending={localQueued['rh'] ?? status?.queue?.pending?.includes('rh-cases')}
-                subtitle={
-                  status?.rhDiscoveryProgress
-                    ? `Discovering ${status.rhDiscoveryProgress.done}/${status.rhDiscoveryProgress.total}${status.rhDiscoveryProgress.current ? ` — ${status.rhDiscoveryProgress.current}` : ''}`
-                    : undefined
-                }
-              />
-            )}
-            {!isL3Only && (
-              <ScrapeSection
-                label="CCSP"
-                status={status?.ccsp ?? null}
-                running={!!triggerBusy['ccsp']}
-                onRunNow={() => runScrape('ccsp', '/api/scrape/ccsp')}
-                circuitBreaker={status?.circuitBreakers?.ccsp}
-                queuePending={localQueued['ccsp'] ?? status?.queue?.pending?.includes('ccsp')}
-                extraActions={
-                  <button
-                    onClick={() => {
-                      fetch('/api/browser/open-tableau-login', { method: 'POST' }).catch(() => {})
-                      window.open(getVncUrl(), '_blank')
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Open VNC Login
-                  </button>
-                }
-              />
-            )}
             <ScrapeSection
-              label="SF Pipeline"
-              status={status?.salesforce ?? null}
-              running={!!triggerBusy['salesforce']}
-              onRunNow={() => runScrape('salesforce', '/api/scrape/salesforce')}
-              circuitBreaker={status?.circuitBreakers?.salesforce}
-              queuePending={localQueued['salesforce'] ?? status?.queue?.pending?.includes('sf-pipeline')}
+              label="RH Cases"
+              status={status?.rh ?? null}
+              running={!!triggerBusy['rh']}
+              onRunNow={() => runScrape('rh', '/api/scrape/rh')}
+              circuitBreaker={status?.circuitBreakers?.rh}
+              queuePending={localQueued['rh'] ?? status?.queue?.pending?.includes('rh-cases')}
+              subtitle={
+                status?.rhDiscoveryProgress
+                  ? `Discovering ${status.rhDiscoveryProgress.done}/${status.rhDiscoveryProgress.total}${status.rhDiscoveryProgress.current ? ` — ${status.rhDiscoveryProgress.current}` : ''}`
+                  : undefined
+              }
+            />
+            <ScrapeSection
+              label="CCSP"
+              status={status?.ccsp ?? null}
+              running={!!triggerBusy['ccsp']}
+              onRunNow={() => runScrape('ccsp', '/api/scrape/ccsp')}
+              circuitBreaker={status?.circuitBreakers?.ccsp}
+              queuePending={localQueued['ccsp'] ?? status?.queue?.pending?.includes('ccsp')}
+              extraActions={
+                <button
+                  onClick={() => {
+                    fetch('/api/browser/open-tableau-login', { method: 'POST' }).catch(() => {})
+                    window.open(getVncUrl(), '_blank')
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Open VNC Login
+                </button>
+              }
             />
           </div>
         </div>
 
-        {/* Browser Sessions — BKL-HERO-12: L4-only (RH Portal session UI) */}
-        {!isL3Only && (
-          <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Browser Sessions</h2>
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-              <ContentRhSessionButton />
-            </div>
+        {/* Browser Sessions */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Browser Sessions</h2>
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+            <ContentRhSessionButton />
           </div>
-        )}
+        </div>
 
         {/* Scheduler config */}
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Scheduler Config</h2>
-          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} isL3Only={isL3Only} />
+          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} />
         </div>
 
         {/* AI Settings — intelligence toggle */}
@@ -1455,12 +1362,6 @@ export function AdminPage() {
 
         {/* Product Intelligence Sources */}
         <ProductSourcesAdmin />
-
-        {/* BKL-HERO-02 — Region Access edit (hero L3 installs) */}
-        <div data-testid="admin-region-access">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Region Access</h2>
-          <RegionAccessSection />
-        </div>
 
         {/* BKL-BACKUP-01: Config Backup */}
         <div>
