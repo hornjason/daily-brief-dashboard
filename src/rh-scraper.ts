@@ -185,7 +185,17 @@ export async function initScrapeContext(profileDir: string): Promise<void> {
 function _attachDisconnectedHandler(ctx: BrowserContext, profileDir: string): void {
   const browser = ctx.browser()
   if (browser) {
+    // BKL-CONN-SF-ADOPT-01: capture ctx in closure and identity-check at fire
+    // time. Without this, a stale disconnect from an old ctx (recycle path,
+    // SF auth flow, recovery sequences) would invoke _autoRecover and wipe
+    // a newly-adopted _context. Now stale handlers no-op when a different
+    // ctx has taken over.
+    const attachedCtx = ctx
     browser.on('disconnected', () => {
+      if (_context !== attachedCtx) {
+        console.log('[rh-scraper] browser disconnected — stale handler (different ctx now active), skipping')
+        return
+      }
       if (_intentionalClose) {
         console.log('[rh-scraper] browser disconnected — intentional close, skipping auto-recovery')
         _intentionalClose = false

@@ -8191,7 +8191,7 @@ Acceptance: test/ui-regression.spec.ts contains assertions that L4 sections are 
 Can we test: YES — Playwright negative assertions against 7776.
 
 ### BKL-CONN-SF-ADOPT-01 | SF re-login breaks RH Portal session — context not re-adopted
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Identity guard added to _attachDisconnectedHandler in rh-scraper.ts. Stale handlers skip recovery when _context !== attachedCtx. Regression test: test/unit/bkl-conn-sf-adopt-01.test.ts (2/0). Quinn + Rook pending.
 Priority: P0
 Size: M
 Source: Session 2026-04-28 (empirical testing — RH portal dropped to not-connected after SF login)
@@ -8886,8 +8886,8 @@ Files: ~/.claude/skills/dev-loop/SKILL.md, ~/.claude/CLAUDE.md
 Description: When working a GitHub issue, mid-implementation discoveries (Rook findings, debt, spin-off work) land in BACKLOG.md only. The parent GitHub issue has no visibility into what it spawned. Fix: add a close-gate step to the dev loop — before closing a parent issue, sort open BKL items tagged with `Issue: #N` by size: XS stays in BACKLOG.md with a reference, S+ gets promoted to a child GitHub issue via /triage with a full agent brief (including context from the parent thread). Parent issue closes with a findings comment listing child issue numbers and any XS BACKLOG.md references. Child issues include `Parent: #N` in body so GitHub creates the "mentioned in" graph. Adds `Issue: #N` as a standard BACKLOG.md field convention for items that originate from GitHub issue work.
 
 Acceptance criteria:
-- [ ] `Issue: #N` field added as a convention in BACKLOG.md item template
-- [ ] dev-loop SKILL.md updated with close-gate step: scan for open BKL items with `Issue: #N`, sort XS vs S+, promote S+ via /triage
+- [x] `Issue: #N` field added as a convention in BACKLOG.md item template — all 9 promoted items updated 2026-05-02
+- [x] dev-loop SKILL.md updated with close-gate step (Step 12) — scan for open BKL items with `Issue: #N`, sort XS vs S+, promote S+ via /triage 2026-05-02
 - [ ] /triage agent brief template updated with `Parent issue context` section
 - [x] Parent issue close comment format documented and used — first run on issue #9 (2026-05-02): 8 child issues created (#18–#26 except #19), findings comment posted, BACKLOG.md entries updated with Issue: #N fields
 - [x] At least one real close cycle tested end-to-end — issue #9 first run complete 2026-05-02
