@@ -17,10 +17,11 @@ import { adoptCcspContext } from '../src/ccsp-scraper.ts'
 import { initSfContext } from '../src/sf-scraper.ts'
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { syncAllPods } from './sync-pod-l3.ts'
+import { isPrimary } from '../src/lib/node-role.ts'
 
 // ── Guard: primary node only ──────────────────────────────────────────────────
 
-if (process.env.NODE_ROLE !== 'primary') {
+if (!isPrimary()) {
   console.error('[sync-daemon] NODE_ROLE must be primary — exiting')
   process.exit(1)
 }

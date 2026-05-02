@@ -26,12 +26,14 @@ import { sendBriefEmail } from './email-sender.ts'
 import { sanitizeErr, normalizeForQuery, liveProbe } from './utils.ts'
 import { isBootstrapRunning } from './bootstrap-orchestrator.ts'
 import { writeSyncStateFlow, todaySyncRan } from './sync-state.ts'
+import { isPrimary as nodeIsPrimary } from './lib/node-role.ts'
 
 // ── BKL-SYNC-L3-02: Primary-node predicate — gates L4 writer scheduler paths ──
 // NODE_ROLE=primary → this node is the L4 leader (Mac Mini sync daemon).
 // NODE_ROLE unset   → hero install, L3-only; must NOT register L4 writer schedulers
 // or the catch-up block (they throw on every hero restart when NODE_ROLE is unset).
-const isPrimary = process.env.NODE_ROLE === 'primary'
+// Read once at module load via the node-role policy module (single source of truth, issue #10).
+const isPrimary = nodeIsPrimary()
 
 // ── BKL-M49: Scraper queue — serialise browser-context scrapers ─────────────
 // All scrapers share one BrowserContext (SSO constraint). Running them

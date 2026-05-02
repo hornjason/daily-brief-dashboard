@@ -25,6 +25,7 @@ import { sanitizeCell } from './utils.ts'
 import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { getScrapeContext } from './rh-scraper.ts'
+import { assertPrimary } from './lib/node-role.ts'
 
 export class SfSessionExpiredError extends Error {
   constructor() {
@@ -456,9 +457,7 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
   if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
     throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
   }
-  if (process.env.NODE_ROLE !== 'primary') {
-    throw new Error('[sf-scraper] NODE_ROLE not primary — live SF scrape not permitted on non-leader instance')
-  }
+  assertPrimary('sf-scraper.scrapeSfReport')
   // BKL-CONN-SF-AUTO-01: lazy self-heal — if RH recycled the shared context,
   // our cached _context is a stale reference. Mirrors ccsp-scraper.ts:762-770.
   const liveCtx = getScrapeContext()
@@ -958,9 +957,7 @@ export async function listSfReports(): Promise<SfReportItem[]> {
   if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
     throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
   }
-  if (process.env.NODE_ROLE !== 'primary') {
-    throw new Error('[sf-scraper] NODE_ROLE not primary — live SF report list not permitted on non-leader instance')
-  }
+  assertPrimary('sf-scraper.listSfReports')
   if (!_context) throw new Error('SF session not active — log in via Setup first')
 
   const BASE = 'https://redhatcrm.lightning.force.com'
