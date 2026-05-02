@@ -38,9 +38,7 @@ async function resolveCustomerFolder(
   const ae = deps.aes.find(a => a.name === customer.ae)
   const aeFolderId = ae?.driveFolderId
   if (!aeFolderId) {
-    throw new Error(
-      `No Drive folder found for customer ${customer.name} — no per-customer or AE folder ID`,
-    )
+    throw new Error('Drive folder lookup failed — AE has no Drive folder configured')
   }
 
   // BFS up to 2 levels (handles "AE/Accounts/<customer>" layouts), fuzzy-matched.
@@ -52,9 +50,7 @@ async function resolveCustomerFolder(
 
   if (matchId) return matchId
 
-  throw new Error(
-    `No Drive folder found for customer ${customer.name} under AE ${customer.ae}`,
-  )
+  throw new Error('Drive folder lookup failed — no matching folder found in Drive')
 }
 
 // ── Production singleton binding ─────────────────────────────────────────────

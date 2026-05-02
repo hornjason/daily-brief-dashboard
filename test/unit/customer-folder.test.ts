@@ -100,26 +100,36 @@ describe('findCustomerDriveFolder — slow path', () => {
 // ── Slice 4: error — AE has no driveFolderId ─────────────────────────────────
 
 describe('findCustomerDriveFolder — error cases', () => {
-  test('throws descriptive error when AE has no driveFolderId', async () => {
+  test('throws redacted error when AE has no driveFolderId (BKL-SEC-12)', async () => {
     const stub = new StubDriveClient()
     const aeWithNoFolder: AE = { name: 'Alice AE', driveFolderId: '' }
     const resolver = await getResolver(stub, [aeWithNoFolder])
 
+    // BKL-SEC-12: error must NOT contain customer name or AE name
     await expect(
       resolver(makeCustomer({ driveFolderId: undefined })),
-    ).rejects.toThrow('Acme Corp')
+    ).rejects.toThrow('AE has no Drive folder configured')
+
+    await expect(
+      resolver(makeCustomer({ driveFolderId: undefined })),
+    ).rejects.not.toThrow(/Acme Corp|Alice AE/)
 
     expect(stub.calls.length).toBe(0)
   })
 
-  test('throws descriptive error when findDescendantFolder returns null', async () => {
+  test('throws redacted error when findDescendantFolder returns null (BKL-SEC-12)', async () => {
     const stub = new StubDriveClient()
     stub.returnValue = null
     const resolver = await getResolver(stub)
 
+    // BKL-SEC-12: error must NOT contain customer name or AE name
     await expect(
       resolver(makeCustomer({ driveFolderId: undefined })),
-    ).rejects.toThrow('Acme Corp')
+    ).rejects.toThrow('no matching folder found in Drive')
+
+    await expect(
+      resolver(makeCustomer({ driveFolderId: undefined })),
+    ).rejects.not.toThrow(/Acme Corp|Alice AE/)
   })
 })
 

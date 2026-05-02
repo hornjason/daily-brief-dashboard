@@ -98,6 +98,16 @@ export async function bootstrapAe(
   const { driveClient, l3Reader } = deps
   const { aeName, podId, customerNames, parentFolderId } = config
 
+  // BKL-SEC-14: Validate aeName before Drive folder creation
+  if (!aeName || aeName.trim().length === 0) {
+    throw new Error('bootstrapAe: aeName must not be empty')
+  }
+  if (aeName.length > 200) {
+    throw new Error(`bootstrapAe: aeName too long (${aeName.length} chars, max 200)`)
+  }
+  if (/[\x00-\x1f\x7f]/.test(aeName)) {
+    throw new Error('bootstrapAe: aeName contains control characters')
+  }
   // Step 1: Create AE Drive folder
   const driveFolderId = await driveClient.createFolder(aeName, parentFolderId)
 

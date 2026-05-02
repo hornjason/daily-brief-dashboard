@@ -217,6 +217,7 @@ export function createSetupRouter(): Hono {
 
       // Save to config dir (works both locally and in container via volume mount)
       const tokenPath = GOOGLE_UNIFIED_TOKEN_PATH
+      mkdirSync(dirname(tokenPath), { recursive: true })
       writeFileSyncRaw(tokenPath, JSON.stringify(tokenData, null, 2), { mode: 0o600 })
 
       return c.html(`

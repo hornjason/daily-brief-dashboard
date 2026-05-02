@@ -8325,7 +8325,7 @@ Solution: Extract a single CustomerFolderResolver module (one normalizer, one sc
 ---
 
 ### BKL-SEC-12 | customer-folder.ts throw messages include customer name/AE — leak risk
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Rook scan 2026-05-01 (BKL-ARCH-01 session)
@@ -8336,7 +8336,7 @@ Solution: Replace customer.name/ae in throw messages with generic text, or add J
 ---
 
 ### BKL-SEC-13 | account-intelligence.ts intelligence cache slug uses strip-only pattern — missing throw guard
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Rook scan 2026-05-01 (BKL-ARCH-01 session)
@@ -8347,7 +8347,7 @@ Solution: Extract intelligenceCachePath(slug) function following the same guard 
 ---
 
 ### BKL-OPS-SMOKE-01 | make rebuild smoke check false-fails on healthy container — timing issue
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: S
 Source: Rayford observation 2026-05-01 (fired on BKL-ARCH-06, BKL-ARCH-07, BKL-ARCH-01)
@@ -8714,7 +8714,7 @@ Decision: All 29 wizard-e2e tests now pass. Tests 22-24 (Tableau/VNC zero guards
 ---
 
 ### BKL-SEC-14 | l3-bootstrap.ts — aeName and customerNames not validated before Drive folder creation
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Rook scan 2026-05-01 (issue #7 review)
@@ -8726,7 +8726,7 @@ Can we test: YES — unit test in test/unit/l3-bootstrap.test.ts.
 ---
 
 ### BKL-SEC-15 | setup-routes.ts — OAuth token write missing mkdirSync guard on parent directory
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Rook scan 2026-05-01 (issue #7 review)
@@ -8738,7 +8738,7 @@ Can we test: YES — unit test simulating missing parent dir.
 ---
 
 ### BKL-SEC-16 | ci.yml — github.token interpolated into shell command line rather than env-var pattern
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Rook scan 2026-05-01 (issue #8 review)
@@ -8774,7 +8774,7 @@ Can we test: YES — verify endpoint returns 404 after removal.
 ---
 
 ### BKL-BUILD-WORKTREE-PRUNE-01 | Stale git worktrees accumulate node_modules blocking container builds
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: XS
 Source: 2026-05-02 — make build failed with "no space left on device" writing worktree node_modules to container overlay

@@ -87,6 +87,7 @@ build:
 	  echo "   Run from: $(shell git worktree list 2>/dev/null | head -1 | awk '{print $$1}')"; \
 	  exit 1; \
 	fi
+	@git worktree prune 2>/dev/null || true
 	podman build -f Dockerfile.hero -t $(IMAGE) -t $(REMOTE) .
 
 # ── L4 daemon image (Mac Mini primary node only) ──────────────────────────────
@@ -358,11 +359,12 @@ test-restore:
 # that the post-deploy checks did not pass.
 smoke:
 	@echo "Waiting for container to be ready..."
-	@for i in $$(seq 1 30); do \
+	@sleep 2
+	@for i in $$(seq 1 60); do \
 	  curl -sf http://localhost:7777/health > /dev/null 2>&1 && echo "Container ready after $$i seconds" && break; \
 	  sleep 1; \
 	done
-	@curl -sf http://localhost:7777/health > /dev/null || (echo "❌  Container failed to start" && exit 1)
+	@curl -sf http://localhost:7777/health > /dev/null || (echo "❌  Container failed to start after 60s" && exit 1)
 	@BASE_URL=http://localhost:7777 npx playwright test test/smoke-prod.spec.ts --project=ci --reporter=line --timeout=90000 || \
 	  (curl -s -X POST http://localhost:8888/notify \
 	    -H "Content-Type: application/json" \
