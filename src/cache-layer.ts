@@ -101,7 +101,7 @@ export function writeBriefCache(
 // Called by drive-watcher when customer documents change — deletes today's
 // brief cache so the next request triggers fresh generation.
 
-export function invalidateBriefCaches(customerNames: string[]): void {
+function invalidateBriefCaches(customerNames: string[]): void {
   for (const name of customerNames) {
     try {
       const path = briefCachePath(name)

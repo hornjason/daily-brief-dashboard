@@ -1,3 +1,4 @@
+// TODO: Phase 3 — feature radar (see issue #9)
 import { ExternalLink, AlertTriangle, FileText, Presentation } from 'lucide-react'
 
 interface ProductFeature {
