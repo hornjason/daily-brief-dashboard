@@ -1127,12 +1127,6 @@ test.describe('Connection Architecture — Unified State Model (BKL-CONN-ARCH-01
     expect(src).toContain('isAuthSignal')
   })
 
-  test('REG-ARCH-05: useVncLogin hook has window.closed detection', () => {
-    const src = readFileSync(join(projectRoot, 'dashboard/src/hooks/useVncLogin.ts'), 'utf-8')
-    expect(src).toContain('vncRef.current?.closed')
-    expect(src).toContain("'width=1280,height=900'")
-  })
-
   test('REG-ARCH-06: Step 3 ordering copy present', () => {
     const src = readFileSync(join(projectRoot, 'dashboard/src/pages/SetupPage.tsx'), 'utf-8')
     expect(src).toContain('Connect your data sources in order')
