@@ -117,6 +117,28 @@ function readPodConfig(): { territorySheetId: string; sfReportId: string; parent
   } catch { return null }
 }
 
+// ── BKL-DRIVE-SCAFFOLD-CACHE-01: Drive scaffold ID cache ────────────────────
+
+type ScaffoldEntry = { configFolderId: string; productsFolderId: string }
+
+export function readScaffoldCache(): Record<string, ScaffoldEntry> {
+  try {
+    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    return (ds.scaffoldCache as Record<string, ScaffoldEntry>) ?? {}
+  } catch { return {} }
+}
+
+export function writeScaffoldCache(parentFolderId: string, entry: ScaffoldEntry): void {
+  try {
+    let ds: Record<string, unknown> = {}
+    try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch { /* fresh */ }
+    const cache = (ds.scaffoldCache as Record<string, ScaffoldEntry>) ?? {}
+    writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, scaffoldCache: { ...cache, [parentFolderId]: entry } })
+  } catch (e: any) {
+    console.warn('[auto-bootstrap:scaffold] cache write failed (non-blocking):', e?.message)
+  }
+}
+
 // ── BKL-DRIVE-SCAFFOLD-01 ────────────────────────────────────────────────────
 /**
  * Idempotently scaffold `Config/` and `Products/<slug>` folders under the
@@ -130,6 +152,12 @@ function readPodConfig(): { territorySheetId: string; sfReportId: string; parent
  */
 async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<{ configFolderId: string; productsFolderId: string } | null> {
   if (!parentFolderId) return null
+  // BKL-DRIVE-SCAFFOLD-CACHE-01: cache hit → skip all Drive list calls (saves ~9 calls per invocation)
+  const cachedEntry = readScaffoldCache()[parentFolderId]
+  if (cachedEntry?.configFolderId && cachedEntry?.productsFolderId) {
+    console.log(`[auto-bootstrap:scaffold] cache hit for parentFolderId=${parentFolderId} — skipping Drive list calls`)
+    return cachedEntry
+  }
   // BKL-DRIVE-SCAFFOLD-SLUGS-01: derive slugs from products.json — single source of truth
   // BKL-SEC-SLUG-VALIDATE-01: validate slug shape before passing to Drive; deduplicate
   const SLUG_RE = /^[a-z0-9-]{1,64}$/
@@ -181,7 +209,9 @@ async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<
     }
     console.log(`[auto-bootstrap:scaffold] done — configFolderId=${configFolderId ?? 'null'} productsFolderId=${productsFolderId ?? 'null'}`)
     if (!configFolderId || !productsFolderId) return null
-    return { configFolderId, productsFolderId }
+    const result = { configFolderId, productsFolderId }
+    writeScaffoldCache(parentFolderId, result)  // BKL-DRIVE-SCAFFOLD-CACHE-01
+    return result
   } catch (e: any) {
     console.warn('[auto-bootstrap:scaffold] failed (non-blocking):', e?.message ?? e)
     return null

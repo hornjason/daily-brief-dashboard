@@ -7320,7 +7320,7 @@ Can we test: YES — regression test asserting setup page renders without any "S
 ---
 
 ### BKL-DRIVE-SCAFFOLD-CACHE-01 | Persist configFolderId and productsFolderId to config instead of re-discovering on every call
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: S
 Source: Serena council review 2026-04-27 (post-BKL-DRIVE-PRODUCTS-ROOT-01 ship)
