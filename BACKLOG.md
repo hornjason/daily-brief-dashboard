@@ -5105,7 +5105,7 @@ Description: Once Territory Sheet ID, SF Report ID, and Parent Drive Folder are 
 Decision: DONE — Added folderName/folderError state + onBlur handler calling /api/aes/validate-folder in PodBootstrapSection. Border turns green + shows "✓ FolderName" on success; red + error on failure. Matches existing AutoBootstrapForm pattern exactly.
 
 ### BKL-SEC-09 | podKeyFromQualified — trailing-dot / double-dot edge cases silently produce empty key
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Added trailing-dot guard: `if (idx === -1 || idx === qualifiedKey.length - 1) return qualifiedKey` in regionFilter.ts:17. Trailing-dot input now returns the full key instead of "".
 Severity: LOW (no security impact — fail-closed behavior)
 Priority: P3
 Size: XS
@@ -5126,7 +5126,7 @@ Description: `sanitizeErr` stripped JWT patterns, Bearer tokens, and file paths 
 Decision: DONE — one-liner added to sanitizeErr in same Rook-gate session. Test: existing `sanitizeErr` usages unaffected; HTML tags now stripped before returning to client.
 
 ### BKL-SEC-11 | Pre-try 400 paths in POST /api/settings/* return strings without sanitizeErr
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Added contract comment at settings-api.ts:263 documenting that pre-try 400 strings MUST be const-derived (no user input, no e.message). No code-path change needed — strings were already safe.
 Severity: LOW
 Priority: P3
 Size: S
@@ -6718,7 +6718,7 @@ Description: BKL-TEST-P0-04b blocks (removed in this session) tested retry behav
 ---
 
 ### BKL-SEC-DOM-01 | Apply tier2 domain regex to tier1 Clearbit output in domain-waterfall
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Added `/^[a-z0-9]([a-z0-9\-._]{0,251}[a-z0-9])?$/` guard to tier1Clearbit() before return (domain-waterfall.ts:49). Matches tier2LLM validation at line 86.
 Priority: P2
 Size: XS
 Source: Rook finding — worktree review 2026-04-24
@@ -6781,7 +6781,7 @@ Decision: Remaining SetupPage.tsx Supportable connection panel (state, polling, 
 ---
 
 ### BKL-SEC-SUPPORTABLE-02 | SetupPage.tsx Supportable connection panel still live
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Verified in source: supportableStatus, supportableReachable, handleSupportableConnect, and all connection panel state/calls already removed from SetupPage.tsx. Only legacy data fields remain (supportableSheetId, supportableName) which are intentional AE form fields. Remaining: /api/auth/supportable/check endpoint still in scraper-manager.ts (dead route, protected file — see BKL-SCRAPER-DEAD-01).
 Priority: P2
 Size: M
 Source: Rook scan 2026-04-26 during BKL-SEC-SUPPORTABLE-01 pass
@@ -8763,3 +8763,15 @@ Files: src/bootstrap/territory-sheet.ts (new, 225 lines), src/bootstrap/sf-cache
 Description: Split 2306-line bootstrap-orchestrator.ts (ADR-005 500-line cap violation) into focused modules. Extracted: synthesizeSfReportFromPipelineRecords, podKeyFromTerritoryCode, readAEsFromTerritorySheet → territory-sheet.ts; writeSfDriveCache, readSfDriveCache → sf-cache.ts; createBootstrapRouter re-exported via bootstrap-routes.ts.
 Decision: createBootstrapRouter body (1258 lines) could not be extracted without major refactor due to closure captures — thin re-export shim used for bootstrap-routes.ts. Remaining orchestrator body still 2021 lines; full route extraction deferred to follow-on issue.
 Tests: bun test test/unit/territory-sheet.spec.ts — 4/4 pass. Playwright 115/125 (10 pre-existing failures, 0 regressions).
+
+---
+
+### BKL-SCRAPER-DEAD-01 | Dead endpoint /api/auth/supportable/check in scraper-manager.ts
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: BKL-SEC-SUPPORTABLE-02 cleanup 2026-05-02
+Files: src/scraper-manager.ts (line 913)
+Description: /api/auth/supportable/check is a dead route — no frontend code calls it. VPN reachability probe that was used by the old Supportable connection panel (removed). The endpoint itself is in the protected scraper-manager.ts file.
+Solution: Remove the route handler at scraper-manager.ts:912-930 (approx). Requires explicit Jason sign-off before touching scraper-manager.ts per SCRAPER-RULES.md.
+Can we test: YES — verify endpoint returns 404 after removal.

@@ -258,6 +258,8 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
     try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
 
     const token = body.token
+    // BKL-SEC-11: pre-try 400 error strings MUST be const-derived (no user input, no e.message).
+    // sanitizeErr() is used only in catch blocks below. If adding a pre-try 400, follow this contract.
     if (typeof token !== 'string' || token.trim() === '') {
       return c.json({ error: 'token is required and must be a non-empty string' }, 400)
     }

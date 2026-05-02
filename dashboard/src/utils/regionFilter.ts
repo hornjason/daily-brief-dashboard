@@ -15,7 +15,8 @@ export function isPodFilterActive(value: unknown): value is string[] {
  */
 export function podKeyFromQualified(qualifiedKey: string): string {
   const idx = qualifiedKey.indexOf('.')
-  return idx === -1 ? qualifiedKey : qualifiedKey.slice(idx + 1)
+  if (idx === -1 || idx === qualifiedKey.length - 1) return qualifiedKey
+  return qualifiedKey.slice(idx + 1)
 }
 
 /**

@@ -46,7 +46,9 @@ export async function tier1Clearbit(companyName: string): Promise<string | null>
     const first = hits[0]
     if (!first.domain) return null
     if (!nameMatchesClearbit(stripped, first.name)) return null
-    return first.domain.toLowerCase()
+    const domain = first.domain.toLowerCase()
+    if (!/^[a-z0-9]([a-z0-9\-._]{0,251}[a-z0-9])?$/.test(domain)) return null
+    return domain
   } catch {
     return null
   }
