@@ -106,6 +106,7 @@ import { patchAe } from './server-state.ts'
 import { markRunning, recordOutcome } from './scraper-status-store.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
 import { filterRowsForAe } from './ccsp-row-filter.ts'
+import { tryMemoryCache, tryDriveCache, writeCaches } from './ccsp-cache.ts'
 
 /**
  * Search for a VISIBLE element across all frames in the page.
@@ -199,13 +200,8 @@ const PER_AE_TIMEOUT_MS = 6 * 60_000  // 6 minutes — accommodates SSO wait + v
 
 let _ctx: BrowserContext | null = null
 
-// BKL-PERF-02: Lazy cache — populated after first AE's CSV download, reused for subsequent AEs
-// The Tableau CSV endpoint ignores territory filter and returns full POD data every time.
-// Caching here avoids N-1 redundant Tableau navigations in a POD bootstrap.
-// BKL-INGEST-03: TTL changed from 30 min to 24h to match all other flow TTLs (ingestion-flow.md).
-// L3 Drive CSV freshness is now also checked via modifiedTime before trusting in-memory cache.
-let _podCsvCache: { rows: Record<string, string>[]; period: string; expiresAt: number; pod: string; driveFileId?: string } | null = null
-const POD_CSV_CACHE_TTL_MS = 24 * 60 * 60 * 1000  // 24h — matches all other flow TTLs
+// Issue #15 Step 2: in-memory + Drive cache moved to src/ccsp-cache.ts.
+// `_podCsvCache` and `POD_CSV_CACHE_TTL_MS` are now owned there (single owner).
 
 // BKL-UX79: Signal from scraper → bootstrap-orchestrator that Tableau SSO expired.
 // When scrapeOneAe lands on the login page, it sets this flag so the next
@@ -456,107 +452,31 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
   // Compute rolling window up front — used by both cache and live paths
   const { years, quarters, label } = getRollingFyWindow()
 
-  // BKL-PERF-02: Use lazy cache if available — skip Tableau navigation entirely
-  // BKL-CCSP-04: Also apply quarter filter to cached rows so stale quarters don't persist
-  // BKL-PERF-04: Gate on pod match — cross-POD cache hits return 0 rows after territory filter
-  // BKL-INGEST-03: Before using in-memory cache, verify the underlying Drive CSV is < 24h old.
-  // If Drive file is stale (modifiedTime >= 24h ago), invalidate and fall through to Drive re-check.
+  // Issue #15 Step 2: cache tiers extracted to src/ccsp-cache.ts.
+  //   Tier 1 — in-memory POD cache (BKL-PERF-02, BKL-PERF-04, BKL-INGEST-03).
+  //   Tier 2 — Drive POD cache CCSP-<pod>-<date>.csv (BKL-PERF-03).
+  // Both return full POD-wide rows; this orchestrator post-filters per AE.
   const currentPod = validTerritories.length > 0 ? parseTerritoryParts(validTerritories[0]).pod : ''
-  if (_podCsvCache && Date.now() < _podCsvCache.expiresAt && validTerritories.length > 0 && _podCsvCache.pod === currentPod) {
-    // BKL-INGEST-03: Drive modifiedTime check — if we have the source file ID, verify freshness
-    let driveFileStale = false
-    if (_podCsvCache.driveFileId) {
-      try {
-        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-        const drive = google.drive({ version: 'v3', auth })
-        const metaRes = await drive.files.get({ fileId: _podCsvCache.driveFileId, fields: 'modifiedTime', supportsAllDrives: true })
-        const modifiedTime = metaRes.data.modifiedTime
-        if (modifiedTime) {
-          const ageMs = Date.now() - new Date(modifiedTime).getTime()
-          if (ageMs >= POD_CSV_CACHE_TTL_MS) {
-            console.log(`[ccsp] ${ae.name}: Drive CSV modifiedTime is ${Math.round(ageMs / 3_600_000)}h old — invalidating in-memory cache (BKL-INGEST-03)`)
-            _podCsvCache = null
-            driveFileStale = true
-          }
-        }
-      } catch (e: any) {
-        // On Drive API error: default to trusting in-memory cache (fail-open for freshness check)
-        console.warn(`[ccsp] ${ae.name}: Drive modifiedTime check failed: ${e.message} — trusting in-memory cache`)
-      }
-    }
 
-    if (!driveFileStale && _podCsvCache) {
-      const { rows: cachedRows, period } = _podCsvCache
-      // Issue #15 Step 1: extracted to filterRowsForAe (pure)
-      const terrColName = Object.keys(cachedRows[0] ?? {}).find(k => {
-        const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
-        return norm === 'account territory name' || norm === 'account territory'
-      })
-      if (terrColName) {
-        const filtered = filterRowsForAe(cachedRows, validTerritories, quarters)
-        const qtrColName = Object.keys(cachedRows[0] ?? {}).find(k =>
-          k.toLowerCase().replace(/\s+/g, ' ').trim().includes('fiscal year quarter')
-        )
-        if (qtrColName) {
-          console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (territory + quarter filter from cache)`)
-        } else {
-          console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (territory filter only; no quarter column found)`)
-        }
-        return { aeName: ae.name, rows: filtered, accountPeriod: period }
-      }
+  // Tier 1: in-memory cache (gated on pod match + Drive modifiedTime freshness).
+  if (validTerritories.length > 0 && currentPod) {
+    const mem = await tryMemoryCache(currentPod)
+    if (mem.hit && mem.rows) {
+      const filtered = filterRowsForAe(mem.rows, validTerritories, quarters)
+      console.log(`[ccsp] ${ae.name}: using cached POD data — ${filtered.length} rows (memory tier)`)
+      return { aeName: ae.name, rows: filtered, accountPeriod: mem.period ?? label }
     }
   }
 
-  // BKL-PERF-03: Drive cache check — skip Tableau if today's POD CSV already in subscription folder.
-  // Only runs on in-memory cache miss (Drive API is slower than memory).
-  let driveHitRows: Record<string, string>[] | null = null
-  if (podBookingsFolderId && validTerritories.length > 0) {
-    const podName = parseTerritoryParts(validTerritories[0]).pod
-    const today = new Date().toISOString().slice(0, 10)
-    const cacheFileName = `CCSP-${podName}-${today}.csv`
-    try {
-      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-      const drive = google.drive({ version: 'v3', auth })
-      const listRes = await withQuotaRetry(
-        () => drive.files.list({
-          q: `name = '${cacheFileName}' and '${podBookingsFolderId}' in parents and trashed = false`,
-          fields: 'files(id, name)',
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }),
-        'CCSP Drive cache check',
-      )
-      const cacheFile = listRes.data.files?.[0]
-      if (cacheFile?.id) {
-        const dlRes = await withQuotaRetry(
-          () => drive.files.get({ fileId: cacheFile.id!, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }),
-          'CCSP Drive cache download',
-        )
-        const csvText = typeof dlRes.data === 'string' ? dlRes.data : String(dlRes.data)
-        const cachedRows = parseCsvToObjects(csvText)
-        if (cachedRows.length > 0) {
-          console.log(`[ccsp] ${ae.name}: Drive cache hit — ${cachedRows.length} rows from ${cacheFileName}`)
-          // Populate in-memory cache for subsequent AEs in same run
-          // BKL-PERF-04: Include pod so subsequent AEs with different POD don't get a stale hit
-          // BKL-INGEST-03: Store driveFileId so in-memory cache can check Drive modifiedTime on next hit
-          if (!_podCsvCache || Date.now() > _podCsvCache.expiresAt) {
-            _podCsvCache = { rows: cachedRows, period: label, expiresAt: Date.now() + POD_CSV_CACHE_TTL_MS, pod: podName, driveFileId: cacheFile.id! }
-          }
-          driveHitRows = cachedRows
-        }
-      }
-    } catch (e: any) {
-      console.warn(`[ccsp] ${ae.name}: Drive cache check failed: ${e.message} — falling through to Tableau`)
+  // Tier 2: Drive cache. Only runs on memory miss.
+  if (podBookingsFolderId && validTerritories.length > 0 && currentPod) {
+    const drv = await tryDriveCache(currentPod, podBookingsFolderId)
+    if (drv.hit && drv.rows) {
+      const before = drv.rows.length
+      const rows = filterRowsForAe(drv.rows, validTerritories, quarters)
+      console.log(`[ccsp] ${ae.name}: Drive cache filter (territory+quarter): ${before} → ${rows.length} rows`)
+      return { aeName: ae.name, rows, accountPeriod: drv.period ?? label }
     }
-  }
-
-  // If Drive cache hit, apply territory + quarter filters and return immediately
-  // Issue #15 Step 1: extracted to filterRowsForAe (pure)
-  if (driveHitRows !== null) {
-    const before = driveHitRows.length
-    const rows = filterRowsForAe(driveHitRows, validTerritories, quarters)
-    console.log(`[ccsp] ${ae.name}: Drive cache filter (territory+quarter): ${before} → ${rows.length} rows`)
-    return { aeName: ae.name, rows, accountPeriod: label }
   }
 
   // IS_LEADER guard — non-leader instances cap at L3; only leader may do live Tableau scrape (L4)
@@ -741,77 +661,14 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
     // Re-navigate to main Tableau view so next AE scrape starts cleanly
     await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {})
 
-    // BKL-PERF-02: Cache full unfiltered rows — download returns full POD data.
-    // Subsequent AEs in same bootstrap session skip navigation entirely.
-    // BKL-PERF-04: Include pod in cache so cross-POD AEs don't get stale hits.
-    // BKL-INGEST-03: driveFileId populated after Drive cache write below — set here first without it.
-    let _newlyCreatedDriveFileId: string | undefined
-    if (rows.length > 0 && (!_podCsvCache || Date.now() > _podCsvCache.expiresAt)) {
-      const currentPodForCache = validTerritories.length > 0 ? parseTerritoryParts(validTerritories[0]).pod : ''
-      _podCsvCache = { rows, period: label, expiresAt: Date.now() + POD_CSV_CACHE_TTL_MS, pod: currentPodForCache }
-      console.log(`[ccsp] ${ae.name}: POD CSV cached — ${rows.length} rows available for remaining AEs (pod: ${currentPodForCache})`)
-    }
-
-    // BKL-PERF-03: Write Drive cache so subsequent daily runs skip Tableau entirely
-    if (podBookingsFolderId && rows.length > 0 && validTerritories.length > 0) {
-      const podName = parseTerritoryParts(validTerritories[0]).pod
-      const today = new Date().toISOString().slice(0, 10)
-      const cacheFileName = `CCSP-${podName}-${today}.csv`
-      try {
-        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-        const drive = google.drive({ version: 'v3', auth })
-        // REG-CCSP-DUP-01: delete any stale CCSP-<pod>-<date>.csv files for this POD before writing today's
-        try {
-          const staleRes = await withQuotaRetry(
-            () => drive.files.list({
-              q: `name contains 'CCSP-${podName}-' and '${podBookingsFolderId}' in parents and trashed = false`,
-              fields: 'files(id, name)',
-              supportsAllDrives: true,
-              includeItemsFromAllDrives: true,
-            }),
-            'CCSP Drive stale cache list',
-          )
-          const staleFiles = staleRes.data.files ?? []
-          for (const oldFile of staleFiles) {
-            if (!oldFile.id || !oldFile.name) continue
-            if (!oldFile.name.startsWith(`CCSP-${podName}-`) || !oldFile.name.endsWith('.csv')) continue
-            try {
-              await drive.files.delete({ fileId: oldFile.id, supportsAllDrives: true })
-              console.log(`[ccsp] deleted stale Drive cache ${oldFile.name}`)
-            } catch (delErr: any) {
-              console.warn(`[ccsp] ${ae.name}: stale cache delete failed for ${oldFile.name}: ${delErr.message} — non-fatal`)
-            }
-          }
-        } catch (listErr: any) {
-          console.warn(`[ccsp] ${ae.name}: stale cache list failed: ${listErr.message} — non-fatal, proceeding to write`)
-        }
-        const headers = Object.keys(rows[0])
-        const csvLines = [headers.join(',')]
-        for (const row of rows) {
-          csvLines.push(headers.map(h => {
-            const val = row[h] ?? ''
-            return val.includes(',') || val.includes('"') || val.includes('\n')
-              ? `"${val.replace(/"/g, '""')}"` : val
-          }).join(','))
-        }
-        const createRes = await withQuotaRetry(
-          () => drive.files.create({
-            requestBody: { name: cacheFileName, mimeType: 'text/csv', parents: [podBookingsFolderId!] },
-            media: { mimeType: 'text/csv', body: csvLines.join('\n') },
-            supportsAllDrives: true,
-            fields: 'id',
-          }),
-          'CCSP Drive cache write',
-        )
-        // BKL-INGEST-03: Store Drive file ID so next in-memory cache check can verify modifiedTime
-        _newlyCreatedDriveFileId = createRes.data.id ?? undefined
-        if (_newlyCreatedDriveFileId && _podCsvCache) {
-          _podCsvCache = { ..._podCsvCache, driveFileId: _newlyCreatedDriveFileId }
-        }
-        console.log(`[ccsp] ${ae.name}: wrote Drive cache ${cacheFileName} (${rows.length} rows) to subscription folder`)
-      } catch (e: any) {
-        console.warn(`[ccsp] ${ae.name}: Drive cache write failed: ${e.message} — non-fatal`)
-      }
+    // Issue #15 Step 2: cache write-back (memory + Drive) extracted to src/ccsp-cache.ts.
+    //   - BKL-PERF-02 / BKL-PERF-04: in-memory POD-keyed cache.
+    //   - BKL-PERF-03: Drive cache write CCSP-<pod>-<today>.csv.
+    //   - REG-CCSP-DUP-01: stale-sibling deletion.
+    //   - BKL-INGEST-03: stamps driveFileId onto in-memory entry post-write.
+    if (rows.length > 0 && validTerritories.length > 0) {
+      const writePod = parseTerritoryParts(validTerritories[0]).pod
+      await writeCaches(writePod, rows, label, podBookingsFolderId)
     }
 
     // Post-filter by territory and quarter — download returns full POD dataset
