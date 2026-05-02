@@ -49,6 +49,8 @@ export interface CcspRawStatus {
   lastScrape: string | null
   lastError:  string | null
   running?:   boolean
+  tableauSessionExpired?: boolean
+  recordCount?: number
 }
 
 const AGING_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -174,6 +176,8 @@ export function deriveTableauCard(
   // Cookie freshness alone is not sufficient — seeded/old cookies may be present
   // without ever having successfully downloaded CCSP data.
   const hasVerifiedDownload = !!(ccsp?.lastScrape)
+    && !ccsp?.tableauSessionExpired
+    && (ccsp?.recordCount == null || ccsp.recordCount > 0)
   if (!hasVerifiedDownload && !ccsp?.running && !ccsp?.lastError) {
     return {
       sessionState,

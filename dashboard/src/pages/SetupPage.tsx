@@ -13,7 +13,7 @@ import { Step0RegionAccess } from '../components/Step0RegionAccess'
 import { filterPodOptions } from '../utils/regionFilter'
 import { HeroStep3Connections } from '../components/HeroStep3Connections'
 // BKL-CONN-ARCH-01: two-axis connection state derivation
-import { deriveRhCard, deriveSfCard, deriveTableauCard } from '../lib/connection-state'
+import { deriveRhCard, deriveSfCard } from '../lib/connection-state'
 import {
   AlertCircle,
   AlertTriangle,
@@ -2703,20 +2703,24 @@ export default function SetupPage() {
     // BKL-UX65: Keeps the 10s initial timeout behaviour — if the very first
     // poll hasn't resolved within 10s, flip out of 'loading' into 'issues'.
     const computeConnected = async (sig: AbortSignal) => {
-      const [rh, sf, tableau] = await Promise.all([
+      const [rh, sf, tableau, scrapes] = await Promise.all([
         fetch('/api/auth/redhat/status',               { signal: sig }).then(r => r.json()).catch(() => ({ hasSession: false, sessionExpired: false, lastScraped: null })),
         fetch('/api/auth/salesforce/status',           { signal: sig }).then(r => r.json()).catch(() => ({ hasSession: false, lastSync: null, syncError: null })),
         fetch('/api/bootstrap/tableau/session-status', { signal: sig }).then(r => r.json()).catch(() => ({ reachable: false, sessionValid: false })),
+        fetch('/api/status/scrapes',                   { signal: sig }).then(r => r.json()).catch(() => ({ ccsp: null })),
       ])
       // Derivation:
       //   rhConnected    = hasSession && !sessionExpired && !!lastScraped
       //                    (require lastScraped — matches steady-state card color)
       //   sfConnected    = hasSession && !syncError(session expired) && !!lastSync
-      //   tableauConnected = sessionValid
+      //   tableauConnected = sessionValid && CCSP session ok && CCSP data ok
       const rhConnected = !!(rh.hasSession && !rh.sessionExpired && rh.lastScraped && rh.liveReachable !== false)
       const sfExpired = sf.sessionExpired || !!sf.syncError
       const sfConnected = !!(sf.hasSession && !sfExpired && sf.lastSync)
-      const tableauConnected = tableau.sessionValid === true && tableau.reachable !== false
+      const ccspStatus = scrapes?.ccsp
+      const ccspSessionOk = !ccspStatus?.tableauSessionExpired
+      const ccspDataOk = !ccspStatus?.lastSync || ccspStatus?.recordCount == null || (ccspStatus?.recordCount ?? 0) > 0
+      const tableauConnected = tableau.sessionValid === true && tableau.reachable !== false && ccspSessionOk && ccspDataOk
       return [rhConnected, sfConnected, tableauConnected].filter(Boolean).length
     }
 

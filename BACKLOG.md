@@ -7852,21 +7852,20 @@ Fix for Problem 2 (status fix): Wire consumeTableauSessionExpired() (line 146) i
 
 Can we test: YES — regression test that scraper-manager CCSP status surfaces sessionExpired; manual VNC flow test on 7776 after fix.
 
+### BKL-CCSP-STATUS-03 | dataSourcesConnected counter state computed but not consumed in SetupPage JSX
+Status: 🔵 DEFERRED
+Priority: P3
+Size: S
+Source: Quinn audit 2026-05-02 — `dataSourcesConnected` state and `dataSourcesHealth` are computed by `computeConnected()` and polled every 10s, but no JSX consumes them (no "X/3 connected" header indicator in DOM). Comment at SetupPage.tsx:2693-2697 references DataSourcesSection which was deleted in #12.
+Fix: Either (a) wire `dataSourcesConnected` into a visible header counter/badge, or (b) remove the dormant state and polling entirely. If keeping the counter, the SetupPage accordion badge area (Step 1 header region) is the natural home.
+
 ### BKL-CCSP-STATUS-02 | CCSP "connected" badge ignores tableauSessionExpired and 0 recordCount
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P1
 Size: S
 Source: Live observation 2026-04-28 — test container shows CCSP green after 0-record scrape
-Files: dashboard/src/pages/SetupPage.tsx line 3243
-Description: ccspConnected = lastScrape && !running && !lastError — never checks tableauSessionExpired or recordCount. A scrape that ran, hit SSO, and returned 0 records still shows "connected" green because lastScrape is set and lastError is null.
-
-Fix: Update ccspConnected logic to also check:
-1. !tableauSessionExpired (from the API's ccsp.tableauSessionExpired field — needs to be threaded from /api/status/scrapes into the CCSP status state, or read from /api/scrape/ccsp/status)
-2. (recordCount ?? 0) > 0 OR this is the first ever scrape (no prior data)
-
-The tableauSessionExpired field is already in the /api/status/scrapes CCSP block (shipped in BKL-CCSP-STATUS-01). Frontend just needs to read it and wire it into ccspConnected.
-
-Can we test: YES — source-grep test that ccspConnected includes tableauSessionExpired check.
+Files: dashboard/src/lib/connection-state.ts, dashboard/src/pages/SetupPage.tsx
+Decision: DataSourcesSection (original bug location) was deleted in #12 as dead code. Remaining fix: computeConnected() in SetupPage.tsx now fetches /api/status/scrapes as 4th parallel fetch and gates tableauConnected on !ccsp.tableauSessionExpired and recordCount > 0 (null guard preserves first-install behavior). CcspRawStatus interface extended with tableauSessionExpired and recordCount. hasVerifiedDownload in deriveTableauCard also fixed. 3 regression tests added to connection-state.spec.ts. All 20 unit tests pass.
 
 ### BKL-CCSP-SHARED-CTX-01 | Tableau SSO must complete in the shared scrape context — isolated login + cookie bridge fails
 Status: 🔴 OPEN — PROPOSED FIX (ADR-015), awaiting Jason sign-off

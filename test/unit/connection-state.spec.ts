@@ -159,4 +159,31 @@ describe('deriveTableauCard', () => {
     expect(c.countsAsConnected).toBe(true)
     expect(c.dotColor).toBe('amber')
   })
+
+  test('tableauSessionExpired — CCSP failed with SSO expiry → not counted', () => {
+    const c = deriveTableauCard(
+      { sessionValid: true, reachable: true },
+      { state: null, lastScrape: new Date().toISOString(), lastError: null, tableauSessionExpired: true },
+      false
+    )
+    expect(c.countsAsConnected).toBe(false)
+  })
+
+  test('recordCount 0 with prior scrape → not counted (0-record download)', () => {
+    const c = deriveTableauCard(
+      { sessionValid: true, reachable: true },
+      { state: null, lastScrape: new Date().toISOString(), lastError: null, tableauSessionExpired: false, recordCount: 0 },
+      false
+    )
+    expect(c.countsAsConnected).toBe(false)
+  })
+
+  test('normal connected — valid session, recordCount > 0 → counted', () => {
+    const c = deriveTableauCard(
+      { sessionValid: true, reachable: true },
+      { state: null, lastScrape: new Date().toISOString(), lastError: null, tableauSessionExpired: false, recordCount: 42 },
+      false
+    )
+    expect(c.countsAsConnected).toBe(true)
+  })
 })
