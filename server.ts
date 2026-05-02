@@ -598,37 +598,41 @@ app.post('/api/test/supportable-customer-search', async (c) => {
 })
 
 // ── Salesforce login endpoints (kept in server.ts — depend on startSfLoginBrowser) ──
+// BKL-SYNC-L3-02: SF login browser and scrape trigger are L4 operations.
+// Hero installs (NODE_ROLE unset) must not expose these endpoints.
 
-// POST /api/auth/salesforce/start — launch headed browser for SF login
-// The SSO button auto-clicks; the SAML flow completes without user interaction
-// as long as the RH SSO session is active in the profile.
-app.post('/api/auth/salesforce/start', async (c) => {
-  // Guard: SF login depends on the RH SSO context being live. Without it,
-  // launching SF login closes the (already absent) RH context for nothing
-  // and leaves both connections broken until manual recovery.
-  if (!getScrapeContext()) {
-    return c.json({ error: 'No RH session — connect Red Hat Portal first' }, 400)
-  }
-  try {
-    await startSfLoginBrowser(SF_SESSION_PATH, RH_PROFILE_DIR, () => {
-      setSfSyncLastError(null)  // BKL-UX94: clear stale error so sessionExpired resets immediately after login
-      // BKL-BOOT-SCRAPE-ORDER-01: SF auth completing only establishes the session.
-      // Data sync is driven by bootstrap, not auth — do not add scraping here.
-      // Previously this fired runSfSyncForAes() which kicked off a heavy Lightning
-      // report scrape concurrent with bootstrap CCSP, crashing the shared Chromium.
-      console.log('[sf-auth] session established — data sync deferred to bootstrap/scheduler')
-    })
-    return c.json({ started: true })
-  } catch (e: any) {
-    return c.json({ error: 'Login failed — check Salesforce connection' }, 409)
-  }
-})
+if (process.env.NODE_ROLE === 'primary') {
+  // POST /api/auth/salesforce/start — launch headed browser for SF login
+  // The SSO button auto-clicks; the SAML flow completes without user interaction
+  // as long as the RH SSO session is active in the profile.
+  app.post('/api/auth/salesforce/start', async (c) => {
+    // Guard: SF login depends on the RH SSO context being live. Without it,
+    // launching SF login closes the (already absent) RH context for nothing
+    // and leaves both connections broken until manual recovery.
+    if (!getScrapeContext()) {
+      return c.json({ error: 'No RH session — connect Red Hat Portal first' }, 400)
+    }
+    try {
+      await startSfLoginBrowser(SF_SESSION_PATH, RH_PROFILE_DIR, () => {
+        setSfSyncLastError(null)  // BKL-UX94: clear stale error so sessionExpired resets immediately after login
+        // BKL-BOOT-SCRAPE-ORDER-01: SF auth completing only establishes the session.
+        // Data sync is driven by bootstrap, not auth — do not add scraping here.
+        // Previously this fired runSfSyncForAes() which kicked off a heavy Lightning
+        // report scrape concurrent with bootstrap CCSP, crashing the shared Chromium.
+        console.log('[sf-auth] session established — data sync deferred to bootstrap/scheduler')
+      })
+      return c.json({ started: true })
+    } catch (e: any) {
+      return c.json({ error: 'Login failed — check Salesforce connection' }, 409)
+    }
+  })
 
-// DELETE /api/auth/salesforce/session — cancel in-progress login
-app.delete('/api/auth/salesforce/session', async (c) => {
-  await cancelSfLoginBrowser(RH_PROFILE_DIR)
-  return c.json({ cancelled: true })
-})
+  // DELETE /api/auth/salesforce/session — cancel in-progress login
+  app.delete('/api/auth/salesforce/session', async (c) => {
+    await cancelSfLoginBrowser(RH_PROFILE_DIR)
+    return c.json({ cancelled: true })
+  })
+}
 
 // ── Scraper routes (M02 — registered from scraper-manager.ts) ──────────────
 registerScraperRoutes(app)

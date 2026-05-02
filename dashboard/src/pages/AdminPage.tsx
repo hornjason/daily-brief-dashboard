@@ -24,7 +24,6 @@ interface CircuitBreakerState {
 interface AllScrapeStatus {
   rh: ScrapeStatus
   ccsp: ScrapeStatus
-  salesforce: ScrapeStatus
   circuitBreakers?: Record<string, CircuitBreakerState>
   queue?: { running: string | null; pending: string[]; isAnyRunning: boolean }
   browserRestartNeeded?: boolean
@@ -52,14 +51,11 @@ interface GeminiUsageSummary {
 interface SchedulerCfg {
   ccspTime: string
   territoryTime: string
-  sfPipelineTime: string
   ccspEnabled: boolean
   territoryEnabled: boolean
-  sfPipelineEnabled: boolean
   rhEnabled: boolean
   ccspLastRun: string | null
   territoryLastRun: string | null
-  sfPipelineLastRun: string | null
   rhLastRun: string | null
 }
 
@@ -256,9 +252,9 @@ function SchedulerConfig({
   }
 
   const cfg = schedulerCfg ?? {
-    ccspTime: '06:30', territoryTime: '01:45', sfPipelineTime: '02:00',
-    ccspEnabled: true, territoryEnabled: true, sfPipelineEnabled: true, rhEnabled: true,
-    ccspLastRun: null, territoryLastRun: null, sfPipelineLastRun: null, rhLastRun: null,
+    ccspTime: '06:30', territoryTime: '01:45',
+    ccspEnabled: true, territoryEnabled: true, rhEnabled: true,
+    ccspLastRun: null, territoryLastRun: null, rhLastRun: null,
   }
 
   return (
@@ -266,7 +262,6 @@ function SchedulerConfig({
       <div className="space-y-1 divide-y divide-gray-700/50">
         <SourceScheduleRow label="CCSP" timeKey="ccspTime" enabledKey="ccspEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
         <SourceScheduleRow label="Territory" timeKey="territoryTime" enabledKey="territoryEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
-        <SourceScheduleRow label="SF Pipeline" timeKey="sfPipelineTime" enabledKey="sfPipelineEnabled" floorHint="Min 12h between runs" schedCfg={cfg} onSave={onSave} />
         <div className="flex items-center gap-3 py-2">
           <label className="text-xs text-gray-400 w-40 shrink-0">
             RH Cases interval
@@ -991,11 +986,6 @@ export function AdminPage() {
           lastSync:  scrapers['ccsp']?.lastSuccess ?? null,
           lastError: scrapers['ccsp']?.lastError ?? null,
         },
-        salesforce: {
-          isRunning: scrapers['sf-pipeline']?.state === 'running',
-          lastSync:  scrapers['sf-pipeline']?.lastSuccess ?? null,
-          lastError: scrapers['sf-pipeline']?.lastError ?? null,
-        },
         circuitBreakers: d.circuitBreakers,
         queue: d.queue,
         browserRestartNeeded: d.browserRestartNeeded,
@@ -1070,7 +1060,6 @@ export function AdminPage() {
     const keyToQueueName: Record<string, string> = {
       rh: 'rh-cases',
       ccsp: 'ccsp',
-      salesforce: 'sf-pipeline',
     }
     setLocalQueued(prev => {
       const next = { ...prev }
@@ -1201,14 +1190,6 @@ export function AdminPage() {
                   Open VNC Login
                 </button>
               }
-            />
-            <ScrapeSection
-              label="SF Pipeline"
-              status={status?.salesforce ?? null}
-              running={!!triggerBusy['salesforce']}
-              onRunNow={() => runScrape('salesforce', '/api/scrape/salesforce')}
-              circuitBreaker={status?.circuitBreakers?.salesforce}
-              queuePending={localQueued['salesforce'] ?? status?.queue?.pending?.includes('sf-pipeline')}
             />
           </div>
         </div>

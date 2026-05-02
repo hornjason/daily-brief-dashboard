@@ -317,9 +317,10 @@ export function registerScrapeRoutes(app: Hono): void {
   })
 
   // ╭──────────────────────────────────────────────────────────────────────────╮
-  // │  Salesforce pipeline                                                    │
+  // │  Salesforce pipeline (primary node only — BKL-SYNC-L3-02)              │
   // ╰──────────────────────────────────────────────────────────────────────────╯
 
+  if (process.env.NODE_ROLE === 'primary') {
   // POST /api/scrape/salesforce — full pipeline: SF report → sheet → cache
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
@@ -485,7 +486,16 @@ export function registerScrapeRoutes(app: Hono): void {
     return c.json({ started: true, aes: aesWithSf.map(a => a.name), queued: true })
   })
 
-  // GET /api/scrape/salesforce/status
+  // DELETE /api/scrape/salesforce/cancel
+  app.delete('/api/scrape/salesforce/cancel', (c) => {
+    if (!_sfSyncRunning) return c.json({ ok: false, reason: 'No SF sync in progress' })
+    setSfSyncCancelRequested(true)
+    console.log('[scrape:salesforce] cancel requested via API')
+    return c.json({ ok: true })
+  })
+  } // end NODE_ROLE === 'primary' guard for SF pipeline routes
+
+  // GET /api/scrape/salesforce/status — read-only, available on all nodes
   app.get('/api/scrape/salesforce/status', (c) => {
     const store = getScraperStatus('sf-pipeline')
     return c.json({
@@ -499,14 +509,6 @@ export function registerScrapeRoutes(app: Hono): void {
       recordCount:   store.recordCount,
       state:         store.state,
     })
-  })
-
-  // DELETE /api/scrape/salesforce/cancel
-  app.delete('/api/scrape/salesforce/cancel', (c) => {
-    if (!_sfSyncRunning) return c.json({ ok: false, reason: 'No SF sync in progress' })
-    setSfSyncCancelRequested(true)
-    console.log('[scrape:salesforce] cancel requested via API')
-    return c.json({ ok: true })
   })
 
   // ╭──────────────────────────────────────────────────────────────────────────╮

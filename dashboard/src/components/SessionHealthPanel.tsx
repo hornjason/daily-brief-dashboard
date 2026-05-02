@@ -1,11 +1,11 @@
 // BKL-M50d: Session Health Panel
 // At-a-glance session health for all data sources.
-// Fetches RH Portal, Salesforce, and scraper-status in parallel.
+// Fetches RH Portal and scraper-status in parallel.
 // Polls every 30 seconds while mounted.
 
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Shield, Activity, Cloud } from 'lucide-react'
+import { Shield, Activity } from 'lucide-react'
 import RelTime from './RelTime'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -15,14 +15,6 @@ interface RhStatus {
   sessionExpired: boolean
   lastScraped: string | null
   caseCount: number
-}
-
-interface SfStatus {
-  hasSession: boolean
-  sessionExpired?: boolean
-  lastSync: string | null
-  rowCount: number
-  syncError?: string | null
 }
 
 interface ScraperEntry {
@@ -35,7 +27,6 @@ interface ScraperEntry {
 
 interface HealthData {
   rh: RhStatus | null
-  sf: SfStatus | null
   ccsp: ScraperEntry | null
   supportable: ScraperEntry | null
 }
@@ -109,40 +100,6 @@ function RhTile({ rh }: { rh: RhStatus }) {
   )
 }
 
-function SfTile({ sf }: { sf: SfStatus }) {
-  // Any non-null syncError degrades status — not just 'session expired' string matches
-  const expired = sf.sessionExpired || !!sf.syncError
-  const variant: StatusBadgeVariant =
-    !sf.hasSession ? 'no-session'
-    : expired ? 'expired'
-    : 'active'
-
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <Cloud className="w-4 h-4 text-blue-400 shrink-0" />
-          <span className="text-xs font-medium text-gray-200">Salesforce</span>
-        </div>
-        <StatusBadge variant={variant} />
-      </div>
-      <div className="space-y-1 text-xs text-gray-400">
-        {sf.lastSync ? (
-          <div>Last sync: <RelTime iso={sf.lastSync} className="text-gray-300" /></div>
-        ) : (
-          <div className="text-gray-500">Never synced</div>
-        )}
-        <div>{sf.rowCount} row{sf.rowCount !== 1 ? 's' : ''}</div>
-        {variant !== 'active' && (
-          <Link to="/dashboard/setup" className="text-blue-400 hover:text-blue-300 underline text-[10px]">
-            Reconnect →
-          </Link>
-        )}
-      </div>
-    </div>
-  )
-}
-
 function ScraperTile({
   label,
   icon: Icon,
@@ -197,14 +154,12 @@ export function SessionHealthPanel() {
 
   const fetchAll = async () => {
     try {
-      const [rhRes, sfRes, scraperRes] = await Promise.all([
+      const [rhRes, scraperRes] = await Promise.all([
         fetch('/api/auth/redhat/status').then(r => r.json()).catch(() => null),
-        fetch('/api/auth/salesforce/status').then(r => r.json()).catch(() => null),
         fetch('/api/scraper-status').then(r => r.json()).catch(() => null),
       ])
       setData({
         rh: rhRes,
-        sf: sfRes,
         ccsp: scraperRes?.scrapers?.ccsp ?? null,
         supportable: scraperRes?.scrapers?.supportable ?? null,
       })
@@ -226,10 +181,9 @@ export function SessionHealthPanel() {
   return (
     <div>
       <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Data Source Health</h2>
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         {isLoading ? (
           <>
-            <SkeletonTile />
             <SkeletonTile />
             <SkeletonTile />
             <SkeletonTile />
@@ -243,17 +197,6 @@ export function SessionHealthPanel() {
                 <div className="flex items-center gap-2 mb-2">
                   <Shield className="w-4 h-4 text-red-400 shrink-0" />
                   <span className="text-xs font-medium text-gray-200">RH Portal</span>
-                </div>
-                <StatusBadge variant="unknown" />
-              </div>
-            )}
-            {data.sf ? (
-              <SfTile sf={data.sf} />
-            ) : (
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Cloud className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span className="text-xs font-medium text-gray-200">Salesforce</span>
                 </div>
                 <StatusBadge variant="unknown" />
               </div>
