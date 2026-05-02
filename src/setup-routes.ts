@@ -15,7 +15,7 @@ import { sanitizeErr, sanitizeText } from './utils.ts'
 // L4 daemon (primary node) never calls /api/setup/reset.
 const supportableScrapeRunning = false
 const ccspScrapeRunning = false
-import { _rhScrapeRunning } from './scraper-manager.ts'
+import { _rhScrapeRunning, clearSessionFiles } from './scraper-manager.ts'
 import { resetBootstrapStates } from './bootstrap-orchestrator.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
@@ -383,6 +383,7 @@ export function createSetupRouter(): Hono {
     saveAes([])
     pendingOAuthStates.clear()
     resetBootstrapStates()
+    clearSessionFiles()  // BKL-UX-WIPE-CONN-RESET-01: reset connection status
     if (process.env.AE_PARENT_FOLDER_ID) delete process.env.AE_PARENT_FOLDER_ID
     if (process.env.AE_PARENT_FOLDER_IDS) delete process.env.AE_PARENT_FOLDER_IDS
 
@@ -577,6 +578,7 @@ export function createSetupRouter(): Hono {
         customers: JSON.stringify({ customers }),
       }
       // Persist to disk so the guard survives server restarts
+      mkdirSync(dirname(SNAPSHOT_PATH), { recursive: true })
       writeFileSyncRaw(SNAPSHOT_PATH, JSON.stringify(snapshot), { mode: 0o600 })
       return c.json({ ok: true, aes: aes.length, customers: customers.length })
     } catch (e: any) {

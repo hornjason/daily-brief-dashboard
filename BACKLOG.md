@@ -8207,14 +8207,26 @@ Acceptance: /api/browser/open-tableau-login returns 404 on hero nodes; route onl
 Can we test: YES — regression test asserting 404 from 7776 on POST /api/browser/open-tableau-login.
 
 ### BKL-UX-WIPE-CONN-RESET-01 | Wipe does not reset connection status UI — user sees stale "Connected" state
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 (partial — RH + SF session files cleared; Tableau gap tracked in BKL-UX-WIPE-CONN-RESET-02)
 Priority: P1
 Size: S
 Source: Session 2026-04-29 (Jason observed SF "not connected" after wipe despite UI showing connected)
-Files: server.ts (POST /api/setup/reset handler), dashboard/src/ (connections state)
-Description: After a data wipe (POST /api/setup/reset), the shared browser context is destroyed but the UI connection indicators (RH Portal, SF, Tableau) remain showing their pre-wipe state. User proceeds to connect SF without realising RH Portal context is gone — SF adoption then hangs silently. The wipe endpoint must broadcast a connections-reset event (or the reset response must clear connection state) so all three indicators reset to "Not Connected" immediately.
-Acceptance: After wipe, all three connection indicators show "Not Connected". User must re-connect RH Portal first before SF and Tableau will work.
-Can we test: YES — after POST /api/setup/reset, GET /api/status/connections returns hasSession:false for all three.
+Files: src/scraper-manager.ts (clearSessionFiles() added), src/setup-routes.ts (reset handler calls clearSessionFiles())
+Description: After a data wipe (POST /api/setup/reset), the shared browser context is destroyed but the UI connection indicators (RH Portal, SF, Tableau) remain showing their pre-wipe state.
+Fix: clearSessionFiles() exported from scraper-manager.ts deletes RH_SESSION_PATH and SF_SESSION_PATH; called from reset handler after resetBootstrapStates(). SF was already correct (requires live context AND session file). Tableau session file cleanup deferred to BKL-UX-WIPE-CONN-RESET-02.
+Commit: 6746e3258 (SEC batch) + follow-on commit.
+
+---
+
+### BKL-UX-WIPE-CONN-RESET-02 | Tableau + content-RH session files not cleared on wipe — stale Tableau "Connected" state
+Status: 🔴 OPEN
+Priority: P2
+Size: S
+Source: Rook scan 2026-05-02 (BKL-UX-WIPE-CONN-RESET-01 pattern sibling)
+Files: src/scraper-manager.ts (clearSessionFiles), src/ccsp-scraper.ts (TABLEAU_SESSION_PATH), src/product-release-radar.ts (CONTENT_RH_SESSION_PATH), src/bootstrap-orchestrator.ts (_tableauStatusCache)
+Description: BKL-UX-WIPE-CONN-RESET-01 fixed RH/SF session files. Two sibling session files are not cleaned: (1) tableau-session.json (written by ccsp-scraper.ts:44, read by bootstrap-orchestrator.ts:1754 /api/bootstrap/tableau/session-status which drives a UI indicator); (2) content-rh-session.json (written by product-release-radar.ts, used for auth short-circuit). After wipe, /api/bootstrap/tableau/session-status will still report sessionValid:true until cookies fail at next probe. The _tableauStatusCache in bootstrap-orchestrator.ts also needs invalidation.
+Solution: Extend clearSessionFiles() to also unlink TABLEAU_SESSION_PATH and CONTENT_RH_SESSION_PATH (pass their paths through initScraperManager or read from env). Invalidate _tableauStatusCache on reset (export a resetTableauStatusCache() from bootstrap-orchestrator.ts or add a reset hook).
+Can we test: YES — after POST /api/setup/reset, GET /api/bootstrap/tableau/session-status should not return sessionValid:true from stale cache.
 
 
 ### BKL-SYNC-L3-01 | L3 sync daemon — long-running headless pod data sync for primary Mac Mini
@@ -8746,6 +8758,30 @@ Files: .github/workflows/ci.yml:98,125
 Description: Token interpolated directly into shell command line. Low risk (GitHub masks it), but inconsistent with release.yml:114 which already uses the safer env: DEPLOY_TOKEN pattern.
 Solution: env: GH_TOKEN: ${{ github.token }} then echo "$GH_TOKEN" | podman login.
 Can we test: YES — CI run shows no token in logs.
+
+---
+
+### BKL-SEC-17 | setup-routes.ts — SNAPSHOT_PATH write lacks mkdirSync guard
+Status: ✅ DONE 2026-05-02
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-02 (BKL-SEC-16 pattern sibling)
+Files: src/setup-routes.ts:580
+Description: writeFileSyncRaw(SNAPSHOT_PATH, ...) at line 580 has no mkdirSync guard. SNAPSHOT_PATH = resolve(dirname(AES_PATH), '__test_snapshot.json') — relies on dirname(AES_PATH) existing. In a fresh container or wiped config dir this would throw ENOENT. Same defect class as BKL-SEC-15 (now fixed).
+Solution: Add mkdirSync(dirname(SNAPSHOT_PATH), { recursive: true }) before the write, same pattern as line 220.
+Can we test: YES — unit test simulating missing parent dir.
+
+---
+
+### BKL-SEC-18 | bootstrap-orchestrator.ts — OAUTH_STATE_PATH write lacks mkdirSync guard
+Status: ✅ DONE 2026-05-02
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-02 (BKL-SEC-16 pattern sibling)
+Files: src/bootstrap-orchestrator.ts:950
+Description: writeFileSync(OAUTH_STATE_PATH, ...) at line 950 lacks a preceding mkdirSync guard. OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json'). Same defect class as BKL-SEC-15.
+Solution: Add mkdirSync(dirname(OAUTH_STATE_PATH), { recursive: true }) before the write.
+Can we test: YES — unit test simulating missing parent dir.
 
 ---
 

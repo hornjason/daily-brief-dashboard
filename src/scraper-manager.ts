@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, unlinkSync } from 'fs'
 import { writeFile, rename } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { Hono } from 'hono'
@@ -414,6 +414,12 @@ export function setSfSyncRunning(v: boolean): void { _sfSyncRunning = v }
 export function setSfSyncStartedAt(v: number | null): void { _sfSyncStartedAt = v }
 export function setSfSyncCancelRequested(v: boolean): void { _sfSyncCancelRequested = v }
 export function setSfSyncLastError(v: string | null): void { _sfSyncLastError = v }
+
+/** BKL-UX-WIPE-CONN-RESET-01: Delete session marker files so connection status resets to not-connected after wipe. */
+export function clearSessionFiles(): void {
+  try { if (RH_SESSION_PATH && existsSync(RH_SESSION_PATH)) unlinkSync(RH_SESSION_PATH) } catch {}
+  try { if (SF_SESSION_PATH && existsSync(SF_SESSION_PATH)) unlinkSync(SF_SESSION_PATH) } catch {}
+}
 
 // ── RH scrape orchestration ─────────────────────────────────────────────────
 

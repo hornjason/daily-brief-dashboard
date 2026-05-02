@@ -1,8 +1,8 @@
 // ── Auto-bootstrap + Tableau routes (M03 — extracted from server.ts) ────────
 import { Hono } from 'hono'
-import { writeFileSync as writeFileSyncRaw, readFileSync } from 'fs'
+import { writeFileSync as writeFileSyncRaw, readFileSync, mkdirSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import { driveClient } from './lib/drive-client.ts'
@@ -947,6 +947,7 @@ export function createBootstrapRouter(): Hono {
   // POST /api/oauth/dismiss-downgrade — user has seen the reduce-permissions banner
   router.post('/api/oauth/dismiss-downgrade', (c) => {
     try {
+      mkdirSync(dirname(OAUTH_STATE_PATH), { recursive: true })
       writeFileSyncRaw(OAUTH_STATE_PATH, JSON.stringify({ pendingDowngrade: false, dismissedAt: new Date().toISOString() }, null, 2), { mode: 0o600 })
     } catch (e: any) { console.warn('[oauth] dismiss write failed:', e.message) }
     return c.json({ ok: true })

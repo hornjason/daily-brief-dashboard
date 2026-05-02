@@ -49,16 +49,25 @@ mock.module('../../src/gemini-auth.ts', () => ({
 }))
 
 // Mock settings-api — avoid touching the settings store during tests.
+// BKL-UX-WIPE-CONN-RESET-01: include the full surface that transitive importers
+// (rh-auth, sf-auth via scraper-manager) name. Bun's mock.module is global and
+// shared across files, so a partial mock here breaks any later test that
+// loads scraper-manager.
 mock.module('../../src/settings-api.ts', () => ({
-  getGeminiModel:     () => 'gemini-2.5-flash',
-  getGeminiModelLite: () => 'gemini-2.5-flash-lite',
-  getAutomationConfig: () => ({}),
-  getAiConfig:        () => ({
+  getGeminiModel:           () => 'gemini-2.5-flash',
+  getGeminiModelLite:       () => 'gemini-2.5-flash-lite',
+  getAutomationConfig:      () => ({}),
+  getAiConfig:              () => ({
     briefSynthesisTemperature: 1.0,
     docClassifyMaxAgeDays:     0,
     geminiInputCostPerM:       0.30,
     geminiOutputCostPerM:      2.50,
   }),
+  recordSessionEstablished: (_service: string) => { /* no-op */ },
+  getSessionTimestamps:     () => ({}),
+  getRefreshIntervals:      () => ({}),
+  getSchedulerConfig:       () => ({}),
+  getWeatherSettings:       () => ({}),
 }))
 
 // BKL-TEST-P0-04b: mock ./google.ts so callLLM/callLLMStructured/callGeminiStructured
