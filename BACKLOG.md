@@ -8230,7 +8230,7 @@ Can we test: YES — after POST /api/setup/reset, GET /api/bootstrap/tableau/ses
 
 
 ### BKL-UX-WIPE-CONN-RESET-03 | clearSessionFiles() silently swallows unlink errors — failed session reset undetectable
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Rook MED-02 scan 2026-05-02

@@ -417,13 +417,18 @@ export function setSfSyncLastError(v: string | null): void { _sfSyncLastError = 
 
 /** BKL-UX-WIPE-CONN-RESET-01: Delete session marker files so connection status resets to not-connected after wipe. */
 export function clearSessionFiles(): void {
-  try { if (RH_SESSION_PATH && existsSync(RH_SESSION_PATH)) unlinkSync(RH_SESSION_PATH) } catch {}
-  try { if (SF_SESSION_PATH && existsSync(SF_SESSION_PATH)) unlinkSync(SF_SESSION_PATH) } catch {}
+  // BKL-UX-WIPE-CONN-RESET-03: log on failure so silent unlink errors are visible
+  try { if (RH_SESSION_PATH && existsSync(RH_SESSION_PATH)) unlinkSync(RH_SESSION_PATH) }
+  catch (e) { console.warn('[clearSessionFiles] failed to unlink RH session:', sanitizeErr(e)) }
+  try { if (SF_SESSION_PATH && existsSync(SF_SESSION_PATH)) unlinkSync(SF_SESSION_PATH) }
+  catch (e) { console.warn('[clearSessionFiles] failed to unlink SF session:', sanitizeErr(e)) }
   // BKL-UX-WIPE-CONN-RESET-02: also clear Tableau + content-RH session files
   const tableauPath = RH_PROFILE_DIR ? resolve(RH_PROFILE_DIR, 'tableau-session.json') : ''
   const contentRhPath = RH_PROFILE_DIR ? resolve(RH_PROFILE_DIR, 'content-rh-session.json') : ''
-  try { if (tableauPath && existsSync(tableauPath)) unlinkSync(tableauPath) } catch {}
-  try { if (contentRhPath && existsSync(contentRhPath)) unlinkSync(contentRhPath) } catch {}
+  try { if (tableauPath && existsSync(tableauPath)) unlinkSync(tableauPath) }
+  catch (e) { console.warn('[clearSessionFiles] failed to unlink Tableau session:', sanitizeErr(e)) }
+  try { if (contentRhPath && existsSync(contentRhPath)) unlinkSync(contentRhPath) }
+  catch (e) { console.warn('[clearSessionFiles] failed to unlink content-RH session:', sanitizeErr(e)) }
 }
 
 // ── RH scrape orchestration ─────────────────────────────────────────────────
