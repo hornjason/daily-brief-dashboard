@@ -15,7 +15,7 @@ export function sanitizeErr(e: any): string {
     .replace(/Bearer\s+\S+/g, 'Bearer [redacted]')
     .replace(/<[^>]*>/g, '')
     .slice(0, 200)
-    .replace(/\/[^\s:]+\.(ts|js|json)/g, '[file]')
+    .replace(/\/?[\w./\\-]*\.(?:ts|json|js|pem|key)/g, '[file]')
 }
 
 /** Prefix formula-trigger characters with apostrophe to prevent injection */

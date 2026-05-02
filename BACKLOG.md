@@ -5068,7 +5068,7 @@ Files: src/cache-layer.ts (sheetCachePath function)
 Description: readSheetCache(cu.name) constructs a file path using toSlug(customerName). The safety guarantee depends entirely on toSlug producing only safe filesystem characters. If toSlug has an edge case (e.g., name with only special characters), it could produce an unexpected path. The invariant is implicit — no explicit bounds check or allowlist guard at the sheetCachePath level. Fix: add an explicit regex check inside sheetCachePath: if the slug is empty or contains `..` or `/`, throw rather than silently construct a bad path. Low practical risk (customer names come from internal config), but worth hardening.
 
 ### BKL-SEC-03 | sanitizeErr regex doesn't mask .json config paths in 500 responses
-Status: 🔁 REOPENED 2026-05-01 — fix was never applied; marked DONE incorrectly on 2026-04-08
+Status: ✅ DONE 2026-05-02
 Severity: LOW
 Priority: P3
 Size: S
