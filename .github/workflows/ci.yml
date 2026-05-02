@@ -69,6 +69,9 @@ jobs:
       - name: Run unit tests
         run: bun test src/ test/unit/
 
+      - name: Hero purity check (no L4 imports in hero image)
+        run: bun run tsc --noEmit --project tsconfig.hero.json
+
       - name: Build dashboard
         run: cd dashboard && bun run build
 
@@ -106,7 +109,7 @@ jobs:
           podman build \
             -t ghcr.io/hornjason/daily-brief-dashboard:main-latest \
             -t ghcr.io/hornjason/daily-brief-dashboard:${{ github.sha }} \
-            -f Containerfile .
+            -f Dockerfile.hero .
           podman push ghcr.io/hornjason/daily-brief-dashboard:main-latest
           podman push ghcr.io/hornjason/daily-brief-dashboard:${{ github.sha }}
 

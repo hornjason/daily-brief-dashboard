@@ -48,7 +48,7 @@ async function postJSONDestructive(path: string, data: unknown) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  return { status: res.status, body: await res.json() }
+  return { status: res.status, body: await res.json().catch(() => null) }
 }
 
 // ── Snapshot / restore full config (aes + customers) ─────────────────────────
@@ -114,9 +114,10 @@ test.describe('@destructive REG-002: POST /api/scrape/ccsp rejects AEs without t
 
     const res = await postJSONDestructive('/api/scrape/ccsp', {})
     // Should be 400 (or 401/403 if no Google auth, or 503 if no browser context) — but NOT 200 with silent skip
-    // Accept 400 (no territories), 401 (no Google auth), 403 (missing scopes), 409 (scrape in flight from parallel tests), 503 (no browser — ensureBrowserHealthy fires first)
-    expect([400, 401, 403, 409, 503]).toContain(res.status)
-    expect(res.body.error).toBeTruthy()
+    // Accept 400 (no territories), 401 (no Google auth), 403 (missing scopes), 404 (route not registered on hero nodes),
+    // 409 (scrape in flight from parallel tests), 503 (no browser — ensureBrowserHealthy fires first)
+    expect([400, 401, 403, 404, 409, 503]).toContain(res.status)
+    if (res.body) expect(res.body.error).toBeTruthy()
   })
 })
 

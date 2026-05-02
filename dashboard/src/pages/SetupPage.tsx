@@ -1506,7 +1506,6 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
   const [podStarting, setPodStarting] = useState(false)
   const [podStartError, setPodStartError] = useState<string | null>(null)
   const [podCancelling, setPodCancelling] = useState(false)
-  const [tableauOk, setTableauOk] = useState<boolean | null>(null)
   // BKL-UX84: the Parent Drive Folder must be validated in the CURRENT session
   // before Bootstrap Full POD unlocks. Settings.json may hold a wrong value
   // (e.g. a protected directory); treating it as pre-validated would let the
@@ -1519,16 +1518,6 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
   // onAeNameChange so the shared BootstrapConfigBlock can render a scaffolding
   // preview that shows exactly the AE folder about to be created.
   const [singleAePreviewName, setSingleAePreviewName] = useState<string>('')
-
-  // Check Tableau status on mount (for Full POD tab warning)
-  useEffect(() => {
-    const controller = new AbortController()
-    fetch('/api/bootstrap/tableau/session-status', { signal: controller.signal })
-      .then(r => r.json())
-      .then((d: { reachable: boolean; sessionValid: boolean }) => setTableauOk(d.sessionValid))
-      .catch(() => setTableauOk(false))
-    return () => controller.abort()
-  }, [])
 
   // Check for existing POD bootstrap run on mount
   useEffect(() => {
@@ -2008,13 +1997,6 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
             </div>
           )}
 
-          {tableauOk === false && (
-            <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-2.5 text-xs text-warning">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>Tableau is not connected. CCSP scrape will fail for each AE. Connect Tableau in Step 3 (Connections) first or continue knowing CCSP will be skipped.</span>
-            </div>
-          )}
-
           {/* Input + button — hide when running or completed */}
           {!podBootstrapState?.running && !podBootstrapState?.completedAt && (
             <div className="space-y-3">
@@ -2150,7 +2132,7 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
       {activeTab === 'manage' && (
       <>
       <p className="text-sm text-text-secondary">
-        Configure your Account Executives and their customers. Each AE can have a Drive folder, Salesforce report, and Tableau dashboard.
+        Configure your Account Executives and their customers. Each AE can have a Drive folder and Salesforce report.
       </p>
 
       {aes.map((ae, aeIdx) => {
@@ -2301,7 +2283,7 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
                 placeholder="WEST_COMM_CORP_NORTHWEST_TERR01"
                 className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
               />
-              <p className="text-xs text-text-secondary mt-1">Tableau territory code for CCSP scoping. Comma-separate for multiple.</p>
+              <p className="text-xs text-text-secondary mt-1">Territory code for CCSP scoping. Comma-separate for multiple.</p>
             </div>
 
             {/* Sheet IDs */}
@@ -3679,6 +3661,7 @@ export default function SetupPage() {
   const [googleAuthOk, setGoogleAuthOk] = useState<boolean | null>(null) // null = still checking
   const [aeCount, setAeCount] = useState<number | null>(null)
   const [rhOk, setRhOk] = useState<boolean | null>(null)
+  const [rhTokenConfigured, setRhTokenConfigured] = useState<boolean | null>(null)
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
   const [dataSourcesHealth, setDataSourcesHealth] = useState<'loading' | 'healthy' | 'issues'>('loading')
@@ -3732,6 +3715,12 @@ export default function SetupPage() {
       // BKL-UX63: Require !sessionExpired — aligns Step 3 badge with Step 5
       .then(d => { setRhOk((d.hasSession && !d.sessionExpired) ?? false) })
       .catch((e) => { if (e.name !== 'AbortError') setRhOk(false) })
+
+    // Check RH offline token configured (for Step 3 accordion badge)
+    fetch('/api/settings/offline-token', { signal })
+      .then(r => r.json())
+      .then((d: { configured: boolean }) => setRhTokenConfigured(d.configured))
+      .catch((e) => { if (e.name !== 'AbortError') setRhTokenConfigured(false) })
 
     // BKL-HERO-01 Phase 1 — check Step 0 first-boot state.
     // First boot = `enabledRegions` key absent from settings.json (strictly undefined).
@@ -3982,8 +3971,21 @@ export default function SetupPage() {
             <GoogleAuthSection />
           </AccordionSection>
 
-          {/* BKL-HERO-01 Phase 3 — RH offline token connections step */}
-          <HeroStep3Connections />
+          <AccordionSection
+            id="rh-portal"
+            title="Step 3 of 5 — Connections"
+            badge={
+              rhTokenConfigured === null
+                ? <StatusBadge ok={null} label="Checking..." />
+                : rhTokenConfigured
+                  ? <StatusBadge ok={true} label="Configured" />
+                  : <StatusBadge ok={false} label="Not configured" />
+            }
+            isOpen={openSection === 'rh-portal'}
+            onToggle={() => toggleSection('rh-portal')}
+          >
+            <HeroStep3Connections />
+          </AccordionSection>
 
           <AccordionSection
             id="aes"

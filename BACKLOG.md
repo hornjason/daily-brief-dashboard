@@ -8016,7 +8016,7 @@ Can we test: YES — Playwright: navigate to Admin, click Edit Regions, change s
 Decision: DONE — RegionAccessSection function component added to AdminPage.tsx. Fetches GET /api/regions/access on mount, mounts Step0RegionAccess pre-populated. 3 Playwright tests passing. Quinn + Rook gates run in same session.
 
 ### BKL-HERO-03 | Test spec gap — NODE_ROLE=primary suppresses rh-token-input
-Status: 🔴 OPEN
+Status: ✅ OBSOLETE (2026-05-01) — HeroStep3Connections is now unconditional in SetupPage.tsx; NODE_ROLE=primary no longer suppresses it; nothing to test
 Priority: P3
 Size: S
 Source: Quinn scan 2026-05-01 BKL-HERO-01 Phase 3
@@ -8063,7 +8063,7 @@ Acceptance: CloudSpendSection absent on L3. Still renders on L4.
 Can we test: YES — Playwright test on L3 asserts CCSP section absent.
 
 ### BKL-HERO-08 | L3 hero: Pipeline (Tableau) panel — gate Tableau-derived sub-metrics
-Status: 🔴 OPEN
+Status: ✅ OBSOLETE (2026-05-01) — Pipeline data (including techWinsNeeded) comes from SF bookings Drive sheets via sf-bookings-reader.ts, not Tableau scraping. Panel is fully L3-compatible; no gating needed.
 Priority: P2
 Size: M
 Source: Quinn L3 hero audit 2026-05-01
@@ -8123,7 +8123,7 @@ Acceptance: On L3, only SF Pipeline and Territory scheduler rows visible.
 Can we test: YES — Playwright on L3 asserts CCSP and RH Cases scheduler rows absent.
 
 ### BKL-HERO-14 | L3 hero: Admin Run Domain Inference — verify L3 compatibility before gating
-Status: 🔴 OPEN
+Status: ✅ OBSOLETE (2026-05-01) — Domain inference calls /api/setup/infer-domains which uses Clearbit + public HTTP lookups only; no browser, no Tableau. Fully L3 compatible, no gating needed.
 Priority: P3
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8133,8 +8133,8 @@ Acceptance: Decision made and implemented.
 Can we test: YES after decision.
 
 ### BKL-HERO-15 | L3 hero: Admin NotebookLM controls likely leader-only
-Status: 🔴 OPEN
-Priority: P3
+Status: 🔵 COSMETIC (2026-05-01) — Already gated by NOTEBOOKLM_ENABLED env var (shows "disabled" when unset). Not a node role issue. No functional fix needed; label clarification only if desired.
+Priority: P4
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
 Files: dashboard/src/pages/AdminPage.tsx (NOTEBOOKLM section)
@@ -8143,7 +8143,7 @@ Acceptance: NotebookLM section absent on L3. Visible on L4.
 Can we test: YES — Playwright on L3 asserts section absent.
 
 ### BKL-HERO-16 | L3 hero: Admin Generate All Account Intelligence — architectural decision needed
-Status: 🔴 OPEN
+Status: ✅ OBSOLETE (2026-05-01) — Account intelligence generation calls Gemini/Claude APIs (pure HTTP). Fully L3 compatible on hero installs; no architectural decision needed, no gating required.
 Priority: P2
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8201,6 +8201,16 @@ Files: src/sf-auth.ts, src/rh-scraper.ts
 Description: After SF login completes and logs "RH portal confirmed — adopting shared context", the rh-scraper and sf-scraper adoption logs do NOT appear. The RH Portal session drops to hasSession:false and the shared context is lost. Root cause unknown — adoptScrapeContext appears to be called but the rh-scraper adoption log is absent, and no exception surfaces. Hypothesis: sfPage.close() or the blank tab navigation is invalidating ctx before adoptScrapeContext runs, OR a disconnect handler is firing immediately on context adoption clearing it.
 Acceptance: After SF login success, RH Portal remains hasSession:true, sf-scraper shows adopted log, Tableau connect still works without re-logging into RH Portal.
 Can we test: YES — regression test that after startSfLoginBrowser completes, getScrapeContext() is non-null and getSfContext() is non-null.
+
+### BKL-HERO-21 | POST /api/browser/open-tableau-login unguarded on hero nodes (advisory)
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Rook security scan 2026-05-02 — issue #7 L4 removal
+Files: src/scrape-api.ts (or server.ts — wherever the /api/browser/open-tableau-login route is registered)
+Description: POST /api/browser/open-tableau-login is available on hero nodes (no NODE_ROLE guard). On hero, calling it will attempt to Bun.spawn a Chromium binary that doesn't exist, fail with file-not-found, and return { ok: false }. No exploit path. Advisory only: adding a NODE_ROLE=primary guard makes the architectural intent explicit and removes the dead code path.
+Acceptance: /api/browser/open-tableau-login returns 404 on hero nodes; route only registered when NODE_ROLE=primary.
+Can we test: YES — regression test asserting 404 from 7776 on POST /api/browser/open-tableau-login.
 
 ### BKL-UX-WIPE-CONN-RESET-01 | Wipe does not reset connection status UI — user sees stale "Connected" state
 Status: 🔴 OPEN

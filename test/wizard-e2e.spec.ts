@@ -156,13 +156,13 @@ test.describe('3. Step 3 of 5 — Connections', () => {
     await expect(page.getByRole('button', { name: /Step 3 of 5 — Connections/ })).toBeVisible()
   })
 
-  test('expanding Connections shows Red Hat Portal card', async ({ page }) => {
+  test('expanding Connections shows Red Hat Connection section', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
     await page.getByRole('button', { name: /Step 3 of 5 — Connections/ }).click()
-    await expect(page.getByText('Red Hat Portal').first()).toBeVisible()
+    await expect(page.getByText('Red Hat Connection').first()).toBeVisible()
   })
 
-  test('offline token shows "configured" label when offline token is set', async ({ page }) => {
+  test('offline token shows summary when token is configured', async ({ page }) => {
     // Mock offline token as configured
     await page.route('**/api/settings/offline-token', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true }) })
@@ -175,8 +175,8 @@ test.describe('3. Step 3 of 5 — Connections', () => {
     )
     await page.goto(`${BASE}/dashboard/setup`)
     await page.getByRole('button', { name: /Step 3 of 5 — Connections/ }).click()
-    // When offlineTokenConfigured=true, the label "configured" renders next to "Offline Token"
-    await expect(page.getByText('configured').first()).toBeVisible()
+    // When token is configured, HeroStep3Connections renders summary mode
+    await expect(page.locator('[data-testid="hero-step3-summary"]')).toBeVisible()
   })
 })
 
@@ -293,7 +293,6 @@ test.describe('5. Regression guard — deprecated text absent from wizard', () =
       /Step 2 of 5 — Google Auth/,
       /Step 3 of 5 — Connections/,
       /Step 4 of 5 — AEs & Customers/,
-      /Step 5 of 5 — Data Sources/,
     ]) {
       await page.getByRole('button', { name: label }).click()
       await page.waitForTimeout(300)
