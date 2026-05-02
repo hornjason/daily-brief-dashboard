@@ -2289,16 +2289,6 @@ function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onAeCountC
                 )}
                 <p className="text-[10px] text-text-secondary mt-1">Pipeline opportunities report. <a href="/docs/SF-REPORT-SETUP.md" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">Setup guide →</a></p>
               </div>
-              <div>
-                <label className="block text-xs text-text-secondary mb-1">Tableau URL (optional)</label>
-                <input
-                  type="text"
-                  value={ae.tableauUrl}
-                  onChange={e => updateAE(ae.id, { tableauUrl: e.target.value })}
-                  placeholder="Paste your Tableau dashboard URL"
-                  className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
-                />
-              </div>
             </div>
 
             {/* Territory */}
@@ -3703,8 +3693,7 @@ export default function SetupPage() {
   const [step0FirstBoot, setStep0FirstBoot] = useState(false)
   const [step0EnabledRegions, setStep0EnabledRegions] = useState<string[] | undefined>(undefined)
   const [step0EnabledPods, setStep0EnabledPods] = useState<string[] | undefined>(undefined)
-  // BKL-HERO-01 Phase 2 — defaults false = primary/L4 path is safe default during fetch
-  const [isL3Only, setIsL3Only] = useState(false)
+
 
   // Dynamic page title
   useEffect(() => {
@@ -3758,15 +3747,6 @@ export default function SetupPage() {
       .catch((e) => {
         if (e.name !== 'AbortError') setStep0Loaded(true)
       })
-
-    // BKL-HERO-01 Phase 2 — isL3Only gating
-    // Hero installs (NODE_ROLE unset) hide L4-only sections.
-    // Default (false) = render everything — safe for primary/L4 and during fetch.
-    // 404/network errors keep the safe default.
-    fetch('/api/node-role', { signal })
-      .then(r => r.json())
-      .then((d: { isL3Only: boolean }) => { if (typeof d.isL3Only === 'boolean') setIsL3Only(d.isL3Only) })
-      .catch((e) => { if (e.name !== 'AbortError') { /* non-fatal — stay on default false */ } })
 
     // BKL-UX112: Poll the Data Sources counter on a recurring interval so the
     // badge never goes stale while the accordion is collapsed (DataSourcesSection
@@ -4002,27 +3982,8 @@ export default function SetupPage() {
             <GoogleAuthSection />
           </AccordionSection>
 
-          {/* BKL-HERO-01 Phase 3 — L3 hero installs: RH offline token replaces Connections step */}
-          {isL3Only && <HeroStep3Connections />}
-
-          {!isL3Only && <AccordionSection
-            id="rh-portal"
-            title="Step 3 of 5 — Connections"
-            badge={
-              dataSourcesHealth === 'loading'
-                ? <span className="text-xs text-text-secondary">Checking...</span>
-                : dataSourcesHealth === 'issues'
-                  ? <span className="text-xs text-warning">{dataSourcesConnected ?? 0}/{DATA_SOURCE_TOTAL} connected</span>
-                  : <span className="text-xs text-success">{DATA_SOURCE_TOTAL}/{DATA_SOURCE_TOTAL} connected</span>
-            }
-            isOpen={openSection === 'rh-portal'}
-            onToggle={() => toggleSection('rh-portal')}
-          >
-            <DataSourcesSection
-              onlyConnections={true}
-              onHealthChange={(status, count) => { setDataSourcesHealth(status); if (count !== undefined) setDataSourcesConnected(count) }}
-            />
-          </AccordionSection>}
+          {/* BKL-HERO-01 Phase 3 — RH offline token connections step */}
+          <HeroStep3Connections />
 
           <AccordionSection
             id="aes"
@@ -4040,8 +4001,7 @@ export default function SetupPage() {
             <AEsCustomersSection onAeCountChange={setAeCount} step0EnabledPods={step0EnabledPods} />
           </AccordionSection>
 
-          {/* BKL-HERO-01 Phase 5 — L3 hero: "Open Dashboard" after AEs when ≥1 AE configured */}
-          {isL3Only && aeCount !== null && aeCount > 0 && (
+          {aeCount !== null && aeCount > 0 && (
             <div data-testid="hero-open-dashboard" className="mt-2">
               <a
                 href="/dashboard"
@@ -4050,53 +4010,6 @@ export default function SetupPage() {
                 Open Dashboard
               </a>
             </div>
-          )}
-
-          {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs */}
-          {!isL3Only && (
-            <AccordionSection
-              id="data-sources"
-              title="Step 5 of 5 — Data Sources"
-              badge={
-                dataSourcesHealth === 'loading'
-                  ? <span className="text-xs text-text-secondary">Checking...</span>
-                  : dataSourcesHealth === 'issues'
-                    ? <span className="text-xs text-warning">{dataSourcesConnected ?? 0}/{DATA_SOURCE_TOTAL} connected</span>
-                    : <span className="text-xs text-success">{DATA_SOURCE_TOTAL}/{DATA_SOURCE_TOTAL} connected</span>
-              }
-              isOpen={openSection === 'data-sources'}
-              onToggle={() => toggleSection('data-sources')}
-            >
-              <DataSourcesSection
-                hideConnections={true}
-                onHealthChange={(status, count) => { setDataSourcesHealth(status); if (count !== undefined) setDataSourcesConnected(count) }}
-              />
-            </AccordionSection>
-          )}
-
-          {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs.
-              The "Open Dashboard" link inside this section disappears on L3 by
-              design — Phase 5 adds a dedicated placement after AEs for L3. */}
-          {!isL3Only && (
-            <AccordionSection
-              id="settings"
-              title="Refresh Timer & Settings"
-              badge={<span className="text-xs text-text-secondary">Optional</span>}
-              isOpen={openSection === 'settings'}
-              onToggle={() => toggleSection('settings')}
-            >
-              <div className="space-y-4">
-                <RefreshTimerSettings />
-                {/* BKL-E04: Morning Brief Email delivery settings */}
-                <EmailSettingsSection />
-                <a
-                  href="/dashboard"
-                  className="block w-full text-center bg-accent hover:bg-accent/80 text-white px-6 py-3 rounded-xl font-semibold text-base transition-colors"
-                >
-                  Open Dashboard
-                </a>
-              </div>
-            </AccordionSection>
           )}
 
           <AccordionSection
@@ -4108,19 +4021,6 @@ export default function SetupPage() {
           >
             <AiIntelligenceSettings />
           </AccordionSection>
-
-          {/* BKL-HERO-01 Phase 2 — L4-only on primary; hidden on L3 hero installs */}
-          {!isL3Only && (
-            <AccordionSection
-              id="automation-settings"
-              title="Automation & Limits"
-              badge={<span className="text-xs text-text-secondary">Optional</span>}
-              isOpen={openSection === 'automation-settings'}
-              onToggle={() => toggleSection('automation-settings')}
-            >
-              <AutomationSettings />
-            </AccordionSection>
-          )}
         </div>
 
         {/* Quick link to dashboard */}

@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertCircle, X, ExternalLink } from 'lucide-react'
+import { AlertCircle, X } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
-import { getVncUrl } from '../utils'
-import { SessionHealthPanel } from '../components/SessionHealthPanel'
 import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -49,13 +47,7 @@ interface GeminiUsageSummary {
 }
 
 interface SchedulerCfg {
-  ccspTime: string
-  territoryTime: string
-  ccspEnabled: boolean
-  territoryEnabled: boolean
   rhEnabled: boolean
-  ccspLastRun: string | null
-  territoryLastRun: string | null
   rhLastRun: string | null
 }
 
@@ -252,16 +244,13 @@ function SchedulerConfig({
   }
 
   const cfg = schedulerCfg ?? {
-    ccspTime: '06:30', territoryTime: '01:45',
-    ccspEnabled: true, territoryEnabled: true, rhEnabled: true,
-    ccspLastRun: null, territoryLastRun: null, rhLastRun: null,
+    rhEnabled: true,
+    rhLastRun: null,
   }
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="space-y-1 divide-y divide-gray-700/50">
-        <SourceScheduleRow label="CCSP" timeKey="ccspTime" enabledKey="ccspEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
-        <SourceScheduleRow label="Territory" timeKey="territoryTime" enabledKey="territoryEnabled" floorHint="Min 6h between runs" schedCfg={cfg} onSave={onSave} />
         <div className="flex items-center gap-3 py-2">
           <label className="text-xs text-gray-400 w-40 shrink-0">
             RH Cases interval
@@ -904,49 +893,6 @@ function ScrapeHistorySection() {
 
 // ── Admin page ────────────────────────────────��────────────────────────────────
 
-// ── Content RH session save button ───────────────────────────────────────────
-
-function ContentRhSessionButton() {
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
-  const [isError, setIsError] = useState(false)
-
-  const save = async () => {
-    setSaving(true)
-    setMsg(null)
-    setIsError(false)
-    try {
-      const res = await fetch('/api/browser/save-content-rh-session', { method: 'POST' })
-      const data = await res.json()
-      if (data.ok) {
-        setMsg(`Saved ${data.cookieCount} cookies`)
-        setIsError(false)
-      } else {
-        setMsg(data.error ?? 'Unknown error')
-        setIsError(true)
-      }
-    } catch (e: any) {
-      setMsg(e?.message ?? 'Request failed')
-      setIsError(true)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-3">
-      <button
-        onClick={save}
-        disabled={saving}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white transition-colors"
-      >
-        {saving ? 'Saving...' : 'Save Content RH Session'}
-      </button>
-      <span className="text-xs text-gray-400">Captures content.redhat.com cookies from VNC browser for product scraping</span>
-      {msg && <span className={`text-xs ${isError ? 'text-red-400' : 'text-green-400'}`}>{msg}</span>}
-    </div>
-  )
-}
 
 export function AdminPage() {
   const navigate = useNavigate()
@@ -1151,9 +1097,6 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* BKL-M50d: Data Source Health panel */}
-        <SessionHealthPanel />
-
         {/* Manual scrape triggers */}
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Manual Scrape Triggers</h2>
@@ -1171,34 +1114,6 @@ export function AdminPage() {
                   : undefined
               }
             />
-            <ScrapeSection
-              label="CCSP"
-              status={status?.ccsp ?? null}
-              running={!!triggerBusy['ccsp']}
-              onRunNow={() => runScrape('ccsp', '/api/scrape/ccsp')}
-              circuitBreaker={status?.circuitBreakers?.ccsp}
-              queuePending={localQueued['ccsp'] ?? status?.queue?.pending?.includes('ccsp')}
-              extraActions={
-                <button
-                  onClick={() => {
-                    fetch('/api/browser/open-tableau-login', { method: 'POST' }).catch(() => {})
-                    window.open(getVncUrl(), '_blank')
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-                >
-                  <ExternalLink className="w-3 h-3" />
-                  Open VNC Login
-                </button>
-              }
-            />
-          </div>
-        </div>
-
-        {/* Browser Sessions */}
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Browser Sessions</h2>
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-            <ContentRhSessionButton />
           </div>
         </div>
 

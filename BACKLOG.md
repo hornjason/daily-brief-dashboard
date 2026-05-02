@@ -8182,6 +8182,16 @@ Description: SetupPage already fetches /api/node-role on mount and stores isL3On
 Acceptance: Single /api/node-role fetch per page load (not per component). All P1 gate consumers use useNodeRole().
 Can we test: YES — network tab assertion (1 /api/node-role call per page), unit test for hook.
 
+### BKL-HERO-20 | Hero purity: missing Playwright assertions that L4 UI is absent
+Status: 🔴 OPEN
+Priority: P1
+Size: S
+Source: Issue #7 post-mortem 2026-05-01 — worktree merge restored CCSP/Browser Sessions; Quinn gate caught it but CI did not
+Files: test/ui-regression.spec.ts (new assertions), dashboard/src/pages/AdminPage.tsx, dashboard/src/pages/SetupPage.tsx
+Description: No Playwright test asserts that L4 UI sections are absent from the hero image. Worktree merges twice restored CCSP ScrapeSection and Browser Sessions to AdminPage — only caught by Quinn human gate, not by CI. Need negative assertions: Setup page must not contain "Data Sources", "Refresh Timer & Settings", "Automation & Limits"; Admin page must not contain "CCSP", "Browser Sessions", "Salesforce Pipeline". These are the purity gate tests referenced in issue #8 CI pipeline.
+Acceptance: test/ui-regression.spec.ts contains assertions that L4 sections are absent from 7776 (hero image); tests pass in CI. Any future worktree merge that restores L4 content causes CI failure before Quinn gate.
+Can we test: YES — Playwright negative assertions against 7776.
+
 ### BKL-CONN-SF-ADOPT-01 | SF re-login breaks RH Portal session — context not re-adopted
 Status: 🔴 OPEN
 Priority: P0

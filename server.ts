@@ -28,7 +28,7 @@ import { createRegionAccessRouter } from './src/region-access-routes.ts'
 import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
 import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary, setSfSyncLastError } from './src/scraper-manager.ts'
-import { initScrapeApi, createScrapeRouter } from './src/scrape-api.ts'
+import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
 import { initDashboardRoutes, createDashboardRouter } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
@@ -309,14 +309,16 @@ app.post('/api/auth/redhat/start', async (c) => {
           source: 'manual',
           enqueuedAt: Date.now(),
         })
-        const sfAes = aes.filter(a => a.sfReportId)
-        if (sfAes.length) {
-          enqueueScraperTask({
-            name: 'sf-pipeline',
-            run: async () => { await runSfSyncForAes(sfAes) },
-            source: 'manual',
-            enqueuedAt: Date.now(),
-          })
+        if (process.env.NODE_ROLE === 'primary') {
+          const sfAes = aes.filter(a => a.sfReportId)
+          if (sfAes.length) {
+            enqueueScraperTask({
+              name: 'sf-pipeline',
+              run: async () => { await runSfSyncForAes(sfAes) },
+              source: 'manual',
+              enqueuedAt: Date.now(),
+            })
+          }
         }
         enqueueScraperTask({
           name: 'supportable',
@@ -338,28 +340,30 @@ app.post('/api/auth/redhat/start', async (c) => {
           source: 'manual',
           enqueuedAt: Date.now(),
         })
-        const ccspAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
-        if (ccspAes.length) {
-          enqueueScraperTask({
-            name: 'ccsp',
-            run: async () => {
-              if (ccspScrapeRunning || ccspInFlight) { console.log('[rh-auth] ccsp: busy — skipping'); return }
-              setCcspInFlight(true)
-              try {
-                const results = await runCcspScrape(ccspAes)
-                for (const ae of ccspAes) {
-                  const aeResults = results.filter(r => r.aeName === ae.name)
-                  const sheetId = await writeCcspSheet(aeResults, ae.name, ae.driveFolderId, ae.ccspSheetId || undefined)
-                  patchAe(ae.name, { ccspSheetId: sheetId })
+        if (process.env.NODE_ROLE === 'primary') {
+          const ccspAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
+          if (ccspAes.length) {
+            enqueueScraperTask({
+              name: 'ccsp',
+              run: async () => {
+                if (ccspScrapeRunning || ccspInFlight) { console.log('[rh-auth] ccsp: busy — skipping'); return }
+                setCcspInFlight(true)
+                try {
+                  const results = await runCcspScrape(ccspAes)
+                  for (const ae of ccspAes) {
+                    const aeResults = results.filter(r => r.aeName === ae.name)
+                    const sheetId = await writeCcspSheet(aeResults, ae.name, ae.driveFolderId, ae.ccspSheetId || undefined)
+                    patchAe(ae.name, { ccspSheetId: sheetId })
+                  }
+                  await refreshCCSP().catch(() => {})
+                } finally {
+                  setCcspInFlight(false)
                 }
-                await refreshCCSP().catch(() => {})
-              } finally {
-                setCcspInFlight(false)
-              }
-            },
-            source: 'manual',
-            enqueuedAt: Date.now(),
-          })
+              },
+              source: 'manual',
+              enqueuedAt: Date.now(),
+            })
+          }
         }
       })().catch((e: any) => console.error('[supportable] pre-warm block error:', e?.message ?? e))
     })
@@ -640,7 +644,7 @@ if (process.env.NODE_ROLE === 'primary') {
 app.route('/', createScraperRouter())
 
 // ── Unified scrape API (BKL-M25 — registered from scrape-api.ts) ───────────
-app.route('/', createScrapeRouter())
+registerScrapeRoutes(app)
 
 // ── BKL-M50e: Scraper telemetry routes ──────────────────────────────────────
 

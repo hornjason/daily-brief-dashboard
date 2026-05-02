@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
-import { useNodeRole } from './hooks/useNodeRole'
 import { getVncUrl } from './utils'
 import { Sidebar } from './components/Sidebar'
 import type { DashboardViewMode } from './components/Sidebar'
@@ -134,7 +133,6 @@ function NoAEsBanner({ onDismiss }: { onDismiss: () => void }) {
 function Dashboard() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { isL3Only } = useNodeRole()
   const [refreshKey, setRefreshKey] = useState(0)
   const [active, setActive] = useState('Command Center')
   const [viewMode, setViewMode] = useState<DashboardViewMode>(() => {
@@ -504,7 +502,7 @@ function Dashboard() {
             cases={casesApi.data?.cases ?? []}
           />
         )}
-        {rhStatus && !isL3Only && (
+        {rhStatus && (
           <RhSessionBanner status={rhStatus} onReconnect={() => setRhReconnecting(true)} onVncOpen={(win) => { vncWindowRef.current = win }} />
         )}
         {aeCount === 0 && !noAesDismissed && (
@@ -631,7 +629,7 @@ function Dashboard() {
 
             {/* KPI Cards */}
             <section id="section-command" data-section="section-command">
-              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={filteredAccounts} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={rhStatus?.hasSession} sparklineHistory={sparklineHistory} selectedProducts={productFilterSelected} allCases={casesApi.data?.cases ?? []} allAccounts={accountsApi.data?.customers ?? []} caseMatchesProducts={caseMatchesProducts} isL3Only={isL3Only} />
+              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={filteredAccounts} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={rhStatus?.hasSession} sparklineHistory={sparklineHistory} selectedProducts={productFilterSelected} allCases={casesApi.data?.cases ?? []} allAccounts={accountsApi.data?.customers ?? []} caseMatchesProducts={caseMatchesProducts} />
             </section>
 
             {/* Pipeline */}

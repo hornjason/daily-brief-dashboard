@@ -212,7 +212,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // Body: { customers: string[] } — list of SF alias names to search
   app.post('/api/scrape/rh/test-discover', async (c) => {
     try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
-    const body = await c.req.json<{ customers?: string[] }>().catch(() => ({}))
+    const body = await c.req.json<{ customers?: string[] }>().catch(() => ({} as { customers?: string[] }))
     const names: string[] = Array.isArray(body.customers) ? body.customers : []
     if (names.length === 0) return c.json({ error: 'customers array required' }, 400)
     if (names.length > 10) return c.json({ error: 'max 10 customers per test run' }, 400)
@@ -234,6 +234,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // │  CCSP (Tableau)                                                         │
   // ╰──────────────────────────────────────────────────────────────────────────╯
 
+  if (process.env.NODE_ROLE === 'primary') {
   // POST /api/scrape/ccsp — full pipeline: Tableau scrape → sheet → cache
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
@@ -298,6 +299,7 @@ export function registerScrapeRoutes(app: Hono): void {
 
     return c.json({ started: true, aeCount: eligibleAes.length, queued: true })
   })
+  } // NODE_ROLE primary guard — CCSP scrape is L4 only
 
   // GET /api/scrape/ccsp/status
   app.get('/api/scrape/ccsp/status', (c) => {
@@ -531,6 +533,10 @@ export function registerScrapeRoutes(app: Hono): void {
               await runRhScrapeWithState()
             },
           },
+        ]
+
+        if (process.env.NODE_ROLE === 'primary') {
+          scrapers.push(
           {
             name: 'ccsp',
             run: async () => {
@@ -645,7 +651,8 @@ export function registerScrapeRoutes(app: Hono): void {
               }
             },
           },
-        ]
+          )
+        }
 
         // Sequential — shared browser context (ARCHITECTURE.md s1)
         for (const scraper of scrapers) {
