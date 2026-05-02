@@ -72,6 +72,12 @@ jobs:
       - name: Hero purity check (no L4 imports in hero image)
         run: bun run tsc --noEmit --project tsconfig.hero.json
 
+      - name: SetupPage size check
+        run: |
+          count=$(wc -l < dashboard/src/pages/SetupPage.tsx)
+          echo "SetupPage.tsx: $count lines"
+          [ "$count" -lt 3200 ] || (echo "SetupPage.tsx exceeds 3200 lines ($count) — DataSourcesSection was removed in BKL-ARCH-12, file should not regrow past this ceiling" && exit 1)
+
       - name: Build dashboard
         run: cd dashboard && bun run build
 
