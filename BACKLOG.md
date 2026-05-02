@@ -5146,7 +5146,7 @@ Files: dashboard/src/components/HeroStep3Connections.tsx
 Description: Token textarea value remained in React state after successful save. If user clicked [Edit] after saving, the raw token would re-render in the DOM. `setToken('')` added at line 53 immediately after `setSummaryMode(true)`. Fixed inline same session.
 
 ### BKL-SEC-07 | Expansion Opportunities — prompt injection hardening (P2 x3)
-Status: 🔴 OPEN 2026-04-11
+Status: ✅ DONE 2026-05-02 — Verified in source: SEC-EXP-01 (slug guard at expansion-opportunities.ts:48), SEC-EXP-02 (sanitizePromptInput on intelCache.company/industry at line 219), SEC-EXP-03 (sanitizePromptInput on f.name/f.textContent in loadDriveDocsContext at line 96) all already present. No code change needed.
 Severity: MEDIUM (P2)
 Priority: P2
 Size: S
@@ -6533,7 +6533,7 @@ Test: REG-022 added to test/regression.spec.ts — verifies fixedCount (daysLeft
 ---
 
 ### BKL-PRODINTEL-02 | Product intelligence should include goal/initiative alignment for ALL products
-Status: 🟡 IN PROGRESS 2026-04-11 (backend prompt enhancement done; UI "How this helps" section deferred)
+Status: ✅ DONE 2026-05-02 — Backend: initiativeAlignment field + Gemini prompt complete (2026-04-11). UI: "How this helps" section added to ProductIntelSection.tsx:437-450 (2026-05-02). Interface updated at line 36. Renders 1-3 bullet items per product card when AI returns initiative alignment data.
 Priority: P1 | Type: Feature Enhancement
 Source: Jason — 2026-04-11
 Files: src/customer-product-intel.ts, dashboard/src/components/ProductIntelSection.tsx
@@ -7868,7 +7868,7 @@ Files: dashboard/src/lib/connection-state.ts, dashboard/src/pages/SetupPage.tsx
 Decision: DataSourcesSection (original bug location) was deleted in #12 as dead code. Remaining fix: computeConnected() in SetupPage.tsx now fetches /api/status/scrapes as 4th parallel fetch and gates tableauConnected on !ccsp.tableauSessionExpired and recordCount > 0 (null guard preserves first-install behavior). CcspRawStatus interface extended with tableauSessionExpired and recordCount. hasVerifiedDownload in deriveTableauCard also fixed. 3 regression tests added to connection-state.spec.ts. All 20 unit tests pass.
 
 ### BKL-CCSP-SHARED-CTX-01 | Tableau SSO must complete in the shared scrape context — isolated login + cookie bridge fails
-Status: 🔴 OPEN — PROPOSED FIX (ADR-015), awaiting Jason sign-off
+Status: 🔵 HELD — pending L4 design session (after all open issues closed)
 Priority: P0
 Size: M
 Source: Architectural review 2026-04-28 — Serena Blackwood + Rayford
@@ -8694,14 +8694,14 @@ Decision: Verified via code grep and passing wizard-e2e test 23 — no visible "
 ---
 
 ### BKL-ARCH-L4-SPLIT-FOLLOWUP-03 | Prod container running NODE_ROLE=primary — should be unset for hero install
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: S
 Source: Quinn gate 2026-05-01
-Files: Makefile (up target / env vars)
-Description: pai-dashboard prod container has NODE_ROLE=primary, routing it to L4 leader behavior. Per architecture decision, NODE_ROLE unset = hero install (L3-only); NODE_ROLE=primary = Mac Mini leader only. Local dev workstation should run as hero install.
-Solution: Remove NODE_ROLE from the local prod container config. Reserve NODE_ROLE=primary for Mac Mini only.
-Can we test: YES — /api/node-role must return {"isL3Only":true} on local prod.
+Files: .env (line 18 removed)
+Description: pai-dashboard prod container had NODE_ROLE=primary in .env, routing it to L4 leader behavior.
+Decision: Commented out NODE_ROLE=primary from .env; container now starts with NODE_ROLE unset (hero install).
+Verified: /api/node-role returns {"isL3Only":true} on local prod after restart.
 
 ---
 
@@ -8751,3 +8751,15 @@ Files: .github/workflows/ci.yml:98,125
 Description: Token interpolated directly into shell command line. Low risk (GitHub masks it), but inconsistent with release.yml:114 which already uses the safer env: DEPLOY_TOKEN pattern.
 Solution: env: GH_TOKEN: ${{ github.token }} then echo "$GH_TOKEN" | podman login.
 Can we test: YES — CI run shows no token in logs.
+
+---
+
+### BKL-ARCH-16 | Issue #16 — Bootstrap orchestrator split (territory-sheet, sf-cache, bootstrap-routes)
+Status: ✅ DONE 2026-05-02
+Priority: P1
+Size: M
+Source: Issue #16 (hornjason/asaCommandCenter)
+Files: src/bootstrap/territory-sheet.ts (new, 225 lines), src/bootstrap/sf-cache.ts (new, 120 lines), src/bootstrap-routes.ts (new, 11-line re-export), src/bootstrap-orchestrator.ts (2306→2021 lines), test/unit/territory-sheet.spec.ts (new)
+Description: Split 2306-line bootstrap-orchestrator.ts (ADR-005 500-line cap violation) into focused modules. Extracted: synthesizeSfReportFromPipelineRecords, podKeyFromTerritoryCode, readAEsFromTerritorySheet → territory-sheet.ts; writeSfDriveCache, readSfDriveCache → sf-cache.ts; createBootstrapRouter re-exported via bootstrap-routes.ts.
+Decision: createBootstrapRouter body (1258 lines) could not be extracted without major refactor due to closure captures — thin re-export shim used for bootstrap-routes.ts. Remaining orchestrator body still 2021 lines; full route extraction deferred to follow-on issue.
+Tests: bun test test/unit/territory-sheet.spec.ts — 4/4 pass. Playwright 115/125 (10 pre-existing failures, 0 regressions).

@@ -63,6 +63,21 @@ import {
 } from './bootstrap-state.ts'
 import type { AutoBootstrapStep } from './bootstrap-state.ts'
 export { autoBootstrapState, podBootstrapState } from './bootstrap-state.ts'
+// BKL-ARCH-01: Extracted modules (ADR-005 — 500-line cap)
+import {
+  synthesizeSfReportFromPipelineRecords,
+  podKeyFromTerritoryCode,
+  readAEsFromTerritorySheet,
+  isJunkCustomerName,
+} from './bootstrap/territory-sheet.ts'
+export {
+  synthesizeSfReportFromPipelineRecords,
+  podKeyFromTerritoryCode,
+  readAEsFromTerritorySheet,
+  isJunkCustomerName,
+} from './bootstrap/territory-sheet.ts'
+import { writeSfDriveCache, readSfDriveCache } from './bootstrap/sf-cache.ts'
+export { writeSfDriveCache, readSfDriveCache } from './bootstrap/sf-cache.ts'
 import {
   CACHE_HIER_FRESH_MS,
   isPipelineDiskCacheFreshForAe,
@@ -213,21 +228,7 @@ function extractSfReportId(raw: string): string {
   return trimmed
 }
 
-/**
- * BKL-F06: Reject names that are clearly territory sheet junk — deal rows, billing rows,
- * CCSP charges, opportunity rows, etc. Conservative by design: only rejects obvious patterns.
- */
-function isJunkCustomerName(name: string): boolean {
-  if (name.length < 3) return true
-  if (name.includes('~')) return true
-  // Opportunity/deal/billing keywords
-  if (/\b(DSOR|Renewal|Royalty|billing|deal|opportunity)\b/i.test(name)) return true
-  // Date patterns in the name (e.g. "2024-01 Something" or "01/2024")
-  if (/\b\d{4}-\d{2}\b/.test(name) || /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/.test(name)) return true
-  // CCSP billing rows (e.g. "Global Royalty-CCSP")
-  if (/-CCSP\b/i.test(name)) return true
-  return false
-}
+// isJunkCustomerName — moved to ./bootstrap/territory-sheet.ts (BKL-ARCH-01)
 
 /** BKL-W2-17: Exposed so background-scheduler can include bootstrap in isAnyScraperRunning() guard. */
 export function isBootstrapRunning(): boolean { return autoBootstrapState.running || podBootstrapState.running }
@@ -258,156 +259,12 @@ const POD_SF_CACHE_TTL_MS = 30 * 60 * 1000  // 30 min — safe within a single b
 // after bootstrap to re-sync from Google Sheets.
 const PIPELINE_DISK_TTL_MS = 4 * 60 * 60 * 1000  // 4h
 
-// BKL-TOKEN-07: Adapt parsed PipelineRecord[] back into an SfReportRow shape that
-// writePipelineSheet() + parsePipelineRows() both understand. Emits one row per
-// product so the downstream round-trip through parsePipelineRows re-aggregates
-// products identically. Header set matches the columns parsePipelineRows reads.
-function synthesizeSfReportFromPipelineRecords(records: PipelineRecord[]): SfReportRow {
-  const headers = [
-    'Opportunity ID',
-    'Opportunity Number',
-    'Opportunity Name',
-    'Account Name',
-    'Close Date',
-    'Forecast Category',
-    'ACV Opportunity',
-    'Opportunity Owner',
-    'Renewal',
-    'Offering Group',
-    'Probability (%)',
-    'Product Description',
-    'Opportunity Territory Name',
-  ]
-  const rows: string[][] = []
-  for (const r of records) {
-    // Expand each product to its own row (mirrors how scrapeSfReport emits raw SF rows)
-    const prods = r.products.length > 0 ? r.products : ['']
-    for (const prod of prods) {
-      rows.push([
-        r.oppId ?? '',
-        r.oppNumber ?? '',
-        r.oppName ?? '',
-        r.accountName ?? '',
-        r.closeDate ?? '',
-        r.forecastCategory ?? '',
-        r.acv != null ? String(r.acv) : '',
-        r.owner ?? '',
-        r.renewal ? 'true' : 'false',
-        r.offeringGroup ?? '',
-        r.probability != null ? String(r.probability) : '',
-        prod,
-        r.territory ?? '',
-      ])
-    }
-  }
-  return { headers, rows }
-}
+// synthesizeSfReportFromPipelineRecords — moved to ./bootstrap/territory-sheet.ts (BKL-ARCH-01)
 
 
-/**
- * BKL-SFCACHE-01: Write an SfReportRow to Google Drive as SF-PIPELINE-<reportId>-<pod>-<date>.csv
- * inside the podBookingsFolderId. Mirrors the CCSP Drive cache write pattern:
- *   1. List and delete any existing SF-PIPELINE-<reportId>-<pod>-*.csv for this POD (stale cleanup)
- *   2. Create the new file with today's filename
- * All failures are non-fatal — caller falls through to live scrape on retry.
- */
-async function writeSfDriveCache(
-  data: SfReportRow,
-  podBookingsFolderId: string,
-  sfReportId: string,
-  podName: string,
-  cacheFileName: string,
-): Promise<void> {
-  try {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    if (!auth) return
-    const drive = google.drive({ version: 'v3', auth })
+// writeSfDriveCache — moved to ./bootstrap/sf-cache.ts (BKL-ARCH-01)
 
-    // Delete stale SF-PIPELINE-<reportId>-<pod>-*.csv files for this POD
-    try {
-      const staleRes = await withQuotaRetry(
-        () => drive.files.list({
-          q: `name contains 'SF-PIPELINE-${sfReportId}-${podName}-' and '${podBookingsFolderId}' in parents and trashed = false`,
-          fields: 'files(id, name)',
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }),
-        'SF Drive stale cache list',
-      )
-      const staleFiles = staleRes.data.files ?? []
-      for (const oldFile of staleFiles) {
-        if (!oldFile.id || !oldFile.name) continue
-        if (!oldFile.name.startsWith(`SF-PIPELINE-${sfReportId}-${podName}-`) || !oldFile.name.endsWith('.csv')) continue
-        try {
-          await drive.files.delete({ fileId: oldFile.id, supportsAllDrives: true })
-          console.log(`[pod-bootstrap] deleted stale SF Drive cache ${oldFile.name}`)
-        } catch (delErr: any) {
-          console.warn(`[pod-bootstrap] stale SF cache delete failed for ${oldFile.name}: ${delErr.message} — non-fatal`)
-        }
-      }
-    } catch (listErr: any) {
-      console.warn(`[pod-bootstrap] stale SF cache list failed: ${listErr.message} — non-fatal, proceeding to write`)
-    }
-
-    // Build CSV — escape commas, quotes, newlines same as CCSP writer
-    const escape = (val: string): string =>
-      val.includes(',') || val.includes('"') || val.includes('\n')
-        ? `"${val.replace(/"/g, '""')}"` : val
-    const csvLines = [data.headers.map(escape).join(',')]
-    for (const row of data.rows) {
-      csvLines.push(row.map(c => escape(c ?? '')).join(','))
-    }
-
-    await withQuotaRetry(
-      () => drive.files.create({
-        requestBody: { name: cacheFileName, mimeType: 'text/csv', parents: [podBookingsFolderId] },
-        media: { mimeType: 'text/csv', body: csvLines.join('\n') },
-        supportsAllDrives: true,
-        fields: 'id',
-      }),
-      'SF Drive cache write',
-    )
-    console.log(`[pod-bootstrap] SF Drive cache written: ${cacheFileName} (${data.rows.length} rows)`)
-  } catch (e: any) {
-    console.warn(`[pod-bootstrap] SF Drive cache write failed: ${e?.message} — non-fatal`)
-  }
-}
-
-/**
- * BKL-SFCACHE-01: Read SF-PIPELINE-<reportId>-<pod>-<today>.csv from podBookingsFolderId.
- * Returns parsed SfReportRow on hit, null on miss or error (non-fatal).
- */
-async function readSfDriveCache(
-  podBookingsFolderId: string,
-  cacheFileName: string,
-): Promise<SfReportRow | null> {
-  try {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    if (!auth) return null
-    const drive = google.drive({ version: 'v3', auth })
-    const listRes = await withQuotaRetry(
-      () => drive.files.list({
-        q: `name = '${cacheFileName}' and '${podBookingsFolderId}' in parents and trashed = false`,
-        fields: 'files(id, name)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      }),
-      'SF Drive cache check',
-    )
-    const cacheFile = listRes.data.files?.[0]
-    if (!cacheFile?.id) return null
-    const dlRes = await withQuotaRetry(
-      () => drive.files.get({ fileId: cacheFile.id!, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }),
-      'SF Drive cache download',
-    )
-    const csvText = typeof dlRes.data === 'string' ? dlRes.data : String(dlRes.data)
-    const parsed = parseCsvToSfReport(csvText)
-    return parsed.rows.length > 0 ? parsed : null
-  } catch (e: any) {
-    console.warn(`[pod-bootstrap] SF Drive cache read failed: ${e?.message} — non-fatal`)
-    return null
-  }
-}
+// readSfDriveCache — moved to ./bootstrap/sf-cache.ts (BKL-ARCH-01)
 
 export function requestPodBootstrapCancel(): boolean {
   if (!podBootstrapState.running) return false
@@ -415,149 +272,7 @@ export function requestPodBootstrapCancel(): boolean {
   return true
 }
 
-/**
- * Derive a pod key from an East-style territory code embedded in an AE cell.
- * East codes: "East_Comm_Corp_Pod1_Terr01" → "EAST_COMM_CORP_POD01"
- * Returns empty string if the code doesn't contain a recognizable pod prefix.
- */
-function podKeyFromTerritoryCode(terrCode: string): string {
-  const withoutTerr = terrCode.replace(/_?Terr?\d+$/i, '')
-  if (!withoutTerr) return ''
-  let key = withoutTerr.toUpperCase().replace(/-/g, '_')
-  key = key.replace(/POD(\d)$/, (_, d) => `POD0${d}`)
-  return key
-}
-
-/**
- * Read the territory sheet and extract a map of AE name → { territories, customerNames }.
- * Reuses the same parsing logic as territory-sync.ts but returns raw AE-level data
- * rather than a diff against the current customer list.
- */
-async function readAEsFromTerritorySheet(
-  territorySheetId: string,
-  podTabTitle?: string,
-): Promise<Array<{ aeName: string; territories: string[]; customerNames: string[] }>> {
-  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-  if (!auth) throw new Error('Google auth not configured')
-
-  const sheetsClient = google.sheets({ version: 'v4', auth })
-  const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: territorySheetId })
-  const tabNames = (meta.data.sheets ?? [])
-    .filter(s => !s.properties?.hidden)
-    .map(s => s.properties?.title ?? '')
-
-  // When a specific POD tab is requested, skip the pre-filter so
-  // enterprise tabs (e.g. "TOLA") are not excluded before the pod-name filter runs.
-  const candidateTabs = podTabTitle
-    ? tabNames
-    : tabNames.filter(t => !t.toLowerCase().includes('accounts a') && !t.toLowerCase().includes('territory pods'))
-
-  // When a POD is selected, restrict to matching tab using word-level match.
-  // Accepts either an exact tab name OR a Drive sheet displayName (e.g. "Northwest", "TOLA").
-  const filteredTabs = podTabTitle
-    ? candidateTabs.filter(t => {
-        const words = podTabTitle.toLowerCase().split(/[\W_]+/).filter(w => w.length > 3)
-        return t.toLowerCase() === podTabTitle.toLowerCase() ||
-               words.every(w => t.toLowerCase().includes(w))
-      })
-    : candidateTabs
-
-  // West-style fallback: derive pod key from tab title for cells that
-  // contain only a bare "Terr01" without a full embedded code.
-  const podPrefixFromTab = (tabTitle: string): string => {
-    const t = tabTitle.toLowerCase()
-    if (t.includes('northwest') || t.includes('nw')) return 'WEST_COMM_CORP_NORTHWEST'
-    if (t.includes('southwest') || t.includes('sw')) return 'WEST_COMM_CORP_SOUTHWEST'
-    if (t.includes('north central') || t.includes('nc corp')) return 'WEST_COMM_CORP_NORTH_CENTRAL'
-    if (t.includes('south central') || t.includes('sc corp')) return 'WEST_COMM_CORP_SOUTH_CENTRAL'
-    if (t.includes('tola')) return 'CENTRAL_ENT_TOLA'
-    return ''
-  }
-
-  // Accumulate per-AE data: name → { territories, customerNames }
-  const aeMap = new Map<string, { territories: Set<string>; customerNames: Set<string> }>()
-
-  for (const tabTitle of filteredTabs) {
-    const tabFallbackPodKey = podPrefixFromTab(tabTitle)
-    const resp = await sheetsClient.spreadsheets.values.get({
-      spreadsheetId: territorySheetId,
-      range: `'${tabTitle}'!A1:Z60`,
-    })
-    const rows: string[][] = (resp.data.values ?? []).map((r: any[]) =>
-      r.map((c: any) => String(c ?? '').trim())
-    )
-
-    // Find "Account Executive" header row
-    let headerRowIdx = -1
-    for (let r = 0; r < rows.length; r++) {
-      if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
-    }
-    if (headerRowIdx === -1) continue
-
-    const aeNameRowIdx = headerRowIdx + 1
-    const accountsStartIdx = aeNameRowIdx + 1
-    const headerRow = rows[headerRowIdx] ?? []
-    const aeNameRow = rows[aeNameRowIdx] ?? []
-
-    const aeCols = headerRow
-      .map((cell, idx) => ({ cell, idx }))
-      .filter(({ cell }) => cell === 'Account Executive')
-      .map(({ idx }) => idx)
-
-    for (const col of aeCols) {
-      const aeCell = aeNameRow[col] ?? ''
-      if (!aeCell) continue
-
-      // Extract AE name (first line) and territory code
-      const aeName = aeCell.split('\n')[0].trim()
-      if (!aeName) continue
-
-      let terrCode = ''
-      if (aeCell.includes('\n')) {
-        terrCode = aeCell.split('\n')[1].trim()
-      } else {
-        const terrMatch = aeCell.match(/Terr(\d+)/i)
-        if (terrMatch) terrCode = terrMatch[0]
-      }
-
-      // Derive pod key from territory code (works for East-style full codes).
-      // Falls back to tab-title-derived West key for bare "TerrNN" cells.
-      const derivedPodKey = podKeyFromTerritoryCode(terrCode) || tabFallbackPodKey
-      if (!derivedPodKey) continue
-      const terrNumMatch = terrCode.match(/(\d+)/)
-      if (!terrNumMatch) continue
-      const terrNum = terrNumMatch[1].padStart(2, '0')
-      const tableauTerritory = `${derivedPodKey}_TERR${terrNum}`
-
-      // Ensure AE entry exists in map
-      if (!aeMap.has(aeName)) {
-        aeMap.set(aeName, { territories: new Set(), customerNames: new Set() })
-      }
-      const entry = aeMap.get(aeName)!
-      entry.territories.add(tableauTerritory)
-
-      // Extract customer names from column
-      for (let r = accountsStartIdx; r < rows.length; r++) {
-        const cell = rows[r][col] ?? ''
-        if (!cell) continue
-        if (/^\d{1,3}$/.test(cell)) break
-        if (/^Account\s+S[Aa]/i.test(cell)) break
-        if (/^(Support|Partner Sales|\d+ of \d+)$/i.test(cell)) break
-        if (/^(Openshift|Ansible|Rhel|Ai)\s+(SSP|SSA)/i.test(cell)) break
-        const normalized = normalizeCustomerName(cell)
-        if (normalized && !isJunkCustomerName(normalized)) {
-          entry.customerNames.add(normalized)
-        }
-      }
-    }
-  }
-
-  return Array.from(aeMap.entries()).map(([aeName, data]) => ({
-    aeName,
-    territories: [...data.territories],
-    customerNames: [...data.customerNames],
-  }))
-}
+// podKeyFromTerritoryCode, readAEsFromTerritorySheet — moved to ./bootstrap/territory-sheet.ts (BKL-ARCH-01)
 
 /**
  * Check if an AE is considered "already bootstrapped" — has all 4 key sheet IDs

@@ -33,6 +33,7 @@ interface CustomerProductIntel {
     timeline: string
   }[]
   competitiveAngle: string | null
+  initiativeAlignment?: string[]
   generatedAt: string
   productCacheHash: string
 }
@@ -430,6 +431,20 @@ function ProductCard({
             <div>
               <p className="text-xs text-text-secondary font-medium mb-1.5">Competitive</p>
               <p className="text-sm text-text-primary">{renderMarkdownInline(intel.competitiveAngle)}</p>
+            </div>
+          )}
+
+          {/* Initiative Alignment — "How this helps [Customer]" */}
+          {(intel.initiativeAlignment?.length ?? 0) > 0 && (
+            <div>
+              <p className="text-xs text-text-secondary font-medium mb-1.5">How this helps</p>
+              <ul className="space-y-1">
+                {(intel.initiativeAlignment ?? []).map((item, i) => (
+                  <li key={i} className="text-sm text-text-primary">
+                    {renderMarkdownInline(item)}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
