@@ -6678,7 +6678,7 @@ Description: test/unit/ingest-04-disallow-live-scrape.test.ts was a worktree-onl
 ---
 
 ### BKL-AI-FP01 | Add DISALLOW_GEMINI env guard to brief generation
-Status: 🔴 OPEN
+Status: ✅ DONE — already implemented. customer.ts:566 (callLLM) and :1017 (callLLMStructured) both check DISALLOW_GEMINI=true and return fixture responses. BKL-AI-FP-01 comment present in code.
 Priority: P3
 Size: S
 Source: Worktree test cleanup 2026-04-24 — test/unit/ai-03-disallow-gemini.test.ts existed in worktree but guard was never implemented
@@ -6708,7 +6708,7 @@ Description: test/unit/ingest-10-refresh-l1-ttl.test.ts tested a short-circuit i
 ---
 
 ### BKL-SEC-VERTEX-01 | Fix vertex-429 P0-04b mock boundary in callLLM tests
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Added 4 tests to test/unit/vertex-429.test.ts (new describe block lines 210-258). callLLM + callLLMStructured both throw on all-429 and retry ≥2x. 9/9 pass.
 Priority: P2
 Size: M
 Source: Worktree test cleanup 2026-04-24 — BKL-TEST-P0-04b blocks removed as untestable

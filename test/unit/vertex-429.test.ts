@@ -82,6 +82,9 @@ mock.module('../../src/gemini-cost-tracker.ts', () => ({
 // Now import the SUT AFTER mocks are registered so the module graph picks
 // up the mocked auth + settings.
 const { identifyIndustry } = await import('../../src/account-intelligence.ts')
+// BKL-SEC-VERTEX-01: also import callLLM/callLLMStructured to verify the
+// mock boundary holds for the brief-synthesis path too.
+const { callLLM, callLLMStructured } = await import('../../src/customer.ts')
 
 // Helper: build a realistic Vertex 429 response body so we exercise the real
 // JSON-parsing paths in the SUT (not a stubbed `{}` body).
@@ -203,6 +206,60 @@ describe('BKL-TEST-P0-04: Vertex AI 429 rate-limit graceful degradation', () => 
     // "after N retries" message — both start with "Gemini".
     expect(msg.startsWith('{')).toBe(false)
     expect(msg).toMatch(/^Gemini/i)
+  })
+})
+
+// BKL-SEC-VERTEX-01: verify mock boundary holds for callLLM/callLLMStructured.
+// These functions use fetchGeminiWithRetry (BKL-SEC-RETRY-01 migrated them),
+// so global.fetch interception must reach them through the same path that
+// identifyIndustry uses. Regression: P0-04b tests were removed because the
+// original mock targeted getGeminiToken instead of global.fetch — this confirm
+// the corrected approach (google.ts makeAuth mock + global.fetch spy) works.
+describe('BKL-SEC-VERTEX-01: callLLM/callLLMStructured 429 retry via fetchGeminiWithRetry', () => {
+  let fetchSpy: ReturnType<typeof spyOn>
+  let setTimeoutSpy: ReturnType<typeof spyOn>
+
+  beforeEach(() => {
+    setTimeoutSpy = spyOn(globalThis, 'setTimeout').mockImplementation(
+      // @ts-expect-error — test double
+      (cb: () => void, _delay: number) => { cb(); return 0 as unknown as ReturnType<typeof setTimeout> },
+    )
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(
+      async () => buildVertex429Response(),
+    )
+  })
+
+  afterEach(() => {
+    fetchSpy.mockRestore()
+    setTimeoutSpy.mockRestore()
+  })
+
+  test('callLLM throws on all-429 — does not silently return a thin result', async () => {
+    let caught: unknown = null
+    try {
+      await callLLM('sys', 'user', 'brief-synthesize', 'AcmeTestFixture')
+    } catch (e) { caught = e }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toMatch(/429|rate.?limit/i)
+  })
+
+  test('callLLM retry loop fires — fetch called more than once before throwing', async () => {
+    try { await callLLM('sys', 'user', 'brief-synthesize', 'AcmeTestFixture') } catch { /* expected */ }
+    expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('callLLMStructured throws on all-429 — does not silently return empty schema', async () => {
+    let caught: unknown = null
+    try {
+      await callLLMStructured('sys', 'user', { type: 'object' }, 'brief-extract', 'AcmeTestFixture')
+    } catch (e) { caught = e }
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).toMatch(/429|rate.?limit/i)
+  })
+
+  test('callLLMStructured retry loop fires — fetch called more than once before throwing', async () => {
+    try { await callLLMStructured('sys', 'user', { type: 'object' }, 'brief-extract', 'AcmeTestFixture') } catch { /* expected */ }
+    expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 })
 
