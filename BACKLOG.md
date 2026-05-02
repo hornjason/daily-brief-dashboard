@@ -6668,7 +6668,7 @@ Decision: Research before implementing — evaluate quality tradeoff and whether
 ---
 
 ### BKL-INGEST-04 | Add DISALLOW_LIVE_SCRAPE env guard to scrapers
-Status: 🔴 OPEN
+Status: ✅ DONE — 2026-05-02. Guard already fully implemented: rh-scraper.ts:520-521, rh-scraper.ts:1050-1051, sf-scraper.ts:457-458, sf-scraper.ts:957-958, ccsp-scraper.ts:537-538, ccsp-scraper.ts:670-671. All 19 tests in test/unit/ingest-04-disallow-live-scrape.test.ts pass.
 Priority: P3
 Size: S
 Source: Worktree test cleanup 2026-04-24 — test/unit/ingest-04-disallow-live-scrape.test.ts existed in worktree but guard was never implemented
