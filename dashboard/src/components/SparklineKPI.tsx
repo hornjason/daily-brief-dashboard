@@ -45,26 +45,27 @@ export default function SparklineKPI({
   color,
   invertTrend = false,
 }: SparklineKPIProps) {
-  if (!data || data.length < 2) return null
+  const safe = (data ?? []).filter(Number.isFinite)
+  if (safe.length < 2) return null
 
-  const min = Math.min(...data)
-  const max = Math.max(...data)
+  const min = Math.min(...safe)
+  const max = Math.max(...safe)
   const range = max - min || 1
 
   const padding = 2
   const plotW = width - padding * 2
   const plotH = height - padding * 2
 
-  const points = data
+  const points = safe
     .map((v, i) => {
-      const x = padding + (i / (data.length - 1)) * plotW
+      const x = padding + (i / (safe.length - 1)) * plotW
       const y = padding + plotH - ((v - min) / range) * plotH
       return `${x},${y}`
     })
     .join(' ')
 
   // Compute trend-direction color per VISUAL-DESIGN-SPEC.md
-  const trend = computeTrend(data)
+  const trend = computeTrend(safe)
   const trendColor = trend === 'neutral'
     ? SPARK_NEUTRAL
     : trend === 'up'

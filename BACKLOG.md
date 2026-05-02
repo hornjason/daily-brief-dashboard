@@ -6918,7 +6918,7 @@ Description: After bootstrapping, account list showed stale data from previous c
 Decision: DONE — no code change needed. BKL-CACHE-STALE-01 fix resolved the stale bleed. REG-BOOTSTRAP-ACCOUNTS-01 passes. Commit 1515e77.
 
 ### BKL-UX-SPARKLINE-01 | Dashboard sparkline polyline NaN console error on empty data series
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Added Number.isFinite filter to InlineSparkline.tsx and SparklineKPI.tsx before polyline point calculation. 10 unit tests in test/unit/sparkline-nan.test.ts (10/10 pass).
 Priority: P3
 Size: XS
 Source: Quinn audit 2026-04-25 (Phase 1 gate)
