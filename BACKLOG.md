@@ -8836,3 +8836,20 @@ Source: Rook scan 2026-05-02 (BKL-DRIVE-SCAFFOLD-CACHE-01 post-ship review)
 Files: src/bootstrap-orchestrator.ts (writeScaffoldCache, readScaffoldCache)
 Description: writeScaffoldCache(parentFolderId, entry) writes parentFolderId directly as a JSON key without validation. isValidDriveFolderId() already exists in utils.ts. Add guard at function entry. Also validate entry.configFolderId and entry.productsFolderId with the same helper. readScaffoldCache lookup should similarly validate the key before returning entry.
 Can we test: YES — unit test: writeScaffoldCache with invalid parentFolderId should silently skip write; readScaffoldCache with invalid key should return undefined.
+
+### BKL-PROCESS-01 | Child issue promotion at parent issue close — external traceability
+Status: 🔴 OPEN
+Priority: P2
+Size: M
+Source: Jason design discussion 2026-05-02 — closing the loop between GitHub issues and mid-implementation BKL discoveries
+Files: ~/.claude/skills/dev-loop/SKILL.md, ~/.claude/CLAUDE.md
+Description: When working a GitHub issue, mid-implementation discoveries (Rook findings, debt, spin-off work) land in BACKLOG.md only. The parent GitHub issue has no visibility into what it spawned. Fix: add a close-gate step to the dev loop — before closing a parent issue, sort open BKL items tagged with `Issue: #N` by size: XS stays in BACKLOG.md with a reference, S+ gets promoted to a child GitHub issue via /triage with a full agent brief (including context from the parent thread). Parent issue closes with a findings comment listing child issue numbers and any XS BACKLOG.md references. Child issues include `Parent: #N` in body so GitHub creates the "mentioned in" graph. Adds `Issue: #N` as a standard BACKLOG.md field convention for items that originate from GitHub issue work.
+
+Acceptance criteria:
+- [ ] `Issue: #N` field added as a convention in BACKLOG.md item template
+- [ ] dev-loop SKILL.md updated with close-gate step: scan for open BKL items with `Issue: #N`, sort XS vs S+, promote S+ via /triage
+- [ ] /triage agent brief template updated with `Parent issue context` section
+- [ ] Parent issue close comment format documented and used
+- [ ] At least one real close cycle tested end-to-end
+
+Can we test: YES — close a real parent issue with mixed XS/S+ spin-offs and verify child issues appear in GitHub with correct agent briefs and parent links.
