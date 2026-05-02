@@ -8770,3 +8770,14 @@ Files: src/scraper-manager.ts (line 913)
 Description: /api/auth/supportable/check is a dead route — no frontend code calls it. VPN reachability probe that was used by the old Supportable connection panel (removed). The endpoint itself is in the protected scraper-manager.ts file.
 Solution: Remove the route handler at scraper-manager.ts:912-930 (approx). Requires explicit Jason sign-off before touching scraper-manager.ts per SCRAPER-RULES.md.
 Can we test: YES — verify endpoint returns 404 after removal.
+
+---
+
+### BKL-BUILD-WORKTREE-PRUNE-01 | Stale git worktrees accumulate node_modules blocking container builds
+Status: 🔴 OPEN
+Priority: P2
+Size: XS
+Source: 2026-05-02 — make build failed with "no space left on device" writing worktree node_modules to container overlay
+Files: Makefile (build target), Dockerfile.hero.dockerignore (new)
+Description: Git worktrees from prior agent runs accumulate at .claude/worktrees/ with full node_modules (1GB+). When podman copies these into the container overlay during `COPY . .`, the overlay layer fills up and the build fails. Two fixes applied: (1) created Dockerfile.hero.dockerignore matching .dockerignore to ensure podman excludes .claude/ when -f Dockerfile.hero is specified; (2) manually pruned 20 stale worktrees. But the root issue recurs if worktrees accumulate again. Fix: add `git worktree prune` or force-remove stale worktrees to Makefile `build` target pre-check. Or add periodic worktree cleanup script.
+Can we test: YES — verify make build succeeds after worktrees exceed 500MB.
