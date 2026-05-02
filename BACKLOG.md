@@ -8579,13 +8579,14 @@ Solution: After CSV download fails in scrapePodCcspRaw, check the current page U
 ---
 
 ### BKL-ARCH-09 | wizard-e2e test-13 pre-existing failure — "Red Hat Connection" accordion not visible
-Status: OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: S
 Source: Marcus #12 — confirmed via git stash pre/post; Quinn confirmed on prod 2026-05-02
 Files: test/wizard-e2e.spec.ts (test-13), dashboard/src/pages/SetupPage.tsx
 Description: wizard-e2e test-13 "expanding Connections shows Red Hat Connection section" fails on main. The test clicks the Step 3 accordion button and expects `page.locator('[data-testid="hero-step3-summary"]')` to be visible. The accordion button may not be rendering as expected in the test environment, or the test ID is mismatched. Fails identically before and after the DataSourcesSection deletion — not caused by recent changes. Causes 16 downstream wizard-e2e tests to be skipped due to serial cascade.
 Solution: Read the current Step 3 accordion markup in SetupPage.tsx, confirm the data-testid attribute exists on the expected element, update the test selector if it drifted. Run wizard-e2e against 7776 to confirm fix.
+Decision: Root cause was threefold — (1) test assertion checked for "Red Hat Connection" text but summary-mode renders "Red Hat Token Configured"; (2) the 7778 seeded server was running from a stale agent worktree with April 28 bundle (before HeroStep3Connections was added); (3) stale visual baseline snapshots. Fix: updated test 13 to use data-testid CSS selector covering both form and summary states; rebuilt dashboard bundle and restarted 7778 from project root with seed config; updated visual baselines. All 29 wizard-e2e tests now pass.
 
 ---
 
@@ -8668,7 +8669,7 @@ Solution: Add snapshot/restore guards to REG-001 and REG-024, or run them in a s
 ---
 
 ### BKL-ARCH-L4-SPLIT-FOLLOWUP-01 | SetupPage.tsx — Tableau URL/territory inputs still render in AE config form
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P1
 Size: S
 Source: Quinn gate 2026-05-01 (post-rebuild for issue #7)
@@ -8676,11 +8677,12 @@ Files: dashboard/src/pages/SetupPage.tsx (lines 2014, 2153, 2293–2314)
 Description: Marcus removed Tableau from the bootstrap progress UI but not from the AE config step. Still rendering unconditionally: (1) "Tableau is not connected" warning (line 2014), (2) Tableau URL input (line 2153), (3) Tableau territory input (lines 2293–2314). Hero install wizard must show zero Tableau content.
 Solution: Remove or gate behind isPrimary. Acceptance: wizard-e2e Tableau-zero assertion passes (0 occurrences in rendered DOM).
 Can we test: YES — test/wizard-e2e.spec.ts line 287 asserts toBe(0).
+Decision: Verified via code grep and passing wizard-e2e test 22 — no visible "Tableau" text in current SetupPage.tsx JSX. The tableauUrl field exists in AE form state but the label says "Territory (optional)" not "Tableau". Items that Quinn logged in May 2026-05-01 were already resolved by issue #7 — the stale 7778 server (running April 28 bundle) was causing false positives.
 
 ---
 
 ### BKL-ARCH-L4-SPLIT-FOLLOWUP-02 | SetupPage.tsx — VNC popup buttons still render in wizard
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P1
 Size: S
 Source: Quinn gate 2026-05-01 (post-rebuild for issue #7)
@@ -8688,6 +8690,7 @@ Files: dashboard/src/pages/SetupPage.tsx (lines 2532, 2540, 2840)
 Description: "Open VNC" and "Open VNC Login" buttons still rendered; window.open(..., 'rh-vnc'/'sf-vnc'/'tableau-vnc') calls present. Hero install must not surface VNC.
 Solution: Remove or gate behind isPrimary. Acceptance: wizard-e2e VNC-zero assertion passes.
 Can we test: YES — test/wizard-e2e.spec.ts line 310 asserts toBe(0).
+Decision: Verified via code grep and passing wizard-e2e test 23 — no visible "VNC" text in current wizard DOM. VNC references in SetupPage.tsx are inside handler functions and comments, not rendered as button labels. The stale 7778 server (April 28 bundle) had old DataSourcesSection with VNC content — fixed by rebuilding and restarting 7778.
 
 ---
 
@@ -8704,7 +8707,7 @@ Can we test: YES — /api/node-role must return {"isL3Only":true} on local prod.
 ---
 
 ### BKL-WIZARD-E2E-01 | wizard-e2e.spec.ts ships unconditional failing assertions while issue #7 is incomplete
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P1
 Size: S
 Source: Quinn gate 2026-05-01
@@ -8712,6 +8715,7 @@ Files: test/wizard-e2e.spec.ts (lines 281–310)
 Description: Spec has a comment noting Tableau/VNC removal is blocked on issue #7, but assertions (expect(tableauCount).toBe(0), expect(vncCount).toBe(0)) are NOT skipped. CI wizard-e2e job will fail on push with current bundle.
 Solution: Ship FOLLOWUP-01+02 first (preferred). Alternatively add test.skip() until they land. Keep CI honest.
 Can we test: YES — npx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e against 7776.
+Decision: All 29 wizard-e2e tests now pass. Tests 22-24 (Tableau/VNC zero guards) pass — they were blocked by the BKL-ARCH-09 cascade (serial mode). Fixed by resolving BKL-ARCH-09 and rebuilding the 7778 seeded server with current bundle.
 
 ---
 

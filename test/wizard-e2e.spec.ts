@@ -159,7 +159,11 @@ test.describe('3. Step 3 of 5 — Connections', () => {
   test('expanding Connections shows Red Hat Connection section', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
     await page.getByRole('button', { name: /Step 3 of 5 — Connections/ }).click()
-    await expect(page.getByText('Red Hat Connection').first()).toBeVisible()
+    // Component shows "Red Hat Connection" in form/loading mode and "Red Hat Token Configured"
+    // in summary mode — match either testid to handle both states.
+    await expect(
+      page.locator('[data-testid="hero-step3-connections"], [data-testid="hero-step3-summary"]').first()
+    ).toBeVisible()
   })
 
   test('offline token shows summary when token is configured', async ({ page }) => {
