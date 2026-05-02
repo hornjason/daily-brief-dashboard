@@ -57,15 +57,26 @@ describe('BKL-SYNC-L3-01: runSfPodSync exported from sf-scraper.ts', () => {
 // ── sync-l3-daemon.ts: primary guard ─────────────────────────────────────────
 
 describe('BKL-SYNC-L3-01: sync-l3-daemon exits 1 when NODE_ROLE !== primary', () => {
-  test('daemon checks NODE_ROLE === primary at startup', () => {
-    expect(DAEMON_SRC).toContain("process.env.NODE_ROLE !== 'primary'")
+  // After issue #10, the daemon imports isPrimary() from src/lib/node-role.ts
+  // and gates startup on `if (!isPrimary())` — same semantics, single source of truth.
+  test('daemon imports isPrimary from node-role module', () => {
+    expect(DAEMON_SRC).toContain("from '../src/lib/node-role.ts'")
+    expect(DAEMON_SRC).toContain('isPrimary')
+  })
+
+  test('daemon checks !isPrimary() at startup', () => {
+    expect(DAEMON_SRC).toContain('if (!isPrimary())')
   })
 
   test('daemon calls process.exit(1) on non-primary NODE_ROLE', () => {
     // The guard and exit must appear together
-    const guardIdx = DAEMON_SRC.indexOf("process.env.NODE_ROLE !== 'primary'")
+    const guardIdx = DAEMON_SRC.indexOf('if (!isPrimary())')
     const nearbySlice = DAEMON_SRC.slice(guardIdx, guardIdx + 200)
     expect(nearbySlice).toContain('process.exit(1)')
+  })
+
+  test('daemon does not read process.env.NODE_ROLE directly', () => {
+    expect(DAEMON_SRC).not.toContain('process.env.NODE_ROLE')
   })
 
   test('getMsUntil530amET is exported from sync-l3-daemon.ts', () => {

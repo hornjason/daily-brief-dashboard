@@ -1,4 +1,5 @@
 import { setLivePageBusy, getScrapeContext, ensureBrowserHealthy } from "./rh-scraper.ts"
+import { isPrimary } from './lib/node-role.ts'
 /**
  * src/ccsp-scraper.ts
  *
@@ -581,7 +582,7 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
   }
 
   // IS_LEADER guard — non-leader instances cap at L3; only leader may do live Tableau scrape (L4)
-  if (process.env.NODE_ROLE !== 'primary') {
+  if (!isPrimary()) {
     console.log(`[ccsp] ${ae.name}: non-leader instance — L4 (live Tableau scrape) not permitted; returning empty`)
     return { aeName: ae.name, rows: [], accountPeriod: label }
   }
@@ -886,7 +887,7 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
     throw new Error('[ccsp-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
   }
 
-  if (process.env.NODE_ROLE !== 'primary') {
+  if (!isPrimary()) {
     console.log('[ccsp] NODE_ROLE not primary — this instance will cap at L3 for all AEs')
   }
 
@@ -1019,7 +1020,7 @@ export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFold
     throw new Error('[ccsp-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
   }
 
-  if (process.env.NODE_ROLE !== 'primary') {
+  if (!isPrimary()) {
     console.log('[ccsp] scrapePodCcspRaw: non-leader instance — L4 not permitted; returning empty')
     return { rows: [], period: getRollingFyWindow().label }
   }

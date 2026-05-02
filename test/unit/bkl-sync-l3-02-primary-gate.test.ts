@@ -25,12 +25,24 @@ function extractIsPrimaryBlock(): string {
 }
 
 describe('BKL-SYNC-L3-02: isPrimary predicate declared', () => {
+  // After issue #10, the predicate is sourced from src/lib/node-role.ts via
+  // `nodeIsPrimary()`. The local `const isPrimary` binding is preserved so all
+  // downstream gating sites read a single boolean.
   test('isPrimary predicate is declared before initBackgroundScheduler', () => {
-    const predicateIdx = BG_SCHED.indexOf("const isPrimary = process.env.NODE_ROLE === 'primary'")
+    const predicateIdx = BG_SCHED.indexOf('const isPrimary = nodeIsPrimary()')
     const schedulerIdx = BG_SCHED.indexOf('function initBackgroundScheduler')
     expect(predicateIdx).toBeGreaterThan(-1)
     expect(schedulerIdx).toBeGreaterThan(-1)
     expect(predicateIdx).toBeLessThan(schedulerIdx)
+  })
+
+  test('background-scheduler imports isPrimary from node-role module', () => {
+    expect(BG_SCHED).toContain("from './lib/node-role.ts'")
+    expect(BG_SCHED).toContain('isPrimary as nodeIsPrimary')
+  })
+
+  test('background-scheduler does not read process.env.NODE_ROLE directly', () => {
+    expect(BG_SCHED).not.toContain('process.env.NODE_ROLE')
   })
 })
 
