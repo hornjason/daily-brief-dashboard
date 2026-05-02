@@ -164,17 +164,15 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
     },
   })
 
-  // BKL-TEST-P0-04c: shared 429-retry helper. Preserves the 120s per-attempt
-  // AbortSignal.timeout that callGeminiGrounded originally set (grounded calls
-  // are slow — industry analysis can take 60s+). Exhausted retries throw
-  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
-  // canonical "Gemini API error NNN (project=... location=... model=...)"
-  // message with Bearer redaction.
+  // BKL-INTEL-TIMEOUT-01: reduced to 60s per attempt (was 120s). Gemini Flash
+  // grounded calls take 10-40s in practice; 120s was overly conservative and
+  // caused 6+ min stalls on slow Vertex days (3 attempts × 120s = 6 min per
+  // call). 60s still gives enough headroom for the longest grounded calls.
   const res = await fetchGeminiWithRetry(url, getGeminiToken, requestBody, {
     callType:     opts.callType ?? 'intelligence-grounded',
     customerName: opts.customerName ?? 'unknown',
     model, project, location,
-    timeoutMs: 120_000,
+    timeoutMs: 60_000,
     logPrefix: '[acct-intel]',
   })
 

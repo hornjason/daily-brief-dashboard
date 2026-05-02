@@ -7810,7 +7810,7 @@ Pre-existing: Not introduced by CONN-SF-AUTO or DOM-BATCH changes (those don't t
 Can we test: YES — REG-021 is already the test. Fix requires populating accountNumbers in /api/accounts response.
 
 ### BKL-INTEL-TIMEOUT-01 | Account intelligence pipeline stalls on Vertex AI slow-latency days
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — Reduced timeoutMs from 120_000 to 60_000 in account-intelligence.ts callGeminiGrounded. Worst-case per-call: 3 attempts × 60s = 180s (was 360s). Worst-case pipeline: 3 calls × 180s = 9 min (was 18 min). No test change needed; gemini-fetch.test.ts covers the retry path.
 Priority: P2
 Size: S
 Source: Live observation 2026-04-28 — A10 Networks intelligence took 6+ min (still running)
