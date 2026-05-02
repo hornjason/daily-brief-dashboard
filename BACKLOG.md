@@ -8018,7 +8018,7 @@ Files: test/ui/setup-l3-gating.spec.ts (or hero-step3.spec.ts)
 Description: No assertion verifies that `data-testid="rh-token-input"` is absent when NODE_ROLE=primary. The L3-only gating logic is tested from the positive path (NODE_ROLE unset → component renders) but not the negative path (NODE_ROLE=primary → component absent). Add one assertion to cover suppression.
 
 ### BKL-HERO-04 | Fixture drift — TBH AE data stale in test fixtures
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02
 Priority: P3
 Size: S
 Source: Quinn scan 2026-05-01 BKL-HERO-01 Phase 3

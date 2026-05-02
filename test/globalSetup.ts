@@ -13,14 +13,13 @@
 const BASE = process.env.BASE_URL ?? 'http://localhost:7777'
 
 // Mirrors the CAROLANNE constant in fixtures.ts — update both together.
-// BKL-TEST-FIXTURE-DRIFT-01: Re-pointed from "Carolanne Farrell" (no longer
-// in roster) to "TBH" — first AE in data/config/aes.json with full config.
+// BKL-HERO-04: Updated 2026-05-02 — re-pointed to "Carolanne Farrell" (live prod AE).
 const FIXTURE_CAROLANNE = {
-  name: 'TBH',
-  sfReportId: '00OPe00000k5m9ZMAQ',
-  supportableSheetId: '1HcGqHoR6tsK-dK2hipC3vwNMu8I_OV27OixwgOsEixY',
-  pipelineSheetId: '1uLUThdFEz_WTfePNP40V_y5ES8TJTbTMCecwbtdDcLk',
-  ccspSheetId: '1me9Vz4rTpo2g9dz11vsVLuxAq77MlZ9t__07CPds-Bc',
+  name: 'Carolanne Farrell',
+  sfReportId: '00OPe00000isU2zMAE',
+  supportableSheetId: '150e3-q-8_6Uy3qnLhL-ARBVHyVy29P7tnAuFjxkkuCg',
+  pipelineSheetId: '10H8Nl8oQQg1x9Zt0p5cys7JJp0b4ObfzhB-pPMot3BM',
+  ccspSheetId: '1K37mK8BQa8RqHL8ljp_wv7dmF7g9Y_Q1YhhYFmsFaPQ',
 }
 
 export default async function globalSetup() {
