@@ -354,12 +354,12 @@ test('REG-TOKEN-09: account-intelligence.ts declares tiered company + industry T
 
 test('REG-TOKEN-10: pregen-all fetches are OUT of per-AE /api/bootstrap/auto handler (BKL-TOKEN-03)', () => {
   const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'bootstrap-orchestrator.ts'), 'utf-8')
-  // Find the per-AE handler body — it starts at app.post('/api/bootstrap/auto'... and ends
-  // at the next app.post or app.get route declaration.
-  const handlerStart = src.indexOf("app.post('/api/bootstrap/auto'")
+  // Find the per-AE handler body — it starts at router.post('/api/bootstrap/auto'... and ends
+  // at the next router.get or router.post route declaration.
+  const handlerStart = src.indexOf("router.post('/api/bootstrap/auto'")
   expect(handlerStart, "'/api/bootstrap/auto' route handler not found").toBeGreaterThan(-1)
   // Next route declaration marks the end of this handler block
-  const nextRoute = src.indexOf('app.', handlerStart + 1)
+  const nextRoute = src.indexOf('router.', handlerStart + 1)
   expect(nextRoute, 'next route after /api/bootstrap/auto not found').toBeGreaterThan(handlerStart)
   const handlerBody = src.slice(handlerStart, nextRoute)
 

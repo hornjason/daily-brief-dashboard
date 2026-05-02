@@ -1,17 +1,14 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { bodyLimit } from 'hono/body-limit'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, readdirSync } from 'fs'
-import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { renameSync } from 'fs'
 import { resolve } from 'path'
-import { google } from 'googleapis'
-import { fetchEmail, fetchDrive, fetchCalendar, makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './src/google.ts'
+import { fetchEmail, fetchDrive, fetchCalendar } from './src/google.ts'
 import { fetchCases, getTokenTelemetry } from './src/redhat.ts'
 import { fetchCasesViaSolr } from './src/rh-cases-api.ts'
 import { getConfiguredTransport } from './src/case-client.ts'
-import { generateBrief, getBriefProvider, isBriefConfigured } from './src/customer.ts'
-import type { AE, Customer } from './src/types.ts'
-import { rebuildFolderMap, getWatcherState } from './src/drive-watcher.ts'
+import type { Customer } from './src/types.ts'
 import { startLoginBrowser, cancelLoginBrowser, getRhStatus, recordScrapeExpired } from './src/rh-auth.ts'
 import { closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCallback, setContextRecoveryCallback } from './src/rh-scraper.ts'
 
@@ -20,15 +17,15 @@ import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
 import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning, adoptSupportableContext } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
-import { initCacheLayer, createCacheRouter, readSheetCache, readPipelineCache, toSlug } from './src/cache-layer.ts'
+import { initCacheLayer, createCacheRouter, readSheetCache, readPipelineCache } from './src/cache-layer.ts'
 import { initSettingsApi, createSettingsRouter } from './src/settings-api.ts'
 import { createNodeRoleRouter } from './src/node-role-routes.ts'
 import { createRegionAccessRouter } from './src/region-access-routes.ts'
 import { initAuthRoutes, createAuthRouter } from './src/auth-routes.ts'
 // ── M02 extracted modules ───────────────────────────────────────────────────
-import { loadServerState, aes, customers, saveAes, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
+import { loadServerState, aes, customers, setAes, setCustomers, patchAe, AES_PATH, CUSTOMERS_PATH } from './src/server-state.ts'
 import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
-import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, getTelemetryLog, getTelemetrySummary, setSfSyncLastError } from './src/scraper-manager.ts'
+import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
 import { initDashboardRoutes, createDashboardRouter } from './src/dashboard-routes.ts'
@@ -37,21 +34,23 @@ import { createBootstrapRouter, resetBootstrapStates } from './src/bootstrap-orc
 // ── M04 extracted modules ───────────────────────────────────────────────────
 import { createSheetImportRouter } from './src/sheet-import.ts'
 import { createDriveSourcesRouter } from './src/drive-sources.ts'
-import { sanitizeErr, sanitizeText, isValidDriveFolderId, notify, liveProbe } from './src/utils.ts'
+import { sanitizeErr, isValidDriveFolderId, notify, liveProbe } from './src/utils.ts'
 import { deriveConfidence, ConnectionHealthSchema } from './src/connection-health.ts'
 // ── M05 extracted modules ───────────────────────────────────────────────────
 import { initSetupRoutes, createSetupRouter, runStartupDriveMerge } from './src/setup-routes.ts'
+// ── BKL-ARCH-10: AE management routes ───────────────────────────────────────
+import { initAeRoutes, createAeRouter } from './src/ae-routes.ts'
+// ── BKL-ARCH-12: Admin / monitoring / Drive routes ───────────────────────────
+import { initAdminRoutes, createAdminRouter } from './src/admin-routes.ts'
 import { initCustomerRoutes, createCustomerRouter } from './src/customer-routes.ts'
 import { createProductIntelRouter } from './src/product-intel-routes.ts'
 import { initRestoreRoutes, createRestoreRouter } from './src/restore-routes.ts'
 import { createBackupRouter } from './src/backup-routes.ts'
-import { getGeminiUsageSummary } from './src/gemini-cost-tracker.ts'
 import { initJobPersistence } from './src/account-intelligence.ts'
 // ── BKL-UX52: Multi-pod support ───────────────────────────────────────────
 import { readPodConfig, getAeNamesForPod } from './src/pod-config.ts'
 import { computeAllAttentionScores } from './src/attention-score.ts'
 // ── Region config (for parentFolderId / Drive distribution) ───────────────
-import { normalizeSettings, getRegionById } from './src/region-config.ts'
 import { onCacheLevel, offCacheLevel, type IngestCacheEvent } from './src/ingest-events.js'
 import { onAIEvent, offAIEvent, type AIIntelEvent } from './src/ai-events.js'
 
@@ -123,7 +122,7 @@ initCacheLayer(CACHE_DIR, RH_CASES_CACHE_PATH)
 initSfSyncFromCache(readPipelineCache)
 initJobPersistence(CACHE_DIR)
 initDashboardRoutes({ cacheDir: CACHE_DIR, rhCasesCachePath: RH_CASES_CACHE_PATH, dataSourcesPath: DATA_SOURCES_PATH })
-initSettingsApi(DATA_SOURCES_PATH)
+initSettingsApi(DATA_SOURCES_PATH, SETTINGS_PATH)
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'your-admin@example.com'
 const SF_REPORT_ID   = process.env.SF_REPORT_ID ?? ''
 const SF_SESSION_PATH = process.env.SF_SESSION
@@ -144,77 +143,13 @@ initAuthRoutes({
   rhCasesCachePath: RH_CASES_CACHE_PATH,
   sfSessionPath: SF_SESSION_PATH,
 })
+initAeRoutes({ cacheDir: CACHE_DIR, settingsPath: SETTINGS_PATH })
+initAdminRoutes({ sheetsTokenPath: SHEETS_TOKEN_PATH_SRV })
 
 const app = new Hono()
 
-// BKL-M05: Display-oriented normalizer — differs from normalizeForMatch by stripping state codes, parentheticals, and applying title case (needed for Drive folder names).
-/**
- * Normalize a customer name for use as a Drive folder name and search key.
- * Strips state suffixes, legal entity suffixes, and parentheticals; applies title case.
- * Input:  "DROPBOX, INC. - CA"  →  Output: "Dropbox"
- * Input:  "FRED HUTCHINSON CANCER CENTER"  →  Output: "Fred Hutchinson Cancer Center"
- * Input:  "A10 NETWORKS, INC."  →  Output: "A10 Networks"
- */
-function normalizeCustomerName(raw: string): string {
-  let name = raw.trim()
-  // Strip state suffix " - XX" or " - XX/XX"
-  name = name.replace(/\s+-\s+[A-Z]{2}(\/[A-Z]{2})?$/, '')
-  // Strip parentheticals like "(REI)" or "(HostGator)"
-  name = name.replace(/\s*\([^)]*\)\s*$/, '')
-  // Strip legal entity suffixes (with or without leading comma)
-  const legalSuffixes = [
-    /,?\s+L\.?L\.?P\.?$/i,
-    /,?\s+P\.?T\.?Y\.?\s+LTD\.?$/i,
-    /,?\s+L\.?P\.?$/i,
-    /,?\s+INC\.?$/i,
-    /,?\s+LLC\.?$/i,
-    /,?\s+LTD\.?$/i,
-    /,?\s+CORP\.?$/i,
-    /,?\s+CO\.?$/i,
-    /,?\s+PLC\.?$/i,
-  ]
-  for (const re of legalSuffixes) name = name.replace(re, '')
-  name = name.trim().replace(/,+$/, '').trim()
-  // Title case: preserve words with digits (A10, H2O) or internal dots (U.S.) or already mixed case
-  name = name.split(/\s+/).map(word => {
-    if (/\d/.test(word) || /[a-z]/.test(word) || /\.[a-zA-Z]/.test(word)) return word
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  }).join(' ')
-  return name
-}
-
-
-/** Salesforce report/object ID — alphanumeric only, 15-18 chars. */
-function isValidSfId(value: unknown): boolean {
-  if (typeof value !== 'string') return true
-  if (value === '') return true
-  return /^[A-Za-z0-9]{15,18}$/.test(value)
-}
-
-/**
- * BKL-F07: Extract a bare SF report ID from a full Salesforce URL or return as-is if already bare.
- * Handles Lightning URLs (/lightning/r/Report/ID/view), Classic (/ID), and path variants.
- * Returns the extracted ID or the original string if no URL pattern matched.
- */
-function extractSfReportId(raw: string): string {
-  const trimmed = raw.trim()
-  if (!trimmed) return ''
-  // Already a bare ID — return as-is
-  if (/^[A-Za-z0-9]{15,18}$/.test(trimmed)) return trimmed
-  // URL pattern — extract last path segment that looks like a SF ID
-  if (/^https?:\/\//i.test(trimmed)) {
-    try {
-      const url = new URL(trimmed)
-      const segments = url.pathname.split('/').filter(Boolean)
-      // Walk segments in reverse to find the ID (handles /view suffix, etc.)
-      for (let i = segments.length - 1; i >= 0; i--) {
-        if (/^[A-Za-z0-9]{15,18}$/.test(segments[i])) return segments[i]
-      }
-    } catch { /* not a valid URL — fall through */ }
-  }
-  // Not a URL and not a bare ID — return as-is (will fail validation downstream)
-  return trimmed
-}
+// ── Private helpers moved to src/ae-routes.ts (BKL-ARCH-10) ─────────────────
+// normalizeCustomerName, isValidSfId, extractSfReportId
 
 // ── Request body size limit ───────────────────────────────────────────────────
 // Uses actual stream measurement — not spoofable via missing Content-Length header
@@ -250,6 +185,8 @@ app.route('/', createCustomerRouter())
 app.route('/', createProductIntelRouter())
 app.route('/', createRestoreRouter())
 app.route('/', createAuthRouter())
+app.route('/', createAeRouter())
+app.route('/', createAdminRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
@@ -493,13 +430,7 @@ app.route('/', createScraperRouter())
 // ── Unified scrape API (BKL-M25 — registered from scrape-api.ts) ───────────
 registerScrapeRoutes(app)
 
-// ── BKL-M50e: Scraper telemetry routes ──────────────────────────────────────
-
-// GET /api/status/telemetry — summary stats per service (last run, success rate, avg duration)
-app.get('/api/status/telemetry', (c) => c.json(getTelemetrySummary()))
-
-// GET /api/status/telemetry/history — full per-service scrape log (last 100 per service)
-app.get('/api/status/telemetry/history', (c) => c.json(getTelemetryLog()))
+// ── BKL-M50e: Scraper telemetry routes (extracted to src/admin-routes.ts — BKL-ARCH-12)
 
 // ── Auto-bootstrap + Tableau routes (M03 — registered from bootstrap-orchestrator.ts) ──
 app.route('/', createBootstrapRouter())
@@ -528,286 +459,11 @@ app.get('/api/territory/notifications', async (c) => {
 // ── Config backup routes (BKL-BACKUP-01) ────────────────────────────────────
 app.route('/', createBackupRouter())
 
-// ── Gemini cost tracking (BKL-M52) ──────────────────────────────────────────
+// ── Gemini cost tracking + Version API (extracted to src/admin-routes.ts — BKL-ARCH-12)
 
-app.get('/api/admin/gemini-usage', (c) => {
-  return c.json(getGeminiUsageSummary())
-})
+// ── AE Config API (extracted to src/ae-routes.ts) ────────────────────────────
 
-// ── Version API ───────────────────────────────────────────────────────────────
-
-const APP_VERSION: string = (() => {
-  try {
-    const pkg = JSON.parse(readFileSync(resolve(import.meta.dir, 'package.json'), 'utf-8'))
-    return pkg.version ?? '1.0.0'
-  } catch { return '1.0.0' }
-})()
-
-app.get('/api/version', (c) => c.json({ version: APP_VERSION }))
-
-// ── AE Config API ─────────────────────────────────────────────────────────────
-
-app.get('/api/aes', (c) => c.json({ aes }))
-
-app.post('/api/aes', async (c) => {
-  try {
-    const body = await c.req.json() as { aes: AE[] }
-    if (!Array.isArray(body.aes)) return c.json({ error: 'aes must be an array' }, 400)
-    if (body.aes.length > 50) return c.json({ error: 'aes array exceeds maximum of 50 entries' }, 400)
-
-    // Validate each AE entry
-    for (let i = 0; i < body.aes.length; i++) {
-      const ae = body.aes[i]
-      const name = sanitizeText(ae.name)
-      if (!name) return c.json({ error: `aes[${i}].name is invalid or contains disallowed characters` }, 400)
-      // BKL-F07: Accept full Salesforce URLs — extract bare ID before validation
-      if (ae.sfReportId) ae.sfReportId = extractSfReportId(ae.sfReportId)
-      if (ae.sfReportId && !isValidSfId(ae.sfReportId)) return c.json({ error: `aes[${i}].sfReportId must be a valid Salesforce report URL or 15-18 character ID` }, 400)
-      if (Array.isArray(ae.tableauTerritories)) {
-        for (const t of ae.tableauTerritories) {
-          if (typeof t !== 'string' || t.length > 100) return c.json({ error: `aes[${i}].tableauTerritories entry exceeds 100 characters` }, 400)
-        }
-      }
-      // Extract folder ID from full Google Drive URL if provided
-      const rawFolderId = ae.driveFolderId ?? ''
-      const folderIdMatch = rawFolderId.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)
-      const driveFolderId = folderIdMatch ? folderIdMatch[1] : rawFolderId.trim()
-      // Write whitelisted fields only — drop anything not in the schema
-      body.aes[i] = {
-        name,
-        driveFolderId,
-        parentFolderId:       ae.parentFolderId       ?? undefined,
-        sfReportId:           ae.sfReportId           ?? '',
-        tableauTerritories:   ae.tableauTerritories   ?? [],
-        tableauUrl:           ae.tableauUrl           ?? undefined,
-        supportableSheetId:   ae.supportableSheetId   ?? undefined,
-        pipelineSheetId:      ae.pipelineSheetId      ?? undefined,
-        ccspSheetId:          ae.ccspSheetId          ?? undefined,
-      }
-      // Strip undefined values to keep JSON clean
-      Object.keys(body.aes[i]).forEach(k => (body.aes[i] as any)[k] === undefined && delete (body.aes[i] as any)[k])
-    }
-
-    // Detect removed AEs and invalidate their customer caches
-    const newAeNames = new Set(body.aes.map((a: AE) => a.name))
-    const removedAeNames = aes.filter(a => !newAeNames.has(a.name)).map(a => a.name)
-    const removedCustomerNames = removedAeNames.length > 0
-      ? customers.filter(c => c.ae && removedAeNames.includes(c.ae)).map(c => c.name)
-      : []
-
-    saveAes(body.aes)
-    // Mark customers belonging to deleted AEs as inactive (preserve if they have data)
-    if (removedAeNames.length > 0) {
-      try {
-        const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
-        const updated = (raw.customers ?? []).map((c: Customer) => {
-          if (!c.ae || !removedAeNames.includes(c.ae)) return c
-          // Preserve if customer has account numbers or a Drive folder — mark inactive
-          if ((c.accountNumbers?.length ?? 0) > 0 || c.driveFolderId) {
-            return { ...c, inactive: true }
-          }
-          return null // no data — drop entirely
-        }).filter(Boolean)
-        writeFileSync(CUSTOMERS_PATH, JSON.stringify({ customers: updated }, null, 2))
-        setCustomers(updated)
-        const markedInactive = updated.filter((c: Customer) => c.inactive && removedAeNames.includes(c.ae ?? '')).length
-        const dropped = (raw.customers ?? []).length - updated.length
-        console.log(`[wizard] AE removal: ${markedInactive} customers marked inactive, ${dropped} dropped (no data) for AEs: ${removedAeNames.join(', ')}`)
-      } catch (e: any) { console.warn('[wizard] customer cleanup after AE removal failed:', e.message) }
-    } else {
-      // No AEs removed — just reload customers in case other changes happened
-      try {
-        const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
-        setCustomers(raw.customers ?? [])
-      } catch (e: any) { console.warn('[wizard] customers reload failed:', e.message) }
-    }
-
-    // Purge per-customer cache files for removed AEs
-    if (removedCustomerNames.length > 0) {
-      try {
-        const cacheFiles = readdirSync(CACHE_DIR).filter(f => f.endsWith('.json'))
-        const removedSlugs = new Set(removedCustomerNames.map(toSlug))
-        for (const file of cacheFiles) {
-          const match = file.match(/^(.+?)-(sheets|\d{4}-\d{2}-\d{2})\.json$/)
-          if (!match) continue
-          if (removedSlugs.has(match[1])) {
-            try { unlinkSync(resolve(CACHE_DIR, file)) } catch { /* already gone */ }
-            console.log(`[wizard] purged cache file for removed AE customer: ${file}`)
-          }
-        }
-        // AE-level caches are stale after AE removal — delete so next sync rebuilds clean
-        for (const aeCache of ['ccsp-data.json', 'pipeline-data.json']) {
-          try { unlinkSync(resolve(CACHE_DIR, aeCache)) } catch { /* ok if absent */ }
-          console.log(`[wizard] purged ${aeCache} after removing AEs: ${removedAeNames.join(', ')}`)
-        }
-        // Morning synthesis is stale after AE removal
-        try { unlinkSync(resolve(CACHE_DIR, 'morning-synthesis.json')) } catch { /* ok */ }
-        console.log(`[wizard] invalidated morning-synthesis.json after removing AEs: ${removedAeNames.join(', ')}`)
-      } catch (e: any) { console.warn('[wizard] cache cleanup after AE removal failed:', e.message) }
-    }
-
-    return c.json({ ok: true, count: aes.length })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-app.post('/api/aes/validate-folder', async (c) => {
-  try {
-    const { folderUrl } = await c.req.json() as { folderUrl: string }
-    const match = folderUrl?.match(/\/folders\/([\w-]+)/)
-    if (!match) return c.json({ error: 'Could not extract folder ID from URL' }, 400)
-    const folderId = match[1]
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth })
-    const res = await drive.files.get({
-      fileId: folderId,
-      supportsAllDrives: true,
-      fields: 'id,name,mimeType',
-    })
-    if (res.data.mimeType !== 'application/vnd.google-apps.folder') {
-      return c.json({ error: 'URL does not point to a folder' }, 400)
-    }
-    const folderName = res.data.name ?? folderId
-
-    // ── Config subfolder + settings.json distribution (BKL-UX84) ─────────
-    // 1. Create Config/ subfolder inside the validated folder (idempotent).
-    // 2. Write current settings.json to Config/settings.json in Drive.
-    // 3. Save parentFolderId to local settings.json for the first region.
-    let configFolderId: string | undefined
-    try {
-      const listRes = await drive.files.list({
-        q: `'${folderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id,name)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      })
-      configFolderId = listRes.data.files?.[0]?.id ?? undefined
-      if (!configFolderId) {
-        const createRes = await drive.files.create({
-          requestBody: { name: 'Config', mimeType: 'application/vnd.google-apps.folder', parents: [folderId] },
-          supportsAllDrives: true,
-          fields: 'id',
-        })
-        configFolderId = createRes.data.id!
-      }
-
-      // Save parentFolderId to local settings.json FIRST (before Drive write)
-      try {
-        let rawSettings: Record<string, unknown> = {}
-        try { rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')) } catch { /* new file */ }
-        const normalized = normalizeSettings(rawSettings)
-        if (normalized.regions.length > 0) {
-          normalized.regions[0].parentFolderId = folderId
-          const out = rawSettings.regions
-            ? { ...rawSettings, regions: normalized.regions }
-            : rawSettings
-          const tmp = `${SETTINGS_PATH}.tmp`
-          writeFileSync(tmp, JSON.stringify(out, null, 2))
-          renameSync(tmp, SETTINGS_PATH)
-        }
-      } catch (e) {
-        console.warn('[validate-folder] Could not save parentFolderId to settings.json:', (e as Error).message)
-      }
-
-      // Write updated settings.json to Drive Config/ folder (re-read after local save)
-      let settingsContent: string
-      try {
-        settingsContent = readFileSync(SETTINGS_PATH, 'utf-8')
-      } catch {
-        settingsContent = '{}'
-      }
-      const existingFile = await drive.files.list({
-        q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
-        fields: 'files(id)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      })
-      if (existingFile.data.files?.length) {
-        await drive.files.update({
-          fileId: existingFile.data.files[0].id!,
-          requestBody: {},
-          media: { mimeType: 'application/json', body: settingsContent },
-        })
-      } else {
-        await drive.files.create({
-          requestBody: { name: 'settings.json', parents: [configFolderId] },
-          media: { mimeType: 'application/json', body: settingsContent },
-          supportsAllDrives: true,
-          fields: 'id',
-        })
-      }
-    } catch (e) {
-      // Config subfolder / settings distribution is best-effort; don't fail the validate
-      console.warn('[validate-folder] Config subfolder setup error:', (e as Error).message)
-      configFolderId = undefined
-    }
-
-    return c.json({ folderId, folderName, configFolderId })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 400)
-  }
-})
-
-// GET /api/settings/from-drive — fetch Config/settings.json from Drive for a region
-app.get('/api/settings/from-drive', async (c) => {
-  const regionId = c.req.query('region')
-  try {
-    let raw: Record<string, unknown>
-    try {
-      raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')) as Record<string, unknown>
-    } catch {
-      return c.json({ error: 'settings.json not found' }, 404)
-    }
-    const settings = normalizeSettings(raw)
-    const region = getRegionById(settings, regionId)
-    if (!region.parentFolderId) return c.json({ error: 'parentFolderId not set for this region' }, 404)
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth })
-    const listRes = await drive.files.list({
-      q: `'${region.parentFolderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id)',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    })
-    const configFolderId = listRes.data.files?.[0]?.id
-    if (!configFolderId) return c.json({ error: 'Config/ folder not found in parentFolder' }, 404)
-    const fileList = await drive.files.list({
-      q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
-      fields: 'files(id)',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    })
-    const fileId = fileList.data.files?.[0]?.id
-    if (!fileId) return c.json({ error: 'Config/settings.json not found in Drive' }, 404)
-    const content = await drive.files.get({ fileId, alt: 'media' } as any)
-    return c.json(content.data)
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-app.get('/api/config', (c) => {
-  return c.json({
-    briefProvider: getBriefProvider(),
-    briefConfigured: isBriefConfigured(),
-  })
-})
-
-app.get('/api/config/test', async (c) => {
-  if (!isBriefConfigured()) {
-    return c.json({ ok: false, error: `LLM_PROVIDER=${getBriefProvider()} is not configured. Check your .env file.` })
-  }
-  try {
-    const result = await generateBrief(
-      { name: 'Test Account', ae: 'Test', domain: '', accountNumbers: [], segment: '', region: '' } as any,
-      [], [], [], [], [], []
-    )
-    return c.json({ ok: true, provider: getBriefProvider(), preview: result.slice(0, 120) })
-  } catch (e: any) {
-    return c.json({ ok: false, error: sanitizeErr(e) })
-  }
-})
+// GET /api/settings/from-drive, /api/config, /api/config/test (extracted to src/settings-api.ts — BKL-ARCH-11)
 
 // ── BKL-UX52: Pod configuration endpoint ─────────────────────────────────────
 app.get('/api/pods', (c) => {
@@ -963,168 +619,14 @@ app.route('/', createSettingsRouter({ rescheduleRefreshTimers }))
 app.route('/', createNodeRoleRouter())
 app.route('/', createRegionAccessRouter({ settingsPath: SETTINGS_PATH }))
 
-// ── Env var status (BKL-SR02) — lets UI warn when env overrides config settings
-app.get('/api/env/gemini-model', (c) => {
-  const envVal = process.env.GEMINI_MODEL
-  return c.json({ model: envVal ?? null, fromEnv: !!envVal })
-})
+// ── /api/env/gemini-model, /api/settings/email (extracted to src/settings-api.ts — BKL-ARCH-11)
 
-// ── Email delivery settings (BKL-E05) ────────────────────────────────────────
-
-const EMAIL_SETTINGS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'config', 'email-settings.json')
-
-interface EmailSettings {
-  enabled: boolean
-  deliveryTime: string
-  timezone: string
-  schedule: string
-  recipientEmail: string
-  sections: {
-    meetings: boolean
-    emails: boolean
-    cases: boolean
-    pipeline: boolean
-    brief: boolean
-  }
-}
-
-const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
-  enabled: false,
-  deliveryTime: '07:00',
-  timezone: 'America/New_York',
-  schedule: 'weekdays',
-  recipientEmail: '',
-  sections: { meetings: true, emails: true, cases: true, pipeline: true, brief: true },
-}
-
-function readEmailSettings(): EmailSettings {
-  try {
-    if (existsSync(EMAIL_SETTINGS_PATH)) {
-      return { ...DEFAULT_EMAIL_SETTINGS, ...JSON.parse(readFileSync(EMAIL_SETTINGS_PATH, 'utf-8')) }
-    }
-  } catch {}
-  return { ...DEFAULT_EMAIL_SETTINGS }
-}
-
-app.get('/api/settings/email', (c) => {
-  return c.json(readEmailSettings())
-})
-
-app.put('/api/settings/email', async (c) => {
-  try {
-    const body = await c.req.json<Partial<EmailSettings>>().catch((): Partial<EmailSettings> => ({}))
-    const current = readEmailSettings()
-
-    // Validate deliveryTime
-    if (body.deliveryTime != null) {
-      if (typeof body.deliveryTime !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.deliveryTime)) {
-        return c.json({ error: 'deliveryTime must be HH:MM format' }, 400)
-      }
-    }
-    // Validate timezone
-    if (body.timezone != null) {
-      if (typeof body.timezone !== 'string' || body.timezone.length < 2 || body.timezone.length > 50) {
-        return c.json({ error: 'Invalid timezone' }, 400)
-      }
-      try { Intl.DateTimeFormat(undefined, { timeZone: body.timezone }) }
-      catch { return c.json({ error: 'Invalid timezone identifier' }, 400) }
-    }
-    // Validate schedule
-    if (body.schedule != null) {
-      if (!['daily', 'weekdays'].includes(body.schedule as string)) {
-        return c.json({ error: 'schedule must be "daily" or "weekdays"' }, 400)
-      }
-    }
-    // Validate email
-    if (body.recipientEmail != null) {
-      if (typeof body.recipientEmail !== 'string' || (body.recipientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.recipientEmail))) {
-        return c.json({ error: 'Invalid email address format' }, 400)
-      }
-    }
-
-    const updated: EmailSettings = {
-      enabled: typeof body.enabled === 'boolean' ? body.enabled : current.enabled,
-      deliveryTime: body.deliveryTime ?? current.deliveryTime,
-      timezone: body.timezone ?? current.timezone,
-      schedule: (body.schedule as string) ?? current.schedule,
-      recipientEmail: body.recipientEmail ?? current.recipientEmail,
-      sections: body.sections ? { ...current.sections, ...body.sections } : current.sections,
-    }
-
-    // Ensure config dir exists
-    mkdirSync(resolve(process.env.DATA_DIR ?? 'data', 'config'), { recursive: true })
-    const tmpPath = EMAIL_SETTINGS_PATH + '.tmp'
-    writeFileSync(tmpPath, JSON.stringify(updated, null, 2), { mode: 0o600 })
-    renameSync(tmpPath, EMAIL_SETTINGS_PATH)
-    return c.json(updated)
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-// ── Drive watcher endpoints ───────────────────────────────────────────────────
-
-app.get('/api/drive-watcher/status', (c) => {
-  const state = getWatcherState()
-  if (!state) return c.json({ enabled: false, folderMap: [], lastChecked: null, builtAt: null })
-  return c.json({
-    enabled: state.enabled,
-    folderMap: state.folderMap,
-    lastChecked: state.lastChecked ?? null,
-    builtAt: state.builtAt,
-  })
-})
-
-app.post('/api/drive-watcher/rebuild', async (c) => {
-  const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
-  try {
-    const folderMap = await rebuildFolderMap(customers, parentIds)
-    return c.json({ rebuilt: true, folders: folderMap.length, map: folderMap })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
-
-// Diagnostic: list contents of a Drive folder by ID
-app.get('/api/drive/ls/:folderId', async (c) => {
-  const folderId = c.req.param('folderId')
-  try {
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth })
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'files(id,name,mimeType,modifiedTime)',
-      pageSize: 100,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    })
-    return c.json({ folderId, items: res.data.files ?? [] })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
+// ── Drive watcher + drive/ls endpoints (extracted to src/admin-routes.ts — BKL-ARCH-12)
 
 // ── Refresh routes (M02 — registered from refresh-engine.ts) ────────────────
 app.route('/', createRefreshRouter())
 
-// ── Sheet data + debug routes (extracted to src/customer-routes.ts) ──────────
-
-app.get('/debug/sheet-tabs/:fileId', async (c) => {
-  if (process.env.NODE_ENV === 'production') return c.json({ error: 'Not available' }, 404)
-  const fileId = c.req.param('fileId')
-  if (!/^[a-zA-Z0-9_-]{10,60}$/.test(fileId ?? '')) return c.json({ error: 'Invalid file ID' }, 400)
-  const { makeAuth } = await import('./src/google.ts')
-  const { google } = await import('googleapis')
-  const auth = makeAuth(SHEETS_TOKEN_PATH_SRV)
-  const sheets = google.sheets({ version: 'v4', auth })
-  try {
-    const res = await sheets.spreadsheets.get({ spreadsheetId: fileId, fields: 'sheets.properties.title' })
-    const tabs = (res.data.sheets ?? []).map(s => s.properties?.title ?? '')
-    return c.json({ fileId, tabs })
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
+// ── debug/sheet-tabs route (extracted to src/admin-routes.ts — BKL-ARCH-12)
 
 // SSE data stream — each section fires as its promise resolves
 app.get('/events', (c) => {

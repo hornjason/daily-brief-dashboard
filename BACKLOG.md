@@ -7510,6 +7510,7 @@ Status: 🔴 OPEN
 Priority: P2
 Size: M
 Source: Rook+Council second audit 2026-04-27 (residual from BKL-DOM-INF-01 fix)
+Issue: hornjason/asaCommandCenter#20
 Files: src/bootstrap-orchestrator.ts (inference IIFE), src/domain-waterfall.ts (tier1/tier2/tier3 fetches)
 Description: Promise.race timeout resolves the race but does NOT abort the in-flight IIFE. Orphan inference continues running, can still write customers.json via _customerWriteLock and write capturedState.resources.domainInference after inferenceRunning=false flips. Proper fix: thread an AbortController into waterfallInferDomain/inferCustomerDomain fetch calls, abort it when timeout fires. The 15s AbortSignal.timeout per-call in domain-waterfall.ts covers individual calls but there's no parent abort for the whole IIFE.
 Can we test: YES — unit test that verifies inferenceRunning=false only after all writes complete (or after abort).
@@ -7670,6 +7671,7 @@ Status: 🔴 OPEN
 Priority: P3
 Size: S
 Source: Rook second audit 2026-04-27
+Issue: hornjason/asaCommandCenter#23
 Files: src/bootstrap-orchestrator.ts, dashboard/src/pages/SetupPage.tsx
 Description: Inference errors are logged to console but never surfaced in autoBootstrapState or the UI. Users can't tell if inference failed for a customer. Add inferenceWarning field to state resources, show in bootstrap status card.
 Can we test: YES — mock a waterfall failure, verify inferenceWarning field is populated.
@@ -7714,6 +7716,7 @@ Status: 🔴 OPEN
 Priority: P3
 Size: M
 Source: Council investigation 2026-04-27 (Serena + user request)
+Issue: hornjason/asaCommandCenter#25
 Files: src/bootstrap-orchestrator.ts, src/customers-routes.ts, dashboard/src/pages/SetupPage.tsx, dashboard/src/pages/HomePage.tsx
 Description: Companies like Condor Bidco are shell entities with no web presence — genuinely unresolvable by any tier. Currently these silently get no domain with no UI feedback. Fix: (1) add `needs_manual_domain: true` field to customer record when all tiers miss and domain remains null after inference; (2) show a badge on affected customer cards in HomePage ("Domain needed"); (3) link badge to Setup wizard domain field pre-focused on that customer. Condor Bidco is the known test case.
 Can we test: YES — mock all tiers returning null, verify needs_manual_domain=true written; verify badge renders.
@@ -8161,6 +8164,7 @@ Status: 🔴 OPEN
 Priority: P2
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
+Issue: hornjason/asaCommandCenter#26
 Files: dashboard/src/pages/ (customer detail page)
 Description: Customer detail page was not audited — test container has Carolanne Farrell with zero customers so no customer detail URL was reachable. Likely contains L4-specific UI: RH Cases section with [Run Now], Tableau pipeline sub-panel, CCSP sub-panel. Re-run audit after test data (or prod 7777 with ci project) has customers loaded.
 Acceptance: Customer detail audit completed; all L4-specific elements gated on isL3Only.
@@ -8191,6 +8195,7 @@ Status: 🔴 OPEN
 Priority: P0
 Size: M
 Source: Session 2026-04-28 (empirical testing — RH portal dropped to not-connected after SF login)
+Issue: hornjason/asaCommandCenter#19
 Files: src/sf-auth.ts, src/rh-scraper.ts
 Description: After SF login completes and logs "RH portal confirmed — adopting shared context", the rh-scraper and sf-scraper adoption logs do NOT appear. The RH Portal session drops to hasSession:false and the shared context is lost. Root cause unknown — adoptScrapeContext appears to be called but the rh-scraper adoption log is absent, and no exception surfaces. Hypothesis: sfPage.close() or the blank tab navigation is invalidating ctx before adoptScrapeContext runs, OR a disconnect handler is firing immediately on context adoption clearing it.
 Acceptance: After SF login success, RH Portal remains hasSession:true, sf-scraper shows adopted log, Tableau connect still works without re-logging into RH Portal.
@@ -8384,6 +8389,7 @@ Status: 🔴 OPEN
 Priority: P1
 Size: M
 Source: Serena architecture audit 2026-05-01
+Issue: hornjason/asaCommandCenter#18
 Files: src/scraper-status-store.ts, src/rh-auth.ts, src/ccsp-scraper.ts, src/supportable-scraper.ts, src/sf-scraper.ts, src/scraper-manager.ts, src/scrape-api.ts
 Description: ARCHITECTURE.md §13 itself needs a table to explain which field comes from which tier. Callers replicate the fallback policy (lastSync = lastScraped ?? rhStatus.lastSuccess ?? null) in three different consumers. Every scraper exports the same five-fingerprint shape (last*, *Running, *Error, adopt*Context) five times.
 Solution: Route all status reads through getStatus() with a single fallback policy in the store. Introduce a ScraperRegistry for context adoption — collapses the 4-line adoption block into one call.
@@ -8414,10 +8420,11 @@ Depends on: BKL-ARCH-03
 ---
 
 ### BKL-ARCH-10 | Extract AE management routes from server.ts → ae-routes.ts
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — src/ae-routes.ts created (322 lines). server.ts: 1559→1061 (−498 total across 3 extractions). 25/1 Playwright pass. Quinn + Rook pending.
 Priority: P2
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Issue: hornjason/asaCommandCenter#21
 Files: server.ts (lines ~695–897: 3 inline routes), new src/ae-routes.ts
 Description: GET /api/aes, POST /api/aes (100-line handler), POST /api/aes/validate-folder (98-line handler) remain inline. AE management is a distinct domain. Extraction gives it a testable seam. Depends on BKL-ARCH-03.
 Depends on: BKL-ARCH-03
@@ -8425,10 +8432,11 @@ Depends on: BKL-ARCH-03
 ---
 
 ### BKL-ARCH-11 | Consolidate settings/config inline routes into settings-api.ts
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — 6 routes added to existing createSettingsRouter(). settings-api.ts: 556→728 lines (+172). 25/1 Playwright pass. Quinn + Rook pending.
 Priority: P2
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Issue: hornjason/asaCommandCenter#22
 Files: server.ts (lines ~898–1212: 6 inline routes), src/settings-api.ts
 Description: 6 inline routes scattered through server.ts belong in settings-api.ts: /api/settings/from-drive, /api/config, /api/config/test, /api/env/gemini-model, GET+PUT /api/settings/email. These are already semantically owned by the settings domain — consolidation eliminates the split. Depends on BKL-ARCH-03.
 Depends on: BKL-ARCH-03
@@ -8436,10 +8444,11 @@ Depends on: BKL-ARCH-03
 ---
 
 ### BKL-ARCH-12 | Extract admin/monitoring/drive inline routes → admin-routes.ts
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-02 — src/admin-routes.ts created (127 lines). 8 routes extracted. 25/1 Playwright pass. Quinn + Rook pending.
 Priority: P2
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Issue: hornjason/asaCommandCenter#24
 Files: server.ts (8 inline routes), new src/admin-routes.ts
 Description: 8 inline routes with no natural home: /api/status/telemetry, /api/status/telemetry/history, /api/admin/gemini-usage, /api/version, /api/drive-watcher/status, /api/drive-watcher/rebuild, /api/drive/ls/:folderId, /debug/sheet-tabs/:fileId. Grouping into admin-routes.ts clears ~200 lines of inline handlers from server.ts. Depends on BKL-ARCH-03.
 Depends on: BKL-ARCH-03
@@ -8594,7 +8603,7 @@ Solution: After CSV download fails in scrapePodCcspRaw, check the current page U
 
 ---
 
-### BKL-ARCH-09 | wizard-e2e test-13 pre-existing failure — "Red Hat Connection" accordion not visible
+### BKL-ARCH-21 | wizard-e2e test-13 pre-existing failure — "Red Hat Connection" accordion not visible
 Status: ✅ DONE 2026-05-02
 Priority: P2
 Size: S
@@ -8606,7 +8615,7 @@ Decision: Root cause was threefold — (1) test assertion checked for "Red Hat C
 
 ---
 
-### BKL-ARCH-10 | cache-layer.ts — invalidateBriefCaches is unexported dead function
+### BKL-ARCH-18 | cache-layer.ts — invalidateBriefCaches is unexported dead function
 Status: OPEN
 Priority: P3
 Size: XS
@@ -8617,8 +8626,8 @@ Solution: Delete the invalidateBriefCaches function body from cache-layer.ts. Co
 
 ---
 
-### BKL-ARCH-11 | REG-TOKEN-10 stale anchor — app.post vs router.post
-Status: OPEN
+### BKL-ARCH-19 | REG-TOKEN-10 stale anchor — app.post vs router.post
+Status: ✅ DONE 2026-05-02 — Updated anchor string + nextRoute delimiter from `app.` to `router.`; 23/3 e2e-tier pass (3 failures pre-existing).
 Priority: P3
 Size: XS
 Source: Marcus #14 investigation 2026-05-02
@@ -8628,8 +8637,8 @@ Solution: Update the anchor string from `app.post(` to `router.post(` in the REG
 
 ---
 
-### BKL-ARCH-12 | AutoBootstrapStep status union missing 'cancelled'
-Status: OPEN
+### BKL-ARCH-20 | AutoBootstrapStep status union missing 'cancelled'
+Status: ✅ DONE 2026-05-02 — Added 'cancelled' to union in src/bootstrap-state.ts:29.
 Priority: P2
 Size: XS
 Source: Marcus #14 investigation 2026-05-02
@@ -8795,7 +8804,7 @@ Can we test: YES — unit test simulating missing parent dir.
 
 ---
 
-### BKL-ARCH-16 | Issue #16 — Bootstrap orchestrator split (territory-sheet, sf-cache, bootstrap-routes)
+### BKL-ARCH-22 | Issue #16 — Bootstrap orchestrator split (territory-sheet, sf-cache, bootstrap-routes)
 Status: ✅ DONE 2026-05-02
 Priority: P1
 Size: M
@@ -8833,9 +8842,40 @@ Status: 🔴 OPEN
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-DRIVE-SCAFFOLD-CACHE-01 post-ship review)
+Issue: hornjason/asaCommandCenter#9 (XS — stays in BACKLOG.md, not promoted)
 Files: src/bootstrap-orchestrator.ts (writeScaffoldCache, readScaffoldCache)
 Description: writeScaffoldCache(parentFolderId, entry) writes parentFolderId directly as a JSON key without validation. isValidDriveFolderId() already exists in utils.ts. Add guard at function entry. Also validate entry.configFolderId and entry.productsFolderId with the same helper. readScaffoldCache lookup should similarly validate the key before returning entry.
 Can we test: YES — unit test: writeScaffoldCache with invalid parentFolderId should silently skip write; readScaffoldCache with invalid key should return undefined.
+
+### BKL-SEC-20 | admin-routes.ts — /api/drive/ls/:folderId accepts unvalidated path parameter
+Status: 🔴 OPEN
+Priority: P2
+Size: XS
+Source: Rook scan 2026-05-02 (BKL-ARCH-12 post-ship review)
+Files: src/admin-routes.ts:90-106
+Description: `folderId` from c.req.param('folderId') is interpolated into the Drive API query `q: \`'${folderId}' in parents...\`` with no validation. `isValidDriveFolderId()` exists in utils.ts and is used elsewhere but not here. A caller could inject Drive query operators. Bounded by single-user localhost architecture. Carry-over from server.ts — extraction did not introduce the gap.
+Solution: Add `if (!isValidDriveFolderId(folderId)) return c.json({ error: 'Invalid folder ID' }, 400)` at handler entry. Import `isValidDriveFolderId` from `./utils.ts`.
+Can we test: YES — regression test: GET /api/drive/ls/invalid!folder returns 400.
+
+### BKL-SEC-21 | admin-routes.ts — /api/drive-watcher/rebuild lacks NODE_ROLE guard (advisory)
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-02 (BKL-ARCH-12 post-ship review)
+Files: src/admin-routes.ts:79-87
+Description: POST /api/drive-watcher/rebuild is available on hero nodes (NODE_ROLE unset). On hero, calling it attempts to rebuild the in-memory folder map — no destructive write, but architecturally inconsistent with other L4-writer surfaces that guard behind NODE_ROLE=primary. Advisory — requires product decision before adding guard.
+Solution: If hero nodes should not trigger Drive folder rebuilds: add `if (process.env.NODE_ROLE !== 'primary') return c.json({ error: 'Not available on hero nodes' }, 404)`. Decision required.
+Can we test: YES after decision — regression test that 7776 (hero image) returns 404 on POST /api/drive-watcher/rebuild.
+
+### BKL-SEC-22 | settings-api.ts — /api/settings/email PUT recipientEmail lacks length cap
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-02 (BKL-ARCH-11 post-ship review)
+Files: src/settings-api.ts (~line 702)
+Description: Email validation regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` has no length bound. A caller could store a multi-MB string in email-settings.json. RFC 5321 §4.5.3.1.3 caps email address at 254 chars.
+Solution: Add `if (body.recipientEmail.length > 254) return c.json({ error: 'Email exceeds RFC 5321 maximum (254 chars)' }, 400)` before regex test.
+Can we test: YES — regression test: PUT /api/settings/email with 255-char email returns 400.
 
 ### BKL-PROCESS-01 | Child issue promotion at parent issue close — external traceability
 Status: 🔴 OPEN
@@ -8849,7 +8889,7 @@ Acceptance criteria:
 - [ ] `Issue: #N` field added as a convention in BACKLOG.md item template
 - [ ] dev-loop SKILL.md updated with close-gate step: scan for open BKL items with `Issue: #N`, sort XS vs S+, promote S+ via /triage
 - [ ] /triage agent brief template updated with `Parent issue context` section
-- [ ] Parent issue close comment format documented and used
-- [ ] At least one real close cycle tested end-to-end
+- [x] Parent issue close comment format documented and used — first run on issue #9 (2026-05-02): 8 child issues created (#18–#26 except #19), findings comment posted, BACKLOG.md entries updated with Issue: #N fields
+- [x] At least one real close cycle tested end-to-end — issue #9 first run complete 2026-05-02
 
 Can we test: YES — close a real parent issue with mixed XS/S+ spin-offs and verify child issues appear in GitHub with correct agent briefs and parent links.

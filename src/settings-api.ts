@@ -1,9 +1,15 @@
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { resolve } from 'path'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { Hono } from 'hono'
 import { sanitizeErr } from './utils.ts'
 import { backupNow } from './backup-config.ts'
 import { validateOfflineToken } from './redhat.ts'
+import { google } from 'googleapis'
+import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { generateBrief, getBriefProvider, isBriefConfigured } from './customer.ts'
+import { normalizeSettings, getRegionById } from './region-config.ts'
 
 /** Fire-and-forget backup after data-sources.json write. */
 function _triggerBackup(): void {
@@ -12,9 +18,48 @@ function _triggerBackup(): void {
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let DATA_SOURCES_PATH = ''
+let SETTINGS_PATH_MOD = ''
 
-export function initSettingsApi(dataSourcesPath: string): void {
+export function initSettingsApi(dataSourcesPath: string, settingsPath?: string): void {
   DATA_SOURCES_PATH = dataSourcesPath
+  if (settingsPath) SETTINGS_PATH_MOD = settingsPath
+}
+
+// ── Email delivery settings (BKL-E05) ────────────────────────────────────────
+
+const EMAIL_SETTINGS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'config', 'email-settings.json')
+
+export interface EmailSettings {
+  enabled: boolean
+  deliveryTime: string
+  timezone: string
+  schedule: string
+  recipientEmail: string
+  sections: {
+    meetings: boolean
+    emails: boolean
+    cases: boolean
+    pipeline: boolean
+    brief: boolean
+  }
+}
+
+export const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
+  enabled: false,
+  deliveryTime: '07:00',
+  timezone: 'America/New_York',
+  schedule: 'weekdays',
+  recipientEmail: '',
+  sections: { meetings: true, emails: true, cases: true, pipeline: true, brief: true },
+}
+
+export function readEmailSettings(): EmailSettings {
+  try {
+    if (existsSync(EMAIL_SETTINGS_PATH)) {
+      return { ...DEFAULT_EMAIL_SETTINGS, ...JSON.parse(readFileSync(EMAIL_SETTINGS_PATH, 'utf-8')) }
+    }
+  } catch {}
+  return { ...DEFAULT_EMAIL_SETTINGS }
 }
 
 // ── Refresh intervals ────────────────────────────────────────────────────────
@@ -548,6 +593,134 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
     } catch (e: any) {
       console.warn('[weather]', e.message)
       return c.json({ enabled: true, error: 'unavailable' })
+    }
+  })
+
+  // ── BKL-ARCH-11: Routes extracted from server.ts ──────────────────────────
+
+  // GET /api/settings/from-drive — fetch Config/settings.json from Drive for a region
+  router.get('/api/settings/from-drive', async (c) => {
+    const regionId = c.req.query('region')
+    try {
+      let raw: Record<string, unknown>
+      try {
+        raw = JSON.parse(readFileSync(SETTINGS_PATH_MOD, 'utf-8')) as Record<string, unknown>
+      } catch {
+        return c.json({ error: 'settings.json not found' }, 404)
+      }
+      const settings = normalizeSettings(raw)
+      const region = getRegionById(settings, regionId)
+      if (!region.parentFolderId) return c.json({ error: 'parentFolderId not set for this region' }, 404)
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const drive = google.drive({ version: 'v3', auth })
+      const listRes = await drive.files.list({
+        q: `'${region.parentFolderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      })
+      const configFolderId = listRes.data.files?.[0]?.id
+      if (!configFolderId) return c.json({ error: 'Config/ folder not found in parentFolder' }, 404)
+      const fileList = await drive.files.list({
+        q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
+        fields: 'files(id)',
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      })
+      const fileId = fileList.data.files?.[0]?.id
+      if (!fileId) return c.json({ error: 'Config/settings.json not found in Drive' }, 404)
+      const content = await drive.files.get({ fileId, alt: 'media' } as any)
+      return c.json(content.data)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // GET /api/config — Dashboard configuration and provider status
+  router.get('/api/config', (c) => {
+    return c.json({
+      briefProvider: getBriefProvider(),
+      briefConfigured: isBriefConfigured(),
+    })
+  })
+
+  // GET /api/config/test — test LLM provider connectivity
+  router.get('/api/config/test', async (c) => {
+    if (!isBriefConfigured()) {
+      return c.json({ ok: false, error: `LLM_PROVIDER=${getBriefProvider()} is not configured. Check your .env file.` })
+    }
+    try {
+      const result = await generateBrief(
+        { name: 'Test Account', ae: 'Test', domain: '', accountNumbers: [], segment: '', region: '' } as any,
+        [], [], [], [], [], []
+      )
+      return c.json({ ok: true, provider: getBriefProvider(), preview: result.slice(0, 120) })
+    } catch (e: any) {
+      return c.json({ ok: false, error: sanitizeErr(e) })
+    }
+  })
+
+  // GET /api/env/gemini-model — env var status (BKL-SR02)
+  router.get('/api/env/gemini-model', (c) => {
+    const envVal = process.env.GEMINI_MODEL
+    return c.json({ model: envVal ?? null, fromEnv: !!envVal })
+  })
+
+  // GET /api/settings/email — read email delivery settings (BKL-E05)
+  router.get('/api/settings/email', (c) => {
+    return c.json(readEmailSettings())
+  })
+
+  // PUT /api/settings/email — update email delivery settings (BKL-E05)
+  router.put('/api/settings/email', async (c) => {
+    try {
+      const body = await c.req.json<Partial<EmailSettings>>().catch((): Partial<EmailSettings> => ({}))
+      const current = readEmailSettings()
+
+      // Validate deliveryTime
+      if (body.deliveryTime != null) {
+        if (typeof body.deliveryTime !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.deliveryTime)) {
+          return c.json({ error: 'deliveryTime must be HH:MM format' }, 400)
+        }
+      }
+      // Validate timezone
+      if (body.timezone != null) {
+        if (typeof body.timezone !== 'string' || body.timezone.length < 2 || body.timezone.length > 50) {
+          return c.json({ error: 'Invalid timezone' }, 400)
+        }
+        try { Intl.DateTimeFormat(undefined, { timeZone: body.timezone }) }
+        catch { return c.json({ error: 'Invalid timezone identifier' }, 400) }
+      }
+      // Validate schedule
+      if (body.schedule != null) {
+        if (!['daily', 'weekdays'].includes(body.schedule as string)) {
+          return c.json({ error: 'schedule must be "daily" or "weekdays"' }, 400)
+        }
+      }
+      // Validate email
+      if (body.recipientEmail != null) {
+        if (typeof body.recipientEmail !== 'string' || (body.recipientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.recipientEmail))) {
+          return c.json({ error: 'Invalid email address format' }, 400)
+        }
+      }
+
+      const updated: EmailSettings = {
+        enabled: typeof body.enabled === 'boolean' ? body.enabled : current.enabled,
+        deliveryTime: body.deliveryTime ?? current.deliveryTime,
+        timezone: body.timezone ?? current.timezone,
+        schedule: (body.schedule as string) ?? current.schedule,
+        recipientEmail: body.recipientEmail ?? current.recipientEmail,
+        sections: body.sections ? { ...current.sections, ...body.sections } : current.sections,
+      }
+
+      // Ensure config dir exists
+      mkdirSync(resolve(process.env.DATA_DIR ?? 'data', 'config'), { recursive: true })
+      const tmpPath = EMAIL_SETTINGS_PATH + '.tmp'
+      writeFileSync(tmpPath, JSON.stringify(updated, null, 2), { mode: 0o600 })
+      renameSync(tmpPath, EMAIL_SETTINGS_PATH)
+      return c.json(updated)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 

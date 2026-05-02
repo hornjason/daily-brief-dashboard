@@ -26,7 +26,7 @@
 
 export interface AutoBootstrapStep {
   name: string
-  status: 'pending' | 'running' | 'done' | 'error' | 'skipped'
+  status: 'pending' | 'running' | 'done' | 'error' | 'skipped' | 'cancelled'
   detail?: string
   startedAt?: string
   completedAt?: string

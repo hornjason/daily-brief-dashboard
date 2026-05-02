@@ -1,5 +1,8 @@
 ---
-Last validated: 2026-04-24
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-02
 ---
 
 # DailyBriefDashboard — Project State
@@ -200,6 +203,12 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 
 ### On Hold
 - **BKL-BOOT-03** ⏸ — On hold (1 open item remaining; all other backlog cleared or obsolete)
+
+### Closed (2026-05-02)
+- **BKL-ARCH-10** ✅ — AE management routes extracted to src/ae-routes.ts (322 lines); GitHub #21
+- **BKL-ARCH-11** ✅ — Settings/config routes consolidated into src/settings-api.ts createSettingsRouter(); GitHub #22
+- **BKL-ARCH-12** ✅ — Admin/monitoring/drive routes extracted to src/admin-routes.ts (127 lines); GitHub #24
+- **server.ts now 1,061 lines** (down from 1,712 at session start today — −651 lines via ARCH-09 + ARCH-10 + ARCH-11 + ARCH-12)
 
 ### Closed / Obsolete (2026-04-10)
 - **BKL-TEST-03** ✅ — Full Playwright suite wipes production data; workaround in place
