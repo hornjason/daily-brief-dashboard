@@ -1730,6 +1730,14 @@ export function createBootstrapRouter(): Hono {
             if (!inferenceTimedOut && inferenceResults.length > 0) {
               capturedState.resources.domainInference = inferenceResults
             }
+
+            // BKL-DOM-INF-05: Surface customers that remain domain-null after all
+            // inference tiers (batch + retry + Clearbit + signal fallback) so the
+            // wizard UI can prompt the user to set those domains manually.
+            const unresolved = aeCustomers.filter(cu => !batchMap?.get(cu.name) && !inferenceResults.find(r => r.customerName === cu.name))
+            if (!inferenceTimedOut && unresolved.length > 0) {
+              capturedState.resources.inferenceWarning = `${unresolved.length} customer${unresolved.length > 1 ? 's' : ''} have no resolvable domain: ${unresolved.map(cu => cu.name).join(', ')}`
+            }
           })(),
           new Promise<void>(resolve => setTimeout(() => { inferenceTimedOut = true; resolve() }, 60_000)),
         ])

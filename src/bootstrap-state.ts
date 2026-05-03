@@ -42,6 +42,8 @@ export interface AutoBootstrapResources {
   unmatchedCustomers?: string[]
   junkFiltered?: string[]
   domainInference?: { customerName: string; domain: string; confidence: 'high' | 'low'; sources: string[] }[]
+  /** BKL-DOM-INF-05: human-readable warning listing customers whose domain remained null after all inference tiers (batch + retry + Clearbit + signal fallback). Surfaced in SetupPage so users know to set domains manually. */
+  inferenceWarning?: string
 }
 
 export interface AutoBootstrapState {

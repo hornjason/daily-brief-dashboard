@@ -498,6 +498,7 @@ interface AutoBootstrapState {
     unmatchedCustomers?: string[]
     junkFiltered?: string[]
     domainInference?: { customerName: string; domain: string; confidence: 'high' | 'low'; sources: string[] }[]
+    inferenceWarning?: string
   }
 }
 
@@ -844,6 +845,14 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
               </div>
             )
           })()}
+          {/* BKL-DOM-INF-05: Inference warning for unresolvable domains */}
+          {state.resources?.inferenceWarning && (
+            <div className="mt-2 bg-surface/60 border border-warning/40 rounded-lg px-3 py-2">
+              <p className="text-xs text-warning font-medium">⚠ Domain inference incomplete</p>
+              <p className="text-xs text-text-secondary mt-1">{state.resources.inferenceWarning}</p>
+              <p className="text-xs text-text-secondary mt-1">Set domains manually in Setup → Domains for affected customers.</p>
+            </div>
+          )}
           <div className="mt-3 flex items-center gap-3">
             <SaveAeButton />
             <a
