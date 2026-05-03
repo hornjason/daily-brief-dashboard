@@ -97,6 +97,18 @@ test.describe('@destructive BKL-HERO-18: Customer detail L3 gating', () => {
 
   test('T7 — L4 parity: header Pipeline badge present when isL3Only=false', async ({ page }) => {
     await mockNodeRole(page, false)
+    // Mock SSE to return minimal meta so (sectionLoading || sse.meta !== null) fires.
+    // Without this, the test container has no live scraper session so sse.meta stays null
+    // and the stat-badge conditional never renders — regardless of isL3Only.
+    await page.route('**/customer/*/events', (route) => {
+      const meta = JSON.stringify({ name: 'Acme Corp', accountNumbers: [], segment: 'Enterprise', industry: 'Technology' })
+      route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        headers: { 'Cache-Control': 'no-cache' },
+        body: `event: meta\ndata: ${meta}\n\nevent: done\ndata: {}\n\n`,
+      })
+    })
     await page.goto(CUSTOMER_PATH)
     await waitForCustomerPageReady(page)
 
