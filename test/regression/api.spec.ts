@@ -1008,35 +1008,6 @@ test.describe('REG-026: Expansion opportunities cross-product recommendations (B
   })
 })
 
-// ── REG-027: Supportable permanently disabled — scheduler + VPN check never trigger scrape (BKL-UX67) ──
-// BKL-UX67: Supportable is permanently disabled. The scheduled sync must be disabled by default
-// and the VPN check endpoint must never trigger a Playwright browser navigation.
-test.describe('REG-027: Supportable disabled — no browser navigation triggered (BKL-UX67)', () => {
-  test('scheduler config has supportableEnabled=false', async () => {
-    const res = await fetch(`${BASE_URL}/api/admin/scheduler-config`)
-    if (res.status === 404) {
-      console.log('REG-027: /api/admin/scheduler-config not available — skipping')
-      return
-    }
-    expect(res.status).toBe(200)
-    const cfg = await res.json()
-    expect(cfg.supportableEnabled, 'supportableEnabled must be false — Supportable is permanently disabled').toBe(false)
-  })
-
-  test('/api/auth/supportable/check returns reachable field without hanging', async () => {
-    // Verifies the endpoint is a fast server-side HTTP probe only (no Playwright navigation).
-    // If this hangs for >10s, a browser navigation is occurring — that's the regression.
-    const start = Date.now()
-    const res = await fetch(`${BASE_URL}/api/auth/supportable/check`, { method: 'POST', signal: AbortSignal.timeout(10_000) })
-    const elapsed = Date.now() - start
-    expect(res.status).toBe(200)
-    const body = await res.json()
-    expect(body).toHaveProperty('reachable')
-    // Server-side fetch should resolve quickly (fast fail on DNS/VPN miss, not a browser timeout)
-    expect(elapsed, `VPN check took ${elapsed}ms — may be navigating browser instead of using fetch`).toBeLessThan(9_000)
-  })
-})
-
 // ── REG-028: Zero-subscription customers skip Gemini call (BKL-AI-COST-05) ──
 // BKL-AI-COST-05: Before this fix, customers with zero subscriptions bypassed the
 // "no matching subs" gate entirely (outer condition was `subscriptions.length > 0`),

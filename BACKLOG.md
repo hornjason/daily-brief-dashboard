@@ -6099,26 +6099,22 @@ Fix: Added `hay.length === 0 ||` guard before both unguarded `includes` checks i
 Decision: DONE — four call sites now all guard against empty hay. Gate 2 re-run required.
 
 ### BKL-UX52-P1 | Pod tab bar renders as static label, not interactive tabs
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-05-03 (already correctly implemented)
 Severity: LOW
 Priority: P3
 Size: XS
 Source: Quinn BKL-UX52 validation 2026-04-10 — "Southwest Pod:" shows as static text, no clickable tabs
-Files: dashboard/src/components/PodTabBar.tsx, dashboard/src/App.tsx
-Finding: With only 1 pod configured, PodTabBar renders a label instead of an interactive tab control. When 2+ pods are configured the tab switching may work correctly — needs verification. The spec called for a tab bar; currently it's a label.
-Fix needed: Verify tab switching works with 2 pods. If it does, this is just cosmetic — add a design clarification note.
-Decision: OPEN — low priority until NW pod is added; tab bar with 1 tab has no functional value.
+Files: dashboard/src/components/PodTabBar.tsx
+Finding: Quinn's 2026-04-10 observation was stale. PodTabBar.tsx line 14 has `if (pods.length <= 1) return null` — with 1 pod it renders nothing (not a static label). With 2+ pods it renders full interactive tabs with blue underline on active. Behavior is correct as-is.
 
 ### BKL-UX52-P2 | Health dot reason chips shown inline instead of hover tooltip
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-05-03 (already correctly implemented)
 Severity: LOW
 Priority: P3
 Size: XS
 Source: Quinn BKL-UX52 validation 2026-04-10 — chips visible inline, not behind hover trigger
-Files: dashboard/src/components/HealthDot.tsx, dashboard/src/components/AEGroupedList.tsx
-Finding: Reason chips ("Sev1 case open", "Pipeline $405K closes in 20d") are displayed inline next to every customer row. The spec called for hover tooltip. Quinn notes inline display is arguably better UX (always visible) but deviates from spec.
-Fix needed: Design decision — either accept inline chips as the standard or implement hover popup. No functional impact.
-Decision: OPEN — needs Jason design call. Inline chips may be preferred.
+Files: dashboard/src/components/HealthDot.tsx
+Finding: Quinn's 2026-04-10 observation was stale. HealthDot.tsx uses useState + onMouseEnter/onMouseLeave — reasons render inside a `role="tooltip"` div that only appears on hover (showTooltip state). The hover tooltip implementation was already there. No change needed.
 
 ### BKL-TEST-07 | Complete test coverage assessment — silent-fail buttons + untested action flows
 Status: ✅ DONE 2026-05-03 (audit complete; 2 genuine failures fixed; res.ok gate standard documented)

@@ -74,12 +74,6 @@ test.describe('0. Pre-flight: connections and clean state', () => {
     expect(body.sessionValid, 'Tableau not logged in — connect via Setup page first').toBe(true)
   })
 
-  test('Supportable VPN is reachable', async ({ request }) => {
-    const res = await request.post(`${BASE}/api/auth/supportable/check`)
-    const body = await res.json()
-    expect(body.reachable, 'VPN not active — connect to Red Hat VPN first').toBe(true)
-  })
-
   test('cache is empty before bootstrap', async ({ request }) => {
     const res = await request.get(`${BASE}/api/cache/status`)
     const body = await res.json()

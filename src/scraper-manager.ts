@@ -929,21 +929,6 @@ export function createScraperRouter(): Hono {
     }
   })
 
-  // POST /api/auth/supportable/check — VPN reachability probe (no browser tabs)
-  router.post('/api/auth/supportable/check', async (c) => {
-    try {
-      await fetch('https://supportable.corp.redhat.com:4443/pls/rhapplications/f?p=304:1', {
-        method: 'HEAD',
-        signal: AbortSignal.timeout(8_000),
-        redirect: 'manual',
-        tls: { rejectUnauthorized: false },
-      })
-      return c.json({ reachable: true })
-    } catch {
-      return c.json({ reachable: false })
-    }
-  })
-
   // GET /api/status/scrapes — per-scraper sync status (lastSync, lastError, isRunning, isStale)
   // Used by the dashboard to show staleness indicators per data section.
   router.get('/api/status/scrapes', (c) => {
