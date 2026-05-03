@@ -17,7 +17,8 @@ import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
 import { deriveConfidence, ConnectionHealthSchema } from './connection-health.ts'
-import { markRunning, recordOutcome, getScraperStatus } from './scraper-status-store.ts'
+import { markRunning, recordOutcome, getScraperStatus, getUnifiedStatus } from './scraper-status-store.ts'
+import { ScraperRegistry } from './scraper-registry.ts'
 
 // ── BKL-M50e: Scraper telemetry + history ──────────────────────────────────
 
@@ -362,19 +363,22 @@ export function initScraperManager(opts: {
   // BKL-CONN-SF-AUTO-01: Wire the RH context recovery callback so that when
   // the shared Chromium context is auto-recovered or recycled, sister scrapers
   // (SF and CCSP) re-adopt the new live context instead of holding stale refs.
-  // Supportable is permanently disabled — do not include it.
+  // BKL-ARCH-02 Phase 1b: drive the re-adoption through ScraperRegistry so the
+  // policy lives in one place. Skip:
+  //   • retired descriptors (supportable — permanently disabled per CLAUDE.md)
+  //   • the rh-cases descriptor itself (this callback is fired BY rh-scraper
+  //     during its own context recovery — re-adopting would loop back into it)
+  //   • sf-pipeline when getSfContext() === ctx (already on this ctx).
   setContextRecoveryCallback((ctx, profileDir) => {
-    try {
-      if (getSfContext() !== ctx) {
-        adoptSfContext(ctx, profileDir)
+    for (const d of ScraperRegistry.list()) {
+      if (d.retired) continue
+      if (d.name === 'rh-cases') continue
+      if (d.name === 'sf-pipeline' && getSfContext() === ctx) continue
+      try {
+        d.adopt(ctx, profileDir)
+      } catch (e: any) {
+        console.warn(`[scraper-manager] ${d.name} re-adopt failed:`, e?.message ?? e)
       }
-    } catch (e: any) {
-      console.warn('[scraper-manager] sf re-adopt failed:', e?.message ?? e)
-    }
-    try {
-      adoptCcspContext(ctx)
-    } catch (e: any) {
-      console.warn('[scraper-manager] ccsp re-adopt failed:', e?.message ?? e)
     }
   })
 }
@@ -951,42 +955,48 @@ export function createScraperRouter(): Hono {
       return (now - new Date(lastSync).getTime()) > intervalMinutes * 2 * 60 * 1000
     }
 
-    // FIX C1: Fall back to ScraperStatusStore.lastSuccess when in-memory variable is null (survives restart)
-    const rhStatus = getScraperStatus('rh-cases')
-    const supportableStatus = getScraperStatus('supportable')
-    const ccspStatus = getScraperStatus('ccsp')
-    const sfStatus = getScraperStatus('sf-pipeline')
+    // BKL-ARCH-02 Phase 1b: lastSync resolution moved into getUnifiedStatus()
+    // (in-memory hint ?? store.lastSuccess ?? null). Other fields are kept as
+    // they were so /api/status/scrapes JSON shape stays byte-identical.
+    const rhUnified          = getUnifiedStatus('rh-cases')
+    const supportableUnified = getUnifiedStatus('supportable')
+    const ccspUnified        = getUnifiedStatus('ccsp')
+    const sfUnified          = getUnifiedStatus('sf-pipeline')
+    const supportableStatus  = getScraperStatus('supportable')
+    const ccspStatus         = getScraperStatus('ccsp')
+    const rhStatus           = getScraperStatus('rh-cases')
+    const sfStatus           = getScraperStatus('sf-pipeline')
 
     return c.json({
       supportable: {
-        lastSync:    lastSupportableScrape ?? supportableStatus.lastSuccess ?? null,
+        lastSync:    supportableUnified.lastSync,
         lastError:   lastSupportableError ? lastSupportableError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
         isRunning:   supportableScrapeRunning,
-        isStale:     isStale(lastSupportableScrape ?? supportableStatus.lastSuccess ?? null, 24 * 60),
+        isStale:     isStale(supportableUnified.lastSync, 24 * 60),
         recordCount: supportableStatus.recordCount ?? null,
       },
       ccsp: {
-        lastSync:      lastCcspScrape ?? ccspStatus.lastSuccess ?? null,
+        lastSync:      ccspUnified.lastSync,
         lastError:     lastCcspError ? lastCcspError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
         isRunning:     ccspScrapeRunning || ccspInFlight,
-        isStale:       isStale(lastCcspScrape ?? ccspStatus.lastSuccess ?? null, intervals.ccsp),
+        isStale:       isStale(ccspUnified.lastSync, intervals.ccsp),
         recordCount:          ccspStatus.recordCount ?? null,
         tableauSessionExpired: peekTableauSessionExpired(),
       },
       rh: {
-        lastSync:    lastScraped ?? rhStatus.lastSuccess ?? null,
+        lastSync:    rhUnified.lastSync,
         lastError:   _rhScrapeLastError,
         isRunning:   _rhScrapeRunning,
-        isStale:     isStale(lastScraped ?? rhStatus.lastSuccess ?? null, intervals.rhScrape),
+        isStale:     isStale(rhUnified.lastSync, intervals.rhScrape),
         recordCount: rhStatus.recordCount ?? null,
         // BKL-RH-03 Phase 2 (ADR-014): expose active transport to dashboard
         transport:   process.env.RH_CASES_TRANSPORT ?? 'bearer',
       },
       salesforce: {
-        lastSync:    lastSfSync ?? sfStatus.lastSuccess ?? null,
+        lastSync:    sfUnified.lastSync,
         lastError:   _sfSyncLastError,
         isRunning:   _sfSyncRunning,
-        isStale:     isStale(lastSfSync ?? sfStatus.lastSuccess ?? null, 24 * 60),
+        isStale:     isStale(sfUnified.lastSync, 24 * 60),
         recordCount: sfStatus.recordCount ?? null,
       },
       // Circuit breaker states per service

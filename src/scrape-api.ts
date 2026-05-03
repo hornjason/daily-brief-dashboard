@@ -67,7 +67,7 @@ import { readSheetCache, readCCSPCache, readPipelineCache } from './cache-layer.
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
-import { getStatus, getScraperStatus, markRunning, recordOutcome } from './scraper-status-store.ts'
+import { getStatus, getScraperStatus, markRunning, recordOutcome, getUnifiedStatus } from './scraper-status-store.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
 
 // ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
@@ -162,11 +162,17 @@ export function registerScrapeRoutes(app: Hono): void {
     const intervals = getRefreshIntervals()
     const now = Date.now()
     const store = getScraperStatus('rh-cases')
+    // BKL-ARCH-02 Phase 1b: lastSync now resolves through getUnifiedStatus, which
+    // applies the inMemoryHint ?? store.lastSuccess ?? null fallback consistently
+    // with /api/status/scrapes (FIX C1). Previously this endpoint exposed only the
+    // in-memory `lastScraped` and silently returned null after a container restart
+    // even when the store had a real lastSuccess.
+    const lastSync = getUnifiedStatus('rh-cases').lastSync
     return c.json({
       isRunning: _rhScrapeRunning,
-      lastSync:  lastScraped,
+      lastSync:  lastSync,
       lastError: _rhScrapeLastError,
-      isStale:   !lastScraped || (now - new Date(lastScraped).getTime()) > intervals.rhScrape * 2 * 60 * 1000,
+      isStale:   !lastSync || (now - new Date(lastSync).getTime()) > intervals.rhScrape * 2 * 60 * 1000,
       // ScraperStatusStore fields for unified freshness tracking
       lastRun:       store.lastRun,
       lastSuccess:   store.lastSuccess,
@@ -307,7 +313,10 @@ export function registerScrapeRoutes(app: Hono): void {
     const ccspCache = readCCSPCache()
     return c.json({
       running:    ccspScrapeRunning || ccspInFlight,
-      lastScrape: ccspCache?.cachedAt ?? lastCcspScrape,
+      // BKL-ARCH-02 Phase 1b: defer the in-memory ?? store.lastSuccess fallback
+      // to getUnifiedStatus(); cache.cachedAt remains the preferred source
+      // (covers the first request after container restart when in-memory is null).
+      lastScrape: ccspCache?.cachedAt ?? getUnifiedStatus('ccsp').lastSync,
       lastError:  lastCcspError ? sanitizeErr(lastCcspError) : null,
       // ScraperStatusStore fields for unified freshness tracking
       lastRun:       store.lastRun,
@@ -500,9 +509,12 @@ export function registerScrapeRoutes(app: Hono): void {
   // GET /api/scrape/salesforce/status — read-only, available on all nodes
   app.get('/api/scrape/salesforce/status', (c) => {
     const store = getScraperStatus('sf-pipeline')
+    // BKL-ARCH-02 Phase 1b: lastSync resolution centralised in getUnifiedStatus
+    // (in-memory hint ?? store.lastSuccess ?? null). Same fallback the legacy
+    // call site composed inline.
     return c.json({
       isRunning: _sfSyncRunning,
-      lastSync:  lastSfSync,
+      lastSync:  getUnifiedStatus('sf-pipeline').lastSync,
       lastError: _sfSyncLastError,
       // ScraperStatusStore fields for unified freshness tracking
       lastRun:       store.lastRun,

@@ -7667,14 +7667,14 @@ Description: handleRhCancel cleared rhConnectPollRef and rhVncRef but not rhTime
 Resolution: Added rhTimeoutRef clear to handleRhCancel inline.
 
 ### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: S
 Source: Rook second audit 2026-04-27
 Issue: hornjason/asaCommandCenter#23
-Files: src/bootstrap-orchestrator.ts, dashboard/src/pages/SetupPage.tsx
-Description: Inference errors are logged to console but never surfaced in autoBootstrapState or the UI. Users can't tell if inference failed for a customer. Add inferenceWarning field to state resources, show in bootstrap status card.
-Can we test: YES — mock a waterfall failure, verify inferenceWarning field is populated.
+Files: src/bootstrap-state.ts, src/bootstrap-orchestrator.ts, dashboard/src/pages/SetupPage.tsx
+Commit: fa173eee3
+Description: Added `inferenceWarning?: string` to AutoBootstrapResources. Populated in inference IIFE when customers remain domain-null after all tiers. SetupPage renders warning below domain inference results. 5 unit tests added (451 total pass).
 
 ### BKL-DOM-INF-06 | Domain inference batch: serial processing (concurrency=1)
 Status: ⏸ SUPERSEDED by BKL-DOM-BATCH-01
