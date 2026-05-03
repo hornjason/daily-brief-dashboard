@@ -6126,6 +6126,7 @@ Severity: HIGH
 Priority: P1
 Size: L
 Source: Jason 2026-04-10 — BKL-REG-01/02 both had silent catch blocks hiding failures; entire class of bugs undetected
+Issue: hornjason/asaCommandCenter#47
 Files: dashboard/src/components/*.tsx, dashboard/src/pages/*.tsx, test/
 Root cause pattern: 71 silent `catch(() => {})` blocks exist across frontend components. Any of these can hide wrong endpoints, server errors, or broken flows with zero user feedback. BKL-REG-01 (wrong endpoint) and BKL-REG-02 (missing cache) were both invisible because of this pattern.
 
@@ -6491,6 +6492,7 @@ Fix: Removed the entire early-return guard block (lines 1353–1397). All custom
 Status: 🔵 OPEN
 Priority: P1 | Type: Bug Fix
 Source: Quinn — 2026-04-27 (Musarubra Us / Trellix fail with "No Drive folder found under AE Peter Niklaus")
+Issue: hornjason/asaCommandCenter#38
 Files: src/account-intelligence.ts (findCustomerDriveFolder ~line 756, writeIntelligenceDocs call ~line 1426)
 Description: Steps 1–3 (identifyIndustry, generateCompanyIntelligence, generateIndustryAnalysis) succeed and produce content. Step 4 (writeIntelligenceDocs) calls findCustomerDriveFolder which throws if no driveFolderId and no matching subfolder under the AE's Drive. This causes the entire pipeline job to error even though intelligence content was already generated. Any customer with `ae` set to an AE who lacks a Drive folder (or whose subfolder doesn't fuzzy-match the customer name) will fail permanently.
 Fix: Wrap the Drive write step — if findCustomerDriveFolder throws, cache intelligence content locally without docUrls and mark job as "complete (no Drive folder)" rather than error. Intelligence content is still usable for briefs; Drive doc creation can be retried later when folder is created.
@@ -6499,6 +6501,7 @@ Fix: Wrap the Drive write step — if findCustomerDriveFolder throws, cache inte
 Status: 🔵 OPEN
 Priority: P2 | Type: Reliability
 Source: Rook — 2026-04-27
+Issue: hornjason/asaCommandCenter#39
 Files: src/gemini-fetch.ts
 Description: The TimeoutError/AbortError retry loop (up to 2 extra tries × 120s each = 360s) precedes the 429 exponential backoff loop (4 retries × ~30s). Timeout errors on the 429 retry fetches escape the handler and propagate as raw DOMException. Worst-case per-call: ~870s (~14min) holding a fetch socket + AbortSignal + closure. Under batch intelligence (many customers in parallel), a Vertex outage can starve the event loop.
 Fix: (1) Cap timeout retries to 1 for grounded calls (120s× 2 is enough). (2) Wrap the 429 retry fetch in the same `isTimeoutError` guard or add an overall call deadline (~5min). (3) Add concurrency cap upstream in runIntelligencePipeline.
@@ -6507,6 +6510,7 @@ Fix: (1) Cap timeout retries to 1 for grounded calls (120s× 2 is enough). (2) W
 Status: 🔵 OPEN
 Priority: P2 | Type: Reliability
 Source: Rook — 2026-04-27
+Issue: hornjason/asaCommandCenter#40
 Files: src/sf-auth.ts
 Description: In both login completion paths (happy + fallback), `activeContext = null` is set BEFORE the four `adopt*` calls. If any adopt call throws, the catch block at line 266 runs `cleanupBrowser()` which is now a no-op (activeContext is null). The context the scraper just adopted is alive but untracked.
 Fix: Move `activeContext = null` to AFTER all adopt* calls succeed, or wrap the adopt block in a try/catch that runs `cleanupBrowser(ctx)` directly on the local ctx variable.
@@ -6727,6 +6731,7 @@ Status: 🟡 IN PROGRESS
 Priority: P2
 Size: L
 Source: 2026-04-25 — E2E job became reachable for the first time when unit test gate was fixed
+Issue: hornjason/asaCommandCenter#36
 Files: test/wizard.spec.ts, test/ui/*.spec.ts, test/accessibility.spec.ts, test/bootstrap-recovery.spec.ts, test/smoke-prod.spec.ts, test/regression.spec.ts, test/navigation-regression.spec.ts, playwright.config.ts
 Description: 54 pre-existing E2E test failures surfaced when the Integration & E2E job became reachable (previously always blocked by unit test failures). Root causes include: (1) UI selector mismatches — wizard, bootstrap-recovery, and dashboard-empty-state tests look for elements that no longer exist at the expected selectors; (2) axe/WCAG violations on /dashboard and /dashboard/setup; (3) xfail tests using test.fail() counted as failures; (4) smoke-prod hitting /customers endpoint on dev server (7778) and getting empty response; (5) React "Something went wrong" crash on nonexistent customer page. CI has continue-on-error while this is addressed. Fix requires: auditing each failing spec against current UI, updating selectors, fixing the axe violations, and ensuring seed data correctly populates /customers on dev server.
 Stopped at: continue-on-error added 2026-04-25; next step is systematic triage of failing specs with Quinn
@@ -6791,6 +6796,7 @@ Status: 🟡 IN PROGRESS
 Priority: P2
 Size: M
 Source: Marcus review 2026-04-25 — integration tests reference these endpoints, neither exists on local or mini.local
+Issue: hornjason/asaCommandCenter#37
 Files: src/server.ts (or new src/wizard-routes.ts), test/integration/wizard-setup-region.spec.ts
 Description: Integration tests expect POST /api/wizard/setup-region (regionId persistence, idempotency), POST /api/wizard/seed-sheets (returns seed URLs), GET /api/settings/regions. None of these exist on the codebase (confirmed on both local and mini.local). This is a feature gap — needs design brief before implementation: where regions persist (settings.json?), what regionId derives from, canonical seed sheet list.
 
@@ -6939,6 +6945,7 @@ Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: Quinn audit 2026-04-25 (Phase 1 gate)
+Issue: hornjason/asaCommandCenter#46
 Files: test/regression.spec.ts or new test/wizard-sf-sync.spec.ts
 Description: The SF Pipeline "Sync Now" success banner (data-testid="sf-sync-success") cannot be exercised on the test container because the button is disabled without SF credentials. REG-WIZ-SF-SYNC-01 cannot exercise the success path. Fix: write a Playwright test that mocks POST /api/scrape/salesforce to return {ok:true,rowCount:47}, asserts data-testid="sf-sync-success" appears with "✓ Sync complete — 47 rows", and disappears within 8s.
 Can we test: YES — via page.route() mock for the SF scrape endpoint.
@@ -7805,6 +7812,7 @@ Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: CI regression run 2026-04-27 (post BKL-CONN-SF-AUTO-01 + BKL-DOM-BATCH-01 promote)
+Issue: hornjason/asaCommandCenter#45
 Files: src/routes/cases.ts or cases cache, /api/accounts response
 Description: REG-021 checks that all cases from /api/cases/all match at least one account from /api/accounts by accountNumber or customerName. Currently 32 cases present (real account numbers: 5856163, 1530865, 1025778) but /api/accounts returns 10 customers with empty accountNumbers arrays (A10 Networks [], Dropbox []). matchedIds.size = 0.
 Root cause: accountNumbers empty on accounts — either not populated from CCSP scrape or mapping lost.
@@ -7921,6 +7929,7 @@ Status: 🟡 IN PROGRESS
 Priority: P1
 Size: M
 Source: Session 2026-04-28 (Serena council review)
+Issue: hornjason/asaCommandCenter#32
 Description: Tableau and SF sessions expire in ~2h of idle. Leader instance needs periodic lightweight page navigation (not full scrape) to reset the server-side idle timeout. Fixed 90-minute interval per Serena recommendation (cookie expires=-1, adaptive scheduling impossible). Each heartbeat navigates to the service URL and asserts on an auth marker (DOM element only present when authenticated). Uses SessionMutex to avoid racing active scrapes. Logs every heartbeat outcome.
 Acceptance: Sessions survive overnight without manual re-login on leader instance. Heartbeat logs visible in admin panel. Full scrape still succeeds after overnight heartbeat-kept sessions.
 
@@ -7929,6 +7938,7 @@ Status: 🟡 IN PROGRESS
 Priority: P1
 Size: S
 Source: Session 2026-04-28 (empirical testing — SSO credential prompt appeared despite recent auth.redhat.com login)
+Issue: hornjason/asaCommandCenter#41
 Description: After SF login establishes shared context (which includes auth.redhat.com session), Tableau's SAML redirect to auth.redhat.com should auto-authenticate without credential prompt. Today's test showed credential prompt still appearing. Need to confirm: (1) auth.redhat.com session IS present in shared context at time of Tableau SAML redirect, (2) the session is being sent in the SAML request, (3) Tableau's SSO realm matches the one established by SF login. May be a session TTL issue (2h expired) or a cookie domain issue.
 Acceptance: After SF login completes, Tableau SAML redirect auto-authenticates without credential prompt. User only needs to type Tableau email, then lands on dashboard.
 
@@ -8292,6 +8302,7 @@ Status: 🟡 IN PROGRESS
 Priority: P1
 Size: S
 Source: Session 2026-04-30 (Serena council review — Mac Mini needs documented initial auth sequence before daemon can run autonomously)
+Issue: hornjason/asaCommandCenter#42
 Files: docs/HERO-INSTALL.md (new section), Makefile (sync-up-vnc target for one-time auth mode)
 Description: Document and implement the one-time SSO bootstrap sequence for the Mac Mini sync daemon:
   1. Start sync container with VNC port exposed: make sync-up-vnc (adds -p 127.0.0.1:6082:6080 to sync-up)
@@ -8459,6 +8470,7 @@ Status: 🟡 IN PROGRESS
 Priority: P3
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Issue: hornjason/asaCommandCenter#27
 Files: server.ts (3 inline routes), new src/territory-routes.ts
 Description: /api/territory/notifications, /api/pods, /api/accounts remain inline. Territory is already a concept in the domain (PODs, region access, AE config). Depends on BKL-ARCH-03.
 Depends on: BKL-ARCH-03
@@ -8470,6 +8482,7 @@ Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
+Issue: hornjason/asaCommandCenter#28
 Files: server.ts (lines ~1275–1337+: 3 SSE routes), new src/events-routes.ts
 Description: /events, /api/ingest/events, /api/ai/events are all SSE (server-sent events) streams with large inline handlers. Extracting to events-routes.ts isolates the SSE pattern, gives it a seam, and removes ~200 lines from server.ts. Depends on BKL-ARCH-03.
 Depends on: BKL-ARCH-03
@@ -8503,6 +8516,7 @@ Status: 🟡 IN PROGRESS
 Priority: P1
 Size: S
 Source: Serena architecture audit 2026-05-01
+Issue: hornjason/asaCommandCenter#29
 Files: src/account-intelligence.ts, src/backup-config.ts, src/bootstrap-history.ts, src/background-scheduler.ts, src/bootstrap-orchestrator.ts, src/customer-routes.ts, src/drive-sources.ts, src/kpi-history.ts, src/region-access-routes.ts, src/restore-routes.ts (only site with named helper), src/server-state.ts, src/sync-state.ts
 Description: ADR-002 mandates .tmp + atomic rename for all config writes. 20 call sites hand-roll it. Only restore-routes.ts::atomicWriteJSON extracts it but doesn't export it. Variants drift: some set mode: 0o600, some don't; some catch errors, some don't.
 Solution: Export atomicWriteJson(path, data, { mode }) from src/lib/atomic-write.ts. Makes ADR-002 a type-level guarantee. New config files can't accidentally skip the .tmp step.
@@ -8523,6 +8537,7 @@ Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: Marcus BKL-ARCH-07 implementation 2026-05-01
+Issue: hornjason/asaCommandCenter#30
 Files: src/customer.ts (BFS file collection), src/lib/drive-client.ts (listFilesUnder)
 Description: customer.ts BFS (account intelligence file collection) follows folder-shortcuts — when a shortcut pointing to a folder is found, its target is enqueued at the same depth as a real subfolder (BKL-DRIVE-01). listFilesUnder in drive-client.ts does not yet support this. Migrating customer.ts without this option would silently drop files reachable only via folder-shortcuts.
 Solution: Add followFolderShortcuts option to listFilesUnder (default false). Then migrate customer.ts BFS to driveClient.listFilesUnder({ followFolderShortcuts: true, maxFiles, modifiedAfter, maxDepth }).
@@ -8532,6 +8547,7 @@ Status: 🟡 IN PROGRESS
 Priority: P3
 Size: S
 Source: Marcus BKL-ARCH-07 implementation 2026-05-01
+Issue: hornjason/asaCommandCenter#31
 Files: src/account-intelligence.ts (findIntelligenceSubfolder, upsertIntelligenceDoc), src/account-plan.ts (upsertAccountPlanDoc)
 Description: Several Drive call sites in account-intelligence and account-plan handle Doc creation/upsert, not folder traversal. They were out of scope for BKL-ARCH-07 but are candidates for follow-up consolidation into drive-client.ts (e.g. findDocByName, upsertDoc methods).
 Solution: Evaluate whether Doc upsert operations are common enough to warrant module methods. Low priority — these use supportsAllDrives correctly already.
@@ -8552,6 +8568,7 @@ Status: 🔵 OPEN
 Priority: P3
 Size: S
 Source: Rook scan 2026-05-01 (BKL-ARCH-08 review)
+Issue: hornjason/asaCommandCenter#44
 Files: src/lib/cache-hierarchy.ts:229
 Description: catch block logs raw `supportableSheetId` (a Drive capability token). Low severity — localhost-only app, no external log sink. But deviates from project log hygiene pattern.
 Solution: Truncate to last 6 chars: `...${supportableSheetId.slice(-6)}` for consistency with sanitizeErr usage pattern.
@@ -8563,6 +8580,7 @@ Status: 🟡 IN PROGRESS
 Priority: P1
 Size: M
 Source: Council debate 2026-05-01 (Serena + Marcus + Ava)
+Issue: hornjason/asaCommandCenter#33
 Files: scripts/sync-pod-l3.ts (lines 312-320 — CCSP call site), src/ccsp-scraper.ts (peekTableauSessionExpired export)
 Description: CCSP scrape fails silently on transient Tableau viz-not-ready and on auth expiry with no retry. Today's sync: all 5 PODs failed with "CSV download failed: Timeout 60000ms exceeded". Last good CCSP data Apr 29.
 Solution (council-designed):
@@ -8585,6 +8603,7 @@ Status: 🟡 IN PROGRESS
 Priority: P1
 Size: S
 Source: Diagnosis 2026-05-01
+Issue: hornjason/asaCommandCenter#34
 Files: scripts/sync-l3-daemon.ts (doKeepalive function ~line 62)
 Description: doKeepalive() navigates to Tableau home page and checks the final URL for signin/auth redirect. But Tableau can serve the home page with stale cookies without redirecting — the MFA wall only appears when accessing viz endpoints. So keepalive passes while scraping fails. Need to check for login form presence on the page after navigation.
 Solution: After navigating to Tableau in doKeepalive(), check for login form (input[type=password], input#username) — same check scrapeOneAe uses. If found, throw with auth-expired message so the keepalive failure email fires with a clear "Tableau auth expired" subject.
@@ -8596,6 +8615,7 @@ Status: 🟡 IN PROGRESS
 Priority: P1
 Size: S
 Source: Diagnosis 2026-05-01
+Issue: hornjason/asaCommandCenter#35
 Files: src/ccsp-scraper.ts (scrapePodCcspRaw ~line 1155)
 Description: In the POD pre-scrape path, when the viz doesn't load in 45s and the CSV download times out, the code logs a warning and returns 0 rows. The _tableauSessionExpired flag is never checked or set on this code path. The login detection only runs in scrapeOneAe (the per-AE path), not in scrapePodCcspRaw. So a timeout caused by auth expiry is invisible to the retry wrapper's auth check.
 Solution: After CSV download fails in scrapePodCcspRaw, check the current page URL and login form presence. If login form detected, call the internal setter to mark _tableauSessionExpired = true before throwing. The withCcspRetry wrapper in sync-pod-l3.ts will then catch it as AUTH_EXPIRED.
@@ -8837,24 +8857,23 @@ Description: Git worktrees from prior agent runs accumulate at .claude/worktrees
 Can we test: YES — verify make build succeeds after worktrees exceed 500MB.
 
 ### BKL-SEC-19 | bootstrap-orchestrator.ts — writeScaffoldCache missing isValidDriveFolderId guard
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-DRIVE-SCAFFOLD-CACHE-01 post-ship review)
 Issue: hornjason/asaCommandCenter#9 (XS — stays in BACKLOG.md, not promoted)
 Files: src/bootstrap-orchestrator.ts (writeScaffoldCache, readScaffoldCache)
-Description: writeScaffoldCache(parentFolderId, entry) writes parentFolderId directly as a JSON key without validation. isValidDriveFolderId() already exists in utils.ts. Add guard at function entry. Also validate entry.configFolderId and entry.productsFolderId with the same helper. readScaffoldCache lookup should similarly validate the key before returning entry.
-Can we test: YES — unit test: writeScaffoldCache with invalid parentFolderId should silently skip write; readScaffoldCache with invalid key should return undefined.
+Description: Added isValidDriveFolderId guard to writeScaffoldCache for parentFolderId, configFolderId, and productsFolderId. 3 new validation tests in drive-scaffold-cache.test.ts plus updated existing tests to use valid-length IDs.
+Resolution: commit 62b6223ed. Quinn PASS, Rook PASS.
 
 ### BKL-SEC-20 | admin-routes.ts — /api/drive/ls/:folderId accepts unvalidated path parameter
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P2
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-ARCH-12 post-ship review)
 Files: src/admin-routes.ts:90-106
-Description: `folderId` from c.req.param('folderId') is interpolated into the Drive API query `q: \`'${folderId}' in parents...\`` with no validation. `isValidDriveFolderId()` exists in utils.ts and is used elsewhere but not here. A caller could inject Drive query operators. Bounded by single-user localhost architecture. Carry-over from server.ts — extraction did not introduce the gap.
-Solution: Add `if (!isValidDriveFolderId(folderId)) return c.json({ error: 'Invalid folder ID' }, 400)` at handler entry. Import `isValidDriveFolderId` from `./utils.ts`.
-Can we test: YES — regression test: GET /api/drive/ls/invalid!folder returns 400.
+Description: Added `isValidDriveFolderId(folderId)` guard at handler entry; returns 400 on invalid ID. Imported `isValidDriveFolderId` from utils.ts.
+Resolution: commit 62b6223ed. Quinn PASS, Rook PASS.
 
 ### BKL-SEC-21 | admin-routes.ts — /api/drive-watcher/rebuild lacks NODE_ROLE guard (advisory)
 Status: 🟡 IN PROGRESS
@@ -8867,14 +8886,23 @@ Solution: If hero nodes should not trigger Drive folder rebuilds: add `if (proce
 Can we test: YES after decision — regression test that 7776 (hero image) returns 404 on POST /api/drive-watcher/rebuild.
 
 ### BKL-SEC-22 | settings-api.ts — /api/settings/email PUT recipientEmail lacks length cap
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-ARCH-11 post-ship review)
 Files: src/settings-api.ts (~line 702)
-Description: Email validation regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` has no length bound. A caller could store a multi-MB string in email-settings.json. RFC 5321 §4.5.3.1.3 caps email address at 254 chars.
-Solution: Add `if (body.recipientEmail.length > 254) return c.json({ error: 'Email exceeds RFC 5321 maximum (254 chars)' }, 400)` before regex test.
-Can we test: YES — regression test: PUT /api/settings/email with 255-char email returns 400.
+Description: Added 254-char length guard before regex test with RFC 5321 error message.
+Resolution: commit 62b6223ed. Quinn PASS, Rook PASS.
+
+### BKL-SEC-23 | settings-api.ts + config-load — region.parentFolderId PUT and folder IDs at config-read boundaries lack isValidDriveFolderId guard
+Status: 🔵 OPEN
+Priority: P3
+Size: S
+Source: Rook scan 2026-05-03 (BKL-SEC-19/20 post-ship sibling audit)
+Issue: hornjason/asaCommandCenter#43
+Files: src/settings-api.ts (region PUT handler), src/scrape-api.ts, config-load boundaries
+Description: Rook identified that region.parentFolderId and configFolderId passed via PUT /api/settings/regions are interpolated into Drive queries without isValidDriveFolderId validation (analogous to the SEC-20 vector). Also: driveFolderId/parentFolderId values from customers.json/aes.json are interpolated in scrape-api.ts and other modules without validation at config-read time. Low risk (config is trusted), but defense-in-depth would add guards at config-write time for all folder ID fields.
+Can we test: YES — regression test that PUT /api/settings/regions with invalid parentFolderId returns 400.
 
 ### BKL-PROCESS-01 | Child issue promotion at parent issue close — external traceability
 Status: ✅ DONE 2026-05-02
