@@ -75,6 +75,16 @@ async function doKeepalive(): Promise<void> {
     if (tableauFinal.includes('signin') || tableauFinal.includes('auth') || (tableauResp?.status() ?? 200) >= 400) {
       throw new Error(`Tableau session expired — redirected to ${tableauFinal}`)
     }
+    // BKL-CCSP-RETRY-02: Tableau can serve the home page with stale cookies without
+    // redirecting — the MFA wall only appears on viz endpoints. Check for login form
+    // presence (same selectors scrapeOneAe uses) so keepalive catches this case.
+    const hasLoginForm = await page
+      .$('input[type="password"], input#username')
+      .then(el => !!el)
+      .catch(() => false)
+    if (hasLoginForm) {
+      throw new Error('Tableau auth expired')
+    }
 
     // SF keepalive
     console.log('[sync-daemon] keepalive: navigating Salesforce…')

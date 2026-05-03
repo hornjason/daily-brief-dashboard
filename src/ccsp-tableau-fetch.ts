@@ -64,6 +64,11 @@ export function peekTableauSessionExpired(): boolean {
   return _tableauSessionExpired
 }
 
+/** Set the expired flag — used by callers that detect the login wall outside of fetchPodCsv. */
+export function setTableauSessionExpired(value: boolean): void {
+  _tableauSessionExpired = value
+}
+
 // -- Internal helpers (mirror ccsp-scraper) -----------------------------------
 
 /**

@@ -11,10 +11,7 @@
  * service account key or OAuth fallback).
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { writeJsonAtomic } from './lib/atomic-write.ts'
-import { driveClient } from './lib/drive-client.ts'
-import { findCustomerDriveFolder } from './lib/customer-folder.ts'
+import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
@@ -66,14 +63,6 @@ export interface IntelligenceCacheEntry {
   noData?: boolean
 }
 
-/** BKL-SEC-13: Throws if the slug would be empty after stripping non-slug chars. */
-function intelligenceCachePath(customerName: string): string {
-  if (!JOB_CACHE_PATH) throw new Error('JOB_CACHE_PATH not set')
-  const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-  if (!slug) throw new Error('intelligence cache slug is empty — customer name contains no slug-safe characters')
-  return JOB_CACHE_PATH.replace('/intelligence-jobs.json', `/intelligence/${slug}.json`)
-}
-
 export function getIntelligenceCacheEntry(customerName: string): IntelligenceCacheEntry | null {
   return readIntelligenceCache(customerName)
 }
@@ -81,7 +70,8 @@ export function getIntelligenceCacheEntry(customerName: string): IntelligenceCac
 function readIntelligenceCache(customerName: string): IntelligenceCacheEntry | null {
   if (!JOB_CACHE_PATH) return null
   try {
-    const p = intelligenceCachePath(customerName)
+    const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const p = JOB_CACHE_PATH.replace('/intelligence-jobs.json', `/intelligence/${slug}.json`)
     if (!existsSync(p)) return null
     return JSON.parse(readFileSync(p, 'utf-8'))
   } catch { return null }
@@ -104,7 +94,7 @@ export function writeIntelligenceDiscoveryCache(
 ): void {
   if (!JOB_CACHE_PATH) return
   try {
-    const p = intelligenceCachePath(customerName)
+    const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
     const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
     mkdirSync(intelligenceDir, { recursive: true })
     const existing = readIntelligenceCache(customerName)
@@ -129,7 +119,7 @@ export function writeIntelligenceDiscoveryCache(
       ...(industryUrl ? { industryDocUrl: industryUrl } : {}),
       ...(isNoDataStub ? { noData: true } : (existing?.noData ? { noData: existing.noData } : {})),
     } as IntelligenceCacheEntry
-    writeFileSync(p, JSON.stringify(entry), { mode: 0o600 })
+    writeFileSync(`${intelligenceDir}/${slug}.json`, JSON.stringify(entry), { mode: 0o600 })
   } catch { /* non-fatal */ }
 }
 
@@ -171,15 +161,17 @@ async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: str
     },
   })
 
-  // BKL-INTEL-TIMEOUT-01: reduced to 60s per attempt (was 120s). Gemini Flash
-  // grounded calls take 10-40s in practice; 120s was overly conservative and
-  // caused 6+ min stalls on slow Vertex days (3 attempts × 120s = 6 min per
-  // call). 60s still gives enough headroom for the longest grounded calls.
+  // BKL-TEST-P0-04c: shared 429-retry helper. Preserves the 120s per-attempt
+  // AbortSignal.timeout that callGeminiGrounded originally set (grounded calls
+  // are slow — industry analysis can take 60s+). Exhausted retries throw
+  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
+  // canonical "Gemini API error NNN (project=... location=... model=...)"
+  // message with Bearer redaction.
   const res = await fetchGeminiWithRetry(url, getGeminiToken, requestBody, {
     callType:     opts.callType ?? 'intelligence-grounded',
     customerName: opts.customerName ?? 'unknown',
     model, project, location,
-    timeoutMs: 60_000,
+    timeoutMs: 120_000,
     logPrefix: '[acct-intel]',
   })
 
@@ -330,7 +322,9 @@ function persistCustomerFolderId(customerName: string, folderId: string): void {
     data.customers[idx].driveFolderId = folderId
   }
 
-  writeJsonAtomic(CUSTOMERS_PATH, data)
+  const tmp = CUSTOMERS_PATH + '.tmp'
+  writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 })
+  renameSync(tmp, CUSTOMERS_PATH)
 
   // Update in-memory state too
   const memIdx = customers.findIndex(c => c.name === customerName)
@@ -756,11 +750,117 @@ export interface IntelligenceDocUrls {
 }
 
 /**
+ * Find the customer's Drive folder using the same priority chain as _fetchCustomerDocsImpl
+ * in src/customer.ts: per-customer driveFolderId > AE folder > fuzzy match.
+ */
+async function findCustomerDriveFolder(customer: Customer): Promise<string> {
+  if (customer.driveFolderId) return customer.driveFolderId
+
+  const auth = makeAuth(GDRIVE_TOKEN_PATH)
+  const drive = google.drive({ version: 'v3', auth })
+
+  const ae = aes.find(a => a.name === customer.ae)
+  const aeFolderId = ae?.driveFolderId
+  if (!aeFolderId) throw new Error(`No Drive folder found for customer ${customer.name} — no per-customer or AE folder ID`)
+
+  // List subfolders of AE folder and fuzzy match
+  const custFolders = await drive.files.list({
+    q: `'${aeFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: 'files(id,name)', pageSize: 200,
+  })
+
+  const folderList = custFolders.data.files ?? []
+  const match = fuzzyFindFolder(folderList, customer.name)
+  if (match) {
+    // Persist found folderId to customers.json for fast path next time (BKL-DATA-03)
+    persistCustomerFolderId(customer.name, match.id)
+    return match.id
+  }
+
+  // One level deeper (e.g. "Accounts" subfolder)
+  for (const sub of folderList.slice(0, 10)) {
+    if (!sub.id) continue
+    const deeper = await drive.files.list({
+      q: `'${sub.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: 'files(id,name)', pageSize: 100,
+    })
+    const deepMatch = fuzzyFindFolder(deeper.data.files ?? [], customer.name)
+    if (deepMatch) {
+      // Persist found folderId to customers.json for fast path next time (BKL-DATA-03)
+      persistCustomerFolderId(customer.name, deepMatch.id)
+      return deepMatch.id
+    }
+  }
+
+  throw new Error(`No Drive folder found for customer ${customer.name} under AE ${customer.ae}`)
+}
+
+/** Reuse the same fuzzy matching logic from customer.ts */
+function normalizeFolderName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/,?\s+(inc|llc|ltd|corp|corporation|incorporated|limited|co|group|holdings|international|technologies|logistics|solutions|services|foods|systems|global|networks|software|health sciences|cancer center|cancer research)\.?\s*$/gi, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+}
+
+function folderMatchScore(folderName: string, customerName: string): number {
+  const fn = normalizeFolderName(folderName)
+  const cn = normalizeFolderName(customerName)
+  if (fn === cn) return 1
+  if (fn.includes(cn) || cn.includes(fn)) return 0.9
+  const fWords = new Set(fn.split(/\s+/).filter(w => w.length > 2))
+  const cWords = cn.split(/\s+/).filter(w => w.length > 2)
+  if (fWords.size === 0 || cWords.length === 0) return 0
+  const overlap = cWords.filter(w => fWords.has(w)).length
+  return overlap / Math.max(fWords.size, cWords.length)
+}
+
+function fuzzyFindFolder(
+  folders: { id?: string | null; name?: string | null }[],
+  customerName: string,
+): { id: string; name: string } | undefined {
+  let bestScore = 0
+  let bestFolder: { id: string; name: string } | undefined
+  for (const f of folders) {
+    if (!f.id || !f.name) continue
+    const score = folderMatchScore(f.name, customerName)
+    if (score > bestScore) { bestScore = score; bestFolder = { id: f.id, name: f.name } }
+  }
+  return bestScore >= 0.5 ? bestFolder : undefined
+}
+
+/**
  * Find or create "Account Intelligence" subfolder inside the customer's Drive folder.
- * ADR-0016: drive-client supplies supportsAllDrives unconditionally.
  */
 async function ensureIntelligenceSubfolder(customerFolderId: string): Promise<string> {
-  return driveClient.ensureChildFolder(customerFolderId, 'Account Intelligence')
+  const auth = makeAuth(GDRIVE_TOKEN_PATH)
+  const drive = google.drive({ version: 'v3', auth })
+
+  // Check for existing subfolder
+  const existing = await drive.files.list({
+    q: `'${customerFolderId}' in parents and name = 'Account Intelligence' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: 'files(id,name)', pageSize: 1,
+  })
+
+  if (existing.data.files?.length && existing.data.files[0].id) {
+    console.log(`[acct-intel] Found existing Account Intelligence subfolder`)
+    return existing.data.files[0].id
+  }
+
+  // Create new subfolder
+  const created = await drive.files.create({
+    requestBody: {
+      name: 'Account Intelligence',
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [customerFolderId],
+    },
+    fields: 'id',
+  })
+
+  if (!created.data.id) throw new Error('Failed to create Account Intelligence subfolder')
+  console.log(`[acct-intel] Created Account Intelligence subfolder: ${created.data.id}`)
+  return created.data.id
 }
 
 /**
@@ -812,7 +912,6 @@ export async function discoverExistingIntelDocs(
     // writeIntelligenceDocs() — per-customer driveFolderId > AE folder > fuzzy.
     // Throws when no folder is found; caught below so discovery is best-effort.
     const customerFolderId = await findCustomerDriveFolder(customer)
-    persistCustomerFolderId(customer.name, customerFolderId)
 
     // Read-only subfolder lookup — don't create.
     const intelFolderId = await findIntelligenceSubfolder(customerFolderId)
@@ -1000,7 +1099,6 @@ async function upsertGoogleDoc(
 async function fetchCustomPromptFromDrive(customer: Customer): Promise<string | null> {
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
-    persistCustomerFolderId(customer.name, customerFolderId)
     const auth = makeAuth(GDRIVE_TOKEN_PATH)
     const drive = google.drive({ version: 'v3', auth })
 
@@ -1051,7 +1149,6 @@ export async function writeIntelligenceDocs(
   console.log(`[acct-intel] Writing intelligence docs for ${customer.name}`)
 
   const customerFolderId = await findCustomerDriveFolder(customer)
-  persistCustomerFolderId(customer.name, customerFolderId)
   const intelFolderId = await ensureIntelligenceSubfolder(customerFolderId)
 
   const companyDocName = `${customer.name} - Company Intelligence`
@@ -1076,7 +1173,7 @@ export async function writeIntelligenceDocs(
 // ── Full pipeline orchestrator ───────────────────────────────────────────────
 
 export interface IntelligenceJobStatus {
-  status: 'pending' | 'running' | 'complete' | 'error'
+  status: 'pending' | 'running' | 'complete' | 'complete_no_drive_folder' | 'error'
   step?: string
   companyDocUrl?: string
   industryDocUrl?: string
@@ -1281,9 +1378,11 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
       // Step 4: Write docs to Drive (non-fatal if Drive folder not found — BKL-INTEL-DRIVE-FOLDER)
       setJob(jobId, { ...jobs.get(jobId)!, step: 'writing docs to Drive' })
       let docUrls: { companyDocUrl?: string; industryDocUrl?: string; folderId?: string } = {}
+      let driveFolderMissing = false
       try {
         docUrls = await writeIntelligenceDocs(customer, companyBrief ?? '', industryAnalysis ?? '')
       } catch (driveErr: any) {
+        driveFolderMissing = true
         console.warn(`[acct-intel] Drive write failed for ${customerName} — caching without doc URLs:`, driveErr?.message ?? driveErr)
       }
 
@@ -1330,9 +1429,9 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
         try {
           const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
           mkdirSync(intelligenceDir, { recursive: true })
-          const p = intelligenceCachePath(customerName)
+          const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
           writeFileSync(
-            p,
+            `${intelligenceDir}/${slug}.json`,
             JSON.stringify({
               customerName,
               company: companyBrief ?? '',
@@ -1349,7 +1448,7 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
       }
 
       setJob(jobId, {
-        status: 'complete',
+        status: driveFolderMissing ? 'complete_no_drive_folder' : 'complete',
         companyDocUrl: docUrls.companyDocUrl,
         industryDocUrl: docUrls.industryDocUrl,
         folderId: docUrls.folderId,
@@ -1357,7 +1456,7 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
         completedAt: new Date().toISOString(),
       })
 
-      console.log(`[acct-intel] Pipeline complete for ${customerName}`)
+      console.log(`[acct-intel] Pipeline complete for ${customerName}${driveFolderMissing ? ' (no Drive folder — content cached locally)' : ''}`)
     } catch (e: any) {
       console.error(`[acct-intel] Pipeline failed for ${customerName}:`, e)
       setJob(jobId, {

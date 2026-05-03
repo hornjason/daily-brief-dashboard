@@ -210,6 +210,7 @@ let _ctx: BrowserContext | null = null
 // Re-export for backward compatibility — bootstrap-orchestrator.ts and
 // scraper-manager.ts continue to import from './ccsp-scraper.ts'.
 export { consumeTableauSessionExpired, peekTableauSessionExpired } from './ccsp-tableau-fetch.ts'
+import { setTableauSessionExpired } from './ccsp-tableau-fetch.ts'
 
 export function adoptCcspContext(ctx: BrowserContext): void {
   _ctx = ctx
@@ -806,6 +807,16 @@ export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFold
         console.log(`[ccsp] POD pre-scrape: download captured at ${csvPath}`)
       } catch (e: any) {
         console.warn(`[ccsp] POD pre-scrape: CSV download failed: ${e.message}`)
+        // BKL-CCSP-RETRY-03: CSV download timeout does not redirect — check login form
+        // presence directly so auth-expired timeouts are distinguishable from transient failures.
+        const hasLoginForm = await page
+          .$('input[type="password"], input#username')
+          .then(el => !!el)
+          .catch(() => false)
+        if (hasLoginForm) {
+          console.warn('[ccsp] POD pre-scrape: login form detected after CSV download failure — marking Tableau session expired')
+          setTableauSessionExpired(true)
+        }
       }
 
       if (csvPath) {
