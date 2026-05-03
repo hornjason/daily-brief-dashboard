@@ -8703,7 +8703,7 @@ Description: `scrapePodCcspRaw` (out of scope for #15) still contains the origin
 Solution: Route `scrapePodCcspRaw` through `fetchPodCsv` to eliminate duplicate helpers and URL-build code. Dependent on #15 step-4 completion.
 
 ### BKL-ARCH-16 | regression.spec.ts test-ordering pollution — REG-001 and REG-024 fail in full suite, pass in isolation
-Status: OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P2
 Size: M
 Source: DA #15 step-1 Playwright gate 2026-05-02

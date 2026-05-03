@@ -79,6 +79,15 @@ test.afterAll(async () => {
 // ── REG-001: tableauTerritories preserved after POST /api/aes ────────────────
 
 test.describe('@destructive REG-001: tableauTerritories preserved after POST /api/aes', () => {
+  // BKL-ARCH-16: per-test snapshot/restore prevents parallel worker state leak
+  let reg001Snapshot: unknown = null
+  test.beforeAll(async () => {
+    try { const { body } = await postJSONDestructive('/api/__test/snapshot', {}); reg001Snapshot = body } catch { /* non-fatal */ }
+  })
+  test.afterAll(async () => {
+    if (reg001Snapshot) { try { await postJSONDestructive('/api/__test/restore', reg001Snapshot) } catch { /* ignore */ } }
+  })
+
   test('server-managed fields survive a round-trip save', async () => {
     // Save an AE with tableauTerritories set
     const testAe = {
@@ -810,6 +819,15 @@ test.describe('REG-023: validate-all endpoint returns correct shape (BKL-INTEL-0
 // without an industry call, or the customer's industry field gets populated).
 test.describe('@destructive @live REG-024: identifyIndustry runs for no-account customers (BKL-INTEL-04)', () => {
   const TEST_CUSTOMER = 'Cisco Systems'  // Real company — Gemini can identify it via Google Search grounding
+
+  // BKL-ARCH-16: per-test snapshot/restore prevents parallel worker state leak
+  let reg024Snapshot: unknown = null
+  test.beforeAll(async () => {
+    try { const { body } = await postJSONDestructive('/api/__test/snapshot', {}); reg024Snapshot = body } catch { /* non-fatal */ }
+  })
+  test.afterAll(async () => {
+    if (reg024Snapshot) { try { await postJSONDestructive('/api/__test/restore', reg024Snapshot) } catch { /* ignore */ } }
+  })
 
   test('intelligence pipeline calls identifyIndustry even when customer has no account numbers', async () => {
     test.setTimeout(90000) // intelligence pipeline + Gemini call can take up to 60s
