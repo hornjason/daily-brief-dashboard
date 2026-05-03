@@ -11,7 +11,8 @@
  * service account key or OAuth fallback).
  */
 
-import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
@@ -329,9 +330,7 @@ function persistCustomerFolderId(customerName: string, folderId: string): void {
     data.customers[idx].driveFolderId = folderId
   }
 
-  const tmp = CUSTOMERS_PATH + '.tmp'
-  writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 })
-  renameSync(tmp, CUSTOMERS_PATH)
+  writeJsonAtomic(CUSTOMERS_PATH, data)
 
   // Update in-memory state too
   const memIdx = customers.findIndex(c => c.name === customerName)

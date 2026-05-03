@@ -3,10 +3,11 @@
 // Replaces 6 scattered `export let` status variables across scraper modules.
 // Phase 1: ADD calls alongside existing variables. Old variables removed in phase 2.
 
-import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'node:path'
 import { sanitizeErr } from './utils.ts'
 import { ScraperRegistry } from './scraper-registry.ts'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,12 +71,10 @@ let _store: Partial<ScraperStatusMap> = {
 
 // ── Persistence helpers ──────────────────────────────────────────────────────
 
-/** Write current store to disk atomically (write .tmp, then rename). */
+/** Write current store to disk atomically via writeJsonAtomic. */
 function persistStore(): void {
   try {
-    const tmpPath = getStatusFilePath() + '.tmp'
-    writeFileSync(tmpPath, JSON.stringify(_store, null, 2), { mode: 0o600 })
-    renameSync(tmpPath, getStatusFilePath())
+    writeJsonAtomic(getStatusFilePath(), _store)
   } catch (e: any) {
     console.warn('[scraper-status-store] failed to persist:', sanitizeErr(e))
   }

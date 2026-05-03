@@ -16,7 +16,7 @@
  */
 import { Hono } from 'hono'
 import { readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
-import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
@@ -271,9 +271,7 @@ export function createAeRouter(): Hono {
             const out = rawSettings.regions
               ? { ...rawSettings, regions: normalized.regions }
               : rawSettings
-            const tmp = `${SETTINGS_PATH}.tmp`
-            writeFileSync(tmp, JSON.stringify(out, null, 2))
-            renameSync(tmp, SETTINGS_PATH)
+            writeJsonAtomic(SETTINGS_PATH, out)
           }
         } catch (e) {
           console.warn('[validate-folder] Could not save parentFolderId to settings.json:', (e as Error).message)

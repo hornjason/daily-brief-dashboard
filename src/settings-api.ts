@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { writeFileSync as writeFileSyncRaw, renameSync } from 'fs'
 import { resolve } from 'path'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { Hono } from 'hono'
@@ -717,11 +716,7 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
         sections: body.sections ? { ...current.sections, ...body.sections } : current.sections,
       }
 
-      // Ensure config dir exists
-      mkdirSync(resolve(process.env.DATA_DIR ?? 'data', 'config'), { recursive: true })
-      const tmpPath = EMAIL_SETTINGS_PATH + '.tmp'
-      writeFileSync(tmpPath, JSON.stringify(updated, null, 2), { mode: 0o600 })
-      renameSync(tmpPath, EMAIL_SETTINGS_PATH)
+      writeJsonAtomic(EMAIL_SETTINGS_PATH, updated)
       return c.json(updated)
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)

@@ -2,7 +2,8 @@
 // Replaces fragmented /api/bootstrap/* and /api/auth/*/sync endpoints with
 // a unified /api/scrape/* layer. Each endpoint runs the full pipeline:
 // source → Google Sheets → local cache.
-import { writeFileSync as writeFileSyncRaw, writeFileSync, mkdirSync, renameSync, readFileSync } from 'fs'
+import { writeFileSync, mkdirSync, readFileSync } from 'fs'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import type { Hono } from 'hono'
 import {
@@ -906,9 +907,7 @@ export function registerScrapeRoutes(app: Hono): void {
       } else {
         settings.podBookingsFolderId = folderId
       }
-      const tmp = `${SETTINGS_PATH}.tmp`
-      writeFileSync(tmp, JSON.stringify(settings, null, 2))
-      renameSync(tmp, SETTINGS_PATH)
+      writeJsonAtomic(SETTINGS_PATH, settings)
 
       // After local save succeeds, sync updated settings to Drive Config/settings.json (best-effort)
       try {

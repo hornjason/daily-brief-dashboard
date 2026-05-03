@@ -94,6 +94,59 @@ describe('writeFileAtomic', () => {
   })
 })
 
+describe('migration call-site coverage (BKL-ARCH-06)', () => {
+  // Validates that the helpers replicate the byte-level behavior of the
+  // hand-rolled writeFileSync(tmp) + renameSync(tmp, dest) pattern that
+  // existed across scrape-api.ts, settings-api.ts, scraper-status-store.ts,
+  // ae-routes.ts, and account-intelligence.ts before BKL-ARCH-06.
+
+  test('writeJsonAtomic produces same on-disk JSON as hand-rolled tmp+rename', () => {
+    // Simulates the previous pattern in src/scraper-status-store.ts:
+    //   writeFileSync(tmpPath, JSON.stringify(_store, null, 2), { mode: 0o600 })
+    //   renameSync(tmpPath, getStatusFilePath())
+    const path = join(dir, 'scraper-status.json')
+    const store = {
+      'rh-cases': { state: 'fresh', recordCount: 42 },
+      'ccsp':     { state: 'stale', recordCount: 0 },
+    }
+    writeJsonAtomic(path, store)
+
+    // On-disk content matches the expected JSON.stringify(_, null, 2) bytes
+    const expected = JSON.stringify(store, null, 2)
+    expect(readFileSync(path, 'utf-8')).toBe(expected)
+
+    // Mode matches the hand-rolled { mode: 0o600 } site
+    const mode = statSync(path).mode & 0o777
+    expect(mode).toBe(0o600)
+
+    // No leftover .tmp file (atomic rename completed)
+    expect(readdirSync(dir)).toEqual(['scraper-status.json'])
+  })
+
+  test('stale-overwrite guard protects customers.json from accidental wipe (account-intelligence.ts)', () => {
+    // Simulates the previous pattern in src/account-intelligence.ts:
+    //   const tmp = CUSTOMERS_PATH + '.tmp'
+    //   writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 })
+    //   renameSync(tmp, CUSTOMERS_PATH)
+    // The hand-rolled version had no guard; writeJsonAtomic adds one.
+    const path = join(dir, 'customers.json')
+    const real = { customers: [{ name: 'Acme' }, { name: 'Globex' }] }
+    writeJsonAtomic(path, real)
+
+    // A failed read upstream might produce { customers: [] } — but the
+    // *outer* object is non-empty, so the guard does NOT trigger here.
+    // This documents the guard's exact contract.
+    writeJsonAtomic(path, { customers: [] })
+    expect(JSON.parse(readFileSync(path, 'utf-8'))).toEqual({ customers: [] })
+
+    // However, an empty top-level object {} would trigger the guard if the
+    // file is non-empty. Restore real data first, then attempt {}.
+    writeJsonAtomic(path, real)
+    writeJsonAtomic(path, {})
+    expect(JSON.parse(readFileSync(path, 'utf-8'))).toEqual(real)
+  })
+})
+
 describe('appendLine', () => {
   test('appends a line + newline to existing file', () => {
     const path = join(dir, 'log.txt')

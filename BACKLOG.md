@@ -8527,14 +8527,50 @@ Solution: Extract usePolledStatus(url, { intervalMs, until }) hook. Absorbs all 
 ---
 
 ### BKL-ARCH-06 | Atomic file write — tmp + renameSync pattern replicated ~20 times
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P1
 Size: S
 Source: Serena architecture audit 2026-05-01
 Issue: hornjason/asaCommandCenter#29
-Files: src/account-intelligence.ts, src/backup-config.ts, src/bootstrap-history.ts, src/background-scheduler.ts, src/bootstrap-orchestrator.ts, src/customer-routes.ts, src/drive-sources.ts, src/kpi-history.ts, src/region-access-routes.ts, src/restore-routes.ts (only site with named helper), src/server-state.ts, src/sync-state.ts
+Files: src/scrape-api.ts, src/settings-api.ts, src/scraper-status-store.ts, src/ae-routes.ts, src/account-intelligence.ts, test/unit/atomic-write.test.ts
 Description: ADR-002 mandates .tmp + atomic rename for all config writes. 20 call sites hand-roll it. Only restore-routes.ts::atomicWriteJSON extracts it but doesn't export it. Variants drift: some set mode: 0o600, some don't; some catch errors, some don't.
-Solution: Export atomicWriteJson(path, data, { mode }) from src/lib/atomic-write.ts. Makes ADR-002 a type-level guarantee. New config files can't accidentally skip the .tmp step.
+Decision: DONE — 5 sync call sites migrated to writeJsonAtomic(). 5 async sites in scraper-manager.ts and rh-scraper.ts NOT migrated (event-loop safety + scraper stability rule). +2 unit tests (533 pass). See BKL-ARCH-06-FOLLOWUP for async async helper. GitHub issue #29 closed.
+
+### BKL-ARCH-06-FOLLOWUP | writeJsonAtomicAsync helper for scraper-manager + rh-scraper
+Status: 🔴 OPEN
+Priority: P3
+Size: S
+Source: Marcus BKL-ARCH-06 implementation 2026-05-03
+Files: src/lib/atomic-write.ts, src/scraper-manager.ts (lines 67, 563, 665), src/rh-scraper.ts (lines 1019-1032, 1398-1408)
+Description: 5 async hand-rolled tmp+rename sites remain in scraper-manager.ts and rh-scraper.ts. Forcing sync writes inside async hot paths would block the event loop. Requires explicit Jason sign-off before touching scraper files per project rule.
+Solution: Add writeJsonAtomicAsync() to src/lib/atomic-write.ts. Then migrate 5 async scraper sites in a separate session with explicit scraper-touch permission.
+
+### BKL-TS-CLEAN | 41 pre-existing tsc errors in non-migration files
+Status: 🔴 OPEN
+Priority: P3
+Size: M
+Source: Marcus BKL-ARCH-06 typecheck run 2026-05-03
+Files: src/settings-api.ts (lines 364-518), src/supportable-scraper.ts, src/sheet-import.ts, src/setup-routes.ts (and others)
+Description: tsc --noEmit reports 41 errors pre-existing across multiple files. Not introduced by BKL-ARCH-06 migration — confirmed via git stash baseline. Latent type debt that could mask real errors.
+Solution: Dedicate a type-clean pass. Triage: fix structural errors first, suppress/note any intentional type-widening.
+
+### BKL-ARCH-06-GAP-01 | scrape-api.ts:764 session/cookies write non-atomic
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Marcus BKL-ARCH-06 code review 2026-05-03
+Files: src/scrape-api.ts line 764
+Description: writeFileSync(sessionPath, ..., { mode: 0o600 }) writes session/cookie JSON directly without tmp+rename. A crash mid-write corrupts the session file. Not a tmp+rename pattern so was out of scope for BKL-ARCH-06 migration brief.
+Solution: Replace with writeFileAtomic() from atomic-write.ts.
+
+### BKL-ARCH-06-GAP-02 | ae-routes.ts:178 CUSTOMERS_PATH written non-atomically
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Marcus BKL-ARCH-06 code review 2026-05-03
+Files: src/ae-routes.ts line 178
+Description: writeFileSync(CUSTOMERS_PATH, ...) writes customers.json directly without tmp+rename. Same ADR-002 gap pattern as the migrated sites — this one was missed because it doesn't follow the tmp+rename shape.
+Solution: Replace with writeJsonAtomic(CUSTOMERS_PATH, ...) matching the migrated pattern.
 
 ---
 
