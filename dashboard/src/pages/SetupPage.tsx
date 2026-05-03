@@ -2628,6 +2628,8 @@ export default function SetupPage() {
   const [resetError, setResetError] = useState<string | null>(null)
   const [dataSourcesHealth, setDataSourcesHealth] = useState<'loading' | 'healthy' | 'issues'>('loading')
   const [dataSourcesConnected, setDataSourcesConnected] = useState<number | null>(null)
+  const [sfSyncing, setSfSyncing] = useState(false)
+  const [sfSyncSuccess, setSfSyncSuccess] = useState<string | null>(null)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
   // BKL-HERO-01 Phase 1 — Step 0 region access state.
   // `enabledRegionsState`: undefined = still loading OR not yet saved (first boot).
@@ -2793,6 +2795,25 @@ export default function SetupPage() {
     setOpenSection(prev => prev === id ? null : id)
   }
 
+  const handleSfSync = async () => {
+    setSfSyncing(true)
+    setSfSyncSuccess(null)
+    try {
+      const r = await fetch('/api/scrape/sf-bookings-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (r.ok) {
+        const d = await r.json().catch(() => ({})) as { customersMatched?: number; customersTotal?: number }
+        const recordCount = d.customersMatched ?? d.customersTotal ?? 0
+        setSfSyncSuccess(`✓ Sync complete — ${recordCount} rows`)
+        setTimeout(() => setSfSyncSuccess(null), 8_000)
+      }
+    } catch { /* network error — silently ignore for load-only fallback */ }
+    finally { setSfSyncing(false) }
+  }
+
   const doReset = async (full: boolean) => {
     setResetting(true)
     setResetConfirm(null)
@@ -2949,6 +2970,26 @@ export default function SetupPage() {
             onToggle={() => toggleSection('rh-portal')}
           >
             <HeroStep3Connections />
+            {/* SF Pipeline Sync */}
+            <div className="mt-4 pt-4 border-t border-gray-700 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-200">SF Pipeline Sync</p>
+                <p className="text-xs text-gray-500 mt-0.5">Sync Salesforce bookings to AE subscription sheets</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={handleSfSync}
+                  disabled={sfSyncing}
+                  data-testid="sf-sync-btn"
+                  className="px-3 py-1.5 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors"
+                >
+                  {sfSyncing ? 'Syncing...' : 'Sync Now'}
+                </button>
+                {sfSyncSuccess && (
+                  <span data-testid="sf-sync-success" className="text-xs text-green-400">{sfSyncSuccess}</span>
+                )}
+              </div>
+            </div>
           </AccordionSection>
 
           <AccordionSection

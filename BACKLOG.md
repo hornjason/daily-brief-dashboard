@@ -6177,7 +6177,7 @@ Fix: On server startup, check if any configured product slugs are missing a summ
 Decision: OPEN -- small addition to server startup sequence.
 
 ### BKL-TEST-FIXTURE-01 | test/fixtures.ts CAROLANNE.ccspSheetId stale — fixture drift warning every run
-Status: ✅ DONE 2026-05-03 — updated ccspSheetId to 1G8VIkKca9vmLBTsSBrBjE6OWeO2_jbXhNHSHIaGFSUw (verified from /api/aes on prod). Fixture drift warning suppressed.
+Status: ✅ DONE 2026-05-03 — updated ccspSheetId to 1G8VIkKca9vmLBTsSBrBjE6OWeO2_jbXhNHSHIaGFSUw in BOTH test/fixtures.ts AND test/globalSetup.ts (globalSetup.ts has its own mirrored copy — both must be updated together). Fixture drift warning suppressed.
 Priority: P3
 Size: XS
 Source: Quinn QA registry 2026-05-03 — fixture drift polluting every test run output
@@ -6968,7 +6968,7 @@ Files: dashboard/src/components/SubscriptionsSection.tsx:80
 Description: `p.quantity.toLocaleString()` crashed when seed customers have `quantity: undefined` in subscription data. Fix: `(p.quantity ?? 0).toLocaleString()`. One-line fix. Quinn re-audit confirmed page renders cleanly. Commit 93ca1e0.
 
 ### BKL-TEST-SF-SYNC-BANNER-01 | SF Sync Now success banner not testable on seed container (no SF creds)
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03 — added SF Sync Now button + success banner (sfSyncSuccess state, data-testid="sf-sync-success", auto-clear 8s) to SetupPage.tsx Step 3 Connections section. REG-SF-SYNC-01 + REG-SF-SYNC-02 in test/ui/sf-sync.spec.ts. REG-WIZ-SF-SYNC-01 source-pattern test now passes. Quinn+Rook pending gates.
 Priority: P2
 Size: S
 Source: Quinn audit 2026-04-25 (Phase 1 gate)
@@ -6976,6 +6976,17 @@ Issue: hornjason/asaCommandCenter#46
 Files: test/regression.spec.ts or new test/wizard-sf-sync.spec.ts
 Description: The SF Pipeline "Sync Now" success banner (data-testid="sf-sync-success") cannot be exercised on the test container because the button is disabled without SF credentials. REG-WIZ-SF-SYNC-01 cannot exercise the success path. Fix: write a Playwright test that mocks POST /api/scrape/salesforce to return {ok:true,rowCount:47}, asserts data-testid="sf-sync-success" appears with "✓ Sync complete — 47 rows", and disappears within 8s.
 Can we test: YES — via page.route() mock for the SF scrape endpoint.
+
+### BKL-TEST-SF-SYNC-TIMER-01 | SetupPage handleSfSync: setTimeout fires on unmounted component
+Status: 🔵 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan during BKL-TEST-SF-SYNC-BANNER-01 2026-05-03
+Files: dashboard/src/pages/SetupPage.tsx (handleSfSync ~line 2811)
+Description: `setTimeout(() => setSfSyncSuccess(null), 8_000)` fires without cleanup if the component unmounts before 8 seconds (e.g., user navigates away). React 18 no longer throws, but generates a console warning in dev builds and holds the closure alive until the timer fires. No security risk. Fix: move timer handle to a `useRef`, clear in `useEffect` cleanup. Not a security issue — code quality only.
+Can we test: YES — navigate away during the 8s window and check console for React unmount warnings.
+
+---
 
 ### BKL-TEST-SEED-SMOKE-01 | Customer detail page not covered by seed smoke suite
 Status: ✅ DONE 2026-04-27 — @smoke customer-detail test added to smoke-prod.spec.ts. GET-only, dynamic customer name, asserts no AppErrorBoundary + H1 present + zero pageerrors. 7/7 smoke pass on prod. Quinn+Rook: CLEAN.
