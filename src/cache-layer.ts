@@ -97,21 +97,6 @@ export function writeBriefCache(
   }
 }
 
-// ── Brief cache invalidation (BKL-M47) ─────────────────────────────────────
-// Called by drive-watcher when customer documents change — deletes today's
-// brief cache so the next request triggers fresh generation.
-
-function invalidateBriefCaches(customerNames: string[]): void {
-  for (const name of customerNames) {
-    try {
-      const path = briefCachePath(name)
-      unlinkSync(path)
-      console.log(`[cache] invalidated brief cache for ${name}`)
-    } catch {
-      // Cache file may not exist — that's fine
-    }
-  }
-}
 
 // ── Email cache — Tier 2 (ADR-013) ──────────────────────────────────────────
 // Wall-clock TTL. Unconditional overwrite on miss — no hash guard. Eliminates

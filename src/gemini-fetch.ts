@@ -121,7 +121,7 @@ export async function fetchGeminiWithRetry(
       res = await fetch(url, buildInit(token, body, context))
       break
     } catch (e) {
-      if (isTimeoutError(e) && timeoutAttempt < 2) {
+      if (isTimeoutError(e) && timeoutAttempt < 1) {
         timeoutAttempt++
         console.log(`${logPrefix} timeout on attempt ${timeoutAttempt} — retrying`)
         // Re-acquire the token in case the long stall outlived it.
@@ -157,7 +157,13 @@ export async function fetchGeminiWithRetry(
     let retryToken: string
     try { retryToken = await getAccessToken() }
     catch (e) { throw new Error(`Gemini auth failure on retry (project=${context.project}): ${redactBearer(String((e as Error).message ?? e))}`) }
-    const retryRes = await fetch(url, buildInit(retryToken, body, context))
+    let retryRes: Response
+    try {
+      retryRes = await fetch(url, buildInit(retryToken, body, context))
+    } catch (retryFetchErr) {
+      if (isTimeoutError(retryFetchErr)) throw new Error(`Gemini timeout on 429 retry attempt ${attempt} (project=${context.project})`)
+      throw retryFetchErr
+    }
 
     if (retryRes.ok) return retryRes
 

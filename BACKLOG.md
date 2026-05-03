@@ -6498,7 +6498,7 @@ Description: Steps 1–3 (identifyIndustry, generateCompanyIntelligence, generat
 Fix: Wrap the Drive write step — if findCustomerDriveFolder throws, cache intelligence content locally without docUrls and mark job as "complete (no Drive folder)" rather than error. Intelligence content is still usable for briefs; Drive doc creation can be retried later when folder is created.
 
 ### BKL-GEMINI-TIMEOUT-COMPOUND | gemini-fetch.ts timeout retry compounds to ~14min wall time under Vertex outage
-Status: 🔵 OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P2 | Type: Reliability
 Source: Rook — 2026-04-27
 Issue: hornjason/asaCommandCenter#39
@@ -6507,7 +6507,7 @@ Description: The TimeoutError/AbortError retry loop (up to 2 extra tries × 120s
 Fix: (1) Cap timeout retries to 1 for grounded calls (120s× 2 is enough). (2) Wrap the 429 retry fetch in the same `isTimeoutError` guard or add an overall call deadline (~5min). (3) Add concurrency cap upstream in runIntelligencePipeline.
 
 ### BKL-SF-ADOPT-RACE | sf-auth.ts context can leak if adoptScrapeContext throws after activeContext=null
-Status: 🔵 OPEN
+Status: ✅ DONE 2026-05-03 — commit 3c61b63: activeContext=null moved after all adopt* succeed; local ctx cleanup on throw
 Priority: P2 | Type: Reliability
 Source: Rook — 2026-04-27
 Issue: hornjason/asaCommandCenter#40
@@ -8600,7 +8600,7 @@ Solution (council-designed):
 ---
 
 ### BKL-CCSP-RETRY-02 | Keepalive too shallow — home page nav doesn't prove viz session works
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P1
 Size: S
 Source: Diagnosis 2026-05-01
@@ -8612,7 +8612,7 @@ Solution: After navigating to Tableau in doKeepalive(), check for login form (in
 ---
 
 ### BKL-CCSP-RETRY-03 | Viz timeout bypasses auth detection — CSV download timeout doesn't set _tableauSessionExpired
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P1
 Size: S
 Source: Diagnosis 2026-05-01
@@ -8636,7 +8636,7 @@ Decision: Root cause was threefold — (1) test assertion checked for "Red Hat C
 ---
 
 ### BKL-ARCH-18 | cache-layer.ts — invalidateBriefCaches is unexported dead function
-Status: OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-02 (issue #13 cleanup)
@@ -8898,12 +8898,14 @@ Resolution: commit 62b6223ed. Quinn PASS, Rook PASS.
 ### BKL-SEC-23 | settings-api.ts + config-load — region.parentFolderId PUT and folder IDs at config-read boundaries lack isValidDriveFolderId guard
 Status: 🔵 OPEN
 Priority: P3
-Size: S
+Size: XS (XS — stays in BACKLOG.md, not promoted — scope narrower than original description)
 Source: Rook scan 2026-05-03 (BKL-SEC-19/20 post-ship sibling audit)
 Issue: hornjason/asaCommandCenter#43
-Files: src/settings-api.ts (region PUT handler), src/scrape-api.ts, config-load boundaries
-Description: Rook identified that region.parentFolderId and configFolderId passed via PUT /api/settings/regions are interpolated into Drive queries without isValidDriveFolderId validation (analogous to the SEC-20 vector). Also: driveFolderId/parentFolderId values from customers.json/aes.json are interpolated in scrape-api.ts and other modules without validation at config-read time. Low risk (config is trusted), but defense-in-depth would add guards at config-write time for all folder ID fields.
-Can we test: YES — regression test that PUT /api/settings/regions with invalid parentFolderId returns 400.
+Files: src/settings-api.ts, src/bootstrap-orchestrator.ts
+Scope correction (2026-05-03): Investigation shows no PUT handler for region.parentFolderId exists.
+The settings-api.ts line 617 interpolates `region.parentFolderId` from stored config (getRegionById) — NOT from HTTP request body. Bootstrap POST body parentFolderId IS already validated at bootstrap-orchestrator.ts:962 with `/^[a-zA-Z0-9_-]{10,}$/`.
+Remaining gap: config-read time validation (defense-in-depth) — add isValidDriveFolderId guard when loading parentFolderId from stored config files before passing to Drive queries.
+Can we test: YES — unit test for config-read validation guard when folder ID is malformed in stored config.
 
 ### BKL-PROCESS-01 | Child issue promotion at parent issue close — external traceability
 Status: ✅ DONE 2026-05-02

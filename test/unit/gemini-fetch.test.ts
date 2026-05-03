@@ -451,3 +451,60 @@ describe('fetchGeminiWithRetry — Retry-After header honored', () => {
     expect(delay2).toBeLessThan(5000)
   })
 })
+
+// ── BKL-GEMINI-TIMEOUT-COMPOUND: timeout inside 429 retry loop ───────────────
+describe('BKL-GEMINI-TIMEOUT-COMPOUND: timeout on 429 retry fetch throws cleanly', () => {
+  let fetchSpy: ReturnType<typeof spyOn>
+  let setTimeoutSpy: ReturnType<typeof spyOn>
+
+  beforeEach(() => {
+    setTimeoutSpy = spyOn(globalThis, 'setTimeout').mockImplementation(
+      ((fn: () => void, _delay: number) => { fn(); return 0 }) as typeof setTimeout,
+    )
+  })
+  afterEach(() => {
+    fetchSpy?.mockRestore()
+    setTimeoutSpy?.mockRestore()
+  })
+
+  test('TimeoutError during 429 retry fetch throws descriptive error (not raw DOMException)', async () => {
+    let callCount = 0
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      callCount++
+      if (callCount === 1) return new Response(null, { status: 429 })
+      const err = new Error('The operation was aborted due to timeout')
+      err.name = 'TimeoutError'
+      throw err
+    })
+
+    let caught: Error | null = null
+    try {
+      await fetchGeminiWithRetry('https://vertex.example/test', async () => 'tok', '{}', CTX)
+    } catch (e: any) { caught = e }
+
+    expect(caught).not.toBeNull()
+    expect(caught!.message).toContain('Gemini timeout on 429 retry attempt 1')
+    expect(caught!.message).toContain('project=test-project')
+    expect(callCount).toBe(2)
+  })
+
+  test('initial timeout retries at most once (cap reduced to 1)', async () => {
+    let callCount = 0
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      callCount++
+      const err = new Error('aborted')
+      err.name = 'AbortError'
+      throw err
+    })
+
+    let caught: Error | null = null
+    try {
+      await fetchGeminiWithRetry('https://vertex.example/test', async () => 'tok', '{}', CTX)
+    } catch (e: any) { caught = e }
+
+    // Max 1 initial timeout retry → 2 total fetch calls (original + 1 retry)
+    expect(callCount).toBe(2)
+    // Propagates the AbortError after exhausting initial retry
+    expect(caught).not.toBeNull()
+  })
+})
