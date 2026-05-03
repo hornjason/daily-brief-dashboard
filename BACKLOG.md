@@ -8160,15 +8160,14 @@ Acceptance: Panel label clearly indicates node-local usage.
 Can we test: YES — text assertion.
 
 ### BKL-HERO-18 | L3 hero: Customer detail page audit pending test data
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P2
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
 Issue: hornjason/asaCommandCenter#26
-Files: dashboard/src/pages/ (customer detail page)
-Description: Customer detail page was not audited — test container has Carolanne Farrell with zero customers so no customer detail URL was reachable. Likely contains L4-specific UI: RH Cases section with [Run Now], Tableau pipeline sub-panel, CCSP sub-panel. Re-run audit after test data (or prod 7777 with ci project) has customers loaded.
-Acceptance: Customer detail audit completed; all L4-specific elements gated on isL3Only.
-Can we test: YES after data is loaded.
+Files: dashboard/src/pages/CustomerDetailPage.tsx, test/ui/hero-l3-gating-customer-detail.spec.ts
+Commit: 3234bc504
+Description: Quinn audit confirmed 6 ungated L4 elements (CloudSpendCard, PipelineCard, CasesSection, Cases/Cloud$/Pipeline header StatBadges). Added isL3Only hook + gates to all 6 elements. 7 regression tests (T1-T7) — T7 mocks SSE to fire the sse.meta !== null condition. All 7 pass.
 
 ### BKL-HERO-19 | useNodeRole() shared hook — eliminate duplicate /api/node-role fetches
 Status: ✅ DONE (2026-05-01)
@@ -8897,12 +8896,11 @@ Can we test: YES — close a real parent issue with mixed XS/S+ spin-offs and ve
 ---
 
 ### BKL-ARCH-23 | Brief pipeline — decompose buildXmlSources into per-source signal modules
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P1
 Size: M
 Source: GitHub issue #11 — child of #9 (architecture deepening)
 Issue: hornjason/asaCommandCenter#11
-Files: src/customer.ts, src/customer/signals/*.ts (new), src/customer/docs-fetcher.ts (new)
-Description: buildXmlSources (296 lines, ~99 cyclomatic) and _fetchCustomerDocsImpl (336 lines) in customer.ts are monolithic. Decompose into focused signal modules: src/customer/signals/{meetings,emails,docs,cases,subscriptions,pipeline,ccsp}.ts, each exporting collect(input): Promise<SignalBundle|null> + render(bundle, ctx): string. buildXmlSources becomes a ~30-line composition. SignalBundle is a discriminated union (kind field) — not a uniform type. Extract docs-fetcher.ts (pure Drive operations). Golden-file test gates the refactor: byte-identical XML before/after.
-Architecture: Serena brief 2026-05-02 — discriminated union, collect() returns shape, render() is pure, golden test first.
-Stopped at: Serena brief approved; Marcus not yet briefed.
+Files: src/customer.ts (modified -560 lines net), src/customer/signals/{types,xml-utils,cases,pipeline,ccsp,meetings,emails,docs,subscriptions,failed-sources,extras}.ts (new), src/customer/docs-fetcher.ts (new)
+Commit: 3234bc504
+Description: buildXmlSources decomposed from 296-line monolith to ~108-line composition. SignalBundle discriminated union, collect()+render() pattern per source. Golden-file test guarantees byte-identical XML output. 41 new unit tests pass. docs-fetcher extracted with 9 unit tests on pure folder-matching helpers.
