@@ -121,7 +121,7 @@ const SPREADSHEET_MIME = 'application/vnd.google-apps.spreadsheet'
 const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut'
 
 /** Escape single quotes in Drive query string values. */
-function escapeQ(value: string): string {
+export function escapeQ(value: string): string {
   return value.replace(/'/g, "\\'")
 }
 

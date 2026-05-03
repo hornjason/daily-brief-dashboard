@@ -7,7 +7,7 @@ import { resolve } from 'path'
 import { extractText as extractPdfText } from 'unpdf'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
 import type { Customer, DriveFile } from '../types.ts'
-import { driveClient } from '../lib/drive-client.ts'
+import { driveClient, escapeQ } from '../lib/drive-client.ts'
 import { aes } from '../server-state.ts'
 import { readDocContentCache, writeDocContentCache } from '../cache-layer.ts'
 import { getGeminiModelLite } from '../settings-api.ts'
@@ -79,7 +79,7 @@ export async function fetchCustomerDocsImpl(customer: Customer): Promise<DriveFi
     const aeFolderId = ae?.driveFolderId
     if (aeFolderId) {
       const custFolders = await drive.files.list({
-        q: `'${aeFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        q: `'${escapeQ(aeFolderId)}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
         fields: 'files(id,name)', pageSize: 200,
       })
       const folderList = custFolders.data.files ?? []
@@ -99,7 +99,7 @@ export async function fetchCustomerDocsImpl(customer: Customer): Promise<DriveFi
         for (const sub of (custFolders.data.files ?? []).slice(0, 10)) {
           if (!sub.id) continue
           const deeper = await drive.files.list({
-            q: `'${sub.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+            q: `'${escapeQ(sub.id)}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
             fields: 'files(id,name)', pageSize: 100,
           })
           for (const tryName of namesToTry) {
@@ -126,14 +126,14 @@ export async function fetchCustomerDocsImpl(customer: Customer): Promise<DriveFi
     }
     // Scan parent → AE → customer (old path)
     const level1Res = await drive.files.list({
-      q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      q: `'${escapeQ(parentId)}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
       fields: 'files(id,name)', pageSize: 50,
     })
     const legacyNamesToTry = [customer.name, ...(customer.aliases ?? [])]
     for (const aeCandidate of level1Res.data.files ?? []) {
       if (!aeCandidate.id) continue
       const custRes = await drive.files.list({
-        q: `'${aeCandidate.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+        q: `'${escapeQ(aeCandidate.id)}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
         fields: 'files(id,name)', pageSize: 100,
       })
       for (const tryName of legacyNamesToTry) {

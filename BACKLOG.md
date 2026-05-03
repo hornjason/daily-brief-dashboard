@@ -9014,7 +9014,7 @@ Commit: 3234bc504
 Description: buildXmlSources decomposed from 296-line monolith to ~108-line composition. SignalBundle discriminated union, collect()+render() pattern per source. Golden-file test guarantees byte-identical XML output. 41 new unit tests pass. docs-fetcher extracted with 9 unit tests on pure folder-matching helpers.
 
 ### BKL-SEC-26 | docs-fetcher.ts upstream Drive folder ID lookups not using escapeQ()
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-03 (BKL-ARCH-07b post-ship review)
