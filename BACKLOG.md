@@ -6121,45 +6121,40 @@ Fix needed: Design decision — either accept inline chips as the standard or im
 Decision: OPEN — needs Jason design call. Inline chips may be preferred.
 
 ### BKL-TEST-07 | Complete test coverage assessment — silent-fail buttons + untested action flows
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03 (audit complete; 2 genuine failures fixed; res.ok gate standard documented)
 Severity: HIGH
 Priority: P1
 Size: L
 Source: Jason 2026-04-10 — BKL-REG-01/02 both had silent catch blocks hiding failures; entire class of bugs undetected
 Issue: hornjason/asaCommandCenter#47
-Files: dashboard/src/components/*.tsx, dashboard/src/pages/*.tsx, test/
-Root cause pattern: 71 silent `catch(() => {})` blocks exist across frontend components. Any of these can hide wrong endpoints, server errors, or broken flows with zero user feedback. BKL-REG-01 (wrong endpoint) and BKL-REG-02 (missing cache) were both invisible because of this pattern.
+Files: dashboard/src/components/*.tsx, dashboard/src/pages/*.tsx, test/ui/admin.spec.ts
 
-Description: Two deliverables required:
+Audit result: 96 catch blocks swept. 94 are load-only (category a) or polling (category c) — silence is correct for these. 2 genuine action-button silent failures found and fixed:
+  - AdminPage.tsx: BatchIntelligenceSection.handleGenerate (POST /api/intelligence/generate-all) — added startError state + res.ok check + DOM error alert [data-testid=batch-intel-start-error]
+  - AdminPage.tsx: runScrape (POST /api/scrape/rh etc.) — added triggerErrors state + per-key res.ok check + DOM error alert [data-testid=scrape-trigger-error-rh]
 
-  (1) **Silent catch audit** — sweep all 71 silent catch blocks in dashboard/src/:
-    - Categorize each as: (a) load-only fetch where silence is OK, (b) action button where silence hides failures (must surface error), (c) polling fetch where silence is OK
-    - For every (b): add visible error state to the component AND write a Playwright spec
-    - Priority components with confirmed silent-fail action buttons:
-      - AccountIntelligencePanel.tsx (generate intelligence) — BKL-REG-01, fixed
-      - ProductIntelSection.tsx (generate/regenerate per product, generate all) — BKL-REG-02, fixed
-      - AccountPlanPanel.tsx (generate account plan)
-      - AdminPage.tsx (scrape triggers, backup, restore, notebook generate, domain inference)
-      - ProductCard.tsx (refresh)
-      - MorningSummary.tsx (refresh)
+Other "priority components" status:
+  - AccountIntelligencePanel.tsx — already had proper try/catch + setError (fixed in BKL-REG-01)
+  - ProductIntelSection.tsx — already had proper error handling (fixed in BKL-REG-02)
+  - AccountPlanPanel.tsx — already had handleGenerate with proper try/catch + setError
+  - ProductCard.tsx — already had handleRefresh with proper try/catch + setRefreshError
+  - MorningSummary.tsx — no refresh action; mount-load GET only (silence is correct)
+  - AdminPage backup/restore + domain inference — already had res.ok checks
 
-  (2) **Action flow test coverage** — for each action button that calls a mutating API endpoint, verify a Playwright spec exists that:
-    - Clicks the button
-    - Verifies the API call was made (check network or poll status endpoint)
-    - Verifies the expected result (running state, then complete, or visible error on failure)
-    - Does NOT require state mutation of customers.json or aes.json (snapshot/restore if it does)
-    - Priority test specs to write:
-      - test/ui/account-intelligence.spec.ts — generate button → job starts → status: running/complete
-      - test/ui/product-intel.spec.ts — generate button → not silent on error → returns result
-      - test/ui/account-plan.spec.ts — generate button → plan appears
-      - test/api/intelligence.spec.ts — extend existing spec with per-customer endpoint test
+Tests added: test/ui/admin.spec.ts — REG-ADM-01, REG-ADM-02, REG-ADM-03 (3/3 green on 7776)
 
-  (3) **res.ok gate standard** — enforce that all action button fetch calls check res.ok before
-    treating the response as success. Add to CLAUDE.md as a coding standard:
-    "All action button fetch calls (POST/DELETE that trigger work) MUST check res.ok and surface
-    an error state to the user. Never silently catch a non-ok response on an action button."
+res.ok gate standard: added to CLAUDE.md as a coding rule — all action button fetch calls (POST/DELETE that trigger work) MUST check res.ok and surface error state. Never silently catch a non-ok response on an action button.
 
-Decision: OPEN — assign to Marcus for audit + Quinn for test writing. Do audit first, then tests.
+Follow-up logged: BKL-TEST-07b — AdminPage doc-classify-age Save button (~line 1196) silent on non-2xx (lower severity, not category-B per original scope)
+
+### BKL-TEST-07b | AdminPage: doc-classify-age Save button silent on non-2xx
+Status: 🔵 OPEN
+Priority: P3
+Size: XS
+Source: Marcus audit during BKL-TEST-07 2026-05-03
+Files: dashboard/src/pages/AdminPage.tsx (~line 1196)
+Description: The "Save" button for document classification max-age limit (`docClassifyMaxAgeDays`) uses `fetch('/api/settings/ai', POST)`. If the endpoint returns non-2xx, the function only logs `console.error` — no DOM error is shown to the user. Lower severity than the two fixed in BKL-TEST-07 (this is a settings form, not a batch trigger), but violates the res.ok gate standard. Fix: add visible error state and res.ok check.
+Can we test: YES — page.route() mock returning 500, assert error text near Save button.
 
 ### BKL-STARTUP-01 | Product summary caches not seeded on startup — empty after every rebuild
 Status: ✅ DONE — 2026-04-10

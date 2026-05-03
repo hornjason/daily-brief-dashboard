@@ -425,6 +425,9 @@ function NotebookLMSection() {
 function BatchIntelligenceSection() {
   const [batchState, setBatchState] = useState<BatchIntelState | null>(null)
   const [starting, setStarting] = useState(false)
+  // BKL-TEST-07: surface server failure (non-2xx, network) on the Generate All button
+  // instead of the previous silent failure (button just stops spinning).
+  const [startError, setStartError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchBatchStatus = useCallback(async () => {
@@ -451,9 +454,16 @@ function BatchIntelligenceSection() {
 
   const handleGenerate = async () => {
     setStarting(true)
+    setStartError(null)
     try {
-      await fetch('/api/intelligence/generate-all', { method: 'POST' })
+      const res = await fetch('/api/intelligence/generate-all', { method: 'POST' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as { error?: string }))
+        setStartError((body as { error?: string }).error ?? `Failed to start (${res.status})`)
+      }
       await fetchBatchStatus()
+    } catch {
+      setStartError('Failed to start — check server logs.')
     } finally {
       setStarting(false)
     }
@@ -480,6 +490,11 @@ function BatchIntelligenceSection() {
         </button>
       </div>
       <div className="space-y-2 text-xs text-gray-400">
+        {startError && (
+          <div data-testid="batch-intel-start-error" className="text-red-400" role="alert">
+            {startError}
+          </div>
+        )}
         {batchState?.running && batchState.total > 0 && (
           <>
             <div className="flex items-center gap-1.5 text-yellow-400">
@@ -900,6 +915,10 @@ export function AdminPage() {
   const [intervals, setIntervals] = useState<RefreshIntervals | null>(null)
   const [schedulerCfg, setSchedulerCfg] = useState<SchedulerCfg | null>(null)
   const [triggerBusy, setTriggerBusy] = useState<Record<string, boolean>>({})
+  // BKL-TEST-07: per-scraper trigger error surfacing. Previously a non-2xx response
+  // from a scrape trigger left the user with no visible feedback; now we render
+  // a per-key error message under the corresponding ScrapeSection card.
+  const [triggerErrors, setTriggerErrors] = useState<Record<string, string>>({})
   // BKL-G21: immediate queued state set from POST response before polling catches up
   const [localQueued, setLocalQueued] = useState<Record<string, string | true>>({})
   // BKL-W2-13: browser crash banner dismissal
@@ -1027,16 +1046,31 @@ export function AdminPage() {
 
   const runScrape = useCallback(async (key: string, endpoint: string) => {
     setTriggerBusy(b => ({ ...b, [key]: true }))
+    // BKL-TEST-07: clear any prior error for this key when retried
+    setTriggerErrors(e => {
+      if (e[key] === undefined) return e
+      const next = { ...e }
+      delete next[key]
+      return next
+    })
     try {
       const res = await fetch(endpoint, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
+      const data = await res.json().catch(() => ({} as { queued?: boolean; error?: string }))
+      if (!res.ok) {
+        // BKL-TEST-07: surface non-2xx scrape trigger failures per-scraper
+        const msg = (data as { error?: string })?.error ?? `Trigger failed (${res.status})`
+        setTriggerErrors(e => ({ ...e, [key]: msg }))
+        return
+      }
       // BKL-G21: if the API queued the task, show "Queued" state immediately without
       // waiting for the next poll cycle. Clear localQueued when polling detects actual running.
-      if (data?.queued === true) {
+      if ((data as { queued?: boolean })?.queued === true) {
         const runningName = status?.queue?.running ?? null
         setLocalQueued(q => ({ ...q, [key]: runningName ? `waiting on ${runningName}` : true }))
       }
       await fetchStatus()
+    } catch {
+      setTriggerErrors(e => ({ ...e, [key]: 'Trigger failed — network error.' }))
     } finally {
       setTriggerBusy(b => ({ ...b, [key]: false }))
     }
@@ -1101,19 +1135,30 @@ export function AdminPage() {
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Manual Scrape Triggers</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            <ScrapeSection
-              label="RH Cases"
-              status={status?.rh ?? null}
-              running={!!triggerBusy['rh']}
-              onRunNow={() => runScrape('rh', '/api/scrape/rh')}
-              circuitBreaker={status?.circuitBreakers?.rh}
-              queuePending={localQueued['rh'] ?? status?.queue?.pending?.includes('rh-cases')}
-              subtitle={
-                status?.rhDiscoveryProgress
-                  ? `Discovering ${status.rhDiscoveryProgress.done}/${status.rhDiscoveryProgress.total}${status.rhDiscoveryProgress.current ? ` — ${status.rhDiscoveryProgress.current}` : ''}`
-                  : undefined
-              }
-            />
+            <div className="flex flex-col gap-1">
+              <ScrapeSection
+                label="RH Cases"
+                status={status?.rh ?? null}
+                running={!!triggerBusy['rh']}
+                onRunNow={() => runScrape('rh', '/api/scrape/rh')}
+                circuitBreaker={status?.circuitBreakers?.rh}
+                queuePending={localQueued['rh'] ?? status?.queue?.pending?.includes('rh-cases')}
+                subtitle={
+                  status?.rhDiscoveryProgress
+                    ? `Discovering ${status.rhDiscoveryProgress.done}/${status.rhDiscoveryProgress.total}${status.rhDiscoveryProgress.current ? ` — ${status.rhDiscoveryProgress.current}` : ''}`
+                    : undefined
+                }
+              />
+              {triggerErrors['rh'] && (
+                <div
+                  data-testid="scrape-trigger-error-rh"
+                  className="text-xs text-red-400 px-1"
+                  role="alert"
+                >
+                  {triggerErrors['rh']}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

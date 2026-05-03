@@ -137,6 +137,12 @@ See `docs/DATA-RULES.md` — read before touching cache, sheets, or territory sy
 - Marcus writes the test in the same session as the fix, before closing the backlog item
 - No backlog item moves to DONE without a corresponding test added or a documented reason why it's untestable
 
+**res.ok gate standard (BKL-TEST-07) — MANDATORY for all action button fetch calls:**
+- All fetch calls on action buttons (POST/DELETE that trigger work) MUST check `res.ok` before treating the response as success
+- If `!res.ok`, read the error body and surface it to the user via an error state — never silently catch
+- Load-only GETs and polling fetches may silently catch (rendering nothing is acceptable)
+- Test with `page.route()` mocking — every new action button regression test must verify the error state appears on non-2xx response
+
 **"Can we test for that?" — MANDATORY after every bug find or report (Zero exceptions):**
 - Whenever a bug is found (by any agent, by Jason, or during investigation) — immediately ask or answer: "Can we test for this?"
 - Whenever Jason reports an issue — before proposing a fix, ask: "Can we test for that?"
