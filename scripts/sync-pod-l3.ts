@@ -15,8 +15,9 @@ import { readFileSync } from 'node:fs'
 import { google } from 'googleapis'
 import { normalizeSettings } from '../src/region-config.ts'
 import type { RegionConfig } from '../src/region-config.ts'
-import { scrapePodCcspRaw } from '../src/ccsp-scraper.ts'
+import { scrapePodCcspRaw, peekTableauSessionExpired } from '../src/ccsp-scraper.ts'
 import { initScrapeContext, getScrapeContext } from '../src/rh-scraper.ts'
+import { withCcspRetry, AuthExpiredError } from './ccsp-retry.ts'
 import { runSfPodSync, initSfContext, getSfContext } from '../src/sf-scraper.ts'
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../src/google.ts'
@@ -31,6 +32,8 @@ export interface PodResult {
   sfRows?: number
   ccspDelta?: number   // current - previous ccspRows; undefined if no prior data
   sfDelta?: number     // current - previous sfRows; undefined if no prior data
+  /** BKL-CCSP-RETRY-01: true when CCSP succeeded only after a retry. */
+  recovered?: boolean
 }
 
 export interface SyncRunResult {
@@ -135,6 +138,33 @@ async function writeSyncStatusToDrive(folderId: string, result: SyncRunResult): 
   } catch (e: any) {
     console.warn(`[sync-pod-l3] sync-status Drive write failed: ${e.message} — non-fatal`)
   }
+}
+
+// ── Retry-status writer (BKL-CCSP-RETRY-01) ───────────────────────────────────
+
+/**
+ * Write a partial sync-status.json to Drive while a CCSP retry back-off is
+ * pending, so the dashboard / observers can see retry progress without
+ * waiting for the whole run to finish.
+ *
+ * Non-fatal: any failure is logged and swallowed.
+ */
+async function writeRetryStatus(
+  folderId: string,
+  podKey: string,
+  attempt: number,
+  nextRetryAt: string,
+): Promise<void> {
+  if (!folderId) return
+  const partial: SyncRunResult & { status: string; podKey: string; attempt: number; nextRetryAt: string } = {
+    completedAt: new Date().toISOString(),
+    results: [],
+    status: 'retry_in_progress',
+    podKey,
+    attempt,
+    nextRetryAt,
+  }
+  await writeSyncStatusToDrive(folderId, partial as unknown as SyncRunResult)
 }
 
 // ── Prev sync-status loader ───────────────────────────────────────────────────
@@ -309,15 +339,48 @@ export async function syncAllPods(): Promise<SyncRunResult> {
       }
 
       try {
-        // CCSP sync — scrapePodCcspRaw handles its own Drive cache check + write
+        // CCSP sync — scrapePodCcspRaw handles its own Drive cache check + write.
+        // BKL-CCSP-RETRY-01: wrap in withCcspRetry so transient timeouts retry
+        // with back-off + fresh context, and Tableau-auth-expired aborts the run.
         let ccspRows = 0
+        let ccspRecovered = false
+        let ccspAuthExpired = false
         try {
           const seedTerr = `${podKey}_TERR01`
-          const ccspResult = await scrapePodCcspRaw([seedTerr], region.podBookingsFolderId)
-          ccspRows = ccspResult.rows.length
-          console.log(`[sync-pod-l3] ${podKey}: CCSP rows=${ccspRows}`)
+          const retryResult = await withCcspRetry(
+            () => scrapePodCcspRaw([seedTerr], region.podBookingsFolderId),
+            podKey,
+            {
+              peekTableauSessionExpired,
+              rebuildContext: async () => {
+                const profileDir = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
+                await initScrapeContext(profileDir)
+              },
+              sleep: (ms: number) => new Promise(res => setTimeout(res, ms)),
+              writeRetryStatus: async ({ podKey: pk, attempt, nextRetryAt }) => {
+                await writeRetryStatus(primaryFolderId, pk, attempt, nextRetryAt)
+              },
+            },
+          )
+          ccspRows = retryResult.value.rows.length
+          ccspRecovered = retryResult.recovered
+          console.log(
+            `[sync-pod-l3] ${podKey}: CCSP rows=${ccspRows}` +
+            (ccspRecovered ? ` (recovered after ${retryResult.attempts} attempts)` : ''),
+          )
         } catch (ccspErr: any) {
-          console.warn(`[sync-pod-l3] ${podKey}: CCSP failed: ${ccspErr.message} — continuing to SF sync`)
+          if (ccspErr instanceof AuthExpiredError) {
+            ccspAuthExpired = true
+            console.error(`[sync-pod-l3] ${podKey}: ${ccspErr.message} — halting remaining PODs`)
+          } else {
+            console.warn(`[sync-pod-l3] ${podKey}: CCSP failed after retries: ${ccspErr.message} — continuing to SF sync`)
+          }
+        }
+
+        if (ccspAuthExpired) {
+          // Auth state is shared across all PODs; remaining work would also fail.
+          results.push({ podKey, status: 'error', reason: 'auth_expired' })
+          break
         }
 
         // SF pipeline sync
@@ -328,12 +391,17 @@ export async function syncAllPods(): Promise<SyncRunResult> {
         const ccspDelta = (prev?.ccspRows != null && ccspRows != null) ? ccspRows - prev.ccspRows : undefined
         const sfDelta = (prev?.sfRows != null && sfRows != null && sfRows >= 0) ? sfRows - prev.sfRows : undefined
         const podStatus: PodResult['status'] = (ccspRows === 0) ? 'warn' : 'ok'
-        results.push({ podKey, status: podStatus, ccspRows, sfRows, ccspDelta, sfDelta })
+        const podResult: PodResult = { podKey, status: podStatus, ccspRows, sfRows, ccspDelta, sfDelta }
+        if (ccspRecovered) podResult.recovered = true
+        results.push(podResult)
       } catch (e: any) {
         console.error(`[sync-pod-l3] ${podKey}: error: ${e.message}`)
         results.push({ podKey, status: 'error', reason: e.message })
       }
     }
+    // Outer break propagation: if inner loop broke due to auth_expired,
+    // halt all remaining regions too (auth is process-wide).
+    if (results.some(r => r.reason === 'auth_expired')) break
   }
 
   const runResult: SyncRunResult = {

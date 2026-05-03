@@ -8577,12 +8577,12 @@ Solution: Truncated to last 6 chars: `...${supportableSheetId.slice(-6)}` — 1-
 ---
 
 ### BKL-CCSP-RETRY-01 | CCSP scraper retry logic with exponential backoff
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P1
 Size: M
 Source: Council debate 2026-05-01 (Serena + Marcus + Ava)
 Issue: hornjason/asaCommandCenter#33
-Files: scripts/sync-pod-l3.ts (lines 312-320 — CCSP call site), src/ccsp-scraper.ts (peekTableauSessionExpired export)
+Files: scripts/ccsp-retry.ts (new), scripts/sync-pod-l3.ts, test/unit/ccsp-retry-wrapper.test.ts
 Description: CCSP scrape fails silently on transient Tableau viz-not-ready and on auth expiry with no retry. Today's sync: all 5 PODs failed with "CSV download failed: Timeout 60000ms exceeded". Last good CCSP data Apr 29.
 Solution (council-designed):
   - Add withCcspRetry() wrapper in sync-pod-l3.ts wrapping scrapePodCcspRaw() call
