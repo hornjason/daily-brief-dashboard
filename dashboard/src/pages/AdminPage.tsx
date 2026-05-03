@@ -1155,12 +1155,12 @@ export function AdminPage() {
           </div>
         )}
 
-        {/* Manual scrape triggers */}
-        <div>
+        {/* Manual scrape triggers — BKL-HERO-L3-EMPTY-SECTIONS: gate entire section on L4 */}
+        {!isL3Only && <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Manual Scrape Triggers</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            {/* BKL-HERO-11: RH Cases trigger only runs on L4 — gate behind !isL3Only */}
-            {!isL3Only && <div className="flex flex-col gap-1">
+            {/* BKL-HERO-11: RH Cases trigger only runs on L4 */}
+            <div className="flex flex-col gap-1">
               <ScrapeSection
                 label="RH Cases"
                 status={status?.rh ?? null}
@@ -1183,15 +1183,15 @@ export function AdminPage() {
                   {triggerErrors['rh']}
                 </div>
               )}
-            </div>}
+            </div>
           </div>
-        </div>
+        </div>}
 
-        {/* Scheduler config */}
-        <div>
+        {/* Scheduler config — BKL-HERO-L3-EMPTY-SECTIONS: gate entire section on L4 */}
+        {!isL3Only && <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Scheduler Config</h2>
-          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} isL3Only={isL3Only} />
-        </div>
+          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} />
+        </div>}
 
         {/* AI Settings — intelligence toggle */}
         <div>

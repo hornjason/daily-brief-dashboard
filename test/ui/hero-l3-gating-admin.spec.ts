@@ -95,4 +95,22 @@ test.describe('@destructive BKL-HERO-05..13: AdminPage L3 gating', () => {
     await expect(scheduler.locator('text=RH Cases')).toHaveCount(0)
     // Note: Territory and SF Pipeline rows were removed in 6fd5bce2b — no longer in SchedulerConfig.
   })
+
+  test('T7 — Manual Scrape Triggers section header absent on L3 (BKL-HERO-L3-EMPTY-SECTIONS)', async ({ page }) => {
+    await mockNodeRole(page, true)
+    await page.goto(ADMIN_PATH)
+    await waitForAdminReady(page)
+
+    // Entire section (including h2) must be absent — not just the children.
+    await expect(page.locator('h2:has-text("Manual Scrape Triggers")')).toHaveCount(0)
+  })
+
+  test('T8 — Scheduler Config section header absent on L3 (BKL-HERO-L3-EMPTY-SECTIONS)', async ({ page }) => {
+    await mockNodeRole(page, true)
+    await page.goto(ADMIN_PATH)
+    await waitForAdminReady(page)
+
+    // Entire section (including h2) must be absent — not just the children.
+    await expect(page.locator('h2:has-text("Scheduler Config")')).toHaveCount(0)
+  })
 })
