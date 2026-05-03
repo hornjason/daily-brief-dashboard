@@ -17,6 +17,7 @@ import { resolve } from 'path'
 import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
 import { makeAuth } from './google.ts'
+import { driveClient } from './lib/drive-client.ts'
 import { sanitizePromptInput } from './utils.ts'
 import { getGeminiModel } from './settings-api.ts'
 import { aes, customers, patchCustomer, CUSTOMERS_PATH } from './server-state.ts'
@@ -869,26 +870,8 @@ async function ensureIntelligenceSubfolder(customerFolderId: string): Promise<st
   return created.data.id
 }
 
-/**
- * BKL-AI-INTEL-02: Read-only lookup of the "Account Intelligence" subfolder
- * under the customer's Drive folder. Returns null when the subfolder does
- * not exist — NEVER creates it (this is the read-only counterpart to
- * ensureIntelligenceSubfolder, which creates on miss).
- */
-async function findIntelligenceSubfolder(customerFolderId: string): Promise<string | null> {
-  const auth = makeAuth(GDRIVE_TOKEN_PATH)
-  const drive = google.drive({ version: 'v3', auth })
-
-  const existing = await drive.files.list({
-    q: `'${customerFolderId}' in parents and name = 'Account Intelligence' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-    fields: 'files(id,name)', pageSize: 1,
-  })
-
-  if (existing.data.files?.length && existing.data.files[0].id) {
-    return existing.data.files[0].id
-  }
-  return null
-}
+// findIntelligenceSubfolder deleted (BKL-ARCH-07c): replaced by
+// driveClient.findDescendantFolder(customerFolderId, 'Account Intelligence', { maxDepth: 1 })
 
 /**
  * BKL-AI-INTEL-02: Scan the customer's Drive "Account Intelligence" subfolder
@@ -920,7 +903,7 @@ export async function discoverExistingIntelDocs(
     const customerFolderId = await findCustomerDriveFolder(customer)
 
     // Read-only subfolder lookup — don't create.
-    const intelFolderId = await findIntelligenceSubfolder(customerFolderId)
+    const intelFolderId = await driveClient.findDescendantFolder(customerFolderId, 'Account Intelligence', { maxDepth: 1 })
     if (!intelFolderId) return null
 
     const auth = makeAuth(GDRIVE_TOKEN_PATH)
@@ -1030,73 +1013,7 @@ export async function checkStoredDocsTrashed(
   }
 }
 
-/**
- * Create or update a Google Doc in the given folder.
- * If a doc with the same name exists, clears it and writes new content.
- * If not, creates a new doc.
- */
-async function upsertGoogleDoc(
-  folderId: string,
-  docName: string,
-  markdownContent: string,
-): Promise<string> {
-  const auth = makeAuth(GDRIVE_TOKEN_PATH)
-  const drive = google.drive({ version: 'v3', auth })
-  const docs = google.docs({ version: 'v1', auth })
-
-  // BKL-INTEL-01: Delete all existing docs with this name, then create one fresh doc.
-  // pageSize:1 left duplicates — query all (up to 100) and delete every match.
-  const existing = await drive.files.list({
-    q: `'${folderId}' in parents and name = '${docName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.document' and trashed = false`,
-    fields: 'files(id,name)', pageSize: 100,
-  })
-
-  const existingFiles = existing.data.files ?? []
-  if (existingFiles.length > 0) {
-    console.log(`[acct-intel] Deleting ${existingFiles.length} existing doc(s) named "${docName}"`)
-    for (const f of existingFiles) {
-      if (f.id) {
-        await drive.files.delete({ fileId: f.id })
-      }
-    }
-  }
-
-  // Create a single fresh doc
-  console.log(`[acct-intel] Creating fresh doc: ${docName}`)
-  const created = await drive.files.create({
-    requestBody: {
-      name: docName,
-      mimeType: 'application/vnd.google-apps.document',
-      parents: [folderId],
-    },
-    fields: 'id',
-  })
-
-  const docId = created.data.id!
-  if (!docId) throw new Error(`Failed to create doc: ${docName}`)
-
-  // Insert content
-  try {
-    await docs.documents.batchUpdate({
-      documentId: docId,
-      requestBody: {
-        requests: [{
-          insertText: {
-            location: { index: 1 },
-            text: markdownContent,
-          },
-        }],
-      },
-    })
-  } catch (e: any) {
-    console.error(`[acct-intel] batchUpdate failed for new doc ${docId} (${docName}):`, e?.message ?? e)
-    throw e
-  }
-
-  const url = `https://docs.google.com/document/d/${docId}/edit`
-  console.log(`[acct-intel] Doc ready: ${docName} → ${url}`)
-  return url
-}
+// upsertGoogleDoc deleted (BKL-ARCH-07c): replaced by driveClient.upsertDoc(..., { onConflict: 'replace' })
 
 /**
  * Try to read a custom prompt from the customer's "Account Intelligence AI Prompts" doc
@@ -1168,8 +1085,8 @@ export async function writeIntelligenceDocs(
   const industryContent = `Generated: ${timestamp}\n\n${industryAnalysis}`
 
   const [companyDocUrl, industryDocUrl] = await Promise.all([
-    upsertGoogleDoc(intelFolderId, companyDocName, companyContent),
-    upsertGoogleDoc(intelFolderId, industryDocName, industryContent),
+    driveClient.upsertDoc(intelFolderId, companyDocName, companyContent, { onConflict: 'replace' }),
+    driveClient.upsertDoc(intelFolderId, industryDocName, industryContent, { onConflict: 'replace' }),
   ])
 
   console.log(`[acct-intel] Intelligence docs written for ${customer.name}`)

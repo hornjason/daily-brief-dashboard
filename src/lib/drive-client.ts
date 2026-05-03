@@ -17,8 +17,9 @@
  *   - Throws for real API errors propagated from googleapis.
  */
 
-import { google, type drive_v3 } from 'googleapis'
+import { google, type drive_v3, type docs_v1 } from 'googleapis'
 import { makeAuth, withQuotaRetry, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
+import { sanitizeErr } from '../utils.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,9 +54,10 @@ export interface ListFilesOptions {
   followFolderShortcuts?: boolean
 }
 
-// ── Drive auth singleton (lazy) ──────────────────────────────────────────────
+// ── Drive + Docs auth singletons (lazy) ─────────────────────────────────────
 
 type DriveApi = drive_v3.Drive
+type DocsApi  = docs_v1.Docs
 
 /**
  * Internal interface used to inject a stub Drive in unit tests. Production
@@ -128,6 +130,7 @@ export function escapeQ(value: string): string {
 export class DriveFolderClient {
   private readonly tokenPath: string
   private cachedDrive?: DriveApi
+  private cachedDocs?: DocsApi
 
   constructor(tokenPath: string, private readonly deps?: DriveClientDeps) {
     this.tokenPath = tokenPath
@@ -140,6 +143,14 @@ export class DriveFolderClient {
     const auth = makeAuth(this.tokenPath)
     this.cachedDrive = google.drive({ version: 'v3', auth })
     return this.cachedDrive
+  }
+
+  /** Get the underlying Docs API. Builds lazily using the same auth as getDrive(). */
+  private getDocs(): DocsApi {
+    if (this.cachedDocs) return this.cachedDocs
+    const auth = makeAuth(this.tokenPath)
+    this.cachedDocs = google.docs({ version: 'v1', auth })
+    return this.cachedDocs
   }
 
   /**
@@ -430,6 +441,136 @@ export class DriveFolderClient {
     }
 
     return results
+  }
+
+  /**
+   * Create or update a Google Doc named `name` in `folderId` with `markdown` content.
+   *
+   * - `onConflict: 'replace'` (default): delete all existing docs with that name, create one
+   *   fresh doc, insert content. Preserves dup-killer semantics used by account intelligence.
+   * - `onConflict: 'rewrite'`: find the first existing doc by name, clear it, reinsert content
+   *   (preserves docId and Drive URL). Used by account plan to keep a stable URL.
+   *
+   * Returns the `docs.google.com` edit URL of the upserted doc.
+   * Throws with a sanitized error message on API failure.
+   */
+  async upsertDoc(
+    folderId: string,
+    name: string,
+    markdown: string,
+    options?: { onConflict?: 'replace' | 'rewrite' },
+  ): Promise<string> {
+    const onConflict = options?.onConflict ?? 'replace'
+    const drive = this.getDrive()
+    const docs  = this.getDocs()
+
+    const escapedName = escapeQ(name)
+    const DOC_MIME = 'application/vnd.google-apps.document'
+
+    try {
+      if (onConflict === 'replace') {
+        // Delete all existing docs with this name, then create one fresh doc.
+        // Query up to 100 to catch duplicates (pageSize:1 would leave stragglers).
+        const existing = await withQuotaRetry(
+          () =>
+            drive.files.list({
+              q: `'${escapeQ(folderId)}' in parents and name = '${escapedName}' and mimeType = '${DOC_MIME}' and trashed = false`,
+              fields: 'nextPageToken, files(id,name)',
+              pageSize: 100,
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            }),
+          '[drive-client] upsertDoc replace — list existing',
+        )
+        const existingFiles = existing.data.files ?? []
+        if (existingFiles.length > 0) {
+          console.log(`[drive-client] upsertDoc: deleting ${existingFiles.length} existing doc(s) named "${name}"`)
+          for (const f of existingFiles) {
+            if (f.id) {
+              await withQuotaRetry(
+                () => drive.files.delete({ fileId: f.id!, supportsAllDrives: true } as any),
+                '[drive-client] upsertDoc replace — delete',
+              )
+            }
+          }
+        }
+
+        // Create fresh doc
+        console.log(`[drive-client] upsertDoc: creating fresh doc "${name}" in ${folderId}`)
+        const created = await withQuotaRetry(
+          () =>
+            drive.files.create({
+              requestBody: { name, mimeType: DOC_MIME, parents: [folderId] },
+              fields: 'id',
+              supportsAllDrives: true,
+            }),
+          '[drive-client] upsertDoc replace — create',
+        )
+        const docId = created.data.id
+        if (!docId) throw new Error(`drive.files.create returned no id for doc "${name}"`)
+
+        await docs.documents.batchUpdate({
+          documentId: docId,
+          requestBody: { requests: [{ insertText: { location: { index: 1 }, text: markdown } }] },
+        })
+
+        const url = `https://docs.google.com/document/d/${docId}/edit`
+        console.log(`[drive-client] upsertDoc: doc ready "${name}" → ${url}`)
+        return url
+      } else {
+        // rewrite: find existing doc, clear + reinsert to preserve docId / Drive URL
+        const existing = await withQuotaRetry(
+          () =>
+            drive.files.list({
+              q: `'${escapeQ(folderId)}' in parents and name = '${escapedName}' and mimeType = '${DOC_MIME}' and trashed = false`,
+              fields: 'nextPageToken, files(id)',
+              pageSize: 1,
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            }),
+          '[drive-client] upsertDoc rewrite — list existing',
+        )
+
+        if (existing.data.files?.length && existing.data.files[0].id) {
+          const docId = existing.data.files[0].id
+          const doc = await docs.documents.get({ documentId: docId })
+          const contentArr = doc.data.body?.content ?? []
+          const endIndex = contentArr.length > 0 ? (contentArr[contentArr.length - 1]?.endIndex ?? 1) : 1
+          if (endIndex > 2) {
+            await docs.documents.batchUpdate({
+              documentId: docId,
+              requestBody: { requests: [{ deleteContentRange: { range: { startIndex: 1, endIndex: endIndex - 1 } } }] },
+            })
+          }
+          await docs.documents.batchUpdate({
+            documentId: docId,
+            requestBody: { requests: [{ insertText: { location: { index: 1 }, text: markdown } }] },
+          })
+          return `https://docs.google.com/document/d/${docId}/edit`
+        }
+
+        // No existing doc — create new
+        console.log(`[drive-client] upsertDoc: creating new doc (rewrite mode) "${name}" in ${folderId}`)
+        const created = await withQuotaRetry(
+          () =>
+            drive.files.create({
+              requestBody: { name, mimeType: DOC_MIME, parents: [folderId] },
+              fields: 'id',
+              supportsAllDrives: true,
+            }),
+          '[drive-client] upsertDoc rewrite — create',
+        )
+        if (!created.data.id) throw new Error(`drive.files.create returned no id for doc "${name}"`)
+
+        await docs.documents.batchUpdate({
+          documentId: created.data.id,
+          requestBody: { requests: [{ insertText: { location: { index: 1 }, text: markdown } }] },
+        })
+        return `https://docs.google.com/document/d/${created.data.id}/edit`
+      }
+    } catch (e: any) {
+      throw new Error(`[drive-client] upsertDoc "${name}": ${sanitizeErr(e)}`)
+    }
   }
 
   /**

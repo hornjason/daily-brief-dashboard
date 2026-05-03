@@ -15,3 +15,7 @@ The L3 shared folder — the source of truth for all hero installs — lives in 
 
 - **Always-on (chosen)** — zero risk of silent data loss; flags are harmless on personal Drive
 - **Opt-in per call** — callers would need to remember to set it; pre-module history shows they don't
+
+## Addendum (BKL-ARCH-07c, 2026-05-03)
+
+`DriveFolderClient` also owns Google Docs API upsert operations (`upsertDoc`). The class name is a historical misnomer — it covers both Drive folder traversal and Docs content writes. A rename to `DriveClient` is deferred to avoid a cross-codebase churn. All new Drive + Docs write operations should be added as methods here, not re-implemented at call sites.

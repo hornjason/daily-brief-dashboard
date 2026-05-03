@@ -6753,7 +6753,7 @@ Remaining CI failures: BKL-E2E-01 scope only (wizard, accessibility, bootstrap-r
 ---
 
 ### BKL-E2E-01 | Stabilize E2E test suite — 54 pre-existing failures
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-05-03 (e2e-tier exit 0 on both runs)
 Priority: P2
 Size: L
 Source: 2026-04-25 — E2E job became reachable for the first time when unit test gate was fixed
@@ -8655,14 +8655,13 @@ Description: customer.ts BFS (account intelligence file collection) follows fold
 Solution: Add followFolderShortcuts option to listFilesUnder (default false). Then migrate customer.ts BFS to driveClient.listFilesUnder({ followFolderShortcuts: true, maxFiles, modifiedAfter, maxDepth }).
 
 ### BKL-ARCH-07c | account-intelligence + account-plan doc upsert Drive calls not migrated
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-05-03
 Priority: P3
 Size: S
 Source: Marcus BKL-ARCH-07 implementation 2026-05-01
 Issue: hornjason/asaCommandCenter#31
-Files: src/account-intelligence.ts (findIntelligenceSubfolder, upsertIntelligenceDoc), src/account-plan.ts (upsertAccountPlanDoc)
-Description: Several Drive call sites in account-intelligence and account-plan handle Doc creation/upsert, not folder traversal. They were out of scope for BKL-ARCH-07 but are candidates for follow-up consolidation into drive-client.ts (e.g. findDocByName, upsertDoc methods).
-Solution: Evaluate whether Doc upsert operations are common enough to warrant module methods. Low priority — these use supportsAllDrives correctly already.
+Files: src/lib/drive-client.ts (upsertDoc method added), src/account-intelligence.ts (findIntelligenceSubfolder + upsertGoogleDoc deleted), src/account-plan.ts (delegated to driveClient.upsertDoc)
+Description: Consolidated two duplicate Doc upsert patterns into DriveFolderClient.upsertDoc(). findIntelligenceSubfolder deleted (replaced by driveClient.findDescendantFolder). ADR-0016 addendum documents that DriveFolderClient now covers Docs API writes. Serena evaluation: extract confirmed correct by deletion test. TypeScript clean, 178/2 test suite (2 pre-existing @live failures).
 
 ---
 

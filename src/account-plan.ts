@@ -12,9 +12,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
 import { resolve } from 'path'
-import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
-import { makeAuth } from './google.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { getGeminiModel } from './settings-api.ts'
@@ -26,7 +24,6 @@ import type { Customer } from './types.ts'
 // ── Config paths ──────────────────────────────────────────────────────────────
 
 const CONFIG_DIR_PATH  = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
-const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
 
 // ── In-app config path (inside container: /app/config/account-plan/) ─────────
 const APP_CONFIG_DIR = resolve(import.meta.dir, '../config/account-plan')
@@ -72,57 +69,14 @@ export async function ensureAccountPlansSubfolder(customerFolderId: string): Pro
 
 // ── Upload markdown to Drive as a Google Doc ─────────────────────────────────
 
+// Thin wrapper: delegates to driveClient.upsertDoc with rewrite semantics (BKL-ARCH-07c).
+// rewrite preserves the docId / Drive URL on updates — account plan callers depend on a stable URL.
 async function upsertAccountPlanDoc(
   folderId: string,
   docName: string,
   markdownContent: string,
 ): Promise<string> {
-  const auth = makeAuth(GDRIVE_TOKEN_PATH)
-  const drive = google.drive({ version: 'v3', auth })
-  const docs = google.docs({ version: 'v1', auth })
-
-  // Check for existing doc
-  const existing = await drive.files.list({
-    q: `'${folderId}' in parents and name = '${docName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.document' and trashed = false`,
-    fields: 'files(id)', pageSize: 1,
-  })
-
-  if (existing.data.files?.length && existing.data.files[0].id) {
-    const docId = existing.data.files[0].id
-    // Clear and rewrite
-    const doc = await docs.documents.get({ documentId: docId })
-    const contentArr = doc.data.body?.content ?? []
-    const endIndex = contentArr.length > 0 ? (contentArr[contentArr.length - 1]?.endIndex ?? 1) : 1
-    if (endIndex > 2) {
-      await docs.documents.batchUpdate({
-        documentId: docId,
-        requestBody: { requests: [{ deleteContentRange: { range: { startIndex: 1, endIndex: endIndex - 1 } } }] },
-      })
-    }
-    await docs.documents.batchUpdate({
-      documentId: docId,
-      requestBody: { requests: [{ insertText: { location: { index: 1 }, text: markdownContent } }] },
-    })
-    return `https://docs.google.com/document/d/${docId}/edit`
-  }
-
-  // Create new doc
-  const created = await drive.files.create({
-    requestBody: {
-      name: docName,
-      mimeType: 'application/vnd.google-apps.document',
-      parents: [folderId],
-    },
-    fields: 'id',
-  })
-  if (!created.data.id) throw new Error('Failed to create account plan Google Doc')
-
-  await docs.documents.batchUpdate({
-    documentId: created.data.id,
-    requestBody: { requests: [{ insertText: { location: { index: 1 }, text: markdownContent } }] },
-  })
-
-  return `https://docs.google.com/document/d/${created.data.id}/edit`
+  return driveClient.upsertDoc(folderId, docName, markdownContent, { onConflict: 'rewrite' })
 }
 
 // ── Gemini call with multimodal support ──────────────────────────────────────
