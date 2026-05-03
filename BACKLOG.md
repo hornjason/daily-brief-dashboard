@@ -6176,6 +6176,16 @@ Description: Product summary cache files (`data/cache/product-intel/{slug}-summa
 Fix: On server startup, check if any configured product slugs are missing a summary cache. If missing, auto-trigger `refreshAllProducts()` in the background (non-blocking). This runs once per cold start and ensures the cache is always populated within minutes of a rebuild.
 Decision: OPEN -- small addition to server startup sequence.
 
+### BKL-TEST-FIXTURE-01 | test/fixtures.ts CAROLANNE.ccspSheetId stale — fixture drift warning every run
+Status: ✅ DONE 2026-05-03 — updated ccspSheetId to 1G8VIkKca9vmLBTsSBrBjE6OWeO2_jbXhNHSHIaGFSUw (verified from /api/aes on prod). Fixture drift warning suppressed.
+Priority: P3
+Size: XS
+Source: Quinn QA registry 2026-05-03 — fixture drift polluting every test run output
+Files: test/fixtures.ts
+Description: CAROLANNE.ccspSheetId hardcoded to an old Drive sheet ID that no longer matches the live production AE config. globalSetup emits FIXTURE DRIFT DETECTED warning on every Playwright run. Fix: update the ccspSheetId to match /api/aes live value.
+
+---
+
 ### BKL-TEST-08 | intelligence.spec.ts uses hardcoded "A10 Networks" not in customer dataset
 Status: ✅ DONE — 2026-04-10
 Severity: LOW

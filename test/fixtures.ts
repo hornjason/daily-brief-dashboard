@@ -207,7 +207,7 @@ export const CAROLANNE = {
   tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR01'],
   supportableSheetId: '150e3-q-8_6Uy3qnLhL-ARBVHyVy29P7tnAuFjxkkuCg',
   pipelineSheetId: '10H8Nl8oQQg1x9Zt0p5cys7JJp0b4ObfzhB-pPMot3BM',
-  ccspSheetId: '1K37mK8BQa8RqHL8ljp_wv7dmF7g9Y_Q1YhhYFmsFaPQ',
+  ccspSheetId: '1G8VIkKca9vmLBTsSBrBjE6OWeO2_jbXhNHSHIaGFSUw',
 }
 
 // ── RH session mock payloads ─────────────────────────────────────────
