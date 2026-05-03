@@ -1,0 +1,108 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`buildXmlSources — golden snapshot produces byte-identical output for the canonical fixture 1`] = `
+"<customer>
+  <name>Acme Corp</name>
+  <ae>Jane AE</ae>
+  <segment>Commercial</segment>
+  <last_interaction>2026-05-01</last_interaction>
+  <last_brief_date>2026-04-25</last_brief_date>
+</customer>
+
+<source type="subscriptions" synced="2026-05-02" count="1">
+RHEL Server | qty: 100 | expires: Dec 31, 2026 | 243d left | status: Active
+</source>
+
+<source type="subscriptions_detailed" synced="2026-05-02" count="1">
+RH00001: RHEL Premium | qty: 50 | status: Active | ends: Dec 31, 2026
+</source>
+
+<source type="support_cases" status="scraper_failed" last_success="2026-04-30T10:00:00.000Z" synced="2026-05-02" count="1">
+Sev2 | 00112233: Pod CrashLoopBackOff — 5d open [OpenShift]
+</source>
+
+<source type="calendar" window="next_30_days" count="1">
+Q2 QBR on May 15, 2026 (alice@acme.com, bob@acme.com)
+  <attendee_context>
+    alice@acme.com: last interaction 2026-05-01, frequency: weekly
+  </attendee_context>
+  <health_signals cases="1 open Sev2" renewals="1 within 90d" />
+  <competitive_context>VMware bake-off</competitive_context>
+  <silent_attendees>carol@acme.com</silent_attendees>
+  <missing_stakeholders>cfo@acme.com</missing_stakeholders>
+</source>
+
+<source type="emails" window="last_30_days" count="2">
+[May 1, 2026] Renewal question — Can we discuss renewal terms next week? [ACTION_REQUIRED]
+  ⚠ Competitive: VMware (MEDIUM) — asked about migration
+  → Action: Send renewal quote (by 2026-05-08)
+[Apr 30, 2026] Pricing &amp; terms &lt;important&gt; — See attached.
+  <silent_contacts>
+    Carol: 90d silent (was 4/mo, now 0/mo)
+  </silent_contacts>
+</source>
+
+<source type="documents" synced="2026-05-02" count="3">
+Account Plan FY26 (Apr 15, 2026) [ACCOUNT_PLAN]
+  Content excerpt: Account plan content here.
+  <action_items>
+    Schedule QBR (owner: Jane) (by 2026-05-10)
+  </action_items>
+  <decisions>
+    Move to OpenShift in Q3
+  </decisions>
+  <stakeholders>
+    Alice (CTO) — positive
+  </stakeholders>
+  <competitive_mentions>
+    Tanzu: Evaluating alongside.
+  </competitive_mentions>
+Company Brief — Acme (Apr 20, 2026) [COMPANY_INTELLIGENCE]
+  Content excerpt: Strategic background.
+  <strategic_signals priority="high">
+    [TRIGGER_EVENT] CEO transition announced — significance: high
+  </strategic_signals>
+Untyped doc
+  Content excerpt: No mod time.
+</source>
+
+<source type="pipeline" status="stale" last_success="2026-04-30T08:00:00.000Z" synced="2026-05-02" count="1">
+Acme OpenShift Expansion | stage: Commit | amount: $250000 | close: 2026-06-30
+</source>
+
+<source type="cloud_spend" synced="2026-05-02" count="1">
+AWS | Q2-2026 | ACV+: $50000 | close: 2026-06-15
+</source>
+
+<source type="previous_brief" date="2026-04-25">
+## Previous brief content here.
+</source>
+
+<source type="account_intelligence" status="fresh" cached="2026-04-30T00:00:00.000Z">
+[Company Intelligence]
+Acme Corp is a Fortune 500 ...
+
+[Industry Analysis]
+Manufacturing &amp; Logistics ...
+</source>
+
+<source type="product_intelligence" product="openshift" relevance="HIGH" generated="2026-05-01T00:00:00.000Z">
+[Priority Action]
+Pitch OpenShift Virtualization in May QBR.
+
+[Roadmap Talking Points]
+- Virt 4.16: New live-migration tooling.
+
+[Expansion Opportunities]
+- No K8s platform → OpenShift: Aligns with VMware exit.
+
+[Case Alignment]
+- Case 00112233: Fix in 4.17 (Q3 2026)
+
+[Competitive Angle]
+OpenShift vs Tanzu — emphasise integrated CI/CD.
+
+</source>
+
+"
+`;

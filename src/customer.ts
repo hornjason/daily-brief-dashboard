@@ -1,13 +1,23 @@
 import { google } from 'googleapis'
 import { resolve } from 'path'
 import { existsSync, readFileSync } from 'node:fs'
-import { extractText as extractPdfText } from 'unpdf'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer, CalendarEvent, EmailHighlight, DriveFile, SupportCase, CustomerSubscription, ProductSubscription } from './types.ts'
 import type { PipelineRecord } from './pipeline.ts'
 import type { CCSPRecord } from './sheets.ts'
-import { aes } from './server-state.ts'
-import { readLatestBriefCache, readBriefCache, readDocContentCache, writeDocContentCache, readEmailCache, writeEmailCache, readMeetingCache, writeMeetingCache, toSlug, MS_PER_DAY } from './cache-layer.ts'
+import { readLatestBriefCache, readBriefCache, readEmailCache, writeEmailCache, readMeetingCache, writeMeetingCache, toSlug, MS_PER_DAY } from './cache-layer.ts'
+import { fetchCustomerDocsImpl as _fetchCustomerDocsImpl } from './customer/docs-fetcher.ts'
+import { escapeXml } from './customer/signals/xml-utils.ts'
+import { casesSource } from './customer/signals/cases.ts'
+import { pipelineSource } from './customer/signals/pipeline.ts'
+import { ccspSource } from './customer/signals/ccsp.ts'
+import { meetingsSource } from './customer/signals/meetings.ts'
+import { emailsSource } from './customer/signals/emails.ts'
+import { docsSource } from './customer/signals/docs.ts'
+import { subscriptionsSource } from './customer/signals/subscriptions.ts'
+import { renderFailedSources } from './customer/signals/failed-sources.ts'
+import { renderCustomerHeader, renderPreviousBrief, renderAccountIntelligence, renderProductIntelligence } from './customer/signals/extras.ts'
+import type { RenderContext as SignalRenderContext, SignalBundle } from './customer/signals/types.ts'
 import { isFreeOrTrial } from './health-score.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { fetchGeminiWithRetry } from './gemini-fetch.ts'
@@ -152,394 +162,14 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
 }
 
 // ── Drive: docs in this customer's folder ───────────────────────────────────
+// Implementation lives in src/customer/docs-fetcher.ts (BKL-ARCH-23).
 
-// MIME types that Drive can export as plain text
-const EXPORTABLE_MIME_TYPES = new Set([
-  'application/vnd.google-apps.document',
-  'application/vnd.google-apps.presentation',
-  'application/vnd.google-apps.spreadsheet',
-])
-const DOC_CONTENT_CAP   = 8_000   // chars per document (was 3K — too tight for meeting notes/POVs)
-const TOTAL_CONTENT_CAP = 80_000  // chars per customer across all docs (was 20K — starved briefs of context)
 const ACCT_INTEL_COMPANY_CAP  = 3_000  // chars of intel.company emitted to brief XML
 const ACCT_INTEL_INDUSTRY_CAP = 2_000  // chars of intel.industry emitted to brief XML
-const MAX_FILES_PER_CUSTOMER = 50
-const DRIVE_SUBFOLDER_DEPTH  = 5
 export const ACCT_INTEL_TTL_MS = (Number(process.env.INTELLIGENCE_COMPANY_TTL_DAYS) || 14) * MS_PER_DAY
 const FINGERPRINT_EMAIL_LIMIT   = 20  // most recent emails included in brief fingerprint
 const FINGERPRINT_MEETING_LIMIT = 10  // most recent past meetings included in brief fingerprint
 
-// Normalize name for fuzzy matching — strip legal suffixes, punctuation, lowercase
-function normalizeFolderName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/,?\s+(inc|llc|ltd|corp|corporation|incorporated|limited|co|group|holdings|international|technologies|logistics|solutions|services|foods|systems|global|networks|software|health sciences|cancer center|cancer research)\.?\s*$/gi, '')
-    .replace(/[^a-z0-9\s]/g, '')
-    .trim()
-}
-
-function folderMatchScore(folderName: string, customerName: string): number {
-  const fn = normalizeFolderName(folderName)
-  const cn = normalizeFolderName(customerName)
-  if (fn === cn) return 1
-  if (fn.includes(cn) || cn.includes(fn)) return 0.9
-  const fWords = new Set(fn.split(/\s+/).filter(w => w.length > 2))
-  const cWords = cn.split(/\s+/).filter(w => w.length > 2)
-  if (fWords.size === 0 || cWords.length === 0) return 0
-  const overlap = cWords.filter(w => fWords.has(w)).length
-  return overlap / Math.max(fWords.size, cWords.length)
-}
-
-function fuzzyFindCustomerFolder(
-  folders: { id?: string | null; name?: string | null }[],
-  customerName: string,
-): { id: string; name: string } | undefined {
-  let bestScore = 0
-  let bestFolder: { id: string; name: string } | undefined
-  for (const f of folders) {
-    if (!f.id || !f.name) continue
-    const score = folderMatchScore(f.name, customerName)
-    if (score > bestScore) { bestScore = score; bestFolder = { id: f.id, name: f.name } }
-  }
-  return bestScore >= 0.5 ? bestFolder : undefined
-}
-
-async function _fetchCustomerDocsImpl(customer: Customer): Promise<DriveFile[]> {
-  const auth = makeAuth(GDRIVE_TOKEN_PATH)
-  const drive = google.drive({ version: 'v3', auth })
-
-  let customerFolderId: string | undefined
-
-  // ── Priority 1: Per-customer driveFolderId (exact, no search needed) ────────
-  if (customer.driveFolderId) {
-    customerFolderId = customer.driveFolderId
-    console.log(`[drive] Using per-customer folder ID for ${customer.name}`)
-  }
-
-  // ── Priority 2: AE's driveFolderId → fuzzy-match customer subfolder ─────────
-  if (!customerFolderId) {
-    const ae = aes.find(a => a.name === customer.ae)
-    const aeFolderId = ae?.driveFolderId
-    if (aeFolderId) {
-      const custFolders = await drive.files.list({
-        q: `'${aeFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: 'files(id,name)', pageSize: 200,
-      })
-      const folderList = custFolders.data.files ?? []
-      // Try primary name first, then aliases as fallback
-      const namesToTry = [customer.name, ...(customer.aliases ?? [])]
-      for (const tryName of namesToTry) {
-        const match = fuzzyFindCustomerFolder(folderList, tryName)
-        if (match) {
-          customerFolderId = match.id
-          const aliasNote = tryName !== customer.name ? ` (via alias "${tryName}")` : ''
-          console.log(`[drive] Matched folder "${match.name}" for ${customer.name}${aliasNote} (under AE ${customer.ae})`)
-          break
-        }
-      }
-      if (!customerFolderId) {
-        // One level deeper: AE folder → subfolder (e.g. "Accounts") → customer
-        for (const sub of (custFolders.data.files ?? []).slice(0, 10)) {
-          if (!sub.id) continue
-          const deeper = await drive.files.list({
-            q: `'${sub.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-            fields: 'files(id,name)', pageSize: 100,
-          })
-          for (const tryName of namesToTry) {
-            const deepMatch = fuzzyFindCustomerFolder(deeper.data.files ?? [], tryName)
-            if (deepMatch) {
-              customerFolderId = deepMatch.id
-              const aliasNote = tryName !== customer.name ? ` (via alias "${tryName}")` : ''
-              console.log(`[drive] Matched folder "${deepMatch.name}" for ${customer.name}${aliasNote} (under ${sub.name}/${customer.ae})`)
-              break
-            }
-          }
-          if (customerFolderId) break
-        }
-      }
-    }
-  }
-
-  // ── Priority 3: Global AE_PARENT_FOLDER_ID fallback (legacy) ───────────────
-  if (!customerFolderId) {
-    const parentId = process.env.AE_PARENT_FOLDER_ID
-    if (!parentId) {
-      console.warn('[drive] No folder source for', customer.name, '— no per-customer/AE folder ID and AE_PARENT_FOLDER_ID not set')
-      return []
-    }
-    // Scan parent → AE → customer (old path)
-    const level1Res = await drive.files.list({
-      q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id,name)', pageSize: 50,
-    })
-    const legacyNamesToTry = [customer.name, ...(customer.aliases ?? [])]
-    for (const aeCandidate of level1Res.data.files ?? []) {
-      if (!aeCandidate.id) continue
-      const custRes = await drive.files.list({
-        q: `'${aeCandidate.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: 'files(id,name)', pageSize: 100,
-      })
-      for (const tryName of legacyNamesToTry) {
-        const match = fuzzyFindCustomerFolder(custRes.data.files ?? [], tryName)
-        if (match) {
-          customerFolderId = match.id
-          const aliasNote = tryName !== customer.name ? ` (via alias "${tryName}")` : ''
-          console.log(`[drive] Matched folder "${match.name}" for ${customer.name}${aliasNote} via parent scan`)
-          break
-        }
-      }
-      if (customerFolderId) break
-    }
-  }
-
-  if (!customerFolderId) {
-    console.warn('[drive] No customer folder found for', customer.name, 'under AE', customer.ae)
-    return []
-  }
-
-  // BFS: collect all files from customer folder + all subfolders (depth-limited)
-  // BKL-DRIVE-01: follow folder shortcuts into targets; dedup files by Drive fileId
-  // (a file reachable both directly and via shortcut is only collected once) and
-  // dedup folders/shortcut targets by folderId (prevents circular/duplicate traversal).
-  const twoYearsAgo = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString()
-  const allFiles: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string }> = []
-  const seenFileIds = new Set<string>()                              // dedup files across all folders/shortcut targets
-  const visitedFolderIds = new Set<string>([customerFolderId])       // dedup folders + shortcut targets (circular guard)
-  const FOLDER_MIME = 'application/vnd.google-apps.folder'
-  const queue: Array<{ id: string; depth: number }> = [{ id: customerFolderId, depth: 0 }]
-
-  while (queue.length > 0 && allFiles.length < MAX_FILES_PER_CUSTOMER) {
-    const { id: folderId, depth } = queue.shift()!
-
-    // List files in this folder — exclude folders AND shortcuts (shortcuts are handled separately below)
-    const filesRes = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and mimeType != 'application/vnd.google-apps.shortcut' and modifiedTime > '${twoYearsAgo}' and trashed = false`,
-      fields: 'files(id,name,mimeType,modifiedTime,webViewLink)',
-      orderBy: 'modifiedTime desc',
-      pageSize: Math.min(50, MAX_FILES_PER_CUSTOMER - allFiles.length),
-    })
-    for (const f of filesRes.data.files ?? []) {
-      if (!f.id || seenFileIds.has(f.id)) continue  // skip duplicates (already collected via another path)
-      seenFileIds.add(f.id)
-      allFiles.push({
-        id: f.id,
-        name: f.name ?? '',
-        mimeType: f.mimeType ?? '',
-        modifiedTime: f.modifiedTime ?? undefined,
-        webViewLink: f.webViewLink ?? undefined,
-      })
-    }
-
-    // Queue real subfolders + folder-shortcut targets if within depth limit
-    if (depth < DRIVE_SUBFOLDER_DEPTH) {
-      const [subRes, shortcutRes] = await Promise.all([
-        drive.files.list({
-          q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-          fields: 'files(id,name)',
-          pageSize: 20,
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }),
-        drive.files.list({
-          q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
-          fields: 'files(id,name,shortcutDetails(targetId,targetMimeType))',
-          pageSize: 20,
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }),
-      ])
-      for (const sub of subRes.data.files ?? []) {
-        if (!sub.id || visitedFolderIds.has(sub.id)) continue
-        visitedFolderIds.add(sub.id)
-        queue.push({ id: sub.id, depth: depth + 1 })
-      }
-      for (const sc of shortcutRes.data.files ?? []) {
-        const targetId = sc.shortcutDetails?.targetId
-        const targetMime = (sc.shortcutDetails as any)?.targetMimeType
-        if (!targetId || targetMime !== FOLDER_MIME) continue  // only follow shortcuts to folders
-        if (visitedFolderIds.has(targetId)) continue            // circular / already queued
-        visitedFolderIds.add(targetId)
-        queue.push({ id: targetId, depth: depth + 1 })          // treat as same-depth as a real subfolder
-        console.log(`[drive-bfs] following shortcut "${sc.name}" -> ${targetId}`)
-      }
-    }
-  }
-
-  // BKL-AI18a: Export text content in parallel (was sequential); cap applied after collection
-  const EXPORT_CONCURRENCY = 5
-
-  // Helper: export a single file's content (returns extracted text or null)
-  // ADR-013 Tier 3: content-addressed cache by (fileId, modifiedTime).
-  async function exportFileContent(f: { id: string; name: string; mimeType: string; modifiedTime?: string }): Promise<string | null> {
-    if (EXPORTABLE_MIME_TYPES.has(f.mimeType) && f.id) {
-      // Cache hit short-circuits Drive export
-      if (f.modifiedTime) {
-        const cached = readDocContentCache(f.id, f.modifiedTime)
-        if (cached !== null) return cached
-      }
-      try {
-        const exportRes = await drive.files.export(
-          { fileId: f.id, mimeType: 'text/plain' },
-          { responseType: 'text' },
-        )
-        const raw = String(exportRes.data ?? '').replace(/\s+/g, ' ').trim()
-        const capped = raw.slice(0, DOC_CONTENT_CAP)
-        const content = capped.length > 50 ? capped : null
-        if (content !== null && f.modifiedTime) {
-          writeDocContentCache(f.id, f.modifiedTime, content)
-        }
-        return content
-      } catch {
-        return null
-      }
-    }
-    return null
-  }
-
-  // Phase 1: Fire all exportable file fetches in parallel (concurrency-limited batches)
-  const exportableFiles = allFiles.filter(f => EXPORTABLE_MIME_TYPES.has(f.mimeType) && f.id)
-  const exportResultMap = new Map<string, string>()
-
-  for (let i = 0; i < exportableFiles.length; i += EXPORT_CONCURRENCY) {
-    const batch = exportableFiles.slice(i, i + EXPORT_CONCURRENCY)
-    const settled = await Promise.allSettled(batch.map(f => exportFileContent(f)))
-    for (let j = 0; j < batch.length; j++) {
-      const r = settled[j]
-      if (r.status === 'fulfilled' && r.value) {
-        exportResultMap.set(batch[j].id, r.value)
-      }
-    }
-  }
-
-  // Phase 2: Assemble results sequentially, enforcing totalChars cap
-  let totalChars = 0
-  const results: DriveFile[] = []
-
-  for (const f of allFiles) {
-    const file: DriveFile = {
-      id: f.id,
-      name: f.name,
-      mimeType: f.mimeType,
-      modifiedTime: f.modifiedTime,
-      webViewLink: f.webViewLink,
-      customer: customer.name,
-    }
-
-    const preExported = exportResultMap.get(f.id)
-    if (preExported && totalChars < TOTAL_CONTENT_CAP) {
-      file.content = preExported
-      totalChars += preExported.length
-    }
-    // BKL-R25b: PDF extraction — local-first, multimodal fallback
-    // ADR-013 Tier 3: content-addressed cache by (fileId, modifiedTime) short-circuits both unpdf and multimodal paths.
-    else if (f.mimeType === 'application/pdf' && totalChars < TOTAL_CONTENT_CAP && f.id) {
-      if (f.modifiedTime) {
-        const cachedPdf = readDocContentCache(f.id, f.modifiedTime)
-        if (cachedPdf !== null) {
-          file.content = cachedPdf
-          totalChars += cachedPdf.length
-          results.push(file)
-          continue
-        }
-      }
-      try {
-        const pdfRes = await drive.files.get(
-          { fileId: f.id, alt: 'media' },
-          { responseType: 'arraybuffer' },
-        )
-        const pdfBytes = Buffer.from(pdfRes.data as ArrayBuffer)
-        // Skip PDFs over 15MB to avoid memory pressure and Gemini inlineData limits
-        if (pdfBytes.length > 15_000_000) {
-          console.warn(`[docs] PDF too large to extract (${Math.round(pdfBytes.length / 1e6)}MB): ${f.name}`)
-          results.push(file)
-          continue
-        }
-
-        // Step 1: Attempt local text extraction with unpdf (zero token cost)
-        let localText = ''
-        try {
-          const u8 = new Uint8Array(pdfBytes.buffer, pdfBytes.byteOffset, pdfBytes.byteLength)
-          const { text } = await extractPdfText(u8, { mergePages: true })
-          localText = (text as string).replace(/\s+/g, ' ').trim()
-        } catch {
-          // Local extraction unsupported for this PDF — fall through to multimodal
-        }
-
-        if (localText.length >= 50) {
-          // Local extraction succeeded — use text directly as content.
-          // classifyAndExtract will call Gemini for classification; no need to
-          // pre-summarize here (adds latency, risks timeout, redundant LLM call).
-          console.log(`[docs] PDF ${f.name}: local extraction (${localText.length} chars), using text path`)
-          const capped = localText.slice(0, DOC_CONTENT_CAP)
-          file.content = capped
-          totalChars += capped.length
-          if (f.modifiedTime) writeDocContentCache(f.id, f.modifiedTime, capped)
-        } else {
-          // Step 2: Local extraction failed/empty — fall back to multimodal inlineData path
-          console.log(`[docs] PDF ${f.name}: local extraction (${localText.length} chars), using multimodal fallback`)
-          const b64 = pdfBytes.toString('base64')
-
-          const project  = process.env.GOOGLE_CLOUD_PROJECT
-          const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-          const model    = getGeminiModelLite()  // BKL-AI-COST-01: PDF text extraction is high-volume, use lite model
-
-          if (project && b64.length > 0) {
-            let token: string | null | undefined
-            const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-            if (saKeyB64) {
-              const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-              const jwtAuth = new google.auth.JWT({
-                email: keyData.client_email,
-                key:   keyData.private_key,
-                scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-              })
-              token = (await jwtAuth.getAccessToken()).token
-            } else {
-              const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-              token = (await auth.getAccessToken()).token
-            }
-
-            if (token) {
-              const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-              const geminiRes = await fetch(url, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents: [{
-                    role: 'user',
-                    parts: [
-                      { inlineData: { mimeType: 'application/pdf', data: b64 } },
-                      { text: 'Extract the text content from this PDF document. Return only the extracted text, no commentary or formatting.' },
-                    ],
-                  }],
-                  generationConfig: { temperature: 0, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },
-                }),
-              })
-              if (geminiRes.ok) {
-                const json = await geminiRes.json() as any
-                const extracted = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-                const capped = extracted.replace(/\s+/g, ' ').trim().slice(0, DOC_CONTENT_CAP)
-                if (capped.length > 50) {
-                  file.content = capped
-                  totalChars += capped.length
-                  if (f.modifiedTime) writeDocContentCache(f.id, f.modifiedTime, capped)
-                }
-              }
-            }
-          }
-        }
-      } catch (e: any) {
-        const safeName = String(f.name ?? '').replace(/[\r\n]/g, ' ').slice(0, 200)
-        console.warn(`[docs] PDF extraction failed for ${safeName}: ${e?.message?.slice?.(0, 100) ?? 'unknown'}`)
-        // PDF stays in results with name-only — content extraction is best-effort
-      }
-    }
-
-    results.push(file)
-  }
-
-  return results
-}
 
 export async function fetchCustomerDocs(customer: Customer): Promise<DriveFile[]> {
   const timeout = new Promise<never>((_, reject) =>
@@ -701,19 +331,16 @@ const EXTRACTION_SCHEMA = {
 }
 
 // ── XML source builder (R17) ────────────────────────────────────────────────
+// escapeXml lives in src/customer/signals/xml-utils.ts (BKL-ARCH-23)
 
-function escapeXml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
-interface XmlEnrichment {
+export interface XmlEnrichment {
   docClassifications?: Map<string, DocClassification>
   emailClassifications?: Map<string, EmailIntelligence>
   silentContacts?: SilentContact[]
   meetingPreps?: MeetingPrep[]
 }
 
-function buildXmlSources(
+export function buildXmlSources(
   customer: Customer,
   meetings: CalendarEvent[],
   emails: EmailHighlight[],
@@ -729,6 +356,8 @@ function buildXmlSources(
   enrichment?: XmlEnrichment,
   accountIntelligence?: { company?: string; industry?: string; cachedAt?: string } | null,
 ): string {
+  // BKL-ARCH-23: composition over per-source signal modules.
+  // collect() (synchronous calls only — pre-supplied data) → render() pipeline.
   const fmt = (iso: string) => {
     try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }
     catch { return iso }
@@ -737,8 +366,6 @@ function buildXmlSources(
   const today = new Date().toISOString().split('T')[0]
   const now = Date.now()
   const STALE_24H = 24 * 60 * 60 * 1000
-
-  // BKL-AI18c: scraper status for failure/staleness injection into XML
   const scraperStatus = getStatus()
   function sourceStatusAttr(scraperName: ScraperName): string {
     const entry = scraperStatus[scraperName]
@@ -752,263 +379,76 @@ function buildXmlSources(
     return ''
   }
 
-  let xml = `<customer>
-  <name>${escapeXml(customer.name)}</name>
-  <ae>${escapeXml(customer.ae ?? 'Unknown')}</ae>
-  <segment>${escapeXml(customer.segment ?? 'Unknown')}</segment>
-  <last_interaction>${escapeXml(lastInteraction)}</last_interaction>
-  <last_brief_date>${escapeXml(lastBriefDate ?? 'none')}</last_brief_date>
-</customer>\n\n`
-
-  // Subscriptions from Supportable (CustomerSubscription)
-  if (subscriptions.length) {
-    xml += `<source type="subscriptions"${sourceStatusAttr('supportable')} synced="${today}" count="${subscriptions.length}">\n`
-    for (const sub of subscriptions) {
-      xml += `${escapeXml(sub.productName)} | qty: ${sub.quantity} | expires: ${fmt(sub.endDate)} | ${sub.daysLeft}d left | status: ${escapeXml(sub.status)}\n`
-    }
-    xml += `</source>\n\n`
+  const ctx: SignalRenderContext = {
+    escapeXml, fmt, today, sourceStatusAttr,
+    emailLimit: getAutomationConfig().briefEmailsInPrompt,
   }
 
-  // Detailed product data from AE spreadsheet (ProductSubscription)
-  // BKL-M45: exclude free/trial/beta subs entirely — they distort intelligence signal
-  const paidProducts = products.filter(p => !isFreeOrTrial(p))
-  if (paidProducts.length) {
-    xml += `<source type="subscriptions_detailed"${sourceStatusAttr('supportable')} synced="${today}" count="${paidProducts.length}">\n`
-    for (const p of paidProducts) {
-      xml += `${escapeXml(p.sku)}: ${escapeXml(p.productDescription)} | qty: ${p.quantity} | status: ${escapeXml(p.status)}${p.endDate ? ` | ends: ${fmt(p.endDate)}` : ''}\n`
-    }
-    xml += `</source>\n\n`
-  }
-
-  // Support cases
-  if (cases.length) {
-    xml += `<source type="support_cases"${sourceStatusAttr('rh-cases')} synced="${today}" count="${cases.length}">\n`
-    for (const c of cases) {
-      xml += `Sev${c.severity} | ${escapeXml(c.caseNumber)}: ${escapeXml(c.summary)} — ${c.daysOpen}d open${c.product ? ` [${escapeXml(c.product)}]` : ''}\n`
-    }
-    xml += `</source>\n\n`
-  }
-
-  // Calendar — upcoming meetings (enriched with meeting prep when available)
+  // Build bundles in canonical source order (byte-significant — see brief).
+  const subsBundle = (subscriptions.length || products.length)
+    ? {
+        kind: 'subscriptions' as const,
+        status: { syncedDate: today, staleness: 'ok' as const, lastSuccess: null, lastError: null },
+        summary: subscriptions,
+        // detailed is pre-filtered by collect(); we mirror that here.
+        detailed: products.filter(p => !isFreeOrTrial(p)),
+      }
+    : null
+  const casesBundle = cases.length
+    ? { kind: 'cases' as const, status: { syncedDate: today, staleness: 'ok' as const, lastSuccess: null, lastError: null }, items: cases }
+    : null
   const upcomingMeetings = meetings.filter(m => new Date(m.start) >= new Date())
-  if (upcomingMeetings.length) {
-    xml += `<source type="calendar" window="next_30_days" count="${upcomingMeetings.length}">\n`
-    for (const m of upcomingMeetings) {
-      xml += `${escapeXml(m.title)} on ${fmt(m.start)}${m.attendees?.length ? ` (${m.attendees.slice(0, 10).map(escapeXml).join(', ')})` : ''}\n`
-      // Enrich with meeting prep data if available
-      const prep = enrichment?.meetingPreps?.find(p => p.meeting.title === m.title && p.meeting.start === m.start)
-      if (prep) {
-        if (prep.attendeeContext.length) {
-          xml += `  <attendee_context>\n`
-          for (const ac of prep.attendeeContext) {
-            xml += `    ${escapeXml(ac.name)}: last interaction ${escapeXml(ac.lastInteraction ?? 'unknown')}, frequency: ${escapeXml(ac.emailFrequency ?? 'unknown')}\n`
-          }
-          xml += `  </attendee_context>\n`
-        }
-        xml += `  <health_signals cases="${escapeXml(prep.healthSignals.cases)}" renewals="${escapeXml(prep.healthSignals.renewals)}" />\n`
-        if (prep.competitiveContext.length) {
-          xml += `  <competitive_context>${prep.competitiveContext.map(escapeXml).join('; ')}</competitive_context>\n`
-        }
-        if (prep.stakeholderCoverage.silent.length) {
-          xml += `  <silent_attendees>${prep.stakeholderCoverage.silent.map(escapeXml).join(', ')}</silent_attendees>\n`
-        }
-        if (prep.stakeholderCoverage.missing.length) {
-          xml += `  <missing_stakeholders>${prep.stakeholderCoverage.missing.map(escapeXml).join(', ')}</missing_stakeholders>\n`
-        }
+  const meetingsBundle = upcomingMeetings.length
+    ? {
+        kind: 'meetings' as const,
+        status: { syncedDate: today, staleness: 'ok' as const, lastSuccess: null, lastError: null },
+        items: upcomingMeetings,
+        preps: new Map((enrichment?.meetingPreps ?? []).map(p => [`${p.meeting.title}|${p.meeting.start}`, p] as const)),
       }
-    }
-    xml += `</source>\n\n`
-  }
-
-  // Emails (enriched with classification when available)
-  if (emails.length) {
-    xml += `<source type="emails" window="last_30_days" count="${emails.length}">\n`
-    for (const e of emails.slice(0, getAutomationConfig().briefEmailsInPrompt)) {
-      const emailKey = `${e.from}|${e.subject}|${e.date}`
-      const intel = enrichment?.emailClassifications?.get(emailKey)
-      const classTag = intel ? ` [${intel.classification}]` : (e.actionRequired ? ' [ACTION REQUIRED]' : '')
-      xml += `[${fmt(e.date)}] ${escapeXml(e.subject)}${e.snippet ? ` — ${escapeXml(e.snippet.slice(0, 500))}` : ''}${classTag}\n`
-      if (intel?.competitive_mentions?.length) {
-        for (const cm of intel.competitive_mentions) {
-          xml += `  ⚠ Competitive: ${escapeXml(cm.competitor)} (${cm.risk_level}) — ${escapeXml(cm.context.slice(0, 120))}\n`
-        }
+    : null
+  const emailsBundle = emails.length
+    ? {
+        kind: 'emails' as const,
+        status: { syncedDate: today, staleness: 'ok' as const, lastSuccess: null, lastError: null },
+        items: emails,
+        classifications: enrichment?.emailClassifications ?? new Map(),
+        silentContacts: enrichment?.silentContacts ?? [],
       }
-      if (intel?.action_items?.length) {
-        for (const ai of intel.action_items) {
-          xml += `  → Action: ${escapeXml(ai.text)}${ai.deadline ? ` (by ${escapeXml(ai.deadline)})` : ''}\n`
-        }
+    : null
+  const docsBundle = docs.length
+    ? {
+        kind: 'docs' as const,
+        status: { syncedDate: today, staleness: 'ok' as const, lastSuccess: null, lastError: null },
+        items: docs,
+        classifications: enrichment?.docClassifications ?? new Map(),
       }
-    }
-    // Silent contacts section
-    if (enrichment?.silentContacts?.length) {
-      xml += `  <silent_contacts>\n`
-      for (const sc of enrichment.silentContacts) {
-        xml += `    ${escapeXml(sc.name ?? sc.email)}: ${sc.daysSilent}d silent (was ${sc.previousFrequency}/mo, now ${sc.currentFrequency}/mo)\n`
-      }
-      xml += `  </silent_contacts>\n`
-    }
-    xml += `</source>\n\n`
-  }
+    : null
+  const pipelineBundle = pipeline.length
+    ? { kind: 'pipeline' as const, status: { syncedDate: today, staleness: 'ok' as const, lastSuccess: null, lastError: null }, items: pipeline }
+    : null
+  const ccspBundle = ccsp.length
+    ? { kind: 'ccsp' as const, status: { syncedDate: today, staleness: 'ok' as const, lastSuccess: null, lastError: null }, items: ccsp }
+    : null
 
-  // Documents (enriched with classification when available)
-  // BKL-AI08: Account Intelligence docs (company brief, industry analysis) in the
-  // "Account Intelligence" subfolder are automatically picked up here by fetchCustomerDocs()
-  // which uses BFS with DRIVE_SUBFOLDER_DEPTH=5. No explicit wiring needed — done by design.
-  if (docs.length) {
-    xml += `<source type="documents" synced="${today}" count="${docs.length}">\n`
-    for (const d of docs) {
-      const cls = enrichment?.docClassifications?.get(d.name)
-      const typeTag = cls && cls.type !== 'OTHER' ? ` [${cls.type}]` : ''
-      const header = `${escapeXml(d.name)}${d.modifiedTime ? ` (${fmt(d.modifiedTime)})` : ''}${typeTag}`
-      xml += d.content ? `${header}\n  Content excerpt: ${escapeXml(d.content.slice(0, 3000))}\n` : `${header}\n`
-      if (cls) {
-        if (cls.action_items.length) {
-          xml += `  <action_items>\n`
-          for (const ai of cls.action_items) {
-            xml += `    ${escapeXml(ai.text)}${ai.owner ? ` (owner: ${escapeXml(ai.owner)})` : ''}${ai.deadline ? ` (by ${escapeXml(ai.deadline)})` : ''}\n`
-          }
-          xml += `  </action_items>\n`
-        }
-        if (cls.decisions.length) {
-          xml += `  <decisions>\n`
-          for (const dec of cls.decisions) {
-            xml += `    ${escapeXml(dec.text)}\n`
-          }
-          xml += `  </decisions>\n`
-        }
-        if (cls.stakeholders_mentioned.length) {
-          xml += `  <stakeholders>\n`
-          for (const sh of cls.stakeholders_mentioned) {
-            xml += `    ${escapeXml(sh.name)}${sh.role ? ` (${escapeXml(sh.role)})` : ''}${sh.sentiment ? ` — ${escapeXml(sh.sentiment)}` : ''}\n`
-          }
-          xml += `  </stakeholders>\n`
-        }
-        if (cls.competitive_mentions.length) {
-          xml += `  <competitive_mentions>\n`
-          for (const cm of cls.competitive_mentions) {
-            xml += `    ${escapeXml(cm.competitor)}: ${escapeXml(cm.context)}\n`
-          }
-          xml += `  </competitive_mentions>\n`
-        }
-        if (cls.strategic_signals?.length &&
-            (cls.type === 'COMPANY_INTELLIGENCE' || cls.type === 'INDUSTRY_ANALYSIS')) {
-          xml += `  <strategic_signals priority="high">\n`
-          for (const ss of cls.strategic_signals) {
-            xml += `    [${ss.signal_type.toUpperCase()}] ${escapeXml(ss.text)}${ss.significance ? ` — significance: ${escapeXml(ss.significance)}` : ''}\n`
-          }
-          xml += `  </strategic_signals>\n`
-        }
-      }
-    }
-    xml += `</source>\n\n`
-  }
-
-  // Pipeline opportunities
-  if (pipeline.length) {
-    xml += `<source type="pipeline"${sourceStatusAttr('sf-pipeline')} synced="${today}" count="${pipeline.length}">\n`
-    for (const opp of pipeline) {
-      xml += `${escapeXml(opp.oppName)} | stage: ${escapeXml(opp.forecastCategory)} | amount: $${opp.acv} | close: ${escapeXml(opp.closeDate)}\n`
-    }
-    xml += `</source>\n\n`
-  }
-
-  // Cloud spend (CCSP)
-  if (ccsp.length) {
-    xml += `<source type="cloud_spend"${sourceStatusAttr('ccsp')} synced="${today}" count="${ccsp.length}">\n`
-    for (const row of ccsp) {
-      xml += `${escapeXml(row.cloudPartner)} | ${escapeXml(row.quarter)} | ACV+: $${row.acvPlus} | close: ${escapeXml(row.closeDate)}\n`
-    }
-    xml += `</source>\n\n`
-  }
-
-  // BKL-AI18c: Emit empty source tags for failed scrapers with no data, so Gemini knows data is missing
-  const failedSourceMap: [ScraperName, string, boolean][] = [
-    ['supportable', 'subscriptions', subscriptions.length > 0],
-    ['rh-cases', 'support_cases', cases.length > 0],
-    ['sf-pipeline', 'pipeline', pipeline.length > 0],
-    ['ccsp', 'cloud_spend', ccsp.length > 0],
+  const bundles: ReadonlyArray<SignalBundle | null> = [
+    subsBundle, casesBundle, meetingsBundle, emailsBundle, docsBundle, pipelineBundle, ccspBundle,
   ]
-  for (const [scraper, sourceType, hasData] of failedSourceMap) {
-    if (!hasData) {
-      const entry = scraperStatus[scraper]
-      if (entry && (entry.lastError || entry.state === 'failed')) {
-        xml += `<source type="${sourceType}" status="scraper_failed" last_success="${escapeXml(entry.lastSuccess ?? 'never')}" count="0" />\n\n`
-      }
-    }
-  }
 
-  // Previous brief for delta detection
-  if (previousBrief) {
-    xml += `<source type="previous_brief" date="${escapeXml(lastBriefDate ?? 'unknown')}">\n${previousBrief}\n</source>\n\n`
-  }
-
-  // Account intelligence (ADR-008 dual-write cache)
-  // Prefer caller-provided intelligence object; fall back to disk read for backward compat.
-  const intelligenceSlug = toSlug(customer.name)
-  let intel: { company?: string; industry?: string; cachedAt?: string } | null = null
-  if (accountIntelligence !== undefined) {
-    intel = accountIntelligence
-  } else {
-    const intelligencePath = `${process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')}/intelligence/${intelligenceSlug}.json`
-    try {
-      if (existsSync(intelligencePath)) {
-        intel = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
-      }
-    } catch { /* intelligence cache missing */ }
-  }
-  if (intel && (intel.company || intel.industry)) {
-    const age = intel.cachedAt ? Date.now() - new Date(intel.cachedAt).getTime() : Infinity
-    if (age >= ACCT_INTEL_TTL_MS) {
-      const ageDays = Math.round(age / MS_PER_DAY)
-      xml += `<source type="account_intelligence" status="stale" cached="${intel.cachedAt}">Account intelligence is stale (${ageDays}d old) — regeneration pending.</source>\n\n`
-      emitAIEvent({ type: 'cache:stale', flow: 'brief', source: 'l4', accountId: intelligenceSlug })
-    } else {
-      xml += `<source type="account_intelligence" status="fresh" cached="${intel.cachedAt}">\n`
-      if (intel.company) xml += `[Company Intelligence]\n${escapeXml(String(intel.company).slice(0, ACCT_INTEL_COMPANY_CAP))}\n`
-      if (intel.industry) xml += `\n[Industry Analysis]\n${escapeXml(String(intel.industry).slice(0, ACCT_INTEL_INDUSTRY_CAP))}\n`
-      xml += `</source>\n\n`
-    }
-  }
-
-  // Product intelligence — per-product SA talking points (Wave 4 Phase 2c)
-  const customerSlug = customer.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-  try {
-    const productConfigs = loadProductConfig()
-    for (const productCfg of productConfigs) {
-      const intel = getCachedCustomerProductIntel(productCfg.slug, customerSlug)
-      if (!intel || intel.relevanceScore === 'NONE') continue
-      xml += `<source type="product_intelligence" product="${escapeXml(productCfg.slug)}" relevance="${escapeXml(intel.relevanceScore)}" generated="${escapeXml(intel.generatedAt)}">\n`
-      xml += `[Priority Action]\n${escapeXml(intel.priorityAction)}\n\n`
-      if (intel.roadmapRelevance.length) {
-        xml += `[Roadmap Talking Points]\n`
-        for (const r of intel.roadmapRelevance) {
-          xml += `- ${escapeXml(r.feature)}: ${escapeXml(r.talkingPoint)}\n`
-        }
-        xml += '\n'
-      }
-      if (intel.expansionOpportunities.length) {
-        xml += `[Expansion Opportunities]\n`
-        for (const e of intel.expansionOpportunities) {
-          xml += `- ${escapeXml(e.gap)} → ${escapeXml(e.product)}: ${escapeXml(e.rationale)}\n`
-        }
-        xml += '\n'
-      }
-      if (intel.caseAlignment.length) {
-        xml += `[Case Alignment]\n`
-        for (const ca of intel.caseAlignment) {
-          xml += `- Case ${escapeXml(ca.caseNumber)}: ${escapeXml(ca.roadmapFix)} (${escapeXml(ca.timeline)})\n`
-        }
-        xml += '\n'
-      }
-      if (intel.competitiveAngle) {
-        xml += `[Competitive Angle]\n${escapeXml(intel.competitiveAngle)}\n\n`
-      }
-      xml += `</source>\n\n`
-    }
-  } catch { /* product intel cache missing or config unreadable */ }
-
+  let xml = renderCustomerHeader(customer, lastInteraction, lastBriefDate, ctx)
+  if (subsBundle)     xml += subscriptionsSource.render(subsBundle, ctx) + '\n\n'
+  if (casesBundle)    xml += casesSource.render(casesBundle, ctx) + '\n\n'
+  if (meetingsBundle) xml += meetingsSource.render(meetingsBundle, ctx) + '\n\n'
+  if (emailsBundle)   xml += emailsSource.render(emailsBundle, ctx) + '\n\n'
+  if (docsBundle)     xml += docsSource.render(docsBundle, ctx) + '\n\n'
+  if (pipelineBundle) xml += pipelineSource.render(pipelineBundle, ctx) + '\n\n'
+  if (ccspBundle)     xml += ccspSource.render(ccspBundle, ctx) + '\n\n'
+  xml += renderFailedSources(bundles, scraperStatus, ctx)
+  if (previousBrief) xml += renderPreviousBrief(previousBrief, lastBriefDate, ctx)
+  xml += renderAccountIntelligence(customer, accountIntelligence, ctx)
+  xml += renderProductIntelligence(customer, ctx)
   return xml
 }
+
 
 // ── Structured LLM call with responseSchema (R17) ───────────────────────────
 

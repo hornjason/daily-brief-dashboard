@@ -1037,6 +1037,10 @@ export function CustomerDetailPage() {
   )
   const stakeholderContacts = stakeholderApi.data?.contacts ?? []
 
+  // BKL-HERO-18: L4 gating — matches App.tsx:222-223 pattern
+  const nodeRoleApi = useApi<{ isL3Only: boolean }>('/api/node-role')
+  const isL3Only = nodeRoleApi.data?.isL3Only ?? true
+
   // Header stat data: CCSP + Pipeline (BKL-G05)
   const [headerCcsp, setHeaderCcsp] = useState<{ totalAcv: number; byQuarter: { quarter: string; acv: number }[] } | null>(null)
   const [headerPipeline, setHeaderPipeline] = useState<{ totalAcv: number; opps: { acv: number }[] } | null>(null)
@@ -1204,12 +1208,14 @@ export function CustomerDetailPage() {
             {/* Stat badges */}
             {(sectionLoading || sse.meta !== null) && (
               <>
-                <StatBadge
-                  icon={<AlertCircle className={`w-3.5 h-3.5 ${sse.cases.some((c) => c.severity === '1') ? 'text-critical' : sse.cases.length > 0 ? 'text-warning' : 'text-success'}`} />}
-                  value={sse.cases.length}
-                  label="Cases"
-                  loading={sectionLoading}
-                />
+                {isL3Only ? null : (
+                  <StatBadge
+                    icon={<AlertCircle className={`w-3.5 h-3.5 ${sse.cases.some((c) => c.severity === '1') ? 'text-critical' : sse.cases.length > 0 ? 'text-warning' : 'text-success'}`} />}
+                    value={sse.cases.length}
+                    label="Cases"
+                    loading={sectionLoading}
+                  />
+                )}
                 <StatBadge
                   icon={<Package className="w-3.5 h-3.5 text-text-secondary" />}
                   value={accountInfo?.productCount ?? 0}
@@ -1222,34 +1228,38 @@ export function CustomerDetailPage() {
                   label="Licenses"
                   loading={!accountInfo}
                 />
-                {/* BKL-G05: Cloud$ stat badge with sparkline */}
-                <StatBadge
-                  icon={
-                    <div className="flex items-center gap-1">
-                      <Cloud className="w-3.5 h-3.5 text-text-secondary" />
-                      {headerCcsp?.byQuarter && headerCcsp.byQuarter.length >= 2 && (
-                        <InlineSparkline values={headerCcsp.byQuarter.map(q => q.acv)} />
-                      )}
-                    </div>
-                  }
-                  value={headerCcsp ? fmtCurrency(headerCcsp.totalAcv) : '$0'}
-                  label="Cloud$"
-                  loading={!headerCcsp}
-                />
-                {/* BKL-G05: Pipeline ACV stat badge with sparkline */}
-                <StatBadge
-                  icon={
-                    <div className="flex items-center gap-1">
-                      <TrendingUp className="w-3.5 h-3.5 text-text-secondary" />
-                      {headerPipeline?.opps && headerPipeline.opps.length >= 2 && (
-                        <InlineSparkline values={headerPipeline.opps.map(o => o.acv)} />
-                      )}
-                    </div>
-                  }
-                  value={headerPipeline ? fmtCurrency(headerPipeline.totalAcv) : '$0'}
-                  label="Pipeline"
-                  loading={!headerPipeline}
-                />
+                {/* BKL-G05: Cloud$ stat badge with sparkline (BKL-HERO-18: L4-only) */}
+                {isL3Only ? null : (
+                  <StatBadge
+                    icon={
+                      <div className="flex items-center gap-1">
+                        <Cloud className="w-3.5 h-3.5 text-text-secondary" />
+                        {headerCcsp?.byQuarter && headerCcsp.byQuarter.length >= 2 && (
+                          <InlineSparkline values={headerCcsp.byQuarter.map(q => q.acv)} />
+                        )}
+                      </div>
+                    }
+                    value={headerCcsp ? fmtCurrency(headerCcsp.totalAcv) : '$0'}
+                    label="Cloud$"
+                    loading={!headerCcsp}
+                  />
+                )}
+                {/* BKL-G05: Pipeline ACV stat badge with sparkline (BKL-HERO-18: L4-only) */}
+                {isL3Only ? null : (
+                  <StatBadge
+                    icon={
+                      <div className="flex items-center gap-1">
+                        <TrendingUp className="w-3.5 h-3.5 text-text-secondary" />
+                        {headerPipeline?.opps && headerPipeline.opps.length >= 2 && (
+                          <InlineSparkline values={headerPipeline.opps.map(o => o.acv)} />
+                        )}
+                      </div>
+                    }
+                    value={headerPipeline ? fmtCurrency(headerPipeline.totalAcv) : '$0'}
+                    label="Pipeline"
+                    loading={!headerPipeline}
+                  />
+                )}
               </>
             )}
 
@@ -1338,8 +1348,9 @@ export function CustomerDetailPage() {
             customerName={customerName}
             customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
           />
-          <CloudSpendCard customerName={customerName} />
-          <PipelineCard customerName={customerName} />
+          {/* BKL-HERO-18: L4-only sections */}
+          {!isL3Only && <CloudSpendCard customerName={customerName} />}
+          {!isL3Only && <PipelineCard customerName={customerName} />}
           <ActivityTimeline
             meetings={sse.meetings}
             emails={sse.emails}
@@ -1355,7 +1366,8 @@ export function CustomerDetailPage() {
           {/* Order: Intelligence Brief → Cases → Products → Customer Engagement → Key Contacts → Drive */}
           <AccountPlanPanel customerName={customerName} />
           <AccountIntelligencePanel customerName={customerName} />
-          <CasesSection cases={sse.cases} loading={sectionLoading} />
+          {/* BKL-HERO-18: L4-only — Cases section absent on L3 hero install */}
+          {!isL3Only && <CasesSection cases={sse.cases} loading={sectionLoading} />}
           <SubscriptionsSection products={accountInfo?.products ?? []} loading={accountInfo === null} ccspCustomer={accountInfo?.ccspCustomer ?? false} />
           {stakeholderContacts.length > 0 && (
             <div className="bg-surface border border-border rounded-xl p-5">
