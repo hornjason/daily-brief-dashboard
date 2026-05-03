@@ -2630,6 +2630,8 @@ export default function SetupPage() {
   const [dataSourcesConnected, setDataSourcesConnected] = useState<number | null>(null)
   const [sfSyncing, setSfSyncing] = useState(false)
   const [sfSyncSuccess, setSfSyncSuccess] = useState<string | null>(null)
+  const [sfSyncError, setSfSyncError] = useState<string | null>(null)
+  const sfSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
   // BKL-HERO-01 Phase 1 — Step 0 region access state.
   // `enabledRegionsState`: undefined = still loading OR not yet saved (first boot).
@@ -2798,6 +2800,7 @@ export default function SetupPage() {
   const handleSfSync = async () => {
     setSfSyncing(true)
     setSfSyncSuccess(null)
+    setSfSyncError(null)
     try {
       const r = await fetch('/api/scrape/sf-bookings-sync', {
         method: 'POST',
@@ -2808,11 +2811,19 @@ export default function SetupPage() {
         const d = await r.json().catch(() => ({})) as { customersMatched?: number; customersTotal?: number }
         const recordCount = d.customersMatched ?? d.customersTotal ?? 0
         setSfSyncSuccess(`✓ Sync complete — ${recordCount} rows`)
-        setTimeout(() => setSfSyncSuccess(null), 8_000)
+        if (sfSyncTimerRef.current) clearTimeout(sfSyncTimerRef.current)
+        sfSyncTimerRef.current = setTimeout(() => setSfSyncSuccess(null), 8_000)
+      } else {
+        const err = await r.json().catch(() => ({})) as { error?: string }
+        setSfSyncError(err.error ?? `Sync failed (${r.status})`)
       }
-    } catch { /* network error — silently ignore for load-only fallback */ }
+    } catch { setSfSyncError('Sync failed — network error') }
     finally { setSfSyncing(false) }
   }
+
+  useEffect(() => {
+    return () => { if (sfSyncTimerRef.current) clearTimeout(sfSyncTimerRef.current) }
+  }, [])
 
   const doReset = async (full: boolean) => {
     setResetting(true)
@@ -2987,6 +2998,9 @@ export default function SetupPage() {
                 </button>
                 {sfSyncSuccess && (
                   <span data-testid="sf-sync-success" className="text-xs text-green-400">{sfSyncSuccess}</span>
+                )}
+                {sfSyncError && (
+                  <span data-testid="sf-sync-error" role="alert" className="text-xs text-red-400">{sfSyncError}</span>
                 )}
               </div>
             </div>

@@ -1,9 +1,10 @@
 /**
- * SF Pipeline Sync Now — success banner regression tests (BKL-TEST-SF-SYNC-BANNER-01).
+ * SF Pipeline Sync Now — regression tests (BKL-TEST-SF-SYNC-BANNER-01, BKL-TEST-SF-SYNC-ERROR-01).
  *
  * The "Sync Now" button on /dashboard/setup (Step 3 — Connections) POSTs to
  * /api/scrape/sf-bookings-sync. On success, a green banner with the matched
- * row count appears and auto-clears after 8 seconds.
+ * row count appears and auto-clears after 8 seconds. On failure, a red error
+ * banner appears and stays until the next click (res.ok gate — BKL-TEST-07 standard).
  *
  * Routes are mocked via page.route() — no real server mutations.
  * Tagged @destructive so the `test` Playwright project routes to 7776.
@@ -116,5 +117,34 @@ test.describe('SF Pipeline Sync Now — success banner (BKL-TEST-SF-SYNC-BANNER-
 
     // Banner must disappear within 10s (8s timer + 2s buffer)
     await expect(banner).toHaveCount(0, { timeout: 10_000 })
+  })
+})
+
+test.describe('SF Pipeline Sync Now — error state (BKL-TEST-SF-SYNC-ERROR-01) @destructive', () => {
+  test('REG-SF-SYNC-03: 500 from /api/scrape/sf-bookings-sync surfaces error near Sync Now button', async ({ page }) => {
+    await mockSetupGets(page)
+    await page.route('**/api/scrape/sf-bookings-sync', r => {
+      if (r.request().method() === 'POST') {
+        return r.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'SF bookings sync failed' }),
+        })
+      }
+      return r.fallback()
+    })
+
+    await page.goto(SETUP_URL, { waitUntil: 'domcontentloaded' })
+
+    const step3 = page.locator('button, [role="button"]').filter({ hasText: /Step 3.*Connections|Connections/ }).first()
+    if (await step3.isVisible()) await step3.click()
+
+    const syncBtn = page.getByTestId('sf-sync-btn')
+    await expect(syncBtn).toBeVisible({ timeout: 10_000 })
+    await syncBtn.click()
+
+    const err = page.getByTestId('sf-sync-error')
+    await expect(err).toBeVisible({ timeout: 5_000 })
+    await expect(err).toContainText(/SF bookings sync failed|Sync failed/i)
   })
 })

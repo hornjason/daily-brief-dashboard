@@ -6968,7 +6968,7 @@ Files: dashboard/src/components/SubscriptionsSection.tsx:80
 Description: `p.quantity.toLocaleString()` crashed when seed customers have `quantity: undefined` in subscription data. Fix: `(p.quantity ?? 0).toLocaleString()`. One-line fix. Quinn re-audit confirmed page renders cleanly. Commit 93ca1e0.
 
 ### BKL-TEST-SF-SYNC-BANNER-01 | SF Sync Now success banner not testable on seed container (no SF creds)
-Status: ✅ DONE 2026-05-03 — added SF Sync Now button + success banner (sfSyncSuccess state, data-testid="sf-sync-success", auto-clear 8s) to SetupPage.tsx Step 3 Connections section. REG-SF-SYNC-01 + REG-SF-SYNC-02 in test/ui/sf-sync.spec.ts. REG-WIZ-SF-SYNC-01 source-pattern test now passes. Quinn+Rook pending gates.
+Status: ✅ DONE 2026-05-03 — added SF Sync Now button + success banner (sfSyncSuccess state, data-testid="sf-sync-success", auto-clear 8s) + error state (sfSyncError, data-testid="sf-sync-error") to SetupPage.tsx Step 3 Connections section. REG-SF-SYNC-01 + REG-SF-SYNC-02 + REG-SF-SYNC-03 in test/ui/sf-sync.spec.ts. Quinn PASS, Rook PASS.
 Priority: P2
 Size: S
 Source: Quinn audit 2026-04-25 (Phase 1 gate)
@@ -6977,8 +6977,17 @@ Files: test/regression.spec.ts or new test/wizard-sf-sync.spec.ts
 Description: The SF Pipeline "Sync Now" success banner (data-testid="sf-sync-success") cannot be exercised on the test container because the button is disabled without SF credentials. REG-WIZ-SF-SYNC-01 cannot exercise the success path. Fix: write a Playwright test that mocks POST /api/scrape/salesforce to return {ok:true,rowCount:47}, asserts data-testid="sf-sync-success" appears with "✓ Sync complete — 47 rows", and disappears within 8s.
 Can we test: YES — via page.route() mock for the SF scrape endpoint.
 
+### BKL-TEST-SF-SYNC-ERROR-01 | SF Sync Now button silently swallows !r.ok response (res.ok gate violation)
+Status: ✅ DONE 2026-05-03 — added sfSyncError state + `else { setSfSyncError(...) }` branch + `catch { setSfSyncError('Sync failed — network error') }` + data-testid="sf-sync-error" span to SetupPage.tsx. REG-SF-SYNC-03 added to test/ui/sf-sync.spec.ts. All 3 sf-sync tests pass.
+Priority: P2
+Size: XS
+Source: Rook scan 2026-05-03 (Low severity — MANDATORY res.ok gate standard BKL-TEST-07)
+Files: dashboard/src/pages/SetupPage.tsx, test/ui/sf-sync.spec.ts
+Description: handleSfSync had no `else` branch for !r.ok — violates BKL-TEST-07 res.ok gate standard.
+Can we test: YES — REG-SF-SYNC-03 mocks 500 response and asserts error banner visible.
+
 ### BKL-TEST-SF-SYNC-TIMER-01 | SetupPage handleSfSync: setTimeout fires on unmounted component
-Status: 🔵 OPEN
+Status: ✅ DONE 2026-05-03 — sfSyncTimerRef useRef + clearTimeout before reassignment + useEffect cleanup on unmount. Quinn confirmed zero setState-after-unmount warnings in console.
 Priority: P3
 Size: XS
 Source: Rook scan during BKL-TEST-SF-SYNC-BANNER-01 2026-05-03
