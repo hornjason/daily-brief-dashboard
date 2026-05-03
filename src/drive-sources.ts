@@ -278,7 +278,7 @@ export function createDriveSourcesRouter(): Hono {
   // POST /api/sheets/bootstrap-preview — Preview accounts discovered from AE folders or explicit URL.
   // Discovery order: (1) pipeline file by name, (2) explicit fileId, (3) territory spreadsheet tabs.
   router.post('/api/sheets/bootstrap-preview', async (c) => {
-    const body = await c.req.json<{ fileId?: string }>().catch(() => ({}))
+    const body = await c.req.json<{ fileId?: string }>().catch(() => ({} as { fileId?: string }))
     const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
 
     if (!parentIds.length && !body.fileId) {
@@ -302,7 +302,7 @@ export function createDriveSourcesRouter(): Hono {
 
   // POST /api/sheets/bootstrap — Import discovered accounts into customers.json.
   router.post('/api/sheets/bootstrap', async (c) => {
-    const body = await c.req.json<{ fileId?: string }>().catch(() => ({}))
+    const body = await c.req.json<{ fileId?: string }>().catch(() => ({} as { fileId?: string }))
     const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
 
     if (!parentIds.length && !body.fileId) {

@@ -338,7 +338,7 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
 
   // POST /api/settings/refresh — update refresh intervals
   router.post('/api/settings/refresh', async (c) => {
-    const body = await c.req.json<Record<string, unknown>>().catch(() => ({}))
+    const body = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
     const ALLOWED_KEYS: ReadonlySet<string> = new Set(Object.keys(DEFAULT_REFRESH_INTERVALS))
     const filtered: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(body)) {
@@ -405,7 +405,7 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
   router.get('/api/settings/weather', (c) => c.json(getWeatherSettings()))
 
   router.post('/api/settings/weather', async (c) => {
-    const body = await c.req.json<Partial<WeatherSettings>>().catch(() => ({}))
+    const body = await c.req.json<Partial<WeatherSettings>>().catch(() => ({} as Partial<WeatherSettings>))
     const current = getWeatherSettings()
     const rawZip = typeof body.zipCode === 'string' ? body.zipCode.trim() : current.zipCode
     if (rawZip && !/^[A-Za-z0-9\s\-]{2,10}$/.test(rawZip)) {
@@ -431,7 +431,7 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
   router.get('/api/settings/ai', (c) => c.json({ config: getAiConfig(), defaults: DEFAULT_AI_CONFIG }))
 
   router.post('/api/settings/ai', async (c) => {
-    const body = await c.req.json<Partial<AiConfig>>().catch(() => ({}))
+    const body = await c.req.json<Partial<AiConfig>>().catch(() => ({} as Partial<AiConfig>))
     const current = getAiConfig()
     const ALLOWED_MODELS = new Set(['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'])
     const updated: AiConfig = { ...current }
@@ -508,7 +508,7 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
   router.get('/api/settings/automation', (c) => c.json({ config: getAutomationConfig(), defaults: DEFAULT_AUTOMATION_CONFIG }))
 
   router.post('/api/settings/automation', async (c) => {
-    const body = await c.req.json<Partial<AutomationConfig>>().catch(() => ({}))
+    const body = await c.req.json<Partial<AutomationConfig>>().catch(() => ({} as Partial<AutomationConfig>))
     const current = getAutomationConfig()
     const updated: AutomationConfig = { ...current }
 

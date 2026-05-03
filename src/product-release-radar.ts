@@ -47,6 +47,7 @@ export interface ProductConfig {
     releaseNotesUrl: string
     contentHubUrl: string | null
     atomFeedUrl: string | null
+    docsBaseUrl?: string | null
   }
 }
 

@@ -8546,7 +8546,7 @@ Description: 5 async hand-rolled tmp+rename sites remain in scraper-manager.ts a
 Solution: Add writeJsonAtomicAsync() to src/lib/atomic-write.ts. Then migrate 5 async scraper sites in a separate session with explicit scraper-touch permission.
 
 ### BKL-TS-CLEAN | 41 pre-existing tsc errors in non-migration files
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-03 (28 non-scraper errors fixed; 13 scraper errors remain — need Jason sign-off)
 Priority: P3
 Size: M
 Source: Marcus BKL-ARCH-06 typecheck run 2026-05-03

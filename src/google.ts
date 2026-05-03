@@ -1,4 +1,5 @@
 import { google } from 'googleapis'
+import type { calendar_v3 } from 'googleapis'
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import type { EmailHighlight, DriveFile, CalendarEvent, Customer } from './types.ts'
@@ -171,7 +172,7 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
   // Keep 'needsAction' (default for most meetings) and 'tentative' — these are real calendar entries.
   const items = (res.data.items ?? []).filter(ev => {
     if (/^\[proposed time\]/i.test(ev.summary ?? '')) return false
-    const selfAttendee = (ev.attendees ?? []).find(a => a.self)
+    const selfAttendee = (ev.attendees ?? []).find((a: calendar_v3.Schema$EventAttendee) => a.self)
     if (selfAttendee && selfAttendee.responseStatus === 'declined') return false
     return true
   })
@@ -182,14 +183,14 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
 
   return items
     .map((ev) => {
-      const rawAttendees = ev.attendees ?? []
-      const solo = rawAttendees.length === 0 || rawAttendees.every((a) => a.self)
+      const rawAttendees: calendar_v3.Schema$EventAttendee[] = ev.attendees ?? []
+      const solo = rawAttendees.length === 0 || rawAttendees.every((a: calendar_v3.Schema$EventAttendee) => a.self)
       const attendees = rawAttendees
-        .filter((a) => !a.self)
-        .map((a) => a.email ?? '')
+        .filter((a: calendar_v3.Schema$EventAttendee) => !a.self)
+        .map((a: calendar_v3.Schema$EventAttendee) => a.email ?? '')
         .filter(Boolean)
 
-      const externalAttendees = attendees.filter((email) => !email.endsWith('@redhat.com'))
+      const externalAttendees = attendees.filter((email: string) => !email.endsWith('@redhat.com'))
 
       // Customers present: match attendee domain or event title
       const title = ev.summary ?? ''
@@ -339,7 +340,7 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
         solo: solo && matchedCustomers.length === 0,
       } satisfies CalendarEvent
     })
-    .filter((ev): ev is CalendarEvent => ev !== null)
+    .filter((ev) => ev !== null) as CalendarEvent[]
 }
 
 export async function fetchDrive(customers: Customer[]): Promise<DriveFile[]> {

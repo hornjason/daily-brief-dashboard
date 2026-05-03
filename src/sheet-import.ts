@@ -42,7 +42,7 @@ async function importSheetRows(
   writeJsonAtomic(CUSTOMERS_PATH, { customers })
   const syncedAt = new Date().toISOString()
   writeFileSyncRaw(SHEETS_SYNC_PATH, JSON.stringify({ fileId, fileName, columnMap, syncedAt }, null, 2), { mode: 0o600 })
-  return { customers, syncedAt }
+  return { customers: customers as unknown as ReturnType<typeof buildCustomer>[], syncedAt }
 }
 
 function buildCustomer(row: string[], columnMap: Record<string, number | string | null>) {
