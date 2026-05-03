@@ -26,7 +26,7 @@ import { getTelemetrySummary, getTelemetryLog } from './scraper-manager.ts'
 import { getGeminiUsageSummary } from './gemini-cost-tracker.ts'
 import { getWatcherState, rebuildFolderMap } from './drive-watcher.ts'
 import { customers } from './server-state.ts'
-import { sanitizeErr } from './utils.ts'
+import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -89,6 +89,8 @@ export function createAdminRouter(): Hono {
   // GET /api/drive/ls/:folderId — diagnostic: list contents of a Drive folder by ID
   r.get('/api/drive/ls/:folderId', async (c) => {
     const folderId = c.req.param('folderId')
+    // BKL-SEC-20: validate before interpolating into Drive query string
+    if (!isValidDriveFolderId(folderId)) return c.json({ error: 'Invalid folder ID' }, 400)
     try {
       const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
       const drive = google.drive({ version: 'v3', auth })

@@ -702,6 +702,10 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
         if (typeof body.recipientEmail !== 'string' || (body.recipientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.recipientEmail))) {
           return c.json({ error: 'Invalid email address format' }, 400)
         }
+        // BKL-SEC-22: RFC 5321 §4.5.3.1.3 caps addresses at 254 chars
+        if (body.recipientEmail.length > 254) {
+          return c.json({ error: 'Email exceeds RFC 5321 maximum (254 chars)' }, 400)
+        }
       }
 
       const updated: EmailSettings = {

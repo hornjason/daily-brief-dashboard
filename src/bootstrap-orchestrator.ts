@@ -129,6 +129,10 @@ export function readScaffoldCache(): Record<string, ScaffoldEntry> {
 }
 
 export function writeScaffoldCache(parentFolderId: string, entry: ScaffoldEntry): void {
+  // BKL-SEC-19: validate IDs before using them as JSON keys or persisting to disk
+  if (!isValidDriveFolderId(parentFolderId)) return
+  if (entry.configFolderId && !isValidDriveFolderId(entry.configFolderId)) return
+  if (entry.productsFolderId && !isValidDriveFolderId(entry.productsFolderId)) return
   try {
     let ds: Record<string, unknown> = {}
     try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch { /* fresh */ }
