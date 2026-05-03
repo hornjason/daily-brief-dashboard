@@ -8373,13 +8373,14 @@ Solution: Replace customer.name/ae in throw messages with generic text, or add J
 ---
 
 ### BKL-SEC-13 | account-intelligence.ts intelligence cache slug uses strip-only pattern — missing throw guard
-Status: ✅ DONE 2026-05-02
+Status: ✅ DONE 2026-05-03 (re-fixed after regression)
 Priority: P3
 Size: S
 Source: Rook scan 2026-05-01 (BKL-ARCH-01 session)
 Files: src/account-intelligence.ts
 Description: Intelligence cache path construction uses inline strip regex (not throw guard). Path traversal is blocked by the strip. But the pattern deviates from the Security Baseline (BKL-SEC-02 established that cache path functions must use resolve() + throw guard). An empty customerName would produce an empty slug and a malformed path like /cache/intelligence/.json — caught at FS layer but not explicitly.
-Solution: Extract intelligenceCachePath(slug) function following the same guard pattern as briefCachePath in cache-layer.ts. Throw on empty or unsafe slug before constructing the path. Closes BKL-SEC-02 for this module.
+Regression: intelligenceCachePath() guard was removed during BKL-INTEL-DRIVE-FOLDER fix (commit 3c61b6340) — Marcus inlined the slug pattern in three call sites without preserving the throw guard. Re-fixed in same session as BKL-SEC-CACHE-HIER-LOG-01.
+Solution: Restored intelligenceCachePath(slug) function. All three call sites rewired. Closes BKL-SEC-02 for this module.
 
 ---
 
@@ -8564,14 +8565,14 @@ Description: One file holds: bootstrap state machine, step-by-step orchestration
 Solution: Split into bootstrap-state.ts (state machine + shared types) and cache-hierarchy.ts (L1/L2/L3 freshness). Option B (container-object mutation) resolved TypeScript export let reassignment constraint. 13 unit tests, Playwright API 25/0 on 7776.
 
 ### BKL-SEC-CACHE-HIER-LOG-01 | cache-hierarchy.ts logs raw Sheet ID in catch block
-Status: 🔵 OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: S
 Source: Rook scan 2026-05-01 (BKL-ARCH-08 review)
 Issue: hornjason/asaCommandCenter#44
 Files: src/lib/cache-hierarchy.ts:229
 Description: catch block logs raw `supportableSheetId` (a Drive capability token). Low severity — localhost-only app, no external log sink. But deviates from project log hygiene pattern.
-Solution: Truncate to last 6 chars: `...${supportableSheetId.slice(-6)}` for consistency with sanitizeErr usage pattern.
+Solution: Truncated to last 6 chars: `...${supportableSheetId.slice(-6)}` — 1-line change.
 
 ---
 

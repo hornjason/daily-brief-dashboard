@@ -32,6 +32,14 @@ const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '
 // ── BKL-AI-03 / BKL-TOKEN-02: Intelligence cache TTL (tiered) ───────────────
 // Company intelligence changes more often (leadership, earnings, M&A) — 14d default.
 // Industry analysis is macro-level and stable — 30d default. Both env-configurable.
+/** BKL-SEC-13: Throws if the slug would be empty after stripping non-slug chars. */
+function intelligenceCachePath(customerName: string): string {
+  if (!JOB_CACHE_PATH) throw new Error('JOB_CACHE_PATH not set')
+  const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+  if (!slug) throw new Error('intelligence cache slug is empty — customer name contains no slug-safe characters')
+  return JOB_CACHE_PATH.replace('/intelligence-jobs.json', `/intelligence/${slug}.json`)
+}
+
 const INTELLIGENCE_COMPANY_TTL_DAYS  = Number(process.env.INTELLIGENCE_COMPANY_TTL_DAYS)  || 14
 const INTELLIGENCE_INDUSTRY_TTL_DAYS = Number(process.env.INTELLIGENCE_INDUSTRY_TTL_DAYS) || 30
 const INTELLIGENCE_COMPANY_TTL_MS    = INTELLIGENCE_COMPANY_TTL_DAYS  * 24 * 60 * 60 * 1000
@@ -70,8 +78,7 @@ export function getIntelligenceCacheEntry(customerName: string): IntelligenceCac
 function readIntelligenceCache(customerName: string): IntelligenceCacheEntry | null {
   if (!JOB_CACHE_PATH) return null
   try {
-    const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-    const p = JOB_CACHE_PATH.replace('/intelligence-jobs.json', `/intelligence/${slug}.json`)
+    const p = intelligenceCachePath(customerName)
     if (!existsSync(p)) return null
     return JSON.parse(readFileSync(p, 'utf-8'))
   } catch { return null }
@@ -94,7 +101,7 @@ export function writeIntelligenceDiscoveryCache(
 ): void {
   if (!JOB_CACHE_PATH) return
   try {
-    const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    const p = intelligenceCachePath(customerName)
     const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
     mkdirSync(intelligenceDir, { recursive: true })
     const existing = readIntelligenceCache(customerName)
@@ -119,7 +126,7 @@ export function writeIntelligenceDiscoveryCache(
       ...(industryUrl ? { industryDocUrl: industryUrl } : {}),
       ...(isNoDataStub ? { noData: true } : (existing?.noData ? { noData: existing.noData } : {})),
     } as IntelligenceCacheEntry
-    writeFileSync(`${intelligenceDir}/${slug}.json`, JSON.stringify(entry), { mode: 0o600 })
+    writeFileSync(p, JSON.stringify(entry), { mode: 0o600 })
   } catch { /* non-fatal */ }
 }
 
@@ -1427,11 +1434,11 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
       // Dual-write local intelligence cache (ADR-008) — brief pipeline reads this
       if (JOB_CACHE_PATH) {
         try {
+          const p = intelligenceCachePath(customerName)
           const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
           mkdirSync(intelligenceDir, { recursive: true })
-          const slug = customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
           writeFileSync(
-            `${intelligenceDir}/${slug}.json`,
+            p,
             JSON.stringify({
               customerName,
               company: companyBrief ?? '',

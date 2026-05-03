@@ -226,7 +226,7 @@ export async function readSfBookingsFromAeSheet(supportableSheetId: string): Pro
     }
     return results.length > 0 ? results : null
   } catch (e: any) {
-    console.warn(`[bootstrap] L2 SF bookings read failed for sheet ${supportableSheetId}: ${sanitizeErr(e)}`)
+    console.warn(`[bootstrap] L2 SF bookings read failed for sheet ...${supportableSheetId.slice(-6)}: ${sanitizeErr(e)}`)
     return null
   }
 }
