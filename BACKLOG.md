@@ -8555,22 +8555,31 @@ Description: tsc --noEmit reports 41 errors pre-existing across multiple files. 
 Solution: Dedicate a type-clean pass. Triage: fix structural errors first, suppress/note any intentional type-widening.
 
 ### BKL-ARCH-06-GAP-01 | scrape-api.ts:764 session/cookies write non-atomic
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
-Source: Marcus BKL-ARCH-06 code review 2026-05-03
-Files: src/scrape-api.ts line 764
-Description: writeFileSync(sessionPath, ..., { mode: 0o600 }) writes session/cookie JSON directly without tmp+rename. A crash mid-write corrupts the session file. Not a tmp+rename pattern so was out of scope for BKL-ARCH-06 migration brief.
-Solution: Replace with writeFileAtomic() from atomic-write.ts.
+Source: Marcus BKL-ARCH-06 code review 2026-05-03; Rook confirmed MEDIUM (auth material)
+Files: src/scrape-api.ts line 765
+Description: writeFileSync(sessionPath, ..., { mode: 0o600 }) writes session/cookie JSON directly without tmp+rename. A crash mid-write corrupts the session file.
+Decision: DONE — replaced with writeFileAtomic(sessionPath, ...). Helper defaults to 0o600 matching original. Commit: inline with GAP-02.
 
 ### BKL-ARCH-06-GAP-02 | ae-routes.ts:178 CUSTOMERS_PATH written non-atomically
+Status: ✅ DONE 2026-05-03
+Priority: P3
+Size: XS
+Source: Marcus BKL-ARCH-06 code review 2026-05-03; Rook confirmed MEDIUM + baseline violation (missing 0o600)
+Files: src/ae-routes.ts line 178
+Description: writeFileSync(CUSTOMERS_PATH, ...) writes customers.json directly without tmp+rename. Missing mode: 0o600 was a baseline violation.
+Decision: DONE — replaced with writeJsonAtomic(CUSTOMERS_PATH, { customers: updated }). Gets atomicity + 0o600 + stale-overwrite guard.
+
+### BKL-ARCH-06-GAP-03 | account-intelligence.ts 3 non-atomic cache writes
 Status: 🔴 OPEN
 Priority: P3
 Size: XS
-Source: Marcus BKL-ARCH-06 code review 2026-05-03
-Files: src/ae-routes.ts line 178
-Description: writeFileSync(CUSTOMERS_PATH, ...) writes customers.json directly without tmp+rename. Same ADR-002 gap pattern as the migrated sites — this one was missed because it doesn't follow the tmp+rename shape.
-Solution: Replace with writeJsonAtomic(CUSTOMERS_PATH, ...) matching the migrated pattern.
+Source: Rook scan 2026-05-03 (BKL-ARCH-06 sibling sweep)
+Files: src/account-intelligence.ts lines 130, 1215, 1439
+Description: 3 JSON cache writes use writeFileSync directly with mode 0o600 but no atomic rename. Mode is correct (no baseline violation) — only atomicity gap. LOW severity.
+Solution: Replace each with writeJsonAtomic(). writeJsonAtomic already imported in this file.
 
 ---
 

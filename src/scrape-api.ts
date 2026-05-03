@@ -3,7 +3,7 @@
 // a unified /api/scrape/* layer. Each endpoint runs the full pipeline:
 // source → Google Sheets → local cache.
 import { writeFileSync, mkdirSync, readFileSync } from 'fs'
-import { writeJsonAtomic } from './lib/atomic-write.ts'
+import { writeJsonAtomic, writeFileAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import type { Hono } from 'hono'
 import {
@@ -762,7 +762,7 @@ export function registerScrapeRoutes(app: Hono): void {
       const profileDir = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
       mkdirSync(profileDir, { recursive: true })
       const sessionPath = resolve(profileDir, 'content-rh-session.json')
-      writeFileSync(sessionPath, JSON.stringify({ cookies: contentRhCookies, savedAt: new Date().toISOString() }), { mode: 0o600 })
+      writeFileAtomic(sessionPath, JSON.stringify({ cookies: contentRhCookies, savedAt: new Date().toISOString() }))
       return c.json({ ok: true, cookieCount: contentRhCookies.length, savedAt: new Date().toISOString() })
     } catch (e: any) {
       return c.json({ ok: false, error: sanitizeErr(e) }, 500)

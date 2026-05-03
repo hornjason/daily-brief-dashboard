@@ -175,7 +175,7 @@ export function createAeRouter(): Hono {
             }
             return null // no data — drop entirely
           }).filter(Boolean)
-          writeFileSync(CUSTOMERS_PATH, JSON.stringify({ customers: updated }, null, 2))
+          writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
           setCustomers(updated)
           const markedInactive = updated.filter((c: Customer) => c.inactive && removedAeNames.includes(c.ae ?? '')).length
           const dropped = (raw.customers ?? []).length - updated.length
