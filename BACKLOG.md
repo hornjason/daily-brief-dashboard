@@ -6489,7 +6489,7 @@ Description: The no-data early-return block at line 1357 gated the full pipeline
 Fix: Removed the entire early-return guard block (lines 1353–1397). All customers now flow into the full pipeline. Added REG-INTEL-NO-ACCT-01 regression test.
 
 ### BKL-INTEL-DRIVE-FOLDER | Intelligence pipeline fails entirely when customer Drive folder not found
-Status: 🔵 OPEN
+Status: ✅ DONE 2026-05-03 — commit 3c61b63: Drive failure is non-fatal; status 'complete_no_drive_folder'
 Priority: P1 | Type: Bug Fix
 Source: Quinn — 2026-04-27 (Musarubra Us / Trellix fail with "No Drive folder found under AE Peter Niklaus")
 Issue: hornjason/asaCommandCenter#38
@@ -6723,6 +6723,19 @@ Size: XS
 Source: Rook finding — worktree review 2026-04-24
 Files: src/domain-waterfall.ts (~line 45)
 Description: Rook finding: src/domain-waterfall.ts line ~45 — tier1 Clearbit domain output passes straight through without applying the tier2 sanitization regex. A malformed Clearbit response could yield an invalid domain. Fix: apply the same domain validation regex used in tier2 to tier1 output before returning.
+
+---
+
+### BKL-TEST-L4-REPOINT | ~63 source-pattern regression specs grep for L4-daemon code now absent from hero image
+Status: 🔵 OPEN
+Priority: P2
+Size: M
+Source: Quinn scan 2026-05-03 (post BKL-ARCH-L4-SPLIT, hero image CI run)
+Issue: (XS — stays in BACKLOG.md, not promoted)
+Files: test/regression.spec.ts (63 source-pattern REG-* tests), test/api/*.spec.ts (39 auth/scraper tests)
+Description: After BKL-ARCH-L4-SPLIT extracted Tableau/CCSP scrapers to a separate L4 daemon container, the hero image stubs scraper entrypoints. ~63 regression tests grep for code patterns now absent from bootstrap-orchestrator.ts (_tableauOpenLoginPage, force && isLivePageBusy(), readCcspFromAeSheet, waterfallInferDomain imports, etc.) — these patterns moved to sync-pod-l3.ts or were replaced by L4 stubs. 39 auth/VNC tests assume scraper endpoints are live in the hero image. Until re-pointed, CI cannot return a clean signal on the hero image.
+Solution: Re-point source-pattern specs to their new locations (daemon scripts). Move scraper endpoint tests to --project=live-scrapers only. Separate from the 54 pre-existing BKL-E2E-01 failures (different root cause).
+Can we test: YES — after fix, `npx playwright test --project=ci` should show <30 failures (only E2E/wizard pre-existing).
 
 ---
 
@@ -7925,7 +7938,7 @@ Files: src/ccsp-scraper.ts, src/sf-scraper.ts, .env, .env.example
 Decision: IS_LEADER=true env var. Guards added at exact L4 entry points: `scrapeOneAe` (line ~525), `scrapePodCcspRaw` (line ~958), `scrapeSfReport` (line ~459), `listSfReports` (line ~961). Default unset = non-leader (fail-closed). Rook verified no coercion risk. L4 tested end-to-end — Carolanne hit live Tableau scrape (7714 rows), Elmer hit L1 cache (310 rows). BKL-SEC-IS-LEADER-CASE-01 logged for case-sensitivity follow-up.
 
 ### BKL-ARCH-HEARTBEAT-01 | Session heartbeat: periodic lightweight navigation to keep sessions alive overnight
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03 — doKeepalive() in sync-l3-daemon.ts; 2h interval; BKL-CCSP-RETRY-02 added login form detection
 Priority: P1
 Size: M
 Source: Session 2026-04-28 (Serena council review)
@@ -8351,7 +8364,8 @@ Source: /improve-codebase-architecture explore run. Serena walked the full src/ 
 
 ---
 
-### BKL-ARCH-01 | Customer-name / folder-matching logic — replicated 5 times\nStatus: 🔵 IN PROGRESS
+### BKL-ARCH-01 | Customer-name / folder-matching logic — replicated 5 times
+Status: ✅ DONE 2026-05-01
 Priority: P1
 Size: L
 Source: Serena architecture audit 2026-05-01
