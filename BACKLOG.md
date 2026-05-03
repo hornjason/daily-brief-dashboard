@@ -9056,3 +9056,19 @@ Files: src/customer/docs-fetcher.ts lines 82, 102, 129, 136
 Description: Lines 82, 102, 129, 136 interpolate Drive-issued folder IDs into q= query strings without escapeQ(). These IDs come from Drive API results (not user input), so exploitation risk is minimal — Drive IDs are opaque alphanumeric. Inconsistent with DriveFolderClient which wraps all IDs with escapeQ(). LOW severity.
 Solution: Replace raw template literal IDs with escapeQ(aeFolderId), escapeQ(sub.id) etc., or migrate these upstream lookups to driveClient helpers.
 Can we test: YES — unit test asserting escapeQ is applied when folder name contains a single-quote character.
+
+### BKL-HERO-L3-EMPTY-SECTIONS | Admin empty section frames in L3 mode (cosmetic)
+Priority: P3 | Size: S | Status: 🔵 OPEN
+Source: Quinn audit 2026-05-03 post BKL-HERO-13 ship
+Files: dashboard/src/pages/AdminPage.tsx
+Description: In L3 mode, "Manual Scrape Triggers" and "Scheduler Config" section header <h2> elements still render even though all child content is hidden behind !isL3Only. Results in two empty section frames that look like a loading failure. The <div> wrappers and h2 headings should also be gated behind !isL3Only.
+Solution: Move the section wrapper divs (including h2 headings) inside the !isL3Only gates, or add a single top-level !isL3Only wrapper around both sections.
+Can we test: YES — add assertions to hero-l3-gating-admin.spec.ts that h2:has-text("Manual Scrape Triggers") and h2:has-text("Scheduler Config") have count 0 on L3.
+
+### BKL-HERO-L4-VERIFY | L4 positive-case audit not yet verified on any local container
+Priority: P2 | Size: S | Status: 🔵 OPEN
+Source: Quinn audit 2026-05-03 (NODE_ROLE unset on all local containers = L3-only)
+Files: test/ui/ (new spec needed), Makefile (may need L4 test target)
+Description: The "L4 surfaces are visible when isL3Only=false" positive case has never been verified on a live container. All local containers (7776, 7777) run with NODE_ROLE unset = L3. The UI tests mock /api/node-role, but no real L4 container confirms the server-side rendering path.
+Solution: Either (a) spin up a third test container on port 7780 with NODE_ROLE=primary, add a make target, and run the hero gating specs against it; or (b) add a FORCE_L4=true env toggle to the test container config.
+Can we test: YES — entire BKL-HERO-05/09/11/12/13 matrix as a positive-case spec.
