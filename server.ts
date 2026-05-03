@@ -15,7 +15,7 @@ import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
 import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning, adoptSupportableContext } from './src/supportable-scraper.ts'
 import type { SupportableCustomer } from './src/supportable-scraper.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
-import { initCacheLayer, createCacheRouter, readSheetCache, readPipelineCache } from './src/cache-layer.ts'
+import { initCacheLayer, createCacheRouter, readPipelineCache } from './src/cache-layer.ts'
 import { initSettingsApi, createSettingsRouter } from './src/settings-api.ts'
 import { createNodeRoleRouter } from './src/node-role-routes.ts'
 import { createRegionAccessRouter } from './src/region-access-routes.ts'
@@ -45,11 +45,10 @@ import { createProductIntelRouter } from './src/product-intel-routes.ts'
 import { initRestoreRoutes, createRestoreRouter } from './src/restore-routes.ts'
 import { createBackupRouter } from './src/backup-routes.ts'
 import { initJobPersistence } from './src/account-intelligence.ts'
-// ── BKL-UX52: Multi-pod support ───────────────────────────────────────────
-import { readPodConfig, getAeNamesForPod } from './src/pod-config.ts'
-import { computeAllAttentionScores } from './src/attention-score.ts'
 // ── BKL-ARCH-14: SSE event routes ─────────────────────────────────────────
 import { createEventsRouter } from './src/events-routes.ts'
+// ── BKL-ARCH-13: Territory / pod / accounts routes ────────────────────────
+import { createTerritoryRouter } from './src/territory-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -442,16 +441,8 @@ app.route('/', createSheetImportRouter())
 // GET /api/config — Dashboard configuration and provider status
 // ── Territory notifications API ───────────────────────────────────────────────
 
-app.get('/api/territory/notifications', async (c) => {
-  const notifPath = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-notifications.json')
-  try {
-    if (!existsSync(notifPath)) return c.json({ updatedAt: null, pending: [] })
-    const data = JSON.parse(readFileSync(notifPath, 'utf-8'))
-    return c.json(data)
-  } catch (e: any) {
-    return c.json({ error: sanitizeErr(e) }, 500)
-  }
-})
+// ── BKL-ARCH-13: Territory / pod / accounts routes ───────────────────────────
+app.route('/', createTerritoryRouter())
 
 // ── Config backup routes (BKL-BACKUP-01) ────────────────────────────────────
 app.route('/', createBackupRouter())
@@ -461,69 +452,6 @@ app.route('/', createBackupRouter())
 // ── AE Config API (extracted to src/ae-routes.ts) ────────────────────────────
 
 // GET /api/settings/from-drive, /api/config, /api/config/test (extracted to src/settings-api.ts — BKL-ARCH-11)
-
-// ── BKL-UX52: Pod configuration endpoint ─────────────────────────────────────
-app.get('/api/pods', (c) => {
-  const pods = readPodConfig(DATA_SOURCES_PATH, aes)
-  return c.json({ pods: pods.map(p => ({ id: p.id, name: p.name, aeNames: p.aeNames })) })
-})
-
-// GET /api/accounts — All customers with cached sheet data merged
-// BKL-UX52: Accepts ?pod=<id> to filter by pod; adds attentionScore + attentionReasons
-app.get('/api/accounts', (c) => {
-  const podId = c.req.query('pod') ?? undefined
-
-  // Determine which AE names to include based on pod filter
-  let aeNamesToInclude: Set<string> | null = null
-  if (podId) {
-    const pods = readPodConfig(DATA_SOURCES_PATH, aes)
-    const names = getAeNamesForPod(pods, podId)
-    aeNamesToInclude = new Set(names)
-  }
-
-  // Filter customers by pod (AE membership)
-  let filteredCustomers = customers.filter(cu => !cu.inactive)
-  if (aeNamesToInclude) {
-    filteredCustomers = filteredCustomers.filter(cu => cu.ae && aeNamesToInclude!.has(cu.ae))
-  }
-
-  // Compute attention scores for filtered customers
-  let allCases: any[] = []
-  try {
-    const raw = JSON.parse(readFileSync(RH_CASES_CACHE_PATH, 'utf-8'))
-    allCases = raw.cases ?? []
-  } catch { /* no cases cache */ }
-
-  const pipelineData = readPipelineCache()
-  const allPipeline = pipelineData?.records ?? []
-
-  const attentionScores = computeAllAttentionScores(filteredCustomers, allCases, allPipeline)
-
-  const result = filteredCustomers.map((customer) => {
-    const cached = readSheetCache(customer.name)
-    const products = cached?.rows ?? []
-    const distinctProducts = new Set(products.map((p) => p.productDescription)).size
-    const totalLicenses = products.reduce((sum, p) => sum + p.quantity, 0)
-    const attention = attentionScores.get(customer.name)
-
-    return {
-      name: customer.name,
-      domain: customer.domain ?? '',
-      accountNumbers: customer.accountNumbers ?? [],
-      ae: customer.ae ?? '',
-      segment: customer.segment ?? '',
-      products,
-      productCount: distinctProducts,
-      totalLicenses,
-      cachedAt: cached?.cachedAt ?? null,
-      ccspCustomer: customer.ccspCustomer ?? false,
-      attentionScore: attention?.attentionScore ?? 0,
-      attentionReasons: attention?.attentionReasons ?? [],
-      needsManualDomain: customer.needsManualDomain ?? false,
-    }
-  })
-  return c.json({ customers: result })
-})
 
 // ── Setup wizard routes (extracted to src/setup-routes.ts) ───────────────────
 

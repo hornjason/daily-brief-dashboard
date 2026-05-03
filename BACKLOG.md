@@ -8481,14 +8481,14 @@ Depends on: BKL-ARCH-03
 ---
 
 ### BKL-ARCH-13 | Extract territory/pods/accounts inline routes → territory-routes.ts
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
 Issue: hornjason/asaCommandCenter#27
-Files: server.ts (3 inline routes), new src/territory-routes.ts
-Description: /api/territory/notifications, /api/pods, /api/accounts remain inline. Territory is already a concept in the domain (PODs, region access, AE config). Depends on BKL-ARCH-03.
-Depends on: BKL-ARCH-03
+Files: src/territory-routes.ts (new), server.ts (import + mount), test/unit/territory-routes.test.ts (new)
+Description: /api/territory/notifications, /api/pods, /api/accounts extracted from server.ts.
+Decision: DONE — createTerritoryRouter() factory created. readPodConfig, getAeNamesForPod, computeAllAttentionScores, readSheetCache imports moved from server.ts to territory-routes.ts. 535 unit tests pass. GitHub issue #27 closed.
 
 ---
 
