@@ -8581,6 +8581,24 @@ Files: src/account-intelligence.ts lines 130, 1215, 1439
 Description: 3 JSON cache writes use writeFileSync directly with mode 0o600 but no atomic rename. Mode is correct (no baseline violation) — only atomicity gap. LOW severity.
 Solution: Replace each with writeJsonAtomic(). writeJsonAtomic already imported in this file.
 
+### BKL-SEC-24 | events-routes.ts SSE error path emits raw err.message to client
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-03 (BKL-ARCH-14 review)
+Files: src/events-routes.ts lines 34-38
+Description: SSE error handler emits `err.message` directly to client via stream.writeSSE. If upstream fetchers (google.ts, redhat.ts) include filesystem paths, tokens, or stack snippets in .message, those reach the browser. Same pattern existed in server.ts — no regression. LOW severity.
+Solution: Wrap with sanitizeErr(err) before emitting. Pattern used elsewhere in customer-routes.ts and setup-routes.ts.
+
+### BKL-SEC-25 | customer-routes.ts /api/cases/all accountFilter lacks shape validation
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-03 (BKL-CASES-MATCH-01 review)
+Files: src/customer-routes.ts line 396
+Description: ?account= query param used in string comparison without format validation. Not exploitable (string compare only, no interpolation), but inconsistent with /api/cases/:caseNumber which validates /^\d{8}$/. LOW severity.
+Solution: Add `if (accountFilter && !/^\d+$/.test(accountFilter)) return c.json({ cases: [], totalCount: 0 }, 200)` before the filter.
+
 ---
 
 ### BKL-ARCH-07 | Drive folder traversal — 5 hand-rolled BFS implementations
