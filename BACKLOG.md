@@ -6148,13 +6148,22 @@ res.ok gate standard: added to CLAUDE.md as a coding rule — all action button 
 Follow-up logged: BKL-TEST-07b — AdminPage doc-classify-age Save button (~line 1196) silent on non-2xx (lower severity, not category-B per original scope)
 
 ### BKL-TEST-07b | AdminPage: doc-classify-age Save button silent on non-2xx
-Status: 🔵 OPEN
+Status: ✅ DONE 2026-05-03 — added docAgeError state, res.ok check, data-testid="doc-age-save-error" DOM alert, data-testid="doc-age-save-btn" on button. REG-ADM-04 test added and passing 4/4. Quinn PASS (prod). Rook PASS.
 Priority: P3
 Size: XS
 Source: Marcus audit during BKL-TEST-07 2026-05-03
 Files: dashboard/src/pages/AdminPage.tsx (~line 1196)
 Description: The "Save" button for document classification max-age limit (`docClassifyMaxAgeDays`) uses `fetch('/api/settings/ai', POST)`. If the endpoint returns non-2xx, the function only logs `console.error` — no DOM error is shown to the user. Lower severity than the two fixed in BKL-TEST-07 (this is a settings form, not a batch trigger), but violates the res.ok gate standard. Fix: add visible error state and res.ok check.
 Can we test: YES — page.route() mock returning 500, assert error text near Save button.
+
+### BKL-TEST-07c | AdminPage: handleValidate doesn't read server error body on !r.ok
+Status: 🔵 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan during BKL-TEST-07b 2026-05-03
+Files: dashboard/src/pages/AdminPage.tsx (~line 561)
+Description: `handleValidate` does `if (!r.ok) throw new Error(\`Server error: \${r.status}\`)` — throws a generic status-code string without reading the JSON error body. The server's `error` field is never surfaced to the user, only the HTTP status code. Pre-existing gap, not a security issue, but violates the BKL-TEST-07 res.ok gate standard (action button should surface server error message). Fix: read `r.json().catch(() => ({}))` and surface `err.error ?? \`Server error: \${r.status}\`` to the error state.
+Can we test: YES — page.route() mock returning 500 with body, assert error includes server message not just status code.
 
 ### BKL-STARTUP-01 | Product summary caches not seeded on startup — empty after every rebuild
 Status: ✅ DONE — 2026-04-10
@@ -6743,6 +6752,7 @@ Files: test/wizard.spec.ts, test/ui/*.spec.ts, test/accessibility.spec.ts, test/
 Description: 54 pre-existing E2E test failures surfaced when the Integration & E2E job became reachable (previously always blocked by unit test failures). Root causes include: (1) UI selector mismatches — wizard, bootstrap-recovery, and dashboard-empty-state tests look for elements that no longer exist at the expected selectors; (2) axe/WCAG violations on /dashboard and /dashboard/setup; (3) xfail tests using test.fail() counted as failures; (4) smoke-prod hitting /customers endpoint on dev server (7778) and getting empty response; (5) React "Something went wrong" crash on nonexistent customer page. CI has continue-on-error while this is addressed. Fix requires: auditing each failing spec against current UI, updating selectors, fixing the axe violations, and ensuring seed data correctly populates /customers on dev server.
 Stopped at: continue-on-error added 2026-04-25; next step is systematic triage of failing specs with Quinn
 Additional stale regressions found 2026-04-29 during release gate work: REG-BOOT-06 asserts rh-cases IS enqueued from bootstrap (intentionally removed in BKL-BOOT-SCRAPE-ORDER-01); REG-079 checks retired Supportable timeout code; setup.spec.ts pod-config non-destructive tests fail due to file-level beforeAll/afterAll snapshot interference on prod. Release gate scoped to test/api/ + test/contracts/ only until these are fixed.
+Progress 2026-05-03: REG-002 fixed (helpers.ts .json().catch(()=>null) guard; api.spec.ts 404 skip for L4-only CCSP endpoint). Quinn verified: regression 271 passed, smoke 7 passed on ci/7777. Remaining failures are in E2E suites (wizard.spec.ts, accessibility.spec.ts, bootstrap-recovery.spec.ts) — require selector audit + axe violation fixes.
 
 ---
 

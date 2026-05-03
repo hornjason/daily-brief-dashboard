@@ -199,4 +199,28 @@ test.describe('AdminPage — silent failure regression (BKL-TEST-07) @destructiv
     await btn.click()
     await expect(err).toHaveCount(0, { timeout: 5_000 })
   })
+
+  test('REG-ADM-04: 500 from POST /api/settings/ai surfaces error near doc-age Save button', async ({ page }) => {
+    await mockAdminGets(page)
+    await page.route('**/api/settings/ai', r => {
+      if (r.request().method() === 'POST') {
+        return r.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Settings save failed' }),
+        })
+      }
+      return r.fallback()
+    })
+
+    await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded' })
+
+    const saveBtn = page.getByTestId('doc-age-save-btn')
+    await expect(saveBtn).toBeVisible({ timeout: 10_000 })
+    await saveBtn.click()
+
+    const err = page.getByTestId('doc-age-save-error')
+    await expect(err).toBeVisible({ timeout: 5_000 })
+    await expect(err).toContainText(/Settings save failed|Save failed/i)
+  })
 })

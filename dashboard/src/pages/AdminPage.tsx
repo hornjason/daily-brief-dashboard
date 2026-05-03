@@ -933,6 +933,7 @@ export function AdminPage() {
   // BKL-AI-COST-04: doc classify age limit
   const [docClassifyMaxAgeDays, setDocClassifyMaxAgeDays] = useState<number | null>(null)
   const [docAgeSaving, setDocAgeSaving] = useState(false)
+  const [docAgeError, setDocAgeError] = useState<string | null>(null)
   // localQueued value: true = queued (no detail), or string = "waiting on <scraper>"
 
   const fetchStatus = useCallback(async () => {
@@ -1232,21 +1233,31 @@ export function AdminPage() {
                   <button
                     onClick={async () => {
                       setDocAgeSaving(true)
+                      setDocAgeError(null)
                       try {
                         const r = await fetch('/api/settings/ai', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ docClassifyMaxAgeDays }),
                         })
-                        if (!r.ok) console.error('Failed to save docClassifyMaxAgeDays')
-                      } catch { /* ignore */ }
+                        if (!r.ok) {
+                          const err = await r.json().catch(() => ({}))
+                          setDocAgeError((err as { error?: string }).error ?? 'Save failed')
+                        }
+                      } catch { setDocAgeError('Save failed') }
                       finally { setDocAgeSaving(false) }
                     }}
                     disabled={docAgeSaving}
+                    data-testid="doc-age-save-btn"
                     className="px-2 py-1 text-xs bg-accent/20 text-accent rounded hover:bg-accent/30 transition-colors disabled:opacity-50"
                   >
                     {docAgeSaving ? 'Saving...' : 'Save'}
                   </button>
+                  {docAgeError && (
+                    <div data-testid="doc-age-save-error" role="alert" className="text-xs text-red-400 mt-1">
+                      {docAgeError}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
