@@ -13,15 +13,18 @@ process.env.CACHE_DIR = _tmpDir
 import { mkdirSync } from 'fs'
 mkdirSync(_tmpDir, { recursive: true })
 
-import { test, expect, describe, beforeEach } from 'bun:test'
+import { test, expect, describe, beforeEach, afterEach } from 'bun:test'
 import {
   recordOutcome,
   markRunning,
   getStatus,
   getScraperStatus,
   initStatusStore,
+  getUnifiedStatus,
+  getAllUnifiedStatus,
   type ScraperName,
 } from './scraper-status-store.ts'
+import { ScraperRegistry, type ScraperDescriptor } from './scraper-registry.ts'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -151,5 +154,151 @@ describe('getStatus — staleness logic', () => {
     const all = getStatus()
     // Just ran — should be fresh (not yet past threshold)
     expect(all['sf-pipeline'].state).toBe('fresh')
+  })
+})
+
+// ── BKL-ARCH-02 Phase 1: getUnifiedStatus ─────────────────────────────────────
+
+describe('getUnifiedStatus — lastSync resolution', () => {
+  let originals: Record<string, ScraperDescriptor | undefined> = {}
+
+  beforeEach(() => {
+    originals = {
+      'rh-cases':    ScraperRegistry.get('rh-cases'),
+      'supportable': ScraperRegistry.get('supportable'),
+    }
+  })
+
+  function restore() {
+    for (const [name, d] of Object.entries(originals)) {
+      if (d) ScraperRegistry.register(d)
+    }
+  }
+
+  test('uses in-memory hint when set (overrides store.lastSuccess)', () => {
+    const inMem = '2026-05-02T10:00:00.000Z'
+    ScraperRegistry.register({
+      name: 'rh-cases',
+      adopt: () => {},
+      getInMemoryLastSync: () => inMem,
+      getInMemoryLastError: () => null,
+      getInMemoryIsRunning: () => false,
+    })
+    recordOutcome('rh-cases', { success: true, recordCount: 1, durationMs: 1 })
+    const u = getUnifiedStatus('rh-cases')
+    expect(u.lastSync).toBe(inMem)
+    restore()
+  })
+
+  test('falls back to store.lastSuccess when in-memory hint is null', () => {
+    ScraperRegistry.register({
+      name: 'rh-cases',
+      adopt: () => {},
+      getInMemoryLastSync: () => null,
+      getInMemoryLastError: () => null,
+      getInMemoryIsRunning: () => false,
+    })
+    recordOutcome('rh-cases', { success: true, recordCount: 1, durationMs: 1 })
+    const u = getUnifiedStatus('rh-cases')
+    expect(u.lastSync).not.toBeNull()
+    expect(u.lastSync).toBe(u.lastSuccess)
+    restore()
+  })
+
+  test('returns null when both hints are null (supportable retired path)', () => {
+    ScraperRegistry.register({
+      name: 'supportable',
+      adopt: () => {},
+      getInMemoryLastSync: () => null,
+      getInMemoryLastError: () => null,
+      getInMemoryIsRunning: () => false,
+      retired: true,
+    })
+    const u = getUnifiedStatus('supportable')
+    expect(u.lastSync).toBeNull()
+    restore()
+  })
+})
+
+describe('getUnifiedStatus — supportable (retired)', () => {
+  let original: ScraperDescriptor | undefined
+
+  beforeEach(() => {
+    original = ScraperRegistry.get('supportable')
+  })
+
+  afterEach(() => {
+    if (original) ScraperRegistry.register(original)
+  })
+
+  test('always reports state=stale, recordCount=null, isStale=true', () => {
+    ScraperRegistry.register({
+      name: 'supportable',
+      adopt: () => {},
+      getInMemoryLastSync: () => null,
+      getInMemoryLastError: () => null,
+      getInMemoryIsRunning: () => false,
+      retired: true,
+    })
+    const u = getUnifiedStatus('supportable')
+    expect(u.state).toBe('stale')
+    expect(u.recordCount).toBeNull()
+    expect(u.isStale).toBe(true)
+  })
+
+  test('still reports stale even when in-memory hint claims recent sync', () => {
+    ScraperRegistry.register({
+      name: 'supportable',
+      adopt: () => {},
+      getInMemoryLastSync: () => new Date().toISOString(),
+      getInMemoryLastError: () => null,
+      getInMemoryIsRunning: () => false,
+      retired: true,
+    })
+    const u = getUnifiedStatus('supportable')
+    expect(u.isStale).toBe(true)
+    expect(u.state).toBe('stale')
+  })
+})
+
+describe('getUnifiedStatus — isStale threshold', () => {
+  test('flips to true when lastSync is older than STALE_THRESHOLDS[name]', () => {
+    const stale = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+    const original = ScraperRegistry.get('ccsp')
+    ScraperRegistry.register({
+      name: 'ccsp',
+      adopt: () => {},
+      getInMemoryLastSync: () => stale,
+      getInMemoryLastError: () => null,
+      getInMemoryIsRunning: () => false,
+    })
+    const u = getUnifiedStatus('ccsp')
+    expect(u.isStale).toBe(true)
+    if (original) ScraperRegistry.register(original)
+  })
+
+  test('reports fresh when lastSync is within threshold', () => {
+    const fresh = new Date(Date.now() - 60 * 1000).toISOString()
+    const original = ScraperRegistry.get('sf-pipeline')
+    ScraperRegistry.register({
+      name: 'sf-pipeline',
+      adopt: () => {},
+      getInMemoryLastSync: () => fresh,
+      getInMemoryLastError: () => null,
+      getInMemoryIsRunning: () => false,
+    })
+    const u = getUnifiedStatus('sf-pipeline')
+    expect(u.isStale).toBe(false)
+    if (original) ScraperRegistry.register(original)
+  })
+})
+
+describe('getAllUnifiedStatus', () => {
+  test('returns entries for all 4 known scraper names', () => {
+    const all = getAllUnifiedStatus()
+    expect(all['rh-cases']).toBeDefined()
+    expect(all['ccsp']).toBeDefined()
+    expect(all['sf-pipeline']).toBeDefined()
+    expect(all['supportable']).toBeDefined()
   })
 })

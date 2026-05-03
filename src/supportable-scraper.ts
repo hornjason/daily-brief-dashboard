@@ -43,6 +43,7 @@ const SUPPORTABLE_DEBUG = process.env.SUPPORTABLE_DEBUG === 'true'
 import { setLivePageBusy } from './rh-scraper.ts'
 import { sanitizeErr, sanitizeCell } from './utils.ts'
 import { markRunning, recordOutcome } from './scraper-status-store.ts'
+import { ScraperRegistry } from './scraper-registry.ts'
 
 // ── Module state ──────────────────────────────────────────────────────────────
 
@@ -1355,3 +1356,16 @@ export async function writeSupportableSheet(
 
   return spreadsheetId
 }
+
+// ── BKL-ARCH-02: register supportable as RETIRED ─────────────────────────────
+// Supportable is permanently disabled per CLAUDE.md. adoptAll() skips it so no
+// shared context ever flows here. Keeping it registered (retired:true) means
+// getUnifiedStatus('supportable') still works for /api/status/scrapes.
+ScraperRegistry.register({
+  name: 'supportable',
+  adopt: (ctx) => { adoptSupportableContext(ctx) },
+  getInMemoryLastSync: () => lastSupportableScrape,
+  getInMemoryLastError: () => lastSupportableError,
+  getInMemoryIsRunning: () => supportableScrapeRunning,
+  retired: true,
+})

@@ -26,6 +26,7 @@ import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { getScrapeContext } from './rh-scraper.ts'
 import { assertPrimary } from './lib/node-role.ts'
+import { ScraperRegistry } from './scraper-registry.ts'
 
 export class SfSessionExpiredError extends Error {
   constructor() {
@@ -1101,3 +1102,12 @@ export async function runSfPodSync(
 
   return data.rows.length
 }
+
+// ── BKL-ARCH-02: register the sf-pipeline descriptor with the registry ────────
+ScraperRegistry.register({
+  name: 'sf-pipeline',
+  adopt: (ctx, profileDir) => { adoptSfContext(ctx, profileDir) },
+  getInMemoryLastSync: () => lastSfSync,
+  getInMemoryLastError: () => sfSyncError,
+  getInMemoryIsRunning: () => false,
+})

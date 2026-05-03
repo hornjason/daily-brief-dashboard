@@ -6,6 +6,7 @@
 import { existsSync, readFileSync, writeFileSync, renameSync } from 'fs'
 import { resolve } from 'node:path'
 import { sanitizeErr } from './utils.ts'
+import { ScraperRegistry } from './scraper-registry.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -201,4 +202,116 @@ export function getStatus(): ScraperStatusMap {
  */
 export function getScraperStatus(name: ScraperName): ScraperStatusEntry {
   return getStatus()[name] ?? defaultEntry()
+}
+
+// ── Unified status (BKL-ARCH-02) ─────────────────────────────────────────────
+//
+// Phase 1 of unified scraper status. Exposes a single struct that resolves the
+// in-memory hint vs. on-disk store ordering once, in one place. Existing
+// getStatus / getScraperStatus / recordOutcome / markRunning are unchanged so
+// the existing unit tests keep passing — callers migrate at their own pace.
+//
+// Resolution order for `lastSync`:
+//   1. In-memory hint via ScraperRegistry.get(name).getInMemoryLastSync()
+//      (process-local timestamp; survives intra-process restart of a scrape)
+//   2. store.lastSuccess (persisted to disk in scraper-status.json)
+//   3. null
+//
+// `isStale` is computed against STALE_THRESHOLDS[name]. Scrapers without an
+// entry (e.g. retired 'supportable') always report isStale: true and
+// state: 'stale' regardless of lastSync — they can never become fresh.
+
+export interface UnifiedScraperStatus {
+  scraper: ScraperName
+  /** Resolved freshness timestamp: inMemoryHint ?? store.lastSuccess ?? null */
+  lastSync: string | null
+  /** Raw store.lastSuccess (independent of in-memory hint) */
+  lastSuccess: string | null
+  lastRun: string | null
+  lastError: string | null
+  /** null for retired scrapers, otherwise the store's recordCount */
+  recordCount: number | null
+  state: ScraperState
+  isRunning: boolean
+  /** Computed against STALE_THRESHOLDS[name]; always true for retired scrapers. */
+  isStale: boolean
+  consecutiveFailures: number
+  durationMs: number
+  updatedAt: string
+}
+
+function readRegistryHints(name: ScraperName): {
+  inMemoryLastSync: string | null
+  inMemoryLastError: string | null
+  inMemoryIsRunning: boolean
+} {
+  const desc = ScraperRegistry.get(name)
+  if (!desc) {
+    return { inMemoryLastSync: null, inMemoryLastError: null, inMemoryIsRunning: false }
+  }
+  let inMemoryLastSync: string | null = null
+  let inMemoryLastError: string | null = null
+  let inMemoryIsRunning = false
+  try { inMemoryLastSync = desc.getInMemoryLastSync() } catch { /* ignore */ }
+  try { inMemoryLastError = desc.getInMemoryLastError() } catch { /* ignore */ }
+  try { inMemoryIsRunning = desc.getInMemoryIsRunning() } catch { /* ignore */ }
+  return { inMemoryLastSync, inMemoryLastError, inMemoryIsRunning }
+}
+
+export function getUnifiedStatus(name: ScraperName): UnifiedScraperStatus {
+  const stored = _store[name]
+  const baseEntry = stored ?? defaultEntry()
+  const hints = readRegistryHints(name)
+
+  const lastSuccess = baseEntry.lastSuccess
+  const lastSync = hints.inMemoryLastSync ?? lastSuccess ?? null
+
+  const threshold = STALE_THRESHOLDS[name]
+  const hasThreshold = typeof threshold === 'number'
+  const desc = ScraperRegistry.get(name)
+  const retired = desc?.retired === true
+
+  let isStale: boolean
+  if (!hasThreshold || retired) {
+    isStale = true
+  } else if (!lastSync) {
+    isStale = true
+  } else {
+    const ageMs = Date.now() - new Date(lastSync).getTime()
+    isStale = ageMs > threshold * 60 * 1000
+  }
+
+  const isRunning = hints.inMemoryIsRunning || baseEntry.state === 'running'
+  let state: ScraperState = baseEntry.state
+  if (isRunning) {
+    state = 'running'
+  } else if (retired || !hasThreshold) {
+    state = 'stale'
+  } else if (state !== 'failed' && isStale) {
+    state = 'stale'
+  }
+
+  const recordCount = retired || !hasThreshold ? null : baseEntry.recordCount
+
+  return {
+    scraper: name,
+    lastSync,
+    lastSuccess,
+    lastRun: baseEntry.lastRun,
+    lastError: hints.inMemoryLastError ?? baseEntry.lastError,
+    recordCount,
+    state,
+    isRunning,
+    isStale,
+    consecutiveFailures: baseEntry.consecutiveFailures ?? 0,
+    durationMs: baseEntry.durationMs,
+    updatedAt: baseEntry.updatedAt,
+  }
+}
+
+export function getAllUnifiedStatus(): Record<ScraperName, UnifiedScraperStatus> {
+  const names: ScraperName[] = ['rh-cases', 'ccsp', 'sf-pipeline', 'supportable']
+  const out = {} as Record<ScraperName, UnifiedScraperStatus>
+  for (const n of names) out[n] = getUnifiedStatus(n)
+  return out
 }

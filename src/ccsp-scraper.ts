@@ -104,6 +104,7 @@ import type { AE } from './types.ts'
 import { sanitizeErr, sanitizeCell } from './utils.ts'
 import { patchAe } from './server-state.ts'
 import { markRunning, recordOutcome } from './scraper-status-store.ts'
+import { ScraperRegistry } from './scraper-registry.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
 import { filterRowsForAe, warnFilterColumnGaps } from './ccsp-row-filter.ts'
 import { tryMemoryCache, tryDriveCache, writeCaches } from './ccsp-cache.ts'
@@ -1125,3 +1126,12 @@ export async function writeCcspSheet(
 
   return spreadsheetId
 }
+
+// ── BKL-ARCH-02: register the ccsp descriptor with the registry ───────────────
+ScraperRegistry.register({
+  name: 'ccsp',
+  adopt: (ctx) => { adoptCcspContext(ctx) },
+  getInMemoryLastSync: () => lastCcspScrape,
+  getInMemoryLastError: () => lastCcspError,
+  getInMemoryIsRunning: () => ccspScrapeRunning,
+})

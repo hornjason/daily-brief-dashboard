@@ -5783,7 +5783,7 @@ Description: "Sync Now" for CCSP and SF Pipeline have never been validated again
 Decision: DONE — Quinn validated 2026-04-10. Pipeline: removed cache file, API correctly returned 0 records, triggered POST /api/scrape/salesforce, data arrived in ~42s (286 records, $32M ACV across 9 AEs). CCSP: removed cache file, server served from memory (resilient), triggered POST /api/scrape/ccsp, scraper ran end-to-end (Tableau connect, 9 AE sheets written, cookies saved), refresh skipped because source data unchanged (correct behavior). Both scrapers handle cold-start correctly. Production data restored from backups, verified intact (9 AEs, 245 pipeline records, 53 CCSP customers).
 
 ### BKL-BOOT-03 | Single-AE bootstrap regression check — verify one-at-a-time bootstrap still works
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Severity: HIGH
 Priority: P1
 Size: M
@@ -6099,7 +6099,7 @@ Fix: Added `hay.length === 0 ||` guard before both unguarded `includes` checks i
 Decision: DONE — four call sites now all guard against empty hay. Gate 2 re-run required.
 
 ### BKL-UX52-P1 | Pod tab bar renders as static label, not interactive tabs
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Severity: LOW
 Priority: P3
 Size: XS
@@ -6110,7 +6110,7 @@ Fix needed: Verify tab switching works with 2 pods. If it does, this is just cos
 Decision: OPEN — low priority until NW pod is added; tab bar with 1 tab has no functional value.
 
 ### BKL-UX52-P2 | Health dot reason chips shown inline instead of hover tooltip
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Severity: LOW
 Priority: P3
 Size: XS
@@ -6121,7 +6121,7 @@ Fix needed: Design decision — either accept inline chips as the standard or im
 Decision: OPEN — needs Jason design call. Inline chips may be preferred.
 
 ### BKL-TEST-07 | Complete test coverage assessment — silent-fail buttons + untested action flows
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Severity: HIGH
 Priority: P1
 Size: L
@@ -6723,7 +6723,7 @@ Description: Rook finding: src/domain-waterfall.ts line ~45 — tier1 Clearbit d
 ---
 
 ### BKL-E2E-01 | Stabilize E2E test suite — 54 pre-existing failures
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: L
 Source: 2026-04-25 — E2E job became reachable for the first time when unit test gate was fixed
@@ -6787,7 +6787,7 @@ Blocked by: BKL-UI-SETUP-ROUTING-01
 ---
 
 ### BKL-ONBOARD-10 | Implement /api/wizard/setup-region + /api/wizard/seed-sheets
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: M
 Source: Marcus review 2026-04-25 — integration tests reference these endpoints, neither exists on local or mini.local
@@ -6935,7 +6935,7 @@ Files: dashboard/src/components/SubscriptionsSection.tsx:80
 Description: `p.quantity.toLocaleString()` crashed when seed customers have `quantity: undefined` in subscription data. Fix: `(p.quantity ?? 0).toLocaleString()`. One-line fix. Quinn re-audit confirmed page renders cleanly. Commit 93ca1e0.
 
 ### BKL-TEST-SF-SYNC-BANNER-01 | SF Sync Now success banner not testable on seed container (no SF creds)
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: Quinn audit 2026-04-25 (Phase 1 gate)
@@ -6991,7 +6991,7 @@ Tests: REG-WIZ-01 through REG-WIZ-07, REG-POD-01/02 (regression.spec.ts); REG-UX
 Decision: DONE — fix shipped 2026-04-26 commit 7965235. Quinn PASS (81 tests passing). Rook clean.
 
 ### BKL-DEV-01 | Rook security scans should review working-directory diff, not clean worktree
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: XS
 Source: Learning reflection 2026-04-26 — Rook got isolation:worktree, reviewed clean tree, missed uncommitted changes
@@ -7506,7 +7506,7 @@ Can we test: YES — after bootstrap, check that autoBootstrapState.resources.do
 Resolution (2026-04-27 BKL-DOM-INF-01): DONE — awaiting the IIFE before running=false is set. UI now sees inference results before polling stops.
 
 ### BKL-DOM-INF-02 | AbortController for waterfall/signal inference — abort orphan on 120s timeout
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: M
 Source: Rook+Council second audit 2026-04-27 (residual from BKL-DOM-INF-01 fix)
@@ -7667,7 +7667,7 @@ Description: handleRhCancel cleared rhConnectPollRef and rhVncRef but not rhTime
 Resolution: Added rhTimeoutRef clear to handleRhCancel inline.
 
 ### BKL-DOM-INF-05 | Surface inference errors in autoBootstrapState for UI visibility
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: S
 Source: Rook second audit 2026-04-27
@@ -7712,7 +7712,7 @@ Priority: P3
 Source: Council 2026-04-27
 
 ### BKL-DOM-INF-13 | Surface unresolvable domains as "needs manual entry" in UI
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: M
 Source: Council investigation 2026-04-27 (Serena + user request)
@@ -7801,7 +7801,7 @@ Can we test: YES — simulate disconnect, assert SF context restored without VNC
 
 
 ### BKL-CASES-MATCH-01 | REG-021 failing: cases not matching accounts by accountNumber or name
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: CI regression run 2026-04-27 (post BKL-CONN-SF-AUTO-01 + BKL-DOM-BATCH-01 promote)
@@ -7917,7 +7917,7 @@ Files: src/ccsp-scraper.ts, src/sf-scraper.ts, .env, .env.example
 Decision: IS_LEADER=true env var. Guards added at exact L4 entry points: `scrapeOneAe` (line ~525), `scrapePodCcspRaw` (line ~958), `scrapeSfReport` (line ~459), `listSfReports` (line ~961). Default unset = non-leader (fail-closed). Rook verified no coercion risk. L4 tested end-to-end — Carolanne hit live Tableau scrape (7714 rows), Elmer hit L1 cache (310 rows). BKL-SEC-IS-LEADER-CASE-01 logged for case-sensitivity follow-up.
 
 ### BKL-ARCH-HEARTBEAT-01 | Session heartbeat: periodic lightweight navigation to keep sessions alive overnight
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P1
 Size: M
 Source: Session 2026-04-28 (Serena council review)
@@ -7925,7 +7925,7 @@ Description: Tableau and SF sessions expire in ~2h of idle. Leader instance need
 Acceptance: Sessions survive overnight without manual re-login on leader instance. Heartbeat logs visible in admin panel. Full scrape still succeeds after overnight heartbeat-kept sessions.
 
 ### BKL-CONN-TABLEAU-SSO-SHARE-01 | Investigate why auth.redhat.com session not auto-satisfying Tableau SAML after SF login
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P1
 Size: S
 Source: Session 2026-04-28 (empirical testing — SSO credential prompt appeared despite recent auth.redhat.com login)
@@ -8160,7 +8160,7 @@ Acceptance: Panel label clearly indicates node-local usage.
 Can we test: YES — text assertion.
 
 ### BKL-HERO-18 | L3 hero: Customer detail page audit pending test data
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: Quinn L3 hero audit 2026-05-01
@@ -8289,7 +8289,7 @@ Can we test: YES — grep confirms no scheduleCcspSync/schedulePipelineSync call
 Depends on: BKL-SYNC-L3-01 stable in production ≥1 week.
 
 ### BKL-SYNC-L3-04 | One-time SSO setup playbook for primary sync daemon
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P1
 Size: S
 Source: Session 2026-04-30 (Serena council review — Mac Mini needs documented initial auth sequence before daemon can run autonomously)
@@ -8385,7 +8385,7 @@ Solution: Increase smoke check timeout or add retry loop (e.g. wait-for-it style
 ---
 
 ### BKL-ARCH-02 | Scraper status — split across disk store + in-memory module variables
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P1
 Size: M
 Source: Serena architecture audit 2026-05-01
@@ -8456,7 +8456,7 @@ Depends on: BKL-ARCH-03
 ---
 
 ### BKL-ARCH-13 | Extract territory/pods/accounts inline routes → territory-routes.ts
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
@@ -8467,7 +8467,7 @@ Depends on: BKL-ARCH-03
 ---
 
 ### BKL-ARCH-14 | Extract SSE/events inline routes → events-routes.ts
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
@@ -8478,7 +8478,7 @@ Depends on: BKL-ARCH-03
 ---
 
 ### BKL-ARCH-04 | SetupPage.tsx — 4,171-line wizard with embedded sub-components and polling
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: XL
 Source: Serena architecture audit 2026-05-01
@@ -8500,7 +8500,7 @@ Solution: Extract usePolledStatus(url, { intervalMs, until }) hook. Absorbs all 
 ---
 
 ### BKL-ARCH-06 | Atomic file write — tmp + renameSync pattern replicated ~20 times
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P1
 Size: S
 Source: Serena architecture audit 2026-05-01
@@ -8520,7 +8520,7 @@ Description: Every Drive operation reimplements drive.files.list with q=..., pag
 Decision: DONE — src/lib/drive-client.ts created with 5-method singleton (findDescendantFolder, ensureChildFolder, listSpreadsheetsUnder, listFilesUnder, findSheetByName). 5 callers migrated. ADR-0016 enforced (supportsAllDrives always-on). Pagination handled internally. 14 unit tests. customer.ts not migrated — see BKL-ARCH-07b. GitHub issue #2 closed.
 
 ### BKL-ARCH-07b | customer.ts BFS — followFolderShortcuts not yet in DriveFolderClient
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: S
 Source: Marcus BKL-ARCH-07 implementation 2026-05-01
@@ -8529,7 +8529,7 @@ Description: customer.ts BFS (account intelligence file collection) follows fold
 Solution: Add followFolderShortcuts option to listFilesUnder (default false). Then migrate customer.ts BFS to driveClient.listFilesUnder({ followFolderShortcuts: true, maxFiles, modifiedAfter, maxDepth }).
 
 ### BKL-ARCH-07c | account-intelligence + account-plan doc upsert Drive calls not migrated
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: S
 Source: Marcus BKL-ARCH-07 implementation 2026-05-01
@@ -8817,7 +8817,7 @@ Tests: bun test test/unit/territory-sheet.spec.ts — 4/4 pass. Playwright 115/1
 ---
 
 ### BKL-SCRAPER-DEAD-01 | Dead endpoint /api/auth/supportable/check in scraper-manager.ts
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: XS
 Source: BKL-SEC-SUPPORTABLE-02 cleanup 2026-05-02
@@ -8838,7 +8838,7 @@ Description: Git worktrees from prior agent runs accumulate at .claude/worktrees
 Can we test: YES — verify make build succeeds after worktrees exceed 500MB.
 
 ### BKL-SEC-19 | bootstrap-orchestrator.ts — writeScaffoldCache missing isValidDriveFolderId guard
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-DRIVE-SCAFFOLD-CACHE-01 post-ship review)
@@ -8848,7 +8848,7 @@ Description: writeScaffoldCache(parentFolderId, entry) writes parentFolderId dir
 Can we test: YES — unit test: writeScaffoldCache with invalid parentFolderId should silently skip write; readScaffoldCache with invalid key should return undefined.
 
 ### BKL-SEC-20 | admin-routes.ts — /api/drive/ls/:folderId accepts unvalidated path parameter
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P2
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-ARCH-12 post-ship review)
@@ -8858,7 +8858,7 @@ Solution: Add `if (!isValidDriveFolderId(folderId)) return c.json({ error: 'Inva
 Can we test: YES — regression test: GET /api/drive/ls/invalid!folder returns 400.
 
 ### BKL-SEC-21 | admin-routes.ts — /api/drive-watcher/rebuild lacks NODE_ROLE guard (advisory)
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-ARCH-12 post-ship review)
@@ -8868,7 +8868,7 @@ Solution: If hero nodes should not trigger Drive folder rebuilds: add `if (proce
 Can we test: YES after decision — regression test that 7776 (hero image) returns 404 on POST /api/drive-watcher/rebuild.
 
 ### BKL-SEC-22 | settings-api.ts — /api/settings/email PUT recipientEmail lacks length cap
-Status: 🔴 OPEN
+Status: 🟡 IN PROGRESS
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-ARCH-11 post-ship review)
@@ -8893,3 +8893,16 @@ Acceptance criteria:
 - [x] At least one real close cycle tested end-to-end — issue #9 first run complete 2026-05-02
 
 Can we test: YES — close a real parent issue with mixed XS/S+ spin-offs and verify child issues appear in GitHub with correct agent briefs and parent links.
+
+---
+
+### BKL-ARCH-23 | Brief pipeline — decompose buildXmlSources into per-source signal modules
+Status: 🟡 IN PROGRESS
+Priority: P1
+Size: M
+Source: GitHub issue #11 — child of #9 (architecture deepening)
+Issue: hornjason/asaCommandCenter#11
+Files: src/customer.ts, src/customer/signals/*.ts (new), src/customer/docs-fetcher.ts (new)
+Description: buildXmlSources (296 lines, ~99 cyclomatic) and _fetchCustomerDocsImpl (336 lines) in customer.ts are monolithic. Decompose into focused signal modules: src/customer/signals/{meetings,emails,docs,cases,subscriptions,pipeline,ccsp}.ts, each exporting collect(input): Promise<SignalBundle|null> + render(bundle, ctx): string. buildXmlSources becomes a ~30-line composition. SignalBundle is a discriminated union (kind field) — not a uniform type. Extract docs-fetcher.ts (pure Drive operations). Golden-file test gates the refactor: byte-identical XML before/after.
+Architecture: Serena brief 2026-05-02 — discriminated union, collect() returns shape, render() is pure, golden test first.
+Stopped at: Serena brief approved; Marcus not yet briefed.

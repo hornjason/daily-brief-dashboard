@@ -16,10 +16,12 @@ import { chromium } from '@playwright/test'
 import type { BrowserContext } from '@playwright/test'
 import { writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { closeScrapeContext, adoptScrapeContext, reopenScrapeContextFromAuth } from './rh-scraper.ts'
-import { closeSfContext, adoptSfContext, getSfContext } from './sf-scraper.ts'
-import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
-import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
+import { closeScrapeContext, reopenScrapeContextFromAuth } from './rh-scraper.ts'
+// Adoption delegated to ScraperRegistry.adoptAll() — per-scraper adopt* fns no longer imported here
+import { closeSfContext, getSfContext } from './sf-scraper.ts'
+import { closeSupportableContext } from './supportable-scraper.ts'
+import { closeCcspContext } from './ccsp-scraper.ts'
+import { ScraperRegistry } from './scraper-registry.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
 import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
 import { recordSessionEstablished } from './settings-api.ts'
@@ -225,15 +227,9 @@ export async function startSfLoginBrowser(
             // BKL-CONN-SF-ADOPT-01: instrumentation — confirm ctx and rhPage state at adoption time
             console.log('[sf-auth] adoption — ctx valid:', !!ctx, 'rhPage closed:', rhPage.isClosed())
 
-            // Re-adopt for all scrapers sharing this SSO context
-            console.log('[sf-auth] calling adoptScrapeContext…')
-            adoptScrapeContext(ctx, profileDir, rhPage)
-            console.log('[sf-auth] calling adoptSfContext…')
-            adoptSfContext(ctx, profileDir)
-            console.log('[sf-auth] calling adoptSupportableContext…')
-            adoptSupportableContext(ctx)
-            console.log('[sf-auth] calling adoptCcspContext…')
-            adoptCcspContext(ctx)
+            // BKL-ARCH-02: single registry call — all non-retired scrapers re-adopt
+            console.log('[sf-auth] calling ScraperRegistry.adoptAll…')
+            ScraperRegistry.adoptAll(ctx, profileDir, rhPage)
             recordSessionEstablished('rh-portal')
             recordSessionEstablished('salesforce')
 
@@ -278,10 +274,8 @@ export async function startSfLoginBrowser(
             // would launch a second Chromium against the same profileDir and race
             // on SingletonLock). Mirrors the happy path above. RH scraper will
             // re-navigate on its next scrape cycle.
-            adoptScrapeContext(ctx, profileDir, rhPage)
-            adoptSfContext(ctx, profileDir)
-            adoptSupportableContext(ctx)
-            adoptCcspContext(ctx)
+            // BKL-ARCH-02: single registry call for RH-portal-fallback path
+            ScraperRegistry.adoptAll(ctx, profileDir, rhPage)
             // Still reset SF circuit breaker even if RH portal didn't load
             resetAllCircuitBreakers()
             // BKL-CONN-UI: flip loginInProgress AFTER context adoption so the UI never

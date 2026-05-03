@@ -10,9 +10,10 @@ import type { BrowserContext, Page } from '@playwright/test'
 import { writeFileSync, existsSync, unlinkSync, readFileSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
-import { adoptSfContext } from './sf-scraper.ts'
-import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
-import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
+// adoptSfContext/adoptSupportableContext/adoptCcspContext delegated to ScraperRegistry.adoptAll()
+import { closeSupportableContext } from './supportable-scraper.ts'
+import { closeCcspContext } from './ccsp-scraper.ts'
+import { ScraperRegistry } from './scraper-registry.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
 import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
 import { recordSessionEstablished } from './settings-api.ts'
@@ -254,11 +255,9 @@ export async function startLoginBrowser(sessionPath: string, profileDir: string,
           activePage = null
           loginInProgress = false
 
-          adoptScrapeContext(ctx, profileDir, livePage)
-          // SF, Supportable, and CCSP share the same SSO session via the Chromium profile
-          adoptSfContext(ctx, profileDir)
-          adoptSupportableContext(ctx)
-          adoptCcspContext(ctx)
+          // BKL-ARCH-02: single registry call replaces per-scraper adopt block.
+          // SF, Supportable (retired — skipped), and CCSP share the same SSO session.
+          ScraperRegistry.adoptAll(ctx, profileDir, livePage)
 
           // BKL-UX94: Open a blank tab so VNC clears after login. Awaited so VNC reliably shows blank.
           try {
@@ -345,3 +344,20 @@ export function recordScrapeSuccess(caseCount: number): void {
 export function recordScrapeExpired(): void {
   rhSessionExpired = true
 }
+
+// ── BKL-ARCH-02: register the rh-cases descriptor ────────────────────────────
+// Co-located here (not rh-scraper.ts) because lastScraped and rhSessionExpired
+// are owned by this module; rh-scraper does not import rh-auth (one-way dep).
+ScraperRegistry.register({
+  name: 'rh-cases',
+  adopt: (ctx, profileDir, livePage) => {
+    if (!livePage) {
+      console.warn('[rh-auth] rh-cases adopt called without livePage — skipping')
+      return
+    }
+    adoptScrapeContext(ctx, profileDir, livePage)
+  },
+  getInMemoryLastSync: () => lastScraped,
+  getInMemoryLastError: () => (rhSessionExpired ? 'rh session expired' : null),
+  getInMemoryIsRunning: () => false,
+})
