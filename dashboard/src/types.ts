@@ -20,6 +20,7 @@ export interface AccountInfo {
   confidenceScore?: number | null
   attentionScore?: number
   attentionReasons?: string[]
+  needsManualDomain?: boolean  // BKL-DOM-INF-13: true when bootstrap could not resolve a domain
 }
 
 export interface PodInfo {

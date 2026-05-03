@@ -289,6 +289,16 @@ export function AEGroupedList({ accounts, cases, events, loading, onCustomerClic
                           </span>
                         ))}
                       </div>
+                      {/* Domain needed badge — BKL-DOM-INF-13 */}
+                      {customer.needsManualDomain && (
+                        <a
+                          href="/dashboard/setup"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[11px] px-2 py-0.5 rounded bg-amber-900/40 text-amber-400 border border-amber-700/40 whitespace-nowrap shrink-0 hover:bg-amber-900/60 transition-colors"
+                        >
+                          Domain needed
+                        </a>
+                      )}
                       {/* Brief age */}
                       {customer.cachedAt && (
                         <span className="text-[11px] text-text-secondary shrink-0">

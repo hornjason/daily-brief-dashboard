@@ -32,13 +32,22 @@ export interface WaterfallResult {
   verified: boolean | null  // null = not checked, true = reachable, false = unreachable
 }
 
-/** Tier 1: Clearbit autocomplete (free, no key) */
-export async function tier1Clearbit(companyName: string): Promise<string | null> {
+/** Tier 1: Clearbit autocomplete (free, no key)
+ *
+ * BKL-DOM-INF-02: Optional `signal` chains a caller-owned AbortController to the
+ * per-call 5s timeout via `AbortSignal.any`, so when the bootstrap inference
+ * waterfall's 60s race fires the in-flight fetch is cancelled instead of
+ * orphaned. Bun supports `AbortSignal.any` since 1.0.
+ */
+export async function tier1Clearbit(companyName: string, signal?: AbortSignal): Promise<string | null> {
   const stripped = stripLegalSuffixes(companyName)
   try {
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(5000)])
+      : AbortSignal.timeout(5000)
     const res = await fetch(
       `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(stripped)}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: combinedSignal }
     )
     if (!res.ok) return null
     const hits: { name: string; domain: string }[] = await res.json()
@@ -46,9 +55,7 @@ export async function tier1Clearbit(companyName: string): Promise<string | null>
     const first = hits[0]
     if (!first.domain) return null
     if (!nameMatchesClearbit(stripped, first.name)) return null
-    const domain = first.domain.toLowerCase()
-    if (!/^[a-z0-9]([a-z0-9\-._]{0,251}[a-z0-9])?$/.test(domain)) return null
-    return domain
+    return first.domain.toLowerCase()
   } catch {
     return null
   }
@@ -192,7 +199,7 @@ export function isPublicDomain(d: string): boolean {
  * the returned Map. On parse failure or API error for a chunk, every name in
  * that chunk maps to null.
  */
-export async function batchInferDomains(names: string[]): Promise<Map<string, string | null>> {
+export async function batchInferDomains(names: string[], signal?: AbortSignal): Promise<Map<string, string | null>> {
   const result = new Map<string, string | null>()
   if (names.length === 0) return result
 
@@ -231,10 +238,16 @@ Companies:
 ${JSON.stringify(chunk, null, 2)}`
 
     try {
+      // BKL-DOM-INF-02: chain caller-owned signal with the per-call 30s timeout
+      // so the bootstrap waterfall can abort in-flight Gemini calls when its
+      // outer 60s race fires.
+      const combinedSignal = signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+        : AbortSignal.timeout(30_000)
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(30_000),
+        signal: combinedSignal,
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },

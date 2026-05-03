@@ -1649,6 +1649,10 @@ export function createBootstrapRouter(): Hono {
       const capturedState = autoBootstrapState
       bootstrapFlags.inferenceRunning = true
       let inferenceTimedOut = false
+      // BKL-DOM-INF-02: AbortController lets the 60s timeout cancel in-flight fetch
+      // calls instead of orphaning them. Each tier's per-call timeout (5s/30s) is
+      // chained via AbortSignal.any so the outer abort is additive, not replacing.
+      const abortCtrl = new AbortController()
       try {
         await Promise.race([
           (async () => {
@@ -1660,7 +1664,7 @@ export function createBootstrapRouter(): Hono {
             const highConfidenceSaves: { name: string; domain: string; ae: string }[] = []
 
             // Step 1: Gemini batch call
-            let batchMap = await batchInferDomains(names).catch((e: any) => {
+            let batchMap = await batchInferDomains(names, abortCtrl.signal).catch((e: any) => {
               console.warn(`[infer-domains] batch failed for ${aeName}:`, e?.message ?? e)
               return null
             })
@@ -1670,7 +1674,7 @@ export function createBootstrapRouter(): Hono {
               const nulls = names.filter(n => !batchMap!.get(n))
               if (nulls.length > 0) {
                 console.log(`[infer-domains] retry batch for ${nulls.length} nulls: ${nulls.join(', ')}`)
-                const retryMap = await batchInferDomains(nulls).catch(() => null)
+                const retryMap = await batchInferDomains(nulls, abortCtrl.signal).catch(() => null)
                 if (retryMap) {
                   for (const [name, domain] of retryMap) {
                     if (domain) batchMap.set(name, domain)
@@ -1682,7 +1686,8 @@ export function createBootstrapRouter(): Hono {
             // Step 3: Clearbit fallback for still-null
             const stillNull = names.filter(n => !batchMap?.get(n))
             for (const name of stillNull) {
-              const domain = await tier1Clearbit(name).catch(() => null)
+              if (abortCtrl.signal.aborted) break
+              const domain = await tier1Clearbit(name, abortCtrl.signal).catch(() => null)
               if (domain) {
                 batchMap = batchMap ?? new Map()
                 batchMap.set(name, domain)
@@ -1709,20 +1714,34 @@ export function createBootstrapRouter(): Hono {
               highConfidenceSaves.push({ name: cu.name, domain, ae: aeName })
             }
 
-            // Auto-save high-confidence domains to customers.json — AE-scoped lookup so a
-            // matching name under a different AE (or an inactive customer) cannot be
-            // contaminated by this run. Serialized through lockState.customerWriteLock so concurrent
-            // inference across overlapping bootstraps does not lose writes.
-            if (!inferenceTimedOut && highConfidenceSaves.length > 0) {
+            // Auto-save high-confidence domains and apply needsManualDomain flags.
+            // AE-scoped so a matching name under a different AE is never contaminated.
+            // Serialized through lockState.customerWriteLock to prevent concurrent writes.
+            if (!inferenceTimedOut) {
+              const unresolvedNames = new Set(
+                aeCustomers
+                  .filter(cu => !batchMap?.get(cu.name) && !inferenceResults.find(r => r.customerName === cu.name))
+                  .map(cu => cu.name)
+              )
               lockState.customerWriteLock = lockState.customerWriteLock.then(async () => {
+                let dirty = false
                 for (const { name, domain, ae } of highConfidenceSaves) {
                   const cu = customers.find(cx => cx.name === name && cx.ae === ae && !cx.inactive)
-                  if (cu && !cu.domain) cu.domain = domain
+                  if (cu && !cu.domain) { cu.domain = domain; dirty = true }
+                  // BKL-DOM-INF-13: clear flag once a domain resolves
+                  if (cu && cu.needsManualDomain) { cu.needsManualDomain = false; dirty = true }
                 }
-                try {
-                  writeJsonAtomic(CUSTOMERS_PATH, { customers })
-                  console.log(`[auto-bootstrap] Domain inference complete for ${aeName}: ${highConfidenceSaves.length} saved, ${inferenceResults.length - highConfidenceSaves.length} unresolved`)
-                } catch (e: any) { console.warn('[auto-bootstrap] domain auto-save failed:', e.message) }
+                // BKL-DOM-INF-13: flag customers with no domain after all tiers
+                for (const name of unresolvedNames) {
+                  const cu = customers.find(cx => cx.name === name && cx.ae === aeName && !cx.inactive)
+                  if (cu && !cu.domain && !cu.needsManualDomain) { cu.needsManualDomain = true; dirty = true }
+                }
+                if (dirty) {
+                  try {
+                    writeJsonAtomic(CUSTOMERS_PATH, { customers })
+                    console.log(`[auto-bootstrap] Domain inference complete for ${aeName}: ${highConfidenceSaves.length} saved, ${unresolvedNames.size} flagged needsManualDomain`)
+                  } catch (e: any) { console.warn('[auto-bootstrap] domain auto-save failed:', e.message) }
+                }
               })
               await lockState.customerWriteLock
             }
@@ -1739,7 +1758,7 @@ export function createBootstrapRouter(): Hono {
               capturedState.resources.inferenceWarning = `${unresolved.length} customer${unresolved.length > 1 ? 's' : ''} have no resolvable domain: ${unresolved.map(cu => cu.name).join(', ')}`
             }
           })(),
-          new Promise<void>(resolve => setTimeout(() => { inferenceTimedOut = true; resolve() }, 60_000)),
+          new Promise<void>(resolve => setTimeout(() => { inferenceTimedOut = true; abortCtrl.abort(); resolve() }, 60_000)),
         ])
         if (inferenceTimedOut) {
           console.warn(`[auto-bootstrap] domain inference timed out after 60s for ${aeName}`)

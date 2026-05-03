@@ -39,6 +39,7 @@ export interface Customer {
   discoveryFailures?: number        // BKL-RH-PERF-01: count of consecutive failed discovery attempts
   discoveryStatus?: 'unresolvable'  // BKL-RH-PERF-01: set after 3 failures
   discoverySkippedUntil?: string    // BKL-RH-PERF-01: ISO timestamp — skip discovery until this date
+  needsManualDomain?: boolean       // BKL-DOM-INF-13: set when all inference tiers return null; cleared once a domain resolves
 }
 
 export interface CustomerSubscription {

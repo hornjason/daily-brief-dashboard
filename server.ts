@@ -522,6 +522,7 @@ app.get('/api/accounts', (c) => {
       ccspCustomer: customer.ccspCustomer ?? false,
       attentionScore: attention?.attentionScore ?? 0,
       attentionReasons: attention?.attentionReasons ?? [],
+      needsManualDomain: customer.needsManualDomain ?? false,
     }
   })
   return c.json({ customers: result })
