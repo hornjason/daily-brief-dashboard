@@ -8973,7 +8973,7 @@ Description: Added 254-char length guard before regex test with RFC 5321 error m
 Resolution: commit 62b6223ed. Quinn PASS, Rook PASS.
 
 ### BKL-SEC-23 | settings-api.ts + config-load — region.parentFolderId PUT and folder IDs at config-read boundaries lack isValidDriveFolderId guard
-Status: 🔵 OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS (XS — stays in BACKLOG.md, not promoted — scope narrower than original description)
 Source: Rook scan 2026-05-03 (BKL-SEC-19/20 post-ship sibling audit)

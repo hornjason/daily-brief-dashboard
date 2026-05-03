@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { Hono } from 'hono'
-import { sanitizeErr } from './utils.ts'
+import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 import { backupNow } from './backup-config.ts'
 import { validateOfflineToken } from './redhat.ts'
 import { google } from 'googleapis'
@@ -610,6 +610,8 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
       const settings = normalizeSettings(raw)
       const region = getRegionById(settings, regionId)
       if (!region.parentFolderId) return c.json({ error: 'parentFolderId not set for this region' }, 404)
+      // BKL-SEC-23: defense-in-depth — validate stored folder ID before using in Drive query
+      if (!isValidDriveFolderId(region.parentFolderId)) return c.json({ error: 'parentFolderId in stored config is malformed' }, 500)
       const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
       const drive = google.drive({ version: 'v3', auth })
       const listRes = await drive.files.list({
