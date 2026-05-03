@@ -78,6 +78,8 @@ test.describe('@destructive REG-002: POST /api/scrape/ccsp rejects AEs without t
     // 500 on seed container without Google auth configured → skip gracefully
     // 200 possible on seed containers where Google auth allows the scrape to start even without territories
     // 503 when intelligence/CCSP service is disabled on seed containers
+    // 404 when NODE_ROLE != 'primary' — CCSP endpoint is L4-only, not available on hero nodes
+    if (res.status === 404) { console.log('REG-002: /api/scrape/ccsp returned 404 (L4-only endpoint, NODE_ROLE not primary on test container) — skipping'); return }
     if (res.status === 500) { console.log('REG-002: server returned 500 (likely no Google auth on seed container) — skipping'); return }
     expect([200, 400, 401, 403, 409, 503]).toContain(res.status)
     if (res.body) expect(res.body.error).toBeTruthy()

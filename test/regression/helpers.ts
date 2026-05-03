@@ -36,7 +36,7 @@ export async function postJSONDestructive(path: string, data: unknown) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  return { status: res.status, body: await res.json() }
+  return { status: res.status, body: await res.json().catch(() => null) }
 }
 
 export async function getKnownCustomer(baseUrl = BASE_URL): Promise<string | null> {
