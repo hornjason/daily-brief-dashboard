@@ -1,11 +1,9 @@
 import { Hono } from 'hono'
-import { streamSSE } from 'hono/streaming'
 import { bodyLimit } from 'hono/body-limit'
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { renameSync } from 'fs'
 import { resolve } from 'path'
-import { fetchEmail, fetchDrive, fetchCalendar } from './src/google.ts'
-import { fetchCases, getTokenTelemetry } from './src/redhat.ts'
+import { getTokenTelemetry } from './src/redhat.ts'
 import { fetchCasesViaSolr } from './src/rh-cases-api.ts'
 import { getConfiguredTransport } from './src/case-client.ts'
 import type { Customer } from './src/types.ts'
@@ -50,9 +48,8 @@ import { initJobPersistence } from './src/account-intelligence.ts'
 // ── BKL-UX52: Multi-pod support ───────────────────────────────────────────
 import { readPodConfig, getAeNamesForPod } from './src/pod-config.ts'
 import { computeAllAttentionScores } from './src/attention-score.ts'
-// ── Region config (for parentFolderId / Drive distribution) ───────────────
-import { onCacheLevel, offCacheLevel, type IngestCacheEvent } from './src/ingest-events.js'
-import { onAIEvent, offAIEvent, type AIIntelEvent } from './src/ai-events.js'
+// ── BKL-ARCH-14: SSE event routes ─────────────────────────────────────────
+import { createEventsRouter } from './src/events-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -629,95 +626,8 @@ app.route('/', createRefreshRouter())
 
 // ── debug/sheet-tabs route (extracted to src/admin-routes.ts — BKL-ARCH-12)
 
-// SSE data stream — each section fires as its promise resolves
-app.get('/events', (c) => {
-  return streamSSE(c, async (stream) => {
-    const sections: Array<[string, () => Promise<any>]> = [
-      ['calendar', () => fetchCalendar(customers)],
-      ['email',    () => fetchEmail(customers)],
-      ['cases',    fetchCases],
-      ['drive',    () => fetchDrive(customers)],
-    ]
-
-    await Promise.all(
-      sections.map(async ([name, fetcher]) => {
-        try {
-          const data = await fetcher()
-          await stream.writeSSE({
-            event: 'section',
-            data: JSON.stringify({ section: name, data }),
-          })
-        } catch (err: any) {
-          await stream.writeSSE({
-            event: 'section',
-            data: JSON.stringify({ section: name, error: err.message }),
-          })
-        }
-      })
-    )
-
-    await stream.writeSSE({
-      event: 'complete',
-      data: JSON.stringify({ timestamp: new Date().toISOString() }),
-    })
-  })
-})
-
-app.get('/api/ingest/events', (c) => {
-  return streamSSE(c, async (stream) => {
-    await stream.writeSSE({
-      event: 'connected',
-      data: JSON.stringify({ timestamp: new Date().toISOString() }),
-    })
-
-    const handler = async (event: IngestCacheEvent) => {
-      try {
-        await stream.writeSSE({ event: 'cache-level', data: JSON.stringify(event) })
-      } catch {
-        // write failed — client gone; remove listener so it doesn't accumulate
-        offCacheLevel(handler)
-      }
-    }
-
-    onCacheLevel(handler)
-
-    await new Promise<void>((resolve) => {
-      c.req.raw.signal.addEventListener('abort', () => {
-        offCacheLevel(handler)
-        resolve()
-      }, { once: true })
-    })
-  })
-})
-
-// BKL-AI-FP-04: AI intelligence pipeline events SSE stream
-// Mirrors /api/ingest/events pattern — long-lived SSE stream for cache/generation lifecycle events.
-app.get('/api/ai/events', (c) => {
-  return streamSSE(c, async (stream) => {
-    await stream.writeSSE({
-      event: 'connected',
-      data: JSON.stringify({ timestamp: new Date().toISOString() }),
-    })
-
-    const handler = async (event: AIIntelEvent) => {
-      try {
-        await stream.writeSSE({ event: 'ai-intel', data: JSON.stringify(event) })
-      } catch {
-        // write failed — client gone; remove listener so it doesn't accumulate
-        offAIEvent(handler)
-      }
-    }
-
-    onAIEvent(handler)
-
-    await new Promise<void>((resolve) => {
-      c.req.raw.signal.addEventListener('abort', () => {
-        offAIEvent(handler)
-        resolve()
-      }, { once: true })
-    })
-  })
-})
+// ── SSE routes (BKL-ARCH-14: extracted to src/events-routes.ts) ─────────────
+app.route('/', createEventsRouter())
 
 // Per-source refresh functions extracted to src/refresh-engine.ts (M02)
 

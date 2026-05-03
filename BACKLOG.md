@@ -7821,15 +7821,15 @@ Can we test: YES — simulate disconnect, assert SF context restored without VNC
 
 
 ### BKL-CASES-MATCH-01 | REG-021 failing: cases not matching accounts by accountNumber or name
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P2
 Size: S
 Source: CI regression run 2026-04-27 (post BKL-CONN-SF-AUTO-01 + BKL-DOM-BATCH-01 promote)
 Issue: hornjason/asaCommandCenter#45
 Files: src/routes/cases.ts or cases cache, /api/accounts response
 Description: REG-021 checks that all cases from /api/cases/all match at least one account from /api/accounts by accountNumber or customerName. Currently 32 cases present (real account numbers: 5856163, 1530865, 1025778) but /api/accounts returns 10 customers with empty accountNumbers arrays (A10 Networks [], Dropbox []). matchedIds.size = 0.
-Root cause: accountNumbers empty on accounts — either not populated from CCSP scrape or mapping lost.
-Pre-existing: Not introduced by CONN-SF-AUTO or DOM-BATCH changes (those don't touch cases/accounts pipeline).
+Root cause: /api/cases/all used ALL customers (including inactive) for currentAccountNums, but /api/accounts returns only active customers. Cases matching inactive customer account numbers appeared in the feed but couldn't be matched to any account in /api/accounts.
+Decision: DONE — added .filter(cu => !cu.inactive) to activeCustomers in /api/cases/all (customer-routes.ts). Cases now match /api/accounts — both show only active customer data. REG-021 invariant restored. GitHub issue #45 closed.
 
 Can we test: YES — REG-021 is already the test. Fix requires populating accountNumbers in /api/accounts response.
 
@@ -8493,14 +8493,14 @@ Depends on: BKL-ARCH-03
 ---
 
 ### BKL-ARCH-14 | Extract SSE/events inline routes → events-routes.ts
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P2
 Size: S
 Source: BKL-ARCH-03 grilling — Job B inline extraction 2026-05-01
 Issue: hornjason/asaCommandCenter#28
-Files: server.ts (lines ~1275–1337+: 3 SSE routes), new src/events-routes.ts
-Description: /events, /api/ingest/events, /api/ai/events are all SSE (server-sent events) streams with large inline handlers. Extracting to events-routes.ts isolates the SSE pattern, gives it a seam, and removes ~200 lines from server.ts. Depends on BKL-ARCH-03.
-Depends on: BKL-ARCH-03
+Files: src/events-routes.ts (new), server.ts (import + mount), test/unit/events-routes.test.ts (new)
+Description: /events, /api/ingest/events, /api/ai/events are all SSE (server-sent events) streams with large inline handlers. Extracting to events-routes.ts isolates the SSE pattern, gives it a seam, and removes ~90 lines from server.ts.
+Decision: DONE — createEventsRouter() factory created. streamSSE, google, redhat, ingest-events, ai-events imports moved out of server.ts. 534 unit tests pass. GitHub issue #28 closed.
 
 ---
 
