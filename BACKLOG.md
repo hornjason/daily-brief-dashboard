@@ -7506,14 +7506,14 @@ Can we test: YES — after bootstrap, check that autoBootstrapState.resources.do
 Resolution (2026-04-27 BKL-DOM-INF-01): DONE — awaiting the IIFE before running=false is set. UI now sees inference results before polling stops.
 
 ### BKL-DOM-INF-02 | AbortController for waterfall/signal inference — abort orphan on 120s timeout
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P2
 Size: M
 Source: Rook+Council second audit 2026-04-27 (residual from BKL-DOM-INF-01 fix)
-Issue: hornjason/asaCommandCenter#20
+Issue: hornjason/asaCommandCenter#20 (closed)
 Files: src/bootstrap-orchestrator.ts (inference IIFE), src/domain-waterfall.ts (tier1/tier2/tier3 fetches)
-Description: Promise.race timeout resolves the race but does NOT abort the in-flight IIFE. Orphan inference continues running, can still write customers.json via _customerWriteLock and write capturedState.resources.domainInference after inferenceRunning=false flips. Proper fix: thread an AbortController into waterfallInferDomain/inferCustomerDomain fetch calls, abort it when timeout fires. The 15s AbortSignal.timeout per-call in domain-waterfall.ts covers individual calls but there's no parent abort for the whole IIFE.
-Can we test: YES — unit test that verifies inferenceRunning=false only after all writes complete (or after abort).
+Description: AbortController created at inference start, aborted when 60s timeout fires. Signal threaded to batchInferDomains + tier1Clearbit via AbortSignal.any. 4 unit tests in test/unit/domain-waterfall-abort.test.ts.
+Resolution: commit dedf58ee6. 503/503 unit tests pass, 25/25 API tests pass on 7776.
 
 ### BKL-DOM-INF-03 | try/finally around inferenceRunning flag — already implemented
 Status: ✅ DONE 2026-04-27
@@ -7712,14 +7712,14 @@ Priority: P3
 Source: Council 2026-04-27
 
 ### BKL-DOM-INF-13 | Surface unresolvable domains as "needs manual entry" in UI
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: M
 Source: Council investigation 2026-04-27 (Serena + user request)
-Issue: hornjason/asaCommandCenter#25
-Files: src/bootstrap-orchestrator.ts, src/customers-routes.ts, dashboard/src/pages/SetupPage.tsx, dashboard/src/pages/HomePage.tsx
-Description: Companies like Condor Bidco are shell entities with no web presence — genuinely unresolvable by any tier. Currently these silently get no domain with no UI feedback. Fix: (1) add `needs_manual_domain: true` field to customer record when all tiers miss and domain remains null after inference; (2) show a badge on affected customer cards in HomePage ("Domain needed"); (3) link badge to Setup wizard domain field pre-focused on that customer. Condor Bidco is the known test case.
-Can we test: YES — mock all tiers returning null, verify needs_manual_domain=true written; verify badge renders.
+Issue: hornjason/asaCommandCenter#25 (closed)
+Files: src/bootstrap-orchestrator.ts, server.ts, dashboard/src/types.ts, dashboard/src/components/AEGroupedList.tsx
+Description: needsManualDomain field added to Customer type + /api/accounts response. Amber "Domain needed" badge on customer rows in AEGroupedList when field is true; links to /dashboard/setup. 7 unit tests in test/unit/bootstrap-manual-domain.test.ts.
+Resolution: commit dedf58ee6. 503/503 unit tests pass, 25/25 API tests pass on 7776. Field confirmed in prod /api/accounts response.
 
 ### BKL-DOM-BATCH-01 | Batch domain inference — Gemini Flash-Lite per-AE batch with fallback chain
 Status: ✅ DONE 2026-04-27
