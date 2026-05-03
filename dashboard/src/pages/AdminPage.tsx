@@ -439,7 +439,7 @@ function BatchIntelligenceSection() {
     try {
       const d = await fetch('/api/intelligence/generate-all/status').then(r => r.json())
       setBatchState(d)
-    } catch {}
+    } catch (err) { console.error('[AdminPage] fetchBatchStatus failed', err) }
   }, [])
 
   useEffect(() => {
@@ -979,7 +979,7 @@ export function AdminPage() {
       }
       mapped.rhDiscoveryProgress = d.rhDiscoveryProgress ?? null
       setStatus(mapped)
-    } catch {}
+    } catch (err) { console.error('[AdminPage] fetchStatus failed', err) }
   }, [])
 
   const fetchIntervals = useCallback(async () => {
@@ -987,7 +987,7 @@ export function AdminPage() {
       const d = await fetch('/api/settings/refresh').then(r => r.json())
       setIntervals(d.intervals)
       if (d.schedulerConfig) setSchedulerCfg(d.schedulerConfig)
-    } catch {}
+    } catch (err) { console.error('[AdminPage] fetchIntervals failed', err) }
   }, [])
 
   useEffect(() => {
@@ -1002,7 +1002,7 @@ export function AdminPage() {
     fetch('/api/admin/gemini-usage')
       .then(r => r.json())
       .then((d: GeminiUsageSummary) => setGeminiUsage(d))
-      .catch(() => {})
+      .catch((err) => console.error('[AdminPage] gemini-usage fetch failed', err))
   }, [])
 
   // Fetch AI config for intelligence toggle
@@ -1013,7 +1013,7 @@ export function AdminPage() {
         setIntelligenceEnabled(d.config.intelligenceEnabled ?? false)
         setDocClassifyMaxAgeDays(d.config.docClassifyMaxAgeDays ?? 0)
       })
-      .catch(() => {})
+      .catch((err) => console.error('[AdminPage] AI settings fetch failed', err))
   }, [])
 
   // Intelligence job status polling (every 3s when running)

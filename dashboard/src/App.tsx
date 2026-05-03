@@ -423,7 +423,7 @@ function Dashboard() {
         vncWindowRef.current?.close()
         vncWindowRef.current = null
       }
-    } catch {}
+    } catch (err) { console.error('[App] fetchRhStatus failed', err) }
   }, [rhReconnecting])
 
   useEffect(() => {
@@ -434,7 +434,7 @@ function Dashboard() {
 
   // Fetch AE count from health endpoint once on mount
   useEffect(() => {
-    fetch('/health').then(r => r.json()).then(d => setAeCount(d.aes ?? 0)).catch(() => {})
+    fetch('/health').then(r => r.json()).then(d => setAeCount(d.aes ?? 0)).catch((err) => console.error('[App] health fetch failed', err))
   }, [refreshKey])
 
   // Fetch health scores for AE chip dots
@@ -446,7 +446,7 @@ function Dashboard() {
         for (const s of scores) map[s.name] = { score: s.score, status: s.status }
         setAeHealthScores(map)
       })
-      .catch(() => {})
+      .catch((err) => console.error('[App] health-scores fetch failed', err))
   }, [refreshKey])
 
   // Poll product alert count for sidebar badge (every 5 min)

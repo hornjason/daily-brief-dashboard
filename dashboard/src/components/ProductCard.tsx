@@ -113,7 +113,7 @@ export function ProductCard({ summary, alert, onRefreshed }: ProductCardProps) {
         <div className="flex flex-wrap gap-2">
           {visibleSources.map((src, i) => {
             let label = src
-            try { label = new URL(src).hostname.replace('www.', '') } catch {}
+            try { label = new URL(src).hostname.replace('www.', '') } catch {} // silent: invalid URL falls back to raw src string
             return (
               <a
                 key={i}

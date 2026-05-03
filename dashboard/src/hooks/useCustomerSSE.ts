@@ -71,28 +71,28 @@ export function useCustomerSSE(customerName: string): CustomerSSEState {
     const es = new EventSource(`/customer/${encodeURIComponent(customerName)}/events`)
 
     es.addEventListener('meta', (e: MessageEvent) => {
-      try { setState((s) => ({ ...s, meta: JSON.parse(e.data) })) } catch {}
+      try { setState((s) => ({ ...s, meta: JSON.parse(e.data) })) } catch (err) { console.error('[useCustomerSSE] meta parse failed', err) }
     })
     es.addEventListener('meetings', (e: MessageEvent) => {
-      try { setState((s) => ({ ...s, meetings: JSON.parse(e.data) })) } catch {}
+      try { setState((s) => ({ ...s, meetings: JSON.parse(e.data) })) } catch (err) { console.error('[useCustomerSSE] meetings parse failed', err) }
     })
     es.addEventListener('emails', (e: MessageEvent) => {
-      try { setState((s) => ({ ...s, emails: JSON.parse(e.data) })) } catch {}
+      try { setState((s) => ({ ...s, emails: JSON.parse(e.data) })) } catch (err) { console.error('[useCustomerSSE] emails parse failed', err) }
     })
     es.addEventListener('drive', (e: MessageEvent) => {
-      try { setState((s) => ({ ...s, drive: JSON.parse(e.data) })) } catch {}
+      try { setState((s) => ({ ...s, drive: JSON.parse(e.data) })) } catch (err) { console.error('[useCustomerSSE] drive parse failed', err) }
     })
     es.addEventListener('cases', (e: MessageEvent) => {
-      try { setState((s) => ({ ...s, cases: JSON.parse(e.data) })) } catch {}
+      try { setState((s) => ({ ...s, cases: JSON.parse(e.data) })) } catch (err) { console.error('[useCustomerSSE] cases parse failed', err) }
     })
     es.addEventListener('subscriptions', (e: MessageEvent) => {
-      try { setState((s) => ({ ...s, subscriptions: JSON.parse(e.data) })) } catch {}
+      try { setState((s) => ({ ...s, subscriptions: JSON.parse(e.data) })) } catch (err) { console.error('[useCustomerSSE] subscriptions parse failed', err) }
     })
     es.addEventListener('complete', (e: MessageEvent) => {
       try {
         const { timestamp } = JSON.parse(e.data)
         setState((s) => ({ ...s, loading: false, completedAt: timestamp }))
-      } catch {}
+      } catch (err) { console.error('[useCustomerSSE] complete parse failed', err) }
       es.close()
     })
 
