@@ -6157,7 +6157,7 @@ Description: The "Save" button for document classification max-age limit (`docCl
 Can we test: YES — page.route() mock returning 500, assert error text near Save button.
 
 ### BKL-TEST-07c | AdminPage: handleValidate doesn't read server error body on !r.ok
-Status: 🔵 OPEN
+Status: ✅ DONE 2026-05-03 — reads r.json() before throw; added data-testid="validate-error" to error span. REG-ADM-05 added; 5/5 admin spec pass on 7776.
 Priority: P3
 Size: XS
 Source: Rook scan during BKL-TEST-07b 2026-05-03

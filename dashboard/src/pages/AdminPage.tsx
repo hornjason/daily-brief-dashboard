@@ -558,7 +558,10 @@ function ValidateRepairSection() {
     setError(null)
     try {
       const r = await fetch('/api/intelligence/validate-all', { method: 'POST' })
-      if (!r.ok) throw new Error(`Server error: ${r.status}`)
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error ?? `Server error: ${r.status}`)
+      }
       const d = await r.json()
       setResult(d)
     } catch (e: any) {
@@ -586,7 +589,7 @@ function ValidateRepairSection() {
       <div className="text-xs text-gray-500">
         {!running && !result && !error && 'Ready — click to scan all completed intelligence docs'}
         {running && <span className="text-yellow-400">Validating intelligence docs...</span>}
-        {error && <span className="text-red-400">Error: {error}</span>}
+        {error && <span data-testid="validate-error" className="text-red-400">Error: {error}</span>}
         {result && (
           <span>
             Validated <span className="text-gray-300">{result.validated} docs</span>

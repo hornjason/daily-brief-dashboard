@@ -223,4 +223,29 @@ test.describe('AdminPage — silent failure regression (BKL-TEST-07) @destructiv
     await expect(err).toBeVisible({ timeout: 5_000 })
     await expect(err).toContainText(/Settings save failed|Save failed/i)
   })
+
+  test('REG-ADM-05: 500 from POST /api/intelligence/validate-all surfaces server error message (BKL-TEST-07c)', async ({ page }) => {
+    await mockAdminGets(page)
+    await page.route('**/api/intelligence/validate-all', r => {
+      if (r.request().method() === 'POST') {
+        return r.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Validation pipeline down' }),
+        })
+      }
+      return r.fallback()
+    })
+
+    await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded' })
+
+    const btn = page.locator('button', { hasText: 'Validate & Repair' })
+    await expect(btn).toBeVisible({ timeout: 10_000 })
+    await btn.click()
+
+    // Error must surface the server-supplied message, not just "Server error: 500"
+    const err = page.getByTestId('validate-error')
+    await expect(err).toBeVisible({ timeout: 5_000 })
+    await expect(err).toContainText(/Validation pipeline down/i)
+  })
 })
