@@ -8385,14 +8385,14 @@ Solution: Increase smoke check timeout or add retry loop (e.g. wait-for-it style
 ---
 
 ### BKL-ARCH-02 | Scraper status — split across disk store + in-memory module variables
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P1
 Size: M
 Source: Serena architecture audit 2026-05-01
 Issue: hornjason/asaCommandCenter#18
-Files: src/scraper-status-store.ts, src/rh-auth.ts, src/ccsp-scraper.ts, src/supportable-scraper.ts, src/sf-scraper.ts, src/scraper-manager.ts, src/scrape-api.ts
-Description: ARCHITECTURE.md §13 itself needs a table to explain which field comes from which tier. Callers replicate the fallback policy (lastSync = lastScraped ?? rhStatus.lastSuccess ?? null) in three different consumers. Every scraper exports the same five-fingerprint shape (last*, *Running, *Error, adopt*Context) five times.
-Solution: Route all status reads through getStatus() with a single fallback policy in the store. Introduce a ScraperRegistry for context adoption — collapses the 4-line adoption block into one call.
+Files: src/scraper-registry.ts (new), src/scraper-status-store.ts, src/rh-auth.ts, src/sf-auth.ts, src/ccsp-scraper.ts, src/supportable-scraper.ts, src/sf-scraper.ts, src/scraper-manager.ts, src/scrape-api.ts
+Phase 1a commit: 6f8fb5cad — ScraperRegistry + UnifiedScraperStatus + all scraper registrations + adoption migrated to ScraperRegistry.adoptAll()
+Phase 1b commit: 055ea8de1 — scraper-manager + scrape-api callers migrated to getUnifiedStatus(); 25 API tests pass, JSON byte-identical
 
 ---
 
