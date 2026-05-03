@@ -504,7 +504,7 @@ function Dashboard() {
             cases={casesApi.data?.cases ?? []}
           />
         )}
-        {rhStatus && (
+        {rhStatus && !isL3Only && (
           <RhSessionBanner status={rhStatus} onReconnect={() => setRhReconnecting(true)} onVncOpen={(win) => { vncWindowRef.current = win }} />
         )}
         {aeCount === 0 && !noAesDismissed && (

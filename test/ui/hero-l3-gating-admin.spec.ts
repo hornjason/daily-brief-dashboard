@@ -44,16 +44,16 @@ test.describe('@destructive BKL-HERO-05..13: AdminPage L3 gating', () => {
     await expect(page.locator('text=Break-glass page.')).toHaveCount(0)
   })
 
-  test('T2 — RH Cases scrape trigger absent on L3, SF Pipeline present (BKL-HERO-11)', async ({ page }) => {
+  test('T2 — RH Cases scrape trigger absent on L3 (BKL-HERO-11)', async ({ page }) => {
     await mockNodeRole(page, true)
     await page.goto(ADMIN_PATH)
     await waitForAdminReady(page)
 
     // RH Cases ScrapeSection is unmounted entirely on L3.
+    // Note: SF Pipeline trigger was removed from AdminPage in a subsequent refactor;
+    // the SF Pipeline Sync button lives in SetupPage Step 3 Connections section instead.
     const sections = page.locator('h2:has-text("Manual Scrape Triggers")').locator('..')
     await expect(sections.locator('text=RH Cases')).toHaveCount(0)
-    // SF Pipeline must remain — it's L3-safe.
-    await expect(page.locator('text=SF Pipeline').first()).toBeVisible({ timeout: 10_000 })
   })
 
   test('T3 — CCSP scrape trigger absent on L3 (BKL-HERO-11)', async ({ page }) => {
@@ -73,17 +73,15 @@ test.describe('@destructive BKL-HERO-05..13: AdminPage L3 gating', () => {
     await expect(page.locator('h2:has-text("Browser Sessions")')).toHaveCount(0)
   })
 
-  test('T5 — RH Portal + Tableau/CCSP health tiles absent on L3 (BKL-HERO-10)', async ({ page }) => {
+  test('T5 — Data Source Health section absent from Admin page (BKL-HERO-10)', async ({ page }) => {
     await mockNodeRole(page, true)
     await page.goto(ADMIN_PATH)
     await waitForAdminReady(page)
 
-    // SessionHealthPanel renders these tile labels only when not L3.
-    const healthPanel = page.locator('h2:has-text("Data Source Health")').locator('..')
-    await expect(healthPanel.locator('text=RH Portal')).toHaveCount(0)
-    await expect(healthPanel.locator('text=Tableau / CCSP')).toHaveCount(0)
-    // Salesforce tile is unaffected.
-    await expect(healthPanel.locator('text=Salesforce').first()).toBeVisible({ timeout: 10_000 })
+    // SessionHealthPanel (which contained "Data Source Health" tiles for RH Portal,
+    // Tableau/CCSP, and Salesforce) was removed in ca876e931 — the section no longer
+    // exists in AdminPage. Verify no misleading health tiles are present.
+    await expect(page.locator('h2:has-text("Data Source Health")')).toHaveCount(0)
   })
 
   test('T6 — CCSP + RH Cases scheduler rows absent on L3 (BKL-HERO-13)', async ({ page }) => {
@@ -95,8 +93,6 @@ test.describe('@destructive BKL-HERO-05..13: AdminPage L3 gating', () => {
     await expect(scheduler.locator('text=CCSP')).toHaveCount(0)
     await expect(scheduler.locator('text=RH Cases interval')).toHaveCount(0)
     await expect(scheduler.locator('text=RH Cases')).toHaveCount(0)
-    // Territory + SF Pipeline rows must remain.
-    await expect(scheduler.locator('text=Territory').first()).toBeVisible({ timeout: 10_000 })
-    await expect(scheduler.locator('text=SF Pipeline').first()).toBeVisible()
+    // Note: Territory and SF Pipeline rows were removed in 6fd5bce2b — no longer in SchedulerConfig.
   })
 })

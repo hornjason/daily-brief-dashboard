@@ -22,6 +22,10 @@ const ADMIN_URL = `${BASE}/dashboard/admin`
 
 /** Install passthrough mocks for the GET endpoints AdminPage hits on mount. */
 async function mockAdminGets(page: import('@playwright/test').Page) {
+  // Simulate L4 install so the full admin page renders with all scrape triggers.
+  await page.route('**/api/node-role', r =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ isL3Only: false }) })
+  )
   await page.route('**/api/scraper-status', r =>
     r.fulfill({
       status: 200,

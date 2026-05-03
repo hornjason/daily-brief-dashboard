@@ -16,6 +16,10 @@ const SETUP_URL = `${BASE}/dashboard/setup`
 
 /** Stub all mount-time GETs needed for SetupPage to render without crashing */
 async function mockSetupGets(page: import('@playwright/test').Page) {
+  // Simulate L4 install so the rh-portal accordion (and SF Pipeline Sync panel inside it) renders.
+  await page.route('**/api/node-role', r =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ isL3Only: false }) })
+  )
   // RH token check
   await page.route('**/api/settings/offline-token', r =>
     r.request().method() === 'GET'
@@ -58,6 +62,10 @@ async function mockSetupGets(page: import('@playwright/test').Page) {
   await page.route('**/api/products/config', r =>
     r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) })
   )
+  // Suppress Step 0 "first boot" overlay (enabledRegions key must be present to signal non-first-boot).
+  await page.route('**/api/regions/access', r =>
+    r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabledRegions: [], enabledPods: [] }) })
+  )
 }
 
 test.describe('SF Pipeline Sync Now — success banner (BKL-TEST-SF-SYNC-BANNER-01) @destructive', () => {
@@ -77,8 +85,10 @@ test.describe('SF Pipeline Sync Now — success banner (BKL-TEST-SF-SYNC-BANNER-
     await page.goto(SETUP_URL, { waitUntil: 'domcontentloaded' })
 
     // Open Step 3 — Connections section (it's an accordion)
+    // Wait for Step 3 accordion to render (it only appears after /api/node-role responds with isL3Only:false).
     const step3 = page.locator('button, [role="button"]').filter({ hasText: /Step 3.*Connections|Connections/ }).first()
-    if (await step3.isVisible()) await step3.click()
+    await expect(step3).toBeVisible({ timeout: 10_000 })
+    if (!await page.getByTestId('sf-sync-btn').isVisible()) await step3.click()
 
     const syncBtn = page.getByTestId('sf-sync-btn')
     await expect(syncBtn).toBeVisible({ timeout: 10_000 })
@@ -105,8 +115,10 @@ test.describe('SF Pipeline Sync Now — success banner (BKL-TEST-SF-SYNC-BANNER-
 
     await page.goto(SETUP_URL, { waitUntil: 'domcontentloaded' })
 
+    // Wait for Step 3 accordion to render (it only appears after /api/node-role responds with isL3Only:false).
     const step3 = page.locator('button, [role="button"]').filter({ hasText: /Step 3.*Connections|Connections/ }).first()
-    if (await step3.isVisible()) await step3.click()
+    await expect(step3).toBeVisible({ timeout: 10_000 })
+    if (!await page.getByTestId('sf-sync-btn').isVisible()) await step3.click()
 
     const syncBtn = page.getByTestId('sf-sync-btn')
     await expect(syncBtn).toBeVisible({ timeout: 10_000 })
@@ -136,8 +148,10 @@ test.describe('SF Pipeline Sync Now — error state (BKL-TEST-SF-SYNC-ERROR-01) 
 
     await page.goto(SETUP_URL, { waitUntil: 'domcontentloaded' })
 
+    // Wait for Step 3 accordion to render (it only appears after /api/node-role responds with isL3Only:false).
     const step3 = page.locator('button, [role="button"]').filter({ hasText: /Step 3.*Connections|Connections/ }).first()
-    if (await step3.isVisible()) await step3.click()
+    await expect(step3).toBeVisible({ timeout: 10_000 })
+    if (!await page.getByTestId('sf-sync-btn').isVisible()) await step3.click()
 
     const syncBtn = page.getByTestId('sf-sync-btn')
     await expect(syncBtn).toBeVisible({ timeout: 10_000 })

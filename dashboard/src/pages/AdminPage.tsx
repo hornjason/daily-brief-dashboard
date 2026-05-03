@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { AlertCircle, X } from 'lucide-react'
 import { formatRelTime } from '../lib/format'
 import { ProductSourcesAdmin } from '../components/ProductSourcesAdmin'
+import { Step0RegionAccess } from '../components/Step0RegionAccess'
+import { useApi } from '../hooks/useApi'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -216,10 +218,12 @@ function SchedulerConfig({
   intervals,
   schedulerCfg,
   onSave,
+  isL3Only = false,
 }: {
   intervals: RefreshIntervals | null
   schedulerCfg: SchedulerCfg | null
   onSave: (fields: Record<string, unknown>) => Promise<string | null>
+  isL3Only?: boolean
 }) {
   const [rhMinutes, setRhMinutes] = useState<string>('')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -251,7 +255,8 @@ function SchedulerConfig({
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
       <div className="space-y-1 divide-y divide-gray-700/50">
-        <div className="flex items-center gap-3 py-2">
+        {/* BKL-HERO-13: RH Cases scheduler rows are L4-only */}
+        {!isL3Only && <div className="flex items-center gap-3 py-2">
           <label className="text-xs text-gray-400 w-40 shrink-0">
             RH Cases interval
             <span className="block text-gray-500">30 min floor</span>
@@ -274,8 +279,8 @@ function SchedulerConfig({
             {saving ? '...' : saved ? 'Saved' : 'Save'}
           </button>
           {saveError && <span className="text-xs text-red-400">{saveError}</span>}
-        </div>
-        {schedulerCfg && (
+        </div>}
+        {!isL3Only && schedulerCfg && (
           <SourceScheduleRow label="RH Cases" timeKey="rhScrape" enabledKey="rhEnabled" floorHint="Interval-based (see above)" schedCfg={cfg} onSave={onSave} isInterval />
         )}
       </div>
@@ -914,6 +919,19 @@ function ScrapeHistorySection() {
 
 export function AdminPage() {
   const navigate = useNavigate()
+  // BKL-HERO-09: gate break-glass banner behind !isL3Only
+  const nodeRoleApi = useApi<{ isL3Only: boolean }>('/api/node-role')
+  const isL3Only = nodeRoleApi.data?.isL3Only ?? true
+  // BKL-HERO-02: Region Access section state — load saved selections
+  const regionAccessApi = useApi<{ enabledRegions?: string[]; enabledPods?: string[] }>('/api/regions/access')
+  const [adminEnabledRegions, setAdminEnabledRegions] = useState<string[] | undefined>(undefined)
+  const [adminEnabledPods, setAdminEnabledPods] = useState<string[] | undefined>(undefined)
+  useEffect(() => {
+    const d = regionAccessApi.data
+    if (!d) return
+    if (Array.isArray(d.enabledRegions)) setAdminEnabledRegions(d.enabledRegions)
+    if (Array.isArray(d.enabledPods)) setAdminEnabledPods(d.enabledPods)
+  }, [regionAccessApi.data])
   const [status, setStatus] = useState<AllScrapeStatus | null>(null)
   const [intervals, setIntervals] = useState<RefreshIntervals | null>(null)
   const [schedulerCfg, setSchedulerCfg] = useState<SchedulerCfg | null>(null)
@@ -1112,9 +1130,11 @@ export function AdminPage() {
               ← Back to Setup
             </button>
           </div>
-          <div className="mt-2 bg-red-900/50 border border-red-700/60 rounded-md px-4 py-2.5 text-xs text-red-300">
-            <span className="font-semibold">Break-glass page.</span> Manual scrape triggers may take several minutes and require an active Red Hat Portal session. Not for normal use.
-          </div>
+          {!isL3Only && (
+            <div className="mt-2 bg-red-900/50 border border-red-700/60 rounded-md px-4 py-2.5 text-xs text-red-300">
+              <span className="font-semibold">Break-glass page.</span> Manual scrape triggers may take several minutes and require an active Red Hat Portal session. Not for normal use.
+            </div>
+          )}
         </div>
 
         {/* BKL-W2-13: Browser crash banner */}
@@ -1139,7 +1159,8 @@ export function AdminPage() {
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Manual Scrape Triggers</h2>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
+            {/* BKL-HERO-11: RH Cases trigger only runs on L4 — gate behind !isL3Only */}
+            {!isL3Only && <div className="flex flex-col gap-1">
               <ScrapeSection
                 label="RH Cases"
                 status={status?.rh ?? null}
@@ -1162,14 +1183,14 @@ export function AdminPage() {
                   {triggerErrors['rh']}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         </div>
 
         {/* Scheduler config */}
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Scheduler Config</h2>
-          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} />
+          <SchedulerConfig intervals={intervals} schedulerCfg={schedulerCfg} onSave={saveSettings} isL3Only={isL3Only} />
         </div>
 
         {/* AI Settings — intelligence toggle */}
@@ -1348,6 +1369,19 @@ export function AdminPage() {
 
         {/* BKL-M50e: Scrape History */}
         <ScrapeHistorySection />
+
+        {/* BKL-HERO-02: Region Access — edit which regions/pods this install can access */}
+        <div data-testid="admin-region-access">
+          <h2 className="text-lg font-semibold text-white mb-4">Region Access</h2>
+          <Step0RegionAccess
+            initialEnabledRegions={adminEnabledRegions}
+            initialEnabledPods={adminEnabledPods}
+            onSave={(regions, pods) => {
+              setAdminEnabledRegions(regions)
+              setAdminEnabledPods(pods)
+            }}
+          />
+        </div>
 
       </div>
     </div>

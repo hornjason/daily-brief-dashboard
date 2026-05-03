@@ -9,6 +9,7 @@ import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import { BootstrapConfigBlock } from '../components/BootstrapConfigBlock'
 import { useBootstrapConfig } from '../hooks/useBootstrapConfig'
+import { useApi } from '../hooks/useApi'
 import { Step0RegionAccess } from '../components/Step0RegionAccess'
 import { filterPodOptions } from '../utils/regionFilter'
 import { HeroStep3Connections } from '../components/HeroStep3Connections'
@@ -2642,6 +2643,9 @@ export default function SetupPage() {
   const [step0FirstBoot, setStep0FirstBoot] = useState(false)
   const [step0EnabledRegions, setStep0EnabledRegions] = useState<string[] | undefined>(undefined)
   const [step0EnabledPods, setStep0EnabledPods] = useState<string[] | undefined>(undefined)
+  // BKL-HERO-01 Phase 2 — gate Step 3 Connections accordion behind !isL3Only.
+  const nodeRoleApi = useApi<{ isL3Only: boolean }>('/api/node-role')
+  const isL3Only = nodeRoleApi.data?.isL3Only ?? true
 
 
   // Dynamic page title
@@ -2967,6 +2971,9 @@ export default function SetupPage() {
             <GoogleAuthSection />
           </AccordionSection>
 
+          {isL3Only ? (
+            <HeroStep3Connections />
+          ) : (
           <AccordionSection
             id="rh-portal"
             title="Step 3 of 5 — Connections"
@@ -3005,6 +3012,7 @@ export default function SetupPage() {
               </div>
             </div>
           </AccordionSection>
+          )}
 
           <AccordionSection
             id="aes"

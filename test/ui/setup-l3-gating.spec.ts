@@ -115,23 +115,21 @@ test.describe('@destructive BKL-HERO-01 Phase 2: SetupPage L3 gating', () => {
     ).toBeVisible({ timeout: 10_000 })
   })
 
-  test('T7 — Primary (L4) install renders all four sections', async ({ page }) => {
+  test('T7 — Primary (L4) install shows full Connections accordion (not HeroStep3)', async ({ page }) => {
     // The test container is NODE_ROLE-unset, so the real endpoint would
     // return isL3Only:true. Mock it to simulate a primary install.
     await mockNodeRole(page, false)
     await page.goto(SETUP_PATH)
     await waitForSetupReady(page)
 
-    await expect(page.locator('#data-sources')).toHaveCount(1)
-    await expect(page.locator('#settings')).toHaveCount(1)
+    // On L4 the full Connections accordion renders (not bare HeroStep3Connections).
+    // #rh-portal must be present; bare HeroStep3Connections must NOT render standalone.
+    await expect(page.locator('#rh-portal')).toHaveCount(1)
     await expect(page.locator('#ai-settings')).toHaveCount(1)
-    await expect(page.locator('#automation-settings')).toHaveCount(1)
 
-    // Headings visible (collapsed-but-present is fine — accordion header is a button).
+    // Connections step heading visible (in the accordion header button).
     await expect(page.locator('button:has-text("Step 3 of 5 — Connections")')).toBeVisible({ timeout: 10_000 })
-    await expect(page.locator('button:has-text("Step 5 of 5 — Data Sources")')).toBeVisible()
-    await expect(page.locator('button:has-text("Refresh Timer & Settings")')).toBeVisible()
-    await expect(page.locator('button:has-text("Automation & Limits")')).toBeVisible()
     await expect(page.locator('button:has-text("AI & Intelligence Settings")')).toBeVisible()
+    // Note: #data-sources, #settings, #automation-settings were removed in BKL-ARCH-12
   })
 })
