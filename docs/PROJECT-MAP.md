@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-03
+---
+
 # DailyBriefDashboard — Project Map
 *Last validated: 2026-04-21 | Owner: DA | Trigger: New module added, endpoint added/removed, new Operational or Architecture doc created, doc deleted*
 
@@ -99,6 +106,14 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `dashboard-view-mode` | `"asa"` \| `"product"` | ASA vs Product view mode toggle (Sidebar) |
 | `ae-filter-selected` | AE first name string \| `""` | Single-select AE chip filter (App.tsx) |
 | `product-filter-selected` | JSON array of label strings | Multi-select product chip filter (App.tsx) |
+
+## Wizard Endpoints (2026-05-03 — BKL-ONBOARD-10)
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/wizard/setup-region` | Creates a region from a Google Sheets territory URL. Body: `{ sheetUrl, label, sfReportId }`. Idempotent on `territorySheetUrl`. Returns `{ success: true, regionId }`. regionId is the Google Sheets spreadsheet ID. |
+| `GET /api/wizard/seed-sheets` | Returns the two built-in seed territory sheet URLs as `{ sheets: string[] }`. |
+| `GET /api/settings/regions` | Lists all configured regions as `{ regions: { id, label, type }[] }`. Normalizes legacy flat settings schema. |
 
 ## Ingestion Telemetry Endpoint (2026-04-19)
 

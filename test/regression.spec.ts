@@ -1794,4 +1794,12 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
     expect(src).toContain('60_000')
     expect(src).not.toMatch(/inferenceTimedOut = true; resolve\(\) \}, 120_000/)
   })
+
+  // REG-WIZARD-SLUG-01: SECURITY-BASELINE.md cache-path-slug-guards — regionId must be
+  // validated before persisting to settings.json (Rook Medium, BKL-ONBOARD-10, 2026-05-03)
+  test('REG-WIZARD-SLUG-01: setup-region rejects spreadsheet IDs with non-slug chars', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf8')
+    expect(src).toContain('/[^a-zA-Z0-9_-]/.test(regionId)')
+    expect(src).toContain('sheetUrl contains invalid spreadsheet ID')
+  })
 })

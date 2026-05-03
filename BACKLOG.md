@@ -6819,13 +6819,13 @@ Blocked by: BKL-UI-SETUP-ROUTING-01
 ---
 
 ### BKL-ONBOARD-10 | Implement /api/wizard/setup-region + /api/wizard/seed-sheets
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE — 2026-05-03
 Priority: P2
 Size: M
 Source: Marcus review 2026-04-25 — integration tests reference these endpoints, neither exists on local or mini.local
 Issue: hornjason/asaCommandCenter#37
-Files: src/server.ts (or new src/wizard-routes.ts), test/integration/wizard-setup-region.spec.ts
-Description: Integration tests expect POST /api/wizard/setup-region (regionId persistence, idempotency), POST /api/wizard/seed-sheets (returns seed URLs), GET /api/settings/regions. None of these exist on the codebase (confirmed on both local and mini.local). This is a feature gap — needs design brief before implementation: where regions persist (settings.json?), what regionId derives from, canonical seed sheet list.
+Files: src/scrape-api.ts (lines 1002-1076), test/integration/wizard-setup-region.spec.ts
+Description: Implemented POST /api/wizard/setup-region (validates Google Sheets URL, derives regionId from spreadsheet ID, idempotent on territorySheetUrl, writes to settings.json) and GET /api/wizard/seed-sheets (returns 2 built-in seed URLs). Activated 6 integration tests (previously fixme). All 6 pass. 191 total passing, 2 @live pre-existing failures unchanged.
 
 ---
 
@@ -9046,6 +9046,16 @@ Issue: hornjason/asaCommandCenter#11
 Files: src/customer.ts (modified -560 lines net), src/customer/signals/{types,xml-utils,cases,pipeline,ccsp,meetings,emails,docs,subscriptions,failed-sources,extras}.ts (new), src/customer/docs-fetcher.ts (new)
 Commit: 3234bc504
 Description: buildXmlSources decomposed from 296-line monolith to ~108-line composition. SignalBundle discriminated union, collect()+render() pattern per source. Golden-file test guarantees byte-identical XML output. 41 new unit tests pass. docs-fetcher extracted with 9 unit tests on pure folder-matching helpers.
+
+### BKL-SEC-27 | setup-region endpoint — regionId not slug-validated before settings.json write
+Status: ✅ DONE — 2026-05-03 (patched same session)
+Priority: P2
+Size: XS
+Source: Rook scan 2026-05-03 (BKL-ONBOARD-10 post-ship review)
+Files: src/scrape-api.ts line ~1031
+Description: Regex `/\/spreadsheets\/d\/([^/]+)/` accepted any non-slash char including `.`, `%`, spaces. regionId was persisted as region.id in settings.json without slug validation, violating SECURITY-BASELINE.md cache-path-slug-guards. Though setup-region itself doesn't call resolve(regionId), the id flows downstream to pod/region path resolution.
+Solution: Added `/[^a-zA-Z0-9_-]/.test(regionId)` guard → 400 "sheetUrl contains invalid spreadsheet ID". Regression test REG-WIZARD-SLUG-01 in regression.spec.ts.
+Can we test: YES — REG-WIZARD-SLUG-01 asserts guard exists in source.
 
 ### BKL-SEC-26 | docs-fetcher.ts upstream Drive folder ID lookups not using escapeQ()
 Status: ✅ DONE 2026-05-03

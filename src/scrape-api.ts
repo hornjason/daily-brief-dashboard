@@ -11,6 +11,7 @@ import {
   getRegionById,
   flattenPodSfReports,
   flattenPodLabels,
+  type RegionConfig,
 } from './region-config.ts'
 import { aes, customers, patchAe, patchCustomer, saveCustomers, CUSTOMERS_PATH } from './server-state.ts'
 import { createOrUpdateNotebook, isNotebookLmEnabled } from './notebooklm.ts'
@@ -996,6 +997,86 @@ export function registerScrapeRoutes(app: Hono): void {
     } catch {
       return c.json({ regions: [] })
     }
+  })
+
+  // ── POST /api/wizard/setup-region — BKL-ONBOARD-10 ───────────────────────
+  // Creates (or returns existing) region from a Google Sheets territory URL.
+  // Idempotent on territorySheetUrl.
+  app.post('/api/wizard/setup-region', async (c) => {
+    try {
+      let body: { sheetUrl?: unknown; label?: unknown; sfReportId?: unknown }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json({ error: 'Invalid JSON' }, 400)
+      }
+      const sheetUrl = typeof body.sheetUrl === 'string' ? body.sheetUrl : ''
+      const label = typeof body.label === 'string' ? body.label : ''
+      const sfReportId = typeof body.sfReportId === 'string' ? body.sfReportId : ''
+
+      if (!sheetUrl.includes('/spreadsheets/d/')) {
+        return c.json({ error: 'sheetUrl must be a Google Sheets URL' }, 400)
+      }
+      if (!label) {
+        return c.json({ error: 'label required' }, 400)
+      }
+      if (!sfReportId) {
+        return c.json({ error: 'sfReportId required' }, 400)
+      }
+
+      const match = sheetUrl.match(/\/spreadsheets\/d\/([^/]+)/)
+      if (!match) {
+        return c.json({ error: 'sheetUrl must be a Google Sheets URL' }, 400)
+      }
+      const regionId = match[1]
+      // Slug guard — baseline requirement (SECURITY-BASELINE.md cache-path-slug-guards)
+      if (!regionId || /[^a-zA-Z0-9_-]/.test(regionId)) {
+        return c.json({ error: 'sheetUrl contains invalid spreadsheet ID' }, 400)
+      }
+
+      const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config')
+      const SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
+      mkdirSync(CONFIG_DIR, { recursive: true })
+      let settings: Record<string, unknown> = {}
+      try {
+        settings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+      } catch { /* new file */ }
+
+      const normalized = normalizeSettings(settings)
+      const found = normalized.regions.find(r => r.territorySheetUrl === sheetUrl)
+      if (found) {
+        return c.json({ success: true, regionId: found.id })
+      }
+
+      const newRegion: RegionConfig = {
+        id: regionId,
+        label,
+        type: 'commercial',
+        territorySheetUrl: sheetUrl,
+        podBookingsFolderId: '',
+        parentFolderId: '',
+        pods: {},
+      }
+
+      const regions = Array.isArray(settings.regions) ? settings.regions : []
+      settings.regions = [...regions, newRegion]
+      writeJsonAtomic(SETTINGS_PATH, settings)
+
+      return c.json({ success: true, regionId })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── GET /api/wizard/seed-sheets — BKL-ONBOARD-10 ─────────────────────────
+  // Returns the built-in seed territory sheet URLs.
+  app.get('/api/wizard/seed-sheets', (c) => {
+    return c.json({
+      sheets: [
+        'https://docs.google.com/spreadsheets/d/1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8/edit?gid=294606982#gid=294606982',
+        'https://docs.google.com/spreadsheets/d/1p5nM6NNB-vCnaoKxyThnR1zuj_e_80WqzmWh-RsODlQ/edit?gid=409386986#gid=409386986',
+      ],
+    })
   })
 
   // ── POST /api/scrape/sf-bookings-sync — BKL-SF-01 ────────────────────────

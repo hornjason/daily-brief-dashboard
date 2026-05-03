@@ -16,8 +16,10 @@ test.use({ baseURL: process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://loca
 const VALID_SHEET_URL =
   'https://docs.google.com/spreadsheets/d/1wizard_test_sheet_onboard10/edit?gid=0#gid=0'
 
+test.describe.configure({ mode: 'serial' })
+
 test.describe('POST /api/wizard/setup-region', () => {
-  test.fixme('valid body returns 200 with regionId and persists region — BKL-ONBOARD-10: endpoint not yet implemented', async ({ request }) => {
+  test('valid body returns 200 with regionId and persists region', async ({ request }) => {
     const res = await request.post('/api/wizard/setup-region', {
       data: {
         sheetUrl: VALID_SHEET_URL,
@@ -44,7 +46,7 @@ test.describe('POST /api/wizard/setup-region', () => {
     expect(found.label).toBe('Test Region BKL-ONBOARD-10')
   })
 
-  test.fixme('invalid sheetUrl returns 400 with error message — BKL-ONBOARD-10: endpoint not yet implemented', async ({ request }) => {
+  test('invalid sheetUrl returns 400 with error message', async ({ request }) => {
     const res = await request.post('/api/wizard/setup-region', {
       data: {
         sheetUrl: 'https://not-a-google-sheet.example.com/foo',
@@ -59,7 +61,7 @@ test.describe('POST /api/wizard/setup-region', () => {
     expect(body.error.length).toBeGreaterThan(0)
   })
 
-  test.fixme('missing label returns 400 with error message — BKL-ONBOARD-10: endpoint not yet implemented', async ({ request }) => {
+  test('missing label returns 400 with error message', async ({ request }) => {
     const res = await request.post('/api/wizard/setup-region', {
       data: {
         sheetUrl: VALID_SHEET_URL,
@@ -72,7 +74,7 @@ test.describe('POST /api/wizard/setup-region', () => {
     expect(body).toHaveProperty('error')
   })
 
-  test.fixme('missing sfReportId returns 400 with error message — BKL-ONBOARD-10: endpoint not yet implemented', async ({ request }) => {
+  test('missing sfReportId returns 400 with error message', async ({ request }) => {
     const res = await request.post('/api/wizard/setup-region', {
       data: {
         sheetUrl: VALID_SHEET_URL,
@@ -85,7 +87,7 @@ test.describe('POST /api/wizard/setup-region', () => {
     expect(body).toHaveProperty('error')
   })
 
-  test.fixme('idempotency: two POSTs with same sheetUrl result in exactly one region entry — BKL-ONBOARD-10: endpoint not yet implemented', async ({ request }) => {
+  test('idempotency: two POSTs with same sheetUrl result in exactly one region entry', async ({ request }) => {
     // First POST
     const res1 = await request.post('/api/wizard/setup-region', {
       data: {
@@ -122,7 +124,7 @@ test.describe('POST /api/wizard/setup-region', () => {
 })
 
 test.describe('GET /api/wizard/seed-sheets', () => {
-  test.fixme('returns sheets array with at least the built-in entries — BKL-ONBOARD-10: endpoint not yet implemented', async ({ request }) => {
+  test('returns sheets array with at least the built-in entries', async ({ request }) => {
     const res = await request.get('/api/wizard/seed-sheets')
     expect(res.status()).toBe(200)
     const body = await res.json()
