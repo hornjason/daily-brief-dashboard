@@ -159,8 +159,11 @@ test.describe('AdminPage — silent failure regression (BKL-TEST-07) @destructiv
 
     await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded' })
 
-    const btn = page.locator('button', { hasText: 'Run Now' }).first()
-    await expect(btn).toBeVisible({ timeout: 10_000 })
+    // Scope to the RH Cases section to avoid matching DomainInference "Run Now" first.
+    const rhSection = page.getByTestId('rh-cases-section')
+    await expect(rhSection).toBeVisible({ timeout: 10_000 })
+    const btn = rhSection.locator('button', { hasText: /Run Now|Force Run/ })
+    await expect(btn).toBeVisible({ timeout: 5_000 })
     await btn.click()
 
     const err = page.getByTestId('scrape-trigger-error-rh')
@@ -192,8 +195,10 @@ test.describe('AdminPage — silent failure regression (BKL-TEST-07) @destructiv
 
     await page.goto(ADMIN_URL, { waitUntil: 'domcontentloaded' })
 
-    const btn = page.locator('button', { hasText: 'Run Now' }).first()
-    await expect(btn).toBeVisible({ timeout: 10_000 })
+    const rhSection = page.getByTestId('rh-cases-section')
+    await expect(rhSection).toBeVisible({ timeout: 10_000 })
+    const btn = rhSection.locator('button', { hasText: /Run Now|Force Run/ })
+    await expect(btn).toBeVisible({ timeout: 5_000 })
     await btn.click()
 
     const err = page.getByTestId('scrape-trigger-error-rh')

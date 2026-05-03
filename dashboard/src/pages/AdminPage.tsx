@@ -1160,7 +1160,7 @@ export function AdminPage() {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Manual Scrape Triggers</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             {/* BKL-HERO-11: RH Cases trigger only runs on L4 */}
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" data-testid="rh-cases-section">
               <ScrapeSection
                 label="RH Cases"
                 status={status?.rh ?? null}
