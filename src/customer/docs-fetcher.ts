@@ -7,6 +7,7 @@ import { resolve } from 'path'
 import { extractText as extractPdfText } from 'unpdf'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
 import type { Customer, DriveFile } from '../types.ts'
+import { driveClient } from '../lib/drive-client.ts'
 import { aes } from '../server-state.ts'
 import { readDocContentCache, writeDocContentCache } from '../cache-layer.ts'
 import { getGeminiModelLite } from '../settings-api.ts'
@@ -153,68 +154,14 @@ export async function fetchCustomerDocsImpl(customer: Customer): Promise<DriveFi
     return []
   }
 
-  // BFS: collect all files from customer folder + all subfolders (depth-limited)
-  const twoYearsAgo = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString()
-  const allFiles: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string; webViewLink?: string }> = []
-  const seenFileIds = new Set<string>()
-  const visitedFolderIds = new Set<string>([customerFolderId])
-  const FOLDER_MIME = 'application/vnd.google-apps.folder'
-  const queue: Array<{ id: string; depth: number }> = [{ id: customerFolderId, depth: 0 }]
-
-  while (queue.length > 0 && allFiles.length < MAX_FILES_PER_CUSTOMER) {
-    const { id: folderId, depth } = queue.shift()!
-
-    const filesRes = await drive.files.list({
-      q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and mimeType != 'application/vnd.google-apps.shortcut' and modifiedTime > '${twoYearsAgo}' and trashed = false`,
-      fields: 'files(id,name,mimeType,modifiedTime,webViewLink)',
-      orderBy: 'modifiedTime desc',
-      pageSize: Math.min(50, MAX_FILES_PER_CUSTOMER - allFiles.length),
-    })
-    for (const f of filesRes.data.files ?? []) {
-      if (!f.id || seenFileIds.has(f.id)) continue
-      seenFileIds.add(f.id)
-      allFiles.push({
-        id: f.id,
-        name: f.name ?? '',
-        mimeType: f.mimeType ?? '',
-        modifiedTime: f.modifiedTime ?? undefined,
-        webViewLink: f.webViewLink ?? undefined,
-      })
-    }
-
-    if (depth < DRIVE_SUBFOLDER_DEPTH) {
-      const [subRes, shortcutRes] = await Promise.all([
-        drive.files.list({
-          q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-          fields: 'files(id,name)',
-          pageSize: 20,
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }),
-        drive.files.list({
-          q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.shortcut' and trashed = false`,
-          fields: 'files(id,name,shortcutDetails(targetId,targetMimeType))',
-          pageSize: 20,
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }),
-      ])
-      for (const sub of subRes.data.files ?? []) {
-        if (!sub.id || visitedFolderIds.has(sub.id)) continue
-        visitedFolderIds.add(sub.id)
-        queue.push({ id: sub.id, depth: depth + 1 })
-      }
-      for (const sc of shortcutRes.data.files ?? []) {
-        const targetId = sc.shortcutDetails?.targetId
-        const targetMime = (sc.shortcutDetails as any)?.targetMimeType
-        if (!targetId || targetMime !== FOLDER_MIME) continue
-        if (visitedFolderIds.has(targetId)) continue
-        visitedFolderIds.add(targetId)
-        queue.push({ id: targetId, depth: depth + 1 })
-        console.log(`[drive-bfs] following shortcut "${sc.name}" -> ${targetId}`)
-      }
-    }
-  }
+  // BFS: collect all files from customer folder + subfolders (depth-limited, follows folder shortcuts)
+  const twoYearsAgo = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000)
+  const allFiles = await driveClient.listFilesUnder(customerFolderId, {
+    maxFiles: MAX_FILES_PER_CUSTOMER,
+    modifiedAfter: twoYearsAgo,
+    maxDepth: DRIVE_SUBFOLDER_DEPTH,
+    followFolderShortcuts: true,
+  })
 
   const EXPORT_CONCURRENCY = 5
 

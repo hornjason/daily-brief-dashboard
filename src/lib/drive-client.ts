@@ -49,6 +49,8 @@ export interface ListFilesOptions {
   modifiedAfter?: Date
   /** Maximum depth to descend. Default: unbounded (BFS until exhausted). */
   maxDepth?: number
+  /** When true, shortcuts pointing to folders are followed just like real subfolders. Default: false. */
+  followFolderShortcuts?: boolean
 }
 
 // ── Drive auth singleton (lazy) ──────────────────────────────────────────────
@@ -336,7 +338,7 @@ export class DriveFolderClient {
     rootId: string,
     options: ListFilesOptions = {},
   ): Promise<DriveFile[]> {
-    const { maxFiles, modifiedAfter, maxDepth } = options
+    const { maxFiles, modifiedAfter, maxDepth, followFolderShortcuts } = options
 
     const seen = new Set<string>()
     const results: DriveFile[] = []
@@ -394,11 +396,35 @@ export class DriveFolderClient {
           },
           'listFilesUnder folders',
         )
+
+        let shortcutFolderIds: string[] = []
+        if (followFolderShortcuts) {
+          const shortcuts = await this.listAllPages(
+            {
+              q: `'${escapeQ(folderId)}' in parents and mimeType = '${SHORTCUT_MIME}' and trashed = false`,
+              fields: 'nextPageToken, files(id,name,shortcutDetails)',
+              pageSize: 200,
+            },
+            'listFilesUnder shortcuts',
+          )
+          for (const sc of shortcuts) {
+            const targetMime = sc.shortcutDetails?.targetMimeType ?? ''
+            const targetId   = sc.shortcutDetails?.targetId       ?? ''
+            if (targetMime === FOLDER_MIME && targetId && !visitedFolders.has(targetId)) {
+              visitedFolders.add(targetId)
+              shortcutFolderIds.push(targetId)
+            }
+          }
+        }
+
         for (const sub of subFolders) {
           if (sub.id && !visitedFolders.has(sub.id)) {
             visitedFolders.add(sub.id)
             queue.push({ id: sub.id, depth: depth + 1 })
           }
+        }
+        for (const targetId of shortcutFolderIds) {
+          queue.push({ id: targetId, depth: depth + 1 })
         }
       }
     }

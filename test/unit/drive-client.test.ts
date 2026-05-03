@@ -365,6 +365,89 @@ describe('listFilesUnder', () => {
   })
 })
 
+// ── followFolderShortcuts option ─────────────────────────────────────────────
+
+describe('followFolderShortcuts option', () => {
+  test('followFolderShortcuts: false (default) — shortcut files excluded and targets not traversed', async () => {
+    const stub = new StubDrive()
+    stub.entries.push(
+      folder('root', 'Customer', []),
+      file('f1', 'doc1.pdf', ['root']),
+      // A shortcut pointing to a folder
+      {
+        id: 'sc1',
+        name: 'Shortcut to Sub',
+        parents: ['root'],
+        mimeType: SHORTCUT_MIME,
+        shortcutDetails: { targetId: 'targetFolder', targetMimeType: FOLDER_MIME },
+      },
+      // The target folder and a file inside it
+      folder('targetFolder', 'Target Subfolder', []),
+      file('f2', 'doc2.pdf', ['targetFolder']),
+    )
+    const client = makeClient(stub)
+
+    const result = await client.listFilesUnder('root')
+
+    // f2 must not appear — shortcut target was not traversed
+    const ids = result.map((r) => r.id).sort()
+    expect(ids).toEqual(['f1'])
+    // No query that specifically lists shortcuts (mimeType = SHORTCUT_MIME) should have been issued
+    const shortcutListCalls = stub.listCalls.filter((c) => c.q.includes(`mimeType = '${SHORTCUT_MIME}'`))
+    expect(shortcutListCalls.length).toBe(0)
+  })
+
+  test('followFolderShortcuts: true — shortcut pointing to a folder causes that folder files to be included', async () => {
+    const stub = new StubDrive()
+    stub.entries.push(
+      folder('root', 'Customer', []),
+      file('f1', 'doc1.pdf', ['root']),
+      // A shortcut pointing to a folder
+      {
+        id: 'sc1',
+        name: 'Shortcut to Sub',
+        parents: ['root'],
+        mimeType: SHORTCUT_MIME,
+        shortcutDetails: { targetId: 'targetFolder', targetMimeType: FOLDER_MIME },
+      },
+      // The target folder and a file inside it
+      folder('targetFolder', 'Target Subfolder', []),
+      file('f2', 'doc2.pdf', ['targetFolder']),
+    )
+    const client = makeClient(stub)
+
+    const result = await client.listFilesUnder('root', { followFolderShortcuts: true })
+
+    const ids = result.map((r) => r.id).sort()
+    expect(ids).toEqual(['f1', 'f2'])
+  })
+
+  test('followFolderShortcuts: true with maxDepth: 0 — shortcut targets are not followed (depth budget exhausted)', async () => {
+    const stub = new StubDrive()
+    stub.entries.push(
+      folder('root', 'Customer', []),
+      file('f1', 'doc1.pdf', ['root']),
+      // A shortcut pointing to a folder at root level
+      {
+        id: 'sc1',
+        name: 'Shortcut to Sub',
+        parents: ['root'],
+        mimeType: SHORTCUT_MIME,
+        shortcutDetails: { targetId: 'targetFolder', targetMimeType: FOLDER_MIME },
+      },
+      folder('targetFolder', 'Target Subfolder', []),
+      file('f2', 'doc2.pdf', ['targetFolder']),
+    )
+    const client = makeClient(stub)
+
+    const result = await client.listFilesUnder('root', { followFolderShortcuts: true, maxDepth: 0 })
+
+    // maxDepth: 0 means no subfolder recursion at all — shortcut targets must not be followed
+    const ids = result.map((r) => r.id).sort()
+    expect(ids).toEqual(['f1'])
+  })
+})
+
 // ── findSheetByName ──────────────────────────────────────────────────────────
 
 describe('findSheetByName', () => {

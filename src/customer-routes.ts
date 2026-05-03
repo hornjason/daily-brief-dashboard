@@ -392,6 +392,10 @@ export function createCustomerRouter(): Hono {
 
       let allCases = await fetchCases({ includeAll }).catch(() => [])
 
+      // BKL-SEC-25: validate ?account= is numeric before filtering
+      if (accountFilter && !/^\d+$/.test(accountFilter)) {
+        return c.json({ cases: [], totalCount: 0 })
+      }
       if (accountFilter) {
         allCases = allCases.filter((sc) => String(sc.accountNumber) === accountFilter)
       }

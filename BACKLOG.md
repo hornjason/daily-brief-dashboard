@@ -8573,7 +8573,7 @@ Description: writeFileSync(CUSTOMERS_PATH, ...) writes customers.json directly w
 Decision: DONE — replaced with writeJsonAtomic(CUSTOMERS_PATH, { customers: updated }). Gets atomicity + 0o600 + stale-overwrite guard.
 
 ### BKL-ARCH-06-GAP-03 | account-intelligence.ts 3 non-atomic cache writes
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-03 (BKL-ARCH-06 sibling sweep)
@@ -8582,7 +8582,7 @@ Description: 3 JSON cache writes use writeFileSync directly with mode 0o600 but 
 Solution: Replace each with writeJsonAtomic(). writeJsonAtomic already imported in this file.
 
 ### BKL-SEC-24 | events-routes.ts SSE error path emits raw err.message to client
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-03 (BKL-ARCH-14 review)
@@ -8591,7 +8591,7 @@ Description: SSE error handler emits `err.message` directly to client via stream
 Solution: Wrap with sanitizeErr(err) before emitting. Pattern used elsewhere in customer-routes.ts and setup-routes.ts.
 
 ### BKL-SEC-25 | customer-routes.ts /api/cases/all accountFilter lacks shape validation
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-03 (BKL-CASES-MATCH-01 review)
@@ -8611,7 +8611,7 @@ Description: Every Drive operation reimplements drive.files.list with q=..., pag
 Decision: DONE — src/lib/drive-client.ts created with 5-method singleton (findDescendantFolder, ensureChildFolder, listSpreadsheetsUnder, listFilesUnder, findSheetByName). 5 callers migrated. ADR-0016 enforced (supportsAllDrives always-on). Pagination handled internally. 14 unit tests. customer.ts not migrated — see BKL-ARCH-07b. GitHub issue #2 closed.
 
 ### BKL-ARCH-07b | customer.ts BFS — followFolderShortcuts not yet in DriveFolderClient
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P2
 Size: S
 Source: Marcus BKL-ARCH-07 implementation 2026-05-01
@@ -9012,3 +9012,13 @@ Issue: hornjason/asaCommandCenter#11
 Files: src/customer.ts (modified -560 lines net), src/customer/signals/{types,xml-utils,cases,pipeline,ccsp,meetings,emails,docs,subscriptions,failed-sources,extras}.ts (new), src/customer/docs-fetcher.ts (new)
 Commit: 3234bc504
 Description: buildXmlSources decomposed from 296-line monolith to ~108-line composition. SignalBundle discriminated union, collect()+render() pattern per source. Golden-file test guarantees byte-identical XML output. 41 new unit tests pass. docs-fetcher extracted with 9 unit tests on pure folder-matching helpers.
+
+### BKL-SEC-26 | docs-fetcher.ts upstream Drive folder ID lookups not using escapeQ()
+Status: 🔴 OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-03 (BKL-ARCH-07b post-ship review)
+Files: src/customer/docs-fetcher.ts lines 82, 102, 129, 136
+Description: Lines 82, 102, 129, 136 interpolate Drive-issued folder IDs into q= query strings without escapeQ(). These IDs come from Drive API results (not user input), so exploitation risk is minimal — Drive IDs are opaque alphanumeric. Inconsistent with DriveFolderClient which wraps all IDs with escapeQ(). LOW severity.
+Solution: Replace raw template literal IDs with escapeQ(aeFolderId), escapeQ(sub.id) etc., or migrate these upstream lookups to driveClient helpers.
+Can we test: YES — unit test asserting escapeQ is applied when folder name contains a single-quote character.

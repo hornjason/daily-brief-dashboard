@@ -11,8 +11,8 @@
  * service account key or OAuth fallback).
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { writeJsonAtomic } from './lib/atomic-write.ts'
+import { readFileSync, mkdirSync, existsSync } from 'fs'
+import { writeJsonAtomic, writeFileAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
@@ -127,7 +127,7 @@ export function writeIntelligenceDiscoveryCache(
       ...(industryUrl ? { industryDocUrl: industryUrl } : {}),
       ...(isNoDataStub ? { noData: true } : (existing?.noData ? { noData: existing.noData } : {})),
     } as IntelligenceCacheEntry
-    writeFileSync(p, JSON.stringify(entry), { mode: 0o600 })
+    writeJsonAtomic(p, entry)
   } catch { /* non-fatal */ }
 }
 
@@ -1212,7 +1212,7 @@ export function initJobPersistence(cacheDir: string): void {
 function persistJobs(): void {
   if (!JOB_CACHE_PATH) return
   try {
-    writeFileSync(JOB_CACHE_PATH, JSON.stringify(Object.fromEntries(jobs.entries())), { mode: 0o600 })
+    writeFileAtomic(JOB_CACHE_PATH, JSON.stringify(Object.fromEntries(jobs.entries()), null, 2))
   } catch { /* non-fatal */ }
 }
 
@@ -1436,19 +1436,15 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
           const p = intelligenceCachePath(customerName)
           const intelligenceDir = JOB_CACHE_PATH.replace('/intelligence-jobs.json', '/intelligence')
           mkdirSync(intelligenceDir, { recursive: true })
-          writeFileSync(
-            p,
-            JSON.stringify({
-              customerName,
-              company: companyBrief ?? '',
-              industry: industryAnalysis ?? '',
-              industryClassification: industryResult.industry,
-              cachedAt: new Date().toISOString(),
-              companyDocUrl: docUrls.companyDocUrl,
-              industryDocUrl: docUrls.industryDocUrl,
-            }),
-            { mode: 0o600 }
-          )
+          writeJsonAtomic(p, {
+            customerName,
+            company: companyBrief ?? '',
+            industry: industryAnalysis ?? '',
+            industryClassification: industryResult.industry,
+            cachedAt: new Date().toISOString(),
+            companyDocUrl: docUrls.companyDocUrl,
+            industryDocUrl: docUrls.industryDocUrl,
+          })
           console.log(`[acct-intel] Intelligence cache written for ${customerName}`)
         } catch (e: any) { console.warn('[acct-intel] Cache write failed:', e.message) }
       }

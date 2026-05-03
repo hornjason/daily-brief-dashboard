@@ -9,6 +9,7 @@ import { fetchEmail, fetchDrive, fetchCalendar } from './google.ts'
 import { fetchCases } from './redhat.ts'
 import { onCacheLevel, offCacheLevel, type IngestCacheEvent } from './ingest-events.js'
 import { onAIEvent, offAIEvent, type AIIntelEvent } from './ai-events.js'
+import { sanitizeErr } from './utils.ts'
 
 export function createEventsRouter(): Hono {
   const app = new Hono()
@@ -34,7 +35,7 @@ export function createEventsRouter(): Hono {
           } catch (err: any) {
             await stream.writeSSE({
               event: 'section',
-              data: JSON.stringify({ section: name, error: err.message }),
+              data: JSON.stringify({ section: name, error: sanitizeErr(err) }),
             })
           }
         })
