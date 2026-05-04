@@ -1473,22 +1473,11 @@ Fix:
 ---
 
 ### BKL-CONN-TABLEAU-CDP-AUDIT-01 — Structural fix: `safeCookieOp` utility + full CDP call audit (council P0/P1 sweep)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P0**
 - **Source:** Serena council audit 2026-04-29 — scraper-wide CDP hang vulnerability sweep
-- **Symptom:** 13 unguarded CDP Network-domain calls across 5 files can each hang indefinitely when a Tableau tab is open in the shared context. The band-aid pattern (guarding individual call sites) is unsustainable — each patch reveals the next hanging call.
-- **Root cause:** CDP serializes Network-domain calls against pending network activity on any page in the context. Tableau tabs hold live WebSockets permanently. Every `ctx.cookies()`, `ctx.addCookies()`, `ctx.storageState()`, `ctx.clearCookies()` is a potential hang site.
-- **Durable fix:** Build `safeCookieOp<T>(ctx, label, op, fallback, timeoutMs)` + `closeTableauTabs(ctx, label)` in `browser-utils.ts`. Mechanically replace every raw CDP call across all scraper files. Make raw CDP calls a lint failure (ESLint `no-restricted-syntax`).
-- **P0 instances (will hang bootstrap now):**
-  - `tableau-auth.ts:112` — `ctx.storageState()` in `_closeContext` harvest fires while SSO tab is still open
-  - `tableau-auth.ts:179,183,184` — `ctx.cookies()` / `clearCookies()` / `addCookies()` in `startTableauLoginBrowser` unguarded
-  - `ccsp-scraper.ts:658,985` — `saveTableauSession` calls `ctx.storageState()` with no timeout (line 658 fires mid-scrape with live Tableau page)
-  - `tableau-auth.ts:296` — `waitForTableauLogin` timeout exit returns `false` without calling `_closeContext` — leaks SSO Tableau tab permanently into shared context
-- **P1 instances (conditional hangs):**
-  - `rh-scraper.ts:382,951` — `persistSessionState` during scrape and context recycle
-  - `sf-scraper.ts:405` — SF session persistence after scrape
-  - `scrape-api.ts:735` — HTTP endpoint blocks entire request
-  - `tableau-auth.ts:202-208` — `startTableauLoginBrowser` catch path leaks page without closing it
+- **Symptom:** 13 unguarded CDP Network-domain calls across 5 files can each hang indefinitely when a Tableau tab is open in the shared context.
+- **Decision:** DONE — All P0 and P1 call sites wrapped with `safeCookieOp`. P0: `tableau-auth.ts` `_closeContext` harvest, `startTableauLoginBrowser` clearCookies/addCookies, `ccsp-scraper.ts` `saveTableauSession` storageState, `waitForTableauLogin` timeout exit (BKL-CONN-TABLEAU-LOGIN-TIMEOUT-LEAK-01). P1: `rh-scraper.ts`, `sf-scraper.ts`, `scrape-api.ts` storageState calls, `tableau-auth.ts` catch path page cleanup (activePage.close() + popup handler unregister). P2 SSO predicate and restoreSfSession tracked separately.
 - **Files:** `tableau-auth.ts`, `ccsp-scraper.ts`, `rh-scraper.ts`, `sf-scraper.ts`, `scrape-api.ts`, `browser-utils.ts`
 
 ---
@@ -1592,11 +1581,12 @@ Fix:
 - **Closed:** 2026-04-29 ✅ DONE
 
 ### BKL-ARCH-SCRAPER-09 — Wave 8: Remove Supportable from live execution path (P1)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P1
 - **Source:** Serena audit 2026-04-29
 - **Symptom:** Supportable is permanently disabled per CLAUDE.md, but `adoptSupportableContext(ctx)` is still called in `background-scheduler.ts:1270` and `scheduleSupportableSync()` is still registered at line 1190. ~1300 lines of dead code on the live runtime path. Supportable bugs can still surface at startup even though the feature is disabled.
 - **Fix:** Remove `adoptSupportableContext` call and `scheduleSupportableSync()` registration from `background-scheduler.ts`. Keep the file in tree as historical reference.
+- **Decision:** DONE — Removed stubs (`adoptSupportableContext`, `runSupportableDiscoverAndScrape`, `writeSubscriptionSheet`, `supportableScrapeRunning`), `probeVpn()`, `readBatchState()`, `writeBatchState()`, `BATCH_STATE_PATH`, and the full `scheduleSupportableSync()` body (now a no-op export stub). Removed two dead `supportableScrapeRunning` mutex guards from `isAnyScraperRunning()` and `runCcspScrapeWithDelta`. REG-SCRAPER-09-01/02 added. 161 passed on 7776, 570 passed on 7777.
 - **Files:** `background-scheduler.ts`
 
 ---
@@ -9152,7 +9142,7 @@ Fix: Replace both custom Promise.race blocks with safeCookieOp(ctx, c => c.cooki
 Can we test: YES — existing scraper tests + REG assertion that restoreTableauSession has zero raw ctx.cookies() / ctx.addCookies() calls outside safeCookieOp.
 
 ### BKL-CONN-TABLEAU-CDP-AUDIT-03 | storageState() calls in scrape-api.ts/sf-scraper/rh-scraper not through safeCookieOp (LOW)
-Priority: P3 | Size: XS | Status: 🔵 OPEN
+Priority: P3 | Size: XS | Status: ✅ DONE 2026-05-04
 Source: CDP audit 2026-05-04 (BKL-CONN-TABLEAU-CDP-AUDIT-01 execution)
 Files: src/scrape-api.ts:760, src/sf-scraper.ts:407, src/rh-scraper.ts:393
 Description: Three storageState() calls bypass safeCookieOp. All three are wrapped in try/catch (so a CDP hang propagates to a 500 or logged warning, not a silent hang). Low severity — none are in hot scrape paths. Consistency/hardening only.
@@ -9174,3 +9164,27 @@ Files: src/scraper-manager.ts:53,69,299; src/scrape-api.ts:235,918,955; src/back
 Description: Multiple catch blocks log or return e?.message / e.message raw, bypassing sanitizeErr. Most are console-only (low risk), but scrape-api.ts:235 returns the raw error message in a JSON API response body (the /api/scrape/rh/test-discover debug endpoint). Google APIs can include OAuth tokens in 401 bodies; Playwright errors can include file paths.
 Fix: Replace e?.message with sanitizeErr(e) at all logged/returned sites. Priority: scrape-api.ts:235 (user-reachable) first.
 Can we test: YES — source assertion that none of the changed files use raw e?.message in response body construction.
+
+### BKL-ARCH-SCRAPER-09-FOLLOW-01 | Remove `supportable` key from /api/status/scrapes response
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Quinn audit 2026-05-04 (BKL-ARCH-SCRAPER-09 post-ship review)
+Files: src/scrape-api.ts (status/scrapes response builder), src/scraper-manager.ts
+Description: `GET /api/status/scrapes` still returns a `supportable` key with `isRunning:false`, `lastError:null`, `lastSync:null`, `recordCount:0`. This is a legacy entry from when Supportable was active. Cosmetic only — inert — but misleads anyone reading the API response.
+Fix: Remove the `supportable` block from the scraper status response builder. Update any frontend code that reads this key.
+Can we test: YES — assert response JSON has exactly keys `['rh-cases','ccsp','sf-pipeline']` (or equivalent), no `supportable` key.
+
+### BKL-ARCH-SCRAPER-09-FOLLOW-02 | Fix supportableSheetId fixture drift in test/fixtures.ts
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Quinn audit 2026-05-04 (BKL-ARCH-SCRAPER-09 post-ship review)
+Files: test/fixtures.ts
+Description: `test/fixtures.ts` has a hardcoded `CAROLANNE.supportableSheetId` constant that no longer matches live data (live is `undefined` post-removal). Causes a fixture drift warning in global setup.
+Fix: Remove the `supportableSheetId` field from the CAROLANNE fixture constant in `test/fixtures.ts`.
+Can we test: YES — global setup warning disappears.
+
+### BKL-ARCH-SCRAPER-09-FOLLOW-03 | Gate/remove supportable-scraper.ts imports in auth-routes + bootstrap-orchestrator
+Priority: P2 | Size: S | Status: 🔴 OPEN
+Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-09 post-ship review)
+Files: src/auth-routes.ts, src/sf-auth.ts, src/bootstrap-orchestrator.ts (~line 2002)
+Description: These files still import live symbols from `./supportable-scraper.ts` (`adoptSupportableContext`, `closeSupportableContext`, etc.). Per CLAUDE.md Supportable is permanently disabled, but these imports keep the module reachable on non-scheduler routes. A crash in the importer at startup would be hard to diagnose.
+Fix: Remove or stub the supportable imports in these files. Keep `supportable-scraper.ts` in tree as historical reference.
+Can we test: YES — source assertion that auth-routes.ts, sf-auth.ts, bootstrap-orchestrator.ts have zero imports from `./supportable-scraper.ts`.

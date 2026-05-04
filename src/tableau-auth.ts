@@ -203,7 +203,14 @@ export async function startTableauLoginBrowser(): Promise<void> {
   } catch (e) {
     loginInProgress = false
     setLivePageBusy(false)
+    // Unregister popup handler before clearing activeContext
+    if (_activeSsoPopupHandler && sharedCtx) {
+      try { sharedCtx.off('page', _activeSsoPopupHandler) } catch { /* ignore */ }
+      _activeSsoPopupHandler = null
+    }
     activeContext = null
+    // Close any page we opened into the shared context before losing the reference
+    if (activePage) { try { await activePage.close() } catch { /* ignore */ } }
     activePage = null
     throw e
   }

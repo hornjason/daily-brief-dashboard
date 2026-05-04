@@ -9,17 +9,13 @@ import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
 import { lastScraped, recordScrapeExpired, getRhStatus } from './rh-auth.ts'
 import { initScrapeContext, getScrapeContext, closeScrapeContext } from './rh-scraper.ts'
-// BKL-ARCH-L4-SPLIT: sf-scraper, supportable-scraper, ccsp-scraper, and tableau-auth are
+// BKL-ARCH-L4-SPLIT: sf-scraper, ccsp-scraper, and tableau-auth are
 // L4-only modules — they belong in Dockerfile.l4, not the hero install image.
 // These imports are intentionally removed so the hero module graph contains no browser-session code.
 // The constants below are kept for backward-compat with isAnyScraperRunning() — they remain false
 // in the hero install since those scrapers never run.
 const adoptSfContext = (_ctx: any, _dir: string): void => {}
 const initSfSyncFromCache = (_fn: any): void => {}
-const adoptSupportableContext = (_ctx: any): void => {}
-const runSupportableDiscoverAndScrape = async (..._args: any[]): Promise<any[]> => []
-const writeSubscriptionSheet = async (..._args: any[]): Promise<string> => ''
-const supportableScrapeRunning = false
 const adoptCcspContext = (_ctx: any): void => {}
 const runCcspScrape = async (..._args: any[]): Promise<any[]> => []
 const writeCcspSheet = async (..._args: any[]): Promise<string> => ''
@@ -65,7 +61,7 @@ let _scraperQueueRunning = false  // true while a task from the queue is executi
 /** Check all four scraper mutex flags + bootstrap — returns true if ANY browser scraper is active.
  *  BKL-W2-17: includes isBootstrapRunning() so scheduled scrapers wait while bootstrap runs. */
 function isAnyScraperRunning(): boolean {
-  return _rhScrapeRunning || _sfSyncRunning || ccspScrapeRunning || ccspInFlight || supportableScrapeRunning || isBootstrapRunning()
+  return _rhScrapeRunning || _sfSyncRunning || ccspScrapeRunning || ccspInFlight || isBootstrapRunning()
 }
 
 /**
@@ -403,11 +399,6 @@ const CCSP_CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'ccsp-d
 const CCSP_DELTA_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'ccsp-delta.json')
 
 async function runCcspScrapeWithDelta(aesToScrape: any[]): Promise<void> {
-  // BKL-SUP-02: Defer CCSP if Supportable is actively scraping (session collision guard)
-  if (supportableScrapeRunning) {
-    console.log('[ccsp-sync] supportable scrape in progress — deferring CCSP to avoid session collision')
-    return
-  }
   // Read previous cache before scrape
   let prevRecords: any[] = []
   if (existsSync(CCSP_CACHE_PATH)) {
@@ -523,13 +514,6 @@ export function scheduleCcspSync(): void {
         return
       }
 
-      // BKL-SUP-02: Defer scheduled CCSP if Supportable is actively scraping (session collision guard)
-      if (supportableScrapeRunning) {
-        console.log('[ccsp-sync] supportable scrape in progress — deferring scheduled CCSP to avoid session collision')
-        scheduleCcspSync()
-        return
-      }
-
       // BKL-M49: Enqueue through scraper queue instead of running directly
       // BKL-INGEST-06: Wrap run with retry — failures re-enqueue with 5m→10m→15m back-off.
       // Note: runCcspScrapeWithDelta already calls writeSyncStateFlow('ccsp', ok|failed)
@@ -561,142 +545,9 @@ export function scheduleCcspSync(): void {
   }, msUntil)
 }
 
-// ── Supportable daily batch rotation at 7am ET (ADR-008) ────────────────────
-
-const BATCH_STATE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'config', 'batch-state.json')
-
-function readBatchState(): { batchIndex: number; lastBatchRun: string | null } {
-  try {
-    if (existsSync(BATCH_STATE_PATH)) {
-      return JSON.parse(readFileSync(BATCH_STATE_PATH, 'utf-8'))
-    }
-  } catch {}
-  return { batchIndex: 0, lastBatchRun: null }
-}
-
-function writeBatchState(state: { batchIndex: number; lastBatchRun: string | null }): void {
-  writeFileSync(BATCH_STATE_PATH, JSON.stringify(state, null, 2), { mode: 0o600 })
-}
-
-async function probeVpn(): Promise<boolean> {
-  try {
-    await fetch('https://supportable.corp.redhat.com', { signal: AbortSignal.timeout(8_000), redirect: 'manual' })
-    return true
-  } catch {
-    return false
-  }
-}
-
-export function scheduleSupportableSync(): void {
-  const msUntil = nextEt7amUtc().getTime() - Date.now()
-  console.log(`[supportable-sync] next batch run in ${Math.round(msUntil / 60_000)}m (7:00am ET)`)
-  setTimeout(async () => {
-    const suppConfig = getSchedulerConfig()
-    if (!suppConfig.supportableEnabled) {
-      console.log('[supportable-sync] Supportable sync disabled — skipping')
-      scheduleSupportableSync()
-      return
-    }
-    // VPN probe: retry every 15 min until 9am ET
-    const nineAmEt = (() => {
-      const ref = new Date()
-      const fmt = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-      })
-      const p: Record<string, number> = {}
-      for (const part of fmt.formatToParts(ref)) {
-        if (part.type !== 'literal') p[part.type] = Number(part.value)
-      }
-      const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
-      const etOffsetMs = ref.getTime() - etAsIfUtcMs
-      const target = new Date(Date.UTC(p.year, p.month - 1, p.day, 9, 0, 0) + etOffsetMs)
-      return target.getTime() < Date.now() ? new Date(target.getTime() + 86_400_000) : target
-    })()
-
-    let vpnOk = await probeVpn()
-    while (!vpnOk && Date.now() < nineAmEt.getTime()) {
-      console.warn('[supportable-sync] VPN probe failed — retrying in 15m')
-      await new Promise(r => setTimeout(r, 15 * 60_000))
-      if (Date.now() >= nineAmEt.getTime()) break
-      vpnOk = await probeVpn()
-    }
-    if (!vpnOk) {
-      const reason = 'VPN unreachable by 9am ET. Connect VPN and trigger manual sync.'
-      console.error(`[scheduler] SKIPPED: Supportable sync — ${reason}`)
-      setLastSkipReason('supportable', reason)
-      // BKL-M50f: surface skip in scraper status store
-      recordOutcome('supportable', { success: false, error: `Scheduled scrape skipped — session expired` })
-      scheduleSupportableSync()
-      return
-    }
-
-    try {
-      const { customers: currentCustomers } = await import('./server-state.ts')
-      if (!currentCustomers.length) {
-        console.log('[supportable-sync] no customers configured — skipping')
-        scheduleSupportableSync()
-        return
-      }
-
-      const state = readBatchState()
-      const batchIdx = state.batchIndex % 3
-      const batch = currentCustomers.filter((_: any, i: number) => i % 3 === batchIdx)
-      console.log(`[supportable-sync] batch ${batchIdx}: ${batch.length} customers`)
-
-      // BKL-M49: Enqueue through scraper queue instead of running directly
-      if (batch.length > 0) {
-        const capturedBatch = batch
-        const capturedBatchIdx = batchIdx
-        enqueueScraperTask({
-          name: 'supportable',
-          run: async () => {
-            const results = await runSupportableDiscoverAndScrape(capturedBatch)
-
-            // BKL-M21: Post-scrape validation — warn if batch results seem partial
-            const customersWithAccounts = capturedBatch.filter((c: any) => c.accountNumbers?.length > 0).length
-            const expectedWithAccounts = capturedBatch.length
-            if (customersWithAccounts < expectedWithAccounts * 0.5 && expectedWithAccounts > 0) {
-              console.warn(`[scraper-validation] WARNING: Supportable batch discovered accounts for ${customersWithAccounts}/${expectedWithAccounts} customers — possible partial scrape`)
-            }
-
-            // FIX N1: Split results by AE and write a sheet per AE
-            for (const ae of aes) {
-              const aeResults = results.filter(r => {
-                const cx = customers.find(c => c.name === r.customerName)
-                return cx?.ae === ae.name
-              })
-              if (aeResults.length > 0 && aeResults.some(r => r.accountNumbers.length > 0)) {
-                try {
-                  const spreadsheetId = await writeSubscriptionSheet(aeResults, ae.name, ae.driveFolderId, ae.subscriptionSheetId || undefined)
-                  patchAe(ae.name, { subscriptionSheetId: spreadsheetId })
-                } catch (e: any) {
-                  console.warn(`[supportable-sync] sheet write failed for ${ae.name}:`, sanitizeErr(e))
-                }
-              }
-            }
-            await refreshSubscriptions().catch(() => {})
-
-            writeBatchState({ batchIndex: (capturedBatchIdx + 1) % 3, lastBatchRun: new Date().toISOString() })
-            updateSchedulerField('supportableLastRun', new Date().toISOString())
-            console.log(`[supportable-sync] batch ${capturedBatchIdx} complete — next batch: ${(capturedBatchIdx + 1) % 3}`)
-          },
-          source: 'scheduled',
-          enqueuedAt: Date.now(),
-        })
-      } else {
-        writeBatchState({ batchIndex: (batchIdx + 1) % 3, lastBatchRun: new Date().toISOString() })
-      }
-    } catch (e: any) {
-      console.error('[supportable-sync] error:', e?.message ?? e)
-      // Still increment batch index on error so we don't retry same batch indefinitely
-      const state = readBatchState()
-      writeBatchState({ batchIndex: ((state.batchIndex % 3) + 1) % 3, lastBatchRun: new Date().toISOString() })
-    }
-    scheduleSupportableSync()  // reschedule for next day
-  }, msUntil)
-}
+// BKL-ARCH-SCRAPER-09: scheduleSupportableSync() removed — Supportable permanently disabled.
+// Exported stub kept so any stale import in server.ts does not break at parse time.
+export function scheduleSupportableSync(): void { /* no-op */ }
 
 // ── Territory sheet daily sync at 1:45am ET ─────────────────────────────────
 

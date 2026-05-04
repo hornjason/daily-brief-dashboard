@@ -2004,8 +2004,9 @@ test.describe('Solr query injection prevention (BKL-SEC-32)', () => {
     const fs = require('fs')
     const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf-8')
-    // The escaping must appear before the Solr q interpolation
-    expect(src).toMatch(/\.replace\(\/\\\\\\\\/g.*'\\\\\\\\\\\\\\\\'\).*\.replace\(\/"/g/)
+    // Both escaping calls must be present: backslash first, then double-quote
+    expect(src).toContain(".replace(/\\\\/g, '\\\\\\\\')") // .replace(/\\/g, '\\\\')
+    expect(src).toContain('.replace(/"/g, \'\\"\')')         // .replace(/"/g, '\\"')
     // The account_name query still uses the escaped variable
     expect(src).toContain('account_name: "${n}"')
   })
@@ -2063,5 +2064,54 @@ test.describe('restoreTableauSession uses safeCookieOp (BKL-CONN-TABLEAU-CDP-AUD
     // Must NOT have raw custom Promise.race for these ops
     expect(restoreFn).not.toContain('ctx.cookies(),\n')
     expect(restoreFn).not.toContain('ctx.addCookies(saved.cookies),\n')
+  })
+})
+
+// REG-SCRAPER-09: BKL-ARCH-SCRAPER-09 — Supportable removed from live execution path
+// scheduleSupportableSync() must be a no-op stub; no probeVpn, readBatchState, or
+// runSupportableDiscoverAndScrape calls should remain in the function body.
+test.describe('Supportable removed from live execution path (BKL-ARCH-SCRAPER-09)', () => {
+  test('REG-SCRAPER-09-01: scheduleSupportableSync is a no-op stub in background-scheduler.ts', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/background-scheduler.ts'), 'utf-8')
+    const fnStart = src.indexOf('export function scheduleSupportableSync')
+    expect(fnStart).toBeGreaterThan(-1)
+    const fnBody = src.slice(fnStart, src.indexOf('\n}', fnStart) + 2)
+    // Must be a no-op — no setTimeout, no probeVpn, no real scraper calls
+    expect(fnBody).not.toContain('setTimeout')
+    expect(fnBody).not.toContain('probeVpn')
+    expect(fnBody).not.toContain('runSupportableDiscoverAndScrape')
+  })
+
+  test('REG-SCRAPER-09-02: supportableScrapeRunning guard removed from isAnyScraperRunning', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/background-scheduler.ts'), 'utf-8')
+    const fnStart = src.indexOf('function isAnyScraperRunning')
+    const fnEnd = src.indexOf('}', fnStart) + 1
+    const fnBody = src.slice(fnStart, fnEnd)
+    expect(fnBody).not.toContain('supportableScrapeRunning')
+  })
+})
+
+// REG-CDP-AUDIT-03: BKL-CONN-TABLEAU-CDP-AUDIT-01 — startTableauLoginBrowser catch path cleanup
+// If startTableauLoginBrowser throws mid-flight, activePage must be closed and
+// the SSO popup handler must be unregistered before losing the context reference.
+test.describe('startTableauLoginBrowser catch path cleanup (BKL-CONN-TABLEAU-CDP-AUDIT-01)', () => {
+  test('REG-CDP-AUDIT-03-01: tableau-auth.ts catch block closes activePage before nulling it', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf-8')
+    const fnStart = src.indexOf('export async function startTableauLoginBrowser')
+    const fnEnd = src.indexOf('\n}', fnStart) + 2
+    const fnBody = src.slice(fnStart, fnEnd)
+    const catchIdx = fnBody.indexOf('} catch (e)')
+    const catchBody = fnBody.slice(catchIdx)
+    // catch block must close activePage before nulling
+    expect(catchBody).toContain('activePage.close()')
+    // catch block must unregister popup handler
+    expect(catchBody).toContain("sharedCtx.off('page', _activeSsoPopupHandler)")
+    expect(catchBody).toContain('_activeSsoPopupHandler = null')
   })
 })
