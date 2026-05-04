@@ -26,8 +26,8 @@ import { writeFile, mkdir, readFile, unlink, rename } from 'node:fs/promises'
 import { writeJsonAtomicAsync } from './lib/atomic-write.ts'
 import { resolve, dirname, join } from 'node:path'
 import type { SupportCase } from './types.ts'
-import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
-import { notify } from './utils.ts'
+import { BASE_CHROMIUM_ARGS, safeCookieOp } from './browser-utils.ts'
+import { notify, sanitizeErr } from './utils.ts'
 
 // ── BKL-M50c: Auto-recovery state ───────────────────────────────────────────
 let _recoveryInProgress = false
@@ -396,10 +396,10 @@ export async function closeScrapeContext(): Promise<void> {
 async function persistSessionState(): Promise<void> {
   if (!_context || !_profileDir) return
   try {
-    const state = await _context.storageState()
+    const state = await safeCookieOp(_context, 'rh-scraper persistSessionState storageState', c => c.storageState(), { cookies: [], origins: [] })
     await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
   } catch (e: any) {
-    console.warn(`[rh-scraper] persistSessionState failed: ${e?.message ?? e}`)
+    console.warn(`[rh-scraper] persistSessionState failed: ${sanitizeErr(e)}`)
   }
 }
 

@@ -69,6 +69,7 @@ import { readSheetCache, readCCSPCache, readPipelineCache } from './cache-layer.
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
 import { isPrimary } from './lib/node-role.ts'
+import { safeCookieOp } from './browser-utils.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome, getUnifiedStatus } from './scraper-status-store.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
@@ -759,7 +760,7 @@ export function registerScrapeRoutes(app: Hono): void {
     try {
       const ctx = getScrapeContext()
       if (!ctx) return c.json({ ok: false, error: 'No active browser context — connect Red Hat Portal first' }, 400)
-      const state = await ctx.storageState()
+      const state = await safeCookieOp(ctx, 'save-content-rh-session storageState', c => c.storageState(), { cookies: [], origins: [] })
       const contentRhCookies = state.cookies.filter(ck => ck.domain.includes('content.redhat.com') || ck.domain.includes('.redhat.com'))
       if (contentRhCookies.length === 0) return c.json({ ok: false, error: 'No content.redhat.com cookies found — open VNC and log in at content.redhat.com first' }, 400)
       const profileDir = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'

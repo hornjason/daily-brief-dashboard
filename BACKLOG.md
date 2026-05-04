@@ -9144,7 +9144,7 @@ Can we test: YES — test should pass after fix on ci project.
 ---
 
 ### BKL-CONN-TABLEAU-CDP-AUDIT-02 | ccsp-scraper.ts custom Promise.race duplicates safeCookieOp
-Priority: P3 | Size: XS | Status: 🔵 OPEN
+Priority: P3 | Size: XS | Status: ✅ DONE 2026-05-04
 Source: CDP audit 2026-05-04 (BKL-CONN-TABLEAU-CDP-AUDIT-01 execution)
 Files: src/ccsp-scraper.ts lines 71-93
 Description: restoreTableauSession() implements its own Promise.race([ctx.cookies(), 10s_timeout]) and Promise.race([ctx.addCookies(saved.cookies), 10s_timeout]) instead of using safeCookieOp(). Functionally safe — same 10s timeout as safeCookieOp. Pure code duplication. No silent failure risk.

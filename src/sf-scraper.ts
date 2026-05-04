@@ -22,7 +22,7 @@ import { resolve, join } from 'node:path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import { sanitizeCell } from './utils.ts'
-import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
+import { BASE_CHROMIUM_ARGS, safeCookieOp } from './browser-utils.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { getScrapeContext } from './rh-scraper.ts'
 import { assertPrimary } from './lib/node-role.ts'
@@ -404,7 +404,7 @@ export async function closeSfContext(): Promise<void> {
 async function persistSessionState(): Promise<void> {
   if (!_context || !_profileDir) return
   try {
-    const state = await _context.storageState()
+    const state = await safeCookieOp(_context, 'sf-scraper persistSessionState storageState', c => c.storageState(), { cookies: [], origins: [] })
     await writeFile(resolve(_profileDir, SESSION_STATE_FILE), JSON.stringify(state), { mode: 0o600 })
   } catch { /* non-fatal */ }
 }
