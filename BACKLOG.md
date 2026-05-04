@@ -1512,7 +1512,7 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-02 — Wave 1: Standardize scraper service naming (P0)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P0
 - **Source:** Serena audit 2026-04-29 (CC-1)
 - **Symptom:** Same scraper referred to by different identifiers at every layer — `rh-cases` in status store, `rh` in circuit breaker and API, `sf-pipeline` in status store, `salesforce` in circuit breaker and API. Every debug grep and dashboard query requires mental translation. Status routes do triple-fallback chains because names don't align.
@@ -9140,3 +9140,37 @@ Files: test/api/error-paths.spec.ts line 20
 Description: POST /api/scrape/ccsp is gated behind if (process.env.NODE_ROLE === 'primary') in scrape-api.ts:245. On L3 hero containers (NODE_ROLE unset), the route is never registered → 404. The test expects [200, 400, 401, 403, 409] and fails when status is 404. Pre-existing architectural mismatch — not a regression from today. 1 failure in ci project every run.
 Fix: Add 404 to the allowed status array when NODE_ROLE is not primary, OR add a .skip when NODE_ROLE !== 'primary' based on an /api/node-role probe at suite start.
 Can we test: YES — test should pass after fix on ci project.
+
+---
+
+### BKL-CONN-TABLEAU-CDP-AUDIT-02 | ccsp-scraper.ts custom Promise.race duplicates safeCookieOp
+Priority: P3 | Size: XS | Status: 🔵 OPEN
+Source: CDP audit 2026-05-04 (BKL-CONN-TABLEAU-CDP-AUDIT-01 execution)
+Files: src/ccsp-scraper.ts lines 71-93
+Description: restoreTableauSession() implements its own Promise.race([ctx.cookies(), 10s_timeout]) and Promise.race([ctx.addCookies(saved.cookies), 10s_timeout]) instead of using safeCookieOp(). Functionally safe — same 10s timeout as safeCookieOp. Pure code duplication. No silent failure risk.
+Fix: Replace both custom Promise.race blocks with safeCookieOp(ctx, c => c.cookies()) and safeCookieOp(ctx, c => c.addCookies(saved.cookies)).
+Can we test: YES — existing scraper tests + REG assertion that restoreTableauSession has zero raw ctx.cookies() / ctx.addCookies() calls outside safeCookieOp.
+
+### BKL-CONN-TABLEAU-CDP-AUDIT-03 | storageState() calls in scrape-api.ts/sf-scraper/rh-scraper not through safeCookieOp (LOW)
+Priority: P3 | Size: XS | Status: 🔵 OPEN
+Source: CDP audit 2026-05-04 (BKL-CONN-TABLEAU-CDP-AUDIT-01 execution)
+Files: src/scrape-api.ts:760, src/sf-scraper.ts:407, src/rh-scraper.ts:393
+Description: Three storageState() calls bypass safeCookieOp. All three are wrapped in try/catch (so a CDP hang propagates to a 500 or logged warning, not a silent hang). Low severity — none are in hot scrape paths. Consistency/hardening only.
+Fix: Wrap each with safeCookieOp(ctx, c => c.storageState()) — 3 surgical 1-liners.
+Can we test: YES — source assertion in regression.spec.ts.
+
+### BKL-SEC-32 | scrape-api.ts — Solr query string injection in debug-fields endpoint
+Priority: P2 | Size: XS | Status: ✅ DONE 2026-05-04
+Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-02 post-ship review)
+Files: src/scrape-api.ts:206
+Description: /api/scrape/rh/debug-fields endpoint interpolates a name parameter into a Solr `q` field without escaping quotes: `q: "account_name: "${n}""`. A name containing `"` can break out of the quoted clause and inject Solr syntax. Single-user localhost so blast radius is limited, but the pattern is wrong.
+Fix: Escape `"` and `\` in `n` before interpolation: `n.replace(/\\/g, '\\\\').replace(/"/g, '\\"')`.
+Can we test: YES — source assertion that the interpolation escapes quotes, or a test that passes a name with `"` and confirms no Solr error/injection.
+
+### BKL-SEC-33 | scraper-manager.ts/background-scheduler.ts — raw e?.message bypasses sanitizeErr in ~20 log sites
+Priority: P2 | Size: S | Status: ✅ DONE 2026-05-04 (partial — scrape-api.ts 3 sites + scraper-manager.ts 3 sites fixed; background-scheduler.ts sites are log-only, lower priority)
+Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-02 post-ship review)
+Files: src/scraper-manager.ts:53,69,299; src/scrape-api.ts:235,918,955; src/background-scheduler.ts (~15 sites)
+Description: Multiple catch blocks log or return e?.message / e.message raw, bypassing sanitizeErr. Most are console-only (low risk), but scrape-api.ts:235 returns the raw error message in a JSON API response body (the /api/scrape/rh/test-discover debug endpoint). Google APIs can include OAuth tokens in 401 bodies; Playwright errors can include file paths.
+Fix: Replace e?.message with sanitizeErr(e) at all logged/returned sites. Priority: scrape-api.ts:235 (user-reachable) first.
+Can we test: YES — source assertion that none of the changed files use raw e?.message in response body construction.

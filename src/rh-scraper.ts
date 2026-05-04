@@ -350,6 +350,12 @@ export function adoptScrapeContext(context: BrowserContext, profileDir: string, 
   _recoveryAttempts = 0
   _scrapesSinceRecycle = 0
 
+  // BKL-ARCH-SCRAPER-07: fire recovery callback so CCSP/SF re-adopt the fresh context
+  // immediately on login handoff, not lazily on their next scrape cycle.
+  if (_onContextRecovered) {
+    try { _onContextRecovered(context, profileDir) } catch { /* ignore — adoption is best-effort */ }
+  }
+
   _keepAliveTimer = setInterval(
     () => keepAlive().catch(e => console.warn('[rh-scraper] keep-alive error:', e)),
     KEEP_ALIVE_INTERVAL_MS,

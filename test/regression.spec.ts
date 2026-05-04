@@ -2034,3 +2034,18 @@ test.describe('sanitizeErr consistency in API responses (BKL-SEC-33)', () => {
     expect(src).toMatch(/ntfy.*notification failed.*sanitizeErr/)
   })
 })
+
+// REG-SCRAPER-07: BKL-ARCH-SCRAPER-07 — adoptScrapeContext fires recovery callback
+// After a fresh RH login handoff, sister scrapers (CCSP, SF) must re-adopt the context
+// immediately via _onContextRecovered, not lazily on their next scrape cycle.
+test.describe('adoptScrapeContext fires recovery callback (BKL-ARCH-SCRAPER-07)', () => {
+  test('REG-SCRAPER-07-01: rh-scraper.ts adoptScrapeContext calls _onContextRecovered after assignments', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf-8')
+    // adoptScrapeContext must contain the BKL-ARCH-SCRAPER-07 recovery callback invocation
+    const adoptFn = src.slice(src.indexOf('export function adoptScrapeContext'), src.indexOf('console.log(\'[rh-scraper] adopted login context'))
+    expect(adoptFn).toContain('_onContextRecovered')
+    expect(adoptFn).toContain('_onContextRecovered(context, profileDir)')
+  })
+})
