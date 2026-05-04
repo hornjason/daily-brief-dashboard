@@ -1818,6 +1818,21 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
     expect(src).not.toContain('supportableSheetId')
   })
 
+  // REG-SEC-29: BKL-SEC-29 — scrape-api.ts must not leak raw e.message inside c.json() responses.
+  // All catch blocks that return HTTP responses must route through sanitizeErr() instead.
+  test('REG-SEC-29: scrape-api.ts has zero raw e.message occurrences inside c.json() calls', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf8')
+    // The pattern to ban: c.json({ error: e.message } — raw error string in HTTP response
+    expect(src).not.toMatch(/c\.json\(\s*\{\s*error:\s*e\.message/)
+  })
+
+  // REG-SEC-30: BKL-SEC-30 — bootstrap-orchestrator.ts must not use inline ad-hoc truncation.
+  // The .slice(0,200).replace(...) pattern must be gone; sanitizeErr() owns all sanitization.
+  test('REG-SEC-30: bootstrap-orchestrator.ts has zero inline .slice(0, 200).replace() truncation patterns', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    expect(src).not.toMatch(/\.slice\(0,\s*200\)\.replace\(/)
+  })
+
   // REG-SEC-21-01: BKL-SEC-21 — POST /api/drive-watcher/rebuild must guard behind
   // isPrimary() so hero nodes return 404 instead of wiping the in-memory folder map.
   test('REG-SEC-21-01: drive-watcher/rebuild guards behind isPrimary before rebuildFolderMap', () => {

@@ -9104,7 +9104,7 @@ Can we test: YES — grep for supportableSheetId in test/fixtures.ts returning 0
 ---
 
 ### BKL-SEC-29 | scrape-api.ts — 4 raw e.message returns bypass sanitizeErr in HTTP responses
-Priority: P2 | Size: XS | Status: 🔵 OPEN
+Priority: P2 | Size: XS | Status: ✅ DONE 2026-05-04
 Source: Rook scan 2026-05-03 (BKL-ARCH-04 post-ship review)
 Files: src/scrape-api.ts lines 149, 222, 250, 538
 Description: Four catch blocks return `c.json({ error: e.message }, 503)` directly, bypassing sanitizeErr(). Playwright browser executable paths, profile directory paths, and stack frames with internal file paths can leak to API consumers. sanitizeErr() was added in BKL-SEC-28 and already used elsewhere in the file.
@@ -9114,7 +9114,7 @@ Can we test: YES — extend REG-SEC-28 in regression.spec.ts to assert scrape-ap
 ---
 
 ### BKL-SEC-30 | bootstrap-orchestrator.ts — inline error truncation misses JWT and Bearer tokens
-Priority: P2 | Size: XS | Status: 🔵 OPEN
+Priority: P2 | Size: XS | Status: ✅ DONE 2026-05-04
 Source: Rook scan 2026-05-03 (BKL-ARCH-04 post-ship review)
 Files: src/bootstrap-orchestrator.ts lines 823, 1996
 Description: Two sites use s.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') inline. This strips .ts/.js file paths but misses JWT tokens (eyJ...), Bearer tokens, .pem/.key content, and HTML. sanitizeErr() covers all of these.
@@ -9134,7 +9134,7 @@ Can we test: YES — source assertion that none of the 6 files use raw Bearer-on
 ---
 
 ### BKL-TEST-ERROR-PATHS-L3-01 | error-paths.spec.ts CCSP auth test fails on L3 (NODE_ROLE not primary)
-Priority: P3 | Size: XS | Status: 🔵 OPEN
+Priority: P3 | Size: XS | Status: ✅ DONE 2026-05-04
 Source: CI regression run 2026-05-03 (post BKL-ARCH-04 ship)
 Files: test/api/error-paths.spec.ts line 20
 Description: POST /api/scrape/ccsp is gated behind if (process.env.NODE_ROLE === 'primary') in scrape-api.ts:245. On L3 hero containers (NODE_ROLE unset), the route is never registered → 404. The test expects [200, 400, 401, 403, 409] and fails when status is 404. Pre-existing architectural mismatch — not a regression from today. 1 failure in ci project every run.

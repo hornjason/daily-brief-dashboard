@@ -146,7 +146,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker — user is explicitly requesting a run
   app.post('/api/scrape/rh', async (c) => {
-    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
+    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: sanitizeErr(e) }, 503) }
     if (_rhScrapeRunning) return c.json({ scraper: 'rh', status: 'busy', error: 'RH scrape already in progress' }, 409)
     resetCircuitBreaker('rh')
     markRunning('rh-cases')  // BKL-ADM01: set state synchronously before the task runs
@@ -219,7 +219,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // POST /api/scrape/rh/test-discover — run name discovery for specific customers (test only, no writes)
   // Body: { customers: string[] } — list of SF alias names to search
   app.post('/api/scrape/rh/test-discover', async (c) => {
-    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
+    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: sanitizeErr(e) }, 503) }
     const body = await c.req.json<{ customers?: string[] }>().catch(() => ({} as { customers?: string[] }))
     const names: string[] = Array.isArray(body.customers) ? body.customers : []
     if (names.length === 0) return c.json({ error: 'customers array required' }, 400)
@@ -247,7 +247,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
   app.post('/api/scrape/ccsp', async (c) => {
-    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
+    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: sanitizeErr(e) }, 503) }
     // Stale-mutex auto-release: if the flag has been stuck for >15 min (container restart, crash),
     // let the request through — runCcspScrape() will reset the mutex internally.
     const ccspStale = ccspScrapeRunning && ccspScrapeStartedAt &&
@@ -535,7 +535,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // but now respect the global queue so they don't collide with other triggers.
 
   app.post('/api/scrape/all', async (c) => {
-    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: e.message }, 503) }
+    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: sanitizeErr(e) }, 503) }
     enqueueScraperTask({
       name: 'all-scrapers',
       run: async () => {

@@ -16,9 +16,11 @@ test.describe('POST /api/scrape/ccsp — auth guard', () => {
     // Without eligible AEs: 400. Must never return 500.
     const { status, body } = await postJSON('/api/scrape/ccsp')
     expect(status).not.toBe(500)
-    // Accept 200 (auth valid, scrape started), 400 (no eligible AEs), 409 (already running)
-    expect([200, 400, 401, 403, 409]).toContain(status)
-    if (status >= 400) {
+    // Accept 200 (auth valid, scrape started), 400 (no eligible AEs), 404 (L3 node — endpoint not available),
+    // 409 (already running)
+    expect([200, 400, 401, 403, 404, 409]).toContain(status)
+    // 404 on L3 nodes is a plain-text Hono response (route not registered), not a JSON error body
+    if (status >= 400 && status !== 404) {
       expect(body.error ?? body.reason).toBeDefined()
     }
   })

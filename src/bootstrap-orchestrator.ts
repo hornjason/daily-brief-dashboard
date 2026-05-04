@@ -820,7 +820,7 @@ export function createBootstrapRouter(): Hono {
 
   router.get('/api/bootstrap/auto/status', (c) => {
     const sanitizeDetail = (s: string | null | undefined) =>
-      s ? s.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : s
+      s ? sanitizeErr(new Error(s)) : s
     const sanitized: Record<string, unknown> = {
       ...autoBootstrapState,
       error: sanitizeDetail(autoBootstrapState.error),
@@ -1993,7 +1993,7 @@ export function createBootstrapRouter(): Hono {
       ...initialLoadState,
       errors: initialLoadState.errors.map(e => ({
         customer: e.customer,
-        message: String(e.message ?? '').slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]'),
+        message: sanitizeErr(e),
       })),
     })
   })
