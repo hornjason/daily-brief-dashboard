@@ -10,6 +10,43 @@ import { BASE_URL } from './helpers'
 
 
 
+// ── REG-SEC-28: BKL-SEC-28 — /api/status/scrapes lastError must not leak raw paths or JWT tokens ──
+test.describe('REG-SEC-28: /api/status/scrapes lastError does not expose raw paths or JWT tokens (BKL-SEC-28)', () => {
+  test('(source) scraper-manager.ts uses sanitizeErr() for supportable and ccsp lastError', () => {
+    const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'scraper-manager.ts'), 'utf-8')
+    // Inline .slice(0,200).replace(...) must be gone — both fields must use sanitizeErr()
+    expect(src, 'lastSupportableError must use sanitizeErr(), not inline slice/replace').not.toMatch(
+      /lastSupportableError\s*\?\s*lastSupportableError\.slice/
+    )
+    expect(src, 'lastCcspError must use sanitizeErr(), not inline slice/replace').not.toMatch(
+      /lastCcspError\s*\?\s*lastCcspError\.slice/
+    )
+    expect(src, 'lastSupportableError must call sanitizeErr()').toMatch(
+      /lastSupportableError\s*\?\s*sanitizeErr\(lastSupportableError\)/
+    )
+    expect(src, 'lastCcspError must call sanitizeErr()').toMatch(
+      /lastCcspError\s*\?\s*sanitizeErr\(lastCcspError\)/
+    )
+  })
+
+  test('GET /api/status/scrapes lastError fields do not contain raw file paths or JWT tokens', async () => {
+    const res = await fetch(`${BASE_URL}/api/status/scrapes`)
+    expect(res.ok, '/api/status/scrapes must return 200').toBe(true)
+    const body = await res.json() as Record<string, any>
+
+    const services = ['supportable', 'ccsp', 'rh', 'salesforce'] as const
+    for (const svc of services) {
+      const lastError: string | null = body[svc]?.lastError ?? null
+      if (!lastError) continue
+      // Must not contain raw Unix/container file paths
+      expect(lastError, `${svc}.lastError must not contain /Users/ path`).not.toMatch(/\/Users\//)
+      expect(lastError, `${svc}.lastError must not contain /data/ path`).not.toMatch(/\/data\//)
+      // Must not contain JWT-shaped tokens (header.payload.signature base64url)
+      expect(lastError, `${svc}.lastError must not contain JWT token`).not.toMatch(/eyJ[A-Za-z0-9_-]{10,}/)
+    }
+  })
+})
+
 // ── REG-SEC-09: BKL-SEC-09 — parseTerritoryParts allowlist guard ──
 test('REG-SEC-09: parseTerritoryParts rejects territory strings not matching [A-Z0-9_] (BKL-SEC-09)', async () => {
   const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'ccsp-scraper.ts'), 'utf-8')

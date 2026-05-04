@@ -224,7 +224,7 @@ describe('JWT request listener in adoptScrapeContext', () => {
     listener(fakeReq)
 
     // getLivePage still points to our page (token stored in module state)
-    expect(getLivePage()).toBe(mockPage)
+    expect(getLivePage()).toBe(mockPage as unknown as import('@playwright/test').Page)
   })
 })
 
@@ -256,7 +256,7 @@ describe('closeScrapeContext cleanup', () => {
     const mockPage = createMockPage()
     const mockContext = createMockContext()
     adoptScrapeContext(mockContext as any, tmpDir, mockPage as any)
-    expect(getLivePage()).toBe(mockPage)
+    expect(getLivePage()).toBe(mockPage as unknown as import('@playwright/test').Page)
     await closeScrapeContext()
     expect(getLivePage()).toBeNull()
   })

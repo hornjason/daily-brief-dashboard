@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, statSync, existsSync,
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-import { writeJsonAtomic, writeFileAtomic, appendLine } from '../../src/lib/atomic-write.ts'
+import { writeJsonAtomic, writeJsonAtomicAsync, writeFileAtomic, appendLine } from '../../src/lib/atomic-write.ts'
 
 let dir: string
 
@@ -144,6 +144,48 @@ describe('migration call-site coverage (BKL-ARCH-06)', () => {
     writeJsonAtomic(path, real)
     writeJsonAtomic(path, {})
     expect(JSON.parse(readFileSync(path, 'utf-8'))).toEqual(real)
+  })
+})
+
+describe('writeJsonAtomicAsync', () => {
+  test('writes correct JSON content and no .tmp remains', async () => {
+    const path = join(dir, 'async-data.json')
+    await writeJsonAtomicAsync(path, { service: 'rh', count: 5 })
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'))
+    expect(parsed).toEqual({ service: 'rh', count: 5 })
+    // No leftover .tmp file after atomic rename
+    const entries = readdirSync(dir)
+    expect(entries).toContain('async-data.json')
+    expect(entries.some(e => e.endsWith('.tmp'))).toBe(false)
+  })
+
+  test('sets mode 0o600 on written file', async () => {
+    const path = join(dir, 'async-secret.json')
+    await writeJsonAtomicAsync(path, { token: 'abc' })
+    const mode = statSync(path).mode & 0o777
+    expect(mode).toBe(0o600)
+  })
+
+  test('creates parent directory when it does not exist', async () => {
+    const path = join(dir, 'nested', 'async', 'config.json')
+    await writeJsonAtomicAsync(path, { ok: true })
+    expect(existsSync(path)).toBe(true)
+  })
+
+  test('is atomic — .tmp file is absent after write completes', async () => {
+    // After the call resolves, only the final path exists (no leftover .tmp)
+    const path = join(dir, 'atomic-check.json')
+    await writeJsonAtomicAsync(path, [1, 2, 3])
+    expect(existsSync(path + '.tmp')).toBe(false)
+    expect(existsSync(path)).toBe(true)
+  })
+
+  test('stale-overwrite guard prevents empty object from clobbering non-empty file', async () => {
+    const path = join(dir, 'async-cache.json')
+    await writeJsonAtomicAsync(path, { accounts: [{ id: '001' }] })
+    await writeJsonAtomicAsync(path, {})
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'))
+    expect(parsed).toEqual({ accounts: [{ id: '001' }] })
   })
 })
 

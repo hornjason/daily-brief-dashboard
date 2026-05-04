@@ -25,7 +25,8 @@
  */
 
 import type { BrowserContext, Page } from '@playwright/test'
-import { google } from 'googleapis'
+import { google, type sheets_v4 } from 'googleapis'
+import type { GaxiosResponse } from 'gaxios'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts'
 import type { AE } from './types.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
@@ -1248,9 +1249,9 @@ export async function writeSupportableSheet(
 
     // Get current sheet tabs to diff against results.
     // If the sheet was manually deleted, fall through to creating a new one.
-    let metaRes: Awaited<ReturnType<typeof sheets.spreadsheets.get>>
+    let metaRes: GaxiosResponse<sheets_v4.Schema$Spreadsheet>
     try {
-      metaRes = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' })
+      metaRes = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' }) as GaxiosResponse<sheets_v4.Schema$Spreadsheet>
     } catch (e: any) {
       if (e.code === 404 || e.status === 404 || (e.message ?? '').toLowerCase().includes('not found')) {
         console.warn(`[supportable] sheet ${existingSheetId} not found — creating new one`)

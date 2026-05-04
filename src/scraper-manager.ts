@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, unlinkSync } from 'fs'
-import { writeFile, rename } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { writeJsonAtomicAsync } from './lib/atomic-write.ts'
 import { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeStart, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
@@ -64,9 +64,7 @@ async function persistTelemetryLog(): Promise<void> {
     for (const [service, entries] of _telemetryLog) {
       obj[service] = entries
     }
-    const tmpPath = SCRAPE_LOG_PATH + '.tmp'
-    await writeFile(tmpPath, JSON.stringify(obj, null, 2), { mode: 0o600 })
-    await rename(tmpPath, SCRAPE_LOG_PATH)
+    await writeJsonAtomicAsync(SCRAPE_LOG_PATH, obj, { mode: 0o600 })
   } catch (e: any) {
     console.warn('[telemetry] failed to persist scrape log:', e?.message)
   }
@@ -557,12 +555,7 @@ export async function runRhScrapeWithState(): Promise<void> {
     if (nameDiscoveredCases.length > 0) {
       console.log(`[rh-scraper] no account numbers but ${nameDiscoveredCases.length} name-search cases — caching those`)
       // Write name-discovered cases directly (no batch scrape needed)
-      const { mkdir, writeFile, rename } = await import('node:fs/promises')
-      const { dirname } = await import('node:path')
-      await mkdir(dirname(RH_CASES_CACHE_PATH), { recursive: true })
-      const tmpPath = RH_CASES_CACHE_PATH + '.tmp'
-      await writeFile(tmpPath, JSON.stringify({ scrapedAt: new Date().toISOString(), accounts: [], cases: nameDiscoveredCases }, null, 2), { mode: 0o600 })
-      await rename(tmpPath, RH_CASES_CACHE_PATH)
+      await writeJsonAtomicAsync(RH_CASES_CACHE_PATH, { scrapedAt: new Date().toISOString(), accounts: [], cases: nameDiscoveredCases }, { mode: 0o600 })
       recordOutcome('rh-cases', { success: true, recordCount: nameDiscoveredCases.length })
     } else {
       console.log('[rh-scraper] no account numbers and no name-search cases — nothing to cache')
@@ -647,24 +640,22 @@ export async function runRhScrapeWithState(): Promise<void> {
       const batchNums = new Set(cases.map(c => c.caseNumber))
       const newFromName = nameDiscoveredCases.filter(c => !batchNums.has(c.caseNumber))
       if (newFromName.length > 0) {
-        cases.push(...newFromName.map(c => ({
-          caseNumber: c.caseNumber,
-          summary: c.summary,
-          status: c.status,
-          severity: c.severity,
-          accountNumber: c.accountNumber,
-          customerName: c.customerName,
-          daysOpen: 0,
-          product: c.product,
-          casesSource: c.casesSource,
-        })))
+        cases.push(...newFromName.map(c => {
+          const cWithName = c as typeof c & { customerName?: string }
+          return {
+            caseNumber: c.caseNumber,
+            summary: c.summary,
+            status: c.status,
+            severity: c.severity,
+            accountNumber: c.accountNumber,
+            customerName: cWithName.customerName,
+            daysOpen: 0,
+            product: c.product,
+            casesSource: c.casesSource,
+          }
+        }))
         // Re-write cache with merged results
-        const { mkdir: mkdirMerge, writeFile: writeFileMerge, rename: renameMerge } = await import('node:fs/promises')
-        const { dirname: dirnameMerge } = await import('node:path')
-        await mkdirMerge(dirnameMerge(RH_CASES_CACHE_PATH), { recursive: true })
-        const tmpMerge = RH_CASES_CACHE_PATH + '.tmp'
-        await writeFileMerge(tmpMerge, JSON.stringify({ scrapedAt: new Date().toISOString(), accounts: accountNumbers, cases }, null, 2), { mode: 0o600 })
-        await renameMerge(tmpMerge, RH_CASES_CACHE_PATH)
+        await writeJsonAtomicAsync(RH_CASES_CACHE_PATH, { scrapedAt: new Date().toISOString(), accounts: accountNumbers, cases }, { mode: 0o600 })
         console.log(`[rh-scraper] merged ${newFromName.length} name-search cases into cache (total: ${cases.length})`)
       }
     }
@@ -955,14 +946,14 @@ export function createScraperRouter(): Hono {
     return c.json({
       supportable: {
         lastSync:    supportableUnified.lastSync,
-        lastError:   lastSupportableError ? lastSupportableError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
+        lastError:   lastSupportableError ? sanitizeErr(lastSupportableError) : null,
         isRunning:   supportableScrapeRunning,
         isStale:     isStale(supportableUnified.lastSync, 24 * 60),
         recordCount: supportableStatus.recordCount ?? null,
       },
       ccsp: {
         lastSync:      ccspUnified.lastSync,
-        lastError:     lastCcspError ? lastCcspError.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') : null,
+        lastError:     lastCcspError ? sanitizeErr(lastCcspError) : null,
         isRunning:     ccspScrapeRunning || ccspInFlight,
         isStale:       isStale(ccspUnified.lastSync, intervals.ccsp),
         recordCount:          ccspStatus.recordCount ?? null,

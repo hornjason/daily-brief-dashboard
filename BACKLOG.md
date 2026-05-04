@@ -8361,19 +8361,17 @@ Can we test: YES — keepalive logs show Tableau + SF URL visits succeeding for 
 Depends on: BKL-SYNC-L3-01 shipped and running on Mac Mini.
 
 ### BKL-SYNC-L3-05 | Split container image: server (no Chromium) vs sync (with Chromium)
-Status: 🔄 DEFERRED
+Status: ✅ DONE 2026-05-04
 Priority: P2
 Size: L
 Source: Session 2026-04-30 (Serena council review — hero installs need zero Playwright/Chromium; image split is the architectural payoff)
-Files: Containerfile (or Dockerfile), Makefile, CI release pipeline
+Files: Dockerfile.hero, Dockerfile.l4, Makefile
 Description: Since hero installs run zero L4 scrapes and need no browser, the full ~1.4GB image (Chromium included) is wasteful. Split into two images:
   daily-brief-dashboard:server — no Chromium, no Playwright, ~600MB. Default for hero installs.
   daily-brief-dashboard:sync — full image with Chromium, ~1.4GB. Used only by Mac Mini sync daemon.
   Both built from same base; sync image adds Chromium layer on top.
   Most users never download Chromium. CI publishes both tags.
-Acceptance: `make demo-up` and hero installs pull :server. `make sync-up` pulls :sync. Both function correctly. CI publishes both on release.
-Can we test: YES — image size diff confirms Chromium absent from :server; scraper smoke tests confirm :sync can reach Tableau.
-Depends on: BKL-SYNC-L3-03 shipped (L4 code removed from server) + SYNC-L3-01 stable ≥1 week.
+Decision: DONE — Dockerfile.hero (hero install, no Chromium) and Dockerfile.l4 (L4 daemon, Chromium + VNC) both exist. make build → daily-brief-dashboard:latest; make build-l4 → daily-brief-l4-daemon:latest. Makefile sync-up and sync-up-vnc updated to use $(IMAGE_L4). ADR-016 written. Mac Mini running l4-daemon image (1.65GB) with VNC on 6082. Verified sync working 2026-05-04.
 
 ### BKL-SYNC-L3-06 | checkBookingsGSheetExists pod key vs label naming mismatch — FIXED 2026-04-30
 Status: ✅ DONE
@@ -8570,7 +8568,7 @@ Description: ADR-002 mandates .tmp + atomic rename for all config writes. 20 cal
 Decision: DONE — 5 sync call sites migrated to writeJsonAtomic(). 5 async sites in scraper-manager.ts and rh-scraper.ts NOT migrated (event-loop safety + scraper stability rule). +2 unit tests (533 pass). See BKL-ARCH-06-FOLLOWUP for async async helper. GitHub issue #29 closed.
 
 ### BKL-ARCH-06-FOLLOWUP | writeJsonAtomicAsync helper for scraper-manager + rh-scraper
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-04
 Priority: P3
 Size: S
 Source: Marcus BKL-ARCH-06 implementation 2026-05-03
@@ -8579,7 +8577,7 @@ Description: 5 async hand-rolled tmp+rename sites remain in scraper-manager.ts a
 Solution: Add writeJsonAtomicAsync() to src/lib/atomic-write.ts. Then migrate 5 async scraper sites in a separate session with explicit scraper-touch permission.
 
 ### BKL-TS-CLEAN | 41 pre-existing tsc errors in non-migration files
-Status: ✅ DONE 2026-05-03 (28 non-scraper errors fixed; 13 scraper errors remain — need Jason sign-off)
+Status: ✅ DONE 2026-05-04 (all 41 fixed — 28 non-scraper 2026-05-03, 13 scraper files 2026-05-04 with Jason sign-off)
 Priority: P3
 Size: M
 Source: Marcus BKL-ARCH-06 typecheck run 2026-05-03
@@ -8946,7 +8944,7 @@ Tests: bun test test/unit/territory-sheet.spec.ts — 4/4 pass. Playwright 115/1
 ---
 
 ### BKL-SEC-28 | scraper-manager.ts — supportable/ccsp lastError uses weaker inline sanitization vs sanitizeErr()
-Status: 🔴 OPEN
+Status: ✅ DONE 2026-05-04
 Priority: P4
 Size: XS
 Source: Rook scan 2026-05-03 (BKL-SCRAPER-DEAD-01 post-ship review)

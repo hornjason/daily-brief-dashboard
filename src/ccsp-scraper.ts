@@ -828,7 +828,7 @@ export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFold
           currentUrl.includes('/auth') || currentUrl.includes('/login') ||
           hasLoginForm
         if (isLoginPage) {
-          _tableauSessionExpired = true
+          setTableauSessionExpired(true)
           console.warn('[ccsp] POD pre-scrape: login page detected after download failure — marking session expired')
         }
       }

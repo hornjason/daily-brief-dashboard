@@ -1,0 +1,13 @@
+PASS 1: Step 0 renders above OAuth (Δy=329px)
+PASS 2: No East regions visible
+PASS 2: West Commercial + TOLA checkboxes enabled
+PASS 3: 4 West pods shown after expand
+PASS 3 (collapse): pods hidden after second click
+PASS 5a: Save disabled at 0 pods, label "Save & Next"
+PASS 4: Counter shows "1 pod selected across 1 region"
+PASS 5b: Save enabled with 1 pod
+PASS 6: TOLA auto-selected with "Single territory" note, no pod sub-list
+PASS 7: Summary shows green check + region/pod labels
+PASS 8: [Edit] reopens Step 0 form
+PASS 9: bg-surface + rounded-xl + border present (matches setup wizard aesthetic)
+PASS 9: checkboxes use accent-accent color

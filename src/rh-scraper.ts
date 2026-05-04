@@ -23,6 +23,7 @@
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
 import { writeFile, mkdir, readFile, unlink, rename } from 'node:fs/promises'
+import { writeJsonAtomicAsync } from './lib/atomic-write.ts'
 import { resolve, dirname, join } from 'node:path'
 import type { SupportCase } from './types.ts'
 import { BASE_CHROMIUM_ARGS } from './browser-utils.ts'
@@ -454,7 +455,7 @@ async function keepAlive(): Promise<void> {
       if (refreshed) {
         if (token) _cachedToken = token  // keep module-level token current
 
-        const alive = await _livePage.evaluate<boolean>(async (bearerToken: string | null) => {
+        const alive = await _livePage.evaluate<boolean, string | null>(async (bearerToken: string | null) => {
           try {
             const init: RequestInit = { credentials: 'include' }
             if (bearerToken) init.headers = { Authorization: `Bearer ${bearerToken}` }
@@ -1018,18 +1019,11 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
 
   // Write cache atomically — write to .tmp first then rename so a crash mid-write
   // never produces a corrupt cache file that reads as 0 cases.
-  await mkdir(dirname(cachePath), { recursive: true })
-  const tmpPath = cachePath + '.tmp'
-  await writeFile(
-    tmpPath,
-    JSON.stringify({
-      scrapedAt: new Date().toISOString(),
-      accounts: accountNumbers,
-      cases: allCases,
-    }, null, 2),
-    { mode: 0o600 },
-  )
-  await rename(tmpPath, cachePath)
+  await writeJsonAtomicAsync(cachePath, {
+    scrapedAt: new Date().toISOString(),
+    accounts: accountNumbers,
+    cases: allCases,
+  }, { mode: 0o600 })
 
   return allCases
 }
@@ -1175,8 +1169,8 @@ export async function discoverAccountNumberByName(
       ].join(', ')).first()
       const panelToggleVisible = await filterPanelToggle.isVisible({ timeout: 2_000 }).catch(() => false)
       if (panelToggleVisible) {
-        const label = await filterPanelToggle.getAttribute('aria-label').catch(() => '')
-        const title = await filterPanelToggle.getAttribute('title').catch(() => '')
+        const label = (await filterPanelToggle.getAttribute('aria-label').catch(() => '')) ?? ''
+        const title = (await filterPanelToggle.getAttribute('title').catch(() => '')) ?? ''
         if ((label + title).toLowerCase().includes('expand')) {
           await filterPanelToggle.click()
           await page.waitForTimeout(1_000)
@@ -1394,16 +1388,5 @@ export async function writeCasesCache(
   accountNumbers: string[],
   cases: SupportCase[],
 ): Promise<void> {
-  await mkdir(dirname(cachePath), { recursive: true })
-  const tmp = cachePath + '.tmp'
-  await writeFile(
-    tmp,
-    JSON.stringify(
-      { scrapedAt: new Date().toISOString(), accounts: accountNumbers, cases },
-      null,
-      2,
-    ),
-    { mode: 0o600 },
-  )
-  await rename(tmp, cachePath)
+  await writeJsonAtomicAsync(cachePath, { scrapedAt: new Date().toISOString(), accounts: accountNumbers, cases }, { mode: 0o600 })
 }
