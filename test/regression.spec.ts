@@ -2049,3 +2049,19 @@ test.describe('adoptScrapeContext fires recovery callback (BKL-ARCH-SCRAPER-07)'
     expect(adoptFn).toContain('_onContextRecovered(context, profileDir)')
   })
 })
+
+// REG-CDP-AUDIT-02: BKL-CONN-TABLEAU-CDP-AUDIT-02 — restoreTableauSession uses safeCookieOp
+test.describe('restoreTableauSession uses safeCookieOp (BKL-CONN-TABLEAU-CDP-AUDIT-02)', () => {
+  test('REG-CDP-AUDIT-02-01: ccsp-scraper.ts restoreTableauSession has no custom Promise.race for ctx.cookies', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf-8')
+    const restoreFn = src.slice(src.indexOf('async function restoreTableauSession'), src.indexOf('async function saveTableauSession'))
+    // Must use safeCookieOp for ctx.cookies() and ctx.addCookies()
+    expect(restoreFn).toContain("safeCookieOp(ctx, 'restoreTableauSession ctx.cookies'")
+    expect(restoreFn).toContain("safeCookieOp(ctx, 'restoreTableauSession ctx.addCookies'")
+    // Must NOT have raw custom Promise.race for these ops
+    expect(restoreFn).not.toContain('ctx.cookies(),\n')
+    expect(restoreFn).not.toContain('ctx.addCookies(saved.cookies),\n')
+  })
+})

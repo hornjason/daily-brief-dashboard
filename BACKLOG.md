@@ -1562,7 +1562,7 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-07 — Wave 6: Wire login-handoff to sister context re-adoption (P1)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P1
 - **Source:** Serena audit 2026-04-29 (CC-7)
 - **Symptom:** `setContextRecoveryCallback` fires on disconnect and 50-scrape recycle, but NOT on fresh login handoff via `adoptScrapeContext`. After a fresh RH login, SF and CCSP hold the old context reference until their next scrape self-heals via lazy `getScrapeContext() !== _ctx` check.

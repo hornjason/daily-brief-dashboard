@@ -68,12 +68,7 @@ async function restoreTableauSession(ctx: BrowserContext): Promise<void> {
     // After Option B login (SSO in shared context), the context already has the right
     // cookies — overwriting them with a stale file would break the live session.
     console.log('[ccsp] restoreTableauSession: checking context cookies')
-    const existing = await Promise.race([
-      ctx.cookies(),
-      new Promise<Awaited<ReturnType<typeof ctx.cookies>>>((resolve) =>
-        setTimeout(() => { console.warn('[ccsp] restoreTableauSession: ctx.cookies() timed out after 10s — falling through to disk restore'); resolve([]) }, 10_000)
-      ),
-    ])
+    const existing = await safeCookieOp(ctx, 'restoreTableauSession ctx.cookies', c => c.cookies(), [])
     const hasLiveTableau = existing.some(c => c.domain.includes('tableau.com') || c.domain.includes('online.tableau'))
     if (hasLiveTableau) {
       console.log('[ccsp] shared context already has Tableau cookies — skipping disk restore')
@@ -82,15 +77,7 @@ async function restoreTableauSession(ctx: BrowserContext): Promise<void> {
     const saved = JSON.parse(readFileSync(TABLEAU_SESSION_PATH, 'utf-8'))
     if (!saved.cookies?.length) return
     console.log('[ccsp] restoreTableauSession: injecting disk cookies into context')
-    await Promise.race([
-      ctx.addCookies(saved.cookies),
-      new Promise<void>((resolve) =>
-        setTimeout(() => {
-          console.warn('[ccsp] restoreTableauSession: ctx.addCookies() timed out after 10s — skipping inject')
-          resolve()
-        }, 10_000)
-      ),
-    ])
+    await safeCookieOp(ctx, 'restoreTableauSession ctx.addCookies', c => c.addCookies(saved.cookies), undefined as void)
     console.log(`[ccsp] restored ${saved.cookies.length} Tableau cookies from disk (saved ${saved.savedAt})`)
   } catch (e: any) {
     console.warn(`[ccsp] could not restore Tableau session: ${e.message}`)
