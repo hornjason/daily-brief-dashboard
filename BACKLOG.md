@@ -4802,13 +4802,14 @@ Description: `DEFAULT_SCRAPE_TIMEOUT_MS` lambda is defined in scraper-manager.ts
 Decision: MOOT — Supportable was permanently disabled and its wallTimeout calls removed. `wallTimeout` helper is now defined but unused in scrape-api.ts. No hardcoded timeout values remain for active scrapers.
 
 ### BKL-SR03-Q1 | AutomationSettings: no client-side pre-save validation (browser min/max only)
-Status: 📋 BACKLOG
+Status: ✅ DONE — already implemented before audit (verified 2026-05-04)
 Severity: P3 — UX gap, not functional regression
 Priority: P3
 Size: XS (30 min)
 Source: Quinn gate 2026-04-06 — minor UX observation on SR03 pass
 Files: dashboard/src/components/AutomationSettings.tsx
-Description: Input fields use HTML `min`/`max` attributes for browser-native range hints but have no JavaScript pre-save validation. Out-of-range typed values are only caught at save time via server rejection. UX gap: user can type invalid values and submit; error only appears after the POST fails. Fix: add client-side range check before the POST call, highlighting the specific field that's out of range.
+Description: Input fields use HTML `min`/`max` attributes for browser-native range hints but have no JavaScript pre-save validation.
+Decision: DONE — AutomationSettings.tsx:handleSave lines 52-62 have full pre-save validation with explicit field-specific error messages (default/rh/cooldown/threshold/driveDocTextCap/briefEmailsInPrompt/briefHistoryDays), each with `setError(...)` + early return before POST. `errorField` state highlights the specific failing input via `fieldClass()`. Server rejection is now a backup, not the primary validation path.
 
 ---
 
@@ -9255,12 +9256,11 @@ Fix: After 1+ weeks of telemetry, check p95 runRhScrape duration in container lo
 Can we test: YES — log the mutex stale warning in tests if duration exceeds threshold.
 
 ### BKL-CLEAN-MUTEX-02 | Verify releaseRhScrapeMutex wiring to cancel paths (P3)
-Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-04
 Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-04 post-ship review)
 Files: src/rh-scraper.ts (export), src/scraper-manager.ts (cancel path)
-Description: `releaseRhScrapeMutex()` was exported from rh-scraper.ts for cancel paths but Rook found no current consumer — grep across src/ shows zero callsites. The mutex releases automatically via `finally` inside `runRhScrape`, so cancel paths that abort the outer `runRhScrapeWithState` orchestration (e.g., `/api/scrape/rh/cancel`) would not leave the mutex stuck. But explicit cancel paths that kill the promise before it resolves (if any) could leave `_rhScrapeRunning = true`.
-Fix: Audit cancel path in scraper-manager.ts `runRhScrapeWithState`. If the finally clause runs reliably on cancel → remove the export. If cancel can skip the finally → wire `releaseRhScrapeMutex` to the cancel handler.
-Can we test: YES — check `/api/scrape/rh/cancel` behavior under active scrape.
+Description: `releaseRhScrapeMutex()` was exported from rh-scraper.ts for cancel paths but Rook found no current consumer. The mutex releases automatically via `finally` inside `runRhScrape`.
+Decision: DONE (code audit 2026-05-04). Cancel path in DELETE `/api/scrape/rh/cancel` (scrape-api.ts:185) sets `setRhScrapeCancelRequested(true)`. The cooperative cancel is polled inside `runRhScrape` at lines 818 and 953 — when triggered, the function returns early and the `finally` block at line 1070 runs `_rhScrapeRunning = false`. The mutex is always released via `finally` on every exit path (normal, error, cancel). `releaseRhScrapeMutex` is retained as a named export because regression test REG-ARCH-SCRAPER-04-01 asserts its presence — it is dead code in production but kept for API stability. No wiring change needed.
 
 ### BKL-INFRA-CHROMIUM-01 | Playwright Chromium binary missing in production container (P1)
 Priority: P1 | Size: S | Status: ✅ DONE 2026-05-04
