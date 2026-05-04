@@ -598,8 +598,6 @@ function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
 
 type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings'
 
-const DATA_SOURCE_TOTAL = 3 // Red Hat Portal, Salesforce, Tableau/CCSP — Supportable removed
-
 export default function SetupPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>(null)
   const userToggledRef = useRef(false) // tracks whether user has interacted with accordion
@@ -610,8 +608,6 @@ export default function SetupPage() {
   const [rhTokenConfigured, setRhTokenConfigured] = useState<boolean | null>(null)
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
-  const [dataSourcesHealth, setDataSourcesHealth] = useState<'loading' | 'healthy' | 'issues'>('loading')
-  const [dataSourcesConnected, setDataSourcesConnected] = useState<number | null>(null)
   const [sfSyncing, setSfSyncing] = useState(false)
   const [sfSyncSuccess, setSfSyncSuccess] = useState<string | null>(null)
   const [sfSyncError, setSfSyncError] = useState<string | null>(null)
@@ -690,60 +686,6 @@ export default function SetupPage() {
         if (e.name !== 'AbortError') setStep0Loaded(true)
       })
 
-    // BKL-UX112: Poll the Data Sources counter on a recurring interval so the
-    // badge never goes stale while the accordion is collapsed. The accordion
-    // section no longer mounts a separate DataSourcesSection component (removed
-    // in BKL-ARCH-12 two-container split); the computeConnected logic below IS
-    // the single source of truth for the header badge counter.
-    //
-    // The derivation below mirrors the `rhConnected` / `sfConnected` /
-    // `tableauConnected` logic used to drive the accordion card colors.
-    // If these ever disagree, the header counter will contradict the card colors.
-    //
-    // BKL-UX65: Keeps the 10s initial timeout behaviour — if the very first
-    // poll hasn't resolved within 10s, flip out of 'loading' into 'issues'.
-    const computeConnected = async (sig: AbortSignal) => {
-      const [rh, sf, tableau, scrapes] = await Promise.all([
-        fetch('/api/auth/redhat/status',               { signal: sig }).then(r => r.json()).catch(() => ({ hasSession: false, sessionExpired: false, lastScraped: null })),
-        fetch('/api/auth/salesforce/status',           { signal: sig }).then(r => r.json()).catch(() => ({ hasSession: false, lastSync: null, syncError: null })),
-        fetch('/api/bootstrap/tableau/session-status', { signal: sig }).then(r => r.json()).catch(() => ({ reachable: false, sessionValid: false })),
-        fetch('/api/status/scrapes',                   { signal: sig }).then(r => r.json()).catch(() => ({ ccsp: null })),
-      ])
-      // Derivation:
-      //   rhConnected    = hasSession && !sessionExpired && !!lastScraped
-      //                    (require lastScraped — matches steady-state card color)
-      //   sfConnected    = hasSession && !syncError(session expired) && !!lastSync
-      //   tableauConnected = sessionValid && CCSP session ok && CCSP data ok
-      const rhConnected = !!(rh.hasSession && !rh.sessionExpired && rh.lastScraped && rh.liveReachable !== false)
-      const sfExpired = sf.sessionExpired || !!sf.syncError
-      const sfConnected = !!(sf.hasSession && !sfExpired && sf.lastSync)
-      const ccspStatus = scrapes?.ccsp
-      const ccspSessionOk = !ccspStatus?.tableauSessionExpired
-      const ccspDataOk = !ccspStatus?.lastSync || ccspStatus?.recordCount == null || (ccspStatus?.recordCount ?? 0) > 0
-      const tableauConnected = tableau.sessionValid === true && tableau.reachable !== false && ccspSessionOk && ccspDataOk
-      return [rhConnected, sfConnected, tableauConnected].filter(Boolean).length
-    }
-
-    let firstResolved = false
-    const refreshConnected = async () => {
-      try {
-        const connected = await computeConnected(signal)
-        firstResolved = true
-        setDataSourcesConnected(connected)
-        setDataSourcesHealth(connected < DATA_SOURCE_TOTAL ? 'issues' : 'healthy')
-      } catch (e) {
-        if ((e as Error | undefined)?.name !== 'AbortError') { /* swallow network blips; next tick retries */ }
-      }
-    }
-    refreshConnected()
-    const timeout = setTimeout(() => {
-      if (!firstResolved) setDataSourcesHealth('issues')
-    }, 10_000)
-    // Poll the counter every 10s so the badge reflects reality while the
-    // accordion is collapsed. The polling loop is the sole update path for
-    // this counter (DataSourcesSection removed in BKL-ARCH-12).
-    const counterInterval = setInterval(refreshConnected, 10_000)
-
     // OAuth return: open AEs section and clean URL so the child AutoBootstrapForm can restore state
     const params = new URLSearchParams(window.location.search)
     if (params.get('step') === '2') {
@@ -759,8 +701,6 @@ export default function SetupPage() {
     window.addEventListener('ae-saved', onAeSaved)
     return () => {
       controller.abort()
-      clearTimeout(timeout)
-      clearInterval(counterInterval)
       window.removeEventListener('ae-saved', onAeSaved)
     }
   }, [])
