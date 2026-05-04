@@ -18,7 +18,6 @@ import { writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { closeScrapeContext, adoptScrapeContext, reopenScrapeContextFromAuth } from './rh-scraper.ts'
 import { closeSfContext, adoptSfContext, getSfContext } from './sf-scraper.ts'
-import { adoptSupportableContext, closeSupportableContext } from './supportable-scraper.ts'
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
 import { resetAllCircuitBreakers } from './scraper-manager.ts'
 import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
@@ -101,8 +100,7 @@ export async function startSfLoginBrowser(
   // Release profile lock so the headed browser can open the same profile
   closeSfContext()         // clear SF keep-alive timer
   await closeScrapeContext()  // close RH headless context, clear profile lock
-  // Null out CCSP/Supportable context refs so "Run Now" during auth gets a clear error
-  closeSupportableContext()
+  // Null out CCSP context ref so "Run Now" during auth gets a clear error
   closeCcspContext()
 
   // Remove stale SingletonLock — prevents "profile locked by another process" error
@@ -233,8 +231,6 @@ export async function startSfLoginBrowser(
               adoptScrapeContext(ctx, profileDir, rhPage)
               console.log('[sf-auth] calling adoptSfContext…')
               adoptSfContext(ctx, profileDir)
-              console.log('[sf-auth] calling adoptSupportableContext…')
-              adoptSupportableContext(ctx)
               console.log('[sf-auth] calling adoptCcspContext…')
               adoptCcspContext(ctx)
               recordSessionEstablished('rh-portal')
@@ -298,7 +294,6 @@ export async function startSfLoginBrowser(
             try {
               adoptScrapeContext(ctx, profileDir, rhPage)
               adoptSfContext(ctx, profileDir)
-              adoptSupportableContext(ctx)
               adoptCcspContext(ctx)
             } catch (adoptErr: any) {
               console.error('[sf-auth] adopt failed (fallback path) — closing ctx directly:', adoptErr?.message ?? adoptErr)

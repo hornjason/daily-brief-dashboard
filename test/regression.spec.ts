@@ -2115,3 +2115,26 @@ test.describe('startTableauLoginBrowser catch path cleanup (BKL-CONN-TABLEAU-CDP
     expect(catchBody).toContain('_activeSsoPopupHandler = null')
   })
 })
+
+// REG-SCRAPER-09-F3: BKL-ARCH-SCRAPER-09-FOLLOW-03 — Supportable imports removed from auth-routes + sf-auth
+// auth-routes.ts must not import from supportable-scraper.ts.
+// sf-auth.ts must not call adoptSupportableContext or closeSupportableContext.
+test.describe('Supportable imports removed from auth-routes and sf-auth (BKL-ARCH-SCRAPER-09-FOLLOW-03)', () => {
+  test('REG-SCRAPER-09-F3-01: auth-routes.ts has no import from supportable-scraper.ts', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/auth-routes.ts'), 'utf-8')
+    expect(src).not.toContain("from './supportable-scraper.ts'")
+    expect(src).not.toContain('runSupportableScrape')
+    expect(src).not.toContain('writeSubscriptionSheet')
+    expect(src).not.toContain('supportableScrapeRunning')
+  })
+
+  test('REG-SCRAPER-09-F3-02: sf-auth.ts has no adoptSupportableContext or closeSupportableContext calls', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-auth.ts'), 'utf-8')
+    expect(src).not.toContain('adoptSupportableContext')
+    expect(src).not.toContain('closeSupportableContext')
+  })
+})

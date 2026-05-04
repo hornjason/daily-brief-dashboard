@@ -9182,9 +9182,17 @@ Fix: Remove the `supportableSheetId` field from the CAROLANNE fixture constant i
 Can we test: YES — global setup warning disappears.
 
 ### BKL-ARCH-SCRAPER-09-FOLLOW-03 | Gate/remove supportable-scraper.ts imports in auth-routes + bootstrap-orchestrator
-Priority: P2 | Size: S | Status: 🔴 OPEN
+Priority: P2 | Size: S | Status: ✅ DONE 2026-05-04 (partial — auth-routes.ts + sf-auth.ts done; bootstrap-orchestrator.ts deferred to FOLLOW-04)
 Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-09 post-ship review)
-Files: src/auth-routes.ts, src/sf-auth.ts, src/bootstrap-orchestrator.ts (~line 2002)
-Description: These files still import live symbols from `./supportable-scraper.ts` (`adoptSupportableContext`, `closeSupportableContext`, etc.). Per CLAUDE.md Supportable is permanently disabled, but these imports keep the module reachable on non-scheduler routes. A crash in the importer at startup would be hard to diagnose.
-Fix: Remove or stub the supportable imports in these files. Keep `supportable-scraper.ts` in tree as historical reference.
-Can we test: YES — source assertion that auth-routes.ts, sf-auth.ts, bootstrap-orchestrator.ts have zero imports from `./supportable-scraper.ts`.
+Files: src/auth-routes.ts, src/sf-auth.ts (done); src/bootstrap-orchestrator.ts (deferred)
+Description: These files still import live symbols from `./supportable-scraper.ts` (`adoptSupportableContext`, `closeSupportableContext`, etc.).
+Decision: DONE for auth-routes.ts + sf-auth.ts — removed all supportable imports, the live `runSupportableScrape` enqueue, and the `adoptSupportableContext`/`closeSupportableContext` call sites. bootstrap-orchestrator.ts deferred as BKL-ARCH-SCRAPER-09-FOLLOW-04 (Supportable is wired into Steps 3-4 of the bootstrap flow — larger refactor required).
+Regression: REG-SCRAPER-09-F3-01/02 added. 160 passed/3 live-auth-expected-fails (7776); 607 passed (7777). Rook: PASS. Quinn: pending.
+
+### BKL-ARCH-SCRAPER-09-FOLLOW-04 | Remove Supportable from bootstrap-orchestrator.ts Steps 3-4
+Priority: P2 | Size: M | Status: 🔴 OPEN
+Source: BKL-ARCH-SCRAPER-09-FOLLOW-03 scope split 2026-05-04
+Files: src/bootstrap-orchestrator.ts (~lines 1341-1472)
+Description: bootstrap-orchestrator.ts imports `runSupportableDiscoverAndScrape`, `writeSubscriptionSheet` from supportable-scraper.ts and uses them in bootstrap Steps 3 (discovery) and 4 (sheet write). The `supportableScrapeResults` variable and the SF bookings L2/L3/L4 cache probe paths reference Supportable data structures. This is more complex than a simple import removal — it requires replacing Steps 3-4 with a stub or removing them from the auto-bootstrap flow.
+Fix: Replace Steps 3-4 in auto-bootstrap with no-ops or remove them. Account discovery comes from RH Portal sidebar autocomplete; subscription data from SF bookings sheets. No Supportable step needed.
+Can we test: YES — source assertion that bootstrap-orchestrator.ts has zero imports from `./supportable-scraper.ts`.

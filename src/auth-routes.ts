@@ -27,12 +27,10 @@ import { deriveConfidence, ConnectionHealthSchema } from './connection-health.ts
 import { liveProbe } from './utils.ts'
 import { getScrapeContext, getLivePage } from './rh-scraper.ts'
 import { runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './scraper-manager.ts'
-import { aes, customers, patchAe } from './server-state.ts'
-import { runSupportableScrape, writeSubscriptionSheet, supportableScrapeRunning } from './supportable-scraper.ts'
+import { aes, patchAe } from './server-state.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './ccsp-scraper.ts'
 import { refreshSubscriptions, refreshCCSP } from './refresh-engine.ts'
 import { enqueueScraperTask } from './background-scheduler.ts'
-import type { SupportableCustomer } from './supportable-scraper.ts'
 import { isPrimary } from './lib/node-role.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
@@ -123,26 +121,7 @@ export function createAuthRouter(): Hono {
               })
             }
           }
-          enqueueScraperTask({
-            name: 'supportable',
-            run: async () => {
-              if (supportableScrapeRunning) { console.log('[rh-auth] supportable: busy — skipping'); return }
-              for (const ae of aes) {
-                const aeCustomers = customers.filter(cu => !cu.inactive && cu.ae === ae.name && cu.accountNumbers?.length)
-                if (!aeCustomers.length) continue
-                try {
-                  const results = await runSupportableScrape(aeCustomers as SupportableCustomer[])
-                  const sheetId = await writeSubscriptionSheet(results, ae.name, ae.driveFolderId, ae.subscriptionSheetId || undefined)
-                  if (sheetId) patchAe(ae.name, { subscriptionSheetId: sheetId })
-                } catch (e: any) {
-                  console.warn(`[rh-auth:supportable] ${ae.name} failed:`, e?.message ?? e)
-                }
-              }
-              await refreshSubscriptions().catch(() => {})
-            },
-            source: 'manual',
-            enqueuedAt: Date.now(),
-          })
+          // BKL-ARCH-SCRAPER-09-FOLLOW-03: Supportable permanently disabled — enqueue removed
           if (isPrimary()) {
             const ccspAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
             if (ccspAes.length) {
@@ -168,7 +147,7 @@ export function createAuthRouter(): Hono {
               })
             }
           }
-        })().catch((e: any) => console.error('[supportable] pre-warm block error:', e?.message ?? e))
+        })().catch((e: any) => console.error('[rh-auth] post-login enqueue error:', e?.message ?? e))
       })
       return c.json({ started: true })
     } catch (e: any) {
