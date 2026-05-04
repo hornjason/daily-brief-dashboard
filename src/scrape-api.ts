@@ -203,6 +203,7 @@ export function registerScrapeRoutes(app: Hono): void {
     try {
       await page.goto('https://access.redhat.com/support/cases/#/case/list', { waitUntil: 'load', timeout: 30_000 })
       const solrName = name.replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim()
+        .replace(/\\/g, '\\\\').replace(/"/g, '\\"')
       const raw = await page.evaluate(async (n: string) => {
         const body = { q: `account_name: "${n}"`, start: 0, rows: 3, partnerSearch: false, expression: 'fl=*' }
         const resp = await fetch('/hydra/rest/search/v2/cases?redhat_client=Portal%20Case%20Management&account_number=901532',
@@ -232,8 +233,8 @@ export function registerScrapeRoutes(app: Hono): void {
         results.push({ name, accountNumbers, cases: cases.length, caseList: cases })
         console.log(`[scrape/rh/test-discover] "${name}": ${accountNumbers.length} accts, ${cases.length} cases`)
       } catch (e: any) {
-        results.push({ name, accountNumbers: [], cases: 0, caseList: [], error: e?.message })
-        console.warn(`[scrape/rh/test-discover] "${name}" error: ${e?.message}`)
+        results.push({ name, accountNumbers: [], cases: 0, caseList: [], error: sanitizeErr(e) })
+        console.warn(`[scrape/rh/test-discover] "${name}" error: ${sanitizeErr(e)}`)
       }
     }
     return c.json({ results })
@@ -953,7 +954,7 @@ export function registerScrapeRoutes(app: Hono): void {
           }
         }
       } catch (driveErr: any) {
-        console.warn('[sf-bookings/pod-folder] Drive settings sync error (non-fatal):', driveErr.message)
+        console.warn('[sf-bookings/pod-folder] Drive settings sync error (non-fatal):', sanitizeErr(driveErr))
       }
 
       return c.json({ ok: true, podBookingsFolderId: folderId })

@@ -50,7 +50,7 @@ function loadTelemetryLog(): void {
     }
     console.log('[telemetry] loaded scrape log from disk')
   } catch (e: any) {
-    console.warn('[telemetry] failed to load scrape log:', e?.message)
+    console.warn('[telemetry] failed to load scrape log:', sanitizeErr(e))
   }
 }
 
@@ -66,7 +66,7 @@ async function persistTelemetryLog(): Promise<void> {
     }
     await writeJsonAtomicAsync(SCRAPE_LOG_PATH, obj, { mode: 0o600 })
   } catch (e: any) {
-    console.warn('[telemetry] failed to persist scrape log:', e?.message)
+    console.warn('[telemetry] failed to persist scrape log:', sanitizeErr(e))
   }
 }
 
@@ -296,7 +296,7 @@ async function notify(title: string, message: string, priority: 'default' | 'hig
       body: message.slice(0, 512),
     })
   } catch (e: any) {
-    console.warn('[ntfy] notification failed:', e?.message ?? e)
+    console.warn('[ntfy] notification failed:', sanitizeErr(e))
   }
 }
 

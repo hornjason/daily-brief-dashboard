@@ -1997,3 +1997,40 @@ test.describe('NODE_ROLE policy module adoption (Issue #9 user stories 1-4)', ()
     expect(src).toContain("isPrimary()")
   })
 })
+
+// REG-SEC-32: BKL-SEC-32 — Solr query injection escape in debug-fields endpoint
+test.describe('Solr query injection prevention (BKL-SEC-32)', () => {
+  test('REG-SEC-32-01: scrape-api.ts debug-fields escapes backslash and double-quote before Solr interpolation', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf-8')
+    // The escaping must appear before the Solr q interpolation
+    expect(src).toMatch(/\.replace\(\/\\\\\\\\/g.*'\\\\\\\\\\\\\\\\'\).*\.replace\(\/"/g/)
+    // The account_name query still uses the escaped variable
+    expect(src).toContain('account_name: "${n}"')
+  })
+})
+
+// REG-SEC-33: BKL-SEC-33 — User-reachable error responses use sanitizeErr, not raw e.message
+test.describe('sanitizeErr consistency in API responses (BKL-SEC-33)', () => {
+  test('REG-SEC-33-01: scrape-api.ts test-discover error body uses sanitizeErr', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf-8')
+    // The test-discover error push must use sanitizeErr, not raw e?.message
+    expect(src).toMatch(/results\.push\(.*error: sanitizeErr\(e\)/)
+    // Raw e?.message must not appear in the test-discover catch block
+    const testDiscoverSection = src.slice(src.indexOf('/api/scrape/rh/test-discover'), src.indexOf('return c.json({ results })'))
+    expect(testDiscoverSection).not.toMatch(/error: e\?\.message/)
+  })
+
+  test('REG-SEC-33-02: scraper-manager.ts telemetry log/persist errors use sanitizeErr', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf-8')
+    // failed to load and persist must use sanitizeErr
+    expect(src).toMatch(/failed to load scrape log.*sanitizeErr/)
+    expect(src).toMatch(/failed to persist scrape log.*sanitizeErr/)
+    expect(src).toMatch(/ntfy.*notification failed.*sanitizeErr/)
+  })
+})
