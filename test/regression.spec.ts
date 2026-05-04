@@ -1962,3 +1962,38 @@ test.describe('CcspAuthExpiredError relocation (BKL-ARCH-SCRAPER-05)', () => {
     expect(src).toMatch(/import.*CcspAuthExpiredError.*from.*['"]\.\.\/src\/scraper-errors\.ts['"]/)
   })
 })
+
+// REG-NODE-ROLE-01: Issue #9 user stories 1-4 — NODE_ROLE policy module adoption
+// scrape-api.ts, auth-routes.ts, and node-role-routes.ts must not read
+// process.env.NODE_ROLE directly in logic code — all reads must go through
+// src/lib/node-role.ts (isPrimary(), assertPrimary(), etc.)
+test.describe('NODE_ROLE policy module adoption (Issue #9 user stories 1-4)', () => {
+  test('REG-NODE-ROLE-01-01: scrape-api.ts has zero direct process.env.NODE_ROLE reads in logic', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf-8')
+    // Strip comments before checking — comment refs are allowed
+    const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    const matches = noComments.match(/process\.env\.NODE_ROLE/g) ?? []
+    expect(matches).toHaveLength(0)
+  })
+
+  test('REG-NODE-ROLE-01-02: auth-routes.ts has zero direct process.env.NODE_ROLE reads', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/auth-routes.ts'), 'utf-8')
+    const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    const matches = noComments.match(/process\.env\.NODE_ROLE/g) ?? []
+    expect(matches).toHaveLength(0)
+  })
+
+  test('REG-NODE-ROLE-01-03: node-role-routes.ts reads role via isPrimary(), not process.env', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/node-role-routes.ts'), 'utf-8')
+    const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    const matches = noComments.match(/process\.env\.NODE_ROLE/g) ?? []
+    expect(matches).toHaveLength(0)
+    expect(src).toContain("isPrimary()")
+  })
+})

@@ -33,6 +33,7 @@ import { runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './ccsp-scraper
 import { refreshSubscriptions, refreshCCSP } from './refresh-engine.ts'
 import { enqueueScraperTask } from './background-scheduler.ts'
 import type { SupportableCustomer } from './supportable-scraper.ts'
+import { isPrimary } from './lib/node-role.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let RH_SESSION_PATH = ''
@@ -111,7 +112,7 @@ export function createAuthRouter(): Hono {
             source: 'manual',
             enqueuedAt: Date.now(),
           })
-          if (process.env.NODE_ROLE === 'primary') {
+          if (isPrimary()) {
             const sfAes = aes.filter(a => a.sfReportId)
             if (sfAes.length) {
               enqueueScraperTask({
@@ -142,7 +143,7 @@ export function createAuthRouter(): Hono {
             source: 'manual',
             enqueuedAt: Date.now(),
           })
-          if (process.env.NODE_ROLE === 'primary') {
+          if (isPrimary()) {
             const ccspAes = aes.filter(a => a.tableauTerritories?.length && a.driveFolderId)
             if (ccspAes.length) {
               enqueueScraperTask({
@@ -184,7 +185,7 @@ export function createAuthRouter(): Hono {
   // ── Salesforce login endpoints ────────────────────────────────────────────
   // BKL-SYNC-L3-02: SF login browser and scrape trigger are L4 operations.
   // Hero installs (NODE_ROLE unset) must not expose these endpoints.
-  if (process.env.NODE_ROLE === 'primary') {
+  if (isPrimary()) {
     // POST /api/auth/salesforce/start — launch headed browser for SF login
     // The SSO button auto-clicks; the SAML flow completes without user interaction
     // as long as the RH SSO session is active in the profile.

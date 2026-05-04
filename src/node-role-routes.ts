@@ -7,13 +7,14 @@
  * var does not change at runtime.
  */
 import { Hono } from 'hono'
+import { isPrimary } from './lib/node-role.ts'
 
 export function createNodeRoleRouter(): Hono {
   const router = new Hono()
   // GET /api/node-role — { isL3Only: boolean }
   // isL3Only = true when NODE_ROLE is anything other than 'primary' (including unset).
   router.get('/api/node-role', (c) => {
-    return c.json({ isL3Only: process.env.NODE_ROLE !== 'primary' })
+    return c.json({ isL3Only: !isPrimary() })
   })
   return router
 }

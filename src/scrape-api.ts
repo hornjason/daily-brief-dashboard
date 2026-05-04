@@ -68,6 +68,7 @@ import { refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { readSheetCache, readCCSPCache, readPipelineCache } from './cache-layer.ts'
 import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
 import { sanitizeErr } from './utils.ts'
+import { isPrimary } from './lib/node-role.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome, getUnifiedStatus } from './scraper-status-store.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
@@ -242,7 +243,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // │  CCSP (Tableau)                                                         │
   // ╰──────────────────────────────────────────────────────────────────────────╯
 
-  if (process.env.NODE_ROLE === 'primary') {
+  if (isPrimary()) {
   // POST /api/scrape/ccsp — full pipeline: Tableau scrape → sheet → cache
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
@@ -333,7 +334,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // │  Salesforce pipeline (primary node only — BKL-SYNC-L3-02)              │
   // ╰──────────────────────────────────────────────────────────────────────────╯
 
-  if (process.env.NODE_ROLE === 'primary') {
+  if (isPrimary()) {
   // POST /api/scrape/salesforce — full pipeline: SF report → sheet → cache
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
@@ -549,7 +550,7 @@ export function registerScrapeRoutes(app: Hono): void {
           },
         ]
 
-        if (process.env.NODE_ROLE === 'primary') {
+        if (isPrimary()) {
           scrapers.push(
           {
             name: 'ccsp',
@@ -735,7 +736,7 @@ export function registerScrapeRoutes(app: Hono): void {
    *  Use this when the Tableau session has expired and you need to re-authenticate. */
   app.post('/api/browser/open-tableau-login', async (c) => {
     // BKL-HERO-21: guard — Chromium only installed in L4 image
-    if (process.env.NODE_ROLE !== 'primary') return c.json({ error: 'Not available on hero nodes' }, 404)
+    if (!isPrimary()) return c.json({ error: 'Not available on hero nodes' }, 404)
     try {
       const TABLEAU_LOGIN = 'https://10ay.online.tableau.com/#/site/redhatanalytics/signin'
       // Launch Chromium directly on the VNC display for manual login
