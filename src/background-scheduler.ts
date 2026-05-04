@@ -1046,7 +1046,7 @@ export function initBackgroundScheduler(opts: {
   // valid by checking if RH portal loads. If stale (overnight laptop sleep),
   // skip the initial scrape and log clearly — user will VNC in and re-auth,
   // which triggers circuit breaker reset + immediate scrape enqueue via rh-auth.ts.
-  if (existsSync(opts.rhSessionPath)) {
+  if (isPrimary && existsSync(opts.rhSessionPath)) {
     setTimeout(async () => {
       console.log('[scraper-queue] startup: initialising browser context…')
       await initScrapeContext(opts.rhProfileDir)

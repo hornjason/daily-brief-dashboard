@@ -767,8 +767,9 @@ function AutoBootstrapForm({
       return raw
     })()
     if (!/^00O[a-zA-Z0-9]{12,15}$/.test(extractedReportId)) {
+      const rhfp = pod ? !!podSfReportMap[pod] : false
       setPreflightError(
-        hasReportForPod
+        rhfp
           ? `SF Report ID for POD "${pod}" is malformed — check settings.json`
           : `Invalid SF Report ID — paste a bare report ID (starts with 00O) or a full Salesforce report URL`
       )

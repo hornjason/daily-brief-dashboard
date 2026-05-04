@@ -9249,11 +9249,7 @@ Fix: Audit cancel path in scraper-manager.ts `runRhScrapeWithState`. If the fina
 Can we test: YES — check `/api/scrape/rh/cancel` behavior under active scrape.
 
 ### BKL-INFRA-CHROMIUM-01 | Playwright Chromium binary missing in production container (P1)
-Priority: P1 | Size: S | Status: 🔴 OPEN
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-04
 Source: Quinn audit 2026-05-04 (BKL-ARCH-SCRAPER-04 post-ship review)
-Files: Dockerfile.hero (or equivalent), container build process
-Investigated 2026-05-04: Dockerfile.hero intentionally excludes Chromium (ADR-016 two-image split). Hero is pure HTTP server — CCSP/Tableau/SF browser scraping is meant for L4 daemon (Dockerfile.l4). The error fires because hero container code is still calling `launchPersistentContext` without an `assertPrimary` guard. Root cause is BKL-ARCH-01 (node-role module with `assertPrimary()`) not yet implemented — when BKL-ARCH-01 ships, hero container code paths will fail fast with a typed error before ever reaching Playwright. Production is not broken because RH cases use the bearer-token path (pure HTTP), CCSP/SF only run on primary nodes.
-Description: Production container logs show `unhandled rejection: persistentContext: Executable doesn't exist at /root/.cache/ms-playwright/chromium-1208/chrome-linux/chrome`. Playwright cannot launch Chromium for scraping. This would block all browser-dependent scrapers (RH Portal, SF, CCSP, Tableau). Pre-existing — not caused by ARCH-SCRAPER-04. Production likely works because scrapes run against an already-open profile dir / mounted context, not freshly launching Chromium. Needs investigation to confirm whether this is truly blocking or only affects cold-start scenarios.
-Fix: Do NOT add Chromium to Dockerfile.hero — that contradicts ADR-016. Instead, implement BKL-ARCH-01 (node-role module) which will add `assertPrimary()` guards to all browser-scrape paths, making hero containers fail fast before reaching launchPersistentContext.
-Blocked by: BKL-ARCH-01
-Can we test: YES — after BKL-ARCH-01, `assertPrimary` should throw before Playwright is invoked on hero.
+Fix applied: Added `assertPrimary('rh-scraper.runRhScrape')` to rh-scraper.ts:runRhScrape and `isPrimary &&` guard to background-scheduler.ts startup initScrapeContext block. Hero containers now fail fast with WrongRoleError before reaching launchPersistentContext. Also fixed BKL-F07 dashboard tsc error (hasReportForPod not in scope at AEsCustomersSection.tsx:771).
+Test: test/unit/rh-scraper-node-role.test.ts + REG-NODE-ROLE-RH-01 + REG-NODE-ROLE-SCHED-01 in regression.spec.ts.

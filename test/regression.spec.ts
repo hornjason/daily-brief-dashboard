@@ -2301,4 +2301,17 @@ test.describe('REG-F07 SF report URL extraction in bootstrap validation', () => 
     const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/components/BootstrapConfigBlock.tsx'), 'utf-8')
     expect(src).toContain('Report ID or URL')
   })
+
+  // REG-NODE-ROLE-RH-01: rh-scraper.ts imports assertPrimary from node-role
+  test('REG-NODE-ROLE-RH-01: rh-scraper.ts imports assertPrimary for node-role guard', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf-8')
+    expect(src).toContain("import { assertPrimary }")
+    expect(src).toContain("assertPrimary('rh-scraper.runRhScrape')")
+  })
+
+  // REG-NODE-ROLE-SCHED-01: background-scheduler startup block gated on isPrimary
+  test('REG-NODE-ROLE-SCHED-01: background-scheduler initScrapeContext gated on isPrimary', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/background-scheduler.ts'), 'utf-8')
+    expect(src).toContain('isPrimary && existsSync(opts.rhSessionPath)')
+  })
 })

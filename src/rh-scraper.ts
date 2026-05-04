@@ -29,6 +29,7 @@ import type { SupportCase } from './types.ts'
 import { BASE_CHROMIUM_ARGS, safeCookieOp } from './browser-utils.ts'
 import { notify, sanitizeErr } from './utils.ts'
 import { assertLiveScrapeAllowed } from './scraper-utils.ts'
+import { assertPrimary } from './lib/node-role.ts'
 
 // ── BKL-ARCH-SCRAPER-04 Wave 3: Inner mutex (owned by this module) ──────────
 // Mirror the CCSP pattern (ccsp-scraper.ts:549-561): mutex state lives inside
@@ -551,6 +552,9 @@ async function checkForSessionExpiry(page: { url(): string; waitForURL(p: string
 export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]> {
   // BKL-INGEST-04 / BKL-ARCH-SCRAPER-06: live-scrape guard extracted to scraper-utils.ts
   assertLiveScrapeAllowed('rh-scraper')
+  // BKL-ARCH-01: hero nodes must not invoke the browser scrape path.
+  // Bearer-token path is handled upstream in scraper-manager.ts:runRhScrapeWithState.
+  assertPrimary('rh-scraper.runRhScrape')
 
   // BKL-ARCH-SCRAPER-04 Wave 3: Inner mutex — guards direct callers that bypass
   // scraper-manager.ts. Stale auto-release after 15 min. Released in finally.
