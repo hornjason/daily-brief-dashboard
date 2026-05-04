@@ -676,7 +676,7 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
     if (resolved.error) return c.json({ error: resolved.error }, resolved.status!)
     try {
       const parsed = await readSettingsFromDrive(resolved.parentFolderId!)
-      applySettingsToLocal(parsed)
+      applySettingsToLocal(normalizeSettings(parsed))
       // Mirror /api/admin/backup/restore — refresh in-memory state from disk
       loadServerState()
       return c.json({ ok: true, applied: true })

@@ -88,44 +88,32 @@ describe('BKL-CCSP-RETRY-03: scrapePodCcspRaw marks session expired on auth-time
     expect(CCSP_SCRAPER_SRC).toContain("from './ccsp-tableau-fetch.ts'")
   })
 
-  test('scrapePodCcspRaw checks for login form after CSV download failure', () => {
+  // BKL-ARCH-17: scrapePodCcspRaw no longer owns inline CSV-download auth detection —
+  // it delegates the entire Tableau navigation + CSV download to fetchPodCsv. The
+  // BKL-CCSP-RETRY-03 contract (mark _tableauSessionExpired on auth issues) is now
+  // enforced inside fetchPodCsv via its login-wall handshake.
+  test('scrapePodCcspRaw delegates Tableau navigation + download to fetchPodCsv', () => {
     const fnIdx = CCSP_SCRAPER_SRC.indexOf('export async function scrapePodCcspRaw(')
     expect(fnIdx).toBeGreaterThan(-1)
-    // Function body is ~8000 chars to the relevant section — use a large enough slice
     const fnSlice = CCSP_SCRAPER_SRC.slice(fnIdx, fnIdx + 9000)
-
-    // Must check login form inside the download catch block
-    const catchIdx = fnSlice.indexOf('CSV download failed:')
-    expect(catchIdx).toBeGreaterThan(-1)
-    const afterCatch = fnSlice.slice(catchIdx, catchIdx + 600)
-    expect(afterCatch).toContain('input[type="password"]')
-    expect(afterCatch).toContain('input#username')
-    expect(afterCatch).toContain('hasLoginForm')
+    expect(fnSlice).toContain('fetchPodCsv({')
+    // Inline CSV-download error path is gone — proof of delegation.
+    expect(fnSlice).not.toContain('CSV download failed:')
   })
 
-  test('scrapePodCcspRaw calls setTableauSessionExpired(true) when login form detected', () => {
-    const fnIdx = CCSP_SCRAPER_SRC.indexOf('export async function scrapePodCcspRaw(')
-    const fnSlice = CCSP_SCRAPER_SRC.slice(fnIdx, fnIdx + 9000)
-
-    const catchIdx = fnSlice.indexOf('CSV download failed:')
-    const afterCatch = fnSlice.slice(catchIdx, catchIdx + 600)
-    expect(afterCatch).toContain('setTableauSessionExpired(true)')
+  test('fetchPodCsv detects login wall and sets _tableauSessionExpired', () => {
+    // fetchPodCsv inspects the post-navigation URL/DOM and flips the expired flag
+    // before launching the 5-min recovery wait. Replaces the inline auth-on-timeout
+    // path that used to live in scrapePodCcspRaw.
+    expect(CCSP_FETCH_SRC).toContain('isLoginPage')
+    expect(CCSP_FETCH_SRC).toContain('input[type="password"]')
+    expect(CCSP_FETCH_SRC).toContain('input#username')
+    expect(CCSP_FETCH_SRC).toContain('_tableauSessionExpired = true')
   })
 
-  test('scrapePodCcspRaw login form check is inside the CSV download catch block', () => {
-    const fnIdx = CCSP_SCRAPER_SRC.indexOf('export async function scrapePodCcspRaw(')
-    const fnSlice = CCSP_SCRAPER_SRC.slice(fnIdx, fnIdx + 9000)
-
-    // The check must appear between the catch keyword and the closing brace of the catch block
-    // Verify it is NOT outside the catch (i.e. placed before csvPath check)
-    const catchIdx = fnSlice.indexOf('CSV download failed:')
-    const setExpiredIdx = fnSlice.indexOf('setTableauSessionExpired(true)')
-    const csvPathCheckIdx = fnSlice.indexOf('if (csvPath) {')
-
-    expect(catchIdx).toBeGreaterThan(-1)
-    expect(setExpiredIdx).toBeGreaterThan(-1)
-    expect(csvPathCheckIdx).toBeGreaterThan(-1)
-    // setTableauSessionExpired must appear BEFORE the csvPath check (it's inside catch, not after)
-    expect(setExpiredIdx).toBeLessThan(csvPathCheckIdx)
+  test('fetchPodCsv throws when SSO recovery wait deadline passes', () => {
+    // Equivalent to the old scrapePodCcspRaw "Tableau auth expired" throw — now
+    // emitted inside fetchPodCsv after the 5-minute manual login window expires.
+    expect(CCSP_FETCH_SRC).toContain('Tableau session required')
   })
 })

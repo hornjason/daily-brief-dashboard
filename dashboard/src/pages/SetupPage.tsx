@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatRelTime } from '../lib/format'
-import { getVncUrl } from '../utils'
 import { RefreshTimerSettings } from '../components/RefreshTimerSettings'
 import { AiIntelligenceSettings } from '../components/AiIntelligenceSettings'
 import { AutomationSettings } from '../components/AutomationSettings'
@@ -424,176 +423,6 @@ function GoogleAuthSection() {
 // ── Red Hat Portal ─────────────────────────────────────────────────────────────
 
 
-interface RhStatus {
-  hasSession: boolean
-  sessionExpired: boolean
-  lastScraped: string | null
-  caseCount: number
-  loginInProgress: boolean
-  loginTimedOut: boolean
-}
-
-function RedHatPortalSection({ onConnected }: { onConnected?: () => void }) {
-  const [status, setStatus] = useState<RhStatus | null>(null)
-  const [connecting, setConnecting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const popupRef = useRef<Window | null>(null)
-  // Guard: only close the VNC window after the backend has confirmed loginInProgress:true
-  // at least once. Without this, stale hasSession:true (dead browser, live session file)
-  // causes the first poll to immediately close the window before login even starts.
-  const loginStartedRef = useRef(false)
-
-  const fetchStatus = async (signal?: AbortSignal): Promise<boolean> => {
-    try {
-      const d: RhStatus = await fetch('/api/auth/redhat/status', { signal }).then((r) => r.json())
-      setStatus(d)
-      // BKL-UX63: Align with Step 5 logic — require !sessionExpired for connected state
-      if (d.hasSession && !d.sessionExpired) onConnected?.()
-      if (d.loginInProgress) loginStartedRef.current = true
-      if (d.hasSession && !d.loginInProgress && connecting && loginStartedRef.current) {
-        setConnecting(false)
-        popupRef.current?.close()
-        popupRef.current = null
-        fetch('/api/scrape/rh', { method: 'POST', signal }).catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
-      }
-      return true
-    } catch (e: any) {
-      if (e.name !== 'AbortError') { /* ignore */ }
-      return false
-    }
-  }
-
-  useEffect(() => {
-    const controller = new AbortController()
-    // BKL-UX73: Retry once if the mount fetch fails (e.g. container restart timing window)
-    fetchStatus(controller.signal).then(ok => {
-      if (!ok) setTimeout(() => fetchStatus(controller.signal), 600)
-    })
-    return () => controller.abort()
-  }, [])
-
-  useEffect(() => {
-    if (!connecting) return
-    const controller = new AbortController()
-    const interval = setInterval(() => fetchStatus(controller.signal), 2_000)
-    return () => { controller.abort(); clearInterval(interval) }
-  }, [connecting])
-
-  const handleConnect = async () => {
-    // BKL-UX60: Connect button always wins — check status first, then either
-    // start a new login or re-use the in-progress one. Never show errors.
-    setError(null)
-    loginStartedRef.current = false
-    setConnecting(true)
-    try {
-      // Step 1: check current state
-      const currentStatus: RhStatus = await fetch('/api/auth/redhat/status').then(r => r.json())
-      setStatus(currentStatus)
-
-      if (currentStatus.loginInProgress) {
-        // Login already running — just open VNC tab, skip POST
-        loginStartedRef.current = true
-        // BKL-CONN-ARCH-01: open as named popup window, not '_blank' tab
-        popupRef.current = window.open(getVncUrl(), 'rh-vnc', 'width=1280,height=900')
-      } else {
-        // Start a new login, then open VNC tab
-        await fetch('/api/auth/redhat/start', { method: 'POST' }).catch(e => console.warn('[rh-auth] start failed:', e))
-        // Always set after explicit login start — flag is reset to false at top of handleConnect
-        // so mount-time stale-session guard (BKL-UX63) is not affected
-        loginStartedRef.current = true
-        // BKL-CONN-ARCH-01: open as named popup window, not '_blank' tab
-        popupRef.current = window.open(getVncUrl(), 'rh-vnc', 'width=1280,height=900')
-      }
-      // Poll will detect completion and flip to Connected
-    } catch {
-      // Silently absorb errors — never show login errors to the user
-      setConnecting(false)
-    }
-  }
-
-  const handleCancel = async () => {
-    await fetch('/api/auth/redhat/session', { method: 'DELETE' }).catch(e => console.error('[rh-auth] cancel failed:', e))
-    popupRef.current?.close()
-    popupRef.current = null
-    setConnecting(false)
-    fetchStatus()
-  }
-
-  // BKL-UX63: Show connected view only when hasSession is true AND session is not expired
-  if (status?.hasSession && !status?.sessionExpired && !connecting) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <CheckCircle className="w-5 h-5 text-success" />
-          <span className="font-semibold text-white">Red Hat Portal Connected</span>
-        </div>
-        <p className="text-text-secondary text-sm">
-          Support cases will sync automatically every 4 hours.
-          {status.lastScraped && (
-            <> Last synced {timeAgo(status.lastScraped)} — {status.caseCount} cases.</>
-          )}
-        </p>
-        <button
-          onClick={handleConnect}
-          className="text-sm text-text-secondary hover:text-white underline transition-colors"
-        >
-          Reconnect session
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      <p className="text-text-secondary text-sm">
-        Connect your Red Hat Customer Portal session to surface open support cases in the
-        dashboard. A browser window will open — log in, then return here.
-      </p>
-
-      {connecting ? (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 bg-accent/10 border border-accent/30 rounded-lg p-4">
-            <Loader2 className="w-5 h-5 text-accent animate-spin shrink-0" />
-            <div>
-              <p className="text-white text-sm font-medium">Connecting...</p>
-              <p className="text-text-secondary text-xs mt-0.5">
-                Complete login in the opened browser tab. Session saves automatically.
-              </p>
-            </div>
-          </div>
-          {status?.loginTimedOut && (
-            <p className="text-warning text-sm">Login timed out — try again.</p>
-          )}
-          <button
-            onClick={handleCancel}
-            className="text-sm text-text-secondary hover:text-text-primary underline transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          <button
-            onClick={handleConnect}
-            className="flex items-center gap-2 bg-critical hover:bg-critical/80 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Connect Red Hat Portal
-          </button>
-          {error && (
-            <p className="text-critical text-sm flex items-center gap-1.5">
-              <XCircle className="w-4 h-4" /> {error}
-            </p>
-          )}
-          <p className="text-text-secondary text-xs">
-            Optional — you can skip this and connect later from the dashboard.
-          </p>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Main Setup Page ────────────────────────────────────────────────────────────
 
 type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings'
@@ -604,7 +433,6 @@ export default function SetupPage() {
   const [oauthKeysOk, setOauthKeysOk] = useState(false)
   const [googleAuthOk, setGoogleAuthOk] = useState<boolean | null>(null) // null = still checking
   const [aeCount, setAeCount] = useState<number | null>(null)
-  const [rhOk, setRhOk] = useState<boolean | null>(null)
   const [rhTokenConfigured, setRhTokenConfigured] = useState<boolean | null>(null)
   const [resetting, setResetting] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
@@ -661,9 +489,8 @@ export default function SetupPage() {
     // Check RH Portal
     fetch('/api/auth/redhat/status', { signal })
       .then(r => r.json())
-      // BKL-UX63: Require !sessionExpired — aligns Step 3 badge with Step 5
-      .then(d => { setRhOk((d.hasSession && !d.sessionExpired) ?? false) })
-      .catch((e) => { if (e.name !== 'AbortError') setRhOk(false) })
+      .then(() => { /* no-op — RH state removed (BKL-DEAD-CODE-RHSECTION-01) */ })
+      .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
 
     // Check RH offline token configured (for Step 3 accordion badge)
     fetch('/api/settings/offline-token', { signal })

@@ -47,7 +47,7 @@ export const SETTINGS_PATH = resolve(
  * that's a 404 or a no-op).
  */
 export async function resolveConfigFolderId(parentFolderId: string): Promise<string | null> {
-  if (!parentFolderId) return null
+  if (!parentFolderId || !isValidDriveFolderId(parentFolderId)) return null
 
   // Fast path: cache hit
   const cached = readScaffoldCache()[parentFolderId]?.configFolderId
@@ -88,10 +88,14 @@ export async function writeSettingsToDrive(parentFolderId: string): Promise<{ fi
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const drive = google.drive({ version: 'v3', auth })
 
-  // Read current local settings contents (raw bytes — preserve any keys we don't normalize).
+  // Project to allowed keys before uploading — prevents unknown fields from round-tripping.
+  const SETTINGS_ALLOWED_KEYS = ['regions', 'pods', 'podSfReports', 'podLabels', 'podBookingsFolderId', 'enabledRegions', 'enabledPods'] as const
   let body: string
   try {
-    body = readFileSync(SETTINGS_PATH, 'utf-8')
+    const raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')) as Record<string, unknown>
+    const projected: Record<string, unknown> = {}
+    for (const k of SETTINGS_ALLOWED_KEYS) if (k in raw) projected[k] = raw[k]
+    body = JSON.stringify(projected, null, 2)
   } catch {
     body = '{}'
   }

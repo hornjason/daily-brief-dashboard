@@ -70,9 +70,11 @@ export async function runStartupDriveMerge(): Promise<void> {
       // Config/ or settings.json missing — skip merge silently (matches prior behavior).
       return
     }
-    // Deep-merge: Drive wins on regions[], local wins on everything else
-    if (Array.isArray(driveSettings.regions)) {
-      raw.regions = driveSettings.regions
+    // Deep-merge: Drive wins on regions[], local wins on everything else.
+    // Validate Drive data through normalizeSettings before merging.
+    const driveNorm = normalizeSettings(driveSettings)
+    if (driveNorm.regions.length > 0) {
+      raw.regions = driveNorm.regions
       writeJsonAtomic(SETTINGS_PATH_SRV, raw)
       console.log('[startup] Merged regions from Drive Config/settings.json')
     }

@@ -6692,13 +6692,11 @@ Decision: Research before implementing — evaluate quality tradeoff and whether
 - Description: The Step 5 "Data Sources" accordion header badge shows "Checking..." indefinitely and never flips to a resolved state (e.g., "2 of 4 connected" or "Ready"). Tableau connection card inside also stays "Checking..." permanently. Nielsen #1 violation — user cannot get a quick at-a-glance read on data source status. The `dataSourcesHealth` state may never transition from 'loading' if any individual connection check hangs (Tableau in particular since it requires CCSP + session data).
 
 ### BKL-DEAD-CODE-RHSECTION-01 | RedHatPortalSection function and rhOk state are dead code in SetupPage.tsx
-- Status: OPEN
+- Status: ✅ DONE 2026-05-04 — Removed `RedHatPortalSection` function, `rhOk`/`setRhOk` state, dead `RhStatus` interface, and dead `getVncUrl` import from SetupPage.tsx. tsc clean, 551 unit tests pass.
 - Priority: P3
 - Size: XS
 - Source: Code review 2026-05-04 — found while verifying BKL-UX63
 - Files: dashboard/src/pages/SetupPage.tsx
-- Description: `RedHatPortalSection` (line 436) is defined but never rendered — its content was replaced by `HeroStep3Connections` when Step 3 was reworked. `rhOk` state (line 607) is set by `setRhOk((d.hasSession && !d.sessionExpired) ?? false)` but never used in rendering or auto-expand logic. Both are dead code adding noise.
-- Fix: Remove `RedHatPortalSection` function (~60 lines) and `rhOk` / `setRhOk` declarations from SetupPage.tsx. Verify no other file imports RedHatPortalSection. Run tsc and full suite.
 (XS — stays in BACKLOG.md, not promoted)
 
 ### BKL-UX66 | "Analysis skipped" entries appear in Top Priority Actions on Products page
@@ -7293,7 +7291,7 @@ Description: The agreed architecture has `Config/settings.json` as a config snap
 Fix: (1) Add `POST /api/config/backup` — reads local settings.json and writes to `Config/settings.json` on Drive with timestamp metadata. (2) Add `POST /api/config/restore` — reads `Config/settings.json` from Drive and applies to local settings.json (with confirmation/safety guard). (3) Both endpoints depend on BKL-DRIVE-SCAFFOLD-01 ensuring `Config/` exists. (4) Document in docs/SECRETS-GUIDE.md or new docs/CONFIG-BACKUP.md.
 
 ### BKL-SEC-DRIVE-RESTORE-VALIDATE-01 | applySettingsToLocal writes Drive JSON without payload validation
-Status: OPEN
+Status: ✅ DONE 2026-05-04 — `settings-api.ts` POST /api/config/restore now calls `normalizeSettings(parsed)` before `applySettingsToLocal`; `runStartupDriveMerge` in setup-routes.ts calls `normalizeSettings(driveSettings)` before merging regions. tsc clean.
 Priority: P2
 Size: XS
 Source: Rook scan 2026-05-04 — BKL-DRIVE-BACKUP-API-01 review of drive-config-sync.ts
@@ -7302,7 +7300,7 @@ Description: `readSettingsFromDrive` returns `Record<string, unknown>` (JSON-par
 Fix: In `applySettingsToLocal` (or `readSettingsFromDrive`), run `parsed` through `normalizeSettings()` round-trip, validate each `region.parentFolderId` and `region.podBookingsFolderId` with `isValidDriveFolderId`, and reject if structure is unrecognizable. Apply same guard in `runStartupDriveMerge`.
 
 ### BKL-SEC-DRIVE-FOLDERID-GUARD-01 | resolveConfigFolderId does not guard parentFolderId with isValidDriveFolderId
-Status: OPEN
+Status: ✅ DONE 2026-05-04 — `if (!parentFolderId || !isValidDriveFolderId(parentFolderId)) return null` added at top of `resolveConfigFolderId` in drive-config-sync.ts.
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-04 — BKL-DRIVE-BACKUP-API-01 review of drive-config-sync.ts:49-75
@@ -7312,7 +7310,7 @@ Fix: Add `if (!isValidDriveFolderId(parentFolderId)) return null` at the top of 
 (XS — stays in BACKLOG.md, not promoted)
 
 ### BKL-SEC-DRIVE-SETTINGS-ALLOWLIST-01 | writeSettingsToDrive ships raw local settings.json bytes — no field allowlist
-Status: OPEN
+Status: ✅ DONE 2026-05-04 — `writeSettingsToDrive` now parses local file and projects to known allowlist keys (regions, pods, podSfReports, podLabels, podBookingsFolderId, enabledRegions, enabledPods) before uploading. tsc clean.
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-04 — BKL-DRIVE-BACKUP-API-01 review of drive-config-sync.ts:91-97
@@ -8861,7 +8859,7 @@ Description: 13 remaining TypeScript errors, all in protected scraper files. The
 Solution: Requires Jason sign-off to touch rh-scraper.ts, scraper-manager.ts, supportable-scraper.ts.
 
 ### BKL-ARCH-14 | filterCcspRowsForAe (line ~1268) missing quarter filter; candidate for delegation to filterRowsForAe
-Status: OPEN
+Status: ✅ DONE 2026-05-04 — Added optional `quarters?: string[]` param; when provided and non-empty delegates to `filterRowsForAe(rawRows, territories, quarters)`. Territory-only path preserved for 3-arg callers. tsc clean, 551 unit tests pass.
 Priority: P3
 Size: XS
 Source: Marcus #15 step-1 investigation 2026-05-02
@@ -8879,7 +8877,7 @@ Description: Test fails with "Export named 'recordSessionEstablished' not found 
 Solution: Investigate module resolution order; may need a re-export fix in settings-api.ts or test isolation.
 
 ### BKL-ARCH-17 | scrapePodCcspRaw duplicates URL-build/navigation/CSV logic now in ccsp-tableau-fetch.ts
-Status: OPEN
+Status: ✅ DONE 2026-05-04 — `scrapePodCcspRaw` now routes through `fetchPodCsv` for navigation/CSV download. Dead helpers `findEl`, `waitForVizReady`, `applyFilter`, `dumpDom` removed from ccsp-scraper.ts (~206 lines deleted). Test unit ccsp-auth-detection.test.ts updated to assert delegation. tsc clean, 551 unit tests pass.
 Priority: P3
 Size: S
 Source: Marcus #15 step-3 investigation 2026-05-02
