@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-01
+updated: 2026-05-03
 ---
 
 # DailyBriefDashboard — Project Instructions
@@ -107,7 +107,7 @@ gh label create "enhancement" --repo hornjason/asaCommandCenter --color "a2eeef"
 
 ## Agent Briefing
 
-- **Rook:** Shared browser context and no-auth are intentional — do not flag as vulnerabilities
+- **Rook:** Shared browser context and no-auth are intentional — do not flag as vulnerabilities. Always give Rook explicit file paths and line ranges from the main working directory — never spawn Rook with `isolation:worktree` on pre-commit reviews (worktree gets clean tree, misses uncommitted changes).
 - **Quinn:** Test as brand new user from scratch unless Jason says otherwise
 - **Marcus:** Read the file before modifying; surgical fixes only; never touch scraper files without explicit instruction
 - Include relevant `ARCHITECTURE.md` section in every agent prompt

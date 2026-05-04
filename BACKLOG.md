@@ -7041,7 +7041,7 @@ Tests: REG-WIZ-01 through REG-WIZ-07, REG-POD-01/02 (regression.spec.ts); REG-UX
 Decision: DONE — fix shipped 2026-04-26 commit 7965235. Quinn PASS (81 tests passing). Rook clean.
 
 ### BKL-DEV-01 | Rook security scans should review working-directory diff, not clean worktree
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Learning reflection 2026-04-26 — Rook got isolation:worktree, reviewed clean tree, missed uncommitted changes
@@ -8942,15 +8942,27 @@ Tests: bun test test/unit/territory-sheet.spec.ts — 4/4 pass. Playwright 115/1
 
 ---
 
+### BKL-SEC-28 | scraper-manager.ts — supportable/ccsp lastError uses weaker inline sanitization vs sanitizeErr()
+Status: 🔴 OPEN
+Priority: P4
+Size: XS
+Source: Rook scan 2026-05-03 (BKL-SCRAPER-DEAD-01 post-ship review)
+Files: src/scraper-manager.ts (~lines 958, 965)
+Description: `/api/status/scrapes` handler sanitizes `supportable.lastError` and `ccsp.lastError` with inline `.slice(0,200).replace(...)` instead of `sanitizeErr()`. The inline regex misses Windows paths, `.json`/`.pem`/`.key` extensions, JWT tokens. `rh` and `sf` use `sanitizeErr()` at write-time — inconsistent.
+Solution: Replace inline truncation with `sanitizeErr(lastSupportableError)` and `sanitizeErr(lastCcspError)` in `/api/status/scrapes` handler.
+Can we test: YES — regression test that lastError in status response doesn't contain raw file paths or JWT tokens.
+
+---
+
 ### BKL-SCRAPER-DEAD-01 | Dead endpoint /api/auth/supportable/check in scraper-manager.ts
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: BKL-SEC-SUPPORTABLE-02 cleanup 2026-05-02
 Files: src/scraper-manager.ts (line 913)
 Description: /api/auth/supportable/check is a dead route — no frontend code calls it. VPN reachability probe that was used by the old Supportable connection panel (removed). The endpoint itself is in the protected scraper-manager.ts file.
-Solution: Remove the route handler at scraper-manager.ts:912-930 (approx). Requires explicit Jason sign-off before touching scraper-manager.ts per SCRAPER-RULES.md.
-Can we test: YES — verify endpoint returns 404 after removal.
+Solution: Removed route handler, test in bootstrap-e2e.spec.ts, and REG-027 block in regression/api.spec.ts. Zero references remain.
+Resolution: commit 396d8f512. Rook PASS, Quinn PASS.
 
 ---
 

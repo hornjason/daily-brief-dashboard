@@ -1802,4 +1802,20 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
     expect(src).toContain('/[^a-zA-Z0-9_-]/.test(regionId)')
     expect(src).toContain('sheetUrl contains invalid spreadsheet ID')
   })
+
+  // REG-SEC-21-01: BKL-SEC-21 — POST /api/drive-watcher/rebuild must guard behind
+  // isPrimary() so hero nodes return 404 instead of wiping the in-memory folder map.
+  test('REG-SEC-21-01: drive-watcher/rebuild guards behind isPrimary before rebuildFolderMap', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/admin-routes.ts'), 'utf8')
+    // Import is present
+    expect(src).toMatch(/import\s*\{\s*isPrimary\s*\}\s*from\s*['"]\.\/lib\/node-role\.ts['"]/)
+    // Guard appears before rebuildFolderMap call inside the rebuild handler
+    const handlerIdx = src.indexOf("r.post('/api/drive-watcher/rebuild'")
+    expect(handlerIdx).toBeGreaterThan(-1)
+    const guardIdx = src.indexOf('if (!isPrimary())', handlerIdx)
+    const rebuildCallIdx = src.indexOf('rebuildFolderMap(customers, parentIds)', handlerIdx)
+    expect(guardIdx).toBeGreaterThan(handlerIdx)
+    expect(guardIdx).toBeLessThan(rebuildCallIdx)
+    expect(src).toContain("'Not available on hero nodes'")
+  })
 })

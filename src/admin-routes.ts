@@ -27,6 +27,7 @@ import { getGeminiUsageSummary } from './gemini-cost-tracker.ts'
 import { getWatcherState, rebuildFolderMap } from './drive-watcher.ts'
 import { customers } from './server-state.ts'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
+import { isPrimary } from './lib/node-role.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -77,6 +78,7 @@ export function createAdminRouter(): Hono {
 
   // POST /api/drive-watcher/rebuild — rebuild Drive folder map
   r.post('/api/drive-watcher/rebuild', async (c) => {
+    if (!isPrimary()) return c.json({ error: 'Not available on hero nodes' }, 404)
     const parentIds = (process.env.AE_PARENT_FOLDER_IDS ?? process.env.AE_PARENT_FOLDER_ID ?? '').split(',').filter(Boolean)
     try {
       const folderMap = await rebuildFolderMap(customers, parentIds)
