@@ -110,7 +110,7 @@ function detectBrowserCrash(): boolean {
 // ── Standardized response shape ─────────────────────────────────────────────
 
 export interface ScrapeResult {
-  scraper: 'rh' | 'ccsp' | 'salesforce'
+  scraper: 'rh-cases' | 'ccsp' | 'sf-pipeline'
   status: 'ok' | 'partial' | 'error' | 'busy' | 'skipped'
   recordsWritten: number
   accountsScraped?: number
@@ -147,8 +147,8 @@ export function registerScrapeRoutes(app: Hono): void {
   // Manual "Run Now" overrides circuit breaker — user is explicitly requesting a run
   app.post('/api/scrape/rh', async (c) => {
     try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: sanitizeErr(e) }, 503) }
-    if (_rhScrapeRunning) return c.json({ scraper: 'rh', status: 'busy', error: 'RH scrape already in progress' }, 409)
-    resetCircuitBreaker('rh')
+    if (_rhScrapeRunning) return c.json({ scraper: 'rh-cases', status: 'busy', error: 'RH scrape already in progress' }, 409)
+    resetCircuitBreaker('rh-cases')
     markRunning('rh-cases')  // BKL-ADM01: set state synchronously before the task runs
     enqueueScraperTask({
       name: 'rh-cases',
@@ -156,7 +156,7 @@ export function registerScrapeRoutes(app: Hono): void {
       source: 'manual',
       enqueuedAt: Date.now(),
     })
-    return c.json({ scraper: 'rh', started: true, queued: true })
+    return c.json({ scraper: 'rh-cases', started: true, queued: true })
   })
 
   // GET /api/scrape/rh/status
@@ -338,7 +338,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker
   app.post('/api/scrape/salesforce', async (c) => {
-    resetCircuitBreaker('salesforce')
+    resetCircuitBreaker('sf-pipeline')
     const aesWithSf = aes.filter(a => a.sfReportId && a.driveFolderId)
     if (!aesWithSf.length && !SF_REPORT_ID) return c.json({ error: 'No AEs with sfReportId configured' }, 400)
 
@@ -348,7 +348,7 @@ export function registerScrapeRoutes(app: Hono): void {
       setSfSyncRunning(false)
       setSfSyncStartedAt(null)
     }
-    if (_sfSyncRunning) return c.json({ scraper: 'salesforce', status: 'busy', error: 'SF sync already in progress' }, 409)
+    if (_sfSyncRunning) return c.json({ scraper: 'sf-pipeline', status: 'busy', error: 'SF sync already in progress' }, 409)
 
     markRunning('sf-pipeline')  // BKL-ADM01: set state synchronously before the task runs
     enqueueScraperTask({
@@ -470,7 +470,7 @@ export function registerScrapeRoutes(app: Hono): void {
           // BKL-M50e: Record telemetry
           recordScrapeResult({
             timestamp: new Date().toISOString(),
-            service: 'salesforce',
+            service: 'sf-pipeline',
             durationMs: Date.now() - _sfTelemetryStart,
             recordCount: totalRows,
             status: _sfSyncLastError ? 'failure' : 'success',
@@ -541,9 +541,9 @@ export function registerScrapeRoutes(app: Hono): void {
       run: async () => {
         const scrapers: { name: string; run: () => Promise<void> }[] = [
           {
-            name: 'rh',
+            name: 'rh-cases',
             run: async () => {
-              if (_rhScrapeRunning) { console.log('[scrape:all] rh: busy — skipping'); return }
+              if (_rhScrapeRunning) { console.log('[scrape:all] rh-cases: busy — skipping'); return }
               await runRhScrapeWithState()
             },
           },
@@ -595,11 +595,11 @@ export function registerScrapeRoutes(app: Hono): void {
             },
           },
           {
-            name: 'salesforce',
+            name: 'sf-pipeline',
             run: async () => {
-              if (_sfSyncRunning) { console.log('[scrape:all] salesforce: busy — skipping'); return }
+              if (_sfSyncRunning) { console.log('[scrape:all] sf-pipeline: busy — skipping'); return }
               const aesWithSf = aes.filter(a => a.sfReportId && a.driveFolderId)
-              if (!aesWithSf.length) { console.log('[scrape:all] salesforce: no AEs — skipping'); return }
+              if (!aesWithSf.length) { console.log('[scrape:all] sf-pipeline: no AEs — skipping'); return }
               setSfSyncRunning(true)
               setSfSyncStartedAt(Date.now())
               const _sfTelemetryStart = Date.now()
@@ -644,7 +644,7 @@ export function registerScrapeRoutes(app: Hono): void {
                 // BKL-M50e: Record telemetry
                 recordScrapeResult({
                   timestamp: new Date().toISOString(),
-                  service: 'salesforce',
+                  service: 'sf-pipeline',
                   durationMs: Date.now() - _sfTelemetryStart,
                   recordCount: totalRows,
                   status: 'success',
@@ -652,7 +652,7 @@ export function registerScrapeRoutes(app: Hono): void {
               } catch (e: any) {
                 recordScrapeResult({
                   timestamp: new Date().toISOString(),
-                  service: 'salesforce',
+                  service: 'sf-pipeline',
                   durationMs: Date.now() - _sfTelemetryStart,
                   recordCount: totalRows,
                   status: 'failure',

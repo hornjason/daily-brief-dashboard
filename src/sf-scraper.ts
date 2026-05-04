@@ -387,7 +387,7 @@ export function adoptSfContext(context: BrowserContext, profileDir: string): voi
   // doesn't get blocked by failures accumulated while the context was dead.
   // Lazy import avoids a static circular dependency with scraper-manager.
   import('./scraper-manager.ts')
-    .then(m => m.resetCircuitBreaker('salesforce'))
+    .then(m => m.resetCircuitBreaker('sf-pipeline'))
     .catch(() => { /* non-fatal — breaker will clear on first success */ })
 }
 

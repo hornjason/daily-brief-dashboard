@@ -1914,6 +1914,34 @@ test.describe('AEsCustomersSection extraction (BKL-ARCH-04)', () => {
   })
 })
 
+// REG-SCRAPER-02: BKL-ARCH-SCRAPER-02 — Scraper service name canonicalization
+// scraper-manager.ts must use 'rh-cases' and 'sf-pipeline' as circuit breaker and telemetry keys.
+// recordConnectionSuccess/Failure use ConnectionId 'rh'/'sf' (separate key space) and are allowed.
+test.describe('Scraper service name canonicalization (BKL-ARCH-SCRAPER-02)', () => {
+  test('REG-SCRAPER-02-01: scraper-manager.ts circuit breaker map uses rh-cases not rh', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf-8')
+    // The circuitBreakers object must use 'rh-cases' as its key
+    expect(src).toContain("'rh-cases': new CircuitBreaker('rh-cases'")
+    // The circuitBreakers object must NOT define a bare 'rh' key
+    expect(src).not.toContain("rh: new CircuitBreaker('rh'")
+    // The resetCircuitBreaker function must accept 'rh-cases', not 'rh'
+    expect(src).toContain("service: 'rh-cases' | 'ccsp' | 'sf-pipeline'")
+    // telemetry service field must use 'rh-cases', not 'rh'
+    const rhTelemetryMatches = src.match(/service:\s*'rh'(?!-)/g) ?? []
+    expect(rhTelemetryMatches).toHaveLength(0)
+  })
+
+  test('REG-SCRAPER-02-02: scraper-manager.ts has zero occurrences of bare "salesforce" as a scraper key', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf-8')
+    const bareSfMatches = src.match(/'salesforce'|"salesforce"/g) ?? []
+    expect(bareSfMatches).toHaveLength(0)
+  })
+})
+
 // REG-SCRAPER-05: BKL-ARCH-SCRAPER-05 — AuthExpiredError relocated to src/scraper-errors.ts
 test.describe('CcspAuthExpiredError relocation (BKL-ARCH-SCRAPER-05)', () => {
   test('REG-SCRAPER-05-01: src/scraper-errors.ts exists and exports CcspAuthExpiredError', () => {

@@ -24,7 +24,7 @@ import { ScraperRegistry } from './scraper-registry.ts'
 
 export interface ScrapeLogEntry {
   timestamp: string
-  service: 'rh' | 'ccsp' | 'supportable' | 'salesforce'
+  service: 'rh-cases' | 'ccsp' | 'supportable' | 'sf-pipeline'
   durationMs: number
   recordCount: number
   status: 'success' | 'failure' | 'skipped' | 'timeout'
@@ -102,7 +102,7 @@ export function getTelemetrySummary(): Record<string, {
   last5: ScrapeLogEntry[]
 }> {
   const summary: Record<string, any> = {}
-  for (const service of ['rh', 'ccsp', 'supportable', 'salesforce']) {
+  for (const service of ['rh-cases', 'ccsp', 'supportable', 'sf-pipeline']) {
     const entries = _telemetryLog.get(service) ?? []
     const successEntries = entries.filter(e => e.status === 'success')
     const avgDuration = successEntries.length > 0
@@ -228,22 +228,22 @@ class CircuitBreaker {
 const _thresholdGetter   = (): number => getAutomationConfig().circuitBreakerThreshold
 const _cooldownMsGetter  = (): number => getAutomationConfig().circuitBreakerCooldownMs
 const circuitBreakers = {
-  rh: new CircuitBreaker('rh', _thresholdGetter, _cooldownMsGetter),
+  'rh-cases': new CircuitBreaker('rh-cases', _thresholdGetter, _cooldownMsGetter),
   ccsp: new CircuitBreaker('ccsp', _thresholdGetter, _cooldownMsGetter),
-  salesforce: new CircuitBreaker('salesforce', _thresholdGetter, _cooldownMsGetter),
+  'sf-pipeline': new CircuitBreaker('sf-pipeline', _thresholdGetter, _cooldownMsGetter),
 }
 
 /** Get circuit breaker states for all services — exposed for /api/status endpoint. */
 export function getCircuitBreakerStates(): Record<string, ReturnType<CircuitBreaker['getState']>> {
   return {
-    rh: circuitBreakers.rh.getState(),
+    'rh-cases': circuitBreakers['rh-cases'].getState(),
     ccsp: circuitBreakers.ccsp.getState(),
-    salesforce: circuitBreakers.salesforce.getState(),
+    'sf-pipeline': circuitBreakers['sf-pipeline'].getState(),
   }
 }
 
 /** Reset a single circuit breaker — used when auth is re-established. */
-export function resetCircuitBreaker(service: 'rh' | 'ccsp' | 'salesforce'): void {
+export function resetCircuitBreaker(service: 'rh-cases' | 'ccsp' | 'sf-pipeline'): void {
   circuitBreakers[service].recordSuccess()
   console.log(`[circuit-breaker] ${service}: reset by auth event`)
 }
@@ -331,10 +331,10 @@ export function setLastSkipReason(service: string, reason: string): void {
 
 export function getLastSkipReasons(): Record<string, { reason: string; at: string } | null> {
   return {
-    rh: _lastSkipReasons.get('rh') ?? null,
+    'rh-cases': _lastSkipReasons.get('rh-cases') ?? null,
     ccsp: _lastSkipReasons.get('ccsp') ?? null,
     supportable: _lastSkipReasons.get('supportable') ?? null,
-    salesforce: _lastSkipReasons.get('salesforce') ?? null,
+    'sf-pipeline': _lastSkipReasons.get('sf-pipeline') ?? null,
   }
 }
 
@@ -437,8 +437,8 @@ export function clearSessionFiles(): void {
 
 export async function runRhScrapeWithState(): Promise<void> {
   // BKL-M50c: Circuit breaker check
-  if (circuitBreakers.rh.isOpen()) {
-    const state = circuitBreakers.rh.getState()
+  if (circuitBreakers['rh-cases'].isOpen()) {
+    const state = circuitBreakers['rh-cases'].getState()
     console.warn(`[rh-scraper] circuit breaker OPEN (${state.failures} failures) — skipping scrape`)
     return
   }
@@ -662,12 +662,12 @@ export async function runRhScrapeWithState(): Promise<void> {
 
     _rhScrapeLastError = null
     recordScrapeSuccess(cases.length)
-    circuitBreakers.rh.recordSuccess()
+    circuitBreakers['rh-cases'].recordSuccess()
 
     // BKL-M50e: Record telemetry
     recordScrapeResult({
       timestamp: new Date().toISOString(),
-      service: 'rh',
+      service: 'rh-cases',
       durationMs: Date.now() - _rhTelemetryStart,
       recordCount: cases.length,
       status: 'success',
@@ -696,7 +696,7 @@ export async function runRhScrapeWithState(): Promise<void> {
     const isTimeout = e?.message?.includes('[timeout]')
     recordScrapeResult({
       timestamp: new Date().toISOString(),
-      service: 'rh',
+      service: 'rh-cases',
       durationMs: Date.now() - _rhTelemetryStart,
       recordCount: 0,
       status: isTimeout ? 'timeout' : 'failure',
@@ -718,13 +718,13 @@ export async function runRhScrapeWithState(): Promise<void> {
     if (e instanceof SessionExpiredError) {
       _rhScrapeLastError = 'Session expired — reconnect via dashboard'
       recordScrapeExpired()
-      circuitBreakers.rh.recordFailure('session expired', true)
+      circuitBreakers['rh-cases'].recordFailure('session expired', true)
       await closeScrapeContext() // discard expired context so next login gets a clean one
       console.warn('[rh-scraper] session expired — reconnect via dashboard')
       notify('Red Hat Session Expired', 'Session expired during case scrape — reconnect via dashboard', 'high').catch(() => {})
     } else {
       _rhScrapeLastError = sanitizeErr(e)
-      circuitBreakers.rh.recordFailure(sanitizeErr(e))
+      circuitBreakers['rh-cases'].recordFailure(sanitizeErr(e))
       console.warn('[rh-scraper]', sanitizeErr(e))
       // Only flip RH to expired on the second consecutive non-auth failure.
       if (outcome.shouldExpire) {
@@ -840,7 +840,7 @@ function runSfSyncForAes(aesWithSf: typeof aes): Promise<void> {
     // BKL-M50e: Record telemetry for SF sync
     recordScrapeResult({
       timestamp: new Date().toISOString(),
-      service: 'salesforce',
+      service: 'sf-pipeline',
       durationMs: Date.now() - _sfTelemetryStart,
       recordCount: _sfTotalRows,
       status: _sfSyncLastError ? 'failure' : 'success',

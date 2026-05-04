@@ -31,16 +31,16 @@ describe('CircuitBreaker — initial state', () => {
 
   test('all three breakers start closed after resetAllCircuitBreakers', () => {
     const states = getCircuitBreakerStates()
-    expect(states.rh.state).toBe('closed')
+    expect(states['rh-cases'].state).toBe('closed')
     expect(states.ccsp.state).toBe('closed')
-    expect(states.salesforce.state).toBe('closed')
+    expect(states['sf-pipeline'].state).toBe('closed')
   })
 
   test('getCircuitBreakerStates returns exactly 3 active service keys (BKL-SEC-CIRCUIT-BREAKER-SUPPORTABLE-01)', () => {
     const states = getCircuitBreakerStates()
-    expect(Object.keys(states)).toContain('rh')
+    expect(Object.keys(states)).toContain('rh-cases')
     expect(Object.keys(states)).toContain('ccsp')
-    expect(Object.keys(states)).toContain('salesforce')
+    expect(Object.keys(states)).toContain('sf-pipeline')
     expect(Object.keys(states)).not.toContain('supportable')
   })
 
@@ -62,18 +62,18 @@ describe('CircuitBreaker — resetCircuitBreaker', () => {
   })
 
   test('resetCircuitBreaker resets failures to 0 for the named service', () => {
-    resetCircuitBreaker('rh')
-    const state = getCircuitBreakerStates().rh
+    resetCircuitBreaker('rh-cases')
+    const state = getCircuitBreakerStates()['rh-cases']
     expect(state.failures).toBe(0)
     expect(state.state).toBe('closed')
   })
 
   test('resetCircuitBreaker does not affect other services', () => {
-    resetCircuitBreaker('rh')
+    resetCircuitBreaker('rh-cases')
     const states = getCircuitBreakerStates()
     // Other breakers remain closed (or their current state) — not disturbed
     expect(['closed', 'open', 'half-open']).toContain(states.ccsp.state)
-    expect(['closed', 'open', 'half-open']).toContain(states.salesforce.state)
+    expect(['closed', 'open', 'half-open']).toContain(states['sf-pipeline'].state)
   })
 })
 
@@ -81,17 +81,17 @@ describe('CircuitBreaker — resetAllCircuitBreakers', () => {
   test('resets all 3 breakers to closed state', () => {
     resetAllCircuitBreakers()
     const states = getCircuitBreakerStates()
-    expect(states.rh.state).toBe('closed')
+    expect(states['rh-cases'].state).toBe('closed')
     expect(states.ccsp.state).toBe('closed')
-    expect(states.salesforce.state).toBe('closed')
+    expect(states['sf-pipeline'].state).toBe('closed')
   })
 
   test('resets failure counts to 0 for all services', () => {
     resetAllCircuitBreakers()
     const states = getCircuitBreakerStates()
-    expect(states.rh.failures).toBe(0)
+    expect(states['rh-cases'].failures).toBe(0)
     expect(states.ccsp.failures).toBe(0)
-    expect(states.salesforce.failures).toBe(0)
+    expect(states['sf-pipeline'].failures).toBe(0)
   })
 })
 

@@ -809,7 +809,7 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
       if (!sfStatus.hasSession) {
         const reason = 'Salesforce session expired. Reconnect via dashboard.'
         console.warn(`[scheduler] SKIPPED: Pipeline sync — ${reason}`)
-        setLastSkipReason('salesforce', reason)
+        setLastSkipReason('sf-pipeline', reason)
         await refreshPipeline()
       } else {
         // BKL-T06 / BKL-G30 Gap 3: SF Lightning pre-flight — gates the scrape (was log-only)
@@ -822,7 +822,7 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
           if (probe.status >= 400) {
             const reason = `SF Lightning returned ${probe.status} — session may be expired`
             console.warn(`[pipeline-sync] SF pre-flight: ${reason}`)
-            setLastSkipReason('salesforce', reason)
+            setLastSkipReason('sf-pipeline', reason)
           } else {
             console.log('[pipeline-sync] SF pre-flight: Lightning reachable')
             sfProbeOk = true
@@ -830,7 +830,7 @@ export function schedulePipelineSync(sfSessionPath?: string): void {
         } catch (e: any) {
           const reason = `SF pre-flight probe failed: ${e?.message ?? e}`
           console.warn(`[pipeline-sync] ${reason}`)
-          setLastSkipReason('salesforce', reason)
+          setLastSkipReason('sf-pipeline', reason)
         }
 
         // BKL-M49: Enqueue SF pipeline sync through scraper queue (gated on probe)
