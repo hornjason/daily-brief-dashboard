@@ -22,7 +22,15 @@ const TABLEAU_SESSION_PATH = `${process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 const LOGIN_POLL_INTERVAL_MS = 2_000
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000
-const TABLEAU_COOKIE_AGE_MS = parseInt(process.env.TABLEAU_COOKIE_AGE_MS ?? '') || 8 * 60 * 60 * 1000  // 8 hours — same as Tableau SSO TTL (env-overridable)
+const _TABLEAU_COOKIE_AGE_DEFAULT = 8 * 60 * 60 * 1000  // 8 hours — same as Tableau SSO TTL
+const TABLEAU_COOKIE_AGE_MS = (() => {
+  const raw = process.env.TABLEAU_COOKIE_AGE_MS
+  if (!raw) return _TABLEAU_COOKIE_AGE_DEFAULT
+  const n = Number(raw)
+  if (Number.isFinite(n) && n > 0) return n
+  console.warn(`[tableau-auth] TABLEAU_COOKIE_AGE_MS="${raw}" is not a positive finite number — using default ${_TABLEAU_COOKIE_AGE_DEFAULT}ms`)
+  return _TABLEAU_COOKIE_AGE_DEFAULT
+})()
 // Match ccsp-scraper.ts cookie filter exactly (line 48): includes('tableau.com') || includes('online.tableau')
 const TABLEAU_COOKIE_DOMAINS = ['tableau.com', 'online.tableau']
 const TABLEAU_USER_EMAIL = process.env.TABLEAU_USER_EMAIL ?? ''

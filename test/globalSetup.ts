@@ -17,7 +17,7 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:7777'
 const FIXTURE_CAROLANNE = {
   name: 'Carolanne Farrell',
   sfReportId: '00OPe00000isU2zMAE',
-  supportableSheetId: '150e3-q-8_6Uy3qnLhL-ARBVHyVy29P7tnAuFjxkkuCg',
+  subscriptionSheetId: '150e3-q-8_6Uy3qnLhL-ARBVHyVy29P7tnAuFjxkkuCg',
   pipelineSheetId: '10H8Nl8oQQg1x9Zt0p5cys7JJp0b4ObfzhB-pPMot3BM',
   ccspSheetId: '1G8VIkKca9vmLBTsSBrBjE6OWeO2_jbXhNHSHIaGFSUw',
 }
@@ -51,7 +51,7 @@ export default async function globalSetup() {
 
     // Check each key ID field
     const fieldsToCheck: Array<keyof typeof FIXTURE_CAROLANNE> = [
-      'sfReportId', 'supportableSheetId', 'pipelineSheetId', 'ccspSheetId',
+      'sfReportId', 'subscriptionSheetId', 'pipelineSheetId', 'ccspSheetId',
     ]
     const drifted: string[] = []
     for (const field of fieldsToCheck) {

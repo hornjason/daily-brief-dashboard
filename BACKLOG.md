@@ -173,9 +173,10 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Resolution: Verified — listeners are attached synchronously immediately after `ctx.newPage()` resolves and BEFORE `_iap = page` assignment. Within the new mutex closure ordering is: `newPage()` → `page.on('crash')` → `page.on('close')` → `_iap = page` → `goto()`. No intervening await between `newPage` and the listener calls. No code change required beyond the mutex wrap.
 
 ### BKL-TABLEAU-ENV-VALIDATION — parseInt on TABLEAU_COOKIE_AGE_MS accepts negatives/partial numerics
-- Status: OPEN
+- Status: ✅ DONE 2026-05-04
 - Priority: P3
 - Detail: `parseInt(process.env.TABLEAU_COOKIE_AGE_MS ?? '')` parses `"1abc"` as `1` and accepts negatives (negative age → all sessions appear stale → forced re-auth loop). Fix: use `Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT` with a console.warn when the env value is rejected. Operator trust boundary — not externally exploitable. Source: Rook Wave 3 scan 2026-04-27.
+- Resolution: Replaced parseInt with `Number(raw)` + `Number.isFinite(n) && n > 0` guard in `tableau-auth.ts:25`. console.warn fires when value is invalid. Regression test REG-TABLEAU-ENV-01 added.
 
 ### BKL-INTEL-DRIVE-TIMEOUT — Account intelligence pipeline fails with DOMException TimeoutError on Drive write
 - Status: ✅ DONE 2026-04-27
@@ -184,9 +185,10 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Resolution: Root cause was the 120s `AbortSignal.timeout` in `fetchGeminiWithRetry` firing on the slow `generateIndustryAnalysis` grounded call — propagated as `DOMException: TimeoutError`, then re-thrown as fatal by `Promise.allSettled` industry-rejection branch in `runIntelligencePipeline`, killing the pipeline AFTER the company brief had already generated. Two surgical fixes: (1) `src/account-intelligence.ts` — industry rejection now `console.warn`s and continues with `industryAnalysis = null` (matches existing company-side handling); (2) `src/gemini-fetch.ts` — `fetchGeminiWithRetry` now retries up to 2 times on `TimeoutError`/`AbortError` with a fresh per-attempt `AbortSignal.timeout`. 429 retry path unchanged. Regression tests REG-INTEL-TIMEOUT-01/02 added in `test/regression.spec.ts` source-inspection block.
 
 ### BKL-TABLEAU-LOCK-PATH — SingletonLock unlink has no path-containment assertion
-- Status: OPEN
+- Status: ✅ DONE 2026-05-04 (N/A — tableau-auth.ts has no SingletonLock unlink)
 - Priority: P3
 - Detail: `unlinkSync(join(TABLEAU_AUTH_PROFILE_DIR, 'SingletonLock'))` in tableau-auth.ts doesn't verify the resolved path stays inside the profile dir (symlink escape possible if env var is crafted). Fix: `resolve` both paths and assert containment before unlinking. Operator trust boundary only. Source: Rook Wave 3 scan 2026-04-27.
+- Resolution: Verified tableau-auth.ts contains no SingletonLock unlink. The pattern was Rook flagging a hypothetical; actual tableau-auth.ts flow never unlinks SingletonLock. Issue does not exist in current code — marking closed.
 
 ### BKL-CANCEL-STEP3-OVERLAP — tid3 watchdog can false-cancel Step 3 after Step 2 completes
 - Status: OPEN
