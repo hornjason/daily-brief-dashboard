@@ -79,18 +79,11 @@ async function doKeepalive(): Promise<void> {
     // redirecting — the MFA wall only appears on viz endpoints. Check for login form
     // presence (same selectors scrapeOneAe uses) so keepalive catches this case.
     const hasLoginForm = await page
-      .$('input[type="password"], input#username')
+      .$('input[type="password"], input#username, [data-testid="login"]')
       .then(el => !!el)
       .catch(() => false)
     if (hasLoginForm) {
       throw new Error('Tableau auth expired')
-    }
-
-    // Check for login form — home page can load with expired cookies without redirecting
-    const hasLoginForm = await page.$('input[type="password"], input#username, [data-testid="login"]')
-      .then(el => !!el).catch(() => false)
-    if (hasLoginForm) {
-      throw new Error('Tableau session expired — login form detected on home page')
     }
 
     // SF keepalive
