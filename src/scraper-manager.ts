@@ -16,7 +16,7 @@ import type { SupportCase } from './types.ts'
 import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, recordSfSyncSuccess, SfSessionExpiredError, adoptSfContext } from './sf-scraper.ts'
 import { recordScrapeFailure as recordConnectionFailure, recordScrapeSuccess as recordConnectionSuccess } from './connections/scrape-outcome.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
-import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
+import { supportableScrapeRunning } from './supportable-scraper.ts'
 import { ccspScrapeRunning, adoptCcspContext, peekTableauSessionExpired } from './ccsp-scraper.ts'
 import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
@@ -942,23 +942,15 @@ export function createScraperRouter(): Hono {
     // BKL-ARCH-02 Phase 1b: lastSync resolution moved into getUnifiedStatus()
     // (in-memory hint ?? store.lastSuccess ?? null). Other fields are kept as
     // they were so /api/status/scrapes JSON shape stays byte-identical.
-    const rhUnified          = getUnifiedStatus('rh-cases')
-    const supportableUnified = getUnifiedStatus('supportable')
-    const ccspUnified        = getUnifiedStatus('ccsp')
-    const sfUnified          = getUnifiedStatus('sf-pipeline')
-    const supportableStatus  = getScraperStatus('supportable')
-    const ccspStatus         = getScraperStatus('ccsp')
-    const rhStatus           = getScraperStatus('rh-cases')
-    const sfStatus           = getScraperStatus('sf-pipeline')
+    const rhUnified   = getUnifiedStatus('rh-cases')
+    const ccspUnified = getUnifiedStatus('ccsp')
+    const sfUnified   = getUnifiedStatus('sf-pipeline')
+    const ccspStatus  = getScraperStatus('ccsp')
+    const rhStatus    = getScraperStatus('rh-cases')
+    const sfStatus    = getScraperStatus('sf-pipeline')
 
     return c.json({
-      supportable: {
-        lastSync:    supportableUnified.lastSync,
-        lastError:   lastSupportableError ? sanitizeErr(lastSupportableError) : null,
-        isRunning:   supportableScrapeRunning,
-        isStale:     isStale(supportableUnified.lastSync, 24 * 60),
-        recordCount: supportableStatus.recordCount ?? null,
-      },
+      // BKL-ARCH-SCRAPER-09-FOLLOW-01: 'supportable' block removed — permanently disabled
       ccsp: {
         lastSync:      ccspUnified.lastSync,
         lastError:     ccspUnified.lastError,

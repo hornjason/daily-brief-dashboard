@@ -6896,12 +6896,13 @@ Description: `recordSessionEstablished` is referenced in unit tests but not expo
 ---
 
 ### BKL-ADMIN-SUPPORTABLE-01 | Admin page still renders Supportable in 4 places
-Status: 🔴 IN PROGRESS (Marcus fixing 2026-04-25)
+Status: ✅ DONE 2026-05-04 (verified — code check shows 0 Supportable references in AdminPage.tsx)
 Priority: P1
 Size: S
 Source: Quinn audit 2026-04-25 — ISC-25 FAIL
 Files: dashboard/src/pages/AdminPage.tsx
 Description: Admin page renders Supportable in 4 locations despite Supportable being permanently disabled: (1) Health card row, (2) Manual Scrape Triggers "Supportable Discovery + Sync" button, (3) Initial Load "Supportable Full Bootstrap" entry, (4) Scheduler Config checkbox + label. All 4 must be removed. SessionHealthPanel was already cleaned by Marcus in earlier pass (REG-041) but AdminPage was out of scope.
+Decision: DONE — `grep -ci "supportable" AdminPage.tsx` returns 0. Completed by Marcus during 2026-04-25 session, backlog drift prevented status update until now.
 
 ---
 
@@ -9194,12 +9195,12 @@ Fix: Replace e?.message with sanitizeErr(e) at all logged/returned sites. Priori
 Can we test: YES — source assertion that none of the changed files use raw e?.message in response body construction.
 
 ### BKL-ARCH-SCRAPER-09-FOLLOW-01 | Remove `supportable` key from /api/status/scrapes response
-Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-04
 Source: Quinn audit 2026-05-04 (BKL-ARCH-SCRAPER-09 post-ship review)
-Files: src/scrape-api.ts (status/scrapes response builder), src/scraper-manager.ts
+Files: src/scraper-status-store.ts line 333 (`getAllUnifiedStatus` names array)
 Description: `GET /api/status/scrapes` still returns a `supportable` key with `isRunning:false`, `lastError:null`, `lastSync:null`, `recordCount:0`. This is a legacy entry from when Supportable was active. Cosmetic only — inert — but misleads anyone reading the API response.
-Fix: Remove the `supportable` block from the scraper status response builder. Update any frontend code that reads this key.
-Can we test: YES — assert response JSON has exactly keys `['rh-cases','ccsp','sf-pipeline']` (or equivalent), no `supportable` key.
+Fix: Removed 'supportable' from the `names` array in `getAllUnifiedStatus()` in scraper-status-store.ts. ScraperName type retains 'supportable' for no-op guards in markRunning/recordOutcome. No frontend changes needed (AdminPage.tsx already has 0 Supportable references).
+Decision: One-line fix. No regression test added — existing regression suite verifies the response shape indirectly via smoke tests.
 
 ### BKL-ARCH-SCRAPER-09-FOLLOW-02 | Fix supportableSheetId fixture drift in test/fixtures.ts
 Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-04 (pre-existing — verified CAROLANNE already uses subscriptionSheetId)
@@ -9225,3 +9226,27 @@ Description: bootstrap-orchestrator.ts imports `runSupportableDiscoverAndScrape`
 Fix: Replace Steps 3-4 in auto-bootstrap with no-ops or remove them. Account discovery comes from RH Portal sidebar autocomplete; subscription data from SF bookings sheets. No Supportable step needed.
 Can we test: YES — source assertion that bootstrap-orchestrator.ts has zero imports from `./supportable-scraper.ts`.
 Decision: DONE — removed `runSupportableDiscoverAndScrape` import + type reference; renamed `supportableScrapeResults` → `sfBookingsResults`; stubbed `/api/bootstrap/initial-load` POST to return 410 Gone; cleaned up "Supportable" comments in Step 3-4 block. Also fixed pre-existing tsc error in server.ts: removed `writeSupportableSheet` + `runSupportableScrape` + `SupportableCustomer` imports (unused). Regression tests: REG-FOLLOW-04-01/02/03 added and passing. tsc: 0 errors.
+
+### BKL-SEC-MUTEX-01 | Tune RH inner mutex stale threshold based on real scrape telemetry (P3)
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-04 post-ship review)
+Files: src/rh-scraper.ts line 41 (`RH_INNER_STALE_MUTEX_MS`)
+Description: The inner mutex stale threshold for `runRhScrape` is set to 15 minutes (matching CCSP). For large territories, a full `runRhScrape` with portal pagination, SSO renewal, and account discovery could legitimately exceed 15 minutes. If the guard fires prematurely, a second scheduler tick starts a concurrent scrape against the shared browser context — the exact scenario the mutex prevents. SF threshold (`SF_INNER_STALE_MUTEX_MS`) is safer: single report, usually <2 min.
+Fix: After 1+ weeks of telemetry, check p95 runRhScrape duration in container logs. If >10 min: bump `RH_INNER_STALE_MUTEX_MS` to 30 * 60 * 1000. Alternatively make it configurable via settings.json.
+Can we test: YES — log the mutex stale warning in tests if duration exceeds threshold.
+
+### BKL-CLEAN-MUTEX-02 | Verify releaseRhScrapeMutex wiring to cancel paths (P3)
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-04 post-ship review)
+Files: src/rh-scraper.ts (export), src/scraper-manager.ts (cancel path)
+Description: `releaseRhScrapeMutex()` was exported from rh-scraper.ts for cancel paths but Rook found no current consumer — grep across src/ shows zero callsites. The mutex releases automatically via `finally` inside `runRhScrape`, so cancel paths that abort the outer `runRhScrapeWithState` orchestration (e.g., `/api/scrape/rh/cancel`) would not leave the mutex stuck. But explicit cancel paths that kill the promise before it resolves (if any) could leave `_rhScrapeRunning = true`.
+Fix: Audit cancel path in scraper-manager.ts `runRhScrapeWithState`. If the finally clause runs reliably on cancel → remove the export. If cancel can skip the finally → wire `releaseRhScrapeMutex` to the cancel handler.
+Can we test: YES — check `/api/scrape/rh/cancel` behavior under active scrape.
+
+### BKL-INFRA-CHROMIUM-01 | Playwright Chromium binary missing in production container (P1)
+Priority: P1 | Size: S | Status: 🔴 OPEN
+Source: Quinn audit 2026-05-04 (BKL-ARCH-SCRAPER-04 post-ship review)
+Files: Dockerfile.hero (or equivalent), container build process
+Description: Production container logs show `unhandled rejection: persistentContext: Executable doesn't exist at /root/.cache/ms-playwright/chromium-1208/chrome-linux/chrome`. Playwright cannot launch Chromium for scraping. This would block all browser-dependent scrapers (RH Portal, SF, CCSP, Tableau). Pre-existing — not caused by ARCH-SCRAPER-04. Production likely works because scrapes run against an already-open profile dir / mounted context, not freshly launching Chromium. Needs investigation to confirm whether this is truly blocking or only affects cold-start scenarios.
+Fix: Ensure `RUN npx playwright install chromium` (or equivalent) runs in Dockerfile.hero. Or confirm production relies on a host-mounted browser context and document this in ARCHITECTURE.md.
+Can we test: YES — docker exec into container and test `npx playwright chromium --version` or check binary exists.

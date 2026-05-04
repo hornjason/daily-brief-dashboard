@@ -330,7 +330,8 @@ export function getUnifiedStatus(name: ScraperName): UnifiedScraperStatus {
 }
 
 export function getAllUnifiedStatus(): Record<ScraperName, UnifiedScraperStatus> {
-  const names: ScraperName[] = ['rh-cases', 'ccsp', 'sf-pipeline', 'supportable']
+  // BKL-ARCH-SCRAPER-09-FOLLOW-01: 'supportable' removed — permanently disabled; no longer exposed in API
+  const names: ScraperName[] = ['rh-cases', 'ccsp', 'sf-pipeline']
   const out = {} as Record<ScraperName, UnifiedScraperStatus>
   for (const n of names) out[n] = getUnifiedStatus(n)
   return out
