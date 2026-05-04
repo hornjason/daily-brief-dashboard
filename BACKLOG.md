@@ -1034,7 +1034,7 @@ Fix:
   5. Test: click Connect, confirm VNC stays open until login completes or user closes manually
 
 ### BKL-F07 | Accept full Salesforce report URL instead of requiring bare report ID
-Status: ✅ DONE 2026-04-02
+Status: ✅ DONE 2026-05-04 (frontend extraction gap patched — backend was done 2026-04-02, UI validation was not updated)
 Priority: P1
 Size: S (half day)
 Source: Jason 2026-04-02 — cumbersome for new users, doesn't present as quality product

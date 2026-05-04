@@ -2284,3 +2284,21 @@ test.describe('Scraper status single source of truth (BKL-ARCH-SCRAPER-03)', () 
     expect(src).toContain("from './rh-scraper.ts'")
   })
 })
+
+// REG-F07: SF Report URL extraction in frontend validation path
+test.describe('REG-F07 SF report URL extraction in bootstrap validation', () => {
+  test('REG-F07-01: AEsCustomersSection extracts SF report ID from full URL before validation', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/pages/setup/AEsCustomersSection.tsx'), 'utf-8')
+    // The extraction IIFE must appear before the validation regex
+    const extractionIdx = src.indexOf('new URL(raw)')
+    const validationIdx = src.indexOf('^00O[a-zA-Z0-9]')
+    expect(extractionIdx).toBeGreaterThan(-1)
+    expect(validationIdx).toBeGreaterThan(-1)
+    expect(extractionIdx).toBeLessThan(validationIdx)
+  })
+
+  test('REG-F07-02: BootstrapConfigBlock placeholder hints at URL acceptance', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../dashboard/src/components/BootstrapConfigBlock.tsx'), 'utf-8')
+    expect(src).toContain('Report ID or URL')
+  })
+})

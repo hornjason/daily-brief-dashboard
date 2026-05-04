@@ -752,12 +752,26 @@ function AutoBootstrapForm({
       return
     }
 
-    // SF Report ID is now auto-filled from the POD → report ID map — no URL
-    // extraction needed. We still validate the shape defensively in case a
-    // malformed ID ever slips into settings.json.
-    const extractedReportId = sfReportId.trim()
+    // SF Report ID: when auto-filled from POD map it is always a bare ID, but
+    // when entered manually the user may paste a full Salesforce report URL.
+    // Extract the bare ID before validation in either case.
+    const extractedReportId = (() => {
+      const raw = sfReportId.trim()
+      if (/^[A-Za-z0-9]{15,18}$/.test(raw)) return raw
+      try {
+        const url = new URL(raw)
+        for (const seg of url.pathname.split('/').filter(Boolean).reverse()) {
+          if (/^[A-Za-z0-9]{15,18}$/.test(seg)) return seg
+        }
+      } catch { /* not a URL */ }
+      return raw
+    })()
     if (!/^00O[a-zA-Z0-9]{12,15}$/.test(extractedReportId)) {
-      setPreflightError(`Configured SF Report ID for POD "${pod}" is malformed — check settings.json`)
+      setPreflightError(
+        hasReportForPod
+          ? `SF Report ID for POD "${pod}" is malformed — check settings.json`
+          : `Invalid SF Report ID — paste a bare report ID (starts with 00O) or a full Salesforce report URL`
+      )
       bootstrapStartingRef.current = false
       return
     }

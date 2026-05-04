@@ -277,7 +277,7 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
               type="text"
               value={sfReportId}
               onChange={(e) => onSfReportIdChange?.(e.target.value)}
-              placeholder={selectedPod ? 'Paste SF Report ID' : 'Select a POD first'}
+              placeholder={selectedPod ? 'Paste SF Report ID or URL' : 'Select a POD first'}
               className="w-full bg-surface/50 border border-border rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
             />
           )}
