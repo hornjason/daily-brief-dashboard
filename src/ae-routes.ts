@@ -25,6 +25,7 @@ import { aes, customers, saveAes, setCustomers, CUSTOMERS_PATH } from './server-
 import { toSlug } from './cache-layer.ts'
 import { sanitizeErr, sanitizeText } from './utils.ts'
 import { normalizeSettings, getRegionById } from './region-config.ts'
+import { writeSettingsToDrive, resolveConfigFolderId } from './drive-config-sync.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -245,14 +246,11 @@ export function createAeRouter(): Hono {
       // 3. Save parentFolderId to local settings.json for the first region.
       let configFolderId: string | undefined
       try {
-        const listRes = await drive.files.list({
-          q: `'${folderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-          fields: 'files(id,name)',
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        })
-        configFolderId = listRes.data.files?.[0]?.id ?? undefined
+        // Look up Config/ via shared helper (consults scaffold cache + Drive list).
+        configFolderId = (await resolveConfigFolderId(folderId)) ?? undefined
         if (!configFolderId) {
+          // Not present yet — create it. Ownership of the create-if-absent step
+          // stays in ae-routes; drive-config-sync only resolves existing folders.
           const createRes = await drive.files.create({
             requestBody: { name: 'Config', mimeType: 'application/vnd.google-apps.folder', parents: [folderId] },
             supportsAllDrives: true,
@@ -277,33 +275,10 @@ export function createAeRouter(): Hono {
           console.warn('[validate-folder] Could not save parentFolderId to settings.json:', (e as Error).message)
         }
 
-        // Write updated settings.json to Drive Config/ folder (re-read after local save)
-        let settingsContent: string
-        try {
-          settingsContent = readFileSync(SETTINGS_PATH, 'utf-8')
-        } catch {
-          settingsContent = '{}'
-        }
-        const existingFile = await drive.files.list({
-          q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
-          fields: 'files(id)',
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        })
-        if (existingFile.data.files?.length) {
-          await drive.files.update({
-            fileId: existingFile.data.files[0].id!,
-            requestBody: {},
-            media: { mimeType: 'application/json', body: settingsContent },
-          })
-        } else {
-          await drive.files.create({
-            requestBody: { name: 'settings.json', parents: [configFolderId] },
-            media: { mimeType: 'application/json', body: settingsContent },
-            supportsAllDrives: true,
-            fields: 'id',
-          })
-        }
+        // Write updated settings.json to Drive Config/ folder via shared helper.
+        // (writeSettingsToDrive will re-resolve the Config/ folder id; the find/create
+        // above guarantees it exists, so the inner list is a cheap roundtrip.)
+        await writeSettingsToDrive(folderId)
       } catch (e) {
         // Config subfolder / settings distribution is best-effort; don't fail the validate
         console.warn('[validate-folder] Config subfolder setup error:', (e as Error).message)

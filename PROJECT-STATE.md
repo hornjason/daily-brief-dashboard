@@ -108,6 +108,9 @@ Last updated: 2026-04-25 v1.4.0 released — Phase 1: stale-cache filter, wizard
 - `GET /api/settings/scheduler` / `POST` — Scheduler timer config
 - `GET /api/health-scores` — Per-customer confidence scores
 - `GET /health` — Container health probe
+- `GET /api/settings/from-drive` — Read Config/settings.json from Drive for a region
+- `POST /api/config/backup` — Push local settings.json to Drive Config/settings.json (BKL-DRIVE-BACKUP-API-01 ✅)
+- `POST /api/config/restore` — Pull Drive Config/settings.json and apply locally (BKL-DRIVE-BACKUP-API-01 ✅)
 
 ### Auth
 - `GET /api/auth/redhat/status` — RH session state

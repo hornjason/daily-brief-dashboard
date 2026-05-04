@@ -6680,16 +6680,26 @@ Consideration: Grounded search (Google Search API) is only available via Gemini 
 Decision: Research before implementing — evaluate quality tradeoff and whether ungrounded Claude output is acceptable for initial seeding.
 
 ### BKL-UX63 | Setup page Step 3 vs Step 5 show conflicting RH Portal connection state
-- Status: OPEN
+- Status: ✅ DONE 2026-05-04 — Moot: Step 5 "Data Sources" accordion deleted in c39349367 + d4c9f0fd5. Step 3 badge uses `rhTokenConfigured` (correct). fetchStatus already guards `d.hasSession && !d.sessionExpired` per inline BKL-UX63 comment (SetupPage.tsx:450). `RedHatPortalSection` function defined at line 436 is dead code — logged as BKL-DEAD-CODE-RHSECTION-01.
 - Priority: P3
 - Source: Jason caught 2026-04-11 — Step 3 shows "Connected", Step 5 shows "Not connected" for same expired session
 - Description: `RedHatPortalSection` (Step 3) shows "Connected" when `hasSession=true` regardless of `sessionExpired` (per BKL-UX60 intent). Data Sources panel (Step 5) uses `hasSession && !sessionExpired` — stricter. When session expires, both show at same time, confusing the user about true state. Fix: align Step 3 to show "Session expired — reconnect" state when `sessionExpired:true`, or reconcile logic so both panels agree.
 
 ### BKL-UX65 | Step 5 Data Sources header stays "Checking..." forever — never resolves
-- Status: OPEN
+- Status: ✅ DONE 2026-05-04 — Resolved by component deletion. DataSourcesSection component deleted in c39349367 (closes #12). Dead polling state (`dataSourcesHealth`, `dataSourcesConnected`, `computeConnected()`) deleted in d4c9f0fd5 (Issue #9 user story 17). "Checking..." state no longer exists.
 - Priority: P2
 - Source: Quinn audit 2026-04-11
 - Description: The Step 5 "Data Sources" accordion header badge shows "Checking..." indefinitely and never flips to a resolved state (e.g., "2 of 4 connected" or "Ready"). Tableau connection card inside also stays "Checking..." permanently. Nielsen #1 violation — user cannot get a quick at-a-glance read on data source status. The `dataSourcesHealth` state may never transition from 'loading' if any individual connection check hangs (Tableau in particular since it requires CCSP + session data).
+
+### BKL-DEAD-CODE-RHSECTION-01 | RedHatPortalSection function and rhOk state are dead code in SetupPage.tsx
+- Status: OPEN
+- Priority: P3
+- Size: XS
+- Source: Code review 2026-05-04 — found while verifying BKL-UX63
+- Files: dashboard/src/pages/SetupPage.tsx
+- Description: `RedHatPortalSection` (line 436) is defined but never rendered — its content was replaced by `HeroStep3Connections` when Step 3 was reworked. `rhOk` state (line 607) is set by `setRhOk((d.hasSession && !d.sessionExpired) ?? false)` but never used in rendering or auto-expand logic. Both are dead code adding noise.
+- Fix: Remove `RedHatPortalSection` function (~60 lines) and `rhOk` / `setRhOk` declarations from SetupPage.tsx. Verify no other file imports RedHatPortalSection. Run tsc and full suite.
+(XS — stays in BACKLOG.md, not promoted)
 
 ### BKL-UX66 | "Analysis skipped" entries appear in Top Priority Actions on Products page
 - Status: DONE (fixed this session)
@@ -7274,13 +7284,42 @@ Description: Product slug folders (`aap/`, `rhel/`, `ocp/`, `ocp-virt/`, `rhel-a
 Fix: Update `setup-drive-folders` and bootstrap pre-flight to (1) ensure `Products/` exists (BKL-DRIVE-SCAFFOLD-01), (2) create/look up each product slug folder under `Products/`, (3) migrate existing root-level slug folders by moving them into `Products/` and updating any stored folder IDs.
 
 ### BKL-DRIVE-BACKUP-API-01 | No backup/restore APIs for `Config/settings.json`
-Status: OPEN
+Status: ✅ DONE 2026-05-04 — Implemented drive-config-sync.ts module (extracts duplicated Config/settings.json logic from 4 files). Added POST /api/config/backup and POST /api/config/restore to settings-api.ts. Refactored GET /api/settings/from-drive to use shared module. Uses scaffold cache (configFolderId) for fast path. Quinn: PASS (106 CI green). Rook: PASS-WITH-NOTES (3 P2/P3 hardening items logged below). tsc clean. 551 unit tests pass. 4 new spec tests pass on 7776.
 Priority: P3
 Size: M
 Source: Jason 2026-04-26 — Drive architecture review
 Files: server.ts (new routes), src/bootstrap-orchestrator.ts (Config folder access)
 Description: The agreed architecture has `Config/settings.json` as a config snapshot for backup/restore inside CommandCenter's `Config/` folder, but no APIs exist to read or write it. The app should expose `POST /api/config/backup` (snapshot current settings.json into `Config/settings.json` on Drive) and `POST /api/config/restore` (read `Config/settings.json` from Drive and apply it locally). Enables disaster recovery and config portability between installs that share a CommandCenter.
 Fix: (1) Add `POST /api/config/backup` — reads local settings.json and writes to `Config/settings.json` on Drive with timestamp metadata. (2) Add `POST /api/config/restore` — reads `Config/settings.json` from Drive and applies to local settings.json (with confirmation/safety guard). (3) Both endpoints depend on BKL-DRIVE-SCAFFOLD-01 ensuring `Config/` exists. (4) Document in docs/SECRETS-GUIDE.md or new docs/CONFIG-BACKUP.md.
+
+### BKL-SEC-DRIVE-RESTORE-VALIDATE-01 | applySettingsToLocal writes Drive JSON without payload validation
+Status: OPEN
+Priority: P2
+Size: XS
+Source: Rook scan 2026-05-04 — BKL-DRIVE-BACKUP-API-01 review of drive-config-sync.ts
+Files: src/drive-config-sync.ts (applySettingsToLocal), src/setup-routes.ts (runStartupDriveMerge)
+Description: `readSettingsFromDrive` returns `Record<string, unknown>` (JSON-parse validated only). `applySettingsToLocal` writes the object to local settings.json without schema validation. A malicious or corrupted `Config/settings.json` in Drive could overwrite local settings with wrong `parentFolderId`, poisoned `podSfReports`, or missing `regions[]`. `runStartupDriveMerge` in setup-routes.ts has the same issue for the startup merge path. Threat realism low (user's own Drive), but defense-in-depth is warranted.
+Fix: In `applySettingsToLocal` (or `readSettingsFromDrive`), run `parsed` through `normalizeSettings()` round-trip, validate each `region.parentFolderId` and `region.podBookingsFolderId` with `isValidDriveFolderId`, and reject if structure is unrecognizable. Apply same guard in `runStartupDriveMerge`.
+
+### BKL-SEC-DRIVE-FOLDERID-GUARD-01 | resolveConfigFolderId does not guard parentFolderId with isValidDriveFolderId
+Status: OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-04 — BKL-DRIVE-BACKUP-API-01 review of drive-config-sync.ts:49-75
+Files: src/drive-config-sync.ts (resolveConfigFolderId)
+Description: `resolveConfigFolderId` interpolates `parentFolderId` directly into a Drive query string. All current callers validate `parentFolderId` via `isValidDriveFolderId` before calling, but the helper itself doesn't guard — so future callers could bypass. Adding the check at the helper boundary provides defense in depth per BKL-SEC-23 pattern.
+Fix: Add `if (!isValidDriveFolderId(parentFolderId)) return null` at the top of `resolveConfigFolderId`.
+(XS — stays in BACKLOG.md, not promoted)
+
+### BKL-SEC-DRIVE-SETTINGS-ALLOWLIST-01 | writeSettingsToDrive ships raw local settings.json bytes — no field allowlist
+Status: OPEN
+Priority: P3
+Size: XS
+Source: Rook scan 2026-05-04 — BKL-DRIVE-BACKUP-API-01 review of drive-config-sync.ts:91-97
+Files: src/drive-config-sync.ts (writeSettingsToDrive)
+Description: `writeSettingsToDrive` reads `SETTINGS_PATH` as raw bytes and uploads to Drive. Today settings.json holds only region/pod/folder IDs — no secrets. If a future regression persisted a token there, it would auto-replicate to Drive. Low risk today, defense-in-depth warranted.
+Fix: Parse local file, project to known schema (regions, pods, podSfReports, podLabels, podBookingsFolderId), ship projected JSON instead of raw bytes.
+(XS — stays in BACKLOG.md, not promoted)
 
 ### BKL-SEC-FILEMODE-01 | writeFileSync mode flag only applies on file create, not overwrite
 Status: ✅ DONE 2026-04-27 — Added chmodSync(path, 0o600) after both writeFileSync calls in product-feature-radar.ts (lines 471, 639). tsc clean.

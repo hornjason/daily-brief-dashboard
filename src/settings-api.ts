@@ -5,10 +5,10 @@ import { Hono } from 'hono'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 import { backupNow } from './backup-config.ts'
 import { validateOfflineToken } from './redhat.ts'
-import { google } from 'googleapis'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { generateBrief, getBriefProvider, isBriefConfigured } from './customer.ts'
 import { normalizeSettings, getRegionById } from './region-config.ts'
+import { readSettingsFromDrive, writeSettingsToDrive, applySettingsToLocal } from './drive-config-sync.ts'
+import { loadServerState } from './server-state.ts'
 
 /** Fire-and-forget backup after data-sources.json write. */
 function _triggerBackup(): void {
@@ -612,27 +612,79 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
       if (!region.parentFolderId) return c.json({ error: 'parentFolderId not set for this region' }, 404)
       // BKL-SEC-23: defense-in-depth — validate stored folder ID before using in Drive query
       if (!isValidDriveFolderId(region.parentFolderId)) return c.json({ error: 'parentFolderId in stored config is malformed' }, 500)
-      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-      const drive = google.drive({ version: 'v3', auth })
-      const listRes = await drive.files.list({
-        q: `'${region.parentFolderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      })
-      const configFolderId = listRes.data.files?.[0]?.id
-      if (!configFolderId) return c.json({ error: 'Config/ folder not found in parentFolder' }, 404)
-      const fileList = await drive.files.list({
-        q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
-        fields: 'files(id)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      })
-      const fileId = fileList.data.files?.[0]?.id
-      if (!fileId) return c.json({ error: 'Config/settings.json not found in Drive' }, 404)
-      const content = await drive.files.get({ fileId, alt: 'media' } as any)
-      return c.json(content.data)
+      try {
+        const data = await readSettingsFromDrive(region.parentFolderId)
+        return c.json(data)
+      } catch (e: any) {
+        const msg = String(e?.message ?? '')
+        if (msg.includes('Config/ folder not found') || msg.includes('Config/settings.json not found')) {
+          return c.json({ error: msg }, 404)
+        }
+        throw e
+      }
     } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // ── BKL-DRIVE-BACKUP-API-01: Drive Config/settings.json backup + restore ─
+  // Helper: resolve the configured parentFolderId for a region (or first region with one).
+  function resolveParentFolderId(regionId?: string): { parentFolderId?: string; error?: string; status?: 404 | 500 } {
+    let raw: Record<string, unknown>
+    try {
+      raw = JSON.parse(readFileSync(SETTINGS_PATH_MOD, 'utf-8')) as Record<string, unknown>
+    } catch {
+      return { error: 'parentFolderId not set', status: 404 }
+    }
+    const settings = normalizeSettings(raw)
+    let region
+    if (regionId) {
+      try { region = getRegionById(settings, regionId) }
+      catch { return { error: 'parentFolderId not set', status: 404 } }
+    } else {
+      region = settings.regions.find(r => r.parentFolderId)
+      if (!region) return { error: 'parentFolderId not set', status: 404 }
+    }
+    if (!region.parentFolderId) return { error: 'parentFolderId not set', status: 404 }
+    if (!isValidDriveFolderId(region.parentFolderId)) {
+      return { error: 'parentFolderId in stored config is malformed', status: 500 }
+    }
+    return { parentFolderId: region.parentFolderId }
+  }
+
+  // POST /api/config/backup — push local Config/settings.json to Drive
+  router.post('/api/config/backup', async (c) => {
+    const regionId = c.req.query('region') ?? undefined
+    const resolved = resolveParentFolderId(regionId)
+    if (resolved.error) return c.json({ error: resolved.error }, resolved.status!)
+    try {
+      const { fileId } = await writeSettingsToDrive(resolved.parentFolderId!)
+      return c.json({ ok: true, fileId })
+    } catch (e: any) {
+      const msg = String(e?.message ?? '')
+      if (msg.includes('Config/ folder not resolvable')) {
+        return c.json({ error: 'Config/ folder not resolvable' }, 404)
+      }
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // POST /api/config/restore — pull Drive Config/settings.json into local file
+  router.post('/api/config/restore', async (c) => {
+    const regionId = c.req.query('region') ?? undefined
+    const resolved = resolveParentFolderId(regionId)
+    if (resolved.error) return c.json({ error: resolved.error }, resolved.status!)
+    try {
+      const parsed = await readSettingsFromDrive(resolved.parentFolderId!)
+      applySettingsToLocal(parsed)
+      // Mirror /api/admin/backup/restore — refresh in-memory state from disk
+      loadServerState()
+      return c.json({ ok: true, applied: true })
+    } catch (e: any) {
+      const msg = String(e?.message ?? '')
+      if (msg.includes('Config/settings.json not found') || msg.includes('Config/ folder not found')) {
+        return c.json({ error: 'Config/settings.json not found in Drive' }, 404)
+      }
       return c.json({ error: sanitizeErr(e) }, 500)
     }
   })

@@ -5,6 +5,7 @@ import { google } from 'googleapis'
 import { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './google.ts'
 import { normalizeSettings } from './region-config.ts'
+import { readSettingsFromDrive } from './drive-config-sync.ts'
 import { customers, aes, saveAes, CUSTOMERS_PATH, AES_PATH, setAes, setCustomers } from './server-state.ts'
 import type { Customer } from './types.ts'
 import { NORMAL_SCOPES, BOOTSTRAP_SCOPES, getScopeLevel, type StoredToken } from './oauth-scopes.ts'
@@ -62,26 +63,13 @@ export async function runStartupDriveMerge(): Promise<void> {
     const regionsWithParent = settings.regions.filter(r => r.parentFolderId)
     if (regionsWithParent.length === 0) return
     const region = regionsWithParent[0]
-    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-    const drive = google.drive({ version: 'v3', auth })
-    const listRes = await drive.files.list({
-      q: `'${region.parentFolderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id)',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    })
-    const configFolderId = listRes.data.files?.[0]?.id
-    if (!configFolderId) return
-    const fileList = await drive.files.list({
-      q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
-      fields: 'files(id)',
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-    })
-    const fileId = fileList.data.files?.[0]?.id
-    if (!fileId) return
-    const content = await drive.files.get({ fileId, alt: 'media' } as any)
-    const driveSettings = content.data as Record<string, unknown>
+    let driveSettings: Record<string, unknown>
+    try {
+      driveSettings = await readSettingsFromDrive(region.parentFolderId!)
+    } catch {
+      // Config/ or settings.json missing — skip merge silently (matches prior behavior).
+      return
+    }
     // Deep-merge: Drive wins on regions[], local wins on everything else
     if (Array.isArray(driveSettings.regions)) {
       raw.regions = driveSettings.regions

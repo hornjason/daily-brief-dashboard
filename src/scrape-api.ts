@@ -910,44 +910,12 @@ export function registerScrapeRoutes(app: Hono): void {
 
       // After local save succeeds, sync updated settings to Drive Config/settings.json (best-effort)
       try {
-        const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } = await import('./google.ts')
-        const { google } = await import('googleapis')
+        const { writeSettingsToDrive } = await import('./drive-config-sync.ts')
         const updatedRaw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
         const updatedSettings = normalizeSettings(updatedRaw)
         const parentFolderId = updatedSettings.regions[0]?.parentFolderId
         if (parentFolderId) {
-          const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-          const drive = google.drive({ version: 'v3', auth })
-          const listRes = await drive.files.list({
-            q: `'${parentFolderId}' in parents and name='Config' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-            fields: 'files(id)',
-            supportsAllDrives: true,
-            includeItemsFromAllDrives: true,
-          })
-          const configFolderId = listRes.data.files?.[0]?.id
-          if (configFolderId) {
-            const existingFile = await drive.files.list({
-              q: `'${configFolderId}' in parents and name='settings.json' and trashed=false`,
-              fields: 'files(id)',
-              supportsAllDrives: true,
-              includeItemsFromAllDrives: true,
-            })
-            const content = readFileSync(SETTINGS_PATH, 'utf-8')
-            if (existingFile.data.files?.length) {
-              await drive.files.update({
-                fileId: existingFile.data.files[0].id!,
-                requestBody: {},
-                media: { mimeType: 'application/json', body: content },
-              })
-            } else {
-              await drive.files.create({
-                requestBody: { name: 'settings.json', parents: [configFolderId] },
-                media: { mimeType: 'application/json', body: content },
-                supportsAllDrives: true,
-                fields: 'id',
-              })
-            }
-          }
+          await writeSettingsToDrive(parentFolderId)
         }
       } catch (driveErr: any) {
         console.warn('[sf-bookings/pod-folder] Drive settings sync error (non-fatal):', sanitizeErr(driveErr))
