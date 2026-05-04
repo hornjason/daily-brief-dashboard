@@ -191,9 +191,10 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Resolution: Verified tableau-auth.ts contains no SingletonLock unlink. The pattern was Rook flagging a hypothetical; actual tableau-auth.ts flow never unlinks SingletonLock. Issue does not exist in current code — marking closed.
 
 ### BKL-CANCEL-STEP3-OVERLAP — tid3 watchdog can false-cancel Step 3 after Step 2 completes
-- Status: OPEN
+- Status: ✅ DONE 2026-05-04
 - Priority: P2
 - Detail: In the combined SF-bookings try/catch (bootstrap-orchestrator.ts), `tid3` starts before the try block alongside `tid2`. If `tid3` fires in the window between `setStep(2,'done')` and `setStep(3,'running')` (e.g., slow `findExistingSheet` call), it marks Step 3 as error and sets `autoBootstrapCancelRequested = true`, then the success path overwrites with done but `checkCancelled()` still aborts the run. Fix: move `tid3 = makeStepTimeout(3, ...)` to just before the Step 3 sheet-write block (line ~2032) rather than the top of the combined try. Source: Serena Wave 2 audit 2026-04-27.
+- Decision: DONE — moved `const tid3 = makeStepTimeout(3, 'Write Subscriptions')` from line ~1377 (alongside tid2) to inside the Step 3 write block; removed `clearTimeout(tid3)` from the SF read finally; added `clearTimeout(tid3)` in a new finally in the Step 3 write block; removed the misleading `setStep(3, 'running', 'waiting for SF data…')` that pre-marked Step 3 while Step 2 was still running. Regression tests: REG-CANCEL-STEP3-01/02/03 added and passing. tsc: 0 errors.
 
 ### BKL-HEALTH-TIMER-LEAK — setTimeout not cleared in isLivePageHealthy happy path
 - Status: ✅ DONE 2026-04-27
@@ -9193,9 +9194,10 @@ Decision: DONE for auth-routes.ts + sf-auth.ts — removed all supportable impor
 Regression: REG-SCRAPER-09-F3-01/02 added. 160 passed/3 live-auth-expected-fails (7776); 607 passed (7777). Rook: PASS. Quinn: pending.
 
 ### BKL-ARCH-SCRAPER-09-FOLLOW-04 | Remove Supportable from bootstrap-orchestrator.ts Steps 3-4
-Priority: P2 | Size: M | Status: 🔴 OPEN
+Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
 Source: BKL-ARCH-SCRAPER-09-FOLLOW-03 scope split 2026-05-04
 Files: src/bootstrap-orchestrator.ts (~lines 1341-1472)
 Description: bootstrap-orchestrator.ts imports `runSupportableDiscoverAndScrape`, `writeSubscriptionSheet` from supportable-scraper.ts and uses them in bootstrap Steps 3 (discovery) and 4 (sheet write). The `supportableScrapeResults` variable and the SF bookings L2/L3/L4 cache probe paths reference Supportable data structures. This is more complex than a simple import removal — it requires replacing Steps 3-4 with a stub or removing them from the auto-bootstrap flow.
 Fix: Replace Steps 3-4 in auto-bootstrap with no-ops or remove them. Account discovery comes from RH Portal sidebar autocomplete; subscription data from SF bookings sheets. No Supportable step needed.
 Can we test: YES — source assertion that bootstrap-orchestrator.ts has zero imports from `./supportable-scraper.ts`.
+Decision: DONE — removed `runSupportableDiscoverAndScrape` import + type reference; renamed `supportableScrapeResults` → `sfBookingsResults`; stubbed `/api/bootstrap/initial-load` POST to return 410 Gone; cleaned up "Supportable" comments in Step 3-4 block. Also fixed pre-existing tsc error in server.ts: removed `writeSupportableSheet` + `runSupportableScrape` + `SupportableCustomer` imports (unused). Regression tests: REG-FOLLOW-04-01/02/03 added and passing. tsc: 0 errors.

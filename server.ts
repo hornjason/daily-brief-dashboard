@@ -12,8 +12,7 @@ import { closeScrapeContext, getScrapeContext, getLivePage, setSessionExpiredCal
 
 import { runSfPipelineSync, getSfContext, adoptSfContext, initSfSyncFromCache } from './src/sf-scraper.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser } from './src/sf-auth.ts'
-import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning, adoptSupportableContext } from './src/supportable-scraper.ts'
-import type { SupportableCustomer } from './src/supportable-scraper.ts'
+import { supportableScrapeRunning, adoptSupportableContext } from './src/supportable-scraper.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
 import { initCacheLayer, createCacheRouter, readPipelineCache } from './src/cache-layer.ts'
 import { initSettingsApi, createSettingsRouter } from './src/settings-api.ts'

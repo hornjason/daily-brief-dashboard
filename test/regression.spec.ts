@@ -2198,3 +2198,50 @@ test('REG-TABLEAU-ENV-01: tableau-auth.ts uses Number + isFinite guard for TABLE
   expect(src).toContain('Number.isFinite')
   expect(src).toContain('_TABLEAU_COOKIE_AGE_DEFAULT')
 })
+
+// REG-SCRAPER-09-F4: BKL-ARCH-SCRAPER-09-FOLLOW-04 — runSupportableDiscoverAndScrape removed from bootstrap-orchestrator
+// bootstrap-orchestrator.ts must not import or call runSupportableDiscoverAndScrape.
+// The supportableScrapeResults variable must be renamed to sfBookingsResults.
+// /api/bootstrap/initial-load must return 410 with the removal message.
+test.describe('Supportable removal from bootstrap-orchestrator.ts (BKL-ARCH-SCRAPER-09-FOLLOW-04)', () => {
+  test('REG-FOLLOW-04-01: bootstrap-orchestrator.ts does not import runSupportableDiscoverAndScrape', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf-8')
+    expect(src).not.toContain('runSupportableDiscoverAndScrape')
+  })
+
+  test('REG-FOLLOW-04-02: bootstrap-orchestrator.ts does not use supportableScrapeResults variable', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf-8')
+    expect(src).not.toContain('supportableScrapeResults')
+  })
+
+  test('REG-FOLLOW-04-03: /api/bootstrap/initial-load stub returns 410 message', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf-8')
+    expect(src).toContain('Supportable initial-load is no longer supported')
+    expect(src).toContain('410')
+  })
+})
+
+// REG-CANCEL-STEP3: BKL-CANCEL-STEP3-OVERLAP — tid3 must not start before Step 3 write block
+// makeStepTimeout(3) must appear AFTER sfBookingsResults.length > 0 check, not alongside tid2.
+// Step 3 must not be marked 'running' while Step 2 is still reading (false watchdog trigger).
+test.describe('tid3 watchdog scoped to Step 3 write block (BKL-CANCEL-STEP3-OVERLAP)', () => {
+  test('REG-CANCEL-STEP3-01: makeStepTimeout(3) appears after sfBookingsResults.length > 0 in source order', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf-8')
+    const idxSfCheck = src.indexOf('sfBookingsResults.length > 0')
+    const idxTid3 = src.indexOf("makeStepTimeout(3,")
+    expect(idxSfCheck).toBeGreaterThan(0)
+    expect(idxTid3).toBeGreaterThan(idxSfCheck)
+  })
+
+  test('REG-CANCEL-STEP3-02: Step 3 is not pre-marked running during Step 2 SF read', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf-8')
+    expect(src).not.toContain("setStep(3, 'running', 'waiting for SF data")
+  })
+
+  test('REG-CANCEL-STEP3-03: clearTimeout(tid3) is inside a finally block (not standalone)', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf-8')
+    // The finally block containing clearTimeout(tid3) must exist.
+    // Match any whitespace between '} finally {' and 'clearTimeout(tid3)'.
+    expect(src).toMatch(/\}\s+finally\s+\{[^}]*clearTimeout\(tid3\)/)
+  })
+})

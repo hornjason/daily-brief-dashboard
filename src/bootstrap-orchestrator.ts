@@ -10,7 +10,7 @@ import { normalizeCustomerName } from './lib/customer-folder.ts'
 import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { bootstrapAe as bootstrapAeL3, type AeBootstrapDeps } from './l3-bootstrap.ts'
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
-import { runSupportableDiscoverAndScrape, writeSubscriptionSheet } from './supportable-scraper.ts'
+import { writeSubscriptionSheet } from './supportable-scraper.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 // BKL-ARCH-L4-SPLIT: ccsp-scraper and tableau-auth are L4-only modules — they belong
 // in Dockerfile.l4, not the hero install image. These imports are intentionally replaced
@@ -1339,7 +1339,7 @@ export function createBootstrapRouter(): Hono {
       // Steps 3 + 4 — Populate subscription data.
       // If a podBookingsSheet is registered for this AE's territory (settings.json), use the
       // SF bookings sheet as source of truth. Otherwise fall back to Supportable scraper.
-      let supportableScrapeResults: Awaited<ReturnType<typeof runSupportableDiscoverAndScrape>> = []
+      let sfBookingsResults: Parameters<typeof writeSubscriptionSheet>[0] = []
 
       // Check settings.json for a POD bookings folder, then discover sheets from Drive
       // BKL-UX90: Read from regions[].podBookingsFolderId via normalizeSettings — the flat
@@ -1374,10 +1374,13 @@ export function createBootstrapRouter(): Hono {
         //   L3 = POD-level SF bookings sheet via fetchSfBookingsRaw() (L1 local cache inside)
         //   Pattern mirrors CCSP L2 check at this file's CCSP section below.
         const tid2 = makeStepTimeout(2, 'Read SF Bookings')
-        const tid3 = makeStepTimeout(3, 'Write Subscriptions')
+        // BKL-CANCEL-STEP3-OVERLAP: tid3 must NOT start here alongside tid2.
+        // Starting it before the SF read means it could fire while Step 2 is still running
+        // (e.g., during a slow findExistingSheet call), false-marking Step 3 as timed-out
+        // and setting autoBootstrapCancelRequested. tid3 is declared just before the Step 3
+        // sheet-write block so the clock only starts when Step 3 actually begins.
         try {
           setStep(2, 'running', `reading SF bookings sheet…`)
-          setStep(3, 'running', 'waiting for SF data…')
           console.log(`[auto-bootstrap] Using SF bookings sheet ${podSheetId} for ${aeName} (territories: ${tableauTerritories.join(', ')})`)
 
           // Cold-start guard — if customers.json was wiped we must re-derive even on a fresh L2 hit.
@@ -1396,7 +1399,7 @@ export function createBootstrapRouter(): Hono {
                 const rowCount = l2Results.reduce((n, r) => n + r.rows.length, 0)
                 console.log(`[bootstrap] ${aeName}: SF bookings cache L2 hit (AE Supportable sheet) — ${l2Results.length} customers, ${rowCount} rows${aeHasCustomers ? '' : ' (cold start — will re-derive from L3)'}`)
                 emitCacheLevel({ ae: aeName, flow: 'sfBookings', level: 2, rowCount })
-                supportableScrapeResults = l2Results
+                sfBookingsResults = l2Results
                 setStep(2, 'done', `${l2Results.length} customers from L2 cache (AE sheet)`)
                 // Short-circuit — no L3 read, no customers.json upsert (prior run already wrote customers).
                 // Guard: aeHasCustomers ensures this path only fires when customers.json already has this AE's data.
@@ -1439,7 +1442,7 @@ export function createBootstrapRouter(): Hono {
           }
           writeJsonAtomic(CUSTOMERS_PATH, { customers })
 
-          supportableScrapeResults = results
+          sfBookingsResults = results
           setStep(2, 'done', `${matched.length}/${results.length} customers with subscriptions`)
           console.log(`[auto-bootstrap] SF bookings: ${matched.length} matched, ${newCustomers.length} new, ${ccspOnly.length} CCSP-only`)
           }  // end BKL-INGEST-02 L2-miss branch
@@ -1450,7 +1453,6 @@ export function createBootstrapRouter(): Hono {
           autoBootstrapState.error = `SF bookings read failed: ${e.message}`
         } finally {
           clearTimeout(tid2)
-          clearTimeout(tid3)
         }
       } else {
         // No SF bookings sheet found for this AE's territory — skip subscription steps.
@@ -1462,33 +1464,38 @@ export function createBootstrapRouter(): Hono {
 
       if (checkCancelled()) return
 
-      // Step 4 — Write Supportable Sheet (data already scraped in Step 3)
+      // Step 3 — Write Subscription Sheet (data already read in step above)
+      // BKL-CANCEL-STEP3-OVERLAP: tid3 starts HERE — not earlier alongside tid2 —
+      // so the 90s watchdog only ticks while Step 3 is actually executing.
       if (!driveFolderId) {
         setStep(3, 'skipped', 'Skipped: Drive folder creation failed')
-        console.log('[auto-bootstrap] Skipping Supportable sheet — no Drive folder')
-      } else if (supportableScrapeResults.length > 0) {
+        console.log('[auto-bootstrap] Skipping subscription sheet — no Drive folder')
+      } else if (sfBookingsResults.length > 0) {
+        const tid3 = makeStepTimeout(3, 'Write Subscriptions')
         try {
           setStep(3, 'running', 'writing to Google Sheet…')
           const existingSupportableId = aes.find(a => a.name === aeName)?.subscriptionSheetId
             ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `Supportable — ${aeName}`) : null)
             ?? null
-          if (existingSupportableId) console.log(`[auto-bootstrap] Supportable sheet found/reusing: ${existingSupportableId}`)
-          const sheetId = await writeSubscriptionSheet(supportableScrapeResults, aeName, driveFolderId || undefined, existingSupportableId || undefined)
+          if (existingSupportableId) console.log(`[auto-bootstrap] Subscription sheet found/reusing: ${existingSupportableId}`)
+          const sheetId = await writeSubscriptionSheet(sfBookingsResults, aeName, driveFolderId || undefined, existingSupportableId || undefined)
           patchAe(aeName, { subscriptionSheetId: sheetId })
           autoBootstrapState.resources.supportableSheet = { id: sheetId, url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit` }
           // Warm sheet cache immediately from in-memory data — no extra API calls needed
-          for (const result of supportableScrapeResults) {
+          for (const result of sfBookingsResults) {
             if (result.rows.length > 0) {
               const normalized = normalizeRows(result.rows, result.customerName)
               if (normalized.length > 0) writeSheetCache(result.customerName, normalized)
             }
           }
           setStep(3, 'done', `Sheet: ${sheetId}`)
-          console.log(`[auto-bootstrap] Supportable sheet ${existingSupportableId ? 'updated' : 'created'}: ${sheetId}`)
+          console.log(`[auto-bootstrap] Subscription sheet ${existingSupportableId ? 'updated' : 'created'}: ${sheetId}`)
         } catch (e: any) {
           setStep(3, 'error', e.message)
-          autoBootstrapState.error = `Supportable sheet failed: ${e.message}`
-          console.error('[auto-bootstrap] Supportable sheet write failed:', e.message)
+          autoBootstrapState.error = `Subscription sheet write failed: ${e.message}`
+          console.error('[auto-bootstrap] Subscription sheet write failed:', e.message)
+        } finally {
+          clearTimeout(tid3)
         }
       }
 
@@ -1998,105 +2005,8 @@ export function createBootstrapRouter(): Hono {
     })
   })
 
-  router.post('/api/bootstrap/initial-load', async (c) => {
-    const { supportableScrapeRunning } = await import('./supportable-scraper.ts')
-    if (initialLoadState.running) return c.json({ error: 'Initial load already running' }, 409)
-    if (supportableScrapeRunning) return c.json({ error: 'Supportable scrape already in progress — wait for it to finish' }, 409)
-
-    const ctx = getScrapeContext()
-    if (!ctx) return c.json({ error: 'No browser context — connect Red Hat Portal first' }, 400)
-
-    // Snapshot customer list at start time
-    const allCustomers = [...customers]
-    if (!allCustomers.length) return c.json({ error: 'No customers configured' }, 400)
-
-    // Determine which customers to run: skip those with existing subscriptionSheetId + cached rows
-    const toRun: typeof allCustomers = []
-    const skipped: string[] = []
-    for (const cu of allCustomers) {
-      const ae = aes.find(a => a.name === cu.ae)
-      if (ae?.subscriptionSheetId) {
-        // Try to check if sheet has rows via account number cache
-        const hasAccounts = (cu.accountNumbers?.length ?? 0) > 0
-        if (hasAccounts) { skipped.push(cu.name); continue }
-      }
-      toRun.push(cu)
-    }
-
-    initialLoadState.running = true
-    initialLoadState.completedCount = 0
-    initialLoadState.totalCount = toRun.length
-    initialLoadState.errors = []
-    initialLoadState.currentCustomer = null
-    initialLoadState.startedAt = new Date().toISOString()
-    initialLoadState.completedAt = null
-
-    console.log(`[initial-load] starting: ${toRun.length} to run, ${skipped.length} skipped (already have data)`)
-
-    // Hard timeout: 3 hours max — unsticks the lock if a customer scrape hangs indefinitely
-    const initialLoadTimeoutId = setTimeout(() => {
-      if (initialLoadState.running) {
-        initialLoadState.running = false
-        initialLoadState.currentCustomer = null
-        initialLoadState.completedAt = new Date().toISOString()
-        initialLoadState.errors.push({ customer: '(timeout)', message: 'Initial load timed out after 3 hours' })
-        console.error('[initial-load] Hard timeout reached — unsticking lock')
-      }
-    }, 3 * 60 * 60 * 1_000)
-
-    ;(async () => {
-      for (const cu of toRun) {
-        initialLoadState.currentCustomer = cu.name
-        try {
-          const ae = aes.find(a => a.name === cu.ae)
-          const results = await runSupportableDiscoverAndScrape(
-            [cu],
-            () => {},
-            (msg) => console.log(`[initial-load:${cu.name}] ${msg}`)
-          )
-          if (results.length && results[0].accountNumbers.length > 0) {
-            // Persist account numbers incrementally
-            const r = results[0]
-            const idx = customers.findIndex(c => c.name === cu.name)
-            if (idx >= 0) {
-              customers[idx] = { ...customers[idx], accountNumbers: r.accountNumbers }
-              writeJsonAtomic(CUSTOMERS_PATH, { customers })
-            }
-            // Write Supportable sheet incrementally
-            if (ae) {
-              const sheetId = await writeSubscriptionSheet(
-                results,
-                cu.ae!,
-                ae.driveFolderId || undefined,
-                ae.subscriptionSheetId || undefined
-              ).catch((e: any) => { console.warn(`[initial-load:${cu.name}] sheet write failed: ${sanitizeErr(e)}`); return null })
-              if (sheetId && !ae.subscriptionSheetId) {
-                saveAes(aes.map(a => a.name === cu.ae ? { ...a, subscriptionSheetId: sheetId } : a))
-              }
-            }
-          }
-          initialLoadState.completedCount++
-        } catch (e: any) {
-          const msg = sanitizeErr(e)
-          console.warn(`[initial-load:${cu.name}] error: ${msg}`)
-          initialLoadState.errors.push({ customer: cu.name, message: msg })
-          initialLoadState.completedCount++
-        }
-      }
-      clearTimeout(initialLoadTimeoutId)
-      initialLoadState.running = false
-      initialLoadState.currentCustomer = null
-      initialLoadState.completedAt = new Date().toISOString()
-      console.log(`[initial-load] complete: ${initialLoadState.completedCount} processed, ${initialLoadState.errors.length} errors`)
-    })().catch((e: any) => {
-      clearTimeout(initialLoadTimeoutId)
-      console.error('[initial-load] fatal:', sanitizeErr(e))
-      initialLoadState.running = false
-      initialLoadState.currentCustomer = null
-      initialLoadState.completedAt = new Date().toISOString()
-    })
-
-    return c.json({ started: true, total: toRun.length, skipped: skipped.length })
+  router.post('/api/bootstrap/initial-load', (c) => {
+    return c.json({ error: 'Supportable initial-load is no longer supported — account discovery uses RH Portal sidebar autocomplete' }, 410)
   })
 
   return router
