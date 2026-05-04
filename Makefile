@@ -9,7 +9,8 @@
 #   make logs      Follow container logs
 #   make build     Build the image locally
 #   make push      Push to GHCR
-#   make rebuild   Full cycle: build → push → restart container
+#   make rebuild     Full cycle: build → push → restart hero container
+#   make rebuild-l4  Full cycle: build-l4 → push-l4 (then pull on Mac Mini)
 #   make ps        Show container status
 #   make seed         Populate data-test/ with known fixture data
 #   make test-up      Start test container on port 7776 (ALLOW_RESET=true, seeds fake data)
@@ -40,7 +41,7 @@ DATA       := $(CURDIR)/data
 MAC_MINI_HOST ?= jasonhorn@mini.local
 MAC_MINI_DIR  ?= ~/DailyBriefDashboard
 
-.PHONY: up down logs build build-l4 push rebuild ps setup release-patch release-minor release-major version \
+.PHONY: up down logs build build-l4 push-l4 rebuild-l4 push rebuild ps setup release-patch release-minor release-major version \
        dev-snapshot dev-up dev-down dev-logs \
        seed test-up test-rebuild test-up-live test-rebuild-live test-down test-logs \
        test-snapshot test-restore test-check lint \
@@ -99,6 +100,14 @@ build-l4:
 	  exit 1; \
 	fi
 	podman build -f Dockerfile.l4 -t $(IMAGE_L4) -t $(REMOTE_L4) .
+
+push-l4:
+	podman push $(REMOTE_L4)
+
+# Full cycle for L4 daemon: build → push → restart daemon (Mac Mini must pull + sync-up after)
+rebuild-l4: build-l4 push-l4
+	@echo "✅  L4 daemon image pushed to GHCR"
+	@echo "   On Mac Mini: podman pull $(REMOTE_L4) && make sync-up"
 
 push:
 	podman push $(REMOTE)

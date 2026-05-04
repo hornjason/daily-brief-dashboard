@@ -8885,6 +8885,15 @@ Decision: Verified via code grep and passing wizard-e2e test 23 — no visible "
 
 ---
 
+### BKL-MAKEFILE-L4-DEPLOY-01 | No push-l4 / rebuild-l4 Makefile targets — L4 image never deployed to Mac Mini automatically
+Status: ✅ DONE 2026-05-04
+Priority: P2
+Size: XS
+Source: DA audit 2026-05-04 — `make rebuild` only pushes hero image, not L4 daemon image
+Files: Makefile
+Description: `make rebuild` runs `build → push → up` which only covers `daily-brief-dashboard:latest`. `build-l4` built and tagged `daily-brief-l4-daemon:latest` to GHCR but there was no `push-l4` or `rebuild-l4` target. Result: Mac Mini's `pai-sync-l3` container could be running a stale L4 image after code changes, since no automated path existed to push and redeploy it.
+Decision: DONE — added `push-l4` and `rebuild-l4` targets to Makefile. `rebuild-l4` = `build-l4 → push-l4`. Also added to `.PHONY` and Makefile header comment. Mac Mini still needs manual `podman pull && make sync-up` after `rebuild-l4` runs on dev machine.
+
 ### BKL-ARCH-L4-SPLIT-FOLLOWUP-03 | Prod container running NODE_ROLE=primary — should be unset for hero install
 Status: ✅ DONE 2026-05-02
 Priority: P2
