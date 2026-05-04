@@ -6909,22 +6909,24 @@ Decision: DONE — `grep -ci "supportable" AdminPage.tsx` returns 0. Completed b
 ---
 
 ### BKL-UX-STALE-HEALTH-01 | Stale Supportable entry appears in Session Health Panel on first load
-Status: 🟡 OPEN
+Status: ✅ DONE 2026-05-04 (verified — two complementary fixes in place)
 Priority: P2
 Size: XS
 Source: Quinn audit 2026-04-25 — transient observation
 Files: src/scraper-status-store.ts or similar health cache
 Description: On first dashboard load after production rebuild, Session Health Panel briefly showed a stale Supportable entry (from 7:26 AM sync, before Supportable was disabled). After live data refreshed, the entry disappeared. Root cause: health/scrape status cache on disk still has a Supportable entry from when it was active. Fix: on server start or after Supportable disable, evict the Supportable key from the scraper-status store so it cannot be served to clients.
+Decision: DONE — (1) scraper-status-store.ts:103-104 strips 'supportable' key on load (BKL-ARCH-SCRAPER-03); (2) ARCH-SCRAPER-09-FOLLOW-01 removed 'supportable' from /api/status/scrapes response entirely. The entry cannot appear in the UI regardless of disk state.
 
 ---
 
 ### BKL-UI-TITLE-01 | Clicking "By AE" filter sets page title to "Pipeline" while on /dashboard
-Status: 🟡 OPEN
+Status: ✅ DONE (verified via code read — commit b48863c3f)
 Priority: P3
 Size: XS
 Source: Quinn audit 2026-04-25 — cosmetic observation
 Files: dashboard/src/App.tsx or dashboard/src/components/PipelineSection.tsx
 Description: Clicking the "By AE" button in AccountPortfolioGrid causes `document.title` to change to "Pipeline | ASA Command Center" while the URL stays at /dashboard. A PipelineSection useEffect is likely setting the title regardless of whether it's the active view. Fix: only set title in useEffect when the component is the primary visible view, or move title management to a route-level effect.
+Decision: DONE — Sidebar.tsx:68-72 documents the fix: scroll-spy only sets local `activeSection` state; `onActiveChange` (which drives document.title via App.tsx:159) is NOT wired to scroll-spy. Shipped in commit b48863c3f ("pipeline title bug").
 
 ---
 
