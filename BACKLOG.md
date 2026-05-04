@@ -1467,11 +1467,12 @@ Fix:
 - **When to fix:** Before enabling concurrent logins or multi-AE parallel scrapes.
 
 ### BKL-CONN-TABLEAU-STORAGE-STATE-TIMEOUT-01 — `ctx.storageState()` undefended in `_closeContext` (council P2)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04 (verified via code read)
 - **Priority:** P2
 - **Symptom:** `_closeContext` calls `ctx.storageState()` without a timeout. If context is wedged at harvest time, `waitForTableauLogin` hangs indefinitely.
 - **Recommendation (Serena):** Apply same `Promise.race` timeout pattern used for `ctx.cookies()` in `restoreTableauSession`.
 - **When to fix:** If `ctx.storageState()` hang is observed in production logs.
+- **Decision:** DONE — `tableau-auth.ts:120` wraps `c.storageState()` in `safeCookieOp('_closeContext harvest', ...)` with 5s timeout fallback. Part of BKL-CONN-TABLEAU-CDP-AUDIT-01 sweep (2026-05-04).
 
 ---
 
