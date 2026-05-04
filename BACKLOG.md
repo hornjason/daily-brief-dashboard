@@ -1514,12 +1514,13 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-03 — Wave 2: Single source of truth for scraper status (P1)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P1
 - **Source:** Serena audit 2026-04-29 (CC-3)
 - **Symptom:** Three sources of truth per scraper: (1) module-level `export let last*Scrape` in scraper file, (2) `_*ScrapeLastError` in `scraper-manager.ts`, (3) `ScraperStatusEntry` in `scraper-status-store.ts` (persisted). Only (3) survives container restart. Status route uses `??` chains across all three. Behavior changes invisibly post-restart.
 - **Fix:** Delete module-level status exports from scraper files. Read everything from `scraper-status-store.ts` via `getScraperStatus(name)`. Requires Wave 1 (naming) to land first.
 - **Files:** `rh-scraper.ts`, `ccsp-scraper.ts`, `sf-scraper.ts`, `scraper-manager.ts`, `scrape-api.ts`
+- **Decision:** DONE — Serena validated plan; added `seedSuccess` to scraper-status-store.ts; removed `lastCcspScrape`/`lastCcspError` from ccsp-scraper.ts (local `scrapeError` replaces); removed `lastSfSync`/`lastSfRowCount`/`sfSyncError` from sf-scraper.ts (all paths now call `markRunning`+`recordOutcome`); updated registry hints to read from store; updated scraper-manager.ts and scrape-api.ts and customer-routes.ts consumers; rh-scraper.ts confirmed out of scope (no module-level status exports). Unit tests: 4 pass. Regression tests: REG-ARCH-03-01/02/03/04/05 all pass. Full suite: 105/105 passed. tsc: 0 errors.
 
 ---
 

@@ -12,8 +12,7 @@ import type { CCSPRecord } from './sheets.ts'
 import { buildPipelineSummary, fetchPipelineData } from './pipeline.ts'
 import type { PipelineRecord } from './pipeline.ts'
 import { customers, aes, CUSTOMERS_PATH } from './server-state.ts'
-import { lastCcspError } from './ccsp-scraper.ts'
-import { sfSyncError } from './sf-scraper.ts'
+import { getScraperStatus } from './scraper-status-store.ts'
 import { runIntelligencePipeline, getJobStatus, getRunningJob, getAllJobs, requeueJob, validateIntelligenceDocContent, checkStoredDocsTrashed, discoverExistingIntelDocs, getIntelligenceCacheEntry, writeIntelligenceDiscoveryCache } from './account-intelligence.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
@@ -314,7 +313,7 @@ export function createCustomerRouter(): Hono {
     const cacheIsStale = isCCSPCacheStale(currentCcspSheetIds)
     // Use cache if available, not forced, and not stale (data doesn't change hourly)
     if (cached && !force && !cacheIsStale) {
-      return c.json(buildCCSPSummary(filterRecords(cached.records), cached.cachedAt, !!lastCcspError))
+      return c.json(buildCCSPSummary(filterRecords(cached.records), cached.cachedAt, !!getScraperStatus('ccsp').lastError))
     }
     try {
       const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
@@ -347,7 +346,7 @@ export function createCustomerRouter(): Hono {
 
     // Serve from cache if available and not forced — no env var needed for cache hits
     if (cached && !force) {
-      return c.json({ ...buildPipelineSummary(applyFilters(cached.records), cached.cachedAt), sourceWarning: !!sfSyncError })
+      return c.json({ ...buildPipelineSummary(applyFilters(cached.records), cached.cachedAt), sourceWarning: !!getScraperStatus('sf-pipeline').lastError })
     }
     if (!process.env.PIPELINE_FILE_ID) {
       return c.json({ totalAcv: 0, openCount: 0, renewalAcv: 0, newAcv: 0, byStage: [], byOwner: [], topOpps: [], cachedAt: null, sourceWarning: false })

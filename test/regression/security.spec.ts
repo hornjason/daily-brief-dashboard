@@ -24,8 +24,16 @@ test.describe('REG-SEC-28: /api/status/scrapes lastError does not expose raw pat
     expect(src, 'lastSupportableError must call sanitizeErr()').toMatch(
       /lastSupportableError\s*\?\s*sanitizeErr\(lastSupportableError\)/
     )
-    expect(src, 'lastCcspError must call sanitizeErr()').toMatch(
-      /lastCcspError\s*\?\s*sanitizeErr\(lastCcspError\)/
+    // BKL-ARCH-SCRAPER-03: ccsp lastError now flows through getUnifiedStatus('ccsp').lastError
+    // which is sanitized at write time by recordOutcome() in scraper-status-store.ts.
+    // The /api/status/scrapes ccsp.lastError field must read from ccspUnified.lastError.
+    expect(src, 'ccsp lastError must source from ccspUnified.lastError (store-sanitized)').toMatch(
+      /lastError:\s*ccspUnified\.lastError/
+    )
+    // And scraper-status-store.ts must apply sanitizeErr() inside recordOutcome.
+    const storeSrc = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'scraper-status-store.ts'), 'utf-8')
+    expect(storeSrc, 'recordOutcome must call sanitizeErr() on error path').toMatch(
+      /sanitizeErr\(\{\s*message:\s*result\.error\s*\}\)/
     )
   })
 

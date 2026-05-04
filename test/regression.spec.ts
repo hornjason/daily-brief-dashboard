@@ -2245,3 +2245,44 @@ test.describe('tid3 watchdog scoped to Step 3 write block (BKL-CANCEL-STEP3-OVER
     expect(src).toMatch(/\}\s+finally\s+\{[^}]*clearTimeout\(tid3\)/)
   })
 })
+
+// ── BKL-ARCH-SCRAPER-03: scraper-status-store as single source of truth ──────
+test.describe('Scraper status single source of truth (BKL-ARCH-SCRAPER-03)', () => {
+  test('REG-ARCH-03-01: ccsp-scraper.ts has no exported lastCcspScrape or lastCcspError', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf-8')
+    expect(src, 'lastCcspScrape export must be removed').not.toMatch(/export\s+let\s+lastCcspScrape\b/)
+    expect(src, 'lastCcspError export must be removed').not.toMatch(/export\s+let\s+lastCcspError\b/)
+  })
+
+  test('REG-ARCH-03-02: sf-scraper.ts has no exported lastSfSync or lastSfRowCount or sfSyncError', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf-8')
+    expect(src, 'lastSfSync export must be removed').not.toMatch(/export\s+let\s+lastSfSync\b/)
+    expect(src, 'lastSfRowCount export must be removed').not.toMatch(/export\s+let\s+lastSfRowCount\b/)
+    expect(src, 'sfSyncError export must be removed').not.toMatch(/export\s+let\s+sfSyncError\b/)
+  })
+
+  test('REG-ARCH-03-03: scraper-status-store.ts exports seedSuccess function', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/scraper-status-store.ts'), 'utf-8')
+    expect(src, 'seedSuccess must be an exported function').toMatch(/export\s+function\s+seedSuccess\s*\(/)
+  })
+
+  test('REG-ARCH-03-04: ccsp-scraper.ts registry getInMemoryLastSync reads from getScraperStatus', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf-8')
+    expect(src, 'registry hint must read from store').toMatch(
+      /getInMemoryLastSync:\s*\(\)\s*=>\s*getScraperStatus\(['"]ccsp['"]\)\.lastSuccess/
+    )
+    expect(src, 'registry error hint must read from store').toMatch(
+      /getInMemoryLastError:\s*\(\)\s*=>\s*getScraperStatus\(['"]ccsp['"]\)\.lastError/
+    )
+  })
+
+  test('REG-ARCH-03-05: sf-scraper.ts registry getInMemoryLastSync reads from getScraperStatus', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf-8')
+    expect(src, 'registry hint must read from store').toMatch(
+      /getInMemoryLastSync:\s*\(\)\s*=>\s*getScraperStatus\(['"]sf-pipeline['"]\)\.lastSuccess/
+    )
+    expect(src, 'registry error hint must read from store').toMatch(
+      /getInMemoryLastError:\s*\(\)\s*=>\s*getScraperStatus\(['"]sf-pipeline['"]\)\.lastError/
+    )
+  })
+})

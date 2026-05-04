@@ -8,11 +8,11 @@ import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, 
 // BKL-RH-03 Phase 2 (ADR-014): Bearer transport for recurring case refresh
 import { BearerCaseClient, getConfiguredTransport } from './case-client.ts'
 import type { SupportCase } from './types.ts'
-import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, lastSfSync, lastSfRowCount, recordSfSyncSuccess, SfSessionExpiredError, adoptSfContext } from './sf-scraper.ts'
+import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, recordSfSyncSuccess, SfSessionExpiredError, adoptSfContext } from './sf-scraper.ts'
 import { recordScrapeFailure as recordConnectionFailure, recordScrapeSuccess as recordConnectionSuccess } from './connections/scrape-outcome.ts'
 import { getSfAuthStatus } from './sf-auth.ts'
 import { supportableScrapeRunning, lastSupportableScrape, lastSupportableError } from './supportable-scraper.ts'
-import { ccspScrapeRunning, lastCcspScrape, lastCcspError, adoptCcspContext, peekTableauSessionExpired } from './ccsp-scraper.ts'
+import { ccspScrapeRunning, adoptCcspContext, peekTableauSessionExpired } from './ccsp-scraper.ts'
 import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
@@ -887,10 +887,13 @@ export function createScraperRouter(): Hono {
       confidence: deriveConfidence(_sfProbeTimestamp),
     })
     const sfAuthStatus = getSfAuthStatus(SF_SESSION_PATH)
+    // BKL-ARCH-SCRAPER-03: read SF status from store (single source of truth)
+    const sfUnifiedStatus = getUnifiedStatus('sf-pipeline')
+    const sfStoreStatus = getScraperStatus('sf-pipeline')
     return c.json({
       ...sfAuthStatus,
-      lastSync: lastSfSync,
-      rowCount: lastSfRowCount,
+      lastSync: sfUnifiedStatus.lastSync,
+      rowCount: sfStoreStatus.recordCount ?? 0,
       syncError: _sfSyncLastError,
       // BKL-CONN-ARCH-01: typed expired flag (set by SfSessionExpiredError or
       // 2 consecutive failures via scrape-outcome.ts) — replaces string match.
@@ -953,7 +956,7 @@ export function createScraperRouter(): Hono {
       },
       ccsp: {
         lastSync:      ccspUnified.lastSync,
-        lastError:     lastCcspError ? sanitizeErr(lastCcspError) : null,
+        lastError:     ccspUnified.lastError,
         isRunning:     ccspScrapeRunning || ccspInFlight,
         isStale:       isStale(ccspUnified.lastSync, intervals.ccsp),
         recordCount:          ccspStatus.recordCount ?? null,

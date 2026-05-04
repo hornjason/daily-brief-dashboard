@@ -151,6 +151,27 @@ export function recordOutcome(
 }
 
 /**
+ * Seed scraper success state from a disk cache at startup.
+ * Unlike recordOutcome, this accepts an explicit timestamp (not always 'now').
+ * Use only in startup seed paths (e.g. initSfSyncFromCache). Never call from scrape paths.
+ */
+export function seedSuccess(
+  name: ScraperName,
+  { lastSuccess, recordCount }: { lastSuccess: string; recordCount: number }
+): void {
+  const entry = _store[name]
+  if (!entry) return
+  entry.state = 'fresh'
+  entry.lastRun = lastSuccess
+  entry.lastSuccess = lastSuccess
+  entry.recordCount = recordCount
+  entry.lastError = null
+  entry.consecutiveFailures = 0
+  entry.updatedAt = new Date().toISOString()
+  persistStore()
+}
+
+/**
  * Mark a scraper as currently running.
  * Sets state 'running' and updatedAt. Persists to disk.
  */

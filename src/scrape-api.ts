@@ -47,9 +47,6 @@ import {
   writePipelineSheet,
   createPipelineSheet,
   SfSessionExpiredError,
-  lastSfSync,
-  lastSfRowCount,
-  sfSyncError,
   recordSfSyncSuccess,
 } from './sf-scraper.ts'
 import {
@@ -60,8 +57,6 @@ import {
   writeCcspSheet,
   ccspScrapeRunning,
   ccspScrapeStartedAt,
-  lastCcspScrape,
-  lastCcspError,
 } from './ccsp-scraper.ts'
 import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshCCSP, refreshPipeline } from './refresh-engine.ts'
@@ -322,7 +317,7 @@ export function registerScrapeRoutes(app: Hono): void {
       // to getUnifiedStatus(); cache.cachedAt remains the preferred source
       // (covers the first request after container restart when in-memory is null).
       lastScrape: ccspCache?.cachedAt ?? getUnifiedStatus('ccsp').lastSync,
-      lastError:  lastCcspError ? sanitizeErr(lastCcspError) : null,
+      lastError:  getUnifiedStatus('ccsp').lastError,
       // ScraperStatusStore fields for unified freshness tracking
       lastRun:       store.lastRun,
       lastSuccess:   store.lastSuccess,

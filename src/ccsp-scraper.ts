@@ -93,7 +93,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts
 import type { AE } from './types.ts'
 import { sanitizeErr, sanitizeCell } from './utils.ts'
 import { patchAe } from './server-state.ts'
-import { markRunning, recordOutcome } from './scraper-status-store.ts'
+import { markRunning, recordOutcome, getScraperStatus } from './scraper-status-store.ts'
 import { ScraperRegistry } from './scraper-registry.ts'
 import { parseCsvToObjects } from './csv-parse.ts'
 import { filterRowsForAe, warnFilterColumnGaps } from './ccsp-row-filter.ts'
@@ -137,14 +137,17 @@ async function waitForVizReady(page: Page, aeName: string, maxWaitMs = 45_000): 
 
 // -- Module state -------------------------------------------------------------
 
-export let lastCcspScrape: string | null = null
-export let lastCcspError:  string | null = null
 export let ccspScrapeRunning = false
 export let ccspScrapeStartedAt: number | null = null
 
-/** Called by refresh-engine after a sheet-based CCSP cache write (no browser scrape needed). */
+/**
+ * BKL-ARCH-SCRAPER-03: scraper-status-store is the single source of truth.
+ * Refresh callers in refresh-engine.ts now invoke recordOutcome('ccsp', …)
+ * directly before this hook, so this function is intentionally a no-op kept
+ * for back-compat with existing call sites and unit-test mocks.
+ */
 export function recordCcspRefreshAt(): void {
-  lastCcspScrape = new Date().toISOString()
+  // intentional no-op (see jsdoc)
 }
 
 /**
@@ -556,7 +559,7 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
 
   ccspScrapeRunning = true; setLivePageBusy(true)
   ccspScrapeStartedAt = Date.now()
-  lastCcspError = null
+  let scrapeError: Error | null = null
   markRunning('ccsp')
   const _ccspTelemetryStart = Date.now()
 
@@ -621,21 +624,20 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
       }
     }
 
-    lastCcspScrape = new Date().toISOString()
     if (_ctx) saveTableauSession(_ctx).catch(() => {})
     return results
 
   } catch (e: any) {
-    lastCcspError = sanitizeErr(e)
+    scrapeError = e
     throw e
   } finally {
     // ScraperStatusStore: record outcome
     const totalRows = results.reduce((sum, r) => sum + r.rows.length, 0)
     recordOutcome('ccsp', {
-      success: !lastCcspError,
+      success: !scrapeError,
       recordCount: totalRows,
       durationMs: Date.now() - _ccspTelemetryStart,
-      error: lastCcspError ?? undefined,
+      error: scrapeError ? sanitizeErr(scrapeError) : undefined,
     })
     ccspScrapeRunning = false; setLivePageBusy(false)
     ccspScrapeStartedAt = null
@@ -1141,7 +1143,7 @@ export async function writeCcspSheet(
 ScraperRegistry.register({
   name: 'ccsp',
   adopt: (ctx) => { adoptCcspContext(ctx) },
-  getInMemoryLastSync: () => lastCcspScrape,
-  getInMemoryLastError: () => lastCcspError,
+  getInMemoryLastSync: () => getScraperStatus('ccsp').lastSuccess,
+  getInMemoryLastError: () => getScraperStatus('ccsp').lastError,
   getInMemoryIsRunning: () => ccspScrapeRunning,
 })

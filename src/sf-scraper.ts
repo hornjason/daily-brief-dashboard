@@ -28,6 +28,7 @@ import { getScrapeContext } from './rh-scraper.ts'
 import { assertPrimary } from './lib/node-role.ts'
 import { ScraperRegistry } from './scraper-registry.ts'
 import { assertLiveScrapeAllowed } from './scraper-utils.ts'
+import { markRunning, recordOutcome, getScraperStatus, seedSuccess } from './scraper-status-store.ts'
 
 export class SfSessionExpiredError extends Error {
   constructor() {
@@ -897,24 +898,17 @@ export async function createPipelineSheet(aeName: string, driveFolderId: string)
 
 // ── Combined sync ─────────────────────────────────────────────────────────────
 
-export let lastSfSync: string | null = null
-export let lastSfRowCount = 0
-export let sfSyncError: string | null = null
-
 /** Seed SF sync state from pipeline cache on startup — prevents amber card after container restart */
 export function initSfSyncFromCache(readPipelineCache: () => { records: any[]; cachedAt: string } | null): void {
   const cached = readPipelineCache()
   if (cached?.cachedAt && cached.records.length > 0) {
-    lastSfSync = cached.cachedAt
-    lastSfRowCount = cached.records.length
+    seedSuccess('sf-pipeline', { lastSuccess: cached.cachedAt, recordCount: cached.records.length })
   }
 }
 
 /** Update SF sync status from external callers (e.g. scraper-manager) */
 export function recordSfSyncSuccess(rowCount: number): void {
-  lastSfSync = new Date().toISOString()
-  lastSfRowCount = rowCount
-  sfSyncError = null
+  recordOutcome('sf-pipeline', { success: true, recordCount: rowCount })
 }
 
 /**
@@ -924,15 +918,16 @@ export function recordSfSyncSuccess(rowCount: number): void {
  * @param sheetId     Target pipeline sheet ID (from aes.json pipelineSheetId or PIPELINE_FILE_ID env fallback)
  */
 export async function runSfPipelineSync(reportId: string, profileDir: string, sheetId?: string): Promise<number> {
-  sfSyncError = null
+  markRunning('sf-pipeline')
+  let syncError: Error | null = null
   try {
     const data = await scrapeSfReport(reportId, profileDir)
     await writePipelineSheet(data, sheetId)
-    lastSfSync = new Date().toISOString()
-    lastSfRowCount = data.rows.length
+    recordOutcome('sf-pipeline', { success: true, recordCount: data.rows.length })
     return data.rows.length
   } catch (e: any) {
-    sfSyncError = 'SF sync failed'
+    syncError = e
+    recordOutcome('sf-pipeline', { success: false, error: e?.message ?? String(e) })
     throw e
   }
 }
@@ -946,14 +941,13 @@ export async function runSfPipelineSyncFromData(
   data: SfReportRow,
   sheetId?: string
 ): Promise<number> {
-  sfSyncError = null
+  markRunning('sf-pipeline')
   try {
     await writePipelineSheet(data, sheetId)
-    lastSfSync = new Date().toISOString()
-    lastSfRowCount = data.rows.length
+    recordOutcome('sf-pipeline', { success: true, recordCount: data.rows.length })
     return data.rows.length
   } catch (e: any) {
-    sfSyncError = 'SF sync failed'
+    recordOutcome('sf-pipeline', { success: false, error: e?.message ?? String(e) })
     throw e
   }
 }
@@ -1120,7 +1114,7 @@ export async function runSfPodSync(
 ScraperRegistry.register({
   name: 'sf-pipeline',
   adopt: (ctx, profileDir) => { adoptSfContext(ctx, profileDir) },
-  getInMemoryLastSync: () => lastSfSync,
-  getInMemoryLastError: () => sfSyncError,
+  getInMemoryLastSync: () => getScraperStatus('sf-pipeline').lastSuccess,
+  getInMemoryLastError: () => getScraperStatus('sf-pipeline').lastError,
   getInMemoryIsRunning: () => false,
 })
