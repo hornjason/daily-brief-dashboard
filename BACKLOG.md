@@ -9094,7 +9094,7 @@ Can we test: YES — entire BKL-HERO-05/09/11/12/13 matrix as a positive-case sp
 ---
 
 ### BKL-TEST-FIXTURE-SUPPORTABLE-DRIFT-01 | test/fixtures.ts still references supportableSheetId
-Priority: P2 | Size: XS | Status: 🔵 OPEN
+Priority: P2 | Size: XS | Status: ✅ DONE 2026-05-03
 Source: Quinn audit 2026-05-03 (BKL-ARCH-04 regression gate)
 Files: test/fixtures.ts (lines 169, 208)
 Description: BKL-DATA-AE-SUPPORTABLE-SHEET-ID-01 renamed supportableSheetId → subscriptionSheetId in types.ts and all src/ files. test/fixtures.ts still carries the old key name in 2 AE fixture definitions. globalSetup emits FIXTURE DRIFT warnings on every Playwright run. The served bundle is clean (0 hits), but the test fixture is schema-drifted from types.ts AE interface.

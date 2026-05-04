@@ -166,7 +166,7 @@ export function buildAE(overrides: Partial<Record<string, unknown>> = {}) {
     driveFolderId: '1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq',
     sfReportId: 'abc123',
     tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR01'],
-    supportableSheetId: '',
+    subscriptionSheetId: '',
     pipelineSheetId: '',
     ccspSheetId: '',
     ...overrides,
@@ -205,7 +205,7 @@ export const CAROLANNE = {
   driveFolderId: '1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq',
   sfReportId: '00OPe00000isU2zMAE',
   tableauTerritories: ['WEST_COMM_CORP_NORTHWEST_TERR01'],
-  supportableSheetId: '150e3-q-8_6Uy3qnLhL-ARBVHyVy29P7tnAuFjxkkuCg',
+  subscriptionSheetId: '150e3-q-8_6Uy3qnLhL-ARBVHyVy29P7tnAuFjxkkuCg',
   pipelineSheetId: '10H8Nl8oQQg1x9Zt0p5cys7JJp0b4ObfzhB-pPMot3BM',
   ccspSheetId: '1G8VIkKca9vmLBTsSBrBjE6OWeO2_jbXhNHSHIaGFSUw',
 }
