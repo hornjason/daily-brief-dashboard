@@ -4782,22 +4782,24 @@ Source: User audit 2026-04-06 — Jason asked if thinking was disabled everywher
 ## Rook Gate — BKL-SR03 Automation & Limits (2026-04-06)
 
 ### BKL-SR03-F1 | Circuit breaker config snapshot-at-startup — UI cooldown/threshold changes require restart
-Status: 📋 BACKLOG
+Status: ✅ DONE — already fixed before filing (verified 2026-05-04)
 Severity: P2
 Priority: P2
 Size: S (1-2h)
 Source: Rook gate 2026-04-06 — F1 finding on SR03 pass
 Files: src/scraper-manager.ts (lines 196–201)
 Description: `circuitBreakerThreshold` and `circuitBreakerCooldownMs` are read once at module initialization and baked into `CircuitBreaker` constructor args. Timeout fields (`DEFAULT_SCRAPE_TIMEOUT_MS`, `RH_SCRAPE_TIMEOUT_MS`) correctly use lazy lambdas that call `getAutomationConfig()` at invocation time, but circuit breaker config does not. Result: saving a new threshold/cooldown via `POST /api/settings/automation` takes effect for timeouts immediately but has no effect on circuit breakers until container restart. Fix: pass the config getter into `CircuitBreaker` or re-read config in `isOpen()`.
+Decision: DONE — scraper-manager.ts lines 233-234 already use lazy getters `_thresholdGetter = (): number => getAutomationConfig().circuitBreakerThreshold` and `_cooldownMsGetter`. Both are passed into `CircuitBreaker` constructor as function references and called at runtime inside `isOpen()` and `recordFailure()`. Config changes take effect immediately without restart.
 
 ### BKL-SR03-F2 | DEFAULT_SCRAPE_TIMEOUT_MS lambda never invoked — Supportable/CCSP use hardcoded 10-min timeout
-Status: 📋 BACKLOG
+Status: ⚪ SUPERSEDED — Supportable permanently disabled 2026-05-04
 Severity: P3
 Priority: P3
 Size: XS (30 min)
 Source: Rook gate 2026-04-06 — F2 finding on SR03 pass
 Files: src/scraper-manager.ts:232, src/scrape-api.ts:330,389
-Description: `DEFAULT_SCRAPE_TIMEOUT_MS` lambda is defined in scraper-manager.ts but never called. `scrape-api.ts` lines 330 and 389 use hardcoded `10 * 60 * 1000` for Supportable wallTimeout calls, bypassing `getAutomationConfig()` entirely. The "Default Scrape Timeout" UI control has no observable effect on CCSP or Supportable scrapes. Fix: replace hardcoded values in scrape-api.ts with `getAutomationConfig().defaultScrapeTimeoutMs`.
+Description: `DEFAULT_SCRAPE_TIMEOUT_MS` lambda is defined in scraper-manager.ts but never called. `scrape-api.ts` lines 330 and 389 use hardcoded `10 * 60 * 1000` for Supportable wallTimeout calls, bypassing `getAutomationConfig()` entirely.
+Decision: MOOT — Supportable was permanently disabled and its wallTimeout calls removed. `wallTimeout` helper is now defined but unused in scrape-api.ts. No hardcoded timeout values remain for active scrapers.
 
 ### BKL-SR03-Q1 | AutomationSettings: no client-side pre-save validation (browser min/max only)
 Status: 📋 BACKLOG
@@ -4813,22 +4815,24 @@ Description: Input fields use HTML `min`/`max` attributes for browser-native ran
 ## Rook Gate — Wave 5 Security Review (2026-04-06)
 
 ### BKL-W5-RK-F1 | territory-summary: intelDir path uses resolve() but CACHE_DIR env var is unconstrained
-Status: 📋 BACKLOG
+Status: ✅ DONE — already fixed before this entry was audited (verified 2026-05-04)
 Severity: P2
 Priority: P2
 Size: XS (30 min)
 Source: Rook gate 2026-04-06 — Wave 5 review of GET /api/products/:slug/territory-summary
 Files: src/product-intel-routes.ts (lines 356-358)
-Description: The slug parameter is correctly validated via `/^[a-z0-9-]+$/.test(slug)` (line 354) before being interpolated into the path. However, `CACHE_DIR` and `DATA_DIR` are taken directly from `process.env` without validation. If an operator misconfigures these vars to point outside the container data volume, the `resolve()` call will happily construct a path anywhere on disk. In the current container-only deployment this is a low-likelihood operational issue (not an external injection vector), but worth a one-line existence check that CACHE_DIR stays within DATA_DIR. No user-controlled input reaches the env vars — severity is P2 (operator error, not attacker-controlled). Fix: add an assertion at startup that `CACHE_DIR` resolves within `DATA_DIR`, or document the constraint in ARCHITECTURE.md.
+Description: `CACHE_DIR` and `DATA_DIR` taken from `process.env` without validation.
+Decision: DONE — product-intel-routes.ts lines 35-44 have startup assertion `if (process.env.DATA_DIR && process.env.CACHE_DIR) { ... assert CACHE_DIR resolves within DATA_DIR }`. Additionally, lines 548-550 have in-route defense-in-depth check `if (!CACHE_DIR.startsWith('/data')) { console.error(...) }`. Both implemented.
 
 ### BKL-W5-RK-F2 | ProductIntelSection file enumeration: readdirSync filenames used as display fallback without sanitization
-Status: 📋 BACKLOG
+Status: ✅ DONE — already fixed before this entry was audited (verified 2026-05-04)
 Severity: P3
 Priority: P3
 Size: XS (15 min)
 Source: Rook gate 2026-04-06 — Wave 5 review of territory-summary endpoint
 Files: src/product-intel-routes.ts (line 377)
-Description: `intel.customer ?? file.replace('.json', '')` — if a cache JSON file is missing the `intel.customer` field, the raw filename (minus extension) is used as the display customer name in the territory summary response. Cache files are written by the server itself (not externally uploaded), so this is a self-referential risk. However if a corrupt/hand-placed .json file with a crafted filename lands in the directory, its name surfaces in the API response verbatim. Since the directory is server-written only, severity is P3 (defense-in-depth). Fix: strip non-printable characters from the fallback filename before returning, e.g. `.replace(/[^\w\s-]/g, '')`.
+Description: `intel.customer ?? file.replace('.json', '')` — raw filename used as display fallback.
+Decision: DONE — product-intel-routes.ts line 586: `intel.customer ?? fileCustomerSlug.replace(/[^\w\s-]/g, '')`. Sanitization regex strips non-printable/special chars from the fallback filename before returning.
 
 ### BKL-W5-RK-PASS | All other Wave 5 checks — PASS
 Status: ✅ DONE 2026-04-06
@@ -4874,11 +4878,11 @@ Fix: Investigate Tableau Raw Data download reliability. May need to retry or exp
 Action: Jason to run Admin panel → CCSP Sync → capture container logs during scrape → report what Tableau view was downloaded.
 
 ### BKL-SCRAPER-04 | Naming inconsistency: telemetry uses short names, StatusStore uses long names
-Status: 📋 BACKLOG | Priority: P3 | Type: Tech Debt
+Status: ✅ DONE — fixed by BKL-ARCH-SCRAPER-02 (verified 2026-05-04)
 Source: Council review 2026-04-06
 Files: src/scraper-manager.ts, src/scraper-status-store.ts
-Description: Telemetry log service names: 'rh', 'ccsp', 'supportable', 'salesforce'. ScraperStatusStore names: 'rh-cases', 'ccsp', 'supportable', 'sf-pipeline'. No cross-linking. Low impact (different consumers) but creates confusion in logs and dashboards.
-Fix: Standardize on ScraperStatusStore names across both systems. Low priority — no functional impact.
+Description: Telemetry log service names: 'rh', 'ccsp', 'supportable', 'salesforce'. ScraperStatusStore names: 'rh-cases', 'ccsp', 'supportable', 'sf-pipeline'. No cross-linking.
+Decision: DONE — BKL-ARCH-SCRAPER-02 canonicalized all scraper service names to the ScraperStatusStore names. scraper-manager.ts now uses 'rh-cases', 'ccsp', 'sf-pipeline' throughout. Startup loop at line 110: `for (const service of ['rh-cases', 'ccsp', 'supportable', 'sf-pipeline'])`. Circuit breakers use 'rh-cases' and 'sf-pipeline'. Names are consistent.
 
 ### BKL-SCRAPER-05 | Salesforce ScraperStatusStore `state` stuck at "running" while `isRunning: false`
 Status: ✅ DONE 2026-04-08 — `recordOutcome('sf-pipeline', ...)` moved into `.finally()` block in scraper-manager.ts:561. Outcome is now always recorded regardless of success/error/crash path.
@@ -4890,11 +4894,11 @@ Decision: DONE — `.finally()` wrapper ensures recordOutcome always fires. Veri
 
 
 ### BKL-SCRAPER-06 | RH Cases `lastSync` null after container restart — in-memory var never hydrated from cache
-Status: 📋 BACKLOG | Priority: P2 | Type: Bug
+Status: ✅ DONE 2026-05-04 — fixed by BKL-ARCH-02 Phase 1b
 Source: Quinn QA gate 2026-04-06 (council review validation)
 Files: src/rh-auth.ts (line ~30), src/scrape-api.ts (rh-cases status endpoint)
 Description: `lastScraped` in rh-auth.ts is a module-level in-memory variable initialized to `null`. It is set when a scrape runs but never hydrated from disk on startup. After container restart, `/api/scrape/rh-cases/status` returns `lastSync: null` even when 7 cached records exist. The centralized ScraperStatusStore does persist `lastSuccess` (used by AdminPage), but the individual status endpoint reads the in-memory var.
-Fix: Same pattern as ISC-01 (CCSP fix) — hydrate `lastScraped` from the RH cases cache file `cachedAt` on startup. Alternatively, change the rh-cases status endpoint to read `lastSuccess` from ScraperStatusStore (already disk-backed) as the primary timestamp source.
+Decision: DONE — BKL-ARCH-02 Phase 1b routed `/api/scrape/rh/status` through `getUnifiedStatus('rh-cases')`, which applies `inMemoryHint ?? store.lastSuccess ?? null` fallback. After restart, `inMemoryLastSync` is null but `store.lastSuccess` is disk-backed and populated from the last completed scrape. The comment at scrape-api.ts:162 documents this explicitly.
 
 ---
 
