@@ -15,7 +15,7 @@ import { loadProductConfig, type ProductConfig } from './product-release-radar.t
 import { getFeatureCache } from './product-feature-radar.ts'
 import { getGeminiToken } from './gemini-auth.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { sanitizePromptInput, normalizeForQuery } from './utils.ts'
+import { sanitizePromptInput, normalizeForQuery, sanitizeErr } from './utils.ts'
 import { getGeminiModel } from './settings-api.ts'
 import { readSheetCache, readPipelineCache } from './cache-layer.ts'
 import { fetchCases } from './redhat.ts'
@@ -280,7 +280,7 @@ OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
 
     if (!res.ok) {
       const err = await res.text()
-      console.error(`[expansion-opps] Gemini error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
+      console.error(`[expansion-opps] Gemini error ${res.status}: ${sanitizeErr(err)}`)
       const fallback: ExpansionOpportunitiesResult = {
         customerName,
         recommendations: [],

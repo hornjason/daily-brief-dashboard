@@ -15,7 +15,7 @@ import { loadProductConfig, type ProductConfig, type ProductSummary } from './pr
 import { getFeatureCache } from './product-feature-radar.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
-import { sanitizePromptInput, normalizeForQuery } from './utils.ts'
+import { sanitizePromptInput, normalizeForQuery, sanitizeErr } from './utils.ts'
 import { getAiConfig, getGeminiModel, getAutomationConfig } from './settings-api.ts'
 import { readSheetCache, readPipelineCache, toSlug } from './cache-layer.ts'
 import { fetchCases } from './redhat.ts'
@@ -277,7 +277,7 @@ OUTPUT SCHEMA (respond with ONLY this JSON, no markdown):
 
     if (!res.ok) {
       const err = await res.text()
-      console.error(`[customer-product-intel] expansion Gemini error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
+      console.error(`[customer-product-intel] expansion Gemini error ${res.status}: ${sanitizeErr(err)}`)
       const fallback = makeExpansionDefault(slug, customerName, productCacheHash)
       writeCustomerIntelCache(slug, customerSlug, contentHash, fallback)
       return fallback
@@ -572,7 +572,7 @@ For initiativeAlignment: derive from the Account Intelligence section above. Eac
 
     if (!res.ok) {
       const err = await res.text()
-      console.error(`[customer-product-intel] Gemini error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
+      console.error(`[customer-product-intel] Gemini error ${res.status}: ${sanitizeErr(err)}`)
       // Fall through to write default and return
     } else {
       const json = await res.json() as any

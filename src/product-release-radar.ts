@@ -21,6 +21,7 @@ import { createHash } from 'crypto'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
 import { getGeminiModel } from './settings-api.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -376,7 +377,7 @@ Extract the current version, GA date, EOL date, a 2-3 sentence summary, and 3-5 
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[product-release-radar] Gemini error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
+    console.error(`[product-release-radar] Gemini error ${res.status}: ${sanitizeErr(err)}`)
     throw new Error(`Gemini API error ${res.status}`)
   }
 

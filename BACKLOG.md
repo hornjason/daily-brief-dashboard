@@ -9124,7 +9124,7 @@ Can we test: YES — assertion that bootstrap-orchestrator.ts has 0 occurrences 
 ---
 
 ### BKL-SEC-31 | Gemini error log sanitization incomplete across 6 files
-Priority: P2 | Size: S | Status: 🔵 OPEN
+Priority: P2 | Size: S | Status: ✅ DONE 2026-05-04
 Source: Rook scan 2026-05-03 (BKL-ARCH-04 post-ship review)
 Files: src/product-intelligence.ts:72, src/customer-product-intel.ts:280,575, src/product-release-radar.ts:379, src/expansion-opportunities.ts:283, src/product-feature-radar.ts:372
 Description: All 6 files use err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200) — covers Bearer tokens but misses JWT bodies (eyJ...) and internal file paths. Gemini errors are log-only, but logs go to ntfy/console and may surface in screenshots and support flows.

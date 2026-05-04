@@ -16,6 +16,7 @@ import { getGeminiToken } from './gemini-auth.ts'
 import { getAiConfig, getGeminiModel } from './settings-api.ts'
 import { getCachedDriveCorpus } from './product-drive-ingest.ts'
 import { getCachedSummary, loadProductConfig } from './product-release-radar.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -369,7 +370,7 @@ Extract ALL features including those listed in Technology Preview sections. Outp
 
     if (!res.ok) {
       const err = await res.text()
-      console.error(`[feature-radar] Gemini error ${res.status} for ${slug}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
+      console.error(`[feature-radar] Gemini error ${res.status} for ${slug}: ${sanitizeErr(err)}`)
       return null
     }
 

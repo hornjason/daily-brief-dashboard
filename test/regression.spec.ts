@@ -1833,6 +1833,34 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
     expect(src).not.toMatch(/\.slice\(0,\s*200\)\.replace\(/)
   })
 
+  // REG-SEC-31: BKL-SEC-31 — Six Gemini error log sites must use sanitizeErr() not inline Bearer-only pattern.
+  // The incomplete inline pattern `.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)` misses
+  // JWT bodies and internal file paths. sanitizeErr() in utils.ts handles all three.
+  test('REG-SEC-31: product-intelligence.ts has zero inline Bearer-only sanitization patterns', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/product-intelligence.ts'), 'utf8')
+    expect(src).not.toMatch(/Bearer.*\[redacted\].*\.slice|\.replace.*Bearer.*\.slice/)
+  })
+
+  test('REG-SEC-31: customer-product-intel.ts has zero inline Bearer-only sanitization patterns', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/customer-product-intel.ts'), 'utf8')
+    expect(src).not.toMatch(/Bearer.*\[redacted\].*\.slice|\.replace.*Bearer.*\.slice/)
+  })
+
+  test('REG-SEC-31: product-release-radar.ts has zero inline Bearer-only sanitization patterns', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/product-release-radar.ts'), 'utf8')
+    expect(src).not.toMatch(/Bearer.*\[redacted\].*\.slice|\.replace.*Bearer.*\.slice/)
+  })
+
+  test('REG-SEC-31: expansion-opportunities.ts has zero inline Bearer-only sanitization patterns', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/expansion-opportunities.ts'), 'utf8')
+    expect(src).not.toMatch(/Bearer.*\[redacted\].*\.slice|\.replace.*Bearer.*\.slice/)
+  })
+
+  test('REG-SEC-31: product-feature-radar.ts has zero inline Bearer-only sanitization patterns', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/product-feature-radar.ts'), 'utf8')
+    expect(src).not.toMatch(/Bearer.*\[redacted\].*\.slice|\.replace.*Bearer.*\.slice/)
+  })
+
   // REG-SEC-21-01: BKL-SEC-21 — POST /api/drive-watcher/rebuild must guard behind
   // isPrimary() so hero nodes return 404 instead of wiping the in-memory folder map.
   test('REG-SEC-21-01: drive-watcher/rebuild guards behind isPrimary before rebuildFolderMap', () => {

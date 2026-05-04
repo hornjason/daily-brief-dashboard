@@ -10,6 +10,7 @@ import { resolve } from 'path'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
 import { getGeminiModelLite } from './settings-api.ts'
+import { sanitizeErr } from './utils.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -69,7 +70,7 @@ async function callGeminiGroundedRaw(opts: {
 
   if (!res.ok) {
     const err = await res.text()
-    console.error(`[product-intelligence] Gemini error ${res.status}: ${err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200)}`)
+    console.error(`[product-intelligence] Gemini error ${res.status}: ${sanitizeErr(err)}`)
     throw new Error(`Gemini grounded API error ${res.status}`)
   }
 
