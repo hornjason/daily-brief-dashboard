@@ -27,7 +27,7 @@ interface WizardAE {
   folderName: string
   sfReportId: string
   tableauUrl: string
-  supportableSheetId: string
+  subscriptionSheetId: string
   pipelineSheetId: string
   ccspSheetId: string
   tableauTerritories: string
@@ -97,7 +97,7 @@ function makeBlankAE(): WizardAE {
     folderName: '',
     sfReportId: '',
     tableauUrl: '',
-    supportableSheetId: '',
+    subscriptionSheetId: '',
     pipelineSheetId: '',
     ccspSheetId: '',
     tableauTerritories: '',
@@ -525,7 +525,7 @@ function AutoBootstrapForm({
   // BKL-UX85: parent folder is now owned by BootstrapConfigBlock via the
   // shared config block above; this form receives the validated id as a prop.
   const parentFolderId = sharedParentFolderId
-  const [knownAes, setKnownAes] = useState<Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string; supportableSheetId?: string; ccspSheetId?: string; pipelineSheetId?: string; driveFolderId?: string }>>([])
+  const [knownAes, setKnownAes] = useState<Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string; subscriptionSheetId?: string; ccspSheetId?: string; pipelineSheetId?: string; driveFolderId?: string }>>([])
   const [forceRebootstrap, setForceRebootstrap] = useState(false)
   const bootstrapStartingRef = useRef(false)
 
@@ -579,7 +579,7 @@ function AutoBootstrapForm({
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     fetch('/api/aes', { signal: controller.signal })
       .then(r => r.json())
-      .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string; supportableSheetId?: string; ccspSheetId?: string; pipelineSheetId?: string; driveFolderId?: string }> }) => setKnownAes(d.aes ?? []))
+      .then((d: { aes: Array<{ name: string; tableauTerritories?: string[]; accounts?: string[]; parentFolderId?: string; subscriptionSheetId?: string; ccspSheetId?: string; pipelineSheetId?: string; driveFolderId?: string }> }) => setKnownAes(d.aes ?? []))
       .catch((e) => { if (e.name !== 'AbortError') { /* ignore */ } })
     // SF Report ID is now auto-filled from the selected POD via
     // useBootstrapConfig — /api/sf/reports is no longer fetched here.
@@ -1249,7 +1249,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
           driveFolderId: string
           sfReportId?: string
           tableauUrl?: string
-          supportableSheetId?: string
+          subscriptionSheetId?: string
           pipelineSheetId?: string
           ccspSheetId?: string
           tableauTerritories?: string[]
@@ -1277,7 +1277,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
             folderName: ae.driveFolderId,
             sfReportId: ae.sfReportId ?? '',
             tableauUrl: ae.tableauUrl ?? '',
-            supportableSheetId: ae.supportableSheetId ?? '',
+            subscriptionSheetId: ae.subscriptionSheetId ?? '',
             pipelineSheetId: ae.pipelineSheetId ?? '',
             ccspSheetId: ae.ccspSheetId ?? '',
             tableauTerritories: (ae.tableauTerritories ?? []).join(', '),
@@ -1406,7 +1406,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
           driveFolderId: a.folderId || extractFolderId(a.folderUrl),
           ...(a.sfReportId.trim() ? { sfReportId: extractReportId(a.sfReportId) } : {}),
           ...(a.tableauUrl.trim() ? { tableauUrl: a.tableauUrl.trim() } : {}),
-          ...(a.supportableSheetId ? { supportableSheetId: a.supportableSheetId } : {}),
+          ...(a.subscriptionSheetId ? { subscriptionSheetId: a.subscriptionSheetId } : {}),
           ...(a.pipelineSheetId ? { pipelineSheetId: a.pipelineSheetId } : {}),
           ...(a.ccspSheetId ? { ccspSheetId: a.ccspSheetId } : {}),
           ...(a.tableauTerritories.trim() ? { tableauTerritories: a.tableauTerritories.split(',').map(s => s.trim()).filter(Boolean) } : {}),

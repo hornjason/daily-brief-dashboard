@@ -7313,7 +7313,7 @@ Decision: DONE — removed `supportable` from circuitBreakers object, getCircuit
 ---
 
 ### BKL-DATA-AE-SUPPORTABLE-SHEET-ID-01 | supportableSheetId field — rename to subscriptionSheetId
-Status: 🔴 OPEN (scope updated 2026-04-27 — field is ACTIVE, not dead)
+Status: ✅ DONE 2026-05-04
 Priority: P3
 Size: M
 Source: Quinn council audit 2026-04-27
@@ -8533,7 +8533,7 @@ Decision: DONE — createEventsRouter() factory created. streamSSE, google, redh
 ---
 
 ### BKL-ARCH-04 | SetupPage.tsx — 4,171-line wizard with embedded sub-components and polling
-Status: 🔴 OPEN (needs fresh run)
+Status: ✅ DONE 2026-05-04 (SetupPage 3075→1058 lines; AEsCustomersSection.tsx extracted 2039 lines)
 Priority: P2
 Size: XL
 Source: Serena architecture audit 2026-05-01
@@ -9090,3 +9090,53 @@ Files: test/ui/ (new spec needed), Makefile (may need L4 test target)
 Description: The "L4 surfaces are visible when isL3Only=false" positive case has never been verified on a live container. All local containers (7776, 7777) run with NODE_ROLE unset = L3. The UI tests mock /api/node-role, but no real L4 container confirms the server-side rendering path.
 Solution: Either (a) spin up a third test container on port 7780 with NODE_ROLE=primary, add a make target, and run the hero gating specs against it; or (b) add a FORCE_L4=true env toggle to the test container config.
 Can we test: YES — entire BKL-HERO-05/09/11/12/13 matrix as a positive-case spec.
+
+---
+
+### BKL-TEST-FIXTURE-SUPPORTABLE-DRIFT-01 | test/fixtures.ts still references supportableSheetId
+Priority: P2 | Size: XS | Status: 🔵 OPEN
+Source: Quinn audit 2026-05-03 (BKL-ARCH-04 regression gate)
+Files: test/fixtures.ts (lines 169, 208)
+Description: BKL-DATA-AE-SUPPORTABLE-SHEET-ID-01 renamed supportableSheetId → subscriptionSheetId in types.ts and all src/ files. test/fixtures.ts still carries the old key name in 2 AE fixture definitions. globalSetup emits FIXTURE DRIFT warnings on every Playwright run. The served bundle is clean (0 hits), but the test fixture is schema-drifted from types.ts AE interface.
+Fix: s/supportableSheetId/subscriptionSheetId/g in test/fixtures.ts (2 occurrences).
+Can we test: YES — grep for supportableSheetId in test/fixtures.ts returning 0 hits.
+
+---
+
+### BKL-SEC-29 | scrape-api.ts — 4 raw e.message returns bypass sanitizeErr in HTTP responses
+Priority: P2 | Size: XS | Status: 🔵 OPEN
+Source: Rook scan 2026-05-03 (BKL-ARCH-04 post-ship review)
+Files: src/scrape-api.ts lines 149, 222, 250, 538
+Description: Four catch blocks return `c.json({ error: e.message }, 503)` directly, bypassing sanitizeErr(). Playwright browser executable paths, profile directory paths, and stack frames with internal file paths can leak to API consumers. sanitizeErr() was added in BKL-SEC-28 and already used elsewhere in the file.
+Fix: Replace `e.message` with `sanitizeErr(e)` at the 4 call sites. Import sanitizeErr already present in file.
+Can we test: YES — extend REG-SEC-28 in regression.spec.ts to assert scrape-api.ts has zero raw e.message returns in c.json responses.
+
+---
+
+### BKL-SEC-30 | bootstrap-orchestrator.ts — inline error truncation misses JWT and Bearer tokens
+Priority: P2 | Size: XS | Status: 🔵 OPEN
+Source: Rook scan 2026-05-03 (BKL-ARCH-04 post-ship review)
+Files: src/bootstrap-orchestrator.ts lines 823, 1996
+Description: Two sites use s.slice(0, 200).replace(/\/[^\s:]+\.(ts|js)/g, '[file]') inline. This strips .ts/.js file paths but misses JWT tokens (eyJ...), Bearer tokens, .pem/.key content, and HTML. sanitizeErr() covers all of these.
+Fix: Import sanitizeErr from './utils.ts' and replace both inline patterns.
+Can we test: YES — assertion that bootstrap-orchestrator.ts has 0 occurrences of .slice(0, 200).replace in regression.spec.ts.
+
+---
+
+### BKL-SEC-31 | Gemini error log sanitization incomplete across 6 files
+Priority: P2 | Size: S | Status: 🔵 OPEN
+Source: Rook scan 2026-05-03 (BKL-ARCH-04 post-ship review)
+Files: src/product-intelligence.ts:72, src/customer-product-intel.ts:280,575, src/product-release-radar.ts:379, src/expansion-opportunities.ts:283, src/product-feature-radar.ts:372
+Description: All 6 files use err.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 200) — covers Bearer tokens but misses JWT bodies (eyJ...) and internal file paths. Gemini errors are log-only, but logs go to ntfy/console and may surface in screenshots and support flows.
+Fix: Extract a shared sanitizeApiErr(text) helper or call sanitizeErr({ message: err }) at all 6 sites.
+Can we test: YES — source assertion that none of the 6 files use raw Bearer-only pattern.
+
+---
+
+### BKL-TEST-ERROR-PATHS-L3-01 | error-paths.spec.ts CCSP auth test fails on L3 (NODE_ROLE not primary)
+Priority: P3 | Size: XS | Status: 🔵 OPEN
+Source: CI regression run 2026-05-03 (post BKL-ARCH-04 ship)
+Files: test/api/error-paths.spec.ts line 20
+Description: POST /api/scrape/ccsp is gated behind if (process.env.NODE_ROLE === 'primary') in scrape-api.ts:245. On L3 hero containers (NODE_ROLE unset), the route is never registered → 404. The test expects [200, 400, 401, 403, 409] and fails when status is 404. Pre-existing architectural mismatch — not a regression from today. 1 failure in ci project every run.
+Fix: Add 404 to the allowed status array when NODE_ROLE is not primary, OR add a .skip when NODE_ROLE !== 'primary' based on an /api/node-role probe at suite start.
+Can we test: YES — test should pass after fix on ci project.
