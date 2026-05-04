@@ -8773,13 +8773,13 @@ Description: Cancel path sets `step.status = 'cancelled'` but the `AutoBootstrap
 Solution: Add `'cancelled'` to the AutoBootstrapStep status union type in its definition.
 
 ### BKL-ARCH-13 | Pre-existing tsc errors (42) in unrelated files masking new breakage
-Status: OPEN
+Status: 🔄 PARTIAL — 42 → 13 errors as of 2026-05-03
 Priority: P3
 Size: M
 Source: Marcus #15 step-1 investigation 2026-05-02
-Files: src/settings-api.ts (Partial<T>|{} index errors), src/setup-routes.ts (unsafe Customer cast ~line 546), src/sheet-import.ts (Record→typed assignment ~line 45), src/supportable-scraper.ts (GaxiosResponse→void ~line 1252+)
-Description: 42 pre-existing TypeScript errors exist across 4 unrelated files. These mask any new tsc breakage introduced by PRs. `npx tsc --noEmit` is unreliable as a gate until these are cleared.
-Solution: Fix each file independently; aim to get tsc clean so it can be a real CI gate.
+Files: src/rh-scraper.ts (3 errors), src/rh-scraper.test.ts (2 errors), src/scraper-manager.ts (1 error), src/supportable-scraper.ts (7 errors) — all in protected scraper files
+Description: 13 remaining TypeScript errors, all in protected scraper files. These cannot be fixed without explicit scraper change approval per SCRAPER-RULES.md.
+Solution: Requires Jason sign-off to touch rh-scraper.ts, scraper-manager.ts, supportable-scraper.ts.
 
 ### BKL-ARCH-14 | filterCcspRowsForAe (line ~1268) missing quarter filter; candidate for delegation to filterRowsForAe
 Status: OPEN
@@ -8791,7 +8791,7 @@ Description: The exported `filterCcspRowsForAe` convenience wrapper does territo
 Solution: Evaluate after #15 completes; may be a 3-line update.
 
 ### BKL-ARCH-15 | test/unit/ingest-bug04-bearer-records-success.test.ts — intermittent failure in full suite
-Status: OPEN
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: S
 Source: Marcus #15 step-1 investigation 2026-05-02
@@ -8995,7 +8995,7 @@ Description: Added `isValidDriveFolderId(folderId)` guard at handler entry; retu
 Resolution: commit 62b6223ed. Quinn PASS, Rook PASS.
 
 ### BKL-SEC-21 | admin-routes.ts — /api/drive-watcher/rebuild lacks NODE_ROLE guard (advisory)
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-03
 Priority: P3
 Size: XS
 Source: Rook scan 2026-05-02 (BKL-ARCH-12 post-ship review)
@@ -9075,7 +9075,7 @@ Solution: Replace raw template literal IDs with escapeQ(aeFolderId), escapeQ(sub
 Can we test: YES — unit test asserting escapeQ is applied when folder name contains a single-quote character.
 
 ### BKL-HERO-L3-EMPTY-SECTIONS | Admin empty section frames in L3 mode (cosmetic)
-Priority: P3 | Size: S | Status: 🔵 OPEN
+Priority: P3 | Size: S | Status: ✅ DONE 2026-05-03
 Source: Quinn audit 2026-05-03 post BKL-HERO-13 ship
 Files: dashboard/src/pages/AdminPage.tsx
 Description: In L3 mode, "Manual Scrape Triggers" and "Scheduler Config" section header <h2> elements still render even though all child content is hidden behind !isL3Only. Results in two empty section frames that look like a loading failure. The <div> wrappers and h2 headings should also be gated behind !isL3Only.
