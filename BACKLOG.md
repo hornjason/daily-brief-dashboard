@@ -1548,11 +1548,13 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-04-REG-FIX — REG-ARCH-04-01/02 use CommonJS require() in ESM context (P2)
-- **Status:** 🔴 OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P2
 - **Source:** Marcus observation during ARCH-SCRAPER-04 (2026-05-04)
-- **Symptom:** Pre-existing `REG-ARCH-04-01` and `REG-ARCH-04-02` (AEsCustomersSection, test/regression.spec.ts ~lines 1898/1907) fail with `ReferenceError: require is not defined`. These tests use CommonJS `require()` inside Playwright/Bun ESM context.
-- **Fix:** Convert the two test cases to use dynamic `import()` or `Bun.file().text()` pattern (same as other regression tests in the file).
+- **Symptom:** 42 test functions used `const fs = require('fs')` / `const path = require('path')` inline, causing `ReferenceError: require is not defined` in Bun/Playwright ESM context.
+- **Fix:** Removed all 42 inline require declarations. Module-level `import fs from 'node:fs'` and `import path from 'node:path'` (already at lines 965-966) provide the same symbols in scope. `__dirname` derived at line 970 from `import.meta.url` — available to all test closures.
+- **Decision:** Python one-pass substitution via regex — no test logic changed, only the inline declarations removed.
+- **Result:** CI run: 128 passed, 1 skipped (up from 109 passed, 37 failed).
 - **Files:** `test/regression.spec.ts`
 
 ---
