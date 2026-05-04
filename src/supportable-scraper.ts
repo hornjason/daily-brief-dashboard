@@ -877,7 +877,7 @@ export async function runSupportableScrape(
  *
  * Returns SupportableResult[] with both accountNumbers and subscription rows populated.
  * The caller can write account numbers to customers.json and pass results directly
- * to writeSupportableSheet() without a second Supportable visit.
+ * to writeSubscriptionSheet() without a second Supportable visit.
  *
  * onProgress callback fires after each customer completes.
  */
@@ -1220,7 +1220,7 @@ const CSV_HEADERS = [
  *
  * Tabs: "Accounts" summary + one tab per customer with their subscription rows.
  */
-export async function writeSupportableSheet(
+export async function writeSubscriptionSheet(
   results: SupportableResult[],
   aeName: string,
   driveFolderId?: string,
@@ -1255,7 +1255,7 @@ export async function writeSupportableSheet(
     } catch (e: any) {
       if (e.code === 404 || e.status === 404 || (e.message ?? '').toLowerCase().includes('not found')) {
         console.warn(`[supportable] sheet ${existingSheetId} not found — creating new one`)
-        return writeSupportableSheet(results, aeName, driveFolderId, undefined)
+        return writeSubscriptionSheet(results, aeName, driveFolderId, undefined)
       }
       throw e
     }

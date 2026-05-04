@@ -616,9 +616,9 @@ export function createCustomerRouter(): Hono {
         if (!customer.accountNumbers?.length) {
           // Scope sheet IDs to the customer's own AE — prevents cross-AE tab name collisions
           const aeMatch = customer.ae ? aes.find(a => a.name === customer.ae) : undefined
-          const supportableIds = aeMatch?.supportableSheetId
-            ? [aeMatch.supportableSheetId]
-            : aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
+          const supportableIds = aeMatch?.subscriptionSheetId
+            ? [aeMatch.subscriptionSheetId]
+            : aes.map(a => a.subscriptionSheetId).filter((id): id is string => Boolean(id))
           const discovered = await fetchCustomerAccountNumbers(customer, supportableIds.length ? supportableIds : undefined).catch(() => [] as string[])
           if (discovered.length) {
             customer.accountNumbers = discovered
@@ -673,7 +673,7 @@ export function createCustomerRouter(): Hono {
     }
 
     try {
-      const supportableIds = aes.map(a => a.supportableSheetId).filter((id): id is string => Boolean(id))
+      const supportableIds = aes.map(a => a.subscriptionSheetId).filter((id): id is string => Boolean(id))
       const rows = await fetchCustomerSheetData(customer, supportableIds.length ? supportableIds : undefined)
       writeSheetCache(customer.name, rows)
       return c.json({ rows, fromCache: false })

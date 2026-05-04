@@ -18,7 +18,7 @@ const adoptSfContext = (_ctx: any, _dir: string): void => {}
 const initSfSyncFromCache = (_fn: any): void => {}
 const adoptSupportableContext = (_ctx: any): void => {}
 const runSupportableDiscoverAndScrape = async (..._args: any[]): Promise<any[]> => []
-const writeSupportableSheet = async (..._args: any[]): Promise<string> => ''
+const writeSubscriptionSheet = async (..._args: any[]): Promise<string> => ''
 const supportableScrapeRunning = false
 const adoptCcspContext = (_ctx: any): void => {}
 const runCcspScrape = async (..._args: any[]): Promise<any[]> => []
@@ -669,8 +669,8 @@ export function scheduleSupportableSync(): void {
               })
               if (aeResults.length > 0 && aeResults.some(r => r.accountNumbers.length > 0)) {
                 try {
-                  const spreadsheetId = await writeSupportableSheet(aeResults, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
-                  patchAe(ae.name, { supportableSheetId: spreadsheetId })
+                  const spreadsheetId = await writeSubscriptionSheet(aeResults, ae.name, ae.driveFolderId, ae.subscriptionSheetId || undefined)
+                  patchAe(ae.name, { subscriptionSheetId: spreadsheetId })
                 } catch (e: any) {
                   console.warn(`[supportable-sync] sheet write failed for ${ae.name}:`, sanitizeErr(e))
                 }
@@ -1075,7 +1075,7 @@ async function runSheetHealthCheck(): Promise<void> {
     for (const ae of aes) {
       if (ae.ccspSheetId)        checks.push({ ae: ae.name, type: 'ccsp',        id: ae.ccspSheetId })
       if (ae.pipelineSheetId)    checks.push({ ae: ae.name, type: 'pipeline',    id: ae.pipelineSheetId })
-      if (ae.supportableSheetId) checks.push({ ae: ae.name, type: 'supportable', id: ae.supportableSheetId })
+      if (ae.subscriptionSheetId) checks.push({ ae: ae.name, type: 'supportable', id: ae.subscriptionSheetId })
     }
     if (checks.length === 0) {
       console.log('[sheet-health] no sheet IDs configured — skipping health check')

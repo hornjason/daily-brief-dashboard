@@ -27,14 +27,14 @@ export function initRefreshEngine(sheetsSyncPath: string): void {
 }
 
 // ── Batch subscription refresh (BKL-AE-03) ────────────────────────────────
-// Groups customers by their AE's supportableSheetId and fetches all tabs
+// Groups customers by their AE's subscriptionSheetId and fetches all tabs
 // from each sheet in a single batchGet call (~3 API calls instead of ~30).
 
 async function batchRefreshSubscriptions(): Promise<{ refreshed: number; errors: string[] }> {
   const errors: string[] = []
   let refreshed = 0
 
-  // Group customers by their AE's supportableSheetId
+  // Group customers by their AE's subscriptionSheetId
   const sheetGroups = new Map<string, Customer[]>()
   const customersWithOverride: Customer[] = []
 
@@ -47,11 +47,11 @@ async function batchRefreshSubscriptions(): Promise<{ refreshed: number; errors:
 
     // Find which AE this customer belongs to
     const ae = aes.find(a => a.name === customer.ae)
-    if (!ae?.supportableSheetId) continue
+    if (!ae?.subscriptionSheetId) continue
 
-    const group = sheetGroups.get(ae.supportableSheetId) ?? []
+    const group = sheetGroups.get(ae.subscriptionSheetId) ?? []
     group.push(customer)
-    sheetGroups.set(ae.supportableSheetId, group)
+    sheetGroups.set(ae.subscriptionSheetId, group)
   }
 
   // Batch path: one batchGet per unique AE sheet

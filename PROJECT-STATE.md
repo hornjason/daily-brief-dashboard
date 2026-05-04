@@ -22,7 +22,7 @@ Last updated: 2026-04-25 v1.4.0 released — Phase 1: stale-cache filter, wizard
 | `/dashboard/customer/:name` | CustomerDetailPage | ✅ Working | Brief, account intelligence, account plan, cases, subscriptions, emails, meetings |
 | `/dashboard/products` | ProductsPage | ✅ Working | Product intelligence hub: feature radar, release notes, customer Q&A |
 | `/dashboard/products/:slug` | ProductDetailPage | ✅ Working | Single product: features, releases, Q&A chat |
-| `/dashboard/setup` | SetupPage | ✅ Working | AE setup wizard + 6-step bootstrap orchestrator |
+| `/dashboard/setup` | SetupPage | ✅ Working | AE setup wizard + 6-step bootstrap orchestrator (1058 lines; AEsCustomersSection extracted to setup/AEsCustomersSection.tsx) |
 | `/dashboard/admin` | AdminPage | ✅ Working | See Admin Page section below |
 
 **SPA catch-all:** Unknown routes fall through to the main dashboard (no 404 page).

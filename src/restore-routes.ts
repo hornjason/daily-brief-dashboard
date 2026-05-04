@@ -2,7 +2,7 @@
  * src/restore-routes.ts — BKL-RESTORE-01
  *
  * Rebuilds dashboard cache from Google Sheets without re-scraping.
- * Given a valid aes.json with supportableSheetId, pipelineSheetId, and
+ * Given a valid aes.json with subscriptionSheetId, pipelineSheetId, and
  * ccspSheetId per AE, reads those sheets and restores:
  *   - customers.json (from Supportable "Accounts" tab)
  *   - {slug}-sheets.json (from per-customer Supportable tabs)
@@ -387,7 +387,7 @@ export function createRestoreRouter(): Hono {
     for (const ae of targetAes) {
       console.log(`[restore] processing AE: ${ae.name}`)
 
-      if (!ae.supportableSheetId && !ae.ccspSheetId && !ae.pipelineSheetId) {
+      if (!ae.subscriptionSheetId && !ae.ccspSheetId && !ae.pipelineSheetId) {
         results.push({ ae: ae.name, status: 'skipped', error: 'No sheet IDs configured' })
         continue
       }
@@ -395,9 +395,9 @@ export function createRestoreRouter(): Hono {
       const result: AERestoreResult = { ae: ae.name, status: 'ok' }
 
       // ── Supportable sheet → customers + subscription cache ──────────────
-      if (ae.supportableSheetId) {
+      if (ae.subscriptionSheetId) {
         try {
-          const supportableResult = await restoreFromSupportableSheet(sheets, ae.supportableSheetId, ae.name)
+          const supportableResult = await restoreFromSupportableSheet(sheets, ae.subscriptionSheetId, ae.name)
           result.customers = supportableResult.customers.length
           result.subscriptionFiles = supportableResult.subscriptionFiles
 

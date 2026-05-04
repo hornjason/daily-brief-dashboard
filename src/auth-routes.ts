@@ -28,7 +28,7 @@ import { liveProbe } from './utils.ts'
 import { getScrapeContext, getLivePage } from './rh-scraper.ts'
 import { runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './scraper-manager.ts'
 import { aes, customers, patchAe } from './server-state.ts'
-import { runSupportableScrape, writeSupportableSheet, supportableScrapeRunning } from './supportable-scraper.ts'
+import { runSupportableScrape, writeSubscriptionSheet, supportableScrapeRunning } from './supportable-scraper.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './ccsp-scraper.ts'
 import { refreshSubscriptions, refreshCCSP } from './refresh-engine.ts'
 import { enqueueScraperTask } from './background-scheduler.ts'
@@ -131,8 +131,8 @@ export function createAuthRouter(): Hono {
                 if (!aeCustomers.length) continue
                 try {
                   const results = await runSupportableScrape(aeCustomers as SupportableCustomer[])
-                  const sheetId = await writeSupportableSheet(results, ae.name, ae.driveFolderId, ae.supportableSheetId || undefined)
-                  if (sheetId) patchAe(ae.name, { supportableSheetId: sheetId })
+                  const sheetId = await writeSubscriptionSheet(results, ae.name, ae.driveFolderId, ae.subscriptionSheetId || undefined)
+                  if (sheetId) patchAe(ae.name, { subscriptionSheetId: sheetId })
                 } catch (e: any) {
                   console.warn(`[rh-auth:supportable] ${ae.name} failed:`, e?.message ?? e)
                 }

@@ -4,7 +4,7 @@
  * Extracted from src/bootstrap-orchestrator.ts (BKL-ARCH-08) without behavioral
  * changes. The hierarchy:
  *   Level 1: on-disk local cache, cachedAt < 24h → use directly (no Drive)
- *   Level 2: AE Drive sheet (ccspSheetId / pipelineSheetId / supportableSheetId),
+ *   Level 2: AE Drive sheet (ccspSheetId / pipelineSheetId / subscriptionSheetId),
  *            modifiedTime < 24h → read rows
  *   Level 3: Subscription Data folder CSV < 24h (existing scraper paths)
  *   Level 4: fresh source pull (Tableau / Salesforce) — existing paths
@@ -159,7 +159,7 @@ export async function readPipelineFromAeSheet(pipelineSheetId: string): Promise<
  * Returns null on any failure — caller falls through to Level 3 (L3 = read the
  * POD-level SF bookings source sheet via fetchSfBookingsRaw).
  */
-export async function readSfBookingsFromAeSheet(supportableSheetId: string): Promise<import('../supportable-scraper.ts').SupportableResult[] | null> {
+export async function readSfBookingsFromAeSheet(subscriptionSheetId: string): Promise<import('../supportable-scraper.ts').SupportableResult[] | null> {
   try {
     const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
     if (!auth) return null
@@ -167,7 +167,7 @@ export async function readSfBookingsFromAeSheet(supportableSheetId: string): Pro
 
     // Read Accounts tab — the directory of customers in this sheet.
     const accountsRes = await withQuotaRetry(
-      () => sheetsClient.spreadsheets.values.get({ spreadsheetId: supportableSheetId, range: `'Accounts'!A1:C1000` }),
+      () => sheetsClient.spreadsheets.values.get({ spreadsheetId: subscriptionSheetId, range: `'Accounts'!A1:C1000` }),
       'cache-hier SF bookings Accounts read',
     )
     const accountsRaw = (accountsRes.data.values ?? []) as string[][]
@@ -190,14 +190,14 @@ export async function readSfBookingsFromAeSheet(supportableSheetId: string): Pro
     // Read each customer's subscription tab.
     const results: import('../supportable-scraper.ts').SupportableResult[] = []
     for (const entry of accountEntries) {
-      const tab = entry.customerName.slice(0, 100)  // matches writeSupportableSheet tab naming
+      const tab = entry.customerName.slice(0, 100)  // matches writeSubscriptionSheet tab naming
       // Escape single quotes in tab names for Sheets A1 notation (e.g. "O'Reilly" → "O''Reilly").
       // Without this, the range string `'O'Reilly'!A1:ZZ5000` terminates after the first quote
       // and the API returns a 400 for the malformed range.
       const safeTab = tab.replace(/'/g, "''")
       try {
         const tabRes = await withQuotaRetry(
-          () => sheetsClient.spreadsheets.values.get({ spreadsheetId: supportableSheetId, range: `'${safeTab}'!A1:ZZ5000` }),
+          () => sheetsClient.spreadsheets.values.get({ spreadsheetId: subscriptionSheetId, range: `'${safeTab}'!A1:ZZ5000` }),
           `cache-hier SF bookings tab read (${tab})`,
         )
         const tabRaw = (tabRes.data.values ?? []) as string[][]
@@ -226,7 +226,7 @@ export async function readSfBookingsFromAeSheet(supportableSheetId: string): Pro
     }
     return results.length > 0 ? results : null
   } catch (e: any) {
-    console.warn(`[bootstrap] L2 SF bookings read failed for sheet ...${supportableSheetId.slice(-6)}: ${sanitizeErr(e)}`)
+    console.warn(`[bootstrap] L2 SF bookings read failed for sheet ...${subscriptionSheetId.slice(-6)}: ${sanitizeErr(e)}`)
     return null
   }
 }

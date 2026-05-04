@@ -2,7 +2,7 @@
  * src/sf-bookings-reader.ts — BKL-SF-01
  *
  * Reads subscription data from a Salesforce bookings GSheet and maps it to
- * SupportableResult[] so the existing writeSupportableSheet() pipeline works
+ * SupportableResult[] so the existing writeSubscriptionSheet() pipeline works
  * unchanged. Zero impact to scraper, sheets.ts, or dashboard.
  *
  * Column mapping (SF → Supportable CSV_HEADERS):
@@ -26,7 +26,7 @@
  * Usage:
  *   const raw = await fetchSfBookingsRaw(sheetId)
  *   const results = mapSfBookingsToCustomers(raw, aeCustomers, false, ae.tableauTerritories)
- *   await writeSupportableSheet(results, aeName, driveFolderId, existingSheetId)
+ *   await writeSubscriptionSheet(results, aeName, driveFolderId, existingSheetId)
  */
 
 import { google } from 'googleapis'

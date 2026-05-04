@@ -1803,6 +1803,21 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
     expect(src).toContain('sheetUrl contains invalid spreadsheet ID')
   })
 
+  // REG-DATA-AE-01: BKL-DATA-AE-SUPPORTABLE-SHEET-ID-01 — AE type must use subscriptionSheetId,
+  // not the legacy supportableSheetId key. Verifies the rename is complete in types.ts and
+  // the ae-routes.ts serializer exposes subscriptionSheetId in the API response.
+  test('REG-DATA-AE-01: types.ts uses subscriptionSheetId not supportableSheetId', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/types.ts'), 'utf8')
+    expect(src).toContain('subscriptionSheetId')
+    expect(src).not.toContain('supportableSheetId')
+  })
+
+  test('REG-DATA-AE-01: ae-routes.ts serializes subscriptionSheetId not supportableSheetId', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/ae-routes.ts'), 'utf8')
+    expect(src).toContain('subscriptionSheetId')
+    expect(src).not.toContain('supportableSheetId')
+  })
+
   // REG-SEC-21-01: BKL-SEC-21 — POST /api/drive-watcher/rebuild must guard behind
   // isPrimary() so hero nodes return 404 instead of wiping the in-memory folder map.
   test('REG-SEC-21-01: drive-watcher/rebuild guards behind isPrimary before rebuildFolderMap', () => {
@@ -1817,5 +1832,26 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
     expect(guardIdx).toBeGreaterThan(handlerIdx)
     expect(guardIdx).toBeLessThan(rebuildCallIdx)
     expect(src).toContain("'Not available on hero nodes'")
+  })
+})
+
+// REG-ARCH-04: BKL-ARCH-04 — AEsCustomersSection extracted to its own file
+test.describe('AEsCustomersSection extraction (BKL-ARCH-04)', () => {
+  test('REG-ARCH-04-01: AEsCustomersSection.tsx exists and exports AEsCustomersSection', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const filePath = path.join(__dirname, '../dashboard/src/pages/setup/AEsCustomersSection.tsx')
+    expect(fs.existsSync(filePath)).toBe(true)
+    const src = fs.readFileSync(filePath, 'utf-8')
+    expect(src).toContain('export function AEsCustomersSection(')
+  })
+
+  test('REG-ARCH-04-02: SetupPage.tsx line count is below 2200', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const filePath = path.join(__dirname, '../dashboard/src/pages/SetupPage.tsx')
+    const src = fs.readFileSync(filePath, 'utf-8')
+    const lineCount = src.split('\n').length
+    expect(lineCount).toBeLessThan(2200)
   })
 })

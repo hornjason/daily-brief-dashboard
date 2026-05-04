@@ -216,7 +216,7 @@ describe('BKL-INGEST-10: L1 cache TTL gate', () => {
   test('refreshSubscriptions proceeds to L2 check when ANY customer L1 cache > 24h', async () => {
     // Even one stale customer must drop the L1 short-circuit — otherwise the
     // stale customer never refreshes.
-    mockAes.push({ name: 'AE1', supportableSheetId: 'ae1-sheet' })
+    mockAes.push({ name: 'AE1', subscriptionSheetId: 'ae1-sheet' })
     mockCustomers.push({ name: 'CustA', ae: 'AE1' }, { name: 'CustB', ae: 'AE1' })
     mockSheetCacheByCustomer.set('CustA', { rows: [], cachedAt: isoAgoMs(1 * ONE_HOUR_MS) })
     mockSheetCacheByCustomer.set('CustB', { rows: [], cachedAt: isoAgoMs(30 * ONE_HOUR_MS) }) // stale

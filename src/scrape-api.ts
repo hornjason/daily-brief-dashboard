@@ -53,7 +53,7 @@ import {
   recordSfSyncSuccess,
 } from './sf-scraper.ts'
 import {
-  writeSupportableSheet,
+  writeSubscriptionSheet,
 } from './supportable-scraper.ts'
 import {
   runCcspScrape,
@@ -1143,7 +1143,7 @@ export function registerScrapeRoutes(app: Hono): void {
 
     for (let aeIdx = 0; aeIdx < targetAes.length; aeIdx++) {
       // Pace sheet writes to stay under Sheets API quota (300 writes/min/user as of 2026-04-08).
-      // writeSupportableSheet makes ~3-4 API calls per AE; 3s gives ~20 AEs/min headroom.
+      // writeSubscriptionSheet makes ~3-4 API calls per AE; 3s gives ~20 AEs/min headroom.
       if (aeIdx > 0) await new Promise(r => setTimeout(r, 3_000))
 
       const ae = targetAes[aeIdx]
@@ -1207,21 +1207,21 @@ export function registerScrapeRoutes(app: Hono): void {
             customersTotal: 0,
             customersMatched: 0,
             customersEmpty: 0,
-            sheetId: ae.supportableSheetId ?? null,
+            sheetId: ae.subscriptionSheetId ?? null,
             error: 'No customers found — sheet not updated',
           })
           continue
         }
 
-        const spreadsheetId = await writeSupportableSheet(
+        const spreadsheetId = await writeSubscriptionSheet(
           results,
           ae.name,
           ae.driveFolderId,
-          ae.supportableSheetId || undefined,
+          ae.subscriptionSheetId || undefined,
         )
 
-        if (!ae.supportableSheetId) {
-          patchAe(ae.name, { supportableSheetId: spreadsheetId })
+        if (!ae.subscriptionSheetId) {
+          patchAe(ae.name, { subscriptionSheetId: spreadsheetId })
         }
 
         console.log(`[sf-bookings-sync] ${ae.name}: ${matched.length} customers, ${newCustomers.length} new, ${aliasedCustomers.length} alias-updated → sheet ${spreadsheetId}`)

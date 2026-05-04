@@ -147,7 +147,7 @@ export function createAeRouter(): Hono {
           sfReportId:           ae.sfReportId           ?? '',
           tableauTerritories:   ae.tableauTerritories   ?? [],
           tableauUrl:           ae.tableauUrl           ?? undefined,
-          supportableSheetId:   ae.supportableSheetId   ?? undefined,
+          subscriptionSheetId:   ae.subscriptionSheetId   ?? undefined,
           pipelineSheetId:      ae.pipelineSheetId      ?? undefined,
           ccspSheetId:          ae.ccspSheetId          ?? undefined,
         }

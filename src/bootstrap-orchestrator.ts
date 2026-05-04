@@ -10,7 +10,7 @@ import { normalizeCustomerName } from './lib/customer-folder.ts'
 import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
 import { bootstrapAe as bootstrapAeL3, type AeBootstrapDeps } from './l3-bootstrap.ts'
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
-import { runSupportableDiscoverAndScrape, writeSupportableSheet } from './supportable-scraper.ts'
+import { runSupportableDiscoverAndScrape, writeSubscriptionSheet } from './supportable-scraper.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 // BKL-ARCH-L4-SPLIT: ccsp-scraper and tableau-auth are L4-only modules — they belong
 // in Dockerfile.l4, not the hero install image. These imports are intentionally replaced
@@ -324,7 +324,7 @@ export function requestPodBootstrapCancel(): boolean {
 function isAEFullyBootstrapped(aeConfig: AE): boolean {
   return !!(
     aeConfig.driveFolderId &&
-    aeConfig.supportableSheetId &&
+    aeConfig.subscriptionSheetId &&
     aeConfig.pipelineSheetId &&
     aeConfig.ccspSheetId
   )
@@ -649,7 +649,7 @@ async function bootstrapPOD(opts: {
         const err = autoBootstrapState.error
         console.warn(`[pod-bootstrap] ${aeName} completed with error: ${err}`)
         // Still count as succeeded if some steps completed — error might be non-fatal
-        const hasAnySheet = !!(aes.find(a => a.name === aeName)?.supportableSheetId ||
+        const hasAnySheet = !!(aes.find(a => a.name === aeName)?.subscriptionSheetId ||
                               aes.find(a => a.name === aeName)?.pipelineSheetId ||
                               aes.find(a => a.name === aeName)?.ccspSheetId)
         if (hasAnySheet) {
@@ -1384,7 +1384,7 @@ export function createBootstrapRouter(): Hono {
           const aeHasCustomers = customers.some(cx => cx.ae === aeName && !cx.inactive)
 
           // L2 probe — if AE's existing Supportable sheet is <24h old, read from it and skip L3.
-          const existingSupportableIdForL2 = aes.find(a => a.name === aeName)?.supportableSheetId
+          const existingSupportableIdForL2 = aes.find(a => a.name === aeName)?.subscriptionSheetId
             ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `Supportable — ${aeName}`) : null)
             ?? null
           let l2Results: Awaited<ReturnType<typeof readSfBookingsFromAeSheet>> = null
@@ -1469,12 +1469,12 @@ export function createBootstrapRouter(): Hono {
       } else if (supportableScrapeResults.length > 0) {
         try {
           setStep(3, 'running', 'writing to Google Sheet…')
-          const existingSupportableId = aes.find(a => a.name === aeName)?.supportableSheetId
+          const existingSupportableId = aes.find(a => a.name === aeName)?.subscriptionSheetId
             ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `Supportable — ${aeName}`) : null)
             ?? null
           if (existingSupportableId) console.log(`[auto-bootstrap] Supportable sheet found/reusing: ${existingSupportableId}`)
-          const sheetId = await writeSupportableSheet(supportableScrapeResults, aeName, driveFolderId || undefined, existingSupportableId || undefined)
-          patchAe(aeName, { supportableSheetId: sheetId })
+          const sheetId = await writeSubscriptionSheet(supportableScrapeResults, aeName, driveFolderId || undefined, existingSupportableId || undefined)
+          patchAe(aeName, { subscriptionSheetId: sheetId })
           autoBootstrapState.resources.supportableSheet = { id: sheetId, url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit` }
           // Warm sheet cache immediately from in-memory data — no extra API calls needed
           for (const result of supportableScrapeResults) {
@@ -1619,7 +1619,7 @@ export function createBootstrapRouter(): Hono {
           patchAe(aeName, {
             ccspSheetId: l3Result.ccspSheetId,
             pipelineSheetId: l3Result.pipelineSheetId,
-            supportableSheetId: l3Result.sfBookingsSheetId,
+            subscriptionSheetId: l3Result.sfBookingsSheetId,
           })
 
           autoBootstrapState.resources.ccspSheet = { id: l3Result.ccspSheetId, url: `https://docs.google.com/spreadsheets/d/${l3Result.ccspSheetId}/edit` }
@@ -2010,12 +2010,12 @@ export function createBootstrapRouter(): Hono {
     const allCustomers = [...customers]
     if (!allCustomers.length) return c.json({ error: 'No customers configured' }, 400)
 
-    // Determine which customers to run: skip those with existing supportableSheetId + cached rows
+    // Determine which customers to run: skip those with existing subscriptionSheetId + cached rows
     const toRun: typeof allCustomers = []
     const skipped: string[] = []
     for (const cu of allCustomers) {
       const ae = aes.find(a => a.name === cu.ae)
-      if (ae?.supportableSheetId) {
+      if (ae?.subscriptionSheetId) {
         // Try to check if sheet has rows via account number cache
         const hasAccounts = (cu.accountNumbers?.length ?? 0) > 0
         if (hasAccounts) { skipped.push(cu.name); continue }
@@ -2064,14 +2064,14 @@ export function createBootstrapRouter(): Hono {
             }
             // Write Supportable sheet incrementally
             if (ae) {
-              const sheetId = await writeSupportableSheet(
+              const sheetId = await writeSubscriptionSheet(
                 results,
                 cu.ae!,
                 ae.driveFolderId || undefined,
-                ae.supportableSheetId || undefined
+                ae.subscriptionSheetId || undefined
               ).catch((e: any) => { console.warn(`[initial-load:${cu.name}] sheet write failed: ${sanitizeErr(e)}`); return null })
-              if (sheetId && !ae.supportableSheetId) {
-                saveAes(aes.map(a => a.name === cu.ae ? { ...a, supportableSheetId: sheetId } : a))
+              if (sheetId && !ae.subscriptionSheetId) {
+                saveAes(aes.map(a => a.name === cu.ae ? { ...a, subscriptionSheetId: sheetId } : a))
               }
             }
           }
