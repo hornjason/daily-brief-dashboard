@@ -8341,7 +8341,7 @@ Can we test: YES — grep confirms no scheduleCcspSync/schedulePipelineSync call
 Depends on: BKL-SYNC-L3-01 stable in production ≥1 week.
 
 ### BKL-SYNC-L3-04 | One-time SSO setup playbook for primary sync daemon
-Status: 🟡 IN PROGRESS
+Status: ✅ DONE 2026-05-04
 Priority: P1
 Size: S
 Source: Session 2026-04-30 (Serena council review — Mac Mini needs documented initial auth sequence before daemon can run autonomously)

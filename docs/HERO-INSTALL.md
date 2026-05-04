@@ -1,3 +1,10 @@
+---
+doc-type: architecture
+status: active
+owner: jason
+updated: 2026-05-04
+---
+
 # Hero Install — Design & Setup Guide
 
 <!-- doc-type: design-spec | status: council-approved | owner: jason | updated: 2026-04-30 | council: Serena reviewed 2026-04-29 (hero wizard) + 2026-04-30 (sync daemon architecture, NODE_ROLE gate, SSO TTL) -->
@@ -411,7 +418,71 @@ Gate all L4 scheduler paths with a single `isPrimary` predicate at `initBackgrou
 
 ### BKL-SYNC-L3-04 — One-time SSO setup playbook *(after SYNC-L3-01 on Mac Mini)*
 
-Initial auth sequence for the Mac Mini sync daemon: `make sync-up-vnc` → open VNC at port 6082 → auth Tableau (email autofill handles email field, complete SSO popup) → auth SF Lightning → verify keepalive log → `make sync-down && make sync-up` (removes VNC port). Recovery path when keepalive emails about expiry: repeat steps 1–4.
+> **When to use this:** Initial setup of the Mac Mini sync daemon, OR when the sync daemon emails you "Keepalive FAILED" / "L3 Sync FAILED" with a Tableau auth error. Salesforce uses OAuth refresh tokens (auto-renews silently). Tableau uses SAML/SSO cookies — they expire after ~4–10h idle and **require manual re-auth via VNC**.
+
+#### Initial setup (first time)
+
+```bash
+# 1. On Mac Mini — start daemon in VNC mode (exposes port 6082 for browser access)
+make sync-up-vnc
+
+# 2. Open VNC in your browser (from any machine on the same network or via Tailscale)
+open "http://mac.tail2fe7c7.ts.net:6082/vnc.html"
+# Or: noVNC web client at http://<mac-mini-ip>:6082/vnc.html
+
+# 3. In the VNC window, Chromium is already open. Navigate to Tableau:
+#    https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption
+#    - Enter your Red Hat email address when prompted
+#    - Complete the SAML SSO popup (it will redirect to auth.redhat.com → back to Tableau)
+#    - Confirm you land on the CCSP dashboard (not a login page) — session is alive
+
+# 4. Salesforce check (usually auto-renews, but verify):
+#    Navigate to https://redhatcrm.lightning.force.com/lightning/n/Home
+#    - Should load SF Lightning without a login prompt
+#    - If login prompt appears: complete SSO, same flow as Tableau
+
+# 5. Verify keepalive in logs (wait up to 2 minutes):
+make sync-logs
+# Look for: [sync-daemon] keepalive OK  OR  [rh-scraper] keep-alive: session active
+
+# 6. Switch to headless mode (removes VNC port — production running state):
+make sync-down && make sync-up
+```
+
+#### Detecting Tableau session expiry
+
+The keepalive runs every 2h. It visits `https://10ay.online.tableau.com/...` and checks for:
+- **CCSP dashboard loaded** → session alive, logs `[sync-daemon] keepalive OK`
+- **Redirected to SAML login / `auth.redhat.com` URL** → session expired, logs `[rh-scraper] keep-alive: session expired — reconnect via dashboard`
+- **Login form detected on page** (input type=password, #username, or [data-testid="login"]) → session expired
+
+**Note on detection subtlety:** When Tableau SAML expires, the keepalive doesn't know until *after* entering the email address — the page looks like a normal Tableau page until the email is submitted and SSO redirects. The daemon detects the login form selector (`input[type="password"]`) which appears when the SSO popup is needed, not at the initial email prompt. This means a fresh keepalive email means the session **was** alive at that point; a "session expired" log means it expired during the 2h window.
+
+#### Recovery (when you get a keepalive failure email)
+
+```bash
+# Same as initial setup — steps 1–5 only (don't need to switch to headless again unless you already did):
+make sync-up-vnc
+open "http://mac.tail2fe7c7.ts.net:6082/vnc.html"
+# Auth Tableau via SSO, verify CCSP dashboard loads
+make sync-logs  # confirm keepalive OK
+make sync-down && make sync-up
+```
+
+#### Manual sync trigger (after recovery, if sync window was missed)
+
+```bash
+# Touch the trigger file — daemon picks it up within 30s
+ssh jasonhorn@mac.tail2fe7c7.ts.net 'touch ~/DailyBriefDashboard/data-sync/cache/sync-trigger'
+# Watch logs for: [sync-daemon] trigger file detected — running immediate sync
+make sync-logs
+```
+
+#### Why Tableau expires but SF doesn't
+
+SF uses OAuth 2.0 with refresh tokens — the session silently auto-renews on every keepalive visit. Tableau uses SAML SSO via `auth.redhat.com` — SAML assertions are time-limited and cannot be automatically refreshed without user interaction. The 2h keepalive extends the cookie TTL but does not reset the SAML session clock. If the Mac Mini loses network for >4h (sleep, reboot), Tableau will expire regardless of keepalive. SF will not.
+
+**Tracked:** Issue #41 — root cause investigation for whether keepalive frequency can be reduced or SAML TTL can be extended.
 
 ### BKL-SYNC-L3-03 — Remove schedulers + Refresh Timer *(deferred, after SYNC-L3-01 stable ≥1 week)*
 
