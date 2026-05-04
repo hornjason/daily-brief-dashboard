@@ -7,7 +7,7 @@
  *   1. Transient timeouts / context errors → up to 3 retries with exponential
  *      back-off (120s → 300s → 600s) and a fresh browser context per retry.
  *   2. Tableau auth expired (peekTableauSessionExpired() === true) → throw
- *      AuthExpiredError immediately, no retry. Auth state is shared across
+ *      CcspAuthExpiredError immediately, no retry. Auth state is shared across
  *      all PODs in the run, so the caller halts the rest of the loop.
  *
  * Extracted from scripts/sync-pod-l3.ts so it can be unit-tested without
@@ -18,13 +18,18 @@
  * fakes (peek flag, sleep, context init, retry-status writer).
  */
 
-/** Thrown when peekTableauSessionExpired() returns true during a CCSP retry. */
-export class AuthExpiredError extends Error {
-  constructor(podKey: string) {
-    super(`Tableau auth expired during CCSP sync (pod: ${podKey})`)
-    this.name = 'AuthExpiredError'
-  }
-}
+import { CcspAuthExpiredError } from '../src/scraper-errors.ts'
+
+// Re-export canonical type for callers that import from this module.
+export { CcspAuthExpiredError }
+
+/**
+ * Backward-compatibility alias — one-release re-export window (BKL-ARCH-SCRAPER-05).
+ * Existing `instanceof AuthExpiredError` checks keep working because this IS
+ * CcspAuthExpiredError (same constructor reference).
+ * @deprecated Use CcspAuthExpiredError from src/scraper-errors.ts directly.
+ */
+export const AuthExpiredError = CcspAuthExpiredError
 
 /** Default exponential back-off in milliseconds. */
 export const DEFAULT_CCSP_RETRY_DELAYS_MS: readonly number[] = [

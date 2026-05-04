@@ -1494,7 +1494,7 @@ Fix:
 ---
 
 ### BKL-CONN-TABLEAU-LOGIN-TIMEOUT-LEAK-01 — `waitForTableauLogin` timeout exit leaks SSO Tableau tab (council P0)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P0
 - **Source:** Serena council audit 2026-04-29
 - **Symptom:** When the 5-minute Tableau login poll times out, `waitForTableauLogin` returns `false` at line 296 without calling `_closeContext`. The SSO Tableau dashboard tab remains open in the shared context indefinitely. Any subsequent CCSP bootstrap inherits this leaked tab and hangs on CDP calls.
@@ -1542,7 +1542,7 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-05 — Wave 4: CCSP typed error class for Tableau session expiry (P0)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P0
 - **Source:** Serena audit 2026-04-29 (CC-4)
 - **Symptom:** CCSP has no typed `TableauSessionExpiredError` class. Session expiry uses a string flag `_tableauSessionExpired` set/consumed via `consumeTableauSessionExpired()`. `recordConnectionFailure('ccsp', e)` cannot branch on `instanceof` — uses string parsing instead. Grace-period semantics are inconsistent with RH and SF.

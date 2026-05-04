@@ -213,6 +213,11 @@ export async function startTableauLoginBrowser(): Promise<void> {
  * Wait for the Tableau login to complete in the isolated context.
  * On success: harvests cookies to TABLEAU_SESSION_PATH, closes context, returns true.
  * On timeout/error: closes context without harvesting, returns false.
+ *
+ * BKL-CONN-TABLEAU-LOGIN-TIMEOUT-LEAK-01: the main body is wrapped in try/finally so
+ * _closeContext is guaranteed to run on every exit path (early return, exception, timeout).
+ * `succeeded` is flipped to true only on the success branch so harvest=true fires only
+ * when we actually detected a valid Tableau session.
  */
 export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS): Promise<boolean> {
   const page = activePage
@@ -224,81 +229,91 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
 
   const deadline = Date.now() + timeoutMs
   let emailAutoFilled = false
+  let succeeded = false
 
-  while (Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, LOGIN_POLL_INTERVAL_MS))
+  try {
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, LOGIN_POLL_INTERVAL_MS))
 
-    // Auto-fill email if env var is set and we're on the email entry page
-    if (!emailAutoFilled && TABLEAU_USER_EMAIL && loginInProgress && page) {
-      try {
-        const url = page.url()
-        const onEmailPage = !url.includes('/site/') || !url.includes('/views/')
-        if (onEmailPage) {
-          const emailInput = await page.$('input[name="email"], input[type="email"], input[placeholder*="mail" i]')
-            .catch(() => null)
-          if (emailInput) {
-            const currentVal = await emailInput.inputValue().catch(() => '')
-            if (!currentVal) {
-              await emailInput.fill(TABLEAU_USER_EMAIL)
-              await new Promise(r => setTimeout(r, 300))
-              const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Sign in"), button:has-text("Next")')
-                .catch(() => null)
-              if (submitBtn) {
-                await submitBtn.click().catch(() => {})
-                console.log(`[tableau-auth] auto-filled email ${TABLEAU_USER_EMAIL} and clicked submit`)
-                emailAutoFilled = true
+      // Auto-fill email if env var is set and we're on the email entry page
+      if (!emailAutoFilled && TABLEAU_USER_EMAIL && loginInProgress && page) {
+        try {
+          const url = page.url()
+          const onEmailPage = !url.includes('/site/') || !url.includes('/views/')
+          if (onEmailPage) {
+            const emailInput = await page.$('input[name="email"], input[type="email"], input[placeholder*="mail" i]')
+              .catch(() => null)
+            if (emailInput) {
+              const currentVal = await emailInput.inputValue().catch(() => '')
+              if (!currentVal) {
+                await emailInput.fill(TABLEAU_USER_EMAIL)
+                await new Promise(r => setTimeout(r, 300))
+                const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Sign in"), button:has-text("Next")')
+                  .catch(() => null)
+                if (submitBtn) {
+                  await submitBtn.click().catch(() => {})
+                  console.log(`[tableau-auth] auto-filled email ${TABLEAU_USER_EMAIL} and clicked submit`)
+                  emailAutoFilled = true
+                }
               }
             }
           }
-        }
-      } catch { /* non-fatal — user can type manually */ }
-    }
-
-    if (!loginInProgress) return false
-
-    try {
-      // Tableau SSO often opens the final dashboard in a new tab while activePage stays
-      // on about:blank. Scan all pages in the context for the dashboard URL pattern and
-      // use whichever page matches for both the URL stability check and viz content check.
-      const isCcspDashboardUrl = (u: string) =>
-        u.startsWith('https://10ay.online.tableau.com') &&
-        u.includes('/site/') && u.includes('/views/')
-
-      const dashboardPage = ctx.pages().find(p => {
-        try { return isCcspDashboardUrl(p.url()) } catch { return false }
-      })
-      if (!dashboardPage) continue
-
-      let url = ''
-      try { url = dashboardPage.url() } catch { continue }
-
-      // Stability check: wait 3s then re-confirm URL hasn't changed (still on dashboard)
-      await new Promise(r => setTimeout(r, 3_000))
-      let currentUrl = url
-      try { currentUrl = dashboardPage.url() } catch { continue }
-      if (currentUrl !== url) continue
-
-      // URL match + 3s stability is sufficient — viz selector checks were false-negative
-      // prone across Tableau versions (BKL-CONN-TABLEAU-SSO-TAB-LOOP-01)
-      console.log('[tableau-auth] login detected — harvesting cookies')
-      const harvested = await _closeContext({ harvest: true })
-      if (!harvested) return false
-      return true
-    } catch (e: any) {
-      const msg = e?.message ?? ''
-      // Only close session on true destruction — not transient navigation errors
-      if (msg.includes('closed') || msg.includes('destroyed') || msg.includes('crashed')) {
-        await _closeContext({ harvest: false })
-        return false
+        } catch { /* non-fatal — user can type manually */ }
       }
-      // Transient navigation error — log and continue polling
-      console.warn('[tableau-auth] poll cycle error (transient — continuing):', msg)
-    }
-  }
 
-  console.warn('[tableau-auth] wait-for-login: poll cycle timed out — closing context to prevent tab leak')
-  await _closeContext({ harvest: false })
-  return false
+      if (!loginInProgress) return false
+
+      try {
+        // Tableau SSO often opens the final dashboard in a new tab while activePage stays
+        // on about:blank. Scan all pages in the context for the dashboard URL pattern and
+        // use whichever page matches for both the URL stability check and viz content check.
+        const isCcspDashboardUrl = (u: string) =>
+          u.startsWith('https://10ay.online.tableau.com') &&
+          u.includes('/site/') && u.includes('/views/')
+
+        const dashboardPage = ctx.pages().find(p => {
+          try { return isCcspDashboardUrl(p.url()) } catch { return false }
+        })
+        if (!dashboardPage) continue
+
+        let url = ''
+        try { url = dashboardPage.url() } catch { continue }
+
+        // Stability check: wait 3s then re-confirm URL hasn't changed (still on dashboard)
+        await new Promise(r => setTimeout(r, 3_000))
+        let currentUrl = url
+        try { currentUrl = dashboardPage.url() } catch { continue }
+        if (currentUrl !== url) continue
+
+        // URL match + 3s stability is sufficient — viz selector checks were false-negative
+        // prone across Tableau versions (BKL-CONN-TABLEAU-SSO-TAB-LOOP-01)
+        console.log('[tableau-auth] login detected — harvesting cookies')
+        succeeded = true  // flip before _closeContext so finally uses harvest=true
+        const harvested = await _closeContext({ harvest: true })
+        if (!harvested) {
+          succeeded = false
+          return false
+        }
+        return true
+      } catch (e: any) {
+        const msg = e?.message ?? ''
+        // Only close session on true destruction — not transient navigation errors
+        if (msg.includes('closed') || msg.includes('destroyed') || msg.includes('crashed')) {
+          return false  // finally will call _closeContext({ harvest: false })
+        }
+        // Transient navigation error — log and continue polling
+        console.warn('[tableau-auth] poll cycle error (transient — continuing):', msg)
+      }
+    }
+
+    console.warn('[tableau-auth] wait-for-login: poll cycle timed out — closing context to prevent tab leak')
+    return false
+  } finally {
+    // Guarantee cleanup on every exit path: success (succeeded=true, already closed above),
+    // timeout, thrown exception, or early return. _closeContext is idempotent when
+    // activeContext is null (lines 105-109: !ctx branch clears flags and returns false).
+    await _closeContext({ harvest: succeeded })
+  }
 }
 
 /** Cancel in-progress login and close the isolated context. */

@@ -17,7 +17,8 @@ import { normalizeSettings } from '../src/region-config.ts'
 import type { RegionConfig } from '../src/region-config.ts'
 import { scrapePodCcspRaw, peekTableauSessionExpired } from '../src/ccsp-scraper.ts'
 import { initScrapeContext, getScrapeContext } from '../src/rh-scraper.ts'
-import { withCcspRetry, AuthExpiredError } from './ccsp-retry.ts'
+import { withCcspRetry } from './ccsp-retry.ts'
+import { CcspAuthExpiredError } from '../src/scraper-errors.ts'
 import { runSfPodSync, initSfContext, getSfContext } from '../src/sf-scraper.ts'
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../src/google.ts'
@@ -369,7 +370,7 @@ export async function syncAllPods(): Promise<SyncRunResult> {
             (ccspRecovered ? ` (recovered after ${retryResult.attempts} attempts)` : ''),
           )
         } catch (ccspErr: any) {
-          if (ccspErr instanceof AuthExpiredError) {
+          if (ccspErr instanceof CcspAuthExpiredError) {
             ccspAuthExpired = true
             console.error(`[sync-pod-l3] ${podKey}: ${ccspErr.message} — halting remaining PODs`)
           } else {

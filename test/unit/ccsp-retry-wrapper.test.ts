@@ -5,16 +5,20 @@
 //   1. Transient timeouts/context errors → up to N retries with back-off,
 //      rebuilding the browser context between attempts.
 //   2. Tableau auth expired (peekTableauSessionExpired() === true) → throw
-//      AuthExpiredError immediately. No retry, no back-off.
+//      CcspAuthExpiredError immediately. No retry, no back-off.
 //
 // Tests inject mocks for peekTableauSessionExpired, sleep, rebuildContext,
 // and writeRetryStatus so the suite runs instantly without a real browser
 // or any of the sync-pod-l3 import graph.
+//
+// BKL-ARCH-SCRAPER-05: AuthExpiredError is now a backward-compat alias for
+// CcspAuthExpiredError. Tests use the canonical CcspAuthExpiredError name.
 
 import { test, expect, describe, mock } from 'bun:test'
 import {
   withCcspRetry,
   AuthExpiredError,
+  CcspAuthExpiredError,
   DEFAULT_CCSP_RETRY_DELAYS_MS,
 } from '../../scripts/ccsp-retry.ts'
 
@@ -107,9 +111,11 @@ describe('withCcspRetry — auth-expired aborts immediately', () => {
       caught = e
     }
 
+    expect(caught).toBeInstanceOf(CcspAuthExpiredError)
+    // AuthExpiredError is a const alias for CcspAuthExpiredError — instanceof still works
     expect(caught).toBeInstanceOf(AuthExpiredError)
-    expect((caught as AuthExpiredError).message).toContain('POD_AUTH')
-    expect((caught as AuthExpiredError).name).toBe('AuthExpiredError')
+    expect((caught as CcspAuthExpiredError).message).toContain('POD_AUTH')
+    expect((caught as CcspAuthExpiredError).name).toBe('CcspAuthExpiredError')
     // Only one fn call — no retry attempted
     expect(fn).toHaveBeenCalledTimes(1)
     expect(deps.sleep).toHaveBeenCalledTimes(0)
@@ -147,31 +153,41 @@ describe('withCcspRetry — exhausted retries surface the last error', () => {
     expect(deps.sleep).toHaveBeenCalledTimes(3)
     expect(deps.rebuildContext).toHaveBeenCalledTimes(3)
     expect(deps.writeRetryStatus).toHaveBeenCalledTimes(3)
-    // Should NOT be an AuthExpiredError
+    // Should NOT be a CcspAuthExpiredError (nor the alias)
+    expect(caught).not.toBeInstanceOf(CcspAuthExpiredError)
     expect(caught).not.toBeInstanceOf(AuthExpiredError)
   })
 })
 
-// ── 5. AuthExpiredError class shape ───────────────────────────────────────────
+// ── 5. CcspAuthExpiredError class shape (BKL-ARCH-SCRAPER-05) ────────────────
 
-describe('AuthExpiredError', () => {
+describe('CcspAuthExpiredError', () => {
   test('has correct name property and includes podKey in message', () => {
-    const err = new AuthExpiredError('POD_FOO')
+    const err = new CcspAuthExpiredError('POD_FOO')
     expect(err).toBeInstanceOf(Error)
-    expect(err.name).toBe('AuthExpiredError')
+    expect(err.name).toBe('CcspAuthExpiredError')
     expect(err.message).toContain('POD_FOO')
     expect(err.message).toContain('Tableau auth expired')
+    expect(err.retryable).toBe(false)
   })
 
-  test('instanceof AuthExpiredError works after throw/catch', () => {
+  test('instanceof CcspAuthExpiredError works after throw/catch', () => {
     let caught: unknown
     try {
-      throw new AuthExpiredError('POD_BAR')
+      throw new CcspAuthExpiredError('POD_BAR')
     } catch (e) {
       caught = e
     }
-    expect(caught).toBeInstanceOf(AuthExpiredError)
+    expect(caught).toBeInstanceOf(CcspAuthExpiredError)
     expect(caught).toBeInstanceOf(Error)
+  })
+
+  test('AuthExpiredError alias is the same constructor (backward compat)', () => {
+    // const AuthExpiredError = CcspAuthExpiredError — same reference
+    expect(AuthExpiredError).toBe(CcspAuthExpiredError)
+    const err = new AuthExpiredError('POD_ALIAS')
+    expect(err).toBeInstanceOf(CcspAuthExpiredError)
+    expect(err).toBeInstanceOf(AuthExpiredError)
   })
 })
 

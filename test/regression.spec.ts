@@ -1237,6 +1237,21 @@ test.describe('Restored-commits source-level regressions', () => {
     expect(src).toMatch(/export async function isLivePageHealthy\s*\(\s*\)\s*:\s*Promise<boolean>/)
   })
 
+  // ── REG-CONN-TABLEAU-01: waitForTableauLogin try/finally cleanup ─────────────
+  // BKL-CONN-TABLEAU-LOGIN-TIMEOUT-LEAK-01: SSO tabs accumulated when early-return
+  // paths and transient-error stacks exited without closing the SSO tab. Fix wraps
+  // the main body of waitForTableauLogin in try/finally so _closeContext is
+  // guaranteed to run on every exit path.
+  test('REG-CONN-TABLEAU-01: waitForTableauLogin uses try/finally for guaranteed cleanup', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf8')
+    // Verify the try/finally structure exists inside waitForTableauLogin
+    const fnStart = src.indexOf('export async function waitForTableauLogin')
+    expect(fnStart).toBeGreaterThan(-1)
+    const fnBody = src.slice(fnStart, fnStart + 4000)
+    expect(fnBody).toMatch(/\btry\s*\{/)
+    expect(fnBody).toMatch(/\bfinally\s*\{/)
+  })
+
   // ── REG-UX94-01: SF auth happy-path clears VNC before nulling context ──────
   // BKL-UX94: sf-auth.ts must open a blank tab (about:blank) BEFORE setting
   // activeContext = null on the happy path, so the VNC viewer shows a blank tab.
@@ -1896,5 +1911,26 @@ test.describe('AEsCustomersSection extraction (BKL-ARCH-04)', () => {
     const src = fs.readFileSync(filePath, 'utf-8')
     const lineCount = src.split('\n').length
     expect(lineCount).toBeLessThan(2200)
+  })
+})
+
+// REG-SCRAPER-05: BKL-ARCH-SCRAPER-05 — AuthExpiredError relocated to src/scraper-errors.ts
+test.describe('CcspAuthExpiredError relocation (BKL-ARCH-SCRAPER-05)', () => {
+  test('REG-SCRAPER-05-01: src/scraper-errors.ts exists and exports CcspAuthExpiredError', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const filePath = path.join(__dirname, '../src/scraper-errors.ts')
+    expect(fs.existsSync(filePath)).toBe(true)
+    const src = fs.readFileSync(filePath, 'utf-8')
+    expect(src).toContain('export class CcspAuthExpiredError')
+  })
+
+  test('REG-SCRAPER-05-02: scripts/sync-pod-l3.ts imports CcspAuthExpiredError from src/scraper-errors.ts', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const filePath = path.join(__dirname, '../scripts/sync-pod-l3.ts')
+    const src = fs.readFileSync(filePath, 'utf-8')
+    // Must import CcspAuthExpiredError from src/scraper-errors.ts (not only from ccsp-retry.ts)
+    expect(src).toMatch(/import.*CcspAuthExpiredError.*from.*['"]\.\.\/src\/scraper-errors\.ts['"]/)
   })
 })
