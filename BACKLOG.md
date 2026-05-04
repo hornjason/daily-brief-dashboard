@@ -1561,12 +1561,12 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-08 — Wave 7: Session persistence symmetry (P1)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P1
 - **Source:** Serena audit 2026-04-29
-- **Symptom:** (a) SF writes `sf-session-state.json` via `persistSessionState` but never reads it — `restoreSfSession` does not exist. File is a write-only audit trail. (b) CCSP persists cookie-subset format `{ cookies, savedAt }` vs RH full `storageState()` format — not standardized.
-- **Fix:** (a) Add `restoreSfSession()` to `sf-scraper.ts` and call it from `initSfContext`. (b) Document CCSP subset format as intentional (Tableau-domain cookies only) or align with RH format.
-- **Files:** `sf-scraper.ts`
+- **Symptom:** (a) SF writes `sf-session-state.json` via `persistSessionState` but never reads it. (b) CCSP subset format undocumented vs RH full format.
+- **Decision:** DONE — (a) Added `restoreSfSession()` to `sf-scraper.ts`, called from `initSfContext` after context open. Mirrors `rh-scraper.ts`'s `restoreSessionCookies` pattern exactly: reads cookies from disk, calls `_context.addCookies()`. (b) Added `BKL-ARCH-SCRAPER-08` comment above `saveTableauSession` documenting the CCSP Tableau-domain-only subset as intentional. REG-SCRAPER-08-01/02 added.
+- **Files:** `sf-scraper.ts`, `ccsp-scraper.ts`
 
 ---
 

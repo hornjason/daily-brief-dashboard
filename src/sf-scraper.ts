@@ -359,6 +359,8 @@ export async function initSfContext(profileDir: string): Promise<void> {
     args: ['--headless=new', '--disable-blink-features=AutomationControlled', ...BASE_CHROMIUM_ARGS],
     ignoreDefaultArgs: ['--enable-automation'],
   })
+  // Restore session cookies persisted from a previous run (BKL-ARCH-SCRAPER-08)
+  await restoreSfSession()
   _keepAliveTimer = setInterval(
     () => keepAlive().catch(e => console.warn('[sf-scraper] keep-alive error:', e)),
     KEEP_ALIVE_INTERVAL_MS,
@@ -400,6 +402,21 @@ export async function closeSfContext(): Promise<void> {
 }
 
 // ── Session persistence ───────────────────────────────────────────────────────
+
+async function restoreSfSession(): Promise<void> {
+  if (!_context || !_profileDir) return
+  const statePath = resolve(_profileDir, SESSION_STATE_FILE)
+  try {
+    const raw = await readFile(statePath, 'utf-8')
+    const state = JSON.parse(raw)
+    if (Array.isArray(state?.cookies) && state.cookies.length > 0) {
+      await _context.addCookies(state.cookies)
+      console.log(`[sf-scraper] restored ${state.cookies.length} session cookies from disk`)
+    }
+  } catch {
+    // No state file yet (first run) or parse error — non-fatal
+  }
+}
 
 async function persistSessionState(): Promise<void> {
   if (!_context || !_profileDir) return

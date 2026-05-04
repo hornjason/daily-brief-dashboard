@@ -2138,3 +2138,27 @@ test.describe('Supportable imports removed from auth-routes and sf-auth (BKL-ARC
     expect(src).not.toContain('closeSupportableContext')
   })
 })
+
+// REG-SCRAPER-08: BKL-ARCH-SCRAPER-08 — SF session persistence symmetry
+// restoreSfSession() must exist and be called from initSfContext.
+// CCSP subset format is intentional and documented.
+test.describe('SF session restore and CCSP subset format (BKL-ARCH-SCRAPER-08)', () => {
+  test('REG-SCRAPER-08-01: sf-scraper.ts has restoreSfSession and calls it from initSfContext', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf-8')
+    expect(src).toContain('async function restoreSfSession()')
+    // restoreSfSession must be called inside initSfContext
+    const initFn = src.slice(src.indexOf('export async function initSfContext'), src.indexOf('export function adoptSfContext'))
+    expect(initFn).toContain('await restoreSfSession()')
+  })
+
+  test('REG-SCRAPER-08-02: ccsp-scraper.ts CCSP subset format comment documents intentional design', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf-8')
+    // CCSP format uses cookies subset with savedAt — must be documented as intentional
+    expect(src).toContain('BKL-ARCH-SCRAPER-08')
+    expect(src).toContain('Tableau-domain cookie subset')
+  })
+})

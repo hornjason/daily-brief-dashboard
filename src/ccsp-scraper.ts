@@ -44,6 +44,9 @@ import { closeTableauTabs, safeCookieOp } from './browser-utils.ts'
 const TABLEAU_SESSION_PATH = `${process.env.RH_PROFILE_DIR ?? '/data/rh-profile'}/tableau-session.json`
 
 /** Save Tableau-domain cookies from the active context to disk so they survive container restarts. */
+// BKL-ARCH-SCRAPER-08: CCSP uses Tableau-domain cookie subset format { cookies, savedAt }
+// intentionally — only Tableau SSO cookies are needed for login-bypass; the full
+// storageState() used by RH and SF would include unrelated origins and bloat the file.
 async function saveTableauSession(ctx: BrowserContext): Promise<void> {
   try {
     await closeTableauTabs(ctx, 'saveTableauSession')
