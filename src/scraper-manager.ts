@@ -4,7 +4,12 @@ import { writeJsonAtomicAsync } from './lib/atomic-write.ts'
 import { Hono } from 'hono'
 import { aes, patchAe } from './server-state.ts'
 import { recordScrapeStart, recordScrapeSuccess, recordScrapeExpired, lastScraped } from './rh-auth.ts'
-import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage, writeCasesCache, setContextRecoveryCallback } from './rh-scraper.ts'
+import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, browserDegradedReason, discoverAccountNumberByName, closeDiscoverPage, writeCasesCache, setContextRecoveryCallback, _rhScrapeRunning, _rhScrapeStartedAt } from './rh-scraper.ts'
+// BKL-ARCH-SCRAPER-04 Wave 3: Re-export RH inner mutex bindings so existing
+// consumers (scrape-api.ts, background-scheduler.ts, setup-routes.ts) keep
+// importing them from scraper-manager.ts without changes. ESM live bindings
+// preserve up-to-date values across the re-export chain.
+export { _rhScrapeRunning, _rhScrapeStartedAt } from './rh-scraper.ts'
 // BKL-RH-03 Phase 2 (ADR-014): Bearer transport for recurring case refresh
 import { BearerCaseClient, getConfiguredTransport } from './case-client.ts'
 import type { SupportCase } from './types.ts'
@@ -387,12 +392,12 @@ export function initScraperManager(opts: {
 export let ccspInFlight = false
 
 // RH scraper state
-export let _rhScrapeRunning = false
-export let _rhScrapeStartedAt: number | null = null
+// BKL-ARCH-SCRAPER-04 Wave 3: _rhScrapeRunning and _rhScrapeStartedAt are now
+// owned by rh-scraper.ts and re-exported above. The orchestration layer holds
+// only the cancel/last-error/discovery-progress fields it actually drives.
 export let _rhScrapeCancelRequested = false
 export let _rhScrapeLastError: string | null = null
 export let _rhDiscoveryProgress: { done: number; total: number; current: string | null } | null = null
-const RH_STALE_MUTEX_MS = 15 * 60 * 1000  // 15 min auto-release — same as CCSP/Supportable
 
 // SF probe timestamp — records when sfLiveProbe last ran in the status endpoint
 let _sfProbeTimestamp: string | null = null
@@ -443,14 +448,11 @@ export async function runRhScrapeWithState(): Promise<void> {
     return
   }
 
+  // BKL-ARCH-SCRAPER-04 Wave 3: read-only check — runRhScrape owns its own mutex
+  // (set/release inside the function body, including stale auto-release). The
+  // outer orchestration layer just early-returns to avoid duplicate scheduling.
   if (_rhScrapeRunning) {
-    if (_rhScrapeStartedAt && (Date.now() - _rhScrapeStartedAt) > RH_STALE_MUTEX_MS) {
-      console.warn(`[rh-scraper] stale mutex detected (${Math.round((Date.now() - _rhScrapeStartedAt) / 60000)}min) — auto-releasing`)
-      _rhScrapeRunning = false
-      _rhScrapeStartedAt = null
-    } else {
-      console.log('[rh-scraper] already running — skipping'); return
-    }
+    console.log('[rh-scraper] inner mutex already set — skipping orchestration layer'); return
   }
   if (!existsSync(RH_SESSION_PATH)) return
 
@@ -564,8 +566,8 @@ export async function runRhScrapeWithState(): Promise<void> {
     return
   }
 
-  _rhScrapeRunning = true
-  _rhScrapeStartedAt = Date.now()
+  // BKL-ARCH-SCRAPER-04 Wave 3: mutex set/release now lives inside runRhScrape.
+  // Orchestration layer only manages cancel-request flag.
   _rhScrapeCancelRequested = false
 
   const _rhTelemetryStart = Date.now()
@@ -733,8 +735,11 @@ export async function runRhScrapeWithState(): Promise<void> {
       }
     }
   } finally {
-    _rhScrapeRunning = false
-    _rhScrapeStartedAt = null
+    // BKL-ARCH-SCRAPER-04 Wave 3: mutex release lives inside runRhScrape's own
+    // finally (browser path). Orchestration layer only resets cancel flag.
+    // Note: bearer transport branch (BKL-RH-03 Phase 2) does not enter
+    // runRhScrape and therefore does not flip _rhScrapeRunning during the
+    // bearer-only scrape — see BACKLOG observation in this commit.
     _rhScrapeCancelRequested = false
   }
 }

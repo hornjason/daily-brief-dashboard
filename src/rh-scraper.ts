@@ -30,6 +30,22 @@ import { BASE_CHROMIUM_ARGS, safeCookieOp } from './browser-utils.ts'
 import { notify, sanitizeErr } from './utils.ts'
 import { assertLiveScrapeAllowed } from './scraper-utils.ts'
 
+// ── BKL-ARCH-SCRAPER-04 Wave 3: Inner mutex (owned by this module) ──────────
+// Mirror the CCSP pattern (ccsp-scraper.ts:549-561): mutex state lives inside
+// the scraper module so direct calls to runRhScrape() are guarded too. The
+// outer scraper-manager.ts re-exports these as ESM live bindings so existing
+// consumers (scrape-api.ts, background-scheduler.ts, setup-routes.ts) see the
+// same value without changing imports.
+export let _rhScrapeRunning = false
+export let _rhScrapeStartedAt: number | null = null
+const RH_INNER_STALE_MUTEX_MS = 15 * 60 * 1000  // 15 min auto-release
+
+/** Called by scraper-manager.ts to release mutex on cancel/error paths. */
+export function releaseRhScrapeMutex(): void {
+  _rhScrapeRunning = false
+  _rhScrapeStartedAt = null
+}
+
 // ── BKL-M50c: Auto-recovery state ───────────────────────────────────────────
 let _recoveryInProgress = false
 let _recoveryAttempts = 0
@@ -536,6 +552,21 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
   // BKL-INGEST-04 / BKL-ARCH-SCRAPER-06: live-scrape guard extracted to scraper-utils.ts
   assertLiveScrapeAllowed('rh-scraper')
 
+  // BKL-ARCH-SCRAPER-04 Wave 3: Inner mutex — guards direct callers that bypass
+  // scraper-manager.ts. Stale auto-release after 15 min. Released in finally.
+  if (_rhScrapeRunning) {
+    if (_rhScrapeStartedAt && (Date.now() - _rhScrapeStartedAt) > RH_INNER_STALE_MUTEX_MS) {
+      console.warn(`[rh-scraper] stale inner mutex detected (${Math.round((Date.now() - _rhScrapeStartedAt) / 60000)}min) — auto-releasing`)
+      _rhScrapeRunning = false
+      _rhScrapeStartedAt = null
+    } else {
+      throw new Error('[rh-scraper] runRhScrape already in progress — concurrent call blocked')
+    }
+  }
+  _rhScrapeRunning = true
+  _rhScrapeStartedAt = Date.now()
+
+  try {
   const { accountNumbers, profileDir, cachePath, shouldCancel, accountToCustomer } = options
 
   // Ensure long-lived context is open
@@ -1030,6 +1061,11 @@ export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]
   }, { mode: 0o600 })
 
   return allCases
+  } finally {
+    // BKL-ARCH-SCRAPER-04 Wave 3: release inner mutex on every exit path.
+    _rhScrapeRunning = false
+    _rhScrapeStartedAt = null
+  }
 }
 
 /**

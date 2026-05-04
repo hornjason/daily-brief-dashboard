@@ -43,6 +43,15 @@ const KEEPALIVE_URL     = `${SF_BASE_URL}/lightning/n/Home`
 const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000  // 10 minutes — more aggressive to prevent session drops
 const SESSION_STATE_FILE = 'sf-session-state.json'
 
+// ── BKL-ARCH-SCRAPER-04 Wave 3: Per-report inner mutex (owned by this module) ─
+// Mirrors the CCSP pattern (ccsp-scraper.ts:549-561). Distinct from
+// _sfSyncRunning in scraper-manager.ts which guards the pipeline-level
+// runSfSyncForAes loop (potentially many reports). This guards a single
+// scrapeSfReport call against concurrent direct callers.
+export let _sfReportScrapeRunning = false
+export let _sfReportScrapeStartedAt: number | null = null
+const SF_INNER_STALE_MUTEX_MS = 15 * 60 * 1000  // 15 min auto-release
+
 /**
  * Classify a navigation URL as 'login' (SF login or RH SSO landing) vs 'transient'
  * (anything else — about:blank, partial redirects, unrelated pages).
@@ -484,6 +493,21 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
     _profileDir = profileDir
   }
 
+  // BKL-ARCH-SCRAPER-04 Wave 3: Inner mutex — guards direct callers that bypass
+  // scraper-manager.ts. Stale auto-release after 15 min. Released in finally.
+  if (_sfReportScrapeRunning) {
+    if (_sfReportScrapeStartedAt && (Date.now() - _sfReportScrapeStartedAt) > SF_INNER_STALE_MUTEX_MS) {
+      console.warn(`[sf-scraper] stale inner mutex detected (${Math.round((Date.now() - _sfReportScrapeStartedAt) / 60000)}min) — auto-releasing`)
+      _sfReportScrapeRunning = false
+      _sfReportScrapeStartedAt = null
+    } else {
+      throw new Error('[sf-scraper] scrapeSfReport already in progress — concurrent call blocked')
+    }
+  }
+  _sfReportScrapeRunning = true
+  _sfReportScrapeStartedAt = Date.now()
+
+  try {
   await initSfContext(profileDir)
   if (!_context) throw new Error('[sf-scraper] failed to open browser context')
 
@@ -806,6 +830,11 @@ export async function scrapeSfReport(reportId: string, profileDir: string): Prom
 
   } finally {
     await page.close().catch(() => {})
+  }
+  } finally {
+    // BKL-ARCH-SCRAPER-04 Wave 3: release inner mutex on every exit path.
+    _sfReportScrapeRunning = false
+    _sfReportScrapeStartedAt = null
   }
 }
 

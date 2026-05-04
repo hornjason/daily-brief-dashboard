@@ -2285,4 +2285,44 @@ test.describe('Scraper status single source of truth (BKL-ARCH-SCRAPER-03)', () 
       /getInMemoryLastError:\s*\(\)\s*=>\s*getScraperStatus\(['"]sf-pipeline['"]\)\.lastError/
     )
   })
+
+  // ── BKL-ARCH-SCRAPER-04 Wave 3: Mutex ownership moved into scraper modules ──
+
+  // REG-ARCH-SCRAPER-04-01: rh-scraper exports _rhScrapeRunning and releaseRhScrapeMutex
+  test('REG-ARCH-SCRAPER-04-01 rh-scraper exports mutex state and release function', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf-8')
+    expect(src).toContain('export let _rhScrapeRunning = false')
+    expect(src).toContain('export let _rhScrapeStartedAt')
+    expect(src).toContain('export function releaseRhScrapeMutex')
+  })
+
+  // REG-ARCH-SCRAPER-04-02: runRhScrape has inner mutex set and finally release
+  test('REG-ARCH-SCRAPER-04-02 runRhScrape sets and releases inner mutex', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf-8')
+    expect(src).toContain('_rhScrapeRunning = true')
+    expect(src).toMatch(/finally[\s\S]{0,200}_rhScrapeRunning = false/)
+  })
+
+  // REG-ARCH-SCRAPER-04-03: sf-scraper exports _sfReportScrapeRunning
+  test('REG-ARCH-SCRAPER-04-03 sf-scraper exports per-report mutex state', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf-8')
+    expect(src).toContain('export let _sfReportScrapeRunning = false')
+    expect(src).toContain('export let _sfReportScrapeStartedAt')
+  })
+
+  // REG-ARCH-SCRAPER-04-04: scrapeSfReport has inner mutex set and finally release
+  test('REG-ARCH-SCRAPER-04-04 scrapeSfReport sets and releases inner mutex', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf-8')
+    expect(src).toContain('_sfReportScrapeRunning = true')
+    expect(src).toMatch(/finally[\s\S]{0,200}_sfReportScrapeRunning = false/)
+  })
+
+  // REG-ARCH-SCRAPER-04-05: scraper-manager no longer declares _rhScrapeRunning locally
+  test('REG-ARCH-SCRAPER-04-05 scraper-manager imports _rhScrapeRunning from rh-scraper', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf-8')
+    // Must NOT have a local export/let declaration
+    expect(src).not.toMatch(/^export let _rhScrapeRunning/m)
+    // Must import from rh-scraper
+    expect(src).toContain("from './rh-scraper.ts'")
+  })
 })

@@ -1525,12 +1525,35 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-04 — Wave 3: Move mutex ownership into scraper modules (P1)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04
 - **Priority:** P1
 - **Source:** Serena audit 2026-04-29 (CC-2)
 - **Symptom:** CCSP has its mutex inside the scraper (correct). RH and SF have their mutex only in `scraper-manager.ts`. Direct calls to `runRhScrape()` or `scrapeSfReport()` bypass the running guard entirely — no protection against concurrent execution.
-- **Fix:** Add `_rhScrapeRunning` + stale-mutex check to `rh-scraper.ts:runRhScrape`. Add `_sfSyncRunning` to `sf-scraper.ts:scrapeSfReport`. Mirror the CCSP pattern (mutex + `startedAt` + `STALE_MUTEX_MS` + finally release). Requires Wave 2 to land first.
+- **Fix:** Added `_rhScrapeRunning` + stale-mutex + `releaseRhScrapeMutex()` to `rh-scraper.ts:runRhScrape`. Added `_sfReportScrapeRunning` + stale-mutex to `sf-scraper.ts:scrapeSfReport`. `scraper-manager.ts` now imports+re-exports `_rhScrapeRunning`/`_rhScrapeStartedAt` from rh-scraper.ts (no local declarations). SF pipeline-level `_sfSyncRunning` stays in scraper-manager.ts (different scope — guards the multi-report loop, not a single report).
+- **Decision:** Named mutex `_sfReportScrapeRunning` (not `_sfSyncRunning`) to clarify it is per-report scope, not pipeline scope.
+- **Spin-off:** BKL-ARCH-SCRAPER-04-FOLLOWUP — bearer transport branch in `runRhScrapeWithState` does not enter `runRhScrape` so `_rhScrapeRunning` stays false during bearer-only scrapes. Low priority since bearer path is non-default.
+- **Tests:** REG-ARCH-SCRAPER-04-01 through 05 in test/regression.spec.ts; unit tests in test/unit/scraper-mutex-arch-04.test.ts
 - **Files:** `rh-scraper.ts`, `sf-scraper.ts`, `scraper-manager.ts`
+
+---
+
+### BKL-ARCH-SCRAPER-04-FOLLOWUP — Bearer transport branch does not flip _rhScrapeRunning (P3)
+- **Status:** 🔴 OPEN
+- **Priority:** P3
+- **Source:** Marcus observation during ARCH-SCRAPER-04 (2026-05-04)
+- **Symptom:** `runRhScrapeWithState` has two paths: browser path (calls `runRhScrape` which now owns the mutex) and bearer-token path (BKL-RH-03 Phase 2, calls `fetchCasesByBearer` directly). The bearer path bypasses `runRhScrape` so `_rhScrapeRunning` stays false during a bearer-only scrape. Status endpoints, `isAnyScrapeRunning`, and bootstrap conflict guard all rely on `_rhScrapeRunning`.
+- **Fix:** In `runRhScrapeWithState`, wrap the bearer branch with `tryAcquireRhScrapeMutex()` / `releaseRhScrapeMutex()` calls so the mutex reflects "RH cases scrape in progress" regardless of transport.
+- **Files:** `scraper-manager.ts`, `rh-scraper.ts`
+
+---
+
+### BKL-ARCH-SCRAPER-04-REG-FIX — REG-ARCH-04-01/02 use CommonJS require() in ESM context (P2)
+- **Status:** 🔴 OPEN
+- **Priority:** P2
+- **Source:** Marcus observation during ARCH-SCRAPER-04 (2026-05-04)
+- **Symptom:** Pre-existing `REG-ARCH-04-01` and `REG-ARCH-04-02` (AEsCustomersSection, test/regression.spec.ts ~lines 1898/1907) fail with `ReferenceError: require is not defined`. These tests use CommonJS `require()` inside Playwright/Bun ESM context.
+- **Fix:** Convert the two test cases to use dynamic `import()` or `Bun.file().text()` pattern (same as other regression tests in the file).
+- **Files:** `test/regression.spec.ts`
 
 ---
 
