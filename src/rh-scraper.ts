@@ -1096,6 +1096,7 @@ export async function discoverAccountNumberByName(
   profileDir: string,
 ): Promise<DiscoverResult> {
   assertLiveScrapeAllowed('rh-scraper')
+  assertPrimary('rh-scraper.discoverAccountNumberByName')
   await initScrapeContext(profileDir)
   if (!_context) return { accountNumbers: [], cases: [] }
 

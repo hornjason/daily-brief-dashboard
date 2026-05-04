@@ -8438,6 +8438,16 @@ Solution: Replace customer.name/ae in throw messages with generic text, or add J
 
 ---
 
+### BKL-SEC-14 | discoverAccountNumberByName missing assertPrimary guard — hero bypass via test-discover
+Status: ✅ DONE 2026-05-04
+Priority: P2
+Size: XS
+Source: Rook scan 2026-05-04 (BKL-ARCH-01 session)
+Files: src/rh-scraper.ts (line 1098), src/scrape-api.ts (POST /api/scrape/rh/test-discover)
+Description: `discoverAccountNumberByName` called `initScrapeContext` with only `assertLiveScrapeAllowed`, no `assertPrimary`. Hero nodes could reach the browser context via `POST /api/scrape/rh/test-discover` in scrape-api.ts. Fix: added `assertPrimary('rh-scraper.discoverAccountNumberByName')` immediately after `assertLiveScrapeAllowed`. Regression test REG-NODE-ROLE-DISCOVER-01 in regression.spec.ts.
+
+---
+
 ### BKL-SEC-13 | account-intelligence.ts intelligence cache slug uses strip-only pattern — missing throw guard
 Status: ✅ DONE 2026-05-03 (re-fixed after regression)
 Priority: P3

@@ -2314,4 +2314,10 @@ test.describe('REG-F07 SF report URL extraction in bootstrap validation', () => 
     const src = fs.readFileSync(path.join(__dirname, '../src/background-scheduler.ts'), 'utf-8')
     expect(src).toContain('isPrimary && existsSync(opts.rhSessionPath)')
   })
+
+  // REG-NODE-ROLE-DISCOVER-01: discoverAccountNumberByName also guarded (BKL-SEC-07 fix)
+  test('REG-NODE-ROLE-DISCOVER-01: discoverAccountNumberByName has assertPrimary guard', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf-8')
+    expect(src).toContain("assertPrimary('rh-scraper.discoverAccountNumberByName')")
+  })
 })
