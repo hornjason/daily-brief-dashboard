@@ -28,6 +28,7 @@ import { resolve, dirname, join } from 'node:path'
 import type { SupportCase } from './types.ts'
 import { BASE_CHROMIUM_ARGS, safeCookieOp } from './browser-utils.ts'
 import { notify, sanitizeErr } from './utils.ts'
+import { assertLiveScrapeAllowed } from './scraper-utils.ts'
 
 // ── BKL-M50c: Auto-recovery state ───────────────────────────────────────────
 let _recoveryInProgress = false
@@ -532,11 +533,8 @@ async function checkForSessionExpiry(page: { url(): string; waitForURL(p: string
 // ── Main scrape function ──────────────────────────────────────────────────────
 
 export async function runRhScrape(options: ScrapeOptions): Promise<SupportCase[]> {
-  // BKL-INGEST-04: L4 live-scrape guard — blocks live scrape in test environment.
-  // Must be the first check, before any browser/network work.
-  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
-    throw new Error('[rh-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
-  }
+  // BKL-INGEST-04 / BKL-ARCH-SCRAPER-06: live-scrape guard extracted to scraper-utils.ts
+  assertLiveScrapeAllowed('rh-scraper')
 
   const { accountNumbers, profileDir, cachePath, shouldCancel, accountToCustomer } = options
 
@@ -1057,9 +1055,7 @@ export async function discoverAccountNumberByName(
   customerName: string,
   profileDir: string,
 ): Promise<DiscoverResult> {
-  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
-    throw new Error('[rh-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
-  }
+  assertLiveScrapeAllowed('rh-scraper')
   await initScrapeContext(profileDir)
   if (!_context) return { accountNumbers: [], cases: [] }
 

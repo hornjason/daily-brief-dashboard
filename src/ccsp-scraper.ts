@@ -99,6 +99,7 @@ import { parseCsvToObjects } from './csv-parse.ts'
 import { filterRowsForAe, warnFilterColumnGaps } from './ccsp-row-filter.ts'
 import { tryMemoryCache, tryDriveCache, writeCaches } from './ccsp-cache.ts'
 import { fetchPodCsv } from './ccsp-tableau-fetch.ts'
+import { assertLiveScrapeAllowed } from './scraper-utils.ts'
 
 /**
  * Search for a VISIBLE element across all frames in the page.
@@ -524,11 +525,8 @@ async function scrapeOneAe(page: Page, ae: AE, podBookingsFolderId?: string): Pr
 // -- Public scrape entry point ------------------------------------------------
 
 export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
-  // BKL-INGEST-04: L4 live-scrape guard — blocks live Tableau scrape in test environment.
-  // Must be the first check, before any browser/network work.
-  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
-    throw new Error('[ccsp-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
-  }
+  // BKL-INGEST-04 / BKL-ARCH-SCRAPER-06: live-scrape guard extracted to scraper-utils.ts
+  assertLiveScrapeAllowed('ccsp-scraper')
 
   if (!isPrimary()) {
     console.log('[ccsp] NODE_ROLE not primary — this instance will cap at L3 for all AEs')
@@ -657,11 +655,8 @@ export async function runCcspScrape(aes: AE[]): Promise<CcspResult[]> {
  * seedTerritories are only used to get a working Tableau page load.
  */
 export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFolderId?: string): Promise<{ rows: Record<string, string>[]; period: string }> {
-  // BKL-INGEST-04: L4 live-scrape guard — blocks live Tableau scrape in test environment.
-  // Must be the first check, before any browser/network work.
-  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
-    throw new Error('[ccsp-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
-  }
+  // BKL-INGEST-04 / BKL-ARCH-SCRAPER-06: live-scrape guard extracted to scraper-utils.ts
+  assertLiveScrapeAllowed('ccsp-scraper')
 
   if (!isPrimary()) {
     console.log('[ccsp] scrapePodCcspRaw: non-leader instance — L4 not permitted; returning empty')

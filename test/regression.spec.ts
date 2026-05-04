@@ -2162,3 +2162,40 @@ test.describe('SF session restore and CCSP subset format (BKL-ARCH-SCRAPER-08)',
     expect(src).toContain('Tableau-domain cookie subset')
   })
 })
+
+// REG-SCRAPER-06: BKL-ARCH-SCRAPER-06 — assertLiveScrapeAllowed extracted to scraper-utils.ts
+// All 6 inline DISALLOW_LIVE_SCRAPE throw blocks must be replaced with the helper call.
+test.describe('assertLiveScrapeAllowed helper extraction (BKL-ARCH-SCRAPER-06)', () => {
+  test('REG-SCRAPER-06-01: scraper-utils.ts exports assertLiveScrapeAllowed', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/scraper-utils.ts'), 'utf-8')
+    expect(src).toContain('export function assertLiveScrapeAllowed')
+    expect(src).toContain('DISALLOW_LIVE_SCRAPE')
+  })
+
+  test('REG-SCRAPER-06-02: rh-scraper.ts has zero inline DISALLOW_LIVE_SCRAPE checks', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf-8')
+    // No inline if-block — only the import and call remain
+    expect(src).not.toContain("process.env.DISALLOW_LIVE_SCRAPE === '1'")
+    expect(src).toContain('assertLiveScrapeAllowed(')
+  })
+
+  test('REG-SCRAPER-06-03: ccsp-scraper.ts has zero inline DISALLOW_LIVE_SCRAPE checks', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf-8')
+    expect(src).not.toContain("process.env.DISALLOW_LIVE_SCRAPE === '1'")
+    expect(src).toContain('assertLiveScrapeAllowed(')
+  })
+
+  test('REG-SCRAPER-06-04: sf-scraper.ts has zero inline DISALLOW_LIVE_SCRAPE checks', () => {
+    const fs = require('fs')
+    const path = require('path')
+    const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf-8')
+    expect(src).not.toContain("process.env.DISALLOW_LIVE_SCRAPE === '1'")
+    expect(src).toContain('assertLiveScrapeAllowed(')
+  })
+})

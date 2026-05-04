@@ -1541,11 +1541,12 @@ Fix:
 ---
 
 ### BKL-ARCH-SCRAPER-06 — Wave 5: Extract shared scraper helpers (P2)
-- **Status:** OPEN
+- **Status:** ✅ DONE 2026-05-04 (partial — assertLiveScrapeAllowed extracted; keepIfNonEmpty deferred)
 - **Priority:** P2
 - **Source:** Serena audit 2026-04-29 (CC-5, CC-6)
 - **Symptom:** (a) Stale-overwrite guard (`keepIfNonEmpty`) duplicated 5 times across all scrapers. (b) Live-scrape leader/test guard (`DISALLOW_LIVE_SCRAPE` + `IS_LEADER`) duplicated 6 times with inconsistent behavior (SF throws, CCSP returns empty silently).
-- **Fix:** Extract `keepIfNonEmpty(cachePath, newRows)` helper. Extract `assertLiveScrapeAllowed(serviceName)` helper. Both go in a new `scraper-utils.ts` or appended to `browser-utils.ts`.
+- **Fix done:** Created `src/scraper-utils.ts`; extracted `assertLiveScrapeAllowed(serviceName)` and replaced all 6 inline `if (process.env.DISALLOW_LIVE_SCRAPE === '1') throw` blocks in rh-scraper.ts, ccsp-scraper.ts, sf-scraper.ts.
+- **Deferred:** `keepIfNonEmpty` — each scraper's guard is embedded with domain-specific cache structure knowledge (different field names, return semantics); extraction would require parameterizing scraper internals across protected files. Deferred to dedicated BKL item.
 - **Files:** `rh-scraper.ts`, `ccsp-scraper.ts`, `sf-scraper.ts`, new `scraper-utils.ts`
 
 ---
@@ -9174,7 +9175,7 @@ Fix: Remove the `supportable` block from the scraper status response builder. Up
 Can we test: YES — assert response JSON has exactly keys `['rh-cases','ccsp','sf-pipeline']` (or equivalent), no `supportable` key.
 
 ### BKL-ARCH-SCRAPER-09-FOLLOW-02 | Fix supportableSheetId fixture drift in test/fixtures.ts
-Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-04 (pre-existing — verified CAROLANNE already uses subscriptionSheetId)
 Source: Quinn audit 2026-05-04 (BKL-ARCH-SCRAPER-09 post-ship review)
 Files: test/fixtures.ts
 Description: `test/fixtures.ts` has a hardcoded `CAROLANNE.supportableSheetId` constant that no longer matches live data (live is `undefined` post-removal). Causes a fixture drift warning in global setup.

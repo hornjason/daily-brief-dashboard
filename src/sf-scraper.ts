@@ -27,6 +27,7 @@ import { parseCsvToSfReport } from './csv-parse.ts'
 import { getScrapeContext } from './rh-scraper.ts'
 import { assertPrimary } from './lib/node-role.ts'
 import { ScraperRegistry } from './scraper-registry.ts'
+import { assertLiveScrapeAllowed } from './scraper-utils.ts'
 
 export class SfSessionExpiredError extends Error {
   constructor() {
@@ -470,11 +471,8 @@ export interface SfReportRow {
  * Always uses an ephemeral page to avoid navigation conflicts with the RH live page.
  */
 export async function scrapeSfReport(reportId: string, profileDir: string): Promise<SfReportRow> {
-  // BKL-INGEST-04: L4 live-scrape guard — blocks live scrape in test environment.
-  // Must be the first check, before any browser/network work.
-  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
-    throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
-  }
+  // BKL-INGEST-04 / BKL-ARCH-SCRAPER-06: live-scrape guard extracted to scraper-utils.ts
+  assertLiveScrapeAllowed('sf-scraper')
   assertPrimary('sf-scraper.scrapeSfReport')
   // BKL-CONN-SF-AUTO-01: lazy self-heal — if RH recycled the shared context,
   // our cached _context is a stale reference. Mirrors ccsp-scraper.ts:762-770.
@@ -972,9 +970,7 @@ export interface SfReportItem {
  * Returns reports sorted alphabetically by name, capped at 50.
  */
 export async function listSfReports(): Promise<SfReportItem[]> {
-  if (process.env.DISALLOW_LIVE_SCRAPE === '1') {
-    throw new Error('[sf-scraper] DISALLOW_LIVE_SCRAPE=1 — live scrape blocked in test environment')
-  }
+  assertLiveScrapeAllowed('sf-scraper')
   assertPrimary('sf-scraper.listSfReports')
   if (!_context) throw new Error('SF session not active — log in via Setup first')
 
