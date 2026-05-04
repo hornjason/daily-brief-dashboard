@@ -86,6 +86,13 @@ async function doKeepalive(): Promise<void> {
       throw new Error('Tableau auth expired')
     }
 
+    // Check for login form — home page can load with expired cookies without redirecting
+    const hasLoginForm = await page.$('input[type="password"], input#username, [data-testid="login"]')
+      .then(el => !!el).catch(() => false)
+    if (hasLoginForm) {
+      throw new Error('Tableau session expired — login form detected on home page')
+    }
+
     // SF keepalive
     console.log('[sync-daemon] keepalive: navigating Salesforce…')
     await page.goto(SF_BASE_URL, { waitUntil: 'networkidle', timeout: 30_000 })

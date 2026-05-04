@@ -819,6 +819,20 @@ export async function scrapePodCcspRaw(seedTerritories: string[] = [], driveFold
         }
       }
 
+      if (!csvPath) {
+        // Check if download failure is caused by auth expiry
+        const currentUrl = page.url()
+        const hasLoginForm = await page.$('input[type="password"], input#username, [data-testid="login"]')
+          .then(el => !!el).catch(() => false)
+        const isLoginPage = !currentUrl.includes('10ay.online.tableau.com') ||
+          currentUrl.includes('/auth') || currentUrl.includes('/login') ||
+          hasLoginForm
+        if (isLoginPage) {
+          _tableauSessionExpired = true
+          console.warn('[ccsp] POD pre-scrape: login page detected after download failure — marking session expired')
+        }
+      }
+
       if (csvPath) {
         const csvText = readFileSync(csvPath, 'utf8')
         rows = parseCsvToObjects(csvText)
