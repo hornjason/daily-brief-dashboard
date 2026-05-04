@@ -8535,13 +8535,16 @@ Decision: DONE — createEventsRouter() factory created. streamSSE, google, redh
 ---
 
 ### BKL-ARCH-04 | SetupPage.tsx — 4,171-line wizard with embedded sub-components and polling
-Status: 🟡 IN PROGRESS
+Status: 🔴 OPEN (needs fresh run)
 Priority: P2
 Size: XL
 Source: Serena architecture audit 2026-05-01
-Files: dashboard/src/pages/SetupPage.tsx (4,171 lines)
+Files: dashboard/src/pages/SetupPage.tsx (3,075 lines on main as of 2026-05-03)
 Description: Six wizard steps, four polling hooks, AutoBootstrapForm, AEsCustomersSection, DataSourcesSection — all in one file. Components defined here have no test surface; they cannot be rendered without the full Setup context.
 Solution: Extract each step (Step0–Step6, DataSources, AE/Customer config) to its own component file with explicit props. Each becomes individually testable. Quinn can audit one step at a time.
+Stopped at: Marcus ran extraction from stale worktree (branched at 2239230b0, before DataSourcesSection was removed in BKL-ARCH-12). Worktree's SetupPage.tsx contaminated. AEsCustomersSection.tsx was correctly extracted (2073 lines, zero DataSourcesSection refs) but cannot be merged without re-running against current main. Next step: fresh Marcus dispatch from current main (d101265ba), extract AEsCustomersSection only. Regression tests ready:
+- REG-ARCH-04-01: SetupPage.tsx < 1500 lines
+- REG-ARCH-04-02: dashboard/src/pages/setup/AEsCustomersSection.tsx exists + exports AEsCustomersSection
 
 ---
 

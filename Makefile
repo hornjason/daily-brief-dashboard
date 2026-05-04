@@ -740,7 +740,7 @@ sync-up: sync-down
 	  --memory=4g \
 	  --restart=unless-stopped \
 	  --name pai-sync-l3 \
-	  localhost/daily-brief-dashboard:latest
+	  $(IMAGE_L4)
 	@echo "Sync daemon running"
 
 sync-down:
@@ -774,7 +774,7 @@ sync-up-vnc: sync-down
 	  --shm-size=2g \
 	  --memory=4g \
 	  --name pai-sync-l3 \
-	  localhost/daily-brief-dashboard:latest
+	  $(IMAGE_L4)
 	@echo "Sync daemon running with VNC at http://localhost:6082"
 
 # ── All environments ──────────────────────────────────────────────────────────
