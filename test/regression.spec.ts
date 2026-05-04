@@ -1896,8 +1896,6 @@ test.describe('Domain inference surgical fixes (BKL-DOM-INF-01)', () => {
 // REG-ARCH-04: BKL-ARCH-04 — AEsCustomersSection extracted to its own file
 test.describe('AEsCustomersSection extraction (BKL-ARCH-04)', () => {
   test('REG-ARCH-04-01: AEsCustomersSection.tsx exists and exports AEsCustomersSection', () => {
-    const fs = require('fs')
-    const path = require('path')
     const filePath = path.join(__dirname, '../dashboard/src/pages/setup/AEsCustomersSection.tsx')
     expect(fs.existsSync(filePath)).toBe(true)
     const src = fs.readFileSync(filePath, 'utf-8')
@@ -1905,8 +1903,6 @@ test.describe('AEsCustomersSection extraction (BKL-ARCH-04)', () => {
   })
 
   test('REG-ARCH-04-02: SetupPage.tsx line count is below 2200', () => {
-    const fs = require('fs')
-    const path = require('path')
     const filePath = path.join(__dirname, '../dashboard/src/pages/SetupPage.tsx')
     const src = fs.readFileSync(filePath, 'utf-8')
     const lineCount = src.split('\n').length
@@ -1919,8 +1915,6 @@ test.describe('AEsCustomersSection extraction (BKL-ARCH-04)', () => {
 // recordConnectionSuccess/Failure use ConnectionId 'rh'/'sf' (separate key space) and are allowed.
 test.describe('Scraper service name canonicalization (BKL-ARCH-SCRAPER-02)', () => {
   test('REG-SCRAPER-02-01: scraper-manager.ts circuit breaker map uses rh-cases not rh', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf-8')
     // The circuitBreakers object must use 'rh-cases' as its key
     expect(src).toContain("'rh-cases': new CircuitBreaker('rh-cases'")
@@ -1934,8 +1928,6 @@ test.describe('Scraper service name canonicalization (BKL-ARCH-SCRAPER-02)', () 
   })
 
   test('REG-SCRAPER-02-02: scraper-manager.ts has zero occurrences of bare "salesforce" as a scraper key', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf-8')
     const bareSfMatches = src.match(/'salesforce'|"salesforce"/g) ?? []
     expect(bareSfMatches).toHaveLength(0)
@@ -1945,8 +1937,6 @@ test.describe('Scraper service name canonicalization (BKL-ARCH-SCRAPER-02)', () 
 // REG-SCRAPER-05: BKL-ARCH-SCRAPER-05 — AuthExpiredError relocated to src/scraper-errors.ts
 test.describe('CcspAuthExpiredError relocation (BKL-ARCH-SCRAPER-05)', () => {
   test('REG-SCRAPER-05-01: src/scraper-errors.ts exists and exports CcspAuthExpiredError', () => {
-    const fs = require('fs')
-    const path = require('path')
     const filePath = path.join(__dirname, '../src/scraper-errors.ts')
     expect(fs.existsSync(filePath)).toBe(true)
     const src = fs.readFileSync(filePath, 'utf-8')
@@ -1954,8 +1944,6 @@ test.describe('CcspAuthExpiredError relocation (BKL-ARCH-SCRAPER-05)', () => {
   })
 
   test('REG-SCRAPER-05-02: scripts/sync-pod-l3.ts imports CcspAuthExpiredError from src/scraper-errors.ts', () => {
-    const fs = require('fs')
-    const path = require('path')
     const filePath = path.join(__dirname, '../scripts/sync-pod-l3.ts')
     const src = fs.readFileSync(filePath, 'utf-8')
     // Must import CcspAuthExpiredError from src/scraper-errors.ts (not only from ccsp-retry.ts)
@@ -1969,8 +1957,6 @@ test.describe('CcspAuthExpiredError relocation (BKL-ARCH-SCRAPER-05)', () => {
 // src/lib/node-role.ts (isPrimary(), assertPrimary(), etc.)
 test.describe('NODE_ROLE policy module adoption (Issue #9 user stories 1-4)', () => {
   test('REG-NODE-ROLE-01-01: scrape-api.ts has zero direct process.env.NODE_ROLE reads in logic', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf-8')
     // Strip comments before checking — comment refs are allowed
     const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
@@ -1979,8 +1965,6 @@ test.describe('NODE_ROLE policy module adoption (Issue #9 user stories 1-4)', ()
   })
 
   test('REG-NODE-ROLE-01-02: auth-routes.ts has zero direct process.env.NODE_ROLE reads', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/auth-routes.ts'), 'utf-8')
     const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
     const matches = noComments.match(/process\.env\.NODE_ROLE/g) ?? []
@@ -1988,8 +1972,6 @@ test.describe('NODE_ROLE policy module adoption (Issue #9 user stories 1-4)', ()
   })
 
   test('REG-NODE-ROLE-01-03: node-role-routes.ts reads role via isPrimary(), not process.env', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/node-role-routes.ts'), 'utf-8')
     const noComments = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
     const matches = noComments.match(/process\.env\.NODE_ROLE/g) ?? []
@@ -2001,8 +1983,6 @@ test.describe('NODE_ROLE policy module adoption (Issue #9 user stories 1-4)', ()
 // REG-SEC-32: BKL-SEC-32 — Solr query injection escape in debug-fields endpoint
 test.describe('Solr query injection prevention (BKL-SEC-32)', () => {
   test('REG-SEC-32-01: scrape-api.ts debug-fields escapes backslash and double-quote before Solr interpolation', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf-8')
     // Both escaping calls must be present: backslash first, then double-quote
     expect(src).toContain(".replace(/\\\\/g, '\\\\\\\\')") // .replace(/\\/g, '\\\\')
@@ -2015,8 +1995,6 @@ test.describe('Solr query injection prevention (BKL-SEC-32)', () => {
 // REG-SEC-33: BKL-SEC-33 — User-reachable error responses use sanitizeErr, not raw e.message
 test.describe('sanitizeErr consistency in API responses (BKL-SEC-33)', () => {
   test('REG-SEC-33-01: scrape-api.ts test-discover error body uses sanitizeErr', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/scrape-api.ts'), 'utf-8')
     // The test-discover error push must use sanitizeErr, not raw e?.message
     expect(src).toMatch(/results\.push\(.*error: sanitizeErr\(e\)/)
@@ -2026,8 +2004,6 @@ test.describe('sanitizeErr consistency in API responses (BKL-SEC-33)', () => {
   })
 
   test('REG-SEC-33-02: scraper-manager.ts telemetry log/persist errors use sanitizeErr', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/scraper-manager.ts'), 'utf-8')
     // failed to load and persist must use sanitizeErr
     expect(src).toMatch(/failed to load scrape log.*sanitizeErr/)
@@ -2041,8 +2017,6 @@ test.describe('sanitizeErr consistency in API responses (BKL-SEC-33)', () => {
 // immediately via _onContextRecovered, not lazily on their next scrape cycle.
 test.describe('adoptScrapeContext fires recovery callback (BKL-ARCH-SCRAPER-07)', () => {
   test('REG-SCRAPER-07-01: rh-scraper.ts adoptScrapeContext calls _onContextRecovered after assignments', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf-8')
     // adoptScrapeContext must contain the BKL-ARCH-SCRAPER-07 recovery callback invocation
     const adoptFn = src.slice(src.indexOf('export function adoptScrapeContext'), src.indexOf('console.log(\'[rh-scraper] adopted login context'))
@@ -2054,8 +2028,6 @@ test.describe('adoptScrapeContext fires recovery callback (BKL-ARCH-SCRAPER-07)'
 // REG-CDP-AUDIT-02: BKL-CONN-TABLEAU-CDP-AUDIT-02 — restoreTableauSession uses safeCookieOp
 test.describe('restoreTableauSession uses safeCookieOp (BKL-CONN-TABLEAU-CDP-AUDIT-02)', () => {
   test('REG-CDP-AUDIT-02-01: ccsp-scraper.ts restoreTableauSession has no custom Promise.race for ctx.cookies', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf-8')
     const restoreFn = src.slice(src.indexOf('async function restoreTableauSession'), src.indexOf('async function saveTableauSession'))
     // Must use safeCookieOp for ctx.cookies() and ctx.addCookies()
@@ -2072,8 +2044,6 @@ test.describe('restoreTableauSession uses safeCookieOp (BKL-CONN-TABLEAU-CDP-AUD
 // runSupportableDiscoverAndScrape calls should remain in the function body.
 test.describe('Supportable removed from live execution path (BKL-ARCH-SCRAPER-09)', () => {
   test('REG-SCRAPER-09-01: scheduleSupportableSync is a no-op stub in background-scheduler.ts', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/background-scheduler.ts'), 'utf-8')
     const fnStart = src.indexOf('export function scheduleSupportableSync')
     expect(fnStart).toBeGreaterThan(-1)
@@ -2085,8 +2055,6 @@ test.describe('Supportable removed from live execution path (BKL-ARCH-SCRAPER-09
   })
 
   test('REG-SCRAPER-09-02: supportableScrapeRunning guard removed from isAnyScraperRunning', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/background-scheduler.ts'), 'utf-8')
     const fnStart = src.indexOf('function isAnyScraperRunning')
     const fnEnd = src.indexOf('}', fnStart) + 1
@@ -2100,8 +2068,6 @@ test.describe('Supportable removed from live execution path (BKL-ARCH-SCRAPER-09
 // the SSO popup handler must be unregistered before losing the context reference.
 test.describe('startTableauLoginBrowser catch path cleanup (BKL-CONN-TABLEAU-CDP-AUDIT-01)', () => {
   test('REG-CDP-AUDIT-03-01: tableau-auth.ts catch block closes activePage before nulling it', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/tableau-auth.ts'), 'utf-8')
     const fnStart = src.indexOf('export async function startTableauLoginBrowser')
     const fnEnd = src.indexOf('\n}', fnStart) + 2
@@ -2121,8 +2087,6 @@ test.describe('startTableauLoginBrowser catch path cleanup (BKL-CONN-TABLEAU-CDP
 // sf-auth.ts must not call adoptSupportableContext or closeSupportableContext.
 test.describe('Supportable imports removed from auth-routes and sf-auth (BKL-ARCH-SCRAPER-09-FOLLOW-03)', () => {
   test('REG-SCRAPER-09-F3-01: auth-routes.ts has no import from supportable-scraper.ts', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/auth-routes.ts'), 'utf-8')
     expect(src).not.toContain("from './supportable-scraper.ts'")
     expect(src).not.toContain('runSupportableScrape')
@@ -2131,8 +2095,6 @@ test.describe('Supportable imports removed from auth-routes and sf-auth (BKL-ARC
   })
 
   test('REG-SCRAPER-09-F3-02: sf-auth.ts has no adoptSupportableContext or closeSupportableContext calls', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/sf-auth.ts'), 'utf-8')
     expect(src).not.toContain('adoptSupportableContext')
     expect(src).not.toContain('closeSupportableContext')
@@ -2144,8 +2106,6 @@ test.describe('Supportable imports removed from auth-routes and sf-auth (BKL-ARC
 // CCSP subset format is intentional and documented.
 test.describe('SF session restore and CCSP subset format (BKL-ARCH-SCRAPER-08)', () => {
   test('REG-SCRAPER-08-01: sf-scraper.ts has restoreSfSession and calls it from initSfContext', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/sf-scraper.ts'), 'utf-8')
     expect(src).toContain('async function restoreSfSession()')
     // restoreSfSession must be called inside initSfContext
@@ -2154,8 +2114,6 @@ test.describe('SF session restore and CCSP subset format (BKL-ARCH-SCRAPER-08)',
   })
 
   test('REG-SCRAPER-08-02: ccsp-scraper.ts CCSP subset format comment documents intentional design', () => {
-    const fs = require('fs')
-    const path = require('path')
     const src = fs.readFileSync(path.join(__dirname, '../src/ccsp-scraper.ts'), 'utf-8')
     // CCSP format uses cookies subset with savedAt — must be documented as intentional
     expect(src).toContain('BKL-ARCH-SCRAPER-08')
