@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { fetchGeminiWithRetry } from './gemini-fetch.ts'
-import { getGeminiModelLite } from './settings-api.ts'
+import { getGeminiModelLite } from './ai-config.ts'
 import { readDocClassCache, writeDocClassCache } from './cache-layer.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ export async function classifyAndExtract(
 
   // BKL-AI-COST-02/04: skip classification for docs older than docClassifyMaxAgeDays (0 = unlimited)
   if (doc.modifiedTime) {
-    const { getAiConfig } = await import('./settings-api.ts')
+    const { getAiConfig } = await import('./ai-config.ts')
     const maxAgeDays = getAiConfig().docClassifyMaxAgeDays ?? 0
     if (maxAgeDays > 0) {
       const modifiedDate = new Date(doc.modifiedTime)

@@ -3,7 +3,7 @@
 // Pricing defaults: Gemini 2.5 Flash — $0.15/1M input tokens, $0.60/1M output tokens.
 // Configurable via /api/settings/ai (BKL-SR02).
 
-import { getAiConfig } from './settings-api.ts'
+import { getAiConfig } from './ai-config.ts'
 
 export interface GeminiUsageEntry {
   timestamp: string    // ISO-8601

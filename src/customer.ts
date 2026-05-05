@@ -21,7 +21,7 @@ import type { RenderContext as SignalRenderContext, SignalBundle } from './custo
 import { isFreeOrTrial } from './health-score.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { fetchGeminiWithRetry } from './gemini-fetch.ts'
-import { getAiConfig, getGeminiModel, getGeminiModelLite, getAutomationConfig } from './settings-api.ts'
+import { getAiConfig, getGeminiModel, getGeminiModelLite, getAutomationConfig } from './ai-config.ts'
 import { rankItems, buildSynthesisPrompt } from './brief-pipeline.ts'
 import { classifyDocs } from './doc-extraction.ts'
 import { getStatus, type ScraperName } from './scraper-status-store.ts'

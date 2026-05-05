@@ -16,6 +16,7 @@ import { supportableScrapeRunning, adoptSupportableContext } from './src/support
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning, adoptCcspContext } from './src/ccsp-scraper.ts'
 import { initCacheLayer, createCacheRouter, readPipelineCache } from './src/cache-layer.ts'
 import { initSettingsApi, createSettingsRouter } from './src/settings-api.ts'
+import { initAiConfig } from './src/ai-config.ts'
 import { createNodeRoleRouter } from './src/node-role-routes.ts'
 import { createRegionAccessRouter } from './src/region-access-routes.ts'
 import { initAuthRoutes, createAuthRouter } from './src/auth-routes.ts'
@@ -118,6 +119,7 @@ initSfSyncFromCache(readPipelineCache)
 initJobPersistence(CACHE_DIR)
 initDashboardRoutes({ cacheDir: CACHE_DIR, rhCasesCachePath: RH_CASES_CACHE_PATH, dataSourcesPath: DATA_SOURCES_PATH })
 initSettingsApi(DATA_SOURCES_PATH, SETTINGS_PATH)
+initAiConfig(DATA_SOURCES_PATH)
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'your-admin@example.com'
 const SF_REPORT_ID   = process.env.SF_REPORT_ID ?? ''
 const SF_SESSION_PATH = process.env.SF_SESSION

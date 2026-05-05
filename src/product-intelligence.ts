@@ -9,7 +9,7 @@
 import { resolve } from 'path'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModelLite } from './settings-api.ts'
+import { getGeminiModelLite } from './ai-config.ts'
 import { sanitizeErr } from './utils.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────

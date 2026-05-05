@@ -3,7 +3,7 @@
 // private to setup-routes.ts. Extracted here so both modules can import them.
 
 import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModel, getGeminiModelLite } from './settings-api.ts'
+import { getGeminiModel, getGeminiModelLite } from './ai-config.ts'
 
 /** Legal suffixes to strip from company names before Clearbit lookup */
 export const LEGAL_SUFFIXES = /,?\s*\b(Inc\.?|LLC\.?|L\.?L\.?C\.?|Corp\.?|Corporation|Ltd\.?|Limited|L\.?P\.?|Co(?:-?op)?\.?|Group|Holdings|Incorporated)\s*$/i

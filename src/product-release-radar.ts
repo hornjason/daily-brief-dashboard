@@ -20,7 +20,7 @@ import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModel } from './settings-api.ts'
+import { getGeminiModel } from './ai-config.ts'
 import { sanitizeErr } from './utils.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────

@@ -37,7 +37,7 @@ import { fetchCustomerAccountNumbers, normalizeRows } from './sheets.ts'
 import { writeSheetCache, readPipelineCache } from './cache-layer.ts'
 import type { PipelineRecord } from './pipeline.ts'
 import { enqueueScraperTask } from './background-scheduler.ts'
-import { getAiConfig } from './settings-api.ts'
+import { getAiConfig } from './ai-config.ts'
 
 import { getScrapeContext } from './rh-scraper.ts'
 // BKL-ARCH-L4-SPLIT: tableau-auth stubbed (see comment above on ccsp-scraper)

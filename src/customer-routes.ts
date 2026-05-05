@@ -21,7 +21,7 @@ import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { getCachedExpansionOpportunities, generateExpansionOpportunities, toCustomerSlug as toExpansionSlug } from './expansion-opportunities.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
 import { generateAndSaveAccountPlan, readAccountPlan } from './account-plan.ts'
-import { getAiConfig } from './settings-api.ts'
+import { getAiConfig } from './ai-config.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''

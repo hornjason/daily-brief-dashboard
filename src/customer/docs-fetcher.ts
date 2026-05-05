@@ -10,7 +10,7 @@ import type { Customer, DriveFile } from '../types.ts'
 import { driveClient, escapeQ } from '../lib/drive-client.ts'
 import { aes } from '../server-state.ts'
 import { readDocContentCache, writeDocContentCache } from '../cache-layer.ts'
-import { getGeminiModelLite } from '../settings-api.ts'
+import { getGeminiModelLite } from '../ai-config.ts'
 
 const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../../config')
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')

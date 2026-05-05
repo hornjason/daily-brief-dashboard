@@ -9342,6 +9342,21 @@ Files: dashboard/src/components/SettingsCard.tsx (new, 66 lines), dashboard/src/
 Description: Shared save/cancel/dirty-state/error chrome extracted from 5 settings panels. Net −140 lines across panels; +152 lines in shared modules. AiIntelligenceSettings adopted hook but not SettingsCard wrapper (4-sibling-card layout differs).
 Decision: DONE 2026-05-04 — tsc clean, Quinn visual review pending on prod. Issue #57 closed.
 
+### BKL-ARCH-AI-CONFIG-01 | Extract AiConfig + AutomationConfig from settings-api.ts → src/ai-config.ts (Issue #51)
+Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
+Source: fallow circular dependency report — ai/automation config functions embedded in settings-api.ts created cycles
+Files: src/ai-config.ts (new, 80 lines), src/settings-api.ts (refactored), server.ts, 17 caller files (import line only), test/unit/ai-config.test.ts (new, 58 lines)
+Description: Extracted AiConfig interface + getAiConfig/getGeminiModel/getGeminiModelLite and AutomationConfig interface + getAutomationConfig into standalone src/ai-config.ts. settings-api.ts now re-exports via `export type` for interfaces, `export` for values. initAiConfig() wired into initSettingsApi() call in server.ts. 17 callers updated to import from ai-config.ts directly. 6 unit tests added.
+Decision: DONE 2026-05-04 — tsc clean, 28 passed/5 skipped on 7776, Quinn+Rook both PASS. TypeScript export type fix applied for Bun runtime compatibility. Issue #51 closed.
+
+### BKL-DEAD-CODE-AUTOMATION-SETTINGS-01 | AutomationSettings.tsx imported in SetupPage.tsx but never rendered (P3)
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Quinn audit 2026-05-05 (settings panel refactor post-ship review)
+Files: dashboard/src/components/AutomationSettings.tsx, dashboard/src/pages/SetupPage.tsx line 6
+Description: AutomationSettings.tsx is imported at SetupPage.tsx:6 but never rendered anywhere in the live UI. The render site was removed in commit ca876e931. Component was still updated during this refactor (correctly, it's valid code) but reaches no users.
+Fix: Either wire it back into the Setup page (if intended) or delete the file and remove the import from SetupPage.tsx.
+Can we test: YES — grep for AutomationSettings in SetupPage.tsx JSX confirms zero render sites.
+
 ### BKL-TEST-PARALLEL-ISOLATION-01 | Full Playwright suite: 24 failures from snapshot contention in parallel runs (P2)
 Priority: P2 | Size: M | Status: 🔴 OPEN
 Source: Full npx playwright test test/api/ --project=test run 2026-05-04 showed 24 failures; each spec passes in isolation

@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import type { DriveFile } from './types.ts'
-import { getAutomationConfig } from './settings-api.ts'
+import { getAutomationConfig } from './ai-config.ts'
 
 export interface CustomerDocsCorpusFile {
   name: string
