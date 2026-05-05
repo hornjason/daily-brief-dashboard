@@ -47,7 +47,7 @@ describe('BKL-DRIVE-SCAFFOLD-CACHE-01: scaffold cache persistence', () => {
     writeScaffoldCache(PARENT_ID, entry)
     const cache = readScaffoldCache()
 
-    expect(cache[PARENT_ID]).toEqual(entry)
+    expect(cache[PARENT_ID]).toEqual({ ...entry, productSubfolders: {} })
   })
 
   test('writeScaffoldCache preserves existing data-sources.json fields', async () => {
@@ -57,7 +57,7 @@ describe('BKL-DRIVE-SCAFFOLD-CACHE-01: scaffold cache persistence', () => {
     const raw = JSON.parse(readFileSync(resolve(TMP, 'data-sources.json'), 'utf-8'))
     // podConfig written by beforeEach must survive the scaffold write
     expect(raw.podConfig).toBeDefined()
-    expect(raw.scaffoldCache[PARENT_ID]).toEqual({ configFolderId: CONFIG_ID, productsFolderId: PRODUCTS_ID })
+    expect(raw.scaffoldCache[PARENT_ID]).toEqual({ configFolderId: CONFIG_ID, productsFolderId: PRODUCTS_ID, productSubfolders: {} })
   })
 
   test('writeScaffoldCache accumulates multiple parentFolderIds', async () => {

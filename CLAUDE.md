@@ -29,6 +29,13 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - Config files mutated at runtime is intentional — config IS the persistence layer
 - In-memory mutex is safe — single-threaded Bun process
 
+**L3 vs L4 — test prerequisites (never confuse these):**
+- **L4** = browser-based scrapers (RH Portal cases via `POST /api/scrape/rh`, Tableau CCSP, SF pipeline browser). Requires RH offline token, active Salesforce session, Tableau login.
+- **L3** = Drive-read-only (reads sheets/CSVs already written by L4). Requires Google Drive auth only. No RH Portal, no Salesforce session, no Tableau.
+- **bootstrap-e2e runs on the hero image (L3-only)**. The ONLY pre-flight requirement is Google Drive auth (`/api/auth/google/status`). Never add RH Portal, Salesforce, or Tableau as pre-flight gates to bootstrap-e2e — those are L4 dependencies the hero image does not have.
+- **RH offline token** (`REDHAT_OFFLINE_TOKEN` in `.env`) is for RH support case scraping only — not for bootstrap, not for Drive, not for E2E pre-flight checks.
+- **Mac Mini spec drift warning**: The Mac Mini repo at `/Users/jasonhorn/DailyBriefDashboard/` can drift from the laptop repo. When the bootstrap-e2e spec references L4 connections as pre-flight, it is outdated — sync the spec from the laptop repo before running.
+
 **Supportable is permanently disabled — zero exceptions:**
 - Never call `/api/scrape/supportable`, `/api/scrape/supportable/discover`, or any `/supportable` endpoint
 - Account number discovery uses RH Portal sidebar autocomplete (`POST /api/scrape/rh`)
