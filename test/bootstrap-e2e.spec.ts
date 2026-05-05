@@ -35,7 +35,7 @@ const DRIVE_PARENT_URL = process.env.TEST_DRIVE_PARENT_URL ?? ''
 const AE_NAME = process.env.TEST_AE_NAME ?? ''
 const REGION = process.env.TEST_REGION ?? 'west-commercial'
 const POD = process.env.TEST_POD ?? 'west-commercial.WEST_COMM_CORP_NORTHWEST'
-const TERRITORY = process.env.TEST_TERRITORY ?? '01'
+const TERRITORY = process.env.TEST_TERRITORY ?? 'WEST_COMM_CORP_NORTHWEST_TERR01'
 const SF_REPORT_ID = process.env.TEST_SF_REPORT_ID ?? ''
 const TABLEAU_TERRITORY = process.env.TEST_TABLEAU_TERRITORY ?? 'WEST_COMM_CORP_NORTHWEST_TERR01'
 const CUSTOMER_NAMES = (process.env.TEST_CUSTOMER_NAMES ?? '').split(',').map(s => s.trim()).filter(Boolean)
@@ -457,7 +457,8 @@ test('territory dropdown', async ({ page, request }) => {
   if (lookup.status === 404) test.skip(true, '/api/territory-lookup not present on this build')
   expect(lookup.status).toBe(200)
   expect(lookup.body?.aeName, 'territory lookup returned no aeName').toBeTruthy()
-  expect(Array.isArray(lookup.body?.customers), 'territory lookup returned no customers array').toBe(true)
+  const accountsArr = lookup.body?.accounts ?? lookup.body?.customers
+  expect(Array.isArray(accountsArr), 'territory lookup returned no accounts/customers array').toBe(true)
 
   // UI smoke — Setup page loads and the AEs section is reachable.
   await page.goto(`${BASE}/dashboard/setup`)

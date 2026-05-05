@@ -20,6 +20,8 @@
  * (probeTimestamps.sf was dead code and dropped).
  */
 import { Hono } from 'hono'
+import { existsSync, readFileSync } from 'fs'
+import { GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { getRhStatus, startLoginBrowser, cancelLoginBrowser } from './rh-auth.ts'
 import { startSfLoginBrowser, cancelSfLoginBrowser } from './sf-auth.ts'
 import { getConfiguredTransport } from './case-client.ts'
@@ -56,6 +58,19 @@ export function initAuthRoutes(opts: {
 
 export function createAuthRouter(): Hono {
   const r = new Hono()
+
+  // GET /api/auth/google/status — Drive OAuth token presence check
+  r.get('/api/auth/google/status', (c) => {
+    const hasToken = existsSync(GOOGLE_UNIFIED_TOKEN_PATH)
+    if (!hasToken) return c.json({ connected: false, driveReady: false })
+    try {
+      const tok = JSON.parse(readFileSync(GOOGLE_UNIFIED_TOKEN_PATH, 'utf-8'))
+      const connected = !!(tok?.refresh_token)
+      return c.json({ connected, driveReady: connected })
+    } catch {
+      return c.json({ connected: false, driveReady: false })
+    }
+  })
 
   // GET /api/auth/redhat/status — Session health, scrape timestamps, login state
   r.get('/api/auth/redhat/status', async (c) => {
