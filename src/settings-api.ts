@@ -100,7 +100,7 @@ export interface SchedulerConfig {
   rhLastRun: string | null
 }
 
-export const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
+const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   ccspTime: '06:30',
   supportableTime: '07:00',
   territoryTime: '01:45',

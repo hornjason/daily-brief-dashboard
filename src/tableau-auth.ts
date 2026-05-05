@@ -40,7 +40,7 @@ let activePage: Page | null = null
 let loginInProgress = false
 let _activeSsoPopupHandler: ((page: Page) => void) | null = null
 
-export function isTableauLoginInProgress(): boolean {
+function isTableauLoginInProgress(): boolean {
   return loginInProgress
 }
 
@@ -332,6 +332,6 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
 }
 
 /** Cancel in-progress login and close the isolated context. */
-export async function cancelTableauLoginBrowser(): Promise<void> {
+async function cancelTableauLoginBrowser(): Promise<void> {
   await _closeContext({ harvest: false })
 }
