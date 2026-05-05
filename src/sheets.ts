@@ -4,6 +4,11 @@ import { makeAuth, withQuotaRetry } from './google.ts'
 import { driveClient } from './lib/drive-client.ts'
 import type { Customer, SheetRow, ProductSubscription } from './types.ts'
 import { aes, patchAe } from './server-state.ts'
+import {
+  runResolverChain,
+  parseCcspRows,
+  type CcspResolverContext,
+} from './lib/ccsp-resolvers.ts'
 
 const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const SHEETS_TOKEN_PATH = process.env.SHEETS_TOKEN ?? resolve(CONFIG_DIR_PATH, '.sheets-token.json')
@@ -352,224 +357,108 @@ export interface CCSPRecord {
   productOfferingGroup?: string  // column S (index 18) — e.g. "RHEL"; optional, absent in older sheet formats
 }
 
-function normalizePartner(raw: string): string {
-  const lower = raw.toLowerCase()
-  if (lower.includes('amazon') || lower.includes('aws')) return 'AWS'
-  if (lower.includes('google')) return 'Google'
-  if (lower.includes('microsoft')) return 'Microsoft'
-  return 'Other'
-}
+export { parseCcspRows } from './lib/ccsp-resolvers.ts'
 
 export async function fetchCCSPData(
   knownSheetIds?: string[] | { sheetId: string; aeName: string }[],
 ): Promise<{ records: CCSPRecord[]; fileIds: string[] }> {
-  const sheetsAuth = makeAuth(SHEETS_TOKEN_PATH)
-  const sheets = google.sheets({ version: 'v4', auth: sheetsAuth })
+  const sheets = google.sheets({ version: 'v4', auth: makeAuth(SHEETS_TOKEN_PATH) })
+  const { resolvedIds, aeMap } = unpackKnownSheetIds(knownSheetIds)
+  const pairs = resolvedIds?.length
+    ? resolvedIds.map((id) => ({ spreadsheetId: id, ccspTab: 'CCSP Data' }))
+    : await discoverCcspPairsFromBfs(sheets)
+  if (!pairs.length) return { records: [], fileIds: [] }
 
   const allRecords: CCSPRecord[] = []
-  const ccspFileIds: string[] = []
+  const fileIds: string[] = []
+  for (const { spreadsheetId, ccspTab } of pairs) {
+    fileIds.push(spreadsheetId)
+    const ctx = buildResolverContext(spreadsheetId, ccspTab, aeMap, sheets, !!resolvedIds?.length)
+    const rows = await runResolverChain(ctx)
+    if (!rows) { console.warn(`[ccsp-read] sheet ${spreadsheetId}: all resolvers returned <2 rows — skipping`); continue }
+    allRecords.push(...parseCcspRows(rows, spreadsheetId, aeMap.get(spreadsheetId)))
+  }
+  return { records: allRecords, fileIds }
+}
 
-  // Detect whether caller passed AE-tagged pairs or plain string IDs
-  const aeMap = new Map<string, string>() // sheetId → aeName
-  let resolvedIds: string[] | undefined
-  if (knownSheetIds?.length) {
-    if (typeof knownSheetIds[0] === 'string') {
-      resolvedIds = knownSheetIds as string[]
-    } else {
-      const pairs = knownSheetIds as { sheetId: string; aeName: string }[]
-      resolvedIds = pairs.map(p => p.sheetId)
-      for (const p of pairs) aeMap.set(p.sheetId, p.aeName)
+// Detect whether caller passed AE-tagged pairs or plain string IDs.
+function unpackKnownSheetIds(
+  knownSheetIds?: string[] | { sheetId: string; aeName: string }[],
+): { resolvedIds?: string[]; aeMap: Map<string, string> } {
+  const aeMap = new Map<string, string>()
+  if (!knownSheetIds?.length) return { aeMap }
+  if (typeof knownSheetIds[0] === 'string') {
+    return { resolvedIds: knownSheetIds as string[], aeMap }
+  }
+  const pairs = knownSheetIds as { sheetId: string; aeName: string }[]
+  for (const p of pairs) aeMap.set(p.sheetId, p.aeName)
+  return { resolvedIds: pairs.map((p) => p.sheetId), aeMap }
+}
+
+// Build the resolver context for one (spreadsheetId, tab) pair. Drive-folder
+// fallback dependencies are only injected when caller supplied known IDs —
+// without them we have no AE context to anchor the search.
+function buildResolverContext(
+  spreadsheetId: string,
+  knownTab: string,
+  aeMap: Map<string, string>,
+  sheets: ReturnType<typeof google.sheets>,
+  enableDriveFolderFallback: boolean,
+): CcspResolverContext {
+  const ctx: CcspResolverContext = {
+    spreadsheetId,
+    knownTab,
+    aeName: aeMap.get(spreadsheetId),
+    sheets,
+  }
+  if (enableDriveFolderFallback) {
+    ctx.lookupAe = (sid, name) => {
+      const entry = name
+        ? aes.find((a) => a.name === name)
+        : aes.find((a) => a.ccspSheetId === sid)
+      return entry ? { name: entry.name, driveFolderId: entry.driveFolderId } : undefined
     }
+    ctx.patchAe = patchAe
+    ctx.listSpreadsheetsUnder = getSpreadsheetIdsUnderRoot
+  }
+  return ctx
+}
+
+// BFS-based discovery of CCSP spreadsheet/tab pairs across configured parent
+// folders. Only used when caller does not pass known sheet IDs.
+async function discoverCcspPairsFromBfs(
+  sheets: ReturnType<typeof google.sheets>,
+): Promise<{ spreadsheetId: string; ccspTab: string }[]> {
+  const rootIds = getParentFolderIds()
+  if (!rootIds.length) return []
+
+  const spreadsheetIds: string[] = []
+  for (const rootId of rootIds) {
+    spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(rootId))
   }
 
-  // Fast path: use known sheet IDs directly (avoids expensive Drive BFS traversal
-  // which silently returns empty when Sheets API quota is hit).
-  let spreadsheetIdTabPairs: { spreadsheetId: string; ccspTab: string }[]
-
-  if (resolvedIds?.length) {
-    spreadsheetIdTabPairs = resolvedIds.map(id => ({ spreadsheetId: id, ccspTab: 'CCSP Data' }))
-  } else {
-    // Fallback: BFS scan of parent folder (expensive, quota-sensitive)
-    const rootIds = getParentFolderIds()
-    if (!rootIds.length) return { records: [], fileIds: [] }
-
-    const spreadsheetIds: string[] = []
-    for (const rootId of rootIds) {
-      spreadsheetIds.push(...await getSpreadsheetIdsUnderRoot(rootId))
-    }
-
-    const allMeta = await Promise.all(
-      spreadsheetIds.map((id) =>
-        sheets.spreadsheets.get({ spreadsheetId: id, fields: 'properties.title,sheets.properties.title' })
-          .then((res) => ({
-            id,
-            fileName: (res.data.properties?.title ?? '').toLowerCase(),
-            titles: (res.data.sheets ?? []).map((s) => s.properties?.title ?? ''),
-          }))
-          .catch(() => ({ id, fileName: '', titles: [] as string[] }))
-      )
-    )
-
-    spreadsheetIdTabPairs = []
-    for (const { id, fileName, titles } of allMeta) {
-      const ccspTab = titles.find((t) => t.toLowerCase().includes('ccsp'))
-        ?? (fileName.includes('ccsp') ? (titles[0] ?? null) : null)
-      if (ccspTab) spreadsheetIdTabPairs.push({ spreadsheetId: id, ccspTab })
-    }
-  }
-
-  for (const { spreadsheetId, ccspTab } of spreadsheetIdTabPairs) {
-    ccspFileIds.push(spreadsheetId)
-
-    const dataRes = await withQuotaRetry(
-      () => sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `'${ccspTab}'!A:AM`,  // A:AM = 39 cols — covers 32-col Tableau CSV with room to spare
-      }),
-      `ccsp-read ${spreadsheetId}`,
-    ).catch((e: any) => { console.warn(`[ccsp-read] sheet ${spreadsheetId} tab '${ccspTab}' read failed: ${e?.message} — will attempt tab discovery`); return null })
-
-    let rows = dataRes?.data.values ?? []
-    // Trigger tab discovery when: (a) fast-path tab returned <2 rows, or (b) fast-path tab threw an error (tab doesn't exist)
-    if ((rows.length < 2 || !dataRes) && resolvedIds?.length) {
-      console.warn(`[ccsp-read] fast-path sheet ${spreadsheetId} tab '${ccspTab}' returned <2 rows — attempting tab discovery`)
-      try {
-        const meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties.title' })
-        const allTabs = (meta.data.sheets ?? []).map(s => s.properties?.title ?? '')
-        console.log(`[ccsp-read] sheet ${spreadsheetId} tabs found: [${allTabs.join(', ')}]`)
-        // First: try any tab with 'ccsp' in name (but different from fast-path tab that already failed)
-        const ccspNamedTab = allTabs.find(t => t.toLowerCase().includes('ccsp') && t !== ccspTab)
-        // Fallback: try all remaining tabs (header validation will reject wrong-format tabs)
-        const tabsToTry = ccspNamedTab ? [ccspNamedTab] : allTabs.filter(t => t !== ccspTab)
-        for (const tab of tabsToTry) {
-          const safeTab = tab.replace(/'/g, "''")
-          const retryRes = await withQuotaRetry(
-            () => sheets.spreadsheets.values.get({ spreadsheetId, range: `'${safeTab}'!A:AM` }),
-            `ccsp-read retry ${spreadsheetId}`,
-          ).catch(() => null)
-          const retryRows = retryRes?.data.values ?? []
-          if (retryRows.length >= 2) {
-            console.log(`[ccsp-read] tab discovery succeeded with '${tab}'`)
-            rows = retryRows
-            break
-          }
-        }
-      } catch (e: any) { console.warn(`[ccsp-read] tab discovery error for ${spreadsheetId}: ${e?.message}`) }
-    }
-
-    // Drive-folder fallback: known sheet was empty AND tab discovery within it also failed.
-    // Look up the AE's driveFolderId and search it for an alternative CCSP spreadsheet.
-    if (rows.length < 2 && resolvedIds?.length) {
-      const aeName = aeMap.get(spreadsheetId)
-      const aeEntry = aeName
-        ? aes.find(a => a.name === aeName)
-        : aes.find(a => a.ccspSheetId === spreadsheetId)
-      const driveFolderId = aeEntry?.driveFolderId
-      if (driveFolderId) {
-        console.warn(`[ccsp-read] known sheet empty — searching AE Drive folder ${driveFolderId} for alternative CCSP sheet`)
-        try {
-          const candidateIds = await getSpreadsheetIdsUnderRoot(driveFolderId)
-
-          // Filter: only spreadsheets with "ccsp" in the filename
-          const candidateMeta = await Promise.all(
-            candidateIds.map(id =>
-              sheets.spreadsheets.get({ spreadsheetId: id, fields: 'properties.title,sheets.properties.title' })
-                .then(res => ({
-                  id,
-                  fileName: (res.data.properties?.title ?? '').toLowerCase(),
-                  tabs: (res.data.sheets ?? []).map(s => s.properties?.title ?? ''),
-                }))
-                .catch(() => ({ id, fileName: '', tabs: [] as string[] }))
-            )
-          )
-
-          let altSheetId: string | null = null
-          let altTab: string | null = null
-          let altRows: unknown[][] = []
-
-          for (const { id, fileName, tabs } of candidateMeta) {
-            if (id === spreadsheetId) continue  // skip the sheet we already know is empty
-            if (!fileName.includes('ccsp')) continue
-            const ccspTabName = tabs.find(t => t.toLowerCase().includes('ccsp'))
-            if (!ccspTabName) continue
-
-            const safeTab = ccspTabName.replace(/'/g, "''")
-            const altRes = await withQuotaRetry(
-              () => sheets.spreadsheets.values.get({ spreadsheetId: id, range: `'${safeTab}'!A:AM` }),
-              `ccsp-read alt ${id}`,
-            ).catch(() => null)
-            const candidateRows = altRes?.data.values ?? []
-            if (candidateRows.length >= 2) {
-              altSheetId = id
-              altTab = ccspTabName
-              altRows = candidateRows
-              break
-            }
-          }
-
-          const SHEET_ID_RE = /^[a-zA-Z0-9_-]{20,60}$/
-          if (altSheetId && altTab && altRows.length >= 2 && SHEET_ID_RE.test(altSheetId)) {
-            console.log(`[ccsp-read] found alternative CCSP sheet ${altSheetId} in AE folder — using instead`)
-            rows = altRows
-            // Persist so next run uses the correct sheet directly
-            const nameForPatch = aeName ?? aeEntry?.name
-            if (nameForPatch) patchAe(nameForPatch, { ccspSheetId: altSheetId })
-          } else {
-            console.warn(`[ccsp-read] no alternative CCSP sheet found in AE folder — skipping`)
-          }
-        } catch (e: any) {
-          console.warn(`[ccsp-read] Drive folder search failed for ${driveFolderId}: ${e?.message}`)
-        }
-      }
-    }
-
-    if (rows.length < 2) {
-      console.warn(`[ccsp-read] sheet ${spreadsheetId}: all tabs returned <2 rows — skipping`)
-      continue
-    }
-
-    const headers = (rows[0] ?? []).map((h: unknown) => String(h ?? '').trim())
-    // Flexible column detection — Tableau CSV headers vary between Raw Data and summary views.
-    // Raw Data: "Account Name", summary: may be "Account" or missing entirely.
-    const acctCol      = headers.findIndex((h) => {
-      const lower = h.toLowerCase()
-      return lower === 'account name' || lower === 'account' || lower === 'customer name' || lower === 'company'
-    })
-    const qtrCol       = headers.findIndex((h) => h.toLowerCase().includes('fiscal year quarter'))
-    const closeDateCol = headers.findIndex((h) => h.toLowerCase() === 'opportunity close date')
-    const partnerCol   = headers.findIndex((h) => h.toLowerCase().includes('financial partner'))
-    const acvCol       = headers.findIndex((h) => {
-      const lower = h.toLowerCase()
-      return lower === 'acv plus' || lower === 'acv+' || lower === 'acvplus'
-    })
-
-    if (acctCol < 0) {
-      console.warn(`[ccsp] sheet ${spreadsheetId}: no account name column found (tried: account name, account, customer name, company). Headers: [${headers.join(', ')}]. This usually means the Tableau scraper downloaded the summary view instead of Raw Data.`)
-    }
-    if (acvCol < 0) {
-      console.warn(`[ccsp] sheet ${spreadsheetId}: no ACV column found (tried: acv plus, acv+, acvplus). Headers: [${headers.join(', ')}]`)
-    }
-    if (acctCol < 0 || acvCol < 0) continue
-
-    for (const row of rows.slice(1)) {
-      const acvStr = String(row[acvCol] ?? '').replace(/[$,]/g, '').trim()
-      const acv = parseFloat(acvStr)
-      if (!acv || isNaN(acv)) continue
-
-      const productOfferingGroupRaw = String(row[18] ?? '').trim()
-      allRecords.push({
-        accountName:  String(row[acctCol] ?? '').trim(),
-        quarter:      qtrCol >= 0 ? String(row[qtrCol] ?? '').trim() : '',
-        closeDate:    closeDateCol >= 0 ? String(row[closeDateCol] ?? '').trim() : '',
-        cloudPartner: partnerCol >= 0 ? normalizePartner(String(row[partnerCol] ?? '')) : 'Other',
-        acvPlus:      acv,
-        ...(aeMap.has(spreadsheetId) ? { ae: aeMap.get(spreadsheetId)! } : {}),
-        ...(productOfferingGroupRaw ? { productOfferingGroup: productOfferingGroupRaw } : {}),
+  const allMeta = await Promise.all(
+    spreadsheetIds.map((id) =>
+      sheets.spreadsheets.get({
+        spreadsheetId: id,
+        fields: 'properties.title,sheets.properties.title',
       })
-    }
-  }
+        .then((res) => ({
+          id,
+          fileName: (res.data.properties?.title ?? '').toLowerCase(),
+          titles: (res.data.sheets ?? []).map((s) => s.properties?.title ?? ''),
+        }))
+        .catch(() => ({ id, fileName: '', titles: [] as string[] })),
+    ),
+  )
 
-  return { records: allRecords, fileIds: ccspFileIds }
+  const pairs: { spreadsheetId: string; ccspTab: string }[] = []
+  for (const { id, fileName, titles } of allMeta) {
+    const ccspTab = titles.find((t) => t.toLowerCase().includes('ccsp'))
+      ?? (fileName.includes('ccsp') ? (titles[0] ?? null) : null)
+    if (ccspTab) pairs.push({ spreadsheetId: id, ccspTab })
+  }
+  return pairs
 }
 
 export async function fetchCustomerSheetData(customer: Customer, knownSheetIds?: string[]): Promise<ProductSubscription[]> {

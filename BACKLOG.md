@@ -9342,6 +9342,41 @@ Files: dashboard/src/components/SettingsCard.tsx (new, 66 lines), dashboard/src/
 Description: Shared save/cancel/dirty-state/error chrome extracted from 5 settings panels. Net −140 lines across panels; +152 lines in shared modules. AiIntelligenceSettings adopted hook but not SettingsCard wrapper (4-sibling-card layout differs).
 Decision: DONE 2026-05-04 — tsc clean, Quinn visual review pending on prod. Issue #57 closed.
 
+### BKL-ARCH-RUN-COORD-01 | Extract run-coordinator to break background-scheduler↔bootstrap-orchestrator cycle (Issue #53)
+Priority: P2 | Size: S | Status: ✅ DONE 2026-05-04
+Source: fallow circular dependency report — background-scheduler imported isBootstrapRunning from bootstrap-orchestrator; bootstrap-orchestrator imported enqueueScraperTask from background-scheduler (dead import)
+Files: src/lib/run-coordinator.ts (new), src/background-scheduler.ts (import swap), src/bootstrap-orchestrator.ts (dead import removed + 14 sync call insertions), test/unit/run-coordinator.test.ts (new, 7 tests)
+Description: run-coordinator provides setRunning/isAnyRunning/enqueue. background-scheduler calls isAnyRunning() instead of isBootstrapRunning(). bootstrap-orchestrator syncs state at all 14 mutation sites via syncBootstrapRunningToCoordinator(). The enqueueScraperTask import in bootstrap-orchestrator was dead (0 call sites) — removed.
+Decision: DONE 2026-05-04 — tsc clean, 630 unit pass, 28 Playwright pass/5 skip on 7776, Quinn PASS, Rook PASS. Issue #53 closed.
+
+### BKL-ARCH-CCSP-RESOLVER-01 | Replace fetchCCSPData monolith with CcspSourceResolver chain (Issue #55)
+Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
+Source: fallow complexity report — fetchCCSPData 211 LOC, cyclomatic complexity 68
+Files: src/lib/ccsp-resolvers.ts (new — CcspSourceResolver interface + 3 impls + parseCcspRows), src/sheets.ts (fetchCCSPData reduced 211→21 LOC), test/unit/ccsp-resolvers.test.ts (new, 20 tests)
+Description: Three resolvers: KnownSheetResolver (fast path), TabDiscoveryResolver (tab fallback), DriveFolderResolver (AE drive scan + patchAe). parseCcspRows is pure (no I/O). fetchCCSPData becomes 21-line chain runner. All callers (customer-routes.ts, refresh-engine.ts) unchanged.
+Decision: DONE 2026-05-04 — tsc clean, 630 unit pass, 28 Playwright pass/5 skip on 7776, Quinn PASS, Rook PASS. Issue #55 closed.
+
+### BKL-ARCH-DOC-EXTRACTOR-01 | Replace fetchCustomerDocsImpl dispatch with DocExtractor chain (Issue #56)
+Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
+Source: fallow complexity report — fetchCustomerDocsImpl 262 LOC in customer/docs-fetcher.ts
+Files: src/customer/doc-extractors.ts (new — DocExtractor interface + ExportableDocExtractor + PdfDocExtractor), src/customer/docs-fetcher.ts (325→188 LOC), test/unit/doc-extractors.test.ts (new, 19 tests)
+Description: ExportableDocExtractor handles GoogleDoc/Presentation/Spreadsheet via drive.files.export. PdfDocExtractor handles PDF with local unpdf extraction + Gemini multimodal Vertex fallback. Folder resolution (Priority 1/2/3) in fetchCustomerDocsImpl untouched. Callers (customer.ts, signals/docs.ts) unchanged.
+Decision: DONE 2026-05-04 — tsc clean, 610 unit pass, 28 Playwright pass/5 skip on 7776, Quinn PASS, Rook PASS. Issue #56 closed.
+
+### BKL-SECURITY-RUN-COORD-01 | run-coordinator: add queue size cap + log swallowed errors (P4)
+Priority: P4 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Rook scan 2026-05-04 (issue #53 review)
+Files: src/lib/run-coordinator.ts
+Description: (1) _queue has no max size — single-user app, currently bounded by user actions, but no guard. (2) Error catch in drain loop is empty — failing tasks are completely invisible in logs.
+Fix: Add `if (_queue.length > 100) throw new Error('run-coordinator queue overflow')` guard; add `console.warn('[run-coordinator] task failed:', e?.message)` to catch block.
+
+### BKL-SECURITY-SA-KEY-01 | PdfDocExtractor: SA key parse failure could log key fragments (P4)
+Priority: P4 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Rook scan 2026-05-04 (issue #56 review)
+Files: src/customer/doc-extractors.ts
+Description: If GEMINI_SERVICE_ACCOUNT_KEY is malformed, JSON.parse throws and the outer catch logs e?.message?.slice(0,100). PEM/base64 key fragments could appear in logs. Localhost-only app, low actual risk.
+Fix: Wrap JSON.parse in its own try/catch, emit a generic '[docs] SA key parse failed' log instead.
+
 ### BKL-ARCH-SCRAPE-STATE-01 | Extract CircuitBreaker + running-flag state from scraper-manager.ts → src/scrape-state.ts (Issue #52)
 Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
 Source: fallow circular dependency report — rh-auth.ts + sf-auth.ts imported resetAllCircuitBreakers from scraper-manager.ts while scraper-manager.ts imported from both auth files

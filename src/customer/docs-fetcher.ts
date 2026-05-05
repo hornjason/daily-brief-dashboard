@@ -4,24 +4,15 @@
 
 import { google } from 'googleapis'
 import { resolve } from 'path'
-import { extractText as extractPdfText } from 'unpdf'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
+import { makeAuth } from '../google.ts'
 import type { Customer, DriveFile } from '../types.ts'
 import { driveClient, escapeQ } from '../lib/drive-client.ts'
 import { aes } from '../server-state.ts'
-import { readDocContentCache, writeDocContentCache } from '../cache-layer.ts'
-import { getGeminiModelLite } from '../ai-config.ts'
+import { DEFAULT_EXTRACTORS, type DocExtractor } from './doc-extractors.ts'
 
 const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../../config')
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
 
-// MIME types that Drive can export as plain text
-const EXPORTABLE_MIME_TYPES = new Set([
-  'application/vnd.google-apps.document',
-  'application/vnd.google-apps.presentation',
-  'application/vnd.google-apps.spreadsheet',
-])
-const DOC_CONTENT_CAP   = 8_000   // chars per document
 const TOTAL_CONTENT_CAP = 80_000  // chars per customer across all docs
 const MAX_FILES_PER_CUSTOMER = 50
 const DRIVE_SUBFOLDER_DEPTH  = 5
@@ -163,49 +154,11 @@ export async function fetchCustomerDocsImpl(customer: Customer): Promise<DriveFi
     followFolderShortcuts: true,
   })
 
-  const EXPORT_CONCURRENCY = 5
-
-  async function exportFileContent(f: { id: string; name: string; mimeType: string; modifiedTime?: string }): Promise<string | null> {
-    if (EXPORTABLE_MIME_TYPES.has(f.mimeType) && f.id) {
-      if (f.modifiedTime) {
-        const cached = readDocContentCache(f.id, f.modifiedTime)
-        if (cached !== null) return cached
-      }
-      try {
-        const exportRes = await drive.files.export(
-          { fileId: f.id, mimeType: 'text/plain' },
-          { responseType: 'text' },
-        )
-        const raw = String(exportRes.data ?? '').replace(/\s+/g, ' ').trim()
-        const capped = raw.slice(0, DOC_CONTENT_CAP)
-        const content = capped.length > 50 ? capped : null
-        if (content !== null && f.modifiedTime) {
-          writeDocContentCache(f.id, f.modifiedTime, content)
-        }
-        return content
-      } catch {
-        return null
-      }
-    }
-    return null
-  }
-
-  const exportableFiles = allFiles.filter(f => EXPORTABLE_MIME_TYPES.has(f.mimeType) && f.id)
-  const exportResultMap = new Map<string, string>()
-
-  for (let i = 0; i < exportableFiles.length; i += EXPORT_CONCURRENCY) {
-    const batch = exportableFiles.slice(i, i + EXPORT_CONCURRENCY)
-    const settled = await Promise.allSettled(batch.map(f => exportFileContent(f)))
-    for (let j = 0; j < batch.length; j++) {
-      const r = settled[j]
-      if (r.status === 'fulfilled' && r.value) {
-        exportResultMap.set(batch[j].id, r.value)
-      }
-    }
-  }
-
+  // Dispatch content extraction through the DocExtractor registry.
+  // Folder resolution (Priorities 1/2/3) and BFS file listing above are unchanged.
   let totalChars = 0
   const results: DriveFile[] = []
+  const extractors: DocExtractor[] = DEFAULT_EXTRACTORS
 
   for (const f of allFiles) {
     const file: DriveFile = {
@@ -217,104 +170,14 @@ export async function fetchCustomerDocsImpl(customer: Customer): Promise<DriveFi
       customer: customer.name,
     }
 
-    const preExported = exportResultMap.get(f.id)
-    if (preExported && totalChars < TOTAL_CONTENT_CAP) {
-      file.content = preExported
-      totalChars += preExported.length
-    }
-    else if (f.mimeType === 'application/pdf' && totalChars < TOTAL_CONTENT_CAP && f.id) {
-      if (f.modifiedTime) {
-        const cachedPdf = readDocContentCache(f.id, f.modifiedTime)
-        if (cachedPdf !== null) {
-          file.content = cachedPdf
-          totalChars += cachedPdf.length
-          results.push(file)
-          continue
+    if (totalChars < TOTAL_CONTENT_CAP && f.id) {
+      const extractor = extractors.find(e => e.matches(f))
+      if (extractor) {
+        const content = await extractor.extract(f, drive)
+        if (content) {
+          file.content = content
+          totalChars += content.length
         }
-      }
-      try {
-        const pdfRes = await drive.files.get(
-          { fileId: f.id, alt: 'media' },
-          { responseType: 'arraybuffer' },
-        )
-        const pdfBytes = Buffer.from(pdfRes.data as ArrayBuffer)
-        if (pdfBytes.length > 15_000_000) {
-          console.warn(`[docs] PDF too large to extract (${Math.round(pdfBytes.length / 1e6)}MB): ${f.name}`)
-          results.push(file)
-          continue
-        }
-
-        let localText = ''
-        try {
-          const u8 = new Uint8Array(pdfBytes.buffer, pdfBytes.byteOffset, pdfBytes.byteLength)
-          const { text } = await extractPdfText(u8, { mergePages: true })
-          localText = (text as string).replace(/\s+/g, ' ').trim()
-        } catch {
-          // Local extraction unsupported for this PDF — fall through to multimodal
-        }
-
-        if (localText.length >= 50) {
-          console.log(`[docs] PDF ${f.name}: local extraction (${localText.length} chars), using text path`)
-          const capped = localText.slice(0, DOC_CONTENT_CAP)
-          file.content = capped
-          totalChars += capped.length
-          if (f.modifiedTime) writeDocContentCache(f.id, f.modifiedTime, capped)
-        } else {
-          console.log(`[docs] PDF ${f.name}: local extraction (${localText.length} chars), using multimodal fallback`)
-          const b64 = pdfBytes.toString('base64')
-
-          const project  = process.env.GOOGLE_CLOUD_PROJECT
-          const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-          const model    = getGeminiModelLite()
-
-          if (project && b64.length > 0) {
-            let token: string | null | undefined
-            const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-            if (saKeyB64) {
-              const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-              const jwtAuth = new google.auth.JWT({
-                email: keyData.client_email,
-                key:   keyData.private_key,
-                scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-              })
-              token = (await jwtAuth.getAccessToken()).token
-            } else {
-              const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-              token = (await auth.getAccessToken()).token
-            }
-
-            if (token) {
-              const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-              const geminiRes = await fetch(url, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents: [{
-                    role: 'user',
-                    parts: [
-                      { inlineData: { mimeType: 'application/pdf', data: b64 } },
-                      { text: 'Extract the text content from this PDF document. Return only the extracted text, no commentary or formatting.' },
-                    ],
-                  }],
-                  generationConfig: { temperature: 0, maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },
-                }),
-              })
-              if (geminiRes.ok) {
-                const json = await geminiRes.json() as any
-                const extracted = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-                const capped = extracted.replace(/\s+/g, ' ').trim().slice(0, DOC_CONTENT_CAP)
-                if (capped.length > 50) {
-                  file.content = capped
-                  totalChars += capped.length
-                  if (f.modifiedTime) writeDocContentCache(f.id, f.modifiedTime, capped)
-                }
-              }
-            }
-          }
-        }
-      } catch (e: any) {
-        const safeName = String(f.name ?? '').replace(/[\r\n]/g, ' ').slice(0, 200)
-        console.warn(`[docs] PDF extraction failed for ${safeName}: ${e?.message?.slice?.(0, 100) ?? 'unknown'}`)
       }
     }
 

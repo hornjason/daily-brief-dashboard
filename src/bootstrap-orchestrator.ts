@@ -36,7 +36,11 @@ import { parseCsvToSfReport } from './csv-parse.ts'
 import { fetchCustomerAccountNumbers, normalizeRows } from './sheets.ts'
 import { writeSheetCache, readPipelineCache } from './cache-layer.ts'
 import type { PipelineRecord } from './pipeline.ts'
-import { enqueueScraperTask } from './background-scheduler.ts'
+// BKL-ARCH: removed `import { enqueueScraperTask } from './background-scheduler.ts'` —
+// it was unused here (no call sites in this file) and created a circular import.
+// We instead import setRunning from run-coordinator so this file can publish
+// its bootstrap running-state to background-scheduler without the cycle.
+import { setRunning as _coordSetRunning } from './lib/run-coordinator.ts'
 import { getAiConfig } from './ai-config.ts'
 
 import { getScrapeContext } from './rh-scraper.ts'
@@ -273,13 +277,24 @@ function extractSfReportId(raw: string): string {
 
 // isJunkCustomerName — moved to ./bootstrap/territory-sheet.ts (BKL-ARCH-01)
 
-/** BKL-W2-17: Exposed so background-scheduler can include bootstrap in isAnyScraperRunning() guard. */
+/** BKL-W2-17: Exposed so background-scheduler can include bootstrap in isAnyScraperRunning() guard.
+ *  Note: background-scheduler no longer imports this directly — it reads run-coordinator's
+ *  isAnyRunning() instead (BKL-ARCH circular-import break). This function is kept for any
+ *  remaining intra-file/test callers and is also the canonical source the sync helper below uses. */
 export function isBootstrapRunning(): boolean { return autoBootstrapState.running || podBootstrapState.running }
+
+/** BKL-ARCH: Sync bootstrap running-state to the run-coordinator. Called after every mutation
+ *  of autoBootstrapState.running / podBootstrapState.running so background-scheduler's
+ *  isAnyScraperRunning() (which reads run-coordinator) stays consistent with bootstrap state. */
+function syncBootstrapRunningToCoordinator(): void {
+  _coordSetRunning('bootstrap', isBootstrapRunning())
+}
 
 /** Clear both bootstrap states — called by /api/setup/reset so UI doesn't show stale last-run details after a wipe. */
 export function resetBootstrapStates(): void {
   Object.assign(autoBootstrapState, { running: false, steps: [], aeName: null, completedAt: null, error: null, resources: {} })
   Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
+  syncBootstrapRunningToCoordinator()
   bootstrapFlags.autoBootstrapCancelRequested = false
 }
 
@@ -395,12 +410,14 @@ async function bootstrapPOD(opts: {
     completedAt: null,
     error: null,
   })
+  syncBootstrapRunningToCoordinator()
 
   // Dynamic timeout: 30 min per AE
   const podTimeoutMs = aeEntries.length * 30 * 60 * 1000
   const podTimeoutId = setTimeout(() => {
     if (podBootstrapState.running) {
       podBootstrapState.running = false
+      syncBootstrapRunningToCoordinator()
       podBootstrapState.completedAt = new Date().toISOString()
       podBootstrapState.error = `POD bootstrap timed out after ${Math.round(podTimeoutMs / 60000)} minutes`
       console.error(`[pod-bootstrap] Hard timeout reached (${Math.round(podTimeoutMs / 60000)} min)`)
@@ -639,6 +656,7 @@ async function bootstrapPOD(opts: {
       if (autoBootstrapState.running) {
         // Still running after per-AE timeout — force-reset and record error
         autoBootstrapState.running = false
+        syncBootstrapRunningToCoordinator()
         autoBootstrapState.completedAt = new Date().toISOString()
         autoBootstrapState.error = `Timed out after ${Math.round(perAeTimeoutMs / 60000)} minutes (POD bootstrap)`
         throw new Error(`Bootstrap for ${aeName} timed out after ${Math.round(perAeTimeoutMs / 60000)} minutes`)
@@ -763,6 +781,7 @@ async function bootstrapPOD(opts: {
   clearTimeout(podTimeoutId)
   const podTotalMs = Date.now() - new Date(podStartedAt).getTime()
   podBootstrapState.running = false
+  syncBootstrapRunningToCoordinator()
   podBootstrapState.currentAE = null
   podBootstrapState.completedAt = new Date().toISOString()
   podBootstrapState.totalDurationMs = podTotalMs
@@ -869,6 +888,7 @@ export function createBootstrapRouter(): Hono {
     Object.assign(autoBootstrapState, { running: false, steps: [], aeName: '', completedAt: null, error: null, resources: {} })
     bootstrapFlags.autoBootstrapCancelRequested = false
     Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
+    syncBootstrapRunningToCoordinator()
     console.log('[auto-bootstrap] State reset by user request')
     return c.json({ ok: true })
   })
@@ -934,6 +954,7 @@ export function createBootstrapRouter(): Hono {
     // after the await — a TOCTOU race. Claiming here with total:0/results:[] is an "initializing"
     // marker; bootstrapPOD() overwrites these fields once it reads the territory sheet.
     Object.assign(podBootstrapState, { running: true, total: 0, completed: 0, currentAE: null, results: [], startedAt: new Date().toISOString(), completedAt: null, error: null })
+    syncBootstrapRunningToCoordinator()
 
     const body = await c.req.json<{ territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }>().catch(() => ({} as { territorySheetId?: string; sfReportId?: string; parentFolderId?: string; podTabTitle?: string; force?: boolean }))
     const rawTerritorySheet = (body.territorySheetId ?? '').trim()
@@ -948,19 +969,23 @@ export function createBootstrapRouter(): Hono {
 
     if (!territorySheetId) {
       Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
+      syncBootstrapRunningToCoordinator()
       return c.json({ error: 'territorySheetId is required' }, 400)
     }
     // Validate sheet ID format (alphanumeric + hyphens + underscores, typical Google Sheet IDs)
     if (!/^[a-zA-Z0-9_-]{44}$/.test(territorySheetId)) {
       Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
+      syncBootstrapRunningToCoordinator()
       return c.json({ error: 'Invalid territorySheetId format' }, 400)
     }
     if (!sfReportId || !isValidSfId(sfReportId)) {
       Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
+      syncBootstrapRunningToCoordinator()
       return c.json({ error: 'sfReportId is required — provide a Salesforce report URL or bare ID' }, 400)
     }
     if (!parentFolderId || !/^[a-zA-Z0-9_-]{10,}$/.test(parentFolderId)) {
       Object.assign(podBootstrapState, { running: false, total: 0, completed: 0, currentAE: null, results: [], startedAt: null, completedAt: null, error: null })
+      syncBootstrapRunningToCoordinator()
       return c.json({ error: 'parentFolderId is required — provide a Google Drive folder URL or bare ID' }, 400)
     }
 
@@ -982,6 +1007,7 @@ export function createBootstrapRouter(): Hono {
     }).catch(e => {
       console.error(`[pod-bootstrap] Fatal error: ${e?.message ?? e}`)
       podBootstrapState.running = false
+      syncBootstrapRunningToCoordinator()
       podBootstrapState.error = `Fatal: ${e?.message ?? e}`
       podBootstrapState.completedAt = new Date().toISOString()
     })
@@ -1074,6 +1100,7 @@ export function createBootstrapRouter(): Hono {
       completedAt: null,
       resources: { junkFiltered: junkFiltered.length > 0 ? junkFiltered : undefined },
     })
+    syncBootstrapRunningToCoordinator()
 
     const bootstrapStartMs = Date.now()
     const stepStartMs: Record<number, number> = {}
@@ -1113,6 +1140,7 @@ export function createBootstrapRouter(): Hono {
     const bootstrapTimeoutId = setTimeout(() => {
       if (autoBootstrapState.running) {
         autoBootstrapState.running = false
+        syncBootstrapRunningToCoordinator()
         autoBootstrapState.completedAt = new Date().toISOString()
         autoBootstrapState.error = `Bootstrap timed out after ${autoTimeoutMin} minutes`
         const stuck = autoBootstrapState.steps.findIndex(s => s.status === 'running')
@@ -1131,6 +1159,7 @@ export function createBootstrapRouter(): Hono {
           if (step.status === 'pending') step.status = 'cancelled'
         }
         autoBootstrapState.running = false
+        syncBootstrapRunningToCoordinator()
         autoBootstrapState.completedAt = new Date().toISOString()
         autoBootstrapState.error = 'Cancelled by user'
         clearTimeout(bootstrapTimeoutId)
@@ -1781,6 +1810,7 @@ export function createBootstrapRouter(): Hono {
       }
 
       autoBootstrapState.running = false
+      syncBootstrapRunningToCoordinator()
       autoBootstrapState.completedAt = new Date().toISOString()
       clearTimeout(bootstrapTimeoutId)
 

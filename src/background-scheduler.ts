@@ -32,7 +32,10 @@ import { initStatusStore, recordOutcome, getStatus } from './scraper-status-stor
 import { renderBriefHtml } from './email-template.ts'
 import { sendBriefEmail } from './email-sender.ts'
 import { sanitizeErr, normalizeForQuery, liveProbe } from './utils.ts'
-import { isBootstrapRunning } from './bootstrap-orchestrator.ts'
+// BKL-ARCH: imports `isAnyRunning` from run-coordinator instead of
+// `isBootstrapRunning` from bootstrap-orchestrator to break a circular import.
+// bootstrap-orchestrator now publishes its running state via setRunning('bootstrap', …).
+import { isAnyRunning } from './lib/run-coordinator.ts'
 import { writeSyncStateFlow, todaySyncRan } from './sync-state.ts'
 import { isPrimary as nodeIsPrimary } from './lib/node-role.ts'
 
@@ -59,9 +62,10 @@ const _scraperQueue: ScraperTask[] = []
 let _scraperQueueRunning = false  // true while a task from the queue is executing
 
 /** Check all four scraper mutex flags + bootstrap — returns true if ANY browser scraper is active.
- *  BKL-W2-17: includes isBootstrapRunning() so scheduled scrapers wait while bootstrap runs. */
+ *  BKL-W2-17: includes isAnyRunning() (from run-coordinator) so scheduled scrapers wait while
+ *  bootstrap runs. bootstrap-orchestrator publishes its running state via setRunning('bootstrap', …). */
 function isAnyScraperRunning(): boolean {
-  return _rhScrapeRunning || _sfSyncRunning || ccspScrapeRunning || ccspInFlight || isBootstrapRunning()
+  return _rhScrapeRunning || _sfSyncRunning || ccspScrapeRunning || ccspInFlight || isAnyRunning()
 }
 
 /**
