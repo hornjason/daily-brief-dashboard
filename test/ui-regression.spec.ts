@@ -325,6 +325,99 @@ test.describe('UI-REG-008: SF Sync Now status persists', () => {
   })
 })
 
+// ── UI-REG-010: Bootstrap proceeds when RH Portal disconnected (BKL-BOOTSTRAP-RH-GATE-01) ──
+//
+// Uses the live server for pod/territory data (no need to mock those — real server has real pods).
+// Only mocks: RH Portal status (disconnected), bootstrap POST (to avoid triggering a real bootstrap).
+//
+// RED before Fix 1: clicking "Set Up AE" shows "Red Hat Portal must be connected" banner.
+// GREEN after Fix 1: clicking "Set Up AE" does not show that banner.
+
+test.describe('UI-REG-010: Bootstrap does not require RH Portal (L3 architectural contract)', () => {
+  test('Set Up AE proceeds when RH Portal disconnected but Google Drive connected', async ({ page }) => {
+    // Use a real pod from the live server — these are stable on the dev machine.
+    const REAL_POD = 'WEST_COMM_CORP_NORTHWEST'
+
+    // Mock RH Portal status: disconnected (the condition under test)
+    await page.route('**/api/auth/redhat/status', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ hasSession: false }),
+      })
+    })
+
+    // Mock bootstrap POST — prevent a real bootstrap from firing
+    await page.route('**/api/bootstrap/auto', (route) => {
+      if (route.request().method() === 'POST') {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: true }),
+        })
+      } else {
+        route.continue()
+      }
+    })
+
+    await page.goto(`${BASE_URL}/dashboard/setup`)
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(1500)
+
+    // Open the "Step 4 of 5 — AEs & Customers" accordion
+    const step4Header = page.locator('button:has-text("AEs & Customers")')
+    await expect(step4Header).toBeVisible({ timeout: 10000 })
+    await step4Header.click()
+    await page.waitForTimeout(500)
+
+    // If existing AEs are configured, the section auto-switches to the Manage tab.
+    // Click "Single AE" tab to ensure BootstrapConfigBlock renders.
+    const singleAeTab = page.locator('button:has-text("Single AE")')
+    const singleAeTabVisible = await singleAeTab.isVisible().catch(() => false)
+    if (singleAeTabVisible) {
+      await singleAeTab.click()
+      await page.waitForTimeout(500)
+    }
+
+    // Wait for BootstrapConfigBlock to render (pod-select appears after hook fetch)
+    const podSelect = page.locator('[data-testid="pod-select"]')
+    await expect(podSelect).toBeVisible({ timeout: 10000 })
+
+    // Select the real pod — triggers territory names fetch and territory-num-select render
+    await podSelect.selectOption(REAL_POD)
+
+    // Wait for territory select to appear
+    const terrSelect = page.locator('[data-testid="territory-num-select"]')
+    await expect(terrSelect).toBeVisible({ timeout: 10000 })
+    // Use territory '02' — not the configured AE (Carolanne='01'), so the "Set Up AE" button
+    // won't be hidden behind the "already bootstrapped" callout.
+    await terrSelect.selectOption('02')
+
+    // Wait for territory lookup to complete and AE name to resolve (canStart needs aeName)
+    await page.waitForTimeout(1000)
+
+    // Fill customer names textarea
+    const customerTextarea = page.locator('[data-testid="customer-names-textarea"]')
+    await expect(customerTextarea).toBeVisible({ timeout: 5000 })
+    await customerTextarea.fill('Acme Corp')
+    await page.waitForTimeout(300)
+
+    // Wait for "Set Up AE" button to become enabled (canStart = aeName + sfReportId + territories + customers)
+    const setupBtn = page.locator('button:has-text("Set Up AE")')
+    await expect(setupBtn).toBeEnabled({ timeout: 5000 })
+
+    await setupBtn.click()
+    await page.waitForTimeout(1000)
+
+    // THE ASSERTION: RH Portal error banner must NOT appear.
+    // Before Fix 1, the handler calls /api/auth/redhat/status and gates on hasSession.
+    // This is architecturally wrong — bootstrap is L3-only; RH Portal is L4 (support scraping only).
+    const rhErrorBanner = page.locator('text=/Red Hat Portal must be connected/')
+    const bannerVisible = await rhErrorBanner.isVisible().catch(() => false)
+    expect(bannerVisible, 'RH Portal error banner must NOT appear — bootstrap is L3-only').toBe(false)
+  })
+})
+
 // ── UI-REG-009: Per-customer case count in list view (BKL-REG-19) ──
 
 test.describe('UI-REG-009: List view shows name-matched case counts', () => {

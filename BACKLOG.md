@@ -9557,6 +9557,23 @@ Files: src/bootstrap/steps/populate-data-sheets.ts
 Description: Both readCcsp and readPipeline now download L3 Drive CSVs (CCSP-{pod}-*.csv and SF-PIPELINE-*.csv) from podBookingsFolderId, filter by territory, and return full column rows. Sheet tabs renamed at creation time ("CCSP Data", "Pipeline") so fetchCCSPData and fetchPipelineData find the correct tabs.
 Decision: DONE — verified by E2E spec steps I and J (ccspTotalAcv=1696293, pipelineTotalAcv=4442834, 2026-05-06).
 
+### BKL-BOOTSTRAP-WIZARD-UI-TEST-01 | No Playwright test walks the wizard UI end-to-end — gate bugs invisible to E2E suite (P1)
+Priority: P1 | Size: M | Status: 🔴 OPEN
+Source: Bootstrap walkthrough 2026-05-05 — RH Portal gate blocked all bootstrap; bootstrap-e2e spec (17 tests) never caught it because it calls APIs directly, bypassing SetupPage.tsx entirely
+Files: test/bootstrap-e2e.spec.ts, dashboard/src/components/SetupPage.tsx (or SetupWizard.tsx)
+Description: The bootstrap E2E spec tests the backend pipeline (Drive folder creation, sheet population, territory data flow). It never renders the wizard UI, never fills form fields, never clicks "Set Up AE." Any React-level validation gate (enabled/disabled state, banners, conditional guards) is completely invisible to the suite. BKL-BOOTSTRAP-RH-GATE-01 is a direct consequence of this gap.
+Fix: Add a Playwright UI spec that: loads the wizard at /dashboard/setup, mocks RH Portal as disconnected but Google Drive as connected, fills in required fields, asserts "Set Up AE" button is ENABLED. This test must be observed failing against the current gated code before the fix.
+Decision: OPEN
+
+### BKL-BOOTSTRAP-RH-GATE-01 | Setup wizard gates "Set Up AE" on RH Portal connection — blocks all bootstrap (P1)
+Priority: P1 | Size: S | Status: 🔴 OPEN
+Source: Manual bootstrap walkthrough 2026-05-05 — Jason could not bootstrap any AE in test env
+Files: dashboard/src/components/SetupPage.tsx (or SetupWizard.tsx) — the validation logic before Set Up AE button
+Description: The UI displays a red banner "Red Hat Portal must be connected before running bootstrap — scroll up to connect it" and blocks the Set Up AE button. However, bootstrap is L3-only per CLAUDE.md: the ONLY pre-flight requirement is Google Drive auth. RH Portal is an L4 dependency (RH support case scraping) and must never gate bootstrap. The gate is architecturally wrong.
+Fix: Remove the RH Portal connection check from the Set Up AE pre-flight guard. Only require Google Drive auth (/api/auth/google/status). RH token already shows as "Saved and active" independently — it should not block AE setup.
+Can we test for it: Yes — regression test: mock RH Portal as disconnected, verify Set Up AE button is enabled and bootstrap proceeds.
+Decision: OPEN
+
 ---
 
 ## Infrastructure / Ops

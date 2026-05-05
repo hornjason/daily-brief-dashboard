@@ -778,21 +778,6 @@ function AutoBootstrapForm({
 
     setPreflightError(null)
 
-    // Pre-check: RH Portal must be connected (needed for account discovery)
-    try {
-      const rhStatus = await fetch('/api/auth/redhat/status').then(r => r.json())
-      if (!rhStatus.hasSession || rhStatus.sessionExpired) {
-        setPreflightError('Red Hat Portal must be connected before running bootstrap — scroll up to connect it.')
-        bootstrapStartingRef.current = false
-        return
-      }
-    } catch {
-      // E1: network failure on status check — do not proceed silently
-      setPreflightError('Could not verify Red Hat Portal connection — check server status and try again.')
-      bootstrapStartingRef.current = false
-      return
-    }
-
     // Pre-check: validate parent folder exists if provided
     if (parentFolderId.trim()) {
       try {
