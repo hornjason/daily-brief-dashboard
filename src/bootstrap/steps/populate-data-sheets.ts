@@ -80,14 +80,32 @@ export const populateDataSheetsStep: BootstrapStepDef = {
           }),
           `createSheet:${name}`,
         )
-        return created.data.id!
+        const sheetId = created.data.id!
+        // Rename the default "Sheet1" tab so downstream readers find the right tab name:
+        //   Pipeline → "Pipeline" (fetchPipelineData reads "Pipeline!A1:Z5000")
+        //   CCSP     → "CCSP Data" (fetchCCSPData KnownSheetResolver reads "CCSP Data")
+        const tabName = name === 'Pipeline' ? 'Pipeline' : name === 'CCSP' ? 'CCSP Data' : null
+        if (tabName) {
+          await sheetsApi.spreadsheets.get({ spreadsheetId: sheetId })
+            .then(async meta => {
+              const firstSheet = meta.data.sheets?.[0]
+              if (firstSheet?.properties?.sheetId != null) {
+                await sheetsApi.spreadsheets.batchUpdate({
+                  spreadsheetId: sheetId,
+                  requestBody: { requests: [{ updateSheetProperties: { properties: { sheetId: firstSheet.properties!.sheetId, title: tabName }, fields: 'title' } }] },
+                })
+              }
+            })
+            .catch(() => {})
+        }
+        return sheetId
       },
       async writeRows(sheetId: string, rows: string[][]): Promise<void> {
         if (!rows.length) return
         await withQuotaRetry(
           () => sheetsApi.spreadsheets.values.update({
             spreadsheetId: sheetId,
-            range: 'Sheet1!A1',
+            range: 'A1',
             valueInputOption: 'RAW',
             requestBody: { values: rows },
           }),
@@ -131,11 +149,130 @@ export const populateDataSheetsStep: BootstrapStepDef = {
       },
       async readCcsp(_cfg: { podId: string; aeName: string; customerNames: string[] }): Promise<string[][]> {
         const header = ['Account Name', 'Cloud Partner', 'ACV+', 'Quarter']
-        return [header]
+        try {
+          const rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+          const normalized = normalizeSettings(rawSettings)
+          const podKey = (_cfg.podId ?? '').replace(/_TERR\d+$/, '')
+          const region = normalized.regions.find((r: any) => podKey in (r.pods ?? {})) ?? normalized.regions[0]
+          const folderId = region?.podBookingsFolderId
+          if (!folderId) return [header]
+
+          const listRes = await driveApi.files.list({
+            q: `name contains 'CCSP-${podKey}-' and '${folderId}' in parents and trashed = false`,
+            fields: 'files(id, name, modifiedTime)',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+            orderBy: 'modifiedTime desc',
+            pageSize: 5,
+          }).catch(() => ({ data: { files: [] } }))
+          const csvFile = (listRes.data.files ?? [])[0]
+          if (!csvFile?.id) {
+            console.warn(`[l3-bootstrap] No CCSP CSV found for pod '${podKey}' in folder ${folderId}`)
+            return [header]
+          }
+
+          const dlRes = await withQuotaRetry(
+            () => driveApi.files.get({ fileId: csvFile.id!, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }),
+            `readCcsp:download:${csvFile.id}`,
+          )
+          const csvText = typeof dlRes.data === 'string' ? dlRes.data : String(dlRes.data)
+          const { parseCsvToObjects } = await import('../../csv-parse.ts')
+          const rawRows = parseCsvToObjects(csvText)
+          if (rawRows.length === 0) return [header]
+
+          // Territory-only filter — no quarter filter for bootstrap (avoids dependency on rolling window)
+          let filtered = rawRows
+          if (tableauTerritories.length > 0) {
+            const terrSet = new Set(tableauTerritories)
+            const terrCol = Object.keys(rawRows[0]).find(k => {
+              const norm = k.toLowerCase().replace(/\s+/g, ' ').trim()
+              return norm === 'account territory name' || norm === 'account territory'
+            })
+            if (terrCol) filtered = rawRows.filter(r => terrSet.has((r[terrCol] ?? '').trim()))
+          }
+
+          if (filtered.length === 0) return [header]
+
+          const csvHeaders = Object.keys(filtered[0])
+          const rows: string[][] = [csvHeaders]
+          for (const row of filtered) rows.push(csvHeaders.map(h => row[h] ?? ''))
+          console.log(`[l3-bootstrap] CCSP: ${filtered.length} rows from ${csvFile.name}`)
+          return rows
+        } catch (e: any) {
+          console.warn(`[l3-bootstrap] CCSP L3 read failed: ${e?.message}`)
+          return [header]
+        }
       },
       async readPipeline(_cfg: { podId: string; aeName: string; customerNames: string[] }): Promise<string[][]> {
-        const header = ['Account Name', 'Opportunity', 'Stage', 'ACV', 'Close Date']
-        return [header]
+        const header = [
+          'Opportunity ID', 'Opportunity Number', 'Account Name', 'Opportunity Name',
+          'ACV Opportunity', 'Close Date', 'Forecast Category', 'Opportunity Owner',
+          'Offering Group', 'Product Code', 'Opportunity Pod', 'Product Description',
+          'Renewal', 'Opportunity Territory Name',
+        ]
+        try {
+          const rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+          const normalized = normalizeSettings(rawSettings)
+          const podKey = (_cfg.podId ?? '').replace(/_TERR\d+$/, '')
+          const region = normalized.regions.find((r: any) => podKey in (r.pods ?? {})) ?? normalized.regions[0]
+          const folderId = region?.podBookingsFolderId
+          if (!folderId) return [header]
+
+          // Search by podKey (pod is in the filename regardless of which SF report generated it).
+          // Filename format: SF-PIPELINE-{reportId}-{podKey}-{date}.csv — the podKey appears
+          // after the reportId so we must search for it as a substring, not a prefix.
+          const podKeySearch = podKey ? `-${podKey}-` : ''
+          const baseQuery = `name contains 'SF-PIPELINE-' and '${folderId}' in parents and trashed = false`
+          const narrowQuery = podKeySearch ? `${baseQuery} and name contains '${podKeySearch}'` : baseQuery
+          const listRes = await driveApi.files.list({
+            q: narrowQuery,
+            fields: 'files(id, name, modifiedTime)',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+            orderBy: 'modifiedTime desc',
+            pageSize: 5,
+          }).catch(() => ({ data: { files: [] } }))
+          // Fall back to any SF-PIPELINE file in the folder if pod-specific search returns nothing
+          const files = listRes.data.files ?? []
+          const fallbackFiles = files.length === 0 && podKeySearch ? (await driveApi.files.list({
+            q: baseQuery,
+            fields: 'files(id, name, modifiedTime)',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+            orderBy: 'modifiedTime desc',
+            pageSize: 5,
+          }).catch(() => ({ data: { files: [] } }))).data.files ?? [] : []
+          const csvFile = files[0] ?? fallbackFiles[0]
+          if (!csvFile?.id) {
+            console.warn(`[l3-bootstrap] No pipeline CSV found for pod '${podKey}' in folder ${folderId}`)
+            return [header]
+          }
+
+          const dlRes = await withQuotaRetry(
+            () => driveApi.files.get({ fileId: csvFile.id!, alt: 'media', supportsAllDrives: true }, { responseType: 'text' }),
+            `readPipeline:download:${csvFile.id}`,
+          )
+          const csvText = typeof dlRes.data === 'string' ? dlRes.data : String(dlRes.data)
+          const { parseCsvToSfReport } = await import('../../csv-parse.ts')
+          const { headers: parsedHeaders, rows: parsedRows } = parseCsvToSfReport(csvText)
+          if (parsedRows.length === 0) return [header]
+
+          // Territory filter
+          let filtered = parsedRows
+          if (tableauTerritories.length > 0) {
+            const terrSet = new Set(tableauTerritories)
+            const terrColIdx = parsedHeaders.indexOf('Opportunity Territory Name')
+            if (terrColIdx >= 0) filtered = parsedRows.filter(row => terrSet.has((row[terrColIdx] ?? '').trim()))
+          }
+
+          if (filtered.length === 0) return [header]
+
+          console.log(`[l3-bootstrap] Pipeline: ${filtered.length} rows from ${csvFile.name}`)
+          return [parsedHeaders, ...filtered]
+        } catch (e: any) {
+          console.warn(`[l3-bootstrap] Pipeline L3 read failed: ${e?.message}`)
+          return [header]
+        }
       },
     }
 
@@ -146,7 +283,7 @@ export const populateDataSheetsStep: BootstrapStepDef = {
       territoryCode: tableauTerritories[0] ?? '',
       aeName,
       customerNames,
-      parentFolderId: aeFolderId,
+      parentFolderId: ctx.parentFolderId ?? aeFolderId,
       sfReportId,
     }, l3Deps)
 

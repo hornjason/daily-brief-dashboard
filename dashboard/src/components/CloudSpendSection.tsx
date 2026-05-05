@@ -344,7 +344,7 @@ export function CloudSpendSection({ data, loading, error, onRefresh, aeFilterSel
     : customers.slice(0, 10).map(c => ({ name: c.name, acv: c.acv }))
 
   return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
+    <div className="bg-surface border border-border rounded-xl overflow-hidden" data-testid="ccsp-tile">
       {/* Section header */}
       <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
         <Cloud className="w-4 h-4 text-accent" />

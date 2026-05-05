@@ -68,6 +68,7 @@ import { safeCookieOp } from './browser-utils.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome, getUnifiedStatus } from './scraper-status-store.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
+import { driveClient } from './lib/drive-client.ts'
 
 // ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
 /** Rejects after `ms` milliseconds with an informative error. */
@@ -1041,6 +1042,7 @@ export function registerScrapeRoutes(app: Hono): void {
       sheets: [
         'https://docs.google.com/spreadsheets/d/1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8/edit?gid=294606982#gid=294606982',
         'https://docs.google.com/spreadsheets/d/1p5nM6NNB-vCnaoKxyThnR1zuj_e_80WqzmWh-RsODlQ/edit?gid=409386986#gid=409386986',
+        'https://docs.google.com/spreadsheets/d/111gcacXSkB4uNrDNQAuL7fvcS6YQi_6Wfl9hhffJsU0/edit?gid=1703062703#gid=1703062703',
       ],
     })
   })
@@ -1160,6 +1162,19 @@ export function registerScrapeRoutes(app: Hono): void {
             console.log(`[sf-bookings-sync] alias updated: ${ac.name} → ${ac.aliases?.join(', ')}`)
           }
           saveCustomers(allCustomers)
+
+          // Create Drive subfolders for net-new customers
+          if (ae.driveFolderId) {
+            for (const nc of newCustomers) {
+              try {
+                const folderId = await driveClient.ensureChildFolder(ae.driveFolderId, nc.name)
+                patchCustomer(nc.name, { driveFolderId: folderId })
+                console.log(`[sf-bookings-sync] customer folder created: ${nc.name} (${folderId})`)
+              } catch (e: any) {
+                console.warn(`[sf-bookings-sync] customer folder creation failed for ${nc.name}: ${e.message}`)
+              }
+            }
+          }
         }
 
         // Persist CCSP-only flag

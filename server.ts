@@ -103,6 +103,28 @@ try {
 
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, 'config')
 const SETTINGS_PATH = resolve(SRV_CONFIG_DIR, 'settings.json')
+
+// First-boot seed: if settings.json has no regions[], copy from scripts/seed-data/settings.json
+// so the region catalog is pre-populated on a fresh hero install.
+// Adding a new region: update scripts/seed-data/settings.json — it's git-tracked and baked into the image.
+try {
+  const existingRaw = existsSync(SETTINGS_PATH)
+    ? JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+    : {}
+  const hasRegions = Array.isArray(existingRaw.regions) && existingRaw.regions.length > 0
+  if (!hasRegions) {
+    const seedPath = resolve(import.meta.dir, 'scripts/seed-data/settings.json')
+    if (existsSync(seedPath)) {
+      const seedRaw = JSON.parse(readFileSync(seedPath, 'utf-8'))
+      // Preserve any existing non-region keys (tokens, etc.), merge in seed regions
+      const merged = { ...existingRaw, regions: seedRaw.regions }
+      writeFileSync(SETTINGS_PATH, JSON.stringify(merged, null, 2))
+      console.log('[startup] settings.json seeded from scripts/seed-data/settings.json')
+    }
+  }
+} catch (e: any) {
+  console.warn('[startup] first-boot settings seed failed (non-fatal):', e.message)
+}
 const SHEETS_TOKEN_PATH_SRV = process.env.SHEETS_TOKEN
   ?? resolve(SRV_CONFIG_DIR, '.sheets-token.json')
 const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN

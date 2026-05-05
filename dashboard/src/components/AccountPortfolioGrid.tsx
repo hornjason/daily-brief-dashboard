@@ -415,7 +415,7 @@ function AccountCard({
   }, [account.products, selectedProducts])
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-4 hover:border-accent/30 transition-all group">
+    <div className="bg-surface border border-border rounded-xl p-4 hover:border-accent/30 transition-all group" data-testid="account-card">
       {/* Header — links to customer page */}
       <a
         href={`/dashboard/customer/${encodeURIComponent(account.name)}`}

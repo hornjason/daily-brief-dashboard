@@ -269,7 +269,7 @@ export function PipelineSection({ data, loading, error, onRefresh, selectedProdu
   const filteredOpps: PipelineOpp[] = sortedOwnerOpps
 
   return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
+    <div className="bg-surface border border-border rounded-xl overflow-hidden" data-testid="pipeline-tile">
       {/* Header */}
       <div className="px-5 py-3.5 border-b border-border flex items-center gap-2">
         <TrendingUp className="w-4 h-4 text-accent" />
