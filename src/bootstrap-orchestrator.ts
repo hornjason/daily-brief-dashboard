@@ -1412,12 +1412,9 @@ export function createBootstrapRouter(): Hono {
     if (!sfReportId) return c.json({ error: 'sfReportId is required' }, 400)
     if (!isValidSfId(sfReportId)) return c.json({ error: 'sfReportId must be a valid Salesforce report URL or 15-18 character ID' }, 400)
     if (!tableauTerritories.length) return c.json({ error: 'tableauTerritories is required' }, 400)
-    if (!customerNames.length) {
-      // Distinguish between empty input and fully-filtered junk input
-      if (junkFiltered.length > 0 && allCustomerNames.length > 0) {
-        return c.json({ error: `customerNames contains invalid characters — only letters, numbers, spaces, and basic punctuation allowed (${junkFiltered.length} names filtered)` }, 400)
-      }
-      return c.json({ error: 'customerNames is required' }, 400)
+    if (junkFiltered.length > 0 && allCustomerNames.length > 0 && !customerNames.length) {
+      // All provided names were junk-filtered — reject with a clear error
+      return c.json({ error: `customerNames contains invalid characters — only letters, numbers, spaces, and basic punctuation allowed (${junkFiltered.length} names filtered)` }, 400)
     }
     if (customerNames.some(n => /<[^>]*>/.test(n))) return c.json({ error: 'customerNames contains invalid characters' }, 400)
     if (parentFolderId && !/^[a-zA-Z0-9_-]{10,}$/.test(parentFolderId)) return c.json({ error: 'Invalid parentFolderId format' }, 400)
@@ -1654,11 +1651,15 @@ export function createBootstrapRouter(): Hono {
       productsFolderId: null as string | null,
       productSubfolders: {} as Record<string, string>,
     }
-    const podCfg = readPodConfig()
-    const parentFolderId = podCfg?.parentFolderId ?? null
-    if (!parentFolderId) return c.json(empty)
     const cache = readScaffoldCache()
-    const entry = cache[parentFolderId]
+    // Primary: look up by podConfig.parentFolderId (set during POD-level bootstrap).
+    // Fallback: look up by the first AE's parentFolderId (set during single-AE bootstrap).
+    const podCfg = readPodConfig()
+    const parentFolderId = podCfg?.parentFolderId
+      ?? aes.find(a => a.parentFolderId && cache[a.parentFolderId as string])?.parentFolderId
+      ?? null
+    if (!parentFolderId) return c.json(empty)
+    const entry = cache[parentFolderId as string]
     if (!entry) return c.json(empty)
     return c.json({
       configFolderId: entry.configFolderId ?? null,

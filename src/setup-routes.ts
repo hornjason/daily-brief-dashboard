@@ -663,5 +663,29 @@ export function createSetupRouter(): Hono {
     }
   })
 
+  // DELETE /api/__test/drive-cleanup — test-only endpoint to remove a Drive folder
+  // created by the bootstrap E2E spec. Gated on ALLOW_RESET=true (test container only).
+  // Without this, every E2E run leaves an orphaned AE Drive folder behind in the parent
+  // folder (or worse, at Drive ROOT when parentFolderId was never wired in).
+  router.delete('/api/__test/drive-cleanup', async (c) => {
+    if (process.env.ALLOW_RESET !== 'true') {
+      return c.json({ error: 'Not available — ALLOW_RESET is not set' }, 404)
+    }
+    const folderId = c.req.query('folderId') ?? ''
+    if (!/^[a-zA-Z0-9_-]{20,}$/.test(folderId)) {
+      return c.json({ error: 'folderId query param missing or malformed' }, 400)
+    }
+    try {
+      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+      const drive = google.drive({ version: 'v3', auth })
+      await drive.files.delete({ fileId: folderId, supportsAllDrives: true })
+      console.log(`[drive-cleanup] deleted folder ${folderId}`)
+      return c.json({ deleted: true, folderId })
+    } catch (e: any) {
+      console.warn(`[drive-cleanup] failed to delete ${folderId}:`, e?.message ?? e)
+      return c.json({ deleted: false, error: sanitizeErr(e) })
+    }
+  })
+
   return router
 }

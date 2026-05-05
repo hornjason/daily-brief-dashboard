@@ -140,11 +140,16 @@ export function createAeRouter(): Hono {
         const rawFolderId = ae.driveFolderId ?? ''
         const folderIdMatch = rawFolderId.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)
         const driveFolderId = folderIdMatch ? folderIdMatch[1] : rawFolderId.trim()
+        // Resolve parentFolderId from either bare ID (ae.parentFolderId) or full Drive URL (ae.parentFolderUrl).
+        // Wizard / E2E paths sometimes pass a URL instead of a bare ID — extract it the same way as driveFolderId.
+        const rawParentUrl = (ae as any).parentFolderUrl as string | undefined
+        const parentUrlMatch = typeof rawParentUrl === 'string' ? rawParentUrl.match(/\/folders\/([a-zA-Z0-9_-]{20,})/) : null
+        const resolvedParentFolderId = parentUrlMatch ? parentUrlMatch[1] : (ae.parentFolderId ?? undefined)
         // Write whitelisted fields only — drop anything not in the schema
         body.aes[i] = {
           name,
           driveFolderId,
-          parentFolderId:       ae.parentFolderId       ?? undefined,
+          parentFolderId:       resolvedParentFolderId,
           sfReportId:           ae.sfReportId           ?? '',
           tableauTerritories:   ae.tableauTerritories   ?? [],
           tableauUrl:           ae.tableauUrl           ?? undefined,

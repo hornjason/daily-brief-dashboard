@@ -24,6 +24,7 @@ import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../../google.ts'
 import { aes, customers, CUSTOMERS_PATH } from '../../server-state.ts'
 import { writeJsonAtomic } from '../../lib/atomic-write.ts'
+import { driveClient } from '../../lib/drive-client.ts'
 import { normalizeSettings } from '../../region-config.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from '../../sf-bookings-reader.ts'
 import {
@@ -144,6 +145,24 @@ export const readSfBookingsStep: BootstrapStepDef = {
           if (cx) cx.ccspCustomer = true
         }
         writeJsonAtomic(CUSTOMERS_PATH, { customers })
+
+        // Create Drive subfolders for net-new customers discovered during L3 read.
+        // Mirrors the pattern in src/scrape-api.ts sf-bookings-sync endpoint.
+        if (ctx.aeFolderId) {
+          for (const nc of newCustomers) {
+            try {
+              const folderId = await driveClient.ensureChildFolder(ctx.aeFolderId, nc.name)
+              const existingCustomer = customers.find(c => c.name === nc.name)
+              if (existingCustomer) {
+                existingCustomer.driveFolderId = folderId
+                writeJsonAtomic(CUSTOMERS_PATH, { customers })
+              }
+              console.log(`[auto-bootstrap] customer folder created: ${nc.name} (${folderId})`)
+            } catch (e: any) {
+              console.warn(`[auto-bootstrap] customer folder creation failed for ${nc.name}: ${e.message}`)
+            }
+          }
+        }
 
         ctx.sfBookingsResults = results
         ctx.setStep(2, 'done', `${matched.length}/${results.length} customers with subscriptions`)

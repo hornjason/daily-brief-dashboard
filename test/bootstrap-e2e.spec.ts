@@ -32,6 +32,7 @@ import type { APIRequestContext } from '@playwright/test'
 const BASE = process.env.TEST_URL ?? process.env.BASE_URL ?? 'http://localhost:7776'
 
 const DRIVE_PARENT_URL = process.env.TEST_DRIVE_PARENT_URL ?? ''
+const DRIVE_PARENT_ID = DRIVE_PARENT_URL.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)?.[1] ?? ''
 const AE_NAME = process.env.TEST_AE_NAME ?? ''
 const REGION = process.env.TEST_REGION ?? 'west-commercial'
 const POD = process.env.TEST_POD ?? 'west-commercial.WEST_COMM_CORP_NORTHWEST'
@@ -101,6 +102,37 @@ test.beforeAll(async ({ request }) => {
   expect(aes.body.aes.length, 'aes.json was not cleared by /api/setup/reset').toBe(0)
 })
 
+// ── afterAll: best-effort Drive folder cleanup ──────────────────────────────
+// Without this, every E2E run leaves an orphaned AE Drive folder behind. The
+// cleanup endpoint is gated on ALLOW_RESET=true (test container only) and
+// returns 404 on builds that don't have it — both are silently tolerated.
+
+test.afterAll(async ({ request }) => {
+  try {
+    const aesRes = await request.get(`${BASE}/api/aes`)
+    const aesBody = await aesRes.json().catch(() => ({}))
+    const ae = Array.isArray(aesBody?.aes) ? aesBody.aes.find((a: any) => a?.name === AE_NAME) : null
+    const folderId = ae?.driveFolderId
+    if (!folderId) {
+      console.log('[bootstrap-e2e] afterAll: no driveFolderId for AE — nothing to clean up')
+      return
+    }
+    const cleanup = await request.delete(`${BASE}/api/__test/drive-cleanup?folderId=${encodeURIComponent(folderId)}`)
+    if (cleanup.status() === 404) {
+      console.log('[bootstrap-e2e] afterAll: /api/__test/drive-cleanup not available on this build — skipping')
+      return
+    }
+    const body = await cleanup.json().catch(() => ({}))
+    if (body?.deleted) {
+      console.log(`[bootstrap-e2e] afterAll: deleted Drive folder ${folderId}`)
+    } else {
+      console.warn(`[bootstrap-e2e] afterAll: Drive cleanup did not confirm deletion: ${JSON.stringify(body)}`)
+    }
+  } catch (e: any) {
+    console.warn('[bootstrap-e2e] afterAll Drive cleanup failed (non-blocking):', e?.message ?? e)
+  }
+})
+
 // ── Pre-flight: Drive auth (only required external dep on the hero image) ───
 
 test('drive auth — Google session is connected', async ({ request }) => {
@@ -138,7 +170,7 @@ test('wizard — ae setup', async ({ request }) => {
   const submitRes = await postJSON(request, '/api/aes', {
     aes: [{
       name: AE_NAME, pod: POD, territory: TERRITORY,
-      parentFolderUrl: DRIVE_PARENT_URL, sfReportId: SF_REPORT_ID,
+      parentFolderId: DRIVE_PARENT_ID, sfReportId: SF_REPORT_ID,
       tableauTerritories: [TABLEAU_TERRITORY],
     }],
   })
@@ -164,7 +196,7 @@ test('bootstrap completes', async ({ request }) => {
   // Bootstrap may be auto-fired by /api/aes; if not, fire it explicitly.
   const initial = await getJSON(request, '/api/bootstrap/auto/status')
   if (!initial.body?.running && !initial.body?.completedAt) {
-    const bootstrapPayload: Record<string, unknown> = { aeName: AE_NAME, sfReportId: SF_REPORT_ID, tableauTerritories: [TABLEAU_TERRITORY] }
+    const bootstrapPayload: Record<string, unknown> = { aeName: AE_NAME, parentFolderId: DRIVE_PARENT_ID, sfReportId: SF_REPORT_ID, tableauTerritories: [TABLEAU_TERRITORY] }
     if (CUSTOMER_NAMES.length > 0) bootstrapPayload.customerNames = CUSTOMER_NAMES
     const start = await postJSON(request, '/api/bootstrap/auto', bootstrapPayload)
     expect(start.status, `POST /api/bootstrap/auto failed: ${JSON.stringify(start.body)}`).toBeLessThan(400)
