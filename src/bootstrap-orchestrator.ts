@@ -91,13 +91,22 @@ import {
   readPipelineFromAeSheet,
   readSfBookingsFromAeSheet,
 } from './lib/cache-hierarchy.ts'
+// BKL-ARCH-01 (issue #54): per-step modules for the auto-bootstrap flow
+import {
+  ALL_STEPS,
+  runBootstrapSteps,
+  BootstrapCancelledError,
+  type BootstrapContext,
+} from './bootstrap/steps/index.ts'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
 const DATA_SOURCES_PATH = resolve(SRV_CONFIG_DIR, 'data-sources.json')
-const SETTINGS_PATH = resolve(SRV_CONFIG_DIR, 'settings.json')
+// SETTINGS_PATH moved to ./bootstrap/helpers.ts (BKL-ARCH-01) — re-exported here.
+import { SETTINGS_PATH, findExistingSheet } from './bootstrap/helpers.ts'
+export { SETTINGS_PATH, findExistingSheet } from './bootstrap/helpers.ts'
 const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
 
 // ── POD config persistence ────────────────────────────────────────────────────
@@ -238,16 +247,7 @@ async function notify(title: string, message: string, priority: 'default' | 'hig
   }
 }
 
-// BKL-W2-12: Search for an existing Google Sheet by name inside a Drive folder before creating a new one.
-// ADR-0016: drive-client supplies supportsAllDrives unconditionally.
-// `drive` arg retained for caller-call-site compatibility but is unused.
-async function findExistingSheet(_drive: unknown, folderId: string, name: string): Promise<string | null> {
-  try {
-    return await driveClient.findSheetByName(folderId, name)
-  } catch {
-    return null
-  }
-}
+// findExistingSheet moved to ./bootstrap/helpers.ts (BKL-ARCH-01) — see import above.
 
 /** Salesforce report/object ID — alphanumeric only, 15-18 chars. */
 function isValidSfId(value: unknown): boolean {
@@ -832,6 +832,332 @@ export function resetTableauStatusCache(): void {
   _tableauStatusCache = null
 }
 
+// ── Auto-bootstrap flow (BKL-ARCH-01 / issue #54) ──────────────────────────
+// Extracted from the inner IIFE in `createBootstrapRouter()`. Owns the per-AE
+// scaffold pre-flight, the 5-step runner invocation, post-step domain
+// inference, and final cleanup + history. The route handler now just sets up
+// state and fires this function (await-free — fire-and-forget polling pattern).
+
+interface AutoBootstrapInputs {
+  aeName: string
+  customerNames: string[]
+  sfReportId: string
+  tableauTerritories: string[]
+  parentFolderId?: string
+  podName?: string
+}
+
+function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
+  const { aeName, customerNames, sfReportId, tableauTerritories, parentFolderId, podName } = inputs
+
+  const bootstrapStartMs = Date.now()
+  const stepStartMs: Record<number, number> = {}
+
+  const setStep = (idx: number, status: AutoBootstrapStep['status'], detail?: string): void => {
+    const now = Date.now()
+    const existing = autoBootstrapState.steps[idx] ?? {} as AutoBootstrapStep
+    if (status === 'running' && !stepStartMs[idx]) {
+      stepStartMs[idx] = now
+    }
+    const isFinished = status === 'done' || status === 'error' || status === 'skipped'
+    autoBootstrapState.steps[idx] = {
+      ...existing,
+      status,
+      detail,
+      ...(status === 'running' && !existing.startedAt ? { startedAt: new Date(now).toISOString() } : {}),
+      ...(isFinished && stepStartMs[idx] ? {
+        completedAt: new Date(now).toISOString(),
+        durationMs: now - stepStartMs[idx],
+      } : {}),
+    }
+  }
+
+  // Hard timeout: scales with AE count (min 60 min, +30 min per AE)
+  const autoTimeoutMin = Math.max(60, aes.length * 30)
+  const bootstrapTimeoutId = setTimeout(() => {
+    if (autoBootstrapState.running) {
+      autoBootstrapState.running = false
+      syncBootstrapRunningToCoordinator()
+      autoBootstrapState.completedAt = new Date().toISOString()
+      autoBootstrapState.error = `Bootstrap timed out after ${autoTimeoutMin} minutes`
+      const stuck = autoBootstrapState.steps.findIndex(s => s.status === 'running')
+      if (stuck >= 0) autoBootstrapState.steps[stuck] = { ...autoBootstrapState.steps[stuck], status: 'error', detail: 'Timed out' }
+      console.error('[auto-bootstrap] Hard timeout reached — unsticking')
+      notify('Bootstrap Timed Out', `Bootstrap did not complete within ${autoTimeoutMin} minutes — check dashboard`, 'urgent').catch(() => {})
+    }
+  }, autoTimeoutMin * 60 * 1_000)
+
+  // BKL-WIZ-02: Cancellation predicate — runner throws BootstrapCancelledError
+  // when this flips between steps; outer flow handles cleanup.
+  const cancelRequested = (): boolean => bootstrapFlags.autoBootstrapCancelRequested
+
+  // Fire async — caller polls /api/bootstrap/auto/status for progress.
+  ;(async () => {
+    // BKL-DRIVE-SCAFFOLD-01: Idempotently scaffold Config/ and Products/<slug>
+    // under parentFolderId before AE Drive folder creation. Idempotent + non-fatal.
+    let perAeScaffold: { configFolderId: string; productsFolderId: string } | null = null
+    if (parentFolderId) {
+      perAeScaffold = await ensureConfigAndProductsScaffold(parentFolderId)
+    }
+
+    // Pre-flight — Ensure product intel Drive folders exist under Products/
+    // (BKL-DRIVE-PRODUCTS-ROOT-01).
+    try {
+      const productIntelConfig = loadProductIntelConfig()
+      // BKL-UX-PRODUCT-FOLDER-CONFIG-01: parent folder sourced from existing
+      // AE records via the helper, not from product-intel-config.
+      const parentId = getProductIntelParentFolderId()
+      // BKL-DRIVE-PRODUCTS-ROOT-01: slug folders go under Products/ subfolder.
+      const slugParentId = perAeScaffold?.productsFolderId ?? parentId
+      // BKL-SEC-DRIVEID-VALIDATE-01: defense-in-depth — validate before Drive calls.
+      if (parentId && isValidDriveFolderId(parentId)) {
+        const drivePI = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
+        const updatedProducts = [...productIntelConfig.products]
+        let anyUpdated = false
+        for (let i = 0; i < updatedProducts.length; i++) {
+          const p = updatedProducts[i]
+          if (p.driveFolder) {
+            // BKL-UX-PRODUCT-FOLDER-REPARENT-01: verify existing folder is under
+            // slugParentId; if not, add slugParentId as additional parent.
+            const meta = await drivePI.files.get({
+              fileId: p.driveFolder,
+              fields: 'id,parents',
+              supportsAllDrives: true,
+            }).catch(() => null)
+            if (meta?.data.parents && !meta.data.parents.includes(slugParentId ?? parentId)) {
+              await drivePI.files.update({
+                fileId: p.driveFolder,
+                addParents: slugParentId ?? parentId,
+                supportsAllDrives: true,
+                fields: 'id',
+              }).catch((e: any) => console.warn(`[auto-bootstrap] failed to re-parent ${p.slug}:`, e?.message))
+              console.log(`[auto-bootstrap] Re-parented ${p.slug} under ${slugParentId ?? parentId}`)
+            }
+            continue
+          }
+          const safeSlug = p.slug.replace(/'/g, "\\'")
+          const existing = await drivePI.files.list({
+            q: `name='${safeSlug}' and '${slugParentId ?? parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+            fields: 'files(id)',
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          }).catch(() => ({ data: { files: [] } }))
+          if (existing.data.files?.length) {
+            updatedProducts[i] = { ...p, driveFolder: existing.data.files[0].id! }
+            anyUpdated = true
+            console.log(`[auto-bootstrap] Product folder found for ${p.slug}: ${existing.data.files[0].id}`)
+          } else {
+            const created = await drivePI.files.create({
+              requestBody: { name: p.slug, mimeType: 'application/vnd.google-apps.folder', parents: [slugParentId ?? parentId] },
+              supportsAllDrives: true,
+              fields: 'id',
+            }).catch(() => null)
+            if (created?.data.id) {
+              updatedProducts[i] = { ...p, driveFolder: created.data.id }
+              anyUpdated = true
+              console.log(`[auto-bootstrap] Product folder created for ${p.slug}: ${created.data.id}`)
+            }
+          }
+        }
+        if (anyUpdated) saveProductConfig(updatedProducts)
+      }
+    } catch (e: any) {
+      console.warn('[auto-bootstrap] Product intel folder pre-flight failed (non-blocking):', e?.message)
+    }
+
+    // Build the BootstrapContext and run the 5 steps.
+    const ctx: BootstrapContext = {
+      aeName,
+      customerNames,
+      sfReportId,
+      tableauTerritories,
+      parentFolderId,
+      podName,
+      aeFolderId: '',
+      podSheetId: null,
+      sfBookingsResults: [],
+      setStep,
+      cancelRequested,
+      resources: autoBootstrapState.resources,
+    }
+
+    try {
+      await runBootstrapSteps([...ALL_STEPS], ctx)
+    } catch (e: any) {
+      if (e instanceof BootstrapCancelledError) {
+        // BKL-WIZ-02: Mark remaining pending steps as cancelled.
+        for (const step of autoBootstrapState.steps) {
+          if (step.status === 'pending') step.status = 'cancelled'
+        }
+        autoBootstrapState.running = false
+        syncBootstrapRunningToCoordinator()
+        autoBootstrapState.completedAt = new Date().toISOString()
+        autoBootstrapState.error = 'Cancelled by user'
+        clearTimeout(bootstrapTimeoutId)
+        bootstrapFlags.autoBootstrapCancelRequested = false
+        console.log(`[auto-bootstrap] Cancelled by user after completing some steps for ${aeName}`)
+        return
+      }
+      // Step error — already recorded on autoBootstrapState.error and the step
+      // by the runner. Continue to cleanup so we still write completedAt.
+      autoBootstrapState.error = autoBootstrapState.error ?? `Bootstrap failed: ${e?.message ?? String(e)}`
+    }
+
+    // BKL-F05 / BKL-DOM-INF-01 / BKL-DOM-BATCH-01: Auto-run domain inference
+    // for bootstrapped customers after all steps complete. Single Gemini
+    // Flash-Lite batch call per 20 names + retry pass for nulls + Clearbit
+    // fallback. Awaited inline (not fire-and-forget) so the 409 gate and POD
+    // wait loop see a consistent running flag through the whole inference pass.
+    const capturedState = autoBootstrapState
+    bootstrapFlags.inferenceRunning = true
+    let inferenceTimedOut = false
+    // BKL-DOM-INF-02: AbortController lets the 60s timeout cancel in-flight
+    // fetch calls instead of orphaning them.
+    const abortCtrl = new AbortController()
+    try {
+      await Promise.race([
+        (async () => {
+          const aeCustomers = customers.filter(cx => !cx.inactive && cx.ae === aeName && !cx.domain)
+          if (aeCustomers.length === 0) return
+          const names = aeCustomers.map(cu => cu.name)
+          console.log(`[auto-bootstrap] Domain inference: ${names.length} customers for ${aeName}…`)
+          const inferenceResults: NonNullable<typeof capturedState.resources.domainInference> = []
+          const highConfidenceSaves: { name: string; domain: string; ae: string }[] = []
+
+          // Step 1: Gemini batch call
+          let batchMap = await batchInferDomains(names, abortCtrl.signal).catch((e: any) => {
+            console.warn(`[infer-domains] batch failed for ${aeName}:`, e?.message ?? e)
+            return null
+          })
+
+          // Step 2: Gemini retry for nulls only
+          if (batchMap) {
+            const nulls = names.filter(n => !batchMap!.get(n))
+            if (nulls.length > 0) {
+              console.log(`[infer-domains] retry batch for ${nulls.length} nulls: ${nulls.join(', ')}`)
+              const retryMap = await batchInferDomains(nulls, abortCtrl.signal).catch(() => null)
+              if (retryMap) {
+                for (const [name, domain] of retryMap) {
+                  if (domain) batchMap.set(name, domain)
+                }
+              }
+            }
+          }
+
+          // Step 3: Clearbit fallback for still-null
+          const stillNull = names.filter(n => !batchMap?.get(n))
+          for (const name of stillNull) {
+            if (abortCtrl.signal.aborted) break
+            const domain = await tier1Clearbit(name, abortCtrl.signal).catch(() => null)
+            if (domain) {
+              batchMap = batchMap ?? new Map()
+              batchMap.set(name, domain)
+            }
+          }
+
+          // Build results and collect saves
+          for (const cu of aeCustomers) {
+            const domain = batchMap?.get(cu.name) ?? null
+            if (!domain || !isPublicDomain(domain)) {
+              // Step 4: signal fallback (last ditch — Gmail/Calendar headers)
+              const r = await inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e: any) => {
+                console.warn(`[infer-domains] signal fallback error for ${cu.name}:`, e?.message ?? e)
+                return null
+              })
+              if (!r || r.candidates.length === 0) continue
+              const top = r.candidates[0]
+              const confidence = isHighConfidenceDomain(top) ? 'high' : 'low'
+              inferenceResults.push({ customerName: r.customerName, domain: top.domain, confidence, sources: top.sources })
+              if (confidence === 'high') highConfidenceSaves.push({ name: r.customerName, domain: top.domain, ae: aeName })
+              continue
+            }
+            inferenceResults.push({ customerName: cu.name, domain, confidence: 'high', sources: ['llm'] })
+            highConfidenceSaves.push({ name: cu.name, domain, ae: aeName })
+          }
+
+          // Auto-save high-confidence domains and apply needsManualDomain flags.
+          // AE-scoped so a matching name under a different AE is never contaminated.
+          // Serialized through lockState.customerWriteLock to prevent concurrent writes.
+          if (!inferenceTimedOut) {
+            const unresolvedNames = new Set(
+              aeCustomers
+                .filter(cu => !batchMap?.get(cu.name) && !inferenceResults.find(r => r.customerName === cu.name))
+                .map(cu => cu.name)
+            )
+            lockState.customerWriteLock = lockState.customerWriteLock.then(async () => {
+              let dirty = false
+              for (const { name, domain, ae } of highConfidenceSaves) {
+                const cu = customers.find(cx => cx.name === name && cx.ae === ae && !cx.inactive)
+                if (cu && !cu.domain) { cu.domain = domain; dirty = true }
+                // BKL-DOM-INF-13: clear flag once a domain resolves
+                if (cu && cu.needsManualDomain) { cu.needsManualDomain = false; dirty = true }
+              }
+              // BKL-DOM-INF-13: flag customers with no domain after all tiers
+              for (const name of unresolvedNames) {
+                const cu = customers.find(cx => cx.name === name && cx.ae === aeName && !cx.inactive)
+                if (cu && !cu.domain && !cu.needsManualDomain) { cu.needsManualDomain = true; dirty = true }
+              }
+              if (dirty) {
+                try {
+                  writeJsonAtomic(CUSTOMERS_PATH, { customers })
+                  console.log(`[auto-bootstrap] Domain inference complete for ${aeName}: ${highConfidenceSaves.length} saved, ${unresolvedNames.size} flagged needsManualDomain`)
+                } catch (e: any) { console.warn('[auto-bootstrap] domain auto-save failed:', e.message) }
+              }
+            })
+            await lockState.customerWriteLock
+          }
+
+          if (!inferenceTimedOut && inferenceResults.length > 0) {
+            capturedState.resources.domainInference = inferenceResults
+          }
+
+          // BKL-DOM-INF-05: Surface customers that remain domain-null after all
+          // inference tiers (batch + retry + Clearbit + signal fallback).
+          const unresolved = aeCustomers.filter(cu => !batchMap?.get(cu.name) && !inferenceResults.find(r => r.customerName === cu.name))
+          if (!inferenceTimedOut && unresolved.length > 0) {
+            capturedState.resources.inferenceWarning = `${unresolved.length} customer${unresolved.length > 1 ? 's' : ''} have no resolvable domain: ${unresolved.map(cu => cu.name).join(', ')}`
+          }
+        })(),
+        new Promise<void>(resolve => setTimeout(() => { inferenceTimedOut = true; abortCtrl.abort(); resolve() }, 60_000)),
+      ])
+      if (inferenceTimedOut) {
+        console.warn(`[auto-bootstrap] domain inference timed out after 60s for ${aeName}`)
+      }
+    } catch (e: any) {
+      console.warn(`[auto-bootstrap] domain inference failed for ${aeName}:`, e?.message ?? e)
+    } finally {
+      bootstrapFlags.inferenceRunning = false
+    }
+
+    autoBootstrapState.running = false
+    syncBootstrapRunningToCoordinator()
+    autoBootstrapState.completedAt = new Date().toISOString()
+    clearTimeout(bootstrapTimeoutId)
+
+    // Record bootstrap history
+    const aeCustomerCount = customers.filter(cx => !cx.inactive && cx.ae === aeName).length
+    recordBootstrapRun({
+      aeName,
+      completedAt: autoBootstrapState.completedAt,
+      success: !autoBootstrapState.error,
+      customerCount: aeCustomerCount,
+      accountsFound: customers.filter(cx => !cx.inactive && cx.ae === aeName).length,
+      durationMs: Date.now() - bootstrapStartMs,
+      source: 'single',
+    })
+
+    // BKL-TOKEN-03: intelligence + brief pregen triggers moved to POD-level
+    // (bootstrapPOD), fired ONCE after the full AE loop completes.
+    console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
+
+    // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — do not trigger
+    // during bootstrap. The next scheduled run will pick up account discovery
+    // for the new AE.
+
+    notify('Bootstrap Complete', `All steps complete for ${aeName}`, 'high').catch(() => {})
+  })()
+}
+
 // ── Route registration ───────────────────────────────────────────────────────
 
 export function createBootstrapRouter(): Hono {
@@ -1089,758 +1415,25 @@ export function createBootstrapRouter(): Hono {
     Object.assign(autoBootstrapState, {
       running: true,
       aeName,
-      steps: [
-        { name: 'Create Drive Folder', status: 'pending' },
-        { name: 'Create Customer Folders', status: 'pending' },
-        { name: 'Read SF Bookings Sheet', status: 'pending' },
-        { name: 'Write Subscriptions Sheet', status: 'pending' },
-        { name: 'Populate Data Sheets', status: 'pending' },
-      ],
+      steps: ALL_STEPS.map(s => ({ name: s.name, status: 'pending' as const })),
       error: null,
       completedAt: null,
       resources: { junkFiltered: junkFiltered.length > 0 ? junkFiltered : undefined },
     })
     syncBootstrapRunningToCoordinator()
 
-    const bootstrapStartMs = Date.now()
-    const stepStartMs: Record<number, number> = {}
-    const setStep = (idx: number, status: AutoBootstrapStep['status'], detail?: string) => {
-      const now = Date.now()
-      const existing = autoBootstrapState.steps[idx] ?? {}
-      // Record startedAt when transitioning to 'running'
-      if (status === 'running' && !stepStartMs[idx]) {
-        stepStartMs[idx] = now
-      }
-      // Record completedAt + durationMs when finishing
-      const isFinished = status === 'done' || status === 'error' || status === 'skipped'
-      autoBootstrapState.steps[idx] = {
-        ...existing,
-        status,
-        detail,
-        ...(status === 'running' && !existing.startedAt ? { startedAt: new Date(now).toISOString() } : {}),
-        ...(isFinished && stepStartMs[idx] ? {
-          completedAt: new Date(now).toISOString(),
-          durationMs: now - stepStartMs[idx],
-        } : {}),
-      }
-    }
-
-    // BKL-BOOTSTRAP-CANCEL-01: Per-step watchdog — fires if a step is still 'running' after timeout
-    const makeStepTimeout = (idx: number, label: string, timeoutMs = STEP_TIMEOUT_MS): ReturnType<typeof setTimeout> =>
-      setTimeout(() => {
-        if (autoBootstrapState.steps[idx]?.status === 'running') {
-          console.warn(`[auto-bootstrap] Step ${idx} (${label}) timed out after ${timeoutMs / 1000}s`)
-          setStep(idx, 'error', `Step timed out after ${timeoutMs / 1000}s`)
-          bootstrapFlags.autoBootstrapCancelRequested = true
-        }
-      }, timeoutMs)
-
-    // Hard timeout: scales with AE count (min 60 min, +30 min per AE)
-    const autoTimeoutMin = Math.max(60, aes.length * 30)
-    const bootstrapTimeoutId = setTimeout(() => {
-      if (autoBootstrapState.running) {
-        autoBootstrapState.running = false
-        syncBootstrapRunningToCoordinator()
-        autoBootstrapState.completedAt = new Date().toISOString()
-        autoBootstrapState.error = `Bootstrap timed out after ${autoTimeoutMin} minutes`
-        const stuck = autoBootstrapState.steps.findIndex(s => s.status === 'running')
-        if (stuck >= 0) autoBootstrapState.steps[stuck] = { ...autoBootstrapState.steps[stuck], status: 'error', detail: 'Timed out' }
-        console.error('[auto-bootstrap] Hard timeout reached — unsticking')
-        notify('Bootstrap Timed Out', `Bootstrap did not complete within ${autoTimeoutMin} minutes — check dashboard`, 'urgent').catch(() => {})
-      }
-    }, autoTimeoutMin * 60 * 1_000)
-
-    // Run async — client polls /api/bootstrap/auto/status
-    ;(async () => {
-      // BKL-WIZ-02: Check cancellation between steps and mark remaining pending steps as cancelled
-      const checkCancelled = (): boolean => {
-        if (!bootstrapFlags.autoBootstrapCancelRequested) return false
-        for (const step of autoBootstrapState.steps) {
-          if (step.status === 'pending') step.status = 'cancelled'
-        }
-        autoBootstrapState.running = false
-        syncBootstrapRunningToCoordinator()
-        autoBootstrapState.completedAt = new Date().toISOString()
-        autoBootstrapState.error = 'Cancelled by user'
-        clearTimeout(bootstrapTimeoutId)
-        bootstrapFlags.autoBootstrapCancelRequested = false
-        console.log(`[auto-bootstrap] Cancelled by user after completing some steps for ${aeName}`)
-        return true
-      }
-
-      // BKL-DRIVE-SCAFFOLD-01: Idempotently scaffold Config/ and Products/<slug> under parentFolderId
-      // before AE Drive folder creation (Step 0). Idempotent + non-fatal — safe to run per-AE in
-      // POD batches (the bootstrapPOD function also calls it once up-front; per-AE invocations no-op).
-      let perAeScaffold: { configFolderId: string; productsFolderId: string } | null = null
-      if (parentFolderId) {
-        perAeScaffold = await ensureConfigAndProductsScaffold(parentFolderId)
-      }
-
-      // Pre-flight — Ensure product intel Drive folders exist under Products/ (BKL-DRIVE-PRODUCTS-ROOT-01)
-      try {
-        const productIntelConfig = loadProductIntelConfig()
-        // BKL-UX-PRODUCT-FOLDER-CONFIG-01: parent folder now sourced from
-        // existing AE records via the helper, not from product-intel-config.
-        const parentId = getProductIntelParentFolderId()
-        // BKL-DRIVE-PRODUCTS-ROOT-01: slug folders go under Products/ subfolder, not CommandCenter root.
-        const slugParentId = perAeScaffold?.productsFolderId ?? parentId
-        // BKL-SEC-DRIVEID-VALIDATE-01: defense-in-depth — validate parentId before Drive calls
-        if (parentId && isValidDriveFolderId(parentId)) {
-          const drivePI = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
-          const updatedProducts = [...productIntelConfig.products]
-          let anyUpdated = false
-          for (let i = 0; i < updatedProducts.length; i++) {
-            const p = updatedProducts[i]
-            if (p.driveFolder) {
-              // BKL-UX-PRODUCT-FOLDER-REPARENT-01: verify existing folder is under slugParentId;
-              // if not, add slugParentId as an additional parent (non-destructive).
-              const meta = await drivePI.files.get({
-                fileId: p.driveFolder,
-                fields: 'id,parents',
-                supportsAllDrives: true,
-              }).catch(() => null)
-              if (meta?.data.parents && !meta.data.parents.includes(slugParentId ?? parentId)) {
-                await drivePI.files.update({
-                  fileId: p.driveFolder,
-                  addParents: slugParentId ?? parentId,
-                  supportsAllDrives: true,
-                  fields: 'id',
-                }).catch((e: any) => console.warn(`[auto-bootstrap] failed to re-parent ${p.slug}:`, e?.message))
-                console.log(`[auto-bootstrap] Re-parented ${p.slug} under ${slugParentId ?? parentId}`)
-              }
-              continue
-            }
-            const safeSlug = p.slug.replace(/'/g, "\\'")
-            const existing = await drivePI.files.list({
-              q: `name='${safeSlug}' and '${slugParentId ?? parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-              fields: 'files(id)',
-              supportsAllDrives: true,
-              includeItemsFromAllDrives: true,
-            }).catch(() => ({ data: { files: [] } }))
-            if (existing.data.files?.length) {
-              updatedProducts[i] = { ...p, driveFolder: existing.data.files[0].id! }
-              anyUpdated = true
-              console.log(`[auto-bootstrap] Product folder found for ${p.slug}: ${existing.data.files[0].id}`)
-            } else {
-              const created = await drivePI.files.create({
-                requestBody: { name: p.slug, mimeType: 'application/vnd.google-apps.folder', parents: [slugParentId ?? parentId] },
-                supportsAllDrives: true,
-                fields: 'id',
-              }).catch(() => null)
-              if (created?.data.id) {
-                updatedProducts[i] = { ...p, driveFolder: created.data.id }
-                anyUpdated = true
-                console.log(`[auto-bootstrap] Product folder created for ${p.slug}: ${created.data.id}`)
-              }
-            }
-          }
-          if (anyUpdated) saveProductConfig(updatedProducts)
-        }
-      } catch (e: any) {
-        console.warn('[auto-bootstrap] Product intel folder pre-flight failed (non-blocking):', e?.message)
-      }
-
-      // Check if AE already has a Drive folder from a previous run — skip creation if so
-      const existingAe = aes.find(a => a.name === aeName)
-      let driveFolderId = existingAe?.driveFolderId ?? ''
-
-      // Step 1 — Create Drive Folder (skip if already exists)
-      const tid0 = makeStepTimeout(0, 'Create Drive Folder')
-      try {
-        setStep(0, 'running')
-        if (driveFolderId) {
-          autoBootstrapState.resources.driveFolder = { id: driveFolderId, url: `https://drive.google.com/drive/folders/${driveFolderId}` }
-          setStep(0, 'done', `Folder: ${driveFolderId}`)
-          console.log(`[auto-bootstrap] Drive folder already exists, reusing: ${driveFolderId}`)
-        } else {
-          const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
-
-          // BKL-DRIVE-01: If podName is provided, find-or-create a POD subfolder under
-          // parentFolderId, then use it as the effective parent for the AE folder.
-          // Hierarchy: parentFolderId / POD Name / AE Name / customer folders
-          // Single-AE bootstrap without podName skips the POD layer.
-          // ADR-0016: drive-client supplies supportsAllDrives unconditionally.
-          let effectiveParentId = parentFolderId
-          if (podName && parentFolderId) {
-            try {
-              effectiveParentId = await driveClient.ensureChildFolder(parentFolderId, podName)
-              console.log(`[auto-bootstrap] POD folder ready: ${podName} (${effectiveParentId})`)
-            } catch (e: any) {
-              console.warn(`[auto-bootstrap] POD folder ensure failed: ${e?.message} — falling back to parentFolderId`)
-              effectiveParentId = parentFolderId
-            }
-          }
-
-          // BKL-M27: Find-or-create AE folder under effective parent.
-          if (effectiveParentId) {
-            try {
-              driveFolderId = await driveClient.ensureChildFolder(effectiveParentId, aeName)
-              autoBootstrapState.resources.driveFolder = {
-                id: driveFolderId,
-                url: `https://drive.google.com/drive/folders/${driveFolderId}`,
-              }
-              const updated = aes.map(a => a.name === aeName ? { ...a, driveFolderId } : a)
-              saveAes(updated)
-              setStep(0, 'done', `Folder: ${driveFolderId}`)
-              console.log(`[auto-bootstrap] AE folder ready: ${aeName} (${driveFolderId})`)
-            } catch (e: any) {
-              console.warn(`[auto-bootstrap] AE folder ensure failed: ${e?.message}`)
-            }
-          }
-
-          if (!driveFolderId) {
-            // No effective parent — create AE folder at Drive root via legacy direct call
-            const folder = await drive.files.create({
-              requestBody: {
-                name: aeName,
-                mimeType: 'application/vnd.google-apps.folder',
-              },
-              supportsAllDrives: true,
-              fields: 'id,webViewLink',
-            })
-            driveFolderId = folder.data.id!
-            autoBootstrapState.resources.driveFolder = { id: driveFolderId, url: folder.data.webViewLink ?? `https://drive.google.com/drive/folders/${driveFolderId}` }
-            const updated = aes.map(a => a.name === aeName ? { ...a, driveFolderId } : a)
-            saveAes(updated)
-            setStep(0, 'done', `Folder: ${driveFolderId}`)
-            console.log(`[auto-bootstrap] Drive folder created at root: ${driveFolderId}`)
-          }
-        }
-      } catch (e: any) {
-        setStep(0, 'error', e.message)
-        autoBootstrapState.error = `Drive folder creation failed: ${e.message}`
-        console.error('[auto-bootstrap] Drive folder creation failed:', e.message)
-      } finally {
-        clearTimeout(tid0)
-      }
-
-      if (checkCancelled()) return
-
-      // Step 2 — Create Customer Folders (one subfolder per customer inside AE folder)
-      if (!driveFolderId) {
-        setStep(1, 'skipped', 'Skipped: Drive folder creation failed')
-        console.log('[auto-bootstrap] Skipping customer folders — no Drive folder')
-      } else {
-        const tid1 = makeStepTimeout(1, 'Create Customer Folders')
-        try {
-          setStep(1, 'running', `0/${customerNames.length} folders…`)
-          const folderResources: Record<string, { id: string; url: string }> = {}
-          for (let i = 0; i < customerNames.length; i++) {
-            const cname = customerNames[i]
-            try {
-              const existingCustomer = customers.find(cx => cx.name === cname)
-              let folderId = existingCustomer?.driveFolderId ?? ''
-              if (!folderId) {
-                // BKL-M27: find-or-create customer folder via drive-client (ADR-0016).
-                folderId = await driveClient.ensureChildFolder(driveFolderId, cname)
-                console.log(`[bootstrap] Customer folder ready: ${cname} (${folderId})`)
-                if (existingCustomer) {
-                  existingCustomer.driveFolderId = folderId
-                  try {
-                    // BKL-DATA-03: folderId persisted to customers.json via atomic tmp+rename
-                    writeJsonAtomic(CUSTOMERS_PATH, { customers })
-                  } catch (e: any) { console.warn('[bootstrap] customer folder ID persist failed:', e.message) }
-                }
-                // Do NOT create territory-sheet customer records — territory sheet is AE→territory map only.
-                // Customers are sourced exclusively from sf-bookings-sync with canonical SF names.
-              }
-              folderResources[cname] = { id: folderId, url: `https://drive.google.com/drive/folders/${folderId}` }
-              setStep(1, 'running', `${i + 1}/${customerNames.length} folders…`)
-              console.log(`[auto-bootstrap] Customer folder ready for ${cname}: ${folderId}`)
-            } catch (e: any) {
-              console.warn(`[auto-bootstrap] Customer folder creation failed for ${cname}: ${e.message}`)
-            }
-          }
-          autoBootstrapState.resources.customerFolders = folderResources
-          setStep(1, 'done', `${Object.keys(folderResources).length}/${customerNames.length} folders created`)
-          console.log(`[auto-bootstrap] Customer folders done: ${Object.keys(folderResources).length}/${customerNames.length}`)
-        } catch (e: any) {
-          setStep(1, 'error', e.message)
-          autoBootstrapState.error = `Customer folder creation failed: ${e.message}`
-          console.error('[auto-bootstrap] Customer folder creation failed:', e.message)
-        } finally {
-          clearTimeout(tid1)
-        }
-      }
-
-      if (checkCancelled()) return
-
-      // Steps 3 + 4 — Populate subscription data.
-      // If a podBookingsSheet is registered for this AE's territory (settings.json), use the
-      // SF bookings sheet as source of truth. Otherwise fall back to Supportable scraper.
-      let sfBookingsResults: Parameters<typeof writeSubscriptionSheet>[0] = []
-
-      // Check settings.json for a POD bookings folder, then discover sheets from Drive
-      // BKL-UX90: Read from regions[].podBookingsFolderId via normalizeSettings — the flat
-      // root config's bookings folder field may hold the parent folder ID (not the bookings folder).
-      let podSheetId: string | null = null
-      try {
-        const rawSettings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
-        const normalized = normalizeSettings(rawSettings)
-        // Find the region whose pods map contains this AE's pod key
-        const podKey = tableauTerritories[0]?.replace(/_TERR\d+$/, '')
-        const region = podKey
-          ? (normalized.regions.find(r => podKey in r.pods) ?? normalized.regions[0])
-          : normalized.regions[0]
-        const folderId = region?.podBookingsFolderId
-        if (folderId) {
-          const podSheets = await listPodBookingSheets(folderId)
-          podSheetId = matchPodSheet(podSheets, tableauTerritories)
-          if (podSheetId) {
-            const matched = podSheets.find(s => s.sheetId === podSheetId)
-            console.log(`[auto-bootstrap] Resolved POD sheet for ${aeName}: "${matched?.displayName}" (${podSheetId})`)
-          }
-        }
-      } catch { /* no settings file or Drive error — fall back to Supportable */ }
-
-      if (podSheetId) {
-        // ── SF Bookings path ──────────────────────────────────────────────────
-        // SF sheet is source of truth for customer names + subscriptions.
-        // Account numbers come later via RH case scraper (no Supportable needed).
-        //
-        // BKL-INGEST-02: 4-level cache hierarchy
-        //   L2 = AE Supportable sheet modifiedTime < 24h → read rows directly (skip L3)
-        //   L3 = POD-level SF bookings sheet via fetchSfBookingsRaw() (L1 local cache inside)
-        //   Pattern mirrors CCSP L2 check at this file's CCSP section below.
-        const tid2 = makeStepTimeout(2, 'Read SF Bookings')
-        // BKL-CANCEL-STEP3-OVERLAP: tid3 must NOT start here alongside tid2.
-        // Starting it before the SF read means it could fire while Step 2 is still running
-        // (e.g., during a slow findExistingSheet call), false-marking Step 3 as timed-out
-        // and setting autoBootstrapCancelRequested. tid3 is declared just before the Step 3
-        // sheet-write block so the clock only starts when Step 3 actually begins.
-        try {
-          setStep(2, 'running', `reading SF bookings sheet…`)
-          console.log(`[auto-bootstrap] Using SF bookings sheet ${podSheetId} for ${aeName} (territories: ${tableauTerritories.join(', ')})`)
-
-          // Cold-start guard — if customers.json was wiped we must re-derive even on a fresh L2 hit.
-          const aeHasCustomers = customers.some(cx => cx.ae === aeName && !cx.inactive)
-
-          // L2 probe — if AE's existing Supportable sheet is <24h old, read from it and skip L3.
-          const existingSupportableIdForL2 = aes.find(a => a.name === aeName)?.subscriptionSheetId
-            ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `Supportable — ${aeName}`) : null)
-            ?? null
-          let l2Results: Awaited<ReturnType<typeof readSfBookingsFromAeSheet>> = null
-          if (existingSupportableIdForL2) {
-            const supMt = await getSheetModifiedTime(existingSupportableIdForL2)
-            if (supMt && (Date.now() - supMt.getTime()) < CACHE_HIER_FRESH_MS) {
-              l2Results = await readSfBookingsFromAeSheet(existingSupportableIdForL2)
-              if (l2Results && l2Results.length > 0) {
-                const rowCount = l2Results.reduce((n, r) => n + r.rows.length, 0)
-                console.log(`[bootstrap] ${aeName}: SF bookings cache L2 hit (AE Supportable sheet) — ${l2Results.length} customers, ${rowCount} rows${aeHasCustomers ? '' : ' (cold start — will re-derive from L3)'}`)
-                emitCacheLevel({ ae: aeName, flow: 'sfBookings', level: 2, rowCount })
-                sfBookingsResults = l2Results
-                setStep(2, 'done', `${l2Results.length} customers from L2 cache (AE sheet)`)
-                // Short-circuit — no L3 read, no customers.json upsert (prior run already wrote customers).
-                // Guard: aeHasCustomers ensures this path only fires when customers.json already has this AE's data.
-                // On cold start (empty customers.json), fall through to L3 to re-derive customers.
-                // Step 3 (write Supportable sheet) still runs below with the L2 results.
-              } else {
-                console.log(`[bootstrap] ${aeName}: SF bookings L2 read returned no rows — falling through to L3`)
-                emitCacheLevel({ ae: aeName, flow: 'sfBookings', level: 3 })
-              }
-            } else {
-              const ageH = supMt ? Math.round((Date.now() - supMt.getTime()) / 3_600_000) : null
-              console.log(`[bootstrap] ${aeName}: SF bookings cache L2 stale (${ageH ?? '?'}h) — falling through to L3`)
-              emitCacheLevel({ ae: aeName, flow: 'sfBookings', level: 3 })
-            }
-          }
-
-          if (l2Results && l2Results.length > 0 && aeHasCustomers) {
-            // L2 hit — skip L3 read + customer derivation. Continue to Step 3 (sheet write).
-          } else {
-          const rawSfData = await fetchSfBookingsRaw(podSheetId)
-          const existingCustomers = customers.filter(cx => cx.ae === aeName && !cx.inactive)
-          const { results, matched, newCustomers, aliasedCustomers, ccspOnly } = deriveSfCustomersByTerritory(
-            rawSfData, tableauTerritories, existingCustomers, aeName, false,
-          )
-
-          // Upsert net-new and alias-updated customers into customers array + disk
-          for (const nc of newCustomers) {
-            if (!customers.some(c => c.name === nc.name)) {
-              customers.push(nc)
-              console.log(`[auto-bootstrap] SF new customer: ${nc.name}`)
-            }
-          }
-          for (const ac of aliasedCustomers) {
-            const idx = customers.findIndex(c => c.name === ac.name)
-            if (idx !== -1) customers[idx] = ac
-          }
-          for (const name of ccspOnly) {
-            const cx = customers.find(c => c.name === name)
-            if (cx) cx.ccspCustomer = true
-          }
-          writeJsonAtomic(CUSTOMERS_PATH, { customers })
-
-          sfBookingsResults = results
-          setStep(2, 'done', `${matched.length}/${results.length} customers with subscriptions`)
-          console.log(`[auto-bootstrap] SF bookings: ${matched.length} matched, ${newCustomers.length} new, ${ccspOnly.length} CCSP-only`)
-          }  // end BKL-INGEST-02 L2-miss branch
-        } catch (e: any) {
-          setStep(2, 'error', e.message)
-          setStep(3, 'error', 'SF sheet read failed — no results to write')
-          console.error('[auto-bootstrap] SF bookings read failed:', e.message)
-          autoBootstrapState.error = `SF bookings read failed: ${e.message}`
-        } finally {
-          clearTimeout(tid2)
-        }
-      } else {
-        // No SF bookings sheet found for this AE's territory — skip subscription steps.
-        // This app only processes PODs that have a sheet in the shared Drive folder.
-        setStep(2, 'skipped', 'No SF bookings sheet found for this territory — add sheet to shared folder to enable')
-        setStep(3, 'skipped', 'Skipped: no SF bookings sheet')
-        console.warn(`[auto-bootstrap] No POD sheet found for ${aeName} (territories: ${tableauTerritories.join(', ')}) — skipping subscription steps`)
-      }
-
-      if (checkCancelled()) return
-
-      // Step 3 — Write Subscription Sheet (data already read in step above)
-      // BKL-CANCEL-STEP3-OVERLAP: tid3 starts HERE — not earlier alongside tid2 —
-      // so the 90s watchdog only ticks while Step 3 is actually executing.
-      if (!driveFolderId) {
-        setStep(3, 'skipped', 'Skipped: Drive folder creation failed')
-        console.log('[auto-bootstrap] Skipping subscription sheet — no Drive folder')
-      } else if (sfBookingsResults.length > 0) {
-        const tid3 = makeStepTimeout(3, 'Write Subscriptions')
-        try {
-          setStep(3, 'running', 'writing to Google Sheet…')
-          const existingSupportableId = aes.find(a => a.name === aeName)?.subscriptionSheetId
-            ?? (driveFolderId ? await findExistingSheet(google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) }), driveFolderId, `Supportable — ${aeName}`) : null)
-            ?? null
-          if (existingSupportableId) console.log(`[auto-bootstrap] Subscription sheet found/reusing: ${existingSupportableId}`)
-          const sheetId = await writeSubscriptionSheet(sfBookingsResults, aeName, driveFolderId || undefined, existingSupportableId || undefined)
-          patchAe(aeName, { subscriptionSheetId: sheetId })
-          autoBootstrapState.resources.supportableSheet = { id: sheetId, url: `https://docs.google.com/spreadsheets/d/${sheetId}/edit` }
-          // Warm sheet cache immediately from in-memory data — no extra API calls needed
-          for (const result of sfBookingsResults) {
-            if (result.rows.length > 0) {
-              const normalized = normalizeRows(result.rows, result.customerName)
-              if (normalized.length > 0) writeSheetCache(result.customerName, normalized)
-            }
-          }
-          setStep(3, 'done', `Sheet: ${sheetId}`)
-          console.log(`[auto-bootstrap] Subscription sheet ${existingSupportableId ? 'updated' : 'created'}: ${sheetId}`)
-        } catch (e: any) {
-          setStep(3, 'error', e.message)
-          autoBootstrapState.error = `Subscription sheet write failed: ${e.message}`
-          console.error('[auto-bootstrap] Subscription sheet write failed:', e.message)
-        } finally {
-          clearTimeout(tid3)
-        }
-      }
-
-      if (checkCancelled()) return
-
-      // Step 5 — Populate Data Sheets from L3 (CCSP + Pipeline via l3-bootstrap)
-      // BKL-ARCH-L4-SPLIT: Hero install uses l3-bootstrap — no browser, no Tableau, no SF OAuth.
-      if (!driveFolderId) {
-        setStep(4, 'skipped', 'Skipped: Drive folder creation failed')
-        console.log('[auto-bootstrap] Skipping data sheets — no Drive folder')
-      } else {
-        const tid4 = makeStepTimeout(4, 'Populate Data Sheets', 60_000)
-        try {
-          setStep(4, 'running')
-          // BKL-ARCH-L4-SPLIT: Hero install uses l3-bootstrap — no browser, no Tableau, no SF OAuth.
-          // Build a minimal Drive client shim that wraps googleapis for l3-bootstrap.
-          const { google: googApis } = await import('googleapis')
-          const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-          const driveApi = googApis.drive({ version: 'v3', auth })
-          const sheetsApi = googApis.sheets({ version: 'v4', auth })
-
-          const l3DriveClient = {
-            async createFolder(name: string, parentId: string): Promise<string> {
-              const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-              const existing = await driveApi.files.list({
-                q: `name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-                fields: 'files(id)',
-                supportsAllDrives: true,
-                includeItemsFromAllDrives: true,
-              }).catch(() => ({ data: { files: [] } }))
-              if (existing.data.files?.length) return existing.data.files[0].id!
-              const created = await withQuotaRetry(
-                () => driveApi.files.create({
-                  requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
-                  supportsAllDrives: true,
-                  fields: 'id',
-                }),
-                `createFolder:${name}`,
-              )
-              return created.data.id!
-            },
-            async createSheet(name: string, parentFolderId: string): Promise<string> {
-              const existing = await findExistingSheet(driveApi, parentFolderId, name)
-              if (existing) return existing
-              const created = await withQuotaRetry(
-                () => driveApi.files.create({
-                  requestBody: {
-                    name,
-                    mimeType: 'application/vnd.google-apps.spreadsheet',
-                    parents: [parentFolderId],
-                  },
-                  supportsAllDrives: true,
-                  fields: 'id',
-                }),
-                `createSheet:${name}`,
-              )
-              return created.data.id!
-            },
-            async writeRows(sheetId: string, rows: string[][]): Promise<void> {
-              if (!rows.length) return
-              await withQuotaRetry(
-                () => sheetsApi.spreadsheets.values.update({
-                  spreadsheetId: sheetId,
-                  range: 'Sheet1!A1',
-                  valueInputOption: 'RAW',
-                  requestBody: { values: rows },
-                }),
-                `writeRows:${sheetId}`,
-              )
-            },
-          }
-
-          const l3DataReader = {
-            async readSfBookings(cfg: { podId: string; aeName: string; customerNames: string[] }): Promise<string[][]> {
-              try {
-                const { fetchSfBookingsRaw, deriveSfCustomersByTerritory } = await import('./sf-bookings-reader.ts')
-                const rawSettings = JSON.parse(require('fs').readFileSync(SETTINGS_PATH, 'utf-8'))
-                const normalized = normalizeSettings(rawSettings)
-                const podKey = cfg.podId?.replace(/_TERR\d+$/, '')
-                const region = normalized.regions.find((r: any) => podKey in (r.pods ?? {})) ?? normalized.regions[0]
-                const folderId = region?.podBookingsFolderId
-                if (!folderId) return [['Account Name', 'AE', 'Region']]
-                const { listPodBookingSheets, matchPodSheet } = await import('./sf-bookings-reader.ts')
-                const podSheets = await listPodBookingSheets(folderId)
-                const podSheetId = matchPodSheet(podSheets, tableauTerritories.length > 0 ? tableauTerritories : [cfg.podId])
-                if (!podSheetId) return [['Account Name', 'AE', 'Region']]
-                const rawSfData = await fetchSfBookingsRaw(podSheetId)
-                const existingCustomers = customers.filter(cx => cx.ae === cfg.aeName && !cx.inactive)
-                const { results } = deriveSfCustomersByTerritory(
-                  rawSfData,
-                  tableauTerritories.length > 0 ? tableauTerritories : [cfg.podId],
-                  existingCustomers,
-                  cfg.aeName,
-                  false,
-                )
-                const header = ['Account Name', 'AE', 'Subscription Count']
-                const rows: string[][] = [header]
-                for (const r of results) {
-                  rows.push([r.customerName, cfg.aeName, String(r.rows.length)])
-                }
-                return rows
-              } catch (e: any) {
-                console.warn(`[l3-bootstrap] SF bookings L3 read failed: ${e?.message}`)
-                return [['Account Name', 'AE', 'Subscription Count']]
-              }
-            },
-            async readCcsp(_cfg: { podId: string; aeName: string; customerNames: string[] }): Promise<string[][]> {
-              const header = ['Account Name', 'Cloud Partner', 'ACV+', 'Quarter']
-              return [header]
-            },
-            async readPipeline(_cfg: { podId: string; aeName: string; customerNames: string[] }): Promise<string[][]> {
-              const header = ['Account Name', 'Opportunity', 'Stage', 'ACV', 'Close Date']
-              return [header]
-            },
-          }
-
-          const l3Deps: AeBootstrapDeps = { driveClient: l3DriveClient, l3Reader: l3DataReader }
-          const l3Result = await bootstrapAeL3({
-            region: '',
-            podId: tableauTerritories[0]?.replace(/_TERR\d+$/, '') ?? '',
-            territoryCode: tableauTerritories[0] ?? '',
-            aeName,
-            customerNames,
-            parentFolderId: driveFolderId,
-            sfReportId,
-          }, l3Deps)
-
-          patchAe(aeName, {
-            ccspSheetId: l3Result.ccspSheetId,
-            pipelineSheetId: l3Result.pipelineSheetId,
-            subscriptionSheetId: l3Result.sfBookingsSheetId,
-          })
-
-          autoBootstrapState.resources.ccspSheet = { id: l3Result.ccspSheetId, url: `https://docs.google.com/spreadsheets/d/${l3Result.ccspSheetId}/edit` }
-          autoBootstrapState.resources.pipelineSheet = { id: l3Result.pipelineSheetId, url: `https://docs.google.com/spreadsheets/d/${l3Result.pipelineSheetId}/edit` }
-          autoBootstrapState.resources.supportableSheet = { id: l3Result.sfBookingsSheetId, url: `https://docs.google.com/spreadsheets/d/${l3Result.sfBookingsSheetId}/edit` }
-
-          if (l3Result.unmatchedCustomers.length > 0) {
-            autoBootstrapState.resources.unmatchedCustomers = l3Result.unmatchedCustomers
-            console.warn(`[auto-bootstrap] l3-bootstrap: ${l3Result.unmatchedCustomers.length} unmatched customers: ${l3Result.unmatchedCustomers.join(', ')}`)
-          }
-
-          setStep(4, 'done', `3 sheets created (CCSP, Pipeline, SF Bookings)`)
-          console.log(`[auto-bootstrap] l3-bootstrap complete for ${aeName}: ccsp=${l3Result.ccspSheetId} pipeline=${l3Result.pipelineSheetId} sfBookings=${l3Result.sfBookingsSheetId}`)
-
-          refreshPipeline().catch(e => console.warn('[auto-bootstrap] post-bootstrap pipeline cache refresh failed:', e.message))
-        } catch (e: any) {
-          setStep(4, 'error', e.message)
-          autoBootstrapState.error = `Data sheet population failed: ${e.message}`
-          console.error('[auto-bootstrap] Data sheet population failed:', e.message)
-        } finally {
-          clearTimeout(tid4)
-        }
-      }
-
-      // BKL-F05 / BKL-DOM-INF-01 / BKL-DOM-BATCH-01: Auto-run domain inference for
-      // bootstrapped customers after all steps complete. Single Gemini Flash-Lite
-      // batch call per 20 names + retry pass for nulls + Clearbit fallback. Awaited
-      // inline (not fire-and-forget) so the 409 gate and POD wait loop see a
-      // consistent running flag through the whole inference pass. capturedState
-      // anchors writes to the state object that owned this run.
-      const capturedState = autoBootstrapState
-      bootstrapFlags.inferenceRunning = true
-      let inferenceTimedOut = false
-      // BKL-DOM-INF-02: AbortController lets the 60s timeout cancel in-flight fetch
-      // calls instead of orphaning them. Each tier's per-call timeout (5s/30s) is
-      // chained via AbortSignal.any so the outer abort is additive, not replacing.
-      const abortCtrl = new AbortController()
-      try {
-        await Promise.race([
-          (async () => {
-            const aeCustomers = customers.filter(cx => !cx.inactive && cx.ae === aeName && !cx.domain)
-            if (aeCustomers.length === 0) return
-            const names = aeCustomers.map(cu => cu.name)
-            console.log(`[auto-bootstrap] Domain inference: ${names.length} customers for ${aeName}…`)
-            const inferenceResults: NonNullable<typeof capturedState.resources.domainInference> = []
-            const highConfidenceSaves: { name: string; domain: string; ae: string }[] = []
-
-            // Step 1: Gemini batch call
-            let batchMap = await batchInferDomains(names, abortCtrl.signal).catch((e: any) => {
-              console.warn(`[infer-domains] batch failed for ${aeName}:`, e?.message ?? e)
-              return null
-            })
-
-            // Step 2: Gemini retry for nulls only
-            if (batchMap) {
-              const nulls = names.filter(n => !batchMap!.get(n))
-              if (nulls.length > 0) {
-                console.log(`[infer-domains] retry batch for ${nulls.length} nulls: ${nulls.join(', ')}`)
-                const retryMap = await batchInferDomains(nulls, abortCtrl.signal).catch(() => null)
-                if (retryMap) {
-                  for (const [name, domain] of retryMap) {
-                    if (domain) batchMap.set(name, domain)
-                  }
-                }
-              }
-            }
-
-            // Step 3: Clearbit fallback for still-null
-            const stillNull = names.filter(n => !batchMap?.get(n))
-            for (const name of stillNull) {
-              if (abortCtrl.signal.aborted) break
-              const domain = await tier1Clearbit(name, abortCtrl.signal).catch(() => null)
-              if (domain) {
-                batchMap = batchMap ?? new Map()
-                batchMap.set(name, domain)
-              }
-            }
-
-            // Build results and collect saves
-            for (const cu of aeCustomers) {
-              const domain = batchMap?.get(cu.name) ?? null
-              if (!domain || !isPublicDomain(domain)) {
-                // Step 4: signal fallback (last ditch — Gmail/Calendar headers)
-                const r = await inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e: any) => {
-                  console.warn(`[infer-domains] signal fallback error for ${cu.name}:`, e?.message ?? e)
-                  return null
-                })
-                if (!r || r.candidates.length === 0) continue
-                const top = r.candidates[0]
-                const confidence = isHighConfidenceDomain(top) ? 'high' : 'low'
-                inferenceResults.push({ customerName: r.customerName, domain: top.domain, confidence, sources: top.sources })
-                if (confidence === 'high') highConfidenceSaves.push({ name: r.customerName, domain: top.domain, ae: aeName })
-                continue
-              }
-              inferenceResults.push({ customerName: cu.name, domain, confidence: 'high', sources: ['llm'] })
-              highConfidenceSaves.push({ name: cu.name, domain, ae: aeName })
-            }
-
-            // Auto-save high-confidence domains and apply needsManualDomain flags.
-            // AE-scoped so a matching name under a different AE is never contaminated.
-            // Serialized through lockState.customerWriteLock to prevent concurrent writes.
-            if (!inferenceTimedOut) {
-              const unresolvedNames = new Set(
-                aeCustomers
-                  .filter(cu => !batchMap?.get(cu.name) && !inferenceResults.find(r => r.customerName === cu.name))
-                  .map(cu => cu.name)
-              )
-              lockState.customerWriteLock = lockState.customerWriteLock.then(async () => {
-                let dirty = false
-                for (const { name, domain, ae } of highConfidenceSaves) {
-                  const cu = customers.find(cx => cx.name === name && cx.ae === ae && !cx.inactive)
-                  if (cu && !cu.domain) { cu.domain = domain; dirty = true }
-                  // BKL-DOM-INF-13: clear flag once a domain resolves
-                  if (cu && cu.needsManualDomain) { cu.needsManualDomain = false; dirty = true }
-                }
-                // BKL-DOM-INF-13: flag customers with no domain after all tiers
-                for (const name of unresolvedNames) {
-                  const cu = customers.find(cx => cx.name === name && cx.ae === aeName && !cx.inactive)
-                  if (cu && !cu.domain && !cu.needsManualDomain) { cu.needsManualDomain = true; dirty = true }
-                }
-                if (dirty) {
-                  try {
-                    writeJsonAtomic(CUSTOMERS_PATH, { customers })
-                    console.log(`[auto-bootstrap] Domain inference complete for ${aeName}: ${highConfidenceSaves.length} saved, ${unresolvedNames.size} flagged needsManualDomain`)
-                  } catch (e: any) { console.warn('[auto-bootstrap] domain auto-save failed:', e.message) }
-                }
-              })
-              await lockState.customerWriteLock
-            }
-
-            if (!inferenceTimedOut && inferenceResults.length > 0) {
-              capturedState.resources.domainInference = inferenceResults
-            }
-
-            // BKL-DOM-INF-05: Surface customers that remain domain-null after all
-            // inference tiers (batch + retry + Clearbit + signal fallback) so the
-            // wizard UI can prompt the user to set those domains manually.
-            const unresolved = aeCustomers.filter(cu => !batchMap?.get(cu.name) && !inferenceResults.find(r => r.customerName === cu.name))
-            if (!inferenceTimedOut && unresolved.length > 0) {
-              capturedState.resources.inferenceWarning = `${unresolved.length} customer${unresolved.length > 1 ? 's' : ''} have no resolvable domain: ${unresolved.map(cu => cu.name).join(', ')}`
-            }
-          })(),
-          new Promise<void>(resolve => setTimeout(() => { inferenceTimedOut = true; abortCtrl.abort(); resolve() }, 60_000)),
-        ])
-        if (inferenceTimedOut) {
-          console.warn(`[auto-bootstrap] domain inference timed out after 60s for ${aeName}`)
-        }
-      } catch (e: any) {
-        console.warn(`[auto-bootstrap] domain inference failed for ${aeName}:`, e?.message ?? e)
-      } finally {
-        bootstrapFlags.inferenceRunning = false
-      }
-
-      autoBootstrapState.running = false
-      syncBootstrapRunningToCoordinator()
-      autoBootstrapState.completedAt = new Date().toISOString()
-      clearTimeout(bootstrapTimeoutId)
-
-      // Record bootstrap history
-      const aeCustomerCount = customers.filter(cx => !cx.inactive && cx.ae === aeName).length
-      recordBootstrapRun({
-        aeName,
-        completedAt: autoBootstrapState.completedAt,
-        success: !autoBootstrapState.error,
-        customerCount: aeCustomerCount,
-        accountsFound: customers.filter(cx => !cx.inactive && cx.ae === aeName).length,
-        durationMs: Date.now() - bootstrapStartMs,
-        source: 'single',
-      })
-
-      // BKL-TOKEN-03: intelligence + brief pregen triggers moved to POD-level (bootstrapPOD),
-      // fired ONCE after the full AE loop completes. Previously a POD with N AEs triggered
-      // N pregen batches, each processing every customer in the system — quadratic token waste.
-      // Single-AE bootstraps (non-POD) rely on the scheduled/manual pregen endpoints or the
-      // POD completion hook when run as part of a POD.
-
-      console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
-
-      // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — do not trigger during bootstrap.
-      // The next scheduled run will pick up account discovery + case fetch for the new AE.
-      // (Previously BKL-BOOT-06 enqueued an rh-cases scrape here — removed to keep the
-      // shared Chromium context unloaded during the fragile bootstrap window.)
-
-      notify('Bootstrap Complete', `All steps complete for ${aeName}`, 'high').catch(() => {})
-    })()
+    // Run async — client polls /api/bootstrap/auto/status. The full flow
+    // (per-AE scaffold pre-flight, 5 step runner, post-step domain inference,
+    // cleanup + history) lives in runAutoBootstrap below — extracted as part
+    // of BKL-ARCH-01 (issue #54) so the route handler stays slim.
+    runAutoBootstrap({
+      aeName,
+      customerNames,
+      sfReportId,
+      tableauTerritories,
+      parentFolderId,
+      podName,
+    })
 
     return c.json({ started: true })
   })

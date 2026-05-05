@@ -9363,6 +9363,27 @@ Files: src/customer/doc-extractors.ts (new — DocExtractor interface + Exportab
 Description: ExportableDocExtractor handles GoogleDoc/Presentation/Spreadsheet via drive.files.export. PdfDocExtractor handles PDF with local unpdf extraction + Gemini multimodal Vertex fallback. Folder resolution (Priority 1/2/3) in fetchCustomerDocsImpl untouched. Callers (customer.ts, signals/docs.ts) unchanged.
 Decision: DONE 2026-05-04 — tsc clean, 610 unit pass, 28 Playwright pass/5 skip on 7776, Quinn PASS, Rook PASS. Issue #56 closed.
 
+### BKL-ARCH-BOOTSTRAP-STEPS-01 | Extract auto-bootstrap IIFE into BootstrapStep modules (Issue #54)
+Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
+Source: fallow complexity report — bootstrap-orchestrator auto-bootstrap route handler 760 LOC IIFE
+Files: src/bootstrap/steps/types.ts (new — BootstrapContext + BootstrapStepDef interfaces), src/bootstrap/steps/runner.ts (new — runBootstrapSteps + watchdog timers), src/bootstrap/steps/{create-drive-folder,create-customer-folders,read-sf-bookings,write-subscriptions,populate-data-sheets}.ts (5 new step modules), src/bootstrap/steps/index.ts (ALL_STEPS registry), src/bootstrap/helpers.ts (findExistingSheet + SETTINGS_PATH extracted), src/bootstrap-orchestrator.ts (auto-bootstrap IIFE 760→87 LOC), test/unit/bootstrap-steps/preconditions.test.ts (new, 18 tests)
+Description: 5-step BootstrapStep chain (Supportable was already removed). Each step: name, preconditions(ctx), execute(ctx). runner.ts iterates steps with per-step watchdog timers and cancel-check loop. bootstrapPOD left untouched. findExistingSheet + SETTINGS_PATH moved to helpers.ts to prevent circular import. BootstrapCancelledError signals user-initiated cancel. Concurrent-call 409 gate preserved.
+Decision: DONE 2026-05-04 — tsc clean, 648 unit pass, 28 Playwright pass/5 skip on 7776, Quinn PASS, Rook PASS. Issue #54 closed.
+
+### BKL-ARCH-BOOTSTRAP-E2E-01 | Update bootstrap-e2e.spec.ts for hero/L4 split — run on hero with Drive auth only (Issue TBD)
+Priority: P1 | Size: M | Status: 🔴 OPEN
+Source: Jason 2026-05-04 — after hero/L4 split, E2E no longer needs RH Portal session, Tableau session, or VPN
+Files: test/bootstrap-e2e.spec.ts (prereq checks, step count, assertion scope)
+Description: Current E2E pre-flight checks require: RH Portal connected, Tableau session valid, VPN active. After the split, hero image only does Drive operations — all three are obsolete. Updated E2E should require only: (1) Google Drive offline token valid (POST /api/settings/offline-token already configured), (2) AE config present, (3) At least one customer in config. E2E flow: bootstrap one AE → verify Drive folders created → verify L3 cache ingested (CCSP, ACV, pipeline opps visible in dashboard) → verify account portfolios + account detail page → verify account intelligence generation triggered on at least one account. No VPN check. No Portal/Tableau session checks.
+Acceptance criteria:
+- [ ] Pre-flight removes Tableau/Portal/VPN checks; adds Drive auth ping
+- [ ] Step count matches 5 (not 6 — Supportable gone)
+- [ ] Dashboard assertions: CCSP rows, ACV value, pipeline opportunities all visible post-bootstrap
+- [ ] Account portfolios page shows ≥1 customer
+- [ ] Account detail page loads for first customer
+- [ ] Intelligence generation triggered (poll /api/intelligence/status or check cache file)
+Issue: TBD
+
 ### BKL-SECURITY-RUN-COORD-01 | run-coordinator: add queue size cap + log swallowed errors (P4)
 Priority: P4 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
 Source: Rook scan 2026-05-04 (issue #53 review)
