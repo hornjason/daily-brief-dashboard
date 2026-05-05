@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-06
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -397,6 +397,8 @@ Customer folder names use `normalizeCustomerName()` — strips legal suffixes (I
 **Customer type has `driveFolderId?: string`** — stored on each `Customer` entry in `customers.json` after the folder is created in Step 2.
 
 **Bootstrap does NOT populate local cache:** Steps 5 and 6 write CCSP and pipeline data directly to Google Sheets. The local JSON cache files in `data/cache/` are populated separately when the dashboard loads and triggers scrapes. `api/status/scrapes` sync timestamps ARE set during bootstrap.
+
+**Step 5 L3 data flow (populate-data-sheets.ts):** `readCcsp` downloads `CCSP-{pod}-*.csv` from `podBookingsFolderId`, filters by territory, writes full rows to the CCSP sheet. `readPipeline` searches for `SF-PIPELINE-{pod}-*.csv` in `podBookingsFolderId` with a fallback to any SF-PIPELINE file in the folder. Sheet tabs are renamed at creation time ("CCSP Data" for CCSP, "Pipeline" for Pipeline) so `fetchCCSPData` and `fetchPipelineData` find the correct tabs. The AE folder is found via `ctx.parentFolderId` (CommandCenter root), NOT `aeFolderId` — passing `aeFolderId` caused a nested folder bug (BKL-BOOTSTRAP-NESTED-FOLDER-01, fixed 2026-05-06).
 
 **Known implementation gaps (pending — see BACKLOG.md):**
 - **BKL-DRIVE-SCAFFOLD-01** — `Config/` and `Products/` are not yet created as part of initial bootstrap scaffolding.

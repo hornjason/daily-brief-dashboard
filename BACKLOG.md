@@ -9535,17 +9535,39 @@ Decision: DONE
 ## Bootstrap Step 5 Bugs — Found by E2E Spec (2026-05-06)
 
 ### BKL-BOOTSTRAP-CCSP-STUB-01 | populate-data-sheets Step 5: readCcsp and readPipeline are header-only stubs (P1)
-Priority: P1 | Size: M | Status: 🔴 OPEN
+Priority: P1 | Size: M | Status: ✅ DONE 2026-05-06
 Source: E2E bootstrap spec run 2026-05-06 — byAE.length=0 after bootstrap
 Files: src/bootstrap/steps/populate-data-sheets.ts lines 127-136 (readCcsp, readPipeline)
-Description: The L3 data reader passed to bootstrapAeL3 has stub implementations for readCcsp and readPipeline that return only a header row and no data. readSfBookings correctly reads from L3 (podBookingsFolderId), but CCSP and Pipeline do not. Result: CCSP and Pipeline sheets are created in Drive with header-only content. The /api/ccsp and /api/pipeline endpoints return empty results after bootstrap even though the sheets exist.
-Fix: Implement readCcsp and readPipeline in populate-data-sheets.ts to read actual L3 CCSP and pipeline data from the L3 shared folder (settings.json → region.podBookingsFolderId), the same way readSfBookings does.
-Decision: OPEN
+Description: The L3 data reader passed to bootstrapAeL3 had stub implementations for readCcsp and readPipeline that returned only a header row. readSfBookings correctly read from L3 (podBookingsFolderId) but CCSP and Pipeline did not. Result: sheets had header-only content; /api/ccsp and /api/pipeline returned empty results after bootstrap.
+Fix: Implemented readCcsp (downloads CCSP-{pod}-*.csv, filters by territory, returns full column rows) and readPipeline (searches SF-PIPELINE-*.csv by pod substring with fallback, filters by territory). Sheet tabs renamed at creation time ("CCSP Data", "Pipeline") so fetchCCSPData and fetchPipelineData find the correct tabs. writeRows range changed from 'Sheet1!A1' to 'A1'.
+Decision: DONE — verified by E2E spec steps I and J: ccspTotalAcv=1,696,293, pipelineTotalAcv=4,442,834, 23 open opps. Committed b3185d93a 2026-05-06.
 
 ### BKL-BOOTSTRAP-NESTED-FOLDER-01 | populate-data-sheets Step 5: passes aeFolderId as parentFolderId to l3-bootstrap, creating nested AE folder (P1)
-Priority: P1 | Size: S | Status: 🔴 OPEN
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-06
 Source: E2E bootstrap spec run 2026-05-06 — Drive shows "Carolanne Farrell" folder inside the "Carolanne Farrell" AE folder
 Files: src/bootstrap/steps/populate-data-sheets.ts (bootstrapAeL3 call ~line 143), src/l3-bootstrap.ts line 112
 Description: populate-data-sheets.ts calls bootstrapAeL3({ parentFolderId: aeFolderId, aeName, ... }). l3-bootstrap.ts line 112 then calls createFolder(aeName, parentFolderId) — creating a second "Carolanne Farrell" folder INSIDE the already-created AE folder. The AE folder was already created by Step 1 (createDriveFolderStep).
 Fix: Pass ctx.parentFolderId (the asa-e2e-test-runs parent, not the AE folder) to bootstrapAeL3 so l3-bootstrap finds the existing AE folder idempotently via its createFolder check, then creates sheets inside it correctly.
+Decision: DONE — fixed in src/bootstrap/steps/populate-data-sheets.ts line 282: parentFolderId: ctx.parentFolderId ?? aeFolderId. Verified by E2E spec (all 17 runnable tests pass 2026-05-06).
+
+### BKL-BOOTSTRAP-CCSP-STUB-02 | readCcsp and readPipeline stubs fixed — mark DONE
+Priority: P1 | Size: M | Status: ✅ DONE 2026-05-06
+Source: BKL-BOOTSTRAP-CCSP-STUB-01 (see above)
+Files: src/bootstrap/steps/populate-data-sheets.ts
+Description: Both readCcsp and readPipeline now download L3 Drive CSVs (CCSP-{pod}-*.csv and SF-PIPELINE-*.csv) from podBookingsFolderId, filter by territory, and return full column rows. Sheet tabs renamed at creation time ("CCSP Data", "Pipeline") so fetchCCSPData and fetchPipelineData find the correct tabs.
+Decision: DONE — verified by E2E spec steps I and J (ccspTotalAcv=1696293, pipelineTotalAcv=4442834, 2026-05-06).
+
+---
+
+## Infrastructure / Ops
+
+### BKL-OPS-E2E-MACMINI-01 | Run bootstrap-e2e spec on Mac Mini as permanent always-on test host (P2)
+Priority: P2 | Size: S | Status: 🔴 OPEN
+Source: Session 2026-05-06 — E2E spec now 17/17 passing on laptop; Mac Mini is always-on and the right long-term home
+Files: test/bootstrap-e2e.spec.ts, playwright.e2e.config.ts, Makefile (mini targets)
+Description: The bootstrap-e2e spec currently runs only from the laptop. The Mac Mini (mini.local) is always on and should be the permanent E2E test host. Four prerequisites before migrating:
+  1. Sync repo — Mac Mini at /Users/jasonhorn/DailyBriefDashboard/ needs the fixes committed 2026-05-06 (populate-data-sheets.ts, bootstrap-e2e.spec.ts, playwright.e2e.config.ts, 3 component testid files)
+  2. Drive auth — Mac Mini container needs Google auth confirmed at /api/auth/google/status (likely already set up since it runs L4)
+  3. Env vars — TEST_DRIVE_PARENT_URL, TEST_AE_NAME, TEST_SF_REPORT_ID must be set in .env or a run script on the Mac Mini
+  4. Playwright installed — spec runs from host (not inside container); verify `npx playwright` available on Mac Mini host
 Decision: OPEN
