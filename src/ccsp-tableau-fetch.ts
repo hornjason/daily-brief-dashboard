@@ -241,30 +241,50 @@ export async function fetchPodCsv(input: TableauFetchInput): Promise<TableauFetc
     _tableauSessionExpired = true
     const deadline = Date.now() + 5 * 60 * 1000
     let loggedIn = false
+    let emailAutoFilled = false
+    const tableauUserEmail = process.env.TABLEAU_USER_EMAIL ?? ''
     while (Date.now() < deadline) {
       await page.waitForTimeout(2_000)
+
+      // Auto-fill email if env var is set and we're on the email entry page
+      if (!emailAutoFilled && tableauUserEmail) {
+        try {
+          const url = page.url()
+          const onEmailPage = !url.includes('/site/') || !url.includes('/views/')
+          if (onEmailPage) {
+            const emailInput = await page.$('input[name="email"], input[type="email"], input[placeholder*="mail" i], input[name="identifier"]')
+              .catch(() => null)
+            if (emailInput) {
+              const currentVal = await emailInput.inputValue().catch(() => '')
+              if (!currentVal) {
+                await emailInput.fill(tableauUserEmail)
+                emailAutoFilled = true
+                await new Promise(r => setTimeout(r, 300))
+                const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Sign in"), button:has-text("Next"), button:has-text("Log in")')
+                  .catch(() => null)
+                if (submitBtn) {
+                  await submitBtn.click().catch(() => {})
+                } else {
+                  await emailInput.press('Enter').catch(() => {})
+                }
+                console.log(`[ccsp-tableau] ${aeName}: auto-filled email ${tableauUserEmail} and submitted`)
+              }
+            }
+          }
+        } catch { /* non-fatal — user can type manually */ }
+      }
+
+      // URL-only detection — same as waitForTableauLogin (viz selectors are false-negative
+      // prone across Tableau versions; BKL-CONN-TABLEAU-SSO-TAB-LOOP-01)
       const url = page.url()
       if (!url.startsWith('https://10ay.online.tableau.com')) continue
-      await page.waitForTimeout(1_500)
-      if (page.url() !== url) continue
-      const noLoginForm = await page
-        .evaluate(() => {
-          const els = Array.from(
-            document.querySelectorAll('input[type="password"], input#username, [data-testid="login"]'),
-          )
-          return !els.some(el => {
-            const s = window.getComputedStyle(el)
-            return (
-              s.display !== 'none' && s.visibility !== 'hidden' && (el as HTMLElement).offsetParent !== null
-            )
-          })
-        })
-        .catch(() => false)
-      const hasTableauContent = await page
-        .$('.tab-glassPane, iframe[id^="tableau"]')
-        .then(el => !!el)
-        .catch(() => false)
-      if (noLoginForm && hasTableauContent) {
+      if (url.includes('/auth') || url.includes('/login')) continue
+      // 3s stability check — confirm URL has settled on the dashboard
+      await page.waitForTimeout(3_000)
+      const stableUrl = page.url()
+      if (stableUrl !== url) continue
+      if (!stableUrl.startsWith('https://10ay.online.tableau.com') || stableUrl.includes('/auth') || stableUrl.includes('/login')) continue
+      {
         console.log(`[ccsp-tableau] ${aeName}: Tableau login detected — continuing`)
         _tableauSessionExpired = false
         loggedIn = true
