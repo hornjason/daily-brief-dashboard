@@ -9382,7 +9382,7 @@ Acceptance criteria:
 - [ ] Account portfolios page shows ≥1 customer
 - [ ] Account detail page loads for first customer
 - [ ] Intelligence generation triggered (poll /api/intelligence/status or check cache file)
-Issue: TBD
+Issue: #58
 
 ### BKL-SECURITY-RUN-COORD-01 | run-coordinator: add queue size cap + log swallowed errors (P4)
 Priority: P4 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
