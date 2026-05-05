@@ -22,10 +22,14 @@
 //   NOTE: CCSP and pipeline data are populated by L4 scrapers, not by L3 bootstrap.
 //   Those assertions are informational only (0 rows is expected on a fresh test AE).
 //
-// Run:
-//   TEST_DRIVE_PARENT_URL=https://drive.google.com/drive/folders/... \
+// Run (uses asa-e2e-test-runs folder — NOT CommandCenter):
+//   TEST_DRIVE_PARENT_URL=https://drive.google.com/drive/folders/1BxxIwOUTWjPB_VAIdsrEdfuRyXC6su0_ \
 //   TEST_AE_NAME='Carolanne Farrell' \
-//   npx playwright test test/bootstrap-e2e.spec.ts --project=test
+//   TEST_SF_REPORT_ID='00OPe00000isU2zMAE' \
+//   npx playwright test test/bootstrap-e2e.spec.ts --project=e2e-tier --workers=1
+//
+// NOTE: TEST_DRIVE_PARENT_URL must point at asa-e2e-test-runs (1BxxIwOUTWjPB_VAIdsrEdfuRyXC6su0_).
+// NEVER use CommandCenter (1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq) — that is the production folder.
 import { test, expect } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
 
@@ -310,9 +314,9 @@ test('ccsp data visible', async ({ request }) => {
   test.skip(!HAS_LIVE_DATA, 'requires TEST_DRIVE_PARENT_URL + TEST_AE_NAME')
   const { status, body } = await getJSON(request, `/api/ccsp?ae=${encodeURIComponent(AE_NAME)}`)
   expect(status).toBe(200)
-  // CCSP sheet rows come from Tableau (L4) — bootstrap creates the sheet structure
-  // but leaves it empty until an L4 Tableau scrape writes data. On a fresh E2E
-  // test run, this will be 0. The assertion is informational only.
+  // CCSP sheet rows come from Tableau (L4) — the L3 bootstrap creates the sheet
+  // structure but leaves it empty. An L4 Tableau scrape writes data rows.
+  // On a fresh bootstrap this will be 0. Informational log only.
   const rows = Array.isArray(body) ? body : Array.isArray(body?.rows) ? body.rows : []
   console.log(`[ccsp data visible] rows=${rows.length} (populated by L4 Tableau scrape, will be 0 on fresh bootstrap)`)
 })
@@ -323,8 +327,9 @@ test('pipeline data visible', async ({ request }) => {
   test.skip(!HAS_LIVE_DATA, 'requires TEST_DRIVE_PARENT_URL + TEST_AE_NAME')
   const { status, body } = await getJSON(request, `/api/pipeline?ae=${encodeURIComponent(AE_NAME)}`)
   expect(status).toBe(200)
-  // Pipeline rows come from SF (L4) — bootstrap creates the sheet structure but
-  // leaves it empty until an L4 SF scrape writes data. Informational only.
+  // Pipeline rows come from SF Lightning browser scrape (L4) — the L3 bootstrap
+  // creates the sheet structure but leaves it empty. An L4 SF scrape writes data rows.
+  // On a fresh bootstrap this will be 0. Informational log only.
   const rows = Array.isArray(body) ? body : Array.isArray(body?.rows) ? body.rows : []
   console.log(`[pipeline data visible] rows=${rows.length} (populated by L4 SF scrape, will be 0 on fresh bootstrap)`)
 })
@@ -353,18 +358,19 @@ test('sf bookings subscriptions', async ({ request }) => {
   let withSubs = 0
   for (const c of customers) {
     const detail = await getJSON(request, `/customer/${encodeURIComponent(c.name)}/sheetdata`)
-    const subs = detail.body?.subscriptions ?? detail.body?.products ?? []
+    const subs = detail.body?.rows ?? []
     if (Array.isArray(subs) && subs.length > 0) {
       withSubs++
       break
     }
   }
   console.log(`[sf bookings] customers with subscription data: ${withSubs}/${customers.length}`)
+  expect(withSubs, `sf bookings: ${withSubs}/${customers.length} customers have subscription rows — writeSubscriptionsStep must have populated the sheet cache`).toBeGreaterThan(0)
 })
 
 // ── Products hub renders ────────────────────────────────────────────────────
 
-test('products hub', async ({ page }) => {
+test('products hub', async ({ page, request }) => {
   test.skip(!HAS_LIVE_DATA, 'requires TEST_DRIVE_PARENT_URL + TEST_AE_NAME')
   await page.goto(`${BASE}/dashboard/products`)
   // Allow page to settle — products page loads multiple async fetches.
@@ -375,7 +381,12 @@ test('products hub', async ({ page }) => {
   // Soft gate: product cards visible only when CCSP data exists (L4 Tableau).
   const anyCard = page.locator('[data-testid="product-card"], .product-card, h2:has-text("OpenShift"), h2:has-text("RHEL"), h2:has-text("Ansible")')
   const cardCount = await anyCard.count()
-  console.log(`[products hub] product cards visible: ${cardCount} (L4 CCSP required for > 0)`)
+  console.log(`[products hub] product cards visible: ${cardCount} (requires product-intel pipeline: content.redhat.com + REDHAT_OFFLINE_TOKEN + Gemini synthesis)`)
+  // API gate: verify /api/products responds correctly (reads cached summaries — L3 safe)
+  const productsRes = await request.get(`${BASE}/api/products`)
+  expect(productsRes.status(), `GET /api/products returned non-200: ${productsRes.status()}`).toBe(200)
+  const productSummaries = await productsRes.json().catch(() => [])
+  console.log(`[products hub] /api/products summaries: ${Array.isArray(productSummaries) ? productSummaries.length : 'error'} (populated by product-intel, not by bootstrap)`)
 })
 
 // ── Customer detail page renders ────────────────────────────────────────────
@@ -396,12 +407,28 @@ test('customer detail page', async ({ page, request }) => {
 
 test('account numbers present', async ({ request }) => {
   test.skip(!HAS_LIVE_DATA, 'requires TEST_DRIVE_PARENT_URL + TEST_AE_NAME')
-  // Account numbers are populated by L4 RH Portal sidebar discovery — not available
-  // on a fresh test AE without prior L4 scrapes. Soft-warn only.
+  // Account numbers are populated by L4 RH Portal browser discovery — not available
+  // on a fresh test AE without prior L4 scrapes. Support CASES (/api/cases/all)
+  // also require account numbers (populated by the same L4 scrape) before they
+  // can be matched. Both are informational on fresh bootstrap. Soft-warn only.
   const cust = await getJSON(request, '/customers')
   const customers = (cust.body as any[]).filter(c => c?.ae === AE_NAME)
   const withAccounts = customers.filter(c => Array.isArray(c.accountNumbers) && c.accountNumbers.length > 0)
   console.log(`[account numbers] ${withAccounts.length}/${customers.length} customers have accountNumbers (L4 RH Portal required for > 0)`)
+})
+
+// ── RH support cases endpoint — shape verification ──────────────────────────
+
+test('rh support cases endpoint', async ({ request }) => {
+  test.skip(!HAS_LIVE_DATA, 'requires TEST_DRIVE_PARENT_URL + TEST_AE_NAME')
+  // GET /api/cases/all reads from disk cache — L3 safe. On a fresh bootstrap
+  // without L4 account number discovery, cases will be 0 (no account numbers
+  // to match against). This test verifies the endpoint shape, not case count.
+  const { status, body } = await getJSON(request, '/api/cases/all')
+  expect(status, `GET /api/cases/all returned ${status}`).toBe(200)
+  expect(Array.isArray(body?.cases), '/api/cases/all must return { cases: array }').toBe(true)
+  expect(typeof body?.totalCount, '/api/cases/all must return { totalCount: number }').toBe('number')
+  console.log(`[rh support cases] totalCount=${body?.totalCount} (requires account numbers from L4 RH Portal discovery for > 0)`)
 })
 
 // ── Scrape timestamps recent ────────────────────────────────────────────────
