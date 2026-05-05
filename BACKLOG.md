@@ -9312,4 +9312,41 @@ Decision: DONE (code audit 2026-05-04). Cancel path in DELETE `/api/scrape/rh/ca
 Priority: P1 | Size: S | Status: ✅ DONE 2026-05-04
 Source: Quinn audit 2026-05-04 (BKL-ARCH-SCRAPER-04 post-ship review)
 Fix applied: Added `assertPrimary('rh-scraper.runRhScrape')` to rh-scraper.ts:runRhScrape and `isPrimary &&` guard to background-scheduler.ts startup initScrapeContext block. Hero containers now fail fast with WrongRoleError before reaching launchPersistentContext. Also fixed BKL-F07 dashboard tsc error (hasReportForPod not in scope at AEsCustomersSection.tsx:771).
+
+---
+
+## Architecture Hardening — Issues #48–57 (2026-05-04)
+
+Source: /improve-codebase-architecture + npx fallow + Serena two-pass audit. Parent issue #48. Execution: 9 vertical slice issues (#49–#57) generated via /to-issues.
+
+---
+
+### BKL-ARCH-TERRITORY-01 | Extract parseTerritoryParts → src/lib/territory.ts (Issue #49)
+Priority: P1 | Size: XS | Status: ✅ DONE 2026-05-04
+Source: fallow circular dependency detection (ccsp-scraper ↔ ccsp-tableau-fetch cycle created by BKL-ARCH-17)
+Files: src/ccsp-scraper.ts, src/ccsp-tableau-fetch.ts, src/lib/territory.ts (new), test/unit/territory.test.ts (new)
+Description: `parseTerritoryParts` was defined in ccsp-scraper.ts but imported by ccsp-tableau-fetch.ts, creating a circular dependency. Moved to standalone pure module.
+Decision: DONE 2026-05-04 — 6 unit tests pass, tsc clean, circular dep confirmed broken via grep. Issue #49 closed.
+
+### BKL-ARCH-DEAD-FILES-01 | Delete 41 dead files confirmed by fallow (Issue #50)
+Priority: P2 | Size: S | Status: ✅ DONE 2026-05-04
+Source: npx fallow dead-code — 41 unused files (zero static importers)
+Files: 31 files deleted (28 tracked + 3 untracked); 10 skipped (runtime references via shell/Makefile/CI/readFileSync)
+Description: fallow confirmed 41 dead files. Grep-verified each before deleting. 10 skipped: playwright.bootstrap.config.ts (Makefile-invoked), scripts/audit-docs.ts (CI), scripts/preflight.ts (entrypoint.sh), scripts/sync-l3-daemon.ts (entrypoint.sh + regression test), scripts/synthetic-monitor.ts (Makefile), src/interactive-auth-page.ts (readFileSync in regression tests), src/tableau-auth.ts (tsconfig.hero.json + readFileSync), test/reporters/*.ts (Playwright config strings), scripts/sync-pod-l3.ts (readFileSync in unit test — restored after failing test caught deletion).
+Decision: DONE 2026-05-04 — tsc clean, 557 unit tests pass. Key lesson: fallow cannot see runtime references (shell, fs.readFileSync, config strings) — grep-verify step is mandatory. Issue #50 closed.
+
+### BKL-ARCH-SETTINGS-CARD-01 | Extract SettingsCard + useSettingsForm (Issue #57)
+Priority: P3 | Size: S | Status: ✅ DONE 2026-05-04
+Source: fallow duplication report — settings panel chrome duplicated 5×
+Files: dashboard/src/components/SettingsCard.tsx (new, 66 lines), dashboard/src/hooks/useSettingsForm.ts (new, 86 lines), WeatherSettings.tsx, AutomationSettings.tsx, RefreshTimerSettings.tsx, EmailSettingsSection.tsx, AiIntelligenceSettings.tsx (all modified)
+Description: Shared save/cancel/dirty-state/error chrome extracted from 5 settings panels. Net −140 lines across panels; +152 lines in shared modules. AiIntelligenceSettings adopted hook but not SettingsCard wrapper (4-sibling-card layout differs).
+Decision: DONE 2026-05-04 — tsc clean, Quinn visual review pending on prod. Issue #57 closed.
+
+### BKL-TEST-PARALLEL-ISOLATION-01 | Full Playwright suite: 24 failures from snapshot contention in parallel runs (P2)
+Priority: P2 | Size: M | Status: 🔴 OPEN
+Source: Full npx playwright test test/api/ --project=test run 2026-05-04 showed 24 failures; each spec passes in isolation
+Files: test/api/config-sync.spec.ts, test/api/region-access.spec.ts, test/api/offline-token.spec.ts
+Description: @destructive specs share a single snapshot slot (POST /api/__test/snapshot). When 6 workers run in parallel, one spec consumes the snapshot; subsequent specs fail with "No snapshot exists" and ECONNRESET. Individual runs all pass. Pre-existing — unrelated to architecture hardening changes.
+Fix: Either run @destructive tests serially (--workers=1) or implement per-test-file snapshot namespacing so each spec gets its own snapshot slot.
+Can we test: YES — `npx playwright test test/api/ --project=test --workers=1` should reduce failures to 0.
 Test: test/unit/rh-scraper-node-role.test.ts + REG-NODE-ROLE-RH-01 + REG-NODE-ROLE-SCHED-01 in regression.spec.ts.

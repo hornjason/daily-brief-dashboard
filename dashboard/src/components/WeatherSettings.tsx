@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Loader2, Check, Cloud } from 'lucide-react'
+import { Cloud } from 'lucide-react'
+import { useSettingsForm } from '../hooks/useSettingsForm'
+import { SettingsCard } from './SettingsCard'
 
 interface WeatherConfig {
   enabled: boolean
@@ -7,46 +8,25 @@ interface WeatherConfig {
 }
 
 export function WeatherSettings() {
-  const [config, setConfig] = useState<WeatherConfig | null>(null)
-  const [draft, setDraft] = useState<WeatherConfig | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch('/api/settings/weather')
-      .then(r => r.json())
-      .then((d: WeatherConfig) => { setConfig(d); setDraft(d) })
-      .catch(() => {})
-  }, [])
+  const { draft, setDraft, saving, saved, error, dirty, handleSave } =
+    useSettingsForm<WeatherConfig>({
+      fetchUrl: '/api/settings/weather',
+      saveUrl: '/api/settings/weather',
+    })
 
   if (!draft) return null
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(config)
-
-  const handleSave = async () => {
-    setSaving(true); setError(null)
-    try {
-      const res = await fetch('/api/settings/weather', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Save failed'); return }
-      setConfig(data); setDraft(data)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
-    <div className="bg-surface rounded-xl p-5 border border-border space-y-4">
-      <p className="text-sm font-medium text-text-primary">Weather</p>
+    <SettingsCard
+      title="Weather"
+      error={error}
+      dirty={dirty}
+      saving={saving}
+      saved={saved}
+      onSave={handleSave}
+      saveLabel="Save Weather Settings"
+      saveIcon={<Cloud className="w-3.5 h-3.5" />}
+    >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-text-primary">Show weather in top bar</p>
@@ -74,15 +54,6 @@ export function WeatherSettings() {
           />
         </div>
       )}
-      {error && <p className="text-xs text-critical">{error}</p>}
-      <button
-        onClick={handleSave}
-        disabled={!dirty || saving}
-        className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
-      >
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <Cloud className="w-3.5 h-3.5" />}
-        {saved ? 'Saved' : 'Save Weather Settings'}
-      </button>
-    </div>
+    </SettingsCard>
   )
 }

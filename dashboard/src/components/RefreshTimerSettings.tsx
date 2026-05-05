@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Loader2, Check, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
+import { useSettingsForm } from '../hooks/useSettingsForm'
+import { SettingsCard } from './SettingsCard'
 
 interface RefreshIntervals {
   subscriptions: number
@@ -8,21 +9,12 @@ interface RefreshIntervals {
 }
 
 export function RefreshTimerSettings() {
-  const [intervals, setIntervals] = useState<RefreshIntervals | null>(null)
-  const [draft, setDraft] = useState<RefreshIntervals | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch('/api/settings/refresh')
-      .then(r => r.json())
-      .then((d: { intervals: RefreshIntervals }) => {
-        setIntervals(d.intervals)
-        setDraft(d.intervals)
-      })
-      .catch(() => {})
-  }, [])
+  const { draft, setDraft, saving, saved, error, dirty, handleSave } =
+    useSettingsForm<RefreshIntervals>({
+      fetchUrl: '/api/settings/refresh',
+      saveUrl: '/api/settings/refresh',
+      transform: (raw: { intervals: RefreshIntervals }) => raw.intervals,
+    })
 
   if (!draft) return (
     <div className="flex items-center gap-2 text-text-secondary text-sm py-6">
@@ -31,29 +23,6 @@ export function RefreshTimerSettings() {
     </div>
   )
 
-  const handleSave = async () => {
-    setSaving(true); setError(null)
-    try {
-      const res = await fetch('/api/settings/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Save failed'); return }
-      setIntervals(data.intervals)
-      setDraft(data.intervals)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const dirty = JSON.stringify(draft) !== JSON.stringify(intervals)
-
   const fields: Array<{ key: keyof RefreshIntervals; label: string; hint: string }> = [
     { key: 'rhScrape',      label: 'RH Support Cases', hint: 'How often to scrape open cases from Red Hat portal' },
     { key: 'subscriptions', label: 'Subscriptions',    hint: 'How often to sync product data from SF Bookings sheets' },
@@ -61,8 +30,16 @@ export function RefreshTimerSettings() {
   ]
 
   return (
-    <div className="bg-surface rounded-xl p-5 border border-border space-y-4">
-      <p className="text-sm font-medium text-text-primary">Auto-Refresh Intervals</p>
+    <SettingsCard
+      title="Auto-Refresh Intervals"
+      error={error}
+      dirty={dirty}
+      saving={saving}
+      saved={saved}
+      onSave={handleSave}
+      saveLabel="Save Intervals"
+      saveIcon={<RefreshCw className="w-3.5 h-3.5" />}
+    >
       <div className="space-y-3">
         {fields.map(({ key, label, hint }) => (
           <div key={key} className="flex items-center gap-3">
@@ -83,15 +60,6 @@ export function RefreshTimerSettings() {
           </div>
         ))}
       </div>
-      {error && <p className="text-xs text-critical">{error}</p>}
-      <button
-        onClick={handleSave}
-        disabled={!dirty || saving}
-        className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
-      >
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <RefreshCw className="w-3.5 h-3.5" />}
-        {saved ? 'Saved' : 'Save Intervals'}
-      </button>
-    </div>
+    </SettingsCard>
   )
 }

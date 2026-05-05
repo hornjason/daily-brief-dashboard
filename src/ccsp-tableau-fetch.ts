@@ -29,7 +29,7 @@
 import type { Page, ElementHandle } from '@playwright/test'
 import { readFileSync } from 'fs'
 import { parseCsvToObjects } from './csv-parse.ts'
-import { parseTerritoryParts } from './ccsp-scraper.ts'
+import { parseTerritoryParts } from './lib/territory.ts'
 
 // Direct embed URL — used for URL-based filtering (filter params must precede any hash fragment).
 // Tableau Cloud processes ?FilterName=Value on /t/site/views/... URLs server-side.

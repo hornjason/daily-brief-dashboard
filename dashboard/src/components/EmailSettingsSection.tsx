@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Loader2, Check, Mail } from 'lucide-react'
+import { Mail } from 'lucide-react'
+import { useSettingsForm } from '../hooks/useSettingsForm'
+import { SettingsCard } from './SettingsCard'
 
 interface EmailConfig {
   enabled: boolean
@@ -17,42 +18,14 @@ interface EmailConfig {
 }
 
 export function EmailSettingsSection() {
-  const [config, setConfig] = useState<EmailConfig | null>(null)
-  const [draft, setDraft] = useState<EmailConfig | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    fetch('/api/settings/email')
-      .then(r => r.json())
-      .then((d: EmailConfig) => { setConfig(d); setDraft(d) })
-      .catch(() => {})
-  }, [])
+  const { draft, setDraft, saving, saved, error, dirty, handleSave } =
+    useSettingsForm<EmailConfig>({
+      fetchUrl: '/api/settings/email',
+      saveUrl: '/api/settings/email',
+      saveMethod: 'PUT',
+    })
 
   if (!draft) return null
-
-  const dirty = JSON.stringify(draft) !== JSON.stringify(config)
-
-  const handleSave = async () => {
-    setSaving(true); setError(null)
-    try {
-      const res = await fetch('/api/settings/email', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Save failed'); return }
-      setConfig(data); setDraft(data)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const sectionFields: Array<{ key: keyof EmailConfig['sections']; label: string }> = [
     { key: 'meetings', label: 'Meetings' },
@@ -63,9 +36,16 @@ export function EmailSettingsSection() {
   ]
 
   return (
-    <div className="bg-surface rounded-xl p-5 border border-border space-y-4">
-      <p className="text-sm font-medium text-text-primary">Morning Brief Email</p>
-
+    <SettingsCard
+      title="Morning Brief Email"
+      error={error}
+      dirty={dirty}
+      saving={saving}
+      saved={saved}
+      onSave={handleSave}
+      saveLabel="Save Email Settings"
+      saveIcon={<Mail className="w-3.5 h-3.5" />}
+    >
       {/* Master toggle */}
       <div className="flex items-center justify-between">
         <div>
@@ -146,16 +126,6 @@ export function EmailSettingsSection() {
           </div>
         </>
       )}
-
-      {error && <p className="text-xs text-critical">{error}</p>}
-      <button
-        onClick={handleSave}
-        disabled={!dirty || saving}
-        className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
-      >
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
-        {saved ? 'Saved' : 'Save Email Settings'}
-      </button>
-    </div>
+    </SettingsCard>
   )
 }

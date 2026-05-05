@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Loader2, Check, Settings2 } from 'lucide-react'
+import { useState } from 'react'
+import { Loader2, Settings2 } from 'lucide-react'
+import { useSettingsForm } from '../hooks/useSettingsForm'
+import { SettingsCard } from './SettingsCard'
 
 interface AutomationConfig {
   defaultScrapeTimeoutMs: number
@@ -20,24 +22,19 @@ function minutesToMs(min: number): number {
 }
 
 export function AutomationSettings() {
-  const [config, setConfig] = useState<AutomationConfig | null>(null)
-  const [draft, setDraft] = useState<AutomationConfig | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { draft, setDraft, saving, saved, error, setError, dirty, handleSave } =
+    useSettingsForm<AutomationConfig>({
+      fetchUrl: '/api/settings/automation',
+      saveUrl: '/api/settings/automation',
+      transform: (raw: { config: AutomationConfig }) => raw.config,
+    })
+
+  // Field-level validation state stays local — the hook intentionally does
+  // not generalize this.
   const [errorField, setErrorField] = useState<string | null>(null)
+
   const inputCls = (key: string, base: string) =>
     errorField === key ? `${base} ring-critical border-critical` : base
-
-  useEffect(() => {
-    fetch('/api/settings/automation')
-      .then(r => r.json())
-      .then((d: { config: AutomationConfig }) => {
-        setConfig(d.config)
-        setDraft(d.config)
-      })
-      .catch(() => {})
-  }, [])
 
   if (!draft) return (
     <div className="flex items-center gap-2 text-text-secondary text-sm py-6">
@@ -46,42 +43,21 @@ export function AutomationSettings() {
     </div>
   )
 
-  const handleSave = async () => {
-    setSaving(true); setError(null)
-
+  const onSave = async () => {
     // Pre-save validation (matches server-side bounds)
     const defaultMin = msToMinutes(draft.defaultScrapeTimeoutMs)
     const rhMin = msToMinutes(draft.rhScrapeTimeoutMs)
     const cooldownMin = msToMinutes(draft.circuitBreakerCooldownMs)
-    if (defaultMin < 1 || defaultMin > 60) { setError('Default timeout must be between 1 and 60 minutes'); setSaving(false); return }
-    if (rhMin < 1 || rhMin > 60) { setError('RH Portal timeout must be between 1 and 60 minutes'); setSaving(false); return }
-    if (cooldownMin < 1 || cooldownMin > 60) { setError('Cooldown period must be between 1 and 60 minutes'); setSaving(false); return }
-    if (draft.circuitBreakerThreshold < 1 || draft.circuitBreakerThreshold > 20) { setError('Failure threshold must be between 1 and 20'); setSaving(false); return }
-    if (draft.driveDocTextCap < 1000 || draft.driveDocTextCap > 100000) { setError('Drive doc text cap must be between 1,000 and 100,000 characters'); setErrorField('driveDocTextCap'); setSaving(false); return }
-    if (draft.briefEmailsInPrompt < 1 || draft.briefEmailsInPrompt > 50) { setError('Emails in prompt must be between 1 and 50'); setErrorField('briefEmailsInPrompt'); setSaving(false); return }
-    if (draft.briefHistoryDays < 1 || draft.briefHistoryDays > 30) { setError('Brief history window must be between 1 and 30 days'); setErrorField('briefHistoryDays'); setSaving(false); return }
+    if (defaultMin < 1 || defaultMin > 60) { setError('Default timeout must be between 1 and 60 minutes'); return }
+    if (rhMin < 1 || rhMin > 60) { setError('RH Portal timeout must be between 1 and 60 minutes'); return }
+    if (cooldownMin < 1 || cooldownMin > 60) { setError('Cooldown period must be between 1 and 60 minutes'); return }
+    if (draft.circuitBreakerThreshold < 1 || draft.circuitBreakerThreshold > 20) { setError('Failure threshold must be between 1 and 20'); return }
+    if (draft.driveDocTextCap < 1000 || draft.driveDocTextCap > 100000) { setError('Drive doc text cap must be between 1,000 and 100,000 characters'); setErrorField('driveDocTextCap'); return }
+    if (draft.briefEmailsInPrompt < 1 || draft.briefEmailsInPrompt > 50) { setError('Emails in prompt must be between 1 and 50'); setErrorField('briefEmailsInPrompt'); return }
+    if (draft.briefHistoryDays < 1 || draft.briefHistoryDays > 30) { setError('Brief history window must be between 1 and 30 days'); setErrorField('briefHistoryDays'); return }
     setErrorField(null)
-
-    try {
-      const res = await fetch('/api/settings/automation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Save failed'); return }
-      setConfig(data.config)
-      setDraft(data.config)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setSaving(false)
-    }
+    await handleSave()
   }
-
-  const dirty = JSON.stringify(draft) !== JSON.stringify(config)
 
   const setMs = (key: keyof AutomationConfig, minutes: number) => {
     setDraft(prev => prev ? { ...prev, [key]: minutesToMs(minutes) } : prev)
@@ -92,9 +68,17 @@ export function AutomationSettings() {
   }
 
   return (
-    <div className="bg-surface rounded-xl p-5 border border-border space-y-5">
-      <p className="text-sm font-medium text-text-primary">Automation &amp; Limits</p>
-
+    <SettingsCard
+      title="Automation & Limits"
+      error={error}
+      dirty={dirty}
+      saving={saving}
+      saved={saved}
+      onSave={onSave}
+      saveLabel="Save Settings"
+      saveIcon={<Settings2 className="w-3.5 h-3.5" />}
+      className="bg-surface rounded-xl p-5 border border-border space-y-5"
+    >
       {/* Scrape timeouts */}
       <div className="space-y-3">
         <p className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Scrape Timeouts</p>
@@ -236,16 +220,6 @@ export function AutomationSettings() {
           </div>
         </div>
       </div>
-
-      {error && <p className="text-xs text-critical">{error}</p>}
-      <button
-        onClick={handleSave}
-        disabled={!dirty || saving}
-        className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm px-4 py-2 rounded-lg transition-colors"
-      >
-        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <Settings2 className="w-3.5 h-3.5" />}
-        {saved ? 'Saved' : 'Save Settings'}
-      </button>
-    </div>
+    </SettingsCard>
   )
 }

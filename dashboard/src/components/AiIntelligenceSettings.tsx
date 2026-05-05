@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Check, Loader2 } from 'lucide-react'
+import { useSettingsForm } from '../hooks/useSettingsForm'
 
 interface AiConfig {
   geminiModel: string
@@ -20,21 +21,19 @@ const DEFAULTS: AiConfig = {
 }
 
 export function AiIntelligenceSettings() {
-  const [config, setConfig] = useState<AiConfig | null>(null)
-  const [draft, setDraft] = useState<AiConfig | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // This panel renders multiple sibling cards under one shared save button,
+  // so we use the hook for state but keep the bespoke layout instead of
+  // wrapping in <SettingsCard>.
+  const { draft, setDraft, saving, saved, error, dirty, handleSave } =
+    useSettingsForm<AiConfig>({
+      fetchUrl: '/api/settings/ai',
+      saveUrl: '/api/settings/ai',
+      transform: (raw: { config: AiConfig }) => raw.config,
+    })
+
   const [envModel, setEnvModel] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/api/settings/ai')
-      .then(r => r.json())
-      .then((d: { config: AiConfig }) => {
-        setConfig(d.config)
-        setDraft(d.config)
-      })
-      .catch(() => {})
     // Check if GEMINI_MODEL env var is overriding the config
     fetch('/api/env/gemini-model')
       .then(r => r.json())
@@ -51,28 +50,6 @@ export function AiIntelligenceSettings() {
     </div>
   )
 
-  const handleSave = async () => {
-    setSaving(true); setError(null)
-    try {
-      const res = await fetch('/api/settings/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
-      })
-      const data = await res.json()
-      if (!res.ok) { setError(data.error ?? 'Save failed'); return }
-      setConfig(data.config)
-      setDraft(data.config)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const dirty = JSON.stringify(draft) !== JSON.stringify(config)
   const set = (key: keyof AiConfig, val: AiConfig[keyof AiConfig]) =>
     setDraft(prev => prev ? { ...prev, [key]: val } : prev)
 
@@ -165,7 +142,7 @@ export function AiIntelligenceSettings() {
       {error && <p className="text-xs text-error">{error}</p>}
 
       <button
-        onClick={handleSave}
+        onClick={() => handleSave()}
         disabled={!dirty || saving}
         className="flex items-center gap-2 bg-accent hover:bg-accent/80 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
       >

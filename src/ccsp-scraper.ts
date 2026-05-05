@@ -1,5 +1,6 @@
 import { setLivePageBusy, getScrapeContext, ensureBrowserHealthy } from "./rh-scraper.ts"
 import { isPrimary } from './lib/node-role.ts'
+import { parseTerritoryParts } from './lib/territory.ts'
 /**
  * src/ccsp-scraper.ts
  *
@@ -286,25 +287,6 @@ export function getRollingFyWindow(): { years: string[]; quarters: string[]; lab
  *   segment   = Enterprise
  *   region    = CENTRAL                (first segment)
  */
-export function parseTerritoryParts(territory: string): {
-  pod: string; subregion: string; segment: string; subsegment: string; region: string
-} {
-  if (!/^[A-Z0-9_]+$/i.test(territory)) {
-    throw new Error(`Invalid territory format: ${territory}`)
-  }
-  const parts = territory.split('_')
-  const segType = parts[1] ?? ''
-  const isEnterprise = segType === 'ENT'
-
-  const subregion = parts.slice(0, 3).join('_')
-  // Enterprise PODs carry a _POD suffix in Tableau; commercial do not
-  const pod = isEnterprise ? subregion + '_POD' : parts.slice(0, -1).join('_')
-  const segment = isEnterprise ? 'Enterprise' : 'Commercial'
-  const region = isEnterprise ? (parts[0] ?? 'CENTRAL') : 'NA_COMM_COMMERCIAL'
-
-  return { pod, subregion, segment, subsegment: segment, region }
-}
-
 // BKL-ARCH-17: `applyFilter` removed — was zero-caller after URL-based filtering
 // replaced UI dropdown clicks; URL filters now live in fetchPodCsv.
 
