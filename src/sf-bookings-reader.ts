@@ -84,15 +84,21 @@ export function matchPodSheet(
     const segments = territory.replace(/_TERR\d+$/i, '').toLowerCase().split('_').filter(s => s.length > 2)
     const compounds = segments.slice(0, -1).map((_, i) => segments[i] + segments[i + 1])
 
-    const match = sheets.find(s => {
+    // Score each sheet by sum of matched word lengths — longer words are more distinctive
+    // (e.g. "northwest"=9 beats "comm"=4+"corp"=4 for WEST_COMM_CORP_NORTHWEST_TERR01)
+    let best: { sheetId: string; score: number } | null = null
+    for (const s of sheets) {
       const sLower = s.name.toLowerCase()
-      // Word-boundary match for individual tokens (handles Northwest, Southwest, etc.)
-      if (words.some(w => new RegExp(`\\b${w}\\b`).test(sLower))) return true
-      // Compound substring match for fused names (handles NorthCentral, SouthCentral)
-      if (compounds.some(c => sLower.includes(c))) return true
-      return false
-    })
-    if (match) return match.sheetId
+      let score = 0
+      for (const w of words) {
+        if (new RegExp(`\\b${w}\\b`).test(sLower)) score += w.length
+      }
+      for (const c of compounds) {
+        if (sLower.includes(c)) score += c.length
+      }
+      if (score > 0 && (!best || score > best.score)) best = { sheetId: s.sheetId, score }
+    }
+    if (best) return best.sheetId
   }
   return null
 }
