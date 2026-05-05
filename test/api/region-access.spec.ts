@@ -112,4 +112,45 @@ test.describe('@destructive BKL-HERO-01 Phase 0 — region access endpoints', ()
     })
     expect(res.status()).toBe(400)
   })
+
+  // ── POST /api/regions/select — single-region wizard convenience (Phase 1) ──
+
+  test('POST /api/regions/select with missing regionId returns 400', async ({ request }) => {
+    const res = await request.post(`${BASE}/api/regions/select`, { data: {} })
+    expect(res.status()).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/regionId/i)
+  })
+
+  test('POST /api/regions/select with unknown regionId returns 400', async ({ request }) => {
+    const res = await request.post(`${BASE}/api/regions/select`, {
+      data: { regionId: 'east-commercial' },
+    })
+    expect(res.status()).toBe(400)
+    const body = await res.json()
+    expect(body.error).toMatch(/east-commercial/i)
+  })
+
+  test('POST /api/regions/select with valid regionId returns ok plus enabledRegions/enabledPods', async ({ request }) => {
+    const res = await request.post(`${BASE}/api/regions/select`, {
+      data: { regionId: 'west-commercial' },
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.enabledRegions).toEqual(['west-commercial'])
+    expect(Array.isArray(body.enabledPods)).toBe(true)
+    expect(body.enabledPods.length).toBeGreaterThan(0)
+    // Every returned pod must be a qualified key for west-commercial.
+    for (const qk of body.enabledPods as string[]) {
+      expect(qk.startsWith('west-commercial.')).toBe(true)
+    }
+
+    // Verify persistence by reading via GET /api/regions/access.
+    const accessRes = await request.get(`${BASE}/api/regions/access`)
+    expect(accessRes.status()).toBe(200)
+    const access = await accessRes.json()
+    expect(access.enabledRegions).toEqual(['west-commercial'])
+    expect(access.enabledPods).toEqual(body.enabledPods)
+  })
 })

@@ -2,7 +2,7 @@
 doc-type: backlog
 status: active
 owner: jason
-updated: 2026-05-01
+updated: 2026-05-05
 ---
 
 # DailyBriefDashboard — Canonical Backlog
@@ -9294,12 +9294,13 @@ Can we test: YES — source assertion that bootstrap-orchestrator.ts has zero im
 Decision: DONE — removed `runSupportableDiscoverAndScrape` import + type reference; renamed `supportableScrapeResults` → `sfBookingsResults`; stubbed `/api/bootstrap/initial-load` POST to return 410 Gone; cleaned up "Supportable" comments in Step 3-4 block. Also fixed pre-existing tsc error in server.ts: removed `writeSupportableSheet` + `runSupportableScrape` + `SupportableCustomer` imports (unused). Regression tests: REG-FOLLOW-04-01/02/03 added and passing. tsc: 0 errors.
 
 ### BKL-SEC-MUTEX-01 | Tune RH inner mutex stale threshold based on real scrape telemetry (P3)
-Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-05
 Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-04 post-ship review)
 Files: src/rh-scraper.ts line 41 (`RH_INNER_STALE_MUTEX_MS`)
 Description: The inner mutex stale threshold for `runRhScrape` is set to 15 minutes (matching CCSP). For large territories, a full `runRhScrape` with portal pagination, SSO renewal, and account discovery could legitimately exceed 15 minutes. If the guard fires prematurely, a second scheduler tick starts a concurrent scrape against the shared browser context — the exact scenario the mutex prevents. SF threshold (`SF_INNER_STALE_MUTEX_MS`) is safer: single report, usually <2 min.
 Fix: After 1+ weeks of telemetry, check p95 runRhScrape duration in container logs. If >10 min: bump `RH_INNER_STALE_MUTEX_MS` to 30 * 60 * 1000. Alternatively make it configurable via settings.json.
 Can we test: YES — log the mutex stale warning in tests if duration exceeds threshold.
+Decision: DONE 2026-05-05 — bumped RH_INNER_STALE_MUTEX_MS from 15→30 min in rh-scraper.ts:42. No test added (config constant; production telemetry is the oracle — no unit-test hook available).
 
 ### BKL-CLEAN-MUTEX-02 | Verify releaseRhScrapeMutex wiring to cancel paths (P3)
 Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-04
@@ -9370,8 +9371,8 @@ Files: src/bootstrap/steps/types.ts (new — BootstrapContext + BootstrapStepDef
 Description: 5-step BootstrapStep chain (Supportable was already removed). Each step: name, preconditions(ctx), execute(ctx). runner.ts iterates steps with per-step watchdog timers and cancel-check loop. bootstrapPOD left untouched. findExistingSheet + SETTINGS_PATH moved to helpers.ts to prevent circular import. BootstrapCancelledError signals user-initiated cancel. Concurrent-call 409 gate preserved.
 Decision: DONE 2026-05-04 — tsc clean, 648 unit pass, 28 Playwright pass/5 skip on 7776, Quinn PASS, Rook PASS. Issue #54 closed.
 
-### BKL-ARCH-BOOTSTRAP-E2E-01 | Update bootstrap-e2e.spec.ts for hero/L4 split — run on hero with Drive auth only (Issue TBD)
-Priority: P1 | Size: M | Status: 🔴 OPEN
+### BKL-ARCH-BOOTSTRAP-E2E-01 | Update bootstrap-e2e.spec.ts for hero/L4 split — run on hero with Drive auth only (Issue #58)
+Priority: P1 | Size: M | Status: ✅ DONE 2026-05-05
 Source: Jason 2026-05-04 — after hero/L4 split, E2E no longer needs RH Portal session, Tableau session, or VPN
 Files: test/bootstrap-e2e.spec.ts (prereq checks, step count, assertion scope)
 Description: Current E2E pre-flight checks require: RH Portal connected, Tableau session valid, VPN active. After the split, hero image only does Drive operations — all three are obsolete. Updated E2E should require only: (1) Google Drive offline token valid (POST /api/settings/offline-token already configured), (2) AE config present, (3) At least one customer in config. E2E flow: bootstrap one AE → verify Drive folders created → verify L3 cache ingested (CCSP, ACV, pipeline opps visible in dashboard) → verify account portfolios + account detail page → verify account intelligence generation triggered on at least one account. No VPN check. No Portal/Tableau session checks.
@@ -9383,20 +9384,23 @@ Acceptance criteria:
 - [ ] Account detail page loads for first customer
 - [ ] Intelligence generation triggered (poll /api/intelligence/status or check cache file)
 Issue: #58
+Decision: DONE 2026-05-05 — full rewrite of test/bootstrap-e2e.spec.ts (414 lines). 18 serial assertion gates. Real Vertex AI call fires at gate 6, results polled at gate 14. Uses raw @playwright/test imports (no snapshot/restore fixtures). Guards on TEST_DRIVE_PARENT_URL+TEST_AE_NAME. Manual/nightly gate — not CI. New GET /api/bootstrap/scaffold-status endpoint added to bootstrap-orchestrator.ts. Contract test at test/api/bootstrap-scaffold.spec.ts. Bootstrap team to run on Mac Mini with real Drive credentials to verify E2E gates 1-18.
 
 ### BKL-SECURITY-RUN-COORD-01 | run-coordinator: add queue size cap + log swallowed errors (P4)
-Priority: P4 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Priority: P4 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-05
 Source: Rook scan 2026-05-04 (issue #53 review)
 Files: src/lib/run-coordinator.ts
 Description: (1) _queue has no max size — single-user app, currently bounded by user actions, but no guard. (2) Error catch in drain loop is empty — failing tasks are completely invisible in logs.
 Fix: Add `if (_queue.length > 100) throw new Error('run-coordinator queue overflow')` guard; add `console.warn('[run-coordinator] task failed:', e?.message)` to catch block.
+Decision: DONE 2026-05-05 — queue cap at 100 + console.warn on task failure added. Rook post-ship review found MED: overflow path returned without resolving the Promise, causing callers doing `await enqueue(task)` to hang forever. Fixed: `resolveTask()` called before `return` on overflow path. tsc clean.
 
 ### BKL-SECURITY-SA-KEY-01 | PdfDocExtractor: SA key parse failure could log key fragments (P4)
-Priority: P4 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Priority: P4 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-05
 Source: Rook scan 2026-05-04 (issue #56 review)
 Files: src/customer/doc-extractors.ts
 Description: If GEMINI_SERVICE_ACCOUNT_KEY is malformed, JSON.parse throws and the outer catch logs e?.message?.slice(0,100). PEM/base64 key fragments could appear in logs. Localhost-only app, low actual risk.
 Fix: Wrap JSON.parse in its own try/catch, emit a generic '[docs] SA key parse failed' log instead.
+Decision: DONE 2026-05-05 — isolated try/catch wraps JSON.parse; generic log '[docs] SA key parse failed — check GEMINI_SERVICE_ACCOUNT_KEY format'; guard added on client_email+private_key before JWT construction. tsc clean.
 
 ### BKL-ARCH-SCRAPE-STATE-01 | Extract CircuitBreaker + running-flag state from scraper-manager.ts → src/scrape-state.ts (Issue #52)
 Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
@@ -9413,18 +9417,37 @@ Description: Extracted AiConfig interface + getAiConfig/getGeminiModel/getGemini
 Decision: DONE 2026-05-04 — tsc clean, 28 passed/5 skipped on 7776, Quinn+Rook both PASS. TypeScript export type fix applied for Bun runtime compatibility. Issue #51 closed.
 
 ### BKL-DEAD-CODE-AUTOMATION-SETTINGS-01 | AutomationSettings.tsx imported in SetupPage.tsx but never rendered (P3)
-Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: ✅ DONE 2026-05-05
 Source: Quinn audit 2026-05-05 (settings panel refactor post-ship review)
 Files: dashboard/src/components/AutomationSettings.tsx, dashboard/src/pages/SetupPage.tsx line 6
 Description: AutomationSettings.tsx is imported at SetupPage.tsx:6 but never rendered anywhere in the live UI. The render site was removed in commit ca876e931. Component was still updated during this refactor (correctly, it's valid code) but reaches no users.
 Fix: Either wire it back into the Setup page (if intended) or delete the file and remove the import from SetupPage.tsx.
 Can we test: YES — grep for AutomationSettings in SetupPage.tsx JSX confirms zero render sites.
+Decision: DONE 2026-05-05 — import removed from SetupPage.tsx:6. AutomationSettings.tsx kept (valid component, may be wired later). tsc clean.
 
 ### BKL-TEST-PARALLEL-ISOLATION-01 | Full Playwright suite: 24 failures from snapshot contention in parallel runs (P2)
-Priority: P2 | Size: M | Status: 🔴 OPEN
+Priority: P2 | Size: M | Status: ✅ DONE 2026-05-05
 Source: Full npx playwright test test/api/ --project=test run 2026-05-04 showed 24 failures; each spec passes in isolation
-Files: test/api/config-sync.spec.ts, test/api/region-access.spec.ts, test/api/offline-token.spec.ts
+Files: test/api/config-sync.spec.ts, test/api/region-access.spec.ts, test/api/offline-token.spec.ts, playwright.config.ts
 Description: @destructive specs share a single snapshot slot (POST /api/__test/snapshot). When 6 workers run in parallel, one spec consumes the snapshot; subsequent specs fail with "No snapshot exists" and ECONNRESET. Individual runs all pass. Pre-existing — unrelated to architecture hardening changes.
 Fix: Either run @destructive tests serially (--workers=1) or implement per-test-file snapshot namespacing so each spec gets its own snapshot slot.
 Can we test: YES — `npx playwright test test/api/ --project=test --workers=1` should reduce failures to 0.
-Test: test/unit/rh-scraper-node-role.test.ts + REG-NODE-ROLE-RH-01 + REG-NODE-ROLE-SCHED-01 in regression.spec.ts.
+Decision: DONE 2026-05-05 — added `workers: 1` to `test` project in playwright.config.ts. Full suite: 31 passed/5 skipped/0 failed.
+
+### BKL-UX-REGION-ACCESS-WIZARD-GATE-01 | Region Access filter blocks POD dropdown for any region not in enabledPods (P1)
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-05 | Parent: BKL-SETUP-REGION-SELECT-01 (Issue: #59)
+Source: Jason 2026-05-05 (observed: selecting Central Enterprise – TOLA shows empty POD dropdown)
+Files: dashboard/src/utils/regionFilter.ts, dashboard/src/pages/setup/AEsCustomersSection.tsx line 1082, dashboard/src/pages/SetupPage.tsx line 780
+Description: filterPodOptions(podOptions, step0EnabledPods) strips region prefix from each enabled pod key and compares bare keys. When Region Access is set to ["west-commercial.WEST_COMM_CORP_NORTHWEST"], switching to TOLA returns podOptions=[{value:"CENTRAL_ENT_TOLA"}] but enabledKeys={"WEST_COMM_CORP_NORTHWEST"} — TOLA pod is filtered out → empty dropdown. Root: Region Access is a cross-region config but the filter applies globally, preventing setup of any POD not in the enabled list. API confirms TOLA pod config exists (pod-config?region=central-enterprise-tola returns CENTRAL_ENT_TOLA pod).
+Fix option A (preferred per Jason): Remove Region Access filter from the wizard setup flow entirely. AE bootstrap should never be gated by Region Access — that concept gates dashboard view only. Keep filter in dashboard/data display layer.
+Fix option B: Pass selectedRegion into filterPodOptions, check qualified key (region.pod) instead of bare key. Correct per-region filtering — only filters pods for the active region.
+Can we test: YES — select TOLA region in wizard, assert POD dropdown has ≥1 option.
+Decision: DONE 2026-05-05 — Option A applied: `filterPodOptions` import removed from AEsCustomersSection.tsx; `filteredPodOptions = podOptions` (pass-through). All pods show in wizard regardless of Region Access state. filterPodOptions remains in regionFilter.ts for dashboard display layer.
+
+### BKL-SETUP-REGION-SELECT-01 | Region selection at install time — setup.sh prompt replaces wizard Step 0
+Priority: P1 | Size: M | Status: ✅ DONE 2026-05-05 | Issue: #59
+Source: Jason 2026-05-05 (grill session on Bootstrap E2E design)
+Files: scripts/setup.sh, src/region-access-routes.ts (new POST /api/regions/select), dashboard/src/pages/SetupPage.tsx (Step 0 gate), dashboard/src/utils/regionFilter.ts (qualified key fix)
+Description: setup.sh prompts user for region after container health check (single-select from GET /api/settings/regions). New POST /api/regions/select endpoint auto-expands region to all its pods and writes enabledRegions + enabledPods to settings.json. Wizard Step 0 no longer renders on fresh install. Admin Region Access stays as break-glass. Includes fix for BKL-UX-REGION-ACCESS-WIZARD-GATE-01 (TOLA empty POD dropdown).
+Design decisions: Single region per install (no one belongs to multiple regions). setup.sh calls live API (container running) — no need to ship regions.json as release asset. POST /api/regions/select accepts {regionId} only — pod expansion is server-side.
+Decision: DONE 2026-05-05 — POST /api/regions/select added to region-access-routes.ts and registered via existing createRegionAccessRouter() mount in server.ts. select_region() function added to setup.sh (Bash 3.2 compatible, indexed arrays, grep/sed JSON parse). Step 0 wizard suppression is automatic: setup.sh sets enabledRegions before browser opens → step0FirstBoot=false → Step 0 never renders. 3 regression tests added to test/api/region-access.spec.ts, all passing on 7776. Issue #59 to be updated with triage comment.

@@ -45,8 +45,15 @@ export function isAnyRunning(): boolean {
 export function enqueue(task: () => Promise<void>): Promise<void> {
   return new Promise<void>((resolveTask) => {
     const wrapped = async () => {
-      try { await task() } catch { /* swallowed */ }
+      try { await task() } catch (e: any) {
+        console.warn('[run-coordinator] task failed:', e?.message ?? String(e))
+      }
       resolveTask()
+    }
+    if (_queue.length >= 100) {
+      console.warn('[run-coordinator] queue overflow — task dropped')
+      resolveTask()
+      return
     }
     _queue.push(wrapped)
     if (_processing) return

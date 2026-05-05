@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 import { BootstrapConfigBlock } from '../../components/BootstrapConfigBlock'
 import { useBootstrapConfig } from '../../hooks/useBootstrapConfig'
-import { filterPodOptions } from '../../utils/regionFilter'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1078,8 +1077,10 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
     setSelectedRegion,
   } = useBootstrapConfig()
 
-  // BKL-HERO-01 Phase 4: filter pod dropdown to user's Step 0 selection
-  const filteredPodOptions = filterPodOptions(podOptions, step0EnabledPods)
+  // BKL-UX-REGION-ACCESS-WIZARD-GATE-01 (2026-05-05): The region access gate is for
+  // dashboard display filtering, not for gating AE bootstrap. Any AE in any pod must
+  // be able to bootstrap regardless of which regions are enabled. Show all pods.
+  const filteredPodOptions = podOptions
 
   // BKL-UX86: Known AEs (full server records) — used to derive a safe
   // default Parent Drive Folder from a prior successful bootstrap. The

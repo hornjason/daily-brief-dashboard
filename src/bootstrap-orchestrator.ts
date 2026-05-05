@@ -132,7 +132,13 @@ function readPodConfig(): { territorySheetId: string; sfReportId: string; parent
 
 // ── BKL-DRIVE-SCAFFOLD-CACHE-01: Drive scaffold ID cache ────────────────────
 
-type ScaffoldEntry = { configFolderId: string; productsFolderId: string }
+type ScaffoldEntry = {
+  configFolderId: string
+  productsFolderId: string
+  // BKL-SCAFFOLD-STATUS-01: per-product slug → Drive folder ID map captured during
+  // scaffolding so /api/bootstrap/scaffold-status can return it without a live Drive call.
+  productSubfolders?: Record<string, string>
+}
 
 export function readScaffoldCache(): Record<string, ScaffoldEntry> {
   try {
@@ -146,11 +152,24 @@ export function writeScaffoldCache(parentFolderId: string, entry: ScaffoldEntry)
   if (!isValidDriveFolderId(parentFolderId)) return
   if (entry.configFolderId && !isValidDriveFolderId(entry.configFolderId)) return
   if (entry.productsFolderId && !isValidDriveFolderId(entry.productsFolderId)) return
+  // Validate any per-slug subfolder IDs as well — silently drop invalid ones
+  // rather than reject the whole entry (caller may legitimately have partial data).
+  const safeSubfolders: Record<string, string> = {}
+  if (entry.productSubfolders) {
+    for (const [slug, id] of Object.entries(entry.productSubfolders)) {
+      if (typeof id === 'string' && isValidDriveFolderId(id)) safeSubfolders[slug] = id
+    }
+  }
   try {
     let ds: Record<string, unknown> = {}
     try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch { /* fresh */ }
     const cache = (ds.scaffoldCache as Record<string, ScaffoldEntry>) ?? {}
-    writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, scaffoldCache: { ...cache, [parentFolderId]: entry } })
+    const persisted: ScaffoldEntry = {
+      configFolderId: entry.configFolderId,
+      productsFolderId: entry.productsFolderId,
+      productSubfolders: safeSubfolders,
+    }
+    writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, scaffoldCache: { ...cache, [parentFolderId]: persisted } })
   } catch (e: any) {
     console.warn('[auto-bootstrap:scaffold] cache write failed (non-blocking):', e?.message)
   }
@@ -167,7 +186,7 @@ export function writeScaffoldCache(parentFolderId: string, entry: ScaffoldEntry)
  * or any config file in this pass. BKL-DRIVE-PRODUCTS-ROOT-01 will wire the
  * product folder IDs into products.json in a follow-up.
  */
-async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<{ configFolderId: string; productsFolderId: string } | null> {
+async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<ScaffoldEntry | null> {
   if (!parentFolderId) return null
   // BKL-DRIVE-SCAFFOLD-CACHE-01: cache hit → skip all Drive list calls (saves ~9 calls per invocation)
   const cachedEntry = readScaffoldCache()[parentFolderId]
@@ -216,17 +235,22 @@ async function ensureConfigAndProductsScaffold(parentFolderId: string): Promise<
 
     const configFolderId = await findOrCreateFolder('Config', parentFolderId)
     const productsFolderId = await findOrCreateFolder('Products', parentFolderId)
+    // BKL-SCAFFOLD-STATUS-01: capture per-slug folder IDs so the scaffold-status
+    // endpoint can return them without a live Drive call.
+    const productSubfolders: Record<string, string> = {}
     if (productsFolderId) {
       for (const slug of productSlugs) {
         const slugId = await findOrCreateFolder(slug, productsFolderId)
         if (!slugId) {
           console.warn(`[auto-bootstrap:scaffold] failed to ensure Products/${slug} (non-blocking)`)
+        } else {
+          productSubfolders[slug] = slugId
         }
       }
     }
-    console.log(`[auto-bootstrap:scaffold] done — configFolderId=${configFolderId ?? 'null'} productsFolderId=${productsFolderId ?? 'null'}`)
+    console.log(`[auto-bootstrap:scaffold] done — configFolderId=${configFolderId ?? 'null'} productsFolderId=${productsFolderId ?? 'null'} subfolders=${Object.keys(productSubfolders).length}`)
     if (!configFolderId || !productsFolderId) return null
-    const result = { configFolderId, productsFolderId }
+    const result: ScaffoldEntry = { configFolderId, productsFolderId, productSubfolders }
     writeScaffoldCache(parentFolderId, result)  // BKL-DRIVE-SCAFFOLD-CACHE-01
     return result
   } catch (e: any) {
@@ -895,7 +919,7 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
   ;(async () => {
     // BKL-DRIVE-SCAFFOLD-01: Idempotently scaffold Config/ and Products/<slug>
     // under parentFolderId before AE Drive folder creation. Idempotent + non-fatal.
-    let perAeScaffold: { configFolderId: string; productsFolderId: string } | null = null
+    let perAeScaffold: ScaffoldEntry | null = null
     if (parentFolderId) {
       perAeScaffold = await ensureConfigAndProductsScaffold(parentFolderId)
     }
@@ -1617,6 +1641,31 @@ export function createBootstrapRouter(): Hono {
     startedAt: null as string | null,
     completedAt: null as string | null,
   }
+
+  // BKL-SCAFFOLD-STATUS-01: GET /api/bootstrap/scaffold-status
+  // Returns the cached Drive scaffold (Config/, Products/<slug>) for the
+  // current parentFolderId. Reads from data-sources.json scaffoldCache —
+  // populated by ensureConfigAndProductsScaffold() during bootstrap.
+  // Returns 200 with all-null fields when no parentFolderId is configured
+  // or no scaffold cache entry exists for it.
+  router.get('/api/bootstrap/scaffold-status', (c) => {
+    const empty = {
+      configFolderId: null as string | null,
+      productsFolderId: null as string | null,
+      productSubfolders: {} as Record<string, string>,
+    }
+    const podCfg = readPodConfig()
+    const parentFolderId = podCfg?.parentFolderId ?? null
+    if (!parentFolderId) return c.json(empty)
+    const cache = readScaffoldCache()
+    const entry = cache[parentFolderId]
+    if (!entry) return c.json(empty)
+    return c.json({
+      configFolderId: entry.configFolderId ?? null,
+      productsFolderId: entry.productsFolderId ?? null,
+      productSubfolders: entry.productSubfolders ?? {},
+    })
+  })
 
   router.get('/api/bootstrap/initial-load/status', (c) => {
     return c.json({

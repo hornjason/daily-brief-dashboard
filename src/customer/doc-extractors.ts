@@ -121,13 +121,22 @@ export class PdfDocExtractor implements DocExtractor {
       let token: string | null | undefined
       const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
       if (saKeyB64) {
-        const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-        const jwtAuth = new google.auth.JWT({
-          email: keyData.client_email,
-          key:   keyData.private_key,
-          scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-        })
-        token = (await jwtAuth.getAccessToken()).token
+        let keyData: Record<string, unknown>
+        try {
+          keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
+        } catch {
+          console.warn('[docs] SA key parse failed — check GEMINI_SERVICE_ACCOUNT_KEY format')
+          // fall through: keyData undefined, Vertex path will skip
+          keyData = {}
+        }
+        if (keyData.client_email && keyData.private_key) {
+          const jwtAuth = new google.auth.JWT({
+            email: keyData.client_email as string,
+            key:   keyData.private_key as string,
+            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+          })
+          token = (await jwtAuth.getAccessToken()).token
+        }
       } else {
         const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
         token = (await auth.getAccessToken()).token

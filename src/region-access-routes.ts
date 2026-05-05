@@ -1,9 +1,11 @@
 /**
  * BKL-HERO-01 Phase 0 — region access catalog + persistence.
  *
- * Two endpoints:
+ * Endpoints:
  *   GET  /api/regions/catalog   → list of regions with selectable flags + pod sub-list
+ *   GET  /api/regions/access    → current persisted selection
  *   POST /api/regions/access    → validate + persist enabledRegions/enabledPods to settings.json
+ *   POST /api/regions/select    → single-region wizard convenience: sets enabledRegions=[id] + all pods
  *
  * `enabledRegions` and `enabledPods` are top-level optional arrays on
  * settings.json. They sit alongside `regions[]`, not inside it. `normalizeSettings()`
@@ -127,6 +129,39 @@ export function createRegionAccessRouter(deps: { settingsPath: string }): Hono {
       const out = { ...rawSettings, enabledRegions, enabledPods }
       writeJsonAtomic(settingsPath, out)
       return c.json({ ok: true })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // POST /api/regions/select — single-region wizard convenience.
+  // Body: { regionId: string }. Sets enabledRegions=[regionId] and enabledPods to
+  // every qualifiedKey for that region's pods. Thin wrapper over the same
+  // validation + atomic-write pattern as POST /api/regions/access.
+  router.post('/api/regions/select', async (c) => {
+    let body: { regionId?: unknown }
+    try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
+    const regionId = body.regionId
+    if (typeof regionId !== 'string' || regionId.length === 0) {
+      return c.json({ error: 'regionId must be a non-empty string' }, 400)
+    }
+
+    try {
+      let rawSettings: Record<string, unknown> = {}
+      try { rawSettings = JSON.parse(readFileSync(settingsPath, 'utf-8')) } catch { /* new file */ }
+      const settings = normalizeSettings(rawSettings)
+      const catalog = settings.regions.map(buildCatalogRegion)
+      const cat = catalog.find(r => r.id === regionId)
+      if (!cat) return c.json({ error: `Unknown region: ${regionId}` }, 400)
+      if (!cat.selectable) {
+        return c.json({ error: `Region ${regionId} is not selectable: ${cat.comingSoonReason ?? 'coming soon'}` }, 400)
+      }
+
+      const enabledRegions = [regionId]
+      const enabledPods = cat.pods.map(p => p.qualifiedKey)
+      const out = { ...rawSettings, enabledRegions, enabledPods }
+      writeJsonAtomic(settingsPath, out)
+      return c.json({ ok: true, enabledRegions, enabledPods })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }

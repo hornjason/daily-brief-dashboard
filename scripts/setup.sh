@@ -481,6 +481,98 @@ wait_healthy() {
   return 1
 }
 
+select_region() {
+  # BKL-HERO-01 Phase 1 — interactive region selection on first boot.
+  # Skips silently for returning users (enabledRegions already persisted) and
+  # narrates only in --dry-run. Bash 3.2 compatible: indexed arrays, grep/sed
+  # JSON parsing (no jq dependency).
+  hdr "Region selection"
+
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    say "(dry-run) would prompt for region selection"
+    return 0
+  fi
+
+  local access_resp
+  access_resp="$(curl -sf "http://localhost:${PORT}/api/regions/access" 2>/dev/null || echo '')"
+  if [[ -n "$access_resp" ]] && printf '%s' "$access_resp" | grep -q '"enabledRegions"'; then
+    ok "Region already configured — skipping."
+    return 0
+  fi
+
+  local catalog_resp
+  catalog_resp="$(curl -sf "http://localhost:${PORT}/api/regions/catalog" 2>/dev/null || echo '')"
+  if [[ -z "$catalog_resp" ]]; then
+    warn "Could not fetch region catalog — skipping region selection. Configure later in the dashboard."
+    return 0
+  fi
+
+  # Parse the regions array. Strategy: collapse to one line, split on `},{`, then
+  # for each region object extract id, label, and selectable. Bash 3.2 — indexed
+  # arrays only. We accumulate parallel arrays of id/label for selectable regions.
+  local flat
+  flat="$(printf '%s' "$catalog_resp" | tr -d '\n')"
+
+  declare -a region_ids
+  declare -a region_labels
+  region_ids=()
+  region_labels=()
+
+  # Split on region object boundaries. Each object has at minimum: "id":"...","label":"...","selectable":true|false
+  local objects
+  objects="$(printf '%s' "$flat" | sed -e 's/},[[:space:]]*{/}\
+{/g')"
+
+  local obj id label selectable
+  while IFS= read -r obj; do
+    [[ -z "$obj" ]] && continue
+    id="$(printf '%s' "$obj" | grep -oE '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed -e 's/.*"id"[[:space:]]*:[[:space:]]*"//' -e 's/"$//')"
+    label="$(printf '%s' "$obj" | grep -oE '"label"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed -e 's/.*"label"[[:space:]]*:[[:space:]]*"//' -e 's/"$//')"
+    selectable="$(printf '%s' "$obj" | grep -oE '"selectable"[[:space:]]*:[[:space:]]*(true|false)' | head -n1 | grep -oE '(true|false)$')"
+    if [[ -n "$id" && "$selectable" == "true" ]]; then
+      region_ids[${#region_ids[@]}]="$id"
+      region_labels[${#region_labels[@]}]="${label:-$id}"
+    fi
+  done <<< "$objects"
+
+  local n=${#region_ids[@]}
+  if [[ "$n" -eq 0 ]]; then
+    warn "No selectable regions in catalog — skipping. Configure regions in the dashboard."
+    return 0
+  fi
+
+  say "Select your region:"
+  local i
+  for ((i=0; i<n; i++)); do
+    printf '    %d) %s\n' "$((i + 1))" "${region_labels[$i]}"
+  done
+
+  local choice chosen_id chosen_label
+  while true; do
+    printf '  Select your region [1-%d]: ' "$n"
+    if ! IFS= read -r choice; then
+      warn "No input received — skipping region selection."
+      return 0
+    fi
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 && "$choice" -le "$n" ]]; then
+      chosen_id="${region_ids[$((choice - 1))]}"
+      chosen_label="${region_labels[$((choice - 1))]}"
+      break
+    fi
+    bad "Invalid selection: '$choice'. Enter a number between 1 and $n."
+  done
+
+  local select_resp
+  select_resp="$(curl -sf -X POST "http://localhost:${PORT}/api/regions/select" \
+    -H 'Content-Type: application/json' \
+    -d "{\"regionId\":\"${chosen_id}\"}" 2>/dev/null || echo '')"
+  if [[ -n "$select_resp" ]] && printf '%s' "$select_resp" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+    ok "Region configured: ${chosen_label}"
+  else
+    bad "Failed to set region. You can configure it in the dashboard."
+  fi
+}
+
 open_browser() {
   if [[ "$DRY_RUN" -eq 1 ]]; then
     say "(dry-run) would open $DASHBOARD_URL"
@@ -526,6 +618,7 @@ main() {
   pull_image
   start_container
   wait_healthy || true
+  select_region
   open_browser
   print_success
 }

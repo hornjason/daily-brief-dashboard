@@ -53,7 +53,10 @@ export default defineConfig({
       // Destructive tests — always routed to the test container (port 7776).
       // Tests must be tagged @destructive. Set TEST_URL to override the container URL.
       // TEST_KNOWN_CUSTOMER is set to a seed customer so API tests find real data.
+      // workers:1 — @destructive tests share a single snapshot slot; parallel runs cause
+      // contention (24 failures observed with 6 workers). Serial execution eliminates races.
       name: 'test',
+      workers: 1,
       use: {
         baseURL: process.env.TEST_URL ?? 'http://localhost:7776',
         extraHTTPHeaders: {},

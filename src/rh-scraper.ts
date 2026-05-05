@@ -39,7 +39,7 @@ import { assertPrimary } from './lib/node-role.ts'
 // same value without changing imports.
 export let _rhScrapeRunning = false
 export let _rhScrapeStartedAt: number | null = null
-const RH_INNER_STALE_MUTEX_MS = 15 * 60 * 1000  // 15 min auto-release
+const RH_INNER_STALE_MUTEX_MS = 30 * 60 * 1000  // 30 min auto-release (large territories can exceed 15 min)
 
 /** Called by scraper-manager.ts to release mutex on cancel/error paths. */
 export function releaseRhScrapeMutex(): void {
