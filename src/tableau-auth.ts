@@ -262,14 +262,17 @@ export async function waitForTableauLogin(timeoutMs: number = LOGIN_TIMEOUT_MS):
               const currentVal = await emailInput.inputValue().catch(() => '')
               if (!currentVal) {
                 await emailInput.fill(TABLEAU_USER_EMAIL)
+                emailAutoFilled = true  // mark filled regardless of submit outcome
                 await new Promise(r => setTimeout(r, 300))
-                const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Sign in"), button:has-text("Next")')
+                // Try button click first; fall back to Enter key (more reliable across Okta page variants)
+                const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Sign in"), button:has-text("Next"), button:has-text("Log in")')
                   .catch(() => null)
                 if (submitBtn) {
                   await submitBtn.click().catch(() => {})
-                  console.log(`[tableau-auth] auto-filled email ${TABLEAU_USER_EMAIL} and clicked submit`)
-                  emailAutoFilled = true
+                } else {
+                  await emailInput.press('Enter').catch(() => {})
                 }
+                console.log(`[tableau-auth] auto-filled email ${TABLEAU_USER_EMAIL} and submitted`)
               }
             }
           }
