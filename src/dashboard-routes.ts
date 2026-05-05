@@ -882,7 +882,8 @@ export function createDashboardRouter(): Hono {
             const aeCell = aeNameRow[col] ?? ''
             if (!aeCell) continue
             // East-style: code embedded in cell (with or without \n)
-            const terrCodeMatch = aeCell.match(/([A-Za-z][A-Za-z_]+_Terr?\d+)/i)
+            // Allow digits in pod segment (e.g. East_Comm_Corp_Pod1_Terr01, POD01)
+            const terrCodeMatch = aeCell.match(/([A-Za-z][A-Za-z0-9_]+_Terr?\d+)/i)
             if (terrCodeMatch) {
               tabPodKey = podKeyFromTerritoryCode(terrCodeMatch[1])
               if (tabPodKey) break

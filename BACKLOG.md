@@ -9557,8 +9557,24 @@ Files: src/bootstrap/steps/populate-data-sheets.ts
 Description: Both readCcsp and readPipeline now download L3 Drive CSVs (CCSP-{pod}-*.csv and SF-PIPELINE-*.csv) from podBookingsFolderId, filter by territory, and return full column rows. Sheet tabs renamed at creation time ("CCSP Data", "Pipeline") so fetchCCSPData and fetchPipelineData find the correct tabs.
 Decision: DONE — verified by E2E spec steps I and J (ccspTotalAcv=1696293, pipelineTotalAcv=4442834, 2026-05-06).
 
+### BKL-TERRITORY-EAST-COMM-PARSE-01 | territory-names returns 0 results for EAST_COMM_CORP_POD01 — podPrefixFromTabTitle has no East Commercial entries (P1)
+Priority: P1 | Size: S | Status: 🔴 OPEN
+Source: Manual bootstrap walkthrough 2026-05-05 — wizard shows "No AE data for this territory" for East Comm POD01 Rough Riders. Verified: curl /api/territory-names?pod=EAST_COMM_CORP_POD01 returns {"territories":[]}. Google auth confirmed connected.
+Files: src/dashboard-routes.ts — podPrefixFromTabTitle (lines 178-185), commercial tab parsing loop (lines 851-937)
+Description: podPrefixFromTabTitle only maps West Commercial tab names (northwest, southwest, north central, south central). East Commercial tab names ("Rough Riders", etc.) fall through and return ''. The primary pod-key derivation from territory codes in AE cells (podKeyFromTerritoryCode) may also fail if the East sheet stores territory codes differently than expected. Root cause requires reading the actual sheet tab structure — but the podPrefixFromTabTitle omission is confirmed.
+Fix: Either (a) add East Commercial tab name → pod key mappings to podPrefixFromTabTitle, or (b) verify territory codes are embedded in AE cells in East sheet (East_Comm_Corp_Pod1_Terr01 format) and fix the regex if not. Need to read actual sheet tabs first.
+Can we test: YES — regression test: GET /api/territory-names?pod=EAST_COMM_CORP_POD01 must return territories.length > 0.
+Decision: OPEN
+
+### BKL-BOOTSTRAP-TERRITORY-LOAD-FAIL-01 | Territory load failure silently disables Set Up AE button with no clear error (P2)
+Priority: P2 | Size: S | Status: 🔴 OPEN
+Source: Manual bootstrap walkthrough 2026-05-05 — "Could not load territories — check your Google connection" appeared amber but Set Up AE button was silently disabled (territories.length === 0 → canStart = false)
+Files: dashboard/src/pages/setup/AEsCustomersSection.tsx (canStart line ~881, territory load error handling)
+Description: When territory sheet data fails to load (Google connection issue), the amber warning appears but the button disable reason is not surfaced to the user. A user who misses the amber warning will just see a greyed-out button with no explanation. Should surface a clear "Fix the territory load error above before continuing" message near the Set Up AE button when territories.length === 0 due to a load error vs. simply not yet loaded.
+Decision: OPEN
+
 ### BKL-BOOTSTRAP-WIZARD-UI-TEST-01 | No Playwright test walks the wizard UI end-to-end — gate bugs invisible to E2E suite (P1)
-Priority: P1 | Size: M | Status: 🔴 OPEN
+Priority: P1 | Size: M | Status: ✅ DONE 2026-05-05
 Source: Bootstrap walkthrough 2026-05-05 — RH Portal gate blocked all bootstrap; bootstrap-e2e spec (17 tests) never caught it because it calls APIs directly, bypassing SetupPage.tsx entirely
 Files: test/bootstrap-e2e.spec.ts, dashboard/src/components/SetupPage.tsx (or SetupWizard.tsx)
 Description: The bootstrap E2E spec tests the backend pipeline (Drive folder creation, sheet population, territory data flow). It never renders the wizard UI, never fills form fields, never clicks "Set Up AE." Any React-level validation gate (enabled/disabled state, banners, conditional guards) is completely invisible to the suite. BKL-BOOTSTRAP-RH-GATE-01 is a direct consequence of this gap.
@@ -9566,7 +9582,7 @@ Fix: Add a Playwright UI spec that: loads the wizard at /dashboard/setup, mocks 
 Decision: OPEN
 
 ### BKL-BOOTSTRAP-RH-GATE-01 | Setup wizard gates "Set Up AE" on RH Portal connection — blocks all bootstrap (P1)
-Priority: P1 | Size: S | Status: 🔴 OPEN
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-05
 Source: Manual bootstrap walkthrough 2026-05-05 — Jason could not bootstrap any AE in test env
 Files: dashboard/src/components/SetupPage.tsx (or SetupWizard.tsx) — the validation logic before Set Up AE button
 Description: The UI displays a red banner "Red Hat Portal must be connected before running bootstrap — scroll up to connect it" and blocks the Set Up AE button. However, bootstrap is L3-only per CLAUDE.md: the ONLY pre-flight requirement is Google Drive auth. RH Portal is an L4 dependency (RH support case scraping) and must never gate bootstrap. The gate is architecturally wrong.

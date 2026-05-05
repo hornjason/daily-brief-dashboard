@@ -120,3 +120,41 @@ test.describe('GET /api/territory-lookup', () => {
     }
   })
 })
+
+// ── BKL-TERRITORY-EAST-COMM-PARSE-01 regression ────────────────────────────
+
+test.describe('East Commercial territory parsing', () => {
+  /**
+   * BKL-TERRITORY-EAST-COMM-PARSE-01 — East Commercial POD01 must return territories.
+   * @live — requires live Google auth session.
+   *
+   * Root cause: regex [A-Za-z][A-Za-z_]+_Terr\d+ stopped at digit in "Pod1"
+   * so East tabs silently returned 0 territories. Fix: [A-Za-z0-9_]+ in regex.
+   */
+  test('@live East Commercial POD01 returns territories with num and aeName', async () => {
+    const { status, body } = await getJSON('/api/territory-names?pod=EAST_COMM_CORP_POD01')
+    // 200 = Google auth connected; 401 = auth not configured in test container (expected in CI)
+    if (status === 401) return // skip when Google auth unavailable
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('territories')
+    expect(Array.isArray(body.territories)).toBe(true)
+    expect(body.territories.length).toBeGreaterThan(0)
+    const first = body.territories[0]
+    expect(first).toHaveProperty('num')
+    expect(first).toHaveProperty('aeName')
+    expect(typeof first.num).toBe('string')
+    expect(typeof first.aeName).toBe('string')
+  })
+
+  /**
+   * Regression guard: West Commercial POD must still return 10 territories after the
+   * East Commercial fix (ensures we didn't break the existing tab-title fallback path).
+   * @live — requires live Google auth session.
+   */
+  test('@live West Commercial NORTHWEST still returns 10 territories (no regression)', async () => {
+    const { status, body } = await getJSON('/api/territory-names?pod=WEST_COMM_CORP_NORTHWEST')
+    if (status === 401) return // skip when Google auth unavailable
+    expect(status).toBe(200)
+    expect(body.territories.length).toBe(10)
+  })
+})
