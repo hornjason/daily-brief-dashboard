@@ -14,7 +14,9 @@ import { closeScrapeContext, adoptScrapeContext } from './rh-scraper.ts'
 import { closeSupportableContext } from './supportable-scraper.ts'
 import { closeCcspContext } from './ccsp-scraper.ts'
 import { ScraperRegistry } from './scraper-registry.ts'
-import { resetAllCircuitBreakers } from './scraper-manager.ts'
+// BKL-ARCH-06 issue #52: import from scrape-state to break the circular dep
+// (scraper-manager → rh-auth → scraper-manager).
+import { resetAllCircuitBreakers } from './scrape-state.ts'
 import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
 import { recordSessionEstablished } from './settings-api.ts'
 

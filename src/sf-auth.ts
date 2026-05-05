@@ -19,7 +19,9 @@ import { join } from 'node:path'
 import { closeScrapeContext, adoptScrapeContext, reopenScrapeContextFromAuth } from './rh-scraper.ts'
 import { closeSfContext, adoptSfContext, getSfContext } from './sf-scraper.ts'
 import { adoptCcspContext, closeCcspContext } from './ccsp-scraper.ts'
-import { resetAllCircuitBreakers } from './scraper-manager.ts'
+// BKL-ARCH-06 issue #52: import from scrape-state to break the circular dep
+// (scraper-manager → sf-auth → scraper-manager).
+import { resetAllCircuitBreakers } from './scrape-state.ts'
 import { BASE_CHROMIUM_ARGS, sanitizeChromiumProfile } from './browser-utils.ts'
 import { recordSessionEstablished } from './settings-api.ts'
 

@@ -128,145 +128,21 @@ export function getTelemetrySummary(): Record<string, {
 }
 
 // ── BKL-M50c: Circuit breaker per service ────────────────────────────────────
-
-// BKL-SR03-F1: threshold/cooldownMs are read lazily via getter functions so that
-// changes saved through POST /api/settings/automation take effect on the live
-// breakers without a container restart. Do NOT bake config values into instance
-// fields at construction — the previous shape (readonly threshold/cooldownMs +
-// values pulled once at module init) is the bug this fix exists to prevent.
-class CircuitBreaker {
-  private _failureCount = 0
-  private _openedAt: number | null = null
-  private _lastFailure: string | null = null
-  _sessionExpired = false
-  _sessionExpiredAt: number | null = null
-  readonly name: string
-  private readonly _getThreshold: () => number
-  private readonly _getCooldownMs: () => number
-
-  constructor(
-    name: string,
-    getThreshold: () => number = () => 3,
-    getCooldownMs: () => number = () => 5 * 60 * 1000,
-  ) {
-    this.name = name
-    this._getThreshold = getThreshold
-    this._getCooldownMs = getCooldownMs
-  }
-
-  /** Current threshold — read lazily from config every call (BKL-SR03-F1). */
-  get threshold(): number {
-    return this._getThreshold()
-  }
-
-  /** Current cooldownMs — read lazily from config every call (BKL-SR03-F1). */
-  get cooldownMs(): number {
-    return this._getCooldownMs()
-  }
-
-  /** Returns true if the circuit is open (service should be skipped). */
-  isOpen(): boolean {
-    // Session-expiry pin: hold open for 4 hours after a SessionExpiredError
-    if (this._sessionExpired) {
-      const elapsed = Date.now() - (this._sessionExpiredAt ?? 0)
-      if (elapsed < 4 * 60 * 60 * 1000) {
-        return true
-      }
-      // 4-hour window elapsed — clear the pin and fall through to normal logic
-      this._sessionExpired = false
-      this._sessionExpiredAt = null
-      console.log(`[circuit-breaker] ${this.name}: session-expiry pin cleared after 4h — allowing retry`)
-    }
-    const threshold = this._getThreshold()
-    const cooldownMs = this._getCooldownMs()
-    if (this._failureCount < threshold) return false
-    // Check if cooldown has elapsed — if so, allow a retry (half-open)
-    if (this._openedAt && (Date.now() - this._openedAt) >= cooldownMs) {
-      console.log(`[circuit-breaker] ${this.name}: cooldown elapsed — allowing retry (half-open)`)
-      return false
-    }
-    return true
-  }
-
-  recordSuccess(): void {
-    if (this._failureCount > 0) {
-      console.log(`[circuit-breaker] ${this.name}: success — resetting (was at ${this._failureCount} failures)`)
-    }
-    this._failureCount = 0
-    this._openedAt = null
-    this._lastFailure = null
-    this._sessionExpired = false
-    this._sessionExpiredAt = null
-  }
-
-  recordFailure(reason: string, sessionExpired = false): void {
-    this._failureCount++
-    this._lastFailure = reason
-    if (sessionExpired) {
-      this._sessionExpired = true
-      this._sessionExpiredAt = Date.now()
-      console.warn(`[circuit-breaker] ${this.name}: session-expiry pin set — held open for 4h`)
-    }
-    const threshold = this._getThreshold()
-    const cooldownMs = this._getCooldownMs()
-    if (this._failureCount >= threshold) {
-      this._openedAt = Date.now()
-      console.warn(`[circuit-breaker] ${this.name}: OPEN after ${this._failureCount} failures — cooldown ${cooldownMs / 1000}s (last: ${reason})`)
-    } else {
-      console.warn(`[circuit-breaker] ${this.name}: failure ${this._failureCount}/${threshold} (${reason})`)
-    }
-  }
-
-  getState(): { name: string; state: 'closed' | 'open' | 'half-open'; failures: number; lastFailure: string | null } {
-    let state: 'closed' | 'open' | 'half-open' = 'closed'
-    const threshold = this._getThreshold()
-    const cooldownMs = this._getCooldownMs()
-    if (this._failureCount >= threshold) {
-      state = (this._openedAt && (Date.now() - this._openedAt) >= cooldownMs) ? 'half-open' : 'open'
-    }
-    return { name: this.name, state, failures: this._failureCount, lastFailure: this._lastFailure }
-  }
-}
-
-// BKL-SR03-F1: Pass getter functions (not values) so each breaker re-reads the
-// live AutomationConfig on every check. This is what makes the "Save" button on
-// the Automation settings page take effect immediately for circuit breakers.
-const _thresholdGetter   = (): number => getAutomationConfig().circuitBreakerThreshold
-const _cooldownMsGetter  = (): number => getAutomationConfig().circuitBreakerCooldownMs
-const circuitBreakers = {
-  'rh-cases': new CircuitBreaker('rh-cases', _thresholdGetter, _cooldownMsGetter),
-  ccsp: new CircuitBreaker('ccsp', _thresholdGetter, _cooldownMsGetter),
-  'sf-pipeline': new CircuitBreaker('sf-pipeline', _thresholdGetter, _cooldownMsGetter),
-}
-
-/** Get circuit breaker states for all services — exposed for /api/status endpoint. */
-export function getCircuitBreakerStates(): Record<string, ReturnType<CircuitBreaker['getState']>> {
-  return {
-    'rh-cases': circuitBreakers['rh-cases'].getState(),
-    ccsp: circuitBreakers.ccsp.getState(),
-    'sf-pipeline': circuitBreakers['sf-pipeline'].getState(),
-  }
-}
-
-/** Reset a single circuit breaker — used when auth is re-established. */
-export function resetCircuitBreaker(service: 'rh-cases' | 'ccsp' | 'sf-pipeline'): void {
-  circuitBreakers[service].recordSuccess()
-  console.log(`[circuit-breaker] ${service}: reset by auth event`)
-}
-
-/** Reset ALL circuit breakers — called on re-authentication (cold-start recovery). */
-export function resetAllCircuitBreakers(): void {
-  for (const [name, cb] of Object.entries(circuitBreakers)) {
-    if (cb.getState().failures > 0 || cb._sessionExpired) {
-      cb.recordSuccess()
-      console.log(`[circuit-breaker] ${name}: reset by auth event`)
-    }
-  }
-  // Clear the SF expired flag so the status endpoint returns sessionExpired: false
-  // immediately after auth — without this, a stale true from prior scrape failures
-  // blocks the frontend VNC close condition (hasSession && !sessionExpired).
-  _sfSessionExpired = false
-}
+//
+// BKL-ARCH-06 issue #52: CircuitBreaker class + named breakers + reset
+// functions live in `./scrape-state.ts`. Auth files (rh-auth.ts, sf-auth.ts)
+// import `resetAllCircuitBreakers` from there directly to break the prior
+// `scraper-manager → rh-auth → scraper-manager` cycle. We re-export the same
+// names below so existing callers in scrape-api.ts and elsewhere keep working
+// unchanged.
+import {
+  circuitBreakers,
+  getCircuitBreakerStates,
+  resetCircuitBreaker,
+  resetAllCircuitBreakers,
+  registerResetAllHook,
+} from './scrape-state.ts'
+export { getCircuitBreakerStates, resetCircuitBreaker, resetAllCircuitBreakers } from './scrape-state.ts'
 
 // ── BKL-M50c: Wall-clock timeout wrapper ─────────────────────────────────────
 
@@ -413,6 +289,14 @@ export let _sfSyncLastError: string | null = null
 // second consecutive failure (grace period via scrape-outcome.ts).
 export let _sfSessionExpired = false
 let _sfTotalRows = 0
+
+// BKL-ARCH-06 issue #52: When auth re-establishes and resetAllCircuitBreakers()
+// fires from rh-auth or sf-auth, also clear our `_sfSessionExpired` flag here.
+// The flag lives in this module (scrape-api / status routes use the live
+// binding), but resetAllCircuitBreakers now lives in scrape-state.ts to break
+// the circular dep. The hook gives scrape-state.ts a way to call back without
+// re-importing this file.
+registerResetAllHook(() => { _sfSessionExpired = false })
 
 // ── Setters for cross-module state mutation (ESM live bindings) ─────────────
 

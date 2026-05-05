@@ -9342,6 +9342,13 @@ Files: dashboard/src/components/SettingsCard.tsx (new, 66 lines), dashboard/src/
 Description: Shared save/cancel/dirty-state/error chrome extracted from 5 settings panels. Net −140 lines across panels; +152 lines in shared modules. AiIntelligenceSettings adopted hook but not SettingsCard wrapper (4-sibling-card layout differs).
 Decision: DONE 2026-05-04 — tsc clean, Quinn visual review pending on prod. Issue #57 closed.
 
+### BKL-ARCH-SCRAPE-STATE-01 | Extract CircuitBreaker + running-flag state from scraper-manager.ts → src/scrape-state.ts (Issue #52)
+Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
+Source: fallow circular dependency report — rh-auth.ts + sf-auth.ts imported resetAllCircuitBreakers from scraper-manager.ts while scraper-manager.ts imported from both auth files
+Files: src/scrape-state.ts (new, 241 lines), src/scraper-manager.ts (refactored — removed lines 137–268), src/rh-auth.ts (import line only), src/sf-auth.ts (import line only), test/unit/scrape-state.test.ts (new, 21 tests)
+Description: CircuitBreaker class, named breakers map (rh-cases/ccsp/sf-pipeline), getCircuitBreakerStates/resetCircuitBreaker/resetAllCircuitBreakers extracted to scrape-state.ts. _sfSessionExpired reset kept in scraper-manager via registerResetAllHook callback to avoid new cycle. scraper-manager re-exports same symbols so callers (scrape-api.ts) unchanged. Public acquire/release/isRunning/resetCircuit/recordOutcome interface added.
+Decision: DONE 2026-05-04 — 3 circular deps eliminated (rh-auth↔scraper-manager, sf-auth↔scraper-manager paths). tsc clean, 584 unit tests pass, 28 Playwright pass/5 skipped on 7776, Quinn PASS, Rook PASS. Issue #52 closed.
+
 ### BKL-ARCH-AI-CONFIG-01 | Extract AiConfig + AutomationConfig from settings-api.ts → src/ai-config.ts (Issue #51)
 Priority: P2 | Size: M | Status: ✅ DONE 2026-05-04
 Source: fallow circular dependency report — ai/automation config functions embedded in settings-api.ts created cycles
