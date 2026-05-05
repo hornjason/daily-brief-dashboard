@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Timer Reference
 
 Complete verified inventory of all timers in DailyBriefDashboard. 33 server-side timers across 16 source files + 3 sync daemon timers in `scripts/sync-l3-daemon.ts` (Group 7).

@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Changelog
 
 All notable changes to DailyBriefDashboard are documented here.

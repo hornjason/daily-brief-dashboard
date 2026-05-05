@@ -1,3 +1,10 @@
+---
+doc-type: runbook
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # CI & Release Pipeline
 
 ## Overview

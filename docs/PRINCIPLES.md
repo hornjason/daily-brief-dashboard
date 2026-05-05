@@ -1,5 +1,8 @@
 ---
-Last validated: 2026-04-20
+doc-type: architecture
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Design Principles — Typography and Visual Constraints

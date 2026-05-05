@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 *Last validated: 2026-04-11 | Owner: DA | Trigger: New flows added, existing flows change*
 
 # DailyBriefDashboard — End-to-End Flow Reference

@@ -1,5 +1,8 @@
 ---
-Last validated: 2026-04-24
+doc-type: architecture
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # DailyBriefDashboard — Architecture Reference

@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Test Manifest
 
 Status: Operational | Last validated: 2026-04-22 | Trigger: When test files added or tier config changes

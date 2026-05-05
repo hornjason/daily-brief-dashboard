@@ -1,3 +1,10 @@
+---
+doc-type: runbook
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Mac Mini Demo Environment — Setup Guide
 *Status: Operational | Last validated: 2026-04-22 | Trigger: Mac Mini OS changes, CI runner config changes, tunnel URL changes*
 

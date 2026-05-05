@@ -46,8 +46,24 @@ _Avoid_: "sync service", "data sync"
 ### Drive structure
 
 **AE parent folder**:
-The top-level Google Drive folder the user configures during setup. Contains one subfolder per AE, each of which contains one subfolder per customer. Lives in the user's personal Drive or a Drive they own.
-_Avoid_: "root folder", "parent folder", "Drive root"
+The top-level Google Drive folder the user configures during setup. AE folders sit directly under it — there is no region or POD subfolder between the parent and the AE folder. Also contains sibling `Config/` and `Products/` scaffold folders created during bootstrap. Lives in the user's personal Drive or a Drive they own.
+_Avoid_: "root folder", "parent folder", "Drive root", "group drive"
+
+**AE folder**:
+A subfolder directly under the AE parent folder, named after the AE. Contains 3 data sheets (SF Bookings, CCSP, Pipeline) and one customer folder per customer. No intermediate region or POD subfolder exists between the AE parent folder and the AE folder.
+_Avoid_: "AE directory", "rep folder"
+
+**Bootstrap data source**:
+Bootstrap reads exclusively from the L3 cache (L3 shared folder). It has no L4 functionality. The L3 sync daemon on the Mac Mini pulls L4 data to L3 every night, so the L3 shared folder always has at least one day of data available. Hero installs always read from L3 — they never trigger or require L4 scrapes. CCSP, pipeline, and SF bookings data are all available immediately after bootstrap completes because L3 is always pre-populated.
+_Avoid_: "bootstrap pulls from L4", "needs a scrape to run first", "hero install scrapes Tableau"
+
+**SF bookings sheet** (also: subscription sheet, `subscriptionSheetId`):
+The Google Sheet inside the AE folder that holds SF subscription data per customer. Created and populated by the bootstrap pipeline from L3 data. The dashboard reads from `subscriptionSheetId` in `aes.json` to serve `/customer/:name/sheetdata`. The physical sheet may be named "Supportable — {AE Name}" (legacy) or "SF Bookings" — both refer to the same concept. Only `subscriptionSheetId` matters for routing.
+_Avoid_: "Supportable sheet" (use "SF bookings sheet"), "subscription sheet" (too generic)
+
+**Bootstrap scaffold**:
+Two folders created directly under the AE parent folder during bootstrap: `Config/` (holds backup sheets) and `Products/` (holds one subfolder per product slug, e.g. `openshift/`, `rhel/`). Created by `ensureConfigAndProductsScaffold()`. Idempotent — reused across bootstrap runs.
+_Avoid_: "product folders", "config folder" (say "Config/ scaffold folder" to disambiguate)
 
 **Customer folder**:
 A subfolder under an AE folder, named after a customer. Contains account documents, notes, and spreadsheets used for account intelligence.

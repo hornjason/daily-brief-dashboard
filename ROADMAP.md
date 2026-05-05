@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # DailyBriefDashboard — Roadmap
 
 **Last updated:** 2026-04-01

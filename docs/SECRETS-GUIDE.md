@@ -1,7 +1,8 @@
 ---
-Status: Operational
-Last validated: 2026-04-19
-Trigger: New credential added, rotation procedure changes, .env structure changes
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Secrets Management Guide

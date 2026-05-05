@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Data Rules (do not regress)
 *Last validated: 2026-04-20 | Owner: DA | Trigger: Any cache write, Drive BFS change, or new sheet tab matching logic*
 

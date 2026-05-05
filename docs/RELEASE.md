@@ -1,7 +1,8 @@
 ---
-Status: Operational
-Last validated: 2026-04-19
-Trigger: Branch strategy changes, versioning scheme changes, rollback procedure changes
+doc-type: runbook
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Release Management Runbook

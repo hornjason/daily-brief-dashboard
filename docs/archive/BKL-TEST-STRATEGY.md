@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # DailyBriefDashboard -- Enterprise Testing Strategy
 *Status: Architecture/ADR — rationale only, not active commands | Last validated: 2026-04-20 | Trigger: Testing strategy changes, new test tiers added*
 

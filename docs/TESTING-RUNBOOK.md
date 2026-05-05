@@ -1,3 +1,10 @@
+---
+doc-type: runbook
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Testing Runbook
 *Last validated: 2026-04-23 | Owner: DA | Trigger: Makefile changes, playwright.config.ts changes, new test files added or removed*
 

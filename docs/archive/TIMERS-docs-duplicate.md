@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 *Last validated: 2026-04-01 | Owner: DA | Trigger: New timers added or removed | ⚠️ Re-validation needed — timer 34 (KPI Snapshot) was added after last verification*
 
 # Timer Reference

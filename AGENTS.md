@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # AGENTS.md — DailyBriefDashboard Project Behavioral Baseline
 *Status: Operational | Last validated: 2026-04-21 | Trigger: Agent roster changes, new behavioral rules added*
 

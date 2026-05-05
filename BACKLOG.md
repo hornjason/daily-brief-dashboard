@@ -9451,3 +9451,101 @@ Files: scripts/setup.sh, src/region-access-routes.ts (new POST /api/regions/sele
 Description: setup.sh prompts user for region after container health check (single-select from GET /api/settings/regions). New POST /api/regions/select endpoint auto-expands region to all its pods and writes enabledRegions + enabledPods to settings.json. Wizard Step 0 no longer renders on fresh install. Admin Region Access stays as break-glass. Includes fix for BKL-UX-REGION-ACCESS-WIZARD-GATE-01 (TOLA empty POD dropdown).
 Design decisions: Single region per install (no one belongs to multiple regions). setup.sh calls live API (container running) — no need to ship regions.json as release asset. POST /api/regions/select accepts {regionId} only — pod expansion is server-side.
 Decision: DONE 2026-05-05 — POST /api/regions/select added to region-access-routes.ts and registered via existing createRegionAccessRouter() mount in server.ts. select_region() function added to setup.sh (Bash 3.2 compatible, indexed arrays, grep/sed JSON parse). Step 0 wizard suppression is automatic: setup.sh sets enabledRegions before browser opens → step0FirstBoot=false → Step 0 never renders. 3 regression tests added to test/api/region-access.spec.ts, all passing on 7776. Issue #59 to be updated with triage comment.
+
+### BKL-BOOTSTRAP-CUSTOMER-FOLDERS-01 | Per-customer Drive subfolders not created for SF-sync-discovered customers (P2)
+Priority: P2 | Size: S | Status: 🔴 OPEN | Source: Quinn QA 2026-05-05
+Files: src/bootstrap-orchestrator.ts, src/scrape-api.ts (sf-bookings-sync route)
+Description: Bootstrap creates Drive subfolders only for customers in TEST_CUSTOMER_NAMES (pre-seeded). The 11 customers discovered via POST /api/scrape/sf-bookings-sync after bootstrap have no Drive subfolders. Container logs show "No Drive folder found for customer X under AE Carolanne Farrell" for every SF-sync-discovered customer. Intelligence pipeline logs these as non-fatal but Drive docs cannot be created/found for them.
+Decision: OPEN — SF bookings sync should either (a) trigger customer folder creation for newly discovered customers, or (b) a separate "ensure customer folders" step should run post-sync. Needs design decision before implementing.
+
+### BKL-TEST-GEMINI-AUTH-01 | Gemini/Vertex AI auth broken in test container — invalid_grant JWT (P3)
+Priority: P3 | Size: S | Status: 🔴 OPEN | Source: Quinn QA 2026-05-05
+Files: /data/config/ (Vertex AI service account key), src/account-intelligence.ts
+Description: Test container (7776) Gemini auth fails for ALL customers: "invalid_grant: Invalid JWT Signature" for project jhorn-pai. Brief generation fails for every uncached customer. Two customers (A10 Networks, Illumio) serve from fingerprint cache. Root cause: stale/rotated Vertex AI service account key in data-test/config/. Does not affect production container (7777).
+Decision: OPEN — Refresh Vertex AI SA key in data-test/config/ OR exclude Gemini auth from test container setup (test env should not call live Gemini).
+
+### BKL-REGION-EAST-COMM-01 | East Commercial region onboarding — subscription GSheets + settings.json wiring (P1)
+Priority: P1 | Size: M | Status: ✅ DONE 2026-05-04
+Source: Jason 2026-05-04
+Files: scripts/create-east-comm-pod-sheets.ts (migration, one-shot), scripts/seed-data/settings.json, data/config/settings.json
+Description: Onboarded East Commercial as a new region with 4 pods (POD01–POD03, POD05). Work done:
+  1. Created migration script `scripts/create-east-comm-pod-sheets.ts` — reads source SF bookings sheet (13SUwFVV01EqIrPRh_XJReFNnE1ROdGt_glpkxnvQ1XM tab "data"), groups 7,496 rows by ACCOUNT_POD column (idx 12), creates one GSheet per pod in Drive folder (14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo). Skip-if-exists (idempotent). GSheets created: Rough Riders (1,778 rows), Big Apple Ballers (1,844), Pythons (1,973), Mad Hatters (1,901).
+  2. Added east-commercial region block to `scripts/seed-data/settings.json` (canonical region source) and `data/config/settings.json` (live runtime).
+  3. POD01 (Rough Riders) wired with sfReportId `00OPe00000m23W2MAI`. POD02/03/05 sfReportId blank — pending.
+  4. `territorySheetUrl` set to East AE territory sheet `111gcacXSkB4uNrDNQAuL7fvcS6YQi_6Wfl9hhffJsU0` (tab gid=1703062703).
+  5. East territory sheet URL added to `GET /api/wizard/seed-sheets` in `src/scrape-api.ts`.
+Decision: DONE — 4 GSheets in Drive, region config in settings.json, POD01 selectable in wizard (others shown but not selectable — no sfReportId). Region shows as selectable once CCSP + SF Pipeline CSVs land from primary Mac Mini first run.
+
+### BKL-REGION-SEED-01 | First-boot settings seed — scripts/seed-data/settings.json as canonical region source (P1)
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-04
+Source: Jason 2026-05-04 (identified gap: fresh hero installs had no regions[] → only west-commercial via normalizeSettings() fallback)
+Files: server.ts (first-boot seed block ~line 105), scripts/seed-data/settings.json
+Description: Fresh hero container installs started with an empty `data/config/settings.json` — `normalizeSettings()` synthesized only west-commercial from the legacy flat schema. East Commercial and TOLA were invisible to new installs. Fix:
+  1. `scripts/seed-data/settings.json` is now git-tracked, baked into the image at `/app/scripts/seed-data/settings.json`, and is the canonical source for all region + pod definitions. To add a new region → edit this file → `make rebuild`.
+  2. `server.ts` startup block: if `data/config/settings.json` has no `regions[]` (fresh install), copies `regions[]` from seed-data. Existing installs with regions already set are not touched (no clobber).
+  3. The first-boot seed is non-fatal — any file read error emits a warn log and continues.
+Acceptance: Fresh container with empty data/config/settings.json starts up → GET /api/regions/catalog returns all 3 regions (west-commercial, east-commercial, central-enterprise-tola). Existing container with populated regions[] is unaffected.
+Decision: DONE — server.ts seed block added, scripts/seed-data/settings.json updated with all 3 regions. Committed in same session as BKL-REGION-EAST-COMM-01.
+
+### BKL-REGION-EAST-COMM-02 | East Commercial — collect SF report IDs for POD02, POD03, POD05 (P2)
+Priority: P2 | Size: XS | Status: 🔴 OPEN
+Source: Jason 2026-05-04 (only POD01 report ID available at session time)
+Files: scripts/seed-data/settings.json, data/config/settings.json, data-test/config/settings.json, data-demo/config/settings.json
+Description: POD01 (Rough Riders) is wired with sfReportId `00OPe00000m23W2MAI`. POD02 (Big Apple Ballers), POD03 (Pythons), and POD05 (Mad Hatters) have blank sfReportIds — these pods are present in settings.json but L4 SF Pipeline sync skips pods without a report ID. The sync daemon logs "SKIPPED — SF report ID not configured" for each.
+To complete: Jason creates SF reports in Salesforce for each East Commercial pod, copies the 18-char report ID (format `00OPe…`), and pastes into all four settings.json files: prod `data/config/`, test `data-test/config/`, seed `scripts/seed-data/`, demo `data-demo/config/`. Then `make rebuild`.
+Decision: OPEN — blocked on Jason creating SF reports in Salesforce.
+
+## E2E Bootstrap Spec — Follow-up Items (2026-05-06)
+
+### BKL-E2E-ACCOUNT-PLAN-MARKDOWN-01 | Account plan POST response missing markdown field (P2)
+Priority: P2 | Size: XS | Status: 🔴 OPEN
+Source: Marcus (bootstrap-e2e rewrite 2026-05-06)
+Files: src/customer-routes.ts (POST /api/customers/:id/account-plan/generate ~line 1043), test/bootstrap-e2e.spec.ts step R
+Description: The account plan generate endpoint returns `{ ok, generatedAt, driveUrl }` — no `markdown` field. The E2E spec step R asserts `markdown.length > 100` to confirm real content was generated. Currently worked around with a follow-up GET, but the cleaner fix is to include `markdown` in the POST response directly. Recommend adding `markdown` to the POST response to avoid the extra round-trip.
+Decision: OPEN
+
+### BKL-E2E-CUSTOMER-ID-FIELD-01 | Customer type has no stable id field — account plan URL uses name (P3)
+Priority: P3 | Size: XS | Status: 🔴 OPEN
+Source: Marcus (bootstrap-e2e rewrite 2026-05-06)
+Files: src/types.ts (Customer interface), src/customer-routes.ts (account plan route :id param)
+Description: Customer objects have no `id` or `_id` field — only `name`. The account plan route (`/api/customers/:id/account-plan/generate`) accepts name or slug as `:id`. The E2E spec passes `customer.name` as the ID param, which works today but is fragile if the route is ever slug-decoupled. Consider adding a stable `id` field to the Customer type or documenting that `:id` is always the customer name.
+Decision: OPEN
+
+### BKL-E2E-DRIVE-LIST-SHAPE-01 | /api/__test/drive-list response shape not formally specced (P3)
+Priority: P3 | Size: XS | Status: 🔴 OPEN
+Source: Marcus (bootstrap-e2e rewrite 2026-05-06)
+Files: test/bootstrap-e2e.spec.ts step Q
+Description: The E2E spec step Q uses `/api/__test/drive-list` to verify the Account Intelligence subfolder and doc count. The response shape is not pinned in any API spec — the spec currently tolerates `{items:[]}`, `{children:[]}`, or a bare array. When this endpoint is formalized, tighten the step Q assertion to use the documented shape.
+Decision: OPEN
+
+### BKL-E2E-ACCOUNT-PORTFOLIO-TESTID-01 | AccountPortfolioGrid cards need data-testid for crisp E2E assertion (P2)
+Priority: P2 | Size: XS | Status: ✅ DONE 2026-05-06
+Source: Marcus (bootstrap-e2e rewrite 2026-05-06)
+Files: dashboard/src/components/AccountPortfolioGrid.tsx line 418, test/bootstrap-e2e.spec.ts step N
+Description: Added `data-testid="account-card"` to account card container. Step N now uses hard count assertion via `[data-testid="account-card"]` locator.
+Decision: DONE
+
+### BKL-E2E-TILE-TESTID-01 | Pipeline tile and CCSP tile need data-testid for scoped UI cross-checks (P2)
+Priority: P2 | Size: XS | Status: ✅ DONE 2026-05-06
+Source: Marcus (bootstrap-e2e rewrite 2026-05-06)
+Files: dashboard/src/components/PipelineSection.tsx line 272, dashboard/src/components/CloudSpendSection.tsx line 347, test/bootstrap-e2e.spec.ts steps L, M
+Description: Added `data-testid="pipeline-tile"` and `data-testid="ccsp-tile"` to top-level section divs. Steps L and M now scope all assertions to the correct tile locator.
+Decision: DONE
+
+## Bootstrap Step 5 Bugs — Found by E2E Spec (2026-05-06)
+
+### BKL-BOOTSTRAP-CCSP-STUB-01 | populate-data-sheets Step 5: readCcsp and readPipeline are header-only stubs (P1)
+Priority: P1 | Size: M | Status: 🔴 OPEN
+Source: E2E bootstrap spec run 2026-05-06 — byAE.length=0 after bootstrap
+Files: src/bootstrap/steps/populate-data-sheets.ts lines 127-136 (readCcsp, readPipeline)
+Description: The L3 data reader passed to bootstrapAeL3 has stub implementations for readCcsp and readPipeline that return only a header row and no data. readSfBookings correctly reads from L3 (podBookingsFolderId), but CCSP and Pipeline do not. Result: CCSP and Pipeline sheets are created in Drive with header-only content. The /api/ccsp and /api/pipeline endpoints return empty results after bootstrap even though the sheets exist.
+Fix: Implement readCcsp and readPipeline in populate-data-sheets.ts to read actual L3 CCSP and pipeline data from the L3 shared folder (settings.json → region.podBookingsFolderId), the same way readSfBookings does.
+Decision: OPEN
+
+### BKL-BOOTSTRAP-NESTED-FOLDER-01 | populate-data-sheets Step 5: passes aeFolderId as parentFolderId to l3-bootstrap, creating nested AE folder (P1)
+Priority: P1 | Size: S | Status: 🔴 OPEN
+Source: E2E bootstrap spec run 2026-05-06 — Drive shows "Carolanne Farrell" folder inside the "Carolanne Farrell" AE folder
+Files: src/bootstrap/steps/populate-data-sheets.ts (bootstrapAeL3 call ~line 143), src/l3-bootstrap.ts line 112
+Description: populate-data-sheets.ts calls bootstrapAeL3({ parentFolderId: aeFolderId, aeName, ... }). l3-bootstrap.ts line 112 then calls createFolder(aeName, parentFolderId) — creating a second "Carolanne Farrell" folder INSIDE the already-created AE folder. The AE folder was already created by Step 1 (createDriveFolderStep).
+Fix: Pass ctx.parentFolderId (the asa-e2e-test-runs parent, not the AE folder) to bootstrapAeL3 so l3-bootstrap finds the existing AE folder idempotently via its createFolder check, then creates sheets inside it correctly.
+Decision: OPEN

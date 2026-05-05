@@ -1,7 +1,8 @@
 ---
-Classification: Operational
-Last validated: 2026-04-27
-Trigger: Any change to scraper, parser, or sheet-reading code
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Data Ingestion Field Requirements

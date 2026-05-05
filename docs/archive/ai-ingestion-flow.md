@@ -1,7 +1,8 @@
 ---
-Status: Operational
-Last validated: 2026-04-27
-Trigger: When AI intelligence cache hierarchy changes or new flows added
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # AI Intelligence Ingestion Flow

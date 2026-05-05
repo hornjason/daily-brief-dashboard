@@ -1,7 +1,8 @@
 ---
-Status: Operational
-Last validated: 2026-04-27
-Trigger: When the data waterfall, cache hierarchy, or SSE telemetry changes
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # DailyBriefDashboard — Data Ingestion Flow

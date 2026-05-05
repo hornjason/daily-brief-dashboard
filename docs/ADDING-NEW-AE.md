@@ -1,3 +1,10 @@
+---
+doc-type: runbook
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Adding a New AE — Runbook
 *Last validated: 2026-04-15 | Owner: DA | Trigger: AE onboarding flow changes, new setup steps, or bootstrap sequence changes*
 

@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Environment Strategy
 *Last validated: 2026-04-21 | Owner: DA | Trigger: New container tier, port change, new Makefile target, CI workflow changes*
 

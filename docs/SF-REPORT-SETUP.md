@@ -1,7 +1,8 @@
 ---
-Status: Operational
-Last validated: 2026-04-19
-Trigger: Salesforce report column changes, SF instance URL changes, pipeline field mapping changes
+doc-type: runbook
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Salesforce Pipeline Report Setup

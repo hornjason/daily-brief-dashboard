@@ -34,8 +34,33 @@
       }
     },
     {
+      "id": "east-commercial",
+      "label": "East Commercial",
+      "type": "commercial",
+      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/111gcacXSkB4uNrDNQAuL7fvcS6YQi_6Wfl9hhffJsU0/edit?gid=1703062703#gid=1703062703",
+      "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
+      "pods": {
+        "EAST_COMM_CORP_POD01": {
+          "sfReportId": "00OPe00000m23W2MAI",
+          "label": "Rough Riders"
+        },
+        "EAST_COMM_CORP_POD02": {
+          "sfReportId": "",
+          "label": "East Comm Corp POD02"
+        },
+        "EAST_COMM_CORP_POD03": {
+          "sfReportId": "",
+          "label": "East Comm Corp POD03"
+        },
+        "EAST_COMM_CORP_POD05": {
+          "sfReportId": "",
+          "label": "East Comm Corp POD05"
+        }
+      }
+    },
+    {
       "id": "central-enterprise-tola",
-      "label": "Central Enterprise \u2013 TOLA",
+      "label": "Central Enterprise – TOLA",
       "type": "enterprise",
       "territorySheetUrl": "https://docs.google.com/spreadsheets/d/1p5nM6NNB-vCnaoKxyThnR1zuj_e_80WqzmWh-RsODlQ/edit?gid=409386986#gid=409386986",
       "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",

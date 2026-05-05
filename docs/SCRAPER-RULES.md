@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Scraper Rules (do not regress)
 *Last validated: 2026-04-11 | Owner: DA | Trigger: Any scraper file change, new parallelism design, or BrowserContext change*
 

@@ -213,6 +213,7 @@ seed:
 	@cp $(CURDIR)/scripts/seed-data/settings.json    $(CURDIR)/data-test/config/settings.json
 	@cp $(CURDIR)/scripts/seed-data/product-intel-config.json $(CURDIR)/data-test/config/product-intel-config.json
 	@cp $(CURDIR)/scripts/seed-data/data-sources.json $(CURDIR)/data-test/config/data-sources.json
+	@if [ -f "$(CURDIR)/data/config/.google-token.json" ]; then cp "$(CURDIR)/data/config/.google-token.json" "$(CURDIR)/data-test/config/.google-token.json"; fi
 	@echo '{"history":[]}' > $(CURDIR)/data-test/config/bootstrap-history.json
 	@echo '{"folders":{},"lastChecked":null}' > $(CURDIR)/data-test/config/drive-watcher-state.json
 	@echo "  Wiping stale cache before seeding fresh..."

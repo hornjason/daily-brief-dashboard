@@ -1,3 +1,10 @@
+---
+doc-type: architecture
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # BKL-HERO-01 — Architecture Brief
 
 <!-- doc-type: implementation-brief | status: ready-for-marcus | owner: serena | reviewed: 2026-04-30 | parent-spec: docs/HERO-INSTALL.md -->

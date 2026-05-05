@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-04-30
+updated: 2026-05-05
 ---
 
 # DailyBriefDashboard — Documentation Index
@@ -32,6 +32,7 @@ updated: 2026-04-30
 | Set up Salesforce report for pipeline sync | `docs/SF-REPORT-SETUP.md` |
 | Understand the test environment strategy | `docs/ENVIRONMENTS.md` |
 | Run or debug tests | `docs/TESTING-RUNBOOK.md` |
+| Understand the E2E bootstrap test flow and assertions | `docs/E2E-BOOTSTRAP-FLOW.md` |
 | Understand security baseline and rules | `docs/SECURITY-BASELINE.md` |
 
 ---
@@ -53,9 +54,14 @@ Docs with `status: active` that are maintained and indexed here. All others are 
 | `docs/ADDING-NEW-AE.md` | runbook | Full AE onboarding flow |
 | `docs/ENVIRONMENTS.md` | reference | Port map, test/prod/demo/dev containers |
 | `docs/TESTING-RUNBOOK.md` | reference | Test suite, Playwright, state isolation |
+| `docs/E2E-BOOTSTRAP-FLOW.md` | spec | New-user E2E journey — Drive hierarchy, Mermaid flowchart, gap analysis |
 | `docs/DATA-INGESTION-ARCHITECTURE.md` | architecture | L1-L4 cache tiers, data flow detail |
 | `docs/SF-REPORT-SETUP.md` | runbook | Salesforce report configuration |
 | `docs/SECURITY-BASELINE.md` | reference | Security rules for Rook and Marcus |
+| `docs/CI-RELEASE-PIPELINE.md` | runbook | CI/CD pipeline, release tagging, promotion sequence |
+| `docs/DATA-GOVERNANCE.md` | reference | Data governance rules — ownership, retention, access |
+| `docs/SECRETS-GUIDE.md` | reference | Secrets management — env vars, .env layout, rotation |
+| `docs/DEMO-ENV.md` | reference | Demo environment (port 7779), tunnel, Mac Mini demo setup |
 | `docs/SCRAPER-RULES.md` | reference | Scraper stability rules — read before touching scrapers |
 | `docs/DATA-RULES.md` | reference | Cache, sheets, territory sync rules |
 | `docs/PROJECT-MAP.md` | reference | Module inventory, API endpoints, timer reference |

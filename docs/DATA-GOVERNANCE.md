@@ -1,5 +1,8 @@
 ---
-Last validated: 2026-04-21 | Trigger: any new data source added or access method changed
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Daily Brief Dashboard — Data Governance Overview

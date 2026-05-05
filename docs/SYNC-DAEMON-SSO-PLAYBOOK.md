@@ -1,5 +1,8 @@
 ---
-doc-type: runbook | status: active | owner: jason | updated: 2026-04-30
+doc-type: runbook
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # L3 Sync Daemon — SSO Playbook (BKL-SYNC-L3-04)

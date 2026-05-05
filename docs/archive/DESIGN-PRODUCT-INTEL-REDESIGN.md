@@ -1,5 +1,8 @@
 ---
-Last validated: 2026-04-24
+doc-type: spec
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Product Intelligence Page Redesign

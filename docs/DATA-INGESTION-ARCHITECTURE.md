@@ -1,8 +1,8 @@
 ---
-Last validated: 2026-04-25
-Classification: Operational
-Status: Reconstructed after 2026-04-23 git-history loss
-Authority: This document is authoritative for the data-ingestion pipeline. Code is the only thing that ranks higher. When code and this doc disagree, fix the doc — but flag the drift in BACKLOG so the divergence is intentional, not silent.
+doc-type: architecture
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Data Ingestion Architecture

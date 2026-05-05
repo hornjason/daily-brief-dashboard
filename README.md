@@ -1,5 +1,8 @@
 ---
-Last validated: 2026-04-25
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
 ---
 
 # Daily Brief Dashboard

@@ -1,3 +1,10 @@
+---
+doc-type: spec
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Account Detail Page -- Complete Design Specification
 
 **Version:** 1.0

@@ -1,3 +1,10 @@
+---
+doc-type: reference
+status: active
+owner: jason
+updated: 2026-05-05
+---
+
 # Data Freshness Architecture
 
 **Status: PROPOSAL — reviewed 2026-04-01, pending implementation approval**

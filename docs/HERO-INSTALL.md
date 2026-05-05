@@ -310,9 +310,9 @@ Territory codes use underscores throughout — confirmed against actual Tableau 
 | `SOUTHEAST_ENT_NC_SC` | SE NC/SC Carolina Reapers | `Southeast_Ent_NC_SC_Terr##` | `CCSP-SOUTHEAST_ENT_NC_SC_POD-` | `SF-PIPELINE-{id}-SOUTHEAST_ENT_NC_SC-` |
 | `SOUTHEAST_ENT_VA_AL_TN` | SE VA/AL/TN The Untouchables | `Southeast_Ent_VA_AL_TN_Terr##` | `CCSP-SOUTHEAST_ENT_VA_AL_TN_POD-` | `SF-PIPELINE-{id}-SOUTHEAST_ENT_VA_AL_TN-` |
 
-#### East Commercial — `east-commercial` *(Coming Soon — not yet in settings.json)*
+#### East Commercial — `east-commercial` *(live — in settings.json as of 2026-05-04)*
 
-Pod keys confirmed from territory sheet. Pod 4 tab is hidden/inactive — skipped.
+Pod keys confirmed from territory sheet. Pod 4 tab is hidden/inactive — skipped. Subscription GSheets created in Drive folder. POD01 (Rough Riders) wired with sfReportId. POD02/03/05 sfReportIds pending (see BKL-REGION-EAST-COMM-02).
 
 | Pod key | Pod label | Territory code | CCSP CSV prefix | SF Pipeline CSV prefix |
 |---|---|---|---|---|
@@ -390,12 +390,18 @@ A region is **selectable** when all three file types are present in `podBookings
 
 **`sfReportId` in `settings.json` is NOT a selectable gate** — it's an L4 config for the primary scraper only. Hero installs don't need it to function.
 
-To add a new region:
-1. Add region + pod definitions to all `settings.json` files (prod `data/config/`, test `data-test/config/`, seed `scripts/seed-data/`, demo `data-demo/config/`)
-2. Set `territorySheetUrl` for the region
-3. Create the Bookings GSheet in Drive → confirm it matches naming convention
-4. Let the primary run once → CCSP + SF Pipeline CSVs appear in the folder
-5. Region flips from "Coming Soon" → selectable automatically — no code change
+**How region config is seeded on fresh installs:**
+
+`scripts/seed-data/settings.json` is the canonical region source — git-tracked, baked into the image at `/app/scripts/seed-data/settings.json`. On container startup, `server.ts` checks if `data/config/settings.json` has a `regions[]` array. If not (fresh install), it copies `regions[]` from the seed file. Existing installs with `regions[]` already set are not touched.
+
+**To add a new region or pod:**
+1. Edit `scripts/seed-data/settings.json` — add the region + pod block with `id`, `label`, `type`, `territorySheetUrl`, `podBookingsFolderId`, and `pods` map
+2. Update `data/config/settings.json` (live runtime — no restart needed), `data-test/config/settings.json`, and `data-demo/config/settings.json` with the same block
+3. Add the territory sheet URL to `GET /api/wizard/seed-sheets` in `src/scrape-api.ts`
+4. Run `make rebuild` — new installs will auto-seed the region from step 1
+5. Create the Bookings GSheet in Drive → confirm it matches naming convention (`{Region} - {Pod} - SF Bookings`)
+6. Let the primary run once → CCSP + SF Pipeline CSVs appear in the folder
+7. Region flips from "Coming Soon" → selectable automatically — no code change
 
 ---
 
