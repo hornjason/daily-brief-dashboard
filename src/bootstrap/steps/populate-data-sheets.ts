@@ -199,6 +199,9 @@ export const populateDataSheetsStep: BootstrapStepDef = {
           console.log(`[l3-bootstrap] CCSP: ${filtered.length} rows from ${csvFile.name}`)
           return rows
         } catch (e: any) {
+          // BKL-BOOTSTRAP-L3-DATA-GATE-01: re-throw gate errors — they are intentional
+          // failures, not transient network issues. Only swallow genuine API/parse failures.
+          if ((e as Error)?.message?.startsWith('CCSP data not found')) throw e
           console.warn(`[l3-bootstrap] CCSP L3 read failed: ${e?.message}`)
           return [header]
         }
@@ -270,6 +273,9 @@ export const populateDataSheetsStep: BootstrapStepDef = {
           console.log(`[l3-bootstrap] Pipeline: ${filtered.length} rows from ${csvFile.name}`)
           return [parsedHeaders, ...filtered]
         } catch (e: any) {
+          // BKL-BOOTSTRAP-L3-DATA-GATE-01: re-throw gate errors — they are intentional
+          // failures, not transient network issues. Only swallow genuine API/parse failures.
+          if ((e as Error)?.message?.startsWith('Pipeline data not found')) throw e
           console.warn(`[l3-bootstrap] Pipeline L3 read failed: ${e?.message}`)
           return [header]
         }
