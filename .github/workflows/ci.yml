@@ -2,6 +2,7 @@ name: CI
 # re-trigger after package delete 2026-04-20 / runner failure 2026-04-24
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
   push:
