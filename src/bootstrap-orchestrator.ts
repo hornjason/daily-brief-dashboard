@@ -999,7 +999,6 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
       podName,
       aeFolderId: '',
       podSheetId: null,
-      sfBookingsResults: [],
       setStep,
       cancelRequested,
       resources: autoBootstrapState.resources,

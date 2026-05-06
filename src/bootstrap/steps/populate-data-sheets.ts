@@ -46,24 +46,11 @@ export const populateDataSheetsStep: BootstrapStepDef = {
     const sheetsApi = googApis.sheets({ version: 'v4', auth })
 
     const l3DriveClient = {
-      async createFolder(name: string, parentId: string): Promise<string> {
-        const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-        const existing = await driveApi.files.list({
-          q: `name='${safeName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-          fields: 'files(id)',
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }).catch(() => ({ data: { files: [] } }))
-        if (existing.data.files?.length) return existing.data.files[0].id!
-        const created = await withQuotaRetry(
-          () => driveApi.files.create({
-            requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
-            supportsAllDrives: true,
-            fields: 'id',
-          }),
-          `createFolder:${name}`,
-        )
-        return created.data.id!
+      async createFolder(_name: string, _parentId: string): Promise<string> {
+        // BKL-BOOTSTRAP-AE-FOLDER-LOCATION-01: step 1 already created the AE folder.
+        // Returning aeFolderId directly prevents step 5 from creating a duplicate
+        // folder in the wrong parent (parentFolderId vs parentFolderId/podName/).
+        return aeFolderId
       },
       async createSheet(name: string, parentFolderId: string): Promise<string> {
         const existing = await findExistingSheet(driveApi, parentFolderId, name)
@@ -317,7 +304,7 @@ export const populateDataSheetsStep: BootstrapStepDef = {
       console.warn(`[auto-bootstrap] l3-bootstrap: ${l3Result.unmatchedCustomers.length} unmatched customers: ${l3Result.unmatchedCustomers.join(', ')}`)
     }
 
-    ctx.setStep(4, 'done', `3 sheets created (CCSP, Pipeline, SF Bookings)`)
+    ctx.setStep(3, 'done', `3 sheets created (CCSP, Pipeline, SF Bookings)`)
     console.log(`[auto-bootstrap] l3-bootstrap complete for ${aeName}: ccsp=${l3Result.ccspSheetId} pipeline=${l3Result.pipelineSheetId} sfBookings=${l3Result.sfBookingsSheetId}`)
 
     refreshPipeline().catch(e => console.warn('[auto-bootstrap] post-bootstrap pipeline cache refresh failed:', e.message))

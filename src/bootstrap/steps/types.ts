@@ -13,9 +13,6 @@
  * steps import them directly, identical to the pre-extraction inline code.
  */
 import type { AutoBootstrapResources, AutoBootstrapStep } from '../../bootstrap-state.ts'
-import type { writeSubscriptionSheet } from '../../supportable-scraper.ts'
-
-export type SfBookingsResults = Parameters<typeof writeSubscriptionSheet>[0]
 
 export interface BootstrapContext {
   // Inputs (set before runner starts)
@@ -29,10 +26,8 @@ export interface BootstrapContext {
   // Mutated across steps
   /** Set by Step 1 (Create Drive Folder); pre-populated if AE already has a folder. */
   aeFolderId: string
-  /** Set by Step 3 (Read SF Bookings) once a POD bookings sheet is matched. null = skip subscription steps. */
+  /** Set by Step 2 (Read SF Bookings) once a POD bookings sheet is matched. */
   podSheetId: string | null
-  /** Filled by Step 3, consumed by Step 4. */
-  sfBookingsResults: SfBookingsResults
 
   // State machine handles (closures over autoBootstrapState)
   setStep(idx: number, status: AutoBootstrapStep['status'], detail?: string): void
