@@ -37,7 +37,7 @@ test.describe('@destructive BKL-HERO-01 Phase 0 — region access endpoints', ()
     }
   })
 
-  test('GET /api/regions/catalog returns West + TOLA selectable (no East in seed)', async ({ request }) => {
+  test('GET /api/regions/catalog returns West + East + TOLA selectable', async ({ request }) => {
     const res = await request.get(`${BASE}/api/regions/catalog`)
     expect(res.status()).toBe(200)
     const body = await res.json()
@@ -46,7 +46,7 @@ test.describe('@destructive BKL-HERO-01 Phase 0 — region access endpoints', ()
     const ids = body.regions.map((r: { id: string }) => r.id)
     expect(ids).toContain('west-commercial')
     expect(ids).toContain('central-enterprise-tola')
-    expect(ids).not.toContain('east-commercial')
+    expect(ids).toContain('east-commercial')  // added via BKL-REGION-SEED-01
     expect(ids).not.toContain('east-enterprise')
 
     const west = body.regions.find((r: { id: string }) => r.id === 'west-commercial')
@@ -87,11 +87,11 @@ test.describe('@destructive BKL-HERO-01 Phase 0 — region access endpoints', ()
 
   test('POST /api/regions/access rejects unknown region ID with 400', async ({ request }) => {
     const res = await request.post(`${BASE}/api/regions/access`, {
-      data: { enabledRegions: ['east-commercial'], enabledPods: [] },
+      data: { enabledRegions: ['nonexistent-region-xyz'], enabledPods: [] },
     })
     expect(res.status()).toBe(400)
     const body = await res.json()
-    expect(body.error).toMatch(/east-commercial/i)
+    expect(body.error).toMatch(/nonexistent-region-xyz/i)
   })
 
   test('POST /api/regions/access rejects unknown pod qualified key with 400', async ({ request }) => {
@@ -124,11 +124,11 @@ test.describe('@destructive BKL-HERO-01 Phase 0 — region access endpoints', ()
 
   test('POST /api/regions/select with unknown regionId returns 400', async ({ request }) => {
     const res = await request.post(`${BASE}/api/regions/select`, {
-      data: { regionId: 'east-commercial' },
+      data: { regionId: 'nonexistent-region-xyz' },
     })
     expect(res.status()).toBe(400)
     const body = await res.json()
-    expect(body.error).toMatch(/east-commercial/i)
+    expect(body.error).toMatch(/nonexistent-region-xyz/i)
   })
 
   test('POST /api/regions/select with valid regionId returns ok plus enabledRegions/enabledPods', async ({ request }) => {
