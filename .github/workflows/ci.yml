@@ -70,7 +70,7 @@ jobs:
         run: bun test src/ test/unit/
 
       - name: Hero purity check (no L4 imports in hero image)
-        run: bun run tsc --noEmit --project tsconfig.hero.json
+        run: bunx tsc --noEmit --project tsconfig.hero.json
 
       - name: SetupPage size check
         run: |
