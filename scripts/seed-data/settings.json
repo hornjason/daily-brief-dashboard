@@ -46,15 +46,18 @@
         },
         "EAST_COMM_CORP_POD02": {
           "sfReportId": "",
-          "label": "East Comm Corp POD02"
+          "label": "Big Apple Ballers",
+          "pendingSetup": "sfReportId and CCSP not yet configured — no SF Pipeline CSV or Tableau scrape until ops adds these"
         },
         "EAST_COMM_CORP_POD03": {
           "sfReportId": "",
-          "label": "East Comm Corp POD03"
+          "label": "Pythons",
+          "pendingSetup": "sfReportId and CCSP not yet configured — no SF Pipeline CSV or Tableau scrape until ops adds these"
         },
         "EAST_COMM_CORP_POD05": {
           "sfReportId": "",
-          "label": "East Comm Corp POD05"
+          "label": "Mad Hatters",
+          "pendingSetup": "sfReportId and CCSP not yet configured — no SF Pipeline CSV or Tableau scrape until ops adds these"
         }
       }
     },

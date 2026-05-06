@@ -2,7 +2,7 @@
 doc-type: runbook
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-06
 ---
 
 # CI & Release Pipeline
@@ -115,6 +115,54 @@ Users never see `asaCommandCenter`. They land on `daily-brief-dashboard`, run th
 
 ---
 
+## Keeping `scripts/seed-data/settings.json` in Sync
+
+`scripts/seed-data/settings.json` is baked into the image and becomes every new user's starting `data/config/settings.json` on first boot. It must always reflect the current canonical region/pod list.
+
+**Before every release — verify these are current:**
+
+| Field | Where to verify | What to check |
+|---|---|---|
+| `regions[].pods[].label` | This file | Matches real pod team name (not a placeholder like "East Comm Corp POD02") |
+| `regions[].pods[].sfReportId` | Salesforce or ask ops | Populated for any pod that's live; blank + `pendingSetup` note for pods not yet configured |
+| `regions[].territorySheetUrl` | Google Drive | Sheet still exists and is the correct tab |
+| `regions[].podBookingsFolderId` | Google Drive | Folder ID still valid |
+
+**Pods with `"pendingSetup"` fields** are incomplete — they have labels but no SF report ID and no CCSP data yet. They will appear in the wizard but the region will show as "Coming Soon" for those pods until ops configures them. When a pod goes live:
+1. Get the 18-char Salesforce report ID from ops
+2. Remove the `"pendingSetup"` field
+3. Add the `sfReportId`
+4. Update `data/config/settings.json`, `data-test/config/settings.json`, and `data-demo/config/settings.json` with the same change
+5. Cut a patch release so existing installs can pull the update
+
+**All settings.json copies that must stay in sync:**
+
+| File | What it feeds | In git? |
+|---|---|---|
+| `scripts/seed-data/settings.json` | Source of truth — baked into image, seeds new installs | ✅ Yes |
+| `data/config/settings.json` | Laptop production (port 7777) | ✅ Yes |
+| `data-test/config/settings.json` | Test container (port 7776) | ✅ Yes |
+| `data-demo/config/settings.json` | Demo container (port 7779) | ✅ Yes |
+| `data-dev/config/settings.json` | Dev container (port 7778) | ✅ Yes |
+| `data-sync/config/settings.json` | **Mac Mini L4 sync daemon** | ❌ No — lives only on Mac Mini |
+
+**`data-sync/config/settings.json` is not in git.** It must be updated manually on the Mac Mini whenever a region or pod is added. The sync daemon reads this file at runtime — it is fully data-driven and requires no code changes when pods are added, but it will silently skip any pod not present in this file.
+
+**To add a new region or pod to the sync daemon:**
+```bash
+# On Mac Mini — edit the sync daemon's config directly
+ssh jasonhorn@mac.tail2fe7c7.ts.net
+nano ~/DailyBriefDashboard/data-sync/config/settings.json
+# Add the region/pod block matching scripts/seed-data/settings.json
+# Then trigger an immediate sync to verify:
+make -C ~/DailyBriefDashboard sync-now
+make -C ~/DailyBriefDashboard sync-logs
+```
+
+**Do not update only the live `data/config/settings.json`** — that only affects the running dashboard instance. New installs get the seed, and the Mac Mini daemon reads `data-sync/` separately.
+
+---
+
 ## How to Cut a Release
 
 ```bash
@@ -133,6 +181,20 @@ The pipeline does everything else: E2E gate → container push → public releas
 
 ---
 
+## GHCR Package Visibility — Must Stay Public
+
+Both the `hornjason/daily-brief-dashboard` repo and the GHCR container image are **public**. The install one-liner works for anyone without authentication because of this.
+
+**After any package recreation** (e.g. GHCR namespace change, deleting and re-pushing the image), re-verify visibility before cutting the next release:
+1. Go to `https://github.com/users/hornjason/packages/container/package/daily-brief-dashboard`
+2. Confirm visibility shows **Public** — if not, click **Package settings** → **Change visibility** → **Public**
+
+GitHub does not expose package visibility via Actions — it cannot be automated through CI. This is a manual gate before every release.
+
+**Symptom if it goes private:** `setup.sh` runs fine, image pull step fails with `Error: unauthorized` or `manifest unknown`. Users see a failed install with no obvious cause.
+
+---
+
 ## What setup.sh Does
 
 The hero install command:
@@ -141,7 +203,7 @@ curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/do
 ```
 
 1. Runs preflight checks (Podman installed, ports free, disk/memory)
-2. Pulls `ghcr.io/hornjason/daily-brief-dashboard:latest` from GHCR
+2. Pulls `ghcr.io/hornjason/daily-brief-dashboard:latest` from GHCR (requires package set to public — see above)
 3. Writes a starter `.env`
 4. Starts the container on port 7777
 5. Directs user to `http://localhost:7777/dashboard/setup` for first-time wizard

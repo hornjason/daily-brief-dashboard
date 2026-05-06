@@ -12,7 +12,7 @@ A containerized customer intelligence dashboard for Red Hat Account Executives a
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/scripts/setup.sh | bash
+curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh | bash
 ```
 
 The script checks your system, pulls the container image, and opens the setup wizard at **http://localhost:7777/dashboard/setup**. The wizard handles everything else.

@@ -9487,6 +9487,15 @@ Description: Fresh hero container installs started with an empty `data/config/se
 Acceptance: Fresh container with empty data/config/settings.json starts up → GET /api/regions/catalog returns all 3 regions (west-commercial, east-commercial, central-enterprise-tola). Existing container with populated regions[] is unaffected.
 Decision: DONE — server.ts seed block added, scripts/seed-data/settings.json updated with all 3 regions. Committed in same session as BKL-REGION-EAST-COMM-01.
 
+### BKL-REGION-EAST-COMM-03 | East Commercial POD01 — add to Mac Mini data-sync/config/settings.json so CCSP + SF Pipeline syncs run (P1)
+Priority: P1 | Size: XS | Status: 🔴 OPEN
+Source: Jason 2026-05-06
+Files: data-sync/config/settings.json on Mac Mini (not in git)
+Description: `EAST_COMM_CORP_POD01` (Rough Riders) has an sfReportId in `scripts/seed-data/settings.json` and `data/config/settings.json`, but the Mac Mini sync daemon reads from `data-sync/config/settings.json` which is NOT in git and must be updated manually. Until this is done, the daemon skips East Commercial entirely — no CCSP CSV and no SF Pipeline CSV are written to Drive for any East Commercial pod.
+To complete: SSH to Mac Mini, open `~/DailyBriefDashboard/data-sync/config/settings.json`, add the `east-commercial` region block (copy from `scripts/seed-data/settings.json`), then `make sync-now && make sync-logs` to verify POD01 syncs successfully.
+Note: POD02/03/05 will still be SKIPPED (no sfReportId yet — see BKL-REGION-EAST-COMM-02) but POD01 should show `status: ok`.
+Decision: OPEN — blocked on manual Mac Mini SSH update.
+
 ### BKL-REGION-EAST-COMM-02 | East Commercial — collect SF report IDs for POD02, POD03, POD05 (P2)
 Priority: P2 | Size: XS | Status: 🔴 OPEN
 Source: Jason 2026-05-04 (only POD01 report ID available at session time)
