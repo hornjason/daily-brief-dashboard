@@ -24,7 +24,6 @@ import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from '../../google.ts'
 import { aes, customers, CUSTOMERS_PATH } from '../../server-state.ts'
 import { writeJsonAtomic } from '../../lib/atomic-write.ts'
-import { driveClient } from '../../lib/drive-client.ts'
 import { normalizeSettings } from '../../region-config.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from '../../sf-bookings-reader.ts'
 import {
@@ -125,8 +124,33 @@ export const readSfBookingsStep: BootstrapStepDef = {
       } else {
         const rawSfData = await fetchSfBookingsRaw(podSheetId)
         const existingCustomers = customers.filter(cx => cx.ae === aeName && !cx.inactive)
+
+        // BKL-BOOTSTRAP-CUSTOMER-FOLDER-DEDUP-01: On a fresh install, existingCustomers is empty
+        // because step 2 (createCustomerFoldersStep) intentionally does NOT write territory-sheet
+        // names into customers.json. Without candidates, matchCustomer() in deriveSfCustomersByTerritory
+        // has nothing to fuzzy-match against — every SF legal name ("Greenheck Fan Corporation")
+        // becomes a newCustomer and gets a duplicate Drive folder alongside the "Greenheck Fan"
+        // folder already created in step 2.
+        //
+        // Fix: build virtual Customer records from ctx.customerNames (the territory sheet names
+        // that step 2 already created folders for) and include them as additional match candidates.
+        // "Greenheck Fan Corporation" then fuzzy-matches "Greenheck Fan" virtual → group.customer
+        // is non-null → NOT added to newCustomers → no second Drive folder created.
+        // importedFrom: 'territory' keeps these out of the alias-update path (line ~530 in
+        // sf-bookings-reader.ts only fires for importedFrom === 'sf-bookings').
+        const customerFolderMap = ctx.resources.customerFolders ?? {}
+        const territoryVirtuals = (ctx.customerNames ?? [])
+          .filter(name => !existingCustomers.some(ec => ec.name === name))
+          .map(name => ({
+            name,
+            ae: aeName,
+            importedFrom: 'territory' as const,
+            driveFolderId: customerFolderMap[name]?.id ?? '',
+            accountNumbers: [] as string[],
+          }))
+
         const { results, matched, newCustomers, aliasedCustomers, ccspOnly } = deriveSfCustomersByTerritory(
-          rawSfData, tableauTerritories, existingCustomers, aeName, false,
+          rawSfData, tableauTerritories, [...existingCustomers, ...territoryVirtuals], aeName, false,
         )
 
         // Upsert net-new and alias-updated customers into customers array + disk
@@ -134,6 +158,18 @@ export const readSfBookingsStep: BootstrapStepDef = {
           if (!customers.some(c => c.name === nc.name)) {
             customers.push(nc)
             console.log(`[auto-bootstrap] SF new customer: ${nc.name}`)
+          }
+        }
+
+        // BKL-BOOTSTRAP-CUSTOMER-FOLDER-DEDUP-01: Upsert territory-virtual customers that received
+        // SF subscription data. deriveSfCustomersByTerritory only populates aliasedCustomers for
+        // importedFrom === 'sf-bookings' entries, so matched territory virtuals are not persisted
+        // through the normal alias-update path. Write them to customers.json here so their SF
+        // subscription data is visible after bootstrap.
+        for (const tv of territoryVirtuals) {
+          if (results.some(r => r.customerName === tv.name) && !customers.some(c => c.name === tv.name)) {
+            customers.push({ ...tv, importedFrom: 'sf-bookings' })
+            console.log(`[auto-bootstrap] Territory customer promoted to sf-bookings: ${tv.name}`)
           }
         }
         for (const ac of aliasedCustomers) {
@@ -145,24 +181,6 @@ export const readSfBookingsStep: BootstrapStepDef = {
           if (cx) cx.ccspCustomer = true
         }
         writeJsonAtomic(CUSTOMERS_PATH, { customers })
-
-        // Create Drive subfolders for net-new customers discovered during L3 read.
-        // Mirrors the pattern in src/scrape-api.ts sf-bookings-sync endpoint.
-        if (ctx.aeFolderId) {
-          for (const nc of newCustomers) {
-            try {
-              const folderId = await driveClient.ensureChildFolder(ctx.aeFolderId, nc.name)
-              const existingCustomer = customers.find(c => c.name === nc.name)
-              if (existingCustomer) {
-                existingCustomer.driveFolderId = folderId
-                writeJsonAtomic(CUSTOMERS_PATH, { customers })
-              }
-              console.log(`[auto-bootstrap] customer folder created: ${nc.name} (${folderId})`)
-            } catch (e: any) {
-              console.warn(`[auto-bootstrap] customer folder creation failed for ${nc.name}: ${e.message}`)
-            }
-          }
-        }
 
         ctx.sfBookingsResults = results
         ctx.setStep(2, 'done', `${matched.length}/${results.length} customers with subscriptions`)
