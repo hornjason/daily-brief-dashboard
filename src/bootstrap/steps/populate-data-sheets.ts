@@ -167,8 +167,8 @@ export const populateDataSheetsStep: BootstrapStepDef = {
           }).catch(() => ({ data: { files: [] } }))
           const csvFile = (listRes.data.files ?? [])[0]
           if (!csvFile?.id) {
-            console.warn(`[l3-bootstrap] No CCSP CSV found for pod '${podKey}' in folder ${folderId}`)
-            return [header]
+            // BKL-BOOTSTRAP-L3-DATA-GATE-01: hard gate — creating an empty sheet is misleading
+            throw new Error(`CCSP data not found for pod '${podKey}' in L3 folder ${folderId} — run Mac Mini L4 CCSP scrape first, then re-bootstrap`)
           }
 
           const dlRes = await withQuotaRetry(
@@ -244,8 +244,8 @@ export const populateDataSheetsStep: BootstrapStepDef = {
           }).catch(() => ({ data: { files: [] } }))).data.files ?? [] : []
           const csvFile = files[0] ?? fallbackFiles[0]
           if (!csvFile?.id) {
-            console.warn(`[l3-bootstrap] No pipeline CSV found for pod '${podKey}' in folder ${folderId}`)
-            return [header]
+            // BKL-BOOTSTRAP-L3-DATA-GATE-01: hard gate — creating an empty sheet is misleading
+            throw new Error(`Pipeline data not found for pod '${podKey}' in L3 folder ${folderId} — run Mac Mini L4 SF pipeline scrape first, then re-bootstrap`)
           }
 
           const dlRes = await withQuotaRetry(
