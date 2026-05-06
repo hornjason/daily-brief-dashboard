@@ -1023,19 +1023,54 @@ export function createDashboardRouter(): Hono {
         return c.json({ error: `Territory ${requestedTerritory} not found in enterprise sheet` }, 404)
       }
 
-      // Commercial path (existing logic)
-      const corpTabs = tabNames.filter(t => {
-        const lower = t.toLowerCase()
-        return (lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest')) &&
-               !lower.includes('accounts a')
-      })
+      // Commercial path: scan ALL tabs (mirrors territory-names commercial path).
+      // East Commercial tabs ("Rough Riders, JLuciano" etc.) contain no "corp"/
+      // "northwest"/"southwest" keywords, so the old keyword filter silently
+      // excluded every East tab. Instead, probe each non-hidden tab for the
+      // "Account Executive" header and derive the pod key from the territory code
+      // embedded in the AE cell (podKeyFromTerritoryCode), falling back to the
+      // tab-title keyword map (podPrefixFromTabTitle) for West-style tabs.
+      for (const tabTitle of tabNames) {
+        if (tabTitle.toLowerCase().includes('accounts a')) continue
 
-      for (const tabTitle of corpTabs) {
-        const podPrefix = podPrefixFromTabTitle(tabTitle)
-        if (!podPrefix) continue
-        // Quick skip: if requested territory doesn't start with this pod prefix, skip tab
-        if (!requestedTerritory.startsWith(podPrefix)) continue
+        // Probe A1:Z10 for "Account Executive" header and derive pod key
+        const probeResp = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId: sheetId,
+          range: `'${tabTitle}'!A1:Z10`,
+        })
+        const probeRows: string[][] = (probeResp.data.values ?? []).map((r: any[]) =>
+          r.map((cell: any) => String(cell ?? '').trim())
+        )
 
+        let probeHeaderIdx = -1
+        for (let r = 0; r < probeRows.length; r++) {
+          if (probeRows[r].some(cell => /^account executive$/i.test(cell))) { probeHeaderIdx = r; break }
+        }
+        if (probeHeaderIdx === -1) continue
+
+        const probeAeNameRow = probeRows[probeHeaderIdx + 1] ?? []
+        const probeHeaderRow = probeRows[probeHeaderIdx] ?? []
+        const probeAeCols = probeHeaderRow
+          .map((cell, idx) => ({ cell, idx }))
+          .filter(({ cell }) => /^account executive$/i.test(cell))
+          .map(({ idx }) => idx)
+
+        // Derive pod key — try territory-code derivation first (East), fall back to tab-title keywords (West)
+        let tabPodKey = ''
+        for (const col of probeAeCols) {
+          const aeCell = probeAeNameRow[col] ?? ''
+          if (!aeCell) continue
+          // Allow digits in pod segment: East_Comm_Corp_Pod1_Terr01
+          const terrCodeMatch = aeCell.match(/([A-Za-z][A-Za-z0-9_]+_Terr?\d+)/i)
+          if (terrCodeMatch) {
+            tabPodKey = podKeyFromTerritoryCode(terrCodeMatch[1])
+            if (tabPodKey) break
+          }
+        }
+        if (!tabPodKey) tabPodKey = podPrefixFromTabTitle(tabTitle)
+        if (!tabPodKey || tabPodKey !== podFromTerritory) continue
+
+        // Matched tab — full fetch
         const resp = await sheetsClient.spreadsheets.values.get({
           spreadsheetId: sheetId,
           range: `'${tabTitle}'!A1:Z60`,
@@ -1047,7 +1082,7 @@ export function createDashboardRouter(): Hono {
         // Find "Account Executive" header row
         let headerRowIdx = -1
         for (let r = 0; r < rows.length; r++) {
-          if (rows[r].some(cell => cell === 'Account Executive')) { headerRowIdx = r; break }
+          if (rows[r].some(cell => /^account executive$/i.test(cell))) { headerRowIdx = r; break }
         }
         if (headerRowIdx === -1) continue
 
@@ -1058,7 +1093,7 @@ export function createDashboardRouter(): Hono {
 
         const aeCols = headerRow
           .map((cell, idx) => ({ cell, idx }))
-          .filter(({ cell }) => cell === 'Account Executive')
+          .filter(({ cell }) => /^account executive$/i.test(cell))
           .map(({ idx }) => idx)
 
         for (const col of aeCols) {
@@ -1070,7 +1105,7 @@ export function createDashboardRouter(): Hono {
           if (aeCell.includes('\n')) {
             const parts = aeCell.split('\n')
             aeName = parts[0].trim()
-            terrCode = parts[1].trim()
+            terrCode = parts[1]?.trim() ?? ''
           } else {
             const terrMatch = aeCell.match(/\bTerr(\d+)\b/i)
             if (terrMatch) {
@@ -1084,7 +1119,7 @@ export function createDashboardRouter(): Hono {
           const terrNumMatch = terrCode.match(/(\d+)/)
           if (!terrNumMatch) continue
           const terrNum: string = terrNumMatch[1].padStart(2, '0')
-          const tableauTerritory: string = `${podPrefix}_TERR${terrNum}`
+          const tableauTerritory: string = `${tabPodKey}_TERR${terrNum}`
 
           if (tableauTerritory !== requestedTerritory) continue
 

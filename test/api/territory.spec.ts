@@ -119,6 +119,25 @@ test.describe('GET /api/territory-lookup', () => {
       expect([401, 404, 500]).toContain(status)
     }
   })
+
+  test('@live GET /api/territory-lookup?territory=EAST_COMM_CORP_POD01_TERR01 returns aeName and accounts (BKL-TERRITORY-LOOKUP-EAST-COMM-01)', async () => {
+    // Regression: East Commercial tabs ("Rough Riders, JLuciano" etc.) contain no
+    // "corp"/"northwest"/"southwest" keywords so the old corpTabs filter silently
+    // excluded them. Fixed by scanning ALL non-hidden tabs and deriving the pod
+    // key via podKeyFromTerritoryCode (territory code embedded in AE cell).
+    const { status, body } = await getJSON(
+      '/api/territory-lookup?territory=EAST_COMM_CORP_POD01_TERR01&force=true'
+    )
+    if (status === 200) {
+      expect(body).toHaveProperty('aeName')
+      expect(typeof body.aeName).toBe('string')
+      expect(body.aeName.length).toBeGreaterThan(0)
+      expect(body).toHaveProperty('accounts')
+      expect(Array.isArray(body.accounts)).toBe(true)
+    } else {
+      expect([401, 500]).toContain(status)
+    }
+  })
 })
 
 // ── BKL-TERRITORY-EAST-COMM-PARSE-01 regression ────────────────────────────

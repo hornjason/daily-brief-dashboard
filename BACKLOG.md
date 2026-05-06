@@ -9558,12 +9558,21 @@ Description: Both readCcsp and readPipeline now download L3 Drive CSVs (CCSP-{po
 Decision: DONE — verified by E2E spec steps I and J (ccspTotalAcv=1696293, pipelineTotalAcv=4442834, 2026-05-06).
 
 ### BKL-TERRITORY-EAST-COMM-PARSE-01 | territory-names returns 0 results for EAST_COMM_CORP_POD01 — podPrefixFromTabTitle has no East Commercial entries (P1)
-Priority: P1 | Size: S | Status: 🔴 OPEN
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-05
 Source: Manual bootstrap walkthrough 2026-05-05 — wizard shows "No AE data for this territory" for East Comm POD01 Rough Riders. Verified: curl /api/territory-names?pod=EAST_COMM_CORP_POD01 returns {"territories":[]}. Google auth confirmed connected.
 Files: src/dashboard-routes.ts — podPrefixFromTabTitle (lines 178-185), commercial tab parsing loop (lines 851-937)
 Description: podPrefixFromTabTitle only maps West Commercial tab names (northwest, southwest, north central, south central). East Commercial tab names ("Rough Riders", etc.) fall through and return ''. The primary pod-key derivation from territory codes in AE cells (podKeyFromTerritoryCode) may also fail if the East sheet stores territory codes differently than expected. Root cause requires reading the actual sheet tab structure — but the podPrefixFromTabTitle omission is confirmed.
 Fix: Either (a) add East Commercial tab name → pod key mappings to podPrefixFromTabTitle, or (b) verify territory codes are embedded in AE cells in East sheet (East_Comm_Corp_Pod1_Terr01 format) and fix the regex if not. Need to read actual sheet tabs first.
 Can we test: YES — regression test: GET /api/territory-names?pod=EAST_COMM_CORP_POD01 must return territories.length > 0.
+Decision: OPEN
+
+### BKL-TERRITORY-LOOKUP-EAST-COMM-01 | territory-lookup returns "not found" for East Commercial — corpTabs filter excludes East tab names (P1)
+Priority: P1 | Size: S | Status: 🔴 OPEN
+Source: Manual walkthrough 2026-05-05 — wizard shows amber "No AE data" and customers don't auto-populate after selecting territory. curl /api/territory-lookup?territory=EAST_COMM_CORP_POD01_TERR01 returns {"error":"Territory EAST_COMM_CORP_POD01_TERR01 not found in sheet"}.
+Files: src/dashboard-routes.ts — corpTabs filter (lines 1027-1031), territory-lookup commercial path (lines 1033-1037)
+Description: The territory-lookup commercial path filters tabs with: lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest'). East Commercial tabs are named "Rough Riders, JLuciano", "Big Apple Ballers, ACuttone" etc — none match this filter, so they are all skipped. Additionally podPrefixFromTabTitle returns '' for these tab names (same root as BKL-TERRITORY-EAST-COMM-PARSE-01 but in a different code path). Result: aeName and accounts never set → amber warning fires, customer list stays empty.
+Fix: Replace the keyword filter with the same AE-cell regex approach used in territory-names: scan all non-hidden tabs, check for "Account Executive" header, derive pod key from territory codes in AE cells using podKeyFromTerritoryCode (the fixed regex from BKL-TERRITORY-EAST-COMM-PARSE-01), then match the specific territory number to find aeName and accounts.
+Can we test: YES — curl /api/territory-lookup?territory=EAST_COMM_CORP_POD01_TERR01 must return { aeName, accounts } with aeName non-empty.
 Decision: OPEN
 
 ### BKL-BOOTSTRAP-TERRITORY-LOAD-FAIL-01 | Territory load failure silently disables Set Up AE button with no clear error (P2)
