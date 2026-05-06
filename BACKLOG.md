@@ -9720,3 +9720,16 @@ Fix options:
   Recommended: Option A — surgical change in sheets.ts, no architectural impact.
 Can we test: Yes — after bootstrap, assert customer cards show Products > 0 for AEs with SF subscriptions.
 Decision: OPEN — Option A preferred
+
+### BKL-TEST-REG-CLEANUP-01 | Release gate skips new-endpoint tests + live-data brief tests — need runner config or test reorganization (P2)
+Priority: P2 | Size: S | Status: 🔴 OPEN
+Source: v1.6.0 release gate 2026-05-06 — two categories of failures blocked the release:
+  1. bootstrap-scaffold.spec.ts: tests GET /api/bootstrap/scaffold-status (new v1.6.0 endpoint). Release gate runs against v1.5.3 production → 404. Workaround: added `scaffold-status` to release.yml `--grep-invert`.
+  2. customers.spec.ts brief tests: use KNOWN_CUSTOMER=process.env.TEST_KNOWN_CUSTOMER ?? 'Big Ten Network Services'. Mac Mini runner production data no longer has 'Big Ten Network Services' configured. Workaround: added `fromCache|brief returns 200 when pipeline` to `--grep-invert`.
+Files: .github/workflows/release.yml, test/api/customers.spec.ts, test/api/bootstrap-scaffold.spec.ts
+Fix options:
+  A) Set TEST_KNOWN_CUSTOMER env var in release.yml to a customer that is always configured on Mac Mini (e.g. Carolanne Farrell's first customer). Fragile — breaks when AE roster changes.
+  B) Move live-data-dependent brief tests to a separate spec file gated with @live tag (already grep-inverted in most runs). Clean but requires test file reorganization.
+  C) Keep --grep-invert exclusions and document in release gate comments. Lowest effort, acceptable long-term if documented.
+Can we test: N/A — this is a test infrastructure gap, not a product bug.
+Decision: OPEN — Option C applied as v1.6.0 workaround. Recommended: Option B for v1.7.0 cleanup.
