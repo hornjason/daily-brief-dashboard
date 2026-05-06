@@ -9252,6 +9252,22 @@ Description: /api/scrape/rh/debug-fields endpoint interpolates a name parameter 
 Fix: Escape `"` and `\` in `n` before interpolation: `n.replace(/\\/g, '\\\\').replace(/"/g, '\\"')`.
 Can we test: YES — source assertion that the interpolation escapes quotes, or a test that passes a name with `"` and confirms no Solr error/injection.
 
+### BKL-SEC-34 | bootstrap-orchestrator.ts — add code comment on getDataSourcesPath() explaining dynamic re-read
+Priority: P3 | Size: XS | Status: OPEN (XS — stays in BACKLOG.md, not promoted)
+Source: Rook scan 2026-05-06 (v1.6.0 pre-release review)
+Files: src/bootstrap-orchestrator.ts, getDataSourcesPath() function
+Description: getDataSourcesPath() reads process.env.CONFIG_DIR dynamically at call time (intentionally, for test isolation). Without a comment, a future maintainer may "simplify" it back to a module-level const, re-breaking test isolation.
+Fix: Add inline comment explaining the dynamic read is required for drive-scaffold-cache.test.ts isolation — not a refactor candidate.
+Can we test: NO — code style/comment, not testable.
+
+### BKL-SEC-35 | bootstrap-orchestrator.ts — CONFIG_DIR startsWith guard (defense-in-depth)
+Priority: P3 | Size: XS | Status: OPEN (XS — stays in BACKLOG.md, not promoted)
+Source: Rook scan 2026-05-06 (v1.6.0 pre-release review)
+Files: src/bootstrap-orchestrator.ts, getDataSourcesPath() function
+Description: CONFIG_DIR is container-controlled (Makefile -e flag, not user-facing). Theoretical path traversal requires container-level access. Defense-in-depth: add startsWith('/data/') guard in production build.
+Fix: `if (!configDir.startsWith('/data/') && !process.env.ALLOW_RESET) throw new Error('CONFIG_DIR outside allowed prefix')`
+Can we test: YES — unit test that non-/data/ CONFIG_DIR throws in production mode.
+
 ### BKL-SEC-33 | scraper-manager.ts/background-scheduler.ts — raw e?.message bypasses sanitizeErr in ~20 log sites
 Priority: P2 | Size: S | Status: ✅ DONE 2026-05-04 (partial — scrape-api.ts 3 sites + scraper-manager.ts 3 sites fixed; background-scheduler.ts sites are log-only, lower priority)
 Source: Rook scan 2026-05-04 (BKL-ARCH-SCRAPER-02 post-ship review)

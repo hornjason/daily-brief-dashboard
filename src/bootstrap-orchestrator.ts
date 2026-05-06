@@ -103,7 +103,9 @@ import {
 const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
-const DATA_SOURCES_PATH = resolve(SRV_CONFIG_DIR, 'data-sources.json')
+function getDataSourcesPath(): string {
+  return resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'data-sources.json')
+}
 // SETTINGS_PATH moved to ./bootstrap/helpers.ts (BKL-ARCH-01) — re-exported here.
 import { SETTINGS_PATH, findExistingSheet } from './bootstrap/helpers.ts'
 export { SETTINGS_PATH, findExistingSheet } from './bootstrap/helpers.ts'
@@ -114,8 +116,8 @@ const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
 function savePodConfig(cfg: { territorySheetId: string; sfReportId: string; parentFolderId: string; podTabTitle?: string }): void {
   try {
     let ds: Record<string, unknown> = {}
-    try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch { /* fresh file */ }
-    writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, podConfig: cfg })
+    try { ds = JSON.parse(readFileSync(getDataSourcesPath(), 'utf-8')) } catch { /* fresh file */ }
+    writeJsonAtomic(getDataSourcesPath(), { ...ds, podConfig: cfg })
     console.log('[pod-bootstrap] POD config saved to data-sources.json')
   } catch (e: any) {
     console.warn('[pod-bootstrap] Could not save POD config:', e?.message)
@@ -125,7 +127,7 @@ function savePodConfig(cfg: { territorySheetId: string; sfReportId: string; pare
 /** Read the last saved POD config from data-sources.json. Returns null if not saved. */
 function readPodConfig(): { territorySheetId: string; sfReportId: string; parentFolderId: string; podTabTitle?: string } | null {
   try {
-    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    const ds = JSON.parse(readFileSync(getDataSourcesPath(), 'utf-8'))
     return ds.podConfig ?? null
   } catch { return null }
 }
@@ -142,7 +144,7 @@ type ScaffoldEntry = {
 
 export function readScaffoldCache(): Record<string, ScaffoldEntry> {
   try {
-    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
+    const ds = JSON.parse(readFileSync(getDataSourcesPath(), 'utf-8'))
     return (ds.scaffoldCache as Record<string, ScaffoldEntry>) ?? {}
   } catch { return {} }
 }
@@ -162,14 +164,14 @@ export function writeScaffoldCache(parentFolderId: string, entry: ScaffoldEntry)
   }
   try {
     let ds: Record<string, unknown> = {}
-    try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch { /* fresh */ }
+    try { ds = JSON.parse(readFileSync(getDataSourcesPath(), 'utf-8')) } catch { /* fresh */ }
     const cache = (ds.scaffoldCache as Record<string, ScaffoldEntry>) ?? {}
     const persisted: ScaffoldEntry = {
       configFolderId: entry.configFolderId,
       productsFolderId: entry.productsFolderId,
       productSubfolders: safeSubfolders,
     }
-    writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, scaffoldCache: { ...cache, [parentFolderId]: persisted } })
+    writeJsonAtomic(getDataSourcesPath(), { ...ds, scaffoldCache: { ...cache, [parentFolderId]: persisted } })
   } catch (e: any) {
     console.warn('[auto-bootstrap:scaffold] cache write failed (non-blocking):', e?.message)
   }

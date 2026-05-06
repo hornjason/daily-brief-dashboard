@@ -8,16 +8,12 @@
  * BKL-SEC-19: also verifies that invalid Drive folder IDs are rejected
  * before being used as JSON keys or written to disk.
  */
-import { describe, test, expect, beforeEach } from 'bun:test'
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 import { readFileSync } from 'fs'
 
 const TMP = `/tmp/scaffold-cache-test-${Date.now()}`
-
-// Override CONFIG_DIR before importing bootstrap-orchestrator so DATA_SOURCES_PATH
-// points to our temp directory — not the live config.
-process.env.CONFIG_DIR = TMP
 
 // Valid Google Drive IDs are 25-33 alphanumeric chars; use realistic-length stubs.
 const PARENT_ID   = '1TestParentFolderIdAAAAAAA'
@@ -29,9 +25,14 @@ const PROD_ID_B   = '1TestProductsFolderIdBBBBB'
 
 describe('BKL-DRIVE-SCAFFOLD-CACHE-01: scaffold cache persistence', () => {
   beforeEach(() => {
+    process.env.CONFIG_DIR = TMP
     mkdirSync(TMP, { recursive: true })
     // Start each test with a clean data-sources.json
     writeFileSync(resolve(TMP, 'data-sources.json'), JSON.stringify({ podConfig: { sfReportId: 'r' } }))
+  })
+
+  afterEach(() => {
+    delete process.env.CONFIG_DIR
   })
 
   test('readScaffoldCache returns {} when no scaffoldCache key present', async () => {

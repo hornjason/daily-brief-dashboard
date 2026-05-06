@@ -294,11 +294,11 @@ describe('getUnifiedStatus — isStale threshold', () => {
 })
 
 describe('getAllUnifiedStatus', () => {
-  test('returns entries for all 4 known scraper names', () => {
+  test('returns entries for all 3 active scrapers (supportable retired)', () => {
     const all = getAllUnifiedStatus()
     expect(all['rh-cases']).toBeDefined()
     expect(all['ccsp']).toBeDefined()
     expect(all['sf-pipeline']).toBeDefined()
-    expect(all['supportable']).toBeDefined()
+    expect(all['supportable']).toBeUndefined()
   })
 })

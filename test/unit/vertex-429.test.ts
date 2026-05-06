@@ -40,6 +40,17 @@
 
 import { test, expect, describe, beforeEach, afterEach, mock, spyOn } from 'bun:test'
 
+// Import real config functions BEFORE mock.module so mock factory closures
+// capture the real implementations — not the mocked ones.
+// This prevents vertex-429 mock.module from leaking hardcoded stubs into
+// ai-config.test.ts and scrape-state.test.ts (Fix: BKL-TEST-MOCK-LEAK-01).
+import {
+  getGeminiModel as _realGetGeminiModel,
+  getGeminiModelLite as _realGetGeminiModelLite,
+  getAiConfig as _realGetAiConfig,
+  getAutomationConfig as _realGetAutomationConfig,
+} from '../../src/ai-config.ts'
+
 // Provide env so we don't hit `GOOGLE_CLOUD_PROJECT not set` early return.
 process.env.GOOGLE_CLOUD_PROJECT = process.env.GOOGLE_CLOUD_PROJECT ?? 'test-project'
 
@@ -53,16 +64,13 @@ mock.module('../../src/gemini-auth.ts', () => ({
 // (rh-auth, sf-auth via scraper-manager) name. Bun's mock.module is global and
 // shared across files, so a partial mock here breaks any later test that
 // loads scraper-manager.
+// Pass through real config functions so downstream tests (ai-config, scrape-state)
+// get correct defaults — not hardcoded stubs that break their assertions.
 mock.module('../../src/settings-api.ts', () => ({
-  getGeminiModel:           () => 'gemini-2.5-flash',
-  getGeminiModelLite:       () => 'gemini-2.5-flash-lite',
-  getAutomationConfig:      () => ({}),
-  getAiConfig:              () => ({
-    briefSynthesisTemperature: 1.0,
-    docClassifyMaxAgeDays:     0,
-    geminiInputCostPerM:       0.30,
-    geminiOutputCostPerM:      2.50,
-  }),
+  getGeminiModel:           _realGetGeminiModel,      // real — reads process.env.GEMINI_MODEL
+  getGeminiModelLite:       _realGetGeminiModelLite,  // real — reads process.env.GEMINI_MODEL_LITE
+  getAutomationConfig:      _realGetAutomationConfig, // real — returns DEFAULT with circuitBreakerThreshold: 3
+  getAiConfig:              _realGetAiConfig,          // real — returns DEFAULT_AI_CONFIG with geminiModel
   recordSessionEstablished: (_service: string) => { /* no-op */ },
   getSessionTimestamps:     () => ({}),
   getRefreshIntervals:      () => ({}),
