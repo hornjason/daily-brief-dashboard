@@ -297,7 +297,7 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
                 <div className="space-y-1">
                   {failedSteps.map((s, i) => (
                     <p key={i} className="text-xs text-warning bg-warning/10 border border-warning/20 rounded px-2 py-1.5">
-                      <span className="font-medium">{s.name}</span> — {hintFor(s.name)}
+                      <span className="font-medium">{s.name}</span> — {s.detail || hintFor(s.name)}
                     </p>
                   ))}
                 </div>
