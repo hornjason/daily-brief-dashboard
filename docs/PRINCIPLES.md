@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # Design Principles — Typography and Visual Constraints
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 These rules were extracted from the W3 (Week 3) design council pass and are
 binding for any UI work in `dashboard/`. They are intentionally restrictive —

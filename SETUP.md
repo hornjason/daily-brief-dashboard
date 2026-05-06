@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # Daily Brief Dashboard — Setup Guide
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 Detailed setup instructions for the Daily Brief Dashboard. See [README.md](README.md) for an overview of what the dashboard does.
 

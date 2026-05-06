@@ -6,6 +6,7 @@ updated: 2026-05-01
 ---
 
 # Contributing to Daily Brief Dashboard
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 This guide is for developers who want to modify the code, fix bugs, or add features. If you just want to run the dashboard, see [README.md](README.md).
 

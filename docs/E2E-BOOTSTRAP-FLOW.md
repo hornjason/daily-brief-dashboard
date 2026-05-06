@@ -6,6 +6,7 @@ updated: 2026-05-06
 ---
 
 # E2E Bootstrap Test — New User Journey Flow
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 Full end-to-end spec for `test/bootstrap-e2e.spec.ts`. Runs on the Mac Mini against the hero image (port 7776, `e2e-tier` Playwright project). All assertions are hard — no informational-only checks.
 

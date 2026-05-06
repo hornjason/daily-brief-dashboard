@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # DailyBriefDashboard — Data Ingestion Flow
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 This document covers how external data (RH Portal cases, Tableau cloud spend, Salesforce pipeline, SF Bookings subscriptions) flows from source systems through the four-tier cache hierarchy into the dashboard, and how every tier transition surfaces on the `/api/ingest/events` SSE stream.
 

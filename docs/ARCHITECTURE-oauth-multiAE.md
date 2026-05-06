@@ -8,6 +8,7 @@ updated: 2026-05-05
 > **SUPERSEDED** — The OAuth scope design described here (NORMAL_SCOPES / BOOTSTRAP_SCOPES two-tier model) is implemented and documented in `ARCHITECTURE.md` §7 (root). This file is the original design proposal; `ARCHITECTURE.md` is authoritative. Kept for historical rationale only.
 
 # Architecture: OAuth Least-Privilege & Multi-AE Flow
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 **Date**: 2026-03-28
 **Status**: Proposed

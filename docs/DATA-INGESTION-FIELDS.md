@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # Data Ingestion Field Requirements
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 Fields required from each source report to power the DailyBrief Dashboard. Organized for IT configuration of nightly report pulls.
 

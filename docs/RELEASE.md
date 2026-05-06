@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # Release Management Runbook
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 How DailyBriefDashboard versions, ships, and rolls back.
 

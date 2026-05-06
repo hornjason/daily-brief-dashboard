@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # Secrets Management Guide
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 How credentials are handled in DailyBriefDashboard — what lives where, why, and how to rotate.
 

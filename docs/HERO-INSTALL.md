@@ -6,6 +6,7 @@ updated: 2026-05-04
 ---
 
 # Hero Install — Design & Setup Guide
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 <!-- doc-type: design-spec | status: council-approved | owner: jason | updated: 2026-04-30 | council: Serena reviewed 2026-04-29 (hero wizard) + 2026-04-30 (sync daemon architecture, NODE_ROLE gate, SSO TTL) -->
 

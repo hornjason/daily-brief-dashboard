@@ -6,6 +6,7 @@ updated: 2026-05-06
 ---
 
 # DailyBriefDashboard — Architecture Reference
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 **Read this before making recommendations.** This document exists specifically to prevent well-intentioned but incorrect suggestions from breaking intentional design decisions. Every section below describes a pattern that looks like an anti-pattern but isn't.
 

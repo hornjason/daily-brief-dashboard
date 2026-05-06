@@ -7,6 +7,8 @@ updated: 2026-05-01
 
 # `supportsAllDrives: true` is always-on in DriveFolderClient
 
+**Date:** 2026-05-01
+
 Every `drive.files.list` and `drive.files.create` call inside `src/lib/drive-client.ts` includes `supportsAllDrives: true` and `includeItemsFromAllDrives: true` unconditionally. This is not configurable per-call.
 
 The L3 shared folder — the source of truth for all hero installs — lives in a Google Shared Drive. Without `supportsAllDrives: true`, `drive.files.list` silently returns zero results for any Shared Drive folder: no error, just missing data. This was the root cause of Drive discovery gaps in pre-module call sites that omitted the flag. The AE parent folder may also be in a Shared Drive depending on how a user organizes their Drive. Always-on is safe for personal Drive folders (the flags are no-ops there) and mandatory for Shared Drive folders. Making it opt-in would guarantee it gets omitted on future call sites.

@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # Data Ingestion Architecture
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 This is the load-bearing reference for how data enters DailyBriefDashboard. Five sources, four logical cache tiers, several scheduled refresh loops, and one offline-token bypass for Red Hat cases. Everything else in the dashboard reads from the artifacts these flows produce.
 

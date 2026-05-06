@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # Daily Brief Dashboard — Data Governance Overview
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 **Status:** OPERATIONAL | **Owner:** Jason Horn (jhorn@redhat.com) | **Last updated:** 2026-04-13
 **Audience:** Red Hat Data Governance, IT Security, and Data Platform teams

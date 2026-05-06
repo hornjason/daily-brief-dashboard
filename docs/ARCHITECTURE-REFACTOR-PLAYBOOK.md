@@ -6,6 +6,7 @@ updated: 2026-05-01
 ---
 
 # Architecture Refactor Playbook
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 How to execute the BKL-ARCH deepening candidates one at a time without breaking production.
 

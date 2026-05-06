@@ -6,6 +6,7 @@ updated: 2026-05-05
 ---
 
 # L3 Sync Daemon — SSO Playbook (BKL-SYNC-L3-04)
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 ## Normal startup — no manual auth required
 

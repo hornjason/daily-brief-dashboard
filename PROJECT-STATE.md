@@ -6,6 +6,7 @@ updated: 2026-05-02
 ---
 
 # DailyBriefDashboard — Project State
+*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
