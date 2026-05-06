@@ -356,7 +356,7 @@ Extract ALL features including those listed in Technology Preview sections. Outp
     const res = await fetch(url, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(90_000),
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],

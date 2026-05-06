@@ -640,8 +640,10 @@ function Dashboard() {
               <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} selectedProducts={productFilterSelected} />
             </section>
 
-            {/* Cloud Spend — hide on L3 (CCSP scraper not available) and when AE filter yields no customers */}
-            {!isL3Only && filteredAccounts.length > 0 && (
+            {/* Cloud Spend — render whenever CCSP data is available (L3 reads sheet data
+                populated by the L4 leader; isL3Only only blocks scraping, not display).
+                Hide only when AE filter yields no customers. */}
+            {filteredAccounts.length > 0 && (ccspApi.data || ccspApi.loading || ccspApi.error) && (
               <section id="section-cloudspend" data-section="section-cloudspend">
                 <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
               </section>

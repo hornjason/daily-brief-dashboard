@@ -16,7 +16,9 @@
 import { google as googApis } from 'googleapis'
 import { readFileSync } from 'fs'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from '../../google.ts'
-import { customers, patchAe } from '../../server-state.ts'
+import { customers, patchAe, CUSTOMERS_PATH } from '../../server-state.ts'
+import { driveClient } from '../../lib/drive-client.ts'
+import { writeJsonAtomic } from '../../lib/atomic-write.ts'
 import { bootstrapAe as bootstrapAeL3, type AeBootstrapDeps } from '../../l3-bootstrap.ts'
 import { refreshPipeline } from '../../refresh-engine.ts'
 import { normalizeSettings } from '../../region-config.ts'
@@ -37,6 +39,22 @@ export const populateDataSheetsStep: BootstrapStepDef = {
 
   async execute(ctx: BootstrapContext): Promise<void> {
     const { aeName, aeFolderId, customerNames, sfReportId, tableauTerritories } = ctx
+
+    // BKL-BOOTSTRAP-SF-CUSTOMER-NO-FOLDER-01: SF-discovered customers added by step 3
+    // have no driveFolderId because step 2 already ran. Create their folders now.
+    const missingFolderCustomers = customers.filter(c => c.ae === aeName && !c.driveFolderId)
+    if (missingFolderCustomers.length > 0) {
+      console.log(`[auto-bootstrap] Creating Drive folders for ${missingFolderCustomers.length} SF-discovered customers`)
+      for (const cx of missingFolderCustomers) {
+        try {
+          cx.driveFolderId = await driveClient.ensureChildFolder(aeFolderId, cx.name)
+          console.log(`[auto-bootstrap] SF customer folder created: ${cx.name} (${cx.driveFolderId})`)
+        } catch (e: any) {
+          console.warn(`[auto-bootstrap] SF customer folder creation failed for ${cx.name}: ${e.message}`)
+        }
+      }
+      writeJsonAtomic(CUSTOMERS_PATH, { customers })
+    }
 
     // BKL-ARCH-L4-SPLIT: Hero install uses l3-bootstrap — no browser, no
     // Tableau, no SF OAuth. Build a minimal Drive client shim that wraps
@@ -285,6 +303,43 @@ export const populateDataSheetsStep: BootstrapStepDef = {
       pipelineSheetId: l3Result.pipelineSheetId,
       subscriptionSheetId: l3Result.sfBookingsSheetId,
     })
+
+    // BKL-BOOTSTRAP-SF-BOOKINGS-SCHEMA-01: Write one tab per customer into the SF Bookings
+    // sheet so batchFetchSubscriptions can read per-customer subscription data.
+    // The default "Sheet1" tab is left in place; customer tabs are appended.
+    if (l3Result.sfBookingsSheetId && ctx.podSheetId) {
+      try {
+        const { fetchSfBookingsRaw, deriveSfCustomersByTerritory } = await import('../../sf-bookings-reader.ts')
+        const aeCustomers = customers.filter(c => c.ae === aeName)
+        const rawSfData = await fetchSfBookingsRaw(ctx.podSheetId)
+        const { results } = deriveSfCustomersByTerritory(rawSfData, tableauTerritories, aeCustomers, aeName, false)
+        const withRows = results.filter(r => r.rows.length > 0)
+
+        if (withRows.length > 0) {
+          // Sanitize tab names: Google Sheets disallows \ / * [ ] : ? and > 100 chars
+          const sanitize = (name: string) => name.replace(/[\\/*[\]:?]/g, '-').slice(0, 100)
+
+          await sheetsApi.spreadsheets.batchUpdate({
+            spreadsheetId: l3Result.sfBookingsSheetId,
+            requestBody: { requests: withRows.map(r => ({ addSheet: { properties: { title: sanitize(r.customerName) } } })) },
+          })
+
+          for (const r of withRows) {
+            const headers = Object.keys(r.rows[0])
+            const dataRows: string[][] = [headers, ...r.rows.map(row => headers.map(h => row[h] ?? ''))]
+            await sheetsApi.spreadsheets.values.update({
+              spreadsheetId: l3Result.sfBookingsSheetId,
+              range: `'${sanitize(r.customerName)}'!A1`,
+              valueInputOption: 'RAW',
+              requestBody: { values: dataRows },
+            }).catch(e => console.warn(`[auto-bootstrap] SF tab write failed for ${r.customerName}: ${e.message}`))
+          }
+          console.log(`[auto-bootstrap] SF Bookings: wrote ${withRows.length} customer tabs`)
+        }
+      } catch (e: any) {
+        console.warn(`[auto-bootstrap] SF Bookings per-customer tabs failed (non-fatal): ${e.message}`)
+      }
+    }
 
     ctx.resources.ccspSheet = {
       id: l3Result.ccspSheetId,

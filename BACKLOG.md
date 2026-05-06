@@ -9567,7 +9567,7 @@ Can we test: YES — regression test: GET /api/territory-names?pod=EAST_COMM_COR
 Decision: OPEN
 
 ### BKL-TERRITORY-LOOKUP-EAST-COMM-01 | territory-lookup returns "not found" for East Commercial — corpTabs filter excludes East tab names (P1)
-Priority: P1 | Size: S | Status: 🔴 OPEN
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-05
 Source: Manual walkthrough 2026-05-05 — wizard shows amber "No AE data" and customers don't auto-populate after selecting territory. curl /api/territory-lookup?territory=EAST_COMM_CORP_POD01_TERR01 returns {"error":"Territory EAST_COMM_CORP_POD01_TERR01 not found in sheet"}.
 Files: src/dashboard-routes.ts — corpTabs filter (lines 1027-1031), territory-lookup commercial path (lines 1033-1037)
 Description: The territory-lookup commercial path filters tabs with: lower.includes('corp') || lower.includes('northwest') || lower.includes('southwest'). East Commercial tabs are named "Rough Riders, JLuciano", "Big Apple Ballers, ACuttone" etc — none match this filter, so they are all skipped. Additionally podPrefixFromTabTitle returns '' for these tab names (same root as BKL-TERRITORY-EAST-COMM-PARSE-01 but in a different code path). Result: aeName and accounts never set → amber warning fires, customer list stays empty.
@@ -9599,7 +9599,28 @@ Fix: Remove the RH Portal connection check from the Set Up AE pre-flight guard. 
 Can we test for it: Yes — regression test: mock RH Portal as disconnected, verify Set Up AE button is enabled and bootstrap proceeds.
 Decision: OPEN
 
+### BKL-BOOTSTRAP-CUSTOMER-FOLDER-DEDUP-01 | Fresh bootstrap creates duplicate Drive folders — territory short names + SF legal names (P2)
+Priority: P2 | Size: S | Status: ✅ DONE 2026-05-05
+Source: Manual bootstrap walkthrough 2026-05-05 — Jason observed "Greenheck Fan" + "Greenheck Fan Corporation" as separate folders in Mitch Baney's Drive
+Files: src/bootstrap/steps/read-sf-bookings.ts (lines 126-165), src/bootstrap/steps/create-customer-folders.ts, src/sf-bookings-reader.ts (deriveSfCustomersByTerritory)
+Description: On a fresh bootstrap, step 2 (createCustomerFoldersStep) creates Drive folders using territory sheet names ("Greenheck Fan", "Oshkosh") but does NOT add those names to customers.json (intentional per comment — territory sheet is not the canonical customer source). Step 3 (readSfBookingsStep) then calls deriveSfCustomersByTerritory with existingCustomers = customers.filter(ae === aeName) — which is EMPTY on a fresh install. With no candidates in existingCustomers, matchCustomer() finds no matches for ANY SF legal name, so every SF customer ("Greenheck Fan Corporation", "Oshkosh Corporation") becomes a newCustomer and gets a new Drive folder created.
+Result: Two folders per customer — territory short name (step 2) + SF legal name (step 3). These also appear as "7 customers not matched to AE" warnings in the wizard UI.
+Root cause: Step 2 creates folders but doesn't populate customers.json. Step 3's matching pool is therefore empty on first bootstrap.
+Fix approach: Before calling deriveSfCustomersByTerritory in step 3, construct virtual Customer objects from ctx.customerNames (territory names) with driveFolderIds from ctx.resources.customerFolders (step 2 output). Pass these as additional existingCustomers. When "Greenheck Fan Corporation" fuzzy-matches "Greenheck Fan" virtual customer (normalizeName strips "corporation"), it becomes an alias-update rather than a newCustomer — no new Drive folder created.
+Can we test for it: Yes — 4 unit tests in test/unit/bootstrap-customer-dedup.test.ts verify the fix (RED before, GREEN after).
+Decision: DONE — test/unit/bootstrap-customer-dedup.test.ts added (4 tests). src/bootstrap/steps/read-sf-bookings.ts: territory virtuals built from ctx.customerNames, passed to deriveSfCustomersByTerritory as additional candidates. Committed 2026-05-05.
+
 ---
+
+### BKL-BOOTSTRAP-L3-DATA-GATE-01 | Populate Data Sheets silently succeeds when CCSP/Pipeline CSVs are missing — should fail with clear error (P1)
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-05
+Source: Manual bootstrap walkthrough 2026-05-05 — Jason: "there is no ccsp there should be a gate if any of the 3 files needed aren't available in L3 folder then it fails"
+Files: src/bootstrap/steps/populate-data-sheets.ts (readCcsp lines 150–204, readPipeline lines 206–276), specifically the `return [header]` fallbacks
+Description: When the Mac Mini L4 CCSP or Pipeline CSVs are not yet written to the pod's L3 Drive folder (podBookingsFolderId), readCcsp/readPipeline silently return [header] (header-only). The step then writes header-only sheets to Drive and reports "3 sheets created (CCSP, Pipeline, SF Bookings)" as if everything succeeded. Jason's east-commercial Brandt Gribbin had no CCSP data because East Comm L4 CCSP scrape had not yet run on the Mac Mini.
+Fix: In readCcsp and readPipeline, when no CSV is found (csvFile is null), throw an error instead of returning [header]. The error message must name the missing file and the folder searched, e.g. "CCSP data not found for pod EAST_COMM_CORP_POD01 in folder {folderId} — run Mac Mini L4 CCSP scrape first, then re-bootstrap." The step shows as FAILED, no empty sheets are created. The CCSP Sheet and Pipeline Sheet links in the wizard must not appear (or appear grayed with "not populated") until a re-bootstrap after L4 data is available.
+Note: SF Bookings is already gated in step 3 (readSfBookingsStep pre-marks step 3 as skipped if no pod sheet found). This gate only needs to cover step 5 CCSP and Pipeline CSVs.
+Can we test for it: Yes — 7 unit tests in test/unit/bootstrap-l3-gate.test.ts verify propagation path.
+Decision: DONE — src/bootstrap/steps/populate-data-sheets.ts: two `return [header]` branches changed to `throw new Error(...)` with descriptive messages naming pod key and remedy. test/unit/bootstrap-l3-gate.test.ts: 7 tests. Committed 2026-05-05.
 
 ## Infrastructure / Ops
 
@@ -9613,3 +9634,64 @@ Description: The bootstrap-e2e spec currently runs only from the laptop. The Mac
   3. Env vars — TEST_DRIVE_PARENT_URL, TEST_AE_NAME, TEST_SF_REPORT_ID must be set in .env or a run script on the Mac Mini
   4. Playwright installed — spec runs from host (not inside container); verify `npx playwright` available on Mac Mini host
 Decision: OPEN
+
+### BKL-DASH-POD-LABEL-01 | Dashboard header shows wrong pod name after bootstrap (P1)
+Priority: P1 | Size: S | Status: ✅ DONE
+Source: Session 2026-05-06 — Jason bootstrapped a Northwest AE (WEST_COMM_CORP_NORTHWEST_TERR02) but header shows "Southwest Pod: 16 customers · 0 open cases · $5K closing in 30d"
+Fix: src/pod-config.ts — replaced hardcoded 'Southwest' fallback with territory-code derivation (NORTHWEST_TERR02 → "Northwest"). Verified by Jason 2026-05-06.
+Decision: DONE
+
+### BKL-DASH-KPI-ZERO-01 | KPI cards show 0 for all support/renewal metrics after fresh bootstrap (P2)
+Priority: P2 | Size: S | Status: 🔴 OPEN
+Source: Session 2026-05-06 — After bootstrapping one AE (16 customers), Open Cases=0, Sev 1 Cases=0, Meetings Today=0, Meetings This Week=0, Expiring Within 30 Days=0, Renewals in 30-90 Days=0. Only "12 Tech Wins Needed" showed a non-zero value.
+Files: dashboard/src/ (KPI cards), src/server-state.ts, src/rh-scraper.ts
+Description: All KPI metrics are zero on a fresh install. Expected: after bootstrap, at minimum RH cases should populate at next scrape run. This may be expected behavior (L4 scrape hasn't run yet, cases/renewals need scraper pass) — but it's worth confirming whether the dashboard should surface a "scrapes not yet run" state vs silently showing 0. Also possible the RH offline token / scraper isn't configured for this instance.
+Can we test: Yes — after triggering scrape run, assert KPI cards show non-zero values.
+Decision: OPEN — investigate whether zeros are expected (no scrape yet) or a bug
+
+### BKL-PRODUCTS-HUB-ZERO-FEATURES-01 | Products Hub shows "0 features / No features extracted yet" for AAP, RHEL AI, AI Inference Server, OpenShift AI (P2)
+Priority: P2 | Size: M | Status: ✅ DONE
+Fix: src/product-feature-radar.ts — Gemini extraction AbortSignal timeout bumped 60s → 90s. Products with both release note sections at max (12000 chars) were timing out. Verified by Jason 2026-05-06.
+Source: Session 2026-05-06 — After fresh bootstrap, RHEL v19 (30 features), OCP v4.21 (13 features), OpenShift Virtualization v4.21 (7 features) show features correctly. Red Hat Ansible Automation Platform v2.6, Red Hat Enterprise Linux AI v3.4, Red Hat AI Inference Server v3.4, Red Hat OpenShift AI all show "0 features / No features extracted yet".
+Files: dashboard/src/pages/products/ (Products Hub), src/ (feature extraction pipeline)
+Description: A subset of products consistently shows 0 features while others populate correctly. The products with 0 features tend to be newer product lines (AAP, RHEL AI, AI Inference Server, OpenShift AI). Root cause unknown — may be a product name normalization miss, a version string parsing failure, or those products genuinely have no extracted features in the source data.
+Can we test: Yes — assert feature count > 0 for each product in the hub after scrape.
+Decision: OPEN
+
+### BKL-DASH-CCSP-MISSING-01 | CCSP section not showing on main dashboard after bootstrap (P1)
+Priority: P1 | Size: S | Status: ✅ DONE
+Source: Session 2026-05-06 — After fresh bootstrap, main dashboard shows Pipeline ($4M, 29 opps) and Account Portfolio but no CCSP section visible. Bootstrap step 4 (Populate Data Sheets) creates a CCSP sheet and sets ccspSheetId in aes.json, but the CCSP widget is absent from the dashboard view.
+Files: dashboard/src/ (CCSP widget/section), src/server-state.ts (ccspSheetId), populate-data-sheets.ts
+Description: The CCSP section is not rendering on the main dashboard after a fresh bootstrap. Root causes to investigate: (1) ccspSheetId not set in aes.json after bootstrap, (2) CCSP data not populated in the sheet yet (no L4 CCSP scrape run), (3) dashboard conditionally hides CCSP when data is empty. Need to check aes.json and the ccsp sheet contents.
+Can we test: Yes — after bootstrap, assert CCSP section renders (even if empty with placeholder).
+Decision: OPEN
+
+### BKL-DASH-PRODUCTS-LICENSES-ZERO-01 | Account Portfolio cards show 0 Products / 0 Licenses for all customers (P1)
+Priority: P1 | Size: S | Status: ✅ DONE
+Source: Session 2026-05-06 — All 16 customer cards in Account Portfolio show 0 Products, 0 Licenses. Port 7776 (test env). Fresh bootstrap completed including SF bookings step.
+Files: dashboard/src/ (customer cards), src/sf-bookings-reader.ts, data/customers.json, src/server-state.ts
+Description: Products and Licenses counts on the portfolio cards come from SF bookings sheet (not RH Portal). Bootstrap step 3 (Read SF Bookings) ran and the SF bookings sheet exists. Despite this, every customer card shows 0. Root cause unknown — SF bookings data may not be flowing through to the customer card display. Need to trace: (1) does customers.json have subscription data after bootstrap? (2) does the portfolio card query the right field for product/license counts? (3) is the SF bookings sheet populated with actual rows for this AE's territory?
+Can we test: Yes — after bootstrap, assert customer cards show Products > 0 for at least one customer that has SF bookings.
+Decision: OPEN — this is a bug, not expected behavior
+
+### BKL-BOOTSTRAP-SF-CUSTOMER-NO-FOLDER-01 | SF-discovered customers added by step 3 never get Drive folders — step 2 already ran (P1)
+Priority: P1 | Size: S | Status: 🔴 OPEN
+Source: Session 2026-05-06 — After bootstrap, 5 of 16 Cail McClenahen customers have driveFolderId=MISSING: Cerner, Fortified Health Security, Kai Blue, Lumentum Operations, Tcgplayer. All are importedFrom=sf-bookings (net-new SF discoveries, not in territory tab). Drive folder shows only 11 customer folders, matching the 11 with SET driveFolderId.
+Files: src/bootstrap/steps/populate-data-sheets.ts, src/bootstrap/steps/read-sf-bookings.ts, src/lib/drive-client.ts
+Description: Step 2 (Create Customer Folders) loops over ctx.customerNames (territory-listed). Step 3 (Read SF Bookings) discovers additional customers from SF data and adds them to customers.json WITHOUT driveFolderId. Since step 2 already ran, these customers never get folders. Consequence: intelligence generation succeeds but can't save docs to Drive (discoverExistingIntelDocs fails repeatedly), UI shows nothing under Account Intelligence Docs.
+Fix: In populate-data-sheets.ts (step 4), before calling bootstrapAeL3, scan customers for any belonging to aeName that have no driveFolderId and create folders via driveClient.ensureChildFolder(aeFolderId, name). Persist the new IDs to customers.json. This ensures ALL customers represented in the dashboard get a Drive folder regardless of which step added them.
+Can we test: Yes — after bootstrap, assert every customer for this AE has a non-empty driveFolderId in customers.json.
+Regression test: Add assertion to bootstrap-e2e.spec.ts that all customers in customers.json for the bootstrapped AE have driveFolderId set.
+Decision: OPEN
+
+### BKL-BOOTSTRAP-SF-BOOKINGS-SCHEMA-01 | SF Bookings sheet uses summary format but batchFetchSubscriptions expects per-customer tabs (P1)
+Priority: P1 | Size: M | Status: ✅ DONE
+Source: Session 2026-05-06 — After fresh bootstrap, all 16 customer portfolio cards show 0 Products / 0 Licenses. refreshSubscriptions ran (16/16) but every *-sheets.json has rows: 0.
+Root cause: batchFetchSubscriptions (sheets.ts) looks for spreadsheet tabs matching each customer name (e.g. a tab called "Autodesk"). The SF Bookings sheet created by populate-data-sheets.ts step 4 has a single "Sheet1" tab with summary rows (Account Name | AE | Subscription Count). No tab matches any customer name → returns [] for all customers.
+Files: src/sheets.ts (batchFetchSubscriptions), src/bootstrap/steps/populate-data-sheets.ts (l3DataReader.readSfBookings), src/l3-bootstrap.ts (bootstrapAeL3 writeRows contract)
+Fix options:
+  A) Change batchFetchSubscriptions to also handle flat format: when no customer-named tab exists, check for "Sheet1"/"SF Bookings" tab and filter rows by Account Name column. ~20 lines in sheets.ts.
+  B) Change l3DataReader.readSfBookings() to return full per-SKU rows and change l3DriveClient to write per-customer tabs. Requires changes to l3-bootstrap.ts writeRows contract — needs Serena review first.
+  Recommended: Option A — surgical change in sheets.ts, no architectural impact.
+Can we test: Yes — after bootstrap, assert customer cards show Products > 0 for AEs with SF subscriptions.
+Decision: OPEN — Option A preferred

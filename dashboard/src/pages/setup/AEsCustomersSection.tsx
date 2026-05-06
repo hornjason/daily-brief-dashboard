@@ -1564,8 +1564,8 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
           regions={regions}
           selectedRegion={selectedRegion}
           setSelectedRegion={setSelectedRegion}
-          parentFolderId={defaultParentFolderId || podBookingsFolderId}
-          lockedFolderId={defaultParentFolderId || podBookingsFolderId}
+          parentFolderId={defaultParentFolderId}
+          lockedFolderId={defaultParentFolderId}
           showRootFallback={!defaultParentFolderId}
           onParentFolderChange={(folderId: string) => {
             // BKL-UX84 / BKL-UX86: a successful Validate click (or silent

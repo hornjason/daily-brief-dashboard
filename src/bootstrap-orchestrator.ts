@@ -49,7 +49,7 @@ const startTableauLoginBrowser = async (): Promise<void> => { console.warn('[L4-
 const waitForTableauLogin = async (_timeoutMs?: number): Promise<boolean> => { console.warn('[L4-stub] waitForTableauLogin invoked on hero install'); return false }
 const checkTableauSessionFromCookies = async (): Promise<boolean> => { console.warn('[L4-stub] checkTableauSessionFromCookies invoked on hero install'); return false }
 const probeTableauSession = async (): Promise<boolean> => { console.warn('[L4-stub] probeTableauSession invoked on hero install'); return false }
-import { refreshPipeline } from './refresh-engine.ts'
+import { refreshPipeline, refreshSubscriptions } from './refresh-engine.ts'
 import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import { batchInferDomains, isPublicDomain, tier1Clearbit } from './domain-waterfall.ts'
 import type { AE } from './types.ts'
@@ -1172,6 +1172,14 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
     // BKL-TOKEN-03: intelligence + brief pregen triggers moved to POD-level
     // (bootstrapPOD), fired ONCE after the full AE loop completes.
     console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
+
+    // BKL-DASH-PRODUCTS-LICENSES-ZERO-01: Step 4 created the SF Bookings sheet
+    // and wrote raw rows into it, but per-customer sheet caches (the source for
+    // /api/accounts productCount + totalLicenses) are only populated by the
+    // refresh engine. Without this call, every portfolio card shows 0 / 0
+    // until the next scheduled subscription refresh runs (could be hours).
+    // Force-refresh now so the cards have data the moment bootstrap finishes.
+    refreshSubscriptions(true).catch(e => console.warn('[auto-bootstrap] post-bootstrap subscription cache refresh failed:', e?.message ?? e))
 
     // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — do not trigger
     // during bootstrap. The next scheduled run will pick up account discovery
