@@ -194,6 +194,67 @@ describe('BKL-BOOTSTRAP-L3-DATA-GATE-01 — L3 data gate: readCcsp and readPipel
     })
   })
 
+  describe('catch-block re-throw — gate error must not be swallowed', () => {
+    // Regression: the initial fix put the throw INSIDE a try block whose catch
+    // returned [header], silently swallowing the gate error. This test verifies
+    // that a reader whose readCcsp throws the gate error inside a try/catch
+    // wrapper (simulating the populate-data-sheets.ts structure) still propagates.
+    test('readCcsp gate error thrown inside a try/catch wrapper still propagates through bootstrapAe', async () => {
+      const drive = makeMockDriveClient()
+
+      const readerWithWrappedThrow: AeBootstrapDeps['l3Reader'] = {
+        async readSfBookings() {
+          return [['Account Name', 'AE', 'Region']]
+        },
+        async readCcsp(cfg) {
+          // Simulates the populate-data-sheets.ts pattern: throw is inside try,
+          // catch re-throws gate errors and swallows network errors.
+          try {
+            throw new Error(
+              `CCSP data not found for pod '${cfg.podId}' in L3 folder test-folder — run Mac Mini L4 CCSP scrape first, then re-bootstrap`
+            )
+          } catch (e: any) {
+            if ((e as Error)?.message?.startsWith('CCSP data not found')) throw e
+            return [['Account Name', 'Cloud Partner', 'ACV+', 'Quarter']]
+          }
+        },
+        async readPipeline() {
+          return [['Account Name', 'Opportunity', 'Stage', 'ACV', 'Close Date']]
+        },
+      }
+
+      const deps: AeBootstrapDeps = { driveClient: drive, l3Reader: readerWithWrappedThrow }
+      await expect(bootstrapAe(BASE_CONFIG, deps)).rejects.toThrow('CCSP data not found')
+    })
+
+    test('readCcsp non-gate error inside try/catch is swallowed (graceful fallback for network errors)', async () => {
+      const drive = makeMockDriveClient()
+
+      const readerWithNetworkError: AeBootstrapDeps['l3Reader'] = {
+        async readSfBookings() {
+          return [['Account Name', 'AE', 'Region']]
+        },
+        async readCcsp() {
+          // Simulates a transient Drive API error — should NOT propagate
+          try {
+            throw new Error('ETIMEDOUT: network error')
+          } catch (e: any) {
+            if ((e as Error)?.message?.startsWith('CCSP data not found')) throw e
+            return [['Account Name', 'Cloud Partner', 'ACV+', 'Quarter']]
+          }
+        },
+        async readPipeline() {
+          return [['Account Name', 'Opportunity', 'Stage', 'ACV', 'Close Date']]
+        },
+      }
+
+      const deps: AeBootstrapDeps = { driveClient: drive, l3Reader: readerWithNetworkError }
+      // Network error is swallowed — bootstrapAe succeeds with header-only CCSP
+      const result = await bootstrapAe(BASE_CONFIG, deps)
+      expect(result.ccspSheetId).toBeTruthy()
+    })
+  })
+
   describe('SF Bookings NOT gated — silent fallback preserved', () => {
     test('bootstrapAe succeeds when readSfBookings returns header-only (not gated)', async () => {
       const drive = makeMockDriveClient()
