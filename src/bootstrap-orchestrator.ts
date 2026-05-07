@@ -1190,6 +1190,13 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
     // Force-refresh now so the cards have data the moment bootstrap finishes.
     refreshSubscriptions(true).catch(e => console.warn('[auto-bootstrap] post-bootstrap subscription cache refresh failed:', e?.message ?? e))
 
+    // BKL-HERO-PRODUCT-PREREQ-01: Trigger product refresh after auto-bootstrap completes
+    // (OAuth keys now exist from wizard, products can synthesize with Gemini)
+    fetch(`${baseUrl}/api/products/refresh-all`, { method: 'POST' })
+      .then(r => r.json())
+      .then((d: any) => console.log(`[auto-bootstrap] product refresh triggered: ${d?.count ?? 0} products`))
+      .catch(e => console.warn('[auto-bootstrap] product refresh trigger failed:', e?.message))
+
     // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — do not trigger
     // during bootstrap. The next scheduled run will pick up account discovery
     // for the new AE.
