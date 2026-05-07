@@ -69,6 +69,11 @@ ENV RH_PROFILE_DIR=/data/rh-profile
 
 EXPOSE 7777
 
+# OCI labels for GitHub package linking
+LABEL org.opencontainers.image.source=https://github.com/hornjason/daily-brief-dashboard
+LABEL org.opencontainers.image.description="Daily Brief Dashboard - Hero Install (L3-only, no browser scrapers)"
+LABEL org.opencontainers.image.licenses=MIT
+
 # Default environment — loaded by entrypoint.sh, overridden by user's --env-file
 COPY defaults.env /app/defaults.env
 
