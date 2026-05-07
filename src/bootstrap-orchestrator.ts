@@ -883,6 +883,7 @@ interface AutoBootstrapInputs {
 function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
   const { aeName, customerNames, sfReportId, tableauTerritories, parentFolderId, podName } = inputs
 
+  const baseUrl = `http://localhost:${process.env.PORT ?? '7777'}`
   const bootstrapStartMs = Date.now()
   const stepStartMs: Record<number, number> = {}
 
