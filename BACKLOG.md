@@ -9330,6 +9330,27 @@ Priority: P1 | Size: S | Status: ✅ DONE 2026-05-04
 Source: Quinn audit 2026-05-04 (BKL-ARCH-SCRAPER-04 post-ship review)
 Fix applied: Added `assertPrimary('rh-scraper.runRhScrape')` to rh-scraper.ts:runRhScrape and `isPrimary &&` guard to background-scheduler.ts startup initScrapeContext block. Hero containers now fail fast with WrongRoleError before reaching launchPersistentContext. Also fixed BKL-F07 dashboard tsc error (hasReportForPod not in scope at AEsCustomersSection.tsx:771).
 
+### BKL-SEC-36 | rh-cases-api.ts — SOLR injection safety property is non-local (P3)
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Rook scan 2026-05-06 (BKL-RH-DISC-WATERFALL-01 post-ship review)
+Files: src/rh-cases-api.ts:258-274
+Description: SOLR query `case_account_name:${v}*` is safe because the strip regex at line 259 removes all non-[a-zA-Z0-9 ] chars before word extraction. But the safety invariant is 15 lines away from the interpolation — a future change to the regex could silently re-open injection. Add a defensive `if (!/^[a-zA-Z0-9]+$/.test(word)) throw` immediately before the variants array is built — makes safety property local and grep-able.
+Can we test: YES — unit test asserting throw on alias with SOLR meta-characters.
+
+### BKL-SEC-37 | rh-cases-api.ts — fetchCasesViaSolr uses /^\d+$/ (no upper bound) vs discovery /^\d{4,12}$/ (P3)
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Rook scan 2026-05-06 (BKL-RH-DISC-WATERFALL-01 post-ship review)
+Files: src/rh-cases-api.ts:146 (fetchCasesViaSolr), src/rh-cases-api.ts:325,344 (discoverAccountNumbersByName)
+Description: Discovery validates account numbers with /^\d{4,12}$/ but fetchCasesViaSolr uses /^\d+$/ (no upper bound). Values safe in both cases since digits-only prevents SOLR injection, but inconsistency means a caller could pass a 20-digit value to fetch that discovery would have rejected. Tighten fetchCasesViaSolr to /^\d{4,12}$/ to match discovery.
+Can we test: YES — unit test passing >12-digit account number to fetchCasesViaSolr.
+
+### BKL-SEC-38 | scraper-manager.ts — browser vs bearer discovery use different accountNumbers semantics (P3)
+Priority: P3 | Size: XS (XS — stays in BACKLOG.md, not promoted) | Status: 🔴 OPEN
+Source: Rook scan 2026-05-06 (BKL-RH-DISC-WATERFALL-01 post-ship review)
+Files: src/scraper-manager.ts:413 (browser — replacement), src/scraper-manager.ts:461 (bearer — union)
+Description: Bearer discovery path uses union semantics (existing + new, deduplicated). Browser discovery path uses replacement (new set replaces old). If a leader switches from browser→bearer, bearer adds accounts (safe). If it switches back to browser→bearer, browser replaces wholesale — could lose bearer-discovered numbers. Decide on one semantic (union is safer — no silent loss). Track for future harmonization.
+Can we test: YES — unit test simulating browser run after bearer-discovered accounts exist; verify no loss.
+
 ---
 
 ## Architecture Hardening — Issues #48–57 (2026-05-04)
@@ -9720,6 +9741,26 @@ Fix options:
   Recommended: Option A — surgical change in sheets.ts, no architectural impact.
 Can we test: Yes — after bootstrap, assert customer cards show Products > 0 for AEs with SF subscriptions.
 Decision: OPEN — Option A preferred
+
+### BKL-RH-DISC-WATERFALL-01 | RH bearer discovery — broad 4-variant query + client-side lowercase matching + always-discover-all (P1)
+Priority: P1 | Size: M | Status: ✅ DONE 2026-05-06
+Source: 2026-05-06 session — current single-word title-case query misses camelCase brands (CrowdStrike, McAfee, OmniVision). New approach: full first non-legal word from aliases[0] + 4 casing variants (original, titlecase, uppercase, lowercase) → broad SOLR query → client-side lowercase containment matching.
+Files changed: src/rh-cases-api.ts (discoverAccountNumbersByName), src/scraper-manager.ts (session guard + bearer discovery block), src/scrape-api.ts (bearer health-check skip)
+Tests: test/unit/rh-discover-by-name.test.ts (3 new tests — 4-variant query, attempt-2 fires, attempt-2 skipped for short words), test/unit/rh-transport-session-guard.test.ts (session guard)
+Net result tested live: CrowdStrike 41 cases (2 accounts), Intrado 33 cases (2 accounts), OmniVision 24 cases (1 account)
+Gates: Quinn PASS (742 CI tests green, bearer live 34 cases) | Rook PASS (3 P3 hardening items, no blockers)
+Decision: DONE — shipped 2026-05-06. Discovery hit rate 17/23 customers (was 13/23).
+
+### BKL-CCSP-PIPELINE-ZERO-01 | CCSP and Pipeline both show $0 after 2-AE load — investigate root cause (P2)
+Priority: P2 | Size: S | Status: 🔴 OPEN
+Source: 2026-05-06 — screenshot shows CCSP $0/No AE data and Pipeline $0/0 opportunities with 2 AEs loaded on test (7776) and prod (7777).
+Root cause investigation: ccsp-data.json and pipeline-data.json both have records:[] on both containers.
+  - CCSP: scraper-status.json shows lastRun=null — CCSP scraper is L4-only (Mac Mini); if Mac Mini auth is down, CCSP never runs → expected $0
+  - Pipeline: both AEs have pipelineSheetId configured; [refresh:pipeline] logs show it ran but returned 0 records — SF auth may have expired
+  - NOT a 2-AE display/filter code bug — confirmed by checking prod also shows $0 independently
+Next step: trigger CCSP on Mac Mini (re-auth), re-auth SF pipeline, verify data populates. If data loads but display still $0 with 2 AEs, then it IS a code bug.
+Can we test: Yes — after re-auth, trigger scrapers and check /api/ccsp and /api/pipeline response
+Decision: OPEN — investigate after Mac Mini re-auth
 
 ### BKL-TEST-REG-CLEANUP-01 | Release gate skips new-endpoint tests + live-data brief tests — need runner config or test reorganization (P2)
 Priority: P2 | Size: S | Status: 🔴 OPEN

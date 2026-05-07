@@ -16,6 +16,7 @@ import {
 import { aes, customers, patchAe, patchCustomer, saveCustomers, CUSTOMERS_PATH } from './server-state.ts'
 import { createOrUpdateNotebook, isNotebookLmEnabled } from './notebooklm.ts'
 import { lastScraped } from './rh-auth.ts'
+import { getConfiguredTransport } from './case-client.ts'
 import {
   runRhScrapeWithState,
   ccspInFlight,
@@ -144,7 +145,10 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-M49: Manual triggers go through the scraper queue
   // Manual "Run Now" overrides circuit breaker — user is explicitly requesting a run
   app.post('/api/scrape/rh', async (c) => {
-    try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: sanitizeErr(e) }, 503) }
+    // Bearer transport does not need a browser session — skip health check
+    if (getConfiguredTransport() !== 'bearer') {
+      try { await ensureBrowserHealthy() } catch (e: any) { return c.json({ error: sanitizeErr(e) }, 503) }
+    }
     if (_rhScrapeRunning) return c.json({ scraper: 'rh-cases', status: 'busy', error: 'RH scrape already in progress' }, 409)
     resetCircuitBreaker('rh-cases')
     markRunning('rh-cases')  // BKL-ADM01: set state synchronously before the task runs

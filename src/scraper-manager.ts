@@ -12,6 +12,8 @@ import { runRhScrape, SessionExpiredError, closeScrapeContext, browserDegraded, 
 export { _rhScrapeRunning, _rhScrapeStartedAt } from './rh-scraper.ts'
 // BKL-RH-03 Phase 2 (ADR-014): Bearer transport for recurring case refresh
 import { BearerCaseClient, getConfiguredTransport } from './case-client.ts'
+// BKL-RH-03 Phase 3: Bearer-transport account-number discovery (hero, no browser)
+import { discoverAccountNumbersByName } from './rh-cases-api.ts'
 import type { SupportCase } from './types.ts'
 import { runSfPipelineSync, scrapeSfReport, writePipelineSheet, createPipelineSheet, getSfContext, listSfReports, recordSfSyncSuccess, SfSessionExpiredError, adoptSfContext } from './sf-scraper.ts'
 import { recordScrapeFailure as recordConnectionFailure, recordScrapeSuccess as recordConnectionSuccess } from './connections/scrape-outcome.ts'
@@ -339,7 +341,13 @@ export async function runRhScrapeWithState(): Promise<void> {
   if (_rhScrapeRunning) {
     console.log('[rh-scraper] inner mutex already set — skipping orchestration layer'); return
   }
-  if (!existsSync(RH_SESSION_PATH)) return
+
+  // BKL-RH-TRANSPORT-GUARD: Session file is only required for browser transport.
+  // Bearer transport authenticates via REDHAT_OFFLINE_TOKEN — a missing
+  // .rh-session.json must not block a bearer-mode scrape.
+  // Resolve transport first, gate the session-file check on browser only.
+  const transportForDiscovery = getConfiguredTransport()
+  if (transportForDiscovery === 'browser' && !existsSync(RH_SESSION_PATH)) return
 
   // Collect account numbers from customers config; discover missing ones by name
   const serverState = await import('./server-state.ts')
@@ -348,13 +356,12 @@ export async function runRhScrapeWithState(): Promise<void> {
     .filter(Boolean)
 
   // Discover account numbers for all customers that don't have them yet.
-  // Uses POST /hydra/rest/search/v2/cases with account_name: Solr field.
-  // For customers without account numbers: search by full name.
-  // Primary goal = find cases. Bonus = discover account numbers for future runs.
-  // Cases found via name search are folded directly into nameDiscoveredCases for display.
-  const needsDiscovery = serverState.customers.filter((c) => !c.accountNumbers?.length)
+  // Transport-aware (BKL-RH-03 Phase 3):
+  //   - browser → existing Playwright sidebar autocomplete (Mac Mini leader)
+  //   - bearer  → SOLR discoverAccountNumbersByName (hero, no browser)
+  const needsDiscovery = serverState.customers
   const nameDiscoveredCases: import('./rh-scraper.ts').DiscoverResult['cases'] = []
-  if (needsDiscovery.length > 0) {
+  if (transportForDiscovery === 'browser' && needsDiscovery.length > 0) {
     console.log(`[rh-scraper] name-searching portal for ${needsDiscovery.length} customers without account numbers…`)
     _rhDiscoveryProgress = { done: 0, total: needsDiscovery.length, current: null }
     const newNums: string[] = []
@@ -435,6 +442,35 @@ export async function runRhScrapeWithState(): Promise<void> {
     console.log(`[rh-scraper] name search done — ${newNums.length} new account numbers, ${nameDiscoveredCases.length} cases found`)
     console.log(`[rh-scraper] discovery stats: wall=${discoveryWallMs}ms, skipped=${customersSkipped}, searched=${customersSearched}, avg=${avgMs}ms/customer`)
     await closeDiscoverPage()  // free the reused tab — no longer needed for discovery
+  }
+
+  // BKL-RH-03 Phase 3: Bearer-transport discovery for hero installs.
+  // No browser available — use Bearer-token SOLR via discoverAccountNumbersByName.
+  // Mirrors the browser block above for the result-handling shape (patchCustomer +
+  // accountNumbers union + nameDiscoveredCases stamping) without the negative-cache
+  // tombstone path (kept browser-only for now to limit Phase 3 surface area).
+  if (transportForDiscovery === 'bearer' && needsDiscovery.length > 0) {
+    console.log(`[rh-scraper] bearer-discovering ${needsDiscovery.length} customers without account numbers…`)
+    for (const customer of needsDiscovery) {
+      const searchName = (customer as any).aliases?.[0] ?? customer.name
+      try {
+        const result = await discoverAccountNumbersByName(searchName)
+        if (result.accountNumbers.length > 0) {
+          const existing = (customer.accountNumbers ?? []).map(String)
+          const merged = [...new Set([...existing, ...result.accountNumbers])]
+          serverState.patchCustomer(customer.name, { accountNumbers: merged })
+          accountNumbers = [...new Set([...accountNumbers, ...merged])]
+          console.log(`[rh-scraper] bearer discovery: "${customer.name}" → ${merged.join(', ')}`)
+        } else {
+          console.log(`[rh-scraper] bearer discovery: "${customer.name}" → no account numbers found (0 cases or no name match)`)
+        }
+        if (result.cases.length > 0) {
+          nameDiscoveredCases.push(...result.cases.map(c => ({ ...c, customerName: customer.name })))
+        }
+      } catch (e: any) {
+        console.warn(`[rh-scraper] bearer discovery error for "${customer.name}": ${e?.message ?? e}`)
+      }
+    }
   }
 
   // If no account numbers at all, we still may have name-discovered cases to cache
