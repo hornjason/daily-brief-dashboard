@@ -58,6 +58,15 @@ function loadSettings(): Record<string, unknown> {
 // ── Drive helpers ─────────────────────────────────────────────────────────────
 
 /**
+ * Normalize a string for fuzzy matching by removing underscores and spaces.
+ * Enables matching pod keys (EAST_COMM_CORP_POD01) against GSheet names
+ * ("East Comm Corp POD01 - Subscriptions").
+ */
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/[_\s]/g, '')
+}
+
+/**
  * Check if a GSheet matching the pod key exists in the given Drive folder.
  * Uses listPodBookingSheets pattern: list spreadsheets in the folder and check names.
  */
@@ -77,14 +86,14 @@ async function checkBookingsGSheetExists(folderId: string, podKey: string, podLa
       'sync: bookings GSheet check',
     )
     const files = res.data.files ?? []
-    const podKeyLower = podKey.toLowerCase()
+    const podKeyNorm = normalizeForMatch(podKey)
     // Also match against label keywords (e.g. "Northwest Corp" → ["northwest", "corp"])
     // because GSheets are named like "Northwest POD - Subscriptions", not with the pod key
     const labelWords = (podLabel ?? '').toLowerCase().split(/\s+/).filter(w => w.length > 3)
     return files.some(f => {
-      const nameLower = f.name?.toLowerCase() ?? ''
-      if (nameLower.includes(podKeyLower)) return true
-      return labelWords.some(w => nameLower.includes(w))
+      const nameNorm = normalizeForMatch(f.name ?? '')
+      if (nameNorm.includes(podKeyNorm)) return true
+      return labelWords.some(w => nameNorm.includes(w))
     })
   } catch (e: any) {
     console.warn(`[sync-pod-l3] bookings GSheet check failed for ${podKey}: ${e.message} — assuming absent`)
