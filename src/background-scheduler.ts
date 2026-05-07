@@ -1288,8 +1288,16 @@ export function initBackgroundScheduler(opts: {
   // The weekly scheduler only re-seeds on Sunday 6am ET — anything missing
   // before that window causes Generate buttons to silently fail.
   // Fire-and-forget: non-blocking, runs 15s after startup to let server stabilise.
+  // BKL-HERO-PRODUCT-PREREQ-01: Guard against missing OAuth keys on fresh hero installs.
   setTimeout(async () => {
     try {
+      // Pre-flight: check OAuth keys exist (required for Gemini synthesis)
+      const { OAUTH_KEYS_PATH } = await import('./google.ts')
+      if (!existsSync(OAUTH_KEYS_PATH)) {
+        console.log('[product-intel] startup: OAuth keys missing — skipping product refresh (wizard not yet complete)')
+        return
+      }
+
       const { loadProductConfig, getCachedSummary, refreshAllProducts } = await import('./product-release-radar.ts')
       const products = loadProductConfig()
       if (!products.length) return

@@ -830,6 +830,13 @@ async function bootstrapPOD(opts: {
       .then(r => r.json())
       .then((d: any) => console.log(`[pod-bootstrap] brief pregen triggered: ${d?.message ?? 'ok'}`))
       .catch(e => console.warn('[pod-bootstrap] brief pregen trigger failed:', e?.message))
+
+    // BKL-HERO-PRODUCT-PREREQ-01: Trigger product refresh after bootstrap completes
+    // (OAuth keys now exist, products can synthesize with Gemini)
+    fetch(`${baseUrl}/api/products/refresh-all`, { method: 'POST' })
+      .then(r => r.json())
+      .then((d: any) => console.log(`[pod-bootstrap] product refresh triggered: ${d?.count ?? 0} products`))
+      .catch(e => console.warn('[pod-bootstrap] product refresh trigger failed:', e?.message))
   }
 
   // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — it runs on its own timer

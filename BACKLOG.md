@@ -161,6 +161,16 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Decision: DONE — Updated GET /api/settings/offline-token endpoint logic at line 228 to filter out placeholder value: `const configured = !!process.env.REDHAT_OFFLINE_TOKEN && process.env.REDHAT_OFFLINE_TOKEN !== 'your_offline_token_here'`. Matches preflight.ts pattern. Image 3da8d6b30652 built and pushed to ghcr.io as :latest and :stable tags. Commit: 640bb1e.
 - Can we test: YES — Playwright test can verify GET /api/settings/offline-token returns `{"configured": false}` when REDHAT_OFFLINE_TOKEN env var equals "your_offline_token_here", and returns `{"configured": true}` with a real token.
 
+### BKL-HERO-PRODUCT-PREREQ-01 — Product refresh runs at startup before OAuth keys exist, fails silently
+- Status: ✅ DONE 2026-05-07
+- Priority: P1
+- Source: Hero install testing 2026-05-07 (Jason)
+- Files: src/background-scheduler.ts lines 1292-1300 (prerequisite check), src/product-intel-routes.ts lines 687-702 (refresh-all endpoint), src/bootstrap-orchestrator.ts lines 835-838 (bootstrap trigger)
+- Description: Product Intelligence Hub stays empty on fresh hero install even after wizard completes and OAuth keys are created. Root cause: product refresh runs at startup (line 1291, 15s after server starts) before wizard creates `gcp-oauth.keys.json`. Refresh needs OAuth keys for Gemini synthesis, fails with "OAuth keys not found", never retries after keys become available. Next scheduled refresh is Sunday 6am ET (65+ hours later). Fresh installs show empty products until Sunday or manual restart. Logs show successful scraping of release notes but synthesis fails: `[product-release-radar] failed to refresh rhel: OAuth keys not found: /data/config/gcp-oauth.keys.json`.
+- Decision: DONE — Three-part fix: (1) Added OAuth keys prerequisite check to startup product refresh (background-scheduler.ts lines 1292-1300), matching pattern from territory sync line 581. If keys missing, logs skip message and doesn't run refresh. (2) Added POST /api/products/refresh-all endpoint (product-intel-routes.ts lines 687-702) to manually trigger refresh of all products. (3) Bootstrap completion now triggers product refresh via new endpoint (bootstrap-orchestrator.ts lines 835-838) after OAuth keys are created, so fresh installs get products immediately after wizard completes instead of waiting until Sunday. Commit: [pending].
+- Can we test: YES — Fresh container bootstrap, verify: (1) startup product refresh skips with log message when OAuth keys missing, (2) bootstrap completion triggers product refresh after wizard, (3) products appear immediately after bootstrap completes.
+- Related: Other startup tasks already have prerequisite guards: territory sync checks OAuth token (line 581), CCSP checks ccspEnabled config (line 478), SF pipeline checks session status (line 664), sheet health fails gracefully in try/catch (line 947).
+
 ### BKL-SFCACHE-02 — SF L3 write-back fires after fix; add regression log assertion
 - Status: ✅ DONE 2026-04-27
 - Priority: P2

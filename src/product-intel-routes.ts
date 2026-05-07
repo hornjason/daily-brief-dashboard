@@ -13,6 +13,7 @@ import {
   getAllProductSummaries,
   getCachedSummary,
   fetchProductSummary,
+  refreshAllProducts,
   getProductAlerts,
   acknowledgeAlert,
   loadProductConfig,
@@ -681,6 +682,25 @@ export function createProductIntelRouter(): Hono {
     } catch (e: any) {
       console.error(`[product-intel] GET /api/products/${slug} error:`, sanitizeErr(e))
       return c.json({ error: 'Failed to load product summary' }, 500)
+    }
+  })
+
+  // POST /api/products/refresh-all — refresh all product summaries (BKL-HERO-PRODUCT-PREREQ-01)
+  router.post('/api/products/refresh-all', async (c) => {
+    const mutexKey = 'refresh:all'
+    if (_generatingKeys.has(mutexKey)) {
+      return c.json({ error: 'Refresh already in progress for all products' }, 409)
+    }
+    _generatingKeys.add(mutexKey)
+    try {
+      await refreshAllProducts()
+      const summaries = getAllProductSummaries()
+      return c.json({ success: true, count: summaries.length, products: summaries })
+    } catch (e: any) {
+      console.error('[product-intel] POST /api/products/refresh-all error:', sanitizeErr(e))
+      return c.json({ error: sanitizeErr(e) }, 500)
+    } finally {
+      _generatingKeys.delete(mutexKey)
     }
   })
 
