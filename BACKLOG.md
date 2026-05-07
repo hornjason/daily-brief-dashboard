@@ -152,6 +152,15 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Description: Product Intelligence Hub shows "No product data cached yet" on fresh hero installs. Root cause: `product-intel-config.json` missing from `/data/config/` — file exists in `scripts/seed-data/` and is copied into the image, but server.ts startup had no first-boot seed logic (unlike settings.json which does). Container logs showed repeated `[product-release-radar] could not load product config: ENOENT`.
 - Decision: DONE — Added first-boot seed block to server.ts startup (lines 129-139) using same pattern as settings.json seed. If file missing at `/data/config/product-intel-config.json`, copies from `/app/scripts/seed-data/product-intel-config.json` and logs seed action. Verified on test container (7776): file seeded correctly on first boot, products API returns all 7 products (rhel, ocp, ocp-virt, aap, rhel-ai, rh-ai-inference, rhoai). Image c1b4bd11ac4a pushed to ghcr.io. Commit: 2599b19.
 
+### BKL-HERO-OFFLINE-TOKEN-01 — RH offline token shows "Configured" with placeholder value on fresh install
+- Status: 🟡 IN PROGRESS
+- Priority: P1
+- Source: Hero install testing 2026-05-07 (Jason)
+- Files: src/settings-api.ts line 228 (configured check)
+- Description: Fresh hero install wizard shows "Red Hat Token Configured" green checkmark when .env contains placeholder value "your_offline_token_here". Setup wizard should treat this as unconfigured. Root cause: GET /api/settings/offline-token endpoint only checks if env var exists (`!!process.env.REDHAT_OFFLINE_TOKEN`), doesn't filter out the placeholder value. preflight.ts correctly treats the placeholder as unconfigured by comparing against the constant.
+- Decision: [Pending fix]
+- Can we test: YES — Playwright test can verify GET /api/settings/offline-token returns `{"configured": false}` when REDHAT_OFFLINE_TOKEN env var equals "your_offline_token_here", and returns `{"configured": true}` with a real token.
+
 ### BKL-SFCACHE-02 — SF L3 write-back fires after fix; add regression log assertion
 - Status: ✅ DONE 2026-04-27
 - Priority: P2

@@ -225,7 +225,7 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
 
   // GET /api/settings/offline-token — check if token is configured (never expose the value)
   router.get('/api/settings/offline-token', (c) => {
-    const configured = !!process.env.REDHAT_OFFLINE_TOKEN
+    const configured = !!process.env.REDHAT_OFFLINE_TOKEN && process.env.REDHAT_OFFLINE_TOKEN !== 'your_offline_token_here'
     return c.json({ configured })
   })
 
