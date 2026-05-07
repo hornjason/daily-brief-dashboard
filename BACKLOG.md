@@ -144,6 +144,14 @@ Decision: DONE — Three fixes applied 2026-03-31:
 
 ## Bugs
 
+### BKL-HERO-PRODUCT-CONFIG-01 — Product Intelligence Hub empty on hero install (missing first-boot seed)
+- Status: ✅ DONE 2026-05-07
+- Priority: P1
+- Source: Hero install testing 2026-05-07 (Jason)
+- Files: server.ts lines 129-139 (seed block added)
+- Description: Product Intelligence Hub shows "No product data cached yet" on fresh hero installs. Root cause: `product-intel-config.json` missing from `/data/config/` — file exists in `scripts/seed-data/` and is copied into the image, but server.ts startup had no first-boot seed logic (unlike settings.json which does). Container logs showed repeated `[product-release-radar] could not load product config: ENOENT`.
+- Decision: DONE — Added first-boot seed block to server.ts startup (lines 129-139) using same pattern as settings.json seed. If file missing at `/data/config/product-intel-config.json`, copies from `/app/scripts/seed-data/product-intel-config.json` and logs seed action. Verified on test container (7776): file seeded correctly on first boot, products API returns all 7 products (rhel, ocp, ocp-virt, aap, rhel-ai, rh-ai-inference, rhoai). Image c1b4bd11ac4a pushed to ghcr.io. Commit: 2599b19.
+
 ### BKL-SFCACHE-02 — SF L3 write-back fires after fix; add regression log assertion
 - Status: ✅ DONE 2026-04-27
 - Priority: P2

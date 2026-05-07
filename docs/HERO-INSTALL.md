@@ -395,6 +395,10 @@ A region is **selectable** when all three file types are present in `podBookings
 
 `scripts/seed-data/settings.json` is the canonical region source — git-tracked, baked into the image at `/app/scripts/seed-data/settings.json`. On container startup, `server.ts` checks if `data/config/settings.json` has a `regions[]` array. If not (fresh install), it copies `regions[]` from the seed file. Existing installs with `regions[]` already set are not touched.
 
+**How product intelligence config is seeded:** *(BKL-HERO-PRODUCT-CONFIG-01)*
+
+`scripts/seed-data/product-intel-config.json` defines which products to track (RHEL, OCP, AAP, etc.). On container startup, `server.ts` checks if `data/config/product-intel-config.json` exists. If not (fresh install), it copies the seed file. This prevents "No product data cached yet" on fresh hero installs.
+
 **To add a new region or pod:**
 1. Edit `scripts/seed-data/settings.json` — add the region + pod block with `id`, `label`, `type`, `territorySheetUrl`, `podBookingsFolderId`, and `pods` map
 2. Update `data/config/settings.json` (live runtime — no restart needed), `data-test/config/settings.json`, and `data-demo/config/settings.json` with the same block

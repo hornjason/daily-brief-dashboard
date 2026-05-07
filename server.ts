@@ -125,6 +125,19 @@ try {
 } catch (e: any) {
   console.warn('[startup] first-boot settings seed failed (non-fatal):', e.message)
 }
+
+// First-boot seed: if product-intel-config.json is missing, copy from scripts/seed-data/
+// so Product Intelligence Hub shows product data on fresh hero installs
+const PRODUCT_INTEL_CONFIG_PATH = resolve(SRV_CONFIG_DIR, 'product-intel-config.json')
+if (!existsSync(PRODUCT_INTEL_CONFIG_PATH)) {
+  const seedPath = resolve(import.meta.dir, 'scripts/seed-data/product-intel-config.json')
+  if (existsSync(seedPath)) {
+    const seedContent = readFileSync(seedPath, 'utf-8')
+    writeFileSync(PRODUCT_INTEL_CONFIG_PATH, seedContent)
+    console.log('[startup] product-intel-config.json seeded from scripts/seed-data/product-intel-config.json')
+  }
+}
+
 const SHEETS_TOKEN_PATH_SRV = process.env.SHEETS_TOKEN
   ?? resolve(SRV_CONFIG_DIR, '.sheets-token.json')
 const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
