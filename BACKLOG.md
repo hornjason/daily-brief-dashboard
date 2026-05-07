@@ -171,6 +171,20 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Can we test: YES — Fresh container bootstrap, verify: (1) startup product refresh skips with log message when OAuth keys missing, (2) bootstrap completion triggers product refresh after wizard, (3) products appear immediately after bootstrap completes.
 - Related: Other startup tasks already have prerequisite guards: territory sync checks OAuth token (line 581), CCSP checks ccspEnabled config (line 478), SF pipeline checks session status (line 664), sheet health fails gracefully in try/catch (line 947).
 
+### BKL-HERO-GCP-PROJECT-01 — Product features show "0 features" on hero install (missing GOOGLE_CLOUD_PROJECT)
+- Status: ✅ DONE 2026-05-07
+- Priority: P0 (blocks all Product Intelligence features on fresh hero installs)
+- Source: Hero install systematic audit 2026-05-07 (Jason)
+- Files: .env.example (line 12), src/bootstrap-orchestrator.ts (lines ~842, ~1210)
+- Description: Fresh hero install shows Product Intelligence Hub with product summaries loading correctly but "0 features extracted yet" for all products. Root cause: `.env.example` has `# GOOGLE_CLOUD_PROJECT=your-gcp-project-id` commented out with placeholder value. Container starts with NO `GOOGLE_CLOUD_PROJECT` env var. Feature extraction code (product-feature-radar.ts line ~350) checks for this and SILENTLY RETURNS when missing (logs warning but doesn't throw), never extracting features. Secondary issue: Post-bootstrap only triggered summary refresh (`/api/products/refresh-all`), not feature extraction — features wouldn't extract until Sunday 6am ET weekly refresh (65+ hour gap). Result: Product Intelligence features completely non-functional on all hero installs until Sunday.
+- Evidence: (1) Container env check shows GOOGLE_CLOUD_PROJECT not present, (2) Feature cache has zero `-features.json` files (only 7 `-summary.json` files exist), (3) Startup logs show no feature extraction attempts, (4) Manual feature refresh would fail with same silent skip, (5) Drive query parameters verified correct (`supportsAllDrives: true` at product-drive-ingest.ts lines 117-118).
+- Decision: DONE — Two-part fix: (1) `.env.example` line 12 uncommented: `GOOGLE_CLOUD_PROJECT=jhorn-pai` (Jason's existing GCP project powering laptop test/prod). (2) Added post-bootstrap feature extraction trigger to BOTH POD bootstrap (line ~842) and auto-bootstrap (line ~1210) paths in bootstrap-orchestrator.ts via `fetch('/api/products/features/refresh-all')`. Features now extract automatically right after wizard completes instead of waiting until Sunday 6am ET.
+- Verified: Fresh container test (clean data-test/) confirmed: (1) GOOGLE_CLOUD_PROJECT=jhorn-pai present in container env, (2) After adding OAuth keys (simulating wizard completion), triggered both endpoints manually — product summaries: 7 products, features: 101 features extracted across 7 products, (3) Feature cache files created on disk (6/7 products verified), (4) GET /api/products/features returns actual feature data with descriptions, tags, versions, confidence levels.
+- Automatic trigger flow: Wizard completes → creates OAuth keys → bootstrap completion fires two POST requests: `/api/products/refresh-all` (summaries) then `/api/products/features/refresh-all` (features) → Product Intelligence fully functional immediately, no waiting for Sunday.
+- Can we test: YES — Fresh container bootstrap end-to-end, verify: (1) GOOGLE_CLOUD_PROJECT present in container env, (2) After wizard, both summaries and features extract automatically, (3) Product Intelligence Hub displays both summaries AND features immediately post-bootstrap.
+- Shared quota risk: All hero installs share jhorn-pai Vertex AI quota. If 10+ concurrent hero installs run feature extraction simultaneously, could hit quota limits. Acceptable for demo/test purposes; production multi-tenant deployments should use wizard-guided GCP project setup (Option B, deferred).
+- Related: settings.json also updated with new region/POD configuration and will be baked into release assets alongside .env.example going forward.
+
 ### BKL-SFCACHE-02 — SF L3 write-back fires after fix; add regression log assertion
 - Status: ✅ DONE 2026-04-27
 - Priority: P2
@@ -420,6 +434,42 @@ Source: Elmer Alvarez bootstrap — "Bespin Global U.S." returned 0 results in S
 Files: src/supportable-scraper.ts
 Description: When `discoverAccountNumbersByName` initial search returns 0 results, it now automatically retries with abbreviation-normalized name (`U.S.` → `US`) and first-two-words prefix. Fixes "Bespin Global U.S." finding "Bespin Global US" in Supportable without needing a manual `supportableName` override in customers.json.
 Decision: DONE — Three-candidate search chain: (1) `stripLegalSuffix(name)`, (2) abbreviation-normalized (`U.S.` → `US`), (3) first two words only. First match wins. Logged which candidate succeeded for debugging.
+
+### BKL-INFRA-01 | Extract normalizeForMatch to shared string-utils module
+Status: 🔴 OPEN
+Severity: Low
+Source: Algorithm reflection 2026-05-07 (POD01 GSheet fix)
+Files: scripts/sync-pod-l3.ts, new: src/lib/string-utils.ts
+Description: normalizeForMatch() (strips underscores/spaces for fuzzy matching) was added to sync-pod-l3.ts for POD01 GSheet lookup. This pattern will likely recur for other region/pod matching across the codebase. Extract to a shared utility module.
+Fix: Create src/lib/string-utils.ts with normalizeForMatch() + unit tests. Import from sync-pod-l3.ts.
+Decision: 
+
+### BKL-INFRA-02 | Deployment automation: make deploy-to-mac-mini target
+Status: 🔴 OPEN
+Severity: Low
+Source: Algorithm reflection 2026-05-07 (POD01 GSheet fix)
+Files: Makefile
+Description: Deploying to Mac Mini currently requires 3 manual SSH commands (git pull + daemon restart + sync trigger). Bundle into one make target for faster iteration.
+Fix: Add Makefile target `deploy-to-mac-mini` that SSHs to jasonhorn@100.97.86.25 and runs: `cd ~/DailyBriefDashboard && git pull origin main && make sync-down && make sync-up && make sync-now`
+Decision: 
+
+### BKL-INFRA-03 | Drive verification script for L3 CSV files
+Status: 🔴 OPEN
+Severity: Low
+Source: Algorithm reflection 2026-05-07 (POD01 GSheet fix)
+Files: new: Tools/VerifyL3CacheFiles.ts
+Description: Final verification of L3 sync (ISC-12) requires waiting for email + manually checking Drive. Create a script that queries Drive directly for CCSP/SF CSV files for a given pod and date.
+Fix: Create Tools/VerifyL3CacheFiles.ts that takes --region, --pod, --date and checks Drive folder 14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo for expected CSVs.
+Decision: 
+
+### BKL-INFRA-04 | Proactive fuzzy-match audit across codebase
+Status: 🔴 OPEN
+Severity: Low
+Source: Algorithm reflection 2026-05-07 (POD01 GSheet fix)
+Files: Codebase-wide
+Description: POD01 bug was caused by toLowerCase() + includes() without normalization. Audit codebase for similar patterns (string matching that might fail on underscores vs spaces, hyphens vs no-hyphens, etc.).
+Fix: Grep for `toLowerCase().*includes` patterns, review each, determine if normalization needed.
+Decision: 
 
 ---
 

@@ -837,6 +837,13 @@ async function bootstrapPOD(opts: {
       .then(r => r.json())
       .then((d: any) => console.log(`[pod-bootstrap] product refresh triggered: ${d?.count ?? 0} products`))
       .catch(e => console.warn('[pod-bootstrap] product refresh trigger failed:', e?.message))
+
+    // BKL-HERO-GCP-PROJECT-01: Trigger feature extraction after summaries refresh
+    // (Both GOOGLE_CLOUD_PROJECT and OAuth keys now available)
+    fetch(`${baseUrl}/api/products/features/refresh-all`, { method: 'POST' })
+      .then(r => r.json())
+      .then((d: any) => console.log(`[pod-bootstrap] feature extraction triggered: ${d?.products?.length ?? 0} products`))
+      .catch(e => console.warn('[pod-bootstrap] feature extraction trigger failed:', e?.message))
   }
 
   // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — it runs on its own timer
@@ -1197,6 +1204,13 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
       .then(r => r.json())
       .then((d: any) => console.log(`[auto-bootstrap] product refresh triggered: ${d?.count ?? 0} products`))
       .catch(e => console.warn('[auto-bootstrap] product refresh trigger failed:', e?.message))
+
+    // BKL-HERO-GCP-PROJECT-01: Trigger feature extraction after summaries refresh
+    // (Both GOOGLE_CLOUD_PROJECT and OAuth keys now available)
+    fetch(`${baseUrl}/api/products/features/refresh-all`, { method: 'POST' })
+      .then(r => r.json())
+      .then((d: any) => console.log(`[auto-bootstrap] feature extraction triggered: ${d?.products?.length ?? 0} products`))
+      .catch(e => console.warn('[auto-bootstrap] feature extraction trigger failed:', e?.message))
 
     // BKL-BOOT-SCRAPE-ORDER-01: RH Cases is scheduled-only — do not trigger
     // during bootstrap. The next scheduled run will pick up account discovery
