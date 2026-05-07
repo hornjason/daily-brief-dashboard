@@ -2,16 +2,16 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-02
+updated: 2026-05-07
 ---
 
 # DailyBriefDashboard — Project State
-*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
+*Last validated: 2026-05-07 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-04-25 v1.4.0 released — Phase 1: stale-cache filter, wizard polish, SA key removal; Phase 2: SSE waterfall tests, corpus-delta wiring, doc rewrites; Phase 3: Quinn audit fixes (pluralization, duplicate banner, Supportable fields cleanup, subscription crash guard); Phase 4: README curl|bash hero install, v1.4.0 tagged + published to ghcr.io
+Last updated: 2026-05-07 (BKL-CCSP-HEADERS-01 DONE) — Pattern-based CCSP column detection prevents Tableau format drift. Samples first 10 rows, detects columns by content patterns (SF ID regex, decimal ACV, quarter format), overrides misaligned headers. 97 CCSP records now parse correctly from sheets that previously returned 0. See ADR-017.
 
 ---
 

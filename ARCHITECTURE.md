@@ -326,6 +326,8 @@ Playwright scraper
 
 **Stale-overwrite guard:** `refreshSubscriptions`, `refreshAll`, `refreshCCSP`, and `refreshPipeline` all check: if fetch returns 0 records but cache has data, skip the write. Quota failures return `[]` silently; without this guard a quota failure permanently wipes good cached data.
 
+**CCSP column detection resilience (ADR-017):** `parseCcspRows` in `src/lib/ccsp-resolvers.ts` uses pattern-based column detection with confidence scoring. When Tableau CSV headers misalign with data positions (discovered 2026-05-07: "Account Name" header at column A but actual account names at column B), the parser samples first 10 data rows and identifies columns by content patterns (Salesforce ID regex, decimal ACV values, quarter format) instead of trusting header positions. When header/pattern mismatch detected, uses pattern-detected columns. Prevents future Tableau export format drift from breaking CCSP data ingestion.
+
 ---
 
 ### 7. OAuth Token Stored in a Single File

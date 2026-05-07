@@ -213,9 +213,170 @@ export async function runResolverChain(
   return null
 }
 
+// ── ColumnMapping & pattern detection ───────────────────────────────────────
+// When Tableau exports the summary view instead of Raw Data, headers may be
+// misaligned or entirely wrong. detectColumnsByPattern scans actual data values
+// to infer column positions using regex patterns and scoring, independent of
+// header text.
+
+export interface ColumnMapping {
+  accountName?: number
+  quarter?: number
+  closeDate?: number
+  partner?: number
+  acvPlus?: number
+}
+
+// Pattern matchers — each returns true if value matches the expected data type.
+
+/** Fiscal quarter: 2025-Q1, 2026-Q4, etc. */
+const isQuarterValue = (v: string): boolean => /^\d{4}-Q[1-4]$/.test(v)
+
+/** Date in M/D/YYYY or MM/DD/YYYY format */
+const isDateValue = (v: string): boolean => /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v)
+
+/** Date in YYYY-MM-DD format */
+const isIsoDateValue = (v: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(v)
+
+/** Cloud partner keyword (case-insensitive) */
+const isPartnerValue = (v: string): boolean => {
+  const lower = v.toLowerCase()
+  return lower.includes('amazon') || lower.includes('aws') ||
+    lower.includes('google') || lower.includes('microsoft') ||
+    lower === 'other'
+}
+
+/** Salesforce ID pattern: 15-18 char alphanumeric */
+const isSalesforceId = (v: string): boolean => /^[0-9A-Za-z]{15,18}$/.test(v)
+
+/** Numeric value that could be ACV — allows $, commas, decimals. Prefers decimals. */
+const isAcvValue = (v: string): boolean => {
+  const cleaned = v.replace(/[$,\s]/g, '')
+  if (!cleaned) return false
+  // Must be entirely numeric (digits and optional decimal point only)
+  if (!/^[\d.]+$/.test(cleaned)) return false
+  const num = parseFloat(cleaned)
+  return !isNaN(num) && num > 0
+}
+
+/** Check if value contains a decimal point (prefer for ACV over integers) */
+const hasDecimal = (v: string): boolean => v.includes('.')
+
+/**
+ * Detect column positions by scanning data row values for recognizable patterns.
+ * Returns a ColumnMapping if at least accountName + acvPlus are detected, null otherwise.
+ *
+ * Minimum confidence: a pattern must match >= 50% of non-empty values in a column
+ * to be assigned to that column.
+ */
+export function detectColumnsByPattern(rows: unknown[][]): ColumnMapping | null {
+  if (rows.length < 2) return null
+
+  const dataRows = rows.slice(1)
+  if (dataRows.length === 0) return null
+
+  // Determine the max column count across all rows
+  const maxCols = Math.max(...rows.map((r) => r.length))
+  if (maxCols === 0) return null
+
+  // Score each column for each pattern type
+  const scores: Record<keyof ColumnMapping, { col: number; ratio: number }[]> = {
+    accountName: [],
+    quarter: [],
+    closeDate: [],
+    partner: [],
+    acvPlus: [],
+  }
+
+  for (let col = 0; col < maxCols; col++) {
+    let quarterHits = 0, dateHits = 0, partnerHits = 0, acvHits = 0, decimalHits = 0, sfIdHits = 0
+    let nonEmpty = 0
+    // Track strings that are NOT matched by other patterns — candidate account names
+    let textOnlyHits = 0
+
+    for (const row of dataRows) {
+      const raw = String(row[col] ?? '').trim()
+      if (!raw) continue
+      nonEmpty++
+
+      const matchedQuarter = isQuarterValue(raw)
+      const matchedDate = isDateValue(raw) || isIsoDateValue(raw)
+      const matchedPartner = isPartnerValue(raw)
+      const matchedAcv = isAcvValue(raw)
+      const matchedSfId = isSalesforceId(raw)
+
+      if (matchedQuarter) quarterHits++
+      if (matchedDate) dateHits++
+      if (matchedPartner) partnerHits++
+      if (matchedAcv) {
+        acvHits++
+        if (hasDecimal(raw)) decimalHits++
+      }
+      if (matchedSfId) sfIdHits++
+
+      // Account name heuristic: non-empty string that doesn't match other patterns (including SF IDs)
+      if (!matchedQuarter && !matchedDate && !matchedPartner && !matchedAcv && !matchedSfId) {
+        textOnlyHits++
+      }
+    }
+
+    if (nonEmpty === 0) continue
+    const MIN_CONFIDENCE = 0.5
+
+    if (quarterHits / nonEmpty >= MIN_CONFIDENCE) {
+      scores.quarter.push({ col, ratio: quarterHits / nonEmpty })
+    }
+    if (dateHits / nonEmpty >= MIN_CONFIDENCE) {
+      scores.closeDate.push({ col, ratio: dateHits / nonEmpty })
+    }
+    if (partnerHits / nonEmpty >= MIN_CONFIDENCE) {
+      scores.partner.push({ col, ratio: partnerHits / nonEmpty })
+    }
+    if (acvHits / nonEmpty >= MIN_CONFIDENCE) {
+      // Boost score for columns with decimal values (prefer ACV over Quantity)
+      const decimalBoost = decimalHits > 0 ? 0.1 * (decimalHits / acvHits) : 0
+      scores.acvPlus.push({ col, ratio: (acvHits / nonEmpty) + decimalBoost })
+    }
+    if (textOnlyHits / nonEmpty >= MIN_CONFIDENCE) {
+      scores.accountName.push({ col, ratio: textOnlyHits / nonEmpty })
+    }
+  }
+
+  // Assign columns: pick highest-ratio candidate for each type, avoiding conflicts
+  const mapping: ColumnMapping = {}
+  const used = new Set<number>()
+
+  // Priority: quarter and date are most distinctive, then partner, then ACV, then account name
+  const assignBest = (key: keyof ColumnMapping) => {
+    const candidates = scores[key]
+      .filter((c) => !used.has(c.col))
+      .sort((a, b) => b.ratio - a.ratio)
+    if (candidates.length > 0) {
+      mapping[key] = candidates[0].col
+      used.add(candidates[0].col)
+    }
+  }
+
+  assignBest('quarter')
+  assignBest('closeDate')
+  assignBest('partner')
+  assignBest('acvPlus')
+  assignBest('accountName')
+
+  // Require at least accountName + acvPlus to be useful
+  if (mapping.accountName === undefined || mapping.acvPlus === undefined) return null
+
+  return mapping
+}
+
 // ── parseCcspRows ────────────────────────────────────────────────────────────
 // Pure function — no I/O. Takes raw sheet rows (header row + data rows), does
 // flexible column detection, and returns CCSPRecord[].
+//
+// Column detection strategy (two-pass):
+//   1. Try header-based detection (fast path — existing behavior)
+//   2. If headers fail (missing accountName or ACV), fall back to pattern detection
+//   3. Log mismatches between header and pattern results for debugging
 //
 // Column detection notes:
 //   - acctCol: Tableau Raw Data uses "Account Name"; summary views may use
@@ -238,24 +399,79 @@ export function parseCcspRows(
 ): CCSPRecord[] {
   if (rows.length < 2) return []
 
+  // ── Pass 1: header-based detection (fast path) ──────────────────────────
   const headers = (rows[0] ?? []).map((h: unknown) => String(h ?? '').trim())
-  const acctCol = headers.findIndex((h) => {
+  const headerAcctCol = headers.findIndex((h) => {
     const lower = h.toLowerCase()
     return lower === 'account name' || lower === 'account' || lower === 'customer name' || lower === 'company'
   })
-  const qtrCol = headers.findIndex((h) => h.toLowerCase().includes('fiscal year quarter'))
-  const closeDateCol = headers.findIndex((h) => h.toLowerCase() === 'opportunity close date')
-  const partnerCol = headers.findIndex((h) => h.toLowerCase().includes('financial partner'))
-  const acvCol = headers.findIndex((h) => {
+  const headerQtrCol = headers.findIndex((h) => h.toLowerCase().includes('fiscal year quarter'))
+  const headerCloseDateCol = headers.findIndex((h) => h.toLowerCase() === 'opportunity close date')
+  const headerPartnerCol = headers.findIndex((h) => h.toLowerCase().includes('financial partner'))
+  const headerAcvCol = headers.findIndex((h) => {
     const lower = h.toLowerCase()
     return lower === 'acv plus' || lower === 'acv+' || lower === 'acvplus'
   })
 
+  const headerDetectionSucceeded = headerAcctCol >= 0 && headerAcvCol >= 0
+
+  // ── Pass 2: pattern-based fallback ──────────────────────────────────────
+  let acctCol = headerAcctCol
+  let qtrCol = headerQtrCol
+  let closeDateCol = headerCloseDateCol
+  let partnerCol = headerPartnerCol
+  let acvCol = headerAcvCol
+  let usedPatternDetection = false
+
+  if (!headerDetectionSucceeded) {
+    const patternMapping = detectColumnsByPattern(rows)
+    if (patternMapping && patternMapping.accountName !== undefined && patternMapping.acvPlus !== undefined) {
+      acctCol = patternMapping.accountName ?? -1
+      qtrCol = patternMapping.quarter ?? -1
+      closeDateCol = patternMapping.closeDate ?? -1
+      partnerCol = patternMapping.partner ?? -1
+      acvCol = patternMapping.acvPlus ?? -1
+      usedPatternDetection = true
+
+      console.warn(`[ccsp] sheet ${spreadsheetId}: header detection failed — using pattern-based column detection. ` +
+        `Headers: [${headers.join(', ')}]. ` +
+        `Pattern mapping: acct=${acctCol}, qtr=${qtrCol}, date=${closeDateCol}, partner=${partnerCol}, acv=${acvCol}`)
+    }
+  }
+
+  // Log header/pattern mismatches when both are available (for debugging)
+  if (headerDetectionSucceeded && !usedPatternDetection) {
+    const patternMapping = detectColumnsByPattern(rows)
+    if (patternMapping) {
+      const mismatches: string[] = []
+      if (patternMapping.accountName !== undefined && patternMapping.accountName !== headerAcctCol)
+        mismatches.push(`acct: header=${headerAcctCol} pattern=${patternMapping.accountName}`)
+      if (patternMapping.acvPlus !== undefined && patternMapping.acvPlus !== headerAcvCol)
+        mismatches.push(`acv: header=${headerAcvCol} pattern=${patternMapping.acvPlus}`)
+      if (patternMapping.quarter !== undefined && patternMapping.quarter !== headerQtrCol)
+        mismatches.push(`qtr: header=${headerQtrCol} pattern=${patternMapping.quarter}`)
+      if (patternMapping.closeDate !== undefined && patternMapping.closeDate !== headerCloseDateCol)
+        mismatches.push(`date: header=${headerCloseDateCol} pattern=${patternMapping.closeDate}`)
+      if (patternMapping.partner !== undefined && patternMapping.partner !== headerPartnerCol)
+        mismatches.push(`partner: header=${headerPartnerCol} pattern=${patternMapping.partner}`)
+      if (mismatches.length > 0) {
+        console.warn(`[ccsp] sheet ${spreadsheetId}: header/pattern column mismatch detected: ${mismatches.join('; ')}. Using pattern-based mapping to correct misalignment.`)
+        // Override with pattern-detected columns when mismatch detected
+        acctCol = patternMapping.accountName ?? acctCol
+        qtrCol = patternMapping.quarter ?? qtrCol
+        closeDateCol = patternMapping.closeDate ?? closeDateCol
+        partnerCol = patternMapping.partner ?? partnerCol
+        acvCol = patternMapping.acvPlus ?? acvCol
+        usedPatternDetection = true
+      }
+    }
+  }
+
   if (acctCol < 0) {
-    console.warn(`[ccsp] sheet ${spreadsheetId}: no account name column found (tried: account name, account, customer name, company). Headers: [${headers.join(', ')}]. This usually means the Tableau scraper downloaded the summary view instead of Raw Data.`)
+    console.warn(`[ccsp] sheet ${spreadsheetId}: no account name column found (tried: header detection + pattern detection). Headers: [${headers.join(', ')}]. This usually means the Tableau scraper downloaded the summary view instead of Raw Data.`)
   }
   if (acvCol < 0) {
-    console.warn(`[ccsp] sheet ${spreadsheetId}: no ACV column found (tried: acv plus, acv+, acvplus). Headers: [${headers.join(', ')}]`)
+    console.warn(`[ccsp] sheet ${spreadsheetId}: no ACV column found (tried: header detection + pattern detection). Headers: [${headers.join(', ')}]`)
   }
   if (acctCol < 0 || acvCol < 0) return []
 

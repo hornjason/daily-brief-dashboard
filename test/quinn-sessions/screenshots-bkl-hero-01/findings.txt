@@ -1,5 +1,5 @@
-PASS 1: Step 0 renders above OAuth (Δy=329px)
-PASS 2: No East regions visible
+PASS 1: Step 0 renders above OAuth (Δy=391px)
+FAIL 2: found 1 East region row(s)
 PASS 2: West Commercial + TOLA checkboxes enabled
 PASS 3: 4 West pods shown after expand
 PASS 3 (collapse): pods hidden after second click

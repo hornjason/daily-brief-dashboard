@@ -16,7 +16,7 @@ Rules:
 - Security scan (Rook) is mandatory on every item close, not just security items
 
 Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-04-11 (BKL-INTEL-04 added + closed DONE; identifyIndustry now runs for no-data customers in early-exit path)
+Last update: 2026-05-07 (BKL-CCSP-HEADERS-01 DONE; pattern-based CCSP column detection prevents future Tableau format drift)
 
 ---
 
@@ -9781,3 +9781,36 @@ Fix options:
   D) Keep --grep-invert exclusions and document in release gate comments. Lowest effort, acceptable long-term if documented.
 Can we test: N/A — this is a test infrastructure gap, not a product bug.
 Decision: OPEN — Option D applied as v1.6.0 workaround. Recommended: fix item 3 (Option C) in v1.7.0 since it's a real stale test; Option B for items 1,2,4.
+
+### BKL-CCSP-HEADERS-01 | Tableau CCSP headers misaligned with data columns
+Status: ✅ DONE 2026-05-07
+Severity: Critical (blocks all CCSP data from loading)
+Discovered: 2026-05-07
+Root Cause: Tableau Raw Data CSV export has incorrect column headers that don't match data positions
+Evidence: Sheet ID 12FTNk61CFgY0_heeY2x9HGdHPdRtzjoN9CzfYrsV1X4 (Carolanne Farrell CCSP)
+- Header A1 = "Account Name" but A2 = "001f200001S9RH3AAN" (Salesforce ID)
+- Actual account names in column B ("Illumio, inc.")
+- Header C1 = "ACV+" but C2 = "WEST_COMM_CORP_NORTHWEST_TERR01" (territory)
+- Actual ACV values in column AE (position 31): "8.22"
+
+Impact: parseCcspRows() returns 0 records because:
+1. Finds "Account Name" at column A (correct header match)
+2. Reads column A data expecting account names, gets Salesforce IDs instead
+3. Finds "ACV+" at column C
+4. Reads column C data expecting numbers, gets territory strings → fails isNaN() check
+5. Skips all rows, returns empty array
+
+Decision: DONE — implemented pattern-based column detection with confidence scoring. System now samples first 10 data rows and identifies columns by content patterns (Salesforce ID regex, decimal ACV values, quarter format) rather than trusting header positions. When header/pattern mismatch detected, parser uses pattern-detected columns instead. Handles future Tableau format changes automatically.
+
+Implementation:
+- Added detectColumnsByPattern() function (ccsp-resolvers.ts lines 264-360)
+- Pattern matchers: isSalesforceId (15-18 char alphanumeric), isAcvValue (numeric with decimal boost), quarter/date recognition
+- Mismatch override logic in parseCcspRows() — uses pattern mapping when headers misalign
+- 11 new unit tests added (test/unit/ccsp-resolvers.test.ts); all 33 tests passing
+- Live test: 97 CCSP records parsed correctly from Carolanne's sheet (was 0 before fix)
+- ADR-017 documents architectural decision for resilient CCSP parsing
+
+Files:
+- src/lib/ccsp-resolvers.ts (parseCcspRows lines 234-280, detectColumnsByPattern lines 264-360)
+- test/unit/ccsp-resolvers.test.ts (11 new tests)
+- docs/adr/ADR-017-ccsp-column-pattern-detection.md

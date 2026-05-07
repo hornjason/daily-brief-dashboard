@@ -11,8 +11,10 @@ import {
   DriveFolderResolver,
   runResolverChain,
   parseCcspRows,
+  detectColumnsByPattern,
   type CcspResolverContext,
   type CcspSourceResolver,
+  type ColumnMapping,
 } from '../../src/lib/ccsp-resolvers.ts'
 
 // ── Sheets client mock ───────────────────────────────────────────────────────
@@ -252,10 +254,11 @@ describe('parseCcspRows', () => {
     expect(recs[0].accountName).toBe('BETA')
   })
 
-  test('returns [] when account-name column is missing', () => {
+  test('returns [] when neither headers nor patterns can identify columns', () => {
     const rows: unknown[][] = [
-      ['Other Header', 'ACV Plus'],
-      ['x', '100'],
+      ['Other Header', 'Another Header'],
+      ['x', 'y'],
+      ['a', 'b'],
     ]
     expect(parseCcspRows(rows, 'sheet1')).toEqual([])
   })
@@ -293,6 +296,182 @@ describe('parseCcspRows', () => {
     ]
     const recs = parseCcspRows(rows, 'sheet1')
     expect(recs.map((r) => r.cloudPartner)).toEqual(['AWS', 'Google', 'Microsoft', 'Other'])
+  })
+})
+
+// ── detectColumnsByPattern ──────────────────────────────────────────────────
+
+describe('detectColumnsByPattern', () => {
+  test('detects columns from correct Tableau format (headers match data)', () => {
+    const rows: unknown[][] = [
+      ['Account Name', 'Fiscal Year Quarter', 'Opportunity Close Date', 'Financial Partner', 'ACV Plus'],
+      ['Crowdstrike, Inc.', '2025-Q1', '3/24/2025', 'Amazon AWS', '$12,345.67'],
+      ['Dropbox, Inc.', '2025-Q2', '6/25/2025', 'Google Cloud', '1,234.56'],
+    ]
+    const mapping = detectColumnsByPattern(rows)
+    expect(mapping).not.toBeNull()
+    expect(mapping!.accountName).toBe(0)
+    expect(mapping!.quarter).toBe(1)
+    expect(mapping!.closeDate).toBe(2)
+    expect(mapping!.partner).toBe(3)
+    expect(mapping!.acvPlus).toBe(4)
+  })
+
+  test('detects columns when headers are misaligned (broken Tableau export)', () => {
+    // Simulates when Tableau exports summary view — headers shifted but data patterns intact
+    const rows: unknown[][] = [
+      ['Summary', 'View', 'Report', 'Generated', 'By Tableau'],
+      ['Crowdstrike, Inc.', '2025-Q4', '12/30/2025', 'Microsoft Azure', '2215.86'],
+      ['Dropbox, Inc.', '2025-Q4', '12/23/2025', 'Amazon AWS', '2264.12'],
+      ['Illumio, Inc.', '2025-Q3', '9/29/2025', 'AWS', '30270.24'],
+    ]
+    const mapping = detectColumnsByPattern(rows)
+    expect(mapping).not.toBeNull()
+    expect(mapping!.accountName).toBe(0)
+    expect(mapping!.quarter).toBe(1)
+    expect(mapping!.closeDate).toBe(2)
+    expect(mapping!.partner).toBe(3)
+    expect(mapping!.acvPlus).toBe(4)
+  })
+
+  test('detects columns in non-standard order', () => {
+    const rows: unknown[][] = [
+      ['Col A', 'Col B', 'Col C', 'Col D', 'Col E'],
+      ['$5,000.00', 'Crowdstrike, Inc.', 'Amazon AWS', '2025-Q1', '3/24/2025'],
+      ['$1,234.56', 'Dropbox, Inc.', 'Google Cloud', '2025-Q2', '6/25/2025'],
+    ]
+    const mapping = detectColumnsByPattern(rows)
+    expect(mapping).not.toBeNull()
+    expect(mapping!.acvPlus).toBe(0)
+    expect(mapping!.accountName).toBe(1)
+    expect(mapping!.partner).toBe(2)
+    expect(mapping!.quarter).toBe(3)
+    expect(mapping!.closeDate).toBe(4)
+  })
+
+  test('handles sparse data (some columns empty in some rows)', () => {
+    const rows: unknown[][] = [
+      ['Account Name', 'Quarter', 'Close Date', 'Partner', 'ACV Plus'],
+      ['Crowdstrike, Inc.', '2025-Q1', '', 'Amazon AWS', '12345.67'],
+      ['Dropbox, Inc.', '2025-Q2', '6/25/2025', '', '1234.56'],
+      ['Illumio, Inc.', '', '9/29/2025', 'Microsoft Azure', '30270.24'],
+    ]
+    const mapping = detectColumnsByPattern(rows)
+    expect(mapping).not.toBeNull()
+    // Account name and ACV should still be detectable even with sparse other columns
+    expect(mapping!.accountName).toBe(0)
+    expect(mapping!.acvPlus).toBe(4)
+  })
+
+  test('returns null when data rows are empty', () => {
+    const rows: unknown[][] = [
+      ['Account Name', 'Quarter'],
+    ]
+    expect(detectColumnsByPattern(rows)).toBeNull()
+  })
+
+  test('returns null when no recognizable patterns found', () => {
+    const rows: unknown[][] = [
+      ['A', 'B', 'C'],
+      ['x', 'y', 'z'],
+      ['a', 'b', 'c'],
+    ]
+    expect(detectColumnsByPattern(rows)).toBeNull()
+  })
+
+  test('handles rows with different column counts', () => {
+    const rows: unknown[][] = [
+      ['H1', 'H2', 'H3', 'H4', 'H5'],
+      ['Crowdstrike, Inc.', '2025-Q1', '3/24/2025'],  // short row
+      ['Dropbox, Inc.', '2025-Q2', '6/25/2025', 'Amazon AWS', '1234.56'],
+    ]
+    const mapping = detectColumnsByPattern(rows)
+    // Should still detect what it can from available data
+    expect(mapping).not.toBeNull()
+    expect(mapping!.accountName).toBe(0)
+  })
+
+  test('detects date patterns in M/D/YYYY format', () => {
+    const rows: unknown[][] = [
+      ['H1', 'H2', 'H3'],
+      ['Crowdstrike, Inc.', '12/30/2025', '1234.56'],
+      ['Dropbox, Inc.', '1/5/2025', '5678.90'],
+      ['Illumio, Inc.', '9/29/2025', '9012.34'],
+    ]
+    const mapping = detectColumnsByPattern(rows)
+    expect(mapping).not.toBeNull()
+    expect(mapping!.closeDate).toBe(1)
+    expect(mapping!.accountName).toBe(0)
+    expect(mapping!.acvPlus).toBe(2)
+  })
+
+  test('detects fiscal quarter pattern YYYY-QN', () => {
+    const rows: unknown[][] = [
+      ['H1', 'H2', 'H3'],
+      ['Crowdstrike, Inc.', '2025-Q1', '100.00'],
+      ['Dropbox, Inc.', '2025-Q4', '200.00'],
+      ['Illumio, Inc.', '2026-Q2', '300.00'],
+    ]
+    const mapping = detectColumnsByPattern(rows)
+    expect(mapping).not.toBeNull()
+    expect(mapping!.quarter).toBe(1)
+    expect(mapping!.accountName).toBe(0)
+    expect(mapping!.acvPlus).toBe(2)
+  })
+
+  test('requires minimum confidence threshold (at least 50% of rows match)', () => {
+    const rows: unknown[][] = [
+      ['H1', 'H2', 'H3'],
+      ['2025-Q1', 'maybe date', '100'],
+      ['not quarter', 'not date', 'not number'],
+      ['not quarter', 'not date', 'not number'],
+      ['not quarter', 'not date', 'not number'],
+      ['not quarter', 'not date', 'not number'],
+    ]
+    const mapping = detectColumnsByPattern(rows)
+    // Quarter only matched 1/5 = 20% — below threshold
+    expect(mapping?.quarter).toBeUndefined()
+  })
+})
+
+// ── parseCcspRows with pattern detection ────────────────────────────────────
+
+describe('parseCcspRows — pattern detection fallback', () => {
+  test('parses correctly when headers match (no fallback needed)', () => {
+    const rows: unknown[][] = [
+      ['Account Name', 'Fiscal Year Quarter', 'Opportunity Close Date', 'Financial Partner', 'ACV Plus'],
+      ['Crowdstrike, Inc.', '2025-Q1', '3/24/2025', 'Amazon AWS', '12345.67'],
+    ]
+    const recs = parseCcspRows(rows, 'sheet1', 'Alice')
+    expect(recs).toHaveLength(1)
+    expect(recs[0].accountName).toBe('Crowdstrike, Inc.')
+    expect(recs[0].acvPlus).toBe(12345.67)
+  })
+
+  test('falls back to pattern detection when headers are wrong', () => {
+    // Headers don't match any known names, but data patterns are clear
+    const rows: unknown[][] = [
+      ['Summary', 'Period', 'Date', 'Cloud', 'Revenue'],
+      ['Crowdstrike, Inc.', '2025-Q1', '3/24/2025', 'Amazon AWS', '12345.67'],
+      ['Dropbox, Inc.', '2025-Q2', '6/25/2025', 'Google Cloud', '1234.56'],
+    ]
+    const recs = parseCcspRows(rows, 'sheet1')
+    expect(recs).toHaveLength(2)
+    expect(recs[0].accountName).toBe('Crowdstrike, Inc.')
+    expect(recs[0].quarter).toBe('2025-Q1')
+    expect(recs[0].closeDate).toBe('3/24/2025')
+    expect(recs[0].cloudPartner).toBe('AWS')
+    expect(recs[0].acvPlus).toBe(12345.67)
+  })
+
+  test('pattern detection handles $ and , in ACV values', () => {
+    const rows: unknown[][] = [
+      ['X', 'Y', 'Z'],
+      ['Crowdstrike, Inc.', '$12,345.67', '2025-Q1'],
+    ]
+    const recs = parseCcspRows(rows, 'sheet1')
+    expect(recs).toHaveLength(1)
+    expect(recs[0].acvPlus).toBe(12345.67)
   })
 })
 
