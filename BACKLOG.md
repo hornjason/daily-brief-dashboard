@@ -250,6 +250,19 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Scope: Hero install L3-only. RH Cases is the only scraper available on hero (no CCSP, no SF pipeline). Controls only need to support rh-cases scraper.
 - Related: BKL-HERO-INTEL-CANCEL-04 (similar cancel button need for intelligence batch)
 
+### BKL-HERO-BANNER-POD-06 — Dashboard banner shows only last onboarded POD name when multiple PODs configured
+- Status: 🔴 OPEN
+- Priority: P3 (UI display bug, data aggregation works correctly)
+- Source: v1.7.0-rc1 testing 2026-05-08 (Jason)
+- Files: dashboard/src/pages/DashboardPage.tsx (banner component rendering logic), possibly src/dashboard-routes.ts (AE aggregate data endpoint)
+- Description: When multiple AEs from different PODs/regions are onboarded (e.g., one from Northwest Pod, one from East Commercial), the dashboard banner only displays the last onboarded POD name. Screenshot shows "Northwest Pod: 26 customers · 0 open cases · $649K closing in 30d · 12 renewals expiring" but the data aggregates across multiple PODs (evidenced by two AE filter buttons: "Carolanne 11" and "Jon 15" suggesting different territories). The aggregated metrics (customer count, cases, pipeline) are correct — only the POD label is wrong.
+- Evidence: Screenshot from rc1 testing shows banner with "Northwest Pod:" label while AE filter buttons suggest multiple PODs loaded
+- Decision: OPEN — cosmetic UI bug, data is correct so not blocking release
+- Can we test: YES — Bootstrap with 2+ AEs from different PODs (e.g., West Commercial + East Commercial), verify banner shows appropriate label (either "Multiple PODs" or lists both, not just the last one)
+- Fix approach: (1) Detect when AEs span multiple PODs, (2) Update banner label to either say "Multiple PODs:" or list POD names if only 2-3, (3) Alternative: remove POD label entirely and just show aggregate metrics without POD context
+- Scope: Hero install multi-POD configurations only (single POD setups are unaffected)
+- Related: BKL-HERO-AE-SELECT-02 (territory/POD selection logic), dashboard banner rendering
+
 ### BKL-HERO-VNC-PORT-06 — docker-compose.yml exposes VNC port 6080 but hero image has no VNC
 - Status: ✅ DONE 2026-05-07
 - Priority: P3 (cosmetic, no security impact — port binding is localhost-only)
