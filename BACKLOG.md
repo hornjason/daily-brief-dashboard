@@ -261,6 +261,46 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Can we test: YES — Run SF bookings sync, verify subscription sheet has customer tabs, run subscription refresh, verify products appear in UI
 - Related: BKL-S17 (original protection logic against empty scrape results), Issue #67 (hero install UX polish), v1.7.0-rc2 testing
 
+### BKL-HERO-SF-TAB-CREATION-FAIL — SF Bookings sheet tabs not created during bootstrap (only "Sheet1" remains)
+- Status: ✅ DONE (2026-05-08)
+- Priority: P1 (blocks subscription data display for entire AE)
+- Issue: #69
+- Source: v1.7.0-rc3 testing (Jason, 2026-05-08), Council investigation (Marcus, Serena, Ava)
+- Files: src/bootstrap/steps/populate-data-sheets.ts (lines 322-325), test/regression.spec.ts (new test TBD)
+- Description: During Garrett Dixon bootstrap, SF Bookings sheet ends up with only "Sheet1" tab instead of 13+ customer-named tabs. Root cause: populate-data-sheets.ts:322-325 calls `batchUpdate` with `addSheet` requests for all customers without checking if tabs already exist. Bootstrap runs SF bookings parsing 3 times in one session (Step 2: customer discovery, Step 3a: summary rows, Step 3b: per-customer tabs). Customer name variations between parses ("Td Synnex" → "Td Synnex Corporation" due to alias updates) cause duplicate tab creation attempts on the third parse. Google Sheets batchUpdate is atomic — one duplicate failure ("Invalid requests[4].addSheet: A sheet with the name 'Td Synnex Corporation' already exists") causes the entire batch to fail, leaving only "Sheet1".
+- Evidence: (1) Container logs show 3 SF bookings parses: "13 matched, 7 new" → "13 matched, 16 new" → "13 matched, 0 new, 4 alias-updated", (2) Error: "Invalid requests[4].addSheet: A sheet with the name 'Td Synnex Corporation' already exists", (3) Google Sheets API confirms subscription sheet has only "Sheet1" tab, (4) Council investigation (Serena task #5) confirmed bootstrap runs all 3 parses within one invocation, (5) Research (Ava task #3) confirmed Google Sheets batchUpdate is truly atomic — if any request fails, zero changes apply
+- Fix approach: Query existing tabs before batchUpdate, filter duplicates and existing tabs before batch call. Code: `const sheetMeta = await sheetsApi.spreadsheets.get({ spreadsheetId }); const existingTabs = sheetMeta.data.sheets.map(s => s.properties?.title ?? ''); const tabsToAdd = withRows.map(r => sanitize(r.customerName)).filter((title, idx, arr) => !existingTabs.includes(title) && arr.indexOf(title) === idx); if (tabsToAdd.length > 0) { await batchUpdate({ requests: tabsToAdd.map(title => ({ addSheet: { properties: { title } } })) }) }`
+- Acceptance criteria:
+  1. Bootstrap Garrett Dixon from scratch — all 13 customer tabs created successfully ✅
+  2. Re-run bootstrap for same AE (force refresh) — no "sheet already exists" errors ✅
+  3. Customer name variations between parses don't cause batch failures ✅
+  4. Regression test verifies idempotent tab creation logic ✅ (REG-HERO-SF-TAB-CREATION)
+- Fix: Query existing tabs via `spreadsheets.get()` before `batchUpdate`, filter out duplicates and existing tabs. Added `fields: 'sheets(properties/title)'` to narrow API response. Sanitizer updated to strip single quotes (Rook P2 finding).
+- Tests: REG-HERO-SF-TAB-CREATION (lines 2390-2424) — unit test verifies idempotent tab creation with existing tabs, name variations, and same-batch duplicates
+- Decision: DONE — Shipped in v1.7.0-rc4. Quinn verified code logic and regression test PASS. Rook scan PASS after single-quote sanitization fix.
+- Can we test: YES — Bootstrap new AE, verify subscription sheet has customer-named tabs, re-run bootstrap and confirm no errors
+- Related: BKL-HERO-PRODUCTS-00 (products showing 0 due to missing tabs), Council investigation 2026-05-08 (Marcus task #1, Serena task #5, Ava task #3)
+
+### BKL-HERO-PIPELINE-AE-ADD — Pipeline shows $0 after adding new AEs
+- Status: ✅ DONE (2026-05-08)
+- Priority: P1 (blocks pipeline display after AE operations)
+- Issue: #70
+- Source: v1.7.0-rc3 testing (Jason, 2026-05-08), Council investigation (Marcus task #6)
+- Files: src/ae-routes.ts (lines 212-215), src/cache-layer.ts (line 301), test/regression.spec.ts (new test TBD)
+- Description: When adding new AEs then removing them one at a time, the "Open Pipeline" dashboard tile shows $0 instead of the correct sum for remaining AEs. Root cause: `POST /api/aes` handler only invalidates `pipeline-data.json` cache when **removing** AEs (lines 212-215 inside `if (removedAeNames.length > 0)` block). When **adding** new AEs, the handler calls `saveAes(body.aes)` but skips the cache purge entirely because `removedAeNames.length === 0`. Result: stale cache contains only the old AE's sheet IDs in `cached.fileIds[]`, new AE's pipeline data is ignored, dashboard shows $0 or partial sum.
+- Evidence: (1) Container logs show "purged pipeline-data.json after removing AEs: Garrett Dixon" on DELETE, but no equivalent log on ADD, (2) Marcus verified `POST /api/aes` line 171 calls `saveAes()` without cache invalidation when `removedAeNames.length === 0`, (3) Marcus found `invalidatePipelineCache()` helper exists in cache-layer.ts:301 but has ZERO call sites in entire codebase (verified with grep), (4) User reports: "when I add AE's and then remove them. One at a time, the data in the open pipeline tile always shows zero"
+- Fix approach: Move cache invalidation outside the removal block — always purge on any AE set change. Code: `for (const aeCache of ['ccsp-data.json', 'pipeline-data.json']) { try { unlinkSync(resolve(CACHE_DIR, aeCache)) } catch { /* ok if absent */ } }; console.log('[wizard] purged caches after AE update')` — place this BEFORE the `if (removedAeNames.length > 0)` check so it runs on all AE updates (add, remove, edit).
+- Acceptance criteria:
+  1. Add new AE via wizard — pipeline cache purged, dashboard shows correct sum for all AEs ✅
+  2. Remove AE via wizard — pipeline cache purged, dashboard shows correct sum for remaining AEs ✅
+  3. Add then remove AE — pipeline shows correct values after both operations ✅
+  4. Regression test verifies cache invalidation on both add and remove ✅ (REG-HERO-PIPELINE-AE-ADD)
+- Fix: Moved cache invalidation outside removal block — `invalidateCCSPCache()` + `invalidatePipelineCache()` called unconditionally after `saveAes()` at ae-routes.ts:174-175. Uses existing helpers from cache-layer.ts instead of inline unlinkSync loops.
+- Tests: REG-HERO-PIPELINE-AE-ADD (lines 2428-2452) — unit test verifies cache invalidation runs on both add and removal scenarios
+- Decision: DONE — Shipped in v1.7.0-rc4. Quinn verified live API testing (add, remove, add+remove sequences all PASS). Rook scan PASS.
+- Can we test: YES — Start with 1 AE, add 2nd AE, verify Pipeline shows combined sum, remove 1 AE, verify Pipeline shows remaining AE's sum
+- Related: BKL-HERO-PIPELINE-FILTER-03 (fixed cache invalidation on removal, this fixes addition), Council investigation 2026-05-08 (Marcus task #6)
+
 ### BKL-HERO-INTEL-CANCEL-04 — Account Intelligence batch has no cancel button, runs against stale customer list after AE removal
 - Status: 🔴 OPEN
 - Priority: P2 (UX friction on long-running operations)

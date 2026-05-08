@@ -22,7 +22,7 @@ import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { AE, Customer } from './types.ts'
 import { aes, customers, saveAes, setCustomers, CUSTOMERS_PATH } from './server-state.ts'
-import { toSlug } from './cache-layer.ts'
+import { toSlug, invalidateCCSPCache, invalidatePipelineCache } from './cache-layer.ts'
 import { sanitizeErr, sanitizeText } from './utils.ts'
 import { normalizeSettings, getRegionById } from './region-config.ts'
 import { writeSettingsToDrive, resolveConfigFolderId } from './drive-config-sync.ts'
@@ -169,6 +169,11 @@ export function createAeRouter(): Hono {
         : []
 
       saveAes(body.aes)
+
+      // BKL-HERO-PIPELINE-AE-ADD (Issue #70): stale cache contains only old AE sheet IDs → dashboard shows $0
+      invalidateCCSPCache()
+      invalidatePipelineCache()
+
       // Mark customers belonging to deleted AEs as inactive (preserve if they have data)
       if (removedAeNames.length > 0) {
         try {
@@ -207,11 +212,6 @@ export function createAeRouter(): Hono {
               try { unlinkSync(resolve(CACHE_DIR, file)) } catch { /* already gone */ }
               console.log(`[wizard] purged cache file for removed AE customer: ${file}`)
             }
-          }
-          // AE-level caches are stale after AE removal — delete so next sync rebuilds clean
-          for (const aeCache of ['ccsp-data.json', 'pipeline-data.json']) {
-            try { unlinkSync(resolve(CACHE_DIR, aeCache)) } catch { /* ok if absent */ }
-            console.log(`[wizard] purged ${aeCache} after removing AEs: ${removedAeNames.join(', ')}`)
           }
           // Morning synthesis is stale after AE removal
           try { unlinkSync(resolve(CACHE_DIR, 'morning-synthesis.json')) } catch { /* ok */ }

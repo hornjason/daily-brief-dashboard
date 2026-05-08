@@ -316,14 +316,30 @@ export const populateDataSheetsStep: BootstrapStepDef = {
         const withRows = results.filter(r => r.rows.length > 0)
 
         if (withRows.length > 0) {
-          // Sanitize tab names: Google Sheets disallows \ / * [ ] : ? and > 100 chars
-          const sanitize = (name: string) => name.replace(/[\\/*[\]:?]/g, '-').slice(0, 100)
+          // Sanitize tab names: Google Sheets disallows \ / * [ ] : ? ' and > 100 chars
+          const sanitize = (name: string) => name.replace(/[\\/*[\]:?']/g, '-').slice(0, 100)
 
-          await sheetsApi.spreadsheets.batchUpdate({
+          // BKL-HERO-SF-TAB-CREATION-FAIL (Issue #69): Bootstrap runs SF bookings parsing 3x;
+          // customer name variations cause duplicate tab attempts; Sheets batchUpdate is atomic — one duplicate fails the entire batch
+          const sheetMeta = await sheetsApi.spreadsheets.get({
             spreadsheetId: l3Result.sfBookingsSheetId,
-            requestBody: { requests: withRows.map(r => ({ addSheet: { properties: { title: sanitize(r.customerName) } } })) },
+            fields: 'sheets(properties/title)'
           })
+          const existingTabs = (sheetMeta.data.sheets ?? []).map(s => s.properties?.title ?? '')
 
+          const tabsToAdd = withRows
+            .map(r => sanitize(r.customerName))
+            .filter((title, idx, arr) => !existingTabs.includes(title) && arr.indexOf(title) === idx)
+
+          if (tabsToAdd.length > 0) {
+            await sheetsApi.spreadsheets.batchUpdate({
+              spreadsheetId: l3Result.sfBookingsSheetId,
+              requestBody: { requests: tabsToAdd.map(title => ({ addSheet: { properties: { title } } })) },
+            })
+            console.log(`[auto-bootstrap] SF Bookings: created ${tabsToAdd.length} new customer tabs`)
+          }
+
+          // Write data to all tabs (existing + newly created)
           for (const r of withRows) {
             const headers = Object.keys(r.rows[0])
             const dataRows: string[][] = [headers, ...r.rows.map(row => headers.map(h => row[h] ?? ''))]
