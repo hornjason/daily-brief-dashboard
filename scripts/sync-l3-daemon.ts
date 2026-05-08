@@ -58,8 +58,48 @@ export function getMsUntil530amET(): number {
 // ── SSO keepalive ─────────────────────────────────────────────────────────────
 
 /**
+ * Search for a VISIBLE element across all frames (mirrors ccsp-tableau-fetch.ts findEl).
+ * Tableau renders viz inside iframes — page.$() only searches main document.
+ */
+async function findEl(page: any, selector: string): Promise<any> {
+  for (const frame of page.frames()) {
+    try {
+      const el = await frame.$(selector)
+      if (el && (await el.isVisible().catch(() => false))) return el
+    } catch {
+      /* frame may have navigated away */
+    }
+  }
+  return null
+}
+
+/**
+ * Wait for Tableau viz to render — mirrors ccsp-tableau-fetch.ts waitForVizReady.
+ * Returns true if Raw Data tab appears (viz rendered), false if timeout.
+ */
+async function waitForVizReady(page: any, maxWaitMs = 45_000): Promise<boolean> {
+  const start = Date.now()
+  while (Date.now() - start < maxWaitMs) {
+    const el = await findEl(page, 'text="Raw Data"')
+    if (el) {
+      console.log(`[sync-daemon] keepalive: viz ready — Raw Data tab visible (${Math.round((Date.now() - start) / 1000)}s)`)
+      return true
+    }
+    await page.waitForTimeout(1_000)
+  }
+  console.warn(`[sync-daemon] keepalive: viz not ready after ${maxWaitMs / 1000}s`)
+  return false
+}
+
+/**
  * Visit Tableau and SF Lightning home pages to refresh SSO cookies.
- * Throws on navigation redirect to login — indicates session is dead.
+ * Mirrors the exact validation flow from ccsp-tableau-fetch.ts fetchPodCsv:
+ *   1. Navigate to viz URL
+ *   2. Wait for networkidle (non-fatal)
+ *   3. Check for login wall (URL + form detection)
+ *   4. Wait for viz to render (Raw Data tab visible)
+ *   5. Navigate to SF
+ * Throws on login wall or viz render failure.
  */
 async function doKeepalive(): Promise<void> {
   const ctx = getScrapeContext()
@@ -72,33 +112,44 @@ async function doKeepalive(): Promise<void> {
     // Tableau keepalive — hit the actual viz page (/t/ embed URL) not the dashboard shell
     console.log('[sync-daemon] keepalive: navigating Tableau viz…')
     const tableauUrl = process.env.TABLEAU_VIZ_URL ?? TABLEAU_VIZ_URL
-    const tableauResp = await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    const tableauFinal = page.url()
-    if (tableauFinal.includes('signin') || tableauFinal.includes('auth') || (tableauResp?.status() ?? 200) >= 400) {
-      throw new Error(`Tableau session expired — redirected to ${tableauFinal}`)
-    }
-    // BKL-CCSP-RETRY-02: Tableau can serve the viz page with stale cookies without
-    // redirecting — the MFA wall only appears on viz endpoints. Check for login form
-    // presence (same selectors scrapeOneAe uses) so keepalive catches this case.
-    const hasLoginForm = await page
-      .$('input[type="password"], input#username, [data-testid="login"]')
-      .then(el => !!el)
-      .catch(() => false)
-    if (hasLoginForm) {
-      throw new Error('Tableau auth expired')
-    }
-    // Wait a few seconds for the viz to actually render (not just DOM loaded)
-    await page.waitForTimeout(5_000)
+    await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {
+      console.warn('[sync-daemon] keepalive: networkidle timed out — continuing anyway')
+    })
+    await page.waitForTimeout(3_000)
 
-    // SF keepalive
+    // Detect login wall — mirrors ccsp-tableau-fetch.ts (URL checks + form detection)
+    const currentUrl = page.url()
+    const isLoginPage =
+      !currentUrl.includes('10ay.online.tableau.com') ||
+      currentUrl.includes('/auth') ||
+      currentUrl.includes('/login') ||
+      (await page
+        .$('input[type="password"], input#username, [data-testid="login"]')
+        .then(el => !!el)
+        .catch(() => false))
+
+    if (isLoginPage) {
+      throw new Error(`Tableau session expired — login required (URL: ${currentUrl})`)
+    }
+
+    // Wait for viz to render (Raw Data tab visible) — same as CCSP scraper
+    console.log('[sync-daemon] keepalive: waiting for viz to render…')
+    const vizReady = await waitForVizReady(page)
+    if (!vizReady) {
+      throw new Error('Tableau viz failed to render — Raw Data tab never appeared')
+    }
+
+    // SF keepalive — use domcontentloaded (faster, networkidle times out)
     console.log('[sync-daemon] keepalive: navigating Salesforce…')
-    await page.goto(SF_BASE_URL, { waitUntil: 'networkidle', timeout: 30_000 })
+    await page.goto(SF_BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.waitForTimeout(2_000)  // brief wait for SF to settle
     const sfFinal = page.url()
     if (sfFinal.includes('login') || sfFinal.includes('sso') || sfFinal.includes('auth/login')) {
       throw new Error(`SF session expired — redirected to ${sfFinal}`)
     }
 
-    console.log('[sync-daemon] keepalive: OK (Tableau + SF)')
+    console.log('[sync-daemon] keepalive: OK (Tableau viz rendered + SF home loaded)')
   } finally {
     // VNC observation delay — wait 15s before closing so you can watch the navigation
     console.log('[sync-daemon] keepalive: holding page open for 15s (VNC observation)…')
