@@ -5,7 +5,7 @@ export const AESchema = z.object({
   driveFolderId: z.string(),
   sfReportId: z.string(),
   tableauTerritories: z.array(z.string()),
-  supportableSheetId: z.string(),
+  supportableSheetId: z.string().optional(),
   pipelineSheetId: z.string(),
   ccspSheetId: z.string(),
 }).passthrough()
