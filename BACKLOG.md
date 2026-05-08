@@ -185,6 +185,119 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Shared quota risk: All hero installs share jhorn-pai Vertex AI quota. If 10+ concurrent hero installs run feature extraction simultaneously, could hit quota limits. Acceptable for demo/test purposes; production multi-tenant deployments should use wizard-guided GCP project setup (Option B, deferred).
 - Related: settings.json also updated with new region/POD configuration and will be baked into release assets alongside .env.example going forward.
 
+### BKL-HERO-MORNING-DEFAULT-01 — Morning Summary defaults to collapsed view instead of expanded "Today's Brief"
+- Status: 🔴 OPEN
+- Priority: P2 (UX friction on first load)
+- Source: Hero install user testing 2026-05-07 (Jason)
+- Files: dashboard/src/components/MorningSummary.tsx (lines 75, 83-84)
+- Description: Morning Summary card defaults to collapsed view (single line with compact bullets) when there are more than 3 signals. Auto-collapse logic at line 84 runs after data loads and collapses the view when `signals.length > 3`. User wants the full "Today's Brief" expanded view (showing Priority Today / Actions / Watch sections) to be the default state regardless of signal count. Current behavior shows collapsed view first, requiring user to click "Today's Brief" chip or chevron to see the full summary.
+- Evidence: Screenshots show "38 accounts need attention" triggering auto-collapse. User explicitly requested: "morning summary to default to 'Today's Brief' and not [collapsed view]"
+- Decision: OPEN — waiting to batch with other hero install UI bugs per user request
+- Can we test: YES — Load dashboard with >3 signals, verify Morning Summary renders in expanded state by default
+- Related: BKL-UX-morning-min (original request to auto-collapse when signals > 3; this reverses that decision)
+
+### BKL-HERO-AE-SELECT-02 — East Commercial AE selection dropdown broken (value collision on territory number)
+- Status: ✅ DONE (2026-05-08) — Code complete, tests passing, ready for v1.7.0-rc1
+- Priority: P1 (blocks East Commercial POD configuration on hero installs)
+- Source: Hero install user testing 2026-05-07 (Jason)
+- Files: src/dashboard-routes.ts (lines 843, 932, 1119 — three regex fixes), test/regression.spec.ts (REG-HERO-AE-SELECT-02 + REG-HERO-AE-SELECT-02b), test/api/territory.spec.ts (@live test)
+- Description: East Commercial POD AE selection dropdown shows all AEs but selecting any AE always falls back to the first one (territory 01). Root cause: Backend territory parser in /api/territory-names and /api/territory-lookup endpoints used regex `/(\d+)/` to extract territory number from codes like "East_Comm_Corp_Pod1_Terr01". This regex matches the first digit sequence, which is "1" from "Pod1" instead of "01" from "Terr01". All East Commercial AEs return `{ num: "01", aeName: "..." }` causing dropdown value collision. Frontend dropdown uses `num` as the option value, so all options have `value="01"`, causing selection to reset to first match.
+- Evidence: Screenshot shows East Commercial POD01 (Rough Riders) with AEs "01 — Brandt Gribben", "01 — Mark Luciano", "01 — John Dellorco" all sharing territory "01". Selecting Mark or John immediately reverts to Brandt because all three share `value="01"`. Backend /api/territory-names response confirmed returning `num: "01"` for all POD1 AEs.
+- Fix: Changed regex from `/(\d+)/` to `/Terr(\d+)/i` at three locations in src/dashboard-routes.ts (lines 843, 932, 1119). This explicitly extracts the number after "Terr" so East_Comm_Corp_Pod1_Terr01 → "01", Terr02 → "02", etc. No frontend changes needed — dropdown already uses `num` as value and displays correctly once backend returns unique numbers.
+- Tests: REG-HERO-AE-SELECT-02 (source-level regex verification), REG-HERO-AE-SELECT-02b (unit test), @live BKL-HERO-AE-SELECT-02 (API integration test) — all passing
+- Scope: Affects POD01-POD05 in East Commercial region. West and TOLA regions unaffected (they have unique territory numbers per AE).
+- Decision: DONE — Phase 1 of Issue #67 (Hero Install UX Polish v1.7.0)
+- Can we test: YES — Setup wizard East Commercial POD01, select Mark Luciano from AE dropdown, verify selection persists and doesn't revert to Brandt Gribben
+- Related: BKL-TERRITORY-EAST-COMM-PARSE-01 (territory code parsing for East Commercial model)
+
+### BKL-HERO-PIPELINE-FILTER-03 — Pipeline shows $0 after removing AEs even though CCSP shows data for remaining AEs
+- Status: ✅ DONE (2026-05-08) — Code complete, tests passing, ready for v1.7.0-rc1
+- Priority: P2 (data visibility gap after AE list changes)
+- Source: Hero install user testing 2026-05-07 (Jason)
+- Files: src/cache-layer.ts (added isPipelineCacheStale + invalidatePipelineCache after line 278), src/customer-routes.ts (lines 350-354 — added staleness check before cache use), test/regression/cache.spec.ts (REG-PIPELINE-01-a through REG-PIPELINE-01-e)
+- Description: After bootstrapping with a full POD, then removing most AEs from the setup wizard (keeping only 2 of original N AEs), the Open Pipeline section shows "$0 Total Open ACV" and "No opportunities" while the Cloud Spend (CCSP) section correctly shows data for the two remaining AEs (Carolanne $1.7M, Cameron $665K). Root cause: Pipeline cache (pipeline.json) contains records from the original full POD bootstrap with owner names of the deleted AEs. The /api/pipeline endpoint calls filterToAEs which filters pipeline records to only include those matching currently configured AEs by territory or owner name match. When most AEs are deleted, their pipeline records are filtered out, leaving $0 even though the remaining AEs have legitimate customers and CCSP data.
+- Evidence: (1) Setup wizard shows "2 AEs configured, 19 customers" (Carolanne Farrell 11 customers, Cameron Floyd 8 customers), (2) Open Pipeline card shows "$0 - 0 opportunities", "No opportunities" in top opps list, (3) Cloud Spend card shows both Carolanne ($1.7M, 10 accounts) and Cameron ($665K, 10 accounts) with data and customer breakdowns, (4) Both sections show "Synced 43m ago" timestamp indicating fresh data
+- Fix: Implemented smart cache invalidation matching CCSP's BKL-CCSP-03 pattern. Added `isPipelineCacheStale(currentSheetIds: string[]): boolean` and `invalidatePipelineCache(): void` to cache-layer.ts. Integrated staleness check into /api/pipeline endpoint: before serving cached data, compares current AE pipeline sheet IDs against cached fileIds. If AE set changed (count mismatch or ID mismatch), cache is treated as stale and fresh fetch is triggered instead of filtering stale data to $0.
+- Tests: REG-PIPELINE-01-a through REG-PIPELINE-01-e (5 regression tests: export verification, structural mirror check, unit test) — all passing
+- Decision: DONE — Phase 1 of Issue #67 (Hero Install UX Polish v1.7.0)
+- Can we test: YES — Bootstrap with full POD, delete all but 2 AEs in setup wizard, verify pipeline section shows aggregate data for remaining 2 AEs instead of $0
+- Fix approach options: (A) Invalidate pipeline cache when AE list changes (trigger re-fetch on next /api/pipeline call), (B) Re-associate cached pipeline records with remaining AEs if customers overlap, (C) Show warning "Pipeline data may be stale after AE changes — click refresh" when aes.json modification time > pipeline cache time
+- Related: BKL-CASES-MATCH-01 (similar active-customer filtering for support cases), BKL-CACHE-STALE-01 (account number filtering for cases after POD changes)
+
+### BKL-HERO-INTEL-CANCEL-04 — Account Intelligence batch has no cancel button, runs against stale customer list after AE removal
+- Status: 🔴 OPEN
+- Priority: P2 (UX friction on long-running operations)
+- Source: Hero install user testing 2026-05-07 (Jason)
+- Files: dashboard/src/pages/AdminPage.tsx (lines 430-530), src/intelligence-routes.ts
+- Description: Admin panel "Generate All Account Intelligence" batch shows "Running..." button when active but provides no cancel button. User removed most AEs from setup wizard (keeping 2 AEs with 19 customers), but the batch continues processing the original 110-customer list from before the deletion. Progress shows "46 / 110 customers (42%) ~25 min remaining". User is stuck waiting ~25 minutes for a batch that's processing mostly-deleted customers, with no way to stop it. The batch should either: (A) auto-detect when customer list changes mid-run and cancel itself, or (B) provide a cancel button so users can manually stop long-running operations.
+- Evidence: Screenshot shows batch at "46 / 110 customers" with "Running..." button disabled. Setup wizard earlier showed "2 AEs configured, 19 customers" — 91 customers in the batch no longer exist.
+- Decision: OPEN — waiting to batch with other hero install UI bugs per user request
+- Can we test: YES — Start intelligence batch with N customers, remove AEs mid-batch to reduce to M customers, verify either: (A) batch auto-cancels and shows "Customer list changed — batch cancelled" or (B) cancel button appears and successfully stops the batch
+- Fix approach: Add cancel button next to "Running..." that calls POST /api/intelligence/generate-all/cancel endpoint. Backend sets a cancellation flag checked between customers in the batch loop. UI polls status and shows "Cancelled by user" when cancellation completes.
+- Scope: Affects all long-running batches (Account Intelligence, Product Feature Extraction if batched in future). NotebookLM batch already has similar issue but is lower priority (manual-trigger only, not auto-triggered by wizard).
+- Related: BKL-CACHE-STALE-01 (customer list staleness after AE changes)
+
+### BKL-HERO-SCRAPE-CONTROLS-05 — RH Cases scraper has no manual "Sync Now" or "Cancel" controls in Admin panel
+- Status: 🔴 OPEN
+- Priority: P2 (UX improvement for manual RH cases scraping)
+- Source: Hero install user testing 2026-05-07 (Jason)
+- Files: dashboard/src/pages/AdminPage.tsx (scrape history section lines 875-915, RH Cases scraper card location TBD)
+- Description: Admin panel has no quick-access controls to manually trigger RH cases scraping or cancel a running sync. User wants a "Sync Now" button to trigger RH cases on demand and a "Cancel" button when a sync is running. Current state: scrape history table shows past results but has no action buttons. Individual scraper cards may exist elsewhere in admin panel but user wants prominent controls near the scrape history for quick access.
+- Evidence: Screenshot shows scrape history table with entry "47m ago, rh-cases, success, 226, 1s, —". No visible "Sync Now" or "Cancel" buttons near this section.
+- Decision: OPEN — waiting to batch with other hero install UI bugs per user request
+- Can we test: YES — Navigate to Admin panel, verify "Sync Now" button appears for RH cases, click it and confirm POST /api/scrape/rh triggers, verify "Cancel" button appears when sync is running
+- Fix approach: Add control buttons above or beside the scrape history table: (1) "Sync Now" button that calls POST /api/scrape/rh (or equivalent endpoint for RH cases), (2) "Cancel" button (visible only when rh-cases scraper status shows running) that stops the current sync. Buttons should be prominent and easily discoverable.
+- Scope: Hero install L3-only. RH Cases is the only scraper available on hero (no CCSP, no SF pipeline). Controls only need to support rh-cases scraper.
+- Related: BKL-HERO-INTEL-CANCEL-04 (similar cancel button need for intelligence batch)
+
+### BKL-HERO-VNC-PORT-06 — docker-compose.yml exposes VNC port 6080 but hero image has no VNC
+- Status: ✅ DONE 2026-05-07
+- Priority: P3 (cosmetic, no security impact — port binding is localhost-only)
+- Source: Hero install systematic audit 2026-05-07 (Jason)
+- Files: docker-compose.yml (was line 8), Dockerfile.hero (line 35)
+- Description: docker-compose.yml line 8 mapped VNC port `"127.0.0.1:6080:6080"` but the hero image does not contain VNC components. Dockerfile.hero line 35 explicitly documents: "No Playwright, no Chromium, no VNC — hero install is a pure HTTP server." Lines 41-42 confirm no xvfb, x11vnc, novnc, or openbox installed. The port mapping was harmless (localhost-only binding, container just ignored it) but misleading — users might think VNC is available when it's not.
+- Evidence: (1) docker-compose.yml line 8 had VNC port, (2) Dockerfile.hero lines 7-8, 35, 41 all confirm no browser/VNC components, (3) Dockerfile.hero line 70 only exposes 7777, not 6080
+- Decision: DONE — Deleted docker-compose.yml line 8 (`- "127.0.0.1:6080:6080"`). VNC port only needed for L4 daemon image (not yet published).
+- Verified: docker-compose.yml now only maps port 7777. Container starts normally, dashboard accessible at 7777.
+- Scope: Hero install only. L4 daemon compose file (when created) will need VNC port for browser scrapers.
+- Related: ADR-016 (two-Dockerfile split), BKL-ARCH-L4-SPLIT Phase 3 (L4 daemon container architecture)
+
+### BKL-HERO-README-PREREQS-07 — README prerequisite instructions vague and incomplete
+- Status: ✅ DONE 2026-05-07
+- Priority: P2 (documentation accuracy for first-time installers)
+- Source: Hero install systematic audit 2026-05-07 (Jason)
+- Files: README.md (lines 14-28), /tmp/daily-brief-public/README.md (lines 5-28), scripts/setup.sh (lines 127-259)
+- Description: Both READMEs (main project and public repo) had vague Podman install instructions — public README just linked to podman.io, main README buried commands in a blockquote. Neither documented the 4GB Podman machine RAM requirement that setup.sh enforces at line 186-200. Users on fresh systems didn't have copy-paste commands for their OS package manager. Jason wanted "text boxes to copy commands" for Mac brew and Linux apt/dnf, plus accurate reflection of what setup.sh actually validates.
+- Evidence: (1) Public README said "install from podman.io" with no specific commands, (2) Main README had `brew install podman && podman machine init && podman machine start` in a blockquote but missing the `podman machine set --memory 4096` step, (3) setup.sh lines 186-200 enforce MIN_MACHINE_RAM_MB=4096 and provide detailed error message with fix commands, (4) Neither README mentioned system requirements (4GB host RAM, 5GB disk, 2 CPU cores) that setup.sh validates
+- Decision: DONE — Updated both READMEs with prominent Prerequisites sections containing platform-specific install commands in code blocks and system requirements table. Added Troubleshooting sections for Podman machine RAM issues. Added "For Maintainers" sections documenting the release artifact sync process (setup.sh, .env.example, docker-compose.yml, READMEs must stay in sync).
+- Changes:
+  1. **Public README** (/tmp/daily-brief-public/README.md): Added Prerequisites section with macOS (brew + machine init + set memory + start), Ubuntu/Debian (apt), RHEL/Fedora (dnf) commands in separate code blocks. Added System Requirements table (RAM/disk/CPU). Added Troubleshooting entry for Podman machine RAM with fix commands. Added "For Maintainers" section documenting artifact sync process.
+  2. **Main README** (README.md): Restructured Install section to lead with Prerequisites. Added same install commands as public README. Updated Ports section to remove VNC port reference (hero install has no browser). Fixed Advanced/Manual Install podman run command to remove VNC port and reduce shm_size to 256m (was 2g). Added Podman machine RAM troubleshooting. Added maintainer sync documentation.
+  3. **Verified**: docker-compose.yml already correct (VNC port removed earlier, shm_size 256m). .env.example already correct (GOOGLE_CLOUD_PROJECT=jhorn-pai per BKL-HERO-GCP-PROJECT-01). setup.sh validation logic matches README claims.
+- Verified: All README install commands match what setup.sh validates. System requirements table matches MIN_*_MB constants in setup.sh. Troubleshooting commands tested against setup.sh error messages.
+- Can we test: YES — Fresh Mac: verify `brew install podman && podman machine init && podman machine set --memory 4096 && podman machine start` works and meets setup.sh checks. Fresh Linux: verify `sudo apt install -y podman` (Ubuntu) or `sudo dnf install -y podman` (RHEL/Fedora) works and passes setup.sh.
+- Related: BKL-HERO-VNC-PORT-06 (VNC port removed from compose, README updated to match), BKL-HERO-GCP-PROJECT-01 (.env.example pre-configured with jhorn-pai project)
+
+### BKL-HERO-RELEASE-SYNC-08 — Automate hero install file sync to main branch on release tags
+- Status: ✅ DONE 2026-05-07
+- Priority: P2 (release automation, prevents artifact drift)
+- Source: Hero install release process review 2026-05-07 (Jason)
+- Files: .github/workflows/release.yml (lines 105-189), README.md (maintainer section)
+- Description: Hero install files (setup.sh, .env.example, docker-compose.yml, README.md) were manually maintained and could drift between the main repo and what users download. setup.sh lines 19-20 fetch .env.example and docker-compose.yml from `raw.githubusercontent.com/main/`, but there was no automated process to ensure these files on the main branch stayed in sync with the container image tags. Existing `publish-public-release` job (lines 105-148) only uploaded files as GitHub Release assets, which setup.sh doesn't use. Files were manually staged in /tmp/daily-brief-public and pushed to main, creating drift risk.
+- Evidence: (1) setup.sh fetches from main branch, not releases, (2) No GitHub Actions job pushed files to main, only to release assets, (3) /tmp/daily-brief-public had uncommitted README changes showing manual workflow
+- Decision: DONE — Added `sync-hero-install-files` job to release.yml that automatically commits and pushes hero install files to main branch when a release tag is created. Runs after container image is published, before GitHub Release creation. Uses `[skip ci]` to prevent triggering another build. Updated README maintainer section with automated sync documentation and manual verification commands.
+- Changes:
+  1. **.github/workflows/release.yml**: Added `sync-hero-install-files` job (lines 105-145) that checks out main branch, stages setup.sh/.env.example/docker-compose.yml/README.md, commits with release version, and pushes to main. Reordered `publish-public-release` job to run after sync (now dependent on sync-hero-install-files).
+  2. **README.md**: Replaced manual sync instructions with automated workflow documentation. Added verification commands to check main branch files are current after release.
+- Workflow sequence on `git tag v1.7.0 && git push origin v1.7.0`:
+  1. `release-e2e` — full API tests on Mac Mini production
+  2. `publish-release` — build and push container images (:latest, :stable, :v1.7.0)
+  3. `sync-hero-install-files` — commit updated files to main branch [skip ci]
+  4. `publish-public-release` — create GitHub Release with asset uploads (backup distribution)
+- Verified: Workflow uses `PUBLIC_REPO_DEPLOY_TOKEN` secret (already configured for release job), commits as `github-actions[bot]`, includes `[skip ci]` to prevent infinite loops.
+- Can we test: YES — Create a test tag, verify workflow runs, check main branch for new commit with updated files, confirm curl to raw.githubusercontent.com/main/setup.sh returns latest version
+- Related: BKL-HERO-README-PREREQS-07 (README accuracy ensures sync'd files match user expectations)
+
 ### BKL-SFCACHE-02 — SF L3 write-back fires after fix; add regression log assertion
 - Status: ✅ DONE 2026-04-27
 - Priority: P2

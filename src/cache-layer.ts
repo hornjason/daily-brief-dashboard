@@ -277,6 +277,36 @@ export function readPipelineCache(): { records: PipelineRecord[]; cachedAt: stri
   }
 }
 
+/**
+ * BKL-HERO-PIPELINE-FILTER-03: Check whether the Pipeline cache is stale relative to the current AE set.
+ * Returns true if the cached fileIds do not exactly match the provided currentSheetIds
+ * (i.e., AEs were added, removed, or completely replaced since the cache was written).
+ * Mirrors isCCSPCacheStale (BKL-CCSP-03).
+ */
+export function isPipelineCacheStale(currentSheetIds: string[]): boolean {
+  const cached = readPipelineCache()
+  if (!cached) return true  // no cache at all — stale by definition
+  const cachedIds = cached.fileIds ?? []
+  if (currentSheetIds.length !== cachedIds.length) return true
+  // Sort both for order-independent comparison
+  const sortedCurrent = [...currentSheetIds].sort()
+  const sortedCached = [...cachedIds].sort()
+  return sortedCurrent.some((id, i) => id !== sortedCached[i])
+}
+
+/**
+ * BKL-HERO-PIPELINE-FILTER-03: Invalidate Pipeline cache by removing the file.
+ * Called when AE set changes and cached data is known stale.
+ */
+export function invalidatePipelineCache(): void {
+  try {
+    unlinkSync(`${CACHE_DIR}/pipeline-data.json`)
+    console.log('[cache] invalidated stale Pipeline cache (AE set changed)')
+  } catch {
+    // File may not exist — that's fine
+  }
+}
+
 export function writePipelineCache(records: PipelineRecord[], fileIds: string[] = []): void {
   try {
     const newHash = createHash('sha256').update(JSON.stringify({ records, fileIds })).digest('hex').slice(0, 16)

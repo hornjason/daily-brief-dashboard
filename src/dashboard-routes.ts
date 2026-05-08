@@ -840,7 +840,7 @@ export function createDashboardRouter(): Hono {
           const aeTerrMap = extractEnterpriseAeMap(fullRows)
           for (const [aeName, terrCodes] of Object.entries(aeTerrMap)) {
             for (const terrCode of terrCodes) {
-              const m = terrCode.match(/(\d+)/)
+              const m = terrCode.match(/Terr(\d+)/i)
               if (!m) continue
               const num = m[1].padStart(2, '0')
               territories.push({ num, aeName })
@@ -929,7 +929,7 @@ export function createDashboardRouter(): Hono {
               if (terrMatch) { aeName = aeCell.replace(/\s*Terr\d+\s*/i, '').trim(); terrCode = terrMatch[0] }
             }
             if (!aeName || /^TBH$/i.test(aeName.trim())) continue
-            const terrNumMatch = terrCode.match(/(\d+)/)
+            const terrNumMatch = terrCode.match(/Terr(\d+)/i)
             if (!terrNumMatch) continue
             const num = terrNumMatch[1].padStart(2, '0')
             territories.push({ num, aeName })
@@ -1116,7 +1116,7 @@ export function createDashboardRouter(): Hono {
 
           if (!aeName || /^TBH$/i.test(aeName.trim())) continue
 
-          const terrNumMatch = terrCode.match(/(\d+)/)
+          const terrNumMatch = terrCode.match(/Terr(\d+)/i)
           if (!terrNumMatch) continue
           const terrNum: string = terrNumMatch[1].padStart(2, '0')
           const tableauTerritory: string = `${tabPodKey}_TERR${terrNum}`

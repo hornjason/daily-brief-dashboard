@@ -2320,4 +2320,49 @@ test.describe('REG-F07 SF report URL extraction in bootstrap validation', () => 
     const src = fs.readFileSync(path.join(__dirname, '../src/rh-scraper.ts'), 'utf-8')
     expect(src).toContain("assertPrimary('rh-scraper.discoverAccountNumberByName')")
   })
+
+  // REG-HERO-AE-SELECT-02: Territory number extraction must use /Terr(\d+)/i, not /(\d+)/
+  // Bug: /(\d+)/ on "East_Comm_Corp_Pod1_Terr01" matches "1" from Pod1 instead of "01" from Terr01.
+  // All East Commercial AEs collapsed to num:"01", causing dropdown value collision.
+  test('REG-HERO-AE-SELECT-02: dashboard-routes.ts territory number extraction uses Terr-anchored regex', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/dashboard-routes.ts'), 'utf-8')
+
+    // Find all terrNumMatch or terrCode.match lines that extract territory numbers
+    // The pattern terrCode.match(/(\d+)/) is the broken version — must not exist
+    // The pattern terrCode.match(/Terr(\d+)/i) is the correct version
+    const lines = src.split('\n')
+    const terrNumMatchLines = lines.filter(line =>
+      line.includes('.match(') && line.includes('terrNumMatch') || line.includes('terrCode.match')
+    ).filter(line =>
+      // Only lines that are extracting a territory number (not terrCodeMatch for pod detection)
+      line.includes('terrNumMatch') || (line.includes('terrCode.match') && !line.includes('terrCodeMatch'))
+    )
+
+    // There should be exactly 3 such extractions (enterprise line ~843, commercial lines ~932, ~1119)
+    expect(terrNumMatchLines.length).toBeGreaterThanOrEqual(3)
+
+    // None of them should use the bare /(\d+)/ regex
+    for (const line of terrNumMatchLines) {
+      expect(line).not.toMatch(/\.match\(\/\(\\d\+\)\// )
+      expect(line).toMatch(/Terr/)
+    }
+  })
+
+  // REG-HERO-AE-SELECT-02b: Unit test — Terr-anchored regex correctly extracts territory numbers
+  test('REG-HERO-AE-SELECT-02b: Terr-anchored regex extracts correct territory numbers from codes with Pod digits', () => {
+    const terrCodes = [
+      'East_Comm_Corp_Pod1_Terr01',
+      'East_Comm_Corp_Pod1_Terr02',
+      'East_Comm_Corp_Pod1_Terr03',
+      'Terr04',
+      'East_Comm_Corp_Pod2_Terr10',
+    ]
+    const expected = ['01', '02', '03', '04', '10']
+
+    for (let i = 0; i < terrCodes.length; i++) {
+      const m = terrCodes[i].match(/Terr(\d+)/i)
+      expect(m).not.toBeNull()
+      expect(m![1].padStart(2, '0')).toBe(expected[i])
+    }
+  })
 })

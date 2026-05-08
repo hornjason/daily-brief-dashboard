@@ -16,7 +16,7 @@ import { getScraperStatus } from './scraper-status-store.ts'
 import { runIntelligencePipeline, getJobStatus, getRunningJob, getAllJobs, requeueJob, validateIntelligenceDocContent, checkStoredDocsTrashed, discoverExistingIntelDocs, getIntelligenceCacheEntry, writeIntelligenceDiscoveryCache } from './account-intelligence.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import type { ProductKey } from './product-intelligence.ts'
-import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS, toSlug, isCCSPCacheStale } from './cache-layer.ts'
+import { readBriefCache, writeBriefCache, readLatestBriefCache, readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, BRIEF_CACHE_TTL_MS, toSlug, isCCSPCacheStale, isPipelineCacheStale } from './cache-layer.ts'
 import { sanitizeErr, normalizeForQuery } from './utils.ts'
 import { getCachedExpansionOpportunities, generateExpansionOpportunities, toCustomerSlug as toExpansionSlug } from './expansion-opportunities.ts'
 import { writeCustomerDocsCorpus } from './customer-docs-corpus.ts'
@@ -344,8 +344,11 @@ export function createCustomerRouter(): Hono {
       return out
     }
 
-    // Serve from cache if available and not forced — no env var needed for cache hits
-    if (cached && !force) {
+    // BKL-HERO-PIPELINE-FILTER-03: Check if AE set changed since cache was written — if so, treat as stale
+    const currentPipelineSheetIds = aes.filter(a => a.pipelineSheetId).map(a => a.pipelineSheetId!)
+    const cacheIsStale = isPipelineCacheStale(currentPipelineSheetIds)
+    // Use cache if available, not forced, and not stale (mirror CCSP line 315)
+    if (cached && !force && !cacheIsStale) {
       return c.json({ ...buildPipelineSummary(applyFilters(cached.records), cached.cachedAt), sourceWarning: !!getScraperStatus('sf-pipeline').lastError })
     }
     if (!process.env.PIPELINE_FILE_ID) {

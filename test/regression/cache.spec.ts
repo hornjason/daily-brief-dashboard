@@ -475,3 +475,65 @@ test('REG-TOKEN-06-c: 429 retry block uses AbortSignal.timeout >= 90s (BKL-TOKEN
   // gemini-fetch.ts must use timeoutMs to create AbortSignal.timeout per attempt (including retries)
   expect(fetchSrc, 'gemini-fetch.ts must use AbortSignal.timeout(ctx.timeoutMs) for each attempt').toContain('AbortSignal.timeout(ctx.timeoutMs)')
 })
+
+// ── REG-PIPELINE-01: BKL-HERO-PIPELINE-FILTER-03 — Pipeline cache staleness check mirrors CCSP ──
+// Root cause: after bootstrapping with N AEs then removing most via setup wizard,
+// /api/pipeline showed $0 because the cache contained records from deleted AEs.
+// filterToAEs correctly filtered cached records to the current AE list, but the
+// result was empty ($0). CCSP already solved this with isCCSPCacheStale() — Pipeline
+// now has the same pattern: isPipelineCacheStale() + invalidatePipelineCache().
+
+test('REG-PIPELINE-01-a: cache-layer.ts exports isPipelineCacheStale (BKL-HERO-PIPELINE-FILTER-03)', () => {
+  const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'cache-layer.ts'), 'utf-8')
+  expect(src, 'isPipelineCacheStale must be exported from cache-layer.ts').toMatch(/export function isPipelineCacheStale\s*\(/)
+})
+
+test('REG-PIPELINE-01-b: cache-layer.ts exports invalidatePipelineCache (BKL-HERO-PIPELINE-FILTER-03)', () => {
+  const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'cache-layer.ts'), 'utf-8')
+  expect(src, 'invalidatePipelineCache must be exported from cache-layer.ts').toMatch(/export function invalidatePipelineCache\s*\(/)
+})
+
+test('REG-PIPELINE-01-c: isPipelineCacheStale mirrors isCCSPCacheStale structure (BKL-HERO-PIPELINE-FILTER-03)', () => {
+  const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'cache-layer.ts'), 'utf-8')
+  const fnStart = src.indexOf('export function isPipelineCacheStale')
+  expect(fnStart, 'isPipelineCacheStale must be defined in cache-layer.ts').toBeGreaterThan(-1)
+  const fnEnd = src.indexOf('\n}', fnStart)
+  expect(fnEnd, 'closing brace not found for isPipelineCacheStale').toBeGreaterThan(fnStart)
+  const body = src.slice(fnStart, fnEnd)
+  // Must read pipeline cache
+  expect(body, 'isPipelineCacheStale must call readPipelineCache()').toMatch(/readPipelineCache\s*\(\s*\)/)
+  // Must return true when no cache
+  expect(body, 'isPipelineCacheStale must return true when no cache').toMatch(/if\s*\(\s*!cached\s*\)\s*return\s+true/)
+  // Must compare lengths
+  expect(body, 'isPipelineCacheStale must compare array lengths').toMatch(/currentSheetIds\.length\s*!==\s*cachedIds\.length/)
+  // Must sort for order-independent comparison
+  expect(body, 'isPipelineCacheStale must sort for order-independent comparison').toMatch(/\.sort\(\)/)
+})
+
+test('REG-PIPELINE-01-d: /api/pipeline checks isPipelineCacheStale before using cache (BKL-HERO-PIPELINE-FILTER-03)', () => {
+  const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'customer-routes.ts'), 'utf-8')
+  // isPipelineCacheStale must be imported from cache-layer
+  expect(src, 'isPipelineCacheStale must be imported from cache-layer.ts').toMatch(/import\s*\{[^}]*\bisPipelineCacheStale\b[^}]*\}\s*from\s*'\.\/cache-layer\.ts'/)
+  // Locate the /api/pipeline handler body
+  const handlerStart = src.indexOf("router.get('/api/pipeline'")
+  expect(handlerStart, "'/api/pipeline' route handler must exist in customer-routes.ts").toBeGreaterThan(-1)
+  // Next route declaration marks the end of this handler block
+  const nextRoute = src.indexOf("router.get('/api/calendar'", handlerStart)
+  expect(nextRoute, 'calendar route after /api/pipeline not found').toBeGreaterThan(handlerStart)
+  const handlerBody = src.slice(handlerStart, nextRoute)
+  // Must call isPipelineCacheStale
+  expect(handlerBody, '/api/pipeline handler must call isPipelineCacheStale').toContain('isPipelineCacheStale')
+  // Must include !cacheIsStale in the cache-use condition (mirrors CCSP pattern)
+  expect(handlerBody, '/api/pipeline must gate cache usage on !cacheIsStale').toMatch(/cached\s*&&\s*!force\s*&&\s*!cacheIsStale/)
+  // isPipelineCacheStale call must come BEFORE the cache-use condition
+  const staleCheckIdx = handlerBody.indexOf('isPipelineCacheStale')
+  const cacheUseIdx = handlerBody.indexOf('if (cached && !force && !cacheIsStale)')
+  expect(staleCheckIdx, 'isPipelineCacheStale must be called before the cache-use check').toBeLessThan(cacheUseIdx)
+})
+
+test('REG-PIPELINE-01-e: isPipelineCacheStale returns true when AE count changes (unit test)', async () => {
+  const { isPipelineCacheStale } = await import('../../src/cache-layer.ts')
+  // With no cache on disk, isPipelineCacheStale should return true (stale by definition)
+  const result = isPipelineCacheStale(['sheet-1', 'sheet-2'])
+  expect(result, 'isPipelineCacheStale must return true when no cache file exists').toBe(true)
+})

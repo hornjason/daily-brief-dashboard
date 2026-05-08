@@ -176,4 +176,21 @@ test.describe('East Commercial territory parsing', () => {
     expect(status).toBe(200)
     expect(body.territories.length).toBe(10)
   })
+
+  /**
+   * BKL-HERO-AE-SELECT-02 — East Commercial territory numbers must be unique.
+   * Bug: /(\d+)/ regex matched "1" from "Pod1" instead of "01" from "Terr01",
+   * causing all AEs in a pod to have the same num value and colliding in the dropdown.
+   * @live — requires live Google auth session.
+   */
+  test('@live BKL-HERO-AE-SELECT-02: East Commercial POD01 returns unique territory numbers (no collision)', async () => {
+    const { status, body } = await getJSON('/api/territory-names?pod=EAST_COMM_CORP_POD01')
+    if (status === 401) return // skip when Google auth unavailable
+    expect(status).toBe(200)
+    expect(body.territories.length).toBeGreaterThan(1)
+    const nums = body.territories.map((t: { num: string }) => t.num)
+    const uniqueNums = new Set(nums)
+    // Each territory must have a unique num — if they're all "01", the set will have size 1
+    expect(uniqueNums.size).toBe(nums.length)
+  })
 })
