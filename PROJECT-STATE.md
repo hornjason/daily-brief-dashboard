@@ -164,19 +164,35 @@ See `docs/ARCHITECTURE.md` → "SF Bookings Sheet — Required Report Columns"
 
 ---
 
-## Current Data State (2026-04-10)
+## Current Data State (2026-05-08)
 
-- **AEs:** 9 (SW POD only — NW pod was removed during SW wipe/re-bootstrap 2026-04-10)
-  - **SW POD (9):** TBH, Peter Niklaus, Oren Shaolian, Sherry Gayo, Amanda Mejia, Alex Smith, Beena Patel, O'Neil Hopson, Cameron Floyd
-  - **NW POD:** Not currently configured (NW AEs were in aes.json through commit 389c2b8; removed when SW was re-bootstrapped)
-- **Customers:** 105 SW customers (fresh bootstrap 2026-04-10)
-  - 60 customers with RH Portal account numbers discovered
-  - 66 RH support cases cached (2 sev1, 10 sev2)
-  - 47 cases found via name-search during discovery
-- **SF bookings sheets:** SW pipeline sheets per AE (individual sheets per AE, not a shared pod sheet)
-- **Territory sheet:** `1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8` (in data-sources.json)
-- **SF pipeline report:** `00OPe00000k5m9ZMAQ` (SW report)
-- **Account intelligence:** Not yet run post-bootstrap (queued)
+**Multi-Region Architecture (3 regions, 9 pods configured):**
+
+- **West Commercial** (4 pods — all active, L3 sync operational):
+  - `WEST_COMM_CORP_NORTHWEST` — Northwest Corp
+  - `WEST_COMM_CORP_SOUTHWEST` — Southwest Corp
+  - `WEST_COMM_CORP_NORTH_CENTRAL` — North Central Corp
+  - `WEST_COMM_CORP_SOUTH_CENTRAL` — South Central Corp
+
+- **East Commercial** (4 pods configured):
+  - `EAST_COMM_CORP_POD01` — Rough Riders (✅ ACTIVE as of 2026-05-07 — L3 sync operational, 6,775 CCSP rows + 2,000 SF Pipeline rows)
+  - `EAST_COMM_CORP_POD02` — No sfReportId (skipped in L3 sync)
+  - `EAST_COMM_CORP_POD03` — No sfReportId (skipped in L3 sync)
+  - `EAST_COMM_CORP_POD05` — No sfReportId (skipped in L3 sync)
+
+- **Central Enterprise TOLA** (1 pod — active, L3 sync operational):
+  - `CENTRAL_ENT_TOLA` — TOLA POD
+
+**L3 Sync Status (Mac Mini L4 daemon):**
+- Last sync: 2026-05-07 (manual trigger)
+- Results: 6 pods synced, 3 skipped (POD02/03/05 missing sfReportId)
+- Drive folder: `14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo` (shared podBookingsFolderId for all regions)
+- Scheduled sync: Daily at 5:30am ET via sync-l3-daemon.ts
+
+**Hero Install Data (port 7777 — last validated 2026-04-10):**
+- **AEs:** 9 (SW POD — hero install has not been updated with multi-region data yet)
+- **Customers:** 105 (SW POD customers from 2026-04-10 bootstrap)
+- **Note:** Hero install data is stale; Mac Mini L4 daemon is the source of truth for multi-region L3 cache files
 
 ---
 

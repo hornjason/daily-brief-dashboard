@@ -12,19 +12,46 @@ A containerized customer intelligence dashboard for Red Hat Account Executives a
 
 ## Install
 
+### Prerequisites
+
+**Install Podman:**
+
+**macOS:**
+```bash
+brew install podman
+podman machine init
+podman machine set --memory 4096  # 4GB minimum required
+podman machine start
+```
+
+**Ubuntu / Debian:**
+```bash
+sudo apt update
+sudo apt install -y podman
+```
+
+**RHEL / Fedora:**
+```bash
+sudo dnf install -y podman
+```
+
+**System Requirements:**
+- RAM: 4GB minimum (8GB recommended)
+- Disk: 5GB free space
+- CPU: 2+ cores recommended
+
+**Red Hat Portal Access:**
+Generate an offline token at [access.redhat.com/management/api](https://access.redhat.com/management/api) before setup.
+
+### Run the Installer
+
 ```bash
 curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh | bash
 ```
 
 The script checks your system, pulls the container image, and opens the setup wizard at **http://localhost:7777/dashboard/setup**. The wizard handles everything else.
 
-**Prerequisite:** A Red Hat Google Workspace account (`@redhat.com`) with access to the Red Hat Customer Portal. The setup wizard uses your existing Google OAuth — no separate Gemini or GCP credentials needed.
-
-> **macOS:** Podman must be installed first. `brew install podman && podman machine init && podman machine start`
->
-> **RHEL/Fedora:** `sudo dnf install podman`
->
-> Run the script again after installing Podman — it will pick up where it left off.
+> **Want to inspect the script first?** Download it: `curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh -o setup.sh`, review it, then `bash setup.sh`. The script will pick up where it left off if you need to install prerequisites mid-run.
 
 ---
 
@@ -65,9 +92,8 @@ For detailed setup instructions, Drive folder naming conventions, and advanced c
 | Port | Purpose |
 |---|---|
 | **7777** | Dashboard UI and API |
-| **6080** | Browser window for Red Hat Portal login (localhost only) |
 
-Port 6080 opens a browser view into the container's headless Chromium, used during setup and when re-authenticating the Red Hat Portal session.
+The hero install image is a pure HTTP server with no browser components — all data is read from Google Drive and the Red Hat Portal API. No VNC or browser ports needed.
 
 ---
 
@@ -84,6 +110,21 @@ Your data in `./data/` is preserved across stops, starts, and container removal.
 ---
 
 ## Troubleshooting
+
+**Podman machine not running (macOS)**
+```bash
+podman machine start
+```
+
+If you've never initialized: `podman machine init && podman machine set --memory 4096 && podman machine start`
+
+**Podman machine RAM too low (macOS)**
+The container needs 4GB minimum. Increase it:
+```bash
+podman machine stop
+podman machine set --memory 4096
+podman machine start
+```
 
 **Container fails to start or exits immediately**
 Check logs: `podman logs pai-dashboard`
@@ -145,21 +186,19 @@ EOF
 ```bash
 podman run -d \
   -p 7777:7777 \
-  -p 127.0.0.1:6080:6080 \
   -v ./data:/data:Z \
   --env-file .env \
   -e PORT=7777 \
   -e CONFIG_DIR=/data/config \
   -e CACHE_DIR=/data/cache \
   -e RH_PROFILE_DIR=/data/rh-profile \
-  --shm-size=2g \
-  --memory=8g \
+  --shm-size=256m \
   --name pai-dashboard \
   ghcr.io/hornjason/daily-brief-dashboard:latest
 ```
 
 > **Docker users:** Replace `podman` with `docker` and remove the `:Z` volume suffix.
-> **Do not reduce** `--shm-size` or `--memory` — Chromium requires these to run stably.
+> **Linux (SELinux):** The `:Z` suffix is required on RHEL/Fedora to allow the container to write to the volume.
 
 Then open the setup wizard at **http://localhost:7777/dashboard/setup**.
 
@@ -201,3 +240,39 @@ For developer setup, testing, PR guidelines, and project structure, see **[CONTR
 ## Architecture
 
 For technical details on data flow, scraper design, background timers, and module inventory, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
+---
+
+## For Maintainers: Release Artifact Synchronization
+
+**Automated sync on release tags:**
+
+When you create a release tag (e.g., `git tag v1.7.0 && git push origin v1.7.0`), the GitHub Actions workflow (`.github/workflows/release.yml`) automatically:
+
+1. Builds and pushes container images: `latest`, `stable`, `v1.7.0`
+2. **Syncs hero install files to main branch**: `setup.sh`, `.env.example`, `docker-compose.yml`, `README.md`
+3. Creates a GitHub Release with these files as downloadable assets
+
+Users running `curl https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/setup.sh | bash` always get the latest files from the main branch.
+
+**Manual updates between releases:**
+
+When updating prerequisites or system requirements:
+
+1. Update `scripts/setup.sh` preflight checks (MIN_*_MB constants, check_* functions)
+2. Update `.env.example` with any new required/default variables
+3. Update `docker-compose.yml` ports, volumes, resource limits
+4. Update `README.md` Prerequisites section to match
+5. Test locally with `bash scripts/setup.sh --dry-run`
+6. Commit to main: `git commit -m "Update hero install prerequisites"`
+7. Create a release tag to trigger the automated sync workflow
+
+**Verification:**
+
+After a release, verify the main branch has the latest files:
+```bash
+curl -I https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/setup.sh
+curl -I https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/.env.example
+```
+
+Both should return `200 OK` and show recent `Last-Modified` timestamps.

@@ -78,8 +78,9 @@ function persistCollapsedState(set: Set<string>) {
 }
 
 export function AEGroupedList({ accounts, cases, events, loading, onCustomerClick }: AEGroupedListProps) {
-  // Persisted collapsed-AE set. Hydrated from localStorage on first render.
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => loadCollapsedState())
+  // BKL-UX-GROUPED-COLLAPSED: Always start with all groups collapsed (folded up),
+  // ignoring saved localStorage state. Users can expand groups manually as needed.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set<string>())
   // Tracks whether we've already applied the "default-collapse at ≥4 AEs" behavior.
   // Without this, re-deriving the state on every accounts change would fight user toggles.
   const [defaultApplied, setDefaultApplied] = useState(false)

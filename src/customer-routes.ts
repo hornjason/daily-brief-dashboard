@@ -351,11 +351,15 @@ export function createCustomerRouter(): Hono {
     if (cached && !force && !cacheIsStale) {
       return c.json({ ...buildPipelineSummary(applyFilters(cached.records), cached.cachedAt), sourceWarning: !!getScraperStatus('sf-pipeline').lastError })
     }
-    if (!process.env.PIPELINE_FILE_ID) {
+    // BKL-HERO-PIPELINE-L3-07: Hero install uses AE-sourced sheet IDs (currentPipelineSheetIds),
+    // not PIPELINE_FILE_ID env var. Only return $0 when BOTH are empty (no data sources configured).
+    if (!currentPipelineSheetIds.length && !process.env.PIPELINE_FILE_ID) {
       return c.json({ totalAcv: 0, openCount: 0, renewalAcv: 0, newAcv: 0, byStage: [], byOwner: [], topOpps: [], cachedAt: null, sourceWarning: false })
     }
     try {
-      const { records, fileIds } = await fetchPipelineData()
+      // BKL-HERO-PIPELINE-L3-07: Pass currentPipelineSheetIds to fetchPipelineData so it reads
+      // from AE sheets instead of only using PIPELINE_FILE_ID env var (preserves backward compat).
+      const { records, fileIds } = await fetchPipelineData(currentPipelineSheetIds)
       writePipelineCache(records, fileIds)
       return c.json({ ...buildPipelineSummary(applyFilters(records), new Date().toISOString()), sourceWarning: false })
     } catch (e: any) {

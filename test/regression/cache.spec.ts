@@ -537,3 +537,47 @@ test('REG-PIPELINE-01-e: isPipelineCacheStale returns true when AE count changes
   const result = isPipelineCacheStale(['sheet-1', 'sheet-2'])
   expect(result, 'isPipelineCacheStale must return true when no cache file exists').toBe(true)
 })
+
+// ── REG-PIPELINE-02: BKL-HERO-PIPELINE-L3-07 — Pipeline endpoint uses AE-sourced sheet IDs on hero install ──
+// Root cause: line 354 checked `if (!process.env.PIPELINE_FILE_ID)` and returned $0 empty response
+// even when currentPipelineSheetIds (from aes.pipelineSheetId) had valid sheet IDs. Hero install
+// does not set PIPELINE_FILE_ID env var — it relies on AE config. The check blocked the fresh fetch
+// path even though valid sheet IDs existed.
+// Fix: (1) change condition to `if (!currentPipelineSheetIds.length && !process.env.PIPELINE_FILE_ID)`
+//      (2) pass currentPipelineSheetIds to fetchPipelineData() at line 358 so it reads from AE sheets
+// This preserves backward compatibility with legacy PIPELINE_FILE_ID setups while allowing hero install to work.
+
+test('REG-PIPELINE-02-a: Pipeline endpoint checks currentPipelineSheetIds before returning $0 (BKL-HERO-PIPELINE-L3-07)', () => {
+  const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'customer-routes.ts'), 'utf-8')
+  // Locate the /api/pipeline handler body
+  const handlerStart = src.indexOf("router.get('/api/pipeline'")
+  expect(handlerStart, "'/api/pipeline' route handler must exist in customer-routes.ts").toBeGreaterThan(-1)
+  const nextRoute = src.indexOf("router.get('/api/calendar'", handlerStart)
+  expect(nextRoute, 'calendar route after /api/pipeline not found').toBeGreaterThan(handlerStart)
+  const handlerBody = src.slice(handlerStart, nextRoute)
+
+  // The $0 early-return condition must check BOTH currentPipelineSheetIds.length AND process.env.PIPELINE_FILE_ID
+  // Old broken pattern: `if (!process.env.PIPELINE_FILE_ID)` — blocked hero install even with valid AE sheet IDs
+  // New correct pattern: `if (!currentPipelineSheetIds.length && !process.env.PIPELINE_FILE_ID)`
+  expect(handlerBody, 'Pipeline endpoint must NOT return $0 based only on PIPELINE_FILE_ID check')
+    .not.toMatch(/if\s*\(\s*!process\.env\.PIPELINE_FILE_ID\s*\)\s*\{[\s\S]*?return c\.json\(\{[^}]*totalAcv:\s*0/)
+
+  expect(handlerBody, 'Pipeline endpoint must check currentPipelineSheetIds.length before returning $0')
+    .toMatch(/if\s*\(\s*!currentPipelineSheetIds\.length\s*&&\s*!process\.env\.PIPELINE_FILE_ID\s*\)/)
+})
+
+test('REG-PIPELINE-02-b: fetchPipelineData receives currentPipelineSheetIds from Pipeline endpoint (BKL-HERO-PIPELINE-L3-07)', () => {
+  const src = readFileSync(resolve(import.meta.dirname!, '..', '..', 'src', 'customer-routes.ts'), 'utf-8')
+  // Locate the /api/pipeline handler body
+  const handlerStart = src.indexOf("router.get('/api/pipeline'")
+  expect(handlerStart, "'/api/pipeline' route handler must exist in customer-routes.ts").toBeGreaterThan(-1)
+  const nextRoute = src.indexOf("router.get('/api/calendar'", handlerStart)
+  expect(nextRoute, 'calendar route after /api/pipeline not found').toBeGreaterThan(handlerStart)
+  const handlerBody = src.slice(handlerStart, nextRoute)
+
+  // fetchPipelineData call must pass currentPipelineSheetIds as the first argument
+  // Old broken pattern: `await fetchPipelineData()` — no args, falls back to PIPELINE_FILE_ID only
+  // New correct pattern: `await fetchPipelineData(currentPipelineSheetIds)`
+  expect(handlerBody, 'fetchPipelineData must receive currentPipelineSheetIds to read from AE sheets')
+    .toMatch(/await fetchPipelineData\s*\(\s*currentPipelineSheetIds\s*\)/)
+})
