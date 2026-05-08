@@ -113,27 +113,38 @@ async function doKeepalive(): Promise<void> {
     console.log('[sync-daemon] keepalive: navigating Tableau viz…')
     const tableauUrl = process.env.TABLEAU_VIZ_URL ?? TABLEAU_VIZ_URL
     await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+
+    // Wait for SSO redirect chain to complete before checking URL.
+    // Tableau redirects through sso.online.tableau.com even when logged in — need to wait
+    // for it to redirect back to 10ay.online.tableau.com before validating.
     await page.waitForLoadState('networkidle', { timeout: 60_000 }).catch(() => {
       console.warn('[sync-daemon] keepalive: networkidle timed out — continuing anyway')
     })
-    await page.waitForTimeout(3_000)
+    await page.waitForTimeout(5_000)  // give SSO redirect chain time to complete
 
-    // Detect login wall — mirrors ccsp-tableau-fetch.ts (URL checks + form detection)
+    // Check if URL settled on viz page or stuck on login
     const currentUrl = page.url()
-    const isLoginPage =
-      !currentUrl.includes('10ay.online.tableau.com') ||
-      currentUrl.includes('/auth') ||
-      currentUrl.includes('/login') ||
-      (await page
+    console.log(`[sync-daemon] keepalive: URL after navigation: ${currentUrl}`)
+
+    // Only check for login if we're definitively stuck on a login page (not mid-redirect)
+    const stuckOnLogin =
+      (currentUrl.includes('sso.online.tableau.com') && currentUrl.includes('/SSO')) ||
+      (currentUrl.includes('/auth') && !currentUrl.includes('10ay.online.tableau.com')) ||
+      currentUrl.includes('/signin')
+
+    if (stuckOnLogin) {
+      // Double-check with form detection
+      const hasLoginForm = await page
         .$('input[type="password"], input#username, [data-testid="login"]')
         .then(el => !!el)
-        .catch(() => false))
-
-    if (isLoginPage) {
-      throw new Error(`Tableau session expired — login required (URL: ${currentUrl})`)
+        .catch(() => false)
+      if (hasLoginForm) {
+        throw new Error(`Tableau session expired — login required (URL: ${currentUrl})`)
+      }
     }
 
-    // Wait for viz to render (Raw Data tab visible) — same as CCSP scraper
+    // Wait for viz to render (Raw Data tab visible) — the authoritative check
+    // If this succeeds, session is valid regardless of any transient SSO redirects
     console.log('[sync-daemon] keepalive: waiting for viz to render…')
     const vizReady = await waitForVizReady(page)
     if (!vizReady) {
