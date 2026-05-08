@@ -96,6 +96,9 @@ async function doKeepalive(): Promise<void> {
 
     console.log('[sync-daemon] keepalive: OK (Tableau + SF)')
   } finally {
+    // VNC observation delay — wait 15s before closing so you can watch the navigation
+    console.log('[sync-daemon] keepalive: holding page open for 15s (VNC observation)…')
+    await new Promise(resolve => setTimeout(resolve, 15_000))
     await page.close().catch(() => {})
   }
 }
