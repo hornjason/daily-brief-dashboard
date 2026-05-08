@@ -2484,3 +2484,27 @@ test.describe('REG-029: parentFolderId / podBookingsFolderId separation', () => 
     await postJSON('/api/settings/parent-folder', { folderId: originalParent })
   })
 })
+
+// ── REG-030: AAP auto-discovery works with whats_new pattern (BKL-PRODUCT-DOC-DISCOVERY-01) ────
+// BKL-PRODUCT-DOC-DISCOVERY-01: Red Hat changed AAP docs from release_notes to whats_new-*
+// Fix: Expanded auto-discovery to try 4 patterns sequentially with content validation
+
+test.describe('REG-030: AAP auto-discovery works with whats_new pattern', () => {
+  test('POST /api/products/aap/features/refresh extracts features successfully', async () => {
+    const { status, body } = await postJSON('/api/products/aap/features/refresh', {})
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('features')
+    expect(Array.isArray(body.features)).toBe(true)
+    // AAP should extract >0 features after pattern expansion
+    expect(body.features.length).toBeGreaterThan(0)
+  })
+
+  test('AAP features have releaseNotesSection populated', async () => {
+    const { body } = await getJSON('/api/products/aap/features')
+    if (body && body.features && body.features.length > 0) {
+      // At least some features should have releaseNotesSection (not all null)
+      const withSection = body.features.filter((f: any) => f.releaseNotesSection !== null)
+      expect(withSection.length).toBeGreaterThan(0)
+    }
+  })
+})

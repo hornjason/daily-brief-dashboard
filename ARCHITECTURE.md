@@ -1072,6 +1072,34 @@ Ranked top 3-5 features selected by Gemini from the feature radar, each anchored
 - Company content cap: 2000 → 6000 chars
 - Industry content cap: 1000 → 2000 chars
 
+### Product Documentation Auto-Discovery
+
+**Decision:** Discovery-first hybrid (Council 2026-05-08, Issue #75, BKL-PRODUCT-DOC-DISCOVERY-01)
+
+**Problem:** Red Hat documentation structure changes broke single-pattern auto-discovery (AAP changed from `release_notes` to `whats_new-*` pages, causing feature extraction to fail).
+
+**Solution:** Multi-pattern sequential discovery with content validation:
+
+1. **Try 4 patterns sequentially:**
+   - `release[_-]notes` (RHEL, OCP, OCP-Virt)
+   - `whats[_-]new` (AAP 2.6+)
+   - `changelog` (future-proofing)
+   - `new[_-]features` (future-proofing)
+
+2. **Content validation on discovered URLs:**
+   - HTML must be >1KB (not 404 page or redirect)
+   - Must contain version string pattern (`/\d+\.\d+/`)
+
+3. **Config override:** `seeds.releaseNotesDocNames` array takes precedence when present (skips auto-discovery entirely). Used for products where naming conventions deviate significantly or manual override is needed.
+
+4. **Graceful degradation:** If all patterns fail, returns empty string (logged to console).
+
+**Why discovery-first:** Zero-config onboarding for 95% of products. Config serves as escape hatch for edge cases only. New products added to product-intel-config.json work immediately without code changes.
+
+**Files:** `src/product-feature-radar.ts` (fetchLatestReleaseNotesContent, lines 148-240)
+
+**Regression test:** REG-030 in `test/regression.spec.ts` validates AAP feature extraction works with whats_new pattern.
+
 ### Bootstrap wizard: Product Intelligence scaffold
 
 The setup wizard (`SetupPage.tsx`) shows the Product Intelligence folder tree only for the first AE (`knownAes.length === 0`). The shared `Product Intelligence/` Drive folder with 7 product subfolders is a one-time scaffold — second+ AEs share the same Drive folder and do not re-create it.

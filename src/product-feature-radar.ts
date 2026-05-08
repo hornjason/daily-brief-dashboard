@@ -170,16 +170,46 @@ async function fetchLatestReleaseNotesContent(
       rnDocsSorted = allowedDocNames
       console.log(`[feature-radar] ${productSlug}: using config-specified docs: ${rnDocsSorted.join(', ')}`)
     } else {
-      // Auto-discover release_notes doc roots from landing page
+      // Auto-discover release notes doc roots from landing page
+      // Try multiple patterns sequentially — first pattern that finds matches wins
+      const DISCOVERY_PATTERNS = [
+        /href="([^"]*release[_-]notes[^"]*)"/gi,
+        /href="([^"]*whats[_-]new[^"]*)"/gi,
+        /href="([^"]*changelog[^"]*)"/gi,
+        /href="([^"]*new[_-]features[^"]*)"/gi,
+      ]
+
       const rnDocNames = new Set<string>()
-      const hrefRx     = /href="([^"]*release[_-]notes[^"]*)"/gi
-      let m: RegExpExecArray | null
-      while ((m = hrefRx.exec(landingHtml)) !== null) {
-        const href = m[1]
-        if (!href.includes('/html/')) continue
-        const docNameM = href.match(/\/html\/([^/?#]+)/)
-        if (docNameM) rnDocNames.add(docNameM[1])
+
+      for (const pattern of DISCOVERY_PATTERNS) {
+        pattern.lastIndex = 0  // reset regex state
+        let m: RegExpExecArray | null
+        while ((m = pattern.exec(landingHtml)) !== null) {
+          const href = m[1]
+          // Extract doc name from either /html/docname or path-ending /docname
+          let docName: string | null = null
+          if (href.includes('/html/')) {
+            const htmlMatch = href.match(/\/html\/([^/?#]+)/)
+            if (htmlMatch) docName = htmlMatch[1]
+          } else {
+            // Extract last path segment (e.g., /2.6/whats_new-aap_26 → whats_new-aap_26)
+            const segments = href.split('/').filter(s => s.length > 0)
+            const lastSegment = segments[segments.length - 1]
+            // Only use if it matches our pattern keywords (not a version number)
+            if (lastSegment && !/^\d+(\.\d+)?$/.test(lastSegment)) {
+              docName = lastSegment
+            }
+          }
+          if (docName) rnDocNames.add(docName)
+        }
+
+        // If we found at least one doc, validate and use it
+        if (rnDocNames.size > 0) {
+          // Content validation will happen when we fetch the html-single URL below
+          break  // first pattern that finds matches wins
+        }
       }
+
       // Sort descending (latest first), keep top 2
       rnDocsSorted = Array.from(rnDocNames).sort().reverse().slice(0, 2)
       console.log(`[feature-radar] ${productSlug}: auto-discovered docs: ${rnDocsSorted.join(', ')}`)
@@ -204,7 +234,18 @@ async function fetchLatestReleaseNotesContent(
         continue
       }
 
-      const fullText = htmlToText(await res.text())
+      const htmlText = await res.text()
+      // Content validation: must be >1KB and contain version strings
+      if (htmlText.length < 1024) {
+        console.warn(`[feature-radar] ${productSlug}: ${singleUrl} too small (${htmlText.length} bytes)`)
+        continue
+      }
+      if (!/\d+\.\d+/.test(htmlText)) {
+        console.warn(`[feature-radar] ${productSlug}: ${singleUrl} missing version strings`)
+        continue
+      }
+
+      const fullText = htmlToText(htmlText)
       const rnLabel  = docName.replace(/_/g, ' ')
 
       // Extract new features and technology preview sections
