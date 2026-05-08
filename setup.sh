@@ -13,7 +13,8 @@ set -euo pipefail
 # ---------- Constants ----------
 
 SETUP_SCHEMA_VERSION="1.3.1"
-IMAGE_REF="ghcr.io/hornjason/daily-brief-dashboard:latest"
+IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE_REF="ghcr.io/hornjason/daily-brief-dashboard:${IMAGE_TAG}"
 DASHBOARD_URL="http://localhost:7777/dashboard/setup"
 HEALTH_URL="http://localhost:7777/api/aes"
 ENV_EXAMPLE_URL="https://raw.githubusercontent.com/hornjason/daily-brief-dashboard/main/.env.example"

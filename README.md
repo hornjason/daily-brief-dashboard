@@ -4,8 +4,38 @@ A customer intelligence dashboard for Red Hat Account Solution Architects. It ag
 
 ## Prerequisites
 
-- **Podman** — install from [podman.io](https://podman.io/docs/installation). On macOS, start the VM once with `podman machine start`.
-- **Red Hat offline token** — generate one at [access.redhat.com/management/api](https://access.redhat.com/management/api).
+### Install Podman
+
+**macOS:**
+```bash
+brew install podman
+podman machine init
+podman machine set --memory 4096  # 4GB minimum required
+podman machine start
+```
+
+**Ubuntu / Debian:**
+```bash
+sudo apt update
+sudo apt install -y podman
+```
+
+**RHEL / Fedora:**
+```bash
+sudo dnf install -y podman
+```
+
+**Other Linux distributions:** See [podman.io/docs/installation](https://podman.io/docs/installation)
+
+### System Requirements
+
+- **RAM:** 4GB minimum (8GB recommended)
+- **Disk:** 5GB free space
+- **CPU:** 2+ cores recommended
+
+### Red Hat Portal Access
+
+You'll need a Red Hat offline token during setup. Generate one at [access.redhat.com/management/api](https://access.redhat.com/management/api) before running the installer.
 
 ## Quick Start
 
@@ -44,7 +74,27 @@ Fix:
 podman machine start
 ```
 
-If you have never initialized a machine: `podman machine init && podman machine start`.
+If you have never initialized a machine: 
+```bash
+podman machine init
+podman machine set --memory 4096
+podman machine start
+```
+
+### Podman machine RAM too low (macOS)
+
+```
+✗ Podman machine RAM: 2048MB — minimum required is 4096MB (4GB).
+```
+
+The container needs 4GB minimum (uses 2GB for shared memory alone). Fix:
+```bash
+podman machine stop
+podman machine set --memory 4096
+podman machine start
+```
+
+Then re-run `./setup.sh`.
 
 ### Port 7777 in use
 
@@ -85,3 +135,17 @@ You only need to do this once. After that the dashboard is at **http://localhost
 ## Support
 
 Issues and feedback: [open an issue](https://github.com/hornjason/daily-brief-dashboard/issues).
+
+---
+
+## For Maintainers
+
+**Release artifacts** (setup.sh, .env.example, docker-compose.yml) are kept in sync with this README and the container image. When updating prerequisites or system requirements:
+
+1. Update setup.sh preflight checks (MIN_*_MB constants, check_* functions)
+2. Update .env.example with any new required variables
+3. Update docker-compose.yml ports, volumes, resource limits
+4. Update this README Prerequisites section to match
+5. Rebuild and publish the container image with matching version tags
+
+This ensures users installing from different entry points (curl | bash, docker-compose, manual podman run) all get consistent documentation and validated prerequisites.
