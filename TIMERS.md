@@ -2,13 +2,13 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-08
 ---
 
 # Timer Reference
 
-Complete verified inventory of all timers in DailyBriefDashboard. 33 server-side timers across 16 source files + 3 sync daemon timers in `scripts/sync-l3-daemon.ts` (Group 7).
-Last verified: 2026-04-01 (server timers, Marcus Webb). Sync daemon timers added 2026-04-30.
+Complete verified inventory of all timers in DailyBriefDashboard. 33 server-side timers across 16 source files + 4 sync daemon timers in `scripts/sync-l3-daemon.ts` (Group 7).
+Last verified: 2026-04-01 (server timers, Marcus Webb). Sync daemon timers updated 2026-05-08.
 
 ---
 
@@ -259,12 +259,15 @@ These run inside `scripts/sync-l3-daemon.ts` in the separate `pai-sync-l3` podma
 | # | Name | File | Interval | Configurable |
 |---|------|------|----------|-------------|
 | D1 | SSO Keepalive | `scripts/sync-l3-daemon.ts` | 2h (`setInterval`) | No |
-| D2 | Trigger Poller | `scripts/sync-l3-daemon.ts` | 30s (`setInterval`) | No |
+| D2 | Sync Trigger Poller | `scripts/sync-l3-daemon.ts` | 30s (`setInterval`) | No |
 | D3 | Daily Sync | `scripts/sync-l3-daemon.ts` | 5:30am ET (`setTimeout` reschedule loop) | No |
+| D4 | Keepalive Trigger Poller | `scripts/sync-l3-daemon.ts` | 30s (`setInterval`) | No |
 
 ### D1 — SSO Keepalive (every 2h)
 
-Navigates Tableau CCSP dashboard and SF Lightning home inside the daemon's shared Chromium context. Detects session expiry by checking if the final URL contains `signin`, `auth`, `login`, or `sso`. On failure: logs error and sends alert email to `jhorn@redhat.com` with subject `L3 Sync Daemon - Keepalive Failed {date}`. Daemon continues running — next sync will fail if session is not renewed.
+Navigates Tableau viz embed (`/t/site/views/OverallCloudConsumptionDashboard/CloudConsumption`), waits for SSO redirect chain to complete, validates viz rendered (Raw Data tab visible in iframe), then navigates SF Lightning home (`/lightning/page/home`). Auto-fills email from `TABLEAU_USER_EMAIL` env var if login page detected. Throws if viz fails to render or 5-minute login deadline passes. On failure: logs error and sends alert email to `jhorn@redhat.com` with subject `L3 Sync Daemon - Keepalive Failed {date}`. Daemon continues running — next sync will fail if session is not renewed.
+
+Manual trigger: `make keepalive-now` (creates `/data/cache/keepalive-trigger`, polled by Timer D4).
 
 **Non-obvious:** fires independently of sync cycle. A keepalive failure does not abort a running sync — it only emails and logs. The next `syncAllPods()` call will fail when it tries to navigate inside a dead context.
 
@@ -279,6 +282,12 @@ Polls for `/data/cache/sync-trigger` file. When found: deletes the file atomical
 Uses `setTimeout` reschedule loop (same pattern as server-side scheduler timers). `scheduleNextSync()` calculates `getMsUntil530amET()` — targets 09:30 UTC, handles crossing midnight. After each run, reschedules for the next day. EST/EDT handled automatically (UTC target is fixed; local time shifts around it).
 
 **Non-obvious:** if the daemon starts after 09:30 UTC, it schedules for the next day — no same-day catchup run. Use `make sync-now` to trigger immediately after a late start.
+
+### D4 — Keepalive Trigger Poller (every 30s)
+
+Polls for `/data/cache/keepalive-trigger` file. When found: deletes the file atomically (before keepalive starts), then calls `doKeepalive()`. Maximum latency from `make keepalive-now` to execution start: 30s.
+
+**Non-obvious:** trigger file is deleted BEFORE keepalive starts (mirrors D2 sync trigger pattern). Allows watching keepalive execution in VNC without waiting for the 2-hour automatic timer.
 
 ---
 

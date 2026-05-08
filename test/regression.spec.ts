@@ -2451,3 +2451,36 @@ test.describe('REG-F07 SF report URL extraction in bootstrap validation', () => 
     expect(shouldInvalidateCacheWithRemoval).toBe(true)
   })
 })
+
+// ── REG-029: BKL-HERO-PARENT-FOLDER-CONFUSION — parentFolderId vs podBookingsFolderId separation ──
+test.describe('REG-029: parentFolderId / podBookingsFolderId separation', () => {
+  test('GET /api/settings/pod-config returns both parentFolderId and podBookingsFolderId', async () => {
+    const { status, body } = await getJSON('/api/settings/pod-config')
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('podBookingsFolderId')
+    expect(body).toHaveProperty('parentFolderId')
+    expect(typeof body.parentFolderId).toBe('string')
+  })
+
+  test('POST /api/settings/parent-folder saves parentFolderId without changing podBookingsFolderId', async () => {
+    // Read current state
+    const before = await getJSON('/api/settings/pod-config')
+    const originalPodBookings = before.body.podBookingsFolderId
+
+    // Save a test parentFolderId
+    const testFolderId = 'test-parent-folder-reg029'
+    const saveRes = await postJSON('/api/settings/parent-folder', { folderId: testFolderId })
+    expect(saveRes.status).toBe(200)
+    expect(saveRes.body.ok).toBe(true)
+    expect(saveRes.body.parentFolderId).toBe(testFolderId)
+
+    // Verify parentFolderId changed but podBookingsFolderId did not
+    const after = await getJSON('/api/settings/pod-config')
+    expect(after.body.parentFolderId).toBe(testFolderId)
+    expect(after.body.podBookingsFolderId).toBe(originalPodBookings)
+
+    // Restore original parentFolderId
+    const originalParent = before.body.parentFolderId ?? ''
+    await postJSON('/api/settings/parent-folder', { folderId: originalParent })
+  })
+})

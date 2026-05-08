@@ -144,6 +144,16 @@ Decision: DONE — Three fixes applied 2026-03-31:
 
 ## Bugs
 
+### BKL-HERO-PARENT-FOLDER-CONFUSION — Wizard conflates podBookingsFolderId with parentFolderId
+- Status: ✅ DONE 2026-05-08
+- Priority: P1
+- Issue: #72 (closed)
+- Source: Hero install testing 2026-05-08 (Garrett Dixon onboarding)
+- Files: src/scrape-api.ts:71,939-995; src/bootstrap/steps/create-drive-folder.ts:18,30-51; dashboard/src/hooks/useBootstrapConfig.ts:38,78,131,188; dashboard/src/pages/setup/AEsCustomersSection.tsx:1059,1168,1179,1223,1572-1579,1598,1606; dashboard/src/components/BootstrapConfigBlock.tsx:35,41,152-154,293; test/regression.spec.ts:2456-2486 (REG-029); test/regression/bootstrap.spec.ts:235-322 (REG-HERO-PARENT-01/02/03)
+- Description: Garrett Dixon's AE folder was created at `CommandCenter/Subscription Data/Garrett Dixon/` instead of `CommandCenter/Garrett Dixon/`. Root cause: wizard's "Parent Drive Folder" field saved to `podBookingsFolderId` (Subscription Data folder `14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo`) via `POST /api/sf-bookings/pod-folder`, then bootstrap used it as `parentFolderId` for AE folder creation. Two semantically different folder concepts (CommandCenter root vs Subscription Data CSV location) shared the same UI field and state variable.
+- Decision: DONE — Full separation implemented: (1) GET /api/settings/pod-config now returns both `parentFolderId` and `podBookingsFolderId`, (2) New POST /api/settings/parent-folder endpoint saves only to `parentFolderId` field, (3) Bootstrap guard in create-drive-folder.ts validates `parentFolderId !== podBookingsFolderId` and throws on collision, (4) Frontend state split: `commandCenterFolderId` (new) vs `podBookingsFolderId` (existing) in useBootstrapConfig hook, (5) Wizard BootstrapConfigBlock sends to `/api/settings/parent-folder`, (6) Bootstrap POSTs use `commandCenterFolderId` via `sharedParentFolderId` prop. Removed 3 inline SETTINGS_PATH duplications. Regression tests: REG-029 (API contract), REG-HERO-PARENT-01 (guard validation), REG-HERO-PARENT-02 (wizard endpoint), REG-HERO-PARENT-03 (bootstrap state flow). Quinn validated PASS on production (7777): API isolation confirmed, wizard UI correct, guard present. Commit: [pending].
+- Can we test: YES — REG-029 + REG-HERO-PARENT-01/02/03 regression tests verify separation end-to-end.
+
 ### BKL-HERO-PRODUCT-CONFIG-01 — Product Intelligence Hub empty on hero install (missing first-boot seed)
 - Status: ✅ DONE 2026-05-07
 - Priority: P1

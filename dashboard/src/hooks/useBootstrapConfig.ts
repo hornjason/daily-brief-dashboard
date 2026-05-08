@@ -38,6 +38,10 @@ export interface UseBootstrapConfigResult {
   /** Update the local podBookingsFolderId state — e.g. after the user validates
    *  and persists a corrected folder via POST /api/sf-bookings/pod-folder. */
   setPodBookingsFolderId: (folderId: string) => void
+  /** CommandCenter root folder ID for AE output folders. Distinct from podBookingsFolderId. */
+  commandCenterFolderId: string
+  /** Update commandCenterFolderId — set after user validates parent folder via POST /api/settings/parent-folder. */
+  setCommandCenterFolderId: (folderId: string) => void
   /** Derived POD options from podSfReportMap keys, with labels from `podLabels`. */
   podOptions: ReadonlyArray<{ value: string; label: string }>
   /** Available regions, loaded from `/api/settings/regions`. */
@@ -54,6 +58,7 @@ export interface UseBootstrapConfigResult {
 
 interface PodConfigResponse {
   podBookingsFolderId: string | null
+  parentFolderId?: string | null
   podSfReports: Record<string, string>
   podLabels?: Record<string, string>
   territorySheetUrl: string | null
@@ -70,6 +75,7 @@ export function useBootstrapConfig(): UseBootstrapConfigResult {
   const [podLabels, setPodLabels] = useState<Record<string, string>>({})
   const [territorySheetUrl, setTerritorySheetUrl] = useState<string>('')
   const [podBookingsFolderId, setPodBookingsFolderId] = useState<string>('')
+  const [commandCenterFolderId, setCommandCenterFolderId] = useState<string>('')
   const [regions, setRegions] = useState<RegionSummary[]>([])
   const [selectedRegion, setSelectedRegionState] = useState<string>('')
   const [loading, setLoading] = useState<boolean>(true)
@@ -122,6 +128,7 @@ export function useBootstrapConfig(): UseBootstrapConfigResult {
         setPodLabels(json.podLabels ?? {})
         setTerritorySheetUrl(json.territorySheetUrl ?? '')
         setPodBookingsFolderId(json.podBookingsFolderId ?? '')
+        setCommandCenterFolderId(json.parentFolderId ?? '')
         // Reset POD selection when region changes — old POD won't exist in new region
         setSelectedPodState('')
       })
@@ -183,6 +190,8 @@ export function useBootstrapConfig(): UseBootstrapConfigResult {
     territorySheetId,
     podBookingsFolderId,
     setPodBookingsFolderId,
+    commandCenterFolderId,
+    setCommandCenterFolderId,
     podOptions,
     regions,
     selectedRegion,

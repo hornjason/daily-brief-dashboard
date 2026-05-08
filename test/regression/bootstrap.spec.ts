@@ -231,3 +231,101 @@ test.describe('REG-BOOT-06: bootstrap auto-enqueues RH cases scraper after compl
     expect(checked, 'expected at least 2 BKL-BOOT-06 enqueue sites to verify').toBeGreaterThanOrEqual(2)
   })
 })
+
+// ── REG-HERO-PARENT-01: Bootstrap guard prevents folder collision (Issue #72) ──
+// Root cause: Wizard saved "Parent Drive Folder" to podBookingsFolderId instead
+// of parentFolderId, causing Garrett Dixon AE folder to be created inside
+// "Subscription Data" folder instead of CommandCenter root.
+// Fix: create-drive-folder.ts validates parentFolderId !== podBookingsFolderId
+// and throws if they match.
+test.describe('REG-HERO-PARENT-01: Bootstrap guard prevents parentFolderId collision (Issue #72)', () => {
+  const CREATE_DRIVE_FOLDER = resolve(import.meta.dirname!, '..', '..', 'src', 'bootstrap', 'steps', 'create-drive-folder.ts')
+
+  test('create-drive-folder imports SETTINGS_PATH from drive-config-sync', () => {
+    const src = readFileSync(CREATE_DRIVE_FOLDER, 'utf8')
+    expect(src, 'must import SETTINGS_PATH from drive-config-sync').toMatch(/import\s*\{[^}]*SETTINGS_PATH[^}]*\}\s*from\s*['"]\.\.\/\.\.\/drive-config-sync/)
+  })
+
+  test('create-drive-folder validates parentFolderId against podBookingsFolderId (BKL-HERO-PARENT-FOLDER-CONFUSION)', () => {
+    const src = readFileSync(CREATE_DRIVE_FOLDER, 'utf8')
+    // BKL-HERO-PARENT-FOLDER-CONFUSION marker must anchor the guard check
+    expect(src, 'BKL-HERO-PARENT-FOLDER-CONFUSION marker missing').toContain('BKL-HERO-PARENT-FOLDER-CONFUSION')
+    const guardIdx = src.indexOf('BKL-HERO-PARENT-FOLDER-CONFUSION')
+    expect(guardIdx, 'Guard check marker not found').toBeGreaterThan(0)
+
+    // The guard must check if parentFolderId === podBookingsFolderId
+    const guardRegion = src.slice(guardIdx, guardIdx + 800)
+    expect(guardRegion, 'Must read region.podBookingsFolderId').toContain('region.podBookingsFolderId')
+    expect(guardRegion, 'Must compare parentFolderId === podBookingsFolderId').toMatch(/parentFolderId\s*===\s*region\.podBookingsFolderId/)
+    expect(guardRegion, 'Must throw error on collision').toContain('throw new Error')
+    expect(guardRegion, 'Error message must mention both folders').toMatch(/parentFolderId cannot be the same as podBookingsFolderId/)
+  })
+
+  test('Guard check gracefully handles missing settings file (non-blocking)', () => {
+    const src = readFileSync(CREATE_DRIVE_FOLDER, 'utf8')
+    const guardIdx = src.indexOf('BKL-HERO-PARENT-FOLDER-CONFUSION')
+    const guardRegion = src.slice(guardIdx, guardIdx + 1200)
+    // If settings read fails for reasons other than collision, warn but don't block
+    expect(guardRegion, 'Must catch errors from settings read').toMatch(/catch\s*\(\s*e/)
+    expect(guardRegion, 'Must rethrow collision errors').toMatch(/if\s*\(\s*e\?\.message\?\.includes\(['"]parentFolderId cannot be the same as/)
+    expect(guardRegion, 'Must warn on non-blocking failures').toContain('console.warn')
+  })
+})
+
+// ── REG-HERO-PARENT-02: Wizard saves to correct endpoint (Issue #72) ──
+// Root cause: BootstrapConfigBlock.tsx called /api/sf-bookings/pod-folder which
+// saved to podBookingsFolderId, not parentFolderId.
+// Fix: Component now calls /api/settings/parent-folder to save CommandCenter root.
+test.describe('REG-HERO-PARENT-02: Wizard saves parentFolderId to correct endpoint (Issue #72)', () => {
+  const BOOTSTRAP_CONFIG_BLOCK = resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'components', 'BootstrapConfigBlock.tsx')
+
+  test('BootstrapConfigBlock saves to /api/settings/parent-folder, not /api/sf-bookings/pod-folder', () => {
+    const src = readFileSync(BOOTSTRAP_CONFIG_BLOCK, 'utf8')
+    // Must call /api/settings/parent-folder
+    expect(src, 'Must use /api/settings/parent-folder endpoint').toContain('/api/settings/parent-folder')
+    // The old endpoint may appear in negative-context comments (e.g., "not /api/sf-bookings/pod-folder")
+    // but must NOT appear in actual fetch calls
+    const fetchIdx = src.indexOf("fetch('/api/settings/parent-folder'")
+    expect(fetchIdx, '/api/settings/parent-folder fetch call not found').toBeGreaterThan(0)
+    // Verify the fetch region does not contain the old endpoint
+    const fetchRegion = src.slice(Math.max(0, fetchIdx - 200), fetchIdx + 500)
+    expect(fetchRegion, 'Fetch call must not reference old /api/sf-bookings/pod-folder endpoint').not.toMatch(/fetch\(['"][^'"]*\/api\/sf-bookings\/pod-folder/)
+  })
+})
+
+// ── REG-HERO-PARENT-03: Bootstrap uses commandCenterFolderId (Issue #72) ──
+// Root cause: AEsCustomersSection.tsx passed podBookingsFolderId as parentFolderId
+// to bootstrap, causing folders to nest incorrectly.
+// Fix: Component now uses commandCenterFolderId from useBootstrapConfig hook.
+test.describe('REG-HERO-PARENT-03: Bootstrap uses commandCenterFolderId not podBookingsFolderId (Issue #72)', () => {
+  const AES_CUSTOMERS_SECTION = resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'pages', 'setup', 'AEsCustomersSection.tsx')
+
+  test('AEsCustomersSection passes commandCenterFolderId to bootstrap forms', () => {
+    const src = readFileSync(AES_CUSTOMERS_SECTION, 'utf8')
+    // Must destructure commandCenterFolderId from useBootstrapConfig
+    expect(src, 'Must destructure commandCenterFolderId from hook').toMatch(/const\s*\{[^}]*commandCenterFolderId[^}]*\}\s*=\s*useBootstrapConfig/)
+
+    // POD bootstrap must use commandCenterFolderId directly
+    const podIdx = src.indexOf('POST', src.indexOf('/api/bootstrap/pod'))
+    expect(podIdx, 'POD bootstrap POST not found').toBeGreaterThan(0)
+    const podRegion = src.slice(podIdx, podIdx + 500)
+    expect(podRegion, 'POD bootstrap must use commandCenterFolderId').toMatch(/parentFolderId:\s*commandCenterFolderId/)
+
+    // Single-AE form must receive commandCenterFolderId as sharedParentFolderId prop
+    expect(src, 'AutoBootstrapForm must receive commandCenterFolderId as sharedParentFolderId').toMatch(/sharedParentFolderId=\{commandCenterFolderId\}/)
+
+    // Must NOT use podBookingsFolderId anywhere in bootstrap calls
+    expect(src, 'Must not use podBookingsFolderId as parentFolderId').not.toMatch(/parentFolderId:\s*podBookingsFolderId/)
+  })
+
+  test('Parent folder change handler updates commandCenterFolderId, not podBookingsFolderId', () => {
+    const src = readFileSync(AES_CUSTOMERS_SECTION, 'utf8')
+    // onParentFolderChange callback must set commandCenterFolderId
+    const callbackIdx = src.indexOf('onParentFolderChange={(folderId')
+    expect(callbackIdx, 'onParentFolderChange callback implementation not found').toBeGreaterThan(0)
+    const callbackRegion = src.slice(callbackIdx, callbackIdx + 800)
+    expect(callbackRegion, 'Callback must call setCommandCenterFolderId').toContain('setCommandCenterFolderId')
+    // Must NOT call setPodBookingsFolderId
+    expect(callbackRegion, 'Callback must not call setPodBookingsFolderId').not.toContain('setPodBookingsFolderId')
+  })
+})

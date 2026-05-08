@@ -32,13 +32,13 @@ export interface BootstrapConfigBlockProps {
    * When provided, renders the Parent Drive Folder field in Full POD mode.
    * The field is editable, has a Validate button, and shows a Drive
    * scaffolding preview once the folder is validated. The validated folder is
-   * persisted to settings.json via POST /api/sf-bookings/pod-folder and the
+   * persisted to settings.json via POST /api/settings/parent-folder and the
    * parent is notified via `onParentFolderChange` so its local state stays in
    * sync for the next bootstrap run.
    */
   parentFolderId?: string
   /** Callback fired after a successful validate + save so the parent's
-   *  podBookingsFolderId state picks up the corrected value. */
+   *  commandCenterFolderId state picks up the corrected value. */
   onParentFolderChange?: (folderId: string) => void
   /** AE names that will be bootstrapped for the currently selected POD.
    *  Used to render the Drive scaffolding preview (folder tree) below the
@@ -148,10 +148,10 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
       setFolderResolvedId(resolvedId)
       setFolderName(resolvedName)
 
-      // Persist to settings.json so next session has the corrected value.
-      // BKL-UX75 endpoint: POST /api/sf-bookings/pod-folder { folderId }.
+      // Persist parentFolderId to settings.json via the dedicated endpoint.
+      // BKL-HERO-PARENT-FOLDER-CONFUSION: uses /api/settings/parent-folder (not /api/sf-bookings/pod-folder).
       try {
-        const saveRes = await fetch('/api/sf-bookings/pod-folder', {
+        const saveRes = await fetch('/api/settings/parent-folder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ folderId: resolvedId }),
@@ -290,8 +290,8 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
       {/* 4 — Parent Drive Folder (editable, Full POD mode only) ─────────── */}
       {/* Editable URL/ID field + Validate button. On successful validate we: */}
       {/*   (a) show the folder name + clickable Drive link                  */}
-      {/*   (b) persist to settings.json via POST /api/sf-bookings/pod-folder */}
-      {/*   (c) notify the parent so local podBookingsFolderId state updates */}
+      {/*   (b) persist to settings.json via POST /api/settings/parent-folder */}
+      {/*   (c) notify the parent so local commandCenterFolderId state updates */}
       {/*   (d) render a Drive scaffolding preview (folder tree) below       */}
       {parentFolderId !== undefined && isFolderLocked && lockedFolderId && (
         <div data-testid="parent-drive-folder-block-locked">

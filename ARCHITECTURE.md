@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-06
+updated: 2026-05-08
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -100,7 +100,7 @@ RH Portal SSO login → BrowserContext created
 3. `initSfContext(PROFILE_DIR)` — opens SF Playwright context (non-fatal if it fails; SF shares the RH profile)
 4. Boot cleanup — deletes any stale `/data/cache/sync-trigger` from a prior daemon crash
 
-*Timer 1 — SSO keepalive (every 2h):* Opens a new page, navigates Tableau and SF Lightning home. Detects redirect to login/auth and emails if session expired.
+*Timer 1 — SSO keepalive (every 2h):* Opens a new page, navigates Tableau viz embed (`/t/site/views/OverallCloudConsumptionDashboard/CloudConsumption`), waits for SSO redirect chain to complete, validates viz rendered (Raw Data tab visible), then navigates SF Lightning home (`/lightning/page/home`). Auto-fills email from `TABLEAU_USER_EMAIL` if session expired. Emails if login required or viz fails to render.
 
 *Timer 2 — trigger poller (every 30s):* Checks for `/data/cache/sync-trigger`. If present: deletes it atomically, runs `syncAllPods()` using live contexts. Discards trigger if a sync is already running.
 

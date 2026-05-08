@@ -68,6 +68,7 @@ import { isPrimary } from './lib/node-role.ts'
 import { safeCookieOp } from './browser-utils.ts'
 import { fetchSfBookingsRaw, deriveSfCustomersByTerritory, listPodBookingSheets, matchPodSheet } from './sf-bookings-reader.ts'
 import { getStatus, getScraperStatus, markRunning, recordOutcome, getUnifiedStatus } from './scraper-status-store.ts'
+import { SETTINGS_PATH } from './drive-config-sync.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
 import { driveClient } from './lib/drive-client.ts'
 
@@ -937,9 +938,9 @@ export function registerScrapeRoutes(app: Hono): void {
   // for backward compat. Returns flat podSfReports/podLabels maps for the
   // requested region so the frontend can keep its existing shape.
   app.get('/api/settings/pod-config', (c) => {
-    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
     const regionId = c.req.query('region') ?? undefined
     let podBookingsFolderId: string | null = null
+    let parentFolderId: string = ''
     let podSfReports: Record<string, string> = {}
     let podLabels: Record<string, string> = {}
     let territorySheetUrl: string | null = null
@@ -948,11 +949,49 @@ export function registerScrapeRoutes(app: Hono): void {
       const settings = normalizeSettings(JSON.parse(raw))
       const region = getRegionById(settings, regionId)
       podBookingsFolderId = region.podBookingsFolderId || null
+      parentFolderId = region.parentFolderId || ''
       territorySheetUrl = region.territorySheetUrl || null
       podSfReports = flattenPodSfReports(region)
       podLabels = flattenPodLabels(region)
     } catch { /* no settings file yet — return empty defaults */ }
-    return c.json({ podBookingsFolderId, podSfReports, podLabels, territorySheetUrl })
+    return c.json({ podBookingsFolderId, parentFolderId, podSfReports, podLabels, territorySheetUrl })
+  })
+
+  // ── POST /api/settings/parent-folder — save parentFolderId separately from podBookingsFolderId ──
+  // BKL-HERO-PARENT-FOLDER-CONFUSION: parentFolderId (CommandCenter root for AE folders)
+  // is semantically distinct from podBookingsFolderId (Subscription Data folder for L3 CSVs).
+  app.post('/api/settings/parent-folder', async (c) => {
+    try {
+      const body = await c.req.json<{ folderId?: string; region?: string }>()
+      const folderId = typeof body.folderId === 'string' ? body.folderId.trim() : ''
+      const regionId = typeof body.region === 'string' ? body.region : undefined
+      const settings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+      const normalized = normalizeSettings(settings)
+      const region = getRegionById(normalized, regionId)
+
+      // Write parentFolderId to the matching region in settings.json
+      if (Array.isArray(settings.regions)) {
+        const idx = settings.regions.findIndex((r: any) => r.id === region.id)
+        if (idx >= 0) settings.regions[idx].parentFolderId = folderId
+      } else {
+        settings.parentFolderId = folderId
+      }
+      writeJsonAtomic(SETTINGS_PATH, settings)
+
+      // Best-effort Drive config sync
+      try {
+        const { writeSettingsToDrive } = await import('./drive-config-sync.ts')
+        if (folderId) {
+          await writeSettingsToDrive(folderId)
+        }
+      } catch (driveErr: any) {
+        console.warn('[settings/parent-folder] Drive settings sync error (non-fatal):', sanitizeErr(driveErr))
+      }
+
+      return c.json({ ok: true, parentFolderId: folderId })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
   })
 
   // ── GET /api/settings/regions — list available regions for the UI selector ──

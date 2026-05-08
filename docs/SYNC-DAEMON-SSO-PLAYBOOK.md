@@ -2,7 +2,7 @@
 doc-type: runbook
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-08
 ---
 
 # L3 Sync Daemon — SSO Playbook (BKL-SYNC-L3-04)
@@ -67,7 +67,7 @@ Tableau will redirect back to the dashboard — you're done.
 
 Navigate to:
 ```
-https://redhatcrm.lightning.force.com/lightning/n/Home
+https://redhatcrm.lightning.force.com/lightning/page/home
 ```
 
 If redirected to login: complete SSO. SF Lightning home loads — you're done.
@@ -79,12 +79,25 @@ Watch logs for 2–3 minutes:
 make sync-logs
 ```
 
-You should see:
+You should see (if session is valid):
 ```
-[sync-daemon] keepalive: navigating Tableau…
+[sync-daemon] keepalive: navigating Tableau viz…
+[sync-daemon] keepalive: URL after navigation: https://10ay.online.tableau.com/#/site/...
+[sync-daemon] keepalive: waiting for viz to render…
+[sync-daemon] keepalive: viz ready — Raw Data tab visible (12s)
 [sync-daemon] keepalive: navigating Salesforce…
-[sync-daemon] keepalive OK
+[sync-daemon] keepalive: OK (Tableau viz rendered + SF home loaded)
 ```
+
+If session expired, you'll see:
+```
+[sync-daemon] keepalive: URL after navigation: https://sso.online.tableau.com/public/idp/SSO
+[sync-daemon] keepalive: SSO login detected — auto-filling email jhorn@redhat.com
+[sync-daemon] keepalive: auto-filled email and submitted
+[sync-daemon] keepalive: URL after email submit: https://auth.redhat.com/...
+```
+
+Complete MFA in VNC if prompted. The keepalive will wait up to 5 minutes, then validate viz rendered before reporting OK.
 
 ### Step 6 — Switch back to headless (no VNC port)
 
@@ -104,6 +117,21 @@ make sync-now
 ```
 
 Results in logs within 30s. Summary email arrives when sync completes (~5–15 min).
+
+---
+
+## How to trigger an immediate keepalive check
+
+To test SSO session validity or watch keepalive execution in VNC:
+
+```bash
+make keepalive-now
+```
+
+Results in logs within 30s. Useful for:
+- Testing whether Tableau/SF sessions are still valid
+- Watching the keepalive flow in VNC (navigate to `localhost:6080` on Mac Mini)
+- Verifying session recovery after manual re-auth
 
 ---
 

@@ -1056,6 +1056,8 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
     territorySheetId,
     podBookingsFolderId,
     setPodBookingsFolderId,
+    commandCenterFolderId,
+    setCommandCenterFolderId,
     podOptions,
     regions,
     selectedRegion,
@@ -1163,7 +1165,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
   }, [podBootstrapState?.running])
 
   const startPodBootstrap = async () => {
-    if (!territorySheetId.trim() || !sfReportId.trim() || !podBookingsFolderId.trim() || !selectedPod) return
+    if (!territorySheetId.trim() || !sfReportId.trim() || !commandCenterFolderId.trim() || !selectedPod) return
     const podTabTitle = podOptions.find(o => o.value === selectedPod)?.label ?? selectedPod
     setPodStarting(true)
     setPodStartError(null)
@@ -1174,7 +1176,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
         body: JSON.stringify({
           territorySheetId: territorySheetId.trim(),
           sfReportId: sfReportId.trim(),
-          parentFolderId: podBookingsFolderId.trim(),
+          parentFolderId: commandCenterFolderId.trim(),
           podTabTitle,
         }),
       })
@@ -1218,7 +1220,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
   const podFailCount = podBootstrapState?.results.filter(r => r.status === 'error').length ?? 0
   // BKL-UX84: require a fresh session-level validate of the parent folder
   // before allowing the Bootstrap Full POD button to fire.
-  const canStartPodBootstrap = !!territorySheetId.trim() && !!sfReportId.trim() && !!podBookingsFolderId.trim() && !!selectedPod && podFolderValidated
+  const canStartPodBootstrap = !!territorySheetId.trim() && !!sfReportId.trim() && !!commandCenterFolderId.trim() && !!selectedPod && podFolderValidated
 
   const [aes, setAes] = useState<WizardAE[]>([])
   const [loading, setLoading] = useState(true)
@@ -1573,7 +1575,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
             // unlock Bootstrap Full POD. Update the shared folder id AND
             // mark the current session as validated. For single-ae the
             // validated id flows into AutoBootstrapForm as sharedParentFolderId.
-            setPodBookingsFolderId(folderId)
+            setCommandCenterFolderId(folderId)
             setPodFolderValidated(true)
           }}
           previewAeNames={
@@ -1593,7 +1595,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
           sharedPodSfReportMap={podSfReportMap}
           sharedTerritorySheetUrl={territorySheetUrl}
           sharedPodOptions={filteredPodOptions}
-          sharedParentFolderId={podBookingsFolderId}
+          sharedParentFolderId={commandCenterFolderId}
           onAeNameChange={setSingleAePreviewName}
         />
       )}
@@ -1601,10 +1603,10 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
       {/* Full POD tab */}
       {activeTab === 'full-pod' && (
         <div className="space-y-5">
-          {!podBookingsFolderId.trim() && (
+          {!commandCenterFolderId.trim() && (
             <div className="flex items-start gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-2.5 text-xs text-warning">
               <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-              <span>Parent Drive Folder not configured in settings.json — <code>podBookingsFolderId</code> is required for Full POD bootstrap.</span>
+              <span>Parent Drive Folder not configured — a CommandCenter root folder is required for Full POD bootstrap.</span>
             </div>
           )}
 
