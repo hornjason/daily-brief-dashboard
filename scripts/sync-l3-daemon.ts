@@ -32,7 +32,7 @@ const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 // BKL-KEEPALIVE-VIZ-01: Use direct viz embed URL (/t/ not /#/) to actually load the viz.
 // The dashboard shell (/#/) doesn't keep the viz session alive — must hit the viz directly.
 const TABLEAU_VIZ_URL = 'https://10ay.online.tableau.com/t/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
-const SF_BASE_URL = 'https://redhatcrm.lightning.force.com/lightning/n/Home'
+const SF_BASE_URL = 'https://redhatcrm.lightning.force.com/lightning/page/home'
 const KEEPALIVE_INTERVAL_MS = 2 * 60 * 60 * 1000  // 2 hours
 const ALERT_EMAIL = 'jhorn@redhat.com'
 
