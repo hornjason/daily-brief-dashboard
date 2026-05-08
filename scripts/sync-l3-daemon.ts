@@ -164,16 +164,27 @@ async function main(): Promise<void> {
     console.warn('[sync-daemon] SF context init warning (non-fatal):', e.message)
   }
 
-  // ADR-006 §2 H5 — Boot cleanup: delete any stale trigger file from a prior run.
+  // ADR-006 §2 H5 — Boot cleanup: delete any stale trigger files from a prior run.
   // Prevents replaying a trigger that was written before the last daemon restart.
   const CACHE_DIR = process.env.CACHE_DIR ?? '/data/cache'
   const TRIGGER_FILE = `${CACHE_DIR}/sync-trigger`
+  const KEEPALIVE_TRIGGER_FILE = `${CACHE_DIR}/keepalive-trigger`
+
   if (existsSync(TRIGGER_FILE)) {
     try {
       unlinkSync(TRIGGER_FILE)
-      console.log('[sync-daemon] deleted stale trigger file from prior run')
+      console.log('[sync-daemon] deleted stale sync trigger file from prior run')
     } catch (e: any) {
-      console.warn('[sync-daemon] could not delete stale trigger file:', e.message)
+      console.warn('[sync-daemon] could not delete stale sync trigger file:', e.message)
+    }
+  }
+
+  if (existsSync(KEEPALIVE_TRIGGER_FILE)) {
+    try {
+      unlinkSync(KEEPALIVE_TRIGGER_FILE)
+      console.log('[sync-daemon] deleted stale keepalive trigger file from prior run')
+    } catch (e: any) {
+      console.warn('[sync-daemon] could not delete stale keepalive trigger file:', e.message)
     }
   }
 
@@ -235,7 +246,26 @@ async function main(): Promise<void> {
     }
   }, 30_000)
 
-  // Timer 3: daily sync at 5:30am ET
+  // Timer 3: keepalive trigger — poll every 30s for /data/cache/keepalive-trigger
+  setInterval(async () => {
+    if (!existsSync(KEEPALIVE_TRIGGER_FILE)) return
+    // Delete trigger BEFORE running keepalive (atomic consumption)
+    try {
+      unlinkSync(KEEPALIVE_TRIGGER_FILE)
+    } catch (e: any) {
+      console.error('[sync-daemon] failed to delete keepalive trigger file:', e.message)
+      return
+    }
+    console.log('[sync-daemon] keepalive trigger file detected — running immediate keepalive')
+    try {
+      await doKeepalive()
+      console.log('[sync-daemon] keepalive trigger: OK')
+    } catch (e: any) {
+      console.error('[sync-daemon] keepalive trigger: FAILED —', e.message)
+    }
+  }, 30_000)
+
+  // Timer 4: daily sync at 5:30am ET
   scheduleNextSync()
 }
 

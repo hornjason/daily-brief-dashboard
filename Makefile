@@ -53,7 +53,7 @@ MAC_MINI_DIR  ?= ~/DailyBriefDashboard
        demo-deploy demo-status demo-restart demo-setup-tunnel \
        pai-sync-remote demo-full-refresh \
        all-down all-ps \
-       sync-up sync-down sync-logs sync-status sync-now sync-up-vnc
+       sync-up sync-down sync-logs sync-status sync-now sync-up-vnc keepalive-now
 
 up: down
 	podman run -d \
@@ -767,6 +767,11 @@ sync-now:
 	@echo "Triggering immediate sync via daemon…"
 	podman exec pai-sync-l3 touch /data/cache/sync-trigger
 	@echo "Sync queued — watch logs: make sync-logs"
+
+keepalive-now:
+	@echo "Triggering immediate keepalive via daemon…"
+	podman exec pai-sync-l3 touch /data/cache/keepalive-trigger
+	@echo "Keepalive queued — watch logs: make sync-logs"
 
 sync-up-vnc: sync-down
 	@test -f $(SYNC_DATA_DIR)/config/settings.json || \
