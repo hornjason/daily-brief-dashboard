@@ -29,7 +29,9 @@ if (!isPrimary()) {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
-const TABLEAU_URL = 'https://10ay.online.tableau.com/#/site/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
+// BKL-KEEPALIVE-VIZ-01: Use direct viz embed URL (/t/ not /#/) to actually load the viz.
+// The dashboard shell (/#/) doesn't keep the viz session alive — must hit the viz directly.
+const TABLEAU_VIZ_URL = 'https://10ay.online.tableau.com/t/redhatanalytics/views/OverallCloudConsumptionDashboard/CloudConsumption'
 const SF_BASE_URL = 'https://redhatcrm.lightning.force.com/lightning/n/Home'
 const KEEPALIVE_INTERVAL_MS = 2 * 60 * 60 * 1000  // 2 hours
 const ALERT_EMAIL = 'jhorn@redhat.com'
@@ -67,15 +69,15 @@ async function doKeepalive(): Promise<void> {
 
   const page = await ctx.newPage()
   try {
-    // Tableau keepalive
-    console.log('[sync-daemon] keepalive: navigating Tableau…')
-    const tableauUrl = process.env.TABLEAU_BASE_URL ?? TABLEAU_URL
+    // Tableau keepalive — hit the actual viz page (/t/ embed URL) not the dashboard shell
+    console.log('[sync-daemon] keepalive: navigating Tableau viz…')
+    const tableauUrl = process.env.TABLEAU_VIZ_URL ?? TABLEAU_VIZ_URL
     const tableauResp = await page.goto(tableauUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     const tableauFinal = page.url()
     if (tableauFinal.includes('signin') || tableauFinal.includes('auth') || (tableauResp?.status() ?? 200) >= 400) {
       throw new Error(`Tableau session expired — redirected to ${tableauFinal}`)
     }
-    // BKL-CCSP-RETRY-02: Tableau can serve the home page with stale cookies without
+    // BKL-CCSP-RETRY-02: Tableau can serve the viz page with stale cookies without
     // redirecting — the MFA wall only appears on viz endpoints. Check for login form
     // presence (same selectors scrapeOneAe uses) so keepalive catches this case.
     const hasLoginForm = await page
@@ -85,6 +87,8 @@ async function doKeepalive(): Promise<void> {
     if (hasLoginForm) {
       throw new Error('Tableau auth expired')
     }
+    // Wait a few seconds for the viz to actually render (not just DOM loaded)
+    await page.waitForTimeout(5_000)
 
     // SF keepalive
     console.log('[sync-daemon] keepalive: navigating Salesforce…')
