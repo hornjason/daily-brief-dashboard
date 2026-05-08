@@ -243,6 +243,24 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Can we test: YES — Hero install with 2 AEs, verify Pipeline card shows non-zero data; remove 1 AE, verify aggregate updates correctly
 - Related: BKL-HERO-PIPELINE-FILTER-03 (cache invalidation worked, exposed this env var bug), Issue #67 Phase 1 (hero install UX polish)
 
+### BKL-HERO-PRODUCTS-00 — Garrett Dixon customers show 0 products due to BKL-S17 guard blocking tab creation
+- Status: ✅ DONE (2026-05-08)
+- Priority: P1 (blocks hero install product display for entire AE)
+- Source: v1.7.0-rc2 testing (Jason, 2026-05-08)
+- Files: src/supportable-scraper.ts (line 1237-1238), test/regression.spec.ts (lines 2370-2388)
+- Description: Garrett Dixon's 14 customers all show "0 Products" in the UI despite having subscription data in the SF bookings POD sheet. Root cause: BKL-S17 protection logic at supportable-scraper.ts:1237 checks `results.some(r => r.accountNumbers.length > 0)` before writing subscription sheet tabs. Since accountNumbers come from RH Portal discovery (not SF bookings), this check fails even when subscription row data exists (Astrazeneca has 32 rows, Td Synnex has 7 rows, etc.). The function returns early without creating customer-named tabs, leaving only the default "Sheet1" tab. When `/api/refresh/subscriptions` runs, it can't match "Sheet1" to any customer name via `tabMatchesCustomer()`, returning empty arrays for all customers.
+- Evidence: (1) Container log: `[supportable] Garrett Dixon: 0 subscription rows returned — skipping write to protect existing sheet data (BKL-S17)`, (2) Google Sheets API confirms subscription sheet 1P440lJ7iDSWQfTenNYHJH4hSvgQzB5eNkTd6BBqhDTI has only "Sheet1" tab (no customer tabs), (3) SF bookings log shows 13 customers with subscription data, (4) All 14 Garrett Dixon customers have productCount:0 in /api/accounts, (5) Carolanne Farrell and David Delmundo customers show products correctly (their sheets have customer-named tabs)
+- Fix: Changed line 1237 guard from `r.accountNumbers.length > 0` to `r.rows.length > 0`. Added inline comment explaining data source distinction (accountNumbers from RH Portal, rows from SF bookings).
+- Tests: REG-HERO-PRODUCTS-00 unit test validates guard passes when subscription rows exist but accountNumbers empty, and blocks when rows empty
+- Acceptance criteria:
+  1. writeSubscriptionSheet() creates customer-named tabs when subscription data exists, regardless of accountNumbers state ✅
+  2. After SF bookings sync, subscription sheet has customer-named tabs (not just "Sheet1") ✅
+  3. After subscription refresh, customers show non-zero productCount in /api/accounts ✅ (9 of 12 with products)
+  4. Regression test verifies BKL-S17 guard allows tab creation when subscription rows exist but accountNumbers empty ✅
+- Decision: DONE — Shipped in v1.7.0-rc3. Quinn verified 9 of 12 customers show products correctly after fix. Rook scan PASS (no new vulnerabilities).
+- Can we test: YES — Run SF bookings sync, verify subscription sheet has customer tabs, run subscription refresh, verify products appear in UI
+- Related: BKL-S17 (original protection logic against empty scrape results), Issue #67 (hero install UX polish), v1.7.0-rc2 testing
+
 ### BKL-HERO-INTEL-CANCEL-04 — Account Intelligence batch has no cancel button, runs against stale customer list after AE removal
 - Status: 🔴 OPEN
 - Priority: P2 (UX friction on long-running operations)

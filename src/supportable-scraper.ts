@@ -1234,7 +1234,8 @@ export async function writeSubscriptionSheet(
   }
 
   // BKL-S17: never overwrite an existing sheet with empty scrape results
-  const hasAnyData = results.some(r => r.accountNumbers.length > 0)
+  // BKL-HERO-PRODUCTS-00: Check for subscription rows, not accountNumbers (accountNumbers come from RH Portal, rows come from SF bookings)
+  const hasAnyData = results.some(r => r.rows.length > 0)
   if (!hasAnyData && existingSheetId) {
     console.warn(`[supportable] ${aeName}: 0 subscription rows returned — skipping write to protect existing sheet data (BKL-S17)`)
     return existingSheetId

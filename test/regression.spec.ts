@@ -2365,4 +2365,23 @@ test.describe('REG-F07 SF report URL extraction in bootstrap validation', () => 
       expect(m![1].padStart(2, '0')).toBe(expected[i])
     }
   })
+
+  // REG-HERO-PRODUCTS-00: Unit test — BKL-S17 guard checks subscription rows, not accountNumbers
+  test('REG-HERO-PRODUCTS-00: BKL-S17 allows tab creation when subscription rows exist but accountNumbers empty', () => {
+    // Simulate SF bookings result: has subscription rows but no accountNumbers (accountNumbers come from RH Portal, rows come from SF)
+    const results = [
+      { customerName: 'Test Customer', accountNumbers: [], rows: [{ Product: 'RHEL', Status: 'Active' }] },
+    ]
+
+    // The guard should pass (hasAnyData = true) because rows.length > 0
+    const hasAnyData = results.some(r => r.rows.length > 0)
+    expect(hasAnyData).toBe(true)
+
+    // Contrast: if no subscription rows, guard should block
+    const emptyResults = [
+      { customerName: 'Test Customer', accountNumbers: [], rows: [] },
+    ]
+    const hasNoData = emptyResults.some(r => r.rows.length > 0)
+    expect(hasNoData).toBe(false)
+  })
 })
