@@ -295,8 +295,10 @@ Decision: DONE — Three fixes applied 2026-03-31:
   3. `sync-hero-install-files` — commit updated files to main branch [skip ci]
   4. `publish-public-release` — create GitHub Release with asset uploads (backup distribution)
 - Verified: Workflow uses `PUBLIC_REPO_DEPLOY_TOKEN` secret (already configured for release job), commits as `github-actions[bot]`, includes `[skip ci]` to prevent infinite loops.
-- Can we test: YES — Create a test tag, verify workflow runs, check main branch for new commit with updated files, confirm curl to raw.githubusercontent.com/main/setup.sh returns latest version
-- Related: BKL-HERO-README-PREREQS-07 (README accuracy ensures sync'd files match user expectations)
+- **v1.7.0-rc1 fixes (2026-05-08)**: Fixed three workflow issues discovered during rc1 release: (1) Changed `Containerfile` → `Dockerfile.hero` for hero install image, (2) Added `GHCR_TOKEN` secret for ghcr.io authentication (fixes permission_denied), (3) Added `if: "!contains(github.ref_name, '-rc')"` to skip sync-hero-install-files for rc tags (no main branch pollution), (4) Conditional :latest/:stable tagging (rc builds only push versioned tag), (5) Made `supportableSheetId` optional in test schema (Supportable permanently disabled).
+- **IMAGE_TAG override (2026-05-08)**: Added `IMAGE_TAG=${IMAGE_TAG:-latest}` support to setup.sh for testing rc builds via `curl ... | IMAGE_TAG=v1.7.0-rc1 bash`.
+- Can we test: YES — Create a test tag, verify workflow runs, check main branch for new commit with updated files, confirm curl to raw.githubusercontent.com/main/setup.sh returns latest version. **Verified**: v1.7.0-rc1 tag successfully built and pushed image to ghcr.io/hornjason/daily-brief-dashboard:v1.7.0-rc1, E2E gate passed, sync job correctly skipped for -rc tag.
+- Related: BKL-HERO-README-PREREQS-07 (README accuracy ensures sync'd files match user expectations), BKL-HERO-AE-SELECT-02 + BKL-HERO-PIPELINE-FILTER-03 (Phase 1 fixes in v1.7.0-rc1)
 
 ### BKL-SFCACHE-02 — SF L3 write-back fires after fix; add regression log assertion
 - Status: ✅ DONE 2026-04-27
