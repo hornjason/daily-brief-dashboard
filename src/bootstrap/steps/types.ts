@@ -22,6 +22,8 @@ export interface BootstrapContext {
   tableauTerritories: string[]
   parentFolderId?: string
   podName?: string
+  /** BKL-HERO-PARENT-REGION-BUG: for region-scoped settings validation */
+  regionId?: string
 
   // Mutated across steps
   /** Set by Step 1 (Create Drive Folder); pre-populated if AE already has a folder. */

@@ -37,7 +37,8 @@ export const createDriveFolderStep: BootstrapStepDef = {
         const { normalizeSettings, getRegionById } = await import('../../region-config.ts')
         const raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
         const settings = normalizeSettings(raw)
-        const region = getRegionById(settings)
+        // BKL-HERO-PARENT-REGION-BUG: pass ctx.regionId so we check the correct region's podBookingsFolderId
+        const region = getRegionById(settings, ctx.regionId)
         if (region.podBookingsFolderId && parentFolderId === region.podBookingsFolderId) {
           throw new Error(
             'parentFolderId cannot be the same as podBookingsFolderId (Subscription Data folder). ' +

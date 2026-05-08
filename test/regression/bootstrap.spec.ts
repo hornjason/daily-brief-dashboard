@@ -329,3 +329,113 @@ test.describe('REG-HERO-PARENT-03: Bootstrap uses commandCenterFolderId not podB
     expect(callbackRegion, 'Callback must not call setPodBookingsFolderId').not.toContain('setPodBookingsFolderId')
   })
 })
+
+// ── REG-BOOT-PARENT-REGION-01: Multi-region parent folder save (Issue #74) ──
+// Root cause: BootstrapConfigBlock.tsx:154 called POST /api/settings/parent-folder
+// with { folderId } but omitted region parameter. Server's getRegionById(settings, undefined)
+// defaulted to regions[0] (West Commercial), so East Commercial's parentFolderId stayed empty.
+// Fix: Add region: selectedRegion to POST body.
+test.describe('REG-BOOT-PARENT-REGION-01: parent folder saves to correct region, not default (Issue #74)', () => {
+  const BOOTSTRAP_CONFIG_BLOCK = resolve(import.meta.dirname!, '..', '..', 'dashboard', 'src', 'components', 'BootstrapConfigBlock.tsx')
+
+  test('BootstrapConfigBlock sends region parameter when saving parent folder', () => {
+    const src = readFileSync(BOOTSTRAP_CONFIG_BLOCK, 'utf8')
+    // Must import selectedRegion from props
+    expect(src, 'Must destructure selectedRegion from props').toMatch(/selectedRegion.*=\s*props/)
+
+    // The fetch call to /api/settings/parent-folder must include region in body
+    const fetchIdx = src.indexOf("fetch('/api/settings/parent-folder'")
+    expect(fetchIdx, '/api/settings/parent-folder fetch not found').toBeGreaterThan(0)
+    const fetchRegion = src.slice(fetchIdx, fetchIdx + 400)
+    expect(fetchRegion, 'Must send region parameter in POST body').toMatch(/JSON\.stringify\(\{[^}]*region:/i)
+    expect(fetchRegion, 'Must use selectedRegion variable').toContain('selectedRegion')
+  })
+
+  test('Bootstrap orchestrator derives regionId from territories and passes to context', () => {
+    const ORCHESTRATOR = resolve(import.meta.dirname!, '..', '..', 'src', 'bootstrap-orchestrator.ts')
+    const src = readFileSync(ORCHESTRATOR, 'utf8')
+
+    // Must derive regionId before runAutoBootstrap call
+    const runCallIdx = src.indexOf('runAutoBootstrap({')
+    expect(runCallIdx, 'runAutoBootstrap call not found').toBeGreaterThan(0)
+    const beforeCall = src.slice(Math.max(0, runCallIdx - 800), runCallIdx)
+    expect(beforeCall, 'Must derive regionId from territories').toContain('regionId')
+    expect(beforeCall, 'Must look up region by podPrefix').toContain('podPrefix')
+
+    // Must pass regionId to runAutoBootstrap
+    const callRegion = src.slice(runCallIdx, runCallIdx + 300)
+    expect(callRegion, 'Must pass regionId to runAutoBootstrap').toMatch(/regionId[,\s]*\}/)
+  })
+
+  test('AutoBootstrapInputs interface includes regionId field', () => {
+    const ORCHESTRATOR = resolve(import.meta.dirname!, '..', '..', 'src', 'bootstrap-orchestrator.ts')
+    const src = readFileSync(ORCHESTRATOR, 'utf8')
+
+    const interfaceIdx = src.indexOf('interface AutoBootstrapInputs')
+    expect(interfaceIdx, 'AutoBootstrapInputs interface not found').toBeGreaterThan(0)
+    const interfaceRegion = src.slice(interfaceIdx, interfaceIdx + 400)
+    expect(interfaceRegion, 'AutoBootstrapInputs must include regionId field').toMatch(/regionId\??:\s*string/)
+  })
+
+  test('BootstrapContext type includes regionId field', () => {
+    const TYPES = resolve(import.meta.dirname!, '..', '..', 'src', 'bootstrap', 'steps', 'types.ts')
+    const src = readFileSync(TYPES, 'utf8')
+
+    const ctxIdx = src.indexOf('export interface BootstrapContext')
+    expect(ctxIdx, 'BootstrapContext interface not found').toBeGreaterThan(0)
+    const ctxRegion = src.slice(ctxIdx, ctxIdx + 800)
+    expect(ctxRegion, 'BootstrapContext must include regionId field').toMatch(/regionId\??:\s*string/)
+  })
+
+  test('create-drive-folder passes ctx.regionId to getRegionById', () => {
+    const CREATE_FOLDER = resolve(import.meta.dirname!, '..', '..', 'src', 'bootstrap', 'steps', 'create-drive-folder.ts')
+    const src = readFileSync(CREATE_FOLDER, 'utf8')
+
+    // Find the getRegionById call within the guard check
+    const guardIdx = src.indexOf('BKL-HERO-PARENT-FOLDER-CONFUSION')
+    expect(guardIdx, 'Guard check marker not found').toBeGreaterThan(0)
+    const guardRegion = src.slice(guardIdx, guardIdx + 600)
+    expect(guardRegion, 'Must call getRegionById with ctx.regionId').toMatch(/getRegionById\([^)]*,\s*ctx\.regionId/)
+  })
+})
+
+// ── REG-BOOT-PARENT-REGION-02: Bootstrap fallback to settings.json (Issue #74) ──
+// Defense-in-depth: When parentFolderId is undefined from frontend (stale state),
+// bootstrap should fall back to reading the correct region's config from settings.json.
+test.describe('REG-BOOT-PARENT-REGION-02: bootstrap falls back to settings.json when AE.parentFolderId is null (Issue #74)', () => {
+  const ORCHESTRATOR = resolve(import.meta.dirname!, '..', '..', 'src', 'bootstrap-orchestrator.ts')
+
+  test('Bootstrap adds fallback logic after extracting parentFolderId from request', () => {
+    const src = readFileSync(ORCHESTRATOR, 'utf8')
+
+    // Find where parentFolderId is extracted
+    const extractIdx = src.indexOf('const parentFolderId = rawParent')
+    expect(extractIdx, 'parentFolderId extraction not found').toBeGreaterThan(0)
+
+    // Fallback logic should be within 500 chars after extraction
+    const afterExtract = src.slice(extractIdx, extractIdx + 1200)
+    expect(afterExtract, 'Must check if parentFolderId is undefined').toMatch(/if\s*\(\s*!parentFolderId/)
+    expect(afterExtract, 'Must check tableauTerritories length').toContain('tableauTerritories.length')
+    expect(afterExtract, 'Must read SETTINGS_PATH').toContain('SETTINGS_PATH')
+    expect(afterExtract, 'Must call normalizeSettings').toContain('normalizeSettings')
+    expect(afterExtract, 'Must find region by pods').toMatch(/regions\.find.*pods/)
+    expect(afterExtract, 'Must assign region.parentFolderId to parentFolderId').toMatch(/parentFolderId\s*=\s*region/)
+  })
+
+  test('Fallback logs when it succeeds', () => {
+    const src = readFileSync(ORCHESTRATOR, 'utf8')
+
+    const extractIdx = src.indexOf('const parentFolderId = rawParent')
+    const afterExtract = src.slice(extractIdx, extractIdx + 1200)
+    expect(afterExtract, 'Must log fallback success').toMatch(/console\.log.*parentFolderId fallback/)
+  })
+
+  test('Fallback wraps in try-catch and warns on failure', () => {
+    const src = readFileSync(ORCHESTRATOR, 'utf8')
+
+    const extractIdx = src.indexOf('const parentFolderId = rawParent')
+    const afterExtract = src.slice(extractIdx, extractIdx + 1200)
+    expect(afterExtract, 'Must wrap in try-catch').toContain('try {')
+    expect(afterExtract, 'Must catch and warn on failure').toMatch(/catch.*console\.warn/)
+  })
+})

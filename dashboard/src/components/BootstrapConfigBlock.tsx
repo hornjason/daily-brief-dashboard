@@ -150,11 +150,12 @@ export function BootstrapConfigBlock(props: BootstrapConfigBlockProps) {
 
       // Persist parentFolderId to settings.json via the dedicated endpoint.
       // BKL-HERO-PARENT-FOLDER-CONFUSION: uses /api/settings/parent-folder (not /api/sf-bookings/pod-folder).
+      // BKL-HERO-PARENT-REGION-BUG: must send region parameter so server saves to correct region, not regions[0].
       try {
         const saveRes = await fetch('/api/settings/parent-folder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderId: resolvedId }),
+          body: JSON.stringify({ folderId: resolvedId, region: selectedRegion }),
         })
         if (!saveRes.ok) {
           const d = await saveRes.json().catch(() => ({} as { error?: string }))

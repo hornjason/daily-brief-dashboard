@@ -885,10 +885,12 @@ interface AutoBootstrapInputs {
   tableauTerritories: string[]
   parentFolderId?: string
   podName?: string
+  /** BKL-HERO-PARENT-REGION-BUG: for region-scoped settings validation */
+  regionId?: string
 }
 
 function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
-  const { aeName, customerNames, sfReportId, tableauTerritories, parentFolderId, podName } = inputs
+  const { aeName, customerNames, sfReportId, tableauTerritories, parentFolderId, podName, regionId } = inputs
 
   const baseUrl = `http://localhost:${process.env.PORT ?? '7777'}`
   const bootstrapStartMs = Date.now()
@@ -1014,6 +1016,7 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
       tableauTerritories,
       parentFolderId,
       podName,
+      regionId,
       aeFolderId: '',
       podSheetId: null,
       setStep,
@@ -1440,9 +1443,34 @@ export function createBootstrapRouter(): Hono {
     const podName = (body.podName ?? '').trim() || undefined
     // Accept full Drive URL or bare folder ID — extract ID from URL if needed
     const rawParent = (body.parentFolderId ?? '').trim()
-    const parentFolderId = rawParent
+    let parentFolderId = rawParent
       ? (rawParent.match(/\/folders\/([a-zA-Z0-9_-]{20,})/)?.[1] ?? rawParent)
       : undefined
+
+    // BKL-HERO-PARENT-REGION-BUG: Derive region context from territories (needed for both
+    // parentFolderId fallback and regionId context). Single settings.json read consolidates
+    // what was previously two separate reads (efficiency fix).
+    let regionId: string | undefined
+    if (tableauTerritories.length > 0) {
+      try {
+        const podPrefix = tableauTerritories[0].split('_TERR')[0]
+        const settings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+        const normalized = normalizeSettings(settings)
+        const region = normalized.regions.find(r =>
+          Object.keys(r.pods).some(pod => pod === podPrefix)
+        )
+        if (region) {
+          regionId = region.id
+          // Fallback: when frontend state is stale, use settings.json parentFolderId
+          if (!parentFolderId && region.parentFolderId) {
+            parentFolderId = region.parentFolderId
+            console.log(`[bootstrap] parentFolderId fallback from ${region.id} settings: ${parentFolderId}`)
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[bootstrap] region context derivation failed: ${e?.message}`)
+      }
+    }
 
     if (!aeName) return c.json({ error: 'aeName is required' }, 400)
     if (aeName.length > 200) return c.json({ error: 'aeName exceeds 200 characters' }, 400)
@@ -1492,6 +1520,7 @@ export function createBootstrapRouter(): Hono {
       tableauTerritories,
       parentFolderId,
       podName,
+      regionId,
     })
 
     return c.json({ started: true })

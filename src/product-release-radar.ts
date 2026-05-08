@@ -496,7 +496,7 @@ export async function fetchProductSummary(slug: string): Promise<ProductSummary>
   //   1. Lifecycle + release notes (public)
   //   2. Content hub URL (authenticated via RH token)
   //   3. Custom sources added by Jason (public)
-  const publicUrls = [product.seeds.lifecycleUrl, product.seeds.releaseNotesUrl].filter(Boolean)
+  const publicUrls = [product.seeds.releaseNotesUrl].filter(Boolean)
   const customUrls = (product.customSources ?? []).filter(Boolean)
   const contentHubUrl = product.seeds.contentHubUrl
 
