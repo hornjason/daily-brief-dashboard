@@ -161,7 +161,7 @@ Decision: DONE — Three fixes applied 2026-03-31:
 - Source: Hero install testing 2026-05-08 (Garrett Dixon + Mark Fields onboarding after Issue #72 fix)
 - Files: dashboard/src/components/BootstrapConfigBlock.tsx:158; src/bootstrap-orchestrator.ts:1450-1467; src/bootstrap/steps/create-drive-folder.ts:41; src/bootstrap/steps/types.ts:27
 - Description: After Issue #72 fix deployed, added Garrett Dixon (2nd AE) and Mark Fields (3rd AE) under East Commercial region. Both folders created at My Drive root (`1qMpqROcWSh6JfpqbM3gRGUiFjLP6XY2L`, `10WV67EDM6dGDgKSNj_XyQYGBQF49XeqA`) instead of under CommandCenter (`1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq`). Three cascading failures: (1) BootstrapConfigBlock calls `POST /api/settings/parent-folder` with `{ folderId }` but omits `region: selectedRegion` → server's `getRegionById(settings, undefined)` defaults to `regions[0]` (West Commercial), so East Commercial's parentFolderId stays empty in settings.json. (2) Bootstrap-orchestrator receives `parentFolderId: undefined` from frontend (because `commandCenterFolderId` loaded from empty East Commercial config) and passes it through without fallback to settings.json. (3) create-drive-folder.ts receives `effectiveParentId: undefined` and falls through to Drive root creation. Evidence: container logs show "[auto-bootstrap] Drive folder created at root" for both AEs; settings.json shows `west-commercial.parentFolderId = "1BV0u..."` but `east-commercial.parentFolderId = ""`; aes.json shows Brandt Gribbin has parentFolderId but Garrett/Mark have null.
-- Decision: DONE — Three-part fix applied 2026-05-08: (A) BootstrapConfigBlock.tsx:158 add `region: selectedRegion` to POST body (critical 1-line fix), (B) bootstrap-orchestrator.ts:1450-1467 add settings.json fallback when parentFolderId undefined + consolidated duplicate settings.json reads (defense-in-depth + efficiency), (C) create-drive-folder.ts:41 pass `ctx.regionId` to getRegionById + added regionId to BootstrapContext type (latent bug fix). Regression tests: REG-BOOT-PARENT-REGION-01 (8 source-level tests verify region parameter sent, regionId derivation, context type), REG-BOOT-PARENT-REGION-02 (3 tests verify fallback logic). Quinn PASS on production (7777): Setup wizard loads, Bootstrap Config section renders, all 3 regions in picker, API returns both folder fields, zero console errors, fix verified at line 158. Rook security scan: no blocking vulnerabilities. Simplify + fallow: no new issues introduced. Post-fix data remediation: manually move Garrett/Mark folders pending. Commit: 2b7ac93. Tagged: v1.7.0-rc5.
+- Decision: DONE — Three-part fix applied 2026-05-08: (A) BootstrapConfigBlock.tsx:158 add `region: selectedRegion` to POST body (critical 1-line fix), (B) bootstrap-orchestrator.ts:1450-1467 add settings.json fallback when parentFolderId undefined + consolidated duplicate settings.json reads (defense-in-depth + efficiency), (C) create-drive-folder.ts:41 pass `ctx.regionId` to getRegionById + added regionId to BootstrapContext type (latent bug fix). Regression tests: REG-BOOT-PARENT-REGION-01 (8 source-level tests verify region parameter sent, regionId derivation, context type), REG-BOOT-PARENT-REGION-02 (3 tests verify fallback logic). Quinn PASS on production (7777): Setup wizard loads, Bootstrap Config section renders, all 3 regions in picker, API returns both folder fields, zero console errors, fix verified at line 158. Rook security scan: no blocking vulnerabilities. Simplify + fallow: no new issues introduced. User verification (2026-05-08): Fresh bootstrap of Garrett Dixon + Mark Fields created folders directly under CommandCenter parent (1BV0uRHei3oRvGYVEXBX_qBB-VGu0r9wq), no Drive root creation, fix working end-to-end. Commit: 2b7ac93. Tagged: v1.7.0-rc5.
 - Can we test: YES — Multi-region save + bootstrap verified via 11 regression tests. Manual: bootstrap 2nd AE from different region, verify correct parent folder.
 
 ### BKL-HERO-PRODUCT-CONFIG-01 — Product Intelligence Hub empty on hero install (missing first-boot seed)
@@ -10005,6 +10005,24 @@ Files: dashboard/src/pages/products/ (Products Hub), src/ (feature extraction pi
 Description: A subset of products consistently shows 0 features while others populate correctly. The products with 0 features tend to be newer product lines (AAP, RHEL AI, AI Inference Server, OpenShift AI). Root cause unknown — may be a product name normalization miss, a version string parsing failure, or those products genuinely have no extracted features in the source data.
 Can we test: Yes — assert feature count > 0 for each product in the hub after scrape.
 Decision: OPEN
+
+### BKL-PRODUCT-DOC-DISCOVERY-01 | Expand product documentation auto-discovery patterns for resilience against upstream changes (P1)
+Priority: P1 | Size: S | Status: 🟡 IN PROGRESS
+Issue: #75
+Source: Session 2026-05-08 — Red Hat changed AAP documentation from `release_notes` to `whats_new-*` pages, breaking single-pattern auto-discovery regex. AAP feature extraction returned 0 chars.
+Files: src/product-feature-radar.ts (line 175 auto-discovery logic), test/regression.spec.ts, ARCHITECTURE.md
+Description: Current regex `/href="([^"]*release[_-]notes[^"]*)"/gi` only matches release_notes pattern. AAP now uses whats_new structure. Solution per Council: expand to 4 patterns (release_notes, whats_new, changelog, new_features) with sequential try + content validation (>1KB + version string). Config `releaseNotesDocNames` serves as override.
+Acceptance Criteria:
+- product-feature-radar.ts line 175 defines DISCOVERY_PATTERNS array with 4 regex patterns
+- Sequential pattern matching with first-valid-wins logic
+- Content validation on discovered URLs (>1KB + /\d+\.\d+/ regex)
+- Config override fallback after all patterns fail
+- AAP feature extraction returns >0 features with releaseNotesSection populated
+- RHEL/OCP regression verified (existing products still work)
+- Regression test added for AAP whats_new discovery
+- ARCHITECTURE.md updated with discovery-first strategy
+Can we test: Yes — (1) AAP features >0 after fix, (2) regression test mocks AAP landing page with whats_new link, (3) POST /api/products/refresh-all returns 200 for all 7 products
+Decision: IN PROGRESS — implementing pattern expansion per Council Option 4 (Discovery-first with config overrides)
 
 ### BKL-DASH-CCSP-MISSING-01 | CCSP section not showing on main dashboard after bootstrap (P1)
 Priority: P1 | Size: S | Status: ✅ DONE
