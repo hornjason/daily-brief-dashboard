@@ -10007,8 +10007,10 @@ Can we test: Yes — assert feature count > 0 for each product in the hub after 
 Decision: OPEN
 
 ### BKL-PRODUCT-DOC-DISCOVERY-01 | Expand product documentation auto-discovery patterns for resilience against upstream changes (P1)
-Priority: P1 | Size: S | Status: 🟡 IN PROGRESS
+Priority: P1 | Size: S | Status: ✅ DONE 2026-05-08
 Issue: #75
+Commit: 91ed20e
+Tag: v1.7.0-rc6
 Source: Session 2026-05-08 — Red Hat changed AAP documentation from `release_notes` to `whats_new-*` pages, breaking single-pattern auto-discovery regex. AAP feature extraction returned 0 chars.
 Files: src/product-feature-radar.ts (line 175 auto-discovery logic), test/regression.spec.ts, ARCHITECTURE.md
 Description: Current regex `/href="([^"]*release[_-]notes[^"]*)"/gi` only matches release_notes pattern. AAP now uses whats_new structure. Solution per Council: expand to 4 patterns (release_notes, whats_new, changelog, new_features) with sequential try + content validation (>1KB + version string). Config `releaseNotesDocNames` serves as override.
@@ -10022,7 +10024,19 @@ Acceptance Criteria:
 - Regression test added for AAP whats_new discovery
 - ARCHITECTURE.md updated with discovery-first strategy
 Can we test: Yes — (1) AAP features >0 after fix, (2) regression test mocks AAP landing page with whats_new link, (3) POST /api/products/refresh-all returns 200 for all 7 products
-Decision: IN PROGRESS — implementing pattern expansion per Council Option 4 (Discovery-first with config overrides)
+Decision: DONE — verified on 7776: AAP discovered whats_new-async_updates + whats_new-assembly_workspaces_intro, extracted 18 features (was 0), 8787 chars release notes content. Tagged v1.7.0-rc6.
+
+### BKL-PRODUCT-LEARN-MORE-GENERIC-01 | Product feature "Learn More" button links to generic product page instead of specific feature documentation (P2)
+Priority: P2 | Size: S | Status: 🔴 OPEN
+Issue: #76
+Source: Session 2026-05-08 — User reported "Learn More" button on product feature detail panel takes you to a generic Red Hat AI page that has nothing to do with the specific feature.
+Screenshot: Screenshot 2026-05-08 at 7.57.53 PM.png
+Files: dashboard/src/pages/products/ (feature detail panel), src/product-feature-radar.ts (sourceUrls/enrichmentUrls generation)
+Description: When viewing a product feature detail (e.g., "Multi-architecture Support" for Red Hat AI Inference Server), the "Learn More" button at the bottom of the panel links to a generic product landing page instead of the specific release notes section for that feature. Expected behavior: should deep-link to the exact section in the release notes or feature documentation where this feature is documented.
+Root cause: Feature extraction populates `sourceUrls` and `enrichmentUrls` arrays but the detail panel "Learn More" button may be using a fallback generic URL instead of the feature-specific source URL.
+Fix: Verify FeatureDetailPanel component uses feature.sourceUrls[0] or feature.enrichmentUrls[0] as the Learn More href. If arrays are empty, either hide the button or construct a deep link from feature.releaseNotesSection + product release notes base URL.
+Can we test: Yes — (1) extract features for a product, (2) open feature detail panel, (3) assert Learn More href contains release notes URL with section anchor, (4) click and verify it navigates to the correct section
+Decision: OPEN
 
 ### BKL-DASH-CCSP-MISSING-01 | CCSP section not showing on main dashboard after bootstrap (P1)
 Priority: P1 | Size: S | Status: ✅ DONE
