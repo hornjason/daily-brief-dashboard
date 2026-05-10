@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-08
+updated: 2026-05-09
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -327,6 +327,66 @@ Playwright scraper
 **Stale-overwrite guard:** `refreshSubscriptions`, `refreshAll`, `refreshCCSP`, and `refreshPipeline` all check: if fetch returns 0 records but cache has data, skip the write. Quota failures return `[]` silently; without this guard a quota failure permanently wipes good cached data.
 
 **CCSP column detection resilience (ADR-017):** `parseCcspRows` in `src/lib/ccsp-resolvers.ts` uses pattern-based column detection with confidence scoring. When Tableau CSV headers misalign with data positions (discovered 2026-05-07: "Account Name" header at column A but actual account names at column B), the parser samples first 10 data rows and identifies columns by content patterns (Salesforce ID regex, decimal ACV values, quarter format) instead of trusting header positions. When header/pattern mismatch detected, uses pattern-detected columns. Prevents future Tableau export format drift from breaking CCSP data ingestion.
+
+---
+
+### 6a. Customer Data Structure and Domain Inference
+
+**Customer record fields:**
+- `name` — Short/brand name (e.g., "Interval", "National Grid")
+- `aliases` — Legal entity names (e.g., ["Interval International, Inc.", "National Grid USA Service Company, Inc."])
+- `domain` — Primary email domain for Gmail/Calendar searches (e.g., "intervalworld.com")
+- `aliasDomains` — Additional email domains for subsidiaries, acquisitions, regional offices (e.g., ["subsidiary.com", "acquired-co.com"])
+
+**Gmail/Calendar search behavior:**
+All searches use **both** `domain` + `aliasDomains`. Example query for customer with domain="acme.com" and aliasDomains=["widget.com"]:
+```typescript
+(from:@acme.com OR to:@acme.com OR from:@widget.com OR to:@widget.com OR subject:"Acme Corp") after:2024-01-01
+```
+
+This handles:
+- Acquired companies keeping old email domain (Widget Co → Acme Corp, but @widget.com emails still active)
+- Subsidiaries with different domains (parent @company.com, subsidiary @company-intl.com)
+- Regional offices (@company.com, @company.eu)
+
+**Domain inference waterfall:**
+
+Triggered via Admin UI "Infer Domains" button or POST `/api/setup/infer-domains`. Updates `domain` field only (not `aliasDomains` — those are manually curated).
+
+```
+waterfallInferDomain(companyName)
+  1. Gemini LLM via Vertex AI
+     - Input: customer.aliases[0] OR customer.name
+     - Prompt: "What is primary website domain for {name}?"
+     - tools: [{ google_search: {} }]  ← Google Search grounding enabled
+     - Returns: domain string or null
+  
+  2. Clearbit Company API (if LLM returns null)
+     - Input: same companyName
+     - Returns: domain from /v2/companies/find
+  
+  3. Validation: isPublicDomain()
+     - Rejects: localhost, 192.168.x.x, 10.x.x.x, 172.16.x.x, .local
+     - Returns: validated domain or null
+```
+
+**Why aliases[0] (legal entity name) is used first:**
+Short names often resolve to wrong domains. Example: "Interval" → interval.com (wrong), but "Interval International, Inc." → intervalworld.com (correct). Legal entity names in `aliases[0]` provide better specificity for LLM and Clearbit lookups.
+
+**Google Search grounding (BKL-DOMAIN-01):**
+Gemini calls include `tools: [{ google_search: {} }]` to enable web search when the company lacks training data in model weights. No PII sent — only company names from `customers.json`. Essential for companies founded after model training cutoff or with limited online presence.
+
+**Data flow:**
+- Admin triggers inference → POST `/api/setup/infer-domains`
+- For each customer: `waterfallInferDomain(customer.aliases[0] ?? customer.name)`
+- Updates `customers.json` with inferred `domain` value
+- Gmail/Calendar searches use updated domain on next sync
+
+**Manual `aliasDomains` curation:**
+UI provides comma-separated input field "Alias Domains" in Setup wizard customer table. Server-side validation via `isPublicDomain()` rejects invalid entries. Use when:
+- Customer has multiple active email domains
+- Subsidiary uses different domain than parent
+- Acquired company emails still active under old domain
 
 ---
 
