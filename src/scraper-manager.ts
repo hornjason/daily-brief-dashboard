@@ -24,7 +24,7 @@ import { getRefreshIntervals } from './settings-api.ts'
 import { getAutomationConfig } from './ai-config.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
-import { stampProvenance, mergeProvenance } from './account-provenance-healer.ts'
+import { stampProvenance, mergeProvenance, resolveDiscoveryResult } from './account-provenance-healer.ts'
 import { APP_VERSION } from './admin-routes.ts'
 import { deriveConfidence, ConnectionHealthSchema } from './connection-health.ts'
 import { markRunning, recordOutcome, getScraperStatus, getUnifiedStatus } from './scraper-status-store.ts'
@@ -470,7 +470,15 @@ export async function runRhScrapeWithState(): Promise<void> {
           accountNumbers = [...new Set([...accountNumbers, ...merged])]
           console.log(`[rh-scraper] bearer discovery: "${customer.name}" → ${merged.join(', ')}`)
         } else {
-          console.log(`[rh-scraper] bearer discovery: "${customer.name}" → no account numbers found (0 cases or no name match)`)
+          // #82: When discovery returns 0 and customer has stale provenance,
+          // clear the stale automated accounts (they were likely wrong).
+          const clearPatch = resolveDiscoveryResult(customer, [], APP_VERSION)
+          if (clearPatch) {
+            serverState.patchCustomer(customer.name, clearPatch)
+            console.log(`[rh-scraper] bearer discovery: "${customer.name}" → 0 results, cleared ${(customer.accountNumbers ?? []).length} stale accounts (preserved ${clearPatch.accountNumbers.length} manual)`)
+          } else {
+            console.log(`[rh-scraper] bearer discovery: "${customer.name}" → no account numbers found (0 cases or no name match)`)
+          }
         }
         if (result.cases.length > 0) {
           nameDiscoveredCases.push(...result.cases.map(c => ({ ...c, customerName: customer.name })))

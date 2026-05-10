@@ -220,6 +220,37 @@ export function stampProvenance(
 }
 
 /**
+ * Resolve what to do when discovery returns 0 account numbers for a customer.
+ *
+ * When a customer has stale provenance (old appVersion) and re-discovery finds
+ * nothing, the stale automated accounts should be cleared — they were likely
+ * wrong (e.g., buggy v1.7.0-rc6 matcher). Manual accounts are always preserved.
+ *
+ * Returns a patch object { accountNumbers, accountProvenance } to apply, or
+ * null if no action is needed (customer is current or discovery found results).
+ */
+export function resolveDiscoveryResult(
+  customer: Customer,
+  discoveredAccountNumbers: string[],
+  currentVersion: string,
+): { accountNumbers: string[]; accountProvenance: NonNullable<Customer['accountProvenance']> } | null {
+  // Only act when discovery returned 0 accounts
+  if (discoveredAccountNumbers.length > 0) return null
+
+  // Only clear if provenance is actually stale
+  if (!isStaleProvenance(customer.accountProvenance, currentVersion)) return null
+
+  // Preserve manual accounts — only clear automated/stale ones
+  const manualProvenance = (customer.accountProvenance ?? []).filter(p => p.discoveredBy === 'manual')
+  const manualAccountNumbers = manualProvenance.map(p => p.accountNumber)
+
+  return {
+    accountNumbers: manualAccountNumbers,
+    accountProvenance: manualProvenance,
+  }
+}
+
+/**
  * Merge new provenance entries with existing provenance, preserving manual entries.
  *
  * Manual account provenance (discoveredBy === 'manual') is NEVER overwritten by

@@ -14,6 +14,7 @@ import {
   isStaleProvenance,
   migratePreRc8Provenance,
   buildHealerPlan,
+  resolveDiscoveryResult,
   type AccountProvenance,
 } from '../../src/account-provenance-healer.ts'
 
@@ -229,5 +230,98 @@ describe('buildHealerPlan', () => {
     expect(plan).toHaveLength(1)
     expect(plan[0].customerName).toBe('Mixed Customer')
     expect(plan[0].preserveManualAccounts).toEqual(['111111'])
+  })
+})
+
+describe('resolveDiscoveryResult', () => {
+  test('clears stale accounts when discovery returns 0 results', () => {
+    const customer: Customer = {
+      name: 'Continental Broadband',
+      accountNumbers: ['1111111', '2222222', '3333333'],
+      accountProvenance: [
+        {
+          accountNumber: '1111111',
+          discoveredBy: 'rh-cases-api',
+          appVersion: '1.7.0-rc6',
+          discoveredAt: '2026-04-01T00:00:00Z',
+        },
+        {
+          accountNumber: '2222222',
+          discoveredBy: 'rh-cases-api',
+          appVersion: '1.7.0-rc6',
+          discoveredAt: '2026-04-01T00:00:00Z',
+        },
+        {
+          accountNumber: '3333333',
+          discoveredBy: 'rh-cases-api',
+          appVersion: '1.7.0-rc6',
+          discoveredAt: '2026-04-01T00:00:00Z',
+        },
+      ],
+    }
+
+    const result = resolveDiscoveryResult(customer, [], CURRENT_VERSION)
+    expect(result).not.toBeNull()
+    expect(result!.accountNumbers).toEqual([])
+    expect(result!.accountProvenance).toEqual([])
+  })
+
+  test('preserves manual accounts when discovery returns 0 results for stale customer', () => {
+    const customer: Customer = {
+      name: 'Mixed Stale Customer',
+      accountNumbers: ['111111', '222222'],
+      accountProvenance: [
+        {
+          accountNumber: '111111',
+          discoveredBy: 'manual',
+          appVersion: '1.0.0',
+          discoveredAt: '2024-01-01T00:00:00Z',
+        },
+        {
+          accountNumber: '222222',
+          discoveredBy: 'rh-cases-api',
+          appVersion: '1.7.0-rc6',
+          discoveredAt: '2026-04-01T00:00:00Z',
+        },
+      ],
+    }
+
+    const result = resolveDiscoveryResult(customer, [], CURRENT_VERSION)
+    expect(result).not.toBeNull()
+    expect(result!.accountNumbers).toEqual(['111111'])
+    expect(result!.accountProvenance).toHaveLength(1)
+    expect(result!.accountProvenance![0].discoveredBy).toBe('manual')
+  })
+
+  test('returns null (no-op) when discovery returns 0 for non-stale customer', () => {
+    const customer: Customer = {
+      name: 'Current Customer',
+      accountNumbers: ['555555'],
+      accountProvenance: [{
+        accountNumber: '555555',
+        discoveredBy: 'rh-cases-api',
+        appVersion: CURRENT_VERSION,
+        discoveredAt: '2026-05-10T00:00:00Z',
+      }],
+    }
+
+    const result = resolveDiscoveryResult(customer, [], CURRENT_VERSION)
+    expect(result).toBeNull()
+  })
+
+  test('returns null (no-op) when discovery finds accounts (merge path handles it)', () => {
+    const customer: Customer = {
+      name: 'Found Customer',
+      accountNumbers: ['old-num'],
+      accountProvenance: [{
+        accountNumber: 'old-num',
+        discoveredBy: 'rh-cases-api',
+        appVersion: '1.7.0-rc6',
+        discoveredAt: '2026-04-01T00:00:00Z',
+      }],
+    }
+
+    const result = resolveDiscoveryResult(customer, ['new-num'], CURRENT_VERSION)
+    expect(result).toBeNull()
   })
 })
