@@ -10176,3 +10176,4 @@ BKL-PROV-01 → #82 — Phase 1: accountNumbers provenance tracking with auto-he
 BKL-PROV-02 → #83 — Extract 'pre-rc8' magic string to constant
 BKL-PROV-03 → #84 — Optimize healer startup: batch disk writes + merge Phase 1/2 loops
 BKL-PROV-04 → #85 — Remove redundant re-import in healStaleAccountNumbers
+BKL-INSTALL-01 → #86 — Curl hero install overwrites data on upgrades
