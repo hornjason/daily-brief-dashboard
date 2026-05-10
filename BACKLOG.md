@@ -10171,3 +10171,4 @@ Files:
 BKL-DOMAIN-01 → #78 — Multi-domain support + alias-based domain inference
 BKL-RH-DISC-02 → #79 — Fix 2-word name fallback in bearer account discovery (closed)
 BKL-RH-DISC-03 → #80 — Browser path missing N-1 fallback (parity with bearer)
+BKL-HERO-UPGRADE-01 → #81 — REDHAT_OFFLINE_TOKEN lost on hero container upgrade
