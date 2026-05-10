@@ -1,6 +1,6 @@
 {
   "name": "daily-brief-dashboard",
-  "version": "1.7.0-rc7",
+  "version": "1.7.0-rc8",
   "type": "module",
   "scripts": {
     "dev": "bun --watch server.ts",
