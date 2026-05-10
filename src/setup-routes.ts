@@ -85,7 +85,7 @@ export async function runStartupDriveMerge(): Promise<void> {
 
 // ── Domain waterfall helpers (BKL-DOM-01) ────────────────────────────────────
 // Extracted to src/domain-waterfall.ts (BKL-BOOT-05) — imported from there.
-import { waterfallInferDomain } from './domain-waterfall.ts'
+import { waterfallInferDomain, isPublicDomain } from './domain-waterfall.ts'
 export type { WaterfallResult } from './domain-waterfall.ts'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -537,7 +537,7 @@ export function createSetupRouter(): Hono {
         if (cx.sheetTab        != null) cleaned.sheetTab        = cx.sheetTab
         if (cx.supportableName != null) cleaned.supportableName = cx.supportableName
         if (cx.aliases         != null) cleaned.aliases         = (Array.isArray(cx.aliases) ? cx.aliases : []).filter((a: unknown): a is string => typeof a === 'string').map(a => sanitizeText(a, 100)).filter(Boolean)
-        if (cx.aliasDomains    != null) cleaned.aliasDomains    = (Array.isArray(cx.aliasDomains) ? cx.aliasDomains : []).filter((d: unknown): d is string => typeof d === 'string' && isValidDomain(d))
+        if (cx.aliasDomains    != null) cleaned.aliasDomains    = (Array.isArray(cx.aliasDomains) ? cx.aliasDomains : []).filter((d: unknown): d is string => typeof d === 'string' && isPublicDomain(d))
         if (cx.skipAccountDiscovery != null) cleaned.skipAccountDiscovery = cx.skipAccountDiscovery
         body.customers[i] = cleaned as unknown as Customer
       }

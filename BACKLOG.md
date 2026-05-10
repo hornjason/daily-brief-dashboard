@@ -10165,3 +10165,7 @@ Files:
 - src/lib/ccsp-resolvers.ts (parseCcspRows lines 234-280, detectColumnsByPattern lines 264-360)
 - test/unit/ccsp-resolvers.test.ts (11 new tests)
 - docs/adr/ADR-017-ccsp-column-pattern-detection.md
+
+## Domain & Customer
+
+BKL-DOMAIN-01 → #78 — Multi-domain support + alias-based domain inference
