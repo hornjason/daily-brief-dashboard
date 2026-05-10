@@ -40,6 +40,15 @@ export interface Customer {
   discoveryStatus?: 'unresolvable'  // BKL-RH-PERF-01: set after 3 failures
   discoverySkippedUntil?: string    // BKL-RH-PERF-01: ISO timestamp — skip discovery until this date
   needsManualDomain?: boolean       // BKL-DOM-INF-13: set when all inference tiers return null; cleared once a domain resolves
+  accountProvenance?: AccountProvenance[]  // #82: tracks source, version, and timestamp for each discovered account number
+}
+
+/** #82: Metadata tracking origin of each discovered account number. */
+export interface AccountProvenance {
+  accountNumber: string
+  discoveredBy: 'rh-scraper' | 'rh-cases-api' | 'manual' | 'pre-rc8'
+  appVersion: string      // from package.json version
+  discoveredAt: string    // ISO timestamp
 }
 
 export interface CustomerSubscription {

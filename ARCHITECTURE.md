@@ -390,6 +390,52 @@ UI provides comma-separated input field "Alias Domains" in Setup wizard customer
 
 ---
 
+### 6b. Account Provenance Tracking and Auto-Healing (#82, v1.7.0-rc8)
+
+**Pattern:** Every discovered or generated `accountNumbers` entry carries provenance metadata tracking what logic version produced it (`appVersion`), how it was discovered (`discoveredBy`), and when (`discoveredAt`).
+
+**Why it's intentional:** Bug fixes to discovery logic don't self-heal without provenance tracking. Example: Continental Broadband had 7 wrong accounts from a buggy v1.7.0-rc6 matcher. Deploying the fix left stale data forever — manual intervention (wipe cache, re-trigger) required.
+
+**Data structure:**
+```typescript
+interface AccountProvenance {
+  accountNumber: string
+  discoveredBy: 'rh-scraper' | 'rh-cases-api' | 'manual' | 'pre-rc8'
+  appVersion: string         // from package.json
+  discoveredAt: string       // ISO8601 timestamp
+}
+
+interface Customer {
+  accountNumbers: string[]
+  accountProvenance?: AccountProvenance[]   // one entry per account
+  // ...
+}
+```
+
+**Stamping at discovery time:**
+Both RH Portal discovery paths (`src/rh-scraper.ts` browser path + `src/rh-cases-api.ts` bearer path) call `stampProvenance()` immediately after discovering accounts. The stamped entries are merged with existing provenance via `mergeProvenance()`, which preserves manual entries (`discoveredBy === 'manual'`) and replaces all automated entries.
+
+**Startup healer flow:**
+1. `server.ts` calls `healStaleAccountNumbers()` once at container startup (before scheduled scrapes)
+2. Healer migrates pre-rc8 accounts: any customer with `accountNumbers` but no `accountProvenance` gets stamped as `discoveredBy: 'pre-rc8'`
+3. Healer detects stale accounts: any non-manual provenance entry with `appVersion !== APP_VERSION` is flagged
+4. Healer queues re-discovery: enqueues one RH cases scrape task via `enqueueScraperTask()` to refresh all stale customers
+5. Re-discovery runs asynchronously (scraper-manager picks up the queued task)
+
+**Manual entry preservation (CRITICAL):**
+`mergeProvenance()` filters existing provenance to keep only `discoveredBy === 'manual'` entries before appending new automated discoveries. This ensures account numbers manually added by the user (via Setup wizard or direct JSON edit) are NEVER overwritten by automated discovery.
+
+**Exposed via API:**
+`/api/accounts` response includes `accountProvenance` array for each customer (added at `src/territory-routes.ts:99`). Frontend can display provenance metadata, show staleness warnings, or filter by discovery method.
+
+**Why not a database migration?**
+`customers.json` is the persistence layer (§4). The migration is live: on first read at startup, the healer stamps any provenance-less accounts as `'pre-rc8'` and writes back to disk. No separate schema version or migration script needed.
+
+**Future expansion (Phase 2 backlog):**
+Extract provenance module for reuse across all discovered/generated data: domain inference, AI briefs, product intel, industry classification, any cache with logic-dependent data. Same stamping pattern, same healing flow.
+
+---
+
 ### 7. OAuth Token Stored in a Single File
 
 **Pattern:** One `google-token.json` covers all Google API scopes (Sheets, Drive, Gmail, Calendar). Two scope tiers: `NORMAL_SCOPES` (read-only operations) and `BOOTSTRAP_SCOPES` (Drive write, needed for sheet creation).

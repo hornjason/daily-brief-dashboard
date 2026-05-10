@@ -2508,3 +2508,18 @@ test.describe('REG-030: AAP auto-discovery works with whats_new pattern', () => 
     }
   })
 })
+
+// ── REG-032: /api/version endpoint — read-only regression test ──
+// Verifies the version endpoint returns a valid semver string from package.json.
+// This endpoint is used by the provenance healer (healStaleAccountNumbers) to
+// compare appVersion in customers.json against current APP_VERSION.
+//
+// NOTE: This does NOT test the actual provenance healing functionality from #82.
+// That requires an integration test with stale customer data + startup healer execution.
+// Integration test coverage tracked in a separate GitHub issue.
+test('REG-032: /api/version endpoint returns current semver version', async () => {
+  const { body } = await getJSON('/api/version')
+  expect(body?.version).toBeTruthy()
+  // Version should be a semver-like string (e.g. 1.7.0-rc8)
+  expect(body.version).toMatch(/^\d+\.\d+\.\d+/)
+})

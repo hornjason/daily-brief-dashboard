@@ -26,6 +26,7 @@ import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCC
 import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
 import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
+import { healStaleAccountNumbers } from './src/account-provenance-healer.ts'
 import { initDashboardRoutes, createDashboardRouter } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
 import { createBootstrapRouter, resetBootstrapStates } from './src/bootstrap-orchestrator.ts'
@@ -647,6 +648,11 @@ initBackgroundScheduler({
   rhProfileDir: RH_PROFILE_DIR,
   sfSessionPath: SF_SESSION_PATH,
 })
+
+// ── #82: Account provenance startup healer ─────────────────────────────────
+// Runs once at startup, before scheduled scrapes. Detects stale account numbers
+// (missing provenance or old appVersion) and queues re-discovery.
+void healStaleAccountNumbers()
 
 // ── Wave 4: Product Intel weekly refresh (Sunday 6am ET) ────────────────────
 scheduleProductIntelRefresh()

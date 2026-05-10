@@ -24,6 +24,8 @@ import { getRefreshIntervals } from './settings-api.ts'
 import { getAutomationConfig } from './ai-config.ts'
 import { refreshPipeline } from './refresh-engine.ts'
 import { sanitizeErr } from './utils.ts'
+import { stampProvenance, mergeProvenance } from './account-provenance-healer.ts'
+import { APP_VERSION } from './admin-routes.ts'
 import { deriveConfidence, ConnectionHealthSchema } from './connection-health.ts'
 import { markRunning, recordOutcome, getScraperStatus, getUnifiedStatus } from './scraper-status-store.ts'
 import { ScraperRegistry } from './scraper-registry.ts'
@@ -410,7 +412,10 @@ export async function runRhScrapeWithState(): Promise<void> {
         // Multi-entity companies like Microchip Technology legitimately have 7+ account numbers.
         if (nums.length > 0) {
           // BKL-RH-PERF-01: Clear failure count on successful discovery
-          serverState.patchCustomer(customer.name, { accountNumbers: nums, discoveryFailures: 0, discoveryStatus: undefined, discoverySkippedUntil: undefined })
+          // #82: Stamp provenance on browser-discovered account numbers, preserving manual entries
+          const provenance = stampProvenance(nums, 'rh-scraper', APP_VERSION)
+          const mergedProvenance = mergeProvenance(customer.accountProvenance, provenance)
+          serverState.patchCustomer(customer.name, { accountNumbers: nums, accountProvenance: mergedProvenance, discoveryFailures: 0, discoveryStatus: undefined, discoverySkippedUntil: undefined })
           newNums.push(...nums)
           console.log(`[rh-scraper] ${customer.name}: saved account numbers ${nums.join(', ')}`)
         } else if (discoveredCases.length === 0) {
@@ -458,7 +463,10 @@ export async function runRhScrapeWithState(): Promise<void> {
         if (result.accountNumbers.length > 0) {
           const existing = (customer.accountNumbers ?? []).map(String)
           const merged = [...new Set([...existing, ...result.accountNumbers])]
-          serverState.patchCustomer(customer.name, { accountNumbers: merged })
+          // #82: Stamp provenance on bearer-discovered account numbers, preserving manual entries
+          const provenance = stampProvenance(result.accountNumbers, 'rh-cases-api', APP_VERSION)
+          const mergedProvenance = mergeProvenance(customer.accountProvenance, provenance)
+          serverState.patchCustomer(customer.name, { accountNumbers: merged, accountProvenance: mergedProvenance })
           accountNumbers = [...new Set([...accountNumbers, ...merged])]
           console.log(`[rh-scraper] bearer discovery: "${customer.name}" → ${merged.join(', ')}`)
         } else {

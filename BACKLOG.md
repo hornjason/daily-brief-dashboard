@@ -10172,3 +10172,7 @@ BKL-DOMAIN-01 → #78 — Multi-domain support + alias-based domain inference
 BKL-RH-DISC-02 → #79 — Fix 2-word name fallback in bearer account discovery (closed)
 BKL-RH-DISC-03 → #80 — Browser path missing N-1 fallback (parity with bearer)
 BKL-HERO-UPGRADE-01 → #81 — REDHAT_OFFLINE_TOKEN lost on hero container upgrade
+BKL-PROV-01 → #82 — Phase 1: accountNumbers provenance tracking with auto-healing
+BKL-PROV-02 → #83 — Extract 'pre-rc8' magic string to constant
+BKL-PROV-03 → #84 — Optimize healer startup: batch disk writes + merge Phase 1/2 loops
+BKL-PROV-04 → #85 — Remove redundant re-import in healStaleAccountNumbers

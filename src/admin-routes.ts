@@ -37,7 +37,7 @@ export function initAdminRoutes(opts: { sheetsTokenPath: string }): void {
 }
 
 // ── APP_VERSION (moved from server.ts) ───────────────────────────────────────
-const APP_VERSION: string = (() => {
+export const APP_VERSION: string = (() => {
   try {
     // __dirname is not available in ESM — use import.meta.dir (Bun-specific)
     const pkg = JSON.parse(readFileSync(resolve(import.meta.dir, '..', 'package.json'), 'utf-8'))
