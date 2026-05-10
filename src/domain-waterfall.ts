@@ -61,7 +61,17 @@ export async function tier1Clearbit(companyName: string, signal?: AbortSignal): 
   }
 }
 
-/** Tier 2: Gemini via Vertex AI (container-safe — no subprocess) */
+/**
+ * Tier 2: Gemini via Vertex AI (container-safe — no subprocess)
+ *
+ * **Data flow — Google Search grounding (BKL-DOMAIN-01):**
+ * - Company name sent to Gemini Vertex AI with `tools: [{ google_search: {} }]`
+ * - Gemini may use Google Search to discover current domain information
+ * - Names sent: customer short names (e.g., "National Grid") OR legal entity names
+ *   (e.g., "National Grid USA Service Company, Inc.") depending on caller's choice
+ * - Search grounding essential for companies lacking training data in Gemini's weights
+ * - No PII sent; only company names from customers.json config
+ */
 export async function tier2LLM(companyName: string): Promise<string | null> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
