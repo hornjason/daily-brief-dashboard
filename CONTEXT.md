@@ -87,6 +87,14 @@ _Avoid_: "rep", "salesperson", "user"
 A grouping of AEs for SF pipeline and CCSP scraping purposes. Determines which booking sheets are read and which CCSP data is synced.
 _Avoid_: "team", "group", "squad"
 
+**Account provenance** (also: `accountProvenance`):
+Metadata tracking the source, version, and timestamp for each discovered account number. Enables automatic healing of stale data when logic bugs are fixed — accounts discovered by older code versions are automatically re-discovered on container startup. Manual account numbers carry `discoveredBy: 'manual'` and are never auto-healed.
+_Avoid_: "account history", "discovery log", "audit trail"
+
+**Startup healer**:
+A function that runs once per container startup, before any scrapes execute. Compares provenance metadata on discovered data against the current app version. Queues re-discovery for any accounts marked with older versions. Manual edits are preserved.
+_Avoid_: "version checker", "migration script", "bootstrap repair"
+
 ## Relationships
 
 - An **AE** has one subfolder under the **AE parent folder**
