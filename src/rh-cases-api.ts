@@ -231,9 +231,11 @@ export interface DiscoverByNameResult {
  *      exact case — SOLR wildcards are case-sensitive).
  *   4. Attempt 1: for every doc whose normLower(case_account_name) contains ALL searchWords
  *      → collect accountNumber. This filters out SOLR's permissive prefix over-matching.
- *   5. Attempt 2 (fires only if attempt 1 empty AND first word ≥7 chars): re-filter docs
- *      using first word only. Handles compound names stored without the second component
- *      (e.g. "OmniVision Technologies" stored as "Omnivision" in SOLR).
+ *   5. Attempt 2 (fires only if attempt 1 empty AND ≥3 searchWords): re-filter docs
+ *      using first N-1 words. Handles compound names stored without the last component
+ *      (e.g. "OmniVision Technologies Corp" stored as "Omnivision Technologies" in SOLR).
+ *      CRITICAL: 2-word names must NOT fall back to 1-word (too broad — "Continental Broadband"
+ *      → "continental" alone matches "Continentale Krankenversicherung"). MIN_WORDS_FOR_FALLBACK=3.
  *   6. Validate accountNumbers against /^\d{4,12}$/ before returning.
  *
  * Returns ALL matching cases (not just the ones tied to a valid account
@@ -315,9 +317,28 @@ export async function discoverAccountNumbersByName(
   const seenNums = new Set<string>()
   const matchedDocs: SolrDoc[] = []
 
+  // Optimization: precompute normalized names once (hot path — runs for every customer discovery)
+  const docsWithNorm = docs.map(doc => ({
+    doc,
+    storedNameLower: normLower(doc.case_account_name ?? '')
+  }))
+
+  // Optimization: hoist regex compilation outside loop
+  const ACCOUNT_NUM_PATTERN = /^\d{4,12}$/
+
+  // Helper: extract and validate account number (DRY — used in both attempts)
+  const extractAccountNumber = (doc: SolrDoc) => {
+    const n = doc.case_accountNumber
+    if (n != null) {
+      const validNum = ACCOUNT_NUM_PATTERN.test(String(n).trim())
+        ? String(n).trim()
+        : null
+      if (validNum) seenNums.add(validNum)
+    }
+  }
+
   // Attempt 1: Full name (all words must match)
-  for (const doc of docs) {
-    const storedNameLower = normLower(doc.case_account_name ?? '')
+  for (const {doc, storedNameLower} of docsWithNorm) {
     if (!storedNameLower) continue
     // Word-containment match: every significant word from the query alias
     // must appear in the stored account name (case-insensitive). Defends against
@@ -325,31 +346,21 @@ export async function discoverAccountNumbersByName(
     if (!searchWords.every((w) => storedNameLower.includes(w))) continue
 
     matchedDocs.push(doc)
-    const n = doc.case_accountNumber
-    if (n != null) {
-      const validNum = /^\d{4,12}$/.test(String(n).trim())
-        ? String(n).trim()
-        : null
-      if (validNum) seenNums.add(validNum)
-    }
+    extractAccountNumber(doc)
   }
 
-  // Attempt 2: If 0 matches AND multi-word name, drop last word and try again
-  if (matchedDocs.length === 0 && searchWords.length > 1) {
+  // Attempt 2: If 0 matches AND 3+ word name, drop last word and try again
+  // 2-word names must NOT fall back to 1-word (too broad — "Continental Broadband"
+  // → "continental" alone matches "Continentale Krankenversicherung")
+  const MIN_WORDS_FOR_FALLBACK = 3
+  if (matchedDocs.length === 0 && searchWords.length >= MIN_WORDS_FOR_FALLBACK) {
     const shortenedWords = searchWords.slice(0, -1)  // drop last word
-    for (const doc of docs) {
-      const storedNameLower = normLower(doc.case_account_name ?? '')
+    for (const {doc, storedNameLower} of docsWithNorm) {
       if (!storedNameLower) continue
       if (!shortenedWords.every((w) => storedNameLower.includes(w))) continue
 
       matchedDocs.push(doc)
-      const n = doc.case_accountNumber
-      if (n != null) {
-        const validNum = /^\d{4,12}$/.test(String(n).trim())
-          ? String(n).trim()
-          : null
-        if (validNum) seenNums.add(validNum)
-      }
+      extractAccountNumber(doc)
     }
   }
 

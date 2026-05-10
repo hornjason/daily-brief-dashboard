@@ -603,7 +603,8 @@ setSessionExpiredCallback(() => {
 | File | Purpose |
 |---|---|
 | `server.ts` | Hono HTTP server, all API routes, background refresh timers |
-| `src/rh-scraper.ts` | Red Hat Portal case scraper (Playwright) |
+| `src/rh-scraper.ts` | Red Hat Portal case scraper — browser path (Playwright, Mac Mini `NODE_ROLE=primary` only) |
+| `src/rh-cases-api.ts` | Red Hat Portal case scraper — bearer API path (SOLR REST API, hero installs `NODE_ROLE` unset) |
 | `src/supportable-scraper.ts` | Supportable 360 subscription scraper (Playwright, APEX Oracle) |
 | `src/ccsp-scraper.ts` | Tableau CCSP cloud spend scraper (Playwright) |
 | `src/sf-scraper.ts` | Salesforce pipeline scraper (Playwright) |

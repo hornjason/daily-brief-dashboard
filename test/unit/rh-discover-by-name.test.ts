@@ -169,48 +169,79 @@ describe('discoverAccountNumbersByName (bearer-transport name matching)', () => 
     expect(q).toContain('case_account_name:Crowdstrike*')
   })
 
-  test('attempt 2 single-word fallback fires when attempt 1 empty and first word ≥7 chars', async () => {
-    // Attempt 1: searchWords = ['crowdstrike', 'inc'] → 'inc' is legal-stripped → ['crowdstrike']
-    // BUT: we mock a doc whose name contains only the first search word in a
-    // slightly different suffix form so attempt 1 (all-words) would pass, but
-    // this test specifically sets up a case where the doc name does NOT contain
-    // all searchWords to exercise the attempt-2 path.
+  test('REG-079: 2-word name does NOT fall back to 1-word (Continental Broadband bug)', async () => {
+    // Regression test for Issue #79 — 2-word names must NOT fall back to 1-word matching
+    // because it's too broad and causes substring false positives.
     //
-    // Input: alias = 'CrowdTech Security' → searchWords = ['crowdtech', 'security']
-    // Doc: case_account_name = 'CrowdTech' (missing 'security') → attempt 1 fails
-    // Attempt 2: first word = 'crowdtech' (9 chars ≥ 7) → matches 'crowdtech' → doc collected
+    // Scenario: Searching for "Continental Broadband" when only "Continentale Krankenversicherung"
+    // exists in SOLR. Before fix, searchWords = ['continental', 'broadband'] would fall back to
+    // ['continental'] alone, matching "Continentale" via substring match.
+    //
+    // Expected: No match (2-word → 1-word fallback is disabled)
     mockSolrFetch([
       {
         case_number: 'CASE-005',
-        case_account_name: 'CrowdTech',
-        case_accountNumber: '1234567',
-        case_summary: 'test case',
+        case_account_name: 'Continentale Krankenversicherung AG',
+        case_accountNumber: '1100571',
+        case_summary: 'German insurance company case',
         case_status: 'Open',
-        case_severity: '2 (High)',
+        case_severity: '4',
+        case_product: 'OpenShift',
+        case_createdDate: '2024-01-01T00:00:00Z',
+        case_lastModifiedDate: '2026-05-01T00:00:00Z',
+      },
+    ])
+
+    const result = await discoverAccountNumbersByName('Continental Broadband')
+
+    // Attempt 1: 'continental' AND 'broadband' both must appear → fails (no 'broadband' in doc)
+    // Attempt 2: DOES NOT FIRE (only 2 words, MIN_WORDS_FOR_FALLBACK=3)
+    // Result: no matches (prevents false positive)
+    expect(result.accountNumbers).not.toContain('1100571')
+    expect(result.accountNumbers).toEqual([])
+    expect(result.cases).toEqual([])
+  })
+
+  test('attempt 2 N-1 fallback fires for 3+ word names', async () => {
+    // 3-word name with last word missing in SOLR → Attempt 2 should drop last word and match
+    // Input: 'National Grid USA' → searchWords = ['national', 'grid', 'usa']
+    // Doc stored as: 'National Grid' (missing 'usa')
+    // Attempt 1: fails (needs all 3 words)
+    // Attempt 2: drops 'usa' → ['national', 'grid'] → matches
+    mockSolrFetch([
+      {
+        case_number: 'CASE-006',
+        case_account_name: 'National Grid',
+        case_accountNumber: '9876543',
+        case_summary: '3-word fallback test',
+        case_status: 'Open',
+        case_severity: '2',
         case_product: 'RHEL',
         case_createdDate: '2026-01-01T00:00:00Z',
         case_lastModifiedDate: '2026-05-01T00:00:00Z',
       },
     ])
 
-    const result = await discoverAccountNumbersByName('CrowdTech Security')
+    const result = await discoverAccountNumbersByName('National Grid USA')
 
-    // Attempt 1 would fail (missing 'security' in stored name).
-    // Attempt 2 picks it up via 'crowdtech' (first word, 9 chars ≥ 7).
-    expect(result.accountNumbers).toEqual(['1234567'])
+    // Attempt 1 fails (doc missing 'usa')
+    // Attempt 2 matches via ['national', 'grid']
+    expect(result.accountNumbers).toEqual(['9876543'])
     expect(result.cases.length).toBe(1)
   })
 
-  test('attempt 2 does NOT fire when first word is short (<7 chars)', async () => {
-    // 'Robert Systems' → searchWords = ['robert', 'systems'] → first word 'robert' = 6 chars
-    // Doc only has 'Robert' (missing 'systems') → attempt 1 fails → attempt 2 does NOT fire
-    // (too short to be a safe brand-name fallback).
+  test('attempt 2 does NOT fire for 2-word names', async () => {
+    // 2-word name where doc only has first word → Attempt 2 must NOT fire
+    // Input: 'Robert Systems' → searchWords = ['robert', 'systems']
+    // Doc only has 'Robert' (missing 'systems')
+    // Attempt 1: fails (needs both words)
+    // Attempt 2: DOES NOT FIRE (only 2 words, MIN_WORDS_FOR_FALLBACK=3)
     mockSolrFetch([
       {
-        case_number: 'CASE-006',
+        case_number: 'CASE-007',
         case_account_name: 'Robert',
-        case_accountNumber: '9876543',
-        case_summary: 'short word test',
+        case_accountNumber: '5555555',
+        case_summary: '2-word no-fallback test',
         case_status: 'Open',
         case_severity: '3',
       },
@@ -218,7 +249,7 @@ describe('discoverAccountNumbersByName (bearer-transport name matching)', () => 
 
     const result = await discoverAccountNumbersByName('Robert Systems')
 
-    // Neither attempt should match — 'robert' is 6 chars, below the ≥7 threshold.
+    // Neither attempt should match — 2-word name cannot fall back to 1-word
     expect(result.accountNumbers).toEqual([])
     expect(result.cases).toEqual([])
   })

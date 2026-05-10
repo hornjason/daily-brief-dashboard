@@ -13,7 +13,11 @@ updated: 2026-05-05
 - Keep-alive expiry guard: check all 3 mutex flags before `closeScrapeContext()`
 - CCSP two-phase mutex: `ccspScrapeRunning || ccspInFlight` — both required
 - `_ctx.newPage()` must always be wrapped in a 30s `Promise.race` timeout — zombie contexts don't throw, they hang forever (BKL-CCSP-06)
-- RH Cases scraper is the account discovery source — searches RH portal by quoted customer name when accountNumbers is empty; Supportable is NOT used for discovery
+- RH account discovery has TWO parallel code paths (do not confuse):
+  - **Browser path** (Mac Mini, `NODE_ROLE=primary`): `rh-scraper.ts` → Playwright browser automation → RH Portal sidebar autocomplete → in-page case API call → word-containment matching at line 1154
+  - **Bearer API path** (hero installs, `NODE_ROLE` unset): `rh-cases-api.ts` → `discoverAccountNumbersByName()` → Bearer token from offline-token exchange → POST to SOLR `/hydra/rest/search/v2/cases` → word-containment matching at line 341
+  - Both paths implement the SAME matching logic (normLower + legal-word stripping + MIN_WORDS_FOR_FALLBACK=3 guard); changes to discovery behavior must be applied to BOTH files
+  - Supportable is NOT used for discovery on either path
 - RH discovery uses `aliases[0]` (canonical SF name from sf-bookings) ONLY — customers without aliases are skipped entirely; no fallback to display name
 - SF bookings alias column priority (sf-bookings-reader.ts): `ACCOUNT_SALES_GROUP_NAME` first (parent company legal name, matches RH Portal), then `ACCOUNT_GLOBAL_SALES_GROUP_NAME`, then `ACCOUNT_NAME` (deal-level entity, too specific). Do not change priority — global-first caused abbreviated misses ("INSIGHT" instead of "INSIGHT ENTERPRISES, INC."); account-first caused subsidiary misses ("Big Ten Network Services, LLC" instead of "FOX CORPORATION").
 - Territory sheet is AE→territory map ONLY — never a customer data source; customers come exclusively from sf-bookings-sync

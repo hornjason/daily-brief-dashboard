@@ -10169,3 +10169,4 @@ Files:
 ## Domain & Customer
 
 BKL-DOMAIN-01 → #78 — Multi-domain support + alias-based domain inference
+BKL-RH-DISC-02 → #79 — Fix 2-word name fallback in bearer account discovery (closed)
