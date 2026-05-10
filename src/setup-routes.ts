@@ -409,7 +409,10 @@ export function createSetupRouter(): Hono {
           }
 
           // Run waterfall: Clearbit → LLM → validate
-          const wf = await waterfallInferDomain(cu.name)
+          // BKL-DOMAIN-01: prefer legal entity name (aliases[0]) for inference —
+          // short names like "REI" miss; legal names like "Recreational Equipment Inc" resolve.
+          const inferName = cu.aliases?.[0] ?? cu.name
+          const wf = await waterfallInferDomain(inferName)
 
           // Also run existing signal-based inference (Gmail/Calendar/Supportable)
           const existing = await inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e) => ({

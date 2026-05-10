@@ -159,6 +159,79 @@ test.describe('@destructive POST /api/setup/save-customers', () => {
     expect(status).toBe(400)
     expect(body).toHaveProperty('error')
   })
+
+  // BKL-DOMAIN-01: aliasDomains round-trip tests
+  test('saves customer with valid aliasDomains', async () => {
+    const customer = buildCustomer({
+      name: 'AliasDomain Test Corp',
+      accountNumbers: ['123456'],
+      aliasDomains: ['subsidiary.com', 'partner.org'],
+    })
+    const { status, body } = await postJSONDestructive('/api/setup/save-customers', {
+      customers: [customer],
+    })
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('ok', true)
+  })
+
+  test('aliasDomains round-trips correctly through /customers API', async () => {
+    const customer = buildCustomer({
+      name: 'AliasDomain Roundtrip Corp',
+      accountNumbers: ['234567'],
+      aliasDomains: ['lifetouch.com', 'subsidiary.org'],
+    })
+    await postJSONDestructive('/api/setup/save-customers', {
+      customers: [customer],
+    })
+
+    const { body } = await getJSONDestructive('/customers')
+    const found = body.find((c: any) => c.name === 'AliasDomain Roundtrip Corp')
+    expect(found).toBeTruthy()
+    expect(found.aliasDomains).toEqual(['lifetouch.com', 'subsidiary.org'])
+  })
+
+  test('aliasDomains filters invalid domains on save', async () => {
+    const customer = buildCustomer({
+      name: 'AliasDomain Invalid Corp',
+      accountNumbers: ['345678'],
+      aliasDomains: ['valid.com', 'localhost', '192.168.1.1', 'also-valid.org'],
+    })
+    await postJSONDestructive('/api/setup/save-customers', {
+      customers: [customer],
+    })
+
+    const { body } = await getJSONDestructive('/customers')
+    const found = body.find((c: any) => c.name === 'AliasDomain Invalid Corp')
+    expect(found).toBeTruthy()
+    // Only valid public domains should survive the save
+    expect(found.aliasDomains).toEqual(['valid.com', 'also-valid.org'])
+  })
+
+  test('customer without aliasDomains works (backward compat)', async () => {
+    const customer = buildCustomer({
+      name: 'NoAliasDomain Corp',
+      accountNumbers: ['456789'],
+    })
+    const { status, body } = await postJSONDestructive('/api/setup/save-customers', {
+      customers: [customer],
+    })
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('ok', true)
+  })
+})
+
+// ── BKL-DOMAIN-01: /api/accounts aliasDomains response ──────────────────────
+
+test.describe('GET /api/accounts — aliasDomains in response', () => {
+  test('response includes aliasDomains field for each customer', async () => {
+    const { status, body } = await getJSON('/api/accounts')
+    expect(status).toBe(200)
+    expect(body).toHaveProperty('customers')
+    for (const customer of body.customers) {
+      expect(customer).toHaveProperty('aliasDomains')
+      expect(Array.isArray(customer.aliasDomains)).toBe(true)
+    }
+  })
 })
 
 // ── POST /api/setup/infer-domains ───────────────────────────────────────────
