@@ -40,6 +40,7 @@ interface WizardCustomer {
   domain: string
   accountNumbers: string
   aliases: string
+  aliasDomains: string  // BKL-DOMAIN-01: comma-separated alias email domains
 }
 
 // ── Auto-Bootstrap types ──────────────────────────────────────────────────────
@@ -84,7 +85,7 @@ interface PodBootstrapStatus {
 // ── Small helpers ──────────────────────────────────────────────────────────────
 
 function makeBlankCustomer(): WizardCustomer {
-  return { id: crypto.randomUUID(), name: '', supportableName: '', domain: '', accountNumbers: '', aliases: '' }
+  return { id: crypto.randomUUID(), name: '', supportableName: '', domain: '', accountNumbers: '', aliases: '', aliasDomains: '' }
 }
 
 function makeBlankAE(): WizardAE {
@@ -1263,6 +1264,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
           domain?: string
           accountNumbers?: string[]
           aliases?: string[]
+          aliasDomains?: string[]
           ae?: string
         }> = Array.isArray(customerList) ? customerList : []
 
@@ -1293,6 +1295,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
                 domain: c.domain ?? '',
                 accountNumbers: (c.accountNumbers ?? []).join(', '),
                 aliases: (c.aliases ?? []).join(', '),
+                aliasDomains: (c.aliasDomains ?? []).join(', '),
               })),
           })).map(ae => ({
             ...ae,
@@ -1437,6 +1440,9 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
               .filter(Boolean),
             aliases: c.aliases.trim()
               ? c.aliases.split(',').map(s => s.trim()).filter(Boolean)
+              : undefined,
+            aliasDomains: c.aliasDomains.trim()
+              ? c.aliasDomains.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
               : undefined,
             ae: a.name.trim(),
           }))
@@ -1935,6 +1941,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
                     <th className="text-left py-2 pr-2 font-medium">Domain</th>
                     <th className="text-left py-2 pr-2 font-medium">Account Numbers</th>
                     <th className="text-left py-2 pr-2 font-medium">Aliases</th>
+                    <th className="text-left py-2 pr-2 font-medium">Alias Domains</th>
                     <th className="w-8"></th>
                   </tr>
                 </thead>
@@ -1976,6 +1983,17 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
                           placeholder="Dropbox Inc., Dropbox Holdings"
                           className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
                           title="Alternate names for Drive folder lookup (comma-separated)"
+                        />
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <input
+                          type="text"
+                          data-testid="alias-domains-input"
+                          value={c.aliasDomains}
+                          onChange={e => updateCustomer(ae.id, c.id, { aliasDomains: e.target.value })}
+                          placeholder="example.com, subsidiary.org"
+                          className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-white placeholder-text-secondary focus:outline-none focus:border-accent"
+                          title="Alias Domains (comma-separated) — additional email domains for Gmail/Calendar search"
                         />
                       </td>
                       <td className="py-1.5">

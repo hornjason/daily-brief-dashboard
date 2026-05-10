@@ -121,8 +121,10 @@ export async function fetchCustomerEmails(customer: Customer): Promise<EmailHigh
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   const afterStr = `${since.getFullYear()}/${since.getMonth() + 1}/${since.getDate()}`
-  const query = customer.domain
-    ? `(from:@${customer.domain} OR to:@${customer.domain} OR subject:"${customer.name}") after:${afterStr}`
+  // BKL-DOMAIN-01: check all domains (primary + alias) — matches Calendar search pattern at line 78
+  const allDomains = [customer.domain, ...(customer.aliasDomains ?? [])].filter(Boolean) as string[]
+  const query = allDomains.length > 0
+    ? `(${allDomains.map(d => `from:@${d} OR to:@${d}`).join(' OR ')} OR subject:"${customer.name}") after:${afterStr}`
     : `subject:"${customer.name}" after:${afterStr}`
 
   const list = await gmail.users.messages.list({ userId: 'me', q: query, maxResults: 20 })

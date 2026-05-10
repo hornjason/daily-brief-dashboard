@@ -95,6 +95,7 @@ export function createTerritoryRouter(): Hono {
         attentionScore: attention?.attentionScore ?? 0,
         attentionReasons: attention?.attentionReasons ?? [],
         needsManualDomain: customer.needsManualDomain ?? false,
+        aliasDomains: customer.aliasDomains ?? [],  // BKL-DOMAIN-01
       }
     })
     return c.json({ customers: result })

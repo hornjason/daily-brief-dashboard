@@ -83,6 +83,7 @@ export async function tier2LLM(companyName: string): Promise<string | null> {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        tools: [{ google_search: {} }],  // BKL-DOMAIN-01: Google Search grounding for better domain resolution
         generationConfig: { temperature: 0, maxOutputTokens: 64, thinkingConfig: { thinkingBudget: 0 } },
       }),
     })
