@@ -315,6 +315,7 @@ export async function discoverAccountNumbersByName(
   const seenNums = new Set<string>()
   const matchedDocs: SolrDoc[] = []
 
+  // Attempt 1: Full name (all words must match)
   for (const doc of docs) {
     const storedNameLower = normLower(doc.case_account_name ?? '')
     if (!storedNameLower) continue
@@ -333,19 +334,20 @@ export async function discoverAccountNumbersByName(
     }
   }
 
-  // Attempt 2: first word only if ≥7 chars (brand name — safe single-word fallback)
-  // Fires when attempt 1 returned empty AND the first significant word is long enough
-  // to be a specific brand name (not a common word like "Robert" or "Fred").
-  if (matchedDocs.length === 0 && searchWords[0]?.length >= 7) {
-    const firstWord = searchWords[0]
+  // Attempt 2: If 0 matches AND multi-word name, drop last word and try again
+  if (matchedDocs.length === 0 && searchWords.length > 1) {
+    const shortenedWords = searchWords.slice(0, -1)  // drop last word
     for (const doc of docs) {
-      const sn = normLower(doc.case_account_name ?? '')
-      if (!sn) continue
-      if (!sn.includes(firstWord)) continue
+      const storedNameLower = normLower(doc.case_account_name ?? '')
+      if (!storedNameLower) continue
+      if (!shortenedWords.every((w) => storedNameLower.includes(w))) continue
+
       matchedDocs.push(doc)
       const n = doc.case_accountNumber
       if (n != null) {
-        const validNum = /^\d{4,12}$/.test(String(n).trim()) ? String(n).trim() : null
+        const validNum = /^\d{4,12}$/.test(String(n).trim())
+          ? String(n).trim()
+          : null
         if (validNum) seenNums.add(validNum)
       }
     }

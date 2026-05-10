@@ -1,22 +1,39 @@
 ---
-doc-type: backlog
+doc-type: index
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-08
+note: GitHub Issues are source of truth; this file is BKL-ID lookup only
 ---
 
-# DailyBriefDashboard — Canonical Backlog
+# DailyBriefDashboard — Backlog Index
 
-**This is the single source of truth for all open, completed, and deferred work.**
+**⚠️ WORKFLOW CHANGE (2026-05-08):**
+- **GitHub Issues are now the source of truth** — all bugs, features, and work tracked at `hornjason/asaCommandCenter`
+- **This file is an INDEX ONLY** — maps BKL-ID → GitHub issue number for quick lookup
+- **NO status tracking here** — use `gh issue list --repo hornjason/asaCommandCenter --state open` for current status
 
-Rules:
-- Items are NEVER deleted — status moves to DONE / DEFERRED / WONTFIX with date + reason
-- Decision field is mandatory on close — captures what was decided and why
-- Read this file first at every session — do not rely on memory summaries
-- Security scan (Rook) is mandatory on every item close, not just security items
+## Index Format
 
-Last full review: 2026-03-31 (Rook + Marcus + Quinn + ScraperExplorer, deep scraper analysis)
-Last update: 2026-05-07 (BKL-CCSP-HEADERS-01 DONE; pattern-based CCSP column detection prevents future Tableau format drift)
+Each line: `BKL-<COMPONENT>-<SEQUENCE> → #<issue-number> — <one-line title> [(closed)]`
+
+Example:
+- `BKL-HERO-01 → #67 — Hero Install UX Polish v1.7.0`
+- `BKL-RH-DISC-01 → #75 — Product doc auto-discovery (closed)`
+
+## Creating New Items
+
+1. Create GitHub issue first: `gh issue create --repo hornjason/asaCommandCenter`
+2. Add one line to this index: `BKL-XXX-NN → #<number> — <title>`
+3. Never create standalone entries here — always create the GitHub issue first
+
+## Querying Status
+
+- **Open items:** `gh issue list --repo hornjason/asaCommandCenter --state open`
+- **Specific item:** `gh issue view <number> --repo hornjason/asaCommandCenter`
+- **This file:** Quick BKL-ID → issue number lookup only
+
+Last workflow update: 2026-05-08 (transitioned to GitHub Issues as source of truth)
 
 ---
 

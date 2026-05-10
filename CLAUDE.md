@@ -98,15 +98,32 @@ gh label create "enhancement" --repo hornjason/asaCommandCenter --color "a2eeef"
 
 **Architecture backlog:** 8 deepening candidates (BKL-ARCH-01 through BKL-ARCH-08) logged in `BACKLOG.md`. Suggested execution order: #6 → #7 → #1 → #3 → #5 → #8. Interface design for #6 complete; PRD at issue #1.
 
-## Backlog Discipline (Zero Exceptions)
+## Issue Tracking (Zero Exceptions)
 
-**BACKLOG.md is NOT ground truth — the code is.** Never present a backlog item's status to Jason without first verifying it against the actual source files, cache files, or config. BACKLOG.md drifts. Code does not lie. At session start, verify every open/in-progress item before reporting it. Presenting stale backlog status as fact wastes Jason's time and erodes trust.
+**GitHub Issues are the source of truth** — not BACKLOG.md. All bugs, features, enhancements, and technical debt are tracked in GitHub issues at `hornjason/asaCommandCenter`.
 
-**Verify before reporting status.** When Jason asks about backlog state, check the code first: does the feature exist in source? Does the data exist in cache/config? Only then report status. One grep or Read tool call takes 2 seconds. Getting it wrong costs 20 minutes.
+**BACKLOG.md is now an index/reference only:**
+- Maps BKL-ID → GitHub issue number (e.g., "BKL-HERO-01 → #67")
+- NO descriptions, NO status tracking, NO inline work logs
+- Use `gh issue list` or GitHub web UI for current status
 
-**Verify before implementing.** Before working any backlog item, read the relevant source files and confirm the feature is actually absent. Many items will already be done — mark them DONE immediately and move on. Never rewrite working code.
+**Creating new work items:**
+1. **Always create a GitHub issue first** via `gh issue create` or `/triage` skill
+2. Assign a BKL-ID using the pattern: `BKL-<COMPONENT>-<SEQUENCE>`
+3. Add one line to BACKLOG.md: `BKL-XXX-NN → #<issue-number> — <one-line title>`
+4. Never create standalone BACKLOG.md entries without a corresponding GitHub issue
 
-**Update backlog at close-time.** The moment an item is verified done or implemented, update its Status in BACKLOG.md. Do not defer. Drift between code and backlog creates false work and instability.
+**Closing work:**
+1. Close the GitHub issue via `gh issue close <number>` with comment explaining resolution
+2. Update BACKLOG.md line to append `(closed)` — do NOT remove the line
+3. Never mark items as "DONE" in BACKLOG.md — close the GitHub issue instead
+
+**Querying status:**
+- Use `gh issue list --repo hornjason/asaCommandCenter --state open` for current open items
+- Use `gh issue view <number>` for detailed status, comments, and history
+- BACKLOG.md is for quick BKL-ID → issue-number lookup only
+
+**Code verification still mandatory:** Before reporting any item as done or in-progress, verify against actual source code, not GitHub state. Code is ground truth; GitHub tracks intent.
 
 **Scrapers are stable — don't touch without explicit instruction.** The scraper layer (rh-scraper.ts, ccsp-scraper.ts, supportable-scraper.ts, sf-scraper.ts, scraper-manager.ts) took significant effort to stabilize. Any change requires reading SCRAPER-RULES.md first and explicit confirmation from Jason before modifying.
 
