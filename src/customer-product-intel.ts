@@ -136,12 +136,6 @@ export function getCachedCustomerProductIntel(slug: string, customerSlug: string
     if (existsSync(p)) {
       const raw: CustomerIntelCache = JSON.parse(readFileSync(p, 'utf-8'))
       if (!raw.intel) return null
-      // Validate corpusHash against current feature cache
-      const featureCache = getFeatureCache(slug)
-      if (featureCache && raw.intel.productCacheHash !== featureCache.corpusHash) {
-        console.log(`[customer-product-intel] corpusHash mismatch for ${slug}/${customerSlug} — cache stale, returning null`)
-        return null
-      }
       return raw.intel
     }
   } catch (e: any) {
