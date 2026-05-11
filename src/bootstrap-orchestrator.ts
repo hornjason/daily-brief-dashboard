@@ -1194,6 +1194,16 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
     // (bootstrapPOD), fired ONCE after the full AE loop completes.
     console.log(`[auto-bootstrap] All steps complete for ${aeName}`)
 
+    // #113: Auto-trigger RH Cases scrape after bootstrap if token is configured
+    if (process.env.REDHAT_OFFLINE_TOKEN && process.env.REDHAT_OFFLINE_TOKEN !== 'your_offline_token_here') {
+      try {
+        const { enqueueScraperTask } = await import('./background-scheduler.ts')
+        const { runRhScrapeWithState } = await import('./scraper-manager.ts')
+        enqueueScraperTask({ name: 'rh-cases (post-bootstrap)', run: runRhScrapeWithState, source: 'manual', enqueuedAt: Date.now() })
+        console.log(`[auto-bootstrap] RH token configured — queued first RH Cases scrape`)
+      } catch {}
+    }
+
     // BKL-DASH-PRODUCTS-LICENSES-ZERO-01: Step 4 created the SF Bookings sheet
     // and wrote raw rows into it, but per-customer sheet caches (the source for
     // /api/accounts productCount + totalLicenses) are only populated by the

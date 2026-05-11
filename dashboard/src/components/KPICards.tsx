@@ -129,6 +129,8 @@ interface KPICardsProps {
   caseMatchesProducts?: (caseProduct: string | string[], selectedLabels: string[]) => boolean
   /** BKL-#65: L3-only (hero) vs L4 (primary node) for empty state logic */
   isL3Only?: boolean
+  /** BKL-#113: RH offline token configured (not placeholder) */
+  rhTokenConfigured?: boolean
 }
 
 function rhTimeAgo(isoString: string): string {
@@ -141,7 +143,7 @@ function rhTimeAgo(isoString: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory, selectedProducts, allCases, allAccounts, caseMatchesProducts, isL3Only }: KPICardsProps) {
+export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory, selectedProducts, allCases, allAccounts, caseMatchesProducts, isL3Only, rhTokenConfigured }: KPICardsProps) {
   const [casesOpen, setCasesOpen] = useState(false)
   const [sev1Open, setSev1Open] = useState(false)
 
@@ -315,9 +317,10 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
       isL3Only,
       rhLastScraped,
       caseCount,
-      allAccounts ?? accounts
+      allAccounts ?? accounts,
+      rhTokenConfigured
     )
-  }, [isL3Only, rhLastScraped, kpis?.openCasesTotal, filteredCaseCount, isProductFiltered, allAccounts, accounts])
+  }, [isL3Only, rhLastScraped, kpis?.openCasesTotal, filteredCaseCount, isProductFiltered, allAccounts, accounts, rhTokenConfigured])
 
   // KPI card definitions keyed by ID
   const kpiCards: Record<string, React.ReactNode> = {
@@ -335,7 +338,7 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
             subtitle={
               <>
                 <div>No case data source configured</div>
-                <a href="/dashboard/admin" className="text-accent hover:underline text-xs">Configure in Admin → Connections</a>
+                <a href="/dashboard/setup" className="text-accent hover:underline text-xs">Set up in Wizard →</a>
               </>
             }
           />
@@ -353,8 +356,8 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
             loading={loading}
             subtitle={
               <>
-                <div>Awaiting first sync from primary node</div>
-                <a href="/dashboard/admin" className="text-accent hover:underline text-xs">Run Now</a>
+                <div>Awaiting first sync</div>
+                <button onClick={() => { fetch('/api/scrape/rh', { method: 'POST' }).catch(() => {}) }} className="text-accent hover:underline text-xs cursor-pointer bg-transparent border-none p-0">Run Now</button>
               </>
             }
           />

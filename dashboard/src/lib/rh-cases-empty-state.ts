@@ -15,13 +15,15 @@ interface Account {
  * @param lastScraped - ISO timestamp of last successful sync, or null
  * @param caseCount - Number of cases returned from the sync
  * @param accounts - Customer accounts with account numbers
+ * @param rhTokenConfigured - True if REDHAT_OFFLINE_TOKEN is saved (not placeholder)
  * @returns The empty state to show, or null if cases are present
  */
 export function determineRhCasesEmptyState(
   isL3Only: boolean | undefined,
   lastScraped: string | null | undefined,
   caseCount: number,
-  accounts: Account[]
+  accounts: Account[],
+  rhTokenConfigured?: boolean
 ): RhCasesEmptyState {
   // If cases are present, use normal display
   if (caseCount > 0) return null
@@ -31,19 +33,19 @@ export function determineRhCasesEmptyState(
     return 'synced-zero'
   }
 
-  // Count total account numbers across all accounts
-  const totalAccountNumbers = accounts.reduce((sum, acct) => sum + (acct.accountNumbers?.length ?? 0), 0)
-
-  // State 1: No L4 node AND no account numbers → no source configured
-  if ((isL3Only === true || isL3Only === undefined) && totalAccountNumbers === 0) {
-    return 'no-source'
-  }
-
-  // State 2: L4 configured (isL3Only = false) but never synced
-  if (isL3Only === false && !lastScraped) {
+  // State 2: Token configured but no sync yet → awaiting first run
+  if (rhTokenConfigured) {
     return 'awaiting-sync'
   }
 
-  // Fallback: no source (same as state 1 for undefined isL3Only)
+  // Count total account numbers across all accounts
+  const totalAccountNumbers = accounts.reduce((sum, acct) => sum + (acct.accountNumbers?.length ?? 0), 0)
+
+  // State 2: L4 configured or has account numbers but never synced
+  if (isL3Only === false || totalAccountNumbers > 0) {
+    return 'awaiting-sync'
+  }
+
+  // State 1: No token, no L4, no accounts → no source configured
   return 'no-source'
 }

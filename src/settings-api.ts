@@ -255,6 +255,16 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
       saveOfflineToken(token.trim())
       // Update in-memory env so the change takes effect immediately (no restart needed)
       process.env.REDHAT_OFFLINE_TOKEN = token.trim()
+      // #113: Auto-trigger RH Cases scrape if customers already exist
+      try {
+        const { customers } = await import('./server-state.ts')
+        if (customers.length > 0) {
+          const { enqueueScraperTask } = await import('./background-scheduler.ts')
+          const { runRhScrapeWithState } = await import('./scraper-manager.ts')
+          enqueueScraperTask({ name: 'rh-cases (token-saved)', run: runRhScrapeWithState, source: 'manual', enqueuedAt: Date.now() })
+          console.log(`[settings] RH token saved — auto-queued RH Cases scrape for ${customers.length} customers`)
+        }
+      } catch {}
       return c.json({ ok: true })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 400)
