@@ -651,6 +651,9 @@ export default function SetupPage() {
 
         {/* Accordion sections */}
         <div className="space-y-3">
+          {/* BKL-093: OAuth Keys step removed — auto-provisioned from bundled defaults
+              Step0OAuthKeys component preserved below for future re-use if needed */}
+          {false && (
           <AccordionSection
             id="oauth-keys"
             title="Step 1 of 5 — OAuth Keys"
@@ -664,10 +667,11 @@ export default function SetupPage() {
           >
             <Step0OAuthKeys onReady={() => setOauthKeysOk(true)} />
           </AccordionSection>
+          )}
 
           <AccordionSection
             id="google-auth"
-            title="Step 2 of 5 — Google Auth"
+            title="Step 1 of 4 — Google Auth"
             badge={
               googleAuthOk === null
                 ? <StatusBadge ok={null} label="Checking..." />
@@ -686,7 +690,7 @@ export default function SetupPage() {
           ) : (
           <AccordionSection
             id="rh-portal"
-            title="Step 3 of 5 — Connections"
+            title="Step 2 of 4 — Connections"
             badge={
               rhTokenConfigured === null
                 ? <StatusBadge ok={null} label="Checking..." />
@@ -726,7 +730,7 @@ export default function SetupPage() {
 
           <AccordionSection
             id="aes"
-            title="Step 4 of 5 — AEs & Customers"
+            title="Step 3 of 4 — AEs & Customers"
             badge={
               aeCount !== null && aeCount > 0
                 ? <span className="text-xs bg-success/15 text-success border border-success/30/50 px-2 py-0.5 rounded-full font-medium">
