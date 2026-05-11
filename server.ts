@@ -50,12 +50,16 @@ import { initJobPersistence } from './src/account-intelligence.ts'
 import { createEventsRouter } from './src/events-routes.ts'
 // ── BKL-ARCH-13: Territory / pod / accounts routes ────────────────────────
 import { createTerritoryRouter } from './src/territory-routes.ts'
+import { reconcileConfig, AUTH_CONFIG_PATH, POD_CONFIG_PATH, USER_SETTINGS_PATH } from './src/config-reconciler.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
 process.on('unhandledRejection', (reason: any) => {
   console.error('[server] unhandled rejection:', reason?.message ?? reason)
 })
+
+// ── Reconcile config files before loading state ──────────────────────────────
+reconcileConfig()
 
 // ── Load shared state from server-state.ts ──────────────────────────────────
 loadServerState()
@@ -91,14 +95,14 @@ try {
   }
 } catch (e: any) { console.warn('[startup] could not read AE folder IDs:', e.message) }
 
-// Load REDHAT_OFFLINE_TOKEN from data-sources.json if not already set via .env
+// Load REDHAT_OFFLINE_TOKEN from auth.json if not already set via .env
 // (BKL-RH-UX-01: allows token to be saved via the UI without requiring a container restart)
 try {
-  const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
-  const persisted = typeof ds.redhatOfflineToken === 'string' ? ds.redhatOfflineToken : null
+  const auth = JSON.parse(readFileSync(AUTH_CONFIG_PATH, 'utf-8'))
+  const persisted = typeof auth.redhatOfflineToken === 'string' ? auth.redhatOfflineToken : null
   if (persisted && (!process.env.REDHAT_OFFLINE_TOKEN || process.env.REDHAT_OFFLINE_TOKEN === 'your_offline_token_here')) {
     process.env.REDHAT_OFFLINE_TOKEN = persisted
-    console.log('[startup] REDHAT_OFFLINE_TOKEN loaded from data-sources.json')
+    console.log('[startup] REDHAT_OFFLINE_TOKEN loaded from auth.json')
   }
 } catch { /* file missing at startup — skip silently */ }
 
