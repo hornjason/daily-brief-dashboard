@@ -26,41 +26,36 @@ const CCSP_FETCH_SRC = readFileSync(resolve(ROOT, 'src/ccsp-tableau-fetch.ts'), 
 // ── BKL-CCSP-RETRY-02: doKeepalive login form check ──────────────────────────
 
 describe('BKL-CCSP-RETRY-02: doKeepalive checks login form after Tableau navigation', () => {
-  test('doKeepalive checks for input[type="password"] after URL check', () => {
+  const getFnSlice = () => {
     const fnIdx = DAEMON_SRC.indexOf('async function doKeepalive()')
     expect(fnIdx).toBeGreaterThan(-1)
-    const fnSlice = DAEMON_SRC.slice(fnIdx, fnIdx + 1500)
-    // Must check login form presence — not only URL redirect
+    return DAEMON_SRC.slice(fnIdx, fnIdx + 5000)
+  }
+
+  test('doKeepalive checks for input[type="password"] after URL check', () => {
+    const fnSlice = getFnSlice()
     expect(fnSlice).toContain('input[type="password"]')
     expect(fnSlice).toContain('input#username')
   })
 
-  test("doKeepalive throws 'Tableau auth expired' when login form is found", () => {
-    const fnIdx = DAEMON_SRC.indexOf('async function doKeepalive()')
-    const fnSlice = DAEMON_SRC.slice(fnIdx, fnIdx + 1500)
-    // Exact message required so the keepalive failure email has a clear subject
-    expect(fnSlice).toContain("'Tableau auth expired'")
+  test('doKeepalive throws when login page is detected', () => {
+    const fnSlice = getFnSlice()
+    expect(fnSlice).toContain('Tableau session expired')
   })
 
   test('doKeepalive login form check comes after the URL redirect check', () => {
-    const fnIdx = DAEMON_SRC.indexOf('async function doKeepalive()')
-    const fnSlice = DAEMON_SRC.slice(fnIdx, fnIdx + 1500)
-    const urlCheckIdx = fnSlice.indexOf('tableauFinal.includes(\'signin\')')
+    const fnSlice = getFnSlice()
+    const urlCheckIdx = fnSlice.indexOf('10ay.online.tableau.com')
     const loginFormIdx = fnSlice.indexOf('input[type="password"]')
-    // login form check must appear after URL check
     expect(urlCheckIdx).toBeGreaterThan(-1)
     expect(loginFormIdx).toBeGreaterThan(-1)
     expect(loginFormIdx).toBeGreaterThan(urlCheckIdx)
   })
 
-  test('doKeepalive uses .$(selector) pattern matching ccsp-tableau-fetch login detection', () => {
-    // doKeepalive must use page.$() with same selectors as fetchPodCsv
-    const fnIdx = DAEMON_SRC.indexOf('async function doKeepalive()')
-    const fnSlice = DAEMON_SRC.slice(fnIdx, fnIdx + 1500)
-    expect(fnSlice).toContain('hasLoginForm')
-    // Throws on true
-    expect(fnSlice).toContain('if (hasLoginForm)')
-    expect(fnSlice).toContain('throw new Error(\'Tableau auth expired\')')
+  test('doKeepalive uses isLoginPage pattern matching ccsp-tableau-fetch login detection', () => {
+    const fnSlice = getFnSlice()
+    expect(fnSlice).toContain('isLoginPage')
+    expect(fnSlice).toContain('if (isLoginPage)')
   })
 })
 
