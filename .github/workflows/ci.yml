@@ -12,6 +12,12 @@ on:
       - 'docs/**'
       - '.github/pull_request_template.md'
 
+# When multiple pushes to main land quickly (e.g., merging 3 PRs),
+# cancel in-progress runs and only build the latest commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   shellcheck:
     name: Shellcheck
