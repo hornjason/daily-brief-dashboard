@@ -9,12 +9,13 @@
  *
  * Design decisions:
  *   - Manual accounts (discoveredBy === 'manual') are NEVER auto-healed.
- *   - Accounts without provenance are stamped as 'pre-rc8' on first read.
+ *   - Accounts without provenance are stamped as LEGACY_PROVENANCE_TAG on first read.
  *   - Stale = any non-manual entry whose appVersion !== current APP_VERSION.
  *   - Re-discovery reuses enqueueScraperTask (scraper-manager infrastructure).
  */
 
 import type { Customer } from './types.ts'
+import { LEGACY_PROVENANCE_TAG } from './types.ts'
 // Re-export AccountProvenance from types.ts so test imports work from this module
 export type { AccountProvenance } from './types.ts'
 
@@ -47,7 +48,7 @@ export function isStaleProvenance(
 }
 
 /**
- * Stamp existing account numbers with 'pre-rc8' provenance when no
+ * Stamp existing account numbers with LEGACY_PROVENANCE_TAG provenance when no
  * provenance metadata exists. This is the migration path for accounts
  * discovered before provenance tracking was added.
  *
@@ -69,8 +70,8 @@ export function migratePreRc8Provenance(
   const now = new Date().toISOString()
   return accountNumbers.map(num => ({
     accountNumber: num,
-    discoveredBy: 'pre-rc8' as const,
-    appVersion: 'pre-rc8',
+    discoveredBy: LEGACY_PROVENANCE_TAG,
+    appVersion: LEGACY_PROVENANCE_TAG,
     discoveredAt: now,
   }))
 }
@@ -133,7 +134,7 @@ export function buildHealerPlan(
 /**
  * Run once at server startup, before any scrapes execute.
  *
- * 1. For each customer with accountNumbers but no provenance → stamp as 'pre-rc8'
+ * 1. For each customer with accountNumbers but no provenance → stamp as LEGACY_PROVENANCE_TAG
  * 2. For each customer with stale provenance → queue re-discovery
  * 3. Manual accounts are always preserved
  *

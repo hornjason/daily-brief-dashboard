@@ -1,4 +1,10 @@
 /**
+ * Sentinel value for legacy account provenance (pre-tracking era).
+ * Used to mark account numbers discovered before #82 provenance tracking was added.
+ */
+export const LEGACY_PROVENANCE_TAG = 'pre-rc8' as const
+
+/**
  * Per-AE configuration — stored in data/config/aes.json.
  * tableauUrl: full Tableau dashboard URL; territory extracted automatically.
  * Sheet IDs are written back by scrapers after first creation.
@@ -46,7 +52,7 @@ export interface Customer {
 /** #82: Metadata tracking origin of each discovered account number. */
 export interface AccountProvenance {
   accountNumber: string
-  discoveredBy: 'rh-scraper' | 'rh-cases-api' | 'manual' | 'pre-rc8'
+  discoveredBy: 'rh-scraper' | 'rh-cases-api' | 'manual' | typeof LEGACY_PROVENANCE_TAG
   appVersion: string      // from package.json version
   discoveredAt: string    // ISO timestamp
 }

@@ -124,6 +124,22 @@ describe('migratePreRc8Provenance', () => {
   })
 })
 
+describe('LEGACY_PROVENANCE_TAG constant', () => {
+  test('constant exists and equals pre-rc8', async () => {
+    const types = await import('../../src/types.ts')
+    expect(types.LEGACY_PROVENANCE_TAG).toBeDefined()
+    expect(types.LEGACY_PROVENANCE_TAG).toBe('pre-rc8')
+  })
+
+  test('constant is used in account-provenance-healer', async () => {
+    const healer = await import('../../src/account-provenance-healer.ts')
+    // Verify the migratePreRc8Provenance function uses the constant by checking its output
+    const result = healer.migratePreRc8Provenance(['123456'], undefined)
+    expect(result[0].discoveredBy).toBe('pre-rc8')
+    expect(result[0].appVersion).toBe('pre-rc8')
+  })
+})
+
 describe('buildHealerPlan', () => {
   test('queues re-discovery for customer with stale provenance', () => {
     const customers: Customer[] = [{
