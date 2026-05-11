@@ -24,6 +24,16 @@ type PanelFeature = ProductFeature & {
   isNew: boolean
 }
 
+const PRODUCT_RELEASE_NOTES: Record<string, string> = {
+  'rhel': 'https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/',
+  'ocp': 'https://docs.redhat.com/en/documentation/openshift_container_platform/',
+  'ocp-virt': 'https://docs.redhat.com/en/documentation/openshift_container_platform/',
+  'aap': 'https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/',
+  'rhel-ai': 'https://docs.redhat.com/en/documentation/red_hat_enterprise_linux_ai/',
+  'rh-ai-inference': 'https://docs.redhat.com/en/documentation/red_hat_ai_inference_server/',
+  'rhoai': 'https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/',
+}
+
 interface FeatureDetailPanelProps {
   feature: PanelFeature | null
   onClose: () => void
@@ -55,14 +65,12 @@ export function FeatureDetailPanel({ feature, onClose, onTagClick }: FeatureDeta
   // Construct Learn More URL (priority order):
   // 1. feature.sourceUrls[0] if available (AI-extracted docs links)
   // 2. feature.enrichmentUrls[0] if available (fetched during enrichment)
-  // 3. Deep link to release notes section if releaseNotesSection exists
-  // 4. null (hide button)
+  // 3. Product release notes page (known docs.redhat.com URL per product)
   const primaryUrl =
     feature.sourceUrls.find(u => /^https?:\/\//.test(u)) ??
     feature.enrichmentUrls.find(u => /^https?:\/\//.test(u)) ??
-    (feature.releaseNotesSection
-      ? `https://docs.redhat.com/#${feature.releaseNotesSection}`
-      : null)
+    PRODUCT_RELEASE_NOTES[feature.productSlug] ??
+    null
 
   return (
     <>
