@@ -96,7 +96,7 @@ try {
 try {
   const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
   const persisted = typeof ds.redhatOfflineToken === 'string' ? ds.redhatOfflineToken : null
-  if (persisted && !process.env.REDHAT_OFFLINE_TOKEN) {
+  if (persisted && (!process.env.REDHAT_OFFLINE_TOKEN || process.env.REDHAT_OFFLINE_TOKEN === 'your_offline_token_here')) {
     process.env.REDHAT_OFFLINE_TOKEN = persisted
     console.log('[startup] REDHAT_OFFLINE_TOKEN loaded from data-sources.json')
   }
