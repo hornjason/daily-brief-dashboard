@@ -139,6 +139,43 @@ if (!existsSync(PRODUCT_INTEL_CONFIG_PATH)) {
   }
 }
 
+// BKL-INSTALL-01 / Issue #86: Upgrade-safe config seeding
+// First-boot seed: if aes.json is missing, copy from scripts/seed-data/
+// On upgrade (aes.json exists): skip seeding to preserve user configuration
+const AES_CONFIG_PATH = resolve(SRV_CONFIG_DIR, 'aes.json')
+if (!existsSync(AES_CONFIG_PATH)) {
+  const seedPath = resolve(import.meta.dir, 'scripts/seed-data/aes.json')
+  if (existsSync(seedPath)) {
+    const seedContent = readFileSync(seedPath, 'utf-8')
+    writeFileSync(AES_CONFIG_PATH, seedContent)
+    console.log('[startup] aes.json seeded from scripts/seed-data/aes.json (fresh install)')
+  } else {
+    // Fallback: create empty structure if seed file missing
+    writeFileSync(AES_CONFIG_PATH, JSON.stringify({ aes: [] }, null, 2))
+    console.log('[startup] aes.json created with empty structure (seed file missing)')
+  }
+} else {
+  console.log('[startup] aes.json exists — upgrade mode (preserving existing data)')
+}
+
+// First-boot seed: if customers.json is missing, copy from scripts/seed-data/
+// On upgrade (customers.json exists): skip seeding to preserve user configuration
+const CUSTOMERS_CONFIG_PATH = resolve(SRV_CONFIG_DIR, 'customers.json')
+if (!existsSync(CUSTOMERS_CONFIG_PATH)) {
+  const seedPath = resolve(import.meta.dir, 'scripts/seed-data/customers.json')
+  if (existsSync(seedPath)) {
+    const seedContent = readFileSync(seedPath, 'utf-8')
+    writeFileSync(CUSTOMERS_CONFIG_PATH, seedContent)
+    console.log('[startup] customers.json seeded from scripts/seed-data/customers.json (fresh install)')
+  } else {
+    // Fallback: create empty structure if seed file missing
+    writeFileSync(CUSTOMERS_CONFIG_PATH, JSON.stringify({ customers: [] }, null, 2))
+    console.log('[startup] customers.json created with empty structure (seed file missing)')
+  }
+} else {
+  console.log('[startup] customers.json exists — upgrade mode (preserving existing data)')
+}
+
 const SHEETS_TOKEN_PATH_SRV = process.env.SHEETS_TOKEN
   ?? resolve(SRV_CONFIG_DIR, '.sheets-token.json')
 const GDRIVE_TOKEN_PATH_SRV = process.env.GDRIVE_TOKEN
