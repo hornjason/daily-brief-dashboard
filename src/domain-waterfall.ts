@@ -30,6 +30,7 @@ export interface WaterfallResult {
   domain: string | null
   tier: 'clearbit' | 'llm' | null
   verified: boolean | null  // null = not checked, true = reachable, false = unreachable
+  aliasDomains?: string[]   // #115: additional domains for same company from Clearbit
 }
 
 /** Tier 1: Clearbit autocomplete (free, no key)
@@ -165,6 +166,22 @@ export async function tier3Validate(domain: string): Promise<boolean> {
   }
 }
 
+/** Collect all matching domains from Clearbit for a company name (for aliasDomains). */
+export async function collectClearbitDomains(companyName: string): Promise<string[]> {
+  const stripped = stripLegalSuffixes(companyName)
+  try {
+    const res = await fetch(
+      `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(stripped)}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000) }
+    )
+    if (!res.ok) return []
+    const hits: { name: string; domain: string }[] = await res.json()
+    return hits
+      .filter(h => h.domain && nameMatchesClearbit(stripped, h.name))
+      .map(h => h.domain.toLowerCase())
+  } catch { return [] }
+}
+
 /** Run the full waterfall for a single company name. Returns domain + metadata. */
 export async function waterfallInferDomain(companyName: string): Promise<WaterfallResult> {
   // Tier 1: Gemini (LLM) — primary, with variant retries
@@ -172,16 +189,21 @@ export async function waterfallInferDomain(companyName: string): Promise<Waterfa
   if (t2) {
     console.log(`[infer-domains] ${companyName} → gemini: ${t2}`)
     const verified = await tier3Validate(t2)
-    return { domain: t2, tier: 'llm', verified }
+    // #115: Also check Clearbit for additional alias domains
+    const clearbitDomains = await collectClearbitDomains(companyName)
+    const aliasDomains = clearbitDomains.filter(d => d !== t2)
+    return { domain: t2, tier: 'llm', verified, aliasDomains: aliasDomains.length > 0 ? aliasDomains : undefined }
   }
 
   // Tier 2: Clearbit fallback
   console.log(`[infer-domains] ${companyName} → gemini miss, trying clearbit`)
-  const t1 = await tier1Clearbit(companyName)
-  if (t1) {
-    console.log(`[infer-domains] ${companyName} → clearbit: ${t1}`)
-    const verified = await tier3Validate(t1)
-    return { domain: t1, tier: 'clearbit', verified }
+  const clearbitDomains = await collectClearbitDomains(companyName)
+  if (clearbitDomains.length > 0) {
+    const primary = clearbitDomains[0]
+    console.log(`[infer-domains] ${companyName} → clearbit: ${primary}`)
+    const verified = await tier3Validate(primary)
+    const aliasDomains = clearbitDomains.slice(1)
+    return { domain: primary, tier: 'clearbit', verified, aliasDomains: aliasDomains.length > 0 ? aliasDomains : undefined }
   }
 
   console.log(`[infer-domains] ${companyName} → gemini+clearbit miss, no domain`)

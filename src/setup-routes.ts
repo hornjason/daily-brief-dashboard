@@ -532,8 +532,14 @@ export function createSetupRouter(): Hono {
         body.customers[i] = cleaned as unknown as Customer
       }
 
-      writeJsonAtomic(CUSTOMERS_PATH, { customers: body.customers })
-      customers.splice(0, customers.length, ...body.customers)
+      // Merge with existing customer data to preserve fields the UI doesn't manage
+      // (accountProvenance, ccspCustomer, supportableFileId, needsManualDomain, etc.)
+      const merged = body.customers.map((incoming: Customer) => {
+        const existing = customers.find(c => c.name === incoming.name && c.ae === incoming.ae)
+        return existing ? { ...existing, ...incoming } : incoming
+      })
+      writeJsonAtomic(CUSTOMERS_PATH, { customers: merged })
+      customers.splice(0, customers.length, ...merged)
       return c.json({ ok: true, count: body.customers.length })
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)

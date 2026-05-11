@@ -1139,6 +1139,16 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
                 if (cu && !cu.domain) { cu.domain = domain; dirty = true }
                 // BKL-DOM-INF-13: clear flag once a domain resolves
                 if (cu && cu.needsManualDomain) { cu.needsManualDomain = false; dirty = true }
+                // #115: collect alias domains from Clearbit for same company
+                if (cu && !cu.aliasDomains?.length) {
+                  try {
+                    const { collectClearbitDomains } = await import('./domain-waterfall.ts')
+                    const inferKey = cu.aliases?.[0] ?? cu.name
+                    const allDomains = await collectClearbitDomains(inferKey)
+                    const extras = allDomains.filter(d => d !== domain)
+                    if (extras.length > 0) { cu.aliasDomains = extras; dirty = true }
+                  } catch {}
+                }
               }
               // BKL-DOM-INF-13: flag customers with no domain after all tiers
               for (const name of unresolvedNames) {
