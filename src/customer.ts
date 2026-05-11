@@ -43,6 +43,70 @@ const GCAL_TOKEN_PATH   = process.env.GCAL_TOKEN        ?? resolve(CONFIG_DIR_PA
 
 // ── Calendar: meetings for this customer (next 30 days) ──────────────────────
 
+// Common business entity suffixes excluded from partial matching (issue #95)
+const COMMON_SUFFIXES = new Set([
+  'inc',
+  'corp',
+  'corporation',
+  'llc',
+  'ltd',
+  'limited',
+  'co',
+  'company',
+  'group',
+  'holdings',
+  'partners',
+  'solutions',
+  'services',
+  'technologies',
+  'international',
+  'enterprises',
+])
+
+/**
+ * Test if a calendar event matches a customer based on:
+ * - Domain match (attendee emails)
+ * - Full name or alias match in title/description
+ * - Partial name match (significant words from customer name) — issue #95
+ *
+ * Exported for testing.
+ */
+export function matchesCustomerCalendarEvent(
+  eventTitle: string,
+  eventDescription: string,
+  attendeeEmails: string[],
+  customer: Customer
+): boolean {
+  const attendees = attendeeEmails.join(' ')
+  const title = eventTitle.toLowerCase()
+  const agenda = eventDescription.toLowerCase()
+  const nameTerms = [customer.name, ...(customer.aliases ?? [])].map((n) =>
+    n.toLowerCase()
+  )
+
+  // Add individual significant words from customer name for partial matching (issue #95)
+  const nameWords = customer.name
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && !COMMON_SUFFIXES.has(w))
+  const significantTerms = [...nameTerms, ...nameWords]
+
+  // 1. Domain match (highest confidence — attendee emails)
+  const domains = [
+    customer.domain,
+    ...(customer.aliasDomains ?? []),
+  ].filter(Boolean) as string[]
+  if (domains.some((d) => attendees.includes(d))) return true
+
+  // 2. Title match
+  if (significantTerms.some((n) => title.includes(n))) return true
+
+  // 3. Agenda / description match
+  if (significantTerms.some((n) => agenda.includes(n))) return true
+
+  return false
+}
+
 export async function fetchCustomerMeetings(customer: Customer): Promise<CalendarEvent[]> {
   // ADR-013 Tier 2: serve from cache when fresh (2h TTL)
   const customerSlug = toSlug(customer.name)
@@ -71,22 +135,13 @@ export async function fetchCustomerMeetings(customer: Customer): Promise<Calenda
   const meetings = items
     .filter(isPrimaryCalendarEvent) // Exclude subscribed/shared calendar events (issue #94)
     .filter((ev) => {
-      const attendees = (ev.attendees ?? []).map((a) => a.email ?? '').join(' ')
-      const title    = (ev.summary     ?? '').toLowerCase()
-      const agenda   = (ev.description ?? '').toLowerCase()
-      const nameTerms = [customer.name, ...(customer.aliases ?? [])].map((n) => n.toLowerCase())
-
-      // 1. Domain match (highest confidence — attendee emails)
-      const domains = [customer.domain, ...(customer.aliasDomains ?? [])].filter(Boolean) as string[]
-      if (domains.some((d) => attendees.includes(d))) return true
-
-      // 2. Title match
-      if (nameTerms.some((n) => title.includes(n))) return true
-
-      // 3. Agenda / description match
-      if (nameTerms.some((n) => agenda.includes(n))) return true
-
-      return false
+      const attendeeEmails = (ev.attendees ?? []).map((a) => a.email ?? '')
+      return matchesCustomerCalendarEvent(
+        ev.summary ?? '',
+        ev.description ?? '',
+        attendeeEmails,
+        customer
+      )
     })
     .map((ev) => {
       const attendees = (ev.attendees ?? [])

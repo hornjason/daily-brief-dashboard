@@ -1348,9 +1348,9 @@ export function CustomerDetailPage() {
             customerName={customerName}
             customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
           />
-          {/* BKL-HERO-18: L4-only sections */}
-          {!isL3Only && <CloudSpendCard customerName={customerName} />}
-          {!isL3Only && <PipelineCard customerName={customerName} />}
+          {/* BKL-HERO-18: Drive-sourced sections — L3 safe */}
+          <CloudSpendCard customerName={customerName} />
+          <PipelineCard customerName={customerName} />
           <ActivityTimeline
             meetings={sse.meetings}
             emails={sse.emails}
