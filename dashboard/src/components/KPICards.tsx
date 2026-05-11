@@ -6,6 +6,7 @@ import KPISev1Modal from './KPISev1Modal'
 import KPIRenewalsModal, { type RenewalRow, isFreeOrTrialRow } from './KPIRenewalsModal'
 import KPITechWinsModal from './KPITechWinsModal'
 import SparklineKPI from './SparklineKPI'
+import { determineRhCasesEmptyState } from '../lib/rh-cases-empty-state'
 import {
   ShieldAlert,
   AlertTriangle,
@@ -14,6 +15,9 @@ import {
   Package,
   Key,
   Trophy,
+  Info,
+  Clock,
+  CheckCircle,
 } from 'lucide-react'
 
 /* ── KPI config persistence (BKL-UX45) ─────────────────────── */
@@ -123,6 +127,8 @@ interface KPICardsProps {
   allAccounts?: AccountInfo[]
   /** Case-to-product matching function from App */
   caseMatchesProducts?: (caseProduct: string | string[], selectedLabels: string[]) => boolean
+  /** BKL-#65: L3-only (hero) vs L4 (primary node) for empty state logic */
+  isL3Only?: boolean
 }
 
 function rhTimeAgo(isoString: string): string {
@@ -135,7 +141,7 @@ function rhTimeAgo(isoString: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory, selectedProducts, allCases, allAccounts, caseMatchesProducts }: KPICardsProps) {
+export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLastScraped, rhHasSession, sparklineHistory, selectedProducts, allCases, allAccounts, caseMatchesProducts, isL3Only }: KPICardsProps) {
   const [casesOpen, setCasesOpen] = useState(false)
   const [sev1Open, setSev1Open] = useState(false)
 
@@ -302,28 +308,100 @@ export function KPICards({ kpis, cases, accounts, techWinsNeeded, loading, rhLas
     return Array.from(map.entries()).sort((a, b) => a[1][0].daysLeft - b[1][0].daysLeft)
   }, [amberRows])
 
+  // BKL-#65: Determine RH Cases empty state
+  const rhCasesEmptyState = useMemo(() => {
+    const caseCount = isProductFiltered ? filteredCaseCount : (kpis?.openCasesTotal ?? 0)
+    return determineRhCasesEmptyState(
+      isL3Only,
+      rhLastScraped,
+      caseCount,
+      allAccounts ?? accounts
+    )
+  }, [isL3Only, rhLastScraped, kpis?.openCasesTotal, filteredCaseCount, isProductFiltered, allAccounts, accounts])
+
   // KPI card definitions keyed by ID
   const kpiCards: Record<string, React.ReactNode> = {
-    openCases: (
-      <KPICard
-        key="openCases"
-        label="Open Cases"
-        value={isProductFiltered ? `${filteredCaseCount} / ${totalCaseCount}` : (kpis?.openCasesTotal ?? 0)}
-        icon={<ShieldAlert className="w-5 h-5" />}
-        accent="#00BCD4"
-        loading={loading}
-        onClick={() => setCasesOpen(true)}
-        sparklineData={sparklineHistory?.openCases}
-        invertTrend
-        subtitle={
-          rhHasSession === false
-            ? 'No RH session'
-            : rhLastScraped
-            ? `Synced ${rhTimeAgo(rhLastScraped)}`
-            : undefined
-        }
-      />
-    ),
+    openCases: (() => {
+      // BKL-#65: Show empty states when no cases
+      if (rhCasesEmptyState === 'no-source') {
+        return (
+          <KPICard
+            key="openCases"
+            label="Open Cases"
+            value="—"
+            icon={<Info className="w-5 h-5" />}
+            accent="#64748B"
+            loading={loading}
+            subtitle={
+              <>
+                <div>No case data source configured</div>
+                <a href="/dashboard/admin" className="text-accent hover:underline text-xs">Configure in Admin → Connections</a>
+              </>
+            }
+          />
+        )
+      }
+
+      if (rhCasesEmptyState === 'awaiting-sync') {
+        return (
+          <KPICard
+            key="openCases"
+            label="Open Cases"
+            value="—"
+            icon={<Clock className="w-5 h-5" />}
+            accent="#D29922"
+            loading={loading}
+            subtitle={
+              <>
+                <div>Awaiting first sync from primary node</div>
+                <a href="/dashboard/admin" className="text-accent hover:underline text-xs">Run Now</a>
+              </>
+            }
+          />
+        )
+      }
+
+      if (rhCasesEmptyState === 'synced-zero') {
+        return (
+          <KPICard
+            key="openCases"
+            label="Open Cases"
+            value="0"
+            icon={<CheckCircle className="w-5 h-5" />}
+            accent="#3FB950"
+            loading={loading}
+            onClick={() => setCasesOpen(true)}
+            subtitle={
+              rhLastScraped
+                ? `Synced ${rhTimeAgo(rhLastScraped)} — no cases found`
+                : 'No cases found for your accounts'
+            }
+          />
+        )
+      }
+
+      // Normal display when cases are present
+      return (
+        <KPICard
+          key="openCases"
+          label="Open Cases"
+          value={isProductFiltered ? `${filteredCaseCount} / ${totalCaseCount}` : (kpis?.openCasesTotal ?? 0)}
+          icon={<ShieldAlert className="w-5 h-5" />}
+          accent="#00BCD4"
+          loading={loading}
+          onClick={() => setCasesOpen(true)}
+          sparklineData={sparklineHistory?.openCases}
+          invertTrend
+          subtitle={
+            rhHasSession === false
+              ? 'No RH session'
+              : rhLastScraped
+              ? `Synced ${rhTimeAgo(rhLastScraped)}`
+              : undefined
+          }
+        />
+      )
+    })(),
     sev1Cases: (
       <KPICard
         key="sev1Cases"

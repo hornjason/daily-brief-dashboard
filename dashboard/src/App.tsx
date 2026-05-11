@@ -632,7 +632,8 @@ function Dashboard() {
             {/* KPI Cards */}
             <section id="section-command" data-section="section-command">
               {/* BKL-HERO-06: pass rhHasSession as undefined on L3 so the "Connect RH Portal" hint is suppressed */}
-              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={filteredAccounts} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={isL3Only ? undefined : rhStatus?.hasSession} sparklineHistory={sparklineHistory} selectedProducts={productFilterSelected} allCases={casesApi.data?.cases ?? []} allAccounts={accountsApi.data?.customers ?? []} caseMatchesProducts={caseMatchesProducts} />
+              {/* BKL-#65: pass isL3Only for RH Cases empty state logic */}
+              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={filteredAccounts} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={isL3Only ? undefined : rhStatus?.hasSession} sparklineHistory={sparklineHistory} selectedProducts={productFilterSelected} allCases={casesApi.data?.cases ?? []} allAccounts={accountsApi.data?.customers ?? []} caseMatchesProducts={caseMatchesProducts} isL3Only={isL3Only} />
             </section>
 
             {/* Pipeline */}
