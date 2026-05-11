@@ -14,6 +14,7 @@ import { PodTabBar } from './components/PodTabBar'
 import { PodKPIHeader } from './components/PodKPIHeader'
 import { CloudSpendSection } from './components/CloudSpendSection'
 import MorningSummary from './components/MorningSummary'
+import { UpdateBanner } from './components/UpdateBanner'
 import TopActionsPanel from './components/TopActionsPanel'
 import type { TopAction } from './components/TopActionsPanel'
 import { PipelineSection } from './components/PipelineSection'
@@ -504,6 +505,7 @@ function Dashboard() {
             cases={casesApi.data?.cases ?? []}
           />
         )}
+        <UpdateBanner />
         {rhStatus && !isL3Only && (
           <RhSessionBanner status={rhStatus} onReconnect={() => setRhReconnecting(true)} onVncOpen={(win) => { vncWindowRef.current = win }} />
         )}

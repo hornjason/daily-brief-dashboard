@@ -28,6 +28,7 @@ import { getWatcherState, rebuildFolderMap } from './drive-watcher.ts'
 import { customers } from './server-state.ts'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 import { isPrimary } from './lib/node-role.ts'
+import { shouldShowUpdate } from './lib/version-utils.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -35,6 +36,17 @@ let SHEETS_TOKEN_PATH = ''
 export function initAdminRoutes(opts: { sheetsTokenPath: string }): void {
   SHEETS_TOKEN_PATH = opts.sheetsTokenPath
 }
+
+// ── Update check cache (24 hours) ────────────────────────────────────────────
+interface UpdateCheckResult {
+  updateAvailable: boolean
+  currentVersion: string
+  latestVersion: string
+  releaseUrl: string
+}
+
+let updateCheckCache: { result: UpdateCheckResult; timestamp: number } | null = null
+const UPDATE_CHECK_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours in ms
 
 // ── APP_VERSION (moved from server.ts) ───────────────────────────────────────
 export const APP_VERSION: string = (() => {
@@ -62,7 +74,60 @@ export function createAdminRouter(): Hono {
   })
 
   // GET /api/version — application version
-  r.get('/api/version', (c) => c.json({ version: APP_VERSION }))
+  r.get('/api/version', (c) => {
+    const imageTag = process.env.IMAGE_TAG ?? 'dev'
+    return c.json({ version: APP_VERSION, imageTag })
+  })
+
+  // GET /api/updates/check — check for newer version on GitHub (24h cache)
+  r.get('/api/updates/check', async (c) => {
+    // Check cache first
+    const now = Date.now()
+    if (updateCheckCache && (now - updateCheckCache.timestamp) < UPDATE_CHECK_CACHE_TTL) {
+      return c.json(updateCheckCache.result)
+    }
+
+    try {
+      // Fetch latest release from GitHub
+      const res = await fetch('https://api.github.com/repos/hornjason/asaCommandCenter/releases/latest', {
+        headers: { 'User-Agent': 'DailyBriefDashboard' },
+      })
+
+      if (!res.ok) {
+        // Graceful degradation: if GitHub API unreachable, return no update
+        return c.json({
+          updateAvailable: false,
+          currentVersion: APP_VERSION,
+          latestVersion: APP_VERSION,
+          releaseUrl: '',
+        })
+      }
+
+      const data = await res.json() as { tag_name?: string; html_url?: string }
+      const latestVersion = data.tag_name ?? APP_VERSION
+      const releaseUrl = data.html_url ?? ''
+
+      const result: UpdateCheckResult = {
+        updateAvailable: shouldShowUpdate(APP_VERSION, latestVersion),
+        currentVersion: APP_VERSION,
+        latestVersion,
+        releaseUrl,
+      }
+
+      // Update cache
+      updateCheckCache = { result, timestamp: now }
+
+      return c.json(result)
+    } catch (e) {
+      // Graceful degradation: if fetch fails, return no update (no error)
+      return c.json({
+        updateAvailable: false,
+        currentVersion: APP_VERSION,
+        latestVersion: APP_VERSION,
+        releaseUrl: '',
+      })
+    }
+  })
 
   // GET /api/drive-watcher/status — Drive watcher state
   r.get('/api/drive-watcher/status', (c) => {
