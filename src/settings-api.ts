@@ -11,6 +11,7 @@ import { readSettingsFromDrive, writeSettingsToDrive, applySettingsToLocal } fro
 import { loadServerState } from './server-state.ts'
 import { initAiConfig, DEFAULT_AI_CONFIG, getAiConfig, getGeminiModel, getGeminiModelLite, DEFAULT_AUTOMATION_CONFIG, getAutomationConfig } from './ai-config.ts'
 import type { AiConfig, AutomationConfig } from './ai-config.ts'
+import { AUTH_CONFIG_PATH, USER_SETTINGS_PATH } from './config-reconciler.ts'
 export { initAiConfig, DEFAULT_AI_CONFIG, getAiConfig, getGeminiModel, getGeminiModelLite, DEFAULT_AUTOMATION_CONFIG, getAutomationConfig }
 export type { AiConfig, AutomationConfig }
 
@@ -125,11 +126,11 @@ export function getSchedulerConfig(): SchedulerConfig {
 }
 
 export function updateSchedulerField(field: string, value: unknown): void {
-  let ds: Record<string, unknown> = {}
-  try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
-  const config = { ...DEFAULT_SCHEDULER_CONFIG, ...(ds.schedulerConfig ?? {} as any) }
+  let settings: Record<string, unknown> = {}
+  try { settings = JSON.parse(readFileSync(USER_SETTINGS_PATH, 'utf-8')) } catch {}
+  const config = { ...DEFAULT_SCHEDULER_CONFIG, ...(settings.schedulerConfig ?? {} as any) }
   ;(config as any)[field] = value
-  writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, schedulerConfig: config })
+  writeJsonAtomic(USER_SETTINGS_PATH, { ...settings, schedulerConfig: config })
   _triggerBackup()
 }
 
@@ -201,18 +202,18 @@ const WEATHER_CACHE_MS = 30 * 60 * 1000
 
 // ── Offline token helpers ────────────────────────────────────────────────────
 
-/** Persist REDHAT_OFFLINE_TOKEN to data-sources.json so it survives container restarts. */
+/** Persist REDHAT_OFFLINE_TOKEN to auth.json so it survives container restarts. */
 export function saveOfflineToken(token: string): void {
-  let ds: Record<string, unknown> = {}
-  try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
-  writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, redhatOfflineToken: token })
+  let auth: Record<string, unknown> = {}
+  try { auth = JSON.parse(readFileSync(AUTH_CONFIG_PATH, 'utf-8')) } catch {}
+  writeJsonAtomic(AUTH_CONFIG_PATH, { ...auth, redhatOfflineToken: token, lastUpdated: new Date().toISOString() })
 }
 
 /** Read the persisted offline token (returns null if not saved). */
 export function getPersistedOfflineToken(): string | null {
   try {
-    const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
-    return typeof ds.redhatOfflineToken === 'string' ? ds.redhatOfflineToken : null
+    const auth = JSON.parse(readFileSync(AUTH_CONFIG_PATH, 'utf-8'))
+    return typeof auth.redhatOfflineToken === 'string' ? auth.redhatOfflineToken : null
   } catch { return null }
 }
 
@@ -349,8 +350,8 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
       zipCode: rawZip,
     }
     try {
-      const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
-      writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, weather: updated })
+      const settings = JSON.parse(readFileSync(USER_SETTINGS_PATH, 'utf-8'))
+      writeJsonAtomic(USER_SETTINGS_PATH, { ...settings, weather: updated })
       _triggerBackup()
       _weatherCache = null // invalidate cache on settings change
       return c.json(updated)
@@ -426,9 +427,9 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
     }
 
     try {
-      let ds: Record<string, unknown> = {}
-      try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
-      writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, aiConfig: updated })
+      let settings: Record<string, unknown> = {}
+      try { settings = JSON.parse(readFileSync(USER_SETTINGS_PATH, 'utf-8')) } catch {}
+      writeJsonAtomic(USER_SETTINGS_PATH, { ...settings, aiConfig: updated })
       _triggerBackup()
       return c.json({ config: updated })
     } catch (e: any) {
@@ -489,9 +490,9 @@ export function createSettingsRouter(deps: { rescheduleRefreshTimers: (intervals
     }
 
     try {
-      let ds: Record<string, unknown> = {}
-      try { ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8')) } catch {}
-      writeJsonAtomic(DATA_SOURCES_PATH, { ...ds, automationConfig: updated })
+      let settings: Record<string, unknown> = {}
+      try { settings = JSON.parse(readFileSync(USER_SETTINGS_PATH, 'utf-8')) } catch {}
+      writeJsonAtomic(USER_SETTINGS_PATH, { ...settings, automationConfig: updated })
       _triggerBackup()
       return c.json({ config: updated })
     } catch (e: any) {

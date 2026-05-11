@@ -1,0 +1,14 @@
+{
+  "scaffoldCache": {
+    "1TestParentFolderIdAAAAAAA": {
+      "configFolderId": "1TestConfigFolderIdAAAAAAA",
+      "productsFolderId": "1TestProductsFolderIdAAAAA",
+      "productSubfolders": {}
+    },
+    "1TestParentFolderIdBBBBBBB": {
+      "configFolderId": "1TestConfigFolderIdBBBBBBB",
+      "productsFolderId": "1TestProductsFolderIdBBBBB",
+      "productSubfolders": {}
+    }
+  }
+}

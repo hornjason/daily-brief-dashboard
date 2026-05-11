@@ -2,7 +2,7 @@
  * BKL-DRIVE-SCAFFOLD-CACHE-01: Drive scaffold ID cache
  *
  * Verifies that readScaffoldCache/writeScaffoldCache persist scaffold
- * results to data-sources.json so ensureConfigAndProductsScaffold can
+ * results to pod-config.json so ensureConfigAndProductsScaffold can
  * short-circuit on subsequent calls without making Drive API calls.
  *
  * BKL-SEC-19: also verifies that invalid Drive folder IDs are rejected
@@ -27,8 +27,8 @@ describe('BKL-DRIVE-SCAFFOLD-CACHE-01: scaffold cache persistence', () => {
   beforeEach(() => {
     process.env.CONFIG_DIR = TMP
     mkdirSync(TMP, { recursive: true })
-    // Start each test with a clean data-sources.json
-    writeFileSync(resolve(TMP, 'data-sources.json'), JSON.stringify({ podConfig: { sfReportId: 'r' } }))
+    // Start each test with a clean pod-config.json
+    writeFileSync(resolve(TMP, 'pod-config.json'), JSON.stringify({ podConfig: { sfReportId: 'r' } }))
   })
 
   afterEach(() => {
@@ -51,11 +51,11 @@ describe('BKL-DRIVE-SCAFFOLD-CACHE-01: scaffold cache persistence', () => {
     expect(cache[PARENT_ID]).toEqual({ ...entry, productSubfolders: {} })
   })
 
-  test('writeScaffoldCache preserves existing data-sources.json fields', async () => {
+  test('writeScaffoldCache preserves existing pod-config.json fields', async () => {
     const { readScaffoldCache, writeScaffoldCache } = await import('../../src/bootstrap-orchestrator.ts')
     writeScaffoldCache(PARENT_ID, { configFolderId: CONFIG_ID, productsFolderId: PRODUCTS_ID })
 
-    const raw = JSON.parse(readFileSync(resolve(TMP, 'data-sources.json'), 'utf-8'))
+    const raw = JSON.parse(readFileSync(resolve(TMP, 'pod-config.json'), 'utf-8'))
     // podConfig written by beforeEach must survive the scaffold write
     expect(raw.podConfig).toBeDefined()
     expect(raw.scaffoldCache[PARENT_ID]).toEqual({ configFolderId: CONFIG_ID, productsFolderId: PRODUCTS_ID, productSubfolders: {} })
