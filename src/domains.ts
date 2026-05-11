@@ -1,6 +1,7 @@
 import { google } from 'googleapis'
 import { makeAuth } from './google.ts'
 import type { Customer } from './types.ts'
+import { isPrimaryCalendarEvent } from './calendar-filter.ts'
 
 // Extract all email domains from a flat array of cell values
 export function extractDomainsFromCells(cells: string[]): Map<string, number> {
@@ -167,9 +168,11 @@ export async function inferCustomerDomain(
       q: name,
     })
 
-    const events = (res.data.items ?? []).filter((ev) => {
-      const title = (ev.summary ?? '').toLowerCase()
-      return nameTerms.some((t) => title.includes(t))
+    const events = (res.data.items ?? [])
+      .filter(isPrimaryCalendarEvent) // Exclude subscribed/shared calendar events (issue #94)
+      .filter((ev) => {
+        const title = (ev.summary ?? '').toLowerCase()
+        return nameTerms.some((t) => title.includes(t))
     })
 
     for (const ev of events) {

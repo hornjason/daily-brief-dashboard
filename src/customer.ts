@@ -18,6 +18,7 @@ import { subscriptionsSource } from './customer/signals/subscriptions.ts'
 import { renderFailedSources } from './customer/signals/failed-sources.ts'
 import { renderCustomerHeader, renderPreviousBrief, renderAccountIntelligence, renderProductIntelligence } from './customer/signals/extras.ts'
 import type { RenderContext as SignalRenderContext, SignalBundle } from './customer/signals/types.ts'
+import { isPrimaryCalendarEvent } from './calendar-filter.ts'
 import { isFreeOrTrial } from './health-score.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { fetchGeminiWithRetry } from './gemini-fetch.ts'
@@ -68,6 +69,7 @@ export async function fetchCustomerMeetings(customer: Customer): Promise<Calenda
 
   const items = res.data.items ?? []
   const meetings = items
+    .filter(isPrimaryCalendarEvent) // Exclude subscribed/shared calendar events (issue #94)
     .filter((ev) => {
       const attendees = (ev.attendees ?? []).map((a) => a.email ?? '').join(' ')
       const title    = (ev.summary     ?? '').toLowerCase()
