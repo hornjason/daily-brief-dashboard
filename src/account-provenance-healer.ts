@@ -70,7 +70,7 @@ export function migratePreRc8Provenance(
   const now = new Date().toISOString()
   return accountNumbers.map(num => ({
     accountNumber: num,
-    discoveredBy: LEGACY_PROVENANCE_TAG as const,
+    discoveredBy: LEGACY_PROVENANCE_TAG,
     appVersion: LEGACY_PROVENANCE_TAG,
     discoveredAt: now,
   }))
