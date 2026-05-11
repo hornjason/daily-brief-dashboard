@@ -6,7 +6,7 @@
 export type RhCasesEmptyState = 'no-source' | 'awaiting-sync' | 'synced-zero' | null
 
 interface Account {
-  accountNumbers: string[]
+  accountNumbers: (string | number)[]
 }
 
 /**
