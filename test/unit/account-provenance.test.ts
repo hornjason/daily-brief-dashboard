@@ -249,6 +249,25 @@ describe('buildHealerPlan', () => {
   })
 })
 
+describe('healStaleAccountNumbers source code validation', () => {
+  test('does not contain redundant re-import of server-state.ts (#85)', async () => {
+    const sourceFile = await Bun.file('./src/account-provenance-healer.ts').text()
+
+    // Count occurrences of server-state.ts import within healStaleAccountNumbers function
+    // There should be exactly ONE at the top (the legitimate lazy import)
+    const functionBody = sourceFile.substring(
+      sourceFile.indexOf('export async function healStaleAccountNumbers()'),
+      sourceFile.indexOf('}\n', sourceFile.indexOf('export async function healStaleAccountNumbers()')) + 1
+    )
+
+    const importMatches = functionBody.match(/await import\(['"]\.\/server-state\.ts['"]\)/g) || []
+
+    // Should have exactly 1 import (the legitimate one at function start)
+    // The redundant re-import after Phase 1 should be removed
+    expect(importMatches.length).toBe(1)
+  })
+})
+
 describe('resolveDiscoveryResult', () => {
   test('clears stale accounts when discovery returns 0 results', () => {
     const customer: Customer = {
