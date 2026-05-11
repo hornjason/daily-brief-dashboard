@@ -56,6 +56,7 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy account plan config (sample, questions PDF, playbook) for AI generation
 COPY --from=builder /app/config/account-plan /app/config/account-plan
 
+
 # ── Runtime paths ──────────────────────────────────────────────────────────────
 # All persistent state lives under /data so a single volume mount covers
 # config, cache, and the RH browser profile.

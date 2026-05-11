@@ -3,6 +3,7 @@ import type { calendar_v3 } from 'googleapis'
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import type { EmailHighlight, DriveFile, CalendarEvent, Customer } from './types.ts'
+import { GOOGLE_OAUTH_CLIENT } from './google-oauth-config.ts'
 
 // Shared config path — uses CONFIG_DIR env var (container) or local config/ dir
 // import.meta.dir is Bun-only; fall back to process.cwd() when undefined (e.g. Playwright test runner)
@@ -39,12 +40,11 @@ export async function withQuotaRetry<T>(fn: () => Promise<T>, label?: string): P
 }
 
 export function makeAuth(tokenPath: string) {
-  if (!existsSync(OAUTH_KEYS_PATH)) throw new Error(`OAuth keys not found: ${OAUTH_KEYS_PATH}`)
   // Use unified browser-OAuth token if available, fall back to individual token file
   const resolvedPath = existsSync(GOOGLE_UNIFIED_TOKEN_PATH) ? GOOGLE_UNIFIED_TOKEN_PATH : tokenPath
   if (!existsSync(resolvedPath)) throw new Error(`Token not found: ${resolvedPath} — complete OAuth setup at /dashboard/setup`)
-  const keys = JSON.parse(readFileSync(OAUTH_KEYS_PATH, 'utf-8'))
-  const { client_id, client_secret } = keys.installed ?? keys.web
+  // Use bundled OAuth config (Issue #109) — falls back to file if .env override not set
+  const { client_id, client_secret } = GOOGLE_OAUTH_CLIENT
   const auth = new google.auth.OAuth2(client_id, client_secret)
   auth.setCredentials(JSON.parse(readFileSync(resolvedPath, 'utf-8')))
   return auth

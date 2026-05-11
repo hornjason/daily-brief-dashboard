@@ -4,6 +4,7 @@ import { resolve, dirname } from 'path'
 import { google } from 'googleapis'
 import { Hono } from 'hono'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, OAUTH_KEYS_PATH } from './google.ts'
+import { GOOGLE_OAUTH_CLIENT } from './google-oauth-config.ts'
 import { normalizeSettings } from './region-config.ts'
 import { readSettingsFromDrive } from './drive-config-sync.ts'
 import { customers, aes, saveAes, CUSTOMERS_PATH, AES_PATH, setAes, setCustomers } from './server-state.ts'
@@ -109,22 +110,12 @@ export function createSetupRouter(): Hono {
 
   // GET /oauth/start — Redirect browser to Google consent screen
   router.get('/oauth/start', (c) => {
-    if (!existsSync(OAUTH_KEYS_PATH)) {
-      return c.html(`<html><body style="font-family:sans-serif;padding:2rem;background:#0f172a;color:#f1f5f9">
-        <h2 style="color:#f1f5f9">OAuth Keys Not Found</h2>
-        <p style="color:#94a3b8">Place your GCP OAuth credentials file at:</p>
-        <code style="background:#1e293b;padding:.5rem 1rem;border-radius:.5rem;display:block;margin:1rem 0;color:#e2e8f0">gcp-oauth.keys.json</code>
-        <p style="color:#94a3b8">Or set the <code>GOOGLE_OAUTH_KEYS</code> environment variable.</p>
-        <p><a href="/dashboard/setup" style="color:#818cf8">← Back to Setup</a></p>
-      </body></html>`, 400)
-    }
-
     // Default to bootstrap (full) scopes; only use normal (read-only) scopes if user explicitly requests downgrade
     const mode = c.req.query('mode') === 'normal' ? 'normal' : 'bootstrap'
     const scopes = mode === 'normal' ? NORMAL_SCOPES : BOOTSTRAP_SCOPES
 
-    const keys = JSON.parse(readFileSync(OAUTH_KEYS_PATH, 'utf-8'))
-    const { client_id, client_secret } = keys.installed ?? keys.web
+    // Use bundled OAuth config (#109) — no file dependency
+    const { client_id, client_secret } = GOOGLE_OAUTH_CLIENT
     const redirectUri = process.env.OAUTH_BASE_URL
       ? `${process.env.OAUTH_BASE_URL}/oauth/callback`
       : `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
@@ -195,8 +186,7 @@ export function createSetupRouter(): Hono {
     const scopeMode = pendingState.mode === 'bootstrap' ? 'bootstrap' : 'normal'
 
     try {
-      const keys = JSON.parse(readFileSync(OAUTH_KEYS_PATH, 'utf-8'))
-      const { client_id, client_secret } = keys.installed ?? keys.web
+      const { client_id, client_secret } = GOOGLE_OAUTH_CLIENT
       const redirectUri = process.env.OAUTH_BASE_URL
         ? `${process.env.OAUTH_BASE_URL}/oauth/callback`
         : `http://localhost:${process.env.PORT ?? 7777}/oauth/callback`
@@ -288,9 +278,9 @@ export function createSetupRouter(): Hono {
     return c.json({ tokens, valid, expired, email })
   })
 
-  // GET /api/setup/oauth-keys-status — Check if OAuth keys file exists
+  // GET /api/setup/oauth-keys-status — Always true (credentials bundled in source, #109)
   router.get('/api/setup/oauth-keys-status', (c) => {
-    return c.json({ exists: existsSync(OAUTH_KEYS_PATH) })
+    return c.json({ exists: true })
   })
 
   // GET /api/setup/preflight — Return onboarding readiness checks
@@ -298,7 +288,7 @@ export function createSetupRouter(): Hono {
     const checks = [
       { name: 'Environment file',  ok: existsSync('.env') || existsSync('/data/.env'),                         detail: '.env file present' },
       { name: 'RH Portal token',   ok: !!process.env.REDHAT_OFFLINE_TOKEN,                                    detail: 'REDHAT_OFFLINE_TOKEN configured' },
-      { name: 'OAuth keys',        ok: existsSync(resolve(SRV_CONFIG_DIR, 'gcp-oauth.keys.json')),            detail: 'Google OAuth keys uploaded' },
+      { name: 'OAuth keys',        ok: true,                                                                detail: 'Bundled OAuth credentials (#109)' },
       { name: 'Config directory',  ok: existsSync(SRV_CONFIG_DIR),                                            detail: 'Config storage ready' },
       { name: 'Cache directory',   ok: existsSync(CACHE_DIR),                                                 detail: 'Cache storage ready' },
     ]

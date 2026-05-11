@@ -24,6 +24,11 @@ if [ -f /app/defaults.env ]; then
   done < /app/defaults.env
 fi
 
+# ── OAuth keys (#109) ─────────────────────────────────────────────────────────
+# OAuth client credentials are bundled in src/google-oauth-config.ts (council
+# decision 2026-05-11). No file provisioning needed — the server reads from
+# source code, not gcp-oauth.keys.json. File-based override still works if present.
+
 # ── Load REDHAT_OFFLINE_TOKEN from persistent volume (Issue #87) ──────────────
 # Hero install saves token via wizard to /data/config/.rh-token so it survives restarts.
 # Only source if not already set (env file takes precedence).
