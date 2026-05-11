@@ -6,7 +6,6 @@ import { AiIntelligenceSettings } from '../components/AiIntelligenceSettings'
 import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import { useApi } from '../hooks/useApi'
-import { Step0RegionAccess } from '../components/Step0RegionAccess'
 import { HeroStep3Connections } from '../components/HeroStep3Connections'
 // BKL-CONN-ARCH-01: two-axis connection state derivation
 import { deriveRhCard, deriveSfCard } from '../lib/connection-state'
@@ -440,15 +439,6 @@ export default function SetupPage() {
   const [sfSyncError, setSfSyncError] = useState<string | null>(null)
   const sfSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
-  // BKL-HERO-01 Phase 1 — Step 0 region access state.
-  // `enabledRegionsState`: undefined = still loading OR not yet saved (first boot).
-  //                        string[]  = persisted selection (any length, including []).
-  // First-boot trigger: server response had no `enabledRegions` key — strictly undefined,
-  //                     not empty []. Empty [] is BKL-HERO-02 territory.
-  const [step0Loaded, setStep0Loaded] = useState(false)
-  const [step0FirstBoot, setStep0FirstBoot] = useState(false)
-  const [step0EnabledRegions, setStep0EnabledRegions] = useState<string[] | undefined>(undefined)
-  const [step0EnabledPods, setStep0EnabledPods] = useState<string[] | undefined>(undefined)
   // BKL-HERO-01 Phase 2 — gate Step 3 Connections accordion behind !isL3Only.
   const nodeRoleApi = useApi<{ isL3Only: boolean }>('/api/node-role')
   const isL3Only = nodeRoleApi.data?.isL3Only ?? true
@@ -496,21 +486,6 @@ export default function SetupPage() {
       .then(r => r.json())
       .then((d: { configured: boolean }) => setRhTokenConfigured(d.configured))
       .catch((e) => { if (e.name !== 'AbortError') setRhTokenConfigured(false) })
-
-    // BKL-HERO-01 Phase 1 — check Step 0 first-boot state.
-    // First boot = `enabledRegions` key absent from settings.json (strictly undefined).
-    fetch('/api/regions/access', { signal })
-      .then(r => r.json())
-      .then((d: { enabledRegions?: string[]; enabledPods?: string[] }) => {
-        const isFirstBoot = !('enabledRegions' in d)
-        setStep0FirstBoot(isFirstBoot)
-        if (Array.isArray(d.enabledRegions)) setStep0EnabledRegions(d.enabledRegions)
-        if (Array.isArray(d.enabledPods)) setStep0EnabledPods(d.enabledPods)
-        setStep0Loaded(true)
-      })
-      .catch((e) => {
-        if (e.name !== 'AbortError') setStep0Loaded(true)
-      })
 
     // OAuth return: open AEs section and clean URL so the child AutoBootstrapForm can restore state
     const params = new URLSearchParams(window.location.search)
@@ -676,20 +651,6 @@ export default function SetupPage() {
 
         {/* Accordion sections */}
         <div className="space-y-3">
-          {/* BKL-HERO-01 Phase 1 — Step 0 Region & Pod Access (first-boot only) */}
-          {step0Loaded && step0FirstBoot && (
-            <Step0RegionAccess
-              initialEnabledRegions={step0EnabledRegions}
-              initialEnabledPods={step0EnabledPods}
-              onSave={(regions, pods) => {
-                setStep0EnabledRegions(regions)
-                setStep0EnabledPods(pods)
-                // Stay rendered as a summary (component handles internal collapse).
-                // Once saved, the next reload will see `enabledRegions` set and Step 0 won't render.
-              }}
-            />
-          )}
-
           <AccordionSection
             id="oauth-keys"
             title="Step 1 of 5 — OAuth Keys"
@@ -776,7 +737,7 @@ export default function SetupPage() {
             isOpen={openSection === 'aes'}
             onToggle={() => toggleSection('aes')}
           >
-            <AEsCustomersSection onAeCountChange={setAeCount} step0EnabledPods={step0EnabledPods} />
+            <AEsCustomersSection onAeCountChange={setAeCount} />
           </AccordionSection>
 
           {aeCount !== null && aeCount > 0 && (
