@@ -51,10 +51,18 @@ export function FeatureDetailPanel({ feature, onClose, onTagClick }: FeatureDeta
 
   const badgeClass = statusStyles[feature.status] ?? statusStyles['GA']
   const displayText = feature.enrichedDescription ?? feature.description
+
+  // Construct Learn More URL (priority order):
+  // 1. feature.sourceUrls[0] if available (AI-extracted docs links)
+  // 2. feature.enrichmentUrls[0] if available (fetched during enrichment)
+  // 3. Deep link to release notes section if releaseNotesSection exists
+  // 4. null (hide button)
   const primaryUrl =
     feature.sourceUrls.find(u => /^https?:\/\//.test(u)) ??
     feature.enrichmentUrls.find(u => /^https?:\/\//.test(u)) ??
-    null
+    (feature.releaseNotesSection
+      ? `https://docs.redhat.com/#${feature.releaseNotesSection}`
+      : null)
 
   return (
     <>
