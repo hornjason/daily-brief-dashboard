@@ -95,6 +95,7 @@ export function createTerritoryRouter(): Hono {
         attentionScore: attention?.attentionScore ?? 0,
         attentionReasons: attention?.attentionReasons ?? [],
         needsManualDomain: customer.needsManualDomain ?? false,
+        aliases: customer.aliases ?? [],
         aliasDomains: customer.aliasDomains ?? [],  // BKL-DOMAIN-01
         accountProvenance: customer.accountProvenance ?? [],  // #82: expose provenance in API response
       }

@@ -1063,7 +1063,10 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
         (async () => {
           const aeCustomers = customers.filter(cx => !cx.inactive && cx.ae === aeName && !cx.domain)
           if (aeCustomers.length === 0) return
-          const names = aeCustomers.map(cu => cu.name)
+          // BKL-DOMAIN-01: prefer legal entity name (aliases[0]) for inference
+          const inferNames = aeCustomers.map(cu => cu.aliases?.[0] ?? cu.name)
+          const nameToInferName = new Map(aeCustomers.map(cu => [cu.name, cu.aliases?.[0] ?? cu.name]))
+          const names = inferNames
           console.log(`[auto-bootstrap] Domain inference: ${names.length} customers for ${aeName}…`)
           const inferenceResults: NonNullable<typeof capturedState.resources.domainInference> = []
           const highConfidenceSaves: { name: string; domain: string; ae: string }[] = []
@@ -1101,7 +1104,8 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
 
           // Build results and collect saves
           for (const cu of aeCustomers) {
-            const domain = batchMap?.get(cu.name) ?? null
+            const inferKey = nameToInferName.get(cu.name) ?? cu.name
+            const domain = batchMap?.get(inferKey) ?? null
             if (!domain || !isPublicDomain(domain)) {
               // Step 4: signal fallback (last ditch — Gmail/Calendar headers)
               const r = await inferCustomerDomain(cu, GOOGLE_UNIFIED_TOKEN_PATH).catch((e: any) => {
