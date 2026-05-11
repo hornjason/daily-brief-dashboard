@@ -244,10 +244,13 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
             return kws.length >= 2 ? matchingKws.length >= 2 : matchingKws.length >= 1
           }
 
-          // 1. Explicit domain config (exact suffix match)
-          if (c.domain && externalAttendees.some((e) => e.endsWith(c.domain!))) {
-            const domainCount = externalAttendees.filter(e => e.endsWith(c.domain!)).length
-            if (domainCount >= 2 || titleCorroboration(c.name)) return true
+          // 1. Explicit domain config (exact suffix match — includes aliasDomains)
+          const allDomains = [c.domain, ...(c.aliasDomains ?? [])].filter(Boolean) as string[]
+          const domainMatchAttendees = externalAttendees.filter(e => allDomains.some(d => e.endsWith(d)))
+          if (domainMatchAttendees.length > 0) {
+            if (domainMatchAttendees.length >= 2 || titleCorroboration(c.name)) return true
+            // Single attendee from alias domain — still match (alias is explicit config)
+            if (domainMatchAttendees.some(e => (c.aliasDomains ?? []).some(d => e.endsWith(d)))) return true
             return false
           }
 

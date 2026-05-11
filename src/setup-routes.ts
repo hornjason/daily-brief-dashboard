@@ -497,13 +497,16 @@ export function createSetupRouter(): Hono {
       if (body.customers.length === 0) return c.json({ error: 'Refusing to overwrite customer list with empty array — this would wipe all customers' }, 400)
       if (body.customers.length > 200) return c.json({ error: 'customers array exceeds maximum of 200 entries' }, 400)
 
-      // Production guard: refuse to overwrite if >5 customers are already loaded
-      // and ALLOW_RESET is not set (test containers set ALLOW_RESET=true)
+      // Production guard: refuse to overwrite if incoming count is drastically lower
+      // than existing (>50% reduction = likely accidental wipe, not an edit)
       if (customers.length > 5 && process.env.ALLOW_RESET !== 'true') {
-        console.error(`[save-customers] BLOCKED: ${customers.length} customers loaded — production guard triggered`)
-        return c.json({
-          error: `BLOCKED: ${customers.length} customers loaded — production guard active. save-customers would overwrite ${customers.length} existing records. Set ALLOW_RESET=true in env to override (test containers only).`,
-        }, 403)
+        const reduction = customers.length - body.customers.length
+        if (reduction > customers.length * 0.5) {
+          console.error(`[save-customers] BLOCKED: would reduce from ${customers.length} to ${body.customers.length} customers`)
+          return c.json({
+            error: `BLOCKED: save would remove ${reduction} of ${customers.length} customers. Set ALLOW_RESET=true to override.`,
+          }, 403)
+        }
       }
 
       // Validate each customer
@@ -534,9 +537,21 @@ export function createSetupRouter(): Hono {
 
       // Merge with existing customer data to preserve fields the UI doesn't manage
       // (accountProvenance, ccspCustomer, supportableFileId, needsManualDomain, etc.)
+      // Only overwrite fields that are present AND non-empty in the incoming data.
       const merged = body.customers.map((incoming: Customer) => {
         const existing = customers.find(c => c.name === incoming.name && c.ae === incoming.ae)
-        return existing ? { ...existing, ...incoming } : incoming
+        if (!existing) return incoming
+        const result = { ...existing }
+        for (const [key, value] of Object.entries(incoming)) {
+          // Always overwrite scalars (name, domain, ae, etc.)
+          // For arrays: only overwrite if incoming has values (don't wipe with [])
+          if (Array.isArray(value)) {
+            if (value.length > 0) (result as any)[key] = value
+          } else if (value !== undefined) {
+            (result as any)[key] = value
+          }
+        }
+        return result
       })
       writeJsonAtomic(CUSTOMERS_PATH, { customers: merged })
       customers.splice(0, customers.length, ...merged)

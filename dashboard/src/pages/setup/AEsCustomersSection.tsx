@@ -1294,7 +1294,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
                 supportableName: c.supportableName ?? '',
                 domain: c.domain ?? '',
                 accountNumbers: (c.accountNumbers ?? []).join(', '),
-                aliases: (c.aliases ?? []).join(', '),
+                aliases: (c.aliases ?? []).join('; '),
                 aliasDomains: (c.aliasDomains ?? []).join(', '),
               })),
           })).map(ae => ({
@@ -1439,7 +1439,7 @@ export function AEsCustomersSection({ onAeCountChange, step0EnabledPods }: { onA
               .map(s => s.trim())
               .filter(Boolean),
             aliases: c.aliases.trim()
-              ? c.aliases.split(',').map(s => s.trim()).filter(Boolean)
+              ? c.aliases.split(';').map(s => s.trim()).filter(Boolean)
               : undefined,
             aliasDomains: c.aliasDomains.trim()
               ? c.aliasDomains.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
