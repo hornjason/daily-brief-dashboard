@@ -550,6 +550,35 @@ export function createSetupRouter(): Hono {
     }
   })
 
+  // POST /api/setup/rh-token — Save REDHAT_OFFLINE_TOKEN to persistent volume (Issue #87)
+  // Hero install users enter the token via wizard, but it needs to persist across restarts.
+  // Save to /data/config/.rh-token (text file) so entrypoint.sh can source it on startup.
+  router.post('/api/setup/rh-token', async (c) => {
+    try {
+      const body = await c.req.json<{ token: string }>()
+      if (!body.token || typeof body.token !== 'string') {
+        return c.json({ error: 'token must be a non-empty string' }, 400)
+      }
+      // Trim whitespace — common copy/paste error
+      const token = body.token.trim()
+      if (token.length < 10 || token.length > 500) {
+        return c.json({ error: 'token length must be between 10 and 500 characters' }, 400)
+      }
+
+      // Write to persistent volume at /data/config/.rh-token
+      const tokenPath = resolve(SRV_CONFIG_DIR, '.rh-token')
+      mkdirSync(dirname(tokenPath), { recursive: true })
+      writeFileSyncRaw(tokenPath, token, { mode: 0o600 })
+
+      // Also set in process.env for immediate use (no restart needed)
+      process.env.REDHAT_OFFLINE_TOKEN = token
+
+      return c.json({ ok: true })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
   // ── Test isolation endpoints — snapshot/restore full config state ─────────
   // These endpoints let integration tests save and restore the full server state
   // (AEs + customers) so tests are non-destructive even if afterAll fails.

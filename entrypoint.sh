@@ -24,6 +24,14 @@ if [ -f /app/defaults.env ]; then
   done < /app/defaults.env
 fi
 
+# ── Load REDHAT_OFFLINE_TOKEN from persistent volume (Issue #87) ──────────────
+# Hero install saves token via wizard to /data/config/.rh-token so it survives restarts.
+# Only source if not already set (env file takes precedence).
+if [ -f /data/config/.rh-token ] && [ -z "${REDHAT_OFFLINE_TOKEN+x}" ]; then
+  export REDHAT_OFFLINE_TOKEN="$(cat /data/config/.rh-token)"
+  echo "[entrypoint] Loaded REDHAT_OFFLINE_TOKEN from persistent volume"
+fi
+
 # ── Virtual display ────────────────────────────────────────────────────────────
 # Clean up stale X lock files from previous run (left behind by podman restart)
 rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true
