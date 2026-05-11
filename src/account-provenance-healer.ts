@@ -139,33 +139,64 @@ export function buildHealerPlan(
  *
  * Re-discovery reuses the existing scraper-manager infrastructure via
  * enqueueScraperTask, which coalesces duplicate requests.
+ *
+ * Optimization (#84): Single loop merges migration + heal plan building.
+ * Batches all migrations into one saveCustomers() call at the end.
  */
 export async function healStaleAccountNumbers(): Promise<void> {
   // Lazy imports to avoid circular dependencies at module load time
-  const { customers, patchCustomer } = await import('./server-state.ts')
+  const { customers, saveCustomers } = await import('./server-state.ts')
   const { APP_VERSION } = await import('./admin-routes.ts')
 
   console.log(`[healer] startup account provenance check (appVersion=${APP_VERSION}, ${customers.length} customers)`)
 
-  // Phase 1: Migrate pre-rc8 accounts (stamp provenance on first read)
-  let migratedCount = 0
+  // Merged Phase 1+2: Single loop for migration + heal plan building
+  const migrationPatches: Array<{ name: string; provenance: NonNullable<Customer['accountProvenance']> }> = []
+  const plan: HealerPlanEntry[] = []
+
   for (const customer of customers) {
+    // Skip customers with no account numbers
     if (!customer.accountNumbers || customer.accountNumbers.length === 0) continue
-    if (customer.accountProvenance && customer.accountProvenance.length > 0) continue
 
-    const provenance = migratePreRc8Provenance(customer.accountNumbers, customer.accountProvenance)
-    patchCustomer(customer.name, { accountProvenance: provenance })
-    migratedCount++
+    // Phase 1: Migration — stamp pre-rc8 provenance if missing
+    let effectiveProvenance = customer.accountProvenance
+    if (!effectiveProvenance || effectiveProvenance.length === 0) {
+      const provenance = migratePreRc8Provenance(customer.accountNumbers, customer.accountProvenance)
+      migrationPatches.push({ name: customer.name, provenance })
+      effectiveProvenance = provenance  // Use migrated provenance for heal plan check
+    }
+
+    // Phase 2: Heal plan — check if provenance is stale
+    if (customer.skipAccountDiscovery) continue
+    if (!isStaleProvenance(effectiveProvenance, APP_VERSION)) continue
+
+    const reason: HealerPlanEntry['reason'] =
+      (!customer.accountProvenance || customer.accountProvenance.length === 0)
+        ? 'missing-provenance'
+        : 'stale-version'
+
+    const manualAccounts = (effectiveProvenance ?? [])
+      .filter(p => p.discoveredBy === 'manual')
+      .map(p => p.accountNumber)
+
+    plan.push({
+      customerName: customer.name,
+      reason,
+      preserveManualAccounts: manualAccounts,
+    })
   }
-  if (migratedCount > 0) {
-    console.log(`[healer] migrated ${migratedCount} customers to pre-rc8 provenance`)
+
+  // Batch write all migrations in one disk operation
+  if (migrationPatches.length > 0) {
+    const updatedCustomers = customers.map(c => {
+      const patch = migrationPatches.find(p => p.name === c.name)
+      return patch ? { ...c, accountProvenance: patch.provenance } : c
+    })
+    saveCustomers(updatedCustomers)
+    console.log(`[healer] migrated ${migrationPatches.length} customers to pre-rc8 provenance`)
   }
 
-  // Phase 2: Build heal plan and queue re-discovery
-  // Re-read customers after migration patches
-  const { customers: freshCustomers } = await import('./server-state.ts')
-  const plan = buildHealerPlan(freshCustomers, APP_VERSION)
-
+  // Log heal plan and queue re-discovery
   if (plan.length === 0) {
     console.log('[healer] all account provenance is current — no healing needed')
     return
