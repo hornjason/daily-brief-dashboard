@@ -3,7 +3,7 @@
  *
  * #82 — Phase 1: accountNumbers provenance tracking with auto-healing.
  *
- * Pure functions for provenance logic + a startup healer that detects stale
+ * Account-specific functions for provenance logic + a startup healer that detects stale
  * account numbers and queues re-discovery via the existing scraper-manager
  * infrastructure.
  *
@@ -12,10 +12,13 @@
  *   - Accounts without provenance are stamped as LEGACY_PROVENANCE_TAG on first read.
  *   - Stale = any non-manual entry whose appVersion !== current APP_VERSION.
  *   - Re-discovery reuses enqueueScraperTask (scraper-manager infrastructure).
+ *
+ * #97 — Refactored to delegate core logic to generic provenance module.
  */
 
 import type { Customer } from './types.ts'
 import { LEGACY_PROVENANCE_TAG } from './types.ts'
+import { isStale, stamp, merge } from './provenance.ts'
 // Re-export AccountProvenance from types.ts so test imports work from this module
 export type { AccountProvenance } from './types.ts'
 
@@ -23,6 +26,8 @@ export type { AccountProvenance } from './types.ts'
 
 /**
  * Determine if a customer's account provenance is stale.
+ *
+ * Delegates to the generic provenance.isStale() function.
  *
  * Stale means: any non-manual entry has an appVersion that doesn't match
  * the current version, OR provenance is missing entirely.
@@ -34,17 +39,15 @@ export function isStaleProvenance(
   provenance: Customer['accountProvenance'],
   currentVersion: string,
 ): boolean {
-  // Missing or empty provenance = definitely stale (pre-rc8 migration case)
-  if (!provenance || provenance.length === 0) return true
+  // Convert AccountProvenance[] to ProvenanceEntry[] format
+  const entries = provenance?.map(p => ({
+    key: p.accountNumber,
+    producedBy: p.discoveredBy,
+    appVersion: p.appVersion,
+    producedAt: p.discoveredAt,
+  }))
 
-  // Filter to non-manual entries only
-  const automatedEntries = provenance.filter(p => p.discoveredBy !== 'manual')
-
-  // If all entries are manual, not stale
-  if (automatedEntries.length === 0) return false
-
-  // If any automated entry has a different appVersion, it's stale
-  return automatedEntries.some(p => p.appVersion !== currentVersion)
+  return isStale(entries, currentVersion)
 }
 
 /**
@@ -236,18 +239,21 @@ export async function healStaleAccountNumbers(): Promise<void> {
  * Build provenance entries for newly discovered account numbers.
  * Called by rh-cases-api.ts (bearer path) and rh-scraper.ts (browser path)
  * after successful account discovery.
+ *
+ * Delegates to the generic provenance.stamp() function and converts back
+ * to AccountProvenance format.
  */
 export function stampProvenance(
   accountNumbers: string[],
   discoveredBy: 'rh-scraper' | 'rh-cases-api',
   appVersion: string,
 ): NonNullable<Customer['accountProvenance']> {
-  const now = new Date().toISOString()
-  return accountNumbers.map(num => ({
-    accountNumber: num,
-    discoveredBy,
-    appVersion,
-    discoveredAt: now,
+  const entries = stamp(accountNumbers, discoveredBy, appVersion)
+  return entries.map(e => ({
+    accountNumber: e.key,
+    discoveredBy: e.producedBy as 'rh-scraper' | 'rh-cases-api',
+    appVersion: e.appVersion,
+    discoveredAt: e.producedAt,
   }))
 }
 
@@ -289,6 +295,8 @@ export function resolveDiscoveryResult(
  * automated discovery. This function filters existing provenance to keep only manual
  * entries, then appends the new automated entries.
  *
+ * Delegates to the generic provenance.merge() function.
+ *
  * @param existingProvenance - Current customer provenance (may be undefined)
  * @param newEntries - Newly stamped provenance from discovery
  * @returns Merged provenance array with manual entries preserved
@@ -297,6 +305,28 @@ export function mergeProvenance(
   existingProvenance: Customer['accountProvenance'],
   newEntries: NonNullable<Customer['accountProvenance']>,
 ): NonNullable<Customer['accountProvenance']> {
-  const manual = (existingProvenance ?? []).filter(p => p.discoveredBy === 'manual')
-  return [...manual, ...newEntries]
+  // Convert to generic format
+  const existingEntries = existingProvenance?.map(p => ({
+    key: p.accountNumber,
+    producedBy: p.discoveredBy,
+    appVersion: p.appVersion,
+    producedAt: p.discoveredAt,
+  }))
+  const newEntriesGeneric = newEntries.map(p => ({
+    key: p.accountNumber,
+    producedBy: p.discoveredBy,
+    appVersion: p.appVersion,
+    producedAt: p.discoveredAt,
+  }))
+
+  // Delegate to generic merge
+  const merged = merge(existingEntries, newEntriesGeneric)
+
+  // Convert back to AccountProvenance format
+  return merged.map(e => ({
+    accountNumber: e.key,
+    discoveredBy: e.producedBy as 'rh-scraper' | 'rh-cases-api' | 'manual' | typeof LEGACY_PROVENANCE_TAG,
+    appVersion: e.appVersion,
+    discoveredAt: e.producedAt,
+  }))
 }
