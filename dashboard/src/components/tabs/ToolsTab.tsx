@@ -148,7 +148,7 @@ export function ToolsTab({ customerName }: ToolsTabProps) {
       </div>
 
       {/* Tool cards grid */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         {/* PitchBuilder+ */}
         <a
           href="https://pitchbuilderplus.redhat.com/export"
@@ -220,29 +220,6 @@ export function ToolsTab({ customerName }: ToolsTabProps) {
           </div>
         </a>
 
-        {/* CBVS */}
-        <a
-          href="https://auth.redhat.com/auth/realms/EmployeeIDP/protocol/saml/clients/cbvs"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-surface border border-border rounded-xl p-5 space-y-3 hover:border-accent/50 transition-colors group"
-        >
-          <div className="flex items-start justify-between">
-            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
-              <Wrench className="w-5 h-5 text-accent" />
-            </div>
-            <ExternalLink className="w-4 h-4 text-text-secondary group-hover:text-accent transition-colors" />
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-text-primary">CBVS</h3>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              Customer business value scoring and opportunity assessment for <span className="font-medium text-text-primary">{customerName}</span>
-            </p>
-          </div>
-          <div className="w-full px-3 py-2 rounded-lg bg-accent/10 text-xs text-accent font-medium text-center group-hover:bg-accent/20 transition-colors">
-            Launch Tool
-          </div>
-        </a>
       </div>
 
       {/* Upload area */}
