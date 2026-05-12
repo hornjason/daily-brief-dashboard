@@ -239,6 +239,18 @@ jobs:
             [ -f "$f" ] && "${SED_INPLACE[@]}" "s/2026-04-10T00:00:00.000Z/$NOW/g" "$f"
           done
 
+      - name: Start server on port 7778
+        run: |
+          PORT=7778 BASE_URL=http://localhost:7778 bun run server.ts &
+          SERVER_PID=$!
+          echo $SERVER_PID > /tmp/e2e-server.pid
+          # Wait for server to be ready
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:7778/health > /dev/null 2>&1 && echo "Server ready after $i seconds" && break
+            sleep 1
+          done
+          curl -sf http://localhost:7778/health > /dev/null || (echo "Server failed to start" && exit 1)
+
       - name: Run tests
         env:
           TEST_KNOWN_CUSTOMER: 'Acme Corp'
@@ -247,8 +259,6 @@ jobs:
         # --project=ci excludes @live-tagged tests and files in testIgnore (bootstrap-e2e, e2e-carolanne).
         # Covers: api/, contracts/, regression, wizard, ui/, performance, accessibility, dashboard, qa.
         # No Google credentials required. Live scraper tests run in Tier 2 (release.yml).
-        # BASE_URL=7778: playwright.config.ts starts a fresh seeded server on 7778 when CI=true and
-        # no RELEASE_GATE — avoids port conflict with prod container (pai-dashboard) on 7777.
 
       - name: New-user flow gate
         env:
@@ -259,8 +269,16 @@ jobs:
         # --project=e2e-tier: excludes [test] project (targets 7776 which doesn't exist in CI) and avoids
         # running the same tests twice, which caused race conditions on shared server state.
         # Workers=1 required — per-describe .serial inside the spec prevents parallelism.
-        # BASE_URL=7778: fresh seeded server started by playwright.config.ts webServer on Mac Mini.
+        # BASE_URL=7778: Server started in previous step, reused here.
         # Timeout 90s matches council budget for this gate.
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/e2e-server.pid ]; then
+            kill $(cat /tmp/e2e-server.pid) 2>/dev/null || true
+            rm -f /tmp/e2e-server.pid
+          fi
 
       - name: Upload Playwright report
         if: failure()
@@ -327,10 +345,30 @@ jobs:
             [ -f "$f" ] && "${SED_INPLACE[@]}" "s/2026-04-10T00:00:00.000Z/$NOW/g" "$f"
           done
 
+      - name: Start server on port 7778
+        run: |
+          PORT=7778 BASE_URL=http://localhost:7778 bun run server.ts &
+          SERVER_PID=$!
+          echo $SERVER_PID > /tmp/wizard-server.pid
+          # Wait for server to be ready
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:7778/health > /dev/null 2>&1 && echo "Server ready after $i seconds" && break
+            sleep 1
+          done
+          curl -sf http://localhost:7778/health > /dev/null || (echo "Server failed to start" && exit 1)
+
       - name: Run wizard E2E tests
         env:
           BASE_URL: 'http://localhost:7778'
         run: CI=true bunx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e --workers=1 --reporter=list
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/wizard-server.pid ]; then
+            kill $(cat /tmp/wizard-server.pid) 2>/dev/null || true
+            rm -f /tmp/wizard-server.pid
+          fi
 
       - name: Upload wizard E2E report on failure
         if: failure()
