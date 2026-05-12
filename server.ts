@@ -51,6 +51,8 @@ import { createEventsRouter } from './src/events-routes.ts'
 // ── BKL-ARCH-13: Territory / pod / accounts routes ────────────────────────
 import { createTerritoryRouter } from './src/territory-routes.ts'
 import { reconcileConfig, AUTH_CONFIG_PATH, POD_CONFIG_PATH, USER_SETTINGS_PATH } from './src/config-reconciler.ts'
+// ── GitHub #144: Feature module routes ───────────────────────────────────
+import { createFeatureModuleRouter } from './src/feature-module-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -261,6 +263,8 @@ app.route('/', createRestoreRouter())
 app.route('/', createAuthRouter())
 app.route('/', createAeRouter())
 app.route('/', createAdminRouter())
+// ── GitHub #144: Feature module routes ─────────────────────────────────────
+app.route('/', createFeatureModuleRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
