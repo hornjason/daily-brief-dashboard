@@ -57,6 +57,8 @@ import { createFeatureModuleRouter } from './src/feature-module-routes.ts'
 import './src/modules/campaigns-module.ts'
 import './src/modules/news-module.ts'
 import './src/modules/tools-module.ts'
+// ── GitHub #148: Tools artifact upload routes ────────────────────────────
+import { createToolsRouter } from './src/tools-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -269,6 +271,8 @@ app.route('/', createAeRouter())
 app.route('/', createAdminRouter())
 // ── GitHub #144: Feature module routes ─────────────────────────────────────
 app.route('/', createFeatureModuleRouter())
+// ── GitHub #148: Tools artifact upload routes ──────────────────────────────
+app.route('/', createToolsRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
