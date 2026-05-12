@@ -26,6 +26,7 @@ import { toSlug, invalidateCCSPCache, invalidatePipelineCache } from './cache-la
 import { sanitizeErr, sanitizeText } from './utils.ts'
 import { normalizeSettings, getRegionById } from './region-config.ts'
 import { writeSettingsToDrive, resolveConfigFolderId } from './drive-config-sync.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.js'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -285,6 +286,17 @@ export function createAeRouter(): Hono {
           try { unlinkSync(resolve(CACHE_DIR, 'morning-synthesis.json')) } catch { /* ok */ }
           console.log(`[wizard] invalidated morning-synthesis.json after removing AEs: ${removedAeNames.join(', ')}`)
         } catch (e: any) { console.warn('[wizard] cache cleanup after AE removal failed:', e.message) }
+      }
+
+      // Issue #143 — Feature module cleanup for archived customers
+      if (removedCustomerNames.length > 0) {
+        for (const customerName of removedCustomerNames) {
+          try {
+            await FeatureModuleRegistry.cleanupAll(customerName)
+          } catch (e: any) {
+            console.warn(`[ae-routes] feature module cleanup failed for ${customerName}:`, e?.message ?? e)
+          }
+        }
       }
 
       return c.json({ ok: true, count: aes.length })
