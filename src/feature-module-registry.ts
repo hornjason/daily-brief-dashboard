@@ -1,0 +1,149 @@
+// src/feature-module-registry.ts
+// ADR-020 — Feature Module Registry
+// Server-side lifecycle registry for feature modules (campaigns, news, tools, etc.)
+// Modeled after ScraperRegistry pattern — self-registration, status tracking, unified cleanup.
+
+export interface FeatureModule {
+  /** Unique identifier (e.g., 'campaigns', 'news-radar') */
+  name: string
+  /** Cache file paths for a given customer slug */
+  cachePaths: (slug: string) => string[]
+  /** Optional: Drive folder paths this module writes to */
+  driveArtifacts?: (slug: string) => string[]
+  /** Optional: true if this module produces NotebookLM-syncable content */
+  notebookSources?: boolean
+  /** Optional: ms between scheduled refreshes, null = on-demand only */
+  refreshInterval?: number | null
+  /** Pull fresh data for a customer */
+  fetch: (customerName: string) => Promise<void>
+  /** Remove all data for an archived customer */
+  cleanup: (customerName: string) => Promise<void>
+  /** Manual trigger (exposed via API) */
+  syncNow: (customerName: string) => Promise<void>
+}
+
+export interface ModuleStatus {
+  lastRun: string | null
+  lastSuccess: string | null
+  lastError: string | null
+  state: 'idle' | 'running' | 'failed'
+}
+
+// ── Internal state ───────────────────────────────────────────────────────────
+
+const _modules = new Map<string, FeatureModule>()
+const _status = new Map<string, ModuleStatus>()
+
+// ── Helper functions ─────────────────────────────────────────────────────────
+
+function defaultStatus(): ModuleStatus {
+  return {
+    lastRun: null,
+    lastSuccess: null,
+    lastError: null,
+    state: 'idle',
+  }
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
+export const FeatureModuleRegistry = {
+  /**
+   * Register a feature module. Warns on duplicate registration but does not throw.
+   */
+  register(module: FeatureModule): void {
+    if (_modules.has(module.name)) {
+      console.warn(`[feature-module-registry] duplicate registration for module: ${module.name}`)
+    }
+    _modules.set(module.name, module)
+    if (!_status.has(module.name)) {
+      _status.set(module.name, defaultStatus())
+    }
+  },
+
+  /**
+   * Look up a module by name. Returns undefined when not registered.
+   */
+  get(name: string): FeatureModule | undefined {
+    return _modules.get(name)
+  },
+
+  /**
+   * Snapshot of all registered modules in insertion order.
+   */
+  list(): FeatureModule[] {
+    return Array.from(_modules.values())
+  },
+
+  /**
+   * Call cleanup() on every registered module for a given customer.
+   * Each cleanup is try/caught individually — failures are logged but don't throw.
+   * Mirrors ScraperRegistry.adoptAll pattern for error isolation.
+   */
+  async cleanupAll(customerName: string): Promise<void> {
+    for (const module of _modules.values()) {
+      try {
+        await module.cleanup(customerName)
+      } catch (e: any) {
+        console.warn(
+          `[feature-module-registry] cleanup failed for ${module.name} (customer: ${customerName}):`,
+          e?.message ?? e
+        )
+      }
+    }
+  },
+
+  /**
+   * Call syncNow() on every registered module for a given customer.
+   * Each syncNow is try/caught individually — failures are logged but don't throw.
+   */
+  async syncNowAll(customerName: string): Promise<void> {
+    for (const module of _modules.values()) {
+      try {
+        await module.syncNow(customerName)
+      } catch (e: any) {
+        console.warn(
+          `[feature-module-registry] syncNow failed for ${module.name} (customer: ${customerName}):`,
+          e?.message ?? e
+        )
+      }
+    }
+  },
+
+  /**
+   * Get status map for all registered modules.
+   * Returns a record keyed by module name.
+   */
+  getStatus(): Record<string, ModuleStatus> {
+    const result: Record<string, ModuleStatus> = {}
+    for (const [name, status] of _status.entries()) {
+      result[name] = { ...status }
+    }
+    return result
+  },
+
+  /**
+   * Record the outcome of a fetch/syncNow operation.
+   * Updates lastRun, lastSuccess/lastError, and state.
+   */
+  recordOutcome(name: string, outcome: { success: boolean; error?: string }): void {
+    const now = new Date().toISOString()
+    let status = _status.get(name)
+
+    if (!status) {
+      status = defaultStatus()
+      _status.set(name, status)
+    }
+
+    status.lastRun = now
+
+    if (outcome.success) {
+      status.lastSuccess = now
+      status.lastError = null
+      status.state = 'idle'
+    } else {
+      status.lastError = outcome.error ?? 'Unknown error'
+      status.state = 'failed'
+    }
+  },
+}

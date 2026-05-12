@@ -55,6 +55,7 @@ import { KeyContacts } from '../components/KeyContactsSection'
 import { SubscriptionsSection } from '../components/SubscriptionsSection'
 import { DriveSection } from '../components/DriveSection'
 import { ProductIntelSection } from '../components/ProductIntelSection'
+import { CustomerTabBar, type AccountTab } from '../components/CustomerTabBar'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1016,6 +1017,8 @@ export function CustomerDetailPage() {
   const navigate = useNavigate()
   const customerName = decodeURIComponent(name ?? '')
 
+  const [activeTab, setActiveTab] = useState<AccountTab>('overview')
+
   const sse = useCustomerSSE(customerName)
   const accountInfo = useAccountInfo(customerName)
 
@@ -1307,6 +1310,9 @@ export function CustomerDetailPage() {
         )}
       </header>
 
+      {/* Tab bar (GitHub Issue #142) */}
+      <CustomerTabBar activeTab={activeTab} onChange={setActiveTab} />
+
       {/* Error banner */}
       {sse.error && (
         <div className="bg-warning/10 border-b border-warning/30 px-6 py-2 flex items-center gap-2 text-sm text-warning shrink-0">
@@ -1338,10 +1344,12 @@ export function CustomerDetailPage() {
         </div>
       )}
 
-      {/* Two-column body (65/35 — BKL-G14) */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left column — 65% */}
-        <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
+      {/* Tab content area */}
+      {activeTab === 'overview' ? (
+        /* Two-column body (65/35 — BKL-G14) */
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left column — 65% */}
+          <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
           <TemporalDeltaSection customerName={customerName} />
           <BriefSection name={customerName} />
           <ProductIntelSection
@@ -1377,7 +1385,13 @@ export function CustomerDetailPage() {
           <KeyContacts meetings={sse.meetings} emails={sse.emails} loading={sectionLoading} />
           <DriveSection files={sse.drive} loading={sectionLoading} />
         </aside>
-      </div>
+        </div>
+      ) : (
+        /* Placeholder for non-Overview tabs */
+        <div className="flex items-center justify-center h-64 text-zinc-400">
+          Coming soon
+        </div>
+      )}
     </div>
   )
 }
