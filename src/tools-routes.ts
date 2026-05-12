@@ -11,6 +11,7 @@ import { customers } from './server-state'
 import { findCustomerDriveFolder } from './lib/customer-folder'
 import { sanitizeErr } from './utils'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google'
+import { createOrUpdateNotebook } from './notebooklm'
 
 export function createToolsRouter() {
   const router = new Hono()
@@ -66,12 +67,41 @@ export function createToolsRouter() {
 
       console.log(`[tools-upload] Uploaded ${file.name} to ${customerName} Account Intelligence folder: ${fileData.id}`)
 
+      // NotebookLM sync (feature-flagged, non-blocking)
+      let syncedToNotebook = false
+      if (process.env.NOTEBOOKLM_ENABLED === 'true') {
+        try {
+          // List all files in intelligence subfolder
+          const fileList = await drive.files.list({
+            q: `'${intelligenceFolderId}' in parents and trashed = false`,
+            fields: 'files(id,name,modifiedTime)',
+            orderBy: 'modifiedTime desc',
+            pageSize: 100,
+            supportsAllDrives: true,
+            includeItemsFromAllDrives: true,
+          })
+
+          const driveFiles = (fileList.data.files ?? []).map(f => ({
+            id: f.id ?? '',
+            name: f.name ?? '',
+            modifiedTime: f.modifiedTime ?? '',
+          }))
+
+          await createOrUpdateNotebook(customer, driveFiles)
+          syncedToNotebook = true
+          console.log(`[tools-upload] Synced ${driveFiles.length} files to NotebookLM for ${customerName}`)
+        } catch (e: any) {
+          console.warn(`[tools-upload] NotebookLM sync failed for ${customerName}:`, e?.message ?? e)
+        }
+      }
+
       return c.json({
         fileId: fileData.id,
         fileName: fileData.name ?? file.name,
         webViewLink: fileData.webViewLink ?? `https://drive.google.com/file/d/${fileData.id}/view`,
         mimeType: fileData.mimeType ?? file.type,
         uploadedAt: fileData.modifiedTime ?? new Date().toISOString(),
+        syncedToNotebook,
       })
     } catch (e: any) {
       console.error(`[tools-upload] Failed to upload file for ${customerName}:`, sanitizeErr(e))
