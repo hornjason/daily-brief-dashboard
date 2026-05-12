@@ -7,6 +7,8 @@ updated: 2026-05-12
 
 # ADR-019: Dynamic L3 CSV Discovery for Pipeline and CCSP Refresh
 
+**Date:** 2026-05-12
+
 ## Status
 
 Proposed
