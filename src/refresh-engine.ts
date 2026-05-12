@@ -218,17 +218,18 @@ export async function refreshCCSP(force = false): Promise<void> {
         const csvText = await readL3CsvRaw(csv.fileId, driveApi)
         const { headers, rows } = parseCsvToSfReport(csvText)
         const parsed = parseCcspRows([headers, ...rows], csv.fileId)
-        // ADR-019: CCSP CSVs are POD-level — attribute each record to its AE
-        // by matching accountName against the customer list
+        // ADR-019: CCSP CSVs are POD-level — filter to bootstrapped customers only
+        // and attribute each record to its AE (matches pipeline filterToAEs behavior)
         for (const rec of parsed) {
+          const recName = (rec.accountName ?? '').toLowerCase()
           const custMatch = customers.find(cu => {
-            const recName = (rec.accountName ?? '').toLowerCase()
             const cuName = cu.name.toLowerCase()
             return recName.includes(cuName) || cuName.includes(recName)
           })
-          if (custMatch?.ae) rec.ae = custMatch.ae
+          if (!custMatch) continue
+          if (custMatch.ae) rec.ae = custMatch.ae
+          allRecords.push(rec)
         }
-        allRecords.push(...parsed)
         discoveredFileIds.push(csv.fileId)
       }
     }
