@@ -639,11 +639,11 @@ export function createDashboardRouter(): Hono {
       ])
 
       // BKL-UI-02: apply the same attribution filter as KPICasesModal (BKL-CASES-01)
-      // so the KPI card count matches the modal body count. Cases with no matching
-      // active customer account are excluded (Portal sometimes echoes parent/subsidiary
-      // account numbers that aren't in our customer list).
+      // so the KPI card count matches the modal body count. Inactive customers (from
+      // removed AEs) and cases with no matching account are excluded.
+      const activeCustomers = customers.filter(cu => !cu.inactive)
       const attributedCases = allCases.filter((ca) =>
-        customers.some((cu) =>
+        activeCustomers.some((cu) =>
           (cu.accountNumbers ?? []).map(String).includes(String(ca.accountNumber))
         )
       )
