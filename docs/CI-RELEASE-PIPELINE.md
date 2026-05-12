@@ -2,27 +2,28 @@
 doc-type: runbook
 status: active
 owner: jason
-updated: 2026-05-06
+updated: 2026-05-12
 ---
 
 # CI & Release Pipeline
-*Last validated: 2026-05-06 | Owner: DA | Trigger: Review and update on any structural change to this doc*
+*Last validated: 2026-05-12 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 ## Overview
 
-Two GitHub Actions workflows drive the full pipeline. Every commit to `main` runs the **CI** workflow. Every version tag (`v*`) runs the **Release Gate** workflow.
+Three GitHub Actions workflows drive the full pipeline. Every commit to `main` runs the **CI** workflow (Gate 2). Every version tag (`v*`) runs the **Release Gate** workflow (Gate 4). A nightly schedule runs **Data Assertions** (Gate 3). See CONTEXT.md §CI gates for the 4-gate model.
 
 ---
 
-## Workflow 1 — CI (`ci.yml`)
+## Workflow 1 — CI (`ci.yml`) — Gate 2
 **Triggered by:** push to `main` or pull request
+**Budget:** <2 minutes
 
 ```
 git push main
        │
        ▼
 ┌─────────────────────────────────────────────────────────┐
-│                     CI Workflow                         │
+│                  CI Workflow (Gate 2)                    │
 │                 (runs in parallel)                      │
 │                                                         │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
@@ -32,17 +33,17 @@ git push main
 │                                                         │
 │  ┌───────────────────────────────────────────────────┐  │
 │  │  Unit tests + TypeScript check + Build dashboard  │  │
+│  │  + doc audit (warning only) + hero purity         │  │
 │  │  → uploads dashboard-dist artifact                │  │
 │  └───────────────────────┬───────────────────────────┘  │
-│                          │ needs: test                  │
-│             ┌────────────┴────────────┐                 │
-│             ▼                         ▼                 │
-│  ┌──────────────────┐    ┌────────────────────────────┐ │
-│  │  Build & push    │    │  Integration & E2E tests   │ │
-│  │  container image │    │  (continue-on-error: true) │ │
-│  │  → :main-latest  │    │  playwright --project=ci   │ │
-│  │  → :sha          │    │  BASE_URL=7778             │ │
-│  └────────┬─────────┘    └────────────────────────────┘ │
+│                          │ needs: test (main+push only) │
+│                          ▼                              │
+│  ┌──────────────────┐                                   │
+│  │  Build & push    │                                   │
+│  │  container image │                                   │
+│  │  → :main-latest  │                                   │
+│  │  → :sha          │                                   │
+│  └────────┬─────────┘                                   │
 │           │ needs: publish                              │
 │           ▼                                             │
 │  ┌──────────────────┐                                   │
@@ -54,6 +55,8 @@ git push main
 ```
 
 **What it produces:** container image at `ghcr.io/hornjason/daily-brief-dashboard:main-latest` and `:sha`
+
+**Not in Gate 2:** E2E Playwright tests, Wizard E2E, visual regression. These run exclusively in Gate 4 (release.yml). Rationale: issue #138 — E2E took 20+ min per commit with `continue-on-error: true`, providing no gate value while burning Mac Mini runner time.
 
 ---
 

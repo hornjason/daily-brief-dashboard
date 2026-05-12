@@ -133,8 +133,8 @@ _Avoid_: "folder lookup", "folder find", "folder search"
 Local checks that run before `git push` via a pre-push hook. Must complete in <30s to avoid developer friction. Includes unit tests, type check, and hero purity check. Can be bypassed with `QUICK_PUSH=1` (but security linting always runs).
 _Avoid_: "Tier 1", "commit gate", "pre-commit"
 
-**Gate 2** (PR):
-GitHub Actions checks triggered on pull request. Includes all Gate 1 checks plus shellcheck, BATS, drift gate, Playwright API tests against a fresh CI-spun container, and dashboard build. Blocks merge until green.
+**Gate 2** (CI):
+GitHub Actions checks triggered on push to main or pull request. Includes all Gate 1 checks plus shellcheck, BATS, drift gate, dashboard build, doc audit (warning-only), container image push, and container smoke test. No Playwright E2E — that scope lives exclusively in Gate 4. Budget: <2 minutes. Issue #138.
 _Avoid_: "Tier 2", "PR checks", "merge gate"
 
 **Gate 3** (nightly):
@@ -151,9 +151,61 @@ _Avoid_: confusing "test tier" (what kind) with "CI gate" (when it runs)
 
 **Gate-to-project mapping:**
 - Gate 1 (pre-push): `bun test test/unit/`, `tsc --noEmit`, `tsc --noEmit --project tsconfig.hero.json` — no Playwright
-- Gate 2 (PR): Playwright `ci` project + shellcheck + BATS + drift gate + dashboard build
+- Gate 2 (CI): shellcheck + BATS + drift gate + unit tests + tsc + dashboard build + doc audit (warn) + container push + smoke — no Playwright
 - Gate 3 (nightly): data assertion scripts against Mac Mini production (7777) — no Playwright, <90s
 - Gate 4 (release): Playwright `ci` + `wizard-e2e` + `smoke` projects, container build + GHCR push, bootstrap E2E
+
+### Feature modules
+
+**Feature module**:
+A self-contained unit of functionality that registers with the Feature Module Registry. Declares its cache paths, Drive artifacts, NotebookLM sources, refresh interval, cleanup handler, and Sync Now endpoint. The registry manages lifecycle; the module owns business logic.
+_Avoid_: "plugin", "extension", "add-on"
+
+**Feature Module Registry**:
+A central TypeScript registry (modeled after ScraperRegistry) that manages lifecycle for all registered feature modules: refresh scheduling, customer archive cleanup, Sync Now endpoint exposure, and status reporting. See ADR-020.
+_Avoid_: "module manager", "feature manager", "plugin system"
+
+**Feature module contract**:
+The `FeatureModule` TypeScript interface that every feature module implements: `cachePaths`, `driveArtifacts`, `notebookSources`, `refreshInterval`, `fetch()`, `cleanup()`, `syncNow()`. TypeScript enforces completeness at compile time.
+_Avoid_: "feature interface", "module spec"
+
+### Account detail tabs
+
+**Overview tab**:
+The default tab on the account detail page. Contains all existing sections (brief, product intel, cloud spend, pipeline, activity timeline, contacts, subscriptions, cases, etc.) unchanged from the pre-tab layout.
+_Avoid_: "main tab", "summary tab", "home tab"
+
+**Campaigns tab**:
+Account-level email campaign management. Create campaigns (via ContentCampaign skill), track campaign history, manage AE style guide. Output docs persist to the customer's Drive folder.
+_Avoid_: "outreach tab", "email tab"
+
+**News tab**:
+Customer news radar. Daily Gemini-scored news articles about the customer, with summaries and source links. Significance threshold filters noise; high-scoring stories also surface in the morning brief.
+_Avoid_: "intelligence tab", "signals tab", "radar tab"
+
+**Tools tab**:
+Smart link launcher for internal Red Hat business value tools (PitchBuilder+, FinListics CBV, CBVS). Pre-fills customer name and account numbers. Includes upload artifact action to save tool outputs to the customer's Drive intelligence folder and sync to NotebookLM.
+_Avoid_: "utilities tab", "resources tab"
+
+### News radar
+
+**News provider**:
+An interface (`NewsProvider`) that abstracts the news data source behind `searchNews(customerName: string): NewsItem[]`. Concrete implementations can be swapped without changing the feature module. Initial implementation uses Gemini grounded search.
+_Avoid_: "news API", "news source", "search provider"
+
+**Significance score**:
+A 1-10 Gemini-assigned score indicating how newsworthy an article is for a specific customer. Threshold-based: 7+ surfaces in the morning brief, 3+ appears on the News tab. Threshold is configurable per customer.
+_Avoid_: "relevance score" (relevance is binary — significant captures both relevance and importance)
+
+### NotebookLM sync
+
+**Notebook link**:
+The association between a customer and a specific NotebookLM notebook (`notebookUrl` on the customer object). Can be auto-discovered by searching the user's accessible notebooks by customer name, manually selected via a picker, or created fresh.
+_Avoid_: "notebook assignment", "notebook mapping"
+
+**Drive-notebook sync**:
+A hash-based diff process that compares files in the customer's Drive folder against the notebook's current sources. Adds/removes sources to keep them in sync. Runs on the heartbeat tick and on any action that writes to Drive. Manual Sync Now available.
+_Avoid_: "notebook push", "source sync", "notebook refresh"
 
 ## Flagged ambiguities
 
