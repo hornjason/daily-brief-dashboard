@@ -127,6 +127,34 @@ _Avoid_: "BFS", "folder walk", "Drive scan"
 Finding a named folder within a folder tree using exact or fuzzy name matching, up to a configurable depth. Returns the folder ID or null. Used to resolve a customer name to its Drive folder ID.
 _Avoid_: "folder lookup", "folder find", "folder search"
 
+### CI gates
+
+**Gate 1** (pre-push):
+Local checks that run before `git push` via a pre-push hook. Must complete in <30s to avoid developer friction. Includes unit tests, type check, and hero purity check. Can be bypassed with `QUICK_PUSH=1` (but security linting always runs).
+_Avoid_: "Tier 1", "commit gate", "pre-commit"
+
+**Gate 2** (PR):
+GitHub Actions checks triggered on pull request. Includes all Gate 1 checks plus shellcheck, BATS, drift gate, Playwright API tests against a fresh CI-spun container, and dashboard build. Blocks merge until green.
+_Avoid_: "Tier 2", "PR checks", "merge gate"
+
+**Gate 3** (nightly):
+Scheduled GitHub Action that runs data assertion tests (<90s budget). Validates data integrity (account counts, POD coverage, required fields) without full E2E overhead. Coordinates with overnight batch via completion signal (lockfile), not fixed time offset.
+_Avoid_: "Tier 3", "nightly E2E", "scheduled tests"
+
+**Gate 4** (release):
+Triggered on version tag (`v*`). The only gate that runs the full E2E suite, wizard E2E, Quinn-style GUI visual review, and hero install fresh-install flow. Also includes container build, GHCR push, smoke test on published image, and bootstrap E2E on Mac Mini. Requires manual approval via GitHub environment protection.
+_Avoid_: "Tier 4", "deploy gate", "release checks"
+
+**Test tier** (Playwright taxonomy):
+Classification of test *type* — distinct from CI gates (which describe *when* tests run). Playwright projects: `integration-tier`, `e2e-tier`, `api-tier`, `smoke`. Unit tests run via `bun test`, not Playwright.
+_Avoid_: confusing "test tier" (what kind) with "CI gate" (when it runs)
+
+**Gate-to-project mapping:**
+- Gate 1 (pre-push): `bun test test/unit/`, `tsc --noEmit`, `tsc --noEmit --project tsconfig.hero.json` — no Playwright
+- Gate 2 (PR): Playwright `ci` project + shellcheck + BATS + drift gate + dashboard build
+- Gate 3 (nightly): data assertion scripts against Mac Mini production (7777) — no Playwright, <90s
+- Gate 4 (release): Playwright `ci` + `wizard-e2e` + `smoke` projects, container build + GHCR push, bootstrap E2E
+
 ## Flagged ambiguities
 
 - "Shared Drive" (Google product name) vs. "L3 shared folder" (our concept): the L3 shared folder lives _in_ a Google Shared Drive, but the terms are not interchangeable. Use "L3 shared folder" for the concept, "Shared Drive" only when referring to the Google Drive product feature.
