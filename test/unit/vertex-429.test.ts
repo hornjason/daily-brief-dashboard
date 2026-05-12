@@ -94,6 +94,16 @@ mock.module('../../src/google.ts', () => ({
 // Keeps tests hermetic — no writes to cost-tracking files during unit tests.
 mock.module('../../src/gemini-cost-tracker.ts', () => ({
   recordGeminiUsage: (_row: unknown) => { /* no-op in tests */ },
+  getGeminiUsageSummary: () => ({
+    todayInputTokens: 0,
+    todayOutputTokens: 0,
+    todayCostUsd: 0,
+    monthInputTokens: 0,
+    monthOutputTokens: 0,
+    monthCostUsd: 0,
+    totalCalls: 0,
+    byCallType: {},
+  }),
 }))
 
 // Now import the SUT AFTER mocks are registered so the module graph picks

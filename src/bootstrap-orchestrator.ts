@@ -67,7 +67,7 @@ import {
 } from './bootstrap-state.ts'
 import type { AutoBootstrapStep } from './bootstrap-state.ts'
 export { autoBootstrapState, podBootstrapState } from './bootstrap-state.ts'
-import { POD_CONFIG_PATH } from './config-reconciler.ts'
+import { POD_CONFIG_PATH, getPodConfigPath } from './config-reconciler.ts'
 // BKL-ARCH-01: Extracted modules (ADR-005 — 500-line cap)
 import {
   synthesizeSfReportFromPipelineRecords,
@@ -117,8 +117,8 @@ const NTFY_TOPIC = process.env.NTFY_TOPIC ?? 'asa-command-center'
 function savePodConfig(cfg: { territorySheetId: string; sfReportId: string; parentFolderId: string; podTabTitle?: string }): void {
   try {
     let pod: Record<string, unknown> = {}
-    try { pod = JSON.parse(readFileSync(POD_CONFIG_PATH, 'utf-8')) } catch { /* fresh file */ }
-    writeJsonAtomic(POD_CONFIG_PATH, { ...pod, podConfig: cfg })
+    try { pod = JSON.parse(readFileSync(getPodConfigPath(), 'utf-8')) } catch { /* fresh file */ }
+    writeJsonAtomic(getPodConfigPath(), { ...pod, podConfig: cfg })
     console.log('[pod-bootstrap] POD config saved to pod-config.json')
   } catch (e: any) {
     console.warn('[pod-bootstrap] Could not save POD config:', e?.message)
@@ -128,7 +128,7 @@ function savePodConfig(cfg: { territorySheetId: string; sfReportId: string; pare
 /** Read the last saved POD config from pod-config.json. Returns null if not saved. */
 function readPodConfig(): { territorySheetId: string; sfReportId: string; parentFolderId: string; podTabTitle?: string } | null {
   try {
-    const pod = JSON.parse(readFileSync(POD_CONFIG_PATH, 'utf-8'))
+    const pod = JSON.parse(readFileSync(getPodConfigPath(), 'utf-8'))
     return pod.podConfig ?? null
   } catch { return null }
 }
@@ -145,7 +145,7 @@ type ScaffoldEntry = {
 
 export function readScaffoldCache(): Record<string, ScaffoldEntry> {
   try {
-    const pod = JSON.parse(readFileSync(POD_CONFIG_PATH, 'utf-8'))
+    const pod = JSON.parse(readFileSync(getPodConfigPath(), 'utf-8'))
     return (pod.scaffoldCache as Record<string, ScaffoldEntry>) ?? {}
   } catch { return {} }
 }
@@ -165,14 +165,14 @@ export function writeScaffoldCache(parentFolderId: string, entry: ScaffoldEntry)
   }
   try {
     let pod: Record<string, unknown> = {}
-    try { pod = JSON.parse(readFileSync(POD_CONFIG_PATH, 'utf-8')) } catch { /* fresh */ }
+    try { pod = JSON.parse(readFileSync(getPodConfigPath(), 'utf-8')) } catch { /* fresh */ }
     const cache = (pod.scaffoldCache as Record<string, ScaffoldEntry>) ?? {}
     const persisted: ScaffoldEntry = {
       configFolderId: entry.configFolderId,
       productsFolderId: entry.productsFolderId,
       productSubfolders: safeSubfolders,
     }
-    writeJsonAtomic(POD_CONFIG_PATH, { ...pod, scaffoldCache: { ...cache, [parentFolderId]: persisted } })
+    writeJsonAtomic(getPodConfigPath(), { ...pod, scaffoldCache: { ...cache, [parentFolderId]: persisted } })
   } catch (e: any) {
     console.warn('[auto-bootstrap:scaffold] cache write failed (non-blocking):', e?.message)
   }
