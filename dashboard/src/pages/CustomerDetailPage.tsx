@@ -56,6 +56,9 @@ import { SubscriptionsSection } from '../components/SubscriptionsSection'
 import { DriveSection } from '../components/DriveSection'
 import { ProductIntelSection } from '../components/ProductIntelSection'
 import { CustomerTabBar, type AccountTab } from '../components/CustomerTabBar'
+import { CampaignsTab } from '../components/tabs/CampaignsTab'
+import { NewsTab } from '../components/tabs/NewsTab'
+import { ToolsTab } from '../components/tabs/ToolsTab'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1387,9 +1390,11 @@ export function CustomerDetailPage() {
         </aside>
         </div>
       ) : (
-        /* Placeholder for non-Overview tabs */
-        <div className="flex items-center justify-center h-64 text-zinc-400">
-          Coming soon
+        /* Non-Overview tab content */
+        <div className="flex-1 overflow-y-auto">
+          {activeTab === 'campaigns' && <CampaignsTab customerName={customerName} />}
+          {activeTab === 'news' && <NewsTab customerName={customerName} />}
+          {activeTab === 'tools' && <ToolsTab customerName={customerName} />}
         </div>
       )}
     </div>

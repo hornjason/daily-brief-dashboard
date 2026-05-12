@@ -53,6 +53,10 @@ import { createTerritoryRouter } from './src/territory-routes.ts'
 import { reconcileConfig, AUTH_CONFIG_PATH, POD_CONFIG_PATH, USER_SETTINGS_PATH } from './src/config-reconciler.ts'
 // ── GitHub #144: Feature module routes ───────────────────────────────────
 import { createFeatureModuleRouter } from './src/feature-module-routes.ts'
+// ── GitHub #146: Feature module registrations (side-effect imports) ──────
+import './src/modules/campaigns-module.ts'
+import './src/modules/news-module.ts'
+import './src/modules/tools-module.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
