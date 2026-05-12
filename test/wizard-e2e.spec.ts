@@ -5,14 +5,13 @@
  * DO NOT: attempt live Google OAuth, real Tableau, or real RH Portal.
  *
  * Setup page accordion structure (current):
- *   Step 1 of 5 — OAuth Keys      badge: "Configured" when gcp-oauth.keys.json exists
- *   Step 2 of 5 — Google Auth     badge: "Connected"  when .google-token.json exists & valid
- *   Step 3 of 5 — Connections     badge: N/M connected
- *   Step 4 of 5 — AEs & Customers badge: N AEs configured / "None configured"
- *   Step 5 of 5 — Data Sources
+ *   Step 1 of 4 — Google Auth     badge: "Connected"  when .google-token.json exists & valid
+ *   Step 2 of 4 — Connections     badge: N/M connected
+ *   Step 3 of 4 — AEs & Customers badge: N AEs configured / "None configured"
+ *   Step 4 of 4 — Data Sources
  *
- * The region + POD selector lives in Step 4 inside the BootstrapConfigBlock component.
- * Tab structure inside Step 4: Single AE | Full POD | Manage
+ * The region + POD selector lives in Step 3 inside the BootstrapConfigBlock component.
+ * Tab structure inside Step 3: Single AE | Full POD | Manage
  *
  * Visual snapshots → test/snapshots/wizard/   (darwin runner, maxDiffPixelRatio 0.02)
  * Update baselines: make update-snapshots
@@ -59,57 +58,19 @@ test.describe('0. Pre-flight: seeded server is reachable', () => {
   })
 })
 
-// ── Step 1: OAuth Keys accordion ──────────────────────────────────────────────
+// ── Step 1: Google Auth ────────────────────────────────────────────────────────
 
-test.describe('1. Step 1 of 5 — OAuth Keys', () => {
+test.describe('1. Step 1 of 4 — Google Auth', () => {
   test('setup page loads at /dashboard/setup', async ({ page }) => {
     const res = await page.goto(`${BASE}/dashboard/setup`)
     expect(res?.ok()).toBeTruthy()
     await expect(page).toHaveURL(/\/dashboard\/setup/)
   })
 
-  test('Step 1 OAuth Keys accordion header visible', async ({ page }) => {
-    await page.goto(`${BASE}/dashboard/setup`)
-    await expect(page.getByRole('button', { name: /Step 1 of 5 — OAuth Keys/ })).toBeVisible()
-  })
-
-  test('Step 1 badge shows "Configured" because seed provides oauth keys status', async ({ page }) => {
-    // Seed data includes gcp-oauth.keys.json via the seed target; the server reads
-    // CONFIG_DIR which in CI resolves to {project_root}/config/ (seeded from scripts/seed-data/).
-    // We mock the oauth-keys-status endpoint to "exists: true" so the test is
-    // portable — the badge rendering is what we're testing, not file I/O.
-    await page.route('**/api/setup/oauth-keys-status', route =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: true }) })
-    )
-    await page.goto(`${BASE}/dashboard/setup`)
-    // "Configured" badge appears next to the Step 1 accordion button
-    const step1Row = page.getByRole('button', { name: /Step 1 of 5 — OAuth Keys/ })
-    await expect(step1Row).toBeVisible()
-    // The badge text "Configured" renders inside the accordion header
-    await expect(page.getByText('Configured').first()).toBeVisible()
-  })
-
-  test('visual baseline: Step 1 initial load (accordion collapsed)', async ({ page }) => {
-    await page.route('**/api/setup/oauth-keys-status', route =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: true }) })
-    )
-    await page.route('**/api/oauth/status', route =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authorized: true, expired: false, email: 'test@example.com', configuredAt: new Date().toISOString() }) })
-    )
-    await page.goto(`${BASE}/dashboard/setup`)
-    await page.waitForLoadState('networkidle')
-    await expect(page).toHaveScreenshot('setup-step1-initial.png', { maxDiffPixelRatio: 0.02 })
-  })
-})
-
-// ── Step 2: Google Auth ────────────────────────────────────────────────────────
-
-test.describe('2. Step 2 of 5 — Google Auth', () => {
   test('Google Auth accordion header visible', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await expect(page.getByRole('button', { name: /Step 2 of 5 — Google Auth/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Step 1 of 4 — Google Auth/ })).toBeVisible()
   })
-
   test('"Connected" badge shown when Google token is present', async ({ page }) => {
     await page.route('**/api/oauth/status', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({
@@ -121,14 +82,14 @@ test.describe('2. Step 2 of 5 — Google Auth', () => {
       }) })
     )
     await page.goto(`${BASE}/dashboard/setup`)
-    // The badge on Step 2 accordion button shows "Connected" when authorized
-    const step2Row = page.getByRole('button', { name: /Step 2 of 5 — Google Auth/ })
-    await expect(step2Row).toBeVisible()
+    // The badge on Step 1 accordion button shows "Connected" when authorized
+    const step1Row = page.getByRole('button', { name: /Step 1 of 4 — Google Auth/ })
+    await expect(step1Row).toBeVisible()
     // "Connected" badge text appears in the accordion header area
     await expect(page.getByText('Connected').first()).toBeVisible()
   })
 
-  test('expanding Step 2 shows Google Workspace Connected state', async ({ page }) => {
+  test('expanding Step 1 shows Google Workspace Connected state', async ({ page }) => {
     await page.route('**/api/oauth/status', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({
         authorized: true,
@@ -138,27 +99,24 @@ test.describe('2. Step 2 of 5 — Google Auth', () => {
         hasCloudPlatformScope: true,
       }) })
     )
-    await page.route('**/api/setup/oauth-keys-status', route =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: true }) })
-    )
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 2 of 5 — Google Auth/ }).click()
+    await page.getByRole('button', { name: /Step 1 of 4 — Google Auth/ }).click()
     await expect(page.getByText('Google Workspace Connected')).toBeVisible()
     await expect(page.getByText('test@redhat.com')).toBeVisible()
   })
 })
 
-// ── Step 3: Connections (RH Token) ────────────────────────────────────────────
+// ── Step 2: Connections (RH Token) ────────────────────────────────────────────
 
-test.describe('3. Step 3 of 5 — Connections', () => {
+test.describe('2. Step 2 of 4 — Connections', () => {
   test('Connections accordion header visible', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await expect(page.getByRole('button', { name: /Step 3 of 5 — Connections/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Step 2 of 4 — Connections/ })).toBeVisible()
   })
 
   test('expanding Connections shows Red Hat Connection section', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 3 of 5 — Connections/ }).click()
+    await page.getByRole('button', { name: /Step 2 of 4 — Connections/ }).click()
     // Component shows "Red Hat Connection" in form/loading mode and "Red Hat Token Configured"
     // in summary mode — match either testid to handle both states.
     await expect(
@@ -178,30 +136,30 @@ test.describe('3. Step 3 of 5 — Connections', () => {
       }) })
     )
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 3 of 5 — Connections/ }).click()
+    await page.getByRole('button', { name: /Step 2 of 4 — Connections/ }).click()
     // When token is configured, HeroStep3Connections renders summary mode
     await expect(page.locator('[data-testid="hero-step3-summary"]')).toBeVisible()
   })
 })
 
-// ── Step 4: AEs & Customers — region and POD selector ────────────────────────
+// ── Step 3: AEs & Customers — region and POD selector ────────────────────────
 
-test.describe('4. Step 4 of 5 — AEs & Customers', () => {
+test.describe('3. Step 3 of 4 — AEs & Customers', () => {
   test('AEs & Customers accordion header visible', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await expect(page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Step 3 of 4 — AEs & Customers/ })).toBeVisible()
   })
 
-  test('expanding Step 4 shows Single AE and Full POD tabs', async ({ page }) => {
+  test('expanding Step 3 shows Single AE and Full POD tabs', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ }).click()
+    await page.getByRole('button', { name: /Step 3 of 4 — AEs & Customers/ }).click()
     await expect(page.getByRole('button', { name: 'Single AE' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Full POD' })).toBeVisible()
   })
 
   test('Single AE tab shows region and POD selectors after expanding', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ }).click()
+    await page.getByRole('button', { name: /Step 3 of 4 — AEs & Customers/ }).click()
     // Seeded data has AEs configured — component auto-switches to Manage tab.
     // Explicitly click Single AE to show the BootstrapConfigBlock with selectors.
     await page.getByRole('button', { name: 'Single AE' }).click()
@@ -210,25 +168,22 @@ test.describe('4. Step 4 of 5 — AEs & Customers', () => {
     await expect(page.locator('[data-testid="pod-select"]')).toBeVisible({ timeout: 15_000 })
   })
 
-  test('visual baseline: Step 4 Single AE tab with region+POD selectors', async ({ page }) => {
-    await page.route('**/api/setup/oauth-keys-status', route =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: true }) })
-    )
+  test('visual baseline: Step 3 Single AE tab with region+POD selectors', async ({ page }) => {
     await page.route('**/api/oauth/status', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authorized: true, expired: false }) })
     )
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ }).click()
+    await page.getByRole('button', { name: /Step 3 of 4 — AEs & Customers/ }).click()
     // Seeded AEs cause auto-switch to Manage — explicitly switch to Single AE
     await page.getByRole('button', { name: 'Single AE' }).click()
     // Wait for BootstrapConfigBlock fetches to complete
     await expect(page.locator('[data-testid="pod-select"]')).toBeVisible({ timeout: 15_000 })
-    await expect(page).toHaveScreenshot('setup-step4-single-ae.png', { maxDiffPixelRatio: 0.02 })
+    await expect(page).toHaveScreenshot('setup-step3-single-ae.png', { maxDiffPixelRatio: 0.02 })
   })
 
   test('selecting a region populates POD dropdown options', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ }).click()
+    await page.getByRole('button', { name: /Step 3 of 4 — AEs & Customers/ }).click()
     // Seeded AEs cause auto-switch to Manage — explicitly switch to Single AE
     await page.getByRole('button', { name: 'Single AE' }).click()
     // Wait for async fetches (regions + pod-config) to complete
@@ -241,15 +196,12 @@ test.describe('4. Step 4 of 5 — AEs & Customers', () => {
     expect(options.length).toBeGreaterThan(1)
   })
 
-  test('visual baseline: Step 4 with region selected', async ({ page }) => {
-    await page.route('**/api/setup/oauth-keys-status', route =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify({ exists: true }) })
-    )
+  test('visual baseline: Step 3 with region selected', async ({ page }) => {
     await page.route('**/api/oauth/status', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({ authorized: true, expired: false }) })
     )
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ }).click()
+    await page.getByRole('button', { name: /Step 3 of 4 — AEs & Customers/ }).click()
     // Seeded AEs cause auto-switch to Manage — explicitly switch to Single AE
     await page.getByRole('button', { name: 'Single AE' }).click()
     // Wait for async fetches (regions + pod-config) to complete
@@ -265,12 +217,12 @@ test.describe('4. Step 4 of 5 — AEs & Customers', () => {
     }
     // Allow 8% diff — POD selection triggers async UI updates (territory sheet row,
     // SF report auto-fill) that can vary slightly between runs.
-    await expect(page).toHaveScreenshot('setup-step4-region-selected.png', { maxDiffPixelRatio: 0.08 })
+    await expect(page).toHaveScreenshot('setup-step3-region-selected.png', { maxDiffPixelRatio: 0.08 })
   })
 
   test('Full POD tab renders and shows POD configuration', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 4 of 5 — AEs & Customers/ }).click()
+    await page.getByRole('button', { name: /Step 3 of 4 — AEs & Customers/ }).click()
     await page.waitForLoadState('networkidle')
     await page.getByRole('button', { name: 'Full POD' }).click()
     // Full POD tab content should render without crashing
@@ -287,16 +239,15 @@ test.describe('4. Step 4 of 5 — AEs & Customers', () => {
 // SetupPage.tsx lines ~1952-1956 still contain these strings in the Single AE
 // info box. Remove the test.skip() calls after issue #7 ships.
 
-test.describe('5. Regression guard — deprecated text absent from wizard', () => {
+test.describe('4. Regression guard — deprecated text absent from wizard', () => {
   test('no "Tableau" text in wizard DOM', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
     // Open all accordion sections so the full DOM is rendered
     for (const label of [
-      /Step 1 of 5 — OAuth Keys/,
-      /Step 2 of 5 — Google Auth/,
-      /Step 3 of 5 — Connections/,
-      /Step 4 of 5 — AEs & Customers/,
+      /Step 1 of 4 — Google Auth/,
+      /Step 2 of 4 — Connections/,
+      /Step 3 of 4 — AEs & Customers/,
     ]) {
       await page.getByRole('button', { name: label }).click()
       await page.waitForTimeout(300)
@@ -314,10 +265,9 @@ test.describe('5. Regression guard — deprecated text absent from wizard', () =
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
     for (const label of [
-      /Step 1 of 5 — OAuth Keys/,
-      /Step 2 of 5 — Google Auth/,
-      /Step 3 of 5 — Connections/,
-      /Step 4 of 5 — AEs & Customers/,
+      /Step 1 of 4 — Google Auth/,
+      /Step 2 of 4 — Connections/,
+      /Step 3 of 4 — AEs & Customers/,
     ]) {
       await page.getByRole('button', { name: label }).click()
       await page.waitForTimeout(300)
@@ -331,10 +281,9 @@ test.describe('5. Regression guard — deprecated text absent from wizard', () =
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
     for (const label of [
-      /Step 1 of 5 — OAuth Keys/,
-      /Step 2 of 5 — Google Auth/,
-      /Step 3 of 5 — Connections/,
-      /Step 4 of 5 — AEs & Customers/,
+      /Step 1 of 4 — Google Auth/,
+      /Step 2 of 4 — Connections/,
+      /Step 3 of 4 — AEs & Customers/,
     ]) {
       await page.getByRole('button', { name: label }).click()
       await page.waitForTimeout(300)
@@ -349,7 +298,7 @@ test.describe('5. Regression guard — deprecated text absent from wizard', () =
 
 // ── Dashboard visual baselines ────────────────────────────────────────────────
 
-test.describe('6. Dashboard visual baselines (seeded data)', () => {
+test.describe('5. Dashboard visual baselines (seeded data)', () => {
   test('dashboard home loads with seeded AE data', async ({ page }) => {
     const res = await page.goto(`${BASE}/dashboard`)
     expect(res?.ok()).toBeTruthy()
