@@ -180,9 +180,9 @@ jobs:
     name: Integration & E2E tests
     runs-on: [self-hosted, mac-mini-live]
     needs: [test]
-    # Only run E2E on merge to main — PRs are validated by unit tests + type check.
-    # E2E on PRs burns 10-25 min of runner time and blocks the queue for other PRs.
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Gate 2: Run on both PRs and merge-to-main. Catches integration regressions
+    # before merge instead of after. Server starts on 7778 to avoid port conflict
+    # with production container (7777) on Mac Mini runner.
     # BKL-E2E-01: 54 pre-existing test failures surfaced when E2E job became reachable.
     # These are UI selector mismatches, axe violations, and seed-data gaps — not regressions
     # from current changes. continue-on-error while BKL-E2E-01 is being addressed.
