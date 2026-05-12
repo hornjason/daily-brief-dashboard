@@ -191,19 +191,18 @@ jobs:
           fi
 
   sync-hero-install-files:
-    name: Sync hero install files to main branch
+    name: Sync hero install files to public repo
     runs-on: [self-hosted, mac-mini-live]
     needs: [publish-release]
     if: "!contains(github.ref_name, '-rc')"
     environment: production
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-          token: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
 
       - name: Determine version tag
         id: version
@@ -214,34 +213,40 @@ jobs:
             echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Update hero install files on main branch
+      - name: Sync files to public repo (hornjason/daily-brief-dashboard)
+        env:
+          DEPLOY_TOKEN: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
         run: |
-          # Copy hero install files from the tagged release to main branch
+          # Clone the public repo using the deploy token
+          git clone "https://x-access-token:${DEPLOY_TOKEN}@github.com/hornjason/daily-brief-dashboard.git" /tmp/public-repo
+          cd /tmp/public-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Update version in README if needed (optional)
-          # sed -i '' "s/Latest version: .*/Latest version: ${{ steps.version.outputs.tag }}/" README.md
+          # Copy hero install files from private repo (checked out in $GITHUB_WORKSPACE)
+          cp "$GITHUB_WORKSPACE/scripts/setup.sh" setup.sh
+          cp "$GITHUB_WORKSPACE/.env.example" .env.example
+          cp "$GITHUB_WORKSPACE/docker-compose.yml" docker-compose.yml
+          cp "$GITHUB_WORKSPACE/README.md" README.md
 
-          # Stage the files
-          git add scripts/setup.sh .env.example docker-compose.yml README.md
-
-          # Commit and push (skip CI to avoid triggering builds)
+          # Commit and push if changed
+          git add setup.sh .env.example docker-compose.yml README.md
           if ! git diff --cached --quiet; then
-            git commit -m "Release ${{ steps.version.outputs.tag }}: sync hero install files [skip ci]"
+            git commit -m "Release ${{ steps.version.outputs.tag }}: sync hero install files"
             git push origin main
-            echo "Hero install files synced to main branch"
+            echo "✅ Hero install files synced to public repo"
           else
             echo "No changes to hero install files"
           fi
 
+          # Clean up
+          rm -rf /tmp/public-repo
+
   publish-public-release:
-    name: Publish GitHub Release with assets
+    name: Publish GitHub Release on public repo
     runs-on: [self-hosted, mac-mini-live]
     needs: [sync-hero-install-files]
     environment: production
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -255,12 +260,12 @@ jobs:
             echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create GitHub Release with assets
+      - name: Create GitHub Release with assets on public repo
         env:
           DEPLOY_TOKEN: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
           VERSION: ${{ steps.version.outputs.tag }}
         run: |
-          # Create the release
+          # Create the release on the public repo
           RELEASE=$(curl -sf -X POST \
             -H "Authorization: token $DEPLOY_TOKEN" \
             -H "Accept: application/vnd.github+json" \
@@ -268,7 +273,7 @@ jobs:
             -d "{\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"generate_release_notes\":true}")
           UPLOAD_URL=$(echo "$RELEASE" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].split('{')[0])")
 
-          # Upload assets (backup — main distribution is via raw.githubusercontent.com/main/)
+          # Upload assets
           for file in scripts/setup.sh .env.example docker-compose.yml; do
             name=$(basename "$file")
             curl -sf -X POST \
