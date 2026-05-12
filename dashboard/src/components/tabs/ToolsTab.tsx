@@ -1,16 +1,46 @@
 /**
- * GitHub Issue #146: Tools tab shell component
+ * GitHub Issue #147: Tools tab with live deep links
  * Feature: Smart launcher for Red Hat business value tools + artifact upload
- * Status: Phase 1 — shell only, no backend integration
+ * Status: Phase 2 — active links with customer context
  */
 
-import { Wrench, ExternalLink, Upload } from 'lucide-react'
+import { Wrench, ExternalLink, Upload, Copy, Check } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 interface ToolsTabProps {
   customerName: string
 }
 
+interface Customer {
+  name: string
+  accountNumbers?: string[]
+}
+
 export function ToolsTab({ customerName }: ToolsTabProps) {
+  const [accountNumbers, setAccountNumbers] = useState<string[]>([])
+  const [copiedAccount, setCopiedAccount] = useState<string | null>(null)
+
+  // Fetch customer account numbers
+  useEffect(() => {
+    fetch('/api/accounts')
+      .then((r) => r.json())
+      .then((json) => {
+        const customer = (json.customers ?? []).find(
+          (c: Customer) => c.name.toLowerCase() === customerName.toLowerCase()
+        )
+        if (customer?.accountNumbers) {
+          setAccountNumbers(customer.accountNumbers)
+        }
+      })
+      .catch(() => {})
+  }, [customerName])
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedAccount(text)
+    setTimeout(() => setCopiedAccount(null), 2000)
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-8 space-y-6">
       {/* Header */}
@@ -27,70 +57,99 @@ export function ToolsTab({ customerName }: ToolsTabProps) {
       {/* Tool cards grid */}
       <div className="grid gap-4 md:grid-cols-3">
         {/* PitchBuilder+ */}
-        <div className="bg-surface border border-border rounded-xl p-5 space-y-3">
+        <a
+          href="https://pitchbuilderplus.redhat.com/export"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-surface border border-border rounded-xl p-5 space-y-3 hover:border-accent/50 transition-colors group"
+        >
           <div className="flex items-start justify-between">
-            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
               <Wrench className="w-5 h-5 text-accent" />
             </div>
-            <ExternalLink className="w-4 h-4 text-text-secondary opacity-30" />
+            <ExternalLink className="w-4 h-4 text-text-secondary group-hover:text-accent transition-colors" />
           </div>
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-text-primary">PitchBuilder+</h3>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              Export sales-ready reports showcasing Red Hat's delivered value for {customerName}
+            <p className="text-xs text-text-secondary leading-relaxed mb-2">
+              Export sales-ready reports showcasing Red Hat's delivered value for <span className="font-medium text-text-primary">{customerName}</span>
             </p>
+            {accountNumbers.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {accountNumbers.map((acct) => (
+                  <div key={acct} className="flex items-center gap-1 bg-bg-primary/50 rounded px-2 py-1">
+                    <span className="text-xs font-mono text-text-secondary">{acct}</span>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault()
+                        copyToClipboard(acct)
+                      }}
+                      className="hover:text-accent transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      {copiedAccount === acct ? (
+                        <Check className="w-3 h-3 text-green-500" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <button
-            disabled
-            className="w-full px-3 py-2 rounded-lg border border-border text-xs text-text-secondary opacity-50 cursor-not-allowed"
-          >
+          <div className="w-full px-3 py-2 rounded-lg bg-accent/10 text-xs text-accent font-medium text-center group-hover:bg-accent/20 transition-colors">
             Launch Tool
-          </button>
-        </div>
+          </div>
+        </a>
 
         {/* FinListics CBV */}
-        <div className="bg-surface border border-border rounded-xl p-5 space-y-3">
+        <a
+          href="https://v2.finlistics-vm.com/start-page"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-surface border border-border rounded-xl p-5 space-y-3 hover:border-accent/50 transition-colors group"
+        >
           <div className="flex items-start justify-between">
-            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
               <Wrench className="w-5 h-5 text-accent" />
             </div>
-            <ExternalLink className="w-4 h-4 text-text-secondary opacity-30" />
+            <ExternalLink className="w-4 h-4 text-text-secondary group-hover:text-accent transition-colors" />
           </div>
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-text-primary">FinListics CBV</h3>
             <p className="text-xs text-text-secondary leading-relaxed">
-              Account planning, benchmarking, and prospect analysis for {customerName}
+              Account planning, benchmarking, and prospect analysis for <span className="font-medium text-text-primary">{customerName}</span>
             </p>
           </div>
-          <button
-            disabled
-            className="w-full px-3 py-2 rounded-lg border border-border text-xs text-text-secondary opacity-50 cursor-not-allowed"
-          >
+          <div className="w-full px-3 py-2 rounded-lg bg-accent/10 text-xs text-accent font-medium text-center group-hover:bg-accent/20 transition-colors">
             Launch Tool
-          </button>
-        </div>
+          </div>
+        </a>
 
         {/* CBVS */}
-        <div className="bg-surface border border-border rounded-xl p-5 space-y-3">
+        <a
+          href="https://auth.redhat.com/auth/realms/EmployeeIDP/protocol/saml/clients/cbvs"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-surface border border-border rounded-xl p-5 space-y-3 hover:border-accent/50 transition-colors group"
+        >
           <div className="flex items-start justify-between">
-            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
               <Wrench className="w-5 h-5 text-accent" />
             </div>
-            <ExternalLink className="w-4 h-4 text-text-secondary opacity-30" />
+            <ExternalLink className="w-4 h-4 text-text-secondary group-hover:text-accent transition-colors" />
           </div>
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-text-primary">CBVS</h3>
             <p className="text-xs text-text-secondary leading-relaxed">
-              Customer business value scoring and opportunity assessment
+              Customer business value scoring and opportunity assessment for <span className="font-medium text-text-primary">{customerName}</span>
             </p>
           </div>
-          <button
-            disabled
-            className="w-full px-3 py-2 rounded-lg border border-border text-xs text-text-secondary opacity-50 cursor-not-allowed"
-          >
+          <div className="w-full px-3 py-2 rounded-lg bg-accent/10 text-xs text-accent font-medium text-center group-hover:bg-accent/20 transition-colors">
             Launch Tool
-          </button>
-        </div>
+          </div>
+        </a>
       </div>
 
       {/* Upload area placeholder */}
