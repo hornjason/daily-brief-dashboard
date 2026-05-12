@@ -104,7 +104,10 @@ jobs:
       - name: Run wizard E2E tests
         env:
           BASE_URL: 'http://localhost:7778'
-        run: CI=true bunx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e --workers=1 --reporter=list
+        # --grep-invert="visual baseline" skips toHaveScreenshot() assertions which are
+        # platform-specific (laptop baselines differ from Mac Mini rendering).
+        # Functional wizard tests still run and must pass.
+        run: CI=true bunx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e --workers=1 --reporter=list --grep-invert="visual baseline"
 
       - name: Run smoke tests against production
         run: CI=true bunx playwright test --project=smoke --reporter=list
