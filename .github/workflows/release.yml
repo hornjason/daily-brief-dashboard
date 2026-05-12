@@ -109,10 +109,12 @@ jobs:
         # Functional wizard tests still run and must pass.
         run: CI=true bunx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e --workers=1 --reporter=list --grep-invert="visual baseline"
 
-      - name: Run smoke tests against production
+      # Smoke against the seeded server (not Mac Mini production, which may not have data).
+      # The publish-release job runs its own smoke against the published image on port 7780.
+      - name: Run smoke tests against seeded server
         run: CI=true bunx playwright test --project=smoke --reporter=list
         env:
-          BASE_URL: http://localhost:7777
+          BASE_URL: http://localhost:7778
 
       - name: Stop wizard server
         if: always()
