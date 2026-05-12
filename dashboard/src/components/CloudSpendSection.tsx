@@ -80,8 +80,12 @@ function trendDelta(series: number[]): number | null {
 
 function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
   const byAE = data?.byAE ?? []
-  const maxAEAcv = byAE.reduce((m, a) => Math.max(m, a.acv), 0)
   const quarters = byAE.length > 0 ? allAEQuarters(byAE) : []
+  const qSet = new Set(quarters)
+  const maxAEAcv = byAE.reduce((m, a) => {
+    const scopedAcv = a.byQuarter.filter(q => qSet.has(q.quarter)).reduce((s, q) => s + q.acv, 0)
+    return Math.max(m, scopedAcv)
+  }, 0)
 
   // Dynamic grid columns: 1 label col + N quarter cols
   // We use a CSS grid with inline style to handle variable quarter count
@@ -119,8 +123,11 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
         /* ── Compact sparkline rows (BKL-UX109, POD scale) ─────────────────── */
         <div className="space-y-1" data-testid="ccsp-ae-compact">
           {byAE.map((aeRow: CCSPByAE) => {
-            const { ae, acv, byQuarter, topAccounts } = aeRow
+            const { ae, byQuarter, topAccounts } = aeRow
             const series = seriesForQuarters(byQuarter, quarters)
+            // Scope AE total to the displayed rolling quarters only
+            const qSet = new Set(quarters)
+            const acv = byQuarter.filter(q => qSet.has(q.quarter)).reduce((s, q) => s + q.acv, 0)
             const delta = trendDelta(series)
             const customerCount = topAccounts?.length ?? 0
             const isActive = activeAE === ae
@@ -192,7 +199,11 @@ function ByAETile({ data, loading, activeAE, onSelectAE }: ByAETileProps) {
         <>
           {/* Per-AE rows with progress bars */}
           <div className="space-y-2">
-            {byAE.map(({ ae, acv, topAccounts }) => {
+            {byAE.map((aeRow) => {
+              const { ae, byQuarter, topAccounts } = aeRow
+              // Scope AE total to the displayed rolling quarters only
+              const qSet = new Set(quarters)
+              const acv = byQuarter.filter(q => qSet.has(q.quarter)).reduce((s, q) => s + q.acv, 0)
               const pct = maxAEAcv > 0 ? (acv / maxAEAcv) * 100 : 0
               const customerCount = topAccounts?.length ?? 0
               const isActive = activeAE === ae
@@ -317,18 +328,22 @@ export function CloudSpendSection({ data, loading, error, onRefresh, aeFilterSel
 
   const customers = data?.byCustomer ?? []
   const partners = data?.byPartner ?? []
-  const totalAcv = data?.totalAcv ?? 0
 
-  // BKL-G17: reporting period range badge (e.g. "2025 Q3–Q4")
-  // Data format: "2025-Q3" (YYYY-QN) — fixed from prior CY25Q1 assumption (BKL-W3-01)
+  // BKL-UX82: scope totals to the rolling 4-quarter window
   const QTR_FMT = /^\d{4}-Q\d$/
   const allQuarters = data?.byQuarter ?? []
-  const reportingPeriod = allQuarters.length > 0 ? (() => {
-    const validQ = allQuarters.filter(q => QTR_FMT.test(q.quarter))
-    if (!validQ.length) return null
-    const sorted = [...validQ].sort((a, b) => a.quarter.localeCompare(b.quarter))
-    const first = sorted[0].quarter   // e.g. "2025-Q3"
-    const last  = sorted[sorted.length - 1].quarter
+  const rollingQuarters = (() => {
+    const valid = allQuarters.filter(q => QTR_FMT.test(q.quarter))
+    const sorted = [...valid].sort((a, b) => a.quarter.localeCompare(b.quarter))
+    return sorted.slice(-4)
+  })()
+  const rollingQSet = new Set(rollingQuarters.map(q => q.quarter))
+  const totalAcv = rollingQuarters.reduce((s, q) => s + q.acv, 0)
+
+  // BKL-G17: reporting period range badge (e.g. "2025 Q3–Q4")
+  const reportingPeriod = rollingQuarters.length > 0 ? (() => {
+    const first = rollingQuarters[0].quarter
+    const last  = rollingQuarters[rollingQuarters.length - 1].quarter
     const fy1 = first.slice(0, 4)   // "2025"
     const q1  = first.slice(5)       // "Q3"
     const fy2 = last.slice(0, 4)
