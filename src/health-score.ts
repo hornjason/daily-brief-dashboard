@@ -44,10 +44,12 @@ function scoreCases(
   // BKL-REG-19: Match cases by accountNumber OR customerName (same as PodKPIHeader BKL-REG-08)
   const acctSet = new Set(customerAccountNumbers)
   const nameLower = customerName?.toLowerCase()
-  const matched = allCases.filter(c =>
-    acctSet.has(c.accountNumber) ||
-    (nameLower && c.customerName != null && c.customerName.toLowerCase() === nameLower)
-  )
+  const matched = allCases.filter(c => {
+    const statusLower = (c.status ?? '').toLowerCase()
+    if (statusLower.includes('closed') || statusLower.includes('resolved')) return false
+    return acctSet.has(c.accountNumber) ||
+      (nameLower && c.customerName != null && c.customerName.toLowerCase() === nameLower)
+  })
 
   if (!customerAccountNumbers.length && !nameLower) {
     return { score: 50, signal: 'No account numbers — cannot match cases' }
