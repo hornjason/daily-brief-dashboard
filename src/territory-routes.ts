@@ -57,7 +57,7 @@ export function createTerritoryRouter(): Hono {
     }
 
     // Filter customers by pod (AE membership)
-    let filteredCustomers = customers.filter(cu => !cu.inactive)
+    let filteredCustomers = [...customers]  // ADR-018: inactive filtered at load time
     if (aeNamesToInclude) {
       filteredCustomers = filteredCustomers.filter(cu => cu.ae && aeNamesToInclude!.has(cu.ae))
     }

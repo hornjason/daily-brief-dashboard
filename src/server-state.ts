@@ -29,6 +29,7 @@ export function loadServerState(): void {
   }
   try {
     customers = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8')).customers ?? []
+    customers = customers.filter(c => !c.inactive)  // ADR-018: safety net
     if (customers.length === 0) {
       console.warn('[WARN] customers.json loaded with 0 customers — file may be corrupted or was wiped. Re-run territory sync or bootstrap to restore.')
     } else {
@@ -97,5 +98,5 @@ export function setAes(newAes: AE[]): void {
 }
 
 export function setCustomers(newCustomers: Customer[]): void {
-  customers = newCustomers
+  customers = newCustomers.filter(c => !c.inactive)  // ADR-018: safety net
 }

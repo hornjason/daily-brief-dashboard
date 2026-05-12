@@ -40,7 +40,8 @@ export interface Customer {
   notebookId?: string    // BKL-AI11: NotebookLM notebook ID (set after notebook is created)
   notebookUrl?: string   // BKL-AI11: NotebookLM notebook URL for dashboard linking
   importedFrom?: string  // provenance tag: "territory-sheet", "manual", etc.
-  inactive?: boolean     // true = AE removed but customer preserved (has account numbers or Drive folder)
+  /** @deprecated ADR-018: inactive customers are now deleted, not marked. Safety-net filter in server-state.ts. */
+  inactive?: boolean
   ccspCustomer?: boolean // true = customer appears in SF sheet only via CCSP opportunities
   discoveryFailures?: number        // BKL-RH-PERF-01: count of consecutive failed discovery attempts
   discoveryStatus?: 'unresolvable'  // BKL-RH-PERF-01: set after 3 failures

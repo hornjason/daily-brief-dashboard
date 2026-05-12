@@ -411,11 +411,10 @@ export function createCustomerRouter(): Hono {
       // a customer currently in customers.json. The disk cache may still hold
       // cases from previous POD/AE configurations after a reset; without this
       // filter those cases bleed through into /api/cases/all.
-      // BKL-CASES-MATCH-01: only active customers — inactive customers are removed AEs;
-      // their cases should not appear in the live feed (consistent with /api/accounts).
-      const activeCustomers = customers.filter(cu => !cu.inactive)
+      // BKL-CASES-MATCH-01: only current customers — ADR-018 safety net in server-state.ts
+      // filters inactive at load time; this filters to current customer accounts.
       const currentAccountNums = new Set<string>()
-      for (const cu of activeCustomers) {
+      for (const cu of customers) {
         for (const num of cu.accountNumbers ?? []) {
           currentAccountNums.add(String(num))
         }
@@ -425,7 +424,7 @@ export function createCustomerRouter(): Hono {
       // cases that don't belong to a customer currently in customers.json.
       const enriched = allCases
         .map((sc) => {
-          const matched = activeCustomers.find((cu) =>
+          const matched = customers.find((cu) =>
             (cu.accountNumbers ?? []).map(String).includes(String(sc.accountNumber))
           )
           return { ...sc, customerName: matched?.name ?? sc.customerName ?? 'Unknown', _matched: !!matched }

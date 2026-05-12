@@ -1183,7 +1183,7 @@ export function registerScrapeRoutes(app: Hono): void {
 
         // SF sheet is the source of truth — derive customer list from the sheet by territory.
         // existingCustomers passed only to preserve known names + accountNumbers.
-        const existingCustomers = customers.filter(cu => cu.ae === ae.name && !cu.inactive)
+        const existingCustomers = customers.filter(cu => cu.ae === ae.name)
         console.log(`[sf-bookings-sync] ${ae.name}: deriving customers from sheet (territories: ${territories.join(', ')})`)
 
         const { results, matched, newCustomers, aliasedCustomers, ccspOnly } = deriveSfCustomersByTerritory(

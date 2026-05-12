@@ -80,7 +80,7 @@ async function repopulateAliasesFromSfBookings(): Promise<void> {
       if (!rawCache.has(aeSheetId)) rawCache.set(aeSheetId, await fetchSfBookingsRaw(aeSheetId))
       const rawData = rawCache.get(aeSheetId)!
 
-      const existingCustomers = customers.filter(cu => cu.ae === ae.name && !cu.inactive)
+      const existingCustomers = customers.filter(cu => cu.ae === ae.name)
       const { newCustomers, aliasedCustomers } = deriveSfCustomersByTerritory(
         rawData, territories, existingCustomers, ae.name, false,
       )

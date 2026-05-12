@@ -15,13 +15,13 @@
  * from server.ts to follow the logic they serve.
  */
 import { Hono } from 'hono'
-import { readFileSync, writeFileSync, readdirSync, unlinkSync } from 'fs'
+import { readFileSync, writeFileSync, readdirSync, unlinkSync, existsSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { AE, Customer } from './types.ts'
-import { aes, customers, saveAes, setCustomers, CUSTOMERS_PATH } from './server-state.ts'
+import { aes, customers, saveAes, setCustomers, CUSTOMERS_PATH, CONFIG_DIR_PATH } from './server-state.ts'
 import { toSlug, invalidateCCSPCache, invalidatePipelineCache } from './cache-layer.ts'
 import { sanitizeErr, sanitizeText } from './utils.ts'
 import { normalizeSettings, getRegionById } from './region-config.ts'
@@ -174,23 +174,40 @@ export function createAeRouter(): Hono {
       invalidateCCSPCache()
       invalidatePipelineCache()
 
-      // Mark customers belonging to deleted AEs as inactive (preserve if they have data)
+      // ADR-018: delete customers belonging to removed AEs; archive those with Drive folders
       if (removedAeNames.length > 0) {
         try {
           const raw = JSON.parse(readFileSync(CUSTOMERS_PATH, 'utf-8'))
-          const updated = (raw.customers ?? []).map((c: Customer) => {
-            if (!c.ae || !removedAeNames.includes(c.ae)) return c
-            // Preserve if customer has account numbers or a Drive folder — mark inactive
-            if ((c.accountNumbers?.length ?? 0) > 0 || c.driveFolderId) {
-              return { ...c, inactive: true }
+          const allCusts: Customer[] = raw.customers ?? []
+          const kept: Customer[] = []
+          const archiveEntries: { name: string; driveFolderId: string; ae: string; archivedAt: string }[] = []
+          const now = new Date().toISOString()
+          let deletedCount = 0
+
+          for (const c of allCusts) {
+            if (!c.ae || !removedAeNames.includes(c.ae)) {
+              kept.push(c)
+              continue
             }
-            return null // no data — drop entirely
-          }).filter(Boolean)
-          writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
-          setCustomers(updated)
-          const markedInactive = updated.filter((c: Customer) => c.inactive && removedAeNames.includes(c.ae ?? '')).length
-          const dropped = (raw.customers ?? []).length - updated.length
-          console.log(`[wizard] AE removal: ${markedInactive} customers marked inactive, ${dropped} dropped (no data) for AEs: ${removedAeNames.join(', ')}`)
+            // Archive if customer has a Drive folder
+            if (c.driveFolderId) {
+              archiveEntries.push({ name: c.name, driveFolderId: c.driveFolderId, ae: c.ae, archivedAt: now })
+            }
+            deletedCount++
+          }
+
+          // Append to archived-customers.json
+          if (archiveEntries.length > 0) {
+            const archivePath = resolve(CONFIG_DIR_PATH, 'archived-customers.json')
+            let archive: { archived: typeof archiveEntries } = { archived: [] }
+            try { archive = JSON.parse(readFileSync(archivePath, 'utf-8')) } catch { /* first run */ }
+            archive.archived.push(...archiveEntries)
+            writeFileSync(archivePath, JSON.stringify(archive, null, 2))
+          }
+
+          writeJsonAtomic(CUSTOMERS_PATH, { customers: kept })
+          setCustomers(kept)
+          console.log(`[wizard] AE removal: ${archiveEntries.length} customers archived, ${deletedCount - archiveEntries.length} deleted for AEs: ${removedAeNames.join(', ')}`)
         } catch (e: any) { console.warn('[wizard] customer cleanup after AE removal failed:', e.message) }
       } else {
         // No AEs removed — just reload customers in case other changes happened
@@ -206,12 +223,63 @@ export function createAeRouter(): Hono {
           const cacheFiles = readdirSync(CACHE_DIR).filter(f => f.endsWith('.json'))
           const removedSlugs = new Set(removedCustomerNames.map(toSlug))
           for (const file of cacheFiles) {
-            const match = file.match(/^(.+?)-(sheets|\d{4}-\d{2}-\d{2})\.json$/)
-            if (!match) continue
-            if (removedSlugs.has(match[1])) {
+            // Match briefs ({slug}-YYYY-MM-DD.json), sheets, meetings, emails
+            const briefMatch = file.match(/^(.+?)-20\d{2}-\d{2}-\d{2}\.json$/)
+            if (briefMatch && removedSlugs.has(briefMatch[1])) {
               try { unlinkSync(resolve(CACHE_DIR, file)) } catch { /* already gone */ }
               console.log(`[wizard] purged cache file for removed AE customer: ${file}`)
+              continue
             }
+            const suffixMatch = file.match(/^(.+?)-(sheets|meetings|emails)\.json$/)
+            if (suffixMatch && removedSlugs.has(suffixMatch[1])) {
+              try { unlinkSync(resolve(CACHE_DIR, file)) } catch { /* already gone */ }
+              console.log(`[wizard] purged cache file for removed AE customer: ${file}`)
+              continue
+            }
+          }
+          // Purge product-intel/ subdirs for removed slugs
+          const productIntelDir = resolve(CACHE_DIR, 'product-intel')
+          if (existsSync(productIntelDir)) {
+            const walkAndPurge = (dir: string) => {
+              try {
+                for (const entry of readdirSync(dir, { withFileTypes: true })) {
+                  if (entry.isSymbolicLink()) continue
+                  const full = resolve(dir, entry.name)
+                  if (entry.isDirectory()) { walkAndPurge(full); continue }
+                  const lower = entry.name.toLowerCase()
+                  for (const slug of removedSlugs) {
+                    if (lower.startsWith(slug)) {
+                      try { unlinkSync(full) } catch { /* skip */ }
+                      console.log(`[wizard] purged product-intel file for removed AE customer: ${entry.name}`)
+                      break
+                    }
+                  }
+                }
+              } catch { /* skip */ }
+            }
+            walkAndPurge(productIntelDir)
+          }
+          // Purge industry-analysis/ for removed slugs
+          const industryDir = resolve(CACHE_DIR, 'industry-analysis')
+          if (existsSync(industryDir)) {
+            const walkAndPurge = (dir: string) => {
+              try {
+                for (const entry of readdirSync(dir, { withFileTypes: true })) {
+                  if (entry.isSymbolicLink()) continue
+                  const full = resolve(dir, entry.name)
+                  if (entry.isDirectory()) { walkAndPurge(full); continue }
+                  const lower = entry.name.toLowerCase()
+                  for (const slug of removedSlugs) {
+                    if (lower.startsWith(slug)) {
+                      try { unlinkSync(full) } catch { /* skip */ }
+                      console.log(`[wizard] purged industry-analysis file for removed AE customer: ${entry.name}`)
+                      break
+                    }
+                  }
+                }
+              } catch { /* skip */ }
+            }
+            walkAndPurge(industryDir)
           }
           // Morning synthesis is stale after AE removal
           try { unlinkSync(resolve(CACHE_DIR, 'morning-synthesis.json')) } catch { /* ok */ }

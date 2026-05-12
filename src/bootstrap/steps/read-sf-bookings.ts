@@ -59,7 +59,7 @@ export const readSfBookingsStep: BootstrapStepDef = {
       console.log(`[auto-bootstrap] Using SF bookings sheet ${podSheetId} for ${aeName} (territories: ${tableauTerritories.join(', ')})`)
 
       const rawSfData = await fetchSfBookingsRaw(podSheetId)
-      const existingCustomers = customers.filter(cx => cx.ae === aeName && !cx.inactive)
+      const existingCustomers = customers.filter(cx => cx.ae === aeName)
 
       // BKL-BOOTSTRAP-CUSTOMER-FOLDER-DEDUP-01: On a fresh install, existingCustomers is empty
       // because createCustomerFoldersStep intentionally does NOT write territory-sheet names into

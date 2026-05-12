@@ -1061,7 +1061,7 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
     try {
       await Promise.race([
         (async () => {
-          const aeCustomers = customers.filter(cx => !cx.inactive && cx.ae === aeName && !cx.domain)
+          const aeCustomers = customers.filter(cx => cx.ae === aeName && !cx.domain)
           if (aeCustomers.length === 0) return
           // BKL-DOMAIN-01: prefer legal entity name (aliases[0]) for inference
           const inferNames = aeCustomers.map(cu => cu.aliases?.[0] ?? cu.name)
@@ -1135,7 +1135,7 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
             lockState.customerWriteLock = lockState.customerWriteLock.then(async () => {
               let dirty = false
               for (const { name, domain, ae } of highConfidenceSaves) {
-                const cu = customers.find(cx => cx.name === name && cx.ae === ae && !cx.inactive)
+                const cu = customers.find(cx => cx.name === name && cx.ae === ae)
                 if (cu && !cu.domain) { cu.domain = domain; dirty = true }
                 // BKL-DOM-INF-13: clear flag once a domain resolves
                 if (cu && cu.needsManualDomain) { cu.needsManualDomain = false; dirty = true }
@@ -1152,7 +1152,7 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
               }
               // BKL-DOM-INF-13: flag customers with no domain after all tiers
               for (const name of unresolvedNames) {
-                const cu = customers.find(cx => cx.name === name && cx.ae === aeName && !cx.inactive)
+                const cu = customers.find(cx => cx.name === name && cx.ae === aeName)
                 if (cu && !cu.domain && !cu.needsManualDomain) { cu.needsManualDomain = true; dirty = true }
               }
               if (dirty) {
@@ -1193,13 +1193,13 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
     clearTimeout(bootstrapTimeoutId)
 
     // Record bootstrap history
-    const aeCustomerCount = customers.filter(cx => !cx.inactive && cx.ae === aeName).length
+    const aeCustomerCount = customers.filter(cx => cx.ae === aeName).length
     recordBootstrapRun({
       aeName,
       completedAt: autoBootstrapState.completedAt,
       success: !autoBootstrapState.error,
       customerCount: aeCustomerCount,
-      accountsFound: customers.filter(cx => !cx.inactive && cx.ae === aeName).length,
+      accountsFound: customers.filter(cx => cx.ae === aeName).length,
       durationMs: Date.now() - bootstrapStartMs,
       source: 'single',
     })

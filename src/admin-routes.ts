@@ -29,6 +29,7 @@ import { customers } from './server-state.ts'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 import { isPrimary } from './lib/node-role.ts'
 import { shouldShowUpdate } from './lib/version-utils.ts'
+import { runPurgeInactiveMigration } from './migrate-purge-inactive.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -189,6 +190,16 @@ export function createAdminRouter(): Hono {
       const res = await sheets.spreadsheets.get({ spreadsheetId: fileId, fields: 'sheets.properties.title' })
       const tabs = (res.data.sheets ?? []).map((s: any) => s.properties?.title ?? '')
       return c.json({ fileId, tabs })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // POST /api/admin/migrate/purge-inactive — ADR-018: one-time migration to purge inactive customers
+  r.post('/api/admin/migrate/purge-inactive', (c) => {
+    try {
+      const result = runPurgeInactiveMigration(CACHE_DIR)
+      return c.json(result)
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }

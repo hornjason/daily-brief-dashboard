@@ -133,7 +133,7 @@ export const populateDataSheetsStep: BootstrapStepDef = {
           const podSheetId = matchPodSheet(podSheets, tableauTerritories.length > 0 ? tableauTerritories : [cfg.podId])
           if (!podSheetId) return [['Account Name', 'AE', 'Region']]
           const rawSfData = await fetchSfBookingsRaw(podSheetId)
-          const existingCustomers = customers.filter(cx => cx.ae === cfg.aeName && !cx.inactive)
+          const existingCustomers = customers.filter(cx => cx.ae === cfg.aeName)
           const { results } = deriveSfCustomersByTerritory(
             rawSfData,
             tableauTerritories.length > 0 ? tableauTerritories : [cfg.podId],
