@@ -308,26 +308,18 @@ export function createCustomerRouter(): Hono {
       return out
     }
 
-    // BKL-CCSP-03: Check if AE set changed since cache was written — if so, treat as stale
-    const currentCcspSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
-    const cacheIsStale = isCCSPCacheStale(currentCcspSheetIds)
-    // Use cache if available, not forced, and not stale (data doesn't change hourly)
-    if (cached && !force && !cacheIsStale) {
+    // ADR-019: Use cached data if available. The refresh engine handles CSV discovery.
+    if (cached && !force && cached.records.length > 0) {
       return c.json(buildCCSPSummary(filterRecords(cached.records), cached.cachedAt, !!getScraperStatus('ccsp').lastError))
     }
     try {
-      const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
-      // Stale-overwrite guard: don't replace populated cache with empty results
-      // (empty usually means Tableau scraper wrote summary-view data without Account Name column)
-      // BKL-CCSP-03: bypass guard when cache is stale from AE change — 0 records is valid for new AE set
-      if (records.length === 0 && (cached?.records?.length ?? 0) > 0 && !cacheIsStale) {
-        console.warn(`[ccsp] force-refresh returned 0 records but cache has ${cached!.records.length} — keeping existing cache`)
-        return c.json(buildCCSPSummary(filterRecords(cached!.records), cached!.cachedAt, true))
-      }
-      writeCCSPCache(records, fileIds)
-      return c.json(buildCCSPSummary(filterRecords(records), new Date().toISOString(), false))
+      const { refreshCCSP } = await import('./refresh-engine.ts')
+      await refreshCCSP(force)
+      const fresh = readCCSPCache()
+      const records = fresh?.records ?? []
+      return c.json(buildCCSPSummary(filterRecords(records), fresh?.cachedAt ?? new Date().toISOString(), false))
     } catch (e: any) {
-      console.error('[ccsp] fetchCCSPData failed:', e.message)
+      console.error('[ccsp] refresh failed:', e.message)
       if (cached) return c.json(buildCCSPSummary(filterRecords(cached.records), cached.cachedAt, true))
       return c.json({ error: 'CCSP data fetch failed', byCustomer: [], byQuarter: [], byPartner: [], totalAcv: 0, cachedAt: null, sourceWarning: true }, 500)
     }
@@ -344,24 +336,18 @@ export function createCustomerRouter(): Hono {
       return out
     }
 
-    // BKL-HERO-PIPELINE-FILTER-03: Check if AE set changed since cache was written — if so, treat as stale
-    const currentPipelineSheetIds = aes.filter(a => a.pipelineSheetId).map(a => a.pipelineSheetId!)
-    const cacheIsStale = isPipelineCacheStale(currentPipelineSheetIds)
-    // Use cache if available, not forced, and not stale (mirror CCSP line 315)
-    if (cached && !force && !cacheIsStale) {
+    // ADR-019: Use cached data if available. The refresh engine handles CSV discovery
+    // and cache writes via refreshPipeline(). This endpoint just reads the cache.
+    if (cached && !force && cached.records.length > 0) {
       return c.json({ ...buildPipelineSummary(applyFilters(cached.records), cached.cachedAt), sourceWarning: !!getScraperStatus('sf-pipeline').lastError })
     }
-    // BKL-HERO-PIPELINE-L3-07: Hero install uses AE-sourced sheet IDs (currentPipelineSheetIds),
-    // not PIPELINE_FILE_ID env var. Only return $0 when BOTH are empty (no data sources configured).
-    if (!currentPipelineSheetIds.length && !process.env.PIPELINE_FILE_ID) {
-      return c.json({ totalAcv: 0, openCount: 0, renewalAcv: 0, newAcv: 0, byStage: [], byOwner: [], topOpps: [], cachedAt: null, sourceWarning: false })
-    }
+    // Force refresh or no cache: trigger refreshPipeline and re-read
     try {
-      // BKL-HERO-PIPELINE-L3-07: Pass currentPipelineSheetIds to fetchPipelineData so it reads
-      // from AE sheets instead of only using PIPELINE_FILE_ID env var (preserves backward compat).
-      const { records, fileIds } = await fetchPipelineData(currentPipelineSheetIds)
-      writePipelineCache(records, fileIds)
-      return c.json({ ...buildPipelineSummary(applyFilters(records), new Date().toISOString()), sourceWarning: false })
+      const { refreshPipeline } = await import('./refresh-engine.ts')
+      await refreshPipeline(force)
+      const fresh = readPipelineCache()
+      const records = fresh?.records ?? []
+      return c.json({ ...buildPipelineSummary(applyFilters(records), fresh?.cachedAt ?? new Date().toISOString()), sourceWarning: false })
     } catch (e: any) {
       if (cached) return c.json({ ...buildPipelineSummary(applyFilters(cached.records), cached.cachedAt), sourceWarning: true })
       return c.json({ error: sanitizeErr(e), totalAcv: 0, openCount: 0, renewalAcv: 0, newAcv: 0, byStage: [], byOwner: [], topOpps: [], cachedAt: null, sourceWarning: true }, 500)
@@ -483,9 +469,8 @@ export function createCustomerRouter(): Hono {
           }).filter(r => r.forecastCategory.toLowerCase() !== 'closed')
         : []
       const ccspCache = readCCSPCache()
-      // BKL-CCSP-03: don't feed stale CCSP data into brief generation
-      const ccspStale = isCCSPCacheStale(aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!))
-      const ccspRecords = (ccspCache && !ccspStale)
+      // ADR-019: cache freshness managed by refresh engine; trust cache if populated
+      const ccspRecords = ccspCache
         ? ccspCache.records.filter(r => {
             const hay = normalizeForQuery(r.accountName)
             return hay.length > 0 && (hay.includes(needle) || needle.includes(hay))
@@ -541,9 +526,8 @@ export function createCustomerRouter(): Hono {
   router.get('/customer/:name/ccsp', (c) => {
     const rawName = decodeURIComponent(c.req.param('name')).toLowerCase()
     const cached = readCCSPCache()
-    // BKL-CCSP-03: treat stale cache (AE set changed) as empty
-    const ccspSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
-    if (!cached || isCCSPCacheStale(ccspSheetIds)) return c.json({ totalAcv: 0, byQuarter: [], byPartner: [] })
+    // ADR-019: cache freshness managed by refresh engine
+    if (!cached) return c.json({ totalAcv: 0, byQuarter: [], byPartner: [] })
 
     // Fuzzy match: strip legal suffixes, check substring overlap
     const needle = normalizeForQuery(rawName)

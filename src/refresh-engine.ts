@@ -1,16 +1,23 @@
 import { readFileSync } from 'fs'
+import { resolve } from 'path'
 import { Hono } from 'hono'
+import { google } from 'googleapis'
 import type { Customer } from './types.ts'
 import { aes, customers } from './server-state.ts'
-import { readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache, isCCSPCacheStale } from './cache-layer.ts'
-import { fetchCustomerSheetData, fetchCCSPData, batchFetchSubscriptions } from './sheets.ts'
-import { fetchPipelineData } from './pipeline.ts'
+import { readSheetCache, writeSheetCache, readCCSPCache, writeCCSPCache, readPipelineCache, writePipelineCache } from './cache-layer.ts'
+import { fetchCustomerSheetData, batchFetchSubscriptions, parseCcspRows } from './sheets.ts'
+import type { CCSPRecord } from './sheets.ts'
+import { parsePipelineRows } from './pipeline.ts'
 import { checkFilesModified } from './drive-watcher.ts'
 import { recordSfSyncSuccess } from './sf-scraper.ts'
 import { recordOutcome } from './scraper-status-store.ts'
 import { recordCcspRefreshAt } from './ccsp-scraper.ts'
 import { recordSupportableRefreshAt } from './supportable-scraper.ts'
 import { emitCacheLevel } from './ingest-events.js'
+import { normalizeSettings } from './region-config.ts'
+import { parseCsvToSfReport } from './csv-parse.ts'
+import { discoverL3Csv, readL3CsvRaw } from './lib/l3-csv-reader.ts'
+import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 
 // ── Cache hierarchy constants (BKL-INGEST-10) ──────────────────────────────
 // L1 disk-cache TTL: if the local cache is younger than this, skip the L2
@@ -18,6 +25,19 @@ import { emitCacheLevel } from './ingest-events.js'
 //   L1 (disk) → L2 (Drive modifiedTime) → L3 (live fetch)
 // Each tier must be tried in order, cheapest first.
 const INGEST_L1_TTL_MS = 24 * 60 * 60 * 1000
+
+// ── Settings.json reader (ADR-019) ─────────────────────────────────────────
+const _metaDirRefresh: string | undefined = (import.meta as any).dir
+const CONFIG_DIR_REFRESH = process.env.CONFIG_DIR ?? resolve(_metaDirRefresh ?? process.cwd(), _metaDirRefresh ? '../config' : 'config')
+const SETTINGS_PATH_REFRESH = resolve(CONFIG_DIR_REFRESH, 'settings.json')
+
+function readSettingsJson(): Record<string, unknown> {
+  try {
+    return JSON.parse(readFileSync(SETTINGS_PATH_REFRESH, 'utf-8'))
+  } catch {
+    return {}
+  }
+}
 
 // ── Module state ────────────────────────────────────────────────────────────
 let SHEETS_SYNC_PATH = ''
@@ -104,21 +124,11 @@ export async function refreshAll(): Promise<{ sheets: number; ccsp: boolean; err
   const { refreshed: sheetsRefreshed, errors: sheetErrors } = await batchRefreshSubscriptions()
   errors.push(...sheetErrors)
 
-  // 2. CCSP
+  // 2. CCSP — ADR-019: delegate to refreshCCSP which uses CSV discovery
   let ccspOk = false
   try {
-    const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
-    // BKL-CCSP-03: check if AE set changed — if so, don't keep stale cache even if new fetch is empty
-    const aeSetChanged = isCCSPCacheStale(aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!))
-    if (records.length === 0 && (readCCSPCache()?.records?.length ?? 0) > 0 && !aeSetChanged) {
-      console.log(`[refresh:all] ccsp: got 0 records but cache has data — keeping existing cache`)
-      ccspOk = true
-    } else {
-      writeCCSPCache(records, fileIds)
-      recordOutcome('ccsp', { success: true, recordCount: records.length })
-      recordCcspRefreshAt()
-      ccspOk = true
-    }
+    await refreshCCSP(true)
+    ccspOk = true
   } catch (e: any) { errors.push(`ccsp: ${e.message}`) }
 
   console.log(`[refresh] sheets=${sheetsRefreshed}/${customers.length} ccsp=${ccspOk} errors=${errors.length}`)
@@ -170,48 +180,59 @@ export async function refreshSubscriptions(force = false): Promise<void> {
 
 export async function refreshCCSP(force = false): Promise<void> {
   try {
-    const currentSheetIds = aes.filter(a => a.ccspSheetId).map(a => a.ccspSheetId!)
-    let aeSetChanged = false
-    if (!force) {
-      // L1 cache check (BKL-INGEST-10) — if CCSP disk cache < 24h AND fileIds match,
-      // no Drive call needed. L1 must be consulted before any external call.
+    const cached = readCCSPCache()
+
+    // L1 cache check (BKL-INGEST-10)
+    if (!force && cached?.cachedAt) {
       const now = Date.now()
-      const l1Cached = readCCSPCache()
-      if (l1Cached?.cachedAt && (now - new Date(l1Cached.cachedAt).getTime()) < INGEST_L1_TTL_MS) {
-        const l1MatchesCurrent = l1Cached.fileIds?.length === currentSheetIds.length &&
-          currentSheetIds.every(id => l1Cached.fileIds!.includes(id))
-        if (l1MatchesCurrent) {
-          const ageHours = Math.round((now - new Date(l1Cached.cachedAt).getTime()) / 3_600_000 * 10) / 10
-          console.log(`[refresh:ccsp] L1 cache fresh (${ageHours}h old) — skipping Drive check`)
-          emitCacheLevel({ ae: null, flow: 'ccsp', level: 1 })
-          return
-        }
-      }
-      const cached = readCCSPCache()
-      // Mirror pipeline staleness check: if AE sheet IDs don't match cached fileIds, force refresh
-      const cachedMatchesCurrent = cached?.fileIds?.length &&
-        currentSheetIds.length === cached.fileIds.length &&
-        currentSheetIds.every(id => cached.fileIds!.includes(id))
-      aeSetChanged = !cachedMatchesCurrent
-      if (cachedMatchesCurrent && cached!.cachedAt) {
-        const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
-        if (!changed) { console.log(`[refresh:ccsp] skipped — source files unchanged`); return }
-      }
-      if (aeSetChanged) {
-        console.log(`[refresh:ccsp] AE set changed — forcing full refresh (BKL-CCSP-03)`)
+      if ((now - new Date(cached.cachedAt).getTime()) < INGEST_L1_TTL_MS) {
+        const ageHours = Math.round((now - new Date(cached.cachedAt).getTime()) / 3_600_000 * 10) / 10
+        console.log(`[refresh:ccsp] L1 cache fresh (${ageHours}h old) — skipping`)
+        emitCacheLevel({ ae: null, flow: 'ccsp', level: 1 })
+        return
       }
     }
-    const { records, fileIds } = await fetchCCSPData(aes.filter(a => a.ccspSheetId).map(a => ({ sheetId: a.ccspSheetId!, aeName: a.name })))
-    // Guard: don't overwrite populated cache with empty — quota failure returns [] silently
-    // BKL-CCSP-03: bypass guard when AE set changed — 0 records is valid for a new AE set
-    if (records.length === 0 && (readCCSPCache()?.records?.length ?? 0) > 0 && !aeSetChanged && !force) {
-      console.log(`[refresh:ccsp] got 0 records but cache has data — keeping existing cache`)
+
+    // ADR-019: CSV discovery from Drive (replaces sheet-based fetch)
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const driveApi = google.drive({ version: 'v3', auth })
+    const settings = readSettingsJson()
+    const normalized = normalizeSettings(settings)
+
+    const allRecords: CCSPRecord[] = []
+    const discoveredFileIds: string[] = []
+
+    for (const region of normalized.regions) {
+      const folderId = region.podBookingsFolderId
+      if (!folderId) continue
+      for (const podKey of Object.keys(region.pods ?? {})) {
+        const csv = await discoverL3Csv(folderId, 'CCSP-', podKey, driveApi)
+        if (!csv) { console.warn(`[refresh:ccsp] no CSV found for ${podKey}`); continue }
+
+        // Change detection: skip if CSV hasn't changed since last cache
+        if (!force && cached?.cachedAt && new Date(csv.modifiedTime) <= new Date(cached.cachedAt)) {
+          console.log(`[refresh:ccsp] ${podKey} CSV unchanged — skipping`)
+          continue
+        }
+
+        const csvText = await readL3CsvRaw(csv.fileId, driveApi)
+        const { headers, rows } = parseCsvToSfReport(csvText)
+        // parseCcspRows expects unknown[][] with headers as first row
+        allRecords.push(...parseCcspRows([headers, ...rows], csv.fileId))
+        discoveredFileIds.push(csv.fileId)
+      }
+    }
+
+    // Guard: don't overwrite with empty if we already have data (unless force)
+    if (allRecords.length === 0 && (cached?.records?.length ?? 0) > 0 && !force) {
+      console.log(`[refresh:ccsp] got 0 records but cache has data — keeping existing`)
       return
     }
-    writeCCSPCache(records, fileIds)
-    recordOutcome('ccsp', { success: true, recordCount: records.length })
+
+    writeCCSPCache(allRecords, discoveredFileIds)
+    recordOutcome('ccsp', { success: true, recordCount: allRecords.length })
     recordCcspRefreshAt()
-    console.log(`[refresh:ccsp] done`)
+    console.log(`[refresh:ccsp] done — ${allRecords.length} records from ${discoveredFileIds.length} CSVs`)
   } catch (e: any) {
     console.warn(`[refresh:ccsp] ${e.message}`)
   }
@@ -219,43 +240,66 @@ export async function refreshCCSP(force = false): Promise<void> {
 
 export async function refreshPipeline(force = false): Promise<void> {
   try {
-    const pipelineIds = aes.map(a => a.pipelineSheetId).filter((id): id is string => Boolean(id))
     const cached = readPipelineCache()
-    if (!force) {
-      // L1 cache check (BKL-INGEST-10) — if pipeline disk cache < 24h AND fileIds
-      // match, no Drive call needed. L1 must be consulted before any external call.
+
+    // L1 cache check (BKL-INGEST-10)
+    if (!force && cached?.cachedAt) {
       const now = Date.now()
-      if (cached?.cachedAt && (now - new Date(cached.cachedAt).getTime()) < INGEST_L1_TTL_MS) {
-        const l1MatchesCurrent = cached.fileIds?.length === pipelineIds.length &&
-          pipelineIds.every(id => cached.fileIds!.includes(id))
-        if (l1MatchesCurrent) {
-          const ageHours = Math.round((now - new Date(cached.cachedAt).getTime()) / 3_600_000 * 10) / 10
-          console.log(`[refresh:pipeline] L1 cache fresh (${ageHours}h old) — skipping Drive check`)
-          emitCacheLevel({ ae: null, flow: 'sfPipeline', level: 1 })
-          return
-        }
-      }
-      // Only use staleness check if cached fileIds exactly match current AE sheet IDs.
-      // If AEs were re-bootstrapped (new sheet IDs), cached.fileIds will differ — force refresh.
-      const cachedMatchesCurrent = cached?.fileIds?.length &&
-        pipelineIds.length === cached.fileIds.length &&
-        pipelineIds.every(id => cached.fileIds!.includes(id))
-      if (cachedMatchesCurrent && cached!.cachedAt) {
-        const changed = await checkFilesModified(cached!.fileIds!, cached!.cachedAt)
-        if (!changed) { console.log(`[refresh:pipeline] skipped — source files unchanged`); return }
+      if ((now - new Date(cached.cachedAt).getTime()) < INGEST_L1_TTL_MS) {
+        const ageHours = Math.round((now - new Date(cached.cachedAt).getTime()) / 3_600_000 * 10) / 10
+        console.log(`[refresh:pipeline] L1 cache fresh (${ageHours}h old) — skipping`)
+        emitCacheLevel({ ae: null, flow: 'sfPipeline', level: 1 })
+        return
       }
     }
-    const { records, fileIds } = await fetchPipelineData(pipelineIds.length ? pipelineIds : undefined)
-    // Guard: don't overwrite populated cache with empty — quota/network failure returns [] silently
-    if (records.length === 0 && (readPipelineCache()?.records?.length ?? 0) > 0) {
-      console.log(`[refresh:pipeline] got 0 records but cache has data — keeping existing cache`)
+
+    // ADR-019: CSV discovery from Drive (replaces sheet-based fetch)
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const driveApi = google.drive({ version: 'v3', auth })
+    const settings = readSettingsJson()
+    const normalized = normalizeSettings(settings)
+
+    const allRecords: import('./pipeline.ts').PipelineRecord[] = []
+    const discoveredFileIds: string[] = []
+
+    for (const region of normalized.regions) {
+      const folderId = region.podBookingsFolderId
+      if (!folderId) continue
+      for (const podKey of Object.keys(region.pods ?? {})) {
+        const csv = await discoverL3Csv(folderId, 'SF-PIPELINE-', podKey, driveApi)
+        if (!csv) { console.warn(`[refresh:pipeline] no CSV found for ${podKey}`); continue }
+
+        // Change detection: skip if CSV hasn't changed since last cache
+        if (!force && cached?.cachedAt && new Date(csv.modifiedTime) <= new Date(cached.cachedAt)) {
+          console.log(`[refresh:pipeline] ${podKey} CSV unchanged — skipping`)
+          continue
+        }
+
+        const csvText = await readL3CsvRaw(csv.fileId, driveApi)
+        const { headers, rows } = parseCsvToSfReport(csvText)
+        allRecords.push(...parsePipelineRows([headers, ...rows]))
+        discoveredFileIds.push(csv.fileId)
+      }
+    }
+
+    // Guard: don't overwrite with empty if we already have data (unless force)
+    if (allRecords.length === 0 && (cached?.records?.length ?? 0) > 0 && !force) {
+      console.log(`[refresh:pipeline] got 0 records but cache has data — keeping existing`)
       return
     }
-    writePipelineCache(records, fileIds)
-    recordOutcome('sf-pipeline', { success: true, recordCount: records.length })
-    // NOTE: recordSfSyncSuccess is intentionally NOT called here — this path only reads
-    // from Google Sheets, not from Salesforce. Only the actual SF browser scrape calls it.
-    console.log(`[refresh:pipeline] done`)
+
+    // Deduplicate by oppNumber (same logic as fetchPipelineData)
+    const seen = new Set<string>()
+    const deduped = allRecords.filter(r => {
+      const key = r.oppNumber || `${r.accountName}|${r.oppName}|${r.closeDate}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    writePipelineCache(deduped, discoveredFileIds)
+    recordOutcome('sf-pipeline', { success: true, recordCount: deduped.length })
+    console.log(`[refresh:pipeline] done — ${deduped.length} records from ${discoveredFileIds.length} CSVs`)
   } catch (e: any) {
     console.warn(`[refresh:pipeline] ${e.message}`)
   }
