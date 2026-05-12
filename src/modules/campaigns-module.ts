@@ -25,8 +25,25 @@ FeatureModuleRegistry.register({
   },
 
   async cleanup(customerName: string): Promise<void> {
-    // No-op: Phase 1 shell only
-    return Promise.resolve()
+    // Delete all campaign cache files for this customer
+    const { toSlug } = await import('../cache-layer')
+    const { readdirSync, unlinkSync, existsSync } = await import('fs')
+    const { resolve } = await import('path')
+
+    const slug = toSlug(customerName)
+    const campaignsDir = resolve(process.env.CACHE_DIR ?? 'cache', 'campaigns')
+
+    if (!existsSync(campaignsDir)) return
+
+    const files = readdirSync(campaignsDir).filter(f => f.startsWith(`${slug}-`) && f.endsWith('.json'))
+    for (const file of files) {
+      try {
+        unlinkSync(resolve(campaignsDir, file))
+        console.log(`[campaigns-module] Deleted ${file}`)
+      } catch (e: any) {
+        console.warn(`[campaigns-module] Failed to delete ${file}:`, e.message)
+      }
+    }
   },
 
   async syncNow(customerName: string): Promise<void> {

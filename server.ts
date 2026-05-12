@@ -59,6 +59,8 @@ import './src/modules/news-module.ts'
 import './src/modules/tools-module.ts'
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
+// ── GitHub #151: Campaign generation routes ──────────────────────────────
+import { createCampaignsRouter } from './src/campaigns-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -273,6 +275,8 @@ app.route('/', createAdminRouter())
 app.route('/', createFeatureModuleRouter())
 // ── GitHub #148: Tools artifact upload routes ──────────────────────────────
 app.route('/', createToolsRouter())
+// ── GitHub #151: Campaign generation routes ────────────────────────────────
+app.route('/', createCampaignsRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
