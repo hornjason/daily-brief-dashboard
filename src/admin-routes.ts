@@ -18,8 +18,8 @@
  * APP_VERSION computation moved from server.ts module scope into this module.
  */
 import { Hono } from 'hono'
-import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { readFileSync, readdirSync, unlinkSync, statSync } from 'fs'
+import { resolve, join } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { getTelemetrySummary, getTelemetryLog } from './scraper-manager.ts'
@@ -32,9 +32,11 @@ import { shouldShowUpdate } from './lib/version-utils.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
+let CACHE_DIR = ''
 
-export function initAdminRoutes(opts: { sheetsTokenPath: string }): void {
+export function initAdminRoutes(opts: { sheetsTokenPath: string; cacheDir: string }): void {
   SHEETS_TOKEN_PATH = opts.sheetsTokenPath
+  CACHE_DIR = opts.cacheDir
 }
 
 // ── Update check cache (24 hours) ────────────────────────────────────────────
@@ -190,6 +192,129 @@ export function createAdminRouter(): Hono {
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
+  })
+
+  // ── Cache management (issue #117) ──────────────────────────────────────────
+
+  const PROTECTED_FILES = new Set([
+    'cases.json', 'ccsp-data.json', 'pipeline-data.json',
+    'intelligence-jobs.json', 'morning-synthesis.json',
+  ])
+
+  const isProtected = (filename: string): boolean =>
+    PROTECTED_FILES.has(filename) ||
+    filename.endsWith('-sheets.json') ||
+    filename.startsWith('.') ||
+    filename.endsWith('.token') || filename.endsWith('.session')
+
+  const categorizeFile = (filename: string): string | null => {
+    if (isProtected(filename)) return null
+    if (filename.endsWith('-meetings.json')) return 'meetings'
+    if (filename.endsWith('-emails.json')) return 'emails'
+    if (/^.+-20\d{2}-\d{2}-\d{2}\.json$/.test(filename)) return 'briefs'
+    return null
+  }
+
+  const countFilesRecursive = (dir: string): { count: number; oldestAt: string | null; newestAt: string | null } => {
+    let count = 0
+    let oldestMs = Infinity
+    let newestMs = -Infinity
+    try {
+      const walk = (d: string) => {
+        for (const entry of readdirSync(d, { withFileTypes: true })) {
+          if (entry.isSymbolicLink()) continue
+          const full = join(d, entry.name)
+          if (entry.isDirectory()) { walk(full); continue }
+          if (!entry.name.endsWith('.json')) continue
+          count++
+          try {
+            const mt = statSync(full).mtimeMs
+            if (mt < oldestMs) oldestMs = mt
+            if (mt > newestMs) newestMs = mt
+          } catch { /* skip */ }
+        }
+      }
+      walk(dir)
+    } catch { /* dir may not exist */ }
+    return {
+      count,
+      oldestAt: count > 0 ? new Date(oldestMs).toISOString() : null,
+      newestAt: count > 0 ? new Date(newestMs).toISOString() : null,
+    }
+  }
+
+  r.get('/api/admin/cache/status', (c) => {
+    const cats: Record<string, { count: number; oldestAt: string | null; newestAt: string | null }> = {
+      briefs: { count: 0, oldestAt: null, newestAt: null },
+      meetings: { count: 0, oldestAt: null, newestAt: null },
+      emails: { count: 0, oldestAt: null, newestAt: null },
+      productIntel: { count: 0, oldestAt: null, newestAt: null },
+      industryAnalysis: { count: 0, oldestAt: null, newestAt: null },
+    }
+
+    try {
+      const files = readdirSync(CACHE_DIR)
+      for (const file of files) {
+        const cat = categorizeFile(file)
+        if (!cat) continue
+        try {
+          const mt = statSync(resolve(CACHE_DIR, file)).mtimeMs
+          const iso = new Date(mt).toISOString()
+          cats[cat].count++
+          if (!cats[cat].oldestAt || iso < cats[cat].oldestAt!) cats[cat].oldestAt = iso
+          if (!cats[cat].newestAt || iso > cats[cat].newestAt!) cats[cat].newestAt = iso
+        } catch { cats[cat].count++ }
+      }
+    } catch { /* CACHE_DIR may not exist */ }
+
+    cats.productIntel = countFilesRecursive(resolve(CACHE_DIR, 'product-intel'))
+    cats.industryAnalysis = countFilesRecursive(resolve(CACHE_DIR, 'industry-analysis'))
+
+    return c.json(cats)
+  })
+
+  r.post('/api/admin/cache/clear', async (c) => {
+    const body = await c.req.json<{ types?: string[] }>().catch(() => ({ types: [] as string[] }))
+    const types: string[] = body.types ?? []
+    const validTypes = new Set(['briefs', 'meetings', 'emails', 'productIntel', 'industryAnalysis', 'all'])
+    const requested = types.filter((t: string) => validTypes.has(t))
+    if (requested.length === 0) return c.json({ error: 'No valid types provided' }, 400)
+
+    const isAll = requested.includes('all')
+    const targetCats = isAll ? ['briefs', 'meetings', 'emails', 'productIntel', 'industryAnalysis'] : requested
+    let cleared = 0
+
+    if (targetCats.some((t: string) => ['briefs', 'meetings', 'emails'].includes(t))) {
+      try {
+        const files = readdirSync(CACHE_DIR)
+        for (const file of files) {
+          const cat = categorizeFile(file)
+          if (!cat || !targetCats.includes(cat)) continue
+          try { unlinkSync(resolve(CACHE_DIR, file)); cleared++ } catch { /* skip */ }
+        }
+      } catch { /* dir missing */ }
+    }
+
+    const clearDir = (subdir: string) => {
+      const dir = resolve(CACHE_DIR, subdir)
+      try {
+        const walk = (d: string) => {
+          for (const entry of readdirSync(d, { withFileTypes: true })) {
+            if (entry.isSymbolicLink()) continue
+            const full = join(d, entry.name)
+            if (!resolve(full).startsWith(resolve(dir))) continue
+            if (entry.isDirectory()) { walk(full); continue }
+            try { unlinkSync(full); cleared++ } catch { /* skip */ }
+          }
+        }
+        walk(dir)
+      } catch { /* dir missing */ }
+    }
+
+    if (targetCats.includes('productIntel')) clearDir('product-intel')
+    if (targetCats.includes('industryAnalysis')) clearDir('industry-analysis')
+
+    return c.json({ cleared, types: targetCats })
   })
 
   return r

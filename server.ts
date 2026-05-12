@@ -218,7 +218,7 @@ initAuthRoutes({
   sfSessionPath: SF_SESSION_PATH,
 })
 initAeRoutes({ cacheDir: CACHE_DIR, settingsPath: SETTINGS_PATH })
-initAdminRoutes({ sheetsTokenPath: SHEETS_TOKEN_PATH_SRV })
+initAdminRoutes({ sheetsTokenPath: SHEETS_TOKEN_PATH_SRV, cacheDir: CACHE_DIR })
 
 const app = new Hono()
 

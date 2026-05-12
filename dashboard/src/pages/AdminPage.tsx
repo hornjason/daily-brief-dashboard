@@ -847,6 +847,120 @@ function DomainInferenceSection() {
   )
 }
 
+// ── Issue #117: Cache Management ─────────────────────────────────────────────
+
+interface CacheCategory {
+  count: number
+  oldestAt: string | null
+  newestAt: string | null
+}
+
+type CacheStatus = Record<string, CacheCategory>
+
+const CACHE_LABELS: Record<string, string> = {
+  briefs: 'Customer Briefs',
+  meetings: 'Meeting Cache',
+  emails: 'Email Cache',
+  productIntel: 'Product Intelligence',
+  industryAnalysis: 'Industry Analysis',
+}
+
+function CacheManagementSection() {
+  const [status, setStatus] = useState<CacheStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [clearing, setClearing] = useState<string | null>(null)
+  const [result, setResult] = useState<{ ok: boolean; detail: string } | null>(null)
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/cache/status')
+      if (res.ok) setStatus(await res.json())
+    } catch { /* ignore */ }
+    finally { setLoading(false) }
+  }, [])
+
+  useEffect(() => { fetchStatus() }, [fetchStatus])
+
+  const handleClear = async (type: string) => {
+    setClearing(type)
+    setResult(null)
+    try {
+      const types = type === 'all' ? ['all'] : [type]
+      const res = await fetch('/api/admin/cache/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ types }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setResult({ ok: false, detail: d.error ?? `Failed (${res.status})` })
+        return
+      }
+      const d = await res.json()
+      setResult({ ok: true, detail: `Cleared ${d.cleared} file${d.cleared !== 1 ? 's' : ''}` })
+      await fetchStatus()
+    } catch {
+      setResult({ ok: false, detail: 'Network error — check server logs.' })
+    } finally {
+      setClearing(null)
+    }
+  }
+
+  const formatAge = (iso: string | null) => {
+    if (!iso) return '—'
+    return formatRelTime(iso)
+  }
+
+  if (loading) return null
+
+  return (
+    <div>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Cache Management</h2>
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+        {status && Object.entries(CACHE_LABELS).map(([key, label]) => {
+          const cat = status[key]
+          if (!cat) return null
+          return (
+            <div key={key} className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-200">{label}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {cat.count} file{cat.count !== 1 ? 's' : ''}
+                  {cat.oldestAt && <> · oldest {formatAge(cat.oldestAt)}</>}
+                  {cat.newestAt && <> · newest {formatAge(cat.newestAt)}</>}
+                </p>
+              </div>
+              <button
+                onClick={() => handleClear(key)}
+                disabled={clearing !== null || cat.count === 0}
+                className="bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 text-xs font-medium rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {clearing === key ? 'Clearing…' : 'Clear'}
+              </button>
+            </div>
+          )
+        })}
+
+        <div className="pt-2 border-t border-gray-700">
+          <button
+            onClick={() => handleClear('all')}
+            disabled={clearing !== null}
+            className="bg-red-700 hover:bg-red-600 text-white px-3 py-1.5 text-xs font-medium rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {clearing === 'all' ? 'Clearing…' : 'Clear All Caches'}
+          </button>
+        </div>
+
+        {result && (
+          <div className={`text-xs ${result.ok ? 'text-green-400' : 'text-red-400'} bg-gray-900/50 rounded px-3 py-2`}>
+            {result.detail}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ScrapeHistorySection() {
   const [history, setHistory] = useState<ScrapeLogEntry[]>([])
 
@@ -1366,6 +1480,9 @@ export function AdminPage() {
 
         {/* BKL-REG-03: Domain Inference */}
         <DomainInferenceSection />
+
+        {/* Issue #117: Cache Management */}
+        <CacheManagementSection />
 
         {/* BKL-M50e: Scrape History */}
         <ScrapeHistorySection />
