@@ -1,7 +1,8 @@
-name: Release Gate (Tier 2 E2E)
+name: Gate 4 — Release
 
-# Tier 2 — full E2E with real credentials against the live prod server.
-# Run before pushing a production image on major releases.
+# Gate 4 — comprehensive release validation. The only gate that runs the
+# full E2E suite, wizard E2E, and smoke tests. Validates everything before
+# a version is published to GHCR.
 # Triggered manually or on version tags.
 
 on:
@@ -59,12 +60,83 @@ jobs:
           BASE_URL: http://localhost:7777
           RELEASE_GATE: 'true'
 
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install --frozen-lockfile
+
+      - name: Build dashboard
+        run: cd dashboard && bun run build
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Seed wizard test data
+        run: |
+          mkdir -p config cache cache/intelligence
+          cp scripts/seed-data/aes.json config/aes.json
+          cp scripts/seed-data/customers.json config/customers.json
+          cp scripts/seed-data/settings.json config/settings.json
+          cp scripts/seed-data/product-intel-config.json config/product-intel-config.json
+          cp scripts/seed-data/data-sources.json config/data-sources.json
+          cp -r scripts/seed-data/cache/. cache/
+          TODAY=$(date +%Y-%m-%d)
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+          SED_INPLACE=(sed -i '')
+          for f in cache/*-2026-04-10.json; do
+            [ -f "$f" ] || continue
+            "${SED_INPLACE[@]}" "s/2026-04-10T00:00:00.000Z/$NOW/g" "$f"
+            mv "$f" "${f%-2026-04-10.json}-${TODAY}.json"
+          done
+          for f in cache/*.json cache/intelligence/*.json; do
+            [ -f "$f" ] && "${SED_INPLACE[@]}" "s/2026-04-10T00:00:00.000Z/$NOW/g" "$f"
+          done
+
+      - name: Start server on port 7778 for wizard E2E
+        run: |
+          PORT=7778 BASE_URL=http://localhost:7778 bun run server.ts &
+          SERVER_PID=$!
+          echo $SERVER_PID > /tmp/release-wizard-server.pid
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:7778/health > /dev/null 2>&1 && echo "Server ready after $i seconds" && break
+            sleep 1
+          done
+          curl -sf http://localhost:7778/health > /dev/null || (echo "Server failed to start" && exit 1)
+
+      - name: Run wizard E2E tests
+        env:
+          BASE_URL: 'http://localhost:7778'
+        run: CI=true bunx playwright test test/wizard-e2e.spec.ts --project=wizard-e2e --workers=1 --reporter=list
+
+      - name: Run smoke tests against production
+        run: CI=true bunx playwright test --project=smoke --reporter=list
+        env:
+          BASE_URL: http://localhost:7777
+
+      - name: Stop wizard server
+        if: always()
+        run: |
+          if [ -f /tmp/release-wizard-server.pid ]; then
+            kill $(cat /tmp/release-wizard-server.pid) 2>/dev/null || true
+            rm -f /tmp/release-wizard-server.pid
+          fi
+
+      # Placeholder: Hero install E2E (#111) — activate when hero-install-e2e.spec.ts ships
+      # - name: Hero install fresh-install flow
+      #   run: CI=true bunx playwright test test/hero-install-e2e.spec.ts --project=ci --reporter=list
+
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report-${{ github.sha }}
           path: playwright-report/
+          retention-days: 14
+
+      - name: Upload screenshots for visual review
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-screenshots-${{ github.sha }}
+          path: test-results/
           retention-days: 14
 
   publish-release:
