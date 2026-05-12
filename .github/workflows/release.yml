@@ -260,17 +260,43 @@ jobs:
             echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Generate changelog from private repo commits
+        id: changelog
+        run: |
+          # Find the previous tag to diff against
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "$(echo ${{ steps.version.outputs.tag }})" | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          echo "Generating changelog: $PREV_TAG → ${{ steps.version.outputs.tag }}"
+
+          # Group commits by conventional-commit prefix
+          FEATS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --grep="^feat" --extended-regexp | head -20)
+          FIXES=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --grep="^fix" --extended-regexp | head -20)
+          CHORES=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --grep="^chore\|^docs\|^refactor\|^ci" --extended-regexp | head -10)
+
+          BODY="## What's New in ${{ steps.version.outputs.tag }}"
+          [ -n "$FEATS" ] && BODY="${BODY}\n\n### Features\n${FEATS}"
+          [ -n "$FIXES" ] && BODY="${BODY}\n\n### Fixes\n${FIXES}"
+          [ -n "$CHORES" ] && BODY="${BODY}\n\n### Other\n${CHORES}"
+          BODY="${BODY}\n\n---\n*Install:* \`curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/download/setup.sh | bash\`"
+
+          # Write to file to preserve newlines in the API call
+          echo -e "$BODY" > /tmp/release-body.md
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release with assets on public repo
         env:
           DEPLOY_TOKEN: ${{ secrets.PUBLIC_REPO_DEPLOY_TOKEN }}
           VERSION: ${{ steps.version.outputs.tag }}
         run: |
-          # Create the release on the public repo
+          # Create the release on the public repo with generated changelog
+          BODY=$(cat /tmp/release-body.md)
           RELEASE=$(curl -sf -X POST \
             -H "Authorization: token $DEPLOY_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/hornjason/daily-brief-dashboard/releases \
-            -d "{\"tag_name\":\"$VERSION\",\"name\":\"$VERSION\",\"generate_release_notes\":true}")
+            -d "$(python3 -c "import json,sys; print(json.dumps({'tag_name':'$VERSION','name':'$VERSION','body':open('/tmp/release-body.md').read()}))")")
           UPLOAD_URL=$(echo "$RELEASE" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].split('{')[0])")
 
           # Upload assets
