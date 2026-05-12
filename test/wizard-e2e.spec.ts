@@ -107,25 +107,21 @@ test.describe('1. Step 1 of 4 — Google Auth', () => {
 })
 
 // ── Step 2: Connections (RH Token) ────────────────────────────────────────────
+// In L3 (hero) mode: HeroStep3Connections renders inline (no accordion).
+// In L4 (primary) mode: renders inside "Step 2 of 4 — Connections" accordion.
+// Seed data runs in L3 mode (NODE_ROLE unset), so tests check for inline component.
 
 test.describe('2. Step 2 of 4 — Connections', () => {
-  test('Connections accordion header visible', async ({ page }) => {
+  test('Red Hat Connection section visible on setup page', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
-    await expect(page.getByRole('button', { name: /Step 2 of 4 — Connections/ })).toBeVisible()
-  })
-
-  test('expanding Connections shows Red Hat Connection section', async ({ page }) => {
-    await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 2 of 4 — Connections/ }).click()
-    // Component shows "Red Hat Connection" in form/loading mode and "Red Hat Token Configured"
-    // in summary mode — match either testid to handle both states.
+    // L3 mode renders HeroStep3Connections inline; L4 wraps it in an accordion.
+    // Either way, the component should be present on the page.
     await expect(
       page.locator('[data-testid="hero-step3-connections"], [data-testid="hero-step3-summary"]').first()
     ).toBeVisible()
   })
 
   test('offline token shows summary when token is configured', async ({ page }) => {
-    // Mock offline token as configured
     await page.route('**/api/settings/offline-token', route =>
       route.fulfill({ contentType: 'application/json', body: JSON.stringify({ configured: true }) })
     )
@@ -136,8 +132,6 @@ test.describe('2. Step 2 of 4 — Connections', () => {
       }) })
     )
     await page.goto(`${BASE}/dashboard/setup`)
-    await page.getByRole('button', { name: /Step 2 of 4 — Connections/ }).click()
-    // When token is configured, HeroStep3Connections renders summary mode
     await expect(page.locator('[data-testid="hero-step3-summary"]')).toBeVisible()
   })
 })
@@ -244,13 +238,18 @@ test.describe('4. Regression guard — deprecated text absent from wizard', () =
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
     // Open all accordion sections so the full DOM is rendered
+    // Expand all visible accordion sections. In L3 (hero) mode, "Connections"
+    // renders inline without an accordion, so we skip if the button isn't found.
     for (const label of [
       /Step 1 of 4 — Google Auth/,
       /Step 2 of 4 — Connections/,
       /Step 3 of 4 — AEs & Customers/,
     ]) {
-      await page.getByRole('button', { name: label }).click()
-      await page.waitForTimeout(300)
+      const btn = page.getByRole('button', { name: label })
+      if (await btn.count() > 0) {
+        await btn.click()
+        await page.waitForTimeout(300)
+      }
     }
     const bodyText = await page.locator('body').textContent() ?? ''
     // Tableau references MUST NOT appear in the wizard UI (removed in issue #7)
@@ -264,13 +263,18 @@ test.describe('4. Regression guard — deprecated text absent from wizard', () =
   test('no "VNC" text in wizard DOM', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
+    // Expand all visible accordion sections. In L3 (hero) mode, "Connections"
+    // renders inline without an accordion, so we skip if the button isn't found.
     for (const label of [
       /Step 1 of 4 — Google Auth/,
       /Step 2 of 4 — Connections/,
       /Step 3 of 4 — AEs & Customers/,
     ]) {
-      await page.getByRole('button', { name: label }).click()
-      await page.waitForTimeout(300)
+      const btn = page.getByRole('button', { name: label })
+      if (await btn.count() > 0) {
+        await btn.click()
+        await page.waitForTimeout(300)
+      }
     }
     const innerText = await page.locator('body').innerText()
     const vncCount = (innerText.match(/\bVNC\b/g) ?? []).length
@@ -280,13 +284,18 @@ test.describe('4. Regression guard — deprecated text absent from wizard', () =
   test('no "7–15 minutes" or "7-15 minutes" time estimate in wizard DOM', async ({ page }) => {
     await page.goto(`${BASE}/dashboard/setup`)
     await page.waitForLoadState('networkidle')
+    // Expand all visible accordion sections. In L3 (hero) mode, "Connections"
+    // renders inline without an accordion, so we skip if the button isn't found.
     for (const label of [
       /Step 1 of 4 — Google Auth/,
       /Step 2 of 4 — Connections/,
       /Step 3 of 4 — AEs & Customers/,
     ]) {
-      await page.getByRole('button', { name: label }).click()
-      await page.waitForTimeout(300)
+      const btn = page.getByRole('button', { name: label })
+      if (await btn.count() > 0) {
+        await btn.click()
+        await page.waitForTimeout(300)
+      }
     }
     const innerText = await page.locator('body').innerText()
     const hasTimeEstimate =
