@@ -10177,3 +10177,9 @@ BKL-PROV-02 → #83 — Extract 'pre-rc8' magic string to constant
 BKL-PROV-03 → #84 — Optimize healer startup: batch disk writes + merge Phase 1/2 loops
 BKL-PROV-04 → #85 — Remove redundant re-import in healStaleAccountNumbers
 BKL-INSTALL-01 → #86 — Curl hero install overwrites data on upgrades
+BKL-CI-06 → #127 — PRD: CI gate overhaul Gate 1-4 (closed)
+BKL-CI-07 → #128 — Fix wizard E2E server startup on port 7778 (closed)
+BKL-CI-08 → #129 — Gate 1: Pre-push hook with unit+typecheck+hero purity (closed)
+BKL-CI-09 → #130 — Gate 2: Move Playwright ci project to PR trigger (closed)
+BKL-CI-10 → #131 — Gate 3: Nightly data assertion workflow + script (closed)
+BKL-CI-11 → #132 — Gate 4: Extend release workflow with full E2E + smoke (closed)
