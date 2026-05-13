@@ -13,6 +13,7 @@ import { Hono } from 'hono'
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
+import { Readable } from 'stream'
 import { getGeminiToken } from './gemini-auth.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
@@ -50,6 +51,7 @@ export interface CampaignResult {
   campaignId: string
   generatedAt: string
   driveUrl: string
+  htmlUrl: string
 }
 
 export interface CampaignListItem {
@@ -57,6 +59,7 @@ export interface CampaignListItem {
   materialTitle: string
   generatedAt: string
   driveUrl: string
+  htmlUrl: string
 }
 
 // ── Material extraction ──────────────────────────────────────────────────────
@@ -285,7 +288,7 @@ async function uploadCampaignToDrive(
   markdown: string,
   aeName: string,
   signals: CustomerSignals,
-): Promise<string> {
+): Promise<{ driveUrl: string; htmlUrl: string }> {
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
   const timestamp = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -307,7 +310,45 @@ async function uploadCampaignToDrive(
     markdown,
   })
 
-  return driveClient.upsertDoc(campaignsFolderId, docName, htmlContent, { onConflict: 'rewrite' })
+  const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+  const drive = google.drive({ version: 'v3', auth })
+
+  // File 1: Google Doc (formatted, editable) — HTML imported and converted
+  const docResponse = await drive.files.create({
+    requestBody: {
+      name: docName,
+      mimeType: 'application/vnd.google-apps.document',
+      parents: [campaignsFolderId],
+    },
+    media: {
+      mimeType: 'text/html',
+      body: Readable.from(Buffer.from(htmlContent)),
+    },
+    fields: 'id,webViewLink',
+    supportsAllDrives: true,
+  })
+
+  const driveUrl = docResponse.data.webViewLink ?? `https://docs.google.com/document/d/${docResponse.data.id}/edit`
+  console.log(`[campaigns] Created Google Doc: ${docName} → ${driveUrl}`)
+
+  // File 2: HTML file (raw, for browser preview in Drive)
+  const htmlResponse = await drive.files.create({
+    requestBody: {
+      name: `${docName}.html`,
+      parents: [campaignsFolderId],
+    },
+    media: {
+      mimeType: 'text/html',
+      body: Readable.from(Buffer.from(htmlContent)),
+    },
+    fields: 'id,webViewLink',
+    supportsAllDrives: true,
+  })
+
+  const htmlUrl = htmlResponse.data.webViewLink ?? `https://drive.google.com/file/d/${htmlResponse.data.id}/view`
+  console.log(`[campaigns] Created HTML file: ${docName}.html → ${htmlUrl}`)
+
+  return { driveUrl, htmlUrl }
 }
 
 // ── Cache persistence ────────────────────────────────────────────────────────
@@ -318,8 +359,10 @@ interface CampaignCacheEntry {
   materialUrl: string
   customerName: string
   markdown: string
+  htmlContent: string  // Added for preview endpoint
   generatedAt: string
   driveUrl: string
+  htmlUrl: string
 }
 
 function saveCampaignToCache(
@@ -349,6 +392,7 @@ function loadCampaignsFromCache(customerSlug: string): CampaignListItem[] {
         materialTitle: entry.materialTitle,
         generatedAt: entry.generatedAt,
         driveUrl: entry.driveUrl,
+        htmlUrl: entry.htmlUrl,
       })
     } catch (e: any) {
       console.warn(`[campaigns] Failed to read ${file}:`, e.message)
@@ -411,11 +455,30 @@ export async function generateCampaign(
   const generatedAt = new Date().toISOString()
   const campaignId = Date.now().toString()
 
-  // 5. Upload to Drive with HTML template
+  // 5. Generate HTML content (for Drive AND cache)
+  const timestamp = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const htmlContent = generateCampaignHTML({
+    materialTitle,
+    materialUrl,
+    customerName: customer.name,
+    aeName: customer.ae ?? 'Unknown AE',
+    generatedDate: timestamp,
+    signals,
+    markdown,
+  })
+
+  // 6. Upload to Drive (Google Doc + HTML file)
   let driveUrl = ''
+  let htmlUrl = ''
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
-    driveUrl = await uploadCampaignToDrive(
+    const driveResult = await uploadCampaignToDrive(
       customerFolderId,
       customer.name,
       materialTitle,
@@ -424,21 +487,25 @@ export async function generateCampaign(
       customer.ae ?? 'Unknown AE',
       signals
     )
+    driveUrl = driveResult.driveUrl
+    htmlUrl = driveResult.htmlUrl
     console.log(`[campaigns] Uploaded to Drive: ${driveUrl}`)
   } catch (e: any) {
     console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
     // Non-fatal — cached markdown is still available
   }
 
-  // 6. Save to cache
+  // 7. Save to cache (with HTML content for preview)
   saveCampaignToCache(slug, {
     id: campaignId,
     materialTitle,
     materialUrl,
     customerName: customer.name,
     markdown,
+    htmlContent,
     generatedAt,
     driveUrl,
+    htmlUrl,
   })
 
   return {
@@ -446,6 +513,7 @@ export async function generateCampaign(
     campaignId,
     generatedAt,
     driveUrl,
+    htmlUrl,
   }
 }
 
@@ -535,6 +603,34 @@ export function createCampaignsRouter(): Hono {
 
     const deleted = deleteMaterialCache(decodeURIComponent(materialUrl))
     return c.json({ ok: true, deleted })
+  })
+
+  // GET /api/customer/:name/campaigns/:id/preview — Preview campaign HTML
+  router.get('/api/customer/:name/campaigns/:id/preview', (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const campaignId = c.req.param('id')
+
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const campaignsDir = resolve(CACHE_DIR, 'campaigns')
+    const campaignPath = resolve(campaignsDir, `${slug}-${campaignId}.json`)
+
+    if (!existsSync(campaignPath)) {
+      return c.json({ error: 'Campaign not found' }, 404)
+    }
+
+    try {
+      const entry: CampaignCacheEntry = JSON.parse(readFileSync(campaignPath, 'utf-8'))
+      c.header('Content-Type', 'text/html')
+      return c.body(entry.htmlContent)
+    } catch (e: any) {
+      console.error(`[campaigns] Failed to read campaign ${campaignId}:`, e.message)
+      return c.json({ error: 'Failed to load campaign' }, 500)
+    }
   })
 
   return router

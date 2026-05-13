@@ -18,6 +18,7 @@ interface Campaign {
   materialTitle: string
   generatedAt: string
   driveUrl: string
+  htmlUrl: string
 }
 
 interface CampaignsResponse {
@@ -69,6 +70,7 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
           materialTitle: config.materialTitle || 'Campaign',
           generatedAt: data.generatedAt,
           driveUrl: data.driveUrl,
+          htmlUrl: data.htmlUrl,
         },
         ...prev,
       ])
@@ -123,15 +125,25 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
                       {formatRelTime(campaign.generatedAt)}
                     </p>
                   </div>
-                  <a
-                    href={campaign.driveUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 transition-colors"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Open in Drive
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`/api/customer/${encodeURIComponent(customerName)}/campaigns/${campaign.id}/preview`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-zinc-800/50 text-zinc-300 hover:bg-zinc-800 border border-zinc-700 transition-colors"
+                    >
+                      Preview
+                    </a>
+                    <a
+                      href={campaign.driveUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Open in Drive
+                    </a>
+                  </div>
                 </div>
               </div>
             ))}

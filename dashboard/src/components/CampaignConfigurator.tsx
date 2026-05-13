@@ -129,8 +129,17 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
         const customer = accountsData.customers?.find((c: any) => c.name.toLowerCase() === customerName.toLowerCase())
 
         if (customer?.ae) {
-          // Fetch voice profile
-          const voiceRes = await fetch(`/api/ae/${encodeURIComponent(customer.ae)}/style-guide`)
+          // Try cached voice first
+          let voiceRes = await fetch(`/api/ae/${encodeURIComponent(customer.ae)}/style-guide`)
+
+          // If no cached voice, auto-detect from emails
+          if (!voiceRes.ok) {
+            console.log('[CampaignConfigurator] No cached voice profile — auto-detecting...')
+            voiceRes = await fetch(`/api/ae/${encodeURIComponent(customer.ae)}/style-guide/detect`, {
+              method: 'POST',
+            })
+          }
+
           if (voiceRes.ok) {
             const profile: VoiceProfile = await voiceRes.json()
             setVoiceProfile(profile)
@@ -254,8 +263,10 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
       const customer = accountsData.customers?.find((c: any) => c.name.toLowerCase() === customerName.toLowerCase())
 
       if (customer?.ae) {
-        // Fetch voice profile
-        const voiceRes = await fetch(`/api/ae/${encodeURIComponent(customer.ae)}/style-guide`)
+        // Force fresh detection
+        const voiceRes = await fetch(`/api/ae/${encodeURIComponent(customer.ae)}/style-guide/detect`, {
+          method: 'POST',
+        })
         if (voiceRes.ok) {
           const profile: VoiceProfile = await voiceRes.json()
           setVoiceProfile(profile)
