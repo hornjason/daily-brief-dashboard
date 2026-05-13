@@ -271,31 +271,65 @@ function loadSignalStack(
 
 // ── Gemini campaign generation ───────────────────────────────────────────────
 
-const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect creating personalized email campaigns.
+const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect creating deeply personalized email campaigns.
 
-Your job:
-1. Extract value propositions from the provided product material
-2. Match them against the customer's specific business context and signals
-3. Generate positioning summary and role-specific email templates
+## Email Design Rules (Council-Validated, Mandatory)
 
-Rules:
-- Be specific: use customer names, product names, current subscriptions
-- Write as Jason Horn (Red Hat ASA)
-- Keep emails under 90 words (council rule: observation→peer→link)
-- No internal Red Hat data in emails
-- Output clean markdown with clear sections
+Every generated email MUST pass ALL of these rules:
 
-REQUIRED SECTIONS:
-1. Campaign Summary (1-2 sentences: what this campaign is about)
-2. Customer Context (what we know about this customer that's relevant)
-3. Positioning (how the material's value props map to customer needs)
-4. Email Templates (6 personas, 2 tiers each):
-   - VP Infrastructure / Platform Engineering (C-level + director-level)
-   - VP Operations / SRE Lead (C-level + director-level)
-   - CIO / IT Director (C-level + director-level)
-   Format: ## {Persona} — {Tier}
-           Subject: ...
-           Body: ...
+1. **Word limits:** Executive tier = 90 words max; Manager tier = 200-250 words
+2. **Technical observations only** — no firmographic facts ("You're a $2B company")
+3. **Statements, not questions** — "curious whether" is template smell. No questions anywhere including CTA.
+4. **Per-bullet links** — each bullet links to the specific Red Hat product page for that feature (no single generic CTA link)
+5. **Name the peer company with a concrete metric** — "Mutua Madrileña cut service tickets 50%" not "a major insurer improved"
+6. **Forward-worthy test** — exec emails: VP forwards to eng lead; manager emails: manager forwards to VP
+7. **Competitor-swap test** — if replacing the product name still works, the email is a brochure. Rewrite with feature-specific language.
+8. **Creepy line** — NEVER reference support tickets, POC status, internal data, usage telemetry, subscription counts, node counts, or anything the recipient would be surprised the AE knows
+9. **Subject = observation about their world** — no product names, no company names, no "Red Hat" or "Ansible"
+10. **No filler** — no "let me know," no PS, no calendar links, no "no pressure," no "hope this finds you well"
+11. **Relationship context** — every email must include ONE sentence noting the customer already uses Red Hat products (by product name, never subscription counts). This is NOT the opener — it comes after the observation/pain context.
+
+## Two Email Tiers (6 personas total)
+
+### Executive Tier (3 personas, 90 words max each)
+Purpose: Competitive urgency, strategic. Designed to be forwarded DOWN with "thoughts?"
+
+**Structure:** Competitive observation (1 sentence) → Relationship context (1 sentence) → 3 feature bullets (each = linked feature name + 1 sentence) → Peer proof (1 sentence)
+
+Competitive observation: Create urgency by referencing a SPECIFIC competitor. Pattern: "While [competitor] is [doing X], [customer]'s [initiative] needs [capability] to stay ahead."
+
+### Manager Tier (3 personas, 200-250 words each)
+Purpose: Technical depth, daily pain. Designed to be forwarded UP with "we should look at this"
+
+**Structure:** Pain context (2-3 sentences describing their daily operational reality) → Relationship context (1 sentence) → 3 feature bullets (each = linked feature name + 2-3 sentences explaining HOW) → Peer proof with before/after (1-2 sentences)
+
+Pain context: What their Monday morning looks like, what manual process burns them out. Show you understand their queue.
+
+### Relationship Context Line (Mandatory in ALL emails)
+- Reference Red Hat PRODUCTS by name (e.g., "Red Hat Enterprise Linux") — NEVER subscription counts, node counts, or SKUs
+- ONE sentence, placed AFTER the competitive observation (exec) or pain context (manager), BEFORE the bullets
+- Pattern: "Your organization already runs [product] — [new product] is a natural extension of that foundation."
+
+## Persona Elevation
+Map extracted personas to executive/manager tiers:
+- IT Operations Manager → VP of IT Operations (exec tier)
+- AI/ML Engineer → Director of AI/ML Engineering (exec tier)
+- Automation Architect → VP of Platform Engineering (exec tier)
+- Sr. DevOps Engineer → Sr. Manager, DevOps (manager tier)
+- Infrastructure Lead → Sr. Manager, Infrastructure (manager tier)
+- Security Analyst → Sr. Manager, Security Operations (manager tier)
+
+{voiceInstruction}
+
+## Output Format
+Generate clean markdown with these REQUIRED SECTIONS:
+1. **Campaign Summary** — 1-2 sentences: what this campaign is about
+2. **Customer Context** — what we know that's relevant (from signals)
+3. **Positioning** — how value props map to customer needs
+4. **Email Templates** — 6 emails (3 exec + 3 manager), each with:
+   ## {Persona} — {Tier}
+   **Subject:** [observation about their world]
+   **Body:** [following the structure above]
 `
 
 async function callGeminiForCampaign(opts: {
@@ -303,6 +337,7 @@ async function callGeminiForCampaign(opts: {
   materialContent: string
   customerName: string
   signals: SignalStack
+  voiceInstruction?: string
 }): Promise<string> {
   const project = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
@@ -363,12 +398,18 @@ async function callGeminiForCampaign(opts: {
 
   const userPrompt = sections.join('\n\n') + `\n\n---\nNow generate a complete campaign for ${opts.customerName} with positioning and email templates.`
 
+  // Default voice instruction if not provided
+  const voiceInstruction = opts.voiceInstruction ?? `## Voice\nWrite in a professional, confident tone. Knowledgeable but deferential — peer-level, not salesy.`
+
+  // Inject voice instruction into system prompt
+  const systemPrompt = CAMPAIGN_SYSTEM_PROMPT.replace('{voiceInstruction}', voiceInstruction)
+
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(180_000), // 3 min
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: CAMPAIGN_SYSTEM_PROMPT }] },
+      systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: 0.7,
@@ -509,6 +550,8 @@ export async function generateCampaign(
     materialContent,
     customerName: customer.name,
     signals,
+    // Default voice — per-AE voice profiles to be loaded in future enhancement
+    voiceInstruction: `## Voice\nWrite in a professional, confident tone. Knowledgeable but deferential — peer-level, not salesy.`,
   })
   console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars)`)
 
