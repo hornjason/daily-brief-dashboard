@@ -143,6 +143,17 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
                       <ExternalLink className="w-3.5 h-3.5" />
                       Open in Drive
                     </a>
+                    <button
+                      onClick={async () => {
+                        const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/campaigns/${campaign.id}`, { method: 'DELETE' })
+                        if (res.ok) {
+                          setCampaigns(prev => prev.filter(c => c.id !== campaign.id))
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg text-red-400 hover:bg-red-500/10 border border-red-500/20 transition-colors"
+                    >
+                      ✕
+                    </button>
                   </div>
                 </div>
               </div>

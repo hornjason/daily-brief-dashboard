@@ -710,6 +710,31 @@ export function createCampaignsRouter(): Hono {
     }
   })
 
+  // DELETE /api/customer/:name/campaigns/:id — remove a campaign from cache
+  router.delete('/api/customer/:name/campaigns/:id', (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const campaignId = c.req.param('id')
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find((cu) => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const campaignPath = resolve(CACHE_DIR, 'campaigns', `${slug}-${campaignId}.json`)
+
+    if (!existsSync(campaignPath)) {
+      return c.json({ error: 'Campaign not found' }, 404)
+    }
+
+    try {
+      const { unlinkSync } = require('fs')
+      unlinkSync(campaignPath)
+      console.log(`[campaigns] Deleted campaign ${campaignId} for ${customer.name}`)
+      return c.json({ ok: true, deleted: campaignId })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
   // ── AE Voice Profile routes (#183) ──────────────────────────────────────────
 
   router.get('/api/ae/:name/style-guide', async (c) => {

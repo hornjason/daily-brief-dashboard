@@ -56,11 +56,11 @@ function parseCampaignMarkdown(markdown: string): ParsedCampaign {
     emailTemplates: [],
   }
 
-  // Split markdown into sections by ## or # headers
-  const sectionBlocks = markdown.split(/\n(?=#{1,2}\s)/)
+  // Split markdown into sections by #, ##, or ### headers
+  const sectionBlocks = markdown.split(/\n(?=#{1,3}\s)/)
 
   for (const block of sectionBlocks) {
-    const headerMatch = block.match(/^#{1,2}\s+(.+)/)
+    const headerMatch = block.match(/^#{1,3}\s+(.+)/)
     if (!headerMatch) continue
 
     const header = headerMatch[1].trim()
@@ -73,9 +73,12 @@ function parseCampaignMarkdown(markdown: string): ParsedCampaign {
     } else if (/^positioning$/i.test(header)) {
       const items = content.split(/\n\n+/).filter(p => p.trim().length > 0)
       sections.positioning = items
-    } else if (/—|–|-/.test(header) && !/campaign|customer|positioning|email templates/i.test(header)) {
-      // This is an email template: "VP Infrastructure / Platform Engineering — C-level"
-      const tierMatch = header.match(/^(.+?)\s*[—–-]\s*(.+)$/)
+    } else if (/^email templates$/i.test(header)) {
+      // Parent header — emails are inside as ### sub-headers, handled by the split
+      continue
+    } else if (/—|–/.test(header) && !/campaign|customer|positioning|email templates/i.test(header)) {
+      // This is an email template: "Account Executive — Executive Tier"
+      const tierMatch = header.match(/^(.+?)\s*[—–]\s*(.+)$/)
       if (!tierMatch) continue
 
       const persona = tierMatch[1].trim()
