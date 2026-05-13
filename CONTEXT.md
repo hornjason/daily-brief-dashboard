@@ -207,6 +207,20 @@ _Avoid_: "notebook assignment", "notebook mapping"
 A hash-based diff process that compares files in the customer's Drive folder against the notebook's current sources. Adds/removes sources to keep them in sync. Runs on the heartbeat tick and on any action that writes to Drive. Manual Sync Now available.
 _Avoid_: "notebook push", "source sync", "notebook refresh"
 
+### Batch operations
+
+**Batch Operations page**:
+A top-level dashboard page (`/dashboard/batch`) for running feature module actions across multiple customers at once. Supports automated actions (campaigns, news refresh — sequential Gemini calls with progress tracking) and manual checklists (PitchBuilder, FinListics — tracked launch links with localStorage persistence).
+_Avoid_: "bulk operations", "mass actions", "admin batch"
+
+**Campaign configurator**:
+A shared UI component used on both the Campaigns tab (single customer) and the Batch Operations page (multiple customers). Extracts material content via Gemini, presents editable defaults (personas, style guide, value props), then feeds the confirmed configuration into campaign generation. Extraction results are cached by URL hash with a "Re-analyze" override.
+_Avoid_: "campaign wizard", "campaign builder", "campaign editor"
+
+**Material extraction cache**:
+Cached decomposition of a Google Doc/Slides URL into structured data (value props, personas, use cases). Keyed by URL hash at `data/cache/material-extractions/{urlHash}.json`. Avoids re-analyzing the same material on repeated campaign runs. Cleared manually via "Re-analyze" button.
+_Avoid_: "content cache", "extraction cache"
+
 ## Flagged ambiguities
 
 - "Shared Drive" (Google product name) vs. "L3 shared folder" (our concept): the L3 shared folder lives _in_ a Google Shared Drive, but the terms are not interchangeable. Use "L3 shared folder" for the concept, "Shared Drive" only when referring to the Google Drive product feature.
