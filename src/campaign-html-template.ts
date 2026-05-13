@@ -21,6 +21,7 @@ interface CampaignHTMLOptions {
     subscriptions?: any
     emails?: any
     cases?: any
+    accountPlan?: string
   }
   markdown: string
 }
@@ -232,36 +233,75 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
 function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
   initiatives: Array<{ name: string; priority: string; detail: string }>
   competitors: Array<{ name: string; threat: string; advantage: string }>
-  guardrails: { never: string[]; safe: string[] }
+  guardrails: { never: string[]; careful: string[]; safe: string[] }
 } {
   const result = {
     initiatives: [] as Array<{ name: string; priority: string; detail: string }>,
     competitors: [] as Array<{ name: string; threat: string; advantage: string }>,
-    guardrails: { never: [] as string[], safe: [] as string[] },
+    guardrails: { never: [] as string[], careful: [] as string[], safe: [] as string[] },
   }
 
   const intel = signals?.intelligence
-  if (!intel) return result
+  const companyText = typeof intel === 'string' ? intel : (intel?.company || '')
 
-  const companyText = typeof intel === 'string' ? intel : (intel.company || '')
-
-  // Extract competitor mentions
-  const competitorSection = companyText.match(/(?:competitive|competitor|competition)[^]*?(?=##|\z)/i)
+  // ── Extract competitors from ## Competitive Landscape section ──
+  const competitorSection = companyText.match(/## Competitive Landscape[\s\S]*?(?=\n## |$)/i)
   if (competitorSection) {
-    const competitorNames = competitorSection[0].match(/\*\*([^*]+)\*\*/g)
-    if (competitorNames) {
-      for (const match of competitorNames.slice(0, 4)) {
-        const name = match.replace(/\*\*/g, '').trim()
-        if (name.length > 2 && name.length < 40) {
-          result.competitors.push({ name, threat: '', advantage: '' })
+    // Match numbered competitors: 1. **F5, Inc.:** description
+    const competitorRegex = /\d+\.\s+\*\*([^*:]+?)(?::?\*\*):?\s*(.*?)(?=\n\s*\d+\.|\n\s*\d+\.|\n##|$)/gs
+    let match
+    while ((match = competitorRegex.exec(competitorSection[0])) !== null) {
+      const name = match[1].trim().replace(/[,.]$/, '')
+      const description = match[2].trim()
+      // Extract threat/advantage from description
+      const diffMatch = description.match(/differenti(?:ates?|ation)\s+(?:with|by|lies in|often lies in)\s+([^.]+)/i)
+      const threat = description.split('.')[0]?.trim() || ''
+      const advantage = diffMatch?.[1]?.trim() || ''
+      if (name.length > 1 && name.length < 50 && !name.includes('Competitive')) {
+        result.competitors.push({ name, threat, advantage })
+      }
+    }
+  }
+
+  // ── Extract strategic initiatives from account plan ──
+  const planText = signals?.accountPlan || ''
+  if (planText) {
+    // Look for strategic objectives in the account plan
+    const objectivesSection = planText.match(/Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
+      || planText.match(/Why Red Hat[\s\S]*?Strategic Objectives:[\s\S]*?(?=\n\s*\*\*Mapping|$)/i)
+    if (objectivesSection) {
+      const objectiveRegex = /\*\*([^*]+)\*\*:?\s*([^*\n]+)/g
+      let objMatch
+      while ((objMatch = objectiveRegex.exec(objectivesSection[0])) !== null) {
+        const name = objMatch[1].trim()
+        const detail = objMatch[2].trim()
+        if (name.length > 5 && name.length < 80 && !name.includes('Mapping') && !name.includes('Account')) {
+          result.initiatives.push({ name, priority: 'HIGH', detail })
+        }
+      }
+    }
+
+    // Look for risks to build guardrails
+    const risksSection = planText.match(/Account Plan Risks[\s\S]*?(?=\n## |$)/i)
+    if (risksSection) {
+      const riskItems = risksSection[0].match(/\*\*([^*]+)\*\*:?\s*([^*\n]+)/g)
+      if (riskItems) {
+        for (const item of riskItems.slice(0, 5)) {
+          const clean = item.replace(/\*\*/g, '').split(':')[0].trim()
+          if (clean.length > 3 && clean.length < 60) {
+            result.guardrails.careful.push(clean)
+          }
         }
       }
     }
   }
 
-  // Guardrails — always include standard ones
-  result.guardrails.never = ['Pipeline opportunities', 'Support cases', 'Subscription counts', 'Internal data']
-  result.guardrails.safe = ['Public earnings', 'Leadership changes', 'AI strategy', 'Competitor moves', 'Existing Red Hat relationship']
+  // Standard guardrails (always present)
+  result.guardrails.never = ['Pipeline opportunities', 'RHEL Private Offer', 'Support cases', 'Subscription counts', 'Layoff numbers']
+  if (result.guardrails.careful.length === 0) {
+    result.guardrails.careful = ['Leadership changes — frame around strategy, not departures']
+  }
+  result.guardrails.safe = ['Public earnings', 'CTO/CIO appointments', 'AI strategy', 'Competitor moves', 'Existing Red Hat relationship']
 
   return result
 }
@@ -319,6 +359,21 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
 ${parsed.customerContext ? `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Customer Context</h3>
 <p style="font-size: 15px; color: #5f6368; margin: 0 0 20px 0;">${escapeHTML(parsed.customerContext)}</p>` : ''}
 
+${structured.initiatives.length > 0 ? `
+<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🎯 Strategic Initiatives</h3>
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Initiative</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0; width: 80px; text-align: center;">Priority</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Detail</td>
+  </tr>
+  ${structured.initiatives.map(i => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHTML(i.name)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; text-align: center;"><span style="background: ${i.priority === 'HIGH' ? '#c5221f' : '#f9ab00'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${escapeHTML(i.priority)}</span></td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHTML(i.detail)}</td>
+  </tr>`).join('\n')}
+</table>` : ''}
+
 ${structured.competitors.length > 0 ? `
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
 <table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
@@ -336,6 +391,7 @@ ${structured.competitors.length > 0 ? `
 
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
 <p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHTML(g)).join(', ')}</p>
+${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHTML(g)).join(', ')}</p>` : ''}
 <p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHTML(g)).join(', ')}</p>
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">

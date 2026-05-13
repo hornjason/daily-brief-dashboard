@@ -26,6 +26,8 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer } from './types.ts'
 import { extractMaterial, deleteMaterialCache } from './material-extraction.ts'
 import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
+import { runIntelligencePipeline } from './account-intelligence.ts'
+import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import { generateCampaignHTML } from './campaign-html-template.ts'
 
@@ -110,6 +112,7 @@ interface CustomerSignals {
   productIntel?: any
   intelligence?: any
   customerDocs?: any
+  accountPlan?: string
   dailyBrief?: any
   subscriptions?: any
   emails?: any
@@ -205,6 +208,17 @@ function loadCustomerSignals(customerSlug: string, customerName?: string): Signa
       missing.push('productIntel')
     }
   } catch { missing.push('productIntel') }
+
+  // 8. Account plan (markdown)
+  try {
+    const planPath = resolve(CACHE_DIR, 'intelligence', `${customerSlug}-account-plan.md`)
+    if (existsSync(planPath)) {
+      signals.accountPlan = readFileSync(planPath, 'utf-8')
+      loaded.push('accountPlan')
+    } else {
+      missing.push('accountPlan')
+    }
+  } catch { missing.push('accountPlan') }
 
   console.log(`[campaigns] Signal stack for ${customerSlug}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}]`)
   return { signals, loaded, missing }
@@ -500,7 +514,32 @@ export async function generateCampaign(
   const { title: materialTitle, content: materialContent } = await extractMaterialContent(fileId)
   console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars)`)
 
-  // 2. Load all 7 customer signals
+  // 2. Pre-flight: ensure intelligence + account plan exist before loading signals
+  const intelPath = resolve(CACHE_DIR, 'intelligence', `${slug}.json`)
+  const planPath = resolve(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
+
+  if (!existsSync(intelPath)) {
+    console.log(`[campaigns] Intelligence brief missing for ${customer.name} — generating...`)
+    try {
+      await runIntelligencePipeline(customer.name, true)
+      console.log(`[campaigns] Intelligence brief generated for ${customer.name}`)
+    } catch (e: any) {
+      console.warn(`[campaigns] Intelligence generation failed for ${customer.name}:`, e?.message ?? e)
+    }
+  }
+
+  if (!existsSync(planPath)) {
+    console.log(`[campaigns] Account plan missing for ${customer.name} — generating...`)
+    try {
+      const configDir = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+      await generateAccountPlan(customer, CACHE_DIR, configDir)
+      console.log(`[campaigns] Account plan generated for ${customer.name}`)
+    } catch (e: any) {
+      console.warn(`[campaigns] Account plan generation failed for ${customer.name}:`, e?.message ?? e)
+    }
+  }
+
+  // 3. Load all 7 customer signals (now with intelligence + plan available)
   const { signals, loaded, missing } = loadCustomerSignals(slug, customer.name)
   console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}]`)
 
