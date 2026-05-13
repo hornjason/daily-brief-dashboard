@@ -9,7 +9,7 @@
  * - Confirm to generate campaign
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RefreshCw, AlertCircle, Plus, Trash2 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -20,6 +20,12 @@ export interface CampaignConfig {
   personas: Array<{ role: string; relevantVPs: string[]; enabled: boolean }>
   valueProps: Array<{ id: string; claim: string; detail: string }>
   style: string
+}
+
+interface VoiceProfile {
+  aeName: string
+  characteristics: string[]
+  promptInstruction: string
 }
 
 export interface CampaignConfiguratorProps {
@@ -49,6 +55,97 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
   const [personas, setPersonas] = useState<Array<{ role: string; relevantVPs: string[]; enabled: boolean }>>([])
   const [valueProps, setValueProps] = useState<Array<{ id: string; claim: string; detail: string }>>([])
   const [style, setStyle] = useState('')
+
+  // Voice profile state
+  const [voiceProfile, setVoiceProfile] = useState<VoiceProfile | null>(null)
+  const [voiceLoading, setVoiceLoading] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
+  // ── Build style text helper ────────────────────────────────────────────────
+
+  function buildStyleText(voice: VoiceProfile | null, advanced: boolean): string {
+    const lines: string[] = []
+
+    // Voice section (always shown)
+    if (voice) {
+      lines.push(`── AE Voice: ${voice.aeName} ──`)
+      voice.characteristics.forEach(c => lines.push(`• ${c}`))
+      lines.push('')
+    }
+
+    // Key rules (always shown)
+    lines.push('── Key Rules ──')
+    lines.push('• Executive emails: 90 words max | Manager emails: 200-250 words')
+    lines.push('• No filler phrases ("let me know", "hope this finds you well")')
+    lines.push('• Relationship context: ONE sentence about existing Red Hat products')
+    lines.push('')
+
+    if (advanced) {
+      // Full 11 rules
+      lines.push('── All Email Rules (Council-Validated) ──')
+      lines.push('1. Word limits: Executive = 90 words | Manager = 200-250 words')
+      lines.push('2. Technical observations only — no firmographic facts')
+      lines.push('3. Statements only — no questions anywhere including CTA')
+      lines.push('4. Per-bullet links to specific Red Hat product pages')
+      lines.push('5. Name a peer company with concrete metric')
+      lines.push('6. Forward-worthy: exec forwards down, manager forwards up')
+      lines.push('7. Competitor-swap test: swapping product name shouldn\'t work')
+      lines.push('8. Creepy line: never reference internal data')
+      lines.push('9. Subject = observation about their world (no product names)')
+      lines.push('10. No filler phrases')
+      lines.push('11. Relationship context line (mandatory, not the opener)')
+      lines.push('')
+
+      // Email structure
+      lines.push('── Email Structure ──')
+      lines.push('Executive: Competitive observation → Relationship → 3 bullets → Peer proof')
+      lines.push('Manager: Pain context → Relationship → 3 detailed bullets → Before/after proof')
+      lines.push('')
+
+      // Signal sources
+      lines.push('── Signal Sources ──')
+      lines.push('Intelligence brief, product intel, customer docs, daily brief, subscriptions, emails, cases')
+    }
+
+    return lines.join('\n')
+  }
+
+  // ── Fetch voice profile for customer's AE ──────────────────────────────────
+
+  useEffect(() => {
+    if (!customerName) return
+
+    const fetchAEVoice = async () => {
+      setVoiceLoading(true)
+      try {
+        // Fetch customer to get AE name
+        const accountsRes = await fetch('/api/accounts')
+        if (!accountsRes.ok) {
+          setVoiceLoading(false)
+          return
+        }
+
+        const accountsData = await accountsRes.json()
+        const customer = accountsData.customers?.find((c: any) => c.name.toLowerCase() === customerName.toLowerCase())
+
+        if (customer?.ae) {
+          // Fetch voice profile
+          const voiceRes = await fetch(`/api/ae/${encodeURIComponent(customer.ae)}/style-guide`)
+          if (voiceRes.ok) {
+            const profile: VoiceProfile = await voiceRes.json()
+            setVoiceProfile(profile)
+            // Pre-fill style with voice instruction
+            setStyle(buildStyleText(profile, false))
+          }
+        }
+      } catch (err) {
+        console.error('[CampaignConfigurator] Failed to fetch voice profile:', err)
+      }
+      setVoiceLoading(false)
+    }
+
+    fetchAEVoice()
+  }, [customerName])
 
   // ── Material extraction ────────────────────────────────────────────────────
 
@@ -137,6 +234,39 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
 
   function removePersona(index: number) {
     setPersonas(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // ── Voice re-detection ─────────────────────────────────────────────────────
+
+  async function handleRedetectVoice() {
+    if (!customerName) return
+
+    setVoiceLoading(true)
+    try {
+      // Fetch customer to get AE name
+      const accountsRes = await fetch('/api/accounts')
+      if (!accountsRes.ok) {
+        setVoiceLoading(false)
+        return
+      }
+
+      const accountsData = await accountsRes.json()
+      const customer = accountsData.customers?.find((c: any) => c.name.toLowerCase() === customerName.toLowerCase())
+
+      if (customer?.ae) {
+        // Fetch voice profile
+        const voiceRes = await fetch(`/api/ae/${encodeURIComponent(customer.ae)}/style-guide`)
+        if (voiceRes.ok) {
+          const profile: VoiceProfile = await voiceRes.json()
+          setVoiceProfile(profile)
+          // Update style with current advanced state
+          setStyle(buildStyleText(profile, showAdvanced))
+        }
+      }
+    } catch (err) {
+      console.error('[CampaignConfigurator] Failed to re-detect voice profile:', err)
+    }
+    setVoiceLoading(false)
   }
 
   // ── Validation ─────────────────────────────────────────────────────────────
@@ -276,13 +406,40 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
 
       {/* Style */}
       <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
-        <h3 className="text-sm font-semibold text-text-primary">Style Guide</h3>
-        <textarea
-          value={style}
-          onChange={e => setStyle(e.target.value)}
-          rows={6}
-          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-none"
-        />
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-text-primary">Style Guide</h3>
+          <div className="flex items-center gap-3">
+            {voiceProfile && (
+              <button
+                onClick={handleRedetectVoice}
+                disabled={voiceLoading}
+                className="text-xs text-accent hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Re-detect Voice
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setShowAdvanced(!showAdvanced)
+                setStyle(buildStyleText(voiceProfile, !showAdvanced))
+              }}
+              className="text-xs text-text-secondary hover:text-text-primary transition-colors"
+            >
+              {showAdvanced ? '▼ Hide Advanced' : '▶ Show Advanced'}
+            </button>
+          </div>
+        </div>
+
+        {voiceLoading ? (
+          <div className="text-sm text-text-secondary">Detecting AE voice...</div>
+        ) : (
+          <textarea
+            value={style}
+            onChange={e => setStyle(e.target.value)}
+            rows={showAdvanced ? 20 : 8}
+            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 resize-y font-mono"
+          />
+        )}
       </div>
 
       {/* Value props (read-only) */}
