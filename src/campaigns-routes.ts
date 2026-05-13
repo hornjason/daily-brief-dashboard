@@ -25,7 +25,7 @@ import { sanitizeErr } from './utils.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer } from './types.ts'
 import { extractMaterial, deleteMaterialCache } from './material-extraction.ts'
-import { getVoiceProfile } from './ae-voice.ts'
+import { getVoiceProfile, detectVoiceProfile } from './ae-voice.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import { generateCampaignHTML } from './campaign-html-template.ts'
 
@@ -630,6 +630,29 @@ export function createCampaignsRouter(): Hono {
     } catch (e: any) {
       console.error(`[campaigns] Failed to read campaign ${campaignId}:`, e.message)
       return c.json({ error: 'Failed to load campaign' }, 500)
+    }
+  })
+
+  // ── AE Voice Profile routes (#183) ──────────────────────────────────────────
+
+  router.get('/api/ae/:name/style-guide', async (c) => {
+    const aeName = decodeURIComponent(c.req.param('name'))
+    try {
+      const profile = await getVoiceProfile(aeName)
+      if (!profile) return c.json({ error: 'No voice profile found' }, 404)
+      return c.json(profile)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  router.post('/api/ae/:name/style-guide/detect', async (c) => {
+    const aeName = decodeURIComponent(c.req.param('name'))
+    try {
+      const profile = await detectVoiceProfile(aeName)
+      return c.json(profile)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 
