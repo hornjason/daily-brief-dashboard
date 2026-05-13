@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-03
+updated: 2026-05-13
 ---
 
 # DailyBriefDashboard — Project Map
@@ -218,6 +218,9 @@ All schedule times configurable via Admin page. Floors enforced server-side.
 
 | Target | Description |
 |--------|-------------|
+| `make doctor` | Environment health check — validates podman, config files, .env, image, container, API |
+| `make backup-config` | Snapshot config files to `backups/config-backup-YYYYMMDD.tar.gz` for migration |
+| `make restore-config FILE=...` | Restore config from backup tarball |
 | `make seed` | Resets `data-test/` from canonical fixture source in `scripts/seed-data/` (2 AEs, 5 fake customers) |
 | `make test-up` | Starts `pai-dashboard-test` container on port 7776 with `ALLOW_RESET=true` |
 | `make test-down` | Stops and removes `pai-dashboard-test` container |

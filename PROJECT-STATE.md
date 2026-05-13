@@ -2,16 +2,16 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-07
+updated: 2026-05-13
 ---
 
 # DailyBriefDashboard — Project State
-*Last validated: 2026-05-07 | Owner: DA | Trigger: Review and update on any structural change to this doc*
+*Last validated: 2026-05-13 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-07 (BKL-CCSP-HEADERS-01 DONE) — Pattern-based CCSP column detection prevents Tableau format drift. Samples first 10 rows, detects columns by content patterns (SF ID regex, decimal ACV, quarter format), overrides misaligned headers. 97 CCSP records now parse correctly from sheets that previously returned 0. See ADR-017.
+Last updated: 2026-05-13 — Infrastructure hardening: `make up` pre-flight guard, `make doctor` environment validation, `make backup-config`/`restore-config` for portable migration, nightly workflow container health check, `docs/NEW-MACHINE-SETUP.md` runbook. Mac Mini Gate 3 fixed (config restored, container restarted).
 
 ---
 
@@ -130,11 +130,11 @@ Last updated: 2026-05-07 (BKL-CCSP-HEADERS-01 DONE) — Pattern-based CCSP colum
 
 | File | Contents | Backed up? | If lost |
 |------|----------|------------|---------|
-| `aes.json` | AEs: name, folder IDs, sheet IDs, territories | ❌ No automated backup | Reconstruct from bootstrap |
+| `aes.json` | AEs: name, folder IDs, sheet IDs, territories | ✅ `make backup-config` + Drive auto-sync | `make restore-config FILE=...` or reconstruct from bootstrap |
 | `customers.json` | Customers: name, ae, accountNumbers, aliases, ccspCustomer flag | ⚠️ `POST /api/admin/restore` rebuilds from GSheets | 1-2h via restore endpoint |
-| `data-sources.json` | Parent folder IDs, refresh intervals, scheduler times | ❌ No | Re-enter via Setup Wizard |
-| `settings.json` | `podBookingsFolderId` — shared Drive folder containing NW/SW SF bookings sheets | ❌ No | Re-enter folder ID (1 field) |
-| `product-intel-config.json` | 7-product metadata: slugs, Drive folders, URLs | ❌ No | Re-enter via Admin page |
+| `data-sources.json` | Parent folder IDs, refresh intervals, scheduler times | ✅ `make backup-config` + Drive auto-sync | `make restore-config` or re-enter via Setup Wizard |
+| `settings.json` | `podBookingsFolderId` — shared Drive folder containing NW/SW SF bookings sheets | ✅ `make backup-config` | `make restore-config` or re-enter folder ID (1 field) |
+| `product-intel-config.json` | 7-product metadata: slugs, Drive folders, URLs | ✅ `make backup-config` | `make restore-config` or re-enter via Admin page |
 | `product-alerts.json` | Change detection flags per product | ❌ No | Regenerated on next refresh |
 | `.google-token.json` | Google OAuth (Drive, Sheets, Gmail, Calendar) | ❌ No — **preserve on resets** | Re-authenticate (5 min) |
 | `.rh-session.json` | RH Portal session cookie | ❌ No | Re-login via Admin page |

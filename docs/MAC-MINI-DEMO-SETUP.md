@@ -2,7 +2,7 @@
 doc-type: runbook
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-13
 ---
 
 # Mac Mini Demo Environment — Setup Guide

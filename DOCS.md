@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-13
 ---
 
 # DailyBriefDashboard — Documentation Index
@@ -20,6 +20,9 @@ updated: 2026-05-05
 | Operate the L3 sync daemon (start, stop, status) | `ARCHITECTURE.md §3a` |
 | Re-auth after Tableau or SF session expires | `docs/SYNC-DAEMON-SSO-PLAYBOOK.md` |
 | Set up or diagnose the Mac Mini | `docs/MAC-MINI-DEMO-SETUP.md` |
+| Set up a fresh machine from scratch | `docs/NEW-MACHINE-SETUP.md` |
+| Back up or restore config for migration | `docs/NEW-MACHINE-SETUP.md §5` + `make backup-config` / `make restore-config` |
+| Validate environment health | `make doctor` |
 | Add a new AE to the dashboard | `docs/ADDING-NEW-AE.md` |
 | Check what's open, broken, or in progress | `BACKLOG.md` + [GitHub Issues](https://github.com/hornjason/asaCommandCenter/issues) |
 | Build a new feature using the skill pipeline | `CONTRIBUTING.md §Skill-driven development workflow` |
@@ -51,6 +54,7 @@ Docs with `status: active` that are maintained and indexed here. All others are 
 | `docs/HERO-INSTALL.md` | architecture | L3-only install design, NODE_ROLE, sync daemon spec |
 | `docs/SYNC-DAEMON-SSO-PLAYBOOK.md` | runbook | SSO re-auth step-by-step |
 | `docs/MAC-MINI-DEMO-SETUP.md` | runbook | Mac Mini setup, tunnels, LaunchAgents, CI runner |
+| `docs/NEW-MACHINE-SETUP.md` | runbook | Fresh machine setup, config backup/restore, make doctor |
 | `docs/ADDING-NEW-AE.md` | runbook | Full AE onboarding flow |
 | `docs/ENVIRONMENTS.md` | reference | Port map, test/prod/demo/dev containers |
 | `docs/TESTING-RUNBOOK.md` | reference | Test suite, Playwright, state isolation |
