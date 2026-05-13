@@ -44,6 +44,8 @@ export interface CampaignResult {
   campaignId: string
   generatedAt: string
   driveUrl: string
+  signalsLoaded?: string[]
+  signalsMissing?: string[]
 }
 
 export interface CampaignListItem {
@@ -95,53 +97,176 @@ async function extractMaterialContent(fileId: string): Promise<{ title: string; 
 
 // ── Customer intelligence loading ────────────────────────────────────────────
 
-interface CustomerSignals {
-  intelligence?: any
-  emails?: any
-  subscriptions?: any
+interface SignalStack {
+  productIntel: any | null
+  intelligence: any | null
+  customerDocs: any | null
+  dailyBrief: any | null
+  subscriptions: any | null
+  emails: any | null
+  cases: any | null
+}
+
+interface SignalLoadResult {
+  signals: SignalStack
+  loaded: string[]
+  missing: string[]
 }
 
 /**
- * Load customer signal stack from cache (simplified Phase 3 version).
- * Loads:
- * - intelligence brief (data/cache/intelligence/{slug}.json)
- * - emails (data/cache/{slug}-emails.json)
- * - subscriptions (data/cache/{slug}-sheets.json)
+ * Load all 7 signal sources from cache with graceful degradation.
+ * Follows ContentCampaign/SKILL.md Step 4 priority order.
+ *
+ * @param customerName - Full customer name (for cases matching)
+ * @param customerSlug - Slug for file path construction
+ * @param productSlugs - Optional product slugs from material extraction
  */
-function loadCustomerSignals(customerSlug: string): CustomerSignals {
-  const signals: CustomerSignals = {}
+function loadSignalStack(
+  customerName: string,
+  customerSlug: string,
+  productSlugs?: string[]
+): SignalLoadResult {
+  const signals: SignalStack = {
+    productIntel: null,
+    intelligence: null,
+    customerDocs: null,
+    dailyBrief: null,
+    subscriptions: null,
+    emails: null,
+    cases: null,
+  }
+  const loaded: string[] = []
+  const missing: string[] = []
 
-  // Intelligence brief
-  try {
-    const intelPath = resolve(CACHE_DIR, 'intelligence', `${customerSlug}.json`)
-    if (existsSync(intelPath)) {
-      signals.intelligence = JSON.parse(readFileSync(intelPath, 'utf-8'))
+  // 1. Product Intel (only if productSlugs provided)
+  if (productSlugs && productSlugs.length > 0) {
+    for (const productSlug of productSlugs) {
+      try {
+        const path = resolve(CACHE_DIR, 'product-intel', `${productSlug}-customer-intel`, `${customerSlug}.json`)
+        if (existsSync(path)) {
+          signals.productIntel = JSON.parse(readFileSync(path, 'utf-8'))
+          loaded.push('productIntel')
+          break // Only need one match
+        }
+      } catch (e: any) {
+        console.warn(`[campaigns] Failed to load product intel ${productSlug}:`, e.message)
+      }
     }
-  } catch (e: any) {
-    console.warn(`[campaigns] Failed to load intelligence for ${customerSlug}:`, e.message)
+    if (!signals.productIntel) missing.push('productIntel')
   }
 
-  // Emails
+  // 2. Intelligence Brief
   try {
-    const emailsPath = resolve(CACHE_DIR, `${customerSlug}-emails.json`)
-    if (existsSync(emailsPath)) {
-      signals.emails = JSON.parse(readFileSync(emailsPath, 'utf-8'))
+    const path = resolve(CACHE_DIR, 'intelligence', `${customerSlug}.json`)
+    if (existsSync(path)) {
+      signals.intelligence = JSON.parse(readFileSync(path, 'utf-8'))
+      loaded.push('intelligence')
+    } else {
+      missing.push('intelligence')
     }
   } catch (e: any) {
-    console.warn(`[campaigns] Failed to load emails for ${customerSlug}:`, e.message)
+    console.warn(`[campaigns] Failed to load intelligence:`, e.message)
+    missing.push('intelligence')
   }
 
-  // Subscriptions
+  // 3. Customer Docs
   try {
-    const subsPath = resolve(CACHE_DIR, `${customerSlug}-sheets.json`)
-    if (existsSync(subsPath)) {
-      signals.subscriptions = JSON.parse(readFileSync(subsPath, 'utf-8'))
+    const path = resolve(CACHE_DIR, 'product-intel', 'customer-docs', `${customerSlug}.json`)
+    if (existsSync(path)) {
+      signals.customerDocs = JSON.parse(readFileSync(path, 'utf-8'))
+      loaded.push('customerDocs')
+    } else {
+      missing.push('customerDocs')
     }
   } catch (e: any) {
-    console.warn(`[campaigns] Failed to load subscriptions for ${customerSlug}:`, e.message)
+    console.warn(`[campaigns] Failed to load customer docs:`, e.message)
+    missing.push('customerDocs')
   }
 
-  return signals
+  // 4. Daily Brief (today's date, fall back to most recent)
+  try {
+    const today = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+    const todayPath = resolve(CACHE_DIR, `${customerSlug}-${today}.json`)
+
+    if (existsSync(todayPath)) {
+      signals.dailyBrief = JSON.parse(readFileSync(todayPath, 'utf-8'))
+      loaded.push('dailyBrief')
+    } else {
+      // Scan for most recent brief
+      const files = readdirSync(CACHE_DIR).filter(f =>
+        f.startsWith(`${customerSlug}-`) &&
+        f.endsWith('.json') &&
+        /\d{4}-\d{2}-\d{2}\.json$/.test(f)
+      )
+
+      if (files.length > 0) {
+        files.sort().reverse() // Most recent first
+        const mostRecentPath = resolve(CACHE_DIR, files[0])
+        signals.dailyBrief = JSON.parse(readFileSync(mostRecentPath, 'utf-8'))
+        loaded.push('dailyBrief')
+      } else {
+        missing.push('dailyBrief')
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[campaigns] Failed to load daily brief:`, e.message)
+    missing.push('dailyBrief')
+  }
+
+  // 5. Subscriptions
+  try {
+    const path = resolve(CACHE_DIR, `${customerSlug}-sheets.json`)
+    if (existsSync(path)) {
+      signals.subscriptions = JSON.parse(readFileSync(path, 'utf-8'))
+      loaded.push('subscriptions')
+    } else {
+      missing.push('subscriptions')
+    }
+  } catch (e: any) {
+    console.warn(`[campaigns] Failed to load subscriptions:`, e.message)
+    missing.push('subscriptions')
+  }
+
+  // 6. Emails
+  try {
+    const path = resolve(CACHE_DIR, `${customerSlug}-emails.json`)
+    if (existsSync(path)) {
+      signals.emails = JSON.parse(readFileSync(path, 'utf-8'))
+      loaded.push('emails')
+    } else {
+      missing.push('emails')
+    }
+  } catch (e: any) {
+    console.warn(`[campaigns] Failed to load emails:`, e.message)
+    missing.push('emails')
+  }
+
+  // 7. Cases (filter by customer name)
+  try {
+    const path = resolve(CACHE_DIR, 'cases.json')
+    if (existsSync(path)) {
+      const allCases = JSON.parse(readFileSync(path, 'utf-8'))
+      // Filter cases matching this customer
+      signals.cases = Array.isArray(allCases)
+        ? allCases.filter((c: any) =>
+            c.accountName?.toLowerCase().includes(customerName.toLowerCase())
+          )
+        : []
+
+      if (signals.cases.length > 0) {
+        loaded.push('cases')
+      } else {
+        missing.push('cases')
+      }
+    } else {
+      missing.push('cases')
+    }
+  } catch (e: any) {
+    console.warn(`[campaigns] Failed to load cases:`, e.message)
+    missing.push('cases')
+  }
+
+  return { signals, loaded, missing }
 }
 
 // ── Gemini campaign generation ───────────────────────────────────────────────
@@ -177,7 +302,7 @@ async function callGeminiForCampaign(opts: {
   materialTitle: string
   materialContent: string
   customerName: string
-  customerSignals: CustomerSignals
+  signals: SignalStack
 }): Promise<string> {
   const project = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
@@ -187,30 +312,56 @@ async function callGeminiForCampaign(opts: {
   const token = await getGeminiToken()
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
 
-  // Assemble user prompt with material + signals
-  const intelligenceSummary = opts.customerSignals.intelligence?.company
-    ? opts.customerSignals.intelligence.company.substring(0, 4000)
-    : 'No intelligence data available.'
+  // Assemble user prompt with material + all available signals
+  const sections: string[] = []
 
-  const subscriptionsSummary = opts.customerSignals.subscriptions
-    ? JSON.stringify(opts.customerSignals.subscriptions, null, 2).substring(0, 2000)
-    : 'No subscription data available.'
+  // Material
+  sections.push(`## Material: ${opts.materialTitle}\n\n### Material Content (first 8000 chars):\n${opts.materialContent.substring(0, 8000)}`)
 
-  const userPrompt = `## Material: ${opts.materialTitle}
+  // Customer header
+  sections.push(`## Customer: ${opts.customerName}`)
 
-### Material Content (first 8000 chars):
-${opts.materialContent.substring(0, 8000)}
+  // Signal #1: Product Intel
+  if (opts.signals.productIntel) {
+    sections.push(`### Product-Specific Intelligence:\n${JSON.stringify(opts.signals.productIntel, null, 2).substring(0, 2000)}`)
+  }
 
-## Customer: ${opts.customerName}
+  // Signal #2: Intelligence Brief
+  if (opts.signals.intelligence?.company) {
+    sections.push(`### Company Intelligence:\n${opts.signals.intelligence.company.substring(0, 4000)}`)
+  }
 
-### Company Intelligence:
-${intelligenceSummary}
+  // Signal #3: Customer Docs
+  if (opts.signals.customerDocs) {
+    sections.push(`### Account Documentation:\n${JSON.stringify(opts.signals.customerDocs, null, 2).substring(0, 2000)}`)
+  }
 
-### Current Subscriptions:
-${subscriptionsSummary}
+  // Signal #4: Daily Brief
+  if (opts.signals.dailyBrief) {
+    sections.push(`### Recent Daily Brief:\n${JSON.stringify(opts.signals.dailyBrief, null, 2).substring(0, 2000)}`)
+  }
 
----
-Now generate a complete campaign for ${opts.customerName} with positioning and email templates.`
+  // Signal #5: Subscriptions
+  if (opts.signals.subscriptions) {
+    sections.push(`### Current Subscriptions:\n${JSON.stringify(opts.signals.subscriptions, null, 2).substring(0, 2000)}`)
+  }
+
+  // Signal #6: Emails
+  if (opts.signals.emails) {
+    sections.push(`### Recent Email Threads:\n${JSON.stringify(opts.signals.emails, null, 2).substring(0, 2000)}`)
+  }
+
+  // Signal #7: Cases
+  if (opts.signals.cases && Array.isArray(opts.signals.cases) && opts.signals.cases.length > 0) {
+    sections.push(`### Support Cases:\n${JSON.stringify(opts.signals.cases, null, 2).substring(0, 2000)}`)
+  }
+
+  // Fallback if no signals loaded
+  if (sections.length === 2) { // Only material + customer header
+    sections.push('### Available Signals:\nNo cached signal data available for this customer.')
+  }
+
+  const userPrompt = sections.join('\n\n') + `\n\n---\nNow generate a complete campaign for ${opts.customerName} with positioning and email templates.`
 
   const res = await fetch(url, {
     method: 'POST',
@@ -285,6 +436,8 @@ interface CampaignCacheEntry {
   markdown: string
   generatedAt: string
   driveUrl: string
+  signalsLoaded?: string[]
+  signalsMissing?: string[]
 }
 
 function saveCampaignToCache(
@@ -343,12 +496,11 @@ export async function generateCampaign(
   const { title: materialTitle, content: materialContent } = await extractMaterialContent(fileId)
   console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars)`)
 
-  // 2. Load customer signals
-  const signals = loadCustomerSignals(slug)
-  console.log(`[campaigns] Loaded signals for ${customer.name}:`, {
-    hasIntelligence: !!signals.intelligence,
-    hasEmails: !!signals.emails,
-    hasSubscriptions: !!signals.subscriptions,
+  // 2. Load all 7 signal sources
+  const { signals, loaded, missing } = loadSignalStack(customer.name, slug)
+  console.log(`[campaigns] Signal stack for ${customer.name}:`, {
+    loaded: loaded.join(', ') || 'none',
+    missing: missing.join(', ') || 'none',
   })
 
   // 3. Generate campaign via Gemini
@@ -356,7 +508,7 @@ export async function generateCampaign(
     materialTitle,
     materialContent,
     customerName: customer.name,
-    customerSignals: signals,
+    signals,
   })
   console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars)`)
 
@@ -383,6 +535,8 @@ export async function generateCampaign(
     markdown,
     generatedAt,
     driveUrl,
+    signalsLoaded: loaded,
+    signalsMissing: missing,
   })
 
   return {
@@ -390,6 +544,8 @@ export async function generateCampaign(
     campaignId,
     generatedAt,
     driveUrl,
+    signalsLoaded: loaded,
+    signalsMissing: missing,
   }
 }
 
