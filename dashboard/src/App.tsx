@@ -26,6 +26,7 @@ import { SetupPage } from './pages/SetupPage'
 import { AdminPage } from './pages/AdminPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { ProductDetailPage } from './pages/ProductDetailPage'
+import { BatchPage } from './pages/BatchPage'
 import { formatRelTime } from './lib/format'
 import { ChevronUp } from 'lucide-react'
 import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, PipelineSummary, PodInfo } from './types'
@@ -718,6 +719,7 @@ function App() {
       <Route path="/dashboard/customer/:name" element={<CustomerDetailPage />} />
       <Route path="/dashboard/setup" element={<SetupPage />} />
       <Route path="/dashboard/admin" element={<AdminPage />} />
+      <Route path="/dashboard/batch" element={<BatchPage />} />
       <Route path="*" element={<Dashboard />} />
     </Routes>
   )

@@ -25,6 +25,7 @@ Last updated: 2026-05-07 (BKL-CCSP-HEADERS-01 DONE) — Pattern-based CCSP colum
 | `/dashboard/products/:slug` | ProductDetailPage | ✅ Working | Single product: features, releases, Q&A chat |
 | `/dashboard/setup` | SetupPage | ✅ Working | AE setup wizard + 6-step bootstrap orchestrator (1058 lines; AEsCustomersSection extracted to setup/AEsCustomersSection.tsx) |
 | `/dashboard/admin` | AdminPage | ✅ Working | See Admin Page section below |
+| `/dashboard/batch` | BatchPage | ✅ Working | Batch operations: multi-customer campaigns, news refresh, PitchBuilder/FinListics checklists |
 
 **SPA catch-all:** Unknown routes fall through to the main dashboard (no 404 page).
 
