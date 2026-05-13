@@ -168,7 +168,9 @@ function convertMarkdownBullets(text: string): string {
 }
 
 /**
- * Extract metrics from signals (if available)
+ * Extract metrics from signals (if available).
+ * Intelligence cache has: { company: "long text...", industry: "..." }
+ * The company text contains revenue, employee count, etc. in prose form.
  */
 function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
   revenue: string
@@ -183,20 +185,82 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
     productName: 'Product',
   }
 
-  if (!signals?.intelligence?.company) return defaults
+  // Intelligence is the full cache object with { company: string, industry: string }
+  const intel = signals?.intelligence
+  if (!intel) return defaults
 
-  const intel = signals.intelligence.company
+  // The company field is a long markdown string containing all company data
+  const companyText = typeof intel === 'string' ? intel : (intel.company || '')
 
-  // Try to extract from structured intelligence text
-  const revenueMatch = intel.match(/revenue[:\s]+\$?([\d.]+[MBK]?)/i)
-  const employeesMatch = intel.match(/employees?[:\s]+([\d,]+)/i)
+  // Revenue patterns: "$255.4 million", "$9.55B", "revenue of $255.4 million"
+  const revenueMatch = companyText.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
+    || companyText.match(/revenue[^$]*\$(\d[\d,.]*\s*(?:billion|million|[BMK])?)/i)
+
+  // Employee patterns: "804 employees", "had 21,000 employees"
+  const employeesMatch = companyText.match(/([\d,]+)\s*employees/i)
+
+  // Product instances from subscriptions
+  let productInstances = defaults.productInstances
+  let productName = defaults.productName
+  if (signals?.subscriptions) {
+    const subs = Array.isArray(signals.subscriptions) ? signals.subscriptions : []
+    if (subs.length > 0) {
+      const totalQty = subs.reduce((sum: number, s: any) => sum + (Number(s.quantity) || 0), 0)
+      if (totalQty > 0) {
+        productInstances = String(totalQty)
+        const firstProduct = subs[0]?.product || subs[0]?.sku || 'Product'
+        productName = firstProduct.replace(/Red Hat\s*/i, '').split(' ').slice(0, 3).join(' ')
+      }
+    }
+  }
 
   return {
     revenue: revenueMatch?.[1] ? `$${revenueMatch[1]}` : defaults.revenue,
     employees: employeesMatch?.[1] ?? defaults.employees,
-    productInstances: defaults.productInstances,
-    productName: defaults.productName,
+    productInstances,
+    productName,
   }
+}
+
+/**
+ * Extract structured intelligence sections for the HTML template.
+ * Parses the company intelligence text for initiatives, competitors, and guardrails.
+ */
+function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
+  initiatives: Array<{ name: string; priority: string; detail: string }>
+  competitors: Array<{ name: string; threat: string; advantage: string }>
+  guardrails: { never: string[]; safe: string[] }
+} {
+  const result = {
+    initiatives: [] as Array<{ name: string; priority: string; detail: string }>,
+    competitors: [] as Array<{ name: string; threat: string; advantage: string }>,
+    guardrails: { never: [] as string[], safe: [] as string[] },
+  }
+
+  const intel = signals?.intelligence
+  if (!intel) return result
+
+  const companyText = typeof intel === 'string' ? intel : (intel.company || '')
+
+  // Extract competitor mentions
+  const competitorSection = companyText.match(/(?:competitive|competitor|competition)[^]*?(?=##|\z)/i)
+  if (competitorSection) {
+    const competitorNames = competitorSection[0].match(/\*\*([^*]+)\*\*/g)
+    if (competitorNames) {
+      for (const match of competitorNames.slice(0, 4)) {
+        const name = match.replace(/\*\*/g, '').trim()
+        if (name.length > 2 && name.length < 40) {
+          result.competitors.push({ name, threat: '', advantage: '' })
+        }
+      }
+    }
+  }
+
+  // Guardrails — always include standard ones
+  result.guardrails.never = ['Pipeline opportunities', 'Support cases', 'Subscription counts', 'Internal data']
+  result.guardrails.safe = ['Public earnings', 'Leadership changes', 'AI strategy', 'Competitor moves', 'Existing Red Hat relationship']
+
+  return result
 }
 
 /**
@@ -205,6 +269,7 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
 export function generateCampaignHTML(options: CampaignHTMLOptions): string {
   const parsed = parseCampaignMarkdown(options.markdown)
   const metrics = extractMetrics(options.signals)
+  const structured = extractStructuredIntel(options.signals)
 
   // Build HTML
   const html = `<!DOCTYPE html>
@@ -250,6 +315,25 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
 
 ${parsed.customerContext ? `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Customer Context</h3>
 <p style="font-size: 15px; color: #5f6368; margin: 0 0 20px 0;">${escapeHTML(parsed.customerContext)}</p>` : ''}
+
+${structured.competitors.length > 0 ? `
+<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
+<table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitor</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Threat</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Advantage</td>
+  </tr>
+  ${structured.competitors.map(c => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHTML(c.name)}</td>
+    <td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.threat)}</td>
+    <td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.advantage)}</td>
+  </tr>`).join('\n')}
+</table>` : ''}
+
+<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
+<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHTML(g)).join(', ')}</p>
+<p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHTML(g)).join(', ')}</p>
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
