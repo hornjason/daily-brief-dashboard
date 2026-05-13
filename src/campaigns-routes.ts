@@ -52,6 +52,8 @@ export interface CampaignResult {
   generatedAt: string
   driveUrl: string
   htmlUrl: string
+  signalsLoaded?: string[]
+  signalsMissing?: string[]
 }
 
 export interface CampaignListItem {
@@ -105,81 +107,154 @@ async function extractMaterialContent(fileId: string): Promise<{ title: string; 
 // ── Customer intelligence loading ────────────────────────────────────────────
 
 interface CustomerSignals {
+  productIntel?: any
   intelligence?: any
-  emails?: any
+  customerDocs?: any
+  dailyBrief?: any
   subscriptions?: any
+  emails?: any
+  cases?: any
+}
+
+interface SignalLoadResult {
+  signals: CustomerSignals
+  loaded: string[]
+  missing: string[]
 }
 
 /**
- * Load customer signal stack from cache (simplified Phase 3 version).
- * Loads:
- * - intelligence brief (data/cache/intelligence/{slug}.json)
- * - emails (data/cache/{slug}-emails.json)
- * - subscriptions (data/cache/{slug}-sheets.json)
+ * Load all 7 customer signal sources from cache with graceful degradation.
+ * Missing sources are logged but don't block generation.
  */
-function loadCustomerSignals(customerSlug: string): CustomerSignals {
+function loadCustomerSignals(customerSlug: string, customerName?: string): SignalLoadResult {
   const signals: CustomerSignals = {}
+  const loaded: string[] = []
+  const missing: string[] = []
 
-  // Intelligence brief
-  try {
-    const intelPath = resolve(CACHE_DIR, 'intelligence', `${customerSlug}.json`)
-    if (existsSync(intelPath)) {
-      signals.intelligence = JSON.parse(readFileSync(intelPath, 'utf-8'))
+  const tryLoad = (name: string, path: string, postProcess?: (data: any) => any) => {
+    try {
+      if (existsSync(path)) {
+        let data = JSON.parse(readFileSync(path, 'utf-8'))
+        if (postProcess) data = postProcess(data)
+        ;(signals as any)[name] = data
+        loaded.push(name)
+      } else {
+        missing.push(name)
+      }
+    } catch (e: any) {
+      console.warn(`[campaigns] Failed to load ${name} for ${customerSlug}:`, e.message)
+      missing.push(name)
     }
-  } catch (e: any) {
-    console.warn(`[campaigns] Failed to load intelligence for ${customerSlug}:`, e.message)
   }
 
-  // Emails
-  try {
-    const emailsPath = resolve(CACHE_DIR, `${customerSlug}-emails.json`)
-    if (existsSync(emailsPath)) {
-      signals.emails = JSON.parse(readFileSync(emailsPath, 'utf-8'))
-    }
-  } catch (e: any) {
-    console.warn(`[campaigns] Failed to load emails for ${customerSlug}:`, e.message)
+  // 1. Intelligence brief
+  tryLoad('intelligence', resolve(CACHE_DIR, 'intelligence', `${customerSlug}.json`))
+
+  // 2. Customer docs
+  tryLoad('customerDocs', resolve(CACHE_DIR, 'product-intel', 'customer-docs', `${customerSlug}.json`))
+
+  // 3. Daily brief (try today first, then most recent)
+  const today = new Date().toISOString().slice(0, 10)
+  const briefPath = resolve(CACHE_DIR, `${customerSlug}-${today}.json`)
+  if (existsSync(briefPath)) {
+    tryLoad('dailyBrief', briefPath)
+  } else {
+    // Scan for most recent brief
+    try {
+      const files = readdirSync(CACHE_DIR).filter(f => f.startsWith(`${customerSlug}-`) && f.match(/\d{4}-\d{2}-\d{2}\.json$/))
+      if (files.length > 0) {
+        files.sort().reverse()
+        tryLoad('dailyBrief', resolve(CACHE_DIR, files[0]))
+      } else {
+        missing.push('dailyBrief')
+      }
+    } catch { missing.push('dailyBrief') }
   }
 
-  // Subscriptions
-  try {
-    const subsPath = resolve(CACHE_DIR, `${customerSlug}-sheets.json`)
-    if (existsSync(subsPath)) {
-      signals.subscriptions = JSON.parse(readFileSync(subsPath, 'utf-8'))
-    }
-  } catch (e: any) {
-    console.warn(`[campaigns] Failed to load subscriptions for ${customerSlug}:`, e.message)
-  }
+  // 4. Subscriptions
+  tryLoad('subscriptions', resolve(CACHE_DIR, `${customerSlug}-sheets.json`))
 
-  return signals
+  // 5. Emails
+  tryLoad('emails', resolve(CACHE_DIR, `${customerSlug}-emails.json`))
+
+  // 6. Cases (filter by customer name from global cases file)
+  tryLoad('cases', resolve(CACHE_DIR, 'cases.json'), (data) => {
+    if (!customerName || !Array.isArray(data)) return data
+    return data.filter((c: any) => c.customer?.toLowerCase() === customerName.toLowerCase() || c.accountName?.toLowerCase() === customerName.toLowerCase())
+  })
+
+  // 7. Product intel (scan for any customer-specific product intel)
+  try {
+    const productIntelDir = resolve(CACHE_DIR, 'product-intel')
+    if (existsSync(productIntelDir)) {
+      const dirs = readdirSync(productIntelDir).filter(d => d.endsWith('-customer-intel'))
+      const allIntel: any[] = []
+      for (const dir of dirs) {
+        const filePath = resolve(productIntelDir, dir, `${customerSlug}.json`)
+        if (existsSync(filePath)) {
+          allIntel.push(JSON.parse(readFileSync(filePath, 'utf-8')))
+        }
+      }
+      if (allIntel.length > 0) {
+        signals.productIntel = allIntel
+        loaded.push('productIntel')
+      } else {
+        missing.push('productIntel')
+      }
+    } else {
+      missing.push('productIntel')
+    }
+  } catch { missing.push('productIntel') }
+
+  console.log(`[campaigns] Signal stack for ${customerSlug}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}]`)
+  return { signals, loaded, missing }
 }
 
 // ── Gemini campaign generation ───────────────────────────────────────────────
 
-const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect creating personalized email campaigns.
+const CAMPAIGN_SYSTEM_PROMPT = `You are a Red Hat Account Solution Architect creating deeply personalized email campaigns.
 
-Your job:
-1. Extract value propositions from the provided product material
-2. Match them against the customer's specific business context and signals
-3. Generate positioning summary and role-specific email templates
+## Email Design Rules (Council-Validated, Mandatory)
 
-Rules:
-- Be specific: use customer names, product names, current subscriptions
-- Write as Jason Horn (Red Hat ASA)
-- Keep emails under 90 words (council rule: observation→peer→link)
-- No internal Red Hat data in emails
-- Output clean markdown with clear sections
+Every generated email MUST pass ALL of these rules:
 
-REQUIRED SECTIONS:
-1. Campaign Summary (1-2 sentences: what this campaign is about)
-2. Customer Context (what we know about this customer that's relevant)
-3. Positioning (how the material's value props map to customer needs)
-4. Email Templates (6 personas, 2 tiers each):
-   - VP Infrastructure / Platform Engineering (C-level + director-level)
-   - VP Operations / SRE Lead (C-level + director-level)
-   - CIO / IT Director (C-level + director-level)
-   Format: ## {Persona} — {Tier}
-           Subject: ...
-           Body: ...
+1. **Word limits:** Executive tier = 90 words max; Manager tier = 200-250 words
+2. **Technical observations only** — no firmographic facts ("You're a $2B company")
+3. **Statements, not questions** — "curious whether" is template smell. No questions anywhere including CTA.
+4. **Per-bullet links** — each bullet links to the specific Red Hat product page for that feature (no single generic CTA link)
+5. **Name the peer company with a concrete metric** — "Mutua Madrileña cut service tickets 50%" not "a major insurer improved"
+6. **Forward-worthy test** — exec emails: VP forwards to eng lead; manager emails: manager forwards to VP
+7. **Competitor-swap test** — if replacing the product name still works, the email is a brochure. Rewrite with feature-specific language.
+8. **Creepy line** — NEVER reference support tickets, POC status, internal data, usage telemetry, subscription counts, node counts, or anything the recipient would be surprised the AE knows
+9. **Subject = observation about their world** — no product names, no company names, no "Red Hat" or "Ansible"
+10. **No filler** — no "let me know," no PS, no calendar links, no "no pressure," no "hope this finds you well"
+11. **Relationship context** — every email must include ONE sentence noting the customer already uses Red Hat products (by product name, never subscription counts). This is NOT the opener — it comes after the observation/pain context.
+
+## Two Email Tiers (6 personas total)
+
+### Executive Tier (3 personas, 90 words max each)
+Purpose: Competitive urgency, strategic. Designed to be forwarded DOWN with "thoughts?"
+Structure: Competitive observation (1 sentence) → Relationship context (1 sentence) → 3 feature bullets (each = linked feature name + 1 sentence) → Peer proof (1 sentence)
+
+### Manager Tier (3 personas, 200-250 words each)
+Purpose: Technical depth, daily pain. Designed to be forwarded UP with "we should look at this"
+Structure: Pain context (2-3 sentences describing their daily operational reality) → Relationship context (1 sentence) → 3 feature bullets (each = linked feature name + 2-3 sentences explaining HOW) → Peer proof with before/after (1-2 sentences)
+
+### Relationship Context Line (Mandatory in ALL emails)
+Reference Red Hat PRODUCTS by name — NEVER subscription counts, node counts, or SKUs.
+ONE sentence, placed AFTER the competitive observation (exec) or pain context (manager), BEFORE the bullets.
+
+{voiceInstruction}
+
+## Output Format
+Generate clean markdown with these REQUIRED SECTIONS:
+1. **Campaign Summary** — 1-2 sentences
+2. **Customer Context** — what we know that's relevant
+3. **Positioning** — how value props map to customer needs
+4. **Email Templates** — 6 emails (3 exec + 3 manager), each with:
+   ## {Persona} — {Tier}
+   Subject: [observation about their world — no product names]
+   [email body following the structure above]
 `
 
 async function callGeminiForCampaign(opts: {
@@ -359,10 +434,12 @@ interface CampaignCacheEntry {
   materialUrl: string
   customerName: string
   markdown: string
-  htmlContent: string  // Added for preview endpoint
+  htmlContent: string
   generatedAt: string
   driveUrl: string
   htmlUrl: string
+  signalsLoaded?: string[]
+  signalsMissing?: string[]
 }
 
 function saveCampaignToCache(
@@ -423,13 +500,9 @@ export async function generateCampaign(
   const { title: materialTitle, content: materialContent } = await extractMaterialContent(fileId)
   console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars)`)
 
-  // 2. Load customer signals
-  const signals = loadCustomerSignals(slug)
-  console.log(`[campaigns] Loaded signals for ${customer.name}:`, {
-    hasIntelligence: !!signals.intelligence,
-    hasEmails: !!signals.emails,
-    hasSubscriptions: !!signals.subscriptions,
-  })
+  // 2. Load all 7 customer signals
+  const { signals, loaded, missing } = loadCustomerSignals(slug, customer.name)
+  console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}]`)
 
   // 3. Load voice profile if not provided in config
   let voiceInstruction = config?.style || ''
@@ -495,7 +568,7 @@ export async function generateCampaign(
     // Non-fatal — cached markdown is still available
   }
 
-  // 7. Save to cache (with HTML content for preview)
+  // 7. Save to cache (with HTML content for preview + signal metadata)
   saveCampaignToCache(slug, {
     id: campaignId,
     materialTitle,
@@ -506,6 +579,8 @@ export async function generateCampaign(
     generatedAt,
     driveUrl,
     htmlUrl,
+    signalsLoaded: loaded,
+    signalsMissing: missing,
   })
 
   return {
@@ -514,6 +589,8 @@ export async function generateCampaign(
     generatedAt,
     driveUrl,
     htmlUrl,
+    signalsLoaded: loaded,
+    signalsMissing: missing,
   }
 }
 

@@ -41,7 +41,11 @@ interface EmailTemplate {
 }
 
 /**
- * Parse Gemini markdown output into structured sections
+ * Parse Gemini markdown output into structured sections.
+ * Handles multiple Gemini output formats:
+ * - # or ## for section headers
+ * - **Subject:** or Subject: for email subject lines
+ * - Body may follow Subject directly (no **Body:** label)
  */
 function parseCampaignMarkdown(markdown: string): ParsedCampaign {
   const sections: ParsedCampaign = {
@@ -52,44 +56,55 @@ function parseCampaignMarkdown(markdown: string): ParsedCampaign {
     emailTemplates: [],
   }
 
-  // Extract Campaign Summary
-  const summaryMatch = markdown.match(/##?\s*Campaign Summary\s*\n+(.*?)(?=\n##|\z)/is)
-  if (summaryMatch) {
-    sections.summary = summaryMatch[1].trim()
-  }
+  // Split markdown into sections by ## or # headers
+  const sectionBlocks = markdown.split(/\n(?=#{1,2}\s)/)
 
-  // Extract Customer Context
-  const contextMatch = markdown.match(/##?\s*Customer Context\s*\n+(.*?)(?=\n##|\z)/is)
-  if (contextMatch) {
-    sections.customerContext = contextMatch[1].trim()
-  }
+  for (const block of sectionBlocks) {
+    const headerMatch = block.match(/^#{1,2}\s+(.+)/)
+    if (!headerMatch) continue
 
-  // Extract Positioning (may have multiple paragraphs or subsections)
-  const positioningMatch = markdown.match(/##?\s*Positioning\s*\n+(.*?)(?=\n##|\z)/is)
-  if (positioningMatch) {
-    const posText = positioningMatch[1].trim()
-    // Split by double newlines or numbered items
-    const items = posText.split(/\n\n+/).filter(p => p.trim().length > 0)
-    sections.positioning = items
-  }
+    const header = headerMatch[1].trim()
+    const content = block.slice(headerMatch[0].length).trim()
 
-  // Extract Email Templates
-  // Pattern: ## {Persona} — {Tier}
-  const emailRegex = /##\s+([^\n]+?)\s+—\s+([^\n]+)\s*\n+\*\*Subject:\*\*\s*([^\n]+)\s*\n+\*\*Body:\*\*\s*\n+([\s\S]+?)(?=\n##\s+[^\n]+\s+—|\z)/gi
-  let emailMatch
-  while ((emailMatch = emailRegex.exec(markdown)) !== null) {
-    // Capture body but remove trailing signature lines if present
-    let bodyText = emailMatch[4].trim()
-    // Remove common signature patterns at the end
-    bodyText = bodyText.replace(/\n*Best regards,[\s\S]*Account Executive.*$/i, '')
-    bodyText = bodyText.replace(/\n*Sincerely,[\s\S]*Account Executive.*$/i, '')
+    if (/campaign summary/i.test(header)) {
+      sections.summary = content
+    } else if (/customer context/i.test(header)) {
+      sections.customerContext = content
+    } else if (/^positioning$/i.test(header)) {
+      const items = content.split(/\n\n+/).filter(p => p.trim().length > 0)
+      sections.positioning = items
+    } else if (/—|–|-/.test(header) && !/campaign|customer|positioning|email templates/i.test(header)) {
+      // This is an email template: "VP Infrastructure / Platform Engineering — C-level"
+      const tierMatch = header.match(/^(.+?)\s*[—–-]\s*(.+)$/)
+      if (!tierMatch) continue
 
-    sections.emailTemplates.push({
-      persona: emailMatch[1].trim(),
-      tier: emailMatch[2].trim(),
-      subject: emailMatch[3].trim(),
-      body: bodyText.trim(),
-    })
+      const persona = tierMatch[1].trim()
+      const tier = tierMatch[2].trim()
+
+      // Extract subject line — handles both **Subject:** and Subject: formats
+      const subjectMatch = content.match(/\*?\*?Subject:?\*?\*?\s*(.+)/i)
+      const subject = subjectMatch ? subjectMatch[1].trim() : ''
+
+      // Body is everything after the subject line
+      let body = content
+      if (subjectMatch) {
+        const subjectIdx = content.indexOf(subjectMatch[0])
+        body = content.slice(subjectIdx + subjectMatch[0].length).trim()
+      }
+
+      // Remove **Body:** label if present
+      body = body.replace(/^\*?\*?Body:?\*?\*?\s*/i, '').trim()
+
+      // Remove signature patterns
+      body = body.replace(/\n*(?:Best regards|Sincerely|Thanks|Regards),?[\s\S]*$/i, '')
+
+      // Remove trailing link placeholders
+      body = body.replace(/\n*(?:Link|Peer reference):?\s*\[?[^\]]*\]?\s*$/i, '')
+
+      if (persona && (subject || body)) {
+        sections.emailTemplates.push({ persona, tier, subject, body: body.trim() })
+      }
+    }
   }
 
   return sections
