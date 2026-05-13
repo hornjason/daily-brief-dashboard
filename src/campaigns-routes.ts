@@ -23,6 +23,7 @@ import { toSlug } from './cache-layer.ts'
 import { sanitizeErr } from './utils.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer } from './types.ts'
+import { extractMaterial, deleteMaterialCache } from './material-extraction.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -445,6 +446,39 @@ export function createCampaignsRouter(): Hono {
     const campaigns = loadCampaignsFromCache(slug)
 
     return c.json({ campaigns })
+  })
+
+  // POST /api/campaigns/extract-material — Extract and decompose material via Gemini
+  router.post('/api/campaigns/extract-material', async (c) => {
+    let body: { materialUrl: string; forceRefresh?: boolean }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Invalid JSON body' }, 400)
+    }
+
+    if (!body.materialUrl || typeof body.materialUrl !== 'string') {
+      return c.json({ error: 'materialUrl is required' }, 400)
+    }
+
+    try {
+      const extraction = await extractMaterial(body.materialUrl, body.forceRefresh ?? false)
+      return c.json({ ...extraction, cached: !body.forceRefresh })
+    } catch (e: any) {
+      console.error('[campaigns] Material extraction failed:', e.message)
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // DELETE /api/campaigns/extract-material?url={encodedUrl} — Invalidate cache
+  router.delete('/api/campaigns/extract-material', (c) => {
+    const materialUrl = c.req.query('url')
+    if (!materialUrl || typeof materialUrl !== 'string') {
+      return c.json({ error: 'url query parameter is required' }, 400)
+    }
+
+    const deleted = deleteMaterialCache(decodeURIComponent(materialUrl))
+    return c.json({ ok: true, deleted })
   })
 
   return router
