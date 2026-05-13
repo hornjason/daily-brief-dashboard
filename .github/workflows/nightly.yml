@@ -34,6 +34,26 @@ jobs:
             echo "✓ No lockfile — batch has completed, proceeding with assertions"
           fi
 
+      - name: Verify container health
+        if: steps.lockfile_check.outputs.skip == 'false'
+        run: |
+          if ! podman ps --filter name=pai-dashboard --format "{{.Names}}" | grep -q pai-dashboard; then
+            echo "❌ pai-dashboard container is not running"
+            echo "Fix: cd ~/DailyBriefDashboard && make up"
+            exit 1
+          fi
+          # Wait up to 30s for API to be ready
+          for i in $(seq 1 6); do
+            if curl -sf http://localhost:7777/api/aes >/dev/null 2>&1; then
+              echo "✓ Container running and API healthy"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "❌ API not responding after 30s — container may be unhealthy"
+          echo "Check: podman logs pai-dashboard --tail 50"
+          exit 1
+
       - name: Run nightly assertions
         if: steps.lockfile_check.outputs.skip == 'false'
         run: bun scripts/nightly-assertions.ts

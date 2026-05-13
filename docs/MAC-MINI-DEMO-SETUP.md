@@ -8,6 +8,8 @@ updated: 2026-05-05
 # Mac Mini Demo Environment — Setup Guide
 *Status: Operational | Last validated: 2026-04-22 | Trigger: Mac Mini OS changes, CI runner config changes, tunnel URL changes*
 
+> **See also:** [NEW-MACHINE-SETUP.md](NEW-MACHINE-SETUP.md) for the complete portable setup runbook (prerequisites, config backup/restore, environment validation).
+
 ## SSH Access — Local vs Remote
 
 Two ways to reach the Mac Mini depending on where you are:

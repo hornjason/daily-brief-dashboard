@@ -30,6 +30,14 @@ until podman info &>/dev/null 2>&1; do
 done
 log "Podman machine ready"
 
+# Verify config exists before starting
+if [ ! -f "$DASHBOARD_DIR/data/config/aes.json" ]; then
+  log "ERROR: data/config/aes.json missing — cannot start container"
+  log "Fix: restore config with 'make restore-config FILE=...' or copy from another machine"
+  exit 1
+fi
+log "Config pre-flight passed"
+
 # Check if already running
 if podman ps --format "{{.Names}}" 2>/dev/null | grep -q "^pai-dashboard$"; then
   log "pai-dashboard already running — no action needed"

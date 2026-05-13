@@ -41,7 +41,7 @@ DATA       := $(CURDIR)/data
 MAC_MINI_HOST ?= jasonhorn@mini.local
 MAC_MINI_DIR  ?= ~/DailyBriefDashboard
 
-.PHONY: up down logs build build-l4 push-l4 rebuild-l4 push rebuild ps setup release-patch release-minor release-major version \
+.PHONY: up down logs build build-l4 push-l4 rebuild-l4 push rebuild ps setup doctor backup-config restore-config release-patch release-minor release-major version \
        dev-snapshot dev-up dev-down dev-logs \
        seed test-up test-rebuild test-up-live test-rebuild-live test-down test-logs \
        test-snapshot test-restore test-check lint \
@@ -56,6 +56,7 @@ MAC_MINI_DIR  ?= ~/DailyBriefDashboard
        sync-up sync-down sync-logs sync-status sync-now sync-up-vnc keepalive-now
 
 up: down
+	@test -f $(DATA)/config/aes.json || (echo "❌ data/config/aes.json missing — run 'make setup' or restore from backup first" && exit 1)
 	podman run -d \
 	  -p 7777:7777 \
 	  -p 6080:6080 \
@@ -167,6 +168,40 @@ setup:
 	  echo "⚠️  WARNING: REDHAT_OFFLINE_TOKEN is still the placeholder — edit .env before running"; \
 	fi
 	@echo "Next steps: Run 'make rebuild' then open http://localhost:7777 to complete setup"
+
+doctor: ## Run environment health check
+	@echo "Running environment health check..."
+	@echo ""
+	@command -v podman >/dev/null 2>&1 && echo "  ✓ podman found" || echo "  ❌ podman not found"
+	@test -f $(DATA)/config/aes.json && echo "  ✓ aes.json present" || echo "  ❌ data/config/aes.json missing"
+	@test -f $(DATA)/config/customers.json && echo "  ✓ customers.json present" || echo "  ❌ data/config/customers.json missing"
+	@test -f $(DATA)/config/settings.json && echo "  ✓ settings.json present" || echo "  ❌ data/config/settings.json missing"
+	@test -f .env && echo "  ✓ .env present" || echo "  ❌ .env missing — run 'make setup'"
+	@if [ -f .env ]; then grep -q '^REDHAT_OFFLINE_TOKEN=' .env 2>/dev/null && echo "  ✓ REDHAT_OFFLINE_TOKEN set" || echo "  ⚠ REDHAT_OFFLINE_TOKEN not set in .env"; fi
+	@podman image exists $(IMAGE) 2>/dev/null && echo "  ✓ container image exists" || echo "  ⚠ image not built — run 'make build'"
+	@podman ps --filter name=pai-dashboard --format "  ✓ container: {{.Status}}" 2>/dev/null | head -1 || echo "  ⚠ container not running"
+	@curl -sf http://localhost:7777/api/aes >/dev/null 2>&1 && echo "  ✓ API healthy on :7777" || echo "  ⚠ API not responding on :7777"
+	@echo ""
+	@echo "Doctor complete."
+
+backup-config: ## Snapshot config files for migration
+	@mkdir -p backups
+	@STAMP=$$(date +%Y%m%d-%H%M%S); \
+	tar czf backups/config-backup-$$STAMP.tar.gz \
+	  -C $(DATA) \
+	  config/aes.json config/customers.json config/settings.json \
+	  config/product-intel-config.json \
+	  $$(test -f $(DATA)/config/pod-config.json && echo config/pod-config.json) \
+	  $$(test -f $(DATA)/config/data-sources.json && echo config/data-sources.json) \
+	  $$(test -f $(DATA)/config/gcp-oauth.keys.json && echo config/gcp-oauth.keys.json); \
+	echo "✓ Config backed up to backups/config-backup-$$STAMP.tar.gz"
+
+restore-config: ## Restore config from backup tarball (FILE=path/to/backup.tar.gz)
+	@test -n "$(FILE)" || (echo "Usage: make restore-config FILE=backups/config-backup-YYYYMMDD.tar.gz" && exit 1)
+	@test -f "$(FILE)" || (echo "❌ File not found: $(FILE)" && exit 1)
+	@mkdir -p $(DATA)/config
+	tar xzf "$(FILE)" -C $(DATA)
+	@echo "✓ Config restored from $(FILE)"
 
 # ── Dev environment (port 7778) ──────────────────────────────────────────────
 dev-snapshot:
