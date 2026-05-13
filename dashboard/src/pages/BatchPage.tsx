@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { Target } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Target, ChevronDown } from 'lucide-react'
+import { CampaignConfigurator, type CampaignConfig } from '../components/CampaignConfigurator'
 
 interface AEInfo {
   name: string
@@ -28,6 +29,9 @@ export function BatchPage() {
   const [selectedAction, setSelectedAction] = useState<BatchAction>('campaigns')
   const [progress, setProgress] = useState<BatchProgress[]>([])
   const [batchRunning, setBatchRunning] = useState(false)
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const [campaignConfig, setCampaignConfig] = useState<CampaignConfig | null>(null)
 
   // Fetch AEs and customers on mount
   useEffect(() => {
@@ -41,6 +45,32 @@ export function BatchPage() {
       .then(d => setAllCustomers(d.customers || []))
       .catch(err => console.error('Failed to fetch customers:', err))
   }, [])
+
+  // Click outside to close picker
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setCustomerPickerOpen(false)
+      }
+    }
+    if (customerPickerOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [customerPickerOpen])
+
+  // Escape key to close picker
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setCustomerPickerOpen(false)
+      }
+    }
+    if (customerPickerOpen) {
+      document.addEventListener('keydown', handleEscape)
+      return () => document.removeEventListener('keydown', handleEscape)
+    }
+  }, [customerPickerOpen])
 
   // Group customers by AE
   const groupedCustomers = allCustomers.reduce((acc, customer) => {
@@ -97,8 +127,11 @@ export function BatchPage() {
     }
   }
 
-  const handleRun = () => {
+  const handleRun = async () => {
     if (selectedCustomers.size === 0) return
+
+    // For campaigns, require config
+    if (selectedAction === 'campaigns' && !campaignConfig) return
 
     // For automated actions (campaigns, news), populate progress list with pending entries
     if (selectedAction === 'campaigns' || selectedAction === 'news') {
@@ -108,7 +141,67 @@ export function BatchPage() {
       }))
       setProgress(initialProgress)
       setBatchRunning(true)
-      // Actual execution API will be in #168
+
+      try {
+        const customerNames = Array.from(selectedCustomers)
+        const res = await fetch('/api/batch/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: selectedAction,
+            customerNames,
+            config: selectedAction === 'campaigns' ? campaignConfig : undefined,
+          }),
+        })
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Batch execution failed' }))
+          console.error('[BatchPage] Batch execution failed:', err.error)
+          setBatchRunning(false)
+          return
+        }
+
+        // Read SSE stream
+        const reader = res.body?.getReader()
+        if (!reader) {
+          setBatchRunning(false)
+          return
+        }
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (data.status === 'complete') {
+                  setBatchRunning(false)
+                } else if (data.customer) {
+                  setProgress(prev => prev.map(p =>
+                    p.customerName === data.customer
+                      ? { ...p, status: data.status, driveUrl: data.driveUrl, error: data.error }
+                      : p
+                  ))
+                }
+              } catch (e) {
+                console.error('[BatchPage] Failed to parse SSE event:', e)
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[BatchPage] Batch execution error:', e)
+        setBatchRunning(false)
+      }
     }
 
     // For manual checklists (pitchbuilder, finlistics), they're handled by the checklist render
@@ -169,76 +262,90 @@ export function BatchPage() {
         </div>
       </div>
 
-      {/* Customer Picker */}
-      <div className="bg-surface border border-border rounded-xl p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text-primary">Select Customers</h2>
-          <button
-            onClick={handleSelectAll}
-            className="text-xs text-accent hover:underline"
-          >
-            {Object.values(filteredGroups).flat().every(c => selectedCustomers.has(c))
-              ? 'Deselect All'
-              : 'Select All'}
-          </button>
-        </div>
+      {/* Customer Picker — Dropdown */}
+      <div className="bg-surface border border-border rounded-xl p-5 space-y-4" ref={pickerRef}>
+        <h2 className="text-sm font-semibold text-text-primary">Select Customers</h2>
 
-        {/* Search */}
-        <input
-          type="text"
-          placeholder="Search customers..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-full px-4 py-2 bg-bg border border-border rounded-lg text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
-        />
+        {/* Trigger button */}
+        <button
+          onClick={() => setCustomerPickerOpen(!customerPickerOpen)}
+          className="w-full flex items-center justify-between px-4 py-2.5 bg-bg border border-border rounded-lg text-text-primary hover:border-accent transition-colors"
+        >
+          <span className="text-sm">
+            {selectedCustomers.size === 0
+              ? 'Select Customers'
+              : `${selectedCustomers.size} customer${selectedCustomers.size !== 1 ? 's' : ''} selected`}
+          </span>
+          <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${customerPickerOpen ? 'rotate-180' : ''}`} />
+        </button>
 
-        {/* Grouped Customer List */}
-        <div className="space-y-4 max-h-96 overflow-y-auto">
-          {Object.entries(filteredGroups)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([ae, customers]) => (
-              <div key={ae} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={customers.every(c => selectedCustomers.has(c))}
-                    onChange={() => handleSelectAllForAE(ae)}
-                    className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
-                  />
-                  <span className="text-sm font-medium text-text-secondary">{ae}</span>
-                  <span className="text-xs text-text-tertiary">
-                    ({customers.filter(c => selectedCustomers.has(c)).length}/{customers.length})
-                  </span>
-                </div>
-                <div className="ml-6 space-y-1">
-                  {customers.map(customerName => (
-                    <label key={customerName} className="flex items-center gap-2 cursor-pointer hover:bg-surface-hover p-1 rounded">
+        {/* Dropdown panel */}
+        {customerPickerOpen && (
+          <div className="border border-border rounded-lg bg-bg p-4 space-y-4">
+            {/* Search */}
+            <input
+              type="text"
+              placeholder="Search customers..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+
+            {/* Select All button */}
+            <button
+              onClick={handleSelectAll}
+              className="text-xs text-accent hover:underline"
+            >
+              {Object.values(filteredGroups).flat().every(c => selectedCustomers.has(c))
+                ? 'Deselect All'
+                : 'Select All'}
+            </button>
+
+            {/* Grouped Customer List */}
+            <div className="space-y-4 max-h-80 overflow-y-auto">
+              {Object.entries(filteredGroups)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([ae, customers]) => (
+                  <div key={ae} className="space-y-2">
+                    <div className="flex items-center gap-2">
                       <input
                         type="checkbox"
-                        checked={selectedCustomers.has(customerName)}
-                        onChange={() => handleToggleCustomer(customerName)}
+                        checked={customers.every(c => selectedCustomers.has(c))}
+                        onChange={() => handleSelectAllForAE(ae)}
                         className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
                       />
-                      <span className="text-sm text-text-primary">{customerName}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-        </div>
-
-        <div className="text-sm text-text-secondary">
-          {selectedCustomers.size} customer{selectedCustomers.size !== 1 ? 's' : ''} selected
-        </div>
+                      <span className="text-sm font-medium text-text-secondary">{ae}</span>
+                      <span className="text-xs text-text-tertiary">
+                        ({customers.filter(c => selectedCustomers.has(c)).length}/{customers.length})
+                      </span>
+                    </div>
+                    <div className="ml-6 space-y-1">
+                      {customers.map(customerName => (
+                        <label key={customerName} className="flex items-center gap-2 cursor-pointer hover:bg-surface-hover p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={selectedCustomers.has(customerName)}
+                            onChange={() => handleToggleCustomer(customerName)}
+                            className="w-4 h-4 rounded border-border text-accent focus:ring-accent"
+                          />
+                          <span className="text-sm text-text-primary">{customerName}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Config Area (placeholder for CampaignConfigurator) */}
+      {/* Campaign Configurator */}
       {selectedAction === 'campaigns' && (
         <div className="bg-surface border border-border rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-text-primary mb-3">Campaign Configuration</h2>
-          <div className="text-sm text-text-secondary italic">
-            Campaign configurator will be integrated here (separate issue)
-          </div>
+          <h2 className="text-sm font-semibold text-text-primary mb-4">Campaign Configuration</h2>
+          <CampaignConfigurator
+            onConfirm={(config) => setCampaignConfig(config)}
+          />
         </div>
       )}
 
@@ -246,9 +353,9 @@ export function BatchPage() {
       {isAutomatedAction && (
         <button
           onClick={handleRun}
-          disabled={selectedCustomers.size === 0 || batchRunning}
+          disabled={selectedCustomers.size === 0 || batchRunning || (selectedAction === 'campaigns' && !campaignConfig)}
           className={`w-full py-3 rounded-lg font-medium transition-colors ${
-            selectedCustomers.size === 0 || batchRunning
+            selectedCustomers.size === 0 || batchRunning || (selectedAction === 'campaigns' && !campaignConfig)
               ? 'bg-surface-hover text-text-tertiary cursor-not-allowed'
               : 'bg-accent text-white hover:bg-accent/90'
           }`}
