@@ -188,7 +188,10 @@ export function CampaignConfigurator({ customerName, onConfirm, onCancel }: Camp
       setMaterialTitle(data.materialTitle)
       setPersonas(data.personas.map(p => ({ ...p, enabled: true })))
       setValueProps(data.valueProps)
-      setStyle(data.style)
+      // Only use extraction style if no voice profile loaded — voice takes priority
+      if (!voiceProfile) {
+        setStyle(data.style)
+      }
       setState('preview')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Material extraction failed')
