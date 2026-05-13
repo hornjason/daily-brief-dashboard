@@ -514,12 +514,26 @@ export async function generateCampaign(
   const { title: materialTitle, content: materialContent } = await extractMaterialContent(fileId)
   console.log(`[campaigns] Extracted material: "${materialTitle}" (${materialContent.length} chars)`)
 
-  // 2. Pre-flight: ensure intelligence + account plan exist before loading signals
+  // 2. Pre-flight: ensure all intelligence exists and is fresh before loading signals
   const intelPath = resolve(CACHE_DIR, 'intelligence', `${slug}.json`)
   const planPath = resolve(CACHE_DIR, 'intelligence', `${slug}-account-plan.md`)
+  const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
-  if (!existsSync(intelPath)) {
-    console.log(`[campaigns] Intelligence brief missing for ${customer.name} — generating...`)
+  // Check intelligence brief — generate if missing or stale (>7 days)
+  let needsIntelRefresh = !existsSync(intelPath)
+  if (!needsIntelRefresh && existsSync(intelPath)) {
+    try {
+      const intelData = JSON.parse(readFileSync(intelPath, 'utf-8'))
+      const cachedAt = intelData.cachedAt ? new Date(intelData.cachedAt).getTime() : 0
+      if (Date.now() - cachedAt > STALE_THRESHOLD_MS) {
+        needsIntelRefresh = true
+        console.log(`[campaigns] Intelligence brief stale for ${customer.name} (cached ${intelData.cachedAt})`)
+      }
+    } catch { needsIntelRefresh = true }
+  }
+
+  if (needsIntelRefresh) {
+    console.log(`[campaigns] Intelligence brief ${existsSync(intelPath) ? 'stale' : 'missing'} for ${customer.name} — generating...`)
     try {
       await runIntelligencePipeline(customer.name, true)
       console.log(`[campaigns] Intelligence brief generated for ${customer.name}`)
@@ -528,6 +542,7 @@ export async function generateCampaign(
     }
   }
 
+  // Check account plan — generate if missing
   if (!existsSync(planPath)) {
     console.log(`[campaigns] Account plan missing for ${customer.name} — generating...`)
     try {

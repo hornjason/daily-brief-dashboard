@@ -200,8 +200,9 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
   const revenueMatch = companyText.match(/\$(\d[\d,.]*\s*(?:billion|million|[BMK]))/i)
     || companyText.match(/revenue[^$]*\$(\d[\d,.]*\s*(?:billion|million|[BMK])?)/i)
 
-  // Employee patterns: "804 employees", "had 21,000 employees"
+  // Employee patterns: "804 employees", "had 21,000 employees", "employ approximately 3,000 individuals"
   const employeesMatch = companyText.match(/([\d,]+)\s*employees/i)
+    || companyText.match(/employ\w*\s+(?:approximately\s+)?([\d,]+)\s*(?:individuals|people|workers|staff)/i)
 
   // Product instances from subscriptions
   let productInstances = defaults.productInstances
