@@ -5,8 +5,9 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Mail, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react'
+import { Mail, ExternalLink, RefreshCw } from 'lucide-react'
 import { formatRelTime } from '../../lib/format'
+import { CampaignConfigurator, CampaignConfig } from '../CampaignConfigurator'
 
 interface CampaignsTabProps {
   customerName: string
@@ -25,7 +26,6 @@ interface CampaignsResponse {
 
 export function CampaignsTab({ customerName }: CampaignsTabProps) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [materialUrl, setMaterialUrl] = useState('')
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,13 +37,7 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
       .catch(() => {})
   }, [customerName])
 
-  async function handleGenerate() {
-    // Validate material URL format
-    if (!materialUrl.match(/docs\.google\.com\/(document|presentation)\/d\//)) {
-      setError('Please enter a valid Google Doc or Slides URL')
-      return
-    }
-
+  async function handleGenerate(config: CampaignConfig) {
     setGenerating(true)
     setError(null)
 
@@ -51,14 +45,18 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
       const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/campaigns/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ materialUrl }),
+        body: JSON.stringify({
+          materialUrl: config.materialUrl,
+          personas: config.personas.filter(p => p.enabled),
+          style: config.style,
+          valueProps: config.valueProps,
+        }),
       })
 
       // BKL-TEST-07: Check res.ok before treating as success
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Generation failed' }))
         setError(err.error || 'Generation failed')
-        setGenerating(false)
         return
       }
 
@@ -68,13 +66,12 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
       setCampaigns(prev => [
         {
           id: data.campaignId,
-          materialTitle: data.materialTitle || 'Campaign',
+          materialTitle: config.materialTitle || 'Campaign',
           generatedAt: data.generatedAt,
           driveUrl: data.driveUrl,
         },
         ...prev,
       ])
-      setMaterialUrl('')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Generation failed')
     } finally {
@@ -98,41 +95,14 @@ export function CampaignsTab({ customerName }: CampaignsTabProps) {
       </div>
 
       {/* Create Campaign Form */}
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 space-y-4">
-        <h2 className="text-base font-semibold text-text-primary">Create Campaign</h2>
-
-        <div className="space-y-2">
-          <label htmlFor="materialUrl" className="block text-sm font-medium text-zinc-400">
-            Material URL
-          </label>
-          <input
-            id="materialUrl"
-            type="text"
-            value={materialUrl}
-            onChange={e => setMaterialUrl(e.target.value)}
-            disabled={generating}
-            placeholder="https://docs.google.com/document/d/..."
-            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50"
-          />
-          <p className="text-xs text-zinc-500">Google Doc or Slides link</p>
+      {generating ? (
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-12 text-center space-y-3">
+          <RefreshCw className="w-8 h-8 text-accent mx-auto animate-spin" />
+          <p className="text-sm text-text-secondary">Generating campaign...</p>
         </div>
-
-        {error && (
-          <div className="flex items-center gap-2 text-xs text-warning">
-            <AlertCircle className="w-3.5 h-3.5" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <button
-          onClick={handleGenerate}
-          disabled={generating || !materialUrl.trim()}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {generating && <RefreshCw className="w-4 h-4 animate-spin" />}
-          {generating ? 'Generating Campaign...' : 'Generate Campaign'}
-        </button>
-      </div>
+      ) : (
+        <CampaignConfigurator customerName={customerName} onConfirm={handleGenerate} />
+      )}
 
       {/* Campaign History */}
       {hasCampaigns ? (
