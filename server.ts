@@ -25,7 +25,7 @@ import { loadServerState, aes, customers, setAes, setCustomers, patchAe, AES_PAT
 import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
-import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh } from './src/background-scheduler.ts'
+import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh, scheduleNewsRadarRefresh } from './src/background-scheduler.ts'
 import { healStaleAccountNumbers } from './src/account-provenance-healer.ts'
 import { initDashboardRoutes, createDashboardRouter } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
@@ -61,6 +61,8 @@ import './src/modules/tools-module.ts'
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #151: Campaign generation routes ──────────────────────────────
 import { createCampaignsRouter } from './src/campaigns-routes.ts'
+// ── GitHub #153: News Radar routes ──────────────────────────────────────
+import { createNewsRouter } from './src/news-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -277,6 +279,8 @@ app.route('/', createFeatureModuleRouter())
 app.route('/', createToolsRouter())
 // ── GitHub #151: Campaign generation routes ────────────────────────────────
 app.route('/', createCampaignsRouter())
+// ── GitHub #153: News Radar routes ──────────────────────────────────────────
+app.route('/', createNewsRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
@@ -713,6 +717,9 @@ void healStaleAccountNumbers()
 
 // ── Wave 4: Product Intel weekly refresh (Sunday 6am ET) ────────────────────
 scheduleProductIntelRefresh()
+
+// ── Wave 5: News Radar daily refresh (5:30am ET, Issue #153) ────────────────
+scheduleNewsRadarRefresh()
 
 // ── Drive config merge (startup, best-effort) ───────────────────────────────
 // If parentFolderId is set for any region, fetch Config/settings.json from

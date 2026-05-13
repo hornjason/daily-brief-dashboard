@@ -340,6 +340,27 @@ export function nextEt7amUtc(now?: Date): Date {
   return target
 }
 
+/** Returns the next UTC Date representing the next 5:30am ET. Same pattern as nextEt2amUtc. */
+export function nextEt530amUtc(now?: Date): Date {
+  const _now = now ?? new Date()
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  })
+  const p: Record<string, number> = {}
+  for (const part of fmt.formatToParts(_now)) {
+    if (part.type !== 'literal') p[part.type] = Number(part.value)
+  }
+  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
+  const etOffsetMs  = _now.getTime() - etAsIfUtcMs
+  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, 5, 30, 0) + etOffsetMs)
+  if (target.getTime() <= _now.getTime()) {
+    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
+  }
+  return target
+}
+
 /** Returns the next UTC Date representing the next 8:00am ET. Same pattern as nextEt2amUtc. */
 export function nextEt8amUtc(now?: Date): Date {
   const _now = now ?? new Date()
@@ -1478,5 +1499,53 @@ export function scheduleProductIntelRefresh(): void {
       console.error('[product-intel] weekly refresh failed:', e?.message ?? e)
     }
     scheduleProductIntelRefresh()  // reschedule for next Sunday
+  }, msUntil)
+}
+
+// ── News Radar daily refresh at 5:30am ET (Issue #153) ───────────────────────
+
+export function scheduleNewsRadarRefresh(): void {
+  const msUntil = nextEt530amUtc().getTime() - Date.now()
+  console.log(`[news-radar] next refresh in ${Math.round(msUntil / 60_000)}m (5:30am ET)`)
+  setTimeout(async () => {
+    try {
+      const { customers: currentCustomers } = await import('./server-state.ts')
+      if (!currentCustomers || currentCustomers.length === 0) {
+        console.log('[news-radar] no customers configured — skipping')
+        scheduleNewsRadarRefresh()
+        return
+      }
+
+      console.log(`[news-radar] starting daily news refresh for ${currentCustomers.length} customers`)
+
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const newsModule = FeatureModuleRegistry.get('news-radar')
+
+      if (!newsModule) {
+        console.warn('[news-radar] news-radar module not registered — skipping')
+        scheduleNewsRadarRefresh()
+        return
+      }
+
+      let successCount = 0
+      let errorCount = 0
+
+      for (const customer of currentCustomers) {
+        try {
+          await newsModule.fetch(customer.name)
+          successCount++
+          console.log(`[news-radar] refreshed news for ${customer.name}`)
+        } catch (e: any) {
+          errorCount++
+          console.error(`[news-radar] failed to refresh news for ${customer.name}:`, e?.message ?? e)
+        }
+        await new Promise(r => setTimeout(r, 3000))
+      }
+
+      console.log(`[news-radar] daily refresh complete: ${successCount} succeeded, ${errorCount} failed`)
+    } catch (e: any) {
+      console.error('[news-radar] daily refresh error:', e?.message ?? e)
+    }
+    scheduleNewsRadarRefresh()
   }, msUntil)
 }
