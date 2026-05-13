@@ -24,6 +24,7 @@ import { sanitizeErr } from './utils.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import type { Customer } from './types.ts'
 import { extractMaterial, deleteMaterialCache } from './material-extraction.ts'
+import { generateCampaignHTML } from './campaign-html-template.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -451,20 +452,32 @@ async function ensureCampaignsSubfolder(customerFolderId: string): Promise<strin
 async function uploadCampaignToDrive(
   customerFolderId: string,
   customerName: string,
+  aeName: string,
   materialTitle: string,
+  materialUrl: string,
   markdown: string,
+  signals: SignalStack,
 ): Promise<string> {
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
-  const timestamp = new Date().toLocaleDateString('en-US', {
+  const generatedDate = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
   })
   const docName = `${materialTitle} - Campaign for ${customerName}`
-  const fullContent = `Generated: ${timestamp}\n\n${markdown}`
-  return driveClient.upsertDoc(campaignsFolderId, docName, fullContent, { onConflict: 'rewrite' })
+
+  // Generate rich HTML output matching ContentCampaign skill format
+  const htmlContent = generateCampaignHTML({
+    materialTitle,
+    materialUrl,
+    customerName,
+    aeName,
+    generatedDate,
+    signals,
+    markdown,
+  })
+
+  return driveClient.upsertDoc(campaignsFolderId, docName, htmlContent, { onConflict: 'rewrite' })
 }
 
 // ── Cache persistence ────────────────────────────────────────────────────────
@@ -558,11 +571,21 @@ export async function generateCampaign(
   const generatedAt = new Date().toISOString()
   const campaignId = Date.now().toString()
 
-  // 4. Upload to Drive
+  // 4. Upload to Drive (HTML format)
   let driveUrl = ''
   try {
     const customerFolderId = await findCustomerDriveFolder(customer)
-    driveUrl = await uploadCampaignToDrive(customerFolderId, customer.name, materialTitle, markdown)
+    // Get AE name from customer record
+    const aeName = customer.aeName ?? 'Account Executive'
+    driveUrl = await uploadCampaignToDrive(
+      customerFolderId,
+      customer.name,
+      aeName,
+      materialTitle,
+      materialUrl,
+      markdown,
+      signals
+    )
     console.log(`[campaigns] Uploaded to Drive: ${driveUrl}`)
   } catch (e: any) {
     console.error(`[campaigns] Drive upload failed (non-fatal):`, e.message)
