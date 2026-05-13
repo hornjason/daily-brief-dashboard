@@ -102,8 +102,14 @@ export function createBatchRouter(): Hono {
               continue
             }
 
-            // Generate campaign
-            const result = await generateCampaign(customer, config!.materialUrl!)
+            // Generate campaign with config
+            const campaignConfig: CampaignRequest = {
+              materialUrl: config!.materialUrl!,
+              personas: config?.personas,
+              style: config?.style,
+              valueProps: config?.valueProps,
+            }
+            const result = await generateCampaign(customer, config!.materialUrl!, campaignConfig)
 
             const doneEvent: BatchProgressEvent = {
               customer: name,
