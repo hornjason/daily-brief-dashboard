@@ -5998,8 +5998,8 @@ Priority: P2
 Size: S
 Source: 2026-04-09 — Jason debugging session
 Files: src/calendar-routes.ts
-Description: Calendar integration was only fetching events from the user's primary Google Calendar, missing events from shared/secondary calendars. Fixed 2026-04-09: now fetches all calendars and starts query window at midnight (was using current time, missing earlier events).
-Decision: DONE — fetches all calendars, query starts at midnight. Verified with multi-calendar user.
+Description: Calendar integration was only fetching events from the user's primary Google Calendar, missing events from shared/secondary calendars. Fixed 2026-04-09: now fetches all calendars and starts query window at midnight (was using current time, missing earlier events). **Reverted 2026-05-13 (#169):** multi-calendar fetch pulled in subscribed/shared calendars (holiday, team, other people's calendars) polluting the dashboard. Restored to primary-only via `calendarId: 'primary'`.
+Decision: DONE → SUPERSEDED by BKL-CAL-05 / #169 — primary-only is the correct behavior.
 
 ### BKL-CAL-04 | Calendar title keyword false-matching on common words
 Status: ✅ DONE 2026-04-09
@@ -6076,6 +6076,16 @@ Files: src/google.ts (fetchCalendar, matchedCustomers — auto-domain path)
 Root cause: Auto-domain matching uses `co.includes(normAlpha(c.name.split(/[\s,]/)[0]))` — first word of "U S Epson" is "U", normalized to "u", which substring-matches inside "illumio". Any meeting with 2+ @illumio.com attendees triggers U S Epson via auto-domain + corroboration gate passes on attendee count.
 Fix: Add `firstWord.length > 2` guard to auto-domain filter so single/double-char first-words (initials like "U", "A", "B") cannot trigger auto-domain matching. One-line fix in google.ts.
 Decision: OPEN — needs Marcus, rebuild required.
+
+### BKL-CAL-08 | fetchCalendar() pulls events from all subscribed/shared calendars → #169
+Status: ✅ DONE — 2026-05-13 (closed)
+Severity: MEDIUM
+Priority: P2
+Size: XS
+Source: 2026-05-13 — Jason reported subscribed calendars polluting dashboard
+Files: src/google.ts (fetchCalendar)
+Description: fetchCalendar() used calendarList.list() to fetch all calendars the user has access to, then looped over each to collect events. This included subscribed calendars (team calendars, holiday calendars, other people's shared calendars). Fix: replaced multi-calendar fetch with single calendarId: 'primary' query, matching the pattern already used in customer.ts and domains.ts. Supersedes BKL-CAL-03.
+Decision: DONE — primary-only is correct; subscribed calendars are noise.
 
 ### BKL-UX51 | Product filter (OCP/AAP/RHEL) causes dashboard to go black
 Status: ✅ DONE — 2026-04-10
@@ -10183,3 +10193,21 @@ BKL-CI-08 → #129 — Gate 1: Pre-push hook with unit+typecheck+hero purity (cl
 BKL-CI-09 → #130 — Gate 2: Move Playwright ci project to PR trigger (closed)
 BKL-CI-10 → #131 — Gate 3: Nightly data assertion workflow + script (closed)
 BKL-CI-11 → #132 — Gate 4: Extend release workflow with full E2E + smoke (closed)
+
+### BKL-ARCH-CONTRACT-AUDIT-01 | Audit existing features for FeatureModule contract adoption (Issue #139)
+Priority: P2 | Size: M | Status: OPEN
+Source: Design grilling session 2026-05-12 — ADR-020 introduces FeatureModule registry for new features; existing features need programmatic migration plan
+Files: src/feature-module-registry.ts (future), all existing feature modules
+Description: After the FeatureModule registry ships with Campaigns/News/Tools/NotebookLM, audit all existing features (briefs, product intel, health scoring, account intelligence, account plans, morning summary, temporal delta, email settings) for contract adoption. Determine migration order, effort per feature (XS/S/M), and whether to extend FeatureModule or create sibling contracts for different feature shapes. Migrate one-at-a-time when features are already being modified — no big-bang migration.
+
+### BKL-TABS-PHASE1 | Account Detail Tabs + Feature Module Registry — Phase 1 (Issue #140)
+Priority: P1 | Size: L | Status: OPEN
+Source: Design grilling session 2026-05-12
+Description: Parent issue for Phase 1. Tab refactor + FeatureModuleRegistry. See ADR-020.
+Sub-issues:
+  - BKL-TABS-01 → #141 — FeatureModuleRegistry server-side interface + lifecycle
+  - BKL-TABS-02 → #142 — Account detail tab navigation chrome
+  - BKL-TABS-03 → #143 — Wire archive cleanup to FeatureModuleRegistry
+  - BKL-TABS-04 → #144 — Sync Now API endpoint for registered modules
+  - BKL-TABS-05 → #145 — Playwright visual regression baseline for tabbed layout
+  - BKL-TABS-06 → #146 — Tab shell components with dummy feature module registration

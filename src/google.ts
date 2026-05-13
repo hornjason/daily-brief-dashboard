@@ -136,36 +136,15 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
   weekStart.setDate(weekStart.getDate() - (day === 0 ? 6 : day - 1)) // back to Monday
   const weekOut = new Date(weekStart.getTime() + 14 * 24 * 60 * 60 * 1000) // 2 weeks to cover this + next week
 
-  // Fetch all calendars the user has access to, then merge events
-  const calListRes = await calendar.calendarList.list({ minAccessRole: 'reader' }).catch(() => ({ data: { items: [] } }))
-  const calIds = (calListRes.data.items ?? [])
-    .filter(cal => cal.selected !== false)
-    .map(cal => cal.id!)
-    .filter(Boolean)
-  // Always include primary; deduplicate
-  if (!calIds.includes('primary')) calIds.unshift('primary')
-
-  const allItems: any[] = []
-  for (const calId of calIds) {
-    const res = await calendar.events.list({
-      calendarId: calId,
-      timeMin: weekStart.toISOString(),
-      timeMax: weekOut.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime',
-      maxResults: 200,
-    }).catch(() => ({ data: { items: [] } }))
-    allItems.push(...(res.data.items ?? []))
-  }
-
-  // Deduplicate by iCalUID across calendars
-  const seen = new Set<string>()
-  const res = { data: { items: allItems.filter(ev => {
-    const key = ev.iCalUID ?? ev.id
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  }) } }
+  // Fetch only the authenticated user's primary calendar — no subscribed/shared calendars
+  const res = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: weekStart.toISOString(),
+    timeMax: weekOut.toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 200,
+  }).catch(() => ({ data: { items: [] } }))
 
   // BKL-CAL-01: filter out proposed/declined events before processing
   // Only drop events the user explicitly declined or that are "[Proposed Time]" placeholders.

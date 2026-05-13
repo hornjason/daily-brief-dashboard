@@ -1326,7 +1326,7 @@ All schedule times configurable via Admin page or `POST /api/settings/scheduler`
 | Pipeline | Trigger | Data Window | Notes |
 |---|---|---|---|
 | **Gmail** | Fetched per brief generation | Last 30 days | Domain + name matching against customer. Included in brief XML as `<source type="emails">`. |
-| **Calendar** | Fetched per dashboard load | Next 30 days | Google Calendar API. Included in brief XML as `<source type="calendar">`. |
+| **Calendar** | Fetched per dashboard load | 2-week window (Mon–Mon) | Google Calendar API, primary calendar only (`calendarId: 'primary'`). Subscribed/shared calendars excluded. Included in brief XML as `<source type="calendar">`. |
 | **Google Drive docs** | Crawled per brief generation | All docs in customer folder | Depth 5 traversal. Google Docs + PDFs (Gemini multimodal extraction, 15MB size gate). 8K char cap per doc. |
 
 ### Other pipelines
