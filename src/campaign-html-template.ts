@@ -130,8 +130,13 @@ function escapeHTML(text: string): string {
  * Convert markdown-style links to HTML links
  */
 function convertMarkdownLinks(text: string): string {
-  // [text](url) -> <a href="url">text</a>
-  return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #1a73e8;">$1</a>')
+  // Standard markdown: [text](url) -> <a href="url">text</a>
+  let result = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #1a73e8;">$1</a>')
+  // Gemini alternate format: [url] text -> <a href="url">text</a>
+  result = result.replace(/\[(https?:\/\/[^\]]+)\]\s*([^[\n]+)/g, '<a href="$1" style="color: #1a73e8;">$2</a>')
+  // Bare URLs: https://... -> clickable link
+  result = result.replace(/(?<!")(https?:\/\/[^\s<>"]+)/g, '<a href="$1" style="color: #1a73e8;">Link</a>')
+  return result
 }
 
 /**
@@ -248,18 +253,33 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
   // ── Extract competitors from ## Competitive Landscape section ──
   const competitorSection = companyText.match(/## Competitive Landscape[\s\S]*?(?=\n## |$)/i)
   if (competitorSection) {
-    // Match numbered competitors: 1. **F5, Inc.:** description
-    const competitorRegex = /\d+\.\s+\*\*([^*:]+?)(?::?\*\*):?\s*(.*?)(?=\n\s*\d+\.|\n\s*\d+\.|\n##|$)/gs
+    const section = competitorSection[0]
+
+    // Extract differentiation paragraph for the advantage column
+    const diffMatch = section.match(/differentiates?\s+(?:itself\s+)?(?:through|by|with)\s+([\s\S]*?)(?=\n\n|Switching costs)/i)
+    const differentiation = diffMatch?.[1]?.trim().split('.')[0] || ''
+
+    // Format 1: Numbered - 1. **F5, Inc.:** description
+    const numberedRegex = /\d+\.\s+\*\*([^*:]+?)(?::?\*\*):?\s*(.*?)(?=\n\s*\d+\.|\n##|$)/gs
     let match
-    while ((match = competitorRegex.exec(competitorSection[0])) !== null) {
+    while ((match = numberedRegex.exec(section)) !== null) {
       const name = match[1].trim().replace(/[,.]$/, '')
       const description = match[2].trim()
-      // Extract threat/advantage from description
-      const diffMatch = description.match(/differenti(?:ates?|ation)\s+(?:with|by|lies in|often lies in)\s+([^.]+)/i)
       const threat = description.split('.')[0]?.trim() || ''
-      const advantage = diffMatch?.[1]?.trim() || ''
       if (name.length > 1 && name.length < 50 && !name.includes('Competitive')) {
-        result.competitors.push({ name, threat, advantage })
+        result.competitors.push({ name, threat, advantage: differentiation })
+      }
+    }
+
+    // Format 2: Bullet list - * CompanyName or - CompanyName
+    if (result.competitors.length === 0) {
+      const bulletRegex = /[*\-]\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?$/gm
+      while ((match = bulletRegex.exec(section)) !== null) {
+        const name = match[1].trim()
+        if (name.length > 1 && name.length < 50 && !name.match(/^(switching|integrated|specialized|established|market)/i)) {
+          result.competitors.push({ name, threat: '', advantage: differentiation })
+        }
+        if (result.competitors.length >= 5) break
       }
     }
   }
