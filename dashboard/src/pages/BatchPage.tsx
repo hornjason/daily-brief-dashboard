@@ -302,7 +302,7 @@ export function BatchPage() {
             </button>
 
             {/* Grouped Customer List */}
-            <div className="space-y-4 max-h-80 overflow-y-auto">
+            <div className="space-y-4 max-h-[28rem] overflow-y-auto">
               {Object.entries(filteredGroups)
                 .sort(([a], [b]) => a.localeCompare(b))
                 .map(([ae, customers]) => (
