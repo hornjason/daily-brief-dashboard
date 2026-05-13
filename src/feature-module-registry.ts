@@ -29,6 +29,12 @@ export interface ModuleStatus {
   state: 'idle' | 'running' | 'failed'
 }
 
+export interface StartupCatchUpResult {
+  moduleName: string
+  action: 'skipped' | 'ran' | 'failed'
+  reason: string
+}
+
 // ── Internal state ───────────────────────────────────────────────────────────
 
 const _modules = new Map<string, FeatureModule>()
@@ -126,6 +132,48 @@ export const FeatureModuleRegistry = {
    * Record the outcome of a fetch/syncNow operation.
    * Updates lastRun, lastSuccess/lastError, and state.
    */
+  /**
+   * Run catch-up for all modules whose lastRun is older than their refreshInterval.
+   * Called once at startup to handle missed scheduled runs (e.g., container was down overnight).
+   * Modules with refreshInterval=null (on-demand only) are skipped.
+   */
+  async startupCatchUp(customerNames: string[]): Promise<StartupCatchUpResult[]> {
+    const results: StartupCatchUpResult[] = []
+
+    for (const module of _modules.values()) {
+      if (!module.refreshInterval) {
+        results.push({ moduleName: module.name, action: 'skipped', reason: 'on-demand only (no refreshInterval)' })
+        continue
+      }
+
+      const status = _status.get(module.name)
+      const lastRun = status?.lastRun ? new Date(status.lastRun).getTime() : 0
+      const elapsed = Date.now() - lastRun
+
+      if (elapsed < module.refreshInterval) {
+        results.push({ moduleName: module.name, action: 'skipped', reason: `last run ${Math.round(elapsed / 60_000)}m ago, interval is ${Math.round(module.refreshInterval / 60_000)}m` })
+        continue
+      }
+
+      console.log(`[feature-module-registry] startup catch-up: ${module.name} is stale (last run ${status?.lastRun ?? 'never'})`)
+
+      for (const customerName of customerNames) {
+        try {
+          await module.fetch(customerName)
+          this.recordOutcome(module.name, { success: true })
+        } catch (e: any) {
+          console.warn(`[feature-module-registry] catch-up failed for ${module.name}/${customerName}:`, e?.message ?? e)
+          this.recordOutcome(module.name, { success: false, error: e?.message })
+        }
+        await new Promise(r => setTimeout(r, 2000))
+      }
+
+      results.push({ moduleName: module.name, action: 'ran', reason: `stale — ran for ${customerNames.length} customers` })
+    }
+
+    return results
+  },
+
   recordOutcome(name: string, outcome: { success: boolean; error?: string }): void {
     const now = new Date().toISOString()
     let status = _status.get(name)

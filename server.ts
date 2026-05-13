@@ -725,6 +725,23 @@ scheduleProductIntelRefresh()
 // ── Wave 5: News Radar daily refresh (5:30am ET, Issue #153) ────────────────
 scheduleNewsRadarRefresh()
 
+// ── Wave 6: Feature module startup catch-up ─────────────────────────────────
+// If any module's lastRun is older than its refreshInterval, run it now.
+// Handles the case where the container was down during a scheduled window.
+import { FeatureModuleRegistry } from './src/feature-module-registry.ts'
+setTimeout(async () => {
+  try {
+    const customerNames = customers.map((c: Customer) => c.name)
+    if (customerNames.length === 0) { console.log('[startup] no customers — skipping module catch-up'); return }
+    const results = await FeatureModuleRegistry.startupCatchUp(customerNames)
+    for (const r of results) {
+      console.log(`[startup] module catch-up: ${r.moduleName} → ${r.action} (${r.reason})`)
+    }
+  } catch (e: any) {
+    console.warn('[startup] module catch-up failed:', e?.message ?? e)
+  }
+}, 30_000) // 30s delay — let other startup tasks settle first
+
 // ── Drive config merge (startup, best-effort) ───────────────────────────────
 // If parentFolderId is set for any region, fetch Config/settings.json from
 // Drive and merge regions[] into local settings.json (Drive wins on regions[]).
