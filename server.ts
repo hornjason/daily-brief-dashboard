@@ -62,6 +62,8 @@ import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #151: Campaign generation routes ──────────────────────────────
 import { createCampaignsRouter } from './src/campaigns-routes.ts'
 // ── GitHub #153: News Radar routes ──────────────────────────────────────
+// ── GitHub #168: Batch execution routes ─────────────────────────────────
+import { createBatchRouter } from './src/batch-routes.ts'
 import { createNewsRouter } from './src/news-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
@@ -281,6 +283,8 @@ app.route('/', createToolsRouter())
 app.route('/', createCampaignsRouter())
 // ── GitHub #153: News Radar routes ──────────────────────────────────────────
 app.route('/', createNewsRouter())
+// ── GitHub #168: Batch execution routes ─────────────────────────────────────
+app.route('/', createBatchRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
