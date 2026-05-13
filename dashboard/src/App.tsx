@@ -184,6 +184,7 @@ function Dashboard() {
 
   // Back to top button (BKL-UX23)
   const [showBackToTop, setShowBackToTop] = useState(false)
+  const [kpiDetailsExpanded, setKpiDetailsExpanded] = useState(false)
 
   useEffect(() => {
     const onScroll = () => setShowBackToTop(window.scrollY > window.innerHeight)
@@ -639,19 +640,35 @@ function Dashboard() {
               <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={filteredAccounts} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={isL3Only ? undefined : rhStatus?.hasSession} sparklineHistory={sparklineHistory} selectedProducts={productFilterSelected} allCases={casesApi.data?.cases ?? []} allAccounts={accountsApi.data?.customers ?? []} caseMatchesProducts={caseMatchesProducts} isL3Only={isL3Only} rhTokenConfigured={rhTokenApi.data?.configured} />
             </section>
 
-            {/* Pipeline */}
-            <section id="section-pipeline" data-section="section-pipeline">
-              <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} selectedProducts={productFilterSelected} />
-            </section>
+            {/* Collapsible KPI Detail Breakdown */}
+            <div className="bg-surface border border-border rounded-xl overflow-hidden">
+              <button
+                onClick={() => setKpiDetailsExpanded(!kpiDetailsExpanded)}
+                className="w-full px-5 py-3 flex items-center justify-between hover:bg-surface-hover transition-colors"
+              >
+                <span className="text-sm font-semibold text-text-primary">Detailed KPI Breakdown</span>
+                <span className="text-text-secondary text-xs">
+                  {kpiDetailsExpanded ? '▼' : '▶'}
+                </span>
+              </button>
+              {kpiDetailsExpanded && (
+                <div className="border-t border-border p-5 space-y-6">
+                  {/* Pipeline */}
+                  <section id="section-pipeline" data-section="section-pipeline">
+                    <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} selectedProducts={productFilterSelected} />
+                  </section>
 
-            {/* Cloud Spend — render whenever CCSP data is available (L3 reads sheet data
-                populated by the L4 leader; isL3Only only blocks scraping, not display).
-                Hide only when AE filter yields no customers. */}
-            {filteredAccounts.length > 0 && (ccspApi.data || ccspApi.loading || ccspApi.error) && (
-              <section id="section-cloudspend" data-section="section-cloudspend">
-                <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
-              </section>
-            )}
+                  {/* Cloud Spend — render whenever CCSP data is available (L3 reads sheet data
+                      populated by the L4 leader; isL3Only only blocks scraping, not display).
+                      Hide only when AE filter yields no customers. */}
+                  {filteredAccounts.length > 0 && (ccspApi.data || ccspApi.loading || ccspApi.error) && (
+                    <section id="section-cloudspend" data-section="section-cloudspend">
+                      <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
+                    </section>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Calendar + Meeting Prep — visible in both views */}
             <section id="section-calendar" data-section="section-calendar">

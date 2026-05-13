@@ -55,6 +55,14 @@ interface Signal {
   text: string
 }
 
+interface NewsHighlight {
+  customerName: string
+  headline: string
+  summary: string
+  significanceScore: number
+  sourceUrl: string
+}
+
 interface MorningSummaryData {
   signals: Signal[]
   summary: string
@@ -70,6 +78,7 @@ interface MorningSummaryProps {
 export default function MorningSummary({ matchingCustomers }: MorningSummaryProps = {}) {
   const navigate = useNavigate()
   const [data, setData] = useState<MorningSummaryData | null>(null)
+  const [newsHighlights, setNewsHighlights] = useState<NewsHighlight[]>([])
   // BKL-UX-morning-min: Start expanded by default per REG-UX115-01.
   // Auto-collapse once data loads if signals > 3 to reduce visual noise on load.
   const [collapsed, setCollapsed] = useState(false)
@@ -83,6 +92,14 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
         // Auto-collapse when signals are many to reduce visual noise
         if (d.signals.length > 3) setCollapsed(true)
       })
+      .catch(() => {})
+  }, [])
+
+  // Fetch news highlights
+  useEffect(() => {
+    fetch('/api/news/highlights')
+      .then(r => r.ok ? r.json() : { highlights: [] })
+      .then(data => setNewsHighlights(data.highlights || []))
       .catch(() => {})
   }, [])
 
@@ -229,6 +246,33 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                   </button>
                 )
               })}
+            </div>
+          )}
+          {/* News Highlights Section */}
+          {newsHighlights.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <h3 className="text-amber-400 font-bold text-sm mb-3">News</h3>
+              <ul className="space-y-3">
+                {newsHighlights.map((item, i) => (
+                  <li key={i} className="text-sm">
+                    <div className="mb-1">
+                      <strong className="text-text-primary">{item.customerName}</strong>
+                      <span className="text-text-secondary"> — {item.headline}</span>
+                    </div>
+                    <div className="text-xs text-zinc-500 leading-relaxed">{item.summary}</div>
+                    {item.sourceUrl && (
+                      <a
+                        href={item.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-accent hover:text-accent/80 underline mt-1 inline-block"
+                      >
+                        Source
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
