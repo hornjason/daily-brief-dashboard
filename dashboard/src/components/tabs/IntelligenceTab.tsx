@@ -1,10 +1,10 @@
 /**
  * GitHub Issue #200: Intelligence tab shell + Red Hat News section
+ * GitHub Issue #201: Product Roadmap section
  * Feature: Red Hat intelligence surfaces — news, product lifecycle, events
- * Phase 1: Red Hat News section with product filter chips
  */
 
-import { Newspaper, RefreshCw, ExternalLink, Loader2, Copy, Check } from 'lucide-react'
+import { Newspaper, RefreshCw, ExternalLink, Loader2, Copy, Check, Calendar, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 
 interface IntelligenceTabProps {
@@ -22,6 +22,19 @@ interface NewsItem {
   productTags?: string[]
 }
 
+interface ProductLifecycle {
+  slug: string
+  displayName: string
+  currentVersion: string
+  latestPatch: string
+  nextVersion: string | null
+  nextExpected: string | null
+  gaDate: string
+  eolDate: string
+  eusAvailable: boolean
+  supportEnd: string
+}
+
 export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
   const [articles, setArticles] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,6 +42,11 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
   const [selectedProduct, setSelectedProduct] = useState<string>('all')
   const [showMore, setShowMore] = useState(false)
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+
+  const [products, setProducts] = useState<ProductLifecycle[]>([])
+  const [roadmapLoading, setRoadmapLoading] = useState(true)
+  const [roadmapError, setRoadmapError] = useState<string | null>(null)
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
   const fetchArticles = async () => {
     try {
@@ -47,8 +65,26 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
     }
   }
 
+  const fetchRoadmap = async () => {
+    try {
+      const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/intelligence/roadmap`)
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch roadmap' }))
+        throw new Error(errorData.error || 'Failed to fetch roadmap')
+      }
+      const data = await res.json()
+      setProducts(data.products || [])
+      setRoadmapError(null)
+    } catch (e: any) {
+      setRoadmapError(e.message || 'Failed to fetch roadmap')
+    } finally {
+      setRoadmapLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetchArticles()
+    fetchRoadmap()
   }, [customerName])
 
   // Extract unique product tags from articles
@@ -121,6 +157,45 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
       }).format(date)
     } catch {
       return isoDate
+    }
+  }
+
+  const getEOLWarning = (eolDate: string) => {
+    if (eolDate === 'N/A') {
+      return { color: '', countdown: null }
+    }
+
+    try {
+      const eol = new Date(eolDate)
+      const now = new Date()
+      const diffMs = eol.getTime() - now.getTime()
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+      if (diffDays < 0) {
+        return { color: 'text-zinc-500', countdown: null }
+      } else if (diffDays < 90) {
+        return { color: 'text-red-400 font-medium', countdown: `⚠️ ${diffDays} days` }
+      } else if (diffDays < 180) {
+        return { color: 'text-yellow-400', countdown: `${diffDays} days` }
+      } else {
+        return { color: '', countdown: null }
+      }
+    } catch {
+      return { color: '', countdown: null }
+    }
+  }
+
+  const formatEOLDate = (eolDate: string) => {
+    if (eolDate === 'N/A') return 'N/A'
+    try {
+      const date = new Date(eolDate)
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(date)
+    } catch {
+      return eolDate
     }
   }
 
@@ -296,6 +371,227 @@ Read more: ${article.sourceUrl}`
                   </button>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Product Roadmap Section */}
+      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-accent" />
+            <h2 className="text-xl font-semibold text-text-primary">Product Roadmap</h2>
+            <span className="text-sm text-text-secondary">(For Products This Customer Uses)</span>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {/* Loading state */}
+          {roadmapLoading && (
+            <div className="py-12 text-center space-y-4">
+              <Loader2 className="w-12 h-12 text-accent mx-auto animate-spin" />
+              <p className="text-sm text-text-secondary">Loading product roadmap...</p>
+            </div>
+          )}
+
+          {/* Error state */}
+          {!roadmapLoading && roadmapError && (
+            <div className="bg-surface border border-red-500/50 rounded-xl p-6 space-y-3">
+              <p className="text-sm font-medium text-red-400">Error loading roadmap</p>
+              <p className="text-xs text-text-secondary">{roadmapError}</p>
+              <button
+                onClick={fetchRoadmap}
+                className="px-4 py-2 rounded-lg border border-border text-xs text-accent hover:border-accent/50 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!roadmapLoading && !roadmapError && products.length === 0 && (
+            <div className="py-12 text-center space-y-4">
+              <div className="relative mx-auto w-20 h-20">
+                <div className="absolute inset-0 bg-accent/10 rounded-full" />
+                <Calendar className="w-12 h-12 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-base font-medium text-text-primary">No product lifecycle data available</p>
+                <p className="text-sm text-text-secondary max-w-md mx-auto">
+                  Product roadmap data will appear here for this customer's subscriptions.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Product table - Desktop */}
+          {!roadmapLoading && !roadmapError && products.length > 0 && (
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                      Product
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                      Current Version
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                      Next Version
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                      EOL
+                    </th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((product, idx) => {
+                    const eolWarning = getEOLWarning(product.eolDate)
+                    const isExpanded = expandedRow === product.slug
+
+                    return (
+                      <tr key={product.slug} className={idx % 2 === 0 ? 'bg-surface' : 'bg-surface/50'}>
+                        <td colSpan={5} className="p-0">
+                          <div
+                            className="cursor-pointer hover:bg-border/20 transition-colors"
+                            onClick={() => setExpandedRow(isExpanded ? null : product.slug)}
+                          >
+                            <div className="grid grid-cols-[1fr,1fr,1fr,1fr,auto] gap-4 px-4 py-3">
+                              <div className="text-sm font-medium text-text-primary">{product.displayName}</div>
+                              <div className="text-sm text-text-secondary">{product.currentVersion}</div>
+                              <div className="text-sm text-text-secondary">
+                                {product.nextVersion ? `${product.nextVersion}` : 'N/A'}
+                                {product.nextExpected && (
+                                  <span className="text-xs text-text-secondary ml-1">
+                                    ({new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(new Date(product.nextExpected))})
+                                  </span>
+                                )}
+                              </div>
+                              <div className={`text-sm ${eolWarning.color}`}>
+                                {formatEOLDate(product.eolDate)}
+                                {eolWarning.countdown && (
+                                  <div className="text-xs mt-0.5">{eolWarning.countdown}</div>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-center">
+                                {isExpanded ? (
+                                  <ChevronUp className="w-4 h-4 text-text-secondary" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4 text-text-secondary" />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expanded details */}
+                          {isExpanded && (
+                            <div className="bg-border/10 p-4 border-t border-border space-y-2">
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <span className="text-text-secondary">Latest Patch:</span>{' '}
+                                  <span className="text-text-primary font-medium">{product.latestPatch}</span>
+                                </div>
+                                <div>
+                                  <span className="text-text-secondary">Support End:</span>{' '}
+                                  <span className="text-text-primary">{formatEOLDate(product.supportEnd)}</span>
+                                </div>
+                                <div>
+                                  <span className="text-text-secondary">GA Date:</span>{' '}
+                                  <span className="text-text-primary">{formatEOLDate(product.gaDate)}</span>
+                                </div>
+                                <div>
+                                  <span className="text-text-secondary">EUS Available:</span>{' '}
+                                  <span className="text-text-primary">{product.eusAvailable ? 'Yes' : 'No'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Product cards - Mobile */}
+          {!roadmapLoading && !roadmapError && products.length > 0 && (
+            <div className="md:hidden space-y-4">
+              {products.map((product) => {
+                const eolWarning = getEOLWarning(product.eolDate)
+                const isExpanded = expandedRow === product.slug
+
+                return (
+                  <div
+                    key={product.slug}
+                    className="bg-surface border border-border rounded-lg overflow-hidden"
+                  >
+                    <div
+                      className="p-4 cursor-pointer hover:bg-border/20 transition-colors"
+                      onClick={() => setExpandedRow(isExpanded ? null : product.slug)}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="text-base font-semibold text-text-primary">{product.displayName}</h3>
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-text-secondary flex-shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-text-secondary flex-shrink-0" />
+                        )}
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary">Current Version</span>
+                          <span className="text-text-primary font-medium">{product.currentVersion}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary">Next Version</span>
+                          <span className="text-text-primary">
+                            {product.nextVersion ? `${product.nextVersion}` : 'N/A'}
+                            {product.nextExpected && (
+                              <span className="text-xs text-text-secondary ml-1">
+                                ({new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(new Date(product.nextExpected))})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary">EOL</span>
+                          <div className={`text-right ${eolWarning.color}`}>
+                            <div>{formatEOLDate(product.eolDate)}</div>
+                            {eolWarning.countdown && <div className="text-xs mt-0.5">{eolWarning.countdown}</div>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expanded details */}
+                    {isExpanded && (
+                      <div className="bg-border/10 p-4 border-t border-border space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary">Latest Patch</span>
+                          <span className="text-text-primary font-medium">{product.latestPatch}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary">Support End</span>
+                          <span className="text-text-primary">{formatEOLDate(product.supportEnd)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary">GA Date</span>
+                          <span className="text-text-primary">{formatEOLDate(product.gaDate)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary">EUS Available</span>
+                          <span className="text-text-primary">{product.eusAvailable ? 'Yes' : 'No'}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

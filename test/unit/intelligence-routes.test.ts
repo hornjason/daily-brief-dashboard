@@ -200,4 +200,179 @@ describe('Intelligence Routes', () => {
     expect(json.events).toEqual([])
     expect(json.cachedAt).toBeDefined()
   })
+
+  test('GET /api/customer/:name/intelligence/roadmap - returns product lifecycle data', async () => {
+    const app = createIntelligenceRouter()
+
+    // Write test product lifecycle cache
+    const MAIN_CACHE_DIR = resolve(import.meta.dir, '../../data/cache')
+    const lifecyclePath = resolve(MAIN_CACHE_DIR, 'product-lifecycle.json')
+
+    if (!existsSync(MAIN_CACHE_DIR)) {
+      mkdirSync(MAIN_CACHE_DIR, { recursive: true })
+    }
+
+    writeFileSync(
+      lifecyclePath,
+      JSON.stringify({
+        products: [
+          {
+            slug: 'ocp',
+            displayName: 'Red Hat OpenShift Container Platform',
+            currentVersion: '4.17',
+            latestPatch: '4.17.3',
+            nextVersion: '4.18',
+            nextExpected: '2026-06-15',
+            gaDate: '2025-03-01',
+            eolDate: '2025-03-26',
+            eusAvailable: true,
+            supportEnd: '2025-03-26',
+          },
+          {
+            slug: 'rhel',
+            displayName: 'Red Hat Enterprise Linux',
+            currentVersion: '9.3',
+            latestPatch: '9.3.1',
+            nextVersion: '9.4',
+            nextExpected: '2026-05-28',
+            gaDate: '2024-11-05',
+            eolDate: '2032-05-31',
+            eusAvailable: true,
+            supportEnd: '2032-05-31',
+          },
+          {
+            slug: 'aap',
+            displayName: 'Red Hat Ansible Automation Platform',
+            currentVersion: '2.6',
+            latestPatch: '2.6.2',
+            nextVersion: '2.7',
+            nextExpected: '2026-06-01',
+            gaDate: '2024-05-14',
+            eolDate: '2024-05-27',
+            eusAvailable: false,
+            supportEnd: '2024-05-27',
+          },
+        ],
+        fetchedAt: new Date().toISOString(),
+      }),
+      { mode: 0o600 }
+    )
+
+    // Write customer expansion cache (to filter products)
+    const INTEL_CACHE_DIR = resolve(MAIN_CACHE_DIR, 'intelligence')
+    if (!existsSync(INTEL_CACHE_DIR)) {
+      mkdirSync(INTEL_CACHE_DIR, { recursive: true })
+    }
+
+    const expansionPath = resolve(INTEL_CACHE_DIR, 'acme-corp-expansion.json')
+    writeFileSync(
+      expansionPath,
+      JSON.stringify({
+        opportunities: [
+          { productSlug: 'ocp', score: 85 },
+          { productSlug: 'aap', score: 65 },
+        ],
+        lastUpdated: new Date().toISOString(),
+      }),
+      { mode: 0o600 }
+    )
+
+    const res = await app.request('/api/customer/Acme%20Corp/intelligence/roadmap')
+    expect(res.status).toBe(200)
+
+    const json = await res.json()
+    expect(json.products).toBeDefined()
+    expect(json.cachedAt).toBeDefined()
+
+    // Should filter to customer's relevant products (ocp, aap based on expansion data)
+    expect(json.products.length).toBeGreaterThan(0)
+    expect(json.products.some((p: any) => p.slug === 'ocp')).toBe(true)
+
+    // Cleanup
+    if (existsSync(lifecyclePath)) {
+      unlinkSync(lifecyclePath)
+    }
+    if (existsSync(expansionPath)) {
+      unlinkSync(expansionPath)
+    }
+  })
+
+  test('GET /api/customer/:name/intelligence/roadmap - returns all products when no customer data exists', async () => {
+    const app = createIntelligenceRouter()
+
+    const MAIN_CACHE_DIR = resolve(import.meta.dir, '../../data/cache')
+    const lifecyclePath = resolve(MAIN_CACHE_DIR, 'product-lifecycle.json')
+
+    if (!existsSync(MAIN_CACHE_DIR)) {
+      mkdirSync(MAIN_CACHE_DIR, { recursive: true })
+    }
+
+    writeFileSync(
+      lifecyclePath,
+      JSON.stringify({
+        products: [
+          {
+            slug: 'ocp',
+            displayName: 'Red Hat OpenShift Container Platform',
+            currentVersion: '4.17',
+            latestPatch: '4.17.3',
+            nextVersion: '4.18',
+            nextExpected: '2026-06-15',
+            gaDate: '2025-03-01',
+            eolDate: '2025-03-26',
+            eusAvailable: true,
+            supportEnd: '2025-03-26',
+          },
+          {
+            slug: 'rhel',
+            displayName: 'Red Hat Enterprise Linux',
+            currentVersion: '9.3',
+            latestPatch: '9.3.1',
+            nextVersion: '9.4',
+            nextExpected: '2026-05-28',
+            gaDate: '2024-11-05',
+            eolDate: '2032-05-31',
+            eusAvailable: true,
+            supportEnd: '2032-05-31',
+          },
+        ],
+        fetchedAt: new Date().toISOString(),
+      }),
+      { mode: 0o600 }
+    )
+
+    const res = await app.request('/api/customer/NonExistent/intelligence/roadmap')
+    expect(res.status).toBe(200)
+
+    const json = await res.json()
+    // When no customer-specific data, return all products
+    expect(json.products.length).toBe(2)
+
+    // Cleanup
+    if (existsSync(lifecyclePath)) {
+      unlinkSync(lifecyclePath)
+    }
+  })
+
+  test('GET /api/customer/:name/intelligence/roadmap - returns empty when no cache exists', async () => {
+    const app = createIntelligenceRouter()
+
+    const res = await app.request('/api/customer/NonExistent/intelligence/roadmap')
+    expect(res.status).toBe(200)
+
+    const json = await res.json()
+    expect(json.products).toEqual([])
+    expect(json.cachedAt).toBe(null)
+  })
+
+  test('GET /api/customer/:name/intelligence/roadmap - handles invalid slug gracefully', async () => {
+    const app = createIntelligenceRouter()
+
+    // Path with special chars that produce empty slug
+    const res = await app.request('/api/customer/%2F%2F%2F/intelligence/roadmap')
+    expect(res.status).toBe(400)
+
+    const json = await res.json()
+    expect(json.error).toBeDefined()
+  })
 })
