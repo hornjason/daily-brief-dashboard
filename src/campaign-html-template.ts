@@ -336,10 +336,55 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
 /**
  * Generate rich HTML output matching ContentCampaign skill format
  */
+/**
+ * Extract known contacts from intelligence data
+ */
+function extractContacts(signals?: CampaignHTMLOptions['signals']): Array<{ name: string; title: string; email?: string }> {
+  const contacts: Array<{ name: string; title: string; email?: string }> = []
+  const intel = signals?.intelligence
+  const companyText = typeof intel === 'string' ? intel : (intel?.company || '')
+
+  // Parse leadership section for named executives
+  const leadershipSection = companyText.match(/## Leadership[\s\S]*?(?=\n## |$)/i)
+  if (leadershipSection) {
+    // Match patterns like "Scott Thomson, Vice President, Information Technology"
+    // or "* Scott Thomson, VP of IT"
+    const contactRegex = /(?:\*\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+),\s*((?:VP|Vice President|SVP|Senior Vice President|President|CEO|CFO|CTO|CIO|COO|CMO|Director|Head of|Chief)[^.\n]*)/gi
+    let match
+    while ((match = contactRegex.exec(leadershipSection[0])) !== null) {
+      const name = match[1].trim()
+      const title = match[2].trim()
+      if (name.length > 3 && !contacts.some(c => c.name === name)) {
+        contacts.push({ name, title })
+      }
+    }
+  }
+
+  // Also check account plan for team members or stakeholders
+  const planText = signals?.accountPlan || ''
+  if (planText) {
+    const teamSection = planText.match(/## (?:Key Stakeholders|Team Members)[\s\S]*?(?=\n## |$)/i)
+    if (teamSection) {
+      const memberRegex = /\*\*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\*\*:?\s*([^.\n]+)/g
+      let match
+      while ((match = memberRegex.exec(teamSection[0])) !== null) {
+        const name = match[1].trim()
+        const title = match[2].trim()
+        if (!contacts.some(c => c.name === name)) {
+          contacts.push({ name, title })
+        }
+      }
+    }
+  }
+
+  return contacts
+}
+
 export function generateCampaignHTML(options: CampaignHTMLOptions): string {
   const parsed = parseCampaignMarkdown(options.markdown)
   const metrics = extractMetrics(options.signals)
   const structured = extractStructuredIntel(options.signals)
+  const contacts = extractContacts(options.signals)
 
   // Build HTML
   const html = `<!DOCTYPE html>
@@ -355,6 +400,34 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
   <tr>
     <td style="font-size: 14px; color: #5f6368;"><strong style="color: #202124;">Source:</strong> <a href="${escapeHTML(options.materialUrl)}" style="color: #1a73e8;">${escapeHTML(options.materialTitle)}</a></td>
   </tr>
+</table>
+
+${contacts.length > 0 ? `
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">👥 Target Contacts</h2>
+<table width="100%" cellpadding="6" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
+  <tr style="background: #f8f9fa;">
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Name</td>
+    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Title</td>
+  </tr>
+  ${contacts.map(c => `<tr>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHTML(c.name)}</td>
+    <td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.title)}</td>
+  </tr>`).join('\n')}
+</table>` : ''}
+
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
+<table width="100%" cellpadding="4" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 20px;">
+  <tr><td style="padding: 2px 0;">☐ Word limits: Executive ≤90 words | Manager 200-250 words</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Technical observations only — no firmographic facts</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Statements only — no questions anywhere</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Per-bullet links to Red Hat product pages</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Named peer company with concrete metric</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Forward-worthy: exec forwards down, manager forwards up</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Competitor-swap test: product name swap shouldn't work</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Creepy line check: no internal data the recipient wouldn't expect</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Subject = observation about their world (no product names)</td></tr>
+  <tr><td style="padding: 2px 0;">☐ No filler phrases</td></tr>
+  <tr><td style="padding: 2px 0;">☐ Relationship context: ONE sentence about existing Red Hat products</td></tr>
 </table>
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 24px 0;">
