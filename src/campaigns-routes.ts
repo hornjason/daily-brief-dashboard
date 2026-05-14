@@ -235,7 +235,18 @@ Every generated email MUST pass ALL of these rules:
 1. **Word limits:** Executive tier = 90 words max; Manager tier = 200-250 words
 2. **Technical observations only** — no firmographic facts ("You're a $2B company")
 3. **Statements, not questions** — "curious whether" is template smell. No questions anywhere including CTA.
-4. **Per-bullet links** — each bullet links to the specific Red Hat product page for that feature (no single generic CTA link)
+4. **Per-bullet links** — MANDATORY: each bullet MUST be a markdown link [Feature Name](url) linking to the specific Red Hat product page. Use these URLs:
+   - Ansible Automation Platform: https://www.redhat.com/en/technologies/management/ansible/automation-platform
+   - Event-Driven Ansible: https://www.redhat.com/en/technologies/management/ansible/event-driven-ansible
+   - Ansible Lightspeed: https://www.redhat.com/en/technologies/management/ansible/ansible-lightspeed
+   - AI Infrastructure Automation: https://www.redhat.com/en/technologies/management/ansible/automation-platform/features#ai-infrastructure-automation
+   - AIOps: https://www.redhat.com/en/technologies/management/ansible/automation-platform/features#aiops
+   - OpenShift: https://www.redhat.com/en/technologies/cloud-computing/openshift
+   - OpenShift AI: https://www.redhat.com/en/technologies/cloud-computing/openshift/openshift-ai
+   - OpenShift Virtualization: https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization
+   - RHEL: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux
+   - RHEL AI: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/ai
+   Format each bullet as: * [Feature Name](url): description sentence
 5. **Name the peer company with a concrete metric** — "Mutua Madrileña cut service tickets 50%" not "a major insurer improved"
 6. **Forward-worthy test** — exec emails: VP forwards to eng lead; manager emails: manager forwards to VP
 7. **Competitor-swap test** — if replacing the product name still works, the email is a brochure. Rewrite with feature-specific language.
@@ -281,7 +292,7 @@ async function callGeminiForCampaign(opts: {
 }): Promise<string> {
   const project = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model = getGeminiModel()
+  const model = 'gemini-2.5-pro'  // Pro for campaigns — better instruction following for council rules
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
 
   const token = await getGeminiToken()
