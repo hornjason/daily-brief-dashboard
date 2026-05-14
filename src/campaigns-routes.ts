@@ -238,14 +238,16 @@ Every generated email MUST pass ALL of these rules:
 4. **Per-bullet links** — MANDATORY: each bullet MUST be a markdown link [Feature Name](url) linking to the specific Red Hat product page. Use these URLs:
    - Ansible Automation Platform: https://www.redhat.com/en/technologies/management/ansible
    - Event-Driven Ansible: https://www.redhat.com/en/technologies/management/ansible/event-driven-ansible
-   - Ansible Lightspeed: https://www.redhat.com/en/technologies/management/ansible/ansible-lightspeed
-   - AI Infrastructure Automation: https://www.redhat.com/en/technologies/management/ansible
-   - AIOps: https://www.redhat.com/en/technologies/management/ansible
+   - Ansible Lightspeed / Automation Coding Assistant: https://www.redhat.com/en/technologies/management/ansible/automation-coding-assistant
+   - AI Infrastructure Automation: https://www.redhat.com/en/technologies/management/ansible (link to main Ansible page)
+   - AIOps: https://www.redhat.com/en/topics/ai/what-is-aiops
+   - Event-Driven Automation (concept): https://www.redhat.com/en/topics/automation/what-is-event-driven-automation
    - OpenShift: https://www.redhat.com/en/technologies/cloud-computing/openshift
-   - OpenShift AI: https://www.redhat.com/en/technologies/cloud-computing/openshift/openshift-ai
+   - OpenShift AI: https://www.redhat.com/en/products/ai/openshift-ai
    - OpenShift Virtualization: https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization
    - RHEL: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux
-   - RHEL AI: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/ai
+   - RHEL AI: https://www.redhat.com/en/products/ai/enterprise-linux-ai
+   IMPORTANT: Each bullet MUST use the most specific URL that matches the feature being described. Do NOT use the generic Ansible page for specific features like AIOps or Event-Driven Ansible.
    Format each bullet as: * [Feature Name](url): description sentence
 5. **Name the peer company with a concrete metric** — "Mutua Madrileña cut service tickets 50%" not "a major insurer improved"
 6. **Forward-worthy test** — exec emails: VP forwards to eng lead; manager emails: manager forwards to VP
