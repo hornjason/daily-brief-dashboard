@@ -272,14 +272,20 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
     }
 
     // Format 2: Bullet list - * CompanyName or - CompanyName
+    // For bullet lists, competitors have no individual threat/advantage data
+    // Store differentiation separately, don't duplicate per row
     if (result.competitors.length === 0) {
       const bulletRegex = /[*\-]\s+(?:\*\*)?([^*\n]+?)(?:\*\*)?$/gm
       while ((match = bulletRegex.exec(section)) !== null) {
         const name = match[1].trim()
         if (name.length > 1 && name.length < 50 && !name.match(/^(switching|integrated|specialized|established|market)/i)) {
-          result.competitors.push({ name, threat: '', advantage: differentiation })
+          result.competitors.push({ name, threat: '', advantage: '' })
         }
         if (result.competitors.length >= 5) break
+      }
+      // Store differentiation as a separate field for display above the table
+      if (differentiation) {
+        (result as any).differentiation = differentiation
       }
     }
   }
@@ -397,16 +403,17 @@ ${structured.initiatives.length > 0 ? `
 
 ${structured.competitors.length > 0 ? `
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
+${(structured as any).differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHTML((structured as any).differentiation)}</p>` : ''}
 <table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
   <tr style="background: #f8f9fa;">
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitor</td>
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Threat</td>
-    <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Advantage</td>
+    ${structured.competitors.some(c => c.threat) ? `<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Threat</td>` : ''}
+    ${structured.competitors.some(c => c.advantage) ? `<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Advantage</td>` : ''}
   </tr>
   ${structured.competitors.map(c => `<tr>
     <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHTML(c.name)}</td>
-    <td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.threat)}</td>
-    <td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.advantage)}</td>
+    ${structured.competitors.some(cc => cc.threat) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.threat)}</td>` : ''}
+    ${structured.competitors.some(cc => cc.advantage) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.advantage)}</td>` : ''}
   </tr>`).join('\n')}
 </table>` : ''}
 
