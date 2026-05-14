@@ -14,6 +14,8 @@ A containerized customer intelligence dashboard for Red Hat Account Executives a
 
 ### Prerequisites
 
+**Supported platforms:** Linux and macOS on both Intel (x86_64) and Apple Silicon (arm64). The container image is multi-arch — `docker pull` / `podman pull` automatically selects the correct architecture.
+
 **Install Podman:**
 
 **macOS:**

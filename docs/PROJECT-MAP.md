@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-13
+updated: 2026-05-14
 ---
 
 # DailyBriefDashboard — Project Map
@@ -51,7 +51,7 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 - **Scraping:** Playwright (shared browser context)
 - **AI:** Gemini (Vertex AI) — three-step pipeline in `src/brief-pipeline.ts`
 - **External:** Google Sheets/Drive, Red Hat Portal, Salesforce, Tableau
-- **Container:** Podman, `localhost/daily-brief-dashboard:latest`
+- **Container:** Podman, `localhost/daily-brief-dashboard:latest` (multi-arch: amd64 + arm64)
 
 ## Architecture & Design Docs
 

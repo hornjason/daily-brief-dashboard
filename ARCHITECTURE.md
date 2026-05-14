@@ -299,7 +299,7 @@ The daemon stores SSO cookies in a persistent Chromium profile at `/data-sync/rh
 
 **Why it's intentional:** Reproducibility and isolation. The container has its own Playwright, Bun, and VNC server. The Makefile (`make rebuild`) is the single deploy mechanism.
 
-**Multi-arch images (2026-05-14):** The hero image (`daily-brief-dashboard`) is built as a multi-arch manifest (linux/amd64 + linux/arm64). `make build` produces both via QEMU emulation and `podman manifest`. The L4 daemon image remains amd64-only (Chromium binary dependency).
+**Multi-arch images (2026-05-14):** The hero image (`daily-brief-dashboard`) is built as a multi-arch manifest (linux/amd64 + linux/arm64). `make build` builds natively first (full Dockerfile.hero), then cross-compiles only the runtime stage (`Dockerfile.hero-runtime`) for the other architecture using the pre-built dashboard artifacts. This avoids esbuild crashes under QEMU emulation. The L4 daemon image remains amd64-only (Chromium binary dependency).
 
 **Rules that follow:**
 - Always deploy with `make rebuild` — never raw `podman run` or `docker run`

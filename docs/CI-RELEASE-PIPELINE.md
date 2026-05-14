@@ -228,11 +228,13 @@ All jobs run on `[self-hosted, mac-mini-live]` — the Mac Mini at `localhost:77
 All container images are built as multi-arch manifests supporting `linux/amd64` and `linux/arm64`. This applies to CI (Gate 2) and Release (Gate 4) workflows, as well as `make build` locally.
 
 **How it works:**
-1. Both architectures are built separately via `podman build --platform linux/{amd64,arm64}`
-2. A `podman manifest` combines both into a single manifest list
-3. `podman manifest push --all` pushes the manifest list to GHCR
-4. Docker/Podman clients auto-select the correct architecture on pull
+1. Native arch builds first using full `Dockerfile.hero` (builder + runtime stages)
+2. Dashboard dist artifacts are extracted from the native image (static JS/CSS — arch-independent)
+3. Cross-arch image builds using `Dockerfile.hero-runtime` (runtime stage only, skips Vite/esbuild)
+4. Both images are combined into a `podman manifest` list
+5. `podman manifest push --all` pushes the manifest to GHCR
+6. Docker/Podman clients auto-select the correct architecture on pull
 
-**arm64 builds on Intel runner:** Uses QEMU user-mode emulation (built into Podman Machine). Adds ~1-2 minutes to the build step.
+**Why two Dockerfiles:** esbuild (used by Vite) crashes under QEMU emulation in both directions (amd64-on-arm64 and arm64-on-amd64). The `Dockerfile.hero-runtime` skips the builder stage entirely and uses pre-built dashboard artifacts, so only native binaries (bun, curl) need to run under emulation.
 
 **Scope:** Hero image only. L4 daemon remains amd64-only (Chromium binary dependency).
