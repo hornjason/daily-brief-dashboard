@@ -68,12 +68,19 @@ export function getOperatorProfile(): AccountTeamMember | null {
   }
 }
 
+export interface AccountTeamFilter {
+  products?: string[]
+}
+
 /**
  * Get the full account team for a customer.
  * Returns array with AE first, then ASA (from territory data if available,
  * else operator profile), then pod specialists (SSP/SSA).
+ *
+ * Optional filter.products limits specialists to matching products only.
+ * AE, ASA, Partner Sales, and Consulting Manager are always included.
  */
-export function getAccountTeam(customer: Customer): AccountTeamMember[] {
+export function getAccountTeam(customer: Customer, filter?: AccountTeamFilter): AccountTeamMember[] {
   const team: AccountTeamMember[] = []
 
   // AE first
@@ -130,9 +137,11 @@ export function getAccountTeam(customer: Customer): AccountTeamMember[] {
     }
   }
 
-  // Add pod-level specialists (SSP/SSA)
+  // Add pod-level specialists (SSP/SSA), filtered by product if specified
   if (territoryEntry?.specialists) {
+    const productFilter = filter?.products?.map(p => p.toLowerCase())
     for (const spec of territoryEntry.specialists) {
+      if (productFilter && !productFilter.some(p => spec.product.toLowerCase().includes(p))) continue
       const title = `${spec.product} ${spec.role.toUpperCase()}`
       team.push({
         name: spec.name,

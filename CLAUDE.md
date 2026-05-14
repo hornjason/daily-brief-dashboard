@@ -29,6 +29,13 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - Config files mutated at runtime is intentional — config IS the persistence layer
 - In-memory mutex is safe — single-threaded Bun process
 
+**AccountTeam contract (MANDATORY for team/person references):**
+- Any feature that references team members (AE, ASA, SSP, SSA, managers) MUST use `getAccountTeam(customer)` from `src/account-team.ts` — never hardcode names or read `customer.ae` alone
+- For Gemini prompts: use `toPromptContext(team)` for canonical team section
+- For product-specific contexts: use `getAccountTeam(customer, { products: ['Ansible'] })` to filter specialists
+- See ARCHITECTURE.md §20 for full contract documentation, types, and usage examples
+- If building a feature that generates content for a customer, ask: "Does this need account team context?" — the answer is almost always yes
+
 **L3 vs L4 — test prerequisites (never confuse these):**
 - **L4** = browser-based scrapers (RH Portal cases via `POST /api/scrape/rh`, Tableau CCSP, SF pipeline browser). Requires RH offline token, active Salesforce session, Tableau login.
 - **L3** = Drive-read-only (reads sheets/CSVs already written by L4). Requires Google Drive auth only. No RH Portal, no Salesforce session, no Tableau.
@@ -131,6 +138,7 @@ gh label create "enhancement" --repo hornjason/asaCommandCenter --color "a2eeef"
 
 ## Agent Briefing
 
+- **All agents building features:** If the feature references people, team members, or generates content for a customer — use `getAccountTeam()` from `src/account-team.ts`. See ARCHITECTURE.md §20. Never hardcode names.
 - **Rook:** Shared browser context and no-auth are intentional — do not flag as vulnerabilities. Always give Rook explicit file paths and line ranges from the main working directory — never spawn Rook with `isolation:worktree` on pre-commit reviews (worktree gets clean tree, misses uncommitted changes).
 - **Quinn:** Test as brand new user from scratch unless Jason says otherwise
 - **Marcus:** Read the file before modifying; surgical fixes only; never touch scraper files without explicit instruction

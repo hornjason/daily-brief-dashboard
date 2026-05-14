@@ -40,6 +40,62 @@ describe('account-team', () => {
     })
   })
 
+  describe('product filter', () => {
+    it('filters specialists by product when filter provided', async () => {
+      const { generateCampaignHTML } = await import('../../src/campaign-html-template.ts')
+
+      const html = generateCampaignHTML({
+        materialTitle: 'Test',
+        materialUrl: 'https://test.com',
+        customerName: 'Test Corp',
+        aeName: 'Test AE',
+        generatedDate: 'May 14, 2026',
+        markdown: '## Campaign Summary\nTest',
+        accountTeam: [
+          { name: 'Test AE', title: 'Account Executive', role: 'ae' },
+          { name: 'Jason Horn', title: 'Account Solution Architect', role: 'asa' },
+          { name: 'Brad Hinson', title: 'Ansible SSP', role: 'ssp' },
+        ],
+      })
+
+      expect(html).toContain('AE: Test AE')
+      expect(html).toContain('ASA: Jason Horn')
+      expect(html).toContain('SSP: Brad Hinson')
+    })
+
+    it('getAccountTeam with product filter returns only matching specialists', async () => {
+      const { getAccountTeam, invalidateTeamCache, persistTeamCache } = await import('../../src/account-team.ts')
+
+      persistTeamCache({
+        'TEST_TERR01': {
+          territory: 'TEST_TERR01',
+          aeName: 'Test AE',
+          asa: { name: 'Jason Horn' },
+          specialists: [
+            { product: 'Ansible', role: 'ssp', name: 'Brad Hinson' },
+            { product: 'Openshift', role: 'ssp', name: 'Gabe Deupree' },
+            { product: 'RHEL', role: 'ssp', name: 'Mackenzie Deeter' },
+          ],
+        },
+      })
+
+      const customer = { name: 'Test Corp', ae: 'Test AE' }
+
+      const fullTeam = getAccountTeam(customer)
+      const filteredTeam = getAccountTeam(customer, { products: ['Ansible'] })
+
+      expect(fullTeam.filter(m => m.role === 'ssp')).toHaveLength(3)
+      expect(filteredTeam.filter(m => m.role === 'ssp')).toHaveLength(1)
+      expect(filteredTeam.find(m => m.role === 'ssp')?.name).toBe('Brad Hinson')
+
+      // AE and ASA always included regardless of filter
+      expect(filteredTeam.find(m => m.role === 'ae')).toBeTruthy()
+      expect(filteredTeam.find(m => m.role === 'asa')).toBeTruthy()
+
+      invalidateTeamCache()
+    })
+  })
+
   describe('territory team data extraction', () => {
     it('extracts ASA from Account SA row below account list', async () => {
       const { extractTeamMembers } = await import('../../src/territory-sync.ts')

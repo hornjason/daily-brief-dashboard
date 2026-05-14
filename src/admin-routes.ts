@@ -358,7 +358,9 @@ export function createAdminRouter(): Hono {
       || customers.find(cu => toSlug(cu.name) === rawName)
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
-    const team = getAccountTeam(customer)
+    const productsParam = c.req.query('products')
+    const filter = productsParam ? { products: productsParam.split(',').map(p => p.trim()) } : undefined
+    const team = getAccountTeam(customer, filter)
     return c.json({ customer: customer.name, ae: customer.ae, team })
   })
 
