@@ -63,11 +63,38 @@ interface NewsHighlight {
   sourceUrl: string
 }
 
+interface MeetingNewsItem {
+  headline: string
+  summary: string
+  sourceUrl: string
+  relevantCustomer: string
+  relevantProduct: string
+  publishedDate: string
+}
+
+interface ProductRelease {
+  product: string
+  version: string
+  gaDate: string
+}
+
+interface RedHatIntelligence {
+  meetingNews: MeetingNewsItem[]
+  releases: ProductRelease[]
+  events: Array<{
+    name: string
+    location: string
+    date: string
+    nearCustomers: string[]
+  }>
+}
+
 interface MorningSummaryData {
   signals: Signal[]
   summary: string
   customerCount: number
   synthesis?: string
+  redHatIntelligence?: RedHatIntelligence
 }
 
 interface MorningSummaryProps {
@@ -83,6 +110,8 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
   // Auto-collapse once data loads if signals > 3 to reduce visual noise on load.
   const [collapsed, setCollapsed] = useState(false)
   const [showBriefModal, setShowBriefModal] = useState(false)
+  // BKL-INTEL-204: Red Hat Intelligence section starts collapsed by default
+  const [intelligenceCollapsed, setIntelligenceCollapsed] = useState(true)
 
   useEffect(() => {
     fetch('/api/morning-summary')
@@ -274,6 +303,95 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                 ))}
               </ul>
             </div>
+          )}
+        </div>
+      )}
+      {/* Red Hat Intelligence Section (BKL-INTEL-204) — Collapsed by default */}
+      {!collapsed && data.redHatIntelligence && (
+        <div className="border-t border-border">
+          <button
+            onClick={() => setIntelligenceCollapsed(!intelligenceCollapsed)}
+            aria-expanded={!intelligenceCollapsed}
+            className="w-full px-5 py-3 flex items-center justify-between hover:bg-surface-hover transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />
+              <h3 className="text-base font-semibold text-text-primary">Red Hat Intelligence</h3>
+            </div>
+            {intelligenceCollapsed
+              ? <ChevronDown className="w-3.5 h-3.5 text-text-secondary" />
+              : <ChevronUp className="w-3.5 h-3.5 text-text-secondary" />
+            }
+          </button>
+          {!intelligenceCollapsed && (
+          <div className="px-5 pb-5 space-y-4 border-l-[3px] border-l-red-500 ml-5">
+            {/* Subsection 1: News Relevant to Your Customers */}
+            {data.redHatIntelligence.meetingNews.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-text-primary mb-2">News Relevant to Your Customers</h4>
+                <div className="space-y-3">
+                  {data.redHatIntelligence.meetingNews.map((item, i) => (
+                    <div key={i} className="bg-surface-hover border border-border rounded-lg p-3">
+                      <div className="mb-1">
+                        <span className="text-sm font-medium text-text-primary">{item.headline}</span>
+                      </div>
+                      {item.relevantCustomer && (
+                        <div className="text-xs text-accent mb-1">
+                          Relevant to: {item.relevantCustomer} ({item.relevantProduct})
+                        </div>
+                      )}
+                      <div className="text-xs text-text-secondary leading-relaxed mb-2">{item.summary}</div>
+                      {item.sourceUrl && (
+                        <a
+                          href={item.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-accent hover:text-accent/80 underline"
+                        >
+                          Read Article →
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Subsection 2: Product Releases This Month */}
+            {data.redHatIntelligence.releases.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-text-primary mb-2">Product Releases This Month</h4>
+                <ul className="space-y-1">
+                  {data.redHatIntelligence.releases.map((item, i) => (
+                    <li key={i} className="text-sm text-text-secondary">
+                      <span className="font-medium text-text-primary">{item.product} {item.version}</span>
+                      {' — '}
+                      {new Date(item.gaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {' (GA)'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {/* Subsection 3: Events Near Your Customers (stub — will be empty for now) */}
+            {data.redHatIntelligence.events.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-text-primary mb-2">Events Near Your Customers</h4>
+                <div className="space-y-2">
+                  {data.redHatIntelligence.events.map((item, i) => (
+                    <div key={i} className="text-sm text-text-secondary">
+                      <div className="font-medium text-text-primary">{item.name}</div>
+                      <div className="text-xs">
+                        {item.location} • {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </div>
+                      {item.nearCustomers.length > 0 && (
+                        <div className="text-xs text-accent">Near: {item.nearCustomers.join(', ')}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           )}
         </div>
       )}

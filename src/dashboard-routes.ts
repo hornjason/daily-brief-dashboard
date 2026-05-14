@@ -136,6 +136,197 @@ Format your response as markdown with bold headers and bullet points. Keep each 
   return synthesis
 }
 
+// ── Red Hat Intelligence for Morning Brief (BKL-INTEL-204) ───────────────────
+
+interface MeetingNewsItem {
+  headline: string
+  summary: string
+  sourceUrl: string
+  relevantCustomer: string
+  relevantProduct: string
+  publishedDate: string
+}
+
+interface ProductRelease {
+  product: string
+  version: string
+  gaDate: string
+}
+
+interface RedHatIntelligence {
+  meetingNews: MeetingNewsItem[]
+  releases: ProductRelease[]
+  events: Array<{
+    name: string
+    location: string
+    date: string
+    nearCustomers: string[]
+  }>
+}
+
+/**
+ * Build Red Hat Intelligence section for morning brief.
+ * GitHub Issue #204 — Surface 3 of 199-intelligence-surfaces.md
+ *
+ * Returns null if all subsections are empty (per design spec).
+ */
+async function buildRedHatIntelligenceForMorningBrief(
+  customers: Array<{ name: string; products?: string[] }>,
+  calendarEvents: Array<{ title: string; start: string; customers?: string[] }>,
+): Promise<RedHatIntelligence | null> {
+  const { readdirSync } = require('fs')
+
+  // ── 1. Meeting News (max 3 items) ──────────────────────────────────────────
+  const meetingNews: MeetingNewsItem[] = []
+
+  // Collect customers with meetings today
+  const customersWithMeetingsToday = new Set<string>()
+  for (const event of calendarEvents) {
+    for (const customerName of event.customers ?? []) {
+      customersWithMeetingsToday.add(customerName.toLowerCase())
+    }
+  }
+
+  if (customersWithMeetingsToday.size > 0) {
+    try {
+      const NEWS_CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'news')
+
+      if (existsSync(NEWS_CACHE_DIR)) {
+        const files = readdirSync(NEWS_CACHE_DIR)
+
+        for (const file of files) {
+          if (!file.endsWith('.json')) continue
+
+          const cachePath = resolve(NEWS_CACHE_DIR, file)
+          try {
+            const cacheData = JSON.parse(readFileSync(cachePath, 'utf-8'))
+            const articles = cacheData.articles ?? []
+
+            for (const article of articles) {
+              // Check if this article's productTags match any product used by customers with meetings today
+              const productTags = article.productTags ?? []
+
+              for (const customer of customers) {
+                if (!customersWithMeetingsToday.has(customer.name.toLowerCase())) continue
+
+                const customerProducts = customer.products ?? []
+                const matchingProduct = productTags.find((tag: string) =>
+                  customerProducts.some(p => p.toLowerCase().includes(tag.toLowerCase()))
+                )
+
+                if (matchingProduct) {
+                  meetingNews.push({
+                    headline: article.headline,
+                    summary: article.summary,
+                    sourceUrl: article.sourceUrl,
+                    relevantCustomer: customer.name,
+                    relevantProduct: matchingProduct,
+                    publishedDate: article.publishedDate,
+                  })
+                  break // Only add once per article
+                }
+              }
+
+              if (meetingNews.length >= 3) break
+            }
+          } catch { /* skip invalid cache file */ }
+
+          if (meetingNews.length >= 3) break
+        }
+      }
+    } catch { /* news unavailable — non-fatal */ }
+  }
+
+  // If no matches to meeting customers, fall back to top 3 highest-significance news
+  if (meetingNews.length === 0) {
+    try {
+      const NEWS_CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'news')
+
+      if (existsSync(NEWS_CACHE_DIR)) {
+        const allArticles: Array<{
+          headline: string
+          summary: string
+          sourceUrl: string
+          publishedDate: string
+          significanceScore: number
+          productTags?: string[]
+        }> = []
+
+        const files = readdirSync(NEWS_CACHE_DIR)
+        for (const file of files) {
+          if (!file.endsWith('.json')) continue
+
+          const cachePath = resolve(NEWS_CACHE_DIR, file)
+          try {
+            const cacheData = JSON.parse(readFileSync(cachePath, 'utf-8'))
+            allArticles.push(...(cacheData.articles ?? []))
+          } catch { /* skip invalid cache */ }
+        }
+
+        // Sort by significanceScore desc, take top 3
+        allArticles.sort((a, b) => (b.significanceScore ?? 0) - (a.significanceScore ?? 0))
+        const top3 = allArticles.slice(0, 3)
+
+        for (const article of top3) {
+          meetingNews.push({
+            headline: article.headline,
+            summary: article.summary,
+            sourceUrl: article.sourceUrl,
+            relevantCustomer: '', // Generic, not customer-specific
+            relevantProduct: article.productTags?.[0] ?? 'Red Hat',
+            publishedDate: article.publishedDate,
+          })
+        }
+      }
+    } catch { /* news unavailable — non-fatal */ }
+  }
+
+  // ── 2. Product Releases (max 5 items, within 30 days) ─────────────────────
+  const releases: ProductRelease[] = []
+
+  try {
+    const LIFECYCLE_CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'product-lifecycle.json')
+
+    if (existsSync(LIFECYCLE_CACHE_PATH)) {
+      const lifecycleData = JSON.parse(readFileSync(LIFECYCLE_CACHE_PATH, 'utf-8'))
+      const products = lifecycleData.products ?? []
+
+      const now = new Date()
+      const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+
+      for (const product of products) {
+        if (product.nextGA) {
+          const gaDate = new Date(product.nextGA)
+          if (gaDate >= now && gaDate <= thirtyDaysFromNow) {
+            releases.push({
+              product: product.product,
+              version: product.nextVersion ?? 'TBD',
+              gaDate: product.nextGA,
+            })
+          }
+        }
+      }
+
+      // Sort by gaDate (soonest first), limit to 5
+      releases.sort((a, b) => a.gaDate.localeCompare(b.gaDate))
+      releases.splice(5)
+    }
+  } catch { /* product lifecycle cache unavailable — non-fatal */ }
+
+  // ── 3. Events (stub — no data source yet) ─────────────────────────────────
+  const events: Array<{ name: string; location: string; date: string; nearCustomers: string[] }> = []
+
+  // ── Return null if all subsections are empty ──────────────────────────────
+  const hasData = meetingNews.length > 0 || releases.length > 0 || events.length > 0
+  if (!hasData) return null
+
+  return {
+    meetingNews,
+    releases,
+    events,
+  }
+}
+
 // ── Territory helpers ─────────────────────────────────────────────────────────
 
 const TERRITORY_SHEET_ID_FALLBACK = '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
@@ -378,8 +569,12 @@ export function createDashboardRouter(): Hono {
         console.warn('[dashboard-routes] Morning synthesis failed (non-fatal):', e.message)
       }
 
+      // BKL-INTel-204: Red Hat Intelligence section
+      const redHatIntelligence = await buildRedHatIntelligenceForMorningBrief(customers, calendarEvents)
+
       const response: Record<string, unknown> = { signals, summary, customerCount: customers.length }
       if (synthesis) response.synthesis = synthesis
+      if (redHatIntelligence) response.redHatIntelligence = redHatIntelligence
       return c.json(response)
     } catch (e) {
       return c.json({ error: sanitizeErr(e) }, 500)
