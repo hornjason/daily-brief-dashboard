@@ -171,6 +171,7 @@ export function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [refreshingSlug, setRefreshingSlug] = useState<string | null>(null)
+  const [refreshingAll, setRefreshingAll] = useState(false)
 
   // Territory radar
   const [territorySummaries, setTerritorySummaries] = useState<Map<string, TerritorySummary>>(new Map())
@@ -259,6 +260,32 @@ export function ProductsPage() {
   }, [search])
 
   // ── Handlers ─────────────────────────────────────────────────────────────
+
+  async function handleRefreshAll() {
+    setRefreshingAll(true)
+    setError(null)
+    try {
+      // Refresh product summaries (scrape release notes)
+      const res = await fetch('/api/products/refresh-all', { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setSummaries(data.products ?? [])
+
+      // Re-extract features from updated summaries
+      const featRefresh = await fetch('/api/products/features/refresh-all', { method: 'POST' })
+      if (featRefresh.ok) {
+        const featRes = await fetch('/api/products/features')
+        if (featRes.ok) setFeatureCaches(await featRes.json())
+      }
+    } catch (e: any) {
+      setError(e?.message ?? 'Refresh all failed')
+    } finally {
+      setRefreshingAll(false)
+    }
+  }
 
   function handleAcknowledge(id: string) {
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, acknowledged: true } : a))
@@ -429,6 +456,14 @@ export function ProductsPage() {
       <main className="flex-1 overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-semibold text-text-primary">Product Intelligence</h1>
+          <button
+            onClick={handleRefreshAll}
+            disabled={refreshingAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary border border-border rounded-lg hover:bg-surface-hover transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshingAll ? 'animate-spin' : ''}`} />
+            {refreshingAll ? 'Refreshing all…' : 'Refresh All'}
+          </button>
         </div>
 
         {/* Loading skeleton */}

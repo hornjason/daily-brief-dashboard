@@ -15,7 +15,7 @@ import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
 import { getAiConfig, getGeminiModel } from './ai-config.ts'
 import { getCachedDriveCorpus } from './product-drive-ingest.ts'
-import { getCachedSummary, loadProductConfig } from './product-release-radar.ts'
+import { getCachedSummary, loadProductConfig, validateScrapedContent } from './product-release-radar.ts'
 import { sanitizeErr } from './utils.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -609,13 +609,19 @@ export async function enrichFeatures(slug: string): Promise<void> {
     for (const url of allowedUrls) {
       try {
         const resp = await fetch(url, {
-          headers: { 'User-Agent': 'PAI-DailyBrief/1.0' },
+          redirect: 'follow' as const,
           signal: AbortSignal.timeout(10000),
         })
         if (!resp.ok) continue
         const html = await resp.text()
         // Strip HTML tags, take first 2000 chars
         const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 2000)
+        // Content quality gate (BKL-SCRAPE-01) — reject error pages before enrichment
+        const enrichValidation = validateScrapedContent(text, slug, url)
+        if (!enrichValidation.valid) {
+          console.warn(`[feature-radar] ${slug}: REJECTED enrichment content from ${url} — ${enrichValidation.reason}`)
+          continue
+        }
         if (text.length > 100) {
           fetchedContent += `\n\n[${url}]\n${text}`
           enrichmentUrls.push(url)

@@ -157,20 +157,49 @@ async function getRhBearerToken(): Promise<string | null> {
   }
 }
 
+// ── Content quality gate (BKL-SCRAPE-01) ─────────────────────────────────────
+
+export interface ContentValidation {
+  valid: boolean
+  reason?: string
+}
+
+/** Validate scraped text content before it enters the hash/cache pipeline. */
+export function validateScrapedContent(text: string, slug: string, url: string): ContentValidation {
+  // Min length — error pages are typically <500 chars of stripped text
+  if (text.length < 200) return { valid: false, reason: `too short (${text.length} chars)` }
+
+  // Error page indicators
+  const errorPatterns = [
+    /access\s+denied/i,
+    /403\s+forbidden/i,
+    /sign\s+in\s+required/i,
+    /login\s+required/i,
+    /you\s+do\s+not\s+have\s+permission/i,
+    /unauthorized/i,
+    /session\s+expired/i,
+    /digital\s+asset\s+management\s+system/i,  // content.redhat.com login page signature
+  ]
+  for (const pat of errorPatterns) {
+    if (pat.test(text)) return { valid: false, reason: `error indicator: ${pat.source}` }
+  }
+
+  return { valid: true }
+}
+
 // ── Scraping ──────────────────────────────────────────────────────────────────
 
 /** Fetch a URL with optional RH bearer token. Returns stripped plain text (max 6000 chars). */
 export async function scrapeProductPage(url: string, bearerToken?: string | null): Promise<string> {
   let text = ''
   try {
-    const headers: Record<string, string> = {
-      'User-Agent': 'Mozilla/5.0 (compatible; PAI-Dashboard/1.0)',
-    }
+    const headers: Record<string, string> = {}
     if (bearerToken) {
       headers['Authorization'] = `Bearer ${bearerToken}`
     }
     const res = await fetch(url, {
       headers,
+      redirect: 'follow',
       signal: AbortSignal.timeout(15_000),
     })
     if (res.ok) {
@@ -228,7 +257,7 @@ async function scrapeContentHubPage(url: string): Promise<string> {
   let text = ''
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PAI-Dashboard/1.0)' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36' },
       signal: AbortSignal.timeout(15_000),
     })
     if (res.ok) {
@@ -508,7 +537,7 @@ export async function fetchProductSummary(slug: string): Promise<ProductSummary>
     try {
       let html = ''
       const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PAI-Dashboard/1.0)' },
+        redirect: 'follow',
         signal: AbortSignal.timeout(15_000),
       })
       if (res.ok) html = await res.text()
@@ -524,6 +553,13 @@ export async function fetchProductSummary(slug: string): Promise<ProductSummary>
         .replace(/\s{2,}/g, ' ')
         .trim()
         .slice(0, 6000)
+
+      // Content quality gate — reject error pages, login walls, thin content
+      const validation = validateScrapedContent(text, slug, url)
+      if (!validation.valid) {
+        console.warn(`[product-release-radar] ${slug}: REJECTED content from ${url} — ${validation.reason}`)
+        continue
+      }
 
       if (text.length > 100) {
         parts.push(`--- Source: ${url} ---\n${text}`)
@@ -550,7 +586,11 @@ export async function fetchProductSummary(slug: string): Promise<ProductSummary>
   if (contentHubUrl) {
     try {
       const text = await scrapeContentHubPage(contentHubUrl)
-      if (text.length > 100) {
+      // Content quality gate — reject error pages, login walls, thin content
+      const chValidation = validateScrapedContent(text, slug, contentHubUrl)
+      if (!chValidation.valid) {
+        console.warn(`[product-release-radar] ${slug}: REJECTED content hub from ${contentHubUrl} — ${chValidation.reason}`)
+      } else if (text.length > 100) {
         parts.push(`--- Content Hub: ${contentHubUrl} ---\n${text}`)
         allSources.push(contentHubUrl)
         console.log(`[product-release-radar] ${slug}: content hub scraped ${text.length} chars from ${contentHubUrl}`)
@@ -560,6 +600,19 @@ export async function fetchProductSummary(slug: string): Promise<ProductSummary>
     } catch (e: any) {
       console.warn(`[product-release-radar] content hub fetch failed for ${contentHubUrl}:`, e?.message)
     }
+  }
+
+  // BKL-SCRAPE-01: if all sources failed validation, keep existing cached summary
+  // instead of poisoning the hash/cache pipeline with bad content
+  if (parts.length === 0) {
+    const cached = getCachedSummary(slug)
+    if (cached) {
+      console.warn(`[product-release-radar] ${slug}: all sources failed validation — keeping cached summary`)
+      const refreshed = { ...cached, refreshedAt: new Date().toISOString() }
+      writeSummaryCache(refreshed)
+      return refreshed
+    }
+    throw new Error(`No valid content scraped for ${slug} — all sources failed validation`)
   }
 
   const rawContent = parts.join('\n\n').slice(0, 10000)
