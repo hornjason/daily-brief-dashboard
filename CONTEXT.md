@@ -221,6 +221,30 @@ _Avoid_: "campaign wizard", "campaign builder", "campaign editor"
 Cached decomposition of a Google Doc/Slides URL into structured data (value props, personas, use cases). Keyed by URL hash at `data/cache/material-extractions/{urlHash}.json`. Avoids re-analyzing the same material on repeated campaign runs. Cleared manually via "Re-analyze" button.
 _Avoid_: "content cache", "extraction cache"
 
+### AE voice detection
+
+**AE voice profile**:
+A cached writing style analysis for an Account Executive, detected from their sent email history via Gemini. Contains characteristics (tone, formality, vocabulary), a prompt instruction for AI generation, and an example email. Cached to the AE's Drive folder (`Config/style-guide.json`) and locally (`data/cache/style-guides/{ae-slug}.json`). Falls back to skill voice files at `~/.claude/skills/ContentCampaign/voices/{slug}.md`.
+_Avoid_: "writing style", "tone profile", "brand voice"
+
+**Voice fallback chain**:
+The priority order for loading an AE's voice: (1) local cache, (2) Drive cache, (3) skill voice `.md` files, (4) auto-detect from emails, (5) default generic voice. Once detected, cached at levels 1 and 2 for instant loading.
+_Avoid_: "style detection", "voice lookup"
+
+### Campaign generation
+
+**Council-validated email rules**:
+11 mandatory rules for generated emails, validated through a multi-agent council debate. Enforced in the Gemini prompt. Includes word limits (90 exec / 200-250 mgr), no firmographic facts, statements only, per-bullet product links, named peer proof, forward-worthy test, competitor-swap test, creepy line check, subject-as-observation, no filler, relationship context. Users can edit rules per campaign via the Style Guide advanced toggle.
+_Avoid_: "email guidelines", "writing rules"
+
+**Pre-flight intelligence**:
+Before generating a campaign, the system checks that intelligence brief and account plan exist and are fresh (<7 days). Missing or stale data triggers automatic generation before the campaign runs. Ensures every campaign has complete context regardless of prior setup state.
+_Avoid_: "data check", "prerequisite check"
+
+**Universal signal stack**:
+The complete set of data sources consumed by any content generation feature. Currently 8 sources: intelligence brief, customer docs, daily brief, subscriptions, emails, cases, product intel, account plan. Planned expansion (#196) to include product lifecycle (expiry dates), product feature radar, news radar, and meeting data.
+_Avoid_: "data sources", "signal sources" (use "signal stack" as the canonical term)
+
 ## Flagged ambiguities
 
 - "Shared Drive" (Google product name) vs. "L3 shared folder" (our concept): the L3 shared folder lives _in_ a Google Shared Drive, but the terms are not interchangeable. Use "L3 shared folder" for the concept, "Shared Drive" only when referring to the Google Drive product feature.

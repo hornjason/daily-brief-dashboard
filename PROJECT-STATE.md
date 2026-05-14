@@ -73,6 +73,34 @@ Last updated: 2026-05-13 — Infrastructure hardening: `make up` pre-flight guar
 - `GET /api/customer/:name/account-plan` — Account plan markdown
 - `POST /api/customer/:name/account-plan/generate` — Trigger generation
 
+### Campaigns
+- `POST /api/customer/:name/campaigns/generate` — Generate campaign (Gemini Pro, pre-flight intelligence, 11 council rules)
+- `GET /api/customer/:name/campaigns` — Campaign history list
+- `GET /api/customer/:name/campaigns/:id/preview` — Render campaign HTML in browser
+- `DELETE /api/customer/:name/campaigns/:id` — Remove campaign from cache
+- `POST /api/campaigns/extract-material` — Gemini material decomposition (cached by URL hash)
+- `DELETE /api/campaigns/extract-material?url=` — Clear extraction cache
+
+### AE Voice
+- `GET /api/ae/:name/style-guide` — Cached AE voice profile
+- `POST /api/ae/:name/style-guide/detect` — Detect voice from AE emails
+
+### News Radar
+- `GET /api/customer/:name/news` — Cached news articles
+- `POST /api/customer/:name/news/refresh` — Trigger fresh news search
+- `GET /api/news/highlights` — High-significance stories for morning brief
+
+### Tools & Artifacts
+- `POST /api/customer/:name/tools/upload` — Upload file to Drive intelligence folder
+- `GET /api/customer/:name/tools/artifacts` — List uploaded artifacts
+
+### Feature Modules
+- `GET /api/modules/status` — Registry status for all modules
+- `POST /api/customer/:name/modules/:moduleName/sync` — Trigger module sync
+
+### Batch Operations
+- `POST /api/batch/execute` — Batch campaigns/news with SSE progress streaming
+
 ### Product Intelligence
 - `GET /api/products` — All 7 products + cache status
 - `GET /api/products/:slug` — Product detail + feature cache
