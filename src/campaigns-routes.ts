@@ -273,6 +273,14 @@ ONE sentence, placed AFTER the competitive observation (exec) or pain context (m
 
 {voiceInstruction}
 
+## CRITICAL: Vary Feature Bullets Per Persona
+Each of the 6 emails MUST highlight DIFFERENT features relevant to THAT persona's role:
+- A VP of Security cares about threat detection, compliance, and risk reduction
+- An ML Engineer cares about model deployment, GPU infrastructure, and MLOps tooling
+- A Head of Operations cares about uptime, automated remediation, and incident response
+- An IT Director cares about cost, consistency, audit trails, and vendor consolidation
+DO NOT repeat the same 3 bullets across all emails. Each persona should discover features they haven't seen in the other emails. Pull from the full breadth of the material's value propositions.
+
 ## Output Format
 Generate clean markdown with these REQUIRED SECTIONS:
 1. **Campaign Summary** — 1-2 sentences

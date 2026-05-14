@@ -209,17 +209,20 @@ function extractMetrics(signals?: CampaignHTMLOptions['signals']): {
   const employeesMatch = companyText.match(/([\d,]+)\s*employees/i)
     || companyText.match(/employ\w*\s+(?:approximately\s+)?([\d,]+)\s*(?:individuals|people|workers|staff)/i)
 
-  // Product instances from subscriptions
+  // Product instances from subscriptions — handle both .data[] and .rows[] formats
   let productInstances = defaults.productInstances
   let productName = defaults.productName
   if (signals?.subscriptions) {
-    const subs = Array.isArray(signals.subscriptions) ? signals.subscriptions : []
-    if (subs.length > 0) {
-      const totalQty = subs.reduce((sum: number, s: any) => sum + (Number(s.quantity) || 0), 0)
+    const subs = signals.subscriptions
+    const rows = Array.isArray(subs) ? subs : (subs.rows || subs.data || [])
+    if (Array.isArray(rows) && rows.length > 0) {
+      const active = rows.filter((s: any) => s.status === 'Active')
+      const totalQty = active.reduce((sum: number, s: any) => sum + (Number(s.quantity) || 0), 0)
       if (totalQty > 0) {
         productInstances = String(totalQty)
-        const firstProduct = subs[0]?.product || subs[0]?.sku || 'Product'
-        productName = firstProduct.replace(/Red Hat\s*/i, '').split(' ').slice(0, 3).join(' ')
+        const firstActive = active[0]
+        const desc = firstActive?.productDescription || firstActive?.product || firstActive?.sku || 'Product'
+        productName = desc.replace(/Red Hat\s*/i, '').replace(/,\s.*$/, '').split(' ').slice(0, 4).join(' ')
       }
     }
   }
@@ -260,14 +263,19 @@ function extractStructuredIntel(signals?: CampaignHTMLOptions['signals']): {
     const differentiation = diffMatch?.[1]?.trim().split('.')[0] || ''
 
     // Format 1: Numbered - 1. **F5, Inc.:** description
-    const numberedRegex = /\d+\.\s+\*\*([^*:]+?)(?::?\*\*):?\s*(.*?)(?=\n\s*\d+\.|\n##|$)/gs
+    const numberedRegex = /\d+\.\s+\*\*([^*:]+?)(?::?\*\*):?\s*([\s\S]*?)(?=\n\s*\d+\.\s+\*\*|\n##|$)/gs
     let match
     while ((match = numberedRegex.exec(section)) !== null) {
       const name = match[1].trim().replace(/[,.]$/, '')
-      const description = match[2].trim()
-      const threat = description.split('.')[0]?.trim() || ''
+      const fullDesc = match[2].trim()
+      // First sentence = threat, look for differentiation/advantage in the rest
+      const sentences = fullDesc.split(/\.\s+/)
+      const threat = sentences[0]?.trim() || ''
+      const advMatch = fullDesc.match(/differenti\w+\s+(?:with|by|through|often\s+lies?\s+in)\s+([^.]+)/i)
+        || fullDesc.match(/(?:advantage|strength|known for)\s+(?:is|lies in|with)\s+([^.]+)/i)
+      const advantage = advMatch?.[1]?.trim() || (sentences.length > 1 ? sentences[1]?.trim() : '')
       if (name.length > 1 && name.length < 50 && !name.includes('Competitive')) {
-        result.competitors.push({ name, threat, advantage: differentiation })
+        result.competitors.push({ name, threat, advantage })
       }
     }
 
