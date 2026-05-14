@@ -60,7 +60,7 @@ Your initiative requires automation.
     expect(html).toContain('📊 Customer Intelligence Dashboard')
 
     // Verify positioning section exists
-    expect(html).toContain('Positioning Summary')
+    expect(html).toContain('Positioning Matches')
 
     // Verify email template header
     expect(html).toContain('Email Templates by Role')
@@ -172,7 +172,7 @@ Test positioning.`
       markdown: '## Positioning\nTest content',
     })
 
-    expect(html).toContain('Positioning Summary')
+    expect(html).toContain('Positioning Matches')
   })
 
   it('should include email templates section header', () => {
@@ -260,7 +260,7 @@ Test positioning.`
       markdown: '## Campaign Summary\nTest',
       signals: {
         intelligence: {
-          company: 'Test Corp is a mid-market financial services firm. Revenue: $450M. Employees: 1200.',
+          company: 'Test Corp is a mid-market financial services firm. Revenue: $450M. The company has 1200 employees.',
         },
       },
     })

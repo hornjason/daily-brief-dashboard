@@ -145,8 +145,8 @@ describe('CAMPAIGN_SYSTEM_PROMPT validation', () => {
     expect(requiresCustomerName || requiresProducts || requiresSubscriptions).toBe(true)
   })
 
-  test('identifies Jason Horn as the sender', () => {
-    expect(systemPrompt).toContain('Jason Horn')
+  test('has voice instruction placeholder for AE identity', () => {
+    expect(systemPrompt).toContain('{voiceInstruction}')
   })
 
   test('specifies Red Hat as the organization', () => {
@@ -161,6 +161,6 @@ describe('CAMPAIGN_SYSTEM_PROMPT validation', () => {
   })
 
   test('prohibits internal Red Hat data in emails', () => {
-    expect(systemPrompt.toLowerCase()).toMatch(/no internal/)
+    expect(systemPrompt.toLowerCase()).toMatch(/never reference.*internal data/)
   })
 })
