@@ -650,6 +650,17 @@ export function scheduleTerritorySync(): void {
         console.log(`[territory-sync] ${fresh.length} new removal notifications written`)
       }
 
+      // Persist team data to cache
+      if (result.teamData && Object.keys(result.teamData).length > 0) {
+        const teamCachePath = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-teams.json')
+        const teamCache: import('./types.ts').TerritoryTeamsCache = {
+          updatedAt: new Date().toISOString(),
+          teams: result.teamData,
+        }
+        writeJsonAtomic(teamCachePath, teamCache)
+        console.log(`[territory-sync] persisted team data for ${Object.keys(result.teamData).length} territories`)
+      }
+
       updateSchedulerField('territoryLastRun', new Date().toISOString())
       console.log(`[territory-sync] complete: +${result.toAdd.length} added, ${result.toRemove.length} flagged for review, ${result.unchanged.length} unchanged`)
     } catch (e: any) {
@@ -1547,5 +1558,33 @@ export function scheduleNewsRadarRefresh(): void {
       console.error('[news-radar] daily refresh error:', e?.message ?? e)
     }
     scheduleNewsRadarRefresh()
+  }, msUntil)
+}
+
+// ── Product Lifecycle weekly refresh at Sunday 6am ET (GitHub #197) ──────────
+
+export function scheduleProductLifecycleRefresh(): void {
+  const msUntil = nextEtSunday6amUtc().getTime() - Date.now()
+  const hUntil = Math.round(msUntil / 3_600_000)
+  console.log(`[product-lifecycle] next refresh in ${hUntil}h (Sunday 6:00am ET)`)
+
+  setTimeout(async () => {
+    console.log('[product-lifecycle] weekly refresh started')
+    try {
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const lifecycleModule = FeatureModuleRegistry.get('product-lifecycle')
+
+      if (!lifecycleModule) {
+        console.warn('[product-lifecycle] product-lifecycle module not registered — skipping')
+        scheduleProductLifecycleRefresh()
+        return
+      }
+
+      await lifecycleModule.fetch('')  // Product lifecycle is global, not customer-specific
+      console.log('[product-lifecycle] weekly refresh completed')
+    } catch (e: any) {
+      console.error('[product-lifecycle] weekly refresh error:', e?.message ?? e)
+    }
+    scheduleProductLifecycleRefresh()  // reschedule for next Sunday
   }, msUntil)
 }

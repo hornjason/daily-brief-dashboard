@@ -25,7 +25,7 @@ import { loadServerState, aes, customers, setAes, setCustomers, patchAe, AES_PAT
 import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
-import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh, scheduleNewsRadarRefresh } from './src/background-scheduler.ts'
+import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh, scheduleNewsRadarRefresh, scheduleProductLifecycleRefresh } from './src/background-scheduler.ts'
 import { healStaleAccountNumbers } from './src/account-provenance-healer.ts'
 import { initDashboardRoutes, createDashboardRouter } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
@@ -57,6 +57,7 @@ import { createFeatureModuleRouter } from './src/feature-module-routes.ts'
 import './src/modules/campaigns-module.ts'
 import './src/modules/news-module.ts'
 import './src/modules/tools-module.ts'
+import './src/modules/lifecycle-module.ts'  // GitHub #197
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #151: Campaign generation routes ──────────────────────────────
@@ -728,6 +729,9 @@ scheduleProductIntelRefresh()
 
 // ── Wave 5: News Radar daily refresh (5:30am ET, Issue #153) ────────────────
 scheduleNewsRadarRefresh()
+
+// ── GitHub #197: Product Lifecycle weekly refresh (Sunday 6am ET) ───────────
+scheduleProductLifecycleRefresh()
 
 // ── Wave 6: Feature module startup catch-up ─────────────────────────────────
 // If any module's lastRun is older than its refreshInterval, run it now.
