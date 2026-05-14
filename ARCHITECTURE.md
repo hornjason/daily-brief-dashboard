@@ -1134,6 +1134,10 @@ Supportable tile  — state (fresh/stale/failed/running), lastSuccess, recordCou
 
 Config lives in `data/config/product-intel-config.json`. New products are added by editing that JSON — no code changes required.
 
+### Scraper resilience: content quality gate (BKL-SCRAPE-01)
+
+`validateScrapedContent()` in `product-release-radar.ts` validates all scraped text before it enters the content hash / cache pipeline. Rejects content that matches error patterns (403 pages, login walls, SSO redirects) or falls below minimum length. If all sources fail validation, the previous known-good cache is preserved — bad content never poisons the hash baseline. The same gate is applied in `product-feature-radar.ts` for enrichment fetches. No custom User-Agent headers are set on public URL fetches — docs.redhat.com blocks browser-like UA strings.
+
 ### Phase 2: Drive corpus optional + expanded product set
 
 `driveFolder` on each `ProductConfig` is now `string | null`. Products without a configured Drive folder use release-notes-only synthesis. The generate route (`product-intel-routes.ts`) no longer requires `driveFolder` to be set before running — the Drive ingest step is silently skipped when the field is null.

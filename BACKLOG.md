@@ -2,7 +2,7 @@
 doc-type: index
 status: active
 owner: jason
-updated: 2026-05-08
+updated: 2026-05-14
 note: GitHub Issues are source of truth; this file is BKL-ID lookup only
 ---
 
@@ -10193,6 +10193,10 @@ BKL-CI-08 → #129 — Gate 1: Pre-push hook with unit+typecheck+hero purity (cl
 BKL-CI-09 → #130 — Gate 2: Move Playwright ci project to PR trigger (closed)
 BKL-CI-10 → #131 — Gate 3: Nightly data assertion workflow + script (closed)
 BKL-CI-11 → #132 — Gate 4: Extend release workflow with full E2E + smoke (closed)
+
+BKL-SCRAPE-00 → #192 — Fix: product radar User-Agent causing 403 on docs.redhat.com (closed)
+BKL-SCRAPE-01 → #190 — Scraper content quality gate — reject bad content before hashing (closed)
+BKL-SCRAPE-02 → #191 — Scraper health status on products page (open)
 
 ### BKL-ARCH-CONTRACT-AUDIT-01 | Audit existing features for FeatureModule contract adoption (Issue #139)
 Priority: P2 | Size: M | Status: OPEN

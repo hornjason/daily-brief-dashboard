@@ -21,7 +21,7 @@ Last updated: 2026-05-13 — Infrastructure hardening: `make up` pre-flight guar
 |-----|-----------|--------|-------|
 | `/dashboard` | App.tsx fallback | ✅ Working | Main portfolio: KPIs, pipeline, cloud spend, calendar, accounts grid, Morning Summary |
 | `/dashboard/customer/:name` | CustomerDetailPage | ✅ Working | Brief, account intelligence, account plan, cases, subscriptions, emails, meetings |
-| `/dashboard/products` | ProductsPage | ✅ Working | Product intelligence hub: feature radar, release notes, customer Q&A |
+| `/dashboard/products` | ProductsPage | ✅ Working | Product intelligence hub: feature radar, release notes, customer Q&A. Refresh All button scrapes all products + re-extracts features. Content quality gate rejects error pages before caching. |
 | `/dashboard/products/:slug` | ProductDetailPage | ✅ Working | Single product: features, releases, Q&A chat |
 | `/dashboard/setup` | SetupPage | ✅ Working | AE setup wizard + 6-step bootstrap orchestrator (1058 lines; AEsCustomersSection extracted to setup/AEsCustomersSection.tsx) |
 | `/dashboard/admin` | AdminPage | ✅ Working | See Admin Page section below |
