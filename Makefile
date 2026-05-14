@@ -92,6 +92,7 @@ build:
 	fi
 	@git worktree prune 2>/dev/null || true
 	podman manifest rm $(REMOTE) 2>/dev/null || true
+	podman rmi $(REMOTE) 2>/dev/null || true
 	podman manifest create $(REMOTE)
 	podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
 	podman manifest add $(REMOTE) containers-storage:localhost/daily-brief-hero-amd64:latest

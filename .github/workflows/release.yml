@@ -185,6 +185,7 @@ jobs:
           # Create manifest list for each tag, add both arches, push
           for TAG in "${TAGS[@]}"; do
             podman manifest rm ghcr.io/hornjason/daily-brief-dashboard:${TAG} 2>/dev/null || true
+            podman rmi ghcr.io/hornjason/daily-brief-dashboard:${TAG} 2>/dev/null || true
             podman manifest create ghcr.io/hornjason/daily-brief-dashboard:${TAG}
             podman manifest add ghcr.io/hornjason/daily-brief-dashboard:${TAG} containers-storage:localhost/daily-brief-hero-amd64:latest
             podman manifest add ghcr.io/hornjason/daily-brief-dashboard:${TAG} containers-storage:localhost/daily-brief-hero-arm64:latest
