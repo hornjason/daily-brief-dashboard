@@ -29,6 +29,9 @@ interface NewsCacheEntry {
 
 function getCachePath(customerName: string): string {
   const slug = toSlug(customerName)
+  if (!slug || /[^a-zA-Z0-9_-]/.test(slug)) {
+    throw new Error(`[intelligence-routes] unsafe slug: "${slug}"`)
+  }
   return resolve(CACHE_DIR, `${slug}.json`)
 }
 
@@ -58,6 +61,9 @@ export function createIntelligenceRouter(): Hono {
    */
   app.get('/api/customer/:name/intelligence/news', (c) => {
     const customerName = c.req.param('name')
+    if (!customerName || customerName.length > 200) {
+      return c.json({ error: 'Invalid customer name' }, 400)
+    }
     const cached = readCache(customerName)
 
     if (!cached) {
