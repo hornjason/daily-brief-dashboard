@@ -1,0 +1,43 @@
+# ── Dockerfile.hero-runtime — Runtime-only Hero Image ─────────────────────────
+# Used for cross-architecture builds where the builder stage (Vite/esbuild)
+# cannot run under QEMU emulation. Expects pre-built dashboard/dist/ in
+# the build context (produced by a native-arch build or CI artifact).
+#
+# Same output as Dockerfile.hero stage 2, but without the builder stage.
+
+FROM oven/bun:1-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile --production
+
+COPY .hero-dist ./dashboard/dist
+COPY server.ts ./server.ts
+COPY src ./src
+COPY scripts ./scripts
+COPY docs ./docs
+COPY config/account-plan /app/config/account-plan
+
+ENV PORT=7777
+ENV CONFIG_DIR=/data/config
+ENV CACHE_DIR=/data/cache
+ENV RH_PROFILE_DIR=/data/rh-profile
+
+EXPOSE 7777
+
+LABEL org.opencontainers.image.source=https://github.com/hornjason/daily-brief-dashboard
+LABEL org.opencontainers.image.description="Daily Brief Dashboard - Hero Install (L3-only, no browser scrapers)"
+LABEL org.opencontainers.image.licenses=MIT
+
+COPY defaults.env /app/defaults.env
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+CMD ["/entrypoint.sh"]

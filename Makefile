@@ -96,7 +96,10 @@ build:
 	podman manifest create $(REMOTE)
 	podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
 	podman manifest add $(REMOTE) containers-storage:localhost/daily-brief-hero-amd64:latest
-	podman build -f Dockerfile.hero --platform linux/arm64 -t daily-brief-hero-arm64 .
+	rm -rf .hero-dist && podman create --name hero-extract daily-brief-hero-amd64 true && \
+	  podman cp hero-extract:/app/dashboard/dist .hero-dist && podman rm hero-extract
+	podman build -f Dockerfile.hero-runtime --platform linux/arm64 -t daily-brief-hero-arm64 .
+	rm -rf .hero-dist
 	podman manifest add $(REMOTE) containers-storage:localhost/daily-brief-hero-arm64:latest
 	podman tag daily-brief-hero-amd64 $(IMAGE)
 

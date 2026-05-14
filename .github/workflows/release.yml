@@ -172,9 +172,16 @@ jobs:
         run: |
           VERSION_TAG="${{ steps.version.outputs.tag }}"
 
-          # Build both architectures
+          # Build amd64 natively (full Dockerfile with builder stage)
           podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
-          podman build -f Dockerfile.hero --platform linux/arm64 -t daily-brief-hero-arm64 .
+          # Extract pre-built dashboard for arm64 runtime-only build
+          rm -rf .hero-dist
+          podman create --name hero-extract daily-brief-hero-amd64 true
+          podman cp hero-extract:/app/dashboard/dist .hero-dist
+          podman rm hero-extract
+          # Build arm64 with pre-built dashboard (skips esbuild under QEMU)
+          podman build -f Dockerfile.hero-runtime --platform linux/arm64 -t daily-brief-hero-arm64 .
+          rm -rf .hero-dist
 
           # Collect tags to push
           TAGS=("${VERSION_TAG}")

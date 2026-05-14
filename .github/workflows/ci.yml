@@ -115,11 +115,21 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
+      - name: Download pre-built dashboard for arm64 runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-dist-${{ github.sha }}
+          path: .hero-dist/
+
       - name: Build and push multi-arch container image
         # Do NOT push :latest here. :latest is reserved for the release workflow's
         # publish-stable job (updated ONLY after the release smoke gate passes), to match
         # docker-compose.yml and README :latest references. Main-branch CI pushes a
         # commit-sha tag plus :main-latest for internal smoke tests.
+        #
+        # Multi-arch strategy: the dashboard build (Vite/esbuild) produces arch-independent
+        # static JS/CSS. We use the pre-built dashboard artifact and skip the builder stage
+        # via Dockerfile.hero-runtime, avoiding QEMU emulation of esbuild which crashes.
         run: |
           TAGS=("main-latest" "${{ github.sha }}")
           for TAG in "${TAGS[@]}"; do
@@ -129,7 +139,7 @@ jobs:
           done
 
           podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
-          podman build -f Dockerfile.hero --platform linux/arm64 -t daily-brief-hero-arm64 .
+          podman build -f Dockerfile.hero-runtime --platform linux/arm64 -t daily-brief-hero-arm64 .
 
           for TAG in "${TAGS[@]}"; do
             podman manifest add ghcr.io/hornjason/daily-brief-dashboard:${TAG} containers-storage:localhost/daily-brief-hero-amd64:latest
