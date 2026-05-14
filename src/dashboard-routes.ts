@@ -215,6 +215,7 @@ async function buildRedHatIntelligenceForMorningBrief(
                 )
 
                 if (matchingProduct) {
+                  if (article.sourceUrl && !/^https?:\/\//i.test(article.sourceUrl)) continue
                   meetingNews.push({
                     headline: article.headline,
                     summary: article.summary,
