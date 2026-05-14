@@ -10217,3 +10217,7 @@ Sub-issues:
   - BKL-TABS-06 → #146 — Tab shell components with dummy feature module registration
 
 BKL-INFRA-MULTIARCH → #198 — Multi-arch container images (amd64 + arm64) (closed)
+
+BKL-TEAM-01 → #205 — AccountTeam Phase 2: Parse team members from territory sheets (closed)
+BKL-TEAM-02 → #206 — Wire AccountTeam into briefs, meeting prep, email outreach
+BKL-TEAM-03 → #207 — AccountTeam role taxonomy refinement (manager subtypes)

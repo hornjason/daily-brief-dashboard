@@ -136,3 +136,29 @@ export interface CalendarEvent {
   notesUrl?: string    // first Google Doc link found in description
   solo?: boolean       // true when only the calendar owner is on the event
 }
+
+export type AccountTeamRole = 'ae' | 'asa' | 'ssp' | 'ssa' | 'manager'
+
+export interface AccountTeamMember {
+  name: string
+  title: string
+  role: AccountTeamRole
+}
+
+export interface TerritoryTeamEntry {
+  territory: string              // e.g. "WEST_COMM_CORP_NORTHWEST_TERR06"
+  aeName: string                 // AE name for matching customer.ae → territory
+  asa?: { name: string }         // from "Account SA" row in that AE's column
+  specialists: Array<{           // from SSP/SSA rows (shared across pod)
+    product: string               // e.g. "Openshift", "Ansible", "RHEL", "AI", "App Platform", "Cloud"
+    role: 'ssp' | 'ssa'
+    name: string
+  }>
+  partnerSales?: { name: string }
+  consultingManager?: { name: string }
+}
+
+export interface TerritoryTeamsCache {
+  updatedAt: string
+  teams: Record<string, TerritoryTeamEntry>  // keyed by territory code
+}

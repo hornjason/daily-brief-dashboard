@@ -72,6 +72,11 @@ Last updated: 2026-05-13 — Infrastructure hardening: `make up` pre-flight guar
 - `POST /api/customer/:name/intelligence/generate` — Manual trigger
 - `GET /api/customer/:name/account-plan` — Account plan markdown
 - `POST /api/customer/:name/account-plan/generate` — Trigger generation
+- `GET /api/customer/:name/team` — Resolved account team (AE, ASA, SSP/SSA specialists)
+
+### Account Team & Territory
+- `POST /api/admin/territory-sync` — Manual territory sync trigger (populates team cache)
+- Contract: `getAccountTeam(customer)` in `src/account-team.ts` — see ARCHITECTURE.md §20
 
 ### Campaigns
 - `POST /api/customer/:name/campaigns/generate` — Generate campaign (Gemini Pro, pre-flight intelligence, 11 council rules)

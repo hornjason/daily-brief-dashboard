@@ -652,13 +652,8 @@ export function scheduleTerritorySync(): void {
 
       // Persist team data to cache
       if (result.teamData && Object.keys(result.teamData).length > 0) {
-        const teamCachePath = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-teams.json')
-        const teamCache: import('./types.ts').TerritoryTeamsCache = {
-          updatedAt: new Date().toISOString(),
-          teams: result.teamData,
-        }
-        writeJsonAtomic(teamCachePath, teamCache)
-        console.log(`[territory-sync] persisted team data for ${Object.keys(result.teamData).length} territories`)
+        const { persistTeamCache } = await import('./account-team.ts')
+        persistTeamCache(result.teamData)
       }
 
       updateSchedulerField('territoryLastRun', new Date().toISOString())

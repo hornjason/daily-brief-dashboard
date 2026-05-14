@@ -5,6 +5,8 @@
  * Gold standard: ~/.claude/skills/ContentCampaign/output/a10-networks-campaign-final.html
  */
 
+import type { AccountTeamMember } from './types.ts'
+
 interface CampaignHTMLOptions {
   materialTitle: string
   materialUrl: string
@@ -13,6 +15,7 @@ interface CampaignHTMLOptions {
   generatedDate: string
   focus?: string
   style?: string
+  accountTeam?: AccountTeamMember[]
   signals?: {
     productIntel?: any
     intelligence?: any
@@ -402,7 +405,11 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
 
 <h1 style="font-size: 28px; color: #c41e3a; margin: 0 0 4px 0; border-bottom: 3px solid #c41e3a; padding-bottom: 12px;">Content Campaign: ${escapeHTML(options.materialTitle)}</h1>
 <h2 style="font-size: 22px; color: #202124; margin: 8px 0 4px 0;">${escapeHTML(options.customerName)}</h2>
-<p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${options.generatedDate} · AE: ${escapeHTML(options.aeName)}${options.focus ? ` · Focus: ${escapeHTML(options.focus)}` : ''}${options.style ? ` · Style: ${escapeHTML(options.style)}` : ''}</p>
+<p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${options.generatedDate} · ${
+  options.accountTeam && options.accountTeam.length > 0
+    ? options.accountTeam.map(m => `${m.role.toUpperCase()}: ${escapeHTML(m.name)}`).join(' · ')
+    : `AE: ${escapeHTML(options.aeName)}`
+}${options.focus ? ` · Focus: ${escapeHTML(options.focus)}` : ''}${options.style ? ` · Style: ${escapeHTML(options.style)}` : ''}</p>
 
 <table width="100%" cellpadding="10" cellspacing="0" style="background: #f8f9fa; margin-bottom: 24px;">
   <tr>
@@ -427,6 +434,11 @@ ${contacts.length > 0 ? `
 <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
   <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Gemini 2.5 Pro (Vertex AI)</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(options.aeName)}</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Account Team</td><td style="border-bottom: 1px solid #e8eaed;">${
+    options.accountTeam && options.accountTeam.length > 0
+      ? options.accountTeam.map(m => `${escapeHTML(m.name)} (${m.role.toUpperCase()})`).join(', ')
+      : escapeHTML(options.aeName) + ' (AE)'
+  }</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">3 Executive (≤90 words) + 3 Manager (200-250 words)</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Target Personas</td><td style="border-bottom: 1px solid #e8eaed;">${parsed.emailTemplates.length > 0 ? parsed.emailTemplates.map(e => `${escapeHTML(e.persona)} (${escapeHTML(e.tier)})`).join(' · ') : '6 personas (3 exec + 3 mgr)'}</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Signals Used</td><td style="border-bottom: 1px solid #e8eaed;">Intelligence brief, customer docs, daily brief, subscriptions, emails, cases, account plan</td></tr>

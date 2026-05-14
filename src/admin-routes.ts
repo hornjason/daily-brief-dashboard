@@ -25,11 +25,15 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { getTelemetrySummary, getTelemetryLog } from './scraper-manager.ts'
 import { getGeminiUsageSummary } from './gemini-cost-tracker.ts'
 import { getWatcherState, rebuildFolderMap } from './drive-watcher.ts'
-import { customers } from './server-state.ts'
+import { customers, aes } from './server-state.ts'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
 import { isPrimary } from './lib/node-role.ts'
 import { shouldShowUpdate } from './lib/version-utils.ts'
 import { runPurgeInactiveMigration } from './migrate-purge-inactive.ts'
+import { syncTerritorySheet } from './territory-sync.ts'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
+import { getAccountTeam, persistTeamCache } from './account-team.ts'
+import { toSlug } from './cache-layer.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let SHEETS_TOKEN_PATH = ''
@@ -326,6 +330,36 @@ export function createAdminRouter(): Hono {
     if (targetCats.includes('industryAnalysis')) clearDir('industry-analysis')
 
     return c.json({ cleared, types: targetCats })
+  })
+
+  // POST /api/admin/territory-sync — trigger territory sync on demand
+  r.post('/api/admin/territory-sync', async (c) => {
+    if (aes.length === 0) return c.json({ error: 'No AEs configured' }, 400)
+    try {
+      const result = await syncTerritorySheet(aes, customers)
+      if (result.teamData && Object.keys(result.teamData).length > 0) {
+        persistTeamCache(result.teamData)
+      }
+      return c.json({
+        added: result.toAdd.length,
+        removed: result.toRemove.length,
+        unchanged: result.unchanged.length,
+        teamMembers: result.teamData ? Object.keys(result.teamData).length : 0,
+      })
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
+  // GET /api/customer/:name/team — resolved account team for a customer
+  r.get('/api/customer/:name/team', (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find(cu => cu.name.toLowerCase() === rawName.toLowerCase())
+      || customers.find(cu => toSlug(cu.name) === rawName)
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const team = getAccountTeam(customer)
+    return c.json({ customer: customer.name, ae: customer.ae, team })
   })
 
   return r

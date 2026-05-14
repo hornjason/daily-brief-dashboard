@@ -54,6 +54,96 @@ function resolveRegionSheetId(region: RegionConfig): string {
   }
 }
 
+// ── Team Member Extraction ───────────────────────────────────────────────────
+
+/**
+ * Extract team member data from territory sheet rows.
+ *
+ * Scans from accountsStartIdx onwards for team member role labels followed by
+ * person names. Skips account names, count rows, and blank rows.
+ *
+ * @param rows - Full sheet rows from the tab
+ * @param col - Column index to scan
+ * @param accountsStartIdx - Row index where accounts start (first row after AE name row)
+ * @returns Object with asa, specialists, partnerSales, consultingManager
+ */
+export function extractTeamMembers(
+  rows: string[][],
+  col: number,
+  accountsStartIdx: number,
+): {
+  asa?: { name: string }
+  specialists: Array<{ product: string; role: 'ssp' | 'ssa'; name: string }>
+  partnerSales?: { name: string }
+  consultingManager?: { name: string }
+} {
+  const specialists: Array<{ product: string; role: 'ssp' | 'ssa'; name: string }> = []
+  let asa: { name: string } | undefined
+  let partnerSales: { name: string } | undefined
+  let consultingManager: { name: string } | undefined
+
+  // Start scanning from accountsStartIdx to end of sheet (up to row 59, range Z60 limit)
+  const maxRow = Math.min(rows.length, 60)
+
+  const isRoleLabel = (s: string) =>
+    /^Account\s+S[Aa]/i.test(s) ||
+    /^(Openshift|Ansible|Rhel|Ai|App Platform|Cloud)\s+(SSP|SSA)/i.test(s) ||
+    /^Partner Sales Executive/i.test(s) ||
+    /^Consulting Services Manager/i.test(s) ||
+    /^(Support|POD Manager)/i.test(s)
+
+  const findName = (startRow: number): string | null => {
+    for (let n = startRow; n < maxRow; n++) {
+      const nameCell = String(rows[n]?.[col] ?? '').trim()
+      if (!nameCell) continue
+      if (isRoleLabel(nameCell)) return null
+      return nameCell
+    }
+    return null
+  }
+
+  for (let r = accountsStartIdx; r < maxRow; r++) {
+    const cell = String(rows[r]?.[col] ?? '').trim()
+    if (!cell) continue
+
+    // Skip count rows like "9 of 10" or bare numbers
+    if (/^\d{1,3}$/.test(cell) || /^\d+\s+of\s+\d+$/i.test(cell)) continue
+
+    // Account SA — next non-label row is ASA name
+    if (/^Account\s+S[Aa]/i.test(cell)) {
+      const name = findName(r + 1)
+      if (name) asa = { name }
+      continue
+    }
+
+    // Product SSP/SSA — next non-label row is person name
+    const productMatch = cell.match(/^(Openshift|Ansible|Rhel|Ai|App Platform|Cloud)\s+(SSP|SSA)/i)
+    if (productMatch) {
+      const product = productMatch[1]
+      const role = productMatch[2].toLowerCase() as 'ssp' | 'ssa'
+      const name = findName(r + 1)
+      if (name) specialists.push({ product, role, name })
+      continue
+    }
+
+    // Partner Sales Executive
+    if (/^Partner Sales Executive/i.test(cell)) {
+      const name = findName(r + 1)
+      if (name) partnerSales = { name }
+      continue
+    }
+
+    // Consulting Services Manager (with optional "(TSM)")
+    if (/^Consulting Services Manager/i.test(cell)) {
+      const name = findName(r + 1)
+      if (name) consultingManager = { name }
+      continue
+    }
+  }
+
+  return { asa, specialists, partnerSales, consultingManager }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalizeTerritoryCustomerName(raw: string): string {
@@ -276,6 +366,7 @@ export async function syncTerritorySheet(
   toAdd: Array<{ name: string; ae: string }>;
   toRemove: Array<{ name: string; ae: string }>;
   unchanged: string[];
+  teamData?: Record<string, import('./types.ts').TerritoryTeamEntry>;
 }> {
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   if (!auth) throw new Error('Google auth not configured')
@@ -313,6 +404,7 @@ async function syncCommercialRegion(
   const toAdd: Array<{ name: string; ae: string }> = []
   const toRemove: Array<{ name: string; ae: string }> = []
   const unchanged: string[] = []
+  const teamDataByTerritory: Record<string, import('./types.ts').TerritoryTeamEntry> = {}
 
   for (const ae of aes) {
     if (!ae.tableauTerritories?.length) continue
@@ -367,6 +459,7 @@ async function syncCommercialRegion(
 
           if (tableauTerritory !== territory) continue
 
+          // Extract account names
           for (let r = accountsStartIdx; r < rows.length; r++) {
             const cell = rows[r][col] ?? ''
             if (!cell) continue
@@ -376,6 +469,17 @@ async function syncCommercialRegion(
             if (/^(Openshift|Ansible|Rhel|Ai)\s+(SSP|SSA)/i.test(cell)) break
             const normalized = normalizeTerritoryCustomerName(cell)
             if (normalized) sheetAccounts.add(normalized.toLowerCase())
+          }
+
+          // Extract team member data for this territory
+          const teamData = extractTeamMembers(rows, col, accountsStartIdx)
+          teamDataByTerritory[tableauTerritory] = {
+            territory: tableauTerritory,
+            aeName: ae.name,
+            asa: teamData.asa,
+            specialists: teamData.specialists,
+            partnerSales: teamData.partnerSales,
+            consultingManager: teamData.consultingManager,
           }
         }
       }
@@ -402,7 +506,7 @@ async function syncCommercialRegion(
     }
   }
 
-  return { toAdd, toRemove, unchanged }
+  return { toAdd, toRemove, unchanged, teamData: teamDataByTerritory }
 }
 
 async function syncEnterpriseRegion(
@@ -441,7 +545,7 @@ async function syncEnterpriseRegion(
   }
 
   if (!enterpriseTab) {
-    return { toAdd: [], toRemove: [], unchanged: [] }
+    return { toAdd: [], toRemove: [], unchanged: [], teamData: undefined }
   }
 
   const aeTerrMap = extractEnterpriseAeMap(enterpriseRows)
@@ -466,5 +570,5 @@ async function syncEnterpriseRegion(
     for (const c of aeCustomers) unchanged.push(c.name)
   }
 
-  return { toAdd, toRemove, unchanged }
+  return { toAdd, toRemove, unchanged, teamData: undefined }
 }

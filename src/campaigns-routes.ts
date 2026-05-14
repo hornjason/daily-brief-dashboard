@@ -32,6 +32,7 @@ import type { VoiceProfile } from './ae-voice.ts'
 import { generateCampaignHTML } from './campaign-html-template.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
+import { getAccountTeam } from './account-team.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -275,7 +276,7 @@ async function ensureCampaignsSubfolder(customerFolderId: string): Promise<strin
 
 async function uploadCampaignToDrive(
   customerFolderId: string,
-  customerName: string,
+  customer: Customer,
   materialTitle: string,
   materialUrl: string,
   markdown: string,
@@ -290,15 +291,19 @@ async function uploadCampaignToDrive(
     hour: '2-digit',
     minute: '2-digit',
   })
-  const docName = `${materialTitle} - Campaign for ${customerName}`
+  const docName = `${materialTitle} - Campaign for ${customer.name}`
+
+  // Get account team
+  const accountTeam = getAccountTeam(customer)
 
   // Generate rich HTML output
   const htmlContent = generateCampaignHTML({
     materialTitle,
     materialUrl,
-    customerName,
+    customerName: customer.name,
     aeName,
     generatedDate: timestamp,
+    accountTeam,
     signals,
     markdown,
   })
@@ -494,12 +499,17 @@ export async function generateCampaign(
     hour: '2-digit',
     minute: '2-digit',
   })
+
+  // Get account team
+  const accountTeam = getAccountTeam(customer)
+
   const htmlContent = generateCampaignHTML({
     materialTitle,
     materialUrl,
     customerName: customer.name,
     aeName: customer.ae ?? 'Unknown AE',
     generatedDate: timestamp,
+    accountTeam,
     signals,
     markdown,
   })
@@ -511,7 +521,7 @@ export async function generateCampaign(
     const customerFolderId = await findCustomerDriveFolder(customer)
     const driveResult = await uploadCampaignToDrive(
       customerFolderId,
-      customer.name,
+      customer,
       materialTitle,
       materialUrl,
       markdown,

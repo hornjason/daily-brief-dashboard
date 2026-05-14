@@ -1344,6 +1344,59 @@ All schedule times configurable via Admin page or `POST /api/settings/scheduler`
 | **KPI Snapshot** | Daily 8:00 AM ET | Daily metric snapshots to `kpi-history.json`. 90-day rolling window. |
 | **NotebookLM** | Manual only | Requires `NOTEBOOKLM_ENABLED=true` env var. Admin trigger only. |
 
+## §20. Account Team Data Contract
+
+Standardized resolution of account team members (AE, ASA, SSP/SSA specialists, managers) for all features that need team context.
+
+### Key module: `src/account-team.ts`
+
+| Export | Purpose |
+|---|---|
+| `getAccountTeam(customer)` | Returns `AccountTeamMember[]` — canonical team for a customer |
+| `getOperatorProfile()` | Returns logged-in user from `user-settings.json` |
+| `persistTeamCache(teamData)` | Single writer for territory team cache |
+| `invalidateTeamCache()` | Clear in-memory cache (called after writes) |
+| `toPromptContext(team)` | Canonical Markdown serialization for Gemini prompts |
+
+### Data sources (priority order)
+
+1. **Territory sheets** → parsed by `extractTeamMembers()` in `territory-sync.ts`, cached to `cache/territory-teams.json`, loaded into memory on first call
+2. **Operator profile** → `config/user-settings.json` fields `operatorName` + `operatorTitle` (fallback when no territory data)
+3. **Customer record** → `customer.ae` field for AE name
+
+### Territory team structure
+
+Per-territory (per AE column in sheet): Account SA → ASA name.
+Per-pod (shared column): Product SSP/SSA specialists, Partner Sales Executive, Consulting Services Manager.
+
+Territory lookup uses `ae.tableauTerritories[0]` as hash key into the cache, with AE name string matching as fallback.
+
+### Types (`src/types.ts`)
+
+- `AccountTeamRole` = `'ae' | 'asa' | 'ssp' | 'ssa' | 'manager'`
+- `AccountTeamMember` = `{ name, title, role }`
+- `TerritoryTeamEntry` = `{ territory, aeName, asa?, specialists[], partnerSales?, consultingManager? }`
+- `TerritoryTeamsCache` = `{ updatedAt, teams: Record<string, TerritoryTeamEntry> }`
+
+### Current consumers
+
+| Feature | How it uses the contract |
+|---|---|
+| **Campaigns** (`campaigns-routes.ts`) | `getAccountTeam(customer)` → metadata line + config table in HTML |
+| **Account Plans** (`account-plan.ts`) | `getOperatorProfile()` → ASA name in plan prompt |
+| **Team endpoint** (`admin-routes.ts`) | `GET /api/customer/:name/team` → full JSON team |
+| **Territory sync** (`admin-routes.ts`) | `POST /api/admin/territory-sync` → manual trigger |
+
+### Adding a new consumer
+
+```typescript
+import { getAccountTeam, toPromptContext } from './account-team.ts'
+
+const team = getAccountTeam(customer)
+const promptSection = toPromptContext(team)
+// promptSection = "## Account Team\n- Account Executive: Elmer Alvarez\n- Account Solution Architect: Jason Horn\n..."
+```
+
 ### Known bugs (fixed 2026-04-06)
 
 - **`makeAuth` missing import** in `src/account-intelligence.ts` — caused intelligence generation to crash on startup when `makeAuth` was called but not imported from `google-auth-library`.

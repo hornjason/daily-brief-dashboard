@@ -20,6 +20,7 @@ import { customers } from './server-state.ts'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { toSlug } from './cache-layer.ts'
 import type { Customer } from './types.ts'
+import { getOperatorProfile } from './account-team.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ Rules:
 - Use the sample account plan as your structural template — match its sections, depth, and style
 - Use the customer intelligence data as your primary source for specific facts, numbers, and insights
 - Be specific: use customer names, product names, dollar amounts, dates where available
-- Write as if Jason Horn (Red Hat ASA) is the author
+- Write as if the Account Solution Architect is the author
 - Output clean markdown with ## section headers matching the sample plan structure
 - Do NOT include placeholder text — if data is missing, write a concise inference based on what is known
 
@@ -167,6 +168,11 @@ export async function generateAccountPlan(
   const slug = toSlug(customer.name)
   console.log(`[acct-plan] Generating account plan for ${customer.name} (${slug})`)
 
+  // Get operator profile
+  const operatorProfile = getOperatorProfile()
+  const operatorName = operatorProfile?.name ?? 'the Account Solution Architect'
+  const operatorTitle = operatorProfile?.title ?? 'Account Solution Architect'
+
   // 1. Load sample plan markdown
   const samplePlanPath = resolve(APP_CONFIG_DIR, 'sample.md')
   const samplePlan = readFileSync(samplePlanPath, 'utf-8')
@@ -204,7 +210,7 @@ ${samplePlan.substring(0, 15000)}
 ## Customer: ${customerDisplayName}
 ## Account Team
 - Account Executive (AE): ${aeName}
-- Account Solution Architect (ASA): Jason Horn
+- ${operatorTitle} (ASA): ${operatorName}
 
 ### Company Intelligence
 ${companyIntel.substring(0, 8000)}
@@ -216,7 +222,7 @@ ${productIntel.substring(0, 5000)}
 ${playbook}
 
 ---
-Now generate a complete Account Plan for ${customerDisplayName} following the sample structure above and answering all questions from the reference image. Include ${aeName} as the AE and Jason Horn as the ASA in the team members section.`
+Now generate a complete Account Plan for ${customerDisplayName} following the sample structure above and answering all questions from the reference image. Include ${aeName} as the AE and ${operatorName} as the ASA in the team members section.`
 
   // Call Gemini with multimodal (text + PDF image)
   const markdown = await callGeminiMultimodal({
