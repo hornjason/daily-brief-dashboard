@@ -423,6 +423,16 @@ ${contacts.length > 0 ? `
   </tr>`).join('\n')}
 </table>` : ''}
 
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
+<table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
+  <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Gemini 2.5 Pro (Vertex AI)</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(options.aeName)}</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">3 Executive (≤90 words) + 3 Manager (200-250 words)</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Target Personas</td><td style="border-bottom: 1px solid #e8eaed;">${parsed.emailTemplates.length > 0 ? parsed.emailTemplates.map(e => `${escapeHTML(e.persona)} (${escapeHTML(e.tier)})`).join(' · ') : '6 personas (3 exec + 3 mgr)'}</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Signals Used</td><td style="border-bottom: 1px solid #e8eaed;">Intelligence brief, customer docs, daily brief, subscriptions, emails, cases, account plan</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa;">Council Rules</td><td>11 council-validated email design rules (see checklist below)</td></tr>
+</table>
+
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">✅ Email Quality Checklist</h2>
 <table width="100%" cellpadding="4" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 20px;">
   <tr><td style="padding: 2px 0;">☐ Word limits: Executive ≤90 words | Manager 200-250 words</td></tr>
@@ -509,10 +519,11 @@ ${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin:
 <!-- POSITIONING SUMMARY                            -->
 <!-- ═══════════════════════════════════════════════ -->
 
-<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 20px 0;">Positioning Summary</h2>
+<h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 0 0 20px 0;">Positioning Matches</h2>
 
-${parsed.positioning.map(p => `<div style="border-left: 4px solid #c41e3a; padding: 16px 20px; margin-bottom: 20px; background: #fef7f7;">
-  <p style="font-size: 15px; color: #3c4043; margin: 0;">${convertMarkdownLinks(convertMarkdownBold(escapeHTML(p)))}</p>
+${parsed.positioning.map((p, i) => `<div style="border-left: 4px solid #c41e3a; padding: 16px 20px; margin-bottom: 20px; background: #fef7f7;">
+  <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #c41e3a; font-weight: bold; margin: 0 0 8px 0;">MATCH #${i + 1}</p>
+  <p style="font-size: 15px; color: #3c4043; margin: 0; line-height: 1.6;">${convertMarkdownLinks(convertMarkdownBold(escapeHTML(p)))}</p>
 </div>`).join('\n')}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
