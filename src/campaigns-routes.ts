@@ -30,6 +30,8 @@ import { runIntelligencePipeline } from './account-intelligence.ts'
 import { generateAccountPlan } from './account-plan.ts'
 import type { VoiceProfile } from './ae-voice.ts'
 import { generateCampaignHTML } from './campaign-html-template.ts'
+import { loadCustomerSignals } from './lib/signal-loader.ts'
+import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -104,124 +106,6 @@ async function extractMaterialContent(fileId: string): Promise<{ title: string; 
   const content = typeof exportRes.data === 'string' ? exportRes.data : String(exportRes.data)
 
   return { title, content }
-}
-
-// ── Customer intelligence loading ────────────────────────────────────────────
-
-interface CustomerSignals {
-  productIntel?: any
-  intelligence?: any
-  customerDocs?: any
-  accountPlan?: string
-  dailyBrief?: any
-  subscriptions?: any
-  emails?: any
-  cases?: any
-}
-
-interface SignalLoadResult {
-  signals: CustomerSignals
-  loaded: string[]
-  missing: string[]
-}
-
-/**
- * Load all 7 customer signal sources from cache with graceful degradation.
- * Missing sources are logged but don't block generation.
- */
-function loadCustomerSignals(customerSlug: string, customerName?: string): SignalLoadResult {
-  const signals: CustomerSignals = {}
-  const loaded: string[] = []
-  const missing: string[] = []
-
-  const tryLoad = (name: string, path: string, postProcess?: (data: any) => any) => {
-    try {
-      if (existsSync(path)) {
-        let data = JSON.parse(readFileSync(path, 'utf-8'))
-        if (postProcess) data = postProcess(data)
-        ;(signals as any)[name] = data
-        loaded.push(name)
-      } else {
-        missing.push(name)
-      }
-    } catch (e: any) {
-      console.warn(`[campaigns] Failed to load ${name} for ${customerSlug}:`, e.message)
-      missing.push(name)
-    }
-  }
-
-  // 1. Intelligence brief
-  tryLoad('intelligence', resolve(CACHE_DIR, 'intelligence', `${customerSlug}.json`))
-
-  // 2. Customer docs
-  tryLoad('customerDocs', resolve(CACHE_DIR, 'product-intel', 'customer-docs', `${customerSlug}.json`))
-
-  // 3. Daily brief (try today first, then most recent)
-  const today = new Date().toISOString().slice(0, 10)
-  const briefPath = resolve(CACHE_DIR, `${customerSlug}-${today}.json`)
-  if (existsSync(briefPath)) {
-    tryLoad('dailyBrief', briefPath)
-  } else {
-    // Scan for most recent brief
-    try {
-      const files = readdirSync(CACHE_DIR).filter(f => f.startsWith(`${customerSlug}-`) && f.match(/\d{4}-\d{2}-\d{2}\.json$/))
-      if (files.length > 0) {
-        files.sort().reverse()
-        tryLoad('dailyBrief', resolve(CACHE_DIR, files[0]))
-      } else {
-        missing.push('dailyBrief')
-      }
-    } catch { missing.push('dailyBrief') }
-  }
-
-  // 4. Subscriptions
-  tryLoad('subscriptions', resolve(CACHE_DIR, `${customerSlug}-sheets.json`))
-
-  // 5. Emails
-  tryLoad('emails', resolve(CACHE_DIR, `${customerSlug}-emails.json`))
-
-  // 6. Cases (filter by customer name from global cases file)
-  tryLoad('cases', resolve(CACHE_DIR, 'cases.json'), (data) => {
-    if (!customerName || !Array.isArray(data)) return data
-    return data.filter((c: any) => c.customer?.toLowerCase() === customerName.toLowerCase() || c.accountName?.toLowerCase() === customerName.toLowerCase())
-  })
-
-  // 7. Product intel (scan for any customer-specific product intel)
-  try {
-    const productIntelDir = resolve(CACHE_DIR, 'product-intel')
-    if (existsSync(productIntelDir)) {
-      const dirs = readdirSync(productIntelDir).filter(d => d.endsWith('-customer-intel'))
-      const allIntel: any[] = []
-      for (const dir of dirs) {
-        const filePath = resolve(productIntelDir, dir, `${customerSlug}.json`)
-        if (existsSync(filePath)) {
-          allIntel.push(JSON.parse(readFileSync(filePath, 'utf-8')))
-        }
-      }
-      if (allIntel.length > 0) {
-        signals.productIntel = allIntel
-        loaded.push('productIntel')
-      } else {
-        missing.push('productIntel')
-      }
-    } else {
-      missing.push('productIntel')
-    }
-  } catch { missing.push('productIntel') }
-
-  // 8. Account plan (markdown)
-  try {
-    const planPath = resolve(CACHE_DIR, 'intelligence', `${customerSlug}-account-plan.md`)
-    if (existsSync(planPath)) {
-      signals.accountPlan = readFileSync(planPath, 'utf-8')
-      loaded.push('accountPlan')
-    } else {
-      missing.push('accountPlan')
-    }
-  } catch { missing.push('accountPlan') }
-
-  console.log(`[campaigns] Signal stack for ${customerSlug}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}]`)
-  return { signals, loaded, missing }
 }
 
 // ── Gemini campaign generation ───────────────────────────────────────────────

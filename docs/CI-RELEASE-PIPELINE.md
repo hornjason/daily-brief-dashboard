@@ -2,11 +2,11 @@
 doc-type: runbook
 status: active
 owner: jason
-updated: 2026-05-12
+updated: 2026-05-14
 ---
 
 # CI & Release Pipeline
-*Last validated: 2026-05-12 | Owner: DA | Trigger: Review and update on any structural change to this doc*
+*Last validated: 2026-05-14 | Owner: DA | Trigger: Review and update on any structural change to this doc*
 
 ## Overview
 
@@ -40,7 +40,8 @@ git push main
 │                          ▼                              │
 │  ┌──────────────────┐                                   │
 │  │  Build & push    │                                   │
-│  │  container image │                                   │
+│  │  multi-arch image│                                   │
+│  │  (amd64 + arm64) │                                   │
 │  │  → :main-latest  │                                   │
 │  │  → :sha          │                                   │
 │  └────────┬─────────┘                                   │
@@ -54,7 +55,7 @@ git push main
 └─────────────────────────────────────────────────────────┘
 ```
 
-**What it produces:** container image at `ghcr.io/hornjason/daily-brief-dashboard:main-latest` and `:sha`
+**What it produces:** multi-arch container image (linux/amd64 + linux/arm64) at `ghcr.io/hornjason/daily-brief-dashboard:main-latest` and `:sha`
 
 **Not in Gate 2:** E2E Playwright tests, Wizard E2E, visual regression. These run exclusively in Gate 4 (release.yml). Rationale: issue #138 — E2E took 20+ min per commit with `continue-on-error: true`, providing no gate value while burning Mac Mini runner time.
 
@@ -102,7 +103,7 @@ git tag v1.5.2 && git push origin v1.5.2
 ```
 
 **What it produces:**
-- Container image at `:latest`, `:stable`, `:v1.5.2` on GHCR
+- Multi-arch container image (linux/amd64 + linux/arm64) at `:latest`, `:stable`, `:v1.5.2` on GHCR
 - Public GitHub release at `hornjason/daily-brief-dashboard/releases/tag/v1.5.2`
 - `setup.sh` downloadable at `releases/latest/download/setup.sh`
 
@@ -219,3 +220,19 @@ curl -fsSL https://github.com/hornjason/daily-brief-dashboard/releases/latest/do
 ## Runner
 
 All jobs run on `[self-hosted, mac-mini-live]` — the Mac Mini at `localhost:7777`. This is why the Release Gate can test against real live credentials and the actual running prod server.
+
+---
+
+## Multi-Arch Build (2026-05-14)
+
+All container images are built as multi-arch manifests supporting `linux/amd64` and `linux/arm64`. This applies to CI (Gate 2) and Release (Gate 4) workflows, as well as `make build` locally.
+
+**How it works:**
+1. Both architectures are built separately via `podman build --platform linux/{amd64,arm64}`
+2. A `podman manifest` combines both into a single manifest list
+3. `podman manifest push --all` pushes the manifest list to GHCR
+4. Docker/Podman clients auto-select the correct architecture on pull
+
+**arm64 builds on Intel runner:** Uses QEMU user-mode emulation (built into Podman Machine). Adds ~1-2 minutes to the build step.
+
+**Scope:** Hero image only. L4 daemon remains amd64-only (Chromium binary dependency).

@@ -241,9 +241,21 @@ _Avoid_: "email guidelines", "writing rules"
 Before generating a campaign, the system checks that intelligence brief and account plan exist and are fresh (<7 days). Missing or stale data triggers automatic generation before the campaign runs. Ensures every campaign has complete context regardless of prior setup state.
 _Avoid_: "data check", "prerequisite check"
 
+**Signal**:
+A single piece of customer intelligence contributed by a feature module or legacy cache source. Flat shape: `source`, `type`, `headline`, `detail`, `timestamp`, optional `score` (0-1 normalized), optional `url`, optional `metadata` bag for per-type extras. Consumed by all content generation features via `loadCustomerSignals()`.
+_Avoid_: "data point", "insight", "intel item"
+
+**Signal type** (also: `SignalType`):
+A string literal classifying what kind of intelligence a signal represents. 13 canonical types: `news`, `intelligence`, `expansion`, `subscription`, `case`, `email`, `meeting`, `product-release`, `event`, `product-intel`, `account-plan`, `competitive`, `brief`. New types are added to the union when a new data source ships.
+_Avoid_: "signal category", "signal kind"
+
 **Universal signal stack**:
-The complete set of data sources consumed by any content generation feature. Currently 8 sources: intelligence brief, customer docs, daily brief, subscriptions, emails, cases, product intel, account plan. Planned expansion (#196) to include product lifecycle (expiry dates), product feature radar, news radar, and meeting data.
+The complete set of signals collected for a customer across all registered feature modules and legacy cache sources. Collected by `loadCustomerSignals()` in `signal-loader.ts`, which calls `collectAllSignals()` on the registry then fills gaps from legacy cache files. Every content generation feature (campaigns, briefs, account plans, meeting prep) consumes the same stack.
 _Avoid_: "data sources", "signal sources" (use "signal stack" as the canonical term)
+
+**Signal auto-discovery**:
+The pattern where new data sources automatically contribute to all content generation features by implementing `signals()` on their feature module. No wiring needed in consumers — the registry collects from all modules that implement the method. See ADR-021.
+_Avoid_: "signal registration", "signal wiring"
 
 ## Flagged ambiguities
 

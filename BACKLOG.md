@@ -10215,3 +10215,6 @@ Sub-issues:
   - BKL-TABS-04 → #144 — Sync Now API endpoint for registered modules
   - BKL-TABS-05 → #145 — Playwright visual regression baseline for tabbed layout
   - BKL-TABS-06 → #146 — Tab shell components with dummy feature module registration
+
+BKL-INFRA-MULTIARCH → #198 — Multi-arch container images (amd64 + arm64)
+Status: In progress — Makefile + CI updated, manual push verified, awaiting CI green

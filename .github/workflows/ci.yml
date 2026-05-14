@@ -115,18 +115,26 @@ jobs:
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GHCR_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build and push container image
+      - name: Build and push multi-arch container image
         # Do NOT push :latest here. :latest is reserved for the release workflow's
         # publish-stable job (updated ONLY after the release smoke gate passes), to match
         # docker-compose.yml and README :latest references. Main-branch CI pushes a
         # commit-sha tag plus :main-latest for internal smoke tests.
         run: |
-          podman build \
-            -t ghcr.io/hornjason/daily-brief-dashboard:main-latest \
-            -t ghcr.io/hornjason/daily-brief-dashboard:${{ github.sha }} \
-            -f Dockerfile.hero .
-          podman push ghcr.io/hornjason/daily-brief-dashboard:main-latest
-          podman push ghcr.io/hornjason/daily-brief-dashboard:${{ github.sha }}
+          TAGS=("main-latest" "${{ github.sha }}")
+          for TAG in "${TAGS[@]}"; do
+            podman manifest rm ghcr.io/hornjason/daily-brief-dashboard:${TAG} 2>/dev/null || true
+            podman manifest create ghcr.io/hornjason/daily-brief-dashboard:${TAG}
+          done
+
+          podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
+          podman build -f Dockerfile.hero --platform linux/arm64 -t daily-brief-hero-arm64 .
+
+          for TAG in "${TAGS[@]}"; do
+            podman manifest add ghcr.io/hornjason/daily-brief-dashboard:${TAG} containers-storage:localhost/daily-brief-hero-amd64:latest
+            podman manifest add ghcr.io/hornjason/daily-brief-dashboard:${TAG} containers-storage:localhost/daily-brief-hero-arm64:latest
+            podman manifest push --all ghcr.io/hornjason/daily-brief-dashboard:${TAG} docker://ghcr.io/hornjason/daily-brief-dashboard:${TAG}
+          done
 
   smoke:
     name: Container smoke test

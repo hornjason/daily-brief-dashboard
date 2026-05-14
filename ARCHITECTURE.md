@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-09
+updated: 2026-05-14
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -298,6 +298,8 @@ The daemon stores SSO cookies in a persistent Chromium profile at `/data-sync/rh
 **Pattern:** No systemd, no launchd, no host cron jobs, no host-level tooling. Everything runs inside the `pai-dashboard` Podman container.
 
 **Why it's intentional:** Reproducibility and isolation. The container has its own Playwright, Bun, and VNC server. The Makefile (`make rebuild`) is the single deploy mechanism.
+
+**Multi-arch images (2026-05-14):** The hero image (`daily-brief-dashboard`) is built as a multi-arch manifest (linux/amd64 + linux/arm64). `make build` produces both via QEMU emulation and `podman manifest`. The L4 daemon image remains amd64-only (Chromium binary dependency).
 
 **Rules that follow:**
 - Always deploy with `make rebuild` — never raw `podman run` or `docker run`

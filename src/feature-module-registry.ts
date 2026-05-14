@@ -3,6 +3,35 @@
 // Server-side lifecycle registry for feature modules (campaigns, news, tools, etc.)
 // Modeled after ScraperRegistry pattern — self-registration, status tracking, unified cleanup.
 
+// ── Signal types ─────────────────────────────────────────────────────────────
+// GitHub Issue #171 — Universal signal interface for auto-discovery
+
+export type SignalType =
+  | 'news' | 'intelligence' | 'expansion' | 'subscription'
+  | 'case' | 'email' | 'meeting' | 'product-release'
+  | 'event' | 'product-intel' | 'account-plan' | 'competitive' | 'brief'
+
+export interface Signal {
+  /** Module name that produced this signal (e.g., 'news-radar', 'campaigns') */
+  source: string
+  /** Signal classification */
+  type: SignalType
+  /** Short summary */
+  headline: string
+  /** Full content */
+  detail: string
+  /** 0-1 normalized score, optional — omit when source has no natural ranking */
+  score?: number
+  /** ISO 8601 timestamp */
+  timestamp: string
+  /** Optional URL */
+  url?: string
+  /** Per-type extras (e.g., case severity, subscription node count) */
+  metadata?: Record<string, unknown>
+}
+
+// ── Feature Module contract ──────────────────────────────────────────────────
+
 export interface FeatureModule {
   /** Unique identifier (e.g., 'campaigns', 'news-radar') */
   name: string
@@ -20,6 +49,8 @@ export interface FeatureModule {
   cleanup: (customerName: string) => Promise<void>
   /** Manual trigger (exposed via API) */
   syncNow: (customerName: string) => Promise<void>
+  /** Optional: Provide signals for content generation (GitHub Issue #171) */
+  signals?: (customerSlug: string) => Promise<Signal[]>
 }
 
 export interface ModuleStatus {
@@ -114,6 +145,35 @@ export const FeatureModuleRegistry = {
         )
       }
     }
+  },
+
+  /**
+   * Collect signals from all registered modules that implement signals().
+   * Each module is try/caught individually — failures are logged but don't throw (fail-open).
+   * Returns a flat array of all signals from all modules.
+   * GitHub Issue #171 — Signal auto-discovery
+   */
+  async collectAllSignals(customerSlug: string): Promise<Signal[]> {
+    const allSignals: Signal[] = []
+
+    for (const module of _modules.values()) {
+      // Skip modules that don't implement signals()
+      if (!module.signals) {
+        continue
+      }
+
+      try {
+        const signals = await module.signals(customerSlug)
+        allSignals.push(...signals)
+      } catch (e: any) {
+        console.warn(
+          `[feature-module-registry] signals() failed for ${module.name} (customer: ${customerSlug}):`,
+          e?.message ?? e
+        )
+      }
+    }
+
+    return allSignals
   },
 
   /**

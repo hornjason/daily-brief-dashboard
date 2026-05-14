@@ -35,6 +35,7 @@ IMAGE      := localhost/daily-brief-dashboard:latest
 REMOTE     := ghcr.io/hornjason/daily-brief-dashboard:latest
 IMAGE_L4   := localhost/daily-brief-l4-daemon:latest
 REMOTE_L4  := ghcr.io/hornjason/daily-brief-l4-daemon:latest
+PLATFORMS  := linux/amd64,linux/arm64
 DATA       := $(CURDIR)/data
 
 # ── Mac Mini demo machine ─────────────────────────────────────────────────────
@@ -90,7 +91,13 @@ build:
 	  exit 1; \
 	fi
 	@git worktree prune 2>/dev/null || true
-	podman build -f Dockerfile.hero -t $(IMAGE) -t $(REMOTE) .
+	podman manifest rm $(REMOTE) 2>/dev/null || true
+	podman manifest create $(REMOTE)
+	podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
+	podman manifest add $(REMOTE) containers-storage:localhost/daily-brief-hero-amd64:latest
+	podman build -f Dockerfile.hero --platform linux/arm64 -t daily-brief-hero-arm64 .
+	podman manifest add $(REMOTE) containers-storage:localhost/daily-brief-hero-arm64:latest
+	podman tag daily-brief-hero-amd64 $(IMAGE)
 
 # ── L4 daemon image (Mac Mini primary node only) ──────────────────────────────
 # BKL-ARCH-L4-SPLIT (ADR-016): L4 scraper image — Playwright + Chromium + browser scrapers.
@@ -111,7 +118,7 @@ rebuild-l4: build-l4 push-l4
 	@echo "   On Mac Mini: podman pull $(REMOTE_L4) && make sync-up"
 
 push:
-	podman push $(REMOTE)
+	podman manifest push --all $(REMOTE) docker://$(REMOTE)
 
 login-ghcr: ## Re-authenticate to GHCR using GITHUB_TOKEN from .env
 	@TOKEN=$$(grep '^GITHUB_TOKEN=' .env | cut -d= -f2); \

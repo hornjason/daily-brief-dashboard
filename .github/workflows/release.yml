@@ -168,27 +168,28 @@ jobs:
             echo "tag=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build and push versioned image
+      - name: Build and push multi-arch versioned image
         run: |
           VERSION_TAG="${{ steps.version.outputs.tag }}"
 
-          # Build with version tag
-          podman build -t ghcr.io/hornjason/daily-brief-dashboard:${VERSION_TAG} -f Dockerfile.hero .
+          # Build both architectures
+          podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
+          podman build -f Dockerfile.hero --platform linux/arm64 -t daily-brief-hero-arm64 .
 
-          # For official releases (not -rc), also tag as :latest and :stable
+          # Collect tags to push
+          TAGS=("${VERSION_TAG}")
           if [[ ! "${VERSION_TAG}" =~ -rc ]]; then
-            podman tag ghcr.io/hornjason/daily-brief-dashboard:${VERSION_TAG} ghcr.io/hornjason/daily-brief-dashboard:latest
-            podman tag ghcr.io/hornjason/daily-brief-dashboard:${VERSION_TAG} ghcr.io/hornjason/daily-brief-dashboard:stable
+            TAGS+=("latest" "stable")
           fi
 
-          # Push version tag
-          podman push ghcr.io/hornjason/daily-brief-dashboard:${VERSION_TAG}
-
-          # Push latest/stable only for official releases
-          if [[ ! "${VERSION_TAG}" =~ -rc ]]; then
-            podman push ghcr.io/hornjason/daily-brief-dashboard:stable
-            podman push ghcr.io/hornjason/daily-brief-dashboard:latest
-          fi
+          # Create manifest list for each tag, add both arches, push
+          for TAG in "${TAGS[@]}"; do
+            podman manifest rm ghcr.io/hornjason/daily-brief-dashboard:${TAG} 2>/dev/null || true
+            podman manifest create ghcr.io/hornjason/daily-brief-dashboard:${TAG}
+            podman manifest add ghcr.io/hornjason/daily-brief-dashboard:${TAG} containers-storage:localhost/daily-brief-hero-amd64:latest
+            podman manifest add ghcr.io/hornjason/daily-brief-dashboard:${TAG} containers-storage:localhost/daily-brief-hero-arm64:latest
+            podman manifest push --all ghcr.io/hornjason/daily-brief-dashboard:${TAG} docker://ghcr.io/hornjason/daily-brief-dashboard:${TAG}
+          done
 
   sync-hero-install-files:
     name: Sync hero install files to public repo
