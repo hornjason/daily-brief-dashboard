@@ -94,14 +94,21 @@ build:
 	podman manifest rm $(REMOTE) 2>/dev/null || true
 	podman rmi $(REMOTE) 2>/dev/null || true
 	podman manifest create $(REMOTE)
-	podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
-	podman manifest add $(REMOTE) containers-storage:localhost/daily-brief-hero-amd64:latest
-	rm -rf .hero-dist && podman create --name hero-extract daily-brief-hero-amd64 true && \
+	podman build -f Dockerfile.hero -t daily-brief-hero-native .
+	rm -rf .hero-dist && podman create --name hero-extract daily-brief-hero-native true && \
 	  podman cp hero-extract:/app/dashboard/dist .hero-dist && podman rm hero-extract
-	podman build -f Dockerfile.hero-runtime --platform linux/arm64 -t daily-brief-hero-arm64 .
+	NATIVE_ARCH=$$(podman inspect daily-brief-hero-native --format '{{.Architecture}}') && \
+	if [ "$$NATIVE_ARCH" = "arm64" ]; then \
+	  podman tag daily-brief-hero-native daily-brief-hero-arm64; \
+	  podman build -f Dockerfile.hero-runtime --platform linux/amd64 -t daily-brief-hero-amd64 .; \
+	else \
+	  podman tag daily-brief-hero-native daily-brief-hero-amd64; \
+	  podman build -f Dockerfile.hero-runtime --platform linux/arm64 -t daily-brief-hero-arm64 .; \
+	fi
 	rm -rf .hero-dist
+	podman manifest add $(REMOTE) containers-storage:localhost/daily-brief-hero-amd64:latest
 	podman manifest add $(REMOTE) containers-storage:localhost/daily-brief-hero-arm64:latest
-	podman tag daily-brief-hero-amd64 $(IMAGE)
+	podman tag daily-brief-hero-native $(IMAGE)
 
 # ── L4 daemon image (Mac Mini primary node only) ──────────────────────────────
 # BKL-ARCH-L4-SPLIT (ADR-016): L4 scraper image — Playwright + Chromium + browser scrapers.

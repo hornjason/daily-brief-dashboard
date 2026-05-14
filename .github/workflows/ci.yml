@@ -138,8 +138,22 @@ jobs:
             podman manifest create ghcr.io/hornjason/daily-brief-dashboard:${TAG}
           done
 
-          podman build -f Dockerfile.hero --platform linux/amd64 -t daily-brief-hero-amd64 .
-          podman build -f Dockerfile.hero-runtime --platform linux/arm64 -t daily-brief-hero-arm64 .
+          # Build natively first (arm64 on Apple Silicon Mac Mini) — full Dockerfile with builder stage
+          podman build -f Dockerfile.hero -t daily-brief-hero-native .
+          NATIVE_ARCH=$(podman inspect daily-brief-hero-native --format '{{.Architecture}}')
+
+          # Extract pre-built dashboard for cross-arch runtime-only build
+          podman create --name hero-extract daily-brief-hero-native true
+          rm -rf .hero-dist && podman cp hero-extract:/app/dashboard/dist .hero-dist && podman rm hero-extract
+
+          if [ "$NATIVE_ARCH" = "arm64" ]; then
+            podman tag daily-brief-hero-native daily-brief-hero-arm64
+            podman build -f Dockerfile.hero-runtime --platform linux/amd64 -t daily-brief-hero-amd64 .
+          else
+            podman tag daily-brief-hero-native daily-brief-hero-amd64
+            podman build -f Dockerfile.hero-runtime --platform linux/arm64 -t daily-brief-hero-arm64 .
+          fi
+          rm -rf .hero-dist
 
           for TAG in "${TAGS[@]}"; do
             podman manifest add ghcr.io/hornjason/daily-brief-dashboard:${TAG} containers-storage:localhost/daily-brief-hero-amd64:latest
