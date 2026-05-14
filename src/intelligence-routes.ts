@@ -76,5 +76,85 @@ export function createIntelligenceRouter(): Hono {
     })
   })
 
+  /**
+   * GET /api/intelligence/global
+   * Aggregate Red Hat intelligence across all customers (for Red Hat Pulse card)
+   * GitHub Issue #203
+   */
+  app.get('/api/intelligence/global', (c) => {
+    const { readdirSync } = require('fs')
+
+    // Scan all customer news caches
+    const allNews: NewsItem[] = []
+    const latestTimestamps: string[] = []
+
+    try {
+      if (!existsSync(CACHE_DIR)) {
+        return c.json({
+          news: [],
+          releases: [],
+          events: [],
+          cachedAt: new Date().toISOString(),
+        })
+      }
+
+      const files = readdirSync(CACHE_DIR)
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue
+
+        const cachePath = resolve(CACHE_DIR, file)
+        try {
+          const data = JSON.parse(readFileSync(cachePath, 'utf-8')) as NewsCacheEntry
+          if (data.articles && Array.isArray(data.articles)) {
+            allNews.push(...data.articles)
+          }
+          if (data.lastUpdated) {
+            latestTimestamps.push(data.lastUpdated)
+          }
+        } catch (e: any) {
+          console.warn(`[intelligence-routes] Failed to read ${file}:`, e.message)
+        }
+      }
+    } catch (e: any) {
+      console.warn('[intelligence-routes] Failed to scan news cache:', e.message)
+    }
+
+    // Deduplicate by headline + sourceUrl
+    const seen = new Map<string, NewsItem>()
+    for (const item of allNews) {
+      const key = `${item.headline}|${item.sourceUrl}`
+      if (!seen.has(key)) {
+        seen.set(key, item)
+      }
+    }
+
+    // Sort by publishedDate desc, take top 3
+    const deduped = [...seen.values()]
+    deduped.sort((a, b) => {
+      const aDate = new Date(a.publishedDate).getTime()
+      const bDate = new Date(b.publishedDate).getTime()
+      return bDate - aDate
+    })
+    const topNews = deduped.slice(0, 3)
+
+    // Determine cachedAt: most recent timestamp from all caches
+    const cachedAt = latestTimestamps.length > 0
+      ? latestTimestamps.reduce((latest, ts) => (ts > latest ? ts : latest))
+      : new Date().toISOString()
+
+    // Releases: stub for now (requires #197 product-lifecycle cache)
+    const releases: any[] = []
+
+    // Events: stub for now (no events data source yet)
+    const events: any[] = []
+
+    return c.json({
+      news: topNews,
+      releases,
+      events,
+      cachedAt,
+    })
+  })
+
   return app
 }

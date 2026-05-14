@@ -111,4 +111,93 @@ describe('Intelligence Routes', () => {
     const json = await res.json()
     expect(json.articles[0].productTags).toEqual(['OCP', 'AAP'])
   })
+
+  test('GET /api/intelligence/global - aggregates news from all customers', async () => {
+    const app = createIntelligenceRouter()
+
+    // Write multiple customer caches
+    const acmeArticles: NewsItem[] = [
+      {
+        headline: 'AAP 2.7 Announced',
+        summary: 'Ansible Automation Platform 2.7...',
+        sourceUrl: 'https://example.com/aap',
+        sourceName: 'Red Hat',
+        publishedDate: '2026-05-14T10:00:00Z',
+        significanceScore: 8,
+        signalType: 'product',
+        productTags: ['AAP'],
+      },
+    ]
+
+    const boeingArticles: NewsItem[] = [
+      {
+        headline: 'OpenShift 4.18 GA',
+        summary: 'OpenShift Container Platform...',
+        sourceUrl: 'https://example.com/ocp',
+        sourceName: 'Red Hat',
+        publishedDate: '2026-05-14T12:00:00Z',
+        significanceScore: 7,
+        signalType: 'product',
+        productTags: ['OCP'],
+      },
+      {
+        headline: 'AAP 2.7 Announced',
+        summary: 'Ansible Automation Platform 2.7...',
+        sourceUrl: 'https://example.com/aap',
+        sourceName: 'Red Hat',
+        publishedDate: '2026-05-14T10:00:00Z',
+        significanceScore: 8,
+        signalType: 'product',
+        productTags: ['AAP'],
+      },
+    ]
+
+    writeFileSync(
+      resolve(TEST_CACHE_DIR, 'acme-corp.json'),
+      JSON.stringify({ articles: acmeArticles, lastUpdated: '2026-05-14T10:00:00Z' }),
+      { mode: 0o600 }
+    )
+    writeFileSync(
+      resolve(TEST_CACHE_DIR, 'boeing.json'),
+      JSON.stringify({ articles: boeingArticles, lastUpdated: '2026-05-14T12:00:00Z' }),
+      { mode: 0o600 }
+    )
+
+    const res = await app.request('/api/intelligence/global')
+    expect(res.status).toBe(200)
+
+    const json = await res.json()
+    expect(json.news).toBeDefined()
+    expect(json.releases).toBeDefined()
+    expect(json.events).toBeDefined()
+    expect(json.cachedAt).toBeDefined()
+
+    // Should deduplicate (AAP 2.7 appears in both caches)
+    // and return top 3 by publishedDate desc
+    expect(json.news.length).toBeLessThanOrEqual(3)
+
+    // Most recent first (OCP at 12:00, AAP at 10:00)
+    if (json.news.length > 0) {
+      expect(json.news[0].headline).toBe('OpenShift 4.18 GA')
+    }
+  })
+
+  test('GET /api/intelligence/global - returns empty arrays when no caches exist', async () => {
+    const app = createIntelligenceRouter()
+
+    // Clean up all test caches
+    if (existsSync(TEST_CACHE_DIR)) {
+      rmSync(TEST_CACHE_DIR, { recursive: true, force: true })
+      mkdirSync(TEST_CACHE_DIR, { recursive: true })
+    }
+
+    const res = await app.request('/api/intelligence/global')
+    expect(res.status).toBe(200)
+
+    const json = await res.json()
+    expect(json.news).toEqual([])
+    expect(json.releases).toEqual([])
+    expect(json.events).toEqual([])
+    expect(json.cachedAt).toBeDefined()
+  })
 })

@@ -14,6 +14,7 @@ import { PodTabBar } from './components/PodTabBar'
 import { PodKPIHeader } from './components/PodKPIHeader'
 import { CloudSpendSection } from './components/CloudSpendSection'
 import MorningSummary from './components/MorningSummary'
+import { RedHatPulseCard } from './components/RedHatPulseCard'
 import { UpdateBanner } from './components/UpdateBanner'
 import TopActionsPanel from './components/TopActionsPanel'
 import type { TopAction } from './components/TopActionsPanel'
@@ -630,6 +631,9 @@ function Dashboard() {
 
             {/* Morning Summary (R06) — hidden in product view */}
             <MorningSummary matchingCustomers={productFilterSelected.length > 0 ? new Set(filteredAccounts.map(a => a.name)) : undefined} />
+
+            {/* Red Hat Pulse (GitHub Issue #203) */}
+            <RedHatPulseCard />
 
             {/* Top Actions (BKL-F10a, BKL-F10b) */}
             <TopActionsPanel actions={topActions} />
