@@ -236,11 +236,11 @@ Every generated email MUST pass ALL of these rules:
 2. **Technical observations only** — no firmographic facts ("You're a $2B company")
 3. **Statements, not questions** — "curious whether" is template smell. No questions anywhere including CTA.
 4. **Per-bullet links** — MANDATORY: each bullet MUST be a markdown link [Feature Name](url) linking to the specific Red Hat product page. Use these URLs:
-   - Ansible Automation Platform: https://www.redhat.com/en/technologies/management/ansible/automation-platform
+   - Ansible Automation Platform: https://www.redhat.com/en/technologies/management/ansible
    - Event-Driven Ansible: https://www.redhat.com/en/technologies/management/ansible/event-driven-ansible
    - Ansible Lightspeed: https://www.redhat.com/en/technologies/management/ansible/ansible-lightspeed
-   - AI Infrastructure Automation: https://www.redhat.com/en/technologies/management/ansible/automation-platform/features#ai-infrastructure-automation
-   - AIOps: https://www.redhat.com/en/technologies/management/ansible/automation-platform/features#aiops
+   - AI Infrastructure Automation: https://www.redhat.com/en/technologies/management/ansible
+   - AIOps: https://www.redhat.com/en/technologies/management/ansible
    - OpenShift: https://www.redhat.com/en/technologies/cloud-computing/openshift
    - OpenShift AI: https://www.redhat.com/en/technologies/cloud-computing/openshift/openshift-ai
    - OpenShift Virtualization: https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization
@@ -250,7 +250,7 @@ Every generated email MUST pass ALL of these rules:
 5. **Name the peer company with a concrete metric** — "Mutua Madrileña cut service tickets 50%" not "a major insurer improved"
 6. **Forward-worthy test** — exec emails: VP forwards to eng lead; manager emails: manager forwards to VP
 7. **Competitor-swap test** — if replacing the product name still works, the email is a brochure. Rewrite with feature-specific language.
-8. **Creepy line** — NEVER reference support tickets, POC status, internal data, usage telemetry, subscription counts, node counts, or anything the recipient would be surprised the AE knows
+8. **Creepy line** — NEVER reference support tickets, POC status, internal data, usage telemetry, subscription counts, node counts, subscription expiry/renewal status, or anything the recipient would be surprised the AE knows
 9. **Subject = observation about their world** — no product names, no company names, no "Red Hat" or "Ansible"
 10. **No filler** — no "let me know," no PS, no calendar links, no "no pressure," no "hope this finds you well"
 11. **Relationship context** — every email must include ONE sentence noting the customer already uses Red Hat products (by product name, never subscription counts). This is NOT the opener — it comes after the observation/pain context.
