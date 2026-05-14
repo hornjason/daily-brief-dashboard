@@ -74,7 +74,7 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
         maxOutputTokens: 8192,
         thinkingConfig: { thinkingBudget: 0 },
       },
-      tools: [{ googleSearchRetrieval: {} }],  // Enable Google Search grounding
+      tools: [{ google_search: {} }],  // Enable Google Search grounding
     }
 
     const response = await fetch(endpoint, {
