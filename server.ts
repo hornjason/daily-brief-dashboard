@@ -65,6 +65,8 @@ import { createCampaignsRouter } from './src/campaigns-routes.ts'
 // ── GitHub #168: Batch execution routes ─────────────────────────────────
 import { createBatchRouter } from './src/batch-routes.ts'
 import { createNewsRouter } from './src/news-routes.ts'
+// ── GitHub #200: Intelligence surfaces routes ───────────────────────────
+import { createIntelligenceRouter } from './src/intelligence-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -285,6 +287,8 @@ app.route('/', createCampaignsRouter())
 app.route('/', createNewsRouter())
 // ── GitHub #168: Batch execution routes ─────────────────────────────────────
 app.route('/', createBatchRouter())
+// ── GitHub #200: Intelligence surfaces routes ───────────────────────────────
+app.route('/', createIntelligenceRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))

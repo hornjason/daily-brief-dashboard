@@ -1,10 +1,11 @@
 /**
  * GitHub Issue #142: Account detail tab navigation chrome
- * Four tabs: Overview, Campaigns, News, Tools
+ * Five tabs: Overview, Campaigns, News, Intelligence, Tools
+ * GitHub Issue #200: Added Intelligence tab
  * Follows PodTabBar styling pattern
  */
 
-type AccountTab = 'overview' | 'campaigns' | 'news' | 'tools'
+type AccountTab = 'overview' | 'campaigns' | 'news' | 'intelligence' | 'tools'
 
 interface CustomerTabBarProps {
   activeTab: AccountTab
@@ -15,10 +16,11 @@ const TAB_LABELS: Record<AccountTab, string> = {
   overview: 'Overview',
   campaigns: 'Campaigns',
   news: 'News',
+  intelligence: 'Intelligence',
   tools: 'Tools',
 }
 
-const TABS: AccountTab[] = ['overview', 'campaigns', 'news', 'tools']
+const TABS: AccountTab[] = ['overview', 'campaigns', 'news', 'intelligence', 'tools']
 
 export function CustomerTabBar({ activeTab, onChange }: CustomerTabBarProps) {
   return (

@@ -58,6 +58,7 @@ import { ProductIntelSection } from '../components/ProductIntelSection'
 import { CustomerTabBar, type AccountTab } from '../components/CustomerTabBar'
 import { CampaignsTab } from '../components/tabs/CampaignsTab'
 import { NewsTab } from '../components/tabs/NewsTab'
+import { IntelligenceTab } from '../components/tabs/IntelligenceTab'
 import { ToolsTab } from '../components/tabs/ToolsTab'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
@@ -1394,6 +1395,7 @@ export function CustomerDetailPage() {
         <div className="flex-1 overflow-y-auto">
           {activeTab === 'campaigns' && <CampaignsTab customerName={customerName} />}
           {activeTab === 'news' && <NewsTab customerName={customerName} />}
+          {activeTab === 'intelligence' && <IntelligenceTab customerName={customerName} />}
           {activeTab === 'tools' && <ToolsTab customerName={customerName} />}
         </div>
       )}
