@@ -76,6 +76,11 @@ export function RedHatPulseCard() {
     setLoading(true)
     setError(null)
     try {
+      // Trigger module syncs first (using _global as customer name for global modules)
+      await fetch('/api/customer/_global/modules/rh-rss/sync', { method: 'POST' }).catch(() => {})
+      await fetch('/api/customer/_global/modules/rh-events/sync', { method: 'POST' }).catch(() => {})
+
+      // Then re-fetch data
       const res = await fetch('/api/intelligence/global')
       if (!res.ok) {
         throw new Error('Failed to fetch intelligence')

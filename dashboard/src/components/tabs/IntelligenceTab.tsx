@@ -72,6 +72,12 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
 
   const fetchArticles = async () => {
     try {
+      // Trigger module sync first
+      await fetch(`/api/customer/${encodeURIComponent(customerName)}/modules/news-radar/sync`, {
+        method: 'POST'
+      }).catch(() => {})
+
+      // Then re-fetch data
       const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/intelligence/news`)
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Failed to fetch intelligence' }))

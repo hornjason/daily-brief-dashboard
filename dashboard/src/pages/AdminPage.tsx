@@ -620,6 +620,157 @@ interface ScrapeLogEntry {
   error?: string
 }
 
+// ── Issue #208: Feature Modules section ──────────────────────────────────────
+
+interface FeatureModuleStatus {
+  name: string
+  lastRun: string | null
+  lastSuccess: string | null
+  lastError: string | null
+  state: 'idle' | 'running' | 'failed'
+  refreshInterval: number | null
+}
+
+function FeatureModulesSection() {
+  const [modules, setModules] = useState<FeatureModuleStatus[]>([])
+  const [syncing, setSyncing] = useState<Record<string, boolean>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [firstCustomer, setFirstCustomer] = useState<string | null>(null)
+  const [syncingAll, setSyncingAll] = useState(false)
+
+  const fetchModules = useCallback(async () => {
+    try {
+      const res = await fetch('/api/modules/status')
+      if (res.ok) {
+        const data = await res.json()
+        setModules(data.modules ?? [])
+      }
+    } catch (err) {
+      console.error('[FeatureModules] fetch failed', err)
+    }
+  }, [])
+
+  const fetchFirstCustomer = useCallback(async () => {
+    try {
+      const res = await fetch('/api/aes')
+      if (res.ok) {
+        const data = await res.json()
+        const firstAe = data.aes?.[0]
+        if (firstAe?.customers?.[0]) {
+          setFirstCustomer(firstAe.customers[0].name)
+        }
+      }
+    } catch (err) {
+      console.error('[FeatureModules] fetch customer failed', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchModules()
+    fetchFirstCustomer()
+    const poll = setInterval(fetchModules, 10_000)
+    return () => clearInterval(poll)
+  }, [fetchModules, fetchFirstCustomer])
+
+  const handleSync = async (moduleName: string) => {
+    if (!firstCustomer) return
+    setSyncing(s => ({ ...s, [moduleName]: true }))
+    setErrors(e => {
+      const next = { ...e }
+      delete next[moduleName]
+      return next
+    })
+    try {
+      const res = await fetch(`/api/customer/${encodeURIComponent(firstCustomer)}/modules/${moduleName}/sync`, {
+        method: 'POST'
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setErrors(e => ({ ...e, [moduleName]: (data as { error?: string }).error ?? `Failed (${res.status})` }))
+      }
+      await fetchModules()
+    } catch {
+      setErrors(e => ({ ...e, [moduleName]: 'Network error' }))
+    } finally {
+      setSyncing(s => ({ ...s, [moduleName]: false }))
+    }
+  }
+
+  const handleSyncAll = async () => {
+    if (!firstCustomer) return
+    setSyncingAll(true)
+    for (const module of modules) {
+      await handleSync(module.name)
+      await new Promise(r => setTimeout(r, 500))
+    }
+    setSyncingAll(false)
+  }
+
+  const formatInterval = (ms: number | null) => {
+    if (!ms) return 'on-demand'
+    const hours = Math.round(ms / 3_600_000)
+    if (hours >= 24 * 7) return 'weekly'
+    if (hours >= 24) return `every ${Math.round(hours / 24)}d`
+    if (hours >= 1) return `every ${hours}h`
+    const mins = Math.round(ms / 60_000)
+    return `every ${mins}m`
+  }
+
+  const getStateDot = (state: 'idle' | 'running' | 'failed') => {
+    if (state === 'idle') return 'bg-green-500'
+    if (state === 'running') return 'bg-yellow-500 animate-pulse'
+    return 'bg-red-500'
+  }
+
+  return (
+    <div>
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3 flex items-center justify-between">
+        <span>Feature Modules</span>
+        <button
+          onClick={handleSyncAll}
+          disabled={syncingAll || !firstCustomer}
+          className="px-3 py-1.5 text-xs font-medium rounded bg-blue-700 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+        >
+          {syncingAll ? 'Syncing All...' : 'Sync All'}
+        </button>
+      </h2>
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
+        {modules.length === 0 && <div className="text-xs text-gray-500">No modules registered</div>}
+        {modules.map(module => (
+          <div key={module.name} className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDot(module.state)}`} />
+                <span className="text-sm font-medium text-gray-200">{module.name}</span>
+                <span className="text-xs text-gray-500">{module.state}</span>
+                <span className="text-xs text-gray-500">
+                  Last: {module.lastRun ? formatRelTime(module.lastRun) : 'never'}
+                </span>
+                <span className="text-xs text-gray-500 ml-auto shrink-0">⟳ {formatInterval(module.refreshInterval)}</span>
+              </div>
+              <button
+                onClick={() => handleSync(module.name)}
+                disabled={syncing[module.name] || syncingAll}
+                className="px-2.5 py-1 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors ml-2 shrink-0"
+              >
+                {syncing[module.name] ? 'Syncing...' : 'Sync Now'}
+              </button>
+            </div>
+            {module.state === 'failed' && module.lastError && (
+              <div className="text-xs text-red-400 pl-4">Error: {module.lastError}</div>
+            )}
+            {errors[module.name] && (
+              <div className="text-xs text-red-400 pl-4" role="alert">
+                {errors[module.name]}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── BKL-BACKUP-01: Config Backup Section ────────────────────────────────────
 
 interface BackupStatus {
@@ -1486,6 +1637,9 @@ export function AdminPage() {
 
         {/* BKL-M50e: Scrape History */}
         <ScrapeHistorySection />
+
+        {/* Issue #208: Feature Modules */}
+        <FeatureModulesSection />
 
         {/* BKL-HERO-02: Region Access — edit which regions/pods this install can access */}
         <div data-testid="admin-region-access">
