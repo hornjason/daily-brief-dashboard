@@ -189,26 +189,38 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
  */
 function parseDocHTML(html: string): RHEvent[] {
   const events: RHEvent[] = []
-  const lines = html.split('\n')
 
+  // Google Docs exports as single-line HTML. Split by block elements to find sections.
+  // Insert newlines before headings and list items for easier parsing
+  const normalized = html
+    .replace(/<h[1-6][^>]*>/gi, '\n<HEADING>')
+    .replace(/<\/h[1-6]>/gi, '</HEADING>\n')
+    .replace(/<li[^>]*>/gi, '\n<LI>')
+    .replace(/<\/li>/gi, '</LI>\n')
+    .replace(/<p[^>]*>/gi, '\n<P>')
+    .replace(/<\/p>/gi, '</P>\n')
+    .replace(/<hr[^>]*>/gi, '\n<HR>\n')
+
+  const lines = normalized.split('\n')
   let currentRegion: RHEvent['region'] | null = null
 
   for (const line of lines) {
     const trimmed = line.trim()
-    // Strip HTML for region detection
+    if (!trimmed) continue
+
+    // Strip HTML for text analysis but keep original for URL extraction
     const plainText = trimmed.replace(/<[^>]+>/g, '').trim()
 
-    // Check if this is a region header
+    // Check for region header
     const detectedRegion = getRegionFromHeader(plainText)
     if (detectedRegion) {
       currentRegion = detectedRegion
       continue
     }
 
-    // If we don't have a region yet, skip
     if (!currentRegion) continue
 
-    // Try to parse as event line (pass HTML to preserve links)
+    // Try to parse as event line (pass HTML for URL extraction)
     const event = parseEventLine(trimmed, currentRegion)
     if (event) {
       events.push(event)
