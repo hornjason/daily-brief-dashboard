@@ -120,8 +120,7 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
       .then(r => r.json())
       .then((d: MorningSummaryData) => {
         setData(d)
-        // Auto-collapse when signals are many to reduce visual noise
-        if (d.signals.length > 3) setCollapsed(true)
+        // BKL-UX-morning-min: Start expanded by default per user request
       })
       .catch(() => {})
   }, [])
@@ -283,7 +282,7 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                       : 'text-text-secondary hover:text-text-primary hover:bg-border/20'
                   }`}
                 >
-                  {tab === 'today' ? 'Today' : tab === 'alerts' ? 'Alerts' : 'Intelligence'}
+                  {tab === 'today' ? 'Today' : tab === 'alerts' ? 'Alerts' : 'Customer News'}
                   {count !== undefined && count > 0 && (
                     <span className="ml-1.5 px-1.5 py-0.5 bg-health-red/20 text-health-red text-xs rounded-full">
                       {count}
@@ -430,35 +429,34 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
               <div className="space-y-4">
                 {data.redHatIntelligence ? (
                   <>
-                    {/* News Relevant to Your Customers */}
+                    {/* Customer News grouped by customer */}
                     {data.redHatIntelligence.meetingNews.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-text-primary mb-2">News Relevant to Your Customers</h4>
-                        <div className="space-y-3">
-                          {data.redHatIntelligence.meetingNews.map((item, i) => (
-                            <div key={i} className="bg-surface-hover border border-border rounded-lg p-3">
-                              <div className="mb-1">
-                                <span className="text-sm font-medium text-text-primary">{item.headline}</span>
-                              </div>
-                              {item.relevantCustomer && (
-                                <div className="text-xs text-accent mb-1">
-                                  Relevant to: {item.relevantCustomer} ({item.relevantProduct})
+                      <div className="space-y-4">
+                        {Object.entries(
+                          data.redHatIntelligence.meetingNews.reduce((groups, item) => {
+                            const customer = item.relevantCustomer || 'General'
+                            if (!groups[customer]) groups[customer] = []
+                            groups[customer].push(item)
+                            return groups
+                          }, {} as Record<string, typeof data.redHatIntelligence.meetingNews>)
+                        ).map(([customer, items]) => (
+                          <div key={customer}>
+                            <h4 className="text-sm font-semibold text-text-primary mb-2">{customer} ({items.length})</h4>
+                            <div className="space-y-2 pl-3 border-l-2 border-border">
+                              {items.map((item, i) => (
+                                <div key={i} className="text-sm">
+                                  <span className="font-medium text-text-primary">{item.headline}</span>
+                                  <div className="text-xs text-text-secondary leading-relaxed mt-0.5">{item.summary?.slice(0, 150)}{item.summary?.length > 150 ? '...' : ''}</div>
+                                  {item.sourceUrl && !item.sourceUrl.includes('vertexaisearch.cloud.google.com') && (
+                                    <a href={item.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:text-accent/80 underline">
+                                      Read Article →
+                                    </a>
+                                  )}
                                 </div>
-                              )}
-                              <div className="text-xs text-text-secondary leading-relaxed mb-2">{item.summary}</div>
-                              {item.sourceUrl && (
-                                <a
-                                  href={item.sourceUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-accent hover:text-accent/80 underline"
-                                >
-                                  Read Article →
-                                </a>
-                              )}
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ))}
                       </div>
                     )}
 
@@ -505,33 +503,7 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
                   </p>
                 )}
 
-                {/* News Highlights Section (legacy, kept for backward compat) */}
-                {newsHighlights.length > 0 && (
-                  <div className="pt-4 border-t border-border">
-                    <h3 className="text-amber-400 font-bold text-sm mb-3">News</h3>
-                    <ul className="space-y-3">
-                      {newsHighlights.map((item, i) => (
-                        <li key={i} className="text-sm">
-                          <div className="mb-1">
-                            <strong className="text-text-primary">{item.customerName}</strong>
-                            <span className="text-text-secondary"> — {item.headline}</span>
-                          </div>
-                          <div className="text-xs text-zinc-500 leading-relaxed">{item.summary}</div>
-                          {item.sourceUrl && (
-                            <a
-                              href={item.sourceUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-accent hover:text-accent/80 underline mt-1 inline-block"
-                            >
-                              Source
-                            </a>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                {/* Legacy news highlights removed — replaced by meetingNews above */}
               </div>
             )}
           </div>
