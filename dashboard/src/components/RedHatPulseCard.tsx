@@ -34,6 +34,7 @@ interface Event {
   name: string
   location: string
   date: string
+  registrationUrl?: string | null
 }
 
 interface GlobalIntelligence {
@@ -217,7 +218,18 @@ export function RedHatPulseCard() {
                 <div className="space-y-2">
                   {data.events.map((evt, idx) => (
                     <div key={idx} className="space-y-1">
-                      <p className="text-sm font-medium text-text-primary">{evt.name}</p>
+                      {evt.registrationUrl ? (
+                        <a
+                          href={evt.registrationUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-accent hover:text-accent/80 transition-colors"
+                        >
+                          {evt.name}
+                        </a>
+                      ) : (
+                        <p className="text-sm font-medium text-text-primary">{evt.name}</p>
+                      )}
                       <p className="text-xs text-text-secondary">
                         {evt.location} • {evt.date}
                       </p>

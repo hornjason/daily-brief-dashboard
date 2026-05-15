@@ -63,6 +63,7 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
   const [events, setEvents] = useState<RHEvent[]>([])
   const [eventsLoading, setEventsLoading] = useState(true)
   const [eventsError, setEventsError] = useState<string | null>(null)
+  const [copiedEventIndex, setCopiedEventIndex] = useState<number | null>(null)
 
   const fetchArticles = async () => {
     try {
@@ -265,22 +266,36 @@ Read more: ${article.sourceUrl}`
   const getFormatBadge = (format: string) => {
     if (format === 'virtual') {
       return (
-        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400">
           Virtual
         </span>
       )
     } else if (format === 'hybrid') {
       return (
-        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-500/20 text-purple-400">
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
           Hybrid
         </span>
       )
     } else {
       return (
-        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400">
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-accent/20 text-accent">
           In-Person
         </span>
       )
+    }
+  }
+
+  const handleCopyEventToClipboard = async (event: RHEvent, index: number) => {
+    const snippet = `📅 Red Hat Event: ${event.name}
+📍 ${event.location ?? 'Virtual'} | ${formatEventDate(event.date)}${event.registrationUrl ? `
+Register: ${event.registrationUrl}` : ''}`
+
+    try {
+      await navigator.clipboard.writeText(snippet)
+      setCopiedEventIndex(index)
+      setTimeout(() => setCopiedEventIndex(null), 2000)
+    } catch (e) {
+      console.error('Failed to copy event to clipboard:', e)
     }
   }
 
@@ -774,20 +789,36 @@ Read more: ${article.sourceUrl}`
                     )}
                   </div>
 
-                  {/* Registration link */}
-                  {event.registrationUrl && (
-                    <div className="pt-3 border-t border-border">
+                  {/* Footer: actions */}
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+                    <button
+                      onClick={() => handleCopyEventToClipboard(event, idx)}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface border border-border text-xs text-text-secondary font-medium hover:border-accent/50 hover:text-accent transition-colors"
+                    >
+                      {copiedEventIndex === idx ? (
+                        <>
+                          <Check className="w-3 h-3" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3 h-3" />
+                          Share
+                        </>
+                      )}
+                    </button>
+                    {event.registrationUrl && (
                       <a
                         href={event.registrationUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent/10 text-xs text-accent font-medium hover:bg-accent/20 transition-colors w-fit"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent/10 text-xs text-accent font-medium hover:bg-accent/20 transition-colors"
                       >
                         Register
                         <ExternalLink className="w-3 h-3" />
                       </a>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

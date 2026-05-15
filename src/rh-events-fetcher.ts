@@ -102,12 +102,12 @@ function extractLocation(text: string): string | null {
 }
 
 /**
- * Extract registration URL if present
- * Look for "Reg Page" followed by a URL pattern
+ * Extract registration URL from HTML content
+ * Looks for <a> tags with "Reg Page" text
  */
-function extractRegUrl(text: string): string | null {
-  // Very simple extraction - if we see https:// after "Reg Page", grab it
-  const match = text.match(/Reg\s+Page[^\|]*?(https?:\/\/[^\s\|]+)/)
+function extractRegUrlFromHTML(htmlLine: string): string | null {
+  // Match <a href="...">Reg Page</a> or <a href="...">Reg page</a>
+  const match = htmlLine.match(/<a[^>]+href=["']([^"']+)["'][^>]*>Reg\s+[Pp]age<\/a>/i)
   return match ? match[1].trim() : null
 }
 
@@ -127,23 +127,24 @@ function getRegionFromHeader(header: string): RHEvent['region'] | null {
 }
 
 /**
- * Parse a single event line
+ * Parse a single event line from HTML
  */
-function parseEventLine(line: string, region: RHEvent['region']): RHEvent | null {
-  // Expected format: "* June 4: In-Person | Red Hat Tech Day w/ Intel | Houston, TX | Reg Page | ..."
+function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | null {
+  // Strip HTML tags to get plain text for most parsing
+  const plainText = htmlLine.replace(/<[^>]+>/g, '').trim()
 
   // Must start with * and contain :
-  if (!line.trim().startsWith('*') || !line.includes(':')) {
+  if (!plainText.startsWith('*') || !plainText.includes(':')) {
     return null
   }
 
   // Extract date
-  const datePart = line.match(/\*\s*([^:]+):/)
+  const datePart = plainText.match(/\*\s*([^:]+):/)
   if (!datePart) return null
   const date = parseEventDate(datePart[1].trim())
 
   // Split by | separator
-  const parts = line.split('|').map(p => p.trim())
+  const parts = plainText.split('|').map(p => p.trim())
   if (parts.length < 2) return null
 
   // First part has date + format
@@ -160,13 +161,13 @@ function parseEventLine(line: string, region: RHEvent['region']): RHEvent | null
   if (!name) return null
 
   // Try to extract location
-  const location = extractLocation(line)
+  const location = extractLocation(plainText)
 
   // Virtual events are always national
   const finalRegion = format === 'virtual' ? 'national' : region
 
-  // Extract registration URL
-  const registrationUrl = extractRegUrl(line)
+  // Extract registration URL from HTML (before stripping tags)
+  const registrationUrl = extractRegUrlFromHTML(htmlLine)
 
   // Tag with products
   const productTags = tagWithProducts(name)
@@ -179,24 +180,26 @@ function parseEventLine(line: string, region: RHEvent['region']): RHEvent | null
     region: finalRegion,
     productTags,
     registrationUrl,
-    description: line.trim(),
+    description: plainText,
   }
 }
 
 /**
- * Parse Google Doc text into events
+ * Parse Google Doc HTML into events
  */
-function parseDocText(text: string): RHEvent[] {
+function parseDocHTML(html: string): RHEvent[] {
   const events: RHEvent[] = []
-  const lines = text.split('\n')
+  const lines = html.split('\n')
 
   let currentRegion: RHEvent['region'] | null = null
 
   for (const line of lines) {
     const trimmed = line.trim()
+    // Strip HTML for region detection
+    const plainText = trimmed.replace(/<[^>]+>/g, '').trim()
 
     // Check if this is a region header
-    const detectedRegion = getRegionFromHeader(trimmed)
+    const detectedRegion = getRegionFromHeader(plainText)
     if (detectedRegion) {
       currentRegion = detectedRegion
       continue
@@ -205,7 +208,7 @@ function parseDocText(text: string): RHEvent[] {
     // If we don't have a region yet, skip
     if (!currentRegion) continue
 
-    // Try to parse as event line
+    // Try to parse as event line (pass HTML to preserve links)
     const event = parseEventLine(trimmed, currentRegion)
     if (event) {
       events.push(event)
@@ -233,16 +236,16 @@ export async function fetchRHEvents(): Promise<void> {
     const auth = await makeAuth(tokenPath)
     const drive = google.drive({ version: 'v3', auth })
 
-    // Export doc as plain text
+    // Export doc as HTML to preserve hyperlinks
     const res = await drive.files.export({
       fileId: DOC_ID,
-      mimeType: 'text/plain',
+      mimeType: 'text/html',
     })
 
-    const text = res.data as string
+    const html = res.data as string
 
-    // Parse events
-    const events = parseDocText(text)
+    // Parse events from HTML
+    const events = parseDocHTML(html)
 
     console.log(`[rh-events] parsed ${events.length} events`)
 
