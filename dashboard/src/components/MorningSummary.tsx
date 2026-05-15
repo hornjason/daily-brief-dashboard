@@ -106,12 +106,17 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
   const navigate = useNavigate()
   const [data, setData] = useState<MorningSummaryData | null>(null)
   const [newsHighlights, setNewsHighlights] = useState<NewsHighlight[]>([])
-  // BKL-UX-morning-min: Start expanded by default per REG-UX115-01.
-  // Auto-collapse once data loads if signals > 3 to reduce visual noise on load.
-  const [collapsed, setCollapsed] = useState(false)
+  // #225: Persist collapse state and active tab in localStorage
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = localStorage.getItem('ms-collapsed')
+    return saved ? JSON.parse(saved) : false  // default expanded
+  })
   const [showBriefModal, setShowBriefModal] = useState(false)
   // #216: Internal tab state for Today | Alerts | Intelligence
-  const [activeTab, setActiveTab] = useState<'today' | 'alerts' | 'intelligence'>('today')
+  const [activeTab, setActiveTab] = useState<'today' | 'alerts' | 'intelligence'>(() => {
+    const saved = localStorage.getItem('ms-active-tab')
+    return (saved as 'today' | 'alerts' | 'intelligence') || 'today'
+  })
   // Severity group expand state for Alerts tab (Critical expanded by default)
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['critical']))
 
@@ -208,7 +213,11 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
   return (
     <div id="section-morning" data-section="section-morning" className="bg-surface border border-border rounded-xl overflow-hidden">
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => {
+          const next = !collapsed
+          setCollapsed(next)
+          localStorage.setItem('ms-collapsed', JSON.stringify(next))
+        }}
         aria-expanded={!collapsed}
         className="w-full px-5 py-3.5 flex items-center justify-between border-b border-border hover:bg-surface-hover transition-colors"
       >
@@ -275,7 +284,10 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
               return (
                 <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => {
+                    setActiveTab(tab)
+                    localStorage.setItem('ms-active-tab', tab)
+                  }}
                   className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                     activeTab === tab
                       ? 'bg-accent/10 text-accent'

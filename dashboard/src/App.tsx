@@ -187,7 +187,11 @@ function Dashboard() {
 
   // Back to top button (BKL-UX23)
   const [showBackToTop, setShowBackToTop] = useState(false)
-  const [kpiDetailsExpanded, setKpiDetailsExpanded] = useState(false)
+  // #225: KPI Breakdown expanded by default, persist state in localStorage
+  const [kpiDetailsExpanded, setKpiDetailsExpanded] = useState(() => {
+    const saved = localStorage.getItem('kpi-collapsed')
+    return saved ? !JSON.parse(saved) : true  // default expanded
+  })
 
   useEffect(() => {
     const onScroll = () => setShowBackToTop(window.scrollY > window.innerHeight)
@@ -649,7 +653,11 @@ function Dashboard() {
             {/* Collapsible KPI Detail Breakdown */}
             <div className="bg-surface border border-border rounded-xl overflow-hidden">
               <button
-                onClick={() => setKpiDetailsExpanded(!kpiDetailsExpanded)}
+                onClick={() => {
+                  const next = !kpiDetailsExpanded
+                  setKpiDetailsExpanded(next)
+                  localStorage.setItem('kpi-collapsed', JSON.stringify(!next))
+                }}
                 className="w-full px-5 py-3 flex items-center justify-between hover:bg-surface-hover transition-colors"
               >
                 <span className="text-sm font-semibold text-text-primary">Detailed KPI Breakdown</span>

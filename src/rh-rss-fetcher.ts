@@ -6,7 +6,7 @@
  * Tags items with product keywords for filtering.
  */
 
-import { existsSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync, writeFileSync, mkdirSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss')
@@ -104,6 +104,7 @@ function parseRSSXML(xml: string, source: 'blog' | 'press-release' | 'developer-
 /**
  * Fetch all RSS feeds and write to cache.
  * Each feed is try/caught individually so one failure doesn't block others.
+ * #226: Accumulates history by merging with existing cache (deduplicated by link).
  */
 export async function fetchRedHatRSS(): Promise<void> {
   // Ensure cache directory exists
@@ -136,12 +137,33 @@ export async function fetchRedHatRSS(): Promise<void> {
     }
   }
 
+  // #226: Read existing cache to accumulate history
+  let existingItems: RSSItem[] = []
+  if (existsSync(CACHE_PATH)) {
+    try {
+      const existing = JSON.parse(readFileSync(CACHE_PATH, 'utf-8')) as RSSCache
+      existingItems = existing.items || []
+    } catch (e: any) {
+      console.warn(`[rh-rss] failed to read existing cache:`, e?.message ?? e)
+    }
+  }
+
+  // Merge: new items + existing, deduplicate by link
+  const seen = new Set<string>()
+  const merged: RSSItem[] = []
+  for (const item of [...allItems, ...existingItems]) {
+    if (!seen.has(item.link)) {
+      seen.add(item.link)
+      merged.push(item)
+    }
+  }
+
   // Write cache
   const cache: RSSCache = {
-    items: allItems,
+    items: merged,
     fetchedAt: new Date().toISOString(),
   }
 
   writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2), { mode: 0o600 })
-  console.log(`[rh-rss] wrote cache: ${allItems.length} total items`)
+  console.log(`[rh-rss] wrote cache: ${merged.length} total items (${allItems.length} new, ${existingItems.length} existing)`)
 }
