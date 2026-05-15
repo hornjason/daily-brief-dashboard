@@ -130,8 +130,13 @@ function getRegionFromHeader(header: string): RHEvent['region'] | null {
  * Parse a single event line from HTML
  */
 function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | null {
-  // Strip HTML tags to get plain text for most parsing
-  const plainText = htmlLine.replace(/<[^>]+>/g, '').trim()
+  // Strip HTML tags and decode entities to get plain text
+  const plainText = htmlLine.replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>').replace(/&rsquo;/g, "'").replace(/&ldquo;/g, '"')
+    .replace(/&rdquo;/g, '"').replace(/&mdash;/g, '—').replace(/&ndash;/g, '–')
+    .replace(/&#\d+;/g, m => String.fromCharCode(parseInt(m.slice(2, -1))))
+    .trim()
 
   // Must contain a date pattern and In-Person/Virtual/Hybrid
   const hasFormat = /in-person|virtual|hybrid/i.test(plainText)
@@ -210,8 +215,10 @@ function parseDocHTML(html: string): RHEvent[] {
     const trimmed = line.trim()
     if (!trimmed) continue
 
-    // Strip HTML for text analysis but keep original for URL extraction
-    const plainText = trimmed.replace(/<[^>]+>/g, '').trim()
+    // Strip HTML and decode entities for text analysis, keep original for URL extraction
+    const plainText = trimmed.replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&rsquo;/g, "'")
+      .trim()
 
     // Check for region header
     const detectedRegion = getRegionFromHeader(plainText)
