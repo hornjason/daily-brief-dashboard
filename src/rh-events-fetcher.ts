@@ -11,7 +11,7 @@ import { resolve } from 'path'
 import { makeAuth } from './google.ts'
 import { google } from 'googleapis'
 
-const CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'events')
+const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'events')
 const CACHE_PATH = resolve(CACHE_DIR, 'rh-events.json')
 
 // Google Doc ID for NA Revenue Marketing Newsletter

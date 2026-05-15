@@ -128,14 +128,19 @@ export function createIntelligenceRouter(): Hono {
     let enrichedProducts = lifecycleData.products.map((product) => {
       let enriched: any = { ...product }
 
-      // Try to read product-release-radar summary
+      // Product-release-radar is authoritative for versions (scrapes Red Hat docs directly)
       const summaryPath = resolve(PRODUCT_INTEL_CACHE, `${product.slug}-summary.json`)
       if (existsSync(summaryPath)) {
         try {
           const summary = JSON.parse(readFileSync(summaryPath, 'utf-8'))
-          // If radar has a newer current version, use it
-          if (summary.currentVersion && summary.currentVersion !== product.currentVersion) {
+          if (summary.currentVersion) {
             enriched.currentVersion = summary.currentVersion
+          }
+          if (summary.latestPatch || summary.latest) {
+            enriched.latestPatch = summary.latestPatch || summary.latest
+          }
+          if (summary.gaDate) {
+            enriched.gaDate = summary.gaDate
           }
         } catch (e: any) {
           // Silently skip — not critical

@@ -9,7 +9,7 @@
 import { existsSync, writeFileSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 
-const CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'rss')
+const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss')
 const CACHE_PATH = resolve(CACHE_DIR, 'rh-feeds.json')
 
 // ── Types ────────────────────────────────────────────────────────────────────

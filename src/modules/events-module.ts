@@ -11,7 +11,7 @@ import { fetchRHEvents, type RHEvent } from '../rh-events-fetcher.ts'
 import { existsSync, unlinkSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
-const CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'events', 'rh-events.json')
+const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'events', 'rh-events.json')
 
 // ── Territory to Region Mapping ──────────────────────────────────────────────
 

@@ -11,7 +11,7 @@ import { fetchRedHatRSS, type RSSItem } from '../rh-rss-fetcher.ts'
 import { existsSync, unlinkSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
-const CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'rss', 'rh-feeds.json')
+const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss', 'rh-feeds.json')
 
 FeatureModuleRegistry.register({
   name: 'rh-rss',

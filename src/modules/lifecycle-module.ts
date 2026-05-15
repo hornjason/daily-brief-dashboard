@@ -8,7 +8,7 @@ import { fetchProductLifecycle, readProductLifecycleCache } from '../product-lif
 import { existsSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
 
-const CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'product-lifecycle.json')
+const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'product-lifecycle.json')
 
 FeatureModuleRegistry.register({
   name: 'product-lifecycle',
