@@ -31,6 +31,17 @@ export interface RankedItem extends ExtractedItem {
   score: number
 }
 
+// Signal from feature module registry
+export interface Signal {
+  source: string
+  type: string
+  headline: string
+  detail: string
+  score?: number
+  timestamp: string
+  url?: string
+}
+
 // ── Step 2: RANK — Deterministic priority scoring (no LLM call) ────────────
 // From GEMINI-BRIEF-ARCHITECTURE.md lines 197-211
 
@@ -114,6 +125,7 @@ export function buildSynthesisPrompt(
   dataGaps: string[],
   upcomingMeetings?: { title: string; start: string; attendees?: string[] }[],
   intelligenceContext?: { company?: string; industry?: string },
+  registrySignals?: Signal[],
 ): string {
   const top15 = rankedItems.slice(0, 5)  // AI18-R3b: top 5 only (was 15 — fed too much noise to synthesis)
 
@@ -148,10 +160,23 @@ export function buildSynthesisPrompt(
     if (intelligenceContext.industry) intelContext += `\n\n[Industry Analysis]\n<untrusted>${intelligenceContext.industry.slice(0, 4000)}</untrusted>`
   }
 
+  // GitHub #176: Registry signals from news radar, lifecycle events, RSS
+  // Include top 10 highest-scored signals to supplement extraction items
+  let signalContext = ''
+  if (registrySignals && registrySignals.length > 0) {
+    const topSignals = registrySignals
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .slice(0, 10)
+      .map(s => `[${s.type}] ${s.headline} — ${s.detail.slice(0, 150)}${s.url ? ` (${s.url})` : ''}`)
+      .join('\n')
+    signalContext = `\n\nADDITIONAL INTELLIGENCE SIGNALS (from news radar, lifecycle events, RSS feeds):\n<untrusted>\n${topSignals}\n</untrusted>\n`
+  }
+
   return SYNTHESIS_PROMPT
     .replace(/\{last_interaction_date\}/g, lastInteractionDate)
     .replace('{data_gaps}', dataGaps.length ? dataGaps.join('\n') : 'All sources current.')
     .replace('{ranked_items_json}', JSON.stringify(top15, null, 2))
     + meetingContext
     + intelContext
+    + signalContext
 }

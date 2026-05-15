@@ -35,6 +35,7 @@ import type { EmailIntelligence, SilentContact } from './email-extraction.ts'
 import type { MeetingPrep } from './calendar-extraction.ts'
 import { emitAIEvent } from './ai-events.ts'
 import { detectFingerprintDelta, diffDocCorpus, shouldUseDeltaMode, type BriefInputBundle } from './ai-fingerprint.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 
 const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const GMAIL_TOKEN_PATH  = process.env.GMAIL_TOKEN       ?? resolve(CONFIG_DIR_PATH, '.gmail-token.json')
@@ -839,7 +840,12 @@ export async function generateBrief(
         intelligenceContext = { company: accountIntelligence.company, industry: accountIntelligence.industry }
       }
 
-      const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext)
+      // GitHub #176: Collect signals from feature module registry (news, lifecycle, RSS)
+      const customerSlug = toSlug(customer.name)
+      const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
+      console.log(`[brief] Registry signals for ${customer.name}: ${registrySignals.length} signals collected`)
+
+      const synthesisPrompt = buildSynthesisPrompt(ranked, lastInteractionDate, extraction.data_gaps, upcomingMeetingsFor7Days, intelligenceContext, registrySignals)
       const generationStart = Date.now()
       emitAIEvent({ type: 'generation:start', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint })
       const fullUsage: { tokensUsed?: number } = {}
