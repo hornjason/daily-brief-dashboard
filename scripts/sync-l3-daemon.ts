@@ -12,12 +12,13 @@
 
 import { resolve } from 'node:path'
 import { existsSync, unlinkSync } from 'node:fs'
-import { initScrapeContext, getScrapeContext } from '../src/rh-scraper.ts'
+import { initScrapeContext, getScrapeContext, recoverScrapeContext } from '../src/rh-scraper.ts'
 import { adoptCcspContext } from '../src/ccsp-scraper.ts'
 import { initSfContext } from '../src/sf-scraper.ts'
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { syncAllPods } from './sync-pod-l3.ts'
 import { isPrimary } from '../src/lib/node-role.ts'
+import { isContextHealthy } from './sync-l3-daemon-utils.ts'
 
 // ── Guard: primary node only ──────────────────────────────────────────────────
 
@@ -189,7 +190,40 @@ async function doKeepalive(): Promise<void> {
       throw new Error(`SF session expired — redirected to ${sfFinal}`)
     }
 
-    console.log('[sync-daemon] keepalive: OK (Tableau viz rendered + SF home loaded)')
+    // BKL-#223: RH context health probe — detect dead/unresponsive browser contexts
+    // After ~6 days uptime, the RH Portal browser context (Playwright BrowserContext)
+    // can silently die — the Chromium process becomes unresponsive. The SSO cookies
+    // on disk are still valid, so recovery just re-initializes from saved state.
+    console.log('[sync-daemon] keepalive: probing RH context health…')
+    const rhHealthy = await isContextHealthy(ctx, 5000)
+    if (!rhHealthy) {
+      console.warn('[sync-daemon] keepalive: RH context dead — attempting auto-recovery')
+      try {
+        await recoverScrapeContext()
+        console.log('[sync-daemon] keepalive: RH context recovered from saved cookies')
+        // Re-adopt CCSP context after recovery
+        const recoveredCtx = getScrapeContext()
+        if (recoveredCtx) {
+          adoptCcspContext(recoveredCtx)
+          console.log('[sync-daemon] keepalive: CCSP re-adopted after RH recovery')
+        }
+      } catch (e: any) {
+        const errorMsg = `RH context recovery FAILED: ${e?.message ?? e}`
+        console.error(`[sync-daemon] keepalive: ${errorMsg}`)
+        // Send alert email on recovery failure
+        await sendBriefEmail(
+          'ALERT: Sync Daemon RH Context Recovery Failed',
+          `<h2>RH Browser Context Recovery Failed</h2>
+          <p>The sync daemon detected a dead RH Portal browser context during keepalive and attempted auto-recovery, but recovery failed after all retry attempts.</p>
+          <p><strong>Error:</strong> ${e?.message ?? e}</p>
+          <p>Manual intervention required. Restart the pai-sync-l3 container to restore browser context.</p>
+          <pre>podman restart pai-sync-l3</pre>`,
+        ).catch(emailErr => console.error('[sync-daemon] alert email failed:', emailErr))
+        throw new Error(errorMsg)
+      }
+    }
+
+    console.log('[sync-daemon] keepalive: OK (Tableau viz rendered + SF home loaded + RH context healthy)')
   } finally {
     // VNC observation delay — wait 15s before closing so you can watch the navigation
     console.log('[sync-daemon] keepalive: holding page open for 15s (VNC observation)…')

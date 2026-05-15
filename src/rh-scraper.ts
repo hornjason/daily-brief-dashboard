@@ -106,6 +106,24 @@ export function setContextRecoveryCallback(cb: (ctx: BrowserContext, profileDir:
 }
 
 /**
+ * Public API for context recovery — used by sync-l3-daemon keepalive.
+ * Detects dead browser contexts and recovers from saved cookies.
+ * Mirrors the auto-recovery flow but callable from external code.
+ *
+ * @throws Error if recovery fails after all retry attempts
+ */
+export async function recoverScrapeContext(): Promise<void> {
+  if (!_profileDir) {
+    throw new Error('Cannot recover — no profile directory set (browser never initialized)')
+  }
+  console.log('[rh-scraper] recoverScrapeContext: initiating manual recovery from keepalive')
+  await _autoRecover(_profileDir)
+  if (browserDegraded) {
+    throw new Error(browserDegradedReason ?? 'Browser recovery failed after all retry attempts')
+  }
+}
+
+/**
  * Called by sf-auth.ts after SF auth ends (timeout/cancel/error) to restore
  * the RH scraper context without reopening the VNC login flow.
  */
