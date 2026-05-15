@@ -28,6 +28,7 @@ import { AdminPage } from './pages/AdminPage'
 import { ProductsPage } from './pages/ProductsPage'
 import { ProductDetailPage } from './pages/ProductDetailPage'
 import { BatchPage } from './pages/BatchPage'
+import { RedHatNewsPage } from './pages/RedHatNewsPage'
 import { formatRelTime } from './lib/format'
 import { ChevronUp } from 'lucide-react'
 import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, PipelineSummary, PodInfo } from './types'
@@ -724,6 +725,7 @@ function App() {
       <Route path="/dashboard/setup" element={<SetupPage />} />
       <Route path="/dashboard/admin" element={<AdminPage />} />
       <Route path="/dashboard/batch" element={<BatchPage />} />
+      <Route path="/dashboard/rh-news" element={<RedHatNewsPage />} />
       <Route path="*" element={<Dashboard />} />
     </Routes>
   )

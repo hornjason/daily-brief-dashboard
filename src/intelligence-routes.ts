@@ -267,6 +267,27 @@ export function createIntelligenceRouter(): Hono {
   })
 
   /**
+   * GET /api/rss/feeds
+   * All RSS feed items (for Red Hat News page)
+   * GitHub Issue #220 (Fix 5)
+   */
+  app.get('/api/rss/feeds', (c) => {
+    const RSS_CACHE_PATH = resolve(MAIN_CACHE_DIR, 'rss', 'rh-feeds.json')
+
+    if (!existsSync(RSS_CACHE_PATH)) {
+      return c.json({ items: [], fetchedAt: new Date().toISOString() })
+    }
+
+    try {
+      const rssData = JSON.parse(readFileSync(RSS_CACHE_PATH, 'utf-8'))
+      return c.json(rssData)
+    } catch (e: any) {
+      console.warn('[intelligence-routes] Failed to read RSS cache:', e.message)
+      return c.json({ items: [], fetchedAt: new Date().toISOString() })
+    }
+  })
+
+  /**
    * GET /api/intelligence/global
    * Aggregate Red Hat intelligence across all customers (for Red Hat Pulse card)
    * GitHub Issue #203, #174 (RSS integration), #202 (events)
@@ -283,18 +304,18 @@ export function createIntelligenceRouter(): Hono {
       try {
         const rssData = JSON.parse(readFileSync(RSS_CACHE_PATH, 'utf-8'))
         if (rssData.items && Array.isArray(rssData.items)) {
-          // Sort by pubDate desc, take top 3
+          // Sort by pubDate desc, take top 5
           const sorted = [...rssData.items].sort((a, b) => {
             const aDate = new Date(a.pubDate).getTime()
             const bDate = new Date(b.pubDate).getTime()
             return bDate - aDate
           })
-          news = sorted.slice(0, 3).map((item: any) => ({
+          news = sorted.slice(0, 5).map((item: any) => ({
             headline: item.title,
             sourceUrl: item.link,
             publishedDate: item.pubDate,
             summary: item.description,
-            sourceName: item.source === 'blog' ? 'Red Hat Blog' : 'Red Hat Press Release',
+            sourceName: item.source === 'blog' ? 'Red Hat Blog' : item.source === 'developer-blog' ? 'Red Hat Developer Blog' : 'Red Hat Press Release',
             productTags: item.productTags,
           }))
         }
@@ -361,7 +382,16 @@ export function createIntelligenceRouter(): Hono {
             })
             .slice(0, 5)
 
-          events = upcoming.map((e: any) => ({
+          // Deduplicate events by name + date
+          const seen = new Set<string>()
+          const deduplicated = upcoming.filter((e: any) => {
+            const key = `${e.name}|${e.date}`
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+
+          events = deduplicated.map((e: any) => ({
             name: e.name,
             date: e.date,
             format: e.format,

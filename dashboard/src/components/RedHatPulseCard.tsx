@@ -224,21 +224,21 @@ export function RedHatPulseCard() {
                 <div className="space-y-2">
                   {data.events.map((evt, idx) => (
                     <div key={idx} className="space-y-1">
-                      {evt.registrationUrl ? (
+                      <p className="text-sm font-medium text-text-primary">{evt.name}</p>
+                      <p className="text-xs text-text-secondary">
+                        {evt.location} • {evt.date}
+                      </p>
+                      {evt.registrationUrl && (
                         <a
                           href={evt.registrationUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-sm font-medium text-accent hover:text-accent/80 transition-colors"
+                          className="text-xs text-accent hover:text-accent/80 transition-colors inline-flex items-center gap-1"
                         >
-                          {evt.name}
+                          Register
+                          <ExternalLink className="w-3 h-3" />
                         </a>
-                      ) : (
-                        <p className="text-sm font-medium text-text-primary">{evt.name}</p>
                       )}
-                      <p className="text-xs text-text-secondary">
-                        {evt.location} • {evt.date}
-                      </p>
                     </div>
                   ))}
                 </div>
@@ -251,9 +251,7 @@ export function RedHatPulseCard() {
         {!loading && !error && data && data.news.length > 0 && (
           <div className="mt-6 pt-4 border-t border-border text-center">
             <a
-              href="https://www.redhat.com/en/about/newsroom"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/dashboard/rh-news"
               className="inline-flex items-center gap-1 text-sm text-accent hover:text-accent/80 transition-colors"
             >
               View All Red Hat News

@@ -26,6 +26,7 @@ Last updated: 2026-05-13 — Infrastructure hardening: `make up` pre-flight guar
 | `/dashboard/setup` | SetupPage | ✅ Working | AE setup wizard + 6-step bootstrap orchestrator (1058 lines; AEsCustomersSection extracted to setup/AEsCustomersSection.tsx) |
 | `/dashboard/admin` | AdminPage | ✅ Working | See Admin Page section below |
 | `/dashboard/batch` | BatchPage | ✅ Working | Batch operations: multi-customer campaigns, news refresh, PitchBuilder/FinListics checklists |
+| `/dashboard/rh-news` | RedHatNewsPage | ✅ Working | Full Red Hat RSS news feed: blog, press releases, developer blog. Product tag filtering. Linked from Pulse card "View All". |
 
 **SPA catch-all:** Unknown routes fall through to the main dashboard (no 404 page).
 

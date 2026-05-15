@@ -19,7 +19,7 @@ export interface RSSItem {
   link: string
   description: string
   pubDate: string
-  source: 'blog' | 'press-release'
+  source: 'blog' | 'press-release' | 'developer-blog'
   productTags: string[]
 }
 
@@ -33,6 +33,7 @@ export interface RSSCache {
 const RSS_FEEDS = [
   { url: 'https://www.redhat.com/en/rss/blog', source: 'blog' as const },
   { url: 'https://www.redhat.com/en/rss/press-releases', source: 'press-release' as const },
+  { url: 'https://developers.redhat.com/blog/feed', source: 'developer-blog' as const },
 ]
 
 // ── Product Keyword Mapping ──────────────────────────────────────────────────
@@ -66,7 +67,7 @@ function tagWithProducts(title: string, description: string): string[] {
  * Parse RSS 2.0 XML into structured items.
  * Uses simple regex extraction — RSS 2.0 is predictable enough for this.
  */
-function parseRSSXML(xml: string, source: 'blog' | 'press-release'): RSSItem[] {
+function parseRSSXML(xml: string, source: 'blog' | 'press-release' | 'developer-blog'): RSSItem[] {
   const items: RSSItem[] = []
 
   // Extract all <item>...</item> blocks

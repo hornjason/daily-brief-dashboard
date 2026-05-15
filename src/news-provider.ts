@@ -39,7 +39,10 @@ class GeminiGroundedNewsProvider implements NewsProvider {
     // Call 2: Score significance for each article
     const scoredArticles = await this.scoreSignificance(articles, customerName)
 
-    return scoredArticles
+    // Call 3: Deduplicate articles by topic similarity
+    const deduplicated = this.deduplicateArticles(scoredArticles)
+
+    return deduplicated
   }
 
   /**
@@ -279,6 +282,75 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
       // Fallback: return articles with default score of 5
       return articles.map(a => ({ ...a, significanceScore: 5 }))
     }
+  }
+
+  /**
+   * Deduplicate articles by topic similarity
+   *
+   * Groups articles with 60%+ headline word overlap (after normalization),
+   * keeps the best article from each group (highest score, resolved URLs preferred,
+   * longer summaries for tie-breaking).
+   *
+   * Issue #221: Multiple articles about same event should show only the best one
+   */
+  private deduplicateArticles(articles: NewsItem[]): NewsItem[] {
+    if (articles.length === 0) {
+      return []
+    }
+
+    // Normalize headline for comparison
+    const normalize = (headline: string) =>
+      headline.toLowerCase()
+        .replace(/\s*[\|\-–—]\s*[\w\s.]+$/, '')  // remove "| Source" or "- Source" suffix
+        .replace(/[^\w\s]/g, '')                    // remove punctuation
+        .trim()
+
+    // Group articles by similarity
+    const groups: NewsItem[][] = []
+    for (const article of articles) {
+      const norm = normalize(article.headline)
+      const words = new Set(norm.split(/\s+/))
+
+      let matched = false
+      for (const group of groups) {
+        const groupNorm = normalize(group[0].headline)
+        const groupWords = new Set(groupNorm.split(/\s+/))
+
+        // Calculate word overlap
+        const intersection = [...words].filter(w => groupWords.has(w)).length
+        const overlap = intersection / Math.max(words.size, groupWords.size)
+
+        if (overlap >= 0.6) {
+          group.push(article)
+          matched = true
+          break
+        }
+      }
+
+      if (!matched) {
+        groups.push([article])
+      }
+    }
+
+    // Pick best from each group
+    return groups.map(group => {
+      return group.sort((a, b) => {
+        // Primary: highest significance score
+        if (b.significanceScore !== a.significanceScore) {
+          return b.significanceScore - a.significanceScore
+        }
+
+        // Tie-break 1: prefer resolved URLs (not Google search fallbacks)
+        const aIsResolved = !a.sourceUrl.includes('google.com/search')
+        const bIsResolved = !b.sourceUrl.includes('google.com/search')
+        if (aIsResolved !== bIsResolved) {
+          return aIsResolved ? -1 : 1
+        }
+
+        // Tie-break 2: prefer longer summaries
+        return b.summary.length - a.summary.length
+      })[0]
+    }).sort((a, b) => b.significanceScore - a.significanceScore)
   }
 }
 
