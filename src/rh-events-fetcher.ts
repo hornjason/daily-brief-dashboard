@@ -133,18 +133,20 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
   // Strip HTML tags to get plain text for most parsing
   const plainText = htmlLine.replace(/<[^>]+>/g, '').trim()
 
-  // Must start with * and contain :
-  if (!plainText.startsWith('*') || !plainText.includes(':')) {
-    return null
-  }
+  // Must contain a date pattern and In-Person/Virtual/Hybrid
+  const hasFormat = /in-person|virtual|hybrid/i.test(plainText)
+  if (!hasFormat) return null
+
+  // Strip leading list markers (*, LI:, etc.)
+  const cleaned = plainText.replace(/^(?:LI:|NEW!?\s*|\*)\s*/i, '').trim()
 
   // Extract date
-  const datePart = plainText.match(/\*\s*([^:]+):/)
+  const datePart = cleaned.match(/^([^:]+):/)
   if (!datePart) return null
   const date = parseEventDate(datePart[1].trim())
 
   // Split by | separator
-  const parts = plainText.split('|').map(p => p.trim())
+  const parts = cleaned.split('|').map(p => p.trim())
   if (parts.length < 2) return null
 
   // First part has date + format
