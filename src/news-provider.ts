@@ -127,8 +127,8 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
       return []
     }
 
-    // Resolve URLs from grounding metadata
-    const resolvedArticles = this.resolveUrls(articles, data)
+    // Resolve redirect URLs to actual article URLs
+    const resolvedArticles = await this.resolveUrls(articles)
     return resolvedArticles
   }
 
@@ -140,76 +140,26 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
    *
    * Issue #215: Article URLs from Gemini grounded search are broken redirect tokens
    */
-  private resolveUrls(articles: Omit<NewsItem, 'significanceScore'>[], geminiResponse: any): Omit<NewsItem, 'significanceScore'>[] {
-    const groundingChunks = geminiResponse.candidates?.[0]?.groundingMetadata?.groundingChunks || []
-
-    if (groundingChunks.length === 0) {
-      console.warn('[news-provider] No grounding chunks found in Gemini response')
-      return articles
-    }
-
-    // Extract real URLs from grounding chunks
-    const realUrls: string[] = groundingChunks
-      .filter((chunk: any) => chunk.web?.uri)
-      .map((chunk: any) => chunk.web.uri)
-
-    // Map articles to real URLs
-    // Strategy: Match by index if counts align, otherwise use heuristics
-    return articles.map((article, index) => {
-      let resolvedUrl = article.sourceUrl
-
-      // Check if sourceUrl is a Google redirect token
-      const isRedirectToken = article.sourceUrl.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')
-
-      if (isRedirectToken) {
-        // Try to find matching real URL
-        if (realUrls[index]) {
-          // Direct index mapping (most reliable when counts match)
-          resolvedUrl = realUrls[index]
-        } else if (realUrls.length > 0) {
-          // Fallback: try to match by domain in headline or summary
-          const matchedUrl = this.findBestUrlMatch(article, realUrls)
-          if (matchedUrl) {
-            resolvedUrl = matchedUrl
-          } else {
-            // Last resort: use first available real URL
-            resolvedUrl = realUrls[0]
-            console.warn(`[news-provider] Could not match URL for article "${article.headline}", using first available`)
-          }
-        } else {
-          console.warn(`[news-provider] No real URLs available to resolve redirect token for "${article.headline}"`)
-        }
-      }
-
-      // Validate resolved URL
-      if (!this.isValidUrl(resolvedUrl)) {
-        console.warn(`[news-provider] Invalid resolved URL for "${article.headline}": ${resolvedUrl}`)
-        // Keep original even if invalid — better than nothing
+  private async resolveUrls(articles: Omit<NewsItem, 'significanceScore'>[]): Promise<Omit<NewsItem, 'significanceScore'>[]> {
+    const resolved = await Promise.all(articles.map(async (article) => {
+      if (!article.sourceUrl.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')) {
         return article
       }
 
-      return { ...article, sourceUrl: resolvedUrl }
-    })
-  }
-
-  /**
-   * Find best URL match for an article based on domain hints in content
-   */
-  private findBestUrlMatch(article: Omit<NewsItem, 'significanceScore'>, urls: string[]): string | null {
-    const content = `${article.headline} ${article.summary} ${article.sourceName}`.toLowerCase()
-
-    for (const url of urls) {
       try {
-        const domain = new URL(url).hostname.replace('www.', '')
-        if (content.includes(domain)) {
-          return url
+        const res = await fetch(article.sourceUrl, { redirect: 'manual' })
+        const location = res.headers.get('location')
+        if (location && this.isValidUrl(location)) {
+          return { ...article, sourceUrl: location }
         }
-      } catch {
-        // Invalid URL, skip
+      } catch (e: any) {
+        console.warn(`[news-provider] Failed to resolve redirect for "${article.headline}": ${e.message}`)
       }
-    }
 
-    return null
+      return article
+    }))
+
+    return resolved
   }
 
   /**
