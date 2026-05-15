@@ -16,7 +16,7 @@ import type { NewsItem } from './news-provider.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
-const CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'news')
+const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
 
 // Ensure cache directory exists
 if (!existsSync(CACHE_DIR)) {
@@ -131,10 +131,16 @@ export function createNewsRouter(): Hono {
           // Extract customer name from filename (remove .json extension)
           const slug = file.replace(/\.json$/, '')
 
-          // Filter for high-significance articles
-          const highScoreArticles = data.articles.filter(a => a.significanceScore >= 7)
+          // Filter for Critical significance only (score >= 7)
+          const criticalArticles = data.articles.filter(a => a.significanceScore >= 7)
 
-          for (const article of highScoreArticles) {
+          // Sort by significance score descending
+          criticalArticles.sort((a, b) => b.significanceScore - a.significanceScore)
+
+          // Take top 2 highest-scored articles per customer (GitHub Issue #217)
+          const top2 = criticalArticles.slice(0, 2)
+
+          for (const article of top2) {
             highlights.push({
               ...article,
               customerName: slug,  // Use slug for now; could map back to display name if needed
@@ -146,7 +152,7 @@ export function createNewsRouter(): Hono {
         }
       }
 
-      // Sort by significance score descending
+      // Sort by significance score descending (global sort across all customers)
       highlights.sort((a, b) => b.significanceScore - a.significanceScore)
 
       return c.json({ highlights })

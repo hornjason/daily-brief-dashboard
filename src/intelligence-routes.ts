@@ -201,8 +201,8 @@ export function createIntelligenceRouter(): Hono {
     }
 
     // Get customer's region from their AE's territory
-    const customersPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'customers.json')
-    const aesPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'aes.json')
+    const customersPath = resolve(process.env.CONFIG_DIR ?? 'data/config', 'customers.json')
+    const aesPath = resolve(process.env.CONFIG_DIR ?? 'data/config', 'aes.json')
 
     let customerRegion: string | null = null
 

@@ -8,7 +8,7 @@ import { toSlug } from '../cache-layer.ts'
 import { existsSync, unlinkSync, writeFileSync, mkdirSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
-const CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'news')
+const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
 
 // Ensure cache directory exists
 if (!existsSync(CACHE_DIR)) {
@@ -112,7 +112,7 @@ FeatureModuleRegistry.register({
  * Get news threshold for a customer from config, defaulting to 7
  */
 function getCustomerNewsThreshold(customerSlug: string): number {
-  const configPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'customers.json')
+  const configPath = resolve(process.env.CONFIG_DIR ?? 'data/config', 'customers.json')
 
   if (!existsSync(configPath)) {
     return 7  // Default threshold

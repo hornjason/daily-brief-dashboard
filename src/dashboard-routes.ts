@@ -189,7 +189,7 @@ async function buildRedHatIntelligenceForMorningBrief(
 
   if (customersWithMeetingsToday.size > 0) {
     try {
-      const NEWS_CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'news')
+      const NEWS_CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
 
       if (existsSync(NEWS_CACHE_DIR)) {
         const files = readdirSync(NEWS_CACHE_DIR)
@@ -241,7 +241,7 @@ async function buildRedHatIntelligenceForMorningBrief(
   // If no matches to meeting customers, fall back to top 3 highest-significance news
   if (meetingNews.length === 0) {
     try {
-      const NEWS_CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'news')
+      const NEWS_CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
 
       if (existsSync(NEWS_CACHE_DIR)) {
         const allArticles: Array<{
@@ -286,7 +286,7 @@ async function buildRedHatIntelligenceForMorningBrief(
   const releases: ProductRelease[] = []
 
   try {
-    const LIFECYCLE_CACHE_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'product-lifecycle.json')
+    const LIFECYCLE_CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'product-lifecycle.json')
 
     if (existsSync(LIFECYCLE_CACHE_PATH)) {
       const lifecycleData = JSON.parse(readFileSync(LIFECYCLE_CACHE_PATH, 'utf-8'))

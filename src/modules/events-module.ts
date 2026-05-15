@@ -40,7 +40,7 @@ function territoryToRegion(territory: string): string {
  */
 function getCustomerRegion(customerSlug: string): string | null {
   // Read customers.json to find which AE owns this customer
-  const customersPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'customers.json')
+  const customersPath = resolve(process.env.CONFIG_DIR ?? 'data/config', 'customers.json')
   if (!existsSync(customersPath)) {
     return null
   }
@@ -59,7 +59,7 @@ function getCustomerRegion(customerSlug: string): string | null {
   }
 
   // Read aes.json to get territory
-  const aesPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'aes.json')
+  const aesPath = resolve(process.env.CONFIG_DIR ?? 'data/config', 'aes.json')
   if (!existsSync(aesPath)) {
     return null
   }
