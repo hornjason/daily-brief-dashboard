@@ -164,12 +164,23 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
     return bullets
   }, [data?.synthesis])
 
-  if (!data) return null
-
   // LOG-05: Filter signals to matching customers when product filter is active
-  const displaySignals = matchingCustomers && matchingCustomers.size > 0
+  const displaySignals = data && matchingCustomers && matchingCustomers.size > 0
     ? data.signals.filter(s => matchingCustomers.has(s.customer))
-    : data.signals
+    : data?.signals ?? []
+
+  // #216: Group signals by severity for Alerts tab (must be before early return — React hooks rule)
+  const signalsBySeverity = useMemo(() => {
+    const groups: Record<'critical' | 'high' | 'medium', Signal[]> = {
+      critical: [],
+      high: [],
+      medium: []
+    }
+    displaySignals.forEach(s => groups[s.severity].push(s))
+    return groups
+  }, [displaySignals])
+
+  if (!data) return null
 
   const severityBar: Record<string, string> = {
     critical: 'bg-health-red',
@@ -181,17 +192,6 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
     high: Clock,
     medium: Sun,
   }
-
-  // #216: Group signals by severity for Alerts tab
-  const signalsBySeverity = useMemo(() => {
-    const groups: Record<'critical' | 'high' | 'medium', Signal[]> = {
-      critical: [],
-      high: [],
-      medium: []
-    }
-    displaySignals.forEach(s => groups[s.severity].push(s))
-    return groups
-  }, [displaySignals])
 
   // Toggle severity group expansion
   const toggleGroup = (severity: string) => {
