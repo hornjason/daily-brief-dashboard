@@ -25,7 +25,7 @@ import { loadServerState, aes, customers, setAes, setCustomers, patchAe, AES_PAT
 import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
-import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh, scheduleNewsRadarRefresh, scheduleProductLifecycleRefresh, scheduleRSSRefresh } from './src/background-scheduler.ts'
+import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh, scheduleNewsRadarRefresh, scheduleProductLifecycleRefresh, scheduleRSSRefresh, scheduleEventsRefresh } from './src/background-scheduler.ts'
 import { healStaleAccountNumbers } from './src/account-provenance-healer.ts'
 import { initDashboardRoutes, createDashboardRouter } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
@@ -59,6 +59,7 @@ import './src/modules/news-module.ts'
 import './src/modules/tools-module.ts'
 import './src/modules/lifecycle-module.ts'  // GitHub #197
 import './src/modules/rss-module.ts'  // GitHub #174
+import './src/modules/events-module.ts'  // GitHub #202
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #151: Campaign generation routes ──────────────────────────────
@@ -736,6 +737,9 @@ scheduleProductLifecycleRefresh()
 
 // ── GitHub #174: RSS Feed refresh (every 4 hours) ────────────────────────────
 scheduleRSSRefresh()
+
+// ── GitHub #202: Events refresh (weekly) ──────────────────────────────────────
+scheduleEventsRefresh()
 
 // ── Wave 6: Feature module startup catch-up ─────────────────────────────────
 // If any module's lastRun is older than its refreshInterval, run it now.

@@ -2,13 +2,12 @@
  * Intelligence API Routes
  * GitHub Issue #200 — Intelligence tab shell + Red Hat News section
  * GitHub Issue #201 — Product Roadmap section
+ * GitHub Issue #202 — Events module
  *
  * Provides Red Hat intelligence surfaces:
  * - GET /api/customer/:name/intelligence/news — Red Hat news matched to customer products
  * - GET /api/customer/:name/intelligence/roadmap — Product lifecycle data (Issue #201)
- *
- * Future endpoints:
- * - GET /api/customer/:name/intelligence/events — Events near customer HQ
+ * - GET /api/customer/:name/intelligence/events — Red Hat events filtered by region (Issue #202)
  */
 
 import { Hono } from 'hono'
@@ -17,6 +16,7 @@ import { resolve } from 'path'
 import { toSlug } from './cache-layer.ts'
 import type { NewsItem } from './news-provider.ts'
 import type { ProductLifecycle } from './product-lifecycle.ts'
+import type { RHEvent } from './rh-events-fetcher.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
@@ -170,9 +170,101 @@ export function createIntelligenceRouter(): Hono {
   })
 
   /**
+   * GET /api/customer/:name/intelligence/events
+   * Red Hat marketing events filtered by customer region
+   * GitHub Issue #202
+   */
+  app.get('/api/customer/:name/intelligence/events', (c) => {
+    const customerName = c.req.param('name')
+    const slug = toSlug(customerName)
+    if (!slug || /[^a-zA-Z0-9_-]/.test(slug)) {
+      return c.json({ error: 'Invalid customer name' }, 400)
+    }
+
+    // Read events cache
+    const eventsPath = resolve(MAIN_CACHE_DIR, 'events', 'rh-events.json')
+    if (!existsSync(eventsPath)) {
+      return c.json({ events: [], cachedAt: null })
+    }
+
+    let eventsData: { events: RHEvent[]; fetchedAt: string }
+    try {
+      eventsData = JSON.parse(readFileSync(eventsPath, 'utf-8'))
+    } catch (e: any) {
+      console.warn('[intelligence-routes] Failed to read events cache:', e?.message ?? e)
+      return c.json({ events: [], cachedAt: null })
+    }
+
+    // Get customer's region from their AE's territory
+    const customersPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'customers.json')
+    const aesPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'aes.json')
+
+    let customerRegion: string | null = null
+
+    if (existsSync(customersPath) && existsSync(aesPath)) {
+      try {
+        const customers = JSON.parse(readFileSync(customersPath, 'utf-8'))
+        const customer = customers.find((c: any) => c.slug === slug)
+
+        if (customer && customer.ae) {
+          const aes = JSON.parse(readFileSync(aesPath, 'utf-8'))
+          const ae = aes.find((a: any) => a.name === customer.ae)
+
+          if (ae && ae.tableauTerritories && ae.tableauTerritories.length > 0) {
+            const territory = ae.tableauTerritories[0]
+            const normalized = territory.toUpperCase()
+
+            if (normalized.startsWith('WEST')) customerRegion = 'west'
+            else if (normalized.startsWith('NORTHEAST') || normalized.startsWith('NE_')) customerRegion = 'northeast'
+            else if (normalized.startsWith('SOUTHEAST') || normalized.startsWith('SE_')) customerRegion = 'southeast'
+            else if (normalized.startsWith('CENTRAL')) customerRegion = 'central'
+            else if (normalized.startsWith('CANADA') || normalized.startsWith('CAN_')) customerRegion = 'canada'
+            else customerRegion = 'west'  // fallback
+          }
+        }
+      } catch (e: any) {
+        console.warn('[intelligence-routes] Failed to determine customer region:', e?.message ?? e)
+      }
+    }
+
+    // Filter events: virtual (national) + events matching customer's region
+    const now = Date.now()
+    const upcomingEvents = eventsData.events.filter(event => {
+      // Parse event date
+      let eventDate: number
+      try {
+        eventDate = new Date(event.date).getTime()
+      } catch {
+        return false
+      }
+
+      // Only include upcoming events (within 90 days)
+      const daysUntil = (eventDate - now) / (1000 * 60 * 60 * 24)
+      if (daysUntil < 0 || daysUntil > 90) {
+        return false
+      }
+
+      // Include if virtual or matches customer region
+      return event.region === 'national' || (customerRegion && event.region === customerRegion)
+    })
+
+    // Sort by date ascending (soonest first)
+    upcomingEvents.sort((a, b) => {
+      const aDate = new Date(a.date).getTime()
+      const bDate = new Date(b.date).getTime()
+      return aDate - bDate
+    })
+
+    return c.json({
+      events: upcomingEvents,
+      cachedAt: eventsData.fetchedAt,
+    })
+  })
+
+  /**
    * GET /api/intelligence/global
    * Aggregate Red Hat intelligence across all customers (for Red Hat Pulse card)
-   * GitHub Issue #203, #174 (RSS integration)
+   * GitHub Issue #203, #174 (RSS integration), #202 (events)
    */
   app.get('/api/intelligence/global', (c) => {
     // GitHub Issue #174: Read RSS feed data instead of customer news caches
@@ -238,8 +330,46 @@ export function createIntelligenceRouter(): Hono {
       }
     }
 
-    // Events: stub for now (no events data source yet)
-    const events: any[] = []
+    // Read events data (next 90 days, sorted by date)
+    const eventsPath = resolve(MAIN_CACHE_DIR, 'events', 'rh-events.json')
+    let events: any[] = []
+
+    if (existsSync(eventsPath)) {
+      try {
+        const eventsData = JSON.parse(readFileSync(eventsPath, 'utf-8'))
+        if (eventsData.events && Array.isArray(eventsData.events)) {
+          const now = Date.now()
+          const upcoming = eventsData.events
+            .filter((e: any) => {
+              try {
+                const eventDate = new Date(e.date).getTime()
+                const daysUntil = (eventDate - now) / (1000 * 60 * 60 * 24)
+                return daysUntil >= 0 && daysUntil <= 90
+              } catch {
+                return false
+              }
+            })
+            .sort((a: any, b: any) => {
+              const aDate = new Date(a.date).getTime()
+              const bDate = new Date(b.date).getTime()
+              return aDate - bDate
+            })
+            .slice(0, 5)
+
+          events = upcoming.map((e: any) => ({
+            name: e.name,
+            date: e.date,
+            format: e.format,
+            location: e.location,
+            region: e.region,
+            productTags: e.productTags,
+            registrationUrl: e.registrationUrl,
+          }))
+        }
+      } catch (e: any) {
+        console.warn('[intelligence-routes] Failed to read events cache:', e.message)
+      }
+    }
 
     return c.json({
       news,

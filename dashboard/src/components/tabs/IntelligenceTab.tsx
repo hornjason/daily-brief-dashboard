@@ -1,10 +1,11 @@
 /**
  * GitHub Issue #200: Intelligence tab shell + Red Hat News section
  * GitHub Issue #201: Product Roadmap section
+ * GitHub Issue #202: Events section
  * Feature: Red Hat intelligence surfaces — news, product lifecycle, events
  */
 
-import { Newspaper, RefreshCw, ExternalLink, Loader2, Copy, Check, Calendar, ChevronDown, ChevronUp } from 'lucide-react'
+import { Newspaper, RefreshCw, ExternalLink, Loader2, Copy, Check, Calendar, ChevronDown, ChevronUp, MapPin } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 
 interface IntelligenceTabProps {
@@ -33,6 +34,17 @@ interface ProductLifecycle {
   eolDate: string
   eusAvailable: boolean
   supportEnd: string
+  docsUrl?: string
+}
+
+interface RHEvent {
+  name: string
+  date: string
+  format: 'in-person' | 'virtual' | 'hybrid'
+  location: string | null
+  region: string
+  productTags: string[]
+  registrationUrl: string | null
 }
 
 export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
@@ -47,6 +59,10 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
   const [roadmapLoading, setRoadmapLoading] = useState(true)
   const [roadmapError, setRoadmapError] = useState<string | null>(null)
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+
+  const [events, setEvents] = useState<RHEvent[]>([])
+  const [eventsLoading, setEventsLoading] = useState(true)
+  const [eventsError, setEventsError] = useState<string | null>(null)
 
   const fetchArticles = async () => {
     try {
@@ -82,9 +98,27 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
     }
   }
 
+  const fetchEvents = async () => {
+    try {
+      const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/intelligence/events`)
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch events' }))
+        throw new Error(errorData.error || 'Failed to fetch events')
+      }
+      const data = await res.json()
+      setEvents(data.events || [])
+      setEventsError(null)
+    } catch (e: any) {
+      setEventsError(e.message || 'Failed to fetch events')
+    } finally {
+      setEventsLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetchArticles()
     fetchRoadmap()
+    fetchEvents()
   }, [customerName])
 
   // Extract unique product tags from articles
@@ -212,6 +246,41 @@ Read more: ${article.sourceUrl}`
       setTimeout(() => setCopiedIndex(null), 2000)
     } catch (e) {
       console.error('Failed to copy to clipboard:', e)
+    }
+  }
+
+  const formatEventDate = (isoDate: string) => {
+    try {
+      const date = new Date(isoDate)
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(date)
+    } catch {
+      return isoDate
+    }
+  }
+
+  const getFormatBadge = (format: string) => {
+    if (format === 'virtual') {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+          Virtual
+        </span>
+      )
+    } else if (format === 'hybrid') {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-500/20 text-purple-400">
+          Hybrid
+        </span>
+      )
+    } else {
+      return (
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-500/20 text-green-400">
+          In-Person
+        </span>
+      )
     }
   }
 
@@ -459,7 +528,21 @@ Read more: ${article.sourceUrl}`
                             onClick={() => setExpandedRow(isExpanded ? null : product.slug)}
                           >
                             <div className="grid grid-cols-[1fr,1fr,1fr,1fr,auto] gap-4 px-4 py-3">
-                              <div className="text-sm font-medium text-text-primary">{product.displayName}</div>
+                              <div className="text-sm font-medium text-text-primary">
+                                {product.docsUrl ? (
+                                  <a
+                                    href={product.docsUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-accent hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {product.displayName}
+                                  </a>
+                                ) : (
+                                  product.displayName
+                                )}
+                              </div>
                               <div className="text-sm text-text-secondary">{product.currentVersion}</div>
                               <div className="text-sm text-text-secondary">
                                 {product.nextVersion ? `${product.nextVersion}` : 'N/A'}
@@ -534,7 +617,21 @@ Read more: ${article.sourceUrl}`
                       onClick={() => setExpandedRow(isExpanded ? null : product.slug)}
                     >
                       <div className="flex items-start justify-between mb-3">
-                        <h3 className="text-base font-semibold text-text-primary">{product.displayName}</h3>
+                        <h3 className="text-base font-semibold text-text-primary">
+                          {product.docsUrl ? (
+                            <a
+                              href={product.docsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-accent hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {product.displayName}
+                            </a>
+                          ) : (
+                            product.displayName
+                          )}
+                        </h3>
                         {isExpanded ? (
                           <ChevronUp className="w-5 h-5 text-text-secondary flex-shrink-0" />
                         ) : (
@@ -591,6 +688,108 @@ Read more: ${article.sourceUrl}`
                   </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Events Section */}
+      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-accent" />
+            <h2 className="text-xl font-semibold text-text-primary">Events Near This Customer</h2>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {/* Loading state */}
+          {eventsLoading && (
+            <div className="py-12 text-center space-y-4">
+              <Loader2 className="w-12 h-12 text-accent mx-auto animate-spin" />
+              <p className="text-sm text-text-secondary">Loading events...</p>
+            </div>
+          )}
+
+          {/* Error state */}
+          {!eventsLoading && eventsError && (
+            <div className="bg-surface border border-red-500/50 rounded-xl p-6 space-y-3">
+              <p className="text-sm font-medium text-red-400">Error loading events</p>
+              <p className="text-xs text-text-secondary">{eventsError}</p>
+              <button
+                onClick={fetchEvents}
+                className="px-4 py-2 rounded-lg border border-border text-xs text-accent hover:border-accent/50 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!eventsLoading && !eventsError && events.length === 0 && (
+            <div className="py-12 text-center space-y-4">
+              <div className="relative mx-auto w-20 h-20">
+                <div className="absolute inset-0 bg-accent/10 rounded-full" />
+                <MapPin className="w-12 h-12 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-base font-medium text-text-primary">No upcoming Red Hat events in your region</p>
+                <p className="text-sm text-text-secondary max-w-md mx-auto">
+                  Virtual events and in-person events matching this customer's region will appear here.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Event cards */}
+          {!eventsLoading && !eventsError && events.length > 0 && (
+            <div className="space-y-4">
+              {events.map((event, idx) => (
+                <div
+                  key={idx}
+                  className="bg-surface border border-border rounded-lg p-6 space-y-4 hover:border-accent/50 transition-colors"
+                >
+                  {/* Event name */}
+                  <h3 className="text-lg font-bold text-text-primary">{event.name}</h3>
+
+                  {/* Badges */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {getFormatBadge(event.format)}
+                    <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium text-text-secondary">
+                      {formatEventDate(event.date)}
+                    </span>
+                    {event.location && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-text-secondary">
+                        <MapPin className="w-3 h-3" />
+                        {event.location}
+                      </span>
+                    )}
+                    {event.productTags && event.productTags.length > 0 && (
+                      event.productTags.map((tag, i) => (
+                        <span key={i} className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+                          {tag}
+                        </span>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Registration link */}
+                  {event.registrationUrl && (
+                    <div className="pt-3 border-t border-border">
+                      <a
+                        href={event.registrationUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent/10 text-xs text-accent font-medium hover:bg-accent/20 transition-colors w-fit"
+                      >
+                        Register
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

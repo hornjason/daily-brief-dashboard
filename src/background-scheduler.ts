@@ -1610,3 +1610,30 @@ export function scheduleRSSRefresh(): void {
     scheduleRSSRefresh()  // reschedule for next 4 hours
   }, REFRESH_INTERVAL)
 }
+
+// ── Events refresh every 7 days (GitHub #202) ─────────────────────────────────
+
+export function scheduleEventsRefresh(): void {
+  const REFRESH_INTERVAL = 7 * 24 * 60 * 60 * 1000  // 7 days
+  console.log(`[rh-events] next refresh in ${Math.round(REFRESH_INTERVAL / (24 * 60_000))} days (weekly)`)
+
+  setTimeout(async () => {
+    console.log('[rh-events] scheduled refresh started')
+    try {
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const eventsModule = FeatureModuleRegistry.get('rh-events')
+
+      if (!eventsModule) {
+        console.warn('[rh-events] rh-events module not registered — skipping')
+        scheduleEventsRefresh()
+        return
+      }
+
+      await eventsModule.fetch('')  // Events are global, not customer-specific
+      console.log('[rh-events] scheduled refresh completed')
+    } catch (e: any) {
+      console.error('[rh-events] scheduled refresh error:', e?.message ?? e)
+    }
+    scheduleEventsRefresh()  // reschedule for next 7 days
+  }, REFRESH_INTERVAL)
+}
