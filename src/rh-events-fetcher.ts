@@ -28,6 +28,7 @@ export interface RHEvent {
   productTags: string[]             // ["AAP", "OCP", etc.]
   registrationUrl: string | null    // extracted if "Reg Page" has a URL
   description: string               // raw line content for context
+  summary: string                   // descriptive text after metadata (if any)
 }
 
 export interface EventsCache {
@@ -43,6 +44,23 @@ const PRODUCT_KEYWORDS: Record<string, string[]> = {
   OCP: ['openshift', 'ocp', 'kubernetes'],
   RHEL: ['rhel', 'enterprise linux', 'virtualization'],
   RHOAI: ['openshift ai', 'rhoai', 'instructlab', 'ai workshop'],
+}
+
+// ── Garbage Pattern Filtering ────────────────────────────────────────────────
+
+const GARBAGE_PATTERNS = [
+  /^social$/i,
+  /^full version/i,
+  /^short cut/i,
+  /^bookmark/i,
+  /^revamp\s+\w+$/i,        // "Revamp RHEL", "Revamp AAP", etc.
+]
+
+/**
+ * Check if an event name looks like garbage/navigation
+ */
+function isGarbageEvent(name: string): boolean {
+  return GARBAGE_PATTERNS.some(pattern => pattern.test(name.trim()))
 }
 
 /**
@@ -66,8 +84,9 @@ function tagWithProducts(name: string): string[] {
 /**
  * Parse date from natural language format
  * Examples: "June 4", "May 27", "June 9-11"
+ * Returns null if the date string doesn't look valid (for garbage filtering)
  */
-function parseEventDate(dateStr: string): string {
+function parseEventDate(dateStr: string): string | null {
   // Try to parse natural language date
   const monthNames = ['january', 'february', 'march', 'april', 'may', 'june',
                       'july', 'august', 'september', 'october', 'november', 'december']
@@ -87,8 +106,8 @@ function parseEventDate(dateStr: string): string {
     }
   }
 
-  // Fallback to original string
-  return dateStr
+  // Return null for unparseable dates (garbage entries)
+  return null
 }
 
 /**
@@ -102,13 +121,28 @@ function extractLocation(text: string): string | null {
 }
 
 /**
+ * Unwrap Google redirect URLs
+ * Extracts the actual URL from google.com/url?q= wrappers
+ */
+function unwrapGoogleUrl(url: string): string {
+  if (url.includes('google.com/url?')) {
+    const match = url.match(/[?&]q=([^&]+)/)
+    if (match) return decodeURIComponent(match[1])
+  }
+  return url
+}
+
+/**
  * Extract registration URL from HTML content
  * Looks for <a> tags with "Reg Page" text
  */
 function extractRegUrlFromHTML(htmlLine: string): string | null {
   // Match <a href="...">Reg Page</a> or <a href="...">Reg page</a>
   const match = htmlLine.match(/<a[^>]+href=["']([^"']+)["'][^>]*>Reg\s+[Pp]age<\/a>/i)
-  return match ? match[1].trim() : null
+  if (!match) return null
+
+  const wrappedUrl = match[1].trim()
+  return unwrapGoogleUrl(wrappedUrl)
 }
 
 /**
@@ -150,6 +184,9 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
   if (!datePart) return null
   const date = parseEventDate(datePart[1].trim())
 
+  // Skip if date couldn't be parsed (garbage entry)
+  if (!date) return null
+
   // Split by | separator
   const parts = cleaned.split('|').map(p => p.trim())
   if (parts.length < 2) return null
@@ -167,6 +204,13 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
   const name = parts[1]?.trim() ?? ''
   if (!name) return null
 
+  // Filter garbage events
+  if (isGarbageEvent(name)) return null
+
+  // Event name must have at least 3 words (filter single/two-word titles)
+  const wordCount = name.split(/\s+/).length
+  if (wordCount < 3) return null
+
   // Try to extract location
   const location = extractLocation(plainText)
 
@@ -179,6 +223,23 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
   // Tag with products
   const productTags = tagWithProducts(name)
 
+  // Extract summary from parts after the event name
+  // Parts typically: [date+format, name, location/details, personas, reg page, event lead, etc.]
+  // Summary = everything after name, excluding "Reg Page", "Event Lead:", etc.
+  const summaryParts = parts.slice(2)  // skip date+format and name
+    .filter(p => {
+      const lower = p.toLowerCase()
+      // Skip metadata fields
+      return !lower.includes('reg page') &&
+             !lower.includes('reg report') &&
+             !lower.includes('event lead:') &&
+             !lower.includes('marketing lead') &&
+             !lower.includes('social') &&
+             !lower.match(/^\w+,\s+\w{2}$/)  // skip "City, ST" patterns
+    })
+    .join(' ')
+    .trim()
+
   return {
     name,
     date,
@@ -188,6 +249,7 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
     productTags,
     registrationUrl,
     description: plainText,
+    summary: summaryParts,
   }
 }
 

@@ -429,15 +429,17 @@ Register: ${event.registrationUrl}` : ''}`
                           </>
                         )}
                       </button>
-                      <a
-                        href={article.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent/10 text-xs text-accent font-medium hover:bg-accent/20 transition-colors"
-                      >
-                        Read Article
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                      {article.sourceUrl && !article.sourceUrl.includes('vertexaisearch.cloud.google.com') && (
+                        <a
+                          href={article.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent/10 text-xs text-accent font-medium hover:bg-accent/20 transition-colors"
+                        >
+                          Read Article
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>

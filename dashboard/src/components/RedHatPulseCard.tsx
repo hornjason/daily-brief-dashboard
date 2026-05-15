@@ -165,14 +165,20 @@ export function RedHatPulseCard() {
                 <div className="space-y-3">
                   {data.news.map((item, idx) => (
                     <div key={idx} className="space-y-1">
-                      <a
-                        href={item.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm font-medium text-text-primary hover:text-accent transition-colors line-clamp-2"
-                      >
-                        {item.headline}
-                      </a>
+                      {item.sourceUrl && !item.sourceUrl.includes('vertexaisearch.cloud.google.com') ? (
+                        <a
+                          href={item.sourceUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-text-primary hover:text-accent transition-colors line-clamp-2"
+                        >
+                          {item.headline}
+                        </a>
+                      ) : (
+                        <p className="text-sm font-medium text-text-primary line-clamp-2">
+                          {item.headline}
+                        </p>
+                      )}
                       <p className="text-xs text-text-secondary">
                         {formatTimeAgo(item.publishedDate)}
                       </p>

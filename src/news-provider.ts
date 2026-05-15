@@ -147,16 +147,39 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
       }
 
       try {
+        // First try: manual redirect with immediate check
         const res = await fetch(article.sourceUrl, { redirect: 'manual' })
         const location = res.headers.get('location')
         if (location && this.isValidUrl(location)) {
           return { ...article, sourceUrl: location }
         }
+
+        // Second try: full redirect follow with timeout for slow redirects
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
+
+        try {
+          const followRes = await fetch(article.sourceUrl, {
+            redirect: 'follow',
+            signal: controller.signal
+          })
+          clearTimeout(timeout)
+
+          if (followRes.ok && this.isValidUrl(followRes.url)) {
+            return { ...article, sourceUrl: followRes.url }
+          }
+        } catch (followErr: any) {
+          clearTimeout(timeout)
+          console.warn(`[news-provider] Follow redirect failed for "${article.headline}": ${followErr.message}`)
+        }
       } catch (e: any) {
         console.warn(`[news-provider] Failed to resolve redirect for "${article.headline}": ${e.message}`)
       }
 
-      return article
+      // If we couldn't resolve, use Google search fallback instead of broken link
+      const fallbackUrl = `https://www.google.com/search?q=${encodeURIComponent(article.headline)}`
+      console.warn(`[news-provider] Using Google search fallback for "${article.headline}"`)
+      return { ...article, sourceUrl: fallbackUrl }
     }))
 
     return resolved
