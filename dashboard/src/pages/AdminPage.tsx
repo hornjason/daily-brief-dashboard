@@ -652,12 +652,12 @@ function FeatureModulesSection() {
 
   const fetchFirstCustomer = useCallback(async () => {
     try {
-      const res = await fetch('/api/aes')
+      const res = await fetch('/api/accounts')
       if (res.ok) {
         const data = await res.json()
-        const firstAe = data.aes?.[0]
-        if (firstAe?.customers?.[0]) {
-          setFirstCustomer(firstAe.customers[0].name)
+        const first = data.customers?.[0]
+        if (first?.name) {
+          setFirstCustomer(first.name)
         }
       }
     } catch (err) {
