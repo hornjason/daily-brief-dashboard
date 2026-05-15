@@ -110,8 +110,10 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
   // Auto-collapse once data loads if signals > 3 to reduce visual noise on load.
   const [collapsed, setCollapsed] = useState(false)
   const [showBriefModal, setShowBriefModal] = useState(false)
-  // BKL-INTEL-204: Red Hat Intelligence section starts collapsed by default
-  const [intelligenceCollapsed, setIntelligenceCollapsed] = useState(true)
+  // #216: Internal tab state for Today | Alerts | Intelligence
+  const [activeTab, setActiveTab] = useState<'today' | 'alerts' | 'intelligence'>('today')
+  // Severity group expand state for Alerts tab (Critical expanded by default)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['critical']))
 
   useEffect(() => {
     fetch('/api/morning-summary')
@@ -180,6 +182,30 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
     medium: Sun,
   }
 
+  // #216: Group signals by severity for Alerts tab
+  const signalsBySeverity = useMemo(() => {
+    const groups: Record<'critical' | 'high' | 'medium', Signal[]> = {
+      critical: [],
+      high: [],
+      medium: []
+    }
+    displaySignals.forEach(s => groups[s.severity].push(s))
+    return groups
+  }, [displaySignals])
+
+  // Toggle severity group expansion
+  const toggleGroup = (severity: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(severity)) {
+        next.delete(severity)
+      } else {
+        next.add(severity)
+      }
+      return next
+    })
+  }
+
   return (
     <div id="section-morning" data-section="section-morning" className="bg-surface border border-border rounded-xl overflow-hidden">
       <button
@@ -240,160 +266,276 @@ export default function MorningSummary({ matchingCustomers }: MorningSummaryProp
         </div>
       )}
       {!collapsed && (
-        <div className="p-5">
-          {data.synthesis && (
-            <div className="mb-4 p-3 bg-surface-hover border border-border rounded-lg leading-relaxed">
-              <RenderMarkdown text={data.synthesis} />
-            </div>
-          )}
-          {displaySignals.length === 0 ? (
-            <p className="text-sm text-text-secondary text-center py-4">
-              {matchingCustomers && matchingCustomers.size > 0
-                ? 'No signals for selected products'
-                : `All clear across ${data.customerCount} account${data.customerCount !== 1 ? 's' : ''}`}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {displaySignals.map((s, i) => {
-                const Icon = severityIcon[s.severity]
-                return (
-                  <button
-                    key={i}
-                    onClick={() => navigate(`/dashboard/customer/${encodeURIComponent(s.customer)}`)}
-                    className="w-full flex items-start gap-3 text-left rounded-lg px-2 py-1.5 -mx-2 cursor-pointer hover:bg-border/20 transition-colors"
-                  >
-                    <div className={`w-0.5 self-stretch rounded-full ${severityBar[s.severity]}`} />
-                    <Icon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
-                      s.severity === 'critical' ? 'text-health-red'
-                        : s.severity === 'high' ? 'text-health-amber'
-                        : 'text-accent'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-text-primary">{s.customer}</span>
-                      <span className="text-sm text-text-secondary"> &mdash; {s.text}</span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-          {/* News Highlights Section */}
-          {newsHighlights.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <h3 className="text-amber-400 font-bold text-sm mb-3">News</h3>
-              <ul className="space-y-3">
-                {newsHighlights.map((item, i) => (
-                  <li key={i} className="text-sm">
-                    <div className="mb-1">
-                      <strong className="text-text-primary">{item.customerName}</strong>
-                      <span className="text-text-secondary"> — {item.headline}</span>
-                    </div>
-                    <div className="text-xs text-zinc-500 leading-relaxed">{item.summary}</div>
-                    {item.sourceUrl && (
-                      <a
-                        href={item.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-accent hover:text-accent/80 underline mt-1 inline-block"
-                      >
-                        Source
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-      {/* Red Hat Intelligence Section (BKL-INTEL-204) — Collapsed by default */}
-      {!collapsed && data.redHatIntelligence && (
-        <div className="border-t border-border">
-          <button
-            onClick={() => setIntelligenceCollapsed(!intelligenceCollapsed)}
-            aria-expanded={!intelligenceCollapsed}
-            className="w-full px-5 py-3 flex items-center justify-between hover:bg-surface-hover transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-red-500" aria-hidden="true" />
-              <h3 className="text-base font-semibold text-text-primary">Red Hat Intelligence</h3>
-            </div>
-            {intelligenceCollapsed
-              ? <ChevronDown className="w-3.5 h-3.5 text-text-secondary" />
-              : <ChevronUp className="w-3.5 h-3.5 text-text-secondary" />
-            }
-          </button>
-          {!intelligenceCollapsed && (
-          <div className="px-5 pb-5 space-y-4 border-l-[3px] border-l-red-500 ml-5">
-            {/* Subsection 1: News Relevant to Your Customers */}
-            {data.redHatIntelligence.meetingNews.length > 0 && (
+        <>
+          {/* #216: Tab bar */}
+          <div className="flex gap-1 px-6 py-2 border-b border-border/40">
+            {(['today', 'alerts', 'intelligence'] as const).map(tab => {
+              const count = tab === 'alerts'
+                ? signalsBySeverity.critical.length + signalsBySeverity.high.length
+                : undefined
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                    activeTab === tab
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-text-secondary hover:text-text-primary hover:bg-border/20'
+                  }`}
+                >
+                  {tab === 'today' ? 'Today' : tab === 'alerts' ? 'Alerts' : 'Intelligence'}
+                  {count !== undefined && count > 0 && (
+                    <span className="ml-1.5 px-1.5 py-0.5 bg-health-red/20 text-health-red text-xs rounded-full">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Tab content area */}
+          <div className="p-5">
+            {/* Today Tab */}
+            {activeTab === 'today' && (
               <div>
-                <h4 className="text-sm font-medium text-text-primary mb-2">News Relevant to Your Customers</h4>
-                <div className="space-y-3">
-                  {data.redHatIntelligence.meetingNews.map((item, i) => (
-                    <div key={i} className="bg-surface-hover border border-border rounded-lg p-3">
-                      <div className="mb-1">
-                        <span className="text-sm font-medium text-text-primary">{item.headline}</span>
-                      </div>
-                      {item.relevantCustomer && (
-                        <div className="text-xs text-accent mb-1">
-                          Relevant to: {item.relevantCustomer} ({item.relevantProduct})
-                        </div>
-                      )}
-                      <div className="text-xs text-text-secondary leading-relaxed mb-2">{item.summary}</div>
-                      {item.sourceUrl && (
-                        <a
-                          href={item.sourceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-accent hover:text-accent/80 underline"
+                {data.synthesis ? (
+                  <div className="p-3 bg-surface-hover border border-border rounded-lg leading-relaxed">
+                    <RenderMarkdown text={data.synthesis} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-text-secondary text-center py-4">
+                    No priority items today
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Alerts Tab */}
+            {activeTab === 'alerts' && (
+              <div className="space-y-3">
+                {displaySignals.length === 0 ? (
+                  <p className="text-sm text-text-secondary text-center py-4">
+                    {matchingCustomers && matchingCustomers.size > 0
+                      ? 'No signals for selected products'
+                      : `All clear across ${data.customerCount} account${data.customerCount !== 1 ? 's' : ''}`}
+                  </p>
+                ) : (
+                  <>
+                    {/* Critical Group */}
+                    {signalsBySeverity.critical.length > 0 && (
+                      <div className="bg-health-red/10 border-l-4 border-health-red rounded-lg">
+                        <button
+                          onClick={() => toggleGroup('critical')}
+                          className="w-full flex items-center justify-between p-3"
                         >
-                          Read Article →
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Subsection 2: Product Releases This Month */}
-            {data.redHatIntelligence.releases.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-text-primary mb-2">Product Releases This Month</h4>
-                <ul className="space-y-1">
-                  {data.redHatIntelligence.releases.map((item, i) => (
-                    <li key={i} className="text-sm text-text-secondary">
-                      <span className="font-medium text-text-primary">{item.product} {item.version}</span>
-                      {' — '}
-                      {new Date(item.gaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      {' (GA)'}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {/* Subsection 3: Events Near Your Customers (stub — will be empty for now) */}
-            {data.redHatIntelligence.events.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-text-primary mb-2">Events Near Your Customers</h4>
-                <div className="space-y-2">
-                  {data.redHatIntelligence.events.map((item, i) => (
-                    <div key={i} className="text-sm text-text-secondary">
-                      <div className="font-medium text-text-primary">{item.name}</div>
-                      <div className="text-xs">
-                        {item.location} • {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-health-red" />
+                            <span className="text-sm font-semibold text-text-primary">CRITICAL</span>
+                            <span className="text-xs text-text-secondary">({signalsBySeverity.critical.length})</span>
+                          </div>
+                          {expandedGroups.has('critical') ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        {expandedGroups.has('critical') && (
+                          <div className="px-3 pb-3 space-y-2">
+                            {signalsBySeverity.critical.map((s, i) => (
+                              <button
+                                key={i}
+                                onClick={() => navigate(`/dashboard/customer/${encodeURIComponent(s.customer)}`)}
+                                className="w-full flex items-start gap-3 text-left rounded-lg px-2 py-1.5 -mx-2 cursor-pointer hover:bg-border/20 transition-colors"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm font-medium text-text-primary">{s.customer}</span>
+                                  <span className="text-sm text-text-secondary"> — {s.text}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      {item.nearCustomers.length > 0 && (
-                        <div className="text-xs text-accent">Near: {item.nearCustomers.join(', ')}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    )}
+
+                    {/* High Group */}
+                    {signalsBySeverity.high.length > 0 && (
+                      <div className="bg-health-amber/10 border-l-4 border-health-amber rounded-lg">
+                        <button
+                          onClick={() => toggleGroup('high')}
+                          className="w-full flex items-center justify-between p-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-health-amber" />
+                            <span className="text-sm font-semibold text-text-primary">HIGH</span>
+                            <span className="text-xs text-text-secondary">({signalsBySeverity.high.length})</span>
+                          </div>
+                          {expandedGroups.has('high') ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        {expandedGroups.has('high') && (
+                          <div className="px-3 pb-3 space-y-2">
+                            {signalsBySeverity.high.map((s, i) => (
+                              <button
+                                key={i}
+                                onClick={() => navigate(`/dashboard/customer/${encodeURIComponent(s.customer)}`)}
+                                className="w-full flex items-start gap-3 text-left rounded-lg px-2 py-1.5 -mx-2 cursor-pointer hover:bg-border/20 transition-colors"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm font-medium text-text-primary">{s.customer}</span>
+                                  <span className="text-sm text-text-secondary"> — {s.text}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Medium Group */}
+                    {signalsBySeverity.medium.length > 0 && (
+                      <div className="bg-accent/10 border-l-4 border-accent rounded-lg">
+                        <button
+                          onClick={() => toggleGroup('medium')}
+                          className="w-full flex items-center justify-between p-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Sun className="w-4 h-4 text-accent" />
+                            <span className="text-sm font-semibold text-text-primary">MEDIUM</span>
+                            <span className="text-xs text-text-secondary">({signalsBySeverity.medium.length})</span>
+                          </div>
+                          {expandedGroups.has('medium') ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        {expandedGroups.has('medium') && (
+                          <div className="px-3 pb-3 space-y-2">
+                            {signalsBySeverity.medium.map((s, i) => (
+                              <button
+                                key={i}
+                                onClick={() => navigate(`/dashboard/customer/${encodeURIComponent(s.customer)}`)}
+                                className="w-full flex items-start gap-3 text-left rounded-lg px-2 py-1.5 -mx-2 cursor-pointer hover:bg-border/20 transition-colors"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-sm font-medium text-text-primary">{s.customer}</span>
+                                  <span className="text-sm text-text-secondary"> — {s.text}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Intelligence Tab */}
+            {activeTab === 'intelligence' && (
+              <div className="space-y-4">
+                {data.redHatIntelligence ? (
+                  <>
+                    {/* News Relevant to Your Customers */}
+                    {data.redHatIntelligence.meetingNews.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-text-primary mb-2">News Relevant to Your Customers</h4>
+                        <div className="space-y-3">
+                          {data.redHatIntelligence.meetingNews.map((item, i) => (
+                            <div key={i} className="bg-surface-hover border border-border rounded-lg p-3">
+                              <div className="mb-1">
+                                <span className="text-sm font-medium text-text-primary">{item.headline}</span>
+                              </div>
+                              {item.relevantCustomer && (
+                                <div className="text-xs text-accent mb-1">
+                                  Relevant to: {item.relevantCustomer} ({item.relevantProduct})
+                                </div>
+                              )}
+                              <div className="text-xs text-text-secondary leading-relaxed mb-2">{item.summary}</div>
+                              {item.sourceUrl && (
+                                <a
+                                  href={item.sourceUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-accent hover:text-accent/80 underline"
+                                >
+                                  Read Article →
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Product Releases This Month */}
+                    {data.redHatIntelligence.releases.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-text-primary mb-2">Product Releases This Month</h4>
+                        <ul className="space-y-1">
+                          {data.redHatIntelligence.releases.map((item, i) => (
+                            <li key={i} className="text-sm text-text-secondary">
+                              <span className="font-medium text-text-primary">{item.product} {item.version}</span>
+                              {' — '}
+                              {new Date(item.gaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              {' (GA)'}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Events Near Your Customers */}
+                    {data.redHatIntelligence.events.length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium text-text-primary mb-2">Events Near Your Customers</h4>
+                        <div className="space-y-2">
+                          {data.redHatIntelligence.events.map((item, i) => (
+                            <div key={i} className="text-sm text-text-secondary">
+                              <div className="font-medium text-text-primary">{item.name}</div>
+                              <div className="text-xs">
+                                {item.location} • {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </div>
+                              {item.nearCustomers.length > 0 && (
+                                <div className="text-xs text-accent">Near: {item.nearCustomers.join(', ')}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-text-secondary text-center py-4">
+                    No Red Hat Intelligence available
+                  </p>
+                )}
+
+                {/* News Highlights Section (legacy, kept for backward compat) */}
+                {newsHighlights.length > 0 && (
+                  <div className="pt-4 border-t border-border">
+                    <h3 className="text-amber-400 font-bold text-sm mb-3">News</h3>
+                    <ul className="space-y-3">
+                      {newsHighlights.map((item, i) => (
+                        <li key={i} className="text-sm">
+                          <div className="mb-1">
+                            <strong className="text-text-primary">{item.customerName}</strong>
+                            <span className="text-text-secondary"> — {item.headline}</span>
+                          </div>
+                          <div className="text-xs text-zinc-500 leading-relaxed">{item.summary}</div>
+                          {item.sourceUrl && (
+                            <a
+                              href={item.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-accent hover:text-accent/80 underline mt-1 inline-block"
+                            >
+                              Source
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </div>
-          )}
-        </div>
+        </>
       )}
     </div>
   )

@@ -65,6 +65,11 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
   const [eventsError, setEventsError] = useState<string | null>(null)
   const [copiedEventIndex, setCopiedEventIndex] = useState<number | null>(null)
 
+  // Collapsible section state
+  const [newsExpanded, setNewsExpanded] = useState(true)
+  const [roadmapExpanded, setRoadmapExpanded] = useState(false)
+  const [eventsExpanded, setEventsExpanded] = useState(false)
+
   const fetchArticles = async () => {
     try {
       const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/intelligence/news`)
@@ -121,6 +126,11 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
     fetchRoadmap()
     fetchEvents()
   }, [customerName])
+
+  // Auto-expand news section when articles arrive
+  useEffect(() => {
+    setNewsExpanded(articles.length > 0)
+  }, [articles])
 
   // Extract unique product tags from articles
   const productFilters = useMemo(() => {
@@ -304,24 +314,54 @@ Register: ${event.registrationUrl}` : ''}`
       {/* Red Hat News Section */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div
+          className="px-6 py-4 cursor-pointer hover:bg-border/10 transition-colors flex items-center justify-between"
+          onClick={() => setNewsExpanded(!newsExpanded)}
+        >
+          <div className="flex items-center gap-3">
             <Newspaper className="w-5 h-5 text-accent" />
             <h2 className="text-xl font-semibold text-text-primary">Customer News</h2>
+            {!loading && !error && articles.length > 0 && (
+              <span className="bg-accent/10 text-accent text-xs px-2 py-0.5 rounded-full font-medium">
+                {articles.length}
+              </span>
+            )}
           </div>
-          <button
-            onClick={fetchArticles}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent/10 text-accent text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                fetchArticles()
+              }}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent/10 text-accent text-sm font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            {newsExpanded ? (
+              <ChevronUp className="w-5 h-5 text-text-secondary" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-text-secondary" />
+            )}
+          </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Product Filter Chips */}
-          {!loading && !error && productFilters.length > 1 && (
+        {/* Collapsed preview */}
+        {!newsExpanded && !loading && !error && articles.length > 0 && (
+          <div className="px-6 py-4 border-t border-border/60 space-y-2">
+            {articles.slice(0, 2).map((article, idx) => (
+              <div key={idx} className="text-sm text-text-secondary truncate">
+                • {article.headline}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {newsExpanded && (
+          <div className="p-6 space-y-6">
+            {/* Product Filter Chips */}
+            {!loading && !error && productFilters.length > 1 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-text-secondary font-medium">Filter:</span>
               {productFilters.map(product => (
@@ -458,23 +498,46 @@ Register: ${event.registrationUrl}` : ''}`
               )}
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Product Roadmap Section */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div
+          className="px-6 py-4 cursor-pointer hover:bg-border/10 transition-colors flex items-center justify-between"
+          onClick={() => setRoadmapExpanded(!roadmapExpanded)}
+        >
+          <div className="flex items-center gap-3">
             <Calendar className="w-5 h-5 text-accent" />
             <h2 className="text-xl font-semibold text-text-primary">Product Roadmap</h2>
-            <span className="text-sm text-text-secondary">(For Products This Customer Uses)</span>
+            {!roadmapLoading && !roadmapError && products.length > 0 && (
+              <span className="bg-accent/10 text-accent text-xs px-2 py-0.5 rounded-full font-medium">
+                {products.length}
+              </span>
+            )}
           </div>
+          {roadmapExpanded ? (
+            <ChevronUp className="w-5 h-5 text-text-secondary" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-text-secondary" />
+          )}
         </div>
 
-        <div className="p-6">
-          {/* Loading state */}
-          {roadmapLoading && (
+        {/* Collapsed preview */}
+        {!roadmapExpanded && !roadmapLoading && !roadmapError && products.length > 0 && (
+          <div className="px-6 py-4 border-t border-border/60">
+            <div className="text-sm text-text-secondary">
+              {products.length} product{products.length !== 1 ? 's' : ''} tracked
+            </div>
+          </div>
+        )}
+
+        {roadmapExpanded && (
+          <div className="p-6">
+            {/* Loading state */}
+            {roadmapLoading && (
             <div className="py-12 text-center space-y-4">
               <Loader2 className="w-12 h-12 text-accent mx-auto animate-spin" />
               <p className="text-sm text-text-secondary">Loading product roadmap...</p>
@@ -707,22 +770,46 @@ Register: ${event.registrationUrl}` : ''}`
               })}
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Events Section */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div
+          className="px-6 py-4 cursor-pointer hover:bg-border/10 transition-colors flex items-center justify-between"
+          onClick={() => setEventsExpanded(!eventsExpanded)}
+        >
+          <div className="flex items-center gap-3">
             <MapPin className="w-5 h-5 text-accent" />
             <h2 className="text-xl font-semibold text-text-primary">Events Near This Customer</h2>
+            {!eventsLoading && !eventsError && events.length > 0 && (
+              <span className="bg-accent/10 text-accent text-xs px-2 py-0.5 rounded-full font-medium">
+                {events.length}
+              </span>
+            )}
           </div>
+          {eventsExpanded ? (
+            <ChevronUp className="w-5 h-5 text-text-secondary" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-text-secondary" />
+          )}
         </div>
 
-        <div className="p-6">
-          {/* Loading state */}
-          {eventsLoading && (
+        {/* Collapsed preview */}
+        {!eventsExpanded && !eventsLoading && !eventsError && events.length > 0 && (
+          <div className="px-6 py-4 border-t border-border/60">
+            <div className="text-sm text-text-secondary">
+              {events[0].name} • {formatEventDate(events[0].date)}
+            </div>
+          </div>
+        )}
+
+        {eventsExpanded && (
+          <div className="p-6">
+            {/* Loading state */}
+            {eventsLoading && (
             <div className="py-12 text-center space-y-4">
               <Loader2 className="w-12 h-12 text-accent mx-auto animate-spin" />
               <p className="text-sm text-text-secondary">Loading events...</p>
@@ -825,7 +912,8 @@ Register: ${event.registrationUrl}` : ''}`
               ))}
             </div>
           )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
