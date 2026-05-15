@@ -269,7 +269,9 @@ Navigates Tableau viz embed (`/t/site/views/OverallCloudConsumptionDashboard/Clo
 
 Manual trigger: `make keepalive-now` (creates `/data/cache/keepalive-trigger`, polled by Timer D4).
 
-**Non-obvious:** fires independently of sync cycle. A keepalive failure does not abort a running sync — it only emails and logs. The next `syncAllPods()` call will fail when it tries to navigate inside a dead context.
+**Non-obvious:** fires independently of sync cycle. A keepalive failure does not abort a running sync — it only emails and logs.
+
+**RH context health probe (#223):** After Tableau+SF checks, keepalive probes the RH browser context via `isContextHealthy(ctx, 5000ms)`. If the Chromium process has died (common after ~6 days uptime), auto-recovers from saved cookies on disk via `recoverScrapeContext()` and re-adopts CCSP context. Sends alert email only if recovery fails.
 
 ### D2 — Trigger Poller (every 30s)
 

@@ -100,7 +100,7 @@ RH Portal SSO login → BrowserContext created
 3. `initSfContext(PROFILE_DIR)` — opens SF Playwright context (non-fatal if it fails; SF shares the RH profile)
 4. Boot cleanup — deletes any stale `/data/cache/sync-trigger` from a prior daemon crash
 
-*Timer 1 — SSO keepalive (every 2h):* Opens a new page, navigates Tableau viz embed (`/t/site/views/OverallCloudConsumptionDashboard/CloudConsumption`), waits for SSO redirect chain to complete, validates viz rendered (Raw Data tab visible), then navigates SF Lightning home (`/lightning/page/home`). Auto-fills email from `TABLEAU_USER_EMAIL` if session expired. Emails if login required or viz fails to render.
+*Timer 1 — SSO keepalive (every 2h):* Opens a new page, navigates Tableau viz embed (`/t/site/views/OverallCloudConsumptionDashboard/CloudConsumption`), waits for SSO redirect chain to complete, validates viz rendered (Raw Data tab visible), then navigates SF Lightning home (`/lightning/page/home`). Auto-fills email from `TABLEAU_USER_EMAIL` if session expired. After Tableau+SF checks, probes the RH browser context health via `isContextHealthy()` (5s timeout on `ctx.pages()`). If the context is dead/unresponsive (e.g. Chromium process died after extended uptime), auto-recovers from saved cookies on disk via `recoverScrapeContext()` and re-adopts CCSP context — no container restart or re-login needed. Sends alert email if recovery fails. (#223)
 
 *Timer 2 — trigger poller (every 30s):* Checks for `/data/cache/sync-trigger`. If present: deletes it atomically, runs `syncAllPods()` using live contexts. Discards trigger if a sync is already running.
 
@@ -216,6 +216,13 @@ Most common cause: RH context init failed (stale cookies → redirect to login o
 [sync-daemon] keepalive FAILED: SF session expired — redirected to ...
 ```
 The daemon is still running but SSO cookies are stale. The next sync will fail. Re-auth now before the daily sync fires. See **Re-auth procedure** below.
+
+**Symptom: RH context auto-recovered in keepalive**
+```
+[sync-daemon] keepalive: RH context dead — attempting auto-recovery
+[sync-daemon] keepalive: RH context recovered from saved cookies
+```
+The Chromium process backing the RH browser context died (common after ~6 days uptime / memory pressure). The keepalive detected it and re-initialized from saved cookies — no action needed. If you see `RH context recovery FAILED` instead, the saved cookies are also bad — follow the **Re-auth procedure** below.
 
 **Symptom: Sync ran but specific pods show ERROR in email**
 Check the per-pod error in the summary email HTML table. Common causes:

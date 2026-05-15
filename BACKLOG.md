@@ -10221,3 +10221,4 @@ BKL-INFRA-MULTIARCH → #198 — Multi-arch container images (amd64 + arm64) (cl
 BKL-TEAM-01 → #205 — AccountTeam Phase 2: Parse team members from territory sheets (closed)
 BKL-TEAM-02 → #206 — Wire AccountTeam into briefs, meeting prep, email outreach
 BKL-TEAM-03 → #207 — AccountTeam role taxonomy refinement (manager subtypes)
+BKL-SYNC-L3-07 → #223 — Auto-recover dead RH browser context in keepalive (closed)
