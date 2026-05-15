@@ -111,21 +111,118 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
     }
 
     // Parse JSON response
+    let articles: Omit<NewsItem, 'significanceScore'>[]
     try {
       // Strip markdown code blocks if present
       const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-      const articles = JSON.parse(cleaned)
+      articles = JSON.parse(cleaned)
 
       if (!Array.isArray(articles)) {
         console.warn('[news-provider] Gemini search response was not an array')
         return []
       }
-
-      return articles
     } catch (e: any) {
       console.warn('[news-provider] Failed to parse Gemini search response:', e.message)
       console.warn('[news-provider] Raw response:', content.slice(0, 500))
       return []
+    }
+
+    // Resolve URLs from grounding metadata
+    const resolvedArticles = this.resolveUrls(articles, data)
+    return resolvedArticles
+  }
+
+  /**
+   * Resolve article URLs from grounding metadata
+   *
+   * Gemini's grounded search returns temporary redirect tokens as sourceUrl.
+   * The actual article URLs are in groundingMetadata.groundingChunks[].web.uri
+   *
+   * Issue #215: Article URLs from Gemini grounded search are broken redirect tokens
+   */
+  private resolveUrls(articles: Omit<NewsItem, 'significanceScore'>[], geminiResponse: any): Omit<NewsItem, 'significanceScore'>[] {
+    const groundingChunks = geminiResponse.candidates?.[0]?.groundingMetadata?.groundingChunks || []
+
+    if (groundingChunks.length === 0) {
+      console.warn('[news-provider] No grounding chunks found in Gemini response')
+      return articles
+    }
+
+    // Extract real URLs from grounding chunks
+    const realUrls: string[] = groundingChunks
+      .filter((chunk: any) => chunk.web?.uri)
+      .map((chunk: any) => chunk.web.uri)
+
+    // Map articles to real URLs
+    // Strategy: Match by index if counts align, otherwise use heuristics
+    return articles.map((article, index) => {
+      let resolvedUrl = article.sourceUrl
+
+      // Check if sourceUrl is a Google redirect token
+      const isRedirectToken = article.sourceUrl.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')
+
+      if (isRedirectToken) {
+        // Try to find matching real URL
+        if (realUrls[index]) {
+          // Direct index mapping (most reliable when counts match)
+          resolvedUrl = realUrls[index]
+        } else if (realUrls.length > 0) {
+          // Fallback: try to match by domain in headline or summary
+          const matchedUrl = this.findBestUrlMatch(article, realUrls)
+          if (matchedUrl) {
+            resolvedUrl = matchedUrl
+          } else {
+            // Last resort: use first available real URL
+            resolvedUrl = realUrls[0]
+            console.warn(`[news-provider] Could not match URL for article "${article.headline}", using first available`)
+          }
+        } else {
+          console.warn(`[news-provider] No real URLs available to resolve redirect token for "${article.headline}"`)
+        }
+      }
+
+      // Validate resolved URL
+      if (!this.isValidUrl(resolvedUrl)) {
+        console.warn(`[news-provider] Invalid resolved URL for "${article.headline}": ${resolvedUrl}`)
+        // Keep original even if invalid — better than nothing
+        return article
+      }
+
+      return { ...article, sourceUrl: resolvedUrl }
+    })
+  }
+
+  /**
+   * Find best URL match for an article based on domain hints in content
+   */
+  private findBestUrlMatch(article: Omit<NewsItem, 'significanceScore'>, urls: string[]): string | null {
+    const content = `${article.headline} ${article.summary} ${article.sourceName}`.toLowerCase()
+
+    for (const url of urls) {
+      try {
+        const domain = new URL(url).hostname.replace('www.', '')
+        if (content.includes(domain)) {
+          return url
+        }
+      } catch {
+        // Invalid URL, skip
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Validate URL is well-formed HTTP(S) and not a redirect token
+   */
+  private isValidUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url)
+      const isHttpOrHttps = parsed.protocol === 'http:' || parsed.protocol === 'https:'
+      const isNotRedirect = !url.includes('vertexaisearch.cloud.google.com/grounding-api-redirect')
+      return isHttpOrHttps && isNotRedirect
+    } catch {
+      return false
     }
   }
 
