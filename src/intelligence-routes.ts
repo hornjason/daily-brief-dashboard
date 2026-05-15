@@ -109,7 +109,7 @@ export function createIntelligenceRouter(): Hono {
     }
 
     // GitHub Issue #212 (1/3): Read registered products from product-intel-config.json
-    const configPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'product-intel-config.json')
+    const configPath = resolve(process.env.CONFIG_DIR ?? 'data/config', 'product-intel-config.json')
     let registeredSlugs: Set<string> | null = null
 
     if (existsSync(configPath)) {
@@ -142,8 +142,8 @@ export function createIntelligenceRouter(): Hono {
         }
       }
 
-      // Add docsUrl from product-intel config
-      if (existsSync(configPath)) {
+      // Add docsUrl from product-intel config (already read above)
+      if (registeredSlugs) {
         try {
           const config = JSON.parse(readFileSync(configPath, 'utf-8'))
           const productConfig = config.products?.find((p: any) => p.slug === product.slug)
