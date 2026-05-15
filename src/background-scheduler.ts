@@ -1583,3 +1583,30 @@ export function scheduleProductLifecycleRefresh(): void {
     scheduleProductLifecycleRefresh()  // reschedule for next Sunday
   }, msUntil)
 }
+
+// ── RSS Feed refresh every 4 hours (GitHub #174) ─────────────────────────────
+
+export function scheduleRSSRefresh(): void {
+  const REFRESH_INTERVAL = 4 * 60 * 60 * 1000  // 4 hours
+  console.log(`[rh-rss] next refresh in ${Math.round(REFRESH_INTERVAL / 60_000)}m (4 hours)`)
+
+  setTimeout(async () => {
+    console.log('[rh-rss] scheduled refresh started')
+    try {
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const rssModule = FeatureModuleRegistry.get('rh-rss')
+
+      if (!rssModule) {
+        console.warn('[rh-rss] rh-rss module not registered — skipping')
+        scheduleRSSRefresh()
+        return
+      }
+
+      await rssModule.fetch('')  // RSS is global, not customer-specific
+      console.log('[rh-rss] scheduled refresh completed')
+    } catch (e: any) {
+      console.error('[rh-rss] scheduled refresh error:', e?.message ?? e)
+    }
+    scheduleRSSRefresh()  // reschedule for next 4 hours
+  }, REFRESH_INTERVAL)
+}

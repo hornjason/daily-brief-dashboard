@@ -83,7 +83,7 @@ export function createIntelligenceRouter(): Hono {
   /**
    * GET /api/customer/:name/intelligence/roadmap
    * Product lifecycle data filtered to customer's relevant products
-   * GitHub Issue #201
+   * GitHub Issue #201, #212
    */
   app.get('/api/customer/:name/intelligence/roadmap', (c) => {
     const customerName = c.req.param('name')
@@ -108,65 +108,63 @@ export function createIntelligenceRouter(): Hono {
       return c.json({ products: [], cachedAt: null })
     }
 
-    // Try to read customer expansion data for filtering
-    const expansionPath = resolve(INTEL_CACHE_DIR, `${slug}-expansion.json`)
-    let expansionProducts: Set<string> | null = null
+    // GitHub Issue #212 (1/3): Read registered products from product-intel-config.json
+    const configPath = resolve(process.env.DATA_DIR ?? 'data', 'config', 'product-intel-config.json')
+    let registeredSlugs: Set<string> | null = null
 
-    if (existsSync(expansionPath)) {
+    if (existsSync(configPath)) {
       try {
-        const expansionData = JSON.parse(readFileSync(expansionPath, 'utf-8'))
-        if (expansionData.opportunities && Array.isArray(expansionData.opportunities)) {
-          expansionProducts = new Set(
-            expansionData.opportunities.map((opp: any) => opp.productSlug)
-          )
+        const config = JSON.parse(readFileSync(configPath, 'utf-8'))
+        if (config.products && Array.isArray(config.products)) {
+          registeredSlugs = new Set(config.products.map((p: any) => p.slug))
         }
       } catch (e: any) {
-        console.warn('[intelligence-routes] Failed to read expansion data for', slug, ':', e?.message ?? e)
+        console.warn('[intelligence-routes] Failed to read product-intel config:', e?.message ?? e)
       }
     }
 
-    // Try to read customer subscriptions from sheets data
-    const sheetsPath = resolve(MAIN_CACHE_DIR, `${slug}-sheets.json`)
-    let subscriptionProducts: Set<string> | null = null
+    // GitHub Issue #212 (2/3): Enrich products with product-release-radar cache data + docsUrl
+    const PRODUCT_INTEL_CACHE = resolve(MAIN_CACHE_DIR, 'product-intel')
+    let enrichedProducts = lifecycleData.products.map((product) => {
+      let enriched: any = { ...product }
 
-    if (existsSync(sheetsPath)) {
-      try {
-        const sheetsData = JSON.parse(readFileSync(sheetsPath, 'utf-8'))
-        if (sheetsData.subscriptions && Array.isArray(sheetsData.subscriptions)) {
-          subscriptionProducts = new Set(
-            sheetsData.subscriptions
-              .map((sub: any) => {
-                // Map product names to slugs
-                const name = sub.product?.toLowerCase() || ''
-                if (name.includes('openshift') || name.includes('ocp')) return 'ocp'
-                if (name.includes('ansible') || name.includes('aap')) return 'aap'
-                if (name.includes('rhel') || name.includes('enterprise linux')) return 'rhel'
-                return null
-              })
-              .filter(Boolean)
-          )
+      // Try to read product-release-radar summary
+      const summaryPath = resolve(PRODUCT_INTEL_CACHE, `${product.slug}-summary.json`)
+      if (existsSync(summaryPath)) {
+        try {
+          const summary = JSON.parse(readFileSync(summaryPath, 'utf-8'))
+          // If radar has a newer current version, use it
+          if (summary.currentVersion && summary.currentVersion !== product.currentVersion) {
+            enriched.currentVersion = summary.currentVersion
+          }
+        } catch (e: any) {
+          // Silently skip — not critical
         }
-      } catch (e: any) {
-        console.warn('[intelligence-routes] Failed to read sheets data for', slug, ':', e?.message ?? e)
       }
-    }
 
-    // Filter products: if we have customer-specific data, use it; otherwise return all
-    let products = lifecycleData.products
-
-    if (expansionProducts || subscriptionProducts) {
-      const relevantSlugs = new Set([
-        ...(expansionProducts || []),
-        ...(subscriptionProducts || []),
-      ])
-
-      if (relevantSlugs.size > 0) {
-        products = lifecycleData.products.filter(p => relevantSlugs.has(p.slug))
+      // Add docsUrl from product-intel config
+      if (existsSync(configPath)) {
+        try {
+          const config = JSON.parse(readFileSync(configPath, 'utf-8'))
+          const productConfig = config.products?.find((p: any) => p.slug === product.slug)
+          if (productConfig?.seeds?.releaseNotesUrl) {
+            enriched.docsUrl = productConfig.seeds.releaseNotesUrl
+          }
+        } catch (e: any) {
+          // Silently skip
+        }
       }
+
+      return enriched
+    })
+
+    // GitHub Issue #212 (1/3): Filter to registered products only
+    if (registeredSlugs && registeredSlugs.size > 0) {
+      enrichedProducts = enrichedProducts.filter(p => registeredSlugs.has(p.slug))
     }
 
     return c.json({
-      products,
+      products: enrichedProducts,
       cachedAt: lifecycleData.fetchedAt,
     })
   })
@@ -174,77 +172,77 @@ export function createIntelligenceRouter(): Hono {
   /**
    * GET /api/intelligence/global
    * Aggregate Red Hat intelligence across all customers (for Red Hat Pulse card)
-   * GitHub Issue #203
+   * GitHub Issue #203, #174 (RSS integration)
    */
   app.get('/api/intelligence/global', (c) => {
-    const { readdirSync } = require('fs')
+    // GitHub Issue #174: Read RSS feed data instead of customer news caches
+    const RSS_CACHE_PATH = resolve(MAIN_CACHE_DIR, 'rss', 'rh-feeds.json')
 
-    // Scan all customer news caches
-    const allNews: NewsItem[] = []
-    const latestTimestamps: string[] = []
+    let news: any[] = []
+    let cachedAt = new Date().toISOString()
 
-    try {
-      if (!existsSync(CACHE_DIR)) {
-        return c.json({
-          news: [],
-          releases: [],
-          events: [],
-          cachedAt: new Date().toISOString(),
-        })
-      }
-
-      const files = readdirSync(CACHE_DIR)
-      for (const file of files) {
-        if (!file.endsWith('.json')) continue
-
-        const cachePath = resolve(CACHE_DIR, file)
-        try {
-          const data = JSON.parse(readFileSync(cachePath, 'utf-8')) as NewsCacheEntry
-          if (data.articles && Array.isArray(data.articles)) {
-            allNews.push(...data.articles)
-          }
-          if (data.lastUpdated) {
-            latestTimestamps.push(data.lastUpdated)
-          }
-        } catch (e: any) {
-          console.warn(`[intelligence-routes] Failed to read ${file}:`, e.message)
+    // Read Red Hat RSS feeds
+    if (existsSync(RSS_CACHE_PATH)) {
+      try {
+        const rssData = JSON.parse(readFileSync(RSS_CACHE_PATH, 'utf-8'))
+        if (rssData.items && Array.isArray(rssData.items)) {
+          // Sort by pubDate desc, take top 3
+          const sorted = [...rssData.items].sort((a, b) => {
+            const aDate = new Date(a.pubDate).getTime()
+            const bDate = new Date(b.pubDate).getTime()
+            return bDate - aDate
+          })
+          news = sorted.slice(0, 3).map((item: any) => ({
+            headline: item.title,
+            sourceUrl: item.link,
+            publishedDate: item.pubDate,
+            summary: item.description,
+            sourceName: item.source === 'blog' ? 'Red Hat Blog' : 'Red Hat Press Release',
+            productTags: item.productTags,
+          }))
         }
-      }
-    } catch (e: any) {
-      console.warn('[intelligence-routes] Failed to scan news cache:', e.message)
-    }
-
-    // Deduplicate by headline + sourceUrl
-    const seen = new Map<string, NewsItem>()
-    for (const item of allNews) {
-      const key = `${item.headline}|${item.sourceUrl}`
-      if (!seen.has(key)) {
-        seen.set(key, item)
+        if (rssData.fetchedAt) {
+          cachedAt = rssData.fetchedAt
+        }
+      } catch (e: any) {
+        console.warn('[intelligence-routes] Failed to read RSS cache:', e.message)
       }
     }
 
-    // Sort by publishedDate desc, take top 3
-    const deduped = [...seen.values()]
-    deduped.sort((a, b) => {
-      const aDate = new Date(a.publishedDate).getTime()
-      const bDate = new Date(b.publishedDate).getTime()
-      return bDate - aDate
-    })
-    const topNews = deduped.slice(0, 3)
+    // Read product lifecycle for releases
+    const lifecyclePath = resolve(MAIN_CACHE_DIR, 'product-lifecycle.json')
+    let releases: any[] = []
 
-    // Determine cachedAt: most recent timestamp from all caches
-    const cachedAt = latestTimestamps.length > 0
-      ? latestTimestamps.reduce((latest, ts) => (ts > latest ? ts : latest))
-      : new Date().toISOString()
-
-    // Releases: stub for now (requires #197 product-lifecycle cache)
-    const releases: any[] = []
+    if (existsSync(lifecyclePath)) {
+      try {
+        const lifecycleData = JSON.parse(readFileSync(lifecyclePath, 'utf-8'))
+        if (lifecycleData.products && Array.isArray(lifecycleData.products)) {
+          // Map to release format, take top 3 most recent
+          releases = lifecycleData.products
+            .filter((p: any) => p.nextVersion && p.nextExpected)
+            .sort((a: any, b: any) => {
+              const aDate = new Date(a.nextExpected).getTime()
+              const bDate = new Date(b.nextExpected).getTime()
+              return bDate - aDate
+            })
+            .slice(0, 3)
+            .map((p: any) => ({
+              product: p.displayName,
+              version: p.nextVersion,
+              expectedDate: p.nextExpected,
+              currentVersion: p.currentVersion,
+            }))
+        }
+      } catch (e: any) {
+        console.warn('[intelligence-routes] Failed to read product lifecycle cache:', e.message)
+      }
+    }
 
     // Events: stub for now (no events data source yet)
     const events: any[] = []
 
     return c.json({
-      news: topNews,
+      news,
       releases,
       events,
       cachedAt,
