@@ -72,6 +72,7 @@ export function extractTeamMembers(
   col: number,
   accountsStartIdx: number,
 ): {
+  additionalRoles: Array<{ label: string; name: string }>
   asa?: { name: string }
   specialists: Array<{ product: string; role: 'ssp' | 'ssa'; name: string }>
   partnerSales?: { name: string }
@@ -81,67 +82,92 @@ export function extractTeamMembers(
   let asa: { name: string } | undefined
   let partnerSales: { name: string } | undefined
   let consultingManager: { name: string } | undefined
+  const additionalRoles: Array<{ label: string; name: string }> = []
 
-  // Start scanning from accountsStartIdx to end of sheet (up to row 59, range Z60 limit)
-  const maxRow = Math.min(rows.length, 60)
+  const maxRow = rows.length
 
-  const isRoleLabel = (s: string) =>
-    /^Account\s+S[Aa]/i.test(s) ||
-    /^(Openshift|Ansible|Rhel|Ai|App Platform|Cloud)\s+(SSP|SSA)/i.test(s) ||
-    /^Partner Sales Executive/i.test(s) ||
-    /^Consulting Services Manager/i.test(s) ||
-    /^(Support|POD Manager)/i.test(s)
-
-  const findName = (startRow: number): string | null => {
-    for (let n = startRow; n < maxRow; n++) {
-      const nameCell = String(rows[n]?.[col] ?? '').trim()
-      if (!nameCell) continue
-      if (isRoleLabel(nameCell)) return null
-      return nameCell
-    }
-    return null
-  }
-
+  // Phase 1: Skip past account names to find where team data begins.
+  // Account names end at the first break condition (count row, blank gap, or known label).
+  let teamStartRow = accountsStartIdx
   for (let r = accountsStartIdx; r < maxRow; r++) {
     const cell = String(rows[r]?.[col] ?? '').trim()
-    if (!cell) continue
+    if (!cell) { teamStartRow = r; break }
+    if (/^\d{1,3}$/.test(cell) || /^\d+\s+of\s+\d+$/i.test(cell)) { teamStartRow = r; break }
+    if (/^Account\s+S[Aa]/i.test(cell)) { teamStartRow = r; break }
+    if (/\b(SSP|SSA|PSE|TSM)\b/i.test(cell)) { teamStartRow = r; break }
+  }
 
-    // Skip count rows like "9 of 10" or bare numbers
-    if (/^\d{1,3}$/.test(cell) || /^\d+\s+of\s+\d+$/i.test(cell)) continue
+  // Phase 2: Scan for role label → name pairs.
+  // Labels are detected by keyword patterns. A label may be in ANY column (centered/merged).
+  // The name row is directly below the label row.
+  // If names appear in multiple columns → per-territory assignment.
+  // If name appears in only one column → that person covers all territories.
+  const isLikelyRoleLabel = (s: string) =>
+    /^Account\s+S[Aa]/i.test(s) ||
+    /\b(SSP|SSA)\b/i.test(s) ||
+    /^[A-Z]{2,4}$/.test(s) ||
+    /\b(Partner Sales|Consulting Services|Training Specialist|Cloud Sales|Sales Executive|Manager|Specialist|Lead)\b/i.test(s)
 
-    // Account SA — next non-label row is ASA name
-    if (/^Account\s+S[Aa]/i.test(cell)) {
-      const name = findName(r + 1)
-      if (name) asa = { name }
-      continue
+  const isCountOrNoise = (s: string) =>
+    /^\d{1,3}$/.test(s) || /^\d+\s+of\s+\d+$/i.test(s)
+
+  for (let r = teamStartRow; r < maxRow; r++) {
+    // Look for a role label in ANY column of this row
+    let label: string | null = null
+    const row = rows[r] ?? []
+    for (let c = 0; c < row.length; c++) {
+      const cell = String(row[c] ?? '').trim()
+      if (cell && isLikelyRoleLabel(cell)) { label = cell; break }
+    }
+    if (!label) continue
+
+    // Name row is directly below the label row — read THIS column
+    const nameRow = rows[r + 1] ?? []
+    const personName = String(nameRow[col] ?? '').trim()
+
+    // If this column has no name, check if only ONE column has a name (shared role).
+    // If so, that person covers all territories including this one.
+    let resolvedName = personName
+    if (!resolvedName || isLikelyRoleLabel(resolvedName) || isCountOrNoise(resolvedName)) {
+      // Count how many columns have a real name in the name row
+      let sharedName: string | null = null
+      let nameCount = 0
+      for (let c = 0; c < nameRow.length; c++) {
+        const cell = String(nameRow[c] ?? '').trim()
+        if (cell && !isLikelyRoleLabel(cell) && !isCountOrNoise(cell)) {
+          nameCount++
+          sharedName = cell
+        }
+      }
+      // If exactly one name found across all columns → shared role for all territories
+      if (nameCount === 1 && sharedName) {
+        resolvedName = sharedName
+      } else {
+        resolvedName = ''
+      }
     }
 
-    // Product SSP/SSA — next non-label row is person name
-    const productMatch = cell.match(/^(Openshift|Ansible|Rhel|Ai|App Platform|Cloud)\s+(SSP|SSA)/i)
-    if (productMatch) {
-      const product = productMatch[1]
-      const role = productMatch[2].toLowerCase() as 'ssp' | 'ssa'
-      const name = findName(r + 1)
-      if (name) specialists.push({ product, role, name })
-      continue
-    }
+    if (!resolvedName) continue
 
-    // Partner Sales Executive
-    if (/^Partner Sales Executive/i.test(cell)) {
-      const name = findName(r + 1)
-      if (name) partnerSales = { name }
-      continue
-    }
-
-    // Consulting Services Manager (with optional "(TSM)")
-    if (/^Consulting Services Manager/i.test(cell)) {
-      const name = findName(r + 1)
-      if (name) consultingManager = { name }
-      continue
+    // Classify the role from the label text
+    if (/^Account\s+S[Aa]/i.test(label)) {
+      asa = { name: resolvedName }
+    } else if (/\b(SSP|SSA)\b/i.test(label)) {
+      const sspSsaMatch = label.match(/\b(SSP|SSA)\b/i)
+      const role = sspSsaMatch![1].toLowerCase() as 'ssp' | 'ssa'
+      let product = label.replace(/\s*(SSP|SSA)\s*/i, '').trim()
+      if (/^App Plat$/i.test(product)) product = 'App Platform'
+      specialists.push({ product, role, name: resolvedName })
+    } else if (/\b(Partner Sales|PSE)\b/i.test(label)) {
+      partnerSales = { name: resolvedName }
+    } else if (/\b(Consulting Services|TSM)\b/i.test(label)) {
+      consultingManager = { name: resolvedName }
+    } else {
+      additionalRoles.push({ label, name: resolvedName })
     }
   }
 
-  return { asa, specialists, partnerSales, consultingManager }
+  return { asa, specialists, partnerSales, consultingManager, additionalRoles }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -480,6 +506,7 @@ async function syncCommercialRegion(
             specialists: teamData.specialists,
             partnerSales: teamData.partnerSales,
             consultingManager: teamData.consultingManager,
+            additionalRoles: teamData.additionalRoles.length > 0 ? teamData.additionalRoles : undefined,
           }
         }
       }
@@ -557,18 +584,56 @@ async function syncEnterpriseRegion(
   const toRemove: Array<{ name: string; ae: string }> = []
   const unchanged: string[] = []
 
+  // Extract team member data from enterprise sheet (same label→name pattern as commercial)
+  const teamDataByTerritory: Record<string, import('./types.ts').TerritoryTeamEntry> = {}
+
+  // Find the "Account Executive" header row to determine accountsStartIdx
+  let aeHeaderRow = -1
+  for (let r = 0; r < Math.min(10, enterpriseRows.length); r++) {
+    if (enterpriseRows[r].some(c => /^account executive$/i.test(c))) { aeHeaderRow = r; break }
+  }
+
+  if (aeHeaderRow >= 0) {
+    const headerRow = enterpriseRows[aeHeaderRow] ?? []
+    const aeCols = headerRow
+      .map((cell, idx) => ({ cell, idx }))
+      .filter(({ cell }) => /^account executive$/i.test(cell))
+      .map(({ idx }) => idx)
+
+    const aeNameRowIdx = aeHeaderRow + 1
+    const accountsStartIdx = aeNameRowIdx + 1
+
+    for (const col of aeCols) {
+      const rawAeCell = String(enterpriseRows[aeNameRowIdx]?.[col] ?? '').trim()
+      if (!rawAeCell) continue
+
+      const aeName = rawAeCell.split('\n')[0].trim()
+      let terrCode = ''
+      const terrMatch = rawAeCell.match(/Terr?(\d+)/i)
+      if (terrMatch) terrCode = `Terr${terrMatch[1].padStart(2, '0')}`
+      if (!terrCode) continue
+
+      const fullTerrKey = enterpriseTerritoryKey(region, terrCode)
+      const teamData = extractTeamMembers(enterpriseRows, col, accountsStartIdx)
+
+      teamDataByTerritory[fullTerrKey] = {
+        territory: fullTerrKey,
+        aeName,
+        asa: teamData.asa,
+        specialists: teamData.specialists,
+        partnerSales: teamData.partnerSales,
+        consultingManager: teamData.consultingManager,
+        additionalRoles: teamData.additionalRoles.length > 0 ? teamData.additionalRoles : undefined,
+      }
+    }
+  }
+
   for (const ae of aes) {
     const mappedTerrs = aeTerrMap[ae.name]
     if (!mappedTerrs) continue
-    // Convert Ter01 → CENTRAL_ENT_TOLA_TERR01 for each mapped code.
-    const expectedKeys = mappedTerrs.map(t => enterpriseTerritoryKey(region, t))
-    // This parser currently returns the AE→territory map via side-effect logs
-    // only; account-level diffs still live in commercial path. Enterprise
-    // account extraction will be wired in a follow-up.
-    void expectedKeys
     const aeCustomers = customers.filter(c => c.ae === ae.name)
     for (const c of aeCustomers) unchanged.push(c.name)
   }
 
-  return { toAdd, toRemove, unchanged, teamData: undefined }
+  return { toAdd, toRemove, unchanged, teamData: Object.keys(teamDataByTerritory).length > 0 ? teamDataByTerritory : undefined }
 }

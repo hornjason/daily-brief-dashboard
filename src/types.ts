@@ -149,13 +149,17 @@ export interface TerritoryTeamEntry {
   territory: string              // e.g. "WEST_COMM_CORP_NORTHWEST_TERR06"
   aeName: string                 // AE name for matching customer.ae → territory
   asa?: { name: string }         // from "Account SA" row in that AE's column
-  specialists: Array<{           // from SSP/SSA rows (shared across pod)
+  specialists: Array<{           // from SSP/SSA rows (shared or per-territory)
     product: string               // e.g. "Openshift", "Ansible", "RHEL", "AI", "App Platform", "Cloud"
     role: 'ssp' | 'ssa'
     name: string
   }>
   partnerSales?: { name: string }
   consultingManager?: { name: string }
+  additionalRoles?: Array<{      // PSE, TSM, Training Specialist, Cloud Sales Lead, MDR, etc.
+    label: string                  // original label from sheet (e.g. "PSE", "TSM", "Cloud Sales Lead")
+    name: string
+  }>
 }
 
 export interface TerritoryTeamsCache {

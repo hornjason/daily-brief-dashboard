@@ -168,6 +168,17 @@ export function getAccountTeam(customer: Customer, filter?: AccountTeamFilter): 
     })
   }
 
+  // Add any additional roles (TSM, Training Specialist, Cloud Sales Lead, MDR, etc.)
+  if (territoryEntry?.additionalRoles) {
+    for (const extra of territoryEntry.additionalRoles) {
+      team.push({
+        name: extra.name,
+        title: extra.label,
+        role: 'manager',
+      })
+    }
+  }
+
   return team
 }
 
