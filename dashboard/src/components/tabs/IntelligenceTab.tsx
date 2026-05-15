@@ -200,7 +200,7 @@ export function IntelligenceTab({ customerName }: IntelligenceTabProps) {
   }
 
   const handleCopyToClipboard = async (article: NewsItem, index: number) => {
-    const snippet = `📰 Red Hat News: ${article.headline}
+    const snippet = `📰 Customer News: ${article.headline}
 
 ${article.summary}
 
@@ -223,8 +223,7 @@ Read more: ${article.sourceUrl}`
         <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Newspaper className="w-5 h-5 text-accent" />
-            <h2 className="text-xl font-semibold text-text-primary">Red Hat News</h2>
-            <span className="text-sm text-text-secondary">(Matched to this Customer)</span>
+            <h2 className="text-xl font-semibold text-text-primary">Customer News</h2>
           </div>
           <button
             onClick={fetchArticles}
@@ -287,7 +286,7 @@ Read more: ${article.sourceUrl}`
                 <Newspaper className="w-12 h-12 text-accent absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
               </div>
               <div className="space-y-2">
-                <p className="text-base font-medium text-text-primary">No Red Hat news matched to this customer's products</p>
+                <p className="text-base font-medium text-text-primary">No customer news articles found</p>
                 <p className="text-sm text-text-secondary max-w-md mx-auto">
                   News radar checks daily at 5:30am ET.
                 </p>
