@@ -32,6 +32,7 @@ import type { VoiceProfile } from './ae-voice.ts'
 import { generateCampaignHTML } from './campaign-html-template.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
+import type { Signal } from './feature-module-registry.ts'
 import { getAccountTeam } from './account-team.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -182,6 +183,7 @@ async function callGeminiForCampaign(opts: {
   materialContent: string
   customerName: string
   customerSignals: CustomerSignals
+  registrySignals: Signal[]
   voiceInstruction?: string
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[] }>
 }): Promise<string> {
@@ -201,6 +203,14 @@ async function callGeminiForCampaign(opts: {
   const subscriptionsSummary = opts.customerSignals.subscriptions
     ? JSON.stringify(opts.customerSignals.subscriptions, null, 2).substring(0, 2000)
     : 'No subscription data available.'
+
+  // Build registry signals section (news, product lifecycle, RSS, etc.)
+  const registrySignalsSummary = opts.registrySignals.length > 0
+    ? opts.registrySignals
+        .slice(0, 20) // Top 20 signals to avoid token overflow
+        .map(s => `[${s.type}] ${s.headline}${s.detail ? ' — ' + s.detail.substring(0, 200) : ''}`)
+        .join('\n')
+    : 'No registry signals available.'
 
   // Build persona list (filter to enabled only)
   const enabledPersonas = opts.personas?.filter(p => p.enabled).map(p => p.role) ?? [
@@ -222,6 +232,9 @@ ${intelligenceSummary}
 
 ### Current Subscriptions:
 ${subscriptionsSummary}
+
+### Additional Intelligence Signals:
+${registrySignalsSummary}
 
 ${opts.voiceInstruction ? `\n## Voice Instruction:\n${opts.voiceInstruction}\n` : ''}
 
@@ -463,9 +476,9 @@ export async function generateCampaign(
     }
   }
 
-  // 3. Load all 7 customer signals (now with intelligence + plan available)
-  const { signals, loaded, missing } = loadCustomerSignals(slug, customer.name)
-  console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}]`)
+  // 3. Load all customer signals (legacy cache + registry signals)
+  const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name)
+  console.log(`[campaigns] Signals for ${customer.name}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
 
   // 3. Load voice profile if not provided in config
   let voiceInstruction = config?.style || ''
@@ -483,6 +496,7 @@ export async function generateCampaign(
     materialContent,
     customerName: customer.name,
     customerSignals: signals,
+    registrySignals,
     voiceInstruction,
     personas: config?.personas,
   })

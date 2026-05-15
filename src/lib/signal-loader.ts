@@ -2,7 +2,7 @@
 // GitHub Issue #171 — Universal signal loading for content generation
 // Combines registry signal collection + legacy cache fallback
 
-import { FeatureModuleRegistry } from '../feature-module-registry.ts'
+import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { resolve } from 'path'
 
@@ -28,6 +28,7 @@ export interface CustomerSignals {
 
 export interface SignalLoadResult {
   signals: CustomerSignals
+  registrySignals: Signal[]  // Flat array from collectAllSignals()
   loaded: string[]
   missing: string[]
 }
@@ -42,7 +43,7 @@ export interface SignalLoadResult {
  * Returns combined signals in the legacy CustomerSignals shape for backward compatibility.
  * Missing sources are logged but don't block generation.
  */
-export function loadCustomerSignals(customerSlug: string, customerName?: string): SignalLoadResult {
+export async function loadCustomerSignals(customerSlug: string, customerName?: string): Promise<SignalLoadResult> {
   const signals: CustomerSignals = {}
   const loaded: string[] = []
   const missing: string[] = []
@@ -64,12 +65,13 @@ export function loadCustomerSignals(customerSlug: string, customerName?: string)
     }
   }
 
-  // TODO (GitHub Issue #171): Once feature modules implement signals(),
-  // call FeatureModuleRegistry.collectAllSignals(customerSlug) here
-  // and populate CustomerSignals from the flat Signal[] result.
-  // For now, only legacy cache loading is active.
+  // Collect signals from all registered modules
+  const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
 
   // Legacy cache loading (8 sources)
+  // Note: Registry signals supplement, don't replace legacy loading.
+  // The legacy loading handles the 8 original sources while new sources
+  // (news radar signals, lifecycle signals, RSS) come from the registry.
 
   // 1. Intelligence brief
   tryLoad('intelligence', resolve(CACHE_DIR, 'intelligence', `${customerSlug}.json`))
@@ -141,6 +143,6 @@ export function loadCustomerSignals(customerSlug: string, customerName?: string)
     }
   } catch { missing.push('accountPlan') }
 
-  console.log(`[signal-loader] Signal stack for ${customerSlug}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}]`)
-  return { signals, loaded, missing }
+  console.log(`[signal-loader] Signal stack for ${customerSlug}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
+  return { signals, registrySignals, loaded, missing }
 }
