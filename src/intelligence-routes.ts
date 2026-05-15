@@ -20,8 +20,8 @@ import type { RHEvent } from './rh-events-fetcher.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
-const CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'news')
-const MAIN_CACHE_DIR = resolve(process.env.DATA_DIR ?? 'data', 'cache')
+const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
+const MAIN_CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache')
 const INTEL_CACHE_DIR = resolve(MAIN_CACHE_DIR, 'intelligence')
 
 // ── Cache helpers ────────────────────────────────────────────────────────────
