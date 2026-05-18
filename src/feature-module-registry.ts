@@ -10,6 +10,7 @@ export type SignalType =
   | 'news' | 'intelligence' | 'expansion' | 'subscription'
   | 'case' | 'email' | 'meeting' | 'product-release'
   | 'event' | 'product-intel' | 'account-plan' | 'competitive' | 'brief'
+  | 'cloud-spend'
 
 export interface Signal {
   /** Module name that produced this signal (e.g., 'news-radar', 'campaigns') */

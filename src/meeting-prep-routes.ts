@@ -35,6 +35,7 @@ import { getAllProductSummaries } from './product-release-radar.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
 import { getCachedExpansionOpportunities } from './expansion-opportunities.ts'
 import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
+import { readCCSPCache } from './cache-layer.ts'
 import { generateMeetingPrepHTML } from './meeting-prep-html-template.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -72,6 +73,37 @@ function loadProductRoadmap(): ProductRoadmapEntry[] {
     const data = JSON.parse(readFileSync(roadmapPath, 'utf-8'))
     return data.releases ?? []
   } catch { return [] }
+}
+
+function buildCCSPContext(customer: Customer): string {
+  const cache = readCCSPCache()
+  if (!cache?.records?.length) return ''
+
+  const customerRecords = cache.records.filter(r =>
+    r.accountName?.toLowerCase() === customer.name.toLowerCase()
+  )
+  if (customerRecords.length === 0) return ''
+
+  const clouds = [...new Set(customerRecords.map(r => r.cloudPartner).filter(Boolean))]
+  const products = [...new Set(customerRecords.map(r => r.productOfferingGroup).filter(Boolean))]
+  const totalACV = customerRecords.reduce((s, r) => s + (r.acvPlus || 0), 0)
+  const quarters = [...new Set(customerRecords.map(r => r.quarter).filter(Boolean))].sort()
+
+  const lines: string[] = []
+  lines.push(`Cloud Platforms: ${clouds.join(', ') || 'Unknown'}`)
+  lines.push(`Cloud Products: ${products.join(', ') || 'Not specified'}`)
+  lines.push(`Total Cloud ACV: $${Math.round(totalACV).toLocaleString()}`)
+  lines.push(`Data Period: ${quarters[0] ?? '?'} to ${quarters[quarters.length - 1] ?? '?'}`)
+
+  // Break down by cloud partner
+  for (const cloud of clouds) {
+    const cloudRecords = customerRecords.filter(r => r.cloudPartner === cloud)
+    const cloudACV = cloudRecords.reduce((s, r) => s + (r.acvPlus || 0), 0)
+    const cloudProducts = [...new Set(cloudRecords.map(r => r.productOfferingGroup).filter(Boolean))]
+    lines.push(`  ${cloud}: $${Math.round(cloudACV).toLocaleString()} — ${cloudProducts.join(', ') || 'unspecified products'}`)
+  }
+
+  return lines.join('\n')
 }
 
 function loadPartnerConfig(): PartnerConfig[] {
@@ -457,6 +489,12 @@ async function generateMeetingPrep(
     }
   }
 
+  // CCSP cloud spend data
+  const ccspContext = buildCCSPContext(customer)
+  if (ccspContext) {
+    console.log(`[meeting-prep] CCSP data found for ${customer.name}`)
+  }
+
   const lifecycleCache = readProductLifecycleCache()
   const productSummaries = getAllProductSummaries()
   const rssItems = loadRSSFeedItems()
@@ -676,6 +714,8 @@ ${(() => {
 
 ## Customer Intelligence
 ${intelligenceContext || 'Data not available — generate intelligence for this customer'}
+
+${ccspContext ? `## Cloud Consumption & Spend (CCSP)\n${ccspContext}\nUse this data to recommend cloud-specific Red Hat services (ROSA for AWS, ARO for Azure, OSD for GCP) and position cross-cloud consistency with OpenShift.` : ''}
 
 ${accountPlanContext ? `## Account Plan & Notes\n${accountPlanContext}` : ''}
 
