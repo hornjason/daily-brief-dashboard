@@ -1435,6 +1435,19 @@ const promptSection = toPromptContext(team)
 
 Scorecards are stored in the existing cache entry for each output (`.qualityScorecard` field). No new cache files.
 
+### Enrichment tables (ADR-025)
+
+Four deterministic enrichment tables are injected after sections 4-7 post-Gemini via `insertAfterNumberedSection()`. All builders are pure sync functions in `src/meeting-prep-enrichment.ts`:
+
+| Builder | After Section | Data Sources | Key Output |
+|---------|--------------|--------------|------------|
+| `buildProductAlignmentTable` | 4. Why Red Hat | Value maps, customer product intel, product summaries | Confidence (HIGH/MEDIUM/LOW), proof point metrics, Summit news cross-refs |
+| `buildSummitAnnouncementsTable` | 5. What's New | Product summaries, RSS feeds, product roadmap | Recent announcements with recency framing, capped at 8 rows |
+| `buildEnhancedLifecycleTable` | 6. Product Lifecycle | Lifecycle cache, roadmap, product summaries | Key Changes + Customer Angle columns |
+| `buildRSSIntelligenceTable` | 7. Expansion | RSS feed cache | Blog posts with real URLs as markdown links, customer relevance |
+
+Enrichment tables are additive — they cannot cause a previously-passing quality gate to fail. The validator runs on raw Gemini output for retry decisions, then the enriched output is rescored for cache persistence.
+
 ### Key constraint
 
 This module does NOT modify `callGemini()` or any transport-level code. `callGemini()` handles HTTP retry (429s), cost tracking, and delta caching. The quality gate handles business-logic validation. Separate concerns.
