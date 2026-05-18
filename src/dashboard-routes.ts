@@ -16,6 +16,38 @@ import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 import { normalizeSettings } from './region-config.ts'
 import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts } from './territory-sync.ts'
 
+// ── Staleness detection (#279) ───────────────────────────────────────────────
+/**
+ * Check if a priority action text references a date that's already past.
+ * Returns true if the action mentions a specific date more than 24h in the past.
+ */
+function isActionStale(text: string): boolean {
+  const datePatterns = [
+    /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/gi,
+    /\d{1,2}\/\d{1,2}\/\d{4}/g,
+    /(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}/gi,
+  ]
+
+  for (const pattern of datePatterns) {
+    const matches = text.match(pattern)
+    if (matches) {
+      for (const match of matches) {
+        try {
+          const parsed = new Date(match)
+          // 24h grace period: action is stale if date is more than 24h in the past
+          if (!isNaN(parsed.getTime()) && parsed.getTime() < Date.now() - 24 * 60 * 60 * 1000) {
+            return true
+          }
+        } catch {
+          // Date parsing failed - treat as not stale (conservative)
+        }
+      }
+    }
+  }
+
+  return false
+}
+
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
 let RH_CASES_CACHE_PATH = ''
@@ -611,7 +643,7 @@ export function createDashboardRouter(): Hono {
           const match = briefCache.text.match(/^## Priority Action\n(.+)/m)
           if (match) {
             const text = match[1].replace(/^[-*]\s*/, '').trim()
-            if (text) {
+            if (text && !isActionStale(text)) {
               action = { text, severity: 'medium', source: 'brief' }
             }
           }
