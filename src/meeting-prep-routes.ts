@@ -11,7 +11,7 @@
  */
 
 import { Hono } from 'hono'
-import { readFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { Readable } from 'stream'
 import { google } from 'googleapis'
@@ -298,11 +298,12 @@ export function createMeetingPrepRouter() {
       }
     }
 
-    // Remove from history
+    // Remove from history — use writeFileSync directly because writeJsonAtomic's
+    // stale-overwrite guard blocks writing [] to a non-empty file (legitimate delete of last entry)
     history.splice(index, 1)
     const dir = getPrepCacheDir(slug)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-    writeJsonAtomic(getHistoryPath(slug), history)
+    writeFileSync(getHistoryPath(slug), JSON.stringify(history, null, 2), { mode: 0o600 })
 
     return c.json({ deleted: true, remaining: history.length })
   })
