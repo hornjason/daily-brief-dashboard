@@ -8,6 +8,7 @@
  * Pattern: same insertAfterNumberedSection() used for section 2 partners table.
  */
 
+import { readFileSync, existsSync } from 'fs'
 import type { Customer, ProductSubscription } from './types.ts'
 import type { ProductSummary } from './product-release-radar.ts'
 import type { ProductLifecycleCache } from './product-lifecycle.ts'
@@ -98,7 +99,6 @@ export function extractProductProofPoints(slug: string, sectionText: string | nu
   if (!VALUE_MAP_PATH_ENV) return sectionText ? extractProofPoints(sectionText) : []
 
   try {
-    const { readFileSync, existsSync } = require('fs')
     if (!existsSync(VALUE_MAP_PATH_ENV)) return []
     const fullText = readFileSync(VALUE_MAP_PATH_ENV, 'utf-8')
 
@@ -222,10 +222,10 @@ export function buildProductAlignmentTable(
 
     // --- Use case (from intelligence or subscription) ---
     const sub = sheetCache ? findSubscription(sheetCache.rows, slug) : undefined
-    const intelUseCase = intel?.priorityAction || intel?.featureTalkingPoints?.[0]
-    const subQty = sub?.quantity ? `${sub.quantity} ${sub.unit ?? 'units'}` : ''
-    const useCase = intelUseCase
-      ? escapeCell(intelUseCase.slice(0, 80))
+    const intelAction = intel?.priorityAction && intel.priorityAction !== 'Analysis unavailable' ? intel.priorityAction : ''
+    const subQty = sub?.quantity ? `${sub.quantity} units` : ''
+    const useCase = intelAction
+      ? escapeCell(intelAction.slice(0, 80))
       : sub?.productDescription
         ? escapeCell(`${sub.productDescription}${subQty ? ` (${subQty})` : ''}`)
         : `${slug.toUpperCase()} deployment`
