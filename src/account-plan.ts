@@ -13,6 +13,9 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { getGeminiToken } from './gemini-auth.ts'
+import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
+import { accountPlanValidator } from './quality-validators/account-plan-validator.ts'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { getGeminiModel } from './ai-config.ts'
@@ -225,7 +228,7 @@ ${playbook}
 Now generate a complete Account Plan for ${customerDisplayName} following the sample structure above and answering all questions from the reference image. Include ${aeName} as the AE and ${operatorName} as the ASA in the team members section.`
 
   // Call Gemini with multimodal (text + PDF image)
-  const markdown = await callGeminiMultimodal({
+  const rawMarkdown = await callGeminiMultimodal({
     systemPrompt: SYSTEM_PROMPT,
     textParts: [{ text: userPrompt }],
     pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
@@ -234,6 +237,25 @@ Now generate a complete Account Plan for ${customerDisplayName} following the sa
     callType: 'account-plan-generation',
     customerName: customer.name,
   })
+
+  // Quality gate (ADR-024) — validate and retry if below threshold
+  const gateResult = await validateAndRetry(
+    rawMarkdown,
+    { validator: accountPlanValidator },
+    async (failures) => {
+      const feedback = formatFailureFeedback(failures)
+      return callGeminiMultimodal({
+        systemPrompt: SYSTEM_PROMPT,
+        textParts: [{ text: userPrompt + '\n\n' + feedback }],
+        pdfParts: [{ inlineData: { mimeType: 'application/pdf', data: questionsB64 } }],
+        maxOutputTokens: 8192,
+        temperature: 0.7,
+        callType: 'account-plan-generation',
+        customerName: customer.name,
+      })
+    }
+  )
+  const markdown = gateResult.output
 
   const generatedAt = new Date().toISOString()
 
@@ -246,7 +268,16 @@ Now generate a complete Account Plan for ${customerDisplayName} following the sa
   })
   const fullContent = `<!-- Generated: ${generatedAt} -->\n\n${markdown}`
   writeFileSync(outputPath, fullContent, { mode: 0o600 })
-  console.log(`[acct-plan] Written to ${outputPath} (${markdown.length} chars)`)
+  console.log(`[acct-plan] Written to ${outputPath} (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
+
+  // Write quality scorecard meta alongside the plan
+  const metaPath = resolve(intelDir, `${slug}-account-plan-meta.json`)
+  writeJsonAtomic(metaPath, {
+    customerName: customer.name,
+    generatedAt,
+    markdownLength: markdown.length,
+    qualityScorecard: gateResult.scorecard,
+  })
 
   // Upload to Drive
   let driveUrl = ''
