@@ -15,6 +15,8 @@ import { resolve } from 'path'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
 import { callGemini } from './gemini-call.ts'
+import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
+import { campaignValidator } from './quality-validators/campaign-validator.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { customers } from './server-state.ts'
@@ -341,6 +343,7 @@ interface CampaignCacheEntry {
   htmlUrl: string
   signalsLoaded?: string[]
   signalsMissing?: string[]
+  qualityScorecard?: QualityScorecard
 }
 
 function saveCampaignToCache(
@@ -458,8 +461,8 @@ export async function generateCampaign(
     }
   }
 
-  // 4. Generate campaign via Gemini
-  const markdown = await callGeminiForCampaign({
+  // 4. Generate campaign via Gemini + quality gate (ADR-024)
+  const rawMarkdown = await callGeminiForCampaign({
     materialTitle,
     materialContent,
     customerName: customer.name,
@@ -468,7 +471,25 @@ export async function generateCampaign(
     voiceInstruction,
     personas: config?.personas,
   })
-  console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars)`)
+
+  const gateResult = await validateAndRetry(
+    rawMarkdown,
+    { validator: campaignValidator },
+    async (failures) => {
+      const feedback = formatFailureFeedback(failures)
+      return callGeminiForCampaign({
+        materialTitle,
+        materialContent: materialContent + '\n\n' + feedback,
+        customerName: customer.name,
+        customerSignals: signals,
+        registrySignals,
+        voiceInstruction,
+        personas: config?.personas,
+      })
+    }
+  )
+  const markdown = gateResult.output
+  console.log(`[campaigns] Generated campaign markdown (${markdown.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
 
   const generatedAt = new Date().toISOString()
   const campaignId = Date.now().toString()
@@ -548,7 +569,7 @@ export async function generateCampaign(
     // Non-fatal — cached markdown is still available
   }
 
-  // 7. Save to cache (with HTML content for preview + signal metadata)
+  // 7. Save to cache (with HTML content for preview + signal metadata + quality scorecard)
   saveCampaignToCache(slug, {
     id: campaignId,
     materialTitle,
@@ -561,6 +582,7 @@ export async function generateCampaign(
     htmlUrl,
     signalsLoaded: loaded,
     signalsMissing: missing,
+    qualityScorecard: gateResult.scorecard,
   })
 
   return {

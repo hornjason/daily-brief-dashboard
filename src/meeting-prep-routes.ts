@@ -16,6 +16,8 @@ import { resolve } from 'path'
 import { Readable } from 'stream'
 import { google } from 'googleapis'
 import { callGemini } from './gemini-call.ts'
+import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
+import { meetingPrepValidator } from './quality-validators/meeting-prep-validator.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { customers } from './server-state.ts'
@@ -821,7 +823,26 @@ Also note other certified partners that could help. Skip individual attendee pro
     timeoutMs: 120_000,
   })
 
-  const prepContent = geminiResult.text
+  // Quality gate (ADR-024) — validate and retry if below threshold
+  const gateResult = await validateAndRetry(
+    geminiResult.text,
+    { validator: meetingPrepValidator },
+    async (failures) => {
+      const feedback = formatFailureFeedback(failures)
+      const retryResult = await callGemini(
+        systemPrompt,
+        userPrompt + '\n\n' + feedback,
+        {
+          callType: 'meeting-prep-synthesis',
+          customerName: customer.name,
+          model: 'full',
+          timeoutMs: 120_000,
+        }
+      )
+      return retryResult.text
+    }
+  )
+  const prepContent = gateResult.output
 
   // ── Step 5: Save to Google Drive as HTML-imported Google Doc ────────────
 
@@ -900,6 +921,7 @@ Also note other certified partners that could help. Skip individual attendee pro
   writeJsonAtomic(contentPath, {
     ...entry,
     content: prepContent,
+    qualityScorecard: gateResult.scorecard,
   })
 
   return { docUrl, title: docTitle, generatedAt }

@@ -13,6 +13,8 @@
 
 import { readFileSync, mkdirSync, existsSync } from 'fs'
 import { writeJsonAtomic, writeFileAtomic } from './lib/atomic-write.ts'
+import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
+import { intelligenceValidator } from './quality-validators/intelligence-validator.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { getGeminiToken } from './gemini-auth.ts'
@@ -25,6 +27,13 @@ import { readSheetCache, readIndustryAnalysisCache, writeIndustryAnalysisCache }
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { fetchGeminiWithRetry } from './gemini-fetch.ts'
 import type { Customer } from './types.ts'
+
+// ── Quality gate scorecard storage (ADR-024) ─────────────────────────────────
+// Module-level map so orchestration code can retrieve the scorecard after generation
+const _lastScorecards = new Map<string, QualityScorecard>()
+export function getLastQualityScorecard(customerName: string): QualityScorecard | undefined {
+  return _lastScorecards.get(customerName)
+}
 
 // ── Config paths ──────────────────────────────────────────────────────────────
 
@@ -571,7 +580,7 @@ export async function generateCompanyIntelligence(customer: Customer, industry: 
     .replace(/\{date\}/g, date)
 
   console.log(`[acct-intel] Generating company intelligence for ${customer.name}`)
-  const brief = await callGeminiGrounded({
+  const rawBrief = await callGeminiGrounded({
     systemPrompt,
     userPrompt,
     maxOutputTokens: 4096,
@@ -580,8 +589,26 @@ export async function generateCompanyIntelligence(customer: Customer, industry: 
     customerName: customer.name,
   })
 
-  console.log(`[acct-intel] Company intelligence generated for ${customer.name} (${brief.length} chars)`)
-  return brief
+  // Quality gate (ADR-024) — validate and retry if below threshold
+  const gateResult = await validateAndRetry(
+    rawBrief,
+    { validator: intelligenceValidator },
+    async (failures) => {
+      const feedback = formatFailureFeedback(failures)
+      return callGeminiGrounded({
+        systemPrompt,
+        userPrompt: userPrompt + '\n\n' + feedback,
+        maxOutputTokens: 4096,
+        temperature: 1.0,
+        callType: 'intelligence-company',
+        customerName: customer.name,
+      })
+    }
+  )
+
+  _lastScorecards.set(customer.name, gateResult.scorecard)
+  console.log(`[acct-intel] Company intelligence generated for ${customer.name} (${gateResult.output.length} chars, quality: ${gateResult.scorecard.score}/${gateResult.scorecard.passThreshold})`)
+  return gateResult.output
 }
 
 // ── BKL-AI03: Industry Technology Analysis ───────────────────────────────────
@@ -1361,6 +1388,7 @@ export async function runIntelligencePipeline(customerName: string, force?: bool
             cachedAt: new Date().toISOString(),
             companyDocUrl: docUrls.companyDocUrl,
             industryDocUrl: docUrls.industryDocUrl,
+            qualityScorecard: getLastQualityScorecard(customerName),
           })
           console.log(`[acct-intel] Intelligence cache written for ${customerName}`)
         } catch (e: any) { console.warn('[acct-intel] Cache write failed:', e.message) }
