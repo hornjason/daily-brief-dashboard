@@ -201,6 +201,56 @@ function validate(output: string): QualityScorecard {
   return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, checks)
 }
 
+/**
+ * ADR-025: Enrichment presence checks — run on FINAL enriched output only.
+ * These are recommended (not required) because data may genuinely be empty.
+ */
+function validateEnrichment(output: string): QualityCheck[] {
+  return [
+    {
+      name: 'enrichment-product-alignment',
+      passed: output.includes('Product Alignment') && output.includes('Confidence'),
+      expected: 'Product Alignment enrichment table present with Confidence column',
+      actual: output.includes('Product Alignment') ? 'table found' : 'table not found',
+      severity: 'recommended' as const,
+    },
+    {
+      name: 'enrichment-summit-announcements',
+      passed: output.includes('Recent Announcements'),
+      expected: 'Recent Announcements enrichment table present',
+      actual: output.includes('Recent Announcements') ? 'table found' : 'table not found',
+      severity: 'recommended' as const,
+    },
+    {
+      name: 'enrichment-enhanced-lifecycle',
+      passed: output.includes('Key Changes') && output.includes('Customer Angle'),
+      expected: 'Enhanced Lifecycle enrichment table present with Key Changes and Customer Angle',
+      actual: output.includes('Key Changes') ? 'table found' : 'table not found',
+      severity: 'recommended' as const,
+    },
+    {
+      name: 'enrichment-rss-intelligence',
+      passed: output.includes('Blog & News Intelligence'),
+      expected: 'RSS/Blog Intelligence enrichment table present',
+      actual: output.includes('Blog & News Intelligence') ? 'table found' : 'table not found',
+      severity: 'recommended' as const,
+    },
+  ]
+}
+
+/**
+ * Re-score enriched output — runs full validation + enrichment checks
+ * on the final content (after all table insertions). Used for scorecard persistence.
+ */
+export function rescoreEnrichedOutput(output: string): QualityScorecard {
+  const baseScorecard = validate(output)
+  const enrichmentChecks = validateEnrichment(output)
+  return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, [
+    ...baseScorecard.checks,
+    ...enrichmentChecks,
+  ])
+}
+
 export const meetingPrepValidator: QualityValidator = {
   contentType: CONTENT_TYPE,
   passThreshold: PASS_THRESHOLD,

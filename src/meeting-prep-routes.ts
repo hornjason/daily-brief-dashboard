@@ -40,6 +40,7 @@ import { getCachedExpansionOpportunities } from './expansion-opportunities.ts'
 import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts'
 import { readCCSPCache } from './cache-layer.ts'
 import { generateMeetingPrepHTML } from './meeting-prep-html-template.ts'
+import { buildProductAlignmentTable, buildSummitAnnouncementsTable, buildEnhancedLifecycleTable, buildRSSIntelligenceTable } from './meeting-prep-enrichment.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -852,6 +853,38 @@ Also note other certified partners that could help. Skip individual attendee pro
   // (kept out of Gemini to preserve links and formatting — ADR council hybrid inline)
   if (otherPartnersTable) {
     prepContent = insertAfterNumberedSection(prepContent, 2, otherPartnersTable)
+  }
+
+  // ── ADR-025: Enrichment tables for sections 4-7 ─────────────────────────
+  const alignmentTable = buildProductAlignmentTable(customer, productSlugs, {
+    productSummaries, rssItems: relevantRSS, customerSlug: slug,
+    getValueMapFn: getValueMap,
+    getIntelFn: getCachedCustomerProductIntel,
+    getSheetCacheFn: (name: string) => {
+      try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
+    },
+  })
+  if (alignmentTable) {
+    prepContent = insertAfterNumberedSection(prepContent, 4, alignmentTable)
+  }
+
+  const summitTable = buildSummitAnnouncementsTable(productSlugs, relevantRSS, productSummaries, roadmapData)
+  if (summitTable) {
+    prepContent = insertAfterNumberedSection(prepContent, 5, summitTable)
+  }
+
+  const lifecycleTable = buildEnhancedLifecycleTable(customer, productSlugs, lifecycleCache, roadmapData, productSummaries, {
+    getSheetCacheFn: (name: string) => {
+      try { return JSON.parse(readFileSync(resolve(CACHE_DIR, `${toSlug(name)}-sheets.json`), 'utf-8')) } catch { return null }
+    },
+  })
+  if (lifecycleTable) {
+    prepContent = insertAfterNumberedSection(prepContent, 6, lifecycleTable)
+  }
+
+  const rssTable = buildRSSIntelligenceTable(productSlugs, relevantRSS, customer.name)
+  if (rssTable) {
+    prepContent = insertAfterNumberedSection(prepContent, 7, rssTable)
   }
 
   // ── Step 5: Save to Google Drive as HTML-imported Google Doc ────────────
