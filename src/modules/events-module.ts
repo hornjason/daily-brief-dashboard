@@ -48,7 +48,8 @@ function getCustomerRegion(customerSlug: string): string | null {
 
   let customers: any[]
   try {
-    customers = JSON.parse(readFileSync(customersPath, 'utf8'))
+    const parsed = JSON.parse(readFileSync(customersPath, 'utf8'))
+    customers = Array.isArray(parsed) ? parsed : parsed.customers ?? []
   } catch (e: any) {
     console.warn('[events-module] Failed to parse customers.json:', e.message)
     return null
@@ -67,7 +68,8 @@ function getCustomerRegion(customerSlug: string): string | null {
 
   let aes: any[]
   try {
-    aes = JSON.parse(readFileSync(aesPath, 'utf8'))
+    const parsed = JSON.parse(readFileSync(aesPath, 'utf8'))
+    aes = Array.isArray(parsed) ? parsed : parsed.aes ?? []
   } catch (e: any) {
     console.warn('[events-module] Failed to parse aes.json:', e.message)
     return null
