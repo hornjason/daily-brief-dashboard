@@ -32,18 +32,34 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
-  // 2. Partner Context — present with pipe-delimited table
+  // 2. Partner Context or Meeting Attendees — present with pipe-delimited table
   const section2 = extractNumberedSection(output, 2)
   const section2HasTable = section2.includes('|') && section2.split('\n').filter(l => l.trim().startsWith('|')).length >= 3
+  const isPartnerContext = /partner\s*context/i.test(output.match(/^#{1,4}\s*2\.\s+.*/m)?.[0] ?? '')
+  const hasPartnerContent = isPartnerContext
+    ? /specializ|partnership|integrat|certified partner/i.test(section2)
+    : true // Meeting Attendees mode doesn't need partner content
+
   checks.push({
-    name: 'partner-context',
+    name: 'section-2-table',
     passed: section2.length > 0 && section2HasTable,
-    expected: 'Section 2 (Partner Context) present with pipe-delimited table',
+    expected: 'Section 2 present with pipe-delimited table',
     actual: section2.length > 0
       ? (section2HasTable ? 'table found' : 'section present but no table')
       : 'section not found',
     severity: 'required',
   })
+
+  // If section 2 is Partner Context, verify it has actual partner capabilities
+  if (isPartnerContext) {
+    checks.push({
+      name: 'partner-context-depth',
+      passed: hasPartnerContent,
+      expected: 'Partner Context includes specializations, partnership level, or certified partners',
+      actual: hasPartnerContent ? 'partner capabilities found' : 'section titled Partner Context but no partner-specific content',
+      severity: 'required',
+    })
+  }
 
   // 3. Customer Snapshot — present with >= 3 bullet points
   const section3 = extractNumberedSection(output, 3)

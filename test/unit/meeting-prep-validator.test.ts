@@ -128,12 +128,12 @@ describe('meetingPrepValidator', () => {
 
     it('has all 10 sections detected', () => {
       const sectionChecks = scorecard.checks.filter(c =>
-        ['meeting-objective', 'partner-context', 'customer-snapshot', 'why-red-hat',
+        ['meeting-objective', 'section-2-table', 'partner-context-depth', 'customer-snapshot', 'why-red-hat',
          'whats-new', 'product-lifecycle', 'expansion-opportunities',
          'discussion-questions', 'open-cases-renewals', 'action-items'].includes(c.name)
       )
       const passed = sectionChecks.filter(c => c.passed)
-      expect(passed.length).toBe(10)
+      expect(passed.length).toBe(11) // 10 sections + partner-context-depth
     })
 
     it('detects specific names in discussion questions', () => {
@@ -163,7 +163,7 @@ describe('meetingPrepValidator', () => {
     it('identifies missing sections', () => {
       const failedNames = scorecard.failures.map(f => f.name)
       // These sections are completely missing in the minimal fixture
-      expect(failedNames).toContain('partner-context')
+      expect(failedNames).toContain('section-2-table')
       expect(failedNames).toContain('why-red-hat')
       expect(failedNames).toContain('whats-new')
       expect(failedNames).toContain('product-lifecycle')
