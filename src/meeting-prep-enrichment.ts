@@ -69,15 +69,69 @@ const MAX_KEY_CHANGES = 3
 export function extractProofPoints(valueMapText: string): string[] {
   const metrics: string[] = []
   const patterns: RegExp[] = [
-    /\d+%\s+\w+/g,                           // percentage metrics: "667% ROI"
+    /\d+%\s+\w[\w\s]{2,30}?(?=\s+\d|\s*$|\s*[,;.|])/gm,  // percentage metrics: "58% Unplanned Downtime"
     /\$[\d,.]+[BMK]?\s+\w+/g,                // dollar metrics: "$2B ARR"
-    /(?:Forrester|IDC|Gartner|ESG)\s+\w+/g,  // analyst citations
+    /(?:Forrester|IDC|Gartner|ESG)\s*[-–—]?\s*[\w\s,]+/g,  // analyst citations: "IDC - The Business Value of..."
   ]
   for (const p of patterns) {
     const matches = valueMapText.match(p) ?? []
-    metrics.push(...matches.slice(0, 3))
+    metrics.push(...matches.map(m => m.trim().slice(0, 60)).slice(0, 4))
   }
   return [...new Set(metrics)].slice(0, MAX_PROOF_POINTS)
+}
+
+const VALUE_MAP_PATH_ENV = process.env.CACHE_DIR
+  ? `${process.env.CACHE_DIR}/value-maps/business-value-maps.txt`
+  : null
+
+/**
+ * Extract proof points for a specific product by scanning the FULL value map
+ * file for all sections mentioning the product (not just the header section).
+ * Falls back to extractProofPoints(sectionText) if full file unavailable.
+ */
+export function extractProductProofPoints(slug: string, sectionText: string | null): string[] {
+  if (sectionText) {
+    const fromSection = extractProofPoints(sectionText)
+    if (fromSection.length >= 2) return fromSection
+  }
+
+  if (!VALUE_MAP_PATH_ENV) return sectionText ? extractProofPoints(sectionText) : []
+
+  try {
+    const { readFileSync, existsSync } = require('fs')
+    if (!existsSync(VALUE_MAP_PATH_ENV)) return []
+    const fullText = readFileSync(VALUE_MAP_PATH_ENV, 'utf-8')
+
+    const productNames: Record<string, string[]> = {
+      'aap': ['ansible', 'ansible automation platform'],
+      'rhel': ['rhel', 'enterprise linux'],
+      'ocp': ['openshift', 'openshift container platform'],
+      'rhoai': ['openshift ai', 'red hat ai'],
+      'acs': ['advanced cluster security'],
+      'acm': ['advanced cluster management'],
+    }
+    const names = productNames[slug] ?? [slug]
+
+    const lines = fullText.split('\n')
+    const relevantLines: string[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const lower = lines[i].toLowerCase()
+      if (names.some(n => lower.includes(n)) || /\d+%/.test(lines[i])) {
+        const context = lines.slice(Math.max(0, i - 2), Math.min(lines.length, i + 3)).join('\n')
+        if (names.some(n => context.toLowerCase().includes(n))) {
+          relevantLines.push(lines[i])
+        }
+      }
+    }
+
+    if (relevantLines.length > 0) {
+      const combined = relevantLines.join('\n')
+      const metrics = extractProofPoints(combined)
+      if (metrics.length >= 2) return metrics
+    }
+  } catch {}
+
+  return sectionText ? extractProofPoints(sectionText) : []
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -91,13 +145,25 @@ function isWithinDays(dateStr: string, days: number, now: Date): boolean {
   return diff >= 0 && diff <= days * MS_PER_DAY
 }
 
+/** Slug → subscription name fragments for matching */
+const SLUG_TO_SUB_NAMES: Record<string, string[]> = {
+  'aap': ['ansible', 'automation platform'],
+  'rhel': ['enterprise linux', 'rhel'],
+  'ocp': ['openshift', 'container platform'],
+  'rhoai': ['openshift ai', 'red hat ai'],
+  'acs': ['advanced cluster security'],
+  'acm': ['advanced cluster management'],
+  'satellite': ['satellite'],
+  'quay': ['quay'],
+}
+
 /** Check if subscription rows contain a product matching the slug */
 function findSubscription(rows: ProductSubscription[], slug: string): ProductSubscription | undefined {
-  const slugUpper = slug.toUpperCase()
+  const names = SLUG_TO_SUB_NAMES[slug] ?? [slug]
   return rows.find(r =>
     r.status === 'Active' && (
-      r.sku?.toUpperCase().includes(slugUpper) ||
-      r.productDescription?.toUpperCase().includes(slugUpper)
+      names.some(n => r.productDescription?.toLowerCase().includes(n)) ||
+      names.some(n => r.sku?.toLowerCase().includes(n))
     )
   )
 }
@@ -148,17 +214,21 @@ export function buildProductAlignmentTable(
       confidence = 'LOW'
     }
 
-    // --- Proof points ---
-    const proofPoints = valueMapText ? extractProofPoints(valueMapText) : []
+    // --- Proof points (scan full file for IDC/Forrester metrics) ---
+    const proofPoints = extractProductProofPoints(slug, valueMapText)
     const proofCell = proofPoints.length >= 2
       ? proofPoints.join(', ')
       : 'See value map documentation'
 
-    // --- Use case (from subscription description or generic) ---
+    // --- Use case (from intelligence or subscription) ---
     const sub = sheetCache ? findSubscription(sheetCache.rows, slug) : undefined
-    const useCase = sub?.productDescription
-      ? escapeCell(sub.productDescription)
-      : `${slug.toUpperCase()} deployment`
+    const intelUseCase = intel?.priorityAction || intel?.featureTalkingPoints?.[0]
+    const subQty = sub?.quantity ? `${sub.quantity} ${sub.unit ?? 'units'}` : ''
+    const useCase = intelUseCase
+      ? escapeCell(intelUseCase.slice(0, 80))
+      : sub?.productDescription
+        ? escapeCell(`${sub.productDescription}${subQty ? ` (${subQty})` : ''}`)
+        : `${slug.toUpperCase()} deployment`
 
     // --- Summit/recent news ---
     const recentSummary = productSummaries.find(
