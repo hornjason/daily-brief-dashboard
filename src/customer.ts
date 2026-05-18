@@ -684,6 +684,10 @@ export async function generateBrief(
     catch { return iso }
   }
 
+  // ── Pre-flight signal refresh (#285) — ensure fresh data before brief generation
+  const customerSlugForRefresh = toSlug(customer.name)
+  await FeatureModuleRegistry.refreshStaleSignals(customerSlugForRefresh).catch(() => {})
+
   // ── R17: Structured extraction (Step 1 of three-step pipeline) ────────────
   // R18: Three-step pipeline (extract → rank → synthesize) with fallback to single-pass
   // R26: Sub-pipeline enrichment (doc classification, email intelligence, meeting prep)

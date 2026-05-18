@@ -30,7 +30,7 @@ import type { VoiceProfile } from './ae-voice.ts'
 import { generateCampaignHTML } from './campaign-html-template.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
 import type { CustomerSignals, SignalLoadResult } from './lib/signal-loader.ts'
-import type { Signal } from './feature-module-registry.ts'
+import { FeatureModuleRegistry, type Signal } from './feature-module-registry.ts'
 import { getAccountTeam } from './account-team.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -440,6 +440,9 @@ export async function generateCampaign(
       console.warn(`[campaigns] Account plan generation failed for ${customer.name}:`, e?.message ?? e)
     }
   }
+
+  // Pre-flight signal refresh (#285) — ensure fresh data before generation
+  await FeatureModuleRegistry.refreshStaleSignals(slug).catch(() => {})
 
   // 3. Load all customer signals (legacy cache + registry signals)
   const { signals, registrySignals, loaded, missing } = await loadCustomerSignals(slug, customer.name)

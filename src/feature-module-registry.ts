@@ -343,6 +343,62 @@ export const FeatureModuleRegistry = {
     return results
   },
 
+  /**
+   * Pre-flight refresh: sync any modules whose last run is older than their
+   * refreshInterval (or 1 hour for on-demand modules). Called before content
+   * generation (meeting prep, campaigns, briefs) to ensure fresh signals.
+   * Fails open — refresh errors don't block generation.
+   * GitHub Issue #285
+   */
+  async refreshStaleSignals(customerSlug: string): Promise<{ refreshed: string[]; skipped: string[]; failed: string[] }> {
+    const MAX_WAIT_MS = 30_000
+    const ON_DEMAND_STALE_MS = 60 * 60 * 1000 // 1 hour for modules without refreshInterval
+    const refreshed: string[] = []
+    const skipped: string[] = []
+    const failed: string[] = []
+
+    const startTime = performance.now()
+    const promises: Promise<void>[] = []
+
+    for (const module of _modules.values()) {
+      if (!module.syncNow) { skipped.push(module.name); continue }
+
+      const status = _status.get(module.name)
+      const lastRun = status?.lastRun ? new Date(status.lastRun).getTime() : 0
+      const elapsed = Date.now() - lastRun
+      const threshold = module.refreshInterval ?? ON_DEMAND_STALE_MS
+
+      if (elapsed < threshold) {
+        skipped.push(module.name)
+        continue
+      }
+
+      promises.push(
+        module.syncNow(customerSlug)
+          .then(() => {
+            this.recordOutcome(module.name, { success: true })
+            refreshed.push(module.name)
+          })
+          .catch((e: any) => {
+            console.warn(`[signal-refresh] ${module.name} failed: ${e?.message ?? e}`)
+            this.recordOutcome(module.name, { success: false, error: e?.message })
+            failed.push(module.name)
+          })
+      )
+    }
+
+    if (promises.length > 0) {
+      await Promise.race([
+        Promise.allSettled(promises),
+        new Promise(r => setTimeout(r, MAX_WAIT_MS)),
+      ])
+      const elapsed = performance.now() - startTime
+      console.log(`[signal-refresh] pre-flight for ${customerSlug}: ${refreshed.length} refreshed, ${skipped.length} skipped, ${failed.length} failed (${elapsed.toFixed(0)}ms)`)
+    }
+
+    return { refreshed, skipped, failed }
+  },
+
   recordOutcome(name: string, outcome: { success: boolean; error?: string }): void {
     const now = new Date().toISOString()
     let status = _status.get(name)

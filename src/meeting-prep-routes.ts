@@ -25,6 +25,7 @@ import { fetchCalendar, makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { fetchCustomerMeetings } from './customer.ts'
 import { assembleMeetingPrep } from './calendar-extraction.ts'
 import { loadCustomerSignals } from './lib/signal-loader.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { getAccountTeam, toPromptContext } from './account-team.ts'
 import { getValueMap } from './value-map-loader.ts'
 import { fetchCases } from './redhat.ts'
@@ -405,6 +406,9 @@ async function generateMeetingPrep(
   })
 
   console.log(`[meeting-prep] Generating prep for ${customer.name} — "${meeting.meetingTitle}" on ${dateStr}`)
+
+  // ── Step 0: Pre-flight signal refresh (#285) ──────────────────────────
+  await FeatureModuleRegistry.refreshStaleSignals(slug).catch(() => {})
 
   // ── Step 1: Gather all context in parallel ──────────────────────────────
 
