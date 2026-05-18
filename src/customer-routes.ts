@@ -701,44 +701,36 @@ export function createCustomerRouter(): Hono {
     }
   })
 
-  // GET /api/customer/:name/signals/inventory — Signal inventory for debugging (#273)
+  // GET /api/customer/:name/signals/inventory — Signal inventory for debugging (#273, #274)
   router.get('/api/customer/:name/signals/inventory', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
     if (!customer) return c.json({ error: 'Customer not found' }, 404)
 
     const slug = toSlug(customer.name)
-    const { signals, registrySignals, loaded, missing } = await (async () => {
-      const { loadCustomerSignals } = await import('./lib/signal-loader.ts')
-      return loadCustomerSignals(slug, customer.name)
-    })()
+    const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+    const registrySignals = await FeatureModuleRegistry.collectAllSignals(slug)
 
-    // Group registry signals by source
-    const registryBySource: Record<string, { count: number; types: string[]; topHeadline: string }> = {}
+    // Group by source
+    const bySource: Record<string, { count: number; types: string[]; topHeadline: string }> = {}
     for (const s of registrySignals) {
-      if (!registryBySource[s.source]) {
-        registryBySource[s.source] = { count: 0, types: [], topHeadline: '' }
+      if (!bySource[s.source]) {
+        bySource[s.source] = { count: 0, types: [], topHeadline: '' }
       }
-      registryBySource[s.source].count++
-      if (!registryBySource[s.source].types.includes(s.type)) {
-        registryBySource[s.source].types.push(s.type)
+      bySource[s.source].count++
+      if (!bySource[s.source].types.includes(s.type)) {
+        bySource[s.source].types.push(s.type)
       }
-      if (!registryBySource[s.source].topHeadline) {
-        registryBySource[s.source].topHeadline = s.headline
+      if (!bySource[s.source].topHeadline) {
+        bySource[s.source].topHeadline = s.headline
       }
     }
 
     return c.json({
       customer: customer.name,
       slug,
-      legacy: {
-        loaded,
-        missing,
-      },
-      registry: {
-        totalSignals: registrySignals.length,
-        bySource: registryBySource,
-      },
+      totalSignals: registrySignals.length,
+      sources: bySource,
     })
   })
 

@@ -1071,10 +1071,14 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
 
   if (!inventory) return null
 
-  const allLegacySources = [...inventory.legacy.loaded, ...inventory.legacy.missing]
-  const registrySources = Object.keys(inventory.registry.bySource)
-  const totalSources = allLegacySources.length + registrySources.length
-  const activeSources = inventory.legacy.loaded.length + registrySources.length
+  const sources = Object.entries(inventory.sources ?? {}) as [string, { count: number }][]
+  const activeSources = sources.filter(([, v]) => v.count > 0).length
+  const totalSignals = inventory.totalSignals ?? 0
+
+  // Known module names for detecting missing sources
+  const ALL_MODULES = ['product-lifecycle', 'rh-rss', 'rh-events', 'ccsp', 'value-maps', 'intelligence', 'customer-docs', 'subscriptions', 'emails', 'cases', 'pipeline', 'customer-product-intel', 'account-plan']
+  const presentSources = new Set(sources.map(([k]) => k))
+  const missingSources = ALL_MODULES.filter(m => !presentSources.has(m))
 
   return (
     <div className="bg-bg-secondary/30 rounded-lg border border-border p-3">
@@ -1086,7 +1090,7 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
           <Activity className="w-4 h-4 text-text-secondary" />
           <span className="text-sm font-medium text-text-primary">Signal Sources</span>
           <span className="text-xs text-text-secondary">
-            {activeSources} of {totalSources} active
+            {activeSources} active · {totalSignals} signals
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -1103,39 +1107,23 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
 
       {expanded && (
         <div className="mt-3 space-y-1.5">
-          {/* Registry signals */}
-          {registrySources.map(source => {
-            const info = inventory.registry.bySource[source]
-            return (
-              <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
-                <div className="flex items-center gap-2">
-                  <span className="text-green-400">✓</span>
-                  <span className="text-text-primary">{source}</span>
-                </div>
-                <span className="text-text-secondary">{info.count} signals</span>
-              </div>
-            )
-          })}
-
-          {/* Legacy loaded */}
-          {inventory.legacy.loaded.map((source: string) => (
+          {sources.map(([source, info]) => (
             <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
               <div className="flex items-center gap-2">
                 <span className="text-green-400">✓</span>
                 <span className="text-text-primary">{source}</span>
               </div>
-              <span className="text-text-secondary">cached</span>
+              <span className="text-text-secondary">{info.count} signal{info.count !== 1 ? 's' : ''}</span>
             </div>
           ))}
 
-          {/* Legacy missing */}
-          {inventory.legacy.missing.map((source: string) => (
+          {missingSources.map(source => (
             <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
               <div className="flex items-center gap-2">
                 <span className="text-red-400">✗</span>
                 <span className="text-text-secondary">{source}</span>
               </div>
-              <span className="text-text-secondary/50">missing</span>
+              <span className="text-text-secondary/50">no data</span>
             </div>
           ))}
         </div>

@@ -64,6 +64,14 @@ import './src/modules/product-intel-module.ts'  // GitHub #255
 import './src/modules/meeting-prep-module.ts'  // GitHub #229
 import './src/modules/ccsp-module.ts'  // GitHub #268
 import './src/modules/value-map-module.ts'
+import './src/modules/cases-module.ts'  // #274 — legacy migration
+import './src/modules/subscriptions-module.ts'  // #274
+import './src/modules/emails-module.ts'  // #274
+import './src/modules/pipeline-module.ts'  // #274
+import './src/modules/docs-module.ts'  // #274
+import './src/modules/intelligence-module.ts'  // #274
+import './src/modules/customer-product-intel-module.ts'  // #274
+import './src/modules/account-plan-module.ts'  // #274
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────
