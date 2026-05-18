@@ -185,8 +185,8 @@ function buildRequestBody(
     body.generationConfig.responseSchema = options.responseSchema
   }
 
-  // Thinking budget — disable for all models that support it (not lite)
-  if (!modelName.includes('lite')) {
+  // Thinking budget — disable for Flash models only (Pro rejects thinkingBudget: 0)
+  if (modelName.includes('flash') && !modelName.includes('lite')) {
     body.generationConfig.thinkingConfig = { thinkingBudget: 0 }
   }
 
