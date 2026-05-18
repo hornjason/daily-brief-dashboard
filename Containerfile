@@ -81,6 +81,9 @@ COPY --from=builder /app/node_modules ./node_modules
 # Copy account plan config (sample, questions PDF, playbook) for AI generation
 COPY --from=builder /app/config/account-plan /app/config/account-plan
 
+# Config templates — seeded to /data/config/ on first boot by entrypoint.sh
+COPY --from=builder /app/config-templates /app/config-templates
+
 # Install Playwright Chromium browser binary
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN bunx playwright install chromium --no-shell

@@ -1,0 +1,223 @@
+[
+  {
+    "url": "https://www.redhat.com/en/rss/blog",
+    "source": "blog",
+    "category": "Corporate",
+    "label": "Global Red Hat Blog",
+    "productTags": [],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/press-releases",
+    "source": "press-release",
+    "category": "Corporate",
+    "label": "Press Releases & Newsroom",
+    "productTags": [],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/hybrid-cloud-infrastructure",
+    "source": "blog",
+    "category": "Corporate",
+    "label": "Open Hybrid Cloud Infrastructure",
+    "productTags": ["ocp", "ocp-virt"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/red-hat-enterprise-linux",
+    "source": "blog",
+    "category": "Corporate",
+    "label": "Red Hat Enterprise Linux",
+    "productTags": ["rhel"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/automation",
+    "source": "blog",
+    "category": "Corporate",
+    "label": "IT Automation (Ansible)",
+    "productTags": ["aap"],
+    "enabled": false,
+    "_audit": "404 — URL does not exist. Use /channel/red-hat-ansible-automation instead"
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/security",
+    "source": "blog",
+    "category": "Corporate",
+    "label": "Security Architecture & News",
+    "productTags": ["rhel", "acs"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/red-hat-satellite",
+    "source": "blog",
+    "category": "Corporate",
+    "label": "Red Hat Satellite",
+    "productTags": ["satellite"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/red-hat-services-speak",
+    "source": "blog",
+    "category": "Corporate",
+    "label": "Red Hat Services Speak",
+    "productTags": [],
+    "enabled": true
+  },
+  {
+    "url": "https://developers.redhat.com/blog/feed",
+    "source": "developer-blog",
+    "category": "Developer",
+    "label": "Red Hat Developer Blog",
+    "productTags": ["ocp", "rhel"],
+    "enabled": false,
+    "_audit": "403 Forbidden — blocks automated requests"
+  },
+  {
+    "url": "https://cloud.redhat.com/blog/rss.xml",
+    "source": "blog",
+    "category": "Developer",
+    "label": "Red Hat OpenShift Blog",
+    "productTags": ["ocp", "ocp-virt", "acm", "acs"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.ansible.com/blog/rss.xml",
+    "source": "blog",
+    "category": "Developer",
+    "label": "Ansible Official Technical Blog",
+    "productTags": ["aap"],
+    "enabled": false,
+    "_audit": "Returns 0 items — empty feed"
+  },
+  {
+    "url": "https://research.redhat.com/feed",
+    "source": "blog",
+    "category": "Research",
+    "label": "Red Hat Research Blog",
+    "productTags": [],
+    "enabled": false,
+    "_audit": "Last post Dec 2025 — 166 days stale"
+  },
+  {
+    "url": "https://next.redhat.com/feed/",
+    "source": "blog",
+    "category": "Research",
+    "label": "Emerging Technologies (Next @ Red Hat)",
+    "productTags": ["rhoai"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/sysadmin/rss.xml",
+    "source": "blog",
+    "category": "Research",
+    "label": "Enable Sysadmins",
+    "productTags": ["rhel", "aap"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/architect/rss.xml",
+    "source": "blog",
+    "category": "Research",
+    "label": "Enable Architects",
+    "productTags": ["ocp", "rhel"],
+    "enabled": true
+  },
+  {
+    "url": "https://access.redhat.com/security/data/rhsa.rss",
+    "source": "security-advisory",
+    "category": "Security",
+    "label": "Red Hat Security Advisories (RHSA)",
+    "productTags": ["rhel", "ocp", "aap"],
+    "enabled": false,
+    "_audit": "404 — URL no longer valid, need to find new RHSA feed URL"
+  },
+  {
+    "url": "https://status.redhat.com/history.rss",
+    "source": "status",
+    "category": "Security",
+    "label": "Red Hat System Status & Incidents",
+    "productTags": [],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/red-hat-ai",
+    "source": "blog",
+    "category": "Product",
+    "label": "Red Hat AI",
+    "productTags": ["rhoai"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/red-hat-openshift",
+    "source": "blog",
+    "category": "Product",
+    "label": "Red Hat OpenShift",
+    "productTags": ["ocp"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/red-hat-ansible-automation",
+    "source": "blog",
+    "category": "Product",
+    "label": "Red Hat Ansible Automation",
+    "productTags": ["aap"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/red-hat-virtualization",
+    "source": "blog",
+    "category": "Product",
+    "label": "Red Hat Virtualization",
+    "productTags": ["ocp-virt"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/edge-computing",
+    "source": "blog",
+    "category": "Product",
+    "label": "Edge Computing",
+    "productTags": ["ocp", "aap"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/applications",
+    "source": "blog",
+    "category": "Product",
+    "label": "Applications & App Modernization",
+    "productTags": ["ocp", "rhdh"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/cloud-services",
+    "source": "blog",
+    "category": "Product",
+    "label": "Cloud Services",
+    "productTags": ["ocp"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/artificial-intelligence",
+    "source": "blog",
+    "category": "Product",
+    "label": "Artificial Intelligence",
+    "productTags": ["rhoai"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/management-and-automation",
+    "source": "blog",
+    "category": "Product",
+    "label": "Management & Automation",
+    "productTags": ["aap", "satellite"],
+    "enabled": true
+  },
+  {
+    "url": "https://www.redhat.com/en/rss/blog/channel/infrastructure",
+    "source": "blog",
+    "category": "Product",
+    "label": "Infrastructure",
+    "productTags": ["rhel"],
+    "enabled": true
+  }
+]

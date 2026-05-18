@@ -1,0 +1,29 @@
+{
+  "_note": "Internal-only release dates not available in public lifecycle APIs. Maintain manually from Summit, enablement, and roadmap sessions.",
+  "releases": [
+    {
+      "product": "aap",
+      "displayName": "Red Hat Ansible Automation Platform",
+      "nextVersion": "2.7",
+      "expectedDate": "2026-06",
+      "highlights": ["MCP server for Ansible", "Automation orchestrator (tech preview)", "OIDC auth for HashiCorp Vault", "Containerized-only install"],
+      "source": "Red Hat Summit 2026 (May 11-14)"
+    },
+    {
+      "product": "ocp",
+      "displayName": "Red Hat OpenShift Container Platform",
+      "nextVersion": "4.22",
+      "expectedDate": "2026-09",
+      "highlights": [],
+      "source": "4-month release cadence from 4.21"
+    },
+    {
+      "product": "aro",
+      "displayName": "Azure Red Hat OpenShift",
+      "nextVersion": "5.8",
+      "expectedDate": "2026-06",
+      "highlights": ["OCP Virtualization integrated by default"],
+      "source": "Red Hat Summit 2026"
+    }
+  ]
+}

@@ -37,6 +37,21 @@ if [ -f /data/config/.rh-token ] && [ -z "${REDHAT_OFFLINE_TOKEN+x}" ]; then
   echo "[entrypoint] Loaded REDHAT_OFFLINE_TOKEN from persistent volume"
 fi
 
+# ── Seed config templates on first boot ────────────────────────────────────────
+# Templates ship at /app/config-templates/. On first boot, copy any missing files
+# to the persistent volume at /data/config/. Existing files are never overwritten.
+# New features just drop a .json file in config-templates/ — no entrypoint edits needed.
+if [ -d /app/config-templates ]; then
+  for tmpl in /app/config-templates/*.json; do
+    [ -f "$tmpl" ] || continue
+    fname=$(basename "$tmpl")
+    if [ ! -f "/data/config/$fname" ]; then
+      cp "$tmpl" "/data/config/$fname"
+      echo "[entrypoint] Seeded config template: $fname"
+    fi
+  done
+fi
+
 # ── Virtual display ────────────────────────────────────────────────────────────
 # Clean up stale X lock files from previous run (left behind by podman restart)
 rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true

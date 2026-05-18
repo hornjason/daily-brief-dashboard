@@ -23,6 +23,7 @@ COPY src ./src
 COPY scripts ./scripts
 COPY docs ./docs
 COPY config/account-plan /app/config/account-plan
+COPY config-templates /app/config-templates
 
 ENV PORT=7777
 ENV CONFIG_DIR=/data/config

@@ -1,0 +1,145 @@
+[
+  {
+    "name": "AHEAD",
+    "aliases": ["Ahead"],
+    "domain": "ahead.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Container Mgmt"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/ahead",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "CDW",
+    "aliases": [],
+    "domain": "cdw.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/cdw",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "Crossvale, Inc. / Options Technology",
+    "aliases": ["Crossvale", "Options Technology"],
+    "domain": "crossvale.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt", "Application Platform"],
+    "geo": "NA",
+    "country": "US",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/crossvale",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "Insight Direct USA",
+    "aliases": ["Insight", "Insight Enterprises"],
+    "domain": "insight.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/insight",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "Li9",
+    "aliases": [],
+    "domain": "li9.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/li9",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "MOBIA Technology Innovations",
+    "aliases": ["MOBIA"],
+    "domain": "mobia.io",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt"],
+    "geo": "NA",
+    "country": "Canada, US",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/mobia-technology-innovations",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "Pellera Technologies (Converge + Mainline)",
+    "aliases": ["Pellera", "Converge", "Mainline", "Converge Global Concept Technologies"],
+    "domain": "intl.convergetp.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt", "Server Cloud"],
+    "geo": "NA",
+    "country": "Canada, US",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/converge-gc-technologies",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "Presidio",
+    "aliases": [],
+    "domain": "presidio.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/presidio",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "Shadow-Soft, LLC / Arctiq",
+    "aliases": ["Shadow-Soft", "Arctiq"],
+    "domain": "shadow-soft.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt", "Virtualization", "Server Cloud OS"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/shadow-soft",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "Stone Door Group",
+    "aliases": [],
+    "domain": "stonedoorgroup.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/stone-door-group",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "TEK Systems (Allegis)",
+    "aliases": ["TEK Systems", "TEKsystems", "Allegis"],
+    "domain": "teksystems.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt", "Virtualization"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/teksystems",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "Unilogik",
+    "aliases": [],
+    "domain": "unilogik.io",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation", "Container Mgmt"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/unilogik",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  },
+  {
+    "name": "WWT + SoftChoice",
+    "aliases": ["WWT", "World Wide Technology", "SoftChoice"],
+    "domain": "wwt.com",
+    "partnershipLevel": "Red Hat Specialized Partner",
+    "specializations": ["Mission Critical Automation"],
+    "geo": "NA",
+    "country": "US, Canada",
+    "catalogUrl": "https://catalog.redhat.com/en/partners/detail/wwt",
+    "sourceUrl": "https://source.redhat.com/departments/sales/global_red_hat_specialized_partners"
+  }
+]
