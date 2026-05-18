@@ -414,7 +414,7 @@ export class DriveFolderClient {
           const shortcuts = await this.listAllPages(
             {
               q: `'${escapeQ(folderId)}' in parents and mimeType = '${SHORTCUT_MIME}' and trashed = false`,
-              fields: 'nextPageToken, files(id,name,shortcutDetails)',
+              fields: 'nextPageToken, files(id,name,shortcutDetails,modifiedTime)',
               pageSize: 200,
             },
             'listFilesUnder shortcuts',
@@ -422,9 +422,20 @@ export class DriveFolderClient {
           for (const sc of shortcuts) {
             const targetMime = sc.shortcutDetails?.targetMimeType ?? ''
             const targetId   = sc.shortcutDetails?.targetId       ?? ''
-            if (targetMime === FOLDER_MIME && targetId && !visitedFolders.has(targetId)) {
+            if (!targetId) continue
+            if (targetMime === FOLDER_MIME && !visitedFolders.has(targetId)) {
               visitedFolders.add(targetId)
               shortcutFolderIds.push(targetId)
+            } else if (targetMime !== FOLDER_MIME && !seen.has(targetId)) {
+              seen.add(targetId)
+              results.push({
+                id: targetId,
+                name: sc.name ?? '',
+                mimeType: targetMime,
+                modifiedTime: sc.modifiedTime ?? undefined,
+                webViewLink: undefined,
+              })
+              if (maxFiles !== undefined && results.length >= maxFiles) break
             }
           }
         }
