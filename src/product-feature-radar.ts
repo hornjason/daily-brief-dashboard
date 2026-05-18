@@ -149,7 +149,7 @@ async function fetchLatestReleaseNotesContent(
   docsBaseUrl: string,
   productSlug: string,
   allowedDocNames?: string[],  // when set, skip auto-discovery and fetch only these doc names
-): Promise<string> {
+): Promise<{ url: string; content: string } | null> {
   const TOTAL_CAP    = 18000
   const SECTION_CAP  = 6000
 
@@ -158,7 +158,7 @@ async function fetchLatestReleaseNotesContent(
     const landingRes = await fetch(docsBaseUrl, { redirect: 'follow', signal: AbortSignal.timeout(12000) })
     if (!landingRes.ok) {
       console.warn(`[feature-radar] ${productSlug}: docs landing ${landingRes.status} — ${docsBaseUrl}`)
-      return ''
+      return null
     }
     const landingHtml = await landingRes.text()
 
@@ -213,12 +213,13 @@ async function fetchLatestReleaseNotesContent(
       // Sort descending (latest first), keep top 2
       rnDocsSorted = Array.from(rnDocNames).sort().reverse().slice(0, 2)
       console.log(`[feature-radar] ${productSlug}: auto-discovered docs: ${rnDocsSorted.join(', ')}`)
-      if (rnDocsSorted.length === 0) return ''
+      if (rnDocsSorted.length === 0) return null
     }
 
     // 3. Build html-single URLs — docs.redhat.com html-single delivers full pre-rendered HTML
     //    Find the versioned base from the final redirect URL
     const versionedBase = landingRes.url.replace(/\/$/, '')  // e.g. .../red_hat_enterprise_linux/10
+    const releaseNotesBaseUrl = `${versionedBase}/html/${rnDocsSorted[0] ?? 'release_notes'}/`  // use first doc name as canonical URL
     const sections: string[] = []
     let totalChars = 0
 
@@ -273,10 +274,13 @@ async function fetchLatestReleaseNotesContent(
       totalChars += sectionText.length
     }
 
-    return sections.join('\n').slice(0, TOTAL_CAP)
+    return {
+      url: releaseNotesBaseUrl,
+      content: sections.join('\n').slice(0, TOTAL_CAP),
+    }
   } catch (e: any) {
     console.warn(`[feature-radar] ${productSlug}: release notes fetch failed — ${e?.message}`)
-    return ''
+    return null
   }
 }
 
@@ -310,6 +314,7 @@ export async function extractProductFeatures(slug: string): Promise<ProductFeatu
 
   // 5. Fetch live release notes from docs.redhat.com (auto-follows redirect to latest version)
   let releaseNotesContent = ''
+  let releaseNotesBaseUrl: string | null = null
   let productCfg: any = null
   try {
     const config  = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'))
@@ -318,8 +323,12 @@ export async function extractProductFeatures(slug: string): Promise<ProductFeatu
     const allowedDocNames: string[] | undefined = productCfg?.seeds?.releaseNotesDocNames ?? undefined
     if (docsBaseUrl) {
       console.log(`[feature-radar] ${slug}: fetching live release notes from ${docsBaseUrl}`)
-      releaseNotesContent = await fetchLatestReleaseNotesContent(docsBaseUrl, slug, allowedDocNames)
-      console.log(`[feature-radar] ${slug}: release notes fetched — ${releaseNotesContent.length} chars`)
+      const rnData = await fetchLatestReleaseNotesContent(docsBaseUrl, slug, allowedDocNames)
+      if (rnData) {
+        releaseNotesContent = rnData.content
+        releaseNotesBaseUrl = rnData.url
+        console.log(`[feature-radar] ${slug}: release notes fetched — ${releaseNotesContent.length} chars from ${releaseNotesBaseUrl}`)
+      }
     }
   } catch (e: any) {
     console.warn(`[feature-radar] ${slug}: release notes config read failed — ${e?.message}`)
@@ -356,7 +365,11 @@ Features listed in "Technology Preview Features" or "Tech Preview" sections of r
 
 For OpenShift (OCP): extract OCP-specific capabilities — Virtualization, AI/ML features, networking, storage, CI/CD, developer tools, security, multi-cluster management. For OpenShift Virtualization specifically, extract it as a detailed feature with sub-capabilities including VM lifecycle management, live migration, Migration Toolkit for Virtualization (MTV), network attachment, and storage integration.
 
-Output a valid JSON array (maximum ${getAiConfig().featureExtractionMaxFeatures} features — prioritize the most impactful and ${shortName}-specific ones). For description, write 2-4 sentences that help a Solutions Architect have an informed customer conversation. Include URLs mentioned near each feature in sourceUrls. IMPORTANT: Ensure JSON is complete and valid — never truncate mid-object.
+Output a valid JSON array (maximum ${getAiConfig().featureExtractionMaxFeatures} features — prioritize the most impactful and ${shortName}-specific ones). For description, write 2-4 sentences that help a Solutions Architect have an informed customer conversation.
+
+CRITICAL: For EVERY feature, you MUST include sourceUrls. Look for URLs in [brackets] near the feature description — these are documentation links. Every feature MUST have at least one sourceUrl. If a URL appears in the same section as the feature, include it. Never return an empty sourceUrls array if there are any URLs in the surrounding text.
+
+IMPORTANT: Ensure JSON is complete and valid — never truncate mid-object.
 For each feature, set "releaseNotesSection" to the release notes section label that immediately precedes it in the release notes content (e.g. "virtualization", "release_notes", "10.1_release_notes"). If the feature comes from the slide deck content, set "releaseNotesSection" to null.`
 
   const userPrompt = `Product: ${displayName} (${shortName})
@@ -496,6 +509,26 @@ Extract ALL features including those listed in Technology Preview sections. Outp
     const features = Array.from(seen.values())
       .sort((a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9))
       .slice(0, 50)
+
+    // 7a. Assign fallback sourceUrls for features that Gemini left empty (#252)
+    if (releaseNotesBaseUrl) {
+      for (const feature of features) {
+        if (feature.sourceUrls.length === 0) {
+          if (feature.releaseNotesSection) {
+            // Create anchored URL from section name
+            const anchor = feature.releaseNotesSection
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-|-$/g, '')
+            feature.sourceUrls.push(`${releaseNotesBaseUrl}#${anchor}`)
+          } else {
+            // Use base release notes URL as last resort
+            feature.sourceUrls.push(releaseNotesBaseUrl)
+          }
+        }
+      }
+      console.log(`[feature-radar] ${slug}: sourceUrl fallback applied to ${features.filter(f => f.sourceUrls.length > 0).length} features`)
+    }
 
     // 8. Write cache
     const cache: ProductFeatureCache = {

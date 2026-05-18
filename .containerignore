@@ -3,6 +3,7 @@ dashboard/node_modules
 dashboard/dist
 cache/
 data/
+data-demo/
 data-dev/
 data-test/
 data-snapshots/

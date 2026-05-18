@@ -188,6 +188,43 @@ const STATE_TO_REGION: Record<string, RHEvent['region']> = {
   QC: 'canada', SK: 'canada', YT: 'canada',
 }
 
+/**
+ * Major city to state mapping for extracting location from city names
+ * Used when events have city in the name but no explicit "City, ST" pattern
+ */
+const CITY_TO_STATE: Record<string, string> = {
+  'new york': 'NY', 'nyc': 'NY', 'manhattan': 'NY', 'brooklyn': 'NY',
+  'washington': 'DC', 'washington d.c': 'DC', 'washington dc': 'DC',
+  'boston': 'MA', 'chicago': 'IL', 'dallas': 'TX', 'houston': 'TX',
+  'denver': 'CO', 'seattle': 'WA', 'san francisco': 'CA', 'los angeles': 'CA',
+  'atlanta': 'GA', 'miami': 'FL', 'las vegas': 'NV', 'phoenix': 'AZ',
+  'portland': 'OR', 'minneapolis': 'MN', 'detroit': 'MI', 'charlotte': 'NC',
+  'raleigh': 'NC', 'nashville': 'TN', 'austin': 'TX', 'san diego': 'CA',
+  'san jose': 'CA', 'orlando': 'FL', 'tampa': 'FL', 'pittsburgh': 'PA',
+  'philadelphia': 'PA', 'baltimore': 'MD', 'columbus': 'OH', 'indianapolis': 'IN',
+  'salt lake city': 'UT', 'kansas city': 'MO', 'st louis': 'MO',
+  'mandalay bay': 'NV', 'venetian': 'NV',
+}
+
+/**
+ * Extract location from city name when no "City, ST" pattern exists
+ * Searches for major city names in text and returns formatted location string
+ */
+function extractLocationFromCityName(text: string): string | null {
+  const lower = text.toLowerCase()
+  for (const [city, state] of Object.entries(CITY_TO_STATE)) {
+    if (lower.includes(city)) {
+      // Title case the city name for display
+      const titleCaseCity = city
+        .split(' ')
+        .map(word => word[0].toUpperCase() + word.slice(1))
+        .join(' ')
+      return `${titleCaseCity}, ${state}`
+    }
+  }
+  return null
+}
+
 function getRegionFromLocation(location: string | null): RHEvent['region'] | null {
   if (!location) return null
   const stateMatch = location.match(/,\s*([A-Z]{2})\b/)
@@ -405,7 +442,8 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
   if (isGarbageEvent(name)) return null
 
   // Try to extract location from ANY part (not just parts[0])
-  const location = extractLocation(plainText)
+  // Fall back to city name matching if no "City, ST" pattern found
+  const location = extractLocation(plainText) ?? extractLocationFromCityName(plainText)
 
   // Derive region from location (state → region mapping) — more accurate than doc section headers
   // Virtual events are always national
@@ -541,3 +579,6 @@ export async function fetchRHEvents(): Promise<void> {
     throw e
   }
 }
+
+// Export for testing
+export { extractLocation, extractLocationFromCityName, getRegionFromLocation, CITY_TO_STATE, STATE_TO_REGION }
