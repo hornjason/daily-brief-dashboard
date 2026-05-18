@@ -52,6 +52,13 @@ if [ -d /app/config-templates ]; then
   done
 fi
 
+# ── Seed value maps on first boot ──────────────────────────────────────────────
+if [ -f /app/config-templates/business-value-maps.txt ] && [ ! -f /data/cache/value-maps/business-value-maps.txt ]; then
+  mkdir -p /data/cache/value-maps
+  cp /app/config-templates/business-value-maps.txt /data/cache/value-maps/business-value-maps.txt
+  echo "[entrypoint] Seeded business value maps to cache"
+fi
+
 # ── Virtual display ────────────────────────────────────────────────────────────
 # Clean up stale X lock files from previous run (left behind by podman restart)
 rm -f /tmp/.X99-lock /tmp/.X11-unix/X99 2>/dev/null || true

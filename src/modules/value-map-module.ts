@@ -2,17 +2,33 @@
  * Business Value Map Module
  * Registers Red Hat Business Value Maps as a universal signal.
  *
- * Value maps provide per-product business objectives, impact areas,
- * and solution enablers. When available, they feed into ALL intelligence
- * features — briefs, meeting prep, campaigns, customer intelligence —
- * via the universal signal contract (ADR-021).
+ * Sourcing strategy (ADR-023): Drive-first with static fallback.
+ * - When valueMapsDeckId is configured in settings.json, fetch() exports
+ *   the Google Slides deck as text/plain and writes to cache.
+ * - When not configured, the static file shipped in config-templates/
+ *   (seeded by entrypoint.sh on first boot) is used as-is.
+ * - value-map-loader.ts reads from cache path regardless of source.
  */
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { getValueMap, getAvailableValueMapSlugs, clearValueMapCache } from '../value-map-loader.ts'
-import { readFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../cache-layer.ts'
+
+const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
+const VALUE_MAPS_PATH = resolve(CACHE_DIR, 'value-maps/business-value-maps.txt')
+const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? 'config', 'settings.json')
+
+function getValueMapsDeckId(): string | null {
+  try {
+    if (!existsSync(SETTINGS_PATH)) return null
+    const settings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+    return settings.valueMapsDeckId ?? null
+  } catch {
+    return null
+  }
+}
 
 function getCustomersPath(): string {
   const configDir = process.env.CONFIG_DIR ?? 'config'
@@ -50,21 +66,61 @@ function getCustomerProducts(customerSlug: string): string[] {
   }
 }
 
+async function fetchFromDrive(deckId: string): Promise<void> {
+  try {
+    const { google } = await import('googleapis')
+    const { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } = await import('../google.ts')
+    const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+    const drive = google.drive({ version: 'v3', auth })
+
+    const res = await drive.files.export(
+      { fileId: deckId, mimeType: 'text/plain' },
+      { responseType: 'text' }
+    )
+
+    const content = typeof res.data === 'string' ? res.data : String(res.data)
+    if (content.length < 100) {
+      console.warn(`[value-maps] Drive export returned only ${content.length} chars — keeping existing cache`)
+      return
+    }
+
+    const dir = resolve(CACHE_DIR, 'value-maps')
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+    writeFileSync(VALUE_MAPS_PATH, content)
+    clearValueMapCache()
+    console.log(`[value-maps] refreshed from Drive deck ${deckId} — ${content.length} chars`)
+  } catch (e: any) {
+    console.warn(`[value-maps] Drive export failed: ${e?.message ?? e} — using cached file`)
+  }
+}
+
 FeatureModuleRegistry.register({
   name: 'value-maps',
 
   scope: 'portfolio',
 
+  refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
+
   cachePaths: () => ['data/cache/value-maps/business-value-maps.txt'],
 
   async fetch(): Promise<void> {
-    clearValueMapCache()
+    const deckId = getValueMapsDeckId()
+    if (deckId) {
+      await fetchFromDrive(deckId)
+    } else {
+      clearValueMapCache()
+    }
   },
 
   async cleanup(): Promise<void> {},
 
   async syncNow(): Promise<void> {
-    clearValueMapCache()
+    const deckId = getValueMapsDeckId()
+    if (deckId) {
+      await fetchFromDrive(deckId)
+    } else {
+      clearValueMapCache()
+    }
   },
 
   async signals(customerSlug: string): Promise<Signal[]> {
@@ -72,7 +128,8 @@ FeatureModuleRegistry.register({
     if (availableSlugs.length === 0) return []
 
     const customerProducts = getCustomerProducts(customerSlug)
-    const slugsToUse = customerProducts.length > 0
+    const isCustomerSpecific = customerProducts.length > 0
+    const slugsToUse = isCustomerSpecific
       ? customerProducts.filter(s => availableSlugs.includes(s))
       : availableSlugs
 
@@ -92,12 +149,12 @@ FeatureModuleRegistry.register({
         type: 'intelligence',
         headline: `Business value context for ${slug.toUpperCase()}`,
         detail: summary,
-        score: 0.6,
+        score: isCustomerSpecific ? 0.75 : 0.6,
         timestamp: new Date().toISOString(),
         metadata: {
           productSlug: slug,
           contentLength: content.length,
-          isCustomerSpecific: customerProducts.length > 0,
+          isCustomerSpecific,
         },
       })
     }

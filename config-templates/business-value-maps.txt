@@ -1,0 +1,2486 @@
+April 2026
+Business Value Maps
+Red Hat Solutions, Services
+Red Hat Confidential and Partner NDA only 
+1
+
+The content set forth herein does not constitute in any way a binding or legal agreement or impose any legal obligation or duty on Red Hat. This information does not take into account all factors relevant to total cost of ownership or return on investment, and your results will vary based on your environment and other factors. The information is provided for discussion purposes only. Achieving the outcomes described requires the cumulative impact of many forces and entities beyond the control of Red Hat.
+Disclaimer
+2
+
+Introduction to Value Maps
+
+What is a Value Map?
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat Understands Your Business
+
+We are trusted advisors that understand the internal and external factors impacting your business
+
+How does Red Hat help you?
+
+Detail of the solution we are proposing at a executive / summary level
+Competitive differentiators
+
+
+Why is this important to your business?
+
+Our solutions are tied to business performance and how Customers measure success
+
+Value Maps and MEDDPICC
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+PAIN POINT
+METRIC
+ECONOMIC BUYER-FRIENDLY FRAMEWORK
+HELPS CUSTOMERS WITH DEVELOPING DECISION CRITERIA
+Red Hat Understands Your Business
+
+We are trusted advisors that understand the internal and external factors impacting your business
+
+How does Red Hat help you?
+
+Detail of the solution we are proposing at a executive / summary level
+Competitive differentiators
+
+
+Why is this important to your business?
+
+Our solutions are tied to business performance and how Customers measure success
+Account team should deliver messaging that is Customer-specific and relevant to the Persona
+
+Index
+Click on the text to access the Value Map for relevant Solution/Use Case/Sales Play
+Red Hat OpenShift Container Platform
+Red Hat OpenShift Cloud Services
+Red Hat Ansible Automation Platform
+Red Hat Enterprise Linux (RHEL) + Insights
+Red Hat Runtimes
+Red Hat Satellite
+Red Hat Advanced Cluster Management
+Red Hat Advanced Cluster Security
+Red Hat OpenShift Data Foundation
+Red Hat Quay
+Red Hat OpenShift Platform Plus
+Red Hat OpenShift AI
+Red Hat Enterprise Linux AI
+Red Hat AI
+Red Hat Developer Hub Platform
+Red Hat OpenShift Dev Spaces
+CentOS to RHEL
+AWX to Enterprise Ansible
+EKS to ROSA
+SAP Workloads
+Openshift as Application Platform
+Standardization and Automation with Red Hat: RHEL, Satellite, Ansible
+Red Hat OpenShift Virtualization
+Event-Driven Ansible
+Ansible Lightspeed
+Red Hat Ansible for Edge Automation
+Red Hat Ansible for Network Automation
+Red Hat OpenShift AI + WatsonX
+RHEL in the Cloud
+AAP for RHEL Automation
+AIOps
+Red Hat Training
+Red Hat Consulting for OpenShift
+Red Hat Technical Account Manager (TAM)
+Value Maps by Solution
+Value Maps by Sales Motion/Use Case
+Value Maps by Services
+Modernize Existing Applications
+Accelerate New (App) Development
+Automate the Enterprise
+Value Maps by Sales Play
+Value Maps by Partner Solutions
+Red Hat Ansible with Terraform
+Red Hat Ansible with Dynatrace
+Red Hat Ansible with ServiceNow
+Red Hat Solutions with SI Consulting
+
+Value Maps by Solution
+
+
+
+Policy-driven compliance increases security, stability and overall audit preparedness.
+Multicluster observability  increases platform stability and security while simplifying monitoring function. 
+Improved data security by micro-segmentation via containers.
+Increase availability with the ability to deploy legacy and cloud-native applications quickly.
+Application dashboards for support teams to quickly identify and correlate runtime issues in production.
+Rapid experimentation accelerates development of new apps and features, driving revenue and new customer acquisition.
+Consistent development experience across the application life cycle.
+Increased platform stability drives customer retention.
+Pre-integrated, ready to use application development tools enabling immediate productivity towards business logic and customer deliverables that are consistent and independent of where applications run.
+Server cost
+Avoid the cost of building and maintaining an app platform.
+Automated self-service provisioning and cluster deployment across legacy & cloud environments.
+Reduce skill-sprawl and increase productivity by learning one platform regardless of cloud choice.
+Integrated platform includes container host, Kubernetes, and application life-cycle management using your choice of infrastructure.
+Number of unplanned downtimes
+Development velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat OpenShift Container Platform | Value Map
+Infrastructure cost
+Time to resolve unplanned downtime
+Application development productivity
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+Effort on IT infrastructure management
+<< Back to Index
+
+
+
+Policy-driven compliance increases security, stability and overall audit preparedness.
+Multicluster observability  increases platform stability and security while simplifying monitoring function. 
+Improved data security by micro-segmentation via containers.
+Increase availability with the ability to deploy legacy and cloud-native applications quickly.
+Application dashboards for support teams to quickly identify and correlate runtime issues in production.
+Rapid experimentation accelerates development of new apps and features, driving revenue and new customer acquisition.
+Platform ubiquity creates new market opportunities - drives market share.
+Increased platform stability drives customer retention.
+Pre-integrated, ready to use application development tools enabling immediate productivity towards business logic and customer deliverables that are consistent and independent of where applications run.
+Operational efficiency
+Avoid the cost of building and maintaining an app platform.
+Automated self-service provisioning and cluster deployment across legacy & cloud environments.
+Reduce skill-sprawl and increase productivity by learning one platform regardless of cloud choice.
+Application portability with lower operational cost across hybrid cloud, multi cloud, and edge footprints.
+Number of unplanned downtimes
+Development velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat OpenShift Cloud Services | Value Map
+Application development infrastructure saving
+Time to resolve unplanned downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+<< Back to Index
+
+Red Hat Ansible Automation Platform | Value Map
+<< Back to Index
+
+
+Maintain configuration and compliance across clouds with a single tool.
+Enable security collaboration across business domains providing cross-department compliance.
+Quickly address network security risks; go from days and weeks to hours and minutes.
+Manage backups, disruptions, and failures.
+Schedule enforcement areas across clouds.
+Ansible ensures your cloud deployments work seamlessly across public, private or hybrid cloud as easily as you can build a single system.
+Make installations, upgrade and day-to-day management repeatable and reliable.
+Over 300 modules spanning hundreds of endpoints in various cloud technologies and vendors. Interoperability at cloud scale.
+Automate often repeated, rote tasks to free time to focus on key priorities and delivering innovation.
+Scale with confidence, knowing that Ansible will allow you to easily adapt to evolving needs and requirements.
+Accelerate provisioning and deployment times to meet stakeholder expectations.
+Turn off unused infrastructure, and recover orphaned resources.
+Library of networking automation content that provides building blocks to jumpstart new automation projects.
+Take the guesswork out of the process, and deploy with confidence, with your teams aligned around a common tool.
+Leverage tooling to automate even the most complex environments in the datacenter, across clouds, and at the edge.
+Right size cloud resources, using scheduled jobs
+Number of unplanned downtimes
+Development velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Time to resolve unplanned downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+IT Ops FTEs effort
+Effort on regulatory compliance
+Number of revenue generating applications
+Help desk ticket volume and time per ticket
+Effort on IT security
+Effort on network management
+
+
+
+System-wide cryptographic policy providing a consistent way to implement and maintain standards-based compliance settings for your infrastructure.
+Centralized identity management (IdM) capabilities that allows you to authenticate users and implement role-based access controls (RBAC).
+Multi-hybrid cloud capabilities, giving developers the ability to move applications from on-premises systems to the cloud, to the edge.
+Extensive library of applications, tools, help, and guidance that let developers be selective.
+Optimized for high-performance graphics, animation, scientific activities, and other demanding workloads.
+Cost-effective operating system with transparent roadmap and experienced support.
+Streamline management at scale with a consistent and repeatable platform for all deployments, whether on-premise, virtualized, in the cloud, or at the edge.
+Highly stable, scalable, and reliable platform for data warehouse.
+Number of unplanned downtimes
+Development velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat Enterprise Linux (RHEL) + Insights | Value Map
+Time to resolve unplanned downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+Effort spent on managing IT infrastructure
+Effort spent on network management
+Application development productivity
+Server cost
+Time to deploy new servers
+<< Back to Index
+
+
+
+An identity management system that enables developers to provide web single sign-on capabilities based on industry standards for enterprise security.
+Provides established and market-proven technologies and production-ready capabilities, including application runtimes, data caching, data messaging, and security.
+Offers tight integration with Red Hat OpenShift® to accelerate time to market by providing the ideal platform to develop, deliver, and deploy cloud-native applications.
+Delivers increased efficiencies by providing developers the tools they need to migrate and optimize existing apps so that more time can be spent innovating and staying competitive.
+A collection of runtimes, frameworks, and languages so developers and architects can choose the right tool for the right task. Support is included for Quarkus, Spring Boot, Vert.x, and Node.js.
+A solution for accessing, processing, and analyzing data at in-memory speed to deliver a superior user experience.
+Number of unplanned downtimes
+Development velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat Runtimes | Value Map
+Time to resolve unplanned downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+Effort spent on managing IT infrastructure
+Effort spent on helpdesk support
+Application development productivity
+<< Back to Index
+
+
+
+Apply security patches and software updates to thousands of globally distributed systems.
+Compliance using OpenSCAP policies.
+Built in auditing and reporting capabilities which vary depending on the specific item that you want to audit or report on.
+Simplified workflows based on the most common patterns of use to streamline the user experience.
+Supports a secure repository for any type of content to be distributed to hosts.
+ Analyze and correct configuration drift.
+Ability to integrate into existing infrastructure services like DNS, DHCP.
+Centrally manage customer subscription usage with inventory, utilization, and consumption reporting.
+Define and maintain a Standard Operating Environment (SOE) to quickly create new servers.
+Development velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat Satellite | Value Map
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+IT FTEs efforts
+Time to deploy new servers and virtual machines
+Application development productivity
+Compliance team productivity
+<< Back to Index
+Server cost
+Number of unplanned downtimes
+Time to resolve unplanned downtime
+
+
+
+Using placement rules, ensure that the desired number of application instances are deployed across the fleet. If a cluster becomes unavailable, the app will automatically be deployed to a cluster that matches the placement.
+Automate the DR failover and failback processes asynchronously with Regional-DR for minimal recovery point objective (RPO) or synchronously with Metro-DR for no RPO at all*.
+Apply consistent operational policies for security, configuration, compliance, and governance to Kubernetes clusters across hybrid cloud infrastructure.
+Define and deploy applications across clusters and clouds using a Kubernetes desired state placement approach.
+Automate everything outside of Kubernetes with your application deployments. For example, automate and configure networking, databases, load balancers, and firewalls with Ansible Automation Platform integration.
+Self-service provisioning of preconfigured resources to any environment.
+Effort spent on cluster management
+Automatic deployment of clusters from a self-service catalog, reducing burden on IT team.
+Gain intelligence on cluster health for your entire managed fleet and take proactive steps and remediation actions as needed
+Allow policies to be auto-generated and deployed via OpenShift GitOps from existing Kubernetes configuration, Gatekeeper, and Kyverno policies.
+Number of unplanned downtimes*
+Development velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat Advanced Cluster Management | Value Map
+Risk of compliance policy violation
+Effort spent on compliance management
+Time to resolve unplanned downtime*
+Application development productivity
+*Supported by Red Hat OpenShift Data Foundation solution
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+<< Back to Index
+
+
+
+Prevent risky workloads from being deployed or run using out-of-the-box deploy-time and runtime policies.
+Monitor for deviations from known good activity and detect known bad activity to make more informed risk management decisions.
+Manage and audit compliance with  built-in checks for CIS, NIST, PCI-DSS, and HIPAA controls.
+Quantify risk by delivering deep visibility centered around deployments across namespaces and clusters.
+Integrated security guardrails supporting developer velocity while still maintaining the desired security posture.
+Enforce security policy directly in CI/CD pipelines and give developers remediation guidance quickly.
+Propagate a single configuration across all pods in a deployment rather than configuring system-level controls on every host in a cluster.
+Effort on vulnerability management
+Remove operational dependencies by storing policies for network segmentation, admission control, and other security functions.
+Identify issues faster and simpler and solve them using chosen toolchains and workflows.
+Prioritizes risk based on potential impact, correlating vulnerabilities with rich context derived from Kubernetes constructs, including labels and annotations, privileges, secrets, and network configuration.
+Application downtime
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat Advanced Cluster Security | Value Map
+Risk of compliance policy violation
+Effort on compliance and audit management
+Risk of security breach
+Application development productivity
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+Effort on security  management
+<< Back to Index
+
+
+
+Native support for data resiliency, to support backup and restoration services for Kubernetes applications, including their data, resources, and state.
+Metro Disaster Recovery for both stretched and multiple Red Hat OpenShift clusters that are within 10 milliseconds of latency.*
+Regional Disaster Recovery (Regional-DR Multi Cluster) for multiple Red Hat clusters at multiple sites.*
+Granular volume-level encryption to control access to critical data.*
+Simplify data management across hybrid cloud while providing easy and consistent access, faster innovation, and instant insights.
+Provide accessible data and support for Red Hat OpenShift apps.
+Let data scientists and those who support them deploy and manage storage on demand, without requiring details about how data is stored or how to move datasets to other platforms.
+Provide common functionality across all cloud platforms, simplifying processes for developers and users.
+Automate storage provisioning alongside the provisioning of application resources, all available from the operator installed in the OpenShift administrator console.
+Provides cluster data management capability that lets organizations deploy their apps and storage as needs dictate and adjust as situations change.
+Work with existing solutions so organizations can easily extend their backup software to container-based environments without having to invest in new methodologies.
+Support for diverse workloads and multicloud object gateway functionality, along with critical business-continuity functionality for data services.
+Risk of data security breach
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat OpenShift Data Foundation | Value Map
+Application development productivity
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+*Additional capabilities supported by Red Hat OpenShift Data Foundation Advanced version
+Disaster recovery time
+Effort on storage management
+Cost of data storage and processing
+<< Back to Index
+
+
+
+High availability in the management of images reducing any severe consequences to developers who are accessing container registries at all times.
+Organise responsibilities and fine-grained permissions which can be mapped to your organizational structure.
+Simplify continuous integration (CI) pipelines by building container images in the registry with source code management integration.
+Scalability from a developer laptop to a container host or Kubernetes, on-premise or on public cloud.
+Integrate enterprise registry into your existing environment and automate your workflows.
+Speed up access to the binary blobs for geographically dispersed setups while content is the same across regions.
+Mirror a subset of the entire registry content to distributed registry deployments.
+Monitor known container image vulnerabilities on a cluster, project or pod level directly.
+Rich severity grading information obtained from multiple sources.
+Logging and auditing every security-relevant event in the system in long-term log storage.
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat Quay | Value Map
+Application development productivity
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+Vulnerability cost
+IT  management  effort
+(content federation)
+Security management effort
+Vulnerability  management effort
+Audit  management effort
+<< Back to Index
+
+
+
+Server cost
+OpenShift Container Platform:
+Avoid the cost of building and maintaining an app platform.
+Automated self-service provisioning and cluster deployment across legacy & cloud environments.
+Integrated platform includes container host, Kubernetes, and application life-cycle management using your choice of infrastructure.
+Advanced Cluster Management:
+Automatic deployment of clusters from a self-service catalog, reducing burden on IT team.
+Gain intelligence on cluster health for your entire managed fleet and take proactive steps and remediation actions as needed
+Allow policies to be auto-generated and deployed via OpenShift GitOps from existing Kubernetes configuration, Gatekeeper, and Kyverno policies.
+Advanced Cluster Security:
+Remove operational dependencies by storing policies for network segmentation, admission control, and other security functions.
+Identify issues faster and simpler and solve them using chosen toolchains and workflows.
+Prioritizes risk based on potential impact, correlating vulnerabilities with rich context derived from Kubernetes constructs, including labels and annotations, privileges, secrets, and network configuration.
+OpenShift Data Foundation:
+Automate storage provisioning alongside the provisioning of application resources, all available from the operator installed in the OpenShift administrator console.
+Provides cluster data management capability that lets organizations deploy their apps and storage as needs dictate and adjust as situations change.
+Work with existing solutions so organizations can easily extend their backup software to container-based environments without having to invest in new methodologies.
+Quay:
+Speed up access to the binary blobs for geographically dispersed setups while content is the same across regions.
+Mirror a subset of the entire registry content to distributed registry deployments.
+Monitor known container image vulnerabilities on a cluster, project or pod level directly.
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat OpenShift Platform Plus | Value Map 1/3
+Infrastructure cost
+Cost Efficiency
+Effort on IT infrastructure management
+Effort on cluster management
+Effort on compliance management
+Effort on vulnerability management
+Effort on security  management
+Effort on storage management
+Cost of data storage and processing
+Effort on IT  management
+(content federation)
+Effort on audit  management
+<< Back to Index
+
+
+
+OpenShift Container Platform:
+Rapid experimentation accelerates development of new apps and features, driving revenue and new customer acquisition.
+Increased platform stability drives customer retention.
+Pre-integrated, ready to use application development tools enabling immediate productivity improvements.
+Advanced Cluster Management:
+Define and deploy applications across clusters and clouds using a Kubernetes desired state placement approach.
+Automate everything outside of Kubernetes with your application deployments. For example, automate and configure networking, databases, load balancers, and firewalls with Ansible Automation Platform integration.
+Self-service provisioning of preconfigured resources to any environment.
+Advanced Cluster Security:
+Integrated security guardrails supporting developer velocity while still maintaining the desired security posture.
+Enforce security policy directly in CI/CD pipelines and give developers remediation guidance quickly.
+Propagate a single configuration across all pods in a deployment rather than configuring system-level controls on every host in a cluster.
+OpenShift Data Foundation:
+Simplify data management across hybrid cloud while providing easy and consistent access, faster innovation, and instant insights.
+Provide accessible data and support for Red Hat OpenShift apps.
+Let data scientists and those who support them deploy and manage storage on demand, without requiring details about how data is stored or how to move datasets to other platforms.
+Quay:
+Simplify continuous integration (CI) pipelines by building container images in the registry with source code management integration.
+Scalability from a developer laptop to a container host or Kubernetes, on-premise or on public cloud.
+Integrate enterprise registry into your existing environment and automate workflows.
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat OpenShift Platform Plus | Value Map 2/3
+Revenue Growth
+Development velocity
+Application development productivity
+<< Back to Index
+
+
+
+OpenShift Container Platform:
+Policy-driven compliance increases security, stability and overall audit preparedness.
+Multicluster observability  increases platform stability and security while simplifying monitoring function. 
+Improved data security by micro-segmentation via containers.
+Increase availability with the ability to deploy legacy and cloud-native applications quickly.
+Advanced Cluster Management:
+Using placement rules, ensure that the desired number of application instances are deployed across the fleet. If a cluster becomes unavailable, the app will automatically be deployed to a cluster that matches the placement.
+Apply consistent operational policies for security, configuration, compliance, and governance to Kubernetes clusters across hybrid cloud infrastructure.
+Advanced Cluster Security:
+Prevent risky workloads from being deployed or run using out-of-the-box deploy-time and runtime policies.
+Manage and audit compliance with  built-in checks for CIS, NIST, PCI-DSS, and HIPAA controls.
+Quantify risk by delivering deep visibility centered around deployments across namespaces and clusters.
+OpenShift Data Foundation:
+Native support for data resiliency, to support backup and restoration services for Kubernetes applications, including their data, resources, and state.
+Metro Disaster Recovery for both stretched and multiple Red Hat OpenShift clusters that are within 10 milliseconds of latency.
+Regional Disaster Recovery (Regional-DR Multi Cluster) for multiple Red Hat clusters at multiple sites.
+Granular volume-level encryption to control access to critical data.
+Quay:
+High availability in the management of images reducing any severe consequences to developers who are accessing container registries at all times.
+Organise responsibilities and fine-grained permissions which can be mapped to your organizational structure.
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat OpenShift Platform Plus | Value Map 3/3
+Risk
+Mitigation
+Number of unplanned downtimes
+Time to resolve unplanned downtime
+Risk of compliance policy violation
+Risk of security breach
+Vulnerability cost
+<< Back to Index
+
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat OpenShift AI | Value Map
+Train and deploy models  to meet the relevant regulatory, security, and data requirements
+Reduce risk of any sensitive data exposure by using an on premise data science platform
+
+Adopt CI/CD  pipelines to rapidly build, test, and deploy AIML models
+Reduce complexities of building and delivering models and AI-enabled applications
+Self-service environments for data science teams with integrated hardware acceleration
+Revenue Growth
+Risk
+Mitigation
+
+
+ Streamline resource provisioning, deployment, and management
+
+Enhance  model scalability and reduced model training /tuning
+Consistent user experience across personas (Data scientist, engineers) for effective collaboration
+
+Distributed workloads for efficient data processing, model training / tuning
+Cost Efficiency
+Through Simplified AI Adoption
+By driving AI/ML operational consistency
+By gaining hybrid cloud flexibility
+Model Quality
+Faster Time to Market
+Accelerated model development
+Business Revenue
+Incremental benefit
+Cost due to on-demand auto-scaling
+Model Maintenance
+Time-To-Configure Compute
+Increased Operational Efficiency 
+Technical effort for setup
+Time for support tickets routing
+Data Scientist Productivity
+Reduced Infrastructure Cost
+Risk on  Data Security
+Data Security
+Risk on  Compliance Violation
+Enhanced Compliance
+<< Back to Index
+
+Red Hat Enterprise Linux AI | Value Map
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Revenue Growth
+Risk
+Mitigation
+Enhance Innovation 
+Ensure Support and IP Indemnification
+
+
+
+Securely deploy open source-licensed Granite language and code models, fully supported and indemnified by Red Hat under the Apache-2.0 Open Source license
+
+Safeguard your investment with Red Hat enterprise support: trusted product distribution, 24x7 support, extended lifecycle, and IP indemnification
+
+
+
+Improve  innovation by unlocking the power of efficient, open source gen AI models
+
+Accelerate results with InstructLab, enabling developers and domain experts to tune models without deep data science expertise
+
+Expedite  the process from proof of concept to production by providing tools to train, tune, and deploy models across the hybrid cloud
+
+
+Cost Efficiency
+
+Improve Operational Productivity and Resource Optimization
+
+
+Reduce cost by leveraging cost and performance optimized LLMs  that align with a wide variety of gen AI use cases
+
+Streamline efficiency with Red Hat Enterprise Linux AI's InstructLab tooling, enabling effective skill and knowledge contributions to AI models for business applications
+
+Optimize resource utilization with bootable RHEL images that include PyTorch, required runtime libraries, and hardware accelerators for NVIDIA, Intel, and AMD
+
+
+Models Tuning 
+ Time to Market
+Setting up gen AI LLMs
+Revenue from AI Capabilities
+AI Models Training Cost
+Opex (FTEs effort on AI Models)
+ Risk of Compliance Violation
+Risk of Legal Issues
+Improve Data Governance
+<< Back to Index
+
+
+ 
+
+
+
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Provide flexibility to deploy anywhere by allowing customers to choose where to train, tune, deploy to meet regulatory requirements
+
+Reduce risk of any sensitive data exposure by using an customer preferred deployment (data centre, cloud)
+
+Availability of validated models  and model catalog of pre -optimized and high performance models or build your machine learning models
+Tune small, purpose-built models efficiently with enterprise-relevant data
+
+Manage and monitor the lifecycle of both predictive and generative AI models at scale
+Predictability and flexibility when deploying third-party generative AI models 
+Innovation and Scale
+Risk
+Mitigation
+
+
+Enhance Gen AI models with RAG techniques, Instruct Lab and fine tune pre trained model on enterprise specific data to improve performance 
+
+Enable data scientists to build predictive models autonomously with a streamlined interface and advanced AI capabilities
+
+Distributed workloads for efficient data processing, model training / tuning
+
+Inference runtime (via vLLM) for the hybrid cloud - run model of choice across any accelerator / any cloud and model optimization capabilities
+Cost Efficiency
+With increased  efficiency and adoption 
+By driving AI/ML operational productivity with simplified experience 
+With Flexibility to deploy anywhere
+Faster Time to Market
+Accelerated model development /tuning
+Revenue from AI capabilities
+Incremental benefit
+Cost due to on-demand auto-scaling
+Model Maintenance / Customization
+Time-To-Configure Compute
+Increased Operational Efficiency 
+Technical effort for setup
+AI model training cost
+Data Scientist Productivity
+Reduced Infrastructure Cost
+Risk of   Compliance Violation
+Enhanced Compliance
+Inference cost (GPU cost)
+Innovation speed and AI adoption
+Cost due to model compression
+Red Hat AI | Value Map
+<< Back to Index
+
+Red Hat Developer Hub Platform | Value Map
+<< Back to Index
+
+
+Number of Downtimes (planned or unplanned)
+Development Velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+Developer Productivity
+Effort on Platform engineering
+Reduce Cognitive Load
+Drive Innovation and Delight Customers
+Secure and compliant Development
+Provide secure access to all users within the environment with Role Based Access Control (or RBAC)
+Ensure business continuity with faster issue resolution through Red Hat support services 
+Reduce downtime by delivering high quality software through streamlined developer workflows against organization’s best practices
+Install, update, and remove plugins anytime without requiring a rebuild or significant downtime
+Enable self-service collaboration to help developers focus on delivering features faster
+Reduce bureaucratic & repetitive tasks with a streamlined end-to-end development environment
+Save time by accessing all tools & information via a centralized API and software catalog
+Use certified pipelines and Gitops plugins to design consistently while accelerating development, on top of Red Hat OpenShift, running on-premises, cloud or edge
+Easily implement & maintain DevOps practices, CI/CD pipeline & application release with integrated automated workflows
+Create, maintain, and search technical documentation alongside code seamlessly
+Enable new team members to quickly spin up new projects without building from scratch through software templates
+Reduce the frequency of support requests related to common issues, repetitive tasks
+Help Desk Ticket volume
+Developer Onboarding time
+Number of Security Incidents
+
+Red Hat OpenShift Dev Spaces | Value Map
+<< Back to Index
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Risk
+Mitigation
+Secure & Compliant Development
+All source code/data remains on cluster and is not pulled to local machines
+Isolated sandboxed environments which minimizes the attack surface for both Developers & agentic assistants
+Air Gapped setup while pointing Developer environments to internally hosted plug-in & image registries 
+Improve security & compliance
+Decrease number of security incidents
+
+
+Cost Efficiency
+
+Reduce Cognitive Load
+Enable developers to remotely code, run & test applications using their favorite IDEs with OpenShift Dev Spaces (included in OCP subscription)
+Compute is executed remotely on OpenShift cluster which allows for scaling up or down workloads depending on Developer activity
+Developer environments as code enabling repeatable consistent environments that allow instant onboarding for new Developers
+Reduce compute & infra Cost
+Shorten Developer onboarding
+Reduce Help Desk tickets
+Improve infrastructure utilization
+Improve standardization of configurations
+Revenue Growth
+Drive Innovation & Delight Customers
+Eradicates “works on my machine” by running on Linux containers which more closely resembles production environments while keeping Developer environments consistent, reproducible & shareable
+Fully secure code assistant flow via connecting an assistant running on an air gapped Dev Spaces deployment with a model running on RHOAI
+Enable developers to securely run tools such as Podman that may be prohibited on local machines due to elevated privilege requirements
+Reduce time-to-market
+Increase Developer productivity & velocity
+Increase tool availability
+Decrease time to innovation
+Improve Developer collaboration
+
+Value Maps by Sales Motion/Use Case
+
+
+
+Live kernel patching for increased uptime
+Transparency in patching security vulnerabilities
+Consistent, independently validated and certified solutions that have passed government and regulated industry standards
+Certified on  Federal Information Processing Standard (FIPS) 140-2, FedRAMP and other certifications providing assurance on security controls
+Out-of-the-box compliance tools as part of the OS to easily deploy security baselines from the day one and at scale
+Development of a secure and validated baseline image for applications.
+High quality, supported and popular open source development tools
+Create certified applications for production deployment using Universal Base Image 
+Large ecosystem of partner products to give you more choice, innovation, and stability
+Consistent and repeatable configuration within the OS to enable streamlined administration
+Actionable insight needed for a consistent means of enforcing security policies and configuration
+Simplified configuration from initial provisioning until eventual retirement.
+Consistent provisioning and deployment across physical, virtual, multi-cloud and edge environments comprising the Hybrid Cloud.
+Audit logs of user activity for security event and incident management
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+CentOS to RHEL | Value Map
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+Unplanned downtime time to resolve
+Unplanned downtime frequency
+Development velocity
+Application development productivity
+Risk of compliance policy violation
+Time to upgrade mission critical application
+Effort spent on helpdesk support
+Effort spent on security management
+Effort spent on compliance management
+Risk of security breach
+<< Back to Index
+
+AWX to Enterprise Ansible | Value Map
+<< Back to Index
+Pre-Built Ansible Playbooks for Various On-Premises and Cloud Use Cases
+Avoid rebuilding and reconfiguring every time with manageable upgrade paths and product life cycles
+Deployments of complex multi tier setups 
+Generate full Ansible playbooks using guided text prompts with step-by-step functionality explanations with integrated AI
+Integration and testing of separated features into new/ different projects  in AWX, like UI, API, RBAC, and Backend. 
+Implement rule-based design engine for automated, decisive action for requests
+Guaranteed integrations with automated service requests submitted through third party sources like ServiceNow
+Automate maintenance tasks, network and database failovers 
+Digitally signed Ansible content ensuring end-to-end software supply chain
+Centralized and auditable system with credential management, security and access control
+Rely on security patches and fixes for the entire life of the product with SLA
+Guaranteed SLA support for compatibility, upgrades, and security vulnerabilities for entire life cycle.
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Risk
+Mitigation
+Managing risk
+ Effort on helpdesk support
+
+
+Cost Efficiency
+
+Improve Operational Productivity
+Efforts to write a playbook
+(new creation/standardization)
+Efforts to install and upgrade Ansible Automation platform
+Efforts required to operate a production environment
+Efforts on integration/ testing of different  features
+Cost of Downtime
+Improved SecOps Posture
+
+
+Integration with existing CI/CD tool for successful code build
+Increase IT team productivity to free up capacity for more innovative projects
+Increase innovation with seamless integration and support for nightly build releases
+Enhance application development  velocity with attribute based access control along with role based access control
+Reduce time to market with consistent, centralized experience with a new, improved interface for operators, developers, and administrators
+Development velocity
+Revenue Growth
+Enhance Innovation 
+Innovation driven by new features/enhancements in Automation Platform
+
+
+
+SRE support including enhanced security with automated patching and proactive monitoring for downtime and security vulnerabilities.
+Platform built on secure software supply chain: security at OS and K8s level.
+Transition from on-prem to the cloud, or from cloud to cloud is less complex with a unified control plane.
+Fully managed clusters in minutes to build, deploy, and run applications using built-in developer UI.
+Develop and deploy cloud-native apps with a consistent experience across clouds and on-premises.
+Integrated developer productivity tools, including Service Mesh, CodeReady Workspaces, Serverless, etc.
+Reduce skill sprawl and optimise resources by learning one platform across cloud or on premises.
+Avoid the cost of building and maintaining an app platform.
+Built in cluster services like monitoring, logging, metrics, etc.
+Automated self-service provisioning and cluster deployment across legacy and cloud environments improves efficiencies.
+Scale quickly and cost effectively to meet changes in demand while controlling costs.
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+EKS to ROSA | Value Map
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+Unplanned downtime time to resolve
+Unplanned downtime frequency
+Development velocity
+Security posture
+IT Ops FTEs effort on infrastructure maintenance and support
+DevOps operational efficiency
+Developer productivity
+<< Back to Index
+Cloud resources efficiency
+
+
+
+Server cost
+Comprehensive open source ecosystem that enables customers to run their SAP-related applications and automate SAP deployments.
+Cost-effective operating system with transparent roadmap and experienced support1.
+Wealth of SAP-specific roles for automating SAP HANA landscapes. Simplifies configuration of SAP HANA landscapes and Red Hat infrastructure3.
+Enables Red Hat Enterprise Linux for SAP Solutions environments to run efficiently and securely and lets users group sets of SAP systems to manage them centrally8.
+Ensures consistency in the datacenter by providing programmatic methods to deploy, manage, and secure infrastructure resources3.
+Provides a reliable, high-performance, and cost-effective platform for critical enterprise applications, such as the SAP HANA in-memory data platform6.
+Using the SAP Integration Suite for SAP and non-SAP integrations with 2,000+ pre-built integration flows, it reduces the integration efforts and maintenance costs7.
+Allow customers to integrate data and manage the entire API life cycle, from design to implementation to API retirement, including SAP7.
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat’s Solutions* for SAP Workloads | Value Map 1/3
+Effort spent on managing IT infrastructure
+Cost Efficiency
+Effort on IT security
+Effort spent on database administration
+Time to deploy new compute and storage resources
+*Solutions Scope: 1. Red Hat Enterprise Linux for SAP Solutions, 2. Red Hat OpenShift, 3. Red Hat Ansible Automation Platform, 4. Red Hat Insights, 5. Red Hat Smart Management, 6. Red Hat Virtualization, 7. Red Hat Integration, 8. Red Hat Satellite
+<< Back to Index
+
+Simplify enterprise IT landscapes by providing automation to configure, deploy, secure, and manage SAP environments on premises or in cloud environments.
+Ease the complexity of SAP migrations while enabling the datacenter to operate more efficiently, making hybrid IT simple, powering the intelligent edge, and enabling new business insights from Big Data.
+Migrate and upgrade new SAP applications and/or features with greater ease.
+Integrate non-SAP applications with SAP's Digital Core, IoT infrastructure with SAP Data Intelligence, and digitally transform the workloads for cloud-native development and hybrid cloud deployment strategies2 & 7.
+Supports the OpenAPI specification, enabling import capabilities for all SAP API Business Hub APIs7.
+Allows customers to create out-of-the-box and custom data and application integration flows using SAP and non-SAP systems7.
+Provides SAP-certified side-by-side extensibility solutions to keep the SAP digital code clean while providing API-first capabilities for business and technical users7.
+Sort through the "noise" from unnecessary messages received from devices and reduce traffic passed to SAP Data Intelligence for further AI/ML processing in an intelligent edge deployment2.
+Development velocity - new applications
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat’s Solutions* for SAP Workloads | Value Map 2/3
+Time to complete SAP migration/upgrade
+Revenue Growth
+Development velocity - new features
+Analytics FTEs productivity
+*Solutions Scope: 1. Red Hat Enterprise Linux for SAP Solutions, 2. Red Hat OpenShift, 3. Red Hat Ansible Automation Platform, 4. Red Hat Insights, 5. Red Hat Smart Management, 6. Red Hat Virtualization, 7. Red Hat Integration, 8. Red Hat Satellite
+<< Back to Index
+
+The High Availability Add-On reduces planned and unplanned downtime in scale-up and scale-out SAP HANA, SAP S/4HANA, and SAP NetWeaver deployments1.
+Receive real-time assessment of risks related to performance, availability, stability, and security for the business-critical SAP applications4 & 5.
+Automate critical transitions like system and software upgrades, with near-zero downtime3.
+Includes SAP-specific rules for alerting system configurations, which do not meet the specifications recommended by either Red Hat or SAP4.
+Complements SAP EarlyWatch Alert service, thereby providing a holistic view across the SAP environment that includes a bottom-up view on infrastructure health and a  top-down EarlyWatch Alert view4.
+Supports a variety of software-defined storage solutions, high availability of virtual machines, and third-party tools to enable backup and restoration of virtual machines in case of failure6.
+Enables secured environment using Secure Virtualization (sVirt) and Security-Enhanced Linux (SELinux technologies) to help secure and harden the hypervisor against any attacks6.
+Number of unplanned downtime
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Red Hat’s Solutions* for SAP Workloads | Value Map 3/3
+Time to resolve unplanned downtime
+Risk
+Mitigation
+Number of planned downtime
+Time to resolve planned downtime
+*Solutions Scope: 1. Red Hat Enterprise Linux for SAP Solutions, 2. Red Hat OpenShift, 3. Red Hat Ansible Automation Platform, 4. Red Hat Insights, 5. Red Hat Smart Management, 6. Red Hat Virtualization, 7. Red Hat Integration, 8. Red Hat Satellite
+<< Back to Index
+
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+
+
+Provide developers a faster, consistent, more reliable development environment, and self service access to languages  with OpenShift Dev Spaces
+Use CI/CD and GitOps capabilities to automate application delivery
+Add AI-powered intelligence to applications to accelerate ML modeling and ML models integration with application development and delivery
+Improve application development capabilities with Red Hat application foundation such as API connectivity, Single sign on, Java applications frameworks, etc.
+Onboard and modernize existing applications with integrated migration tooling and RedHat JBoss platform
+Improve IT team motivation with availability of integrated development sandboxes and platform to manage applications across different environments
+Cost Efficiency
+Increase DevOps FTEs productivity
+Effort spent on security & compliance management
+Cost to build application platform
+Protect the App platform with core security features like access controls, network security and an enterprise registry with built-in scanner
+Follow best practices with integration of consistent security and compliance capabilities with DevSecOps tools and workflows
+Enhance security and compliance with capabilities like runtime threat detection, full life cycle vulnerability management, risk profiling
+Monitor built-in cluster and applications using Prometheus and grafana dashboards
+Risk
+Mitigation
+Reduce time to resolve unplanned downtimes
+Reduce number of unplanned downtimes
+Risk of compliance policy violation
+Risk of security breach
+IT team retention rate
+<< Back to Index
+OpenShift as Application Platform | Value Map
+Improve developer productivity
+Accelerate the secure and iterative development and delivery of cloud-native applications across the hybrid and multi-cloud, including edge
+Drive revenue and innovation with ability to quickly experiment new features in existing applications
+Increase platform stability to drive customer retention
+Adopt cloud-native and DevSecOps approaches to create modular, adaptable, microservices based applications and data services
+Revenue Growth
+Development velocity (applications)
+Development velocity (New Features)
+
+CURRENT CHALLENGES
+ 
+Standardization and Automation with Red Hat: RHEL, Satellite, Ansible
+
+
+Impact from toil
+Power of OPEN opinionated and integrated Red Hat solutions 
+Rich ecosystem of Partner and ISV content
+Innovation derived from the depth of community and number of upstream projects 
+Retention & satisfaction
+Toil &  cognitive load 
+ BUSINESS   OUTCOMES
+
+
+Lack of standardization
+Agility & speed of IT Ops
+Increased ability to scale
+Increased security posture 
+
+
+Suboptimal level of automation
+ FTE effort
+Development velocity & new apps & features
+Outages & MTTR
+Enterprise-wide platform
+Streamlined management at scale, across environments
+Automated detection of configuration drift
+Secure software supply chain
+Automated identification and remediation of vulnerabilities
+Faster tracking of system patch status
+Maintain compliance and generate audit reports
+Predictive analytics that turn break-fixes into scheduled actions
+RHEL+INSIGHTS
+Analyze and correct configuration drift
+Enhanced consistency for all deployments
+Built in auditing and reporting capabilities
+Management with  Standard Operating Environment (SOE) to quickly create new servers
+Supports a secure repository for any type of content to be distributed to hosts
+SATELLITE 
+Create playbooks to remediate issues at scale
+Quickly address network security risks - from days and weeks to hours and minutes.
+Scale across environments
+Make installations, upgrade and day-to-day management repeatable and reliable
+Automate patch and upgrade execution
+Manage backups, disruptions, and failures
+ANSIBLE 
+CONTENT
+AUTOMATION 
+RED HAT BUSINESS AND TECH ENABLERS
+VISIBILITY
+<< Back to Index
+
+
+
+Simplify the management of VMs, containers, and serverless under a single pane of glass
+Harness the shared underlying storage stack for backup, operational support, and maintenance processes.
+Utilize the shared monitoring, routing, and networking capabilities to your benefit.
+
+Cost Efficiency
+Effort spent on Infrastructure Management
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Support development of new, microservices-based applications in containers that interact with traditional virtualized applications
+Leverage the scale advantages of Kubernetes for VMs with the same tools, pipelines, and platform
+Streamline application delivery with a platform that enables self-service options and integrations with CI/CD pipelines.
+Integrates VMs with development pipelines via the OpenShift API 
+
+Revenue Growth
+Development velocity
+Application development productivity
+Reduced Infrastructure Cost
+Reduce skill sprawl and optimise resources by learning single administration framework with Openshift
+Modernize VM-based applications by benefiting from modern management principles 
+
+Strategic Improvement
+Increased Talent Retention
+Vendor Lock-in 
+<< Back to Index
+Red Hat OpenShift Virtualization | Value Map
+Red Hat® OpenShift® Virtualization is a feature of Red Hat OpenShift that allows you to run and manage virtual machine (VM) and container workloads side by side.
+OpenShift Virtualization is a feature of Red Hat OpenShift Container Platform (OCP) and Red Hat OpenShift Kubernetes Engine (OKE). It is not an add-on or a separate product. The OpenShift Virtualization operator must be installed in order to access the feature.
+Lets developers bring VMs into containerized workflows by running a VM within a container where they can develop, manage, and deploy VMs side-by-side with containers and serverless, all in one platform.
+
+Red Hat Event-Driven Ansible | Value Map
+
+
+Time to market
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+Number of service tickets
+IT operations productivity
+Customer NPS
+Network team productivity
+Tickets resolution time
+Infrastructure team productivity
+Improve Operational Productivity and Agility
+Enhance Innovation 
+Ensure Resilience and Security
+
+Automate log enrichments from security events and security responses from incidents 
+Automate fact gathering for further troubleshooting, re-applying configurations when a system has drifted and provisioning new solutions
+Ensure infrastructure and configurations are in compliance with policy when any change is made
+
+Accelerate time to market by enabling real-time responses to events, reducing manual intervention, and streamlining workflows
+Automate repetitive tasks with events driven workflows to prioritize innovation and key objectives
+Improve customer experience with more resilient, secure and self-healing capabilities of applications
+Automatically resolve tickets using rule-based workflows and past experiences
+Speed up remediation processes by  automatically  gathering  additional facts
+Enhance reactive automation to improve operational efficiency and responsiveness
+Automate  provisioning requests  for VMs, containers, and various application instances with rule-based decision making
+Automatically balance network loads, shut down components in security threats, and reconfigure drift
+Number of unplanned downtimes
+Time to resolve unplanned downtime
+Number of security breaches
+Employee turnover rate
+<< Back to Index
+
+Red Hat Ansible Lightspeed | Value Map
+
+
+Time from automation idea to execution
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+Number of Ansible Service/Support  tickets
+Automation developers productivity
+- Increase no. of playbooks
+- Reduce time to create playbooks
+Time to value for new IT  hires
+IT skill gap
+Improve Developer and Operational Productivity
+Accelerate IT Automation
+Extend Trust and Code Quality
+
+Boost transparency and trust by revealing the potential source, author, and license of training data used for suggestions, using content source matching
+
+Improve the quality of existing Ansible content  using version control, automated testing and code review using Ansible code bot
+
+Augment model recommendations with post-processing capabilities to ensure adherence to best practices
+
+
+Adopt and scale enterprise wide automation with structured YAML content and Ansible best practises suggested by Lightspeed
+
+Reduce the preliminary Ansible onboarding learning period by accelerating familiarity with Ansible content
+
+Ensure adoption and collaboration between teams by monitoring metrics and usage patterns across teams 
+
+Enable automation SMEs with basic coding knowledge to translate expertise into usable Ansible Playbooks
+
+Empower  developers with AI-generated code recommendations seamlessly integrated into Ansible workflows
+
+Generate multiple task suggestions for Ansible task files and playbooks with a sequential chain of natural language task prompts
+
+Increase developer efficiency with integrated Visual Studio Code, reducing context-switching
+Number of Ansible playbook failures
+
+Playbook/Data security 
+Employee satisfaction index
+IT operations team effort
+Trust on automation content 
+<< Back to Index
+
+Red Hat Ansible for Edge Automation | Value Map
+
+
+Number of Unplanned Downtimes
+Time to market
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Time to resolve Unplanned Downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+NetOps FTEs Effort
+Help desk ticket volume &  MTTR
+IT Service Management effort for Endpoints
+Edge Infra Management Effort
+Do more with Less
+Innovation at Scale
+Maintain Business Continuity 
+Distribute security solutions like firewalls, intrusion detection and prevention systems across edge tiers
+Enforce compliance with regulations and policies remotely across all sites
+Achieve business continuity at sensitive edge sites that have connectivity issues
+Detect, investigate, and remediate issues at malicious activities on endpoints through Endpoint protection platforms (EPPs) 
+Use Event-Driven Ansible to respond automatically to environmental changes for mitigating performance issues
+Enable developers to efficiently build, run, and manage applications to deliver edge solutions with automated workflows
+Ensure repeatability and interoperability across a wide ecosystem to accelerate innovation at scale
+Manage hundreds to thousands of endpoints faster to sell more
+Avoid inconsistencies due to human error using automated deployments to expand to new sites
+Use a single user interface to manage thousands of sites, network devices, and clusters
+Control automation jobs across edge tiers through an encrypted and distributed architecture using Automation Mesh
+Sync application state to database or ITSM tool to track application & infrastructure status
+Implement updates and required maintenance without sending a technician to the site
+Automate NetOps for deploying multiple wireless settings at scale
+Number of Security Breaches
+<< Back to Index
+
+Red Hat Ansible for Network Automation | Value Map
+
+
+Network Outage Frequency  
+Time to Market
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Network Recovery Time
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+Network Deployment & Provisioning speed
+Help Desk Ticket Volume and Time per ticket
+Effort on Network Security
+NetOps FTE  Effort
+Streamline NetOps
+Fuel Business growth with network agility
+Ensure secure, compliant and resilient network
+Strengthen security posture with automated policy enforcement & threat response
+Ensure regulatory compliance with detailed audit trails
+Automate network monitoring to minimize misconfigurations & resulting downtime
+Apply event-driven automation to limit outages, address security risks, enforce standard configurations and perform backups
+Fast-track network automation maturity to enhance business capabilities
+Accelerate network service provisioning to achieve faster time to value
+Rapidly manage broad, global network implementations without the need to install agents in each device
+Scale network resources to support business growth without increased manual efforts
+Improve day-to day network operations through simple and effective automation sequences
+Unify, communicate & collaborate across network domains (campus, WAN, edge, etc.)
+Use certified network automation content for multi vendor network and security solutions to jumpstart new automation projects
+Ensure faster service delivery for improved customer and stakeholder satisfaction
+Number of Security Incidents
+<< Back to Index
+
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Revenue Growth
+Risk
+Mitigation
+Through Simplified AI Adoption
+By gaining hybrid cloud flexibility
+Toolkit to accelerate AI workflows while maintaining focus AI lifecycle governance, from training and tuning to deployment
+Securely deploy open source-licensed ML models with  model guardrails and IBM  / Red Hat model indemnification for Gen AI models
+Reduce risk of any sensitive data exposure  and compliance violation with improved data governance, from data quality to privacy and compliance
+Enterprise studio for business users  to train, validate, tune, and deploy
+generative AI, and machine learning capabilities
+
+Improve  innovation by unlocking the power of efficient, foundation models, generative AI and ML models
+
+Adopt CI/CD  pipelines to rapidly build, test, and deploy AI/ML models
+Reduce complexities of building and delivering models and AI-enabled applications
+
+
+Cost Efficiency
+
+By driving AI/ML operational consistency
+
+
+Reduce cost by leveraging cost and performance optimized Gen AI /ML models  that align with a wide variety of gen AI use cases 
+Streamline resource provisioning, deployment, and management
+Enhance  model scalability and reduced model training /tuning
+Consistent user experience across personas (Data scientist, engineers) for effective collaboration
+Distributed workloads for efficient data processing, model training / tuning
+
+ Risk of Compliance Violation
+Risk on Data Security
+Improve Data Governance
+Model Quality
+Faster Time to Market
+Accelerated model development / tuning (Rate of Innovation)
+Business Revenue from AI capabilities
+Incremental benefit
+Time-To-Configure Compute 
+Increased Operational Efficiency 
+Technical effort for setup
+Opex (IT FTE cost (self service / custom models)
+Data Scientist Productivity
+Reduced Infrastructure Cost
+Cost due to on-demand auto-scaling
+OpenShift AI + watsonx.ai | Value Map
+<< Back to Index
+
+
+ 
+
+
+
+RHEL in the Cloud | Value Map
+
+
+Reduce your attack surface and protect systems in cloud with built-in security features, compliance with industry and government regulations, and a modular package structure.
+Scan systems for Common Vulnerabilities and Exposures (CVEs) and cloud provider issues, collect information, and access remediation guidance with Red Hat Insights.
+Implement and maintain standards-based compliance settings across hybrid environments with a system-wide cryptographic policy.
+Configure your systems with best practice-based default settings for increased security in the cloud from the start.
+Rapidly move applications from on-premise systems to the cloud with open-hybrid cloud capabilities.
+Streamline the path from development to production with easy access to toolchains, libraries, container tools, runtimes and reliable OS images in the cloud.
+Optimize workloads with a consistent operating foundation for hybrid cloud environment
+Seamlessly integrate with a partner ecosystem and provide users with the same level of security, scalability, manageability, and reliability
+Reduce the cost associated with cloud infrastructure utilization, as RHEL qualifies for cloud committed spend
+Free up your staff to focus more on building apps rather than system maintenance with a supported OS
+Provision and deploy operating system consistently across physical, virtual, multi-cloud, and edge environments within a hybrid infrastructure.
+Number of unplanned downtimes
+Development velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Time to resolve unplanned downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+Effort spent on managing hybrid cloud environment
+Cloud Infrastructure Cost
+Application development productivity
+Effort spent on security management
+Time to deploy cloud instances
+Enhancing Operational Efficiency
+Adopting Modern Architecture
+Minimize Disruptions from Security Threats
+Risk of compliance policy violation
+Risk of security breach
+<< Back to Index
+
+AAP for RHEL Automation | Value Map
+
+
+Number of Unplanned Downtimes
+Development Velocity
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Time to resolve Unplanned Downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+Effort on IT DevOps & Infra Management
+Development Productivity
+Effort on Security & Compliance Management
+Boost Operational Efficiency
+Improve Innovation and Speed
+Enhance Reliability and Lower Risk
+Reduce compliance risks by adhering to a reliable schedule using standardized workflows
+Lower probability of a breach through prompt security patch management
+Increase resilience against high latency and connection disruptions by running automation for RHEL endpoints.
+Ensure availability and uptime throughout migration to RHEL OS
+Monitor and remediate issues and security vulnerabilities by using Red Hat Insights as an event source for Event-Driven Ansible
+Create predictable revenue stream by bringing Applications and services quickly to market
+Speed up transactions, improve customer experience, and gain a competitive edge by automating all the way to the edge
+Automate repetitive tasks to prioritize innovation and key objectives
+Deploy manage and scale RHEL workloads anywhere-in the datacenter, cloud or edge using Automation mesh
+Use AAP based RHEL System Roles to provision, configure multiple RHEL releases at scale
+Orchestrate complex workflows across RHEL infrastructure using a single flexible platform
+Automate patching, compliance, and vulnerability management while eliminating drift for Day 2 operational efficiency
+Migrate infrastructure and workloads distributed across multiple environments consistently
+Speed up remediation process by automatically resolving tickets with rule based workflows
+Workload Migration Cost
+Risk of Security Breach
+Help desk Ticket Volume/MTTR
+<< Back to Index
+
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+De-Risk disruption
+Detect performance issues and failures in real time with AI-powered monitoring
+Improve resilience by early detection of problems before outages occur
+Detect and automatically resolve vulnerabilities via Ansible playbooks
+Reduce outages and shorten MTTR for mission-critical systems
+Risk Mitigation
+Number of Downtime Incidents
+
+
+Cost Efficiency
+Improve efficiency of IT Ops and administration team by consolidating various monitoring tools into a singular, transparent AIOps solution
+Enable granular insights into the application and infrastructure performance, while automating the response and enriching ITSM
+Maintain a complete, unalterable audit trail in ITSM  for every automated action, simplifying compliance
+Respond to IT issues and changing conditions  immediately with consistency and accuracy
+Effort on network management
+Time to Resolve Unplanned Incident
+Effort on regulatory compliance
+Enable self-healing and reduce developer troubleshooting time by triggering Ansible playbooks from an alert
+Improve customer experience with proactive Ansible incident resolution, reducing downtime and ensuring always-available digital services
+Revenue Growth
+Time to Market
+Help desk ticket volume 
+IT Ops FTE effort
+Risk of Security Breach
+Effort on Infra management
+Fulfillment Time per ticket
+Developer Productivity
+AIOps Powered by AAP | Value Map
+<< Back to Index
+
+Value Maps by Services
+
+
+
+Reduce vulnerabilities and enhance incident response times
+
+Improve IT environments with professionally trained staff expertise
+
+Improve governance with more repeatable, monitorable, and effective workflows
+
+Improve compliance through employee training on standards and protocols
+Maximize Red Hat's solution potential with streamlined deployments and hardware usage
+
+Upskill IT to streamline tasks with advanced training & resources
+
+Minimize support requests with better-configured hardware and efficient workflows
+
+Increase satisfaction by investing in employee growth through training
+Time to value for new hires
+Support business units with agile IT environments for faster time to market and enhanced customer experiences
+
+Fast-track employee productivity through dedicated training on Red Hat solutions
+
+Empower exploration & implementation of new technologies to spark innovation
+Risk of security breach
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+KEY ENABLERS
+Talent retention
+Cost Efficiency
+Risk Mitigation
+Revenue Growth
+Improve Time to Value
+Enhance Security and Compliance 
+Enhance Operational Efficiency
+IT FTEs effort spent on regular tasks
+IT FTEs effort spent on helpdesk support
+Development velocity
+Unplanned downtimes
+Red Hat Training | Value Map
+<< Back to Index
+
+Red Hat Consulting for OpenShift | Value Map
+
+
+Number of Unplanned Downtimes
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Time to resolve Unplanned Downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+DevOps & IT Admin FTEs Effort
+Legacy Platform Cost
+OpenShift Implementation Effort
+Optimize OpenShift Implementation and Operations 
+Realize Revenue Faster 
+Improve Performance and Availability
+Develop customized implementation plans to address migration complexities and risks
+Proactively identify and resolve issues, defects, and security risks early in the implementation cycle to avoid costly fixes later
+Maximize performance and availability of the OpenShift environment by getting guidance on optimal architecture and capability usage
+Maximize OpenShift’s self-healing & scaling capabilities to enhance application resiliency
+Enhance the ability to meet and show adherence to regulatory compliance requirements
+Generate revenue faster and earlier through new OpenShift-enabled revenue streams
+Gain the skills & practical experience to grow product adoption and continued innovation
+Allow experienced consultants to orchestrate across teams and departments to help expedite adoption for greater impact
+Benefit from latest & greatest enterprise open source technology to drive innovation
+Adopt modern tools and DevOps best practices to automate and expedite the development, testing, and deployment processes
+Reduce timelines & cost by shortening each implementation phase - planning to migration
+Optimize contract size by avoiding over-provisioning and scalability issues with enhanced platform architecture and design
+Modernize apps faster, realizing infrastructure utilization efficiencies better and earlier
+Lower licensing costs by migrating VMs to OpenShift Virtualization faster and then progressively containerizing workloads
+Accelerate automation & orchestration adoption and streamline management, reporting
+Infrastructure Cost
+OpenShift Implementation Time
+Development Velocity
+Developer Productivity
+<< Back to Index
+
+Time to resolve Unplanned Downtime
+Risk of Security Breaches
+Number of Unplanned Downtimes
+Risk
+Mitigation
+Enhance Security and Risk Compliance
+Provide advice on tools and approaches for proactive patching, and deployment strategy 
+Deploy your strategies to ensure regulatory compliance with Red Hat products
+Deliver periodic risk assessments  and advance notice on new bugs, errata releases, software changes etc.
+Revenue Growth
+Build up the skills and knowledge of customer teams on Red Hat technologies and processes
+Meet regularly to understand customer environment, planned migrations, and priorities 
+Provide insights into Red Hat’s tech strategy to ensure productive integration of customer’s roadmap with Red Hat
+Speed time to market with TAM’s expert guidance and beta access to Red Hat products
+Developer/ IT Productivity
+Development Velocity
+Reduce Time to Market
+Amplify Red Hat Investment Value
+Red Hat Technical Account Manager (TAM) | Value Map
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+
+
+Optimize Infrastructure and Operations Costs
+Cost Efficiency
+
+Utilise TAM’s knowledge of customer’s environment and direct access to Red Hat resources to solve technical issues speedily
+Provide support to resolve multi vendor issues with open source and cloud partners 
+Identify opportunities to consolidate products/ subscriptions and support life cycle planning
+Leverage TAM’s technical assistance on installation, configuration, upgrades etc. and version planning to optimise existing infrastructure 
+Technology Cost
+Reduce IT FTEs effort spent on Helpdesk Support
+<< Back to Index
+
+Value Maps by Partner Solutions
+
+Risk
+Mitigation
+Leverage policy enforcement and drift detection to ensure that all resources comply with security standards, thereby minimizing downtime
+Enable operational observability by maintaining a comprehensive system of record, including logs for infrastructure updates and details regarding the updates
+Ensure consistent security and performance across the enterprise by monitoring configurations and promptly applying patches when vulnerabilities are identified
+Cost Efficiency
+Implement clear and immutable configuration files to define infrastructure's desired state, preventing over-provisioning and eliminating orphaned resources
+Set up your infrastructure and initiate an Ansible dynamic inventory or workflow to commence the configuration process
+Utilize policies and guardrails to detect and rectify any out-of-band changes, ensuring that your infrastructure remains in its intended state
+Ansible Automation Platform with Terraform | Value Map
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+
+
+Revenue Growth
+Apply golden configurations against new/existing environments, create workflows for infrastructure/application deployment, and manage resources at scale
+Utilize consistent framework built on Ansible playbooks to help developers automate testing, software deployment and day 2 operational management
+<< Back to Index
+Downtime Incident
+Effort to Ensure Regulatory Compliance
+Time to Resolve Incident
+Infrastructure  Provisioning Effort
+Development Velocity
+Risk of Security Breach
+Developer Productivity
+Infrastructure  Configuration Effort
+Network Management Effort
+Infrastructure Cost
+
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+De-Risk disruption
+Automatically create, configure, or reset development/test environments using ansible based on Dynatrace insights or usage patterns
+Enable self-healing and reduce developer troubleshooting time by triggering Ansible playbooks through Dynatrace
+Revenue Growth
+Developer Productivity
+Detect performance issues, security vulnerabilities and failures in real time with AI-powered monitoring
+Improve application responsiveness and resilience by early detection of problems before outages occur
+Automatically resolve detected vulnerabilities through predefined playbooks.
+Greater insights into security events with continuous forecasting, anomaly detection and prompt remediation
+Risk Mitigation
+
+
+Improve efficiency of IT DevOps and administration team by consolidating various monitoring tools into a singular, transparent platform
+Enable granular insights into the application and infrastructure performance, while automating the response
+Improve regulatory compliance by enabling real-time monitoring, automated policy enforcement, and auditable, consistent remediation
+Accelerate automation using building blocks from network automation content hub.
+Assure seamless integration for event-driven automation service requests
+Cost Efficiency
+Downtime Incident
+Time to Resolve Incident
+Risk of Security Breach
+Effort on network management
+Effort on regulatory compliance
+Help desk ticket volume and time per ticket
+IT DevOps FTE effort
+Effort on Infra management
+Ansible Automation Platform with Dynatrace | Value Map
+<< Back to Index
+
+
+
+Time to market (Infrastructure, network, cloud team productivity)
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+Number of IT incidents 
+Time to implement changes
+Number and fulfillment time of IT service request
+IT operations productivity
+Enhance IT Service Management Operations
+Improve  Employee/Customer Experience
+Ensure Resilience and Security
+
+Enforce compliance with Ansible inventories and policies triggered by ServiceNow changes 
+
+Eliminate manual errors and strengthen IT resilience by auto-syncing Ansible configuration changes back to the CMDB
+
+Ensure infrastructure and configurations comply with policy when any change is made
+
+Fulfill infrastructure requests faster by automating provisioning of servers, VMs, and applications via ServiceNow-Ansible workflows
+
+Integrate cross-domain systems  like networking, cloud, storage  via Ansible workflows for end-to-end IT efficiency
+
+Automate ServiceNow change requests with Ansible, ensuring consistent execution and complete audit trails
+Automate event-driven workflows by linking observability tool alerts with ServiceNow tickets through Ansible rules
+
+Streamline IT incident remediation workflows with ticket enrichment using Ansible playbooks, applying consistent fixes at scale
+
+Integrate ServiceNow CMDB with Ansible to ensure accurate, real-time configuration updates
+Number of unplanned downtimes
+Time to resolve unplanned downtime
+Compliance and security team effort
+Number of changes implemented
+ MTTR  of IT incidents 
+Ansible Automation Platform with ServiceNow | Value Map
+<< Back to Index
+
+Red Hat Solutions with SI Consulting | Value Map
+
+
+Number of Unplanned Downtimes
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+Time to Resolve Unplanned Downtime
+Revenue Growth
+Risk
+Mitigation
+Cost Efficiency
+
+Helpdesk Support Effort
+Technology Cost
+Implementation FTE Effort
+Optimize Implementation and Operations 
+Realize Revenue Faster 
+Improve Performance and Availability
+Develop customized implementation plans to address migration complexities and risks
+Proactively resolve issues, defects, and security risks early in the implementation cycle to avoid costly rework.
+Maximize Red Hat platform performance and availability through optimal architecture guidance
+Maximize platform’s self-healing & scaling capabilities to enhance application resiliency
+Enhance the ability to meet and show adherence to regulatory compliance requirements
+Accelerate deployments and application delivery with modern DevOps tools and practices
+Close skills gaps through hands-on expertise that drives Red Hat adoption
+Harness the latest enterprise open source technologies to fuel innovation
+Streamline development workflows and automation adoption across the full DevOps stack
+Reduce project timelines and costs by accelerating every phase from planning to migration with expert guidance
+Modernize applications faster while improving infrastructure utilization efficiency
+Optimize DevOps processes and platform architecture to reduce redundant tooling and enhance resource utilisation
+Reduce help desk support calls with streamlined workflows, reporting, and automation tools
+Infrastructure Cost
+Development Velocity
+Developer Productivity
+<< Back to Index
+
+Value Maps by Sales Play
+Persona-Driven
+
+Modernize Existing Applications
+<< Back to Index
+
+55
+What to Say
+Business Leader
+Economic buyer
+CIO, CTO, CFO, COO
+ "I am a C-level executive responsible for all technology used within the company. I have oversight over finance and business operations and am involved with strategic planning. I am a budget owner and have influence over technology purchases across the entire company."
+Who to sell to
+Target personas and buying groups
+Objectives - mostly internal:
+Digital transformation (converting files for digital access, ecommerce sites)
+Migration to cloud/cloud-native apps
+Company-wide software rollouts or conversions (ERP, CRM, MS Teams)
+
+Tech Focus Areas & Measures of Success:
+Integration
+Automation
+US: cloud-native app dev and networking
+Staying on budget
+Completing initiatives
+Financial benefits from projects (cost savings or sales/profits)
+
+What to ask:
+What are your current priorities?
+Are there some perceived hurdles your teams are experiencing?
+Has the new virtual state of things caused any additional challenges / delays?
+What about your teams, are they experiencing any challenges with resources / skills / process as a result of the remote operating model?
+Curious if there is an existing process that helps prioritize all of these new initiatives?
+Are the applications you have outlined as priorities existing or new?
+How are you tracking and measuring your progress today?
+What other additional stakeholders are you engaged with on these new initiatives?
+And are there communication strategies developed to keep everyone updated? (How are you ensuring that everyone is staying current / updated?)
+As a leader, what do you most want to accomplish? What are you looking for in a platform to help you achieve this? With that platform available, is it likely that your goals will be achieved?
+Business value framework - The purpose of this framework is to provide metrics (M) and KPIs tied to the customer’s top identified pain (I) points with probing questions that can be quantified with real numbers.  For more sales process resources, visit the landing page.  
+
+
+
+
+Accelerate modernization efforts leveraging Red Hat’s Partner network
+Improve time-to-value with components that are integrated and/or pre-certified and services that are managed delivering turnkey solutions for your developers
+Leverage Red Hat’s partnerships with hyperscalers - place modernized workloads anywhere
+
+
+
+56
+Modernize Existing Apps Using Red Hat Solutions
+Persona: Business Leader
+Save on public cloud costs with smaller, scalable footprint
+Reduce or eliminate legacy platform licensing costs and related tech debt
+Use Red Hat services offered as managed offering - save cost on set up and day 2 management
+Take advantage of  purchasing flexibility with Red Hat’s Hybrid Committed Spend program
+Optimized OpEx and Cash Flow
+Increased Revenue
+Effective Risk Management
+Improve budget effectiveness
+Increased Efficiency
+Optimized cash flow
+
+Lower FTE effort
+Lower cost of technical debt
+Revenue
+Customer retention
+Increased NPS
+Increased TAM
+Faster Time-to-Value
+Lower implementation cost
+Lower migration cost
+Lower complexity
+
+
+Higher availability
+
+MODERNIZATIONOBJECTIVES
+BUSINESS IMPACT
+RED HATENABLERS
+Risk Reduction
+Cost Efficiency
+Increased revenue 
+Pain Point: complexity of securing applications across cloud footprints.
+Pain Point: legacy costs of VMs, rising licensing costs as vendors strongly monetize older platforms; lack of cloud-like consumption flexibility
+Pain Point: Inability for existing app solution to scale to match business growth to new segments or geographies. 
+Leverage Red Hat’s expertise: Red Hat Services, Open Innovation Labs and ecosystem of experienced partners
+Architect applications for increased resilience and reliability
+Develop legacy apps and microservices in one ecosystem and connect them in the hybrid cloud
+
+57
+Modernize Existing Apps Using Red Hat Solutions
+Persona: Business Leader
+Adopt solutions leveraging modern practices, like DevOps, site reliability engineering (SRE) 
+Add new features, like AI and data science, to improve customer experience and beat competition
+Leverage third-party innovation nimbly; create API-driven architecture
+
+ 
+MODERNIZATIONOBJECTIVES
+BUSINESS IMPACT
+RED HATENABLERS
+Talent Management
+Provide modern cloud-native as well as open source tools and frameworks for developers eager to learn and develop professionally
+Talent is dedicated to higher-value activities - increased job satisfaction, skill portability and employee retention
+Award winning, highly effective training and certification offerings - accelerate onboarding, implementation and job satisfaction
+
+Increased Innovation
+Faster dev cycles
+Higher number of new apps & features
+Higher dev productivity
+Improved competitive standing
+
+
+Talent Management
+Higher job satisfaction
+Higher retention
+Increased collaboration
+Optimized training costs
+Increased Innovation, 
+Competitiveness
+Challenge: Difficult to quickly innovate to meet new business or competitive challenges.
+Challenge: Developers spend time fixing bugs and keeping the lights on, rather than innovating and using newer cloud-native approaches to architecting applications. 
+
+58
+What to Say
+Who to sell to
+Target personas and buying groups
+AppDev ITDM
+Primary Economic Buyer
+VP of AppDev, VP of engineering
+ "I am the manager responsible for my company’s application and software development. I am a budget owner for technology purchases and have influence over purchases for the IT department."
+Objectives - both internal and external:
+Implementing cloud infrastructure and solutions
+Changing AppDev processes
+Improving the customer experience
+Adopting automation technologies
+
+Tech Focus Areas & Measures of Success:
+APIs
+DevOps
+Automation
+End-user/customer adoption and satisfaction
+Maximize business uptime
+Deliver on-time and within budget
+
+
+What to ask:
+What are your current priorities? 
+Are there some perceived hurdles your teams are experiencing?
+Has the new virtual state of things caused any additional challenges / delays?
+What about your teams, are they experiencing any challenges with resources / skills / process as a result of the remote operating model?
+Curious if there is an existing process that helps prioritize all of these new initiatives?
+Are the applications you have outlined as priorities existing or new?
+How are you tracking and measuring your progress today?
+What other additional stakeholders are you engaged with on these new initiatives?
+And are there communication strategies developed to keep everyone updated? (How are you ensuring that everyone is staying current / updated?)
+As a leader, what do you most want to accomplish? What are you looking for in a platform to help you achieve this? With that platform available, is it likely that your goals will be achieved?
+Business value framework - The purpose of this framework is to provide metrics (M) and KPIs tied to the customer’s top identified pain (I) points with probing questions that can be quantified with real numbers.  For more sales process resources, visit the landing page.  
+
+
+
+
+59
+Modernize Existing Apps Using Red Hat Solutions
+Persona: AppDev ITDM
+Well defined software lifecycle helps reduce maintenance costs
+Ability to reduce or eliminate legacy platform licensing costs
+Over 150 Red Hat OpenShift pre-certified operators 
+Automatic updates on-the-fly and re-spinning of containers, to eliminate manual toil 
+Improve resource utilization and capacity planning with right-sized and optimized JVMs, and EAP container images 
+Optimized OpEx and Cash Flow
+Increased Revenue
+Effective Risk Management
+Improved budget effectiveness
+Increased Efficiency
+Increased scalability
+
+Lower FTE effort
+Lower cost of remediation
+Revenue
+Customer retention
+Increased NPS
+Increased TAM
+Faster Time-to-Value
+Higher compliance
+Higher availability
+More competitive positioning
+Workload mobility
+Lower audit cost
+MODERNIZATIONOBJECTIVES
+BUSINESS IMPACT
+RED HATENABLERS
+Risk Reduction
+Cost Efficiency
+Increased revenue 
+Challenge: Ever-changing risk and compliance requirements, complexity of securing applications across cloud footprints.
+Challenge: Including legacy costs of VMs, rising licensing costs as vendors strongly monetize older platforms - since it cost them money to maintain old versions. 
+Challenge: Inability for existing app solution to scale to match business growth to new segments or geographies. 
+Accelerate agile feature delivery and rollout cloud-native applications like EAP XP for Microservices that’s quick to respond to CVEs
+Red Hat has a rich ecosystem of technology and channel partners that can help customers move their workloads to the open hybrid cloud 
+vFunction can help customers analyze the application and deciding exactly where and how to split into domain-driven services, and how to deploy them to OpenShift.
+Scale by replatforming existing legacy workloads onto a modern cloud platform; add agility by breaking monoliths to microservices
+IT Operators - improving time-to-value with components that have been pretested on Red Hat OpenShift
+
+
+60
+Modernize Existing Apps Using Red Hat Solutions
+Persona: AppDev ITDM
+MODERNIZATION OBJECTIVES
+BUSINESS IMPACT
+RED HATENABLERS
+Talent Management
+Modern, cloud native tooling and frameworks developers want to work with
+Meet developers where they are with tooling and integrations that allow them to use the tools they know.
+Talent is dedicated to higher-value activities - increased job satisfaction, skill portability and employee retention
+Award winning, highly effective training and certification offerings - accelerate onboarding, implementation and job satisfaction
+Increased Innovation
+Faster dev cycles
+Shorter build/tear down 
+Lower validation costs
+Higher number of new apps/features
+Higher dev productivity
+Talent Management
+Higher job satisfaction
+Higher retention
+Increased collaboration
+Optimized training costs
+Increased Innovation, 
+Competitiveness
+Challenge: Difficult to quickly innovate to meet new business or competitive challenges.
+Challenge: Developers spend time fixing bugs and keeping the lights on, rather than innovating and using newer cloud-native approaches to architecting applications. 
+Start right for large scale application modernization efforts - decouple code into microservices
+Develop new and legacy applications all from one ecosystem - market proven frameworks, curated runtimes and programming languages for your code builds
+Adopt a container-first approach for microservice workflows 
+Connect legacy technologies and microservices in the hybrid cloud - predefined Enterprise Integration Patterns (EIPs) and +200 pluggable connectors
+Future-proof existing infrastructure and developer tool investments
+adopt new ways of working, like DevOps, site reliability engineering (SRE) and CI/CD
+
+Integration and Modernization Metrics
+(focus on Red Hat Runtimes and Integration)
+
+BUSINESS FOCUS
+METRICS AND KPIs
+App-oriented
+# applications migrated to microservices
+#applications migrated to public cloud avg time to migrate to microservices  or cloud - by app size
+#COTS replaced with natively developed apps
+%decrease of feature backlog due to integration ease
+#of outbound calls/messages
+#services in catalog or % increase
+#apps integrated or % increase
+% of revenue from applications running on Red Hat Integration support
+#weeks to integrate apps
+Cloud-oriented
+% of L&S workloads (vs replatforming, re-architecting, etc)
+minimizing need for of cloud-specific skill sets
+API-related
+#APIs used
+#APIs published to a catalog
+API usage
+#of applications integrated with third-party services
+%time reduction of an integration process
+# or % connected endpoints
+Productivity
+IT infrastructure efficiencies
+%time reduced to build and test and deploying new releases
+%optimized hardware requirements due to containerization
+%acceleration of lead time due to parallelization
+
+Accelerate New (App) Development
+<< Back to Index
+
+Policy-driven compliance increases security, stability and overall audit preparedness
+Application portability future-proofs overall IT strategy and minimizes provider dependence/vendor lock-in
+Transition from on-prem to the cloud, or from cloud to cloud is less complex with a unified control plane - placement rules can allow quick deployment
+Increase application availability with the ability to deploy legacy and cloud-native applications quickly across distributed clusters.
+Rapid experimentation accelerates development of new apps and features, driving revenue and new customer acquisition
+Enhanced ability to become a market maker and create new sources of revenue
+Increased platform stability drives customer retention
+Platform ubiquity creates new market opportunities - drives market share
+63
+Accelerate App Development and Delivery Using Red Hat Solutions
+Persona: Business Leader
+Unique, Industry-specific 
+Vision
+Avoid the cost of building and maintaining a K8s platform using DIY, esp in multi-cloud env.
+Automated self-service provisioning and cluster deployment across legacy and cloud environments improves efficiencies
+Reduce skill-sprawl and increase productivity by learning one platform regardless of cloud choice
+Single pane of glass visibility helps with efficient remediation
+
+Optimized OpEx and Cash Flow
+Increased Revenue
+Effective Risk Management
+Improve budget effectiveness
+Increased Efficiency
+
+Lower FTE effort
+Cost of remediation
+Revenue
+Customer retention
+Increased NPS
+Increased TAM
+Faster Time-to-Market
+Higher compliance
+Higher availability
+More competitive positioning
+Workload mobility
+Lower audit cost
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+    VISION
+Risk
+Reduction
+Cost Efficiency
+Increased revenue
+
+64
+Accelerate App Development and Delivery Using Red Hat Solutions
+Persona: Business Leader
+Unique, Industry-specific 
+Vision
+Providing a production-ready turnkey application platform with built in, integrated developer tooling drives rapid experimentation and innovation
+Red Hat platform helps take advantage of native cloud innovation coming from hyperscalers and ISVs - IT Operators
+Red Hat helps take  advantage of open source community
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+    VISION
+Talent
+Management
+Talent is dedicated to higher-value activities - increased job satisfaction, skill portability and employee retention
+Reduce friction between teams during development, deployment, and operations with a cross-functional platform with consistent interfaces and APIs
+Award winning, highly effective training and certification offerings - accelerate onboarding, implementation and job satisfaction
+Increased Innovation
+Faster dev cycles
+Shorter build/tear down 
+Lower validation costs
+Higher number of new apps/features
+Higher dev productivity
+Talent Management
+Higher job satisfaction
+Higher retention
+Increased collaboration
+Optimized training costs
+Increased Innovation
+
+Application dashboards for support teams to quickly identify and correlate runtime issues in production.
+Stay secure with application platform and framework patching automatically as part of the BAU application lifecycle process.
+Easily reproduce then build/test/release updates for specific source code branches for accelerated production defect remediation.
+Self service application infrastructure that encourages creativity and innovation while maintaining confines of enterprise standards and infrastructure policies.
+Pre-integrated, ready to use application development tools enabling immediate productivity towards business logic and customer deliverables that are consistent independent of where applications run.. 
+Deploy innovative technology where your business needs it most via a build once run anywhere strategy where applications and data exist in modern, legacy and extreme environments.
+Global consulting partner ecosystem; Award winning, highly effective training and certification offerings - accelerate onboarding, implementation and job satisfaction
+Easily adopt modern architectures like serverless, mesh and AI to continually challenge and inspire senior technical resources. 
+Shorten the onramp period for new team members due to immediate availability of integrated development sandboxes aligning to specific application requirements..  Simplified security for offshore/offsite team members,, IP not stored on laptops.
+65
+Accelerate App Development and Delivery Using Red Hat Solutions
+Persona: DevOps and Development Leaders
+Unique, Industry-specific 
+Vision
+Talent Management
+Increased Revenue
+Effective Risk Management
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+    VISION
+Risk
+Reduction
+Talent Management
+Increased revenue
+Shorten Time-to-Fill for developer reqs
+Lower voluntary attrition rate
+Shorten ramp for developer onboarding
+Shorter Mean-Time-to-Resolution
+Fewer old CVEs from vulnerability scans
+Lower effort for new CVE resolution
+Increased features shipped 
+Improved velocity per sprint
+More feature requests from business
+
+66
+Accelerate App Development and Delivery Using Red Hat Solutions
+Persona: DevOps and Development Leaders
+Unique, Industry-specific 
+Vision
+
+Supported, secure cloud native runtimes pre-integrated with self service developer tooling. 
+Opinionated DevSecOps pipelines and integrated tooling for immediate value and avoiding the common source of technical debt associated with legacy, overly complex CI/CD pipelines.
+Lift and shift legacy applications to containerized runtimes so that even the old benefits from the new capabilities.
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+    VISION
+Abstract the Infrastructure
+Maintain a common experience for project teams independent of the infrastructure.
+Avoid significant resource investments for modifying applications when cloud provider or infrastructure requirements are changed by other teams.
+Build modern applications that run at the edge, empowering distributed businesses to be limited only by the imagination of what is possible.
+Reduce friction between teams during development, deployment, and operations with a cross-functional platform with consistent interfaces and APIs
+Modernize
+Abstract the Infrastructure
+Modernize
+Shorten Time-to-Fill for developer reqs
+Lower voluntary attrition rate
+Faster or higher #s of release cycles
+SRE team efficiency - same support model for more applications
+Fewer developers allocated to specific infrastructures
+One application SRE team structure for all environments
+Feature requests involving AI/ML, messaging, or microservices at the edge (manufacturing, retail, transportation)
+Fewer change requests and external teams involved in releases.
+
+Multicluster observability  increases platform stability and security while simplifying monitoring function. 
+Improved data security by micro-segmentation via containers
+Simple installation and upgrades, even in air gapped environments.
+Secure, validated container content and services from a wide partner ecosystem.
+Through faster development and delivery of new and improved capabilities
+React to new market opportunities
+Respond to competitive pressures
+Improve customer satisfaction
+Operators provide an agile DevOps workflow.
+Consistent development experience across the application life cycle.
+Integrated platform and application life-cycle management using your choice of infrastructure is faster to deliver
+67
+Accelerate App Development and Delivery Using Red Hat Solutions
+Persona: IT Ops Leader
+Unique, Industry-specific 
+Vision
+Certified IT Operator framework helps avoid validation costs of TP ISVs
+Reduce skill-sprawl and increase productivity by learning one platform regardless of cloud choice
+Integrated platform includes container host, Kubernetes, and application life-cycle management using your choice of infrastructure.
+Application portability with lower operational cost across hybrid cloud, multi cloud, and edge footprints.
+Optimized OpEx and Cash Flow
+Increased Revenue
+Effective Risk Management
+Autoscaling supports greater number of applications
+
+Reduced build/deploy times
+Lower operational and capital cost
+
+Increase release velocity
+Faster developer onboarding
+Faster time to market for new features/capabilities
+
+
+Centralized security and enforcement
+Ability to provide auditing and reporting
+Reduced downtime
+
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+    VISION
+Risk
+Reduction
+Cost Efficiency
+Increased revenue
+
+Employee satisfaction leveraging latest technology on a common platform
+OpenShift has the largest market share for multicloud container development platform
+Maintain single skillset across deployment environments
+Automated operations at scale
+Reduced support resolution times
+
+App modernization via containerization and refactoring
+Reference architectures, templates and built in integrations to assist with hybrid deployments 
+Support for emerging requirements such as AI/ML
+Fast deployment and easy integration of certified software to any cloud via the Red Hat Marketplace
+68
+Accelerate App Development and Delivery Using Red Hat Solutions
+Persona: IT Ops Leader
+Unique, Industry-specific 
+Vision
+BUSINESS OBJECTIVES
+BUSINESS IMPACT
+SOLUTION ENABLERS
+    VISION
+Talent
+Management
+Increased Innovation
+Compliance and security standards met
+Increased revenue/time to market
+Deployment support based on application requirements
+
+Talent Management
+Retention of existing employees
+Size of labor pool (candidates)
+Reduce number of skill sets required
+Reduced number of FTEs to manage infrastructure
+Support ticket resolution time
+
+Increased Innovation
+
+Measuring Impact on Revenue
+(without talking about $$$!)
+
+BUSINESS FOCUS
+METRICS AND KPIs
+Time to Market / Velocity
+time from code commit to production deployment
+time to build out production environment
+frequency of release
+New product features
+deployment frequency
+# of features
+NPS
+End-user experience
+latency
+# abandoned transactions
+NPS
+#returning customers/repeat transactions
+faster end-user/customer set-up and onboarding
+NOTE: many pain points your IT Customer expresses can be easily aligned to the first column, “Business Focus”.
+
+Measuring Impact on Risk Mitigation
+BUSINESS FOCUS
+METRICS AND KPIs
+System stability
+# of outages
+MTTR
+% uptime SLA compliance
+#of tickets (by root cause)
+% emergency changes
+% releases causing downtime
+Config Management
+% discrepancies b/w repository and live
+% svcs recorded in repository
+Security
+#security incidents and vulnerabilities
+#of tickets (by root cause)
+Governance, Compliance and Regulatory
+#of audit findings
+#policies implemented
+# of policy violations
+% of processes covered by policies
+High Availability/DR
+RPO/RTO
+Reduce complexity/dependence on on manual processes
+#playbooks x manual time
+% of incidents detected by automated systems
+
+2019 Cost of a Data Breach Report - https://ibm.com/security/data-breach 
+Venturebeat - https://venturebeat.com/2017/12/16/the-lesson-behind-2017s-biggest-enterprise-security-story/ 
+
+
+Source: https://www.the20.com/blog/the-cost-of-it-downtime/#:~:text=According%20to%20Gartner%2C%20the%20average,hour%20at%20the%20higher%20end.
+
+Focus on Strategic Imperatives
+Measuring Impact on Innovation and Talent Management
+BUSINESS FOCUS
+METRICS AND KPIs
+Third party integration
+# TP  (third party) tools integrated with less administrative burden
+Toil elimination 
+#playbooks x manual time
+% satisfaction
+%turnover
+%reduction in # tickets handled
+%reduction in ticket escalation (L1->L2->L3)
+Onboarding efficiency and effectiveness
+time to onboard
+% certified personnel
+$ training budget/FTE
+Rapid experimentation
+lead time associated with delivery of sandboxes
+frequency of releases
+Sustainability
+% IT equipment with on/off controls for energy consumed/capacity adjustment
+KWHrs energy saved
+
+Measuring Impact on Cost
+(without talking about $$$!)
+
+BUSINESS FOCUS
+METRICS AND KPIs
+Tool sprawl/toolchain complexity
+# TP (third party)  tools eliminated
+Hardware elimination
+% reduction (eg testing servers)
+Cost of rework / cost of change
+Change failure rate: % of deployments requiring rollback
+Cost of TP integration validation
+# pre-certified third party content collections x typical cost of validation
+Cost of outage 
+MTTR x internal rate
+MTTR x external rate 
+MTTR x revenue loss/hr
+# of violated SLAs (and $ payout)
+Effectiveness - platform
+#of items in self-service catalog x usage rate
+% reduction incident/problem resolution time
+% reduction workflow/process lead time or cycle time
+
+Developer-centric Metrics
+(focus on DevOps domain)
+
+BUSINESS FOCUS
+METRICS AND KPIs
+Agility
+lead time
+cycle time (gates: pull request ->commit -> first review ->merge ->deploy) 
+% manual CI/CD tasks
+# TP tools in devops landscape
+Velocity
+# commits per day
+deployment frequency
+Quality
+change failure rate% of deployments requiring rollback
+% releases causing downtime
+Security
+code Coverage: % code tested and validated
+Global DevOps Report/Dynatrace
+
+Automate the Enterprise
+<< Back to Index
+
+75
+TANGIBLE
+INTANGIBLE
+BOTTOM LINE
+TOP LINE
+Cost Optimization
+Risk Avoidance
+Strategic  Initiatives
+Revenue Growth
+Automation at enterprise scale has business value beyond  FTE efficiency
+Summary
+
+Automate the Enterprise Market Opportunity
+Engaging business domains 
+by connecting Red Hat automation solutions to business value drivers 
+
+Security Automation 
+Respond to threats across the enterprise in a coordinated, unified way, using a curated collection of modules, roles, and playbooks
+
+Vision
+Business Objectives
+Technology Enablers
+Business Impact
+Source: IDC
+Unique, Industry-specific Vision
+Standardize your security toolset
+Utilize pre built certified content across security tools and processes that are supported by both Red Hat and technology partners (e.g. CISCO) 
+Enable security collaboration across business domains providing cross-department compliance 
+
+Truly automated security
+End-to-end security workflows
+Programmatic operation with minimal manual intervention. Reduce human error.
+Validate ACLs, verify policies and sync with ITSM
+
+Integrated IT + more secure IT
+Ensure consistent and stable interoperation across a wide variety of technologies
+Easily assign roles and responsibilities to multiple different groups as part of a holistic, integrated process. 
+
+Compliance meeting regulatory standards reducing manual errors 
+With many compliance regulations to deal with, automating compliance processes allows customers to reduce time spent on manual processes and save time to stay compliant
+
+Reliability
+Reduce downtime and improve security posture 
+Optimization
+Drive down cost by increasing ops efficiency
+Revenue growth 
+Increase demand for new and existing customers
+Talent 
+Improve employee efficiency, retention & skills
+Innovation
+Increase agility to meet market opportunities 
+
+30% IT security FTE productivity
+
+
+58% Unplanned Downtime
+
+
+
+44% Meantime to resolution
+
+
+
+18% Compliance FTE productivity
+
+
+
+
+42% Network Security Mgmt.
+Source: IDC - The Business Value of Red Hat Ansible Automation Platform (October 2021)
+Notes from July 20th convo with Jamie Becker
+
+Note on Certified Content - content on Ansible.com is certified by both Red Hat and our technology partners, content on ansible.galaxy.com is not.
+
+
+https://docs.google.com/document/d/1VkfiKvNaOMPzRkwQGevUmy6qR5-NiyKCrqwOdHzHE2Y/edit?usp=sharing
+
+https://docs.google.com/presentation/d/1UOXTxUG71M74J_Zy90ZlMc_Ro2R-RathoSeNvFUKGPo/edit?usp=sharing
+
+Network Automation 
+Bringing a single solution to help teams integrate across networking and other IT areas for faster response
+Vision
+Business Objectives
+Technology Enablers
+Business Impact
+Source: IDC
+Unique, Industry-specific Vision
+Reliability
+Reduce downtime and improve security posture 
+Optimization
+Drive down cost by increasing ops efficiency
+Revenue growth 
+Increase demand for new and existing customers
+Talent 
+Improve employee efficiency, retention & skills
+Innovation
+Increase agility to meet market opportunities 
+Unify networking with the rest of IT
+Unify, communicate and collaborate across network domains (campus, WAN, edge, mobile, etc.)
+Improve communication across networking and  other IT teams (cloud, development, infrastructure etc.) to automate complete processes 
+Accelerate network provisioning to meet expectations
+
+Create new network automation w speed 
+Tooling to help teams automate even the most complex network deployments 
+Create automation for a broad multi-vendor ecosystem using  a single automation platform across all networking devices and systems 
+Library of networking automation content that provided building blocks to jumpstart new automation projects
+Expand the scope and complexity of automation to be more encompassing: “start small think big” toward network validation  
+
+Empower network teams to deliver faster
+Move from command line manual steps to a more efficient approach
+Quickly address network security risks; go from days and weeks to hours and minutes
+Automate often repeated, rote tasks to free time to focus on key priorities and delivering innovation 
+Automate pre- and post-checks to complete them faster and improve employee satisfaction especially 
+42% Network deployment and provisioning
+38% Overall network management team efficiencies
+67% Faster delivery of new network resources
+19% Network performance and optimization
+Source: IDC - The Business Value of Red Hat Ansible Automation Platform for Network Efficiencies (March 2024)
+
+Hybrid Cloud Automation
+Streamlines and operationalizes cloud management and configuration across multiple clouds and container-native services
+Vision
+Business Objectives
+Technology Enablers
+Business Impact
+Source: IDC
+Unique, Industry-specific Vision
+Reliability
+Reduce downtime and  disruptions
+Optimization
+Drive down cost by increasing ops efficiency and calibrating resources
+Revenue growth 
+Easily manage scale to meet demand from new customers
+Talent 
+Improve employee efficiency, retention & skills
+Innovation
+Increase agility to meet market opportunities 
+Deploy
+Turnkey deployments for infra team (across public clouds and tools (cloud formations, resource manager and Terraform)
+Create service catalog items for ordering the creation and retirement of environments
+
+Optimize
+App deployments with CI/CD pipelines
+cloud workloads lifecycle management
+OS patching and maintenance
+
+Secure 
+Enforce IAM (Identity Access and Mgmt.) Policies across clouds
+Schedule enforcement areas across clouds
+Turn off unused infrastructure, and recover orphaned resources
+Right size cloud resources, using scheduled jobs
+Manage backups, disruptions, and failures
+
+Migrate
+Orchestrate migration as organizations adopt public cloud
+Reduce friction for migration to cloud native technologies
+Unify automation architecture across legacy and cloud native
+On-prem to public cloud, one public cloud to another, or traditional compute architecture to cloud native
+
+74% Faster deployment of new servers resources
+65% Increase in staff efficiency related to server deployment
+67% Faster New  Storage Deploy
+30% Productivity boost for IT infrastructure
+Source: IDC - The Business Value of Red Hat Ansible Automation Platform (October 2021)
+References:
+Messaging Guide - https://docs.google.com/document/d/1gh4Bj4ttHd0qpvuN5s0PUDM-QXIeLcI8b1TBSyQge3A/edit?usp=sharing
+101 Deck - https://docs.google.com/presentation/d/1_RPEdMkJtD_uTMMfd3VGGpgZUYILgnRM_BSCbBNAW-E/edit?usp=sharing
+
+Application Deployment 
+Simplest way to deploy your services and applications 
+Vision
+Business Objectives
+Technology Enablers
+Business Impact
+Source: IDC
+Unique, Industry-specific Vision
+Playbooks make things easy
+Written in natural language; easy to evolve and edit
+Make installations, upgrade and day-to-day management repeatable and reliable
+
+Cloud ready. Any cloud. 
+
+Ansible Automation Platform ships with modules to manage both local systems and cloud services
+Manage any cloud instance or network software without modifying base image
+
+Zero downtime with  less effort
+Written in natural language; easy to evolve and edit
+Make installations, upgrade and day-to-day management repeatable and reliable
+Reliability
+Reduce downtime and improve security posture 
+Optimization
+Drive down cost by increasing ops efficiency
+Revenue growth 
+Increase demand for new and existing customers
+Talent 
+Improve employee efficiency, retention & skills
+Innovation
+Increase agility to meet market opportunities 
+39% New applications, new logic
+50% Securing
+48% Provisioning
+38% Configuring
+Source: IDC - The Business Value of Red Hat Ansible Automation Platform (October 2021)
+JD
+
+Infrastructure Automation 
+Manage a complex, heterogeneous environment through single, intuitive platform 
+Vision
+Business Objectives
+Technology Enablers
+Business Impact
+Source: IDC
+Unique, Industry-specific Vision
+Reliability
+Reduce downtime and improve security posture 
+Optimization
+Drive down cost by increasing ops efficiency
+Revenue growth 
+Increase demand for new and existing customers
+Talent 
+Improve employee efficiency, retention & skills
+Innovation
+Increase agility to meet market opportunities 
+Take control of your IT ecosystem 
+Replace disparate automation solutions with a single, feature-rich tool 
+Access a full content library with building blocks to jumpstart new automation projects
+Accelerate provisioning and deployment times to meet stakeholder expectations
+Provision, deploy, and manage workloads such as Red Hat Enterprise Linux, Windows, SAP S/4HANA, ServiceNow ITSM, storage, hypervisors, and more
+
+Manage less; innovate more
+Leverage tooling to automate even the most complex environments in the datacenter, across clouds, and at the edge
+Expand the scope and complexity of automation to be more encompassing:  start small, think big
+Improve communication across teams  (cloud, app dev, security, etc.) to automate end-to-end processes
+Tackle ongoing “Day 2” operations (where your automation investment pays dividends)
+
+Empower ops teams to grow and scale
+Deploy infrastructure workloads in just hours or minutes instead of days or weeks
+Move from the command line to a more efficient, effective, enterprise-grade approach
+Automate repetitive, manual tasks to focus on key priorities and improve innovation
+Unify, communicate and collaborate across domains (DevOps, SecOps, BusDevOps)
+30% IT management productivity
+74% faster deploying new servers
+67% faster deploying new  storage
+65% IT FTE productivity
+30% annual salary savings
+Source: IDC - The Business Value of Red Hat Ansible Automation Platform (October 2021)
+Notes (July 12)
+Pull through day 2 (maintain & support) 
+Simplified provisioning de-prioitized → need to take control of the entire infrastructure through a single pane of glass / tool 
+ADP & UPS → management of operations (not just doing an action, but building an immutable ops); reliability 
+managing ops repeatable, scaleable and reliable address talent (codified in a way that does not lose knowledge when people go away)  
+
+Thank you
+Red Hat is the world’s leading provider of enterprise open-source software solutions. Award-winning support, training, and consulting services make Red Hat a trusted adviser to the Fortune 500.
+82
+CONFIDENTIAL Designator
+linkedin.com/company/red-hat
+youtube.com/user/RedHatVideos
+facebook.com/redhatinc
+twitter.com/RedHat
