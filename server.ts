@@ -63,6 +63,7 @@ import './src/modules/events-module.ts'  // GitHub #202
 import './src/modules/product-intel-module.ts'  // GitHub #255
 import './src/modules/meeting-prep-module.ts'  // GitHub #229
 import './src/modules/ccsp-module.ts'  // GitHub #268
+import './src/modules/value-map-module.ts'
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────

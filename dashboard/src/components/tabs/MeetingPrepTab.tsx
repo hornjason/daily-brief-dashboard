@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
-import { Calendar, ExternalLink, RefreshCw, Users, Clock } from 'lucide-react'
+import { Calendar, ExternalLink, RefreshCw, Users, Clock, Trash2 } from 'lucide-react'
 import { formatRelTime, formatDate, formatTime } from '../../lib/format'
 import { useApi } from '../../hooks/useApi'
 
@@ -96,6 +96,19 @@ export function MeetingPrepTab({ customerName }: MeetingPrepTabProps) {
     } finally {
       setGeneratingKey(null)
     }
+  }
+
+  const handleDelete = async (index: number) => {
+    const entry = history[index]
+    if (!confirm(`Delete "${entry.title || entry.meetingTitle}"?\nThis will also remove the Google Drive document.`)) return
+    try {
+      const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/meeting-prep/${index}`, {
+        method: 'DELETE',
+      })
+      if (res.ok) {
+        setHistory(prev => prev.filter((_, i) => i !== index))
+      }
+    } catch { /* silent */ }
   }
 
   const hasUpcoming = customerEvents.length > 0
@@ -242,15 +255,24 @@ export function MeetingPrepTab({ customerName }: MeetingPrepTabProps) {
                     </div>
                   </div>
 
-                  <a
-                    href={entry.docUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 bg-bg-secondary border border-border rounded-md hover:border-accent text-sm font-medium flex items-center gap-2 whitespace-nowrap"
-                  >
-                    Open Doc
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={entry.docUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-bg-secondary border border-border rounded-md hover:border-accent text-sm font-medium flex items-center gap-2 whitespace-nowrap"
+                    >
+                      Open Doc
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                    <button
+                      onClick={() => handleDelete(idx)}
+                      className="p-2 text-text-secondary/50 hover:text-red-400 transition-colors"
+                      title="Delete from history and Drive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
