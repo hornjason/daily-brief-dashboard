@@ -7,6 +7,8 @@ import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.t
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../cache-layer.ts'
+import { normalizeForQuery } from '../utils.ts'
+import { customers } from '../server-state.ts'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const CASES_PATH = resolve(CACHE_DIR, 'cases.json')
@@ -28,8 +30,10 @@ FeatureModuleRegistry.register({
       allCases = raw.cases ?? (Array.isArray(raw) ? raw : [])
     } catch { return [] }
 
+    const customer = customers.find(c => toSlug(c.name) === customerSlug)
+    const needle = normalizeForQuery(customer?.name ?? customerSlug)
     const customerCases = allCases.filter(c =>
-      toSlug(c.customerName ?? '') === customerSlug
+      normalizeForQuery(c.customerName ?? '').includes(needle) || needle.includes(normalizeForQuery(c.customerName ?? ''))
     )
     if (customerCases.length === 0) return []
 

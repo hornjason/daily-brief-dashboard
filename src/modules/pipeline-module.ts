@@ -5,6 +5,8 @@
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { readPipelineCache } from '../cache-layer.ts'
+import { normalizeForQuery } from '../utils.ts'
+import { customers } from '../server-state.ts'
 import { toSlug } from '../cache-layer.ts'
 
 FeatureModuleRegistry.register({
@@ -19,8 +21,10 @@ FeatureModuleRegistry.register({
     const cache = readPipelineCache()
     if (!cache?.records?.length) return []
 
-    const customerRecords = cache.records.filter((r: any) =>
-      toSlug(r.accountName ?? r.customer ?? '') === customerSlug
+    const customer = customers.find(c => toSlug(c.name) === customerSlug)
+    const needle = normalizeForQuery(customer?.name ?? customerSlug)
+    const customerRecords = cache.records.filter(r =>
+      normalizeForQuery(r.accountName).includes(needle) || needle.includes(normalizeForQuery(r.accountName))
     )
     if (customerRecords.length === 0) return []
 
