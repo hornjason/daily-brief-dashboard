@@ -3,10 +3,6 @@
 // Combines registry signal collection + legacy cache fallback
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
-import { existsSync, readFileSync, readdirSync } from 'fs'
-import { resolve } from 'path'
-
-const CACHE_DIR = process.env.CACHE_DIR ?? resolve(import.meta.dir, '../../cache')
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,112 +32,45 @@ export interface SignalLoadResult {
 // ── Signal loading ───────────────────────────────────────────────────────────
 
 /**
- * Load all customer signal sources from:
- * 1. Feature modules that implement signals() (via registry)
- * 2. Legacy cache files (for sources not yet migrated to modules)
+ * Load all customer signal sources from feature modules via registry.
  *
- * Returns combined signals in the legacy CustomerSignals shape for backward compatibility.
+ * GitHub Issue #274 migrated all 8 legacy sources (intelligence, customerDocs, dailyBrief,
+ * subscriptions, emails, cases, productIntel, accountPlan) to registry modules.
+ * This function now uses the registry as the single source of truth.
+ *
+ * Returns signals in the registry format plus empty legacy signals object for backward compatibility.
  * Missing sources are logged but don't block generation.
  */
 export async function loadCustomerSignals(customerSlug: string, customerName?: string): Promise<SignalLoadResult> {
-  const signals: CustomerSignals = {}
+  const signals: CustomerSignals = {}  // Empty — deprecated, consumers should use registrySignals
   const loaded: string[] = []
   const missing: string[] = []
+  let registrySignals: Signal[] = []
 
-  // Helper for loading legacy cache files
-  const tryLoad = (name: string, path: string, postProcess?: (data: any) => any) => {
-    try {
-      if (existsSync(path)) {
-        let data = JSON.parse(readFileSync(path, 'utf-8'))
-        if (postProcess) data = postProcess(data)
-        ;(signals as any)[name] = data
-        loaded.push(name)
-      } else {
-        missing.push(name)
-      }
-    } catch (e: any) {
-      console.warn(`[signal-loader] Failed to load ${name} for ${customerSlug}:`, e.message)
-      missing.push(name)
+  // Collect signals from all registered modules (single path)
+  try {
+    registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
+  } catch (e: any) {
+    console.warn(`[signal-loader] Registry collection failed for ${customerSlug}:`, e.message)
+    // Return empty result on registry failure — don't block generation
+    return { signals, registrySignals: [], loaded, missing }
+  }
+
+  // Build loaded/missing lists from registry signals
+  // Group signals by source module to identify which modules contributed
+  const sourceModules = new Set<string>()
+  for (const signal of registrySignals) {
+    if (signal.source) {
+      sourceModules.add(signal.source)
     }
   }
 
-  // Collect signals from all registered modules
-  const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
+  // Modules that returned signals go into loaded
+  loaded.push(...sourceModules)
 
-  // Legacy cache loading (8 sources)
-  // Note: Registry signals supplement, don't replace legacy loading.
-  // The legacy loading handles the 8 original sources while new sources
-  // (news radar signals, lifecycle signals, RSS) come from the registry.
-
-  // 1. Intelligence brief
-  tryLoad('intelligence', resolve(CACHE_DIR, 'intelligence', `${customerSlug}.json`))
-
-  // 2. Customer docs
-  tryLoad('customerDocs', resolve(CACHE_DIR, 'product-intel', 'customer-docs', `${customerSlug}.json`))
-
-  // 3. Daily brief (try today first, then most recent)
-  const today = new Date().toISOString().slice(0, 10)
-  const briefPath = resolve(CACHE_DIR, `${customerSlug}-${today}.json`)
-  if (existsSync(briefPath)) {
-    tryLoad('dailyBrief', briefPath)
-  } else {
-    // Scan for most recent brief
-    try {
-      const files = readdirSync(CACHE_DIR).filter(f => f.startsWith(`${customerSlug}-`) && f.match(/\d{4}-\d{2}-\d{2}\.json$/))
-      if (files.length > 0) {
-        files.sort().reverse()
-        tryLoad('dailyBrief', resolve(CACHE_DIR, files[0]))
-      } else {
-        missing.push('dailyBrief')
-      }
-    } catch { missing.push('dailyBrief') }
-  }
-
-  // 4. Subscriptions
-  tryLoad('subscriptions', resolve(CACHE_DIR, `${customerSlug}-sheets.json`))
-
-  // 5. Emails
-  tryLoad('emails', resolve(CACHE_DIR, `${customerSlug}-emails.json`))
-
-  // 6. Cases (filter by customer name from global cases file)
-  tryLoad('cases', resolve(CACHE_DIR, 'cases.json'), (data) => {
-    if (!customerName || !Array.isArray(data)) return data
-    return data.filter((c: any) => c.customer?.toLowerCase() === customerName.toLowerCase() || c.accountName?.toLowerCase() === customerName.toLowerCase())
-  })
-
-  // 7. Product intel (scan for any customer-specific product intel)
-  try {
-    const productIntelDir = resolve(CACHE_DIR, 'product-intel')
-    if (existsSync(productIntelDir)) {
-      const dirs = readdirSync(productIntelDir).filter(d => d.endsWith('-customer-intel'))
-      const allIntel: any[] = []
-      for (const dir of dirs) {
-        const filePath = resolve(productIntelDir, dir, `${customerSlug}.json`)
-        if (existsSync(filePath)) {
-          allIntel.push(JSON.parse(readFileSync(filePath, 'utf-8')))
-        }
-      }
-      if (allIntel.length > 0) {
-        signals.productIntel = allIntel
-        loaded.push('productIntel')
-      } else {
-        missing.push('productIntel')
-      }
-    } else {
-      missing.push('productIntel')
-    }
-  } catch { missing.push('productIntel') }
-
-  // 8. Account plan (markdown)
-  try {
-    const planPath = resolve(CACHE_DIR, 'intelligence', `${customerSlug}-account-plan.md`)
-    if (existsSync(planPath)) {
-      signals.accountPlan = readFileSync(planPath, 'utf-8')
-      loaded.push('accountPlan')
-    } else {
-      missing.push('accountPlan')
-    }
-  } catch { missing.push('accountPlan') }
+  // TODO: Track registered modules that returned zero signals for missing array
+  // This requires the registry to expose a list of all registered module names
+  // For now, missing will be empty unless we add that capability to the registry
 
   console.log(`[signal-loader] Signal stack for ${customerSlug}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
   return { signals, registrySignals, loaded, missing }

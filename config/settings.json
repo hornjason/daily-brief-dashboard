@@ -1,0 +1,78 @@
+{
+  "refreshIntervalHours": 4,
+  "weatherZip": "85001",
+  "enabledSections": [
+    "calendar",
+    "cases",
+    "pipeline",
+    "ccsp"
+  ],
+  "regions": [
+    {
+      "id": "west-commercial",
+      "label": "West Commercial",
+      "type": "commercial",
+      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8/edit?gid=294606982#gid=294606982",
+      "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
+      "pods": {
+        "WEST_COMM_CORP_NORTHWEST": {
+          "sfReportId": "00OPe00000jyo86MAA",
+          "label": "Northwest Corp"
+        },
+        "WEST_COMM_CORP_SOUTHWEST": {
+          "sfReportId": "00OPe00000k5m9ZMAQ",
+          "label": "Southwest Corp"
+        },
+        "WEST_COMM_CORP_NORTH_CENTRAL": {
+          "sfReportId": "00OPe00000kSeCwMAK",
+          "label": "North Central Corp"
+        },
+        "WEST_COMM_CORP_SOUTH_CENTRAL": {
+          "sfReportId": "00OPe00000kSlCnMAK",
+          "label": "South Central Corp"
+        }
+      }
+    },
+    {
+      "id": "east-commercial",
+      "label": "East Commercial",
+      "type": "commercial",
+      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/111gcacXSkB4uNrDNQAuL7fvcS6YQi_6Wfl9hhffJsU0/edit?gid=1703062703#gid=1703062703",
+      "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
+      "pods": {
+        "EAST_COMM_CORP_POD01": {
+          "sfReportId": "00OPe00000m23W2MAI",
+          "label": "Rough Riders"
+        },
+        "EAST_COMM_CORP_POD02": {
+          "sfReportId": "",
+          "label": "Big Apple Ballers",
+          "pendingSetup": "sfReportId and CCSP not yet configured — no SF Pipeline CSV or Tableau scrape until ops adds these"
+        },
+        "EAST_COMM_CORP_POD03": {
+          "sfReportId": "",
+          "label": "Pythons",
+          "pendingSetup": "sfReportId and CCSP not yet configured — no SF Pipeline CSV or Tableau scrape until ops adds these"
+        },
+        "EAST_COMM_CORP_POD05": {
+          "sfReportId": "",
+          "label": "Mad Hatters",
+          "pendingSetup": "sfReportId and CCSP not yet configured — no SF Pipeline CSV or Tableau scrape until ops adds these"
+        }
+      }
+    },
+    {
+      "id": "central-enterprise-tola",
+      "label": "Central Enterprise – TOLA",
+      "type": "enterprise",
+      "territorySheetUrl": "https://docs.google.com/spreadsheets/d/1p5nM6NNB-vCnaoKxyThnR1zuj_e_80WqzmWh-RsODlQ/edit?gid=409386986#gid=409386986",
+      "podBookingsFolderId": "14I0UH1CiSNNOqVHdZVS7tHOPibJMN5Oo",
+      "pods": {
+        "CENTRAL_ENT_TOLA": {
+          "sfReportId": "00OPe00000kZhSfMAK",
+          "label": "TOLA"
+        }
+      }
+    }
+  ]
+}

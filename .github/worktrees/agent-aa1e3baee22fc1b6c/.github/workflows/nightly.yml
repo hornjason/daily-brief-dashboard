@@ -1,0 +1,50 @@
+name: Gate 3 — Nightly Data Assertions
+
+on:
+  # Run every night at 6:00 AM UTC (after overnight batch typically completes)
+  # Staggered from :00 to avoid API load spikes across the fleet
+  schedule:
+    - cron: '7 6 * * *'
+
+  # Manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  nightly-assertions:
+    name: Data integrity validation
+    runs-on: [self-hosted, mac-mini-live]
+    timeout-minutes: 3  # 90s budget + buffer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Check for batch lockfile
+        id: lockfile_check
+        run: |
+          LOCKFILE="$HOME/daily-brief-batch.lock"
+          if [ -f "$LOCKFILE" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⚠ Batch lockfile detected at $LOCKFILE — skipping assertions"
+            echo "This is not a failure — batch is still running, will retry tomorrow"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "✓ No lockfile — batch has completed, proceeding with assertions"
+          fi
+
+      - name: Run nightly assertions
+        if: steps.lockfile_check.outputs.skip == 'false'
+        run: bun scripts/nightly-assertions.ts
+        env:
+          BASE_URL: 'http://localhost:7777'
+
+      - name: Post results summary
+        if: always() && steps.lockfile_check.outputs.skip == 'false'
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Gate 3 PASSED — production data integrity verified"
+          else
+            echo "❌ Gate 3 FAILED — see assertion output above for details"
+          fi

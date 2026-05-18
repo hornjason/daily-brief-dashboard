@@ -177,9 +177,12 @@ export const FeatureModuleRegistry = {
    * Each module is try/caught individually — failures are logged but don't throw (fail-open).
    * Returns a flat array of all signals from all modules.
    * GitHub Issue #171 — Signal auto-discovery
+   * GitHub Issue #277 — Performance instrumentation
    */
   async collectAllSignals(customerSlug: string): Promise<Signal[]> {
+    const startTime = performance.now()
     const allSignals: Signal[] = []
+    const moduleTimes: Array<{ name: string; ms: number; count: number }> = []
 
     for (const module of _modules.values()) {
       // Skip modules that don't implement signals()
@@ -187,14 +190,31 @@ export const FeatureModuleRegistry = {
         continue
       }
 
+      const moduleStartTime = performance.now()
       try {
         const signals = await module.signals(customerSlug)
+        const moduleElapsed = performance.now() - moduleStartTime
+        moduleTimes.push({ name: module.name, ms: moduleElapsed, count: signals.length })
         allSignals.push(...signals)
       } catch (e: any) {
+        const moduleElapsed = performance.now() - moduleStartTime
+        moduleTimes.push({ name: module.name, ms: moduleElapsed, count: 0 })
         console.warn(
           `[feature-module-registry] signals() failed for ${module.name} (customer: ${customerSlug}):`,
           e?.message ?? e
         )
+      }
+    }
+
+    const totalElapsed = performance.now() - startTime
+
+    // Only log when total time > 50ms (don't spam logs for fast calls)
+    if (totalElapsed > 50) {
+      console.log(
+        `[signal-perf] collectAllSignals for ${customerSlug}: ${totalElapsed.toFixed(2)}ms (${allSignals.length} signals from ${moduleTimes.length} modules)`
+      )
+      for (const { name, ms, count } of moduleTimes) {
+        console.log(`[signal-perf]   ${name}: ${ms.toFixed(2)}ms (${count} signals)`)
       }
     }
 

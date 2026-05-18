@@ -32,9 +32,19 @@ FeatureModuleRegistry.register({
 
     const customer = customers.find(c => toSlug(c.name) === customerSlug)
     const needle = normalizeForQuery(customer?.name ?? customerSlug)
+
+    const filterStartTime = performance.now()
+    const totalRecords = allCases.length
     const customerCases = allCases.filter(c =>
       normalizeForQuery(c.customerName ?? '').includes(needle) || needle.includes(normalizeForQuery(c.customerName ?? ''))
     )
+    const filterElapsed = performance.now() - filterStartTime
+
+    // Only log when filter > 10ms
+    if (filterElapsed > 10) {
+      console.log(`[signal-perf] cases filter: ${filterElapsed.toFixed(2)}ms (${totalRecords} records → ${customerCases.length} matches)`)
+    }
+
     if (customerCases.length === 0) return []
 
     return customerCases.map(c => ({

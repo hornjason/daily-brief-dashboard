@@ -23,9 +23,19 @@ FeatureModuleRegistry.register({
 
     const customer = customers.find(c => toSlug(c.name) === customerSlug)
     const needle = normalizeForQuery(customer?.name ?? customerSlug)
+
+    const filterStartTime = performance.now()
+    const totalRecords = cache.records.length
     const customerRecords = cache.records.filter(r =>
       normalizeForQuery(r.accountName).includes(needle) || needle.includes(normalizeForQuery(r.accountName))
     )
+    const filterElapsed = performance.now() - filterStartTime
+
+    // Only log when filter > 10ms
+    if (filterElapsed > 10) {
+      console.log(`[signal-perf] pipeline filter: ${filterElapsed.toFixed(2)}ms (${totalRecords} records → ${customerRecords.length} matches)`)
+    }
+
     if (customerRecords.length === 0) return []
 
     const signals: Signal[] = []
