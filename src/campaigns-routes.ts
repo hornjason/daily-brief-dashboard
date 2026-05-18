@@ -509,6 +509,11 @@ export async function generateCampaign(
   const pipelineSignals = registrySignals.filter(s => s.source === 'pipeline')
   if (pipelineSignals.length > 0) templateSignals.pipeline = pipelineSignals
 
+  const allSignalSources = [...new Set([
+    ...loaded,
+    ...registrySignals.map(s => s.source),
+  ])]
+
   const htmlContent = generateCampaignHTML({
     materialTitle,
     materialUrl,
@@ -517,6 +522,7 @@ export async function generateCampaign(
     generatedDate: timestamp,
     accountTeam,
     signals: templateSignals,
+    signalsLoaded: allSignalSources,
     markdown,
   })
 

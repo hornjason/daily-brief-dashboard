@@ -27,6 +27,7 @@ interface CampaignHTMLOptions {
     accountPlan?: string
   }
   markdown: string
+  signalsLoaded?: string[]
 }
 
 interface ParsedCampaign {
@@ -441,7 +442,7 @@ ${contacts.length > 0 ? `
   }</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">3 Executive (≤90 words) + 3 Manager (200-250 words)</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Target Personas</td><td style="border-bottom: 1px solid #e8eaed;">${parsed.emailTemplates.length > 0 ? parsed.emailTemplates.map(e => `${escapeHTML(e.persona)} (${escapeHTML(e.tier)})`).join(' · ') : '6 personas (3 exec + 3 mgr)'}</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Signals Used</td><td style="border-bottom: 1px solid #e8eaed;">Intelligence brief, customer docs, daily brief, subscriptions, emails, cases, account plan</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Signals Used</td><td style="border-bottom: 1px solid #e8eaed;">${options.signalsLoaded?.join(', ') || 'Intelligence brief, customer docs, subscriptions, cases, account plan'}</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa;">Council Rules</td><td>11 council-validated email design rules (see checklist below)</td></tr>
 </table>
 
