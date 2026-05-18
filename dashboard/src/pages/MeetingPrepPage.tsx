@@ -302,8 +302,9 @@ function useGenerationProgress() {
   return { step, simulateProgress, complete, fail, reset }
 }
 
-function MeetingPrepContent() {
-  const { customer } = useModulePage()
+export function MeetingPrepContent({ customerName: propCustomer }: { customerName?: string } = {}) {
+  const { customer: contextCustomer } = useModulePage()
+  const customer = propCustomer ?? contextCustomer
 
   // Fetch ALL calendar events (no customer filter required)
   const calendarApi = useApi<{ events: CalendarEvent[]; range: string }>('/api/calendar?range=week&all=true')

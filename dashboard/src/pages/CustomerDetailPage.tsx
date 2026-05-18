@@ -61,7 +61,7 @@ import { CampaignsTab } from '../components/tabs/CampaignsTab'
 import { NewsTab } from '../components/tabs/NewsTab'
 import { IntelligenceTab } from '../components/tabs/IntelligenceTab'
 import { ToolsTab } from '../components/tabs/ToolsTab'
-import { MeetingPrepTab } from '../components/tabs/MeetingPrepTab'
+import { MeetingPrepContent } from './MeetingPrepPage'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1022,7 +1022,7 @@ function PipelineCard({ customerName }: { customerName: string }) {
 const TAB_COMPONENTS: Record<string, React.ComponentType<{ customerName: string }>> = {
   campaigns: CampaignsTab,
   'news-radar': NewsTab,
-  'meeting-prep': MeetingPrepTab,
+  'meeting-prep': ({ customerName }: { customerName: string }) => <MeetingPrepContent customerName={customerName} />,
   tools: ToolsTab,
   intelligence: IntelligenceTab,
 }
