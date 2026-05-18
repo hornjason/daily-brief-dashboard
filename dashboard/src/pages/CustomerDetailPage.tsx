@@ -1056,11 +1056,17 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
   const [inventory, setInventory] = useState<any>(null)
   const [expanded, setExpanded] = useState(false)
 
-  useEffect(() => {
+  const fetchInventory = () => {
     fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/inventory`)
       .then(r => r.ok ? r.json() : null)
       .then(setInventory)
       .catch(() => setInventory(null))
+  }
+
+  useEffect(() => {
+    fetchInventory()
+    const interval = setInterval(fetchInventory, 30_000)
+    return () => clearInterval(interval)
   }, [customerName])
 
   if (!inventory) return null
@@ -1083,7 +1089,16 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
             {activeSources} of {totalSources} active
           </span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); fetchInventory() }}
+            className="p-0.5 text-text-secondary/50 hover:text-accent transition-colors"
+            title="Refresh signal inventory"
+          >
+            <RefreshCw className="w-3 h-3" />
+          </button>
+          <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </div>
       </button>
 
       {expanded && (
