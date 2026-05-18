@@ -26,6 +26,7 @@ import {
   Zap,
   X,
   BookOpen,
+  Activity,
 } from 'lucide-react'
 import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { useCustomerSSE } from '../hooks/useCustomerSSE'
@@ -1049,6 +1050,85 @@ function renderTabContent(activeTab: string, customerName: string) {
   )
 }
 
+// ── Signal Inventory Panel (GitHub Issue #273) ─────────────────────────────
+
+function SignalInventoryPanel({ customerName }: { customerName: string }) {
+  const [inventory, setInventory] = useState<any>(null)
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/inventory`)
+      .then(r => r.ok ? r.json() : null)
+      .then(setInventory)
+      .catch(() => setInventory(null))
+  }, [customerName])
+
+  if (!inventory) return null
+
+  const allLegacySources = [...inventory.legacy.loaded, ...inventory.legacy.missing]
+  const registrySources = Object.keys(inventory.registry.bySource)
+  const totalSources = allLegacySources.length + registrySources.length
+  const activeSources = inventory.legacy.loaded.length + registrySources.length
+
+  return (
+    <div className="bg-bg-secondary/30 rounded-lg border border-border p-3">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center justify-between w-full text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-text-secondary" />
+          <span className="text-sm font-medium text-text-primary">Signal Sources</span>
+          <span className="text-xs text-text-secondary">
+            {activeSources} of {totalSources} active
+          </span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-text-secondary transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-1.5">
+          {/* Registry signals */}
+          {registrySources.map(source => {
+            const info = inventory.registry.bySource[source]
+            return (
+              <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span className="text-text-primary">{source}</span>
+                </div>
+                <span className="text-text-secondary">{info.count} signals</span>
+              </div>
+            )
+          })}
+
+          {/* Legacy loaded */}
+          {inventory.legacy.loaded.map((source: string) => (
+            <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
+              <div className="flex items-center gap-2">
+                <span className="text-green-400">✓</span>
+                <span className="text-text-primary">{source}</span>
+              </div>
+              <span className="text-text-secondary">cached</span>
+            </div>
+          ))}
+
+          {/* Legacy missing */}
+          {inventory.legacy.missing.map((source: string) => (
+            <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
+              <div className="flex items-center gap-2">
+                <span className="text-red-400">✗</span>
+                <span className="text-text-secondary">{source}</span>
+              </div>
+              <span className="text-text-secondary/50">missing</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function CustomerDetailPage() {
   const { name } = useParams<{ name: string }>()
   const navigate = useNavigate()
@@ -1440,6 +1520,7 @@ export function CustomerDetailPage() {
         {/* Right column — 35%, flows with main content (no independent scroll) */}
         <aside className="hidden lg:block w-[38%] p-6 pl-3 space-y-4 border-l border-border/40">
           {/* Order: Intelligence Brief → Cases → Products → Customer Engagement → Key Contacts → Drive */}
+          <SignalInventoryPanel customerName={customerName} />
           <AccountPlanPanel customerName={customerName} />
           <AccountIntelligencePanel customerName={customerName} />
           {/* BKL-HERO-18: L4-only — Cases section absent on L3 hero install */}

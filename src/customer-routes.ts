@@ -701,6 +701,47 @@ export function createCustomerRouter(): Hono {
     }
   })
 
+  // GET /api/customer/:name/signals/inventory — Signal inventory for debugging (#273)
+  router.get('/api/customer/:name/signals/inventory', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const { signals, registrySignals, loaded, missing } = await (async () => {
+      const { loadCustomerSignals } = await import('./lib/signal-loader.ts')
+      return loadCustomerSignals(slug, customer.name)
+    })()
+
+    // Group registry signals by source
+    const registryBySource: Record<string, { count: number; types: string[]; topHeadline: string }> = {}
+    for (const s of registrySignals) {
+      if (!registryBySource[s.source]) {
+        registryBySource[s.source] = { count: 0, types: [], topHeadline: '' }
+      }
+      registryBySource[s.source].count++
+      if (!registryBySource[s.source].types.includes(s.type)) {
+        registryBySource[s.source].types.push(s.type)
+      }
+      if (!registryBySource[s.source].topHeadline) {
+        registryBySource[s.source].topHeadline = s.headline
+      }
+    }
+
+    return c.json({
+      customer: customer.name,
+      slug,
+      legacy: {
+        loaded,
+        missing,
+      },
+      registry: {
+        totalSignals: registrySignals.length,
+        bySource: registryBySource,
+      },
+    })
+  })
+
   // BKL-AI-INTEL-02: Drive discovery fallback. After a cache wipe, getJobStatus
   // returns nothing because both in-memory jobs and disk cache are empty — even
   // when intelligence docs already exist in the customer's Drive folder. The UI
