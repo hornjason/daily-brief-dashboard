@@ -10,7 +10,7 @@
  */
 
 import { Hono } from 'hono'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
@@ -685,7 +685,7 @@ export function createCampaignsRouter(): Hono {
   })
 
   // DELETE /api/customer/:name/campaigns/:id — remove a campaign from cache
-  router.delete('/api/customer/:name/campaigns/:id', (c) => {
+  router.delete('/api/customer/:name/campaigns/:id', async (c) => {
     const rawName = decodeURIComponent(c.req.param('name'))
     const campaignId = c.req.param('id')
     const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
@@ -700,7 +700,23 @@ export function createCampaignsRouter(): Hono {
     }
 
     try {
-      const { unlinkSync } = require('fs')
+      const campaign = JSON.parse(readFileSync(campaignPath, 'utf-8'))
+
+      // Delete Google Drive files (doc + HTML)
+      try {
+        const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
+        const driveApi = google.drive({ version: 'v3', auth })
+        for (const url of [campaign.driveUrl, campaign.htmlUrl].filter(Boolean)) {
+          const docIdMatch = (url as string).match(/\/d\/([a-zA-Z0-9_-]+)/)
+          if (docIdMatch?.[1]) {
+            await driveApi.files.delete({ fileId: docIdMatch[1], supportsAllDrives: true } as any)
+            console.log(`[campaigns] Deleted Drive file: ${docIdMatch[1]}`)
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[campaigns] Drive delete failed (continuing):`, e?.message ?? e)
+      }
+
       unlinkSync(campaignPath)
       console.log(`[campaigns] Deleted campaign ${campaignId} for ${customer.name}`)
       return c.json({ ok: true, deleted: campaignId })
