@@ -328,11 +328,29 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
   }, [customer])
 
   // Filter: show all meetings or only customer-matched
+  // When embedded in account tab (propCustomer set), default to customer-only
   const [showAll, setShowAll] = useState(false)
 
   // Group meetings by date
   const groupedMeetings = useMemo(() => {
     const events = calendarApi.data?.events ?? []
+
+    // When propCustomer is set (embedded in account tab), strictly filter to that customer
+    if (propCustomer && !showAll) {
+      const customerOnly = events.filter(e =>
+        e.customers?.some(c => c.toLowerCase() === propCustomer.toLowerCase())
+      )
+      const sorted = [...customerOnly].sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+      const groups: Record<string, CalendarEvent[]> = {}
+      for (const evt of sorted) {
+        const d = new Date(evt.start)
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        if (!groups[dateKey]) groups[dateKey] = []
+        groups[dateKey].push(evt)
+      }
+      return groups
+    }
+
     const external = showAll
       ? events
       : events.filter(e => (e.customers?.length ?? 0) > 0)
@@ -356,7 +374,7 @@ export function MeetingPrepContent({ customerName: propCustomer }: { customerNam
       groups[dateKey].push(evt)
     }
     return groups
-  }, [calendarApi.data, customer, showAll])
+  }, [calendarApi.data, customer, propCustomer, showAll])
 
   // Fetch account names for manual customer tagging
   const accountsApi = useApi<{ customers: { name: string }[] }>('/api/accounts')
