@@ -155,7 +155,7 @@ function resolveTimeout(options: GeminiCallOptions): number {
   return TIMEOUT_STANDARD
 }
 
-function buildRequestBody(
+export function buildRequestBody(
   systemPrompt: string,
   userPrompt: string,
   options: GeminiCallOptions,
