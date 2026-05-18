@@ -188,6 +188,7 @@ FeatureModuleRegistry.register({
         score,
         timestamp: event.date,
         url: event.registrationUrl || undefined,
+        expiresAt: event.date,  // Events expire after they happen (GitHub Issue #278)
         metadata: {
           format: event.format,
           location: event.location,

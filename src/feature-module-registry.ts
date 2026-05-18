@@ -29,6 +29,32 @@ export interface Signal {
   url?: string
   /** Per-type extras (e.g., case severity, subscription node count) */
   metadata?: Record<string, unknown>
+  /** ISO 8601 — signal is stale/irrelevant after this date (GitHub Issue #278) */
+  expiresAt?: string
+}
+
+// ── Time decay function (GitHub Issue #278) ──────────────────────────────────
+
+/**
+ * Apply time-decay scoring to a signal.
+ * - Signals age linearly over 30 days: score * (1 - dayAge/30), minimum 0.1
+ * - Signals with expiresAt in the past get hard floor of 0.05
+ * - Signals without score are returned unchanged
+ */
+export function applyTimeDecay(signal: Signal): Signal {
+  if (!signal.score) return signal
+
+  const age = Date.now() - new Date(signal.timestamp).getTime()
+  const dayAge = age / (1000 * 60 * 60 * 24)
+
+  // If expired, score drops to 0.05
+  if (signal.expiresAt && new Date(signal.expiresAt).getTime() < Date.now()) {
+    return { ...signal, score: 0.05 }
+  }
+
+  // Linear decay over 30 days: score * (1 - dayAge/30), minimum 0.1
+  const decay = Math.max(0.1, 1 - dayAge / 30)
+  return { ...signal, score: signal.score * decay }
 }
 
 // ── Nav / Scope types (GitHub Issue #234) ────────────────────────────────────
@@ -178,6 +204,7 @@ export const FeatureModuleRegistry = {
    * Returns a flat array of all signals from all modules.
    * GitHub Issue #171 — Signal auto-discovery
    * GitHub Issue #277 — Performance instrumentation
+   * GitHub Issue #278 — Apply time-decay scoring before returning
    */
   async collectAllSignals(customerSlug: string): Promise<Signal[]> {
     const startTime = performance.now()
@@ -218,7 +245,8 @@ export const FeatureModuleRegistry = {
       }
     }
 
-    return allSignals
+    // Apply time decay to all signals before returning
+    return allSignals.map(applyTimeDecay)
   },
 
   /**

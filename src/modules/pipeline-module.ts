@@ -59,6 +59,7 @@ FeatureModuleRegistry.register({
         detail: `$${Math.round(acv).toLocaleString()} ACV${closeDate ? ` | Close: ${closeDate}` : ''} | ${opp.products?.join(', ') ?? ''}`,
         score,
         timestamp: cache.cachedAt ?? new Date().toISOString(),
+        expiresAt: closeDate || undefined,  // Opportunities expire after close date (GitHub Issue #278)
         metadata: {
           opportunityName: name,
           stage,
