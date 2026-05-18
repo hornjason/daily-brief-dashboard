@@ -18,10 +18,13 @@ export function createFeatureModuleRouter() {
       return c.json({ error: `Module '${moduleName}' not found` }, 404)
     }
 
-    // Validate customer exists (case-insensitive lookup following customer-routes.ts pattern)
-    const customer = customers.find(cu => cu.name.toLowerCase() === customerName.toLowerCase())
-    if (!customer) {
-      return c.json({ error: `Customer '${customerName}' not found` }, 404)
+    // Portfolio-scope modules accept _global as a sentinel (no customer needed)
+    const isGlobal = customerName === '_global'
+    if (!isGlobal) {
+      const customer = customers.find(cu => cu.name.toLowerCase() === customerName.toLowerCase())
+      if (!customer) {
+        return c.json({ error: `Customer '${customerName}' not found` }, 404)
+      }
     }
 
     try {
