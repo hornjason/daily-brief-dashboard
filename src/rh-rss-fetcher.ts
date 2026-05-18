@@ -19,7 +19,7 @@ export interface RSSItem {
   link: string
   description: string
   pubDate: string
-  source: 'blog' | 'press-release' | 'developer-blog'
+  source: string
   productTags: string[]
 }
 
@@ -28,13 +28,60 @@ export interface RSSCache {
   fetchedAt: string
 }
 
-// ── RSS Feed URLs ────────────────────────────────────────────────────────────
+export interface RSSFeedConfig {
+  url: string
+  source: string
+  category: string
+  label: string
+  productTags: string[]
+  enabled: boolean
+}
 
-const RSS_FEEDS = [
-  { url: 'https://www.redhat.com/en/rss/blog', source: 'blog' as const },
-  { url: 'https://www.redhat.com/en/rss/press-releases', source: 'press-release' as const },
-  { url: 'https://developers.redhat.com/blog/feed', source: 'developer-blog' as const },
-]
+// ── Config Loading ───────────────────────────────────────────────────────────
+
+const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../data/config')
+
+export function loadFeedConfig(): RSSFeedConfig[] {
+  const configPath = resolve(CONFIG_DIR, 'rss-feeds.json')
+
+  if (!existsSync(configPath)) {
+    // Fallback to original hardcoded feeds
+    return [
+      {
+        url: 'https://www.redhat.com/en/rss/blog',
+        source: 'blog',
+        category: 'Corporate',
+        label: 'Global Red Hat Blog',
+        productTags: [],
+        enabled: true
+      },
+      {
+        url: 'https://www.redhat.com/en/rss/press-releases',
+        source: 'press-release',
+        category: 'Corporate',
+        label: 'Press Releases',
+        productTags: [],
+        enabled: true
+      },
+      {
+        url: 'https://developers.redhat.com/blog/feed',
+        source: 'developer-blog',
+        category: 'Developer',
+        label: 'Developer Blog',
+        productTags: [],
+        enabled: true
+      },
+    ]
+  }
+
+  try {
+    const configs = JSON.parse(readFileSync(configPath, 'utf-8')) as RSSFeedConfig[]
+    return configs.filter(f => f.enabled)
+  } catch (e: any) {
+    console.warn(`[rh-rss] Failed to load feed config:`, e?.message ?? e)
+    return []
+  }
+}
 
 // ── Product Keyword Mapping ──────────────────────────────────────────────────
 
@@ -46,14 +93,15 @@ const PRODUCT_KEYWORDS: Record<string, string[]> = {
 }
 
 /**
- * Tag item with product keywords by scanning title + description
+ * Tag item with product keywords by scanning title + description.
+ * Auto-detected tags from keyword matching.
  */
-function tagWithProducts(title: string, description: string): string[] {
-  const text = `${title} ${description}`.toLowerCase()
+function detectProductTags(text: string): string[] {
+  const normalized = text.toLowerCase()
   const tags: string[] = []
 
   for (const [tag, keywords] of Object.entries(PRODUCT_KEYWORDS)) {
-    if (keywords.some(kw => text.includes(kw))) {
+    if (keywords.some(kw => normalized.includes(kw))) {
       tags.push(tag)
     }
   }
@@ -66,8 +114,12 @@ function tagWithProducts(title: string, description: string): string[] {
 /**
  * Parse RSS 2.0 XML into structured items.
  * Uses simple regex extraction — RSS 2.0 is predictable enough for this.
+ *
+ * @param xml RSS feed XML content
+ * @param source Feed source identifier (e.g., 'blog', 'security-advisory')
+ * @param configTags Optional product tags from feed config to merge with auto-detected tags
  */
-function parseRSSXML(xml: string, source: 'blog' | 'press-release' | 'developer-blog'): RSSItem[] {
+function parseRSSXML(xml: string, source: string, configTags?: string[]): RSSItem[] {
   const items: RSSItem[] = []
 
   // Extract all <item>...</item> blocks
@@ -84,7 +136,9 @@ function parseRSSXML(xml: string, source: 'blog' | 'press-release' | 'developer-
 
     if (!title || !link) continue  // Skip items without essential fields
 
-    const productTags = tagWithProducts(title, description)
+    // Merge config tags with auto-detected tags
+    const autoTags = detectProductTags(title + ' ' + description)
+    const productTags = [...new Set([...(configTags ?? []), ...autoTags])]
 
     items.push({
       title: title.trim(),
@@ -113,8 +167,11 @@ export async function fetchRedHatRSS(): Promise<void> {
   }
 
   const allItems: RSSItem[] = []
+  const feeds = loadFeedConfig()
 
-  for (const feed of RSS_FEEDS) {
+  console.log(`[rh-rss] loaded ${feeds.length} enabled feeds from config`)
+
+  for (const feed of feeds) {
     try {
       console.log(`[rh-rss] fetching ${feed.source} from ${feed.url}`)
       const response = await fetch(feed.url, {
@@ -127,7 +184,7 @@ export async function fetchRedHatRSS(): Promise<void> {
       }
 
       const xml = await response.text()
-      const items = parseRSSXML(xml, feed.source)
+      const items = parseRSSXML(xml, feed.source, feed.productTags)
       allItems.push(...items)
 
       console.log(`[rh-rss] ${feed.source}: parsed ${items.length} items`)

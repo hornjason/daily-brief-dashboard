@@ -128,6 +128,7 @@ export interface CalendarEvent {
   start: string
   end: string
   attendees?: string[]
+  attendeeDetails?: Array<{ email: string; displayName?: string }>
   needsPrep: boolean
   customers?: string[]
   organizer?: string   // set when event is organized by an AE (no customer match)

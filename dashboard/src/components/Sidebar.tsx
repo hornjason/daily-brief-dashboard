@@ -1,43 +1,56 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import * as Icons from 'lucide-react'
 import {
-  LayoutDashboard,
-  Calendar,
-  Users,
-  Cloud,
-  TrendingUp,
-  Settings,
-  Wrench,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
   Sun,
+  Users,
+  Calendar,
+  TrendingUp,
+  Settings,
+  Wrench,
   Package,
-  ShieldCheck,
   Target,
 } from 'lucide-react'
 
-const navItems = [
-  { icon: Sun,             label: 'Morning Summary', sectionId: 'section-morning' },
-  { icon: LayoutDashboard, label: 'Command Center',  sectionId: 'section-command' },
-  { icon: TrendingUp,      label: 'Pipeline',        sectionId: 'section-pipeline' },
-  { icon: Cloud,           label: 'Cloud Spend',     sectionId: 'section-cloudspend' },
-  { icon: Calendar,        label: 'Calendar',        sectionId: 'section-calendar' },
-  { icon: Users,           label: 'Accounts',        sectionId: 'section-accounts' },
+// Core navigation pages (hardcoded, always present)
+const corePages = [
+  { icon: Sun,             label: 'Home',             path: '/dashboard' },
+  { icon: Users,           label: 'Accounts',         path: '/dashboard/accounts' },
+  { icon: Calendar,        label: 'Calendar',         path: '/dashboard/calendar' },
+  { icon: TrendingUp,      label: 'Book of Business', path: '/dashboard/book-of-business' },
+  { icon: Settings,        label: 'Admin',            path: '/dashboard/admin' },
 ]
 
 export type DashboardViewMode = 'asa' | 'product'
 
 interface SidebarProps {
-  active: string
-  onActiveChange: (label: string) => void
   aes?: { name: string; customerCount: number }[]
   productAlertCount?: number
   viewMode?: DashboardViewMode
   onViewModeChange?: (mode: DashboardViewMode) => void
 }
 
-export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, viewMode = 'asa', onViewModeChange }: SidebarProps) {
+interface ModuleNavItem {
+  name: string
+  nav?: {
+    path: string
+    label: string
+    icon: string
+    group: 'actions' | 'intelligence'
+    order: number
+  }
+}
+
+interface ModuleGroup {
+  name: string
+  label: string
+  modules: ModuleNavItem[]
+}
+
+export function Sidebar({ aes, productAlertCount = 0, viewMode = 'asa', onViewModeChange }: SidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const versionClickCount = useRef(0)
@@ -47,30 +60,46 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
     return stored === null ? true : stored === 'true'
   })
 
-  // Scroll-spy via IntersectionObserver (BKL-UX40)
-  const [activeSection, setActiveSection] = useState<string | null>(null)
+  // Module navigation state
+  const [modules, setModules] = useState<ModuleNavItem[]>([])
+  const [groupCollapsed, setGroupCollapsed] = useState<Record<string, boolean>>({
+    actions: localStorage.getItem('sidebar-group-actions') === 'false',
+    intelligence: localStorage.getItem('sidebar-group-intelligence') === 'false',
+  })
 
+  const btnBase = `w-full flex items-center py-2.5 rounded-lg text-sm transition-colors ${
+    collapsed ? 'justify-center px-2' : 'gap-3 px-3'
+  }`
+
+  const [accountsExpanded, setAccountsExpanded] = useState(false)
+
+  // Fetch module navigation on mount
   useEffect(() => {
-    const sections = document.querySelectorAll('[data-section]')
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActiveSection(entry.target.getAttribute('data-section'))
-          }
-        }
-      },
-      { rootMargin: '-20% 0px -60% 0px', threshold: 0 }
-    )
-    sections.forEach((s) => observer.observe(s))
-    return () => observer.disconnect()
+    fetch('/api/feature-modules/nav')
+      .then(r => r.json())
+      .then((data: ModuleNavItem[]) => {
+        setModules(data.filter(m => m.nav))
+      })
+      .catch(err => console.error('[Sidebar] Failed to fetch module nav:', err))
   }, [])
 
-  // BKL-UI-TITLE-01: Do NOT sync scroll-spy → onActiveChange. Scroll-spy is a
-  // visual highlight only (via isActive() reading activeSection). Calling
-  // onActiveChange from layout/scroll changes (e.g., switching "By AE" view)
-  // mutates document.title via App.tsx's title useEffect, causing the title
-  // to flip to "Pipeline | ASA Command Center" while the URL stays /dashboard.
+  // Group modules by nav.group
+  const moduleGroups: ModuleGroup[] = [
+    {
+      name: 'actions',
+      label: 'ACTIONS',
+      modules: modules
+        .filter(m => m.nav?.group === 'actions')
+        .sort((a, b) => (a.nav!.order ?? 0) - (b.nav!.order ?? 0)),
+    },
+    {
+      name: 'intelligence',
+      label: 'INTELLIGENCE',
+      modules: modules
+        .filter(m => m.nav?.group === 'intelligence')
+        .sort((a, b) => (a.nav!.order ?? 0) - (b.nav!.order ?? 0)),
+    },
+  ].filter(g => g.modules.length > 0)
 
   function toggle() {
     setCollapsed(prev => {
@@ -80,30 +109,28 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
     })
   }
 
-  function scrollTo(item: typeof navItems[0]) {
-    onActiveChange(item.label)
-    if (location.pathname.startsWith('/dashboard/products')) {
-      navigate('/dashboard')
-      return
-    }
-    const el = document.getElementById(item.sectionId)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  function toggleGroup(groupName: string) {
+    setGroupCollapsed(prev => {
+      const next = !prev[groupName]
+      localStorage.setItem(`sidebar-group-${groupName}`, String(!next))
+      return { ...prev, [groupName]: next }
+    })
   }
-
-  const btnBase = `w-full flex items-center py-2.5 rounded-lg text-sm transition-colors ${
-    collapsed ? 'justify-center px-2' : 'gap-3 px-3'
-  }`
-
-  const [accountsExpanded, setAccountsExpanded] = useState(false)
 
   function scrollToAeGroup(aeName: string) {
     document.querySelector(`[data-ae-group="${CSS.escape(aeName)}"]`)?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  function isActive(label: string, sectionId?: string): boolean {
-    if (active === label) return true
-    if (sectionId && activeSection === sectionId) return true
-    return false
+  function isActive(path: string): boolean {
+    if (path === '/dashboard') {
+      return location.pathname === '/dashboard'
+    }
+    return location.pathname.startsWith(path)
+  }
+
+  function getIconComponent(iconName: string): React.ComponentType<{ className?: string }> {
+    const Icon = (Icons as any)[iconName]
+    return Icon ?? Package
   }
 
   return (
@@ -136,41 +163,51 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
         )}
       </div>
 
-      {/* BKL-UX56: ASA/Product view toggle removed — always ASA view */}
-
       {/* Nav */}
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
-        {navItems.filter(item => {
-          // Hide Morning Summary nav in product view
-          if (viewMode === 'product' && item.label === 'Morning Summary') return false
-          return true
-        }).map((item) => (
-          <div key={item.label} className="relative group">
-            <button
-              onClick={() => {
-                scrollTo(item)
-                if (item.label === 'Accounts') setAccountsExpanded((v) => !v)
-              }}
-              aria-label={item.label}
-              className={`${btnBase} ${
-                isActive(item.label, item.sectionId)
-                  ? 'bg-accent/10 text-accent'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
-              }`}
-            >
-              <item.icon className="w-4 h-4 shrink-0" />
-              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
-              {!collapsed && item.label === 'Accounts' && aes && aes.length > 0 && (
-                <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${accountsExpanded ? 'rotate-180' : ''}`} />
-              )}
-            </button>
+        {/* Core pages */}
+        {corePages.map((page) => (
+          <div key={page.path} className="relative group">
+            {page.label === 'Accounts' ? (
+              <button
+                onClick={() => {
+                  navigate(page.path)
+                  setAccountsExpanded((v) => !v)
+                }}
+                aria-label={page.label}
+                className={`${btnBase} ${
+                  isActive(page.path)
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
+                }`}
+              >
+                <page.icon className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="whitespace-nowrap">{page.label}</span>}
+                {!collapsed && aes && aes.length > 0 && (
+                  <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${accountsExpanded ? 'rotate-180' : ''}`} />
+                )}
+              </button>
+            ) : (
+              <Link
+                to={page.path}
+                aria-label={page.label}
+                className={`${btnBase} ${
+                  isActive(page.path)
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
+                }`}
+              >
+                <page.icon className="w-4 h-4 shrink-0" />
+                {!collapsed && <span className="whitespace-nowrap">{page.label}</span>}
+              </Link>
+            )}
             {collapsed && (
               <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
-                {item.label}
+                {page.label}
               </span>
             )}
             {/* AE sub-navigation under Accounts (BKL-UX48) */}
-            {!collapsed && item.label === 'Accounts' && accountsExpanded && aes && aes.length > 0 && (
+            {!collapsed && page.label === 'Accounts' && accountsExpanded && aes && aes.length > 0 && (
               <div className="mt-1 mb-1">
                 {aes.map((ae) => (
                   <button
@@ -188,67 +225,62 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
           </div>
         ))}
 
-        {/* Products nav item (Wave 4) */}
-        <div className="relative group mt-4">
-          <a
-            href="/dashboard/products"
-            aria-label="Products"
-            className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
-          >
-            <Package className="w-4 h-4 shrink-0" />
+        {/* Module groups */}
+        {moduleGroups.map(group => (
+          <div key={group.name} className="mt-4">
             {!collapsed && (
-              <span className="flex items-center gap-1.5 whitespace-nowrap">
-                Products
-                {productAlertCount > 0 && (
-                  <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-xs font-medium px-1.5 py-0.5 rounded-full leading-none">
-                    {productAlertCount}
-                  </span>
-                )}
-              </span>
+              <button
+                onClick={() => toggleGroup(group.name)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-semibold tracking-wider text-zinc-500 hover:text-zinc-400 transition-colors uppercase"
+              >
+                <span>{group.label}</span>
+                <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${groupCollapsed[group.name] ? '-rotate-90' : ''}`} />
+              </button>
             )}
-            {collapsed && productAlertCount > 0 && (
-              <span className="absolute top-1 right-1 w-2 h-2 bg-amber-500 rounded-full" />
-            )}
-          </a>
-          {collapsed && (
-            <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
-              Products
-            </span>
-          )}
-        </div>
+            {!groupCollapsed[group.name] && group.modules.map(module => {
+              if (!module.nav) return null
+              const Icon = getIconComponent(module.nav.icon)
+              return (
+                <div key={module.name} className="relative group">
+                  <Link
+                    to={module.nav.path}
+                    aria-label={module.nav.label}
+                    className={`${btnBase} ${collapsed ? '' : 'pl-6'} ${
+                      isActive(module.nav.path)
+                        ? 'bg-accent/10 text-accent'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    {!collapsed && <span className="whitespace-nowrap">{module.nav.label}</span>}
+                  </Link>
+                  {collapsed && (
+                    <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
+                      {module.nav.label}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ))}
 
-        {/* Settings — inline panel (stays within Dashboard) */}
-        <div className="relative group">
-          <button
-            onClick={() => onActiveChange('Settings')}
-            aria-label="Settings"
-            className={`${btnBase} ${
-              active === 'Settings' && !location.pathname.startsWith('/dashboard/admin')
-                ? 'bg-accent/10 text-accent'
-                : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
-            }`}
-          >
-            <Settings className="w-4 h-4 shrink-0" />
-            {!collapsed && <span className="whitespace-nowrap">Settings</span>}
-          </button>
-          {collapsed && (
-            <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
-              Settings
-            </span>
-          )}
-        </div>
-
+        {/* Setup and Batch — secondary nav items */}
         {viewMode !== 'product' && (
-          <>
+          <div className="mt-4 pt-4 border-t border-border/50">
             <div className="relative group">
-              <a
-                href="/dashboard/setup"
+              <Link
+                to="/dashboard/setup"
                 aria-label="Setup"
-                className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
+                className={`${btnBase} ${
+                  isActive('/dashboard/setup')
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
+                }`}
               >
                 <Wrench className="w-4 h-4 shrink-0" />
                 {!collapsed && <span className="whitespace-nowrap">Setup</span>}
-              </a>
+              </Link>
               {collapsed && (
                 <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
                   Setup
@@ -257,24 +289,26 @@ export function Sidebar({ active, onActiveChange, aes, productAlertCount = 0, vi
             </div>
 
             <div className="relative group">
-              <a
-                href="/dashboard/batch"
+              <Link
+                to="/dashboard/batch"
                 aria-label="Batch"
-                className={`${btnBase} text-text-secondary hover:text-text-primary hover:bg-border/30`}
+                className={`${btnBase} ${
+                  isActive('/dashboard/batch')
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-border/30'
+                }`}
               >
                 <Target className="w-4 h-4 shrink-0" />
                 {!collapsed && <span className="whitespace-nowrap">Batch</span>}
-              </a>
+              </Link>
               {collapsed && (
                 <span className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded bg-surface border border-border text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-50">
                   Batch
                 </span>
               )}
             </div>
-          </>
+          </div>
         )}
-
-        {/* Admin — hidden from sidebar, accessible via triple-click on version number (BKL-M43) */}
       </nav>
 
       {/* Footer — triple-click version number to access Admin (BKL-M43) */}

@@ -129,12 +129,13 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
   const auth = makeAuth(GCAL_TOKEN_PATH)
   const calendar = google.calendar({ version: 'v3', auth })
 
-  // Start of current week (Monday midnight) so the full Mon-Sun grid is populated
+  // Start from today (weekdays) or upcoming Monday (weekends), show 2 weeks forward
   const weekStart = new Date()
   weekStart.setHours(0, 0, 0, 0)
-  const day = weekStart.getDay() // 0=Sun, 1=Mon...
-  weekStart.setDate(weekStart.getDate() - (day === 0 ? 6 : day - 1)) // back to Monday
-  const weekOut = new Date(weekStart.getTime() + 14 * 24 * 60 * 60 * 1000) // 2 weeks to cover this + next week
+  const dow = weekStart.getDay() // 0=Sun, 1=Mon...6=Sat
+  if (dow === 0) weekStart.setDate(weekStart.getDate() + 1) // Sun → next Mon
+  else if (dow === 6) weekStart.setDate(weekStart.getDate() + 2) // Sat → next Mon
+  const weekOut = new Date(weekStart.getTime() + 14 * 24 * 60 * 60 * 1000)
 
   // Fetch only the authenticated user's primary calendar — no subscribed/shared calendars
   const res = await calendar.events.list({
@@ -168,6 +169,14 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
         .filter((a: calendar_v3.Schema$EventAttendee) => !a.self)
         .map((a: calendar_v3.Schema$EventAttendee) => a.email ?? '')
         .filter(Boolean)
+
+      const attendeeDetails = rawAttendees
+        .filter((a: calendar_v3.Schema$EventAttendee) => !a.self)
+        .map((a: calendar_v3.Schema$EventAttendee) => ({
+          email: a.email ?? '',
+          displayName: a.displayName ?? undefined,
+        }))
+        .filter(a => a.email)
 
       const externalAttendees = attendees.filter((email: string) => !email.endsWith('@redhat.com'))
 
@@ -228,9 +237,9 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
           const domainMatchAttendees = externalAttendees.filter(e => allDomains.some(d => e.endsWith(d)))
           if (domainMatchAttendees.length > 0) {
             if (domainMatchAttendees.length >= 2 || titleCorroboration(c.name)) return true
-            // Single attendee from alias domain — still match (alias is explicit config)
-            if (domainMatchAttendees.some(e => (c.aliasDomains ?? []).some(d => e.endsWith(d)))) return true
-            return false
+            // Single attendee from explicitly configured domain — still match
+            // Both primary domain and aliasDomains are explicit config, so trust them
+            return true
           }
 
           // 2. Auto domain: company part of attendee email appears in customer name (or vice versa)
@@ -313,6 +322,7 @@ export async function fetchCalendar(customers: Customer[], includeAll = false): 
         start:     ev.start?.dateTime ?? ev.start?.date ?? '',
         end:       ev.end?.dateTime   ?? ev.end?.date   ?? '',
         attendees: externalAttendees,
+        attendeeDetails,
         needsPrep,
         customers: matchedCustomers.length ? matchedCustomers : undefined,
         organizer: matchedCustomers.length === 0 && matchedAe ? matchedAe : undefined,

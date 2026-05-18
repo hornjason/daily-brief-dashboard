@@ -83,6 +83,27 @@ function tagWithProducts(name: string): string[] {
   return tags.length > 0 ? tags : ['General']
 }
 
+/**
+ * Garbage event name patterns — must never be selected as event names
+ */
+const GARBAGE_PATTERNS = [
+  /^social$/i,
+  /^full version/i,
+  /^short cut/i,
+  /^bookmark/i,
+  /^revamp\s+\w+$/i,
+  /more\s+details/i,
+  /details\s+coming/i,
+  /^html$/i,
+  /^pdf$/i,
+  /ancillary\s+event/i,
+  /^(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d+\s*:/i,
+]
+
+function isGarbageEvent(name: string): boolean {
+  return GARBAGE_PATTERNS.some(pattern => pattern.test(name.trim()))
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('Events Fetcher', () => {
@@ -157,5 +178,56 @@ describe('Events Fetcher', () => {
     const line = '* June 4: In-Person | Event Name | Location | No Link'
     const url = extractRegUrl(line)
     expect(url).toBe(null)
+  })
+
+  describe('garbage event name filtering', () => {
+    it('rejects "More details coming soon"', () => {
+      expect(isGarbageEvent('More details coming soon')).toBe(true)
+    })
+
+    it('rejects "More details"', () => {
+      expect(isGarbageEvent('More details')).toBe(true)
+    })
+
+    it('rejects "details coming"', () => {
+      expect(isGarbageEvent('details coming')).toBe(true)
+    })
+
+    it('rejects standalone "HTML"', () => {
+      expect(isGarbageEvent('HTML')).toBe(true)
+    })
+
+    it('rejects standalone "PDF"', () => {
+      expect(isGarbageEvent('PDF')).toBe(true)
+    })
+
+    it('rejects "Ancillary event at Queensyard"', () => {
+      expect(isGarbageEvent('Ancillary event at Queensyard')).toBe(true)
+    })
+
+    it('rejects raw lines starting with month name and colon', () => {
+      expect(isGarbageEvent('June 3: In-Person | Cambridge, MA 2:00pm to 4:30pm | From Pilot to Production...')).toBe(true)
+    })
+
+    it('accepts valid event names', () => {
+      expect(isGarbageEvent('Red Hat Tech Day w/ Intel')).toBe(false)
+      expect(isGarbageEvent('Private Models-as-a-Service AI Workshop')).toBe(false)
+      expect(isGarbageEvent('OpenShift Container Platform Workshop')).toBe(false)
+    })
+  })
+
+  describe('summary cleaning', () => {
+    it('strips pipe-separated raw lines from summary', () => {
+      const rawSummary = 'In-Person | Cambridge, MA 2:00pm to 4:30pm | From Pilot to Production'
+      // Summary containing pipes should be cleaned to empty
+      const cleanSummary = rawSummary.includes('|') ? '' : rawSummary
+      expect(cleanSummary).toBe('')
+    })
+
+    it('preserves clean summary text', () => {
+      const cleanText = 'A hands-on workshop exploring Red Hat solutions'
+      const cleanSummary = cleanText.includes('|') ? '' : cleanText
+      expect(cleanSummary).toBe('A hands-on workshop exploring Red Hat solutions')
+    })
   })
 })

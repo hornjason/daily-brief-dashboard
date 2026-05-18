@@ -6,12 +6,13 @@
  * Provides Signal generation for content generation features.
  */
 
-import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
+import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { fetchRHEvents, type RHEvent } from '../rh-events-fetcher.ts'
 import { existsSync, unlinkSync, readFileSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'events', 'rh-events.json')
+const CONFIG_DIR = resolve(process.env.CONFIG_DIR ?? 'data/config')
 
 // ── Territory to Region Mapping ──────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ function territoryToRegion(territory: string): string {
  */
 function getCustomerRegion(customerSlug: string): string | null {
   // Read customers.json to find which AE owns this customer
-  const customersPath = resolve(process.env.CONFIG_DIR ?? 'data/config', 'customers.json')
+  const customersPath = resolve(CONFIG_DIR, 'customers.json')
   if (!existsSync(customersPath)) {
     return null
   }
@@ -59,7 +60,7 @@ function getCustomerRegion(customerSlug: string): string | null {
   }
 
   // Read aes.json to get territory
-  const aesPath = resolve(process.env.CONFIG_DIR ?? 'data/config', 'aes.json')
+  const aesPath = resolve(CONFIG_DIR, 'aes.json')
   if (!existsSync(aesPath)) {
     return null
   }
@@ -86,6 +87,16 @@ function getCustomerRegion(customerSlug: string): string | null {
 
 FeatureModuleRegistry.register({
   name: 'rh-events',
+
+  scope: 'portfolio',
+
+  nav: {
+    label: 'Events',
+    icon: 'CalendarDays',
+    group: 'intelligence',
+    path: '/dashboard/events',
+    order: 30,
+  },
 
   cachePaths: () => ['data/cache/events/rh-events.json'],
 

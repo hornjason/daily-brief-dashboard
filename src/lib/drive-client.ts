@@ -20,6 +20,7 @@
 import { google, type drive_v3, type docs_v1 } from 'googleapis'
 import { makeAuth, withQuotaRetry, GOOGLE_UNIFIED_TOKEN_PATH } from '../google.ts'
 import { sanitizeErr } from '../utils.ts'
+import { markdownToDocsRequests, type TableDef } from './markdown-to-docs.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -444,6 +445,256 @@ export class DriveFolderClient {
   }
 
   /**
+   * Insert tables into a document using a 3-step process:
+   * 1. Delete placeholders + insert empty table structures (one batchUpdate)
+   * 2. Read the document to discover actual cell paragraph indices
+   * 3. Fill cells with text + bold headers (one batchUpdate)
+   */
+  private async insertTables(
+    docId: string,
+    tables: TableDef[],
+  ): Promise<void> {
+    if (tables.length === 0) return
+
+    const docs = this.getDocs()
+
+    // Step 1: Delete placeholders and insert empty tables (reverse order for stable indices)
+    const sortedTables = [...tables].sort((a, b) => b.placeholderIndex - a.placeholderIndex)
+    const structureReqs: any[] = []
+
+    for (const table of sortedTables) {
+      const insertIndex = 1 + table.placeholderIndex
+      structureReqs.push({
+        deleteContentRange: {
+          range: { startIndex: insertIndex, endIndex: insertIndex + 1 },
+        },
+      })
+      structureReqs.push({
+        insertTable: {
+          rows: table.rows.length + 1,
+          columns: table.headers.length,
+          location: { index: insertIndex },
+        },
+      })
+    }
+
+    await docs.documents.batchUpdate({
+      documentId: docId,
+      requestBody: { requests: structureReqs },
+    })
+
+    // Step 2: Read document to discover actual table cell indices
+    const doc = await docs.documents.get({ documentId: docId })
+    const body = doc.data.body?.content ?? []
+
+    // Find all table elements and extract cell paragraph start indices
+    const docTables: { cellStarts: number[][] }[] = []
+    for (const el of body) {
+      if (el.table) {
+        const cellStarts: number[][] = []
+        const tableRows = el.table.tableRows ?? []
+        for (const row of tableRows) {
+          const rowCells: number[] = []
+          for (const cell of row.tableCells ?? []) {
+            const para = cell.content?.[0]
+            const startIdx = para?.startIndex
+            if (typeof startIdx === 'number') {
+              rowCells.push(startIdx)
+            }
+          }
+          cellStarts.push(rowCells)
+        }
+        docTables.push({ cellStarts })
+      }
+    }
+
+    // Step 3: Fill cells with text
+    // Process each table separately to avoid cross-table index shifts
+    const orderedTables = [...tables].sort((a, b) => a.placeholderIndex - b.placeholderIndex)
+
+    // Fill tables one at a time (last to first would also work but separate calls are safest)
+    for (let t = 0; t < orderedTables.length && t < docTables.length; t++) {
+      const tableDef = orderedTables[t]
+      const docTable = docTables[t]
+      const allRows = [tableDef.headers, ...tableDef.rows]
+
+      const fillReqs: any[] = []
+      // Fill cells in REVERSE order within this table to avoid shifting
+      for (let r = allRows.length - 1; r >= 0; r--) {
+        const row = allRows[r]
+        const cellIndices = docTable.cellStarts[r]
+        if (!cellIndices) continue
+
+        for (let c = row.length - 1; c >= 0; c--) {
+          const cellText = row[c] ?? ''
+          const cellIdx = cellIndices[c]
+          if (cellText && typeof cellIdx === 'number') {
+            fillReqs.push({
+              insertText: {
+                location: { index: cellIdx },
+                text: cellText,
+              },
+            })
+          }
+        }
+      }
+
+      if (fillReqs.length > 0) {
+        await docs.documents.batchUpdate({
+          documentId: docId,
+          requestBody: { requests: fillReqs },
+        })
+        // Re-read doc to get fresh indices for next table
+        if (t < orderedTables.length - 1 && t < docTables.length - 1) {
+          const freshDoc = await docs.documents.get({ documentId: docId })
+          const freshBody = freshDoc.data.body?.content ?? []
+          let tableIdx2 = 0
+          docTables.length = 0
+          for (const el of freshBody) {
+            if (el.table) {
+              const cellStarts: number[][] = []
+              for (const row of el.table.tableRows ?? []) {
+                const rowCells: number[] = []
+                for (const cell of row.tableCells ?? []) {
+                  const para = cell.content?.[0]
+                  const startIdx = para?.startIndex
+                  if (typeof startIdx === 'number') rowCells.push(startIdx)
+                }
+                cellStarts.push(rowCells)
+              }
+              docTables.push({ cellStarts })
+            }
+          }
+        }
+      }
+    }
+
+    // Step 4: Bold header rows — need fresh indices after text insertion
+    const doc2 = await docs.documents.get({ documentId: docId })
+    const body2 = doc2.data.body?.content ?? []
+    const boldReqs: any[] = []
+
+    let tableIdx = 0
+    for (const el of body2) {
+      if (el.table && tableIdx < orderedTables.length) {
+        const firstRow = el.table.tableRows?.[0]
+        if (firstRow) {
+          for (const cell of firstRow.tableCells ?? []) {
+            const para = cell.content?.[0]
+            if (para?.paragraph?.elements?.[0]?.textRun) {
+              const textRun = para.paragraph.elements[0].textRun
+              const start = para.startIndex ?? 0
+              const end = start + (textRun.content?.replace(/\n$/, '').length ?? 0)
+              if (start > 0 && end > start) {
+                boldReqs.push({
+                  updateTextStyle: {
+                    range: { startIndex: start, endIndex: end },
+                    textStyle: { bold: true },
+                    fields: 'bold',
+                  },
+                })
+              }
+            }
+          }
+        }
+        tableIdx++
+      }
+    }
+
+    if (boldReqs.length > 0) {
+      await docs.documents.batchUpdate({
+        documentId: docId,
+        requestBody: { requests: boldReqs },
+      })
+    }
+
+    // Step 5: Style table cells — header background color, alternating row colors
+    const doc3 = await docs.documents.get({ documentId: docId })
+    const body3 = doc3.data.body?.content ?? []
+    const styleReqs: any[] = []
+
+    for (const el of body3) {
+      if (!el.table || !el.startIndex) continue
+      const tableRows = el.table.tableRows ?? []
+      const tableStartIdx = el.startIndex
+      const numCols = tableRows[0]?.tableCells?.length ?? 0
+
+      for (let rowIdx = 0; rowIdx < tableRows.length; rowIdx++) {
+        const row = tableRows[rowIdx]
+        const cells = row.tableCells ?? []
+
+        if (rowIdx === 0) {
+          // Header row: Red Hat red-70 background (apply to entire row at once)
+          styleReqs.push({
+            updateTableCellStyle: {
+              tableRange: {
+                tableCellLocation: {
+                  tableStartLocation: { index: tableStartIdx },
+                  rowIndex: 0,
+                  columnIndex: 0,
+                },
+                rowSpan: 1,
+                columnSpan: numCols,
+              },
+              tableCellStyle: {
+                backgroundColor: {
+                  color: { rgbColor: { red: 0.373, green: 0.0, blue: 0.0 } },
+                },
+              },
+              fields: 'backgroundColor',
+            },
+          })
+          // White text for each header cell
+          for (const cell of cells) {
+            const para = cell?.content?.[0]
+            if (para?.startIndex != null && para?.endIndex != null && para.endIndex > para.startIndex) {
+              styleReqs.push({
+                updateTextStyle: {
+                  range: { startIndex: para.startIndex, endIndex: para.endIndex - 1 },
+                  textStyle: {
+                    foregroundColor: {
+                      color: { rgbColor: { red: 1.0, green: 1.0, blue: 1.0 } },
+                    },
+                  },
+                  fields: 'foregroundColor',
+                },
+              })
+            }
+          }
+        } else if (rowIdx % 2 === 0) {
+          // Even data rows: Red Hat gray-10 background (apply to entire row)
+          styleReqs.push({
+            updateTableCellStyle: {
+              tableRange: {
+                tableCellLocation: {
+                  tableStartLocation: { index: tableStartIdx },
+                  rowIndex: rowIdx,
+                  columnIndex: 0,
+                },
+                rowSpan: 1,
+                columnSpan: numCols,
+              },
+              tableCellStyle: {
+                backgroundColor: {
+                  color: { rgbColor: { red: 0.949, green: 0.949, blue: 0.949 } },
+                },
+              },
+              fields: 'backgroundColor',
+            },
+          })
+        }
+      }
+    }
+
+    if (styleReqs.length > 0) {
+      await docs.documents.batchUpdate({
+        documentId: docId,
+        requestBody: { requests: styleReqs },
+      })
+    }
+  }
+
+  /**
    * Create or update a Google Doc named `name` in `folderId` with `markdown` content.
    *
    * - `onConflict: 'replace'` (default): delete all existing docs with that name, create one
@@ -509,10 +760,13 @@ export class DriveFolderClient {
         const docId = created.data.id
         if (!docId) throw new Error(`drive.files.create returned no id for doc "${name}"`)
 
+        const { requests: fmtRequests, tables } = markdownToDocsRequests(markdown)
         await docs.documents.batchUpdate({
           documentId: docId,
-          requestBody: { requests: [{ insertText: { location: { index: 1 }, text: markdown } }] },
+          requestBody: { requests: fmtRequests },
         })
+
+        await this.insertTables(docId, tables)
 
         const url = `https://docs.google.com/document/d/${docId}/edit`
         console.log(`[drive-client] upsertDoc: doc ready "${name}" → ${url}`)
@@ -542,10 +796,14 @@ export class DriveFolderClient {
               requestBody: { requests: [{ deleteContentRange: { range: { startIndex: 1, endIndex: endIndex - 1 } } }] },
             })
           }
+          const { requests: rewriteRequests, tables } = markdownToDocsRequests(markdown)
           await docs.documents.batchUpdate({
             documentId: docId,
-            requestBody: { requests: [{ insertText: { location: { index: 1 }, text: markdown } }] },
+            requestBody: { requests: rewriteRequests },
           })
+
+          await this.insertTables(docId, tables)
+
           return `https://docs.google.com/document/d/${docId}/edit`
         }
 
@@ -562,10 +820,14 @@ export class DriveFolderClient {
         )
         if (!created.data.id) throw new Error(`drive.files.create returned no id for doc "${name}"`)
 
+        const { requests: newDocRequests, tables } = markdownToDocsRequests(markdown)
         await docs.documents.batchUpdate({
           documentId: created.data.id,
-          requestBody: { requests: [{ insertText: { location: { index: 1 }, text: markdown } }] },
+          requestBody: { requests: newDocRequests },
         })
+
+        await this.insertTables(created.data.id, tables)
+
         return `https://docs.google.com/document/d/${created.data.id}/edit`
       }
     } catch (e: any) {

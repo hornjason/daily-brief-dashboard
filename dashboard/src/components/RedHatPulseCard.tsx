@@ -27,7 +27,11 @@ interface NewsItem {
 interface Release {
   product: string
   version: string
+  latestPatch?: string
   gaDate: string
+  eolDate?: string
+  nextVersion?: string | null
+  nextExpected?: string | null
 }
 
 interface Event {
@@ -35,6 +39,7 @@ interface Event {
   location: string
   date: string
   registrationUrl?: string | null
+  enrichedDescription?: string | null
 }
 
 interface GlobalIntelligence {
@@ -202,15 +207,34 @@ export function RedHatPulseCard() {
                 </h3>
               </div>
               {data.releases.length === 0 ? (
-                <p className="text-xs text-text-secondary italic">No upcoming releases</p>
+                <p className="text-xs text-text-secondary italic">No product data available</p>
               ) : (
                 <div className="space-y-2">
-                  {data.releases.map((rel, idx) => (
-                    <div key={idx} className="text-sm">
-                      <span className="font-medium text-text-primary">{rel.product} {rel.version}</span>
-                      <span className="text-xs text-text-secondary ml-2">{rel.gaDate}</span>
-                    </div>
-                  ))}
+                  {data.releases.map((rel, idx) => {
+                    const slug = rel.product.toLowerCase().includes('openshift') ? 'ocp'
+                      : rel.product.toLowerCase().includes('enterprise linux') ? 'rhel'
+                      : rel.product.toLowerCase().includes('ansible') ? 'aap' : null
+                    return (
+                      <a
+                        key={idx}
+                        href={slug ? `/dashboard/products/${slug}` : '/dashboard/products'}
+                        className="block space-y-0.5 p-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group"
+                      >
+                        <div className="text-sm">
+                          <span className="font-medium text-text-primary group-hover:text-accent transition-colors">
+                            {rel.product.replace('Red Hat ', '')}
+                          </span>
+                          <span className="text-xs font-mono bg-surface-hover border border-border px-1.5 py-0.5 rounded ml-2">
+                            v{rel.version}
+                          </span>
+                        </div>
+                        <div className="text-xs text-text-secondary">
+                          GA {rel.gaDate}
+                          {rel.eolDate && rel.eolDate !== 'N/A' && <span> · EOL {rel.eolDate}</span>}
+                        </div>
+                      </a>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -228,23 +252,26 @@ export function RedHatPulseCard() {
               ) : (
                 <div className="space-y-2">
                   {data.events.map((evt, idx) => (
-                    <div key={idx} className="space-y-1">
-                      <p className="text-sm font-medium text-text-primary">{evt.name}</p>
+                    <a
+                      key={idx}
+                      href={evt.registrationUrl || '/dashboard/events'}
+                      target={evt.registrationUrl ? '_blank' : undefined}
+                      rel={evt.registrationUrl ? 'noopener noreferrer' : undefined}
+                      className="block space-y-1 p-2 -mx-2 rounded-lg hover:bg-surface-hover transition-colors group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-text-primary group-hover:text-accent transition-colors">{evt.name}</p>
+                        {evt.registrationUrl && <ExternalLink className="w-3 h-3 text-text-secondary shrink-0" />}
+                      </div>
+                      {evt.enrichedDescription && (
+                        <p className="text-xs text-text-secondary line-clamp-2">
+                          {evt.enrichedDescription.split('. ')[0]}.
+                        </p>
+                      )}
                       <p className="text-xs text-text-secondary">
                         {evt.location} • {evt.date}
                       </p>
-                      {evt.registrationUrl && (
-                        <a
-                          href={evt.registrationUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-accent hover:text-accent/80 transition-colors inline-flex items-center gap-1"
-                        >
-                          Register
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
+                    </a>
                   ))}
                 </div>
               )}

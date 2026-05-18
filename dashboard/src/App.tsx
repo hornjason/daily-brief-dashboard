@@ -1,24 +1,14 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useApi } from './hooks/useApi'
 import { getVncUrl } from './utils'
 import { Sidebar } from './components/Sidebar'
 import type { DashboardViewMode } from './components/Sidebar'
 import { discoverAllProducts, stripProductName, normalizeProductName, getProductGroupMembers } from './utils/productName'
 import { TopBar } from './components/TopBar'
-import { KPICards } from './components/KPICards'
-import { CalendarStrip } from './components/CalendarStrip'
-import { AccountPortfolioGrid } from './components/AccountPortfolioGrid'
-import { AEGroupedList } from './components/AEGroupedList'
 import { PodTabBar } from './components/PodTabBar'
 import { PodKPIHeader } from './components/PodKPIHeader'
-import { CloudSpendSection } from './components/CloudSpendSection'
-import MorningSummary from './components/MorningSummary'
-import { RedHatPulseCard } from './components/RedHatPulseCard'
 import { UpdateBanner } from './components/UpdateBanner'
-import TopActionsPanel from './components/TopActionsPanel'
-import type { TopAction } from './components/TopActionsPanel'
-import { PipelineSection } from './components/PipelineSection'
 import { RefreshTimerSettings } from './components/RefreshTimerSettings'
 import { WeatherSettings } from './components/WeatherSettings'
 import { EmailSettingsSection } from './components/EmailSettingsSection'
@@ -29,9 +19,18 @@ import { ProductsPage } from './pages/ProductsPage'
 import { ProductDetailPage } from './pages/ProductDetailPage'
 import { BatchPage } from './pages/BatchPage'
 import { RedHatNewsPage } from './pages/RedHatNewsPage'
+import { CampaignsPage } from './pages/CampaignsPage'
+import { NewsPage } from './pages/NewsPage'
+import { ToolsPage } from './pages/ToolsPage'
+import { EventsPage } from './pages/EventsPage'
+import { HomePage } from './pages/HomePage'
+import { AccountsPage } from './pages/AccountsPage'
+import { CalendarPage } from './pages/CalendarPage'
+import { BookOfBusinessPage } from './pages/BookOfBusinessPage'
+import { MeetingPrepPage } from './pages/MeetingPrepPage'
 import { formatRelTime } from './lib/format'
 import { ChevronUp } from 'lucide-react'
-import type { KPIs, CalendarEvent, SupportCase, AccountInfo, CCSPSummary, PipelineSummary, PodInfo } from './types'
+import type { AccountInfo, SupportCase, PodInfo, CCSPSummary, PipelineSummary } from './types'
 
 interface RhStatus {
   hasSession: boolean
@@ -44,36 +43,6 @@ interface RhStatus {
 
 const timeAgo = formatRelTime
 
-/** Map normalized product labels to case-matching keywords (LOG-04) */
-const PRODUCT_CASE_KEYWORDS: Record<string, string[]> = {
-  'RHEL': ['enterprise linux', 'satellite'],
-  'OCP': ['openshift'],
-  'AAP': ['ansible'],
-  'Storage': ['storage'],
-  'Middleware': ['runtimes', 'integration'],
-  'Trial': ['trial'],
-  'Free': ['free'],
-  'Beta': ['beta'],
-  'Partner Subscriptions': ['partner'],
-  'Developer Subscriptions': ['developer subscription'],
-}
-
-function caseMatchesProducts(caseProduct: string | string[], selectedLabels: string[]): boolean {
-  const productStr = Array.isArray(caseProduct) ? (caseProduct[0] ?? '') : (caseProduct ?? '')
-  if (!productStr) return false
-  const lower = productStr.toLowerCase()
-  for (const label of selectedLabels) {
-    const keywords = PRODUCT_CASE_KEYWORDS[label]
-    if (keywords) {
-      if (keywords.some(kw => lower.includes(kw))) return true
-    } else {
-      // For labels not in the map, match if the label appears in the case product
-      if (lower.includes(label.toLowerCase())) return true
-    }
-  }
-  return false
-}
-
 function RhSessionBanner({ status, onReconnect, onVncOpen }: { status: RhStatus; onReconnect: () => void; onVncOpen: (win: Window | null) => void }) {
   const [reconnecting, setReconnecting] = useState(false)
 
@@ -85,13 +54,11 @@ function RhSessionBanner({ status, onReconnect, onVncOpen }: { status: RhStatus;
       const res = await fetch('/api/auth/redhat/start', { method: 'POST' })
       const d = await res.json()
       if (d.error) {
-        // Show a concise error — don't open VNC if the browser never started
         console.error('[rh-banner] start failed:', d.error)
         setReconnecting(false)
         return
       }
       onReconnect()
-      // Open the noVNC viewer so the user can complete the login in their browser
       const win = window.open(getVncUrl({ reconnect: true }), '_blank')
       onVncOpen(win)
     } catch {
@@ -134,11 +101,16 @@ function NoAEsBanner({ onDismiss }: { onDismiss: () => void }) {
   )
 }
 
+// Routes where portfolio-level chrome (PodTabBar, PodKPIHeader, filter chips) should render
+const PORTFOLIO_ROUTES = ['/', '/accounts', '/book-of-business', '/calendar']
+
 function Dashboard() {
   const location = useLocation()
   const navigate = useNavigate()
   const [refreshKey, setRefreshKey] = useState(0)
-  const [active, setActive] = useState('Command Center')
+  // Determine if current route is a portfolio page (show filters) or module page (hide filters)
+  const subPath = location.pathname.replace('/dashboard', '') || '/'
+  const isPortfolioPage = PORTFOLIO_ROUTES.includes(subPath)
   const [viewMode, setViewMode] = useState<DashboardViewMode>(() => {
     const stored = localStorage.getItem('dashboard-view-mode')
     return stored === 'product' ? 'product' : 'asa'
@@ -158,12 +130,25 @@ function Dashboard() {
     localStorage.setItem('active-pod-id', podId)
   }, [])
 
-  // Dynamic page title based on active sidebar section
+  // Dynamic page title based on URL pathname (GitHub #238)
   useEffect(() => {
-    document.title = active === 'Command Center'
-      ? 'ASA Command Center'
-      : `${active} | ASA Command Center`
-  }, [active])
+    const pathToTitle: Record<string, string> = {
+      '/dashboard': 'ASA Command Center',
+      '/dashboard/accounts': 'Accounts | ASA Command Center',
+      '/dashboard/calendar': 'Calendar | ASA Command Center',
+      '/dashboard/book-of-business': 'Book of Business | ASA Command Center',
+      '/dashboard/admin': 'Admin | ASA Command Center',
+      '/dashboard/setup': 'Setup | ASA Command Center',
+      '/dashboard/batch': 'Batch | ASA Command Center',
+      '/dashboard/products': 'Products | ASA Command Center',
+      '/dashboard/campaigns': 'Campaigns | ASA Command Center',
+      '/dashboard/news': 'Customer News | ASA Command Center',
+      '/dashboard/tools': 'Tools | ASA Command Center',
+      '/dashboard/events': 'Events | ASA Command Center',
+      '/dashboard/rh-news': 'Red Hat News | ASA Command Center',
+    }
+    document.title = pathToTitle[location.pathname] || 'ASA Command Center'
+  }, [location.pathname])
   const [rhStatus, setRhStatus] = useState<RhStatus | null>(null)
   const [rhReconnecting, setRhReconnecting] = useState(false)
   const [noAesDismissed, setNoAesDismissed] = useState(false)
@@ -187,11 +172,6 @@ function Dashboard() {
 
   // Back to top button (BKL-UX23)
   const [showBackToTop, setShowBackToTop] = useState(false)
-  // #225: KPI Breakdown expanded by default, persist state in localStorage
-  const [kpiDetailsExpanded, setKpiDetailsExpanded] = useState(() => {
-    const saved = localStorage.getItem('kpi-collapsed')
-    return saved ? !JSON.parse(saved) : true  // default expanded
-  })
 
   useEffect(() => {
     const onScroll = () => setShowBackToTop(window.scrollY > window.innerHeight)
@@ -214,13 +194,10 @@ function Dashboard() {
   const pods = podsApi.data?.pods ?? []
   const activePod = pods.find(p => p.id === activePodId) ?? pods[0]
 
-  const kpisApi = useApi<KPIs>(`/api/kpis?_=${refreshKey}`)
-  const calendarApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&_=${refreshKey}`)
-  const calendarAllApi = useApi<{ events: CalendarEvent[] }>(`/api/calendar?range=week&all=true&_=${refreshKey}`)
-  const casesApi = useApi<{ cases: SupportCase[]; totalCount: number }>(`/api/cases/all?_=${refreshKey}`)
-  // BKL-UX52: Pod-filtered accounts with attention scores
+  // Shared data for layout-level components (TopBar sync indicator, PodKPIHeader, filter bars)
   const podQuery = activePodId ? `&pod=${activePodId}` : ''
   const accountsApi = useApi<{ customers: AccountInfo[] }>(`/api/accounts?_=${refreshKey}${podQuery}`)
+  const casesApi = useApi<{ cases: SupportCase[]; totalCount: number }>(`/api/cases/all?_=${refreshKey}`)
   const ccspQueryStr = (() => {
     const params = new URLSearchParams()
     if (aeFilterSelected !== 'all') params.set('ae', aeFilterSelected)
@@ -230,89 +207,11 @@ function Dashboard() {
   })()
   const nodeRoleApi  = useApi<{ isL3Only: boolean }>('/api/node-role')
   const isL3Only     = nodeRoleApi.data?.isL3Only ?? true
-  const rhTokenApi   = useApi<{ configured: boolean }>('/api/settings/offline-token')
   const ccspApi      = useApi<CCSPSummary>(`/api/ccsp${ccspQueryStr}`)
   const pipelineQueryStr = aeFilterSelected && aeFilterSelected !== 'all' ? `?ae=${encodeURIComponent(aeFilterSelected)}` : ''
   const pipelineApi  = useApi<PipelineSummary>(`/api/pipeline${pipelineQueryStr}`)
-  const morningSummaryApi = useApi<{ signals: Array<{ customer: string; type: string; severity: 'critical' | 'high' | 'medium'; text: string }> }>('/api/morning-summary')
-  const scrapeStatus = useApi<{
-    scrapers: {
-      'rh-cases':    { state: string; lastSuccess: string | null; lastError: string | null }
-      'ccsp':        { state: string; lastSuccess: string | null; lastError: string | null }
-      'supportable': { state: string; lastSuccess: string | null; lastError: string | null }
-      'sf-pipeline': { state: string; lastSuccess: string | null; lastError: string | null }
-    }
-  }>('/api/scraper-status')
 
-  // ── KPI history for sparklines (BKL-R30) ─────────────────────────────────
-  const kpiHistoryApi = useApi<{
-    snapshots: Array<{
-      date: string
-      metrics: {
-        totalCases: number
-        sev1Cases: number
-        openRenewals: number
-        totalSubscriptions: number
-        pipelineCount: number
-        customerCount: number
-        meetingsToday?: number
-        meetingsThisWeek?: number
-      }
-    }>
-  }>('/api/kpis/history')
-
-  const sparklineHistory = useMemo<Record<string, number[]> | undefined>(() => {
-    const snapshots = kpiHistoryApi.data?.snapshots
-    if (!snapshots || snapshots.length < 2) return undefined
-    return {
-      openCases: snapshots.map(s => s.metrics.totalCases),
-      sev1Cases: snapshots.map(s => s.metrics.sev1Cases),
-      expiringWithin30: snapshots.map(s => s.metrics.openRenewals),
-      renewals30to90: snapshots.map(s => s.metrics.totalSubscriptions),
-      techWinsNeeded: snapshots.map(s => s.metrics.pipelineCount),
-      meetingsToday: snapshots.map(s => s.metrics.meetingsToday ?? 0),
-      meetingsThisWeek: snapshots.map(s => s.metrics.meetingsThisWeek ?? 0),
-    }
-  }, [kpiHistoryApi.data])
-
-  const topActions = useMemo<TopAction[]>(() => {
-    const signals = morningSummaryApi.data?.signals ?? []
-    if (!signals.length) return []
-
-    // Group by customer — signals are server-sorted by severity, first occurrence = top signal
-    const seen = new Map<string, typeof signals[number]>()
-    for (const sig of signals) {
-      if (!seen.has(sig.customer)) seen.set(sig.customer, sig)
-    }
-
-    const sorted = [...seen.values()].sort((a, b) => {
-      const aIsCase = a.type.includes('case')
-      const bIsCase = b.type.includes('case')
-      const aIsMeeting = a.type === 'meeting-prep'
-      const bIsMeeting = b.type === 'meeting-prep'
-      if (aIsCase !== bIsCase) return aIsCase ? -1 : 1
-      if (aIsMeeting !== bIsMeeting) return aIsMeeting ? -1 : 1
-      return a.customer.localeCompare(b.customer)
-    })
-
-    return sorted.slice(0, 3).map(sig => {
-      const caseMatch = sig.text.match(/case #(\d{6,})/i)
-      const chips: TopAction['chips'] = [
-        ...(caseMatch
-          ? [{ label: 'View Case', href: `https://access.redhat.com/support/cases/#/case/${caseMatch[1]}`, variant: 'case' as const }]
-          : []),
-        { label: 'Schedule', href: `https://calendar.google.com/calendar/r/eventedit?text=${encodeURIComponent(`Follow up: ${sig.text.slice(0, 60)}`)}`, variant: 'calendar' as const },
-      ]
-      return {
-        customerName: sig.customer,
-        signal: sig.text,
-        chips,
-        priority: sig.severity === 'critical' ? 'urgent' : 'this-week',
-      }
-    })
-  }, [morningSummaryApi.data])
-
-  const anyLoading = kpisApi.loading || calendarApi.loading || calendarAllApi.loading || casesApi.loading || accountsApi.loading
+  const anyLoading = accountsApi.loading || casesApi.loading
 
   const handleRefresh = useCallback(() => {
     setRefreshKey((k) => k + 1)
@@ -357,13 +256,11 @@ function Dashboard() {
       const aeAccounts = accounts.filter(a => a.ae === ae.name)
       let worst = 'healthy' as string
       for (const acct of aeAccounts) {
-        // Check health scores first
         const hs = aeHealthScores[acct.name]
         if (hs) {
           if (hs.status === 'red') { worst = 'critical'; break }
           if (hs.status === 'yellow' && worst !== 'critical') worst = 'warning'
         } else {
-          // Fallback: check cases
           const acctCases = acct.accountNumbers.flatMap(
             num => cases.filter(c => String(c.accountNumber) === String(num))
           )
@@ -377,7 +274,6 @@ function Dashboard() {
   }, [aeList, accountsApi.data, casesApi.data, aeHealthScores])
 
   // Discover products scoped to the current AE filter
-  // When a specific AE is selected, only show products from that AE's customers
   const allProducts = useMemo(() => {
     let accounts = accountsApi.data?.customers ?? []
     if (aeFilterSelected !== 'all') {
@@ -474,7 +370,7 @@ function Dashboard() {
 
   // Derive lastSynced from the most recent cachedAt across data sources
   const lastSynced = (() => {
-    if (anyLoading || !kpisApi.data) return null
+    if (anyLoading) return null
     const timestamps = [
       accountsApi.data?.customers?.map(c => c.cachedAt).filter(Boolean) ?? [],
       ccspApi.data?.cachedAt ? [ccspApi.data.cachedAt] : [],
@@ -488,8 +384,6 @@ function Dashboard() {
   return (
     <div className="flex min-h-screen bg-bg">
       <Sidebar
-        active={active}
-        onActiveChange={setActive}
         aes={accountsApi.data?.customers
           ? [...new Set(accountsApi.data.customers.map((c) => c.ae).filter(Boolean))].sort().map((ae) => ({
               name: ae,
@@ -502,12 +396,12 @@ function Dashboard() {
       />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar lastSynced={lastSynced} loading={anyLoading} onRefresh={handleRefresh} />
-        {/* BKL-UX52: Pod tab bar */}
-        {pods.length > 1 && (
+        {/* BKL-UX52: Pod tab bar — portfolio pages only */}
+        {isPortfolioPage && pods.length > 1 && (
           <PodTabBar pods={pods} activePodId={activePodId} onChange={handlePodChange} />
         )}
-        {/* BKL-UX52: Pod KPI header */}
-        {activePod && (accountsApi.data?.customers?.length ?? 0) > 0 && (
+        {/* BKL-UX52: Pod KPI header — portfolio pages only */}
+        {isPortfolioPage && activePod && (accountsApi.data?.customers?.length ?? 0) > 0 && (
           <PodKPIHeader
             podName={activePod.name}
             accounts={accountsApi.data?.customers ?? []}
@@ -521,195 +415,137 @@ function Dashboard() {
         {aeCount === 0 && !noAesDismissed && (
           <NoAEsBanner onDismiss={() => setNoAesDismissed(true)} />
         )}
-        {location.pathname.startsWith('/dashboard/products/') ? (
-          <ProductDetailPage />
-        ) : location.pathname === '/dashboard/products' ? (
-          <ProductsPage />
-        ) : active === 'Settings' ? (
-          <main className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-lg">
-              <h2 className="text-lg font-semibold text-text-primary mb-4">Settings</h2>
-              <div className="space-y-4">
-                <WeatherSettings />
-                <RefreshTimerSettings />
-                <EmailSettingsSection />
-              </div>
-            </div>
-          </main>
-        ) : (
-          <main className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Scrape staleness indicators */}
-            {scrapeStatus.data && (
-              <div className="flex items-center gap-3 flex-wrap text-xs text-text-secondary">
-                {([
-                  { storeKey: 'rh-cases' as const,    label: 'RH Cases',    displayKey: 'rh' },
-                  { storeKey: 'ccsp' as const,         label: 'CCSP',        displayKey: 'ccsp' },
-                  { storeKey: 'sf-pipeline' as const,  label: 'Salesforce',  displayKey: 'salesforce' },
-                ] as const).map(({ storeKey, label, displayKey }) => {
-                  const s = scrapeStatus.data!.scrapers[storeKey]
-                  const isRunning = s.state === 'running'
-                  const isStale = s.state === 'stale'
-                  const color = isRunning ? 'bg-accent' : s.lastError ? 'bg-critical' : isStale ? 'bg-warning' : 'bg-green-500'
-                  const tooltip = isRunning ? 'Currently running' : s.lastError ? `Last error: ${String(s.lastError).slice(0, 80)}` : s.lastSuccess ? `Last sync: ${new Date(s.lastSuccess).toLocaleString()}` : 'Not yet synced'
+
+        {/* Filter Bar — portfolio pages only. AE chips (2+ AEs only) + Product chips */}
+        {isPortfolioPage && (aeList.length > 1 || allProducts.length > 0) && (
+          <div className="px-6 pb-2 pt-2 space-y-2">
+            {/* AE Filter Chip Bar — only shown when 2+ AEs configured */}
+            {aeList.length > 1 && (
+              <div role="radiogroup" aria-label="Filter by Account Executive" className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => handleAeFilterChange('all')}
+                  className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
+                    aeFilterSelected === 'all'
+                      ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                      : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                  }`}
+                  role="radio"
+                  aria-checked={aeFilterSelected === 'all'}
+                >
+                  All <span className="text-xs opacity-70 ml-0.5">{accountsApi.data?.customers?.length ?? 0}</span>
+                </button>
+                {aeList.map(ae => {
+                  const healthStatus = aeWorstHealth[ae.name]
+                  const dotColor = healthStatus === 'critical' ? 'bg-red-500' : healthStatus === 'warning' ? 'bg-amber-500' : 'bg-green-500'
                   return (
-                    <span key={displayKey} className="flex items-center gap-1" title={tooltip}>
-                      <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
-                      {label}
-                    </span>
+                    <button
+                      key={ae.name}
+                      onClick={() => handleAeFilterChange(ae.name)}
+                      className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors flex items-center gap-1.5 ${
+                        aeFilterSelected === ae.name
+                          ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                          : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                      }`}
+                      role="radio"
+                      aria-checked={aeFilterSelected === ae.name}
+                    >
+                      {ae.count > 0 && <span className={`w-2 h-2 rounded-full ${dotColor} shrink-0`} />}
+                      {ae.name.split(' ')[0]} <span className="text-xs opacity-70 ml-0.5">{ae.count}</span>
+                    </button>
                   )
                 })}
               </div>
             )}
 
-            {/* Filter Bar — AE chips (2+ AEs only) + Product chips (always when data exists) */}
-            {(aeList.length > 1 || allProducts.length > 0) && (
-              <div className="sticky top-14 z-10 bg-bg/95 backdrop-blur-sm pb-2 -mt-2 pt-2 space-y-2">
-                {/* AE Filter Chip Bar — only shown when 2+ AEs configured */}
-                {aeList.length > 1 && (
-                  <div role="radiogroup" aria-label="Filter by Account Executive" className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      onClick={() => handleAeFilterChange('all')}
-                      className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
-                        aeFilterSelected === 'all'
-                          ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
-                          : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
-                      }`}
-                      role="radio"
-                      aria-checked={aeFilterSelected === 'all'}
-                    >
-                      All <span className="text-xs opacity-70 ml-0.5">{accountsApi.data?.customers?.length ?? 0}</span>
-                    </button>
-                    {aeList.map(ae => {
-                      const healthStatus = aeWorstHealth[ae.name]
-                      const dotColor = healthStatus === 'critical' ? 'bg-red-500' : healthStatus === 'warning' ? 'bg-amber-500' : 'bg-green-500'
-                      return (
-                        <button
-                          key={ae.name}
-                          onClick={() => handleAeFilterChange(ae.name)}
-                          className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors flex items-center gap-1.5 ${
-                            aeFilterSelected === ae.name
-                              ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
-                              : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
-                          }`}
-                          role="radio"
-                          aria-checked={aeFilterSelected === ae.name}
-                        >
-                          {ae.count > 0 && <span className={`w-2 h-2 rounded-full ${dotColor} shrink-0`} />}
-                          {ae.name.split(' ')[0]} <span className="text-xs opacity-70 ml-0.5">{ae.count}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Product Filter Chip Bar — shown whenever subscription data exists */}
-                {allProducts.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap" aria-label="Filter by product">
-                    <button
-                      onClick={() => handleProductFilterToggle('__all__')}
-                      className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
-                        productFilterSelected.length === 0
-                          ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
-                          : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
-                      }`}
-                    >
-                      All Products
-                    </button>
-                    {allProducts.map(product => (
-                      <button
-                        key={product}
-                        onClick={() => handleProductFilterToggle(product)}
-                        title={getProductGroupMembers(product, rawProducts).join(', ')}
-                        className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
-                          productFilterSelected.includes(product)
-                            ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
-                            : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
-                        }`}
-                      >
-                        {product}
-                      </button>
-                    ))}
-                  </div>
-                )}
+            {/* Product Filter Chip Bar — shown whenever subscription data exists */}
+            {allProducts.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap" aria-label="Filter by product">
+                <button
+                  onClick={() => handleProductFilterToggle('__all__')}
+                  className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
+                    productFilterSelected.length === 0
+                      ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                      : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                  }`}
+                >
+                  All Products
+                </button>
+                {allProducts.map(product => (
+                  <button
+                    key={product}
+                    onClick={() => handleProductFilterToggle(product)}
+                    title={getProductGroupMembers(product, rawProducts).join(', ')}
+                    className={`text-sm px-3 py-1 rounded-full border min-h-[32px] transition-colors ${
+                      productFilterSelected.includes(product)
+                        ? 'border-accent ring-1 ring-accent bg-accent/10 text-accent font-medium'
+                        : 'border-border text-text-secondary hover:text-text-primary hover:border-text-secondary'
+                    }`}
+                  >
+                    {product}
+                  </button>
+                ))}
               </div>
             )}
-
-            {/* Morning Summary (R06) — hidden in product view */}
-            <MorningSummary matchingCustomers={productFilterSelected.length > 0 ? new Set(filteredAccounts.map(a => a.name)) : undefined} />
-
-            {/* Red Hat Pulse (GitHub Issue #203) */}
-            <RedHatPulseCard />
-
-            {/* Top Actions (BKL-F10a, BKL-F10b) */}
-            <TopActionsPanel actions={topActions} />
-
-            {/* KPI Cards */}
-            <section id="section-command" data-section="section-command">
-              {/* BKL-HERO-06: pass rhHasSession as undefined on L3 so the "Connect RH Portal" hint is suppressed */}
-              {/* BKL-#65: pass isL3Only for RH Cases empty state logic */}
-              <KPICards kpis={kpisApi.data} cases={casesApi.data?.cases ?? []} accounts={filteredAccounts} techWinsNeeded={pipelineApi.data?.techWinsNeeded ?? []} loading={kpisApi.loading} rhLastScraped={rhStatus?.lastScraped} rhHasSession={isL3Only ? undefined : rhStatus?.hasSession} sparklineHistory={sparklineHistory} selectedProducts={productFilterSelected} allCases={casesApi.data?.cases ?? []} allAccounts={accountsApi.data?.customers ?? []} caseMatchesProducts={caseMatchesProducts} isL3Only={isL3Only} rhTokenConfigured={rhTokenApi.data?.configured} />
-            </section>
-
-            {/* Collapsible KPI Detail Breakdown */}
-            <div className="bg-surface border border-border rounded-xl overflow-hidden">
-              <button
-                onClick={() => {
-                  const next = !kpiDetailsExpanded
-                  setKpiDetailsExpanded(next)
-                  localStorage.setItem('kpi-collapsed', JSON.stringify(!next))
-                }}
-                className="w-full px-5 py-3 flex items-center justify-between hover:bg-surface-hover transition-colors"
-              >
-                <span className="text-sm font-semibold text-text-primary">Detailed KPI Breakdown</span>
-                <span className="text-text-secondary text-xs">
-                  {kpiDetailsExpanded ? '▼' : '▶'}
-                </span>
-              </button>
-              {kpiDetailsExpanded && (
-                <div className="border-t border-border p-5 space-y-6">
-                  {/* Pipeline */}
-                  <section id="section-pipeline" data-section="section-pipeline">
-                    <PipelineSection data={pipelineApi.data} loading={pipelineApi.loading} error={pipelineApi.error} onRefresh={handleRefresh} selectedProducts={productFilterSelected} />
-                  </section>
-
-                  {/* Cloud Spend — render whenever CCSP data is available (L3 reads sheet data
-                      populated by the L4 leader; isL3Only only blocks scraping, not display).
-                      Hide only when AE filter yields no customers. */}
-                  {filteredAccounts.length > 0 && (ccspApi.data || ccspApi.loading || ccspApi.error) && (
-                    <section id="section-cloudspend" data-section="section-cloudspend">
-                      <CloudSpendSection data={ccspApi.data} loading={ccspApi.loading} error={ccspApi.error} onRefresh={handleRefresh} />
-                    </section>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Calendar + Meeting Prep — visible in both views */}
-            <section id="section-calendar" data-section="section-calendar">
-              <CalendarStrip
-                events={calendarApi.data?.events ?? []}
-                allEvents={calendarAllApi.data?.events ?? []}
-                cases={casesApi.data?.cases ?? []}
-                accounts={accountsApi.data?.customers ?? []}
-                loading={calendarApi.loading || calendarAllApi.loading}
-              />
-            </section>
-
-            {/* Account Portfolio — search/filter/triage/byAE controls + grid (BKL-REG-16: restore from BKL-UX52 regression) */}
-            <section id="section-accounts" data-section="section-accounts">
-              <AccountPortfolioGrid
-                accounts={filteredAccounts}
-                cases={casesApi.data?.cases ?? []}
-                events={calendarApi.data?.events ?? []}
-                loading={accountsApi.loading}
-                selectedProducts={productFilterSelected}
-                aeList={aeList}
-                aeFilterSelected={aeFilterSelected}
-                allAccounts={accountsApi.data?.customers ?? []}
-              />
-            </section>
-          </main>
+          </div>
         )}
+
+        {/* Page Routes — each page fetches its own data independently */}
+        <Routes>
+          <Route path="/" element={
+            <HomePage
+              refreshKey={refreshKey}
+              onRefresh={handleRefresh}
+              aeFilterSelected={aeFilterSelected}
+              productFilterSelected={productFilterSelected}
+              filteredAccounts={filteredAccounts}
+              activePodId={activePodId}
+            />
+          } />
+          <Route path="/accounts" element={
+            <AccountsPage
+              refreshKey={refreshKey}
+              aeFilterSelected={aeFilterSelected}
+              productFilterSelected={productFilterSelected}
+              filteredAccounts={filteredAccounts}
+              activePodId={activePodId}
+            />
+          } />
+          <Route path="/calendar" element={
+            <CalendarPage
+              refreshKey={refreshKey}
+              activePodId={activePodId}
+            />
+          } />
+          <Route path="/book-of-business" element={
+            <BookOfBusinessPage
+              refreshKey={refreshKey}
+              onRefresh={handleRefresh}
+              aeFilterSelected={aeFilterSelected}
+              productFilterSelected={productFilterSelected}
+              filteredAccounts={filteredAccounts}
+            />
+          } />
+          <Route path="/products/:slug" element={<ProductDetailPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/campaigns" element={<CampaignsPage />} />
+          <Route path="/news" element={<NewsPage />} />
+          <Route path="/tools" element={<ToolsPage />} />
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/rh-news" element={<RedHatNewsPage />} />
+          <Route path="/meeting-prep" element={<MeetingPrepPage />} />
+          <Route path="/settings" element={
+            <main className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-lg">
+                <h2 className="text-lg font-semibold text-text-primary mb-4">Settings</h2>
+                <div className="space-y-4">
+                  <WeatherSettings />
+                  <RefreshTimerSettings />
+                  <EmailSettingsSection />
+                </div>
+              </div>
+            </main>
+          } />
+        </Routes>
       </div>
 
       {/* Back to top button (BKL-UX23) */}
@@ -733,8 +569,8 @@ function App() {
       <Route path="/dashboard/setup" element={<SetupPage />} />
       <Route path="/dashboard/admin" element={<AdminPage />} />
       <Route path="/dashboard/batch" element={<BatchPage />} />
-      <Route path="/dashboard/rh-news" element={<RedHatNewsPage />} />
-      <Route path="*" element={<Dashboard />} />
+      <Route path="/dashboard/*" element={<Dashboard />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

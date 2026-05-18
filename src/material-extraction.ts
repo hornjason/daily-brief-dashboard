@@ -12,9 +12,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { google } from 'googleapis'
-import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModel } from './ai-config.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { callGemini } from './gemini-call.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -116,14 +114,6 @@ async function callGeminiForDecomposition(opts: {
   materialTitle: string
   materialContent: string
 }): Promise<MaterialExtraction> {
-  const project = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model = getGeminiModel()
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
-
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
   const userPrompt = `## Material: ${opts.materialTitle}
 
 ### Content (first 16000 chars):
@@ -132,50 +122,24 @@ ${opts.materialContent.substring(0, 16000)}
 ---
 Now extract structured data from this material in JSON format.`
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(120_000), // 2 min
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: DECOMPOSITION_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature: 0.3,  // Lower for more consistent structured output
-        maxOutputTokens: 4096,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }),
+  const result = await callGemini(DECOMPOSITION_PROMPT, userPrompt, {
+    callType: 'material-decomposition',
+    customerName: 'n/a',
+    model: 'full',
+    temperature: 0.3,
+    // No deltaKey — material content may change, and we want fresh extraction each time
   })
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 300)}`)
-  }
-
-  const json = await res.json() as any
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
-      callType: 'material-decomposition',
-      customerName: 'n/a',
-      inputTokens: usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  if (!text) throw new Error('Gemini returned empty response')
+  if (!result.text) throw new Error('Gemini returned empty response')
 
   // Parse JSON output
   let parsed: any
   try {
     // Strip markdown fences if present
-    const cleaned = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim()
+    const cleaned = result.text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim()
     parsed = JSON.parse(cleaned)
   } catch (e: any) {
-    console.error('[material-extraction] Gemini response was not valid JSON:', text.substring(0, 500))
+    console.error('[material-extraction] Gemini response was not valid JSON:', result.text.substring(0, 500))
     throw new Error(`Gemini returned invalid JSON: ${e.message}`)
   }
 

@@ -83,6 +83,10 @@ export function readSyncState(): SyncState {
 /**
  * Atomically update a single flow's status in sync-state.json.
  * Uses tmp + rename to prevent corrupt file on crash during write.
+ *
+ * Note: Current design stores a single snapshot. This function resets
+ * date to today on every write, so old entries naturally drop off.
+ * Cleanup logic below is defensive for future time-series schemas.
  */
 export function writeSyncStateFlow(
   flow: keyof SyncStateFlows,
@@ -98,8 +102,44 @@ export function writeSyncStateFlow(
     }
     writeJsonAtomic(SYNC_STATE_PATH, next)
     console.log(`[sync-state] ${flow} → ${status} (date: ${today})`)
+
+    // Defensive cleanup: if schema evolves to time-series, enforce 90-day retention
+    // Current single-entry design self-rotates, so this is future-proofing only.
+    cleanupSyncState()
   } catch (e: any) {
     console.warn(`[sync-state] writeSyncStateFlow failed: ${e.message}`)
+  }
+}
+
+/**
+ * Remove sync-state entries older than 90 days.
+ * Current schema (single snapshot) makes this a no-op, but defends against
+ * future time-series evolution where old entries could accumulate.
+ */
+function cleanupSyncState(): void {
+  try {
+    if (!existsSync(SYNC_STATE_PATH)) return
+    const raw = JSON.parse(readFileSync(SYNC_STATE_PATH, 'utf-8'))
+
+    // Current schema: single entry with .date field (YYYY-MM-DD)
+    // Future schema: could be an array of { date, flows, updatedAt }[]
+    // This cleanup handles both cases safely
+
+    if (Array.isArray(raw)) {
+      // Time-series format (future-proofing)
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA')
+      const cleaned = raw.filter((entry: any) => {
+        if (typeof entry.date !== 'string') return false
+        return entry.date >= ninetyDaysAgo
+      })
+      if (cleaned.length < raw.length) {
+        writeJsonAtomic(SYNC_STATE_PATH, cleaned)
+        console.log(`[sync-state] cleaned ${raw.length - cleaned.length} entries older than 90 days`)
+      }
+    }
+    // Single-entry format: no cleanup needed (self-rotates via date reset)
+  } catch (e: any) {
+    console.warn(`[sync-state] cleanup failed: ${e.message}`)
   }
 }
 

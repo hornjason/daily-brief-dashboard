@@ -9,7 +9,6 @@
 import { resolve } from 'path'
 import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModelLite } from './ai-config.ts'
 import { sanitizeErr } from './utils.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -37,6 +36,10 @@ const PRODUCT_NAMES: Record<ProductKey, string> = {
 }
 
 // ── Raw Gemini call returning full response JSON (for grounding metadata) ─────
+// NOTE: This cannot be migrated to callGemini() yet because it needs access to
+// grounding metadata (groundingChunks, groundingSupports) for source extraction.
+// callGemini() currently only exposes text. Migration blocked on BKL-ARCH-06 Phase 3
+// (grounding metadata exposure in GeminiResult).
 
 async function callGeminiGroundedRaw(opts: {
   systemPrompt: string
@@ -46,7 +49,7 @@ async function callGeminiGroundedRaw(opts: {
 }): Promise<any> {
   const project  = process.env.GOOGLE_CLOUD_PROJECT
   const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModelLite()  // BKL-AI-COST-01: product Q&A is high-volume, use lite model
+  const model    = 'gemini-2.5-flash-lite'  // BKL-AI-COST-01: product Q&A is high-volume, use lite model
   if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
 
   const token = await getGeminiToken()

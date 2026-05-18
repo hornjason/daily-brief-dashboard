@@ -36,7 +36,7 @@ REMOTE     := ghcr.io/hornjason/daily-brief-dashboard:latest
 IMAGE_L4   := localhost/daily-brief-l4-daemon:latest
 REMOTE_L4  := ghcr.io/hornjason/daily-brief-l4-daemon:latest
 PLATFORMS  := linux/amd64,linux/arm64
-DATA       := $(CURDIR)/data
+DATA       := $(HOME)/hero-test/data
 
 # ── Mac Mini demo machine ─────────────────────────────────────────────────────
 MAC_MINI_HOST ?= jasonhorn@mini.local

@@ -60,8 +60,12 @@ import './src/modules/tools-module.ts'
 import './src/modules/lifecycle-module.ts'  // GitHub #197
 import './src/modules/rss-module.ts'  // GitHub #174
 import './src/modules/events-module.ts'  // GitHub #202
+import './src/modules/product-intel-module.ts'  // GitHub #255
+import './src/modules/meeting-prep-module.ts'  // GitHub #229
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
+// ── GitHub #229: Meeting Prep routes ─────────────────────────────────────
+import { createMeetingPrepRouter } from './src/meeting-prep-routes.ts'
 // ── GitHub #151: Campaign generation routes ──────────────────────────────
 import { createCampaignsRouter } from './src/campaigns-routes.ts'
 // ── GitHub #153: News Radar routes ──────────────────────────────────────
@@ -290,6 +294,8 @@ app.route('/', createCampaignsRouter())
 app.route('/', createNewsRouter())
 // ── GitHub #168: Batch execution routes ─────────────────────────────────────
 app.route('/', createBatchRouter())
+// ── GitHub #229: Meeting Prep routes ─────────────────────────────────────────
+app.route('/', createMeetingPrepRouter())
 // ── GitHub #200: Intelligence surfaces routes ───────────────────────────────
 app.route('/', createIntelligenceRouter())
 

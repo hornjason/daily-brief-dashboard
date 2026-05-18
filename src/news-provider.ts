@@ -5,9 +5,7 @@
  * significance for Red Hat Account Solution Architects.
  */
 
-import { getGeminiToken } from './gemini-auth.ts'
-import { getGeminiModel } from './ai-config.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
+import { callGemini } from './gemini-call.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,11 +47,7 @@ class GeminiGroundedNewsProvider implements NewsProvider {
    * First Gemini call: Search for news with Google Search grounding and extract structured data
    */
   private async searchAndExtract(customerName: string): Promise<Omit<NewsItem, 'significanceScore'>[]> {
-    const token = await getGeminiToken()
-    const model = getGeminiModel()
-    const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT}/locations/us-central1/publishers/google/models/${model}:generateContent`
-
-    const searchPrompt = `Search for recent news articles (last 48 hours) about ${customerName}.
+    const userPrompt = `Search for recent news articles (last 48 hours) about ${customerName}.
 Find articles about: leadership changes, acquisitions, partnerships, earnings,
 layoffs, product launches, regulatory issues, or major business developments.
 
@@ -70,45 +64,16 @@ For each article:
 
 Return valid JSON only — no markdown, no code blocks, no explanatory text.`
 
-    const requestBody = {
-      contents: [{ role: 'user', parts: [{ text: searchPrompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 8192,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-      tools: [{ google_search: {} }],  // Enable Google Search grounding
-    }
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Gemini search request failed (${response.status}): ${errorText}`)
-    }
-
-    const data = await response.json()
-
-    // Record usage for cost tracking
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
+    const result = await callGemini('', userPrompt, {
       callType: 'news-search',
       customerName,
-      model,
-      inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+      model: 'full',
+      temperature: 0.3,
+      grounding: true,
+      // No deltaKey — news is real-time grounded search, always fresh
     })
 
-    // Extract text from response
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!content) {
+    if (!result.text) {
       console.warn('[news-provider] Gemini returned no content for search query')
       return []
     }
@@ -117,7 +82,7 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
     let articles: Omit<NewsItem, 'significanceScore'>[]
     try {
       // Strip markdown code blocks if present
-      const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const cleaned = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       articles = JSON.parse(cleaned)
 
       if (!Array.isArray(articles)) {
@@ -126,7 +91,7 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
       }
     } catch (e: any) {
       console.warn('[news-provider] Failed to parse Gemini search response:', e.message)
-      console.warn('[news-provider] Raw response:', content.slice(0, 500))
+      console.warn('[news-provider] Raw response:', result.text.slice(0, 500))
       return []
     }
 
@@ -206,11 +171,7 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
    * Second Gemini call: Score significance of articles
    */
   private async scoreSignificance(articles: Omit<NewsItem, 'significanceScore'>[], customerName: string): Promise<NewsItem[]> {
-    const token = await getGeminiToken()
-    const model = getGeminiModel()
-    const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT}/locations/us-central1/publishers/google/models/${model}:generateContent`
-
-    const scoringPrompt = `Score each article 1-10 for business significance to a Red Hat Account Solution Architect managing this customer:
+    const userPrompt = `Score each article 1-10 for business significance to a Red Hat Account Solution Architect managing this customer:
 - 9-10: Critical (bankruptcy, major acquisition, C-suite departure)
 - 7-8: Important (new tech initiative, major partnership, earnings surprise)
 - 4-6: Notable (product launch, minor leadership change, industry report)
@@ -221,44 +182,15 @@ Input articles: ${JSON.stringify(articles, null, 2)}
 Return: same array with significanceScore (integer 1-10) added to each item.
 Return valid JSON only — no markdown, no code blocks, no explanatory text.`
 
-    const requestBody = {
-      contents: [{ role: 'user', parts: [{ text: scoringPrompt }] }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 8192,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Gemini scoring request failed (${response.status}): ${errorText}`)
-    }
-
-    const data = await response.json()
-
-    // Record usage for cost tracking
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
+    const result = await callGemini('', userPrompt, {
       callType: 'news-scoring',
       customerName,
-      model,
-      inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+      model: 'full',
+      temperature: 0.2,
+      // No deltaKey — scoring depends on fresh articles from search
     })
 
-    // Extract text from response
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!content) {
+    if (!result.text) {
       console.warn('[news-provider] Gemini returned no content for scoring query')
       // Fallback: return articles with default score of 5
       return articles.map(a => ({ ...a, significanceScore: 5 }))
@@ -267,7 +199,7 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
     // Parse JSON response
     try {
       // Strip markdown code blocks if present
-      const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const cleaned = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       const scoredArticles = JSON.parse(cleaned)
 
       if (!Array.isArray(scoredArticles)) {
@@ -278,7 +210,7 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
       return scoredArticles
     } catch (e: any) {
       console.warn('[news-provider] Failed to parse Gemini scoring response:', e.message)
-      console.warn('[news-provider] Raw response:', content.slice(0, 500))
+      console.warn('[news-provider] Raw response:', result.text.slice(0, 500))
       // Fallback: return articles with default score of 5
       return articles.map(a => ({ ...a, significanceScore: 5 }))
     }

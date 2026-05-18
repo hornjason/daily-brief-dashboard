@@ -55,7 +55,7 @@ import { KeyContacts } from '../components/KeyContactsSection'
 import { SubscriptionsSection } from '../components/SubscriptionsSection'
 import { DriveSection } from '../components/DriveSection'
 import { ProductIntelSection } from '../components/ProductIntelSection'
-import { CustomerTabBar, type AccountTab } from '../components/CustomerTabBar'
+import { CustomerTabBar, type AccountTab, type TabEntry } from '../components/CustomerTabBar'
 import { CampaignsTab } from '../components/tabs/CampaignsTab'
 import { NewsTab } from '../components/tabs/NewsTab'
 import { IntelligenceTab } from '../components/tabs/IntelligenceTab'
@@ -1016,6 +1016,37 @@ function PipelineCard({ customerName }: { customerName: string }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+// Tab component mapping (GitHub Issue #240)
+const TAB_COMPONENTS: Record<string, React.ComponentType<{ customerName: string }>> = {
+  campaigns: CampaignsTab,
+  'news-radar': NewsTab,
+  tools: ToolsTab,
+  intelligence: IntelligenceTab,
+}
+
+function renderTabContent(activeTab: string, customerName: string) {
+  // Intelligence is always a known component
+  if (activeTab === 'intelligence') {
+    return <IntelligenceTab customerName={customerName} />
+  }
+
+  // Try to find registered component for this module
+  const Component = TAB_COMPONENTS[activeTab]
+  if (Component) {
+    return <Component customerName={customerName} />
+  }
+
+  // Fallback for unknown tabs
+  return (
+    <div className="p-6 flex items-center justify-center h-full">
+      <div className="text-center space-y-2">
+        <p className="text-sm text-text-secondary">Coming soon</p>
+        <p className="text-xs text-text-secondary/60">Tab: {activeTab}</p>
+      </div>
+    </div>
+  )
+}
+
 export function CustomerDetailPage() {
   const { name } = useParams<{ name: string }>()
   const navigate = useNavigate()
@@ -1025,6 +1056,37 @@ export function CustomerDetailPage() {
 
   const sse = useCustomerSSE(customerName)
   const accountInfo = useAccountInfo(customerName)
+
+  // Fetch tabs from Feature Module Registry (GitHub Issue #240)
+  const [tabs, setTabs] = useState<TabEntry[]>([
+    { id: 'overview', label: 'Overview', order: 0 },
+    { id: 'intelligence', label: 'Intelligence', order: 9999 }
+  ])
+
+  useEffect(() => {
+    fetch('/api/feature-modules/nav')
+      .then(r => r.json())
+      .then((modules: Array<{ name: string; accountTab?: { label: string; order?: number } }>) => {
+        const moduleTabs = modules
+          .filter(m => m.accountTab)
+          .map(m => ({
+            id: m.name,
+            label: m.accountTab!.label,
+            order: m.accountTab!.order ?? Number.MAX_SAFE_INTEGER
+          }))
+          .sort((a, b) => a.order - b.order)
+
+        setTabs([
+          { id: 'overview', label: 'Overview', order: 0 },
+          ...moduleTabs,
+          { id: 'intelligence', label: 'Intelligence', order: 9999 }
+        ])
+      })
+      .catch(err => {
+        console.warn('[CustomerDetailPage] Failed to fetch module tabs:', err)
+        // Fallback to hardcoded tabs on error
+      })
+  }, [])
 
   // Priority Action (R13)
   const [priorityAction, setPriorityAction] = useState<{ text: string; severity: 'critical' | 'high' | 'medium'; source: string } | null>(null)
@@ -1314,8 +1376,8 @@ export function CustomerDetailPage() {
         )}
       </header>
 
-      {/* Tab bar (GitHub Issue #142) */}
-      <CustomerTabBar activeTab={activeTab} onChange={setActiveTab} />
+      {/* Tab bar (GitHub Issue #142, #240) */}
+      <CustomerTabBar tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
       {/* Error banner */}
       {sse.error && (
@@ -1391,12 +1453,9 @@ export function CustomerDetailPage() {
         </aside>
         </div>
       ) : (
-        /* Non-Overview tab content */
+        /* Non-Overview tab content (GitHub Issue #240 — dynamic mapping) */
         <div className="flex-1 overflow-y-auto">
-          {activeTab === 'campaigns' && <CampaignsTab customerName={customerName} />}
-          {activeTab === 'news' && <NewsTab customerName={customerName} />}
-          {activeTab === 'intelligence' && <IntelligenceTab customerName={customerName} />}
-          {activeTab === 'tools' && <ToolsTab customerName={customerName} />}
+          {renderTabContent(activeTab, customerName)}
         </div>
       )}
     </div>

@@ -2,8 +2,7 @@
 // Registers product lifecycle fetcher with the Feature Module Registry
 // and provides Signal generation for content generation features.
 
-import { FeatureModuleRegistry } from '../feature-module-registry.ts'
-import type { Signal } from '../feature-module-registry.ts'
+import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { fetchProductLifecycle, readProductLifecycleCache } from '../product-lifecycle.ts'
 import { existsSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
@@ -12,6 +11,16 @@ const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'product-lifec
 
 FeatureModuleRegistry.register({
   name: 'product-lifecycle',
+
+  scope: 'portfolio',
+
+  nav: {
+    label: 'Products',
+    icon: 'Package',
+    group: 'intelligence',
+    path: '/dashboard/products',
+    order: 10,
+  },
 
   cachePaths: () => ['data/cache/product-lifecycle.json'],
 

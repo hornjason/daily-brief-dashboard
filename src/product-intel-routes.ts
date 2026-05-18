@@ -23,6 +23,8 @@ import {
 } from './product-release-radar.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
+import { callGemini } from './gemini-call.ts'
+import { readProductLifecycleCache } from './product-lifecycle.ts'
 import { refreshDriveCorpus, getCachedDriveCorpus } from './product-drive-ingest.ts'
 import { getFeatureCache, extractProductFeatures, enrichFeatures, refreshAllFeatures, isAllowedUrl } from './product-feature-radar.ts'
 import {
@@ -32,6 +34,7 @@ import {
 } from './customer-product-intel.ts'
 import { toSlug } from './cache-layer.ts'
 import { customers } from './server-state.ts'
+import { getValueMap } from './value-map-loader.ts'
 
 // ── BKL-W5-RK-F1: Startup assertion that CACHE_DIR resolves within DATA_DIR ──
 // Only fires when both env vars are explicitly set (not defaulted). If an operator
@@ -492,6 +495,96 @@ export function createProductIntelRouter(): Hono {
       return c.json({ error: sanitizeErr(e) }, 500)
     } finally {
       _generatingKeys.delete(mutexKey)
+    }
+  })
+
+  // ── What's New Route (Issue #249) ─────────────────────────────────────────
+  // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "whats-new"
+
+  // GET /api/products/:slug/whats-new — Gemini-synthesized sales talking points for current release
+  router.get('/api/products/:slug/whats-new', async (c) => {
+    const slug = c.req.param('slug')
+    if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)
+    const forceRefresh = c.req.query('refresh') === 'true'
+
+    try {
+      // Get feature cache for this product (may be empty — value maps can still generate)
+      const featureCache = getFeatureCache(slug)
+      const hasFeatures = featureCache && featureCache.features.length > 0
+
+      // Get version — prefer product summary (radar, authoritative) over lifecycle (endoflife.date)
+      const radarSummary = getCachedSummary(slug)
+      const lifecycleCache = readProductLifecycleCache()
+      const lifecycle = lifecycleCache?.products.find(p => p.slug === slug)
+      const version = radarSummary?.currentVersion ?? lifecycle?.currentVersion ?? featureCache?.features[0]?.versionCurrent ?? 'latest'
+
+      // Filter features for synthesis (empty array if no feature cache)
+      let featuresForSynthesis: any[] = []
+      if (hasFeatures) {
+        const gaFeatures = featureCache!.features.filter(f =>
+          f.status === 'GA' && (f.versionCurrent === version || f.versionIntroduced === version)
+        )
+        featuresForSynthesis = gaFeatures.length > 0
+          ? gaFeatures
+          : featureCache!.features.filter(f => f.status === 'GA').length > 0
+            ? featureCache!.features.filter(f => f.status === 'GA').slice(0, 20)
+            : featureCache!.features.slice(0, 20)
+      }
+
+      // Build feature context for Gemini
+      const featureContext = featuresForSynthesis.map(f =>
+        `- [${f.status}] ${f.name}: ${f.description}${f.enrichedDescription ? ' ' + f.enrichedDescription : ''}`
+      ).join('\n')
+
+      const productName = featureCache?.displayName ?? radarSummary?.displayName ?? slug.toUpperCase()
+      const deltaKey = forceRefresh ? undefined : `product-whats-new:${slug}:${version}`
+      const valueMapContent = getValueMap(slug)
+
+      // If no features AND no value maps, return empty
+      if (featuresForSynthesis.length === 0 && !valueMapContent) {
+        return c.json({ summary: [], version, generatedAt: new Date().toISOString(), cached: false })
+      }
+
+      const systemPrompt = 'You are a Red Hat product expert. Given the features in this release and the business value context, write a concise summary (5-7 bullet points) covering both GA and Tech Preview features. For each bullet, use this exact format: "**Feature Name**: explanation of what it does and business value." Start with the most impactful GA features, then include 1-2 notable Tech Preview features that customers should know about. Connect each feature to a business outcome (cost reduction, risk mitigation, productivity, revenue growth). Write as if briefing an Account Executive before a customer meeting. Return ONLY a JSON array of strings, each being one bullet point with the **bold** feature name. No numbering, no extra text.'
+
+      // Build user prompt — features (if any) + value maps (if available)
+      let userPrompt = `Product: ${productName}\nVersion: ${version}`
+      if (featureContext) {
+        userPrompt += `\n\nFeatures in this release:\n${featureContext}`
+      }
+      if (valueMapContent) {
+        userPrompt += `\n\nBusiness Value Context (use this to frame features in terms of customer outcomes):\n${valueMapContent}`
+      }
+
+      const result = await callGemini(systemPrompt, userPrompt, {
+        callType: 'product-whats-new',
+        model: 'full',
+        deltaKey,
+        responseSchema: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+        },
+      })
+
+      // Parse the response — it should be a JSON array of strings
+      let summary: string[]
+      try {
+        summary = JSON.parse(result.text)
+        if (!Array.isArray(summary)) summary = [result.text]
+      } catch {
+        // If not valid JSON, split by newlines and clean up
+        summary = result.text.split('\n').filter(line => line.trim().length > 0).slice(0, 5)
+      }
+
+      return c.json({
+        summary,
+        version,
+        generatedAt: new Date().toISOString(),
+        cached: result.cached,
+      })
+    } catch (e: any) {
+      console.error(`[product-intel] GET /api/products/${slug}/whats-new error:`, sanitizeErr(e))
+      return c.json({ error: sanitizeErr(e) }, 500)
     }
   })
 

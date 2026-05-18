@@ -10,12 +10,10 @@
 
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
-import { getGeminiToken } from './gemini-auth.ts'
+import { callGemini } from './gemini-call.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
-import { getGeminiModel } from './ai-config.ts'
 import { aes, customers } from './server-state.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { toSlug, readEmailCache } from './cache-layer.ts'
 import type { EmailHighlight } from './types.ts'
 
@@ -179,21 +177,13 @@ async function callGeminiForVoiceDetection(
   aeName: string,
   emails: EmailHighlight[],
 ): Promise<{ characteristics: string[]; promptInstruction: string; exampleEmail: string }> {
-  const project = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model = getGeminiModel()
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set')
-
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
   // Sample up to 15 emails for analysis (balance: enough signal, not excessive tokens)
   const sampled = emails.slice(0, 15)
   const emailSamples = sampled.map((e, i) =>
     `[Email ${i + 1}]\nFrom: ${e.from}\nSubject: ${e.subject}\nSnippet: ${e.snippet}\n`
   ).join('\n')
 
-  const prompt = `Analyze these emails sent by ${aeName} and create a voice profile.
+  const userPrompt = `Analyze these emails sent by ${aeName} and create a voice profile.
 
 Emails:
 ${emailSamples}
@@ -210,43 +200,32 @@ Return as JSON with this exact structure:
   "exampleEmail": "Subject: ...\n\nBody text..."
 }`
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(120_000),
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.3,  // Lower temp for consistent analysis
-        maxOutputTokens: 2048,
-        thinkingConfig: { thinkingBudget: 0 },
-        responseMimeType: 'application/json',
+  // Define response schema for structured JSON output
+  const responseSchema = {
+    type: 'object',
+    properties: {
+      characteristics: {
+        type: 'array',
+        items: { type: 'string' },
       },
-    }),
+      promptInstruction: { type: 'string' },
+      exampleEmail: { type: 'string' },
+    },
+    required: ['characteristics', 'promptInstruction', 'exampleEmail'],
+  }
+
+  const result = await callGemini('', userPrompt, {
+    callType: 'ae-voice-detection',
+    customerName: aeName,
+    model: 'full',
+    temperature: 0.3,
+    responseSchema,
+    // No deltaKey — email sets change as more emails are sent
   })
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 300)}`)
-  }
+  if (!result.text) throw new Error('Gemini returned empty response')
 
-  const json = await res.json() as any
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
-      callType: 'ae-voice-detection',
-      customerName: aeName,
-      inputTokens: usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  if (!text) throw new Error('Gemini returned empty response')
-
-  const parsed = JSON.parse(text)
+  const parsed = JSON.parse(result.text)
   return {
     characteristics: parsed.characteristics ?? [],
     promptInstruction: parsed.promptInstruction ?? '',

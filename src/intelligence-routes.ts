@@ -8,21 +8,29 @@
  * - GET /api/customer/:name/intelligence/news — Red Hat news matched to customer products
  * - GET /api/customer/:name/intelligence/roadmap — Product lifecycle data (Issue #201)
  * - GET /api/customer/:name/intelligence/events — Red Hat events filtered by region (Issue #202)
+ * - GET /api/admin/rss-feeds — List RSS feed config
+ * - POST /api/admin/rss-feeds — Add new RSS feed
+ * - DELETE /api/admin/rss-feeds — Remove RSS feed
+ * - PATCH /api/admin/rss-feeds — Toggle feed enabled/disabled
+ * - POST /api/admin/rss-feeds/refresh — Trigger immediate RSS fetch
  */
 
 import { Hono } from 'hono'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from './cache-layer.ts'
 import type { NewsItem } from './news-provider.ts'
 import type { ProductLifecycle } from './product-lifecycle.ts'
 import type { RHEvent } from './rh-events-fetcher.ts'
+import { enrichEvents } from './event-enricher.ts'
+import { loadFeedConfig, fetchRedHatRSS, type RSSFeedConfig } from './rh-rss-fetcher.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
 const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
 const MAIN_CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache')
 const INTEL_CACHE_DIR = resolve(MAIN_CACHE_DIR, 'intelligence')
+const CONFIG_DIR = process.env.CONFIG_DIR ?? 'data/config'
 
 // ── Cache helpers ────────────────────────────────────────────────────────────
 
@@ -288,6 +296,93 @@ export function createIntelligenceRouter(): Hono {
   })
 
   /**
+   * GET /api/events/enriched
+   * Enriched events with Gemini-synthesized descriptions + customer relevance
+   * GitHub Issue #250
+   *
+   * Lazy enrichment: scrapes registration pages and calls Gemini on first request,
+   * then caches results. Rate-limited to 5 page scrapes per request.
+   */
+  app.get('/api/events/enriched', async (c) => {
+    try {
+      const enriched = await enrichEvents()
+      return c.json({ events: enriched, fetchedAt: new Date().toISOString() })
+    } catch (e: any) {
+      console.warn('[intelligence-routes] Event enrichment failed, falling back:', e.message)
+      // Fall back to non-enriched events
+      const eventsPath = resolve(MAIN_CACHE_DIR, 'events', 'rh-events.json')
+      if (!existsSync(eventsPath)) {
+        return c.json({ events: [], fetchedAt: null })
+      }
+      try {
+        const eventsData = JSON.parse(readFileSync(eventsPath, 'utf-8'))
+        return c.json({ events: eventsData.events ?? [], fetchedAt: eventsData.fetchedAt })
+      } catch {
+        return c.json({ events: [], fetchedAt: null })
+      }
+    }
+  })
+
+  /**
+   * GET /api/events
+   * All upcoming Red Hat events (next 90 days), not sliced — for the Events module page
+   * GitHub Issue #247
+   */
+  app.get('/api/events', (c) => {
+    const eventsPath = resolve(MAIN_CACHE_DIR, 'events', 'rh-events.json')
+
+    if (!existsSync(eventsPath)) {
+      return c.json({ events: [], fetchedAt: null })
+    }
+
+    try {
+      const eventsData = JSON.parse(readFileSync(eventsPath, 'utf-8'))
+      if (!eventsData.events || !Array.isArray(eventsData.events)) {
+        return c.json({ events: [], fetchedAt: eventsData.fetchedAt ?? null })
+      }
+
+      const now = Date.now()
+      const upcoming = eventsData.events
+        .filter((e: any) => {
+          try {
+            const eventDate = new Date(e.date).getTime()
+            const daysUntil = (eventDate - now) / (1000 * 60 * 60 * 24)
+            return daysUntil >= -1 && daysUntil <= 90
+          } catch {
+            return false
+          }
+        })
+        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+      // Deduplicate by name + date
+      const seen = new Set<string>()
+      const events = upcoming
+        .filter((e: any) => {
+          const key = `${e.name}|${e.date}`
+          if (seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+        .map((e: any) => ({
+          name: e.name,
+          date: e.date,
+          format: e.format,
+          location: e.location,
+          region: e.region,
+          productTags: e.productTags,
+          registrationUrl: e.registrationUrl,
+          description: e.description ?? '',
+          summary: e.summary ?? '',
+        }))
+
+      return c.json({ events, fetchedAt: eventsData.fetchedAt })
+    } catch (e: any) {
+      console.warn('[intelligence-routes] Failed to read events cache:', e.message)
+      return c.json({ events: [], fetchedAt: null })
+    }
+  })
+
+  /**
    * GET /api/intelligence/global
    * Aggregate Red Hat intelligence across all customers (for Red Hat Pulse card)
    * GitHub Issue #203, #174 (RSS integration), #202 (events)
@@ -327,29 +422,49 @@ export function createIntelligenceRouter(): Hono {
       }
     }
 
-    // Read product lifecycle for releases
+    // Read product releases — prefer release radar (scrapes Red Hat docs) over lifecycle (endoflife.date)
+    // Release radar is authoritative for current version; lifecycle provides GA/EOL dates
     const lifecyclePath = resolve(MAIN_CACHE_DIR, 'product-lifecycle.json')
     let releases: any[] = []
+
+    // First, read release radar summaries for authoritative version info
+    const PRODUCT_INTEL_CACHE = resolve(MAIN_CACHE_DIR, 'product-intel')
+    const radarVersions = new Map<string, string>()
+    for (const slug of ['ocp', 'rhel', 'aap', 'ocp-virt', 'rhoai', 'rhel-ai', 'rh-ai-inference']) {
+      const summaryPath = resolve(PRODUCT_INTEL_CACHE, `${slug}-summary.json`)
+      if (existsSync(summaryPath)) {
+        try {
+          const summary = JSON.parse(readFileSync(summaryPath, 'utf-8'))
+          if (summary.currentVersion) {
+            radarVersions.set(slug, summary.currentVersion)
+          }
+        } catch { /* skip */ }
+      }
+    }
 
     if (existsSync(lifecyclePath)) {
       try {
         const lifecycleData = JSON.parse(readFileSync(lifecyclePath, 'utf-8'))
         if (lifecycleData.products && Array.isArray(lifecycleData.products)) {
-          // Map to release format, take top 3 most recent
+          // Show current releases — radar is authoritative, lifecycle fills gaps
+          // When radar has a major-only version (e.g., "10"), prefer lifecycle's more specific version (e.g., "10.1")
           releases = lifecycleData.products
-            .filter((p: any) => p.nextVersion && p.nextExpected)
-            .sort((a: any, b: any) => {
-              const aDate = new Date(a.nextExpected).getTime()
-              const bDate = new Date(b.nextExpected).getTime()
-              return bDate - aDate
+            .filter((p: any) => p.currentVersion)
+            .map((p: any) => {
+              const radarVersion = radarVersions.get(p.slug)
+              const radarIsMajorOnly = radarVersion && !radarVersion.includes('.')
+              const bestVersion = radarIsMajorOnly ? p.currentVersion : (radarVersion ?? p.currentVersion)
+              return {
+                product: p.displayName,
+                slug: p.slug,
+                version: bestVersion,
+                latestPatch: p.latestPatch,
+                gaDate: p.gaDate,
+                eolDate: p.eolDate,
+                nextVersion: p.nextVersion ?? null,
+                nextExpected: p.nextExpected ?? null,
+              }
             })
-            .slice(0, 3)
-            .map((p: any) => ({
-              product: p.displayName,
-              version: p.nextVersion,
-              expectedDate: p.nextExpected,
-              currentVersion: p.currentVersion,
-            }))
         }
       } catch (e: any) {
         console.warn('[intelligence-routes] Failed to read product lifecycle cache:', e.message)
@@ -359,6 +474,16 @@ export function createIntelligenceRouter(): Hono {
     // Read events data (next 90 days, sorted by date)
     const eventsPath = resolve(MAIN_CACHE_DIR, 'events', 'rh-events.json')
     let events: any[] = []
+
+    // Load enrichment cache for descriptions (Issue #250)
+    const enrichmentPath = resolve(MAIN_CACHE_DIR, 'events', 'rh-events-enriched.json')
+    let enrichmentCache: Record<string, { enrichedDescription: string | null }> = {}
+    if (existsSync(enrichmentPath)) {
+      try {
+        const enrichmentData = JSON.parse(readFileSync(enrichmentPath, 'utf-8'))
+        enrichmentCache = enrichmentData.enrichments ?? {}
+      } catch { /* ignore */ }
+    }
 
     if (existsSync(eventsPath)) {
       try {
@@ -391,15 +516,22 @@ export function createIntelligenceRouter(): Hono {
             return true
           })
 
-          events = deduplicated.map((e: any) => ({
-            name: e.name,
-            date: e.date,
-            format: e.format,
-            location: e.location,
-            region: e.region,
-            productTags: e.productTags,
-            registrationUrl: e.registrationUrl,
-          }))
+          events = deduplicated.map((e: any) => {
+            const cacheKey = `${e.name}:${e.date}`
+            const enrichment = enrichmentCache[cacheKey]
+            return {
+              name: e.name,
+              date: e.date,
+              format: e.format,
+              location: e.location,
+              region: e.region,
+              productTags: e.productTags,
+              registrationUrl: e.registrationUrl,
+              description: e.description ?? '',
+              summary: e.summary ?? '',
+              enrichedDescription: enrichment?.enrichedDescription ?? null,
+            }
+          })
         }
       } catch (e: any) {
         console.warn('[intelligence-routes] Failed to read events cache:', e.message)
@@ -412,6 +544,165 @@ export function createIntelligenceRouter(): Hono {
       events,
       cachedAt,
     })
+  })
+
+  /**
+   * GET /api/admin/rss-feeds
+   * List all configured RSS feeds
+   */
+  app.get('/api/admin/rss-feeds', (c) => {
+    const configPath = resolve(CONFIG_DIR, 'rss-feeds.json')
+    if (!existsSync(configPath)) {
+      return c.json({ feeds: [] })
+    }
+
+    try {
+      const feeds = JSON.parse(readFileSync(configPath, 'utf-8'))
+      return c.json({ feeds })
+    } catch (e: any) {
+      console.warn('[intelligence-routes] Failed to read RSS feed config:', e?.message ?? e)
+      return c.json({ feeds: [] })
+    }
+  })
+
+  /**
+   * POST /api/admin/rss-feeds
+   * Add a new RSS feed to config
+   */
+  app.post('/api/admin/rss-feeds', async (c) => {
+    const body = await c.req.json<{
+      url: string
+      label: string
+      category?: string
+      productTags?: string[]
+    }>()
+
+    if (!body.url || !body.label) {
+      return c.json({ error: 'url and label are required' }, 400)
+    }
+
+    const configPath = resolve(CONFIG_DIR, 'rss-feeds.json')
+    let feeds: RSSFeedConfig[] = []
+
+    if (existsSync(configPath)) {
+      try {
+        feeds = JSON.parse(readFileSync(configPath, 'utf-8'))
+      } catch (e: any) {
+        console.warn('[intelligence-routes] Failed to read existing config:', e?.message ?? e)
+      }
+    }
+
+    // Check for duplicate URL
+    if (feeds.some(f => f.url === body.url)) {
+      return c.json({ error: 'Feed URL already exists' }, 409)
+    }
+
+    // Derive source from URL pattern
+    const source = body.url.includes('security') ? 'security-advisory'
+      : body.url.includes('status') ? 'status'
+      : body.url.includes('press') ? 'press-release'
+      : body.url.includes('developer') ? 'developer-blog'
+      : 'blog'
+
+    const newFeed: RSSFeedConfig = {
+      url: body.url,
+      source,
+      category: body.category ?? 'Custom',
+      label: body.label,
+      productTags: body.productTags ?? [],
+      enabled: true,
+    }
+
+    feeds.push(newFeed)
+    writeFileSync(configPath, JSON.stringify(feeds, null, 2))
+
+    console.log(`[intelligence-routes] Added RSS feed: ${body.label} (${body.url})`)
+    return c.json({ feed: newFeed, total: feeds.length })
+  })
+
+  /**
+   * DELETE /api/admin/rss-feeds
+   * Remove an RSS feed from config
+   */
+  app.delete('/api/admin/rss-feeds', async (c) => {
+    const body = await c.req.json<{ url: string }>()
+
+    if (!body.url) {
+      return c.json({ error: 'url is required' }, 400)
+    }
+
+    const configPath = resolve(CONFIG_DIR, 'rss-feeds.json')
+    if (!existsSync(configPath)) {
+      return c.json({ error: 'No feeds configured' }, 404)
+    }
+
+    let feeds: RSSFeedConfig[] = []
+    try {
+      feeds = JSON.parse(readFileSync(configPath, 'utf-8'))
+    } catch (e: any) {
+      return c.json({ error: 'Failed to read config' }, 500)
+    }
+
+    const before = feeds.length
+    feeds = feeds.filter(f => f.url !== body.url)
+
+    if (feeds.length === before) {
+      return c.json({ error: 'Feed not found' }, 404)
+    }
+
+    writeFileSync(configPath, JSON.stringify(feeds, null, 2))
+    console.log(`[intelligence-routes] Removed RSS feed: ${body.url}`)
+    return c.json({ removed: body.url, remaining: feeds.length })
+  })
+
+  /**
+   * PATCH /api/admin/rss-feeds
+   * Toggle RSS feed enabled/disabled
+   */
+  app.patch('/api/admin/rss-feeds', async (c) => {
+    const body = await c.req.json<{ url: string; enabled: boolean }>()
+
+    if (!body.url || body.enabled === undefined) {
+      return c.json({ error: 'url and enabled are required' }, 400)
+    }
+
+    const configPath = resolve(CONFIG_DIR, 'rss-feeds.json')
+    if (!existsSync(configPath)) {
+      return c.json({ error: 'No feeds configured' }, 404)
+    }
+
+    let feeds: RSSFeedConfig[] = []
+    try {
+      feeds = JSON.parse(readFileSync(configPath, 'utf-8'))
+    } catch (e: any) {
+      return c.json({ error: 'Failed to read config' }, 500)
+    }
+
+    const feed = feeds.find(f => f.url === body.url)
+    if (!feed) {
+      return c.json({ error: 'Feed not found' }, 404)
+    }
+
+    feed.enabled = body.enabled
+    writeFileSync(configPath, JSON.stringify(feeds, null, 2))
+
+    console.log(`[intelligence-routes] ${body.enabled ? 'Enabled' : 'Disabled'} RSS feed: ${body.url}`)
+    return c.json({ feed })
+  })
+
+  /**
+   * POST /api/admin/rss-feeds/refresh
+   * Trigger immediate RSS feed fetch
+   */
+  app.post('/api/admin/rss-feeds/refresh', async (c) => {
+    try {
+      console.log('[intelligence-routes] Triggering manual RSS refresh')
+      await fetchRedHatRSS()
+      return c.json({ status: 'complete' })
+    } catch (e: any) {
+      console.warn('[intelligence-routes] RSS refresh failed:', e?.message ?? e)
+      return c.json({ error: e?.message ?? 'RSS refresh failed' }, 500)
+    }
   })
 
   return app

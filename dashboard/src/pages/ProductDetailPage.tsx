@@ -1,16 +1,42 @@
 // Route: /dashboard/products/:slug
-// Full drill-down view for a single product
+// Full drill-down view for a single product — Issue #249 enhancements:
+// - "What's New" Gemini-synthesized sales talking points
+// - Release Notes link to official Red Hat docs
+// - Feature list grouped by status (GA, Tech Preview, Deprecated)
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { ExternalLink, RefreshCw, Sparkles, ChevronRight } from 'lucide-react'
 import type { ProductSummary, ProductAlert } from '../components/ProductCard'
-import { renderMarkdownInline } from '../lib/markdown'
+import { getReleaseNotesUrl } from '../lib/release-notes-url'
 import { useAction } from '../hooks/useAction'
 
-interface ProductConfig {
+interface WhatsNewData {
+  summary: string[]
+  version: string
+  generatedAt: string
+  cached: boolean
+}
+
+interface ProductFeature {
+  id: string
+  name: string
+  status: 'GA' | 'Tech Preview' | 'Roadmap' | 'Deprecated'
+  description: string
+  enrichedDescription: string | null
+  versionIntroduced: string | null
+  versionCurrent: string | null
+  sourceUrls: string[]
+  tags: string[]
+  confidence: string
+}
+
+interface FeatureCache {
   slug: string
-  customSources: string[]
-  followLinks: boolean
+  displayName: string
+  features: ProductFeature[]
+  extractedAt: string
+  enrichedAt: string | null
 }
 
 export function ProductDetailPage() {
@@ -18,21 +44,26 @@ export function ProductDetailPage() {
 
   const [summary, setSummary] = useState<ProductSummary | null>(null)
   const [alert, setAlert] = useState<ProductAlert | null>(null)
-  const [config, setConfig] = useState<ProductConfig | null>(null)
+  const [whatsNew, setWhatsNew] = useState<WhatsNewData | null>(null)
+  const [features, setFeatures] = useState<FeatureCache | null>(null)
+  const [expandedFeatures, setExpandedFeatures] = useState<Set<string>>(new Set())
 
   const [summaryLoading, setSummaryLoading] = useState(true)
   const [summaryError, setSummaryError] = useState<string | null>(null)
-
-  const [newSource, setNewSource] = useState('')
-  const [sourceSaving, setSourceSaving] = useState(false)
-  const [sourceError, setSourceError] = useState<string | null>(null)
-
-  const [refreshing, setRefreshing] = useState(false)
-  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [whatsNewLoading, setWhatsNewLoading] = useState(false)
+  const [whatsNewError, setWhatsNewError] = useState<string | null>(null)
 
   const [acknowledging, setAcknowledging] = useState(false)
   const ackAction = useAction()
-  const followLinksAction = useAction<ProductConfig>()
+
+  const toggleFeature = useCallback((id: string) => {
+    setExpandedFeatures(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
 
   // Fetch product summary
   useEffect(() => {
@@ -65,18 +96,80 @@ export function ProductDetailPage() {
       .catch(() => {})
   }, [slug])
 
-  // Fetch config
+  // Fetch What's New data
   useEffect(() => {
     if (!slug) return
-    fetch('/api/products/config')
+    setWhatsNewLoading(true)
+    setWhatsNewError(null)
+    fetch(`/api/products/${slug}/whats-new`)
+      .then(async res => {
+        if (!res.ok) {
+          if (res.status === 404) return null // No feature data yet — not an error
+          const d = await res.json().catch(() => ({}))
+          throw new Error(d.error ?? `HTTP ${res.status}`)
+        }
+        return res.json() as Promise<WhatsNewData>
+      })
+      .then(data => setWhatsNew(data))
+      .catch(e => setWhatsNewError(e?.message ?? 'Failed to load'))
+      .finally(() => setWhatsNewLoading(false))
+  }, [slug])
+
+  // Fetch feature cache
+  useEffect(() => {
+    if (!slug) return
+    fetch(`/api/products/${slug}/features`)
       .then(async res => {
         if (!res.ok) return
-        const configs: ProductConfig[] = await res.json()
-        const match = configs.find(c => c.slug === slug)
-        setConfig(match ?? { slug, customSources: [], followLinks: false })
+        return res.json() as Promise<FeatureCache>
       })
+      .then(data => { if (data) setFeatures(data) })
       .catch(() => {})
   }, [slug])
+
+  // Group features by status
+  const groupedFeatures = useMemo(() => {
+    if (!features?.features) return null
+    const groups: Record<string, ProductFeature[]> = {
+      'GA': [],
+      'Tech Preview': [],
+      'Deprecated': [],
+    }
+    for (const f of features.features) {
+      const status = f.status
+      if (status in groups) {
+        groups[status].push(f)
+      } else {
+        // Roadmap or unknown — skip from display
+      }
+    }
+    return groups
+  }, [features])
+
+  // Release notes URL
+  const releaseNotesUrl = useMemo(() => {
+    if (!slug || !summary?.currentVersion) return null
+    return getReleaseNotesUrl(slug, summary.currentVersion)
+  }, [slug, summary?.currentVersion])
+
+  async function handleRegenerateWhatsNew() {
+    if (!slug) return
+    setWhatsNewLoading(true)
+    setWhatsNewError(null)
+    try {
+      const res = await fetch(`/api/products/${slug}/whats-new?refresh=true`)
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error ?? `HTTP ${res.status}`)
+      }
+      const data: WhatsNewData = await res.json()
+      setWhatsNew(data)
+    } catch (e: any) {
+      setWhatsNewError(e?.message ?? 'Failed to regenerate')
+    } finally {
+      setWhatsNewLoading(false)
+    }
+  }
 
   async function handleAcknowledge() {
     if (!alert) return
@@ -86,88 +179,10 @@ export function ProductDetailPage() {
     setAcknowledging(false)
   }
 
-  async function handleAddSource() {
-    if (!slug || !newSource.trim()) return
-    setSourceSaving(true)
-    setSourceError(null)
-    try {
-      const updated = [...(config?.customSources ?? []), newSource.trim()]
-      const res = await fetch(`/api/products/${slug}/sources`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customSources: updated }),
-      })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error ?? `HTTP ${res.status}`)
-      }
-      const next: ProductConfig = await res.json()
-      setConfig(next)
-      setNewSource('')
-    } catch (e: any) {
-      setSourceError(e?.message ?? 'Failed to add source')
-    } finally {
-      setSourceSaving(false)
-    }
-  }
-
-  async function handleRemoveSource(src: string) {
-    if (!slug || !config) return
-    setSourceSaving(true)
-    setSourceError(null)
-    try {
-      const updated = config.customSources.filter(s => s !== src)
-      const res = await fetch(`/api/products/${slug}/sources`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customSources: updated }),
-      })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error ?? `HTTP ${res.status}`)
-      }
-      const next: ProductConfig = await res.json()
-      setConfig(next)
-    } catch (e: any) {
-      setSourceError(e?.message ?? 'Failed to remove source')
-    } finally {
-      setSourceSaving(false)
-    }
-  }
-
-  async function handleFollowLinksToggle(value: boolean) {
-    if (!slug) return
-    const result = await followLinksAction.execute(`/api/products/${slug}/sources`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ followLinks: value }),
-    })
-    if (result) setConfig(result)
-  }
-
-  async function handleRefreshNow() {
-    if (!slug) return
-    setRefreshing(true)
-    setRefreshError(null)
-    try {
-      const res = await fetch(`/api/products/${slug}/refresh`, { method: 'POST' })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error ?? `HTTP ${res.status}`)
-      }
-      const updated: ProductSummary = await res.json()
-      setSummary(updated)
-    } catch (e: any) {
-      setRefreshError(e?.message ?? 'Refresh failed')
-    } finally {
-      setRefreshing(false)
-    }
-  }
-
   if (summaryLoading) {
     return (
       <div className="flex-1 text-text-primary overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-10">
+        <div className="px-6 py-10">
           <div className="animate-pulse space-y-4">
             <div className="h-4 bg-surface rounded w-32" />
             <div className="h-8 bg-surface rounded w-64" />
@@ -182,7 +197,7 @@ export function ProductDetailPage() {
   if (summaryError || !summary) {
     return (
       <div className="flex-1 text-text-primary overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-10">
+        <div className="px-6 py-10">
           <p className="text-critical text-sm">{summaryError ?? 'Product not found.'}</p>
           <Link to="/dashboard/products" className="text-accent text-sm hover:underline mt-2 inline-block">
             Back to Products
@@ -192,9 +207,61 @@ export function ProductDetailPage() {
     )
   }
 
+  /** Render a list of features with expand/collapse + optional source link */
+  function FeatureRow({ f }: { f: ProductFeature }) {
+    const hasLink = f.sourceUrls?.length > 0 && /^https?:\/\//.test(f.sourceUrls[0])
+    return (
+      <li>
+        <div className="flex items-center gap-2 text-sm w-full text-left py-1 group">
+          <button
+            onClick={() => toggleFeature(f.id)}
+            className="shrink-0 p-0 bg-transparent border-0 cursor-pointer"
+            aria-label={expandedFeatures.has(f.id) ? 'Collapse' : 'Expand'}
+          >
+            <ChevronRight className={`w-3.5 h-3.5 text-text-secondary transition-transform ${expandedFeatures.has(f.id) ? 'rotate-90' : ''}`} />
+          </button>
+          {hasLink ? (
+            <a
+              href={f.sourceUrls[0]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent font-medium hover:underline flex items-center gap-1"
+              onClick={e => e.stopPropagation()}
+            >
+              {f.name}
+              <ExternalLink className="w-3 h-3 opacity-50" />
+            </a>
+          ) : (
+            <button
+              onClick={() => toggleFeature(f.id)}
+              className="text-accent font-medium group-hover:underline bg-transparent border-0 cursor-pointer text-left p-0"
+            >
+              {f.name}
+            </button>
+          )}
+        </div>
+        {expandedFeatures.has(f.id) && f.description && (
+          <p className="text-sm text-text-secondary ml-[22px] pb-2">{f.description}</p>
+        )}
+      </li>
+    )
+  }
+
+  function FeatureGroup({ features, expandedFeatures: _ef, toggleFeature: _tf }: {
+    features: ProductFeature[]
+    expandedFeatures: Set<string>
+    toggleFeature: (id: string) => void
+  }) {
+    return (
+      <ul className="space-y-1">
+        {features.map(f => <FeatureRow key={f.id} f={f} />)}
+      </ul>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-bg text-text-primary">
-      <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
+      <div className="px-6 py-10 space-y-8">
 
         {/* Breadcrumb */}
         <nav className="text-sm text-text-secondary flex items-center gap-1.5">
@@ -236,130 +303,139 @@ export function ProductDetailPage() {
                 disabled={acknowledging}
                 className="bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-white px-3 py-1 rounded text-xs font-medium transition-colors"
               >
-                {acknowledging ? 'Acknowledging…' : 'Acknowledge'}
+                {acknowledging ? 'Acknowledging...' : 'Acknowledge'}
               </button>
               {ackAction.error && <p className="text-xs text-warning mt-1">{ackAction.error}</p>}
             </div>
           </div>
         )}
 
-        {/* Summary */}
+        {/* What's New section — Issue #249 */}
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">Summary</h2>
-          {summary.summaryText && (
-            <p className="text-sm text-text-primary leading-relaxed">{renderMarkdownInline(summary.summaryText)}</p>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-accent" />
+              What's New in v{whatsNew?.version ?? summary.currentVersion ?? ''}
+            </h2>
+            <button
+              onClick={handleRegenerateWhatsNew}
+              disabled={whatsNewLoading}
+              className="text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50 flex items-center gap-1"
+              title="Regenerate talking points"
+            >
+              <RefreshCw className={`w-3 h-3 ${whatsNewLoading ? 'animate-spin' : ''}`} />
+              Regenerate
+            </button>
+          </div>
+
+          {whatsNewLoading && !whatsNew && (
+            <div className="animate-pulse space-y-2">
+              <div className="h-3 bg-surface rounded w-full" />
+              <div className="h-3 bg-surface rounded w-5/6" />
+              <div className="h-3 bg-surface rounded w-4/6" />
+            </div>
           )}
-          {summary.summaryBullets.length > 0 && (
-            <ul className="space-y-1.5">
-              {summary.summaryBullets.map((bullet, i) => (
-                <li key={i} className="flex gap-2 text-sm text-text-secondary">
-                  <span className="text-accent shrink-0 mt-0.5">•</span>
-                  <span>{renderMarkdownInline(bullet)}</span>
-                </li>
-              ))}
+
+          {whatsNewError && (
+            <p className="text-xs text-text-secondary italic">Summary unavailable — click Regenerate to retry</p>
+          )}
+
+          {whatsNew && whatsNew.summary.length > 0 && (
+            <ul className="space-y-3">
+              {whatsNew.summary.map((point, i) => {
+                // Parse **Feature Name**: description pattern
+                const boldMatch = point.match(/^\*\*(.+?)\*\*[:\s]*(.*)/)
+                // Also handle "Feature Name:" without markdown bold
+                const colonMatch = !boldMatch ? point.match(/^([^:]{5,60}):\s*(.+)/) : null
+                const featureName = boldMatch?.[1] || colonMatch?.[1] || null
+                const description = boldMatch?.[2] || colonMatch?.[2] || point
+
+                return (
+                  <li key={i} className="flex gap-2 text-sm leading-relaxed">
+                    <span className="text-accent shrink-0 mt-0.5">•</span>
+                    <span>
+                      {featureName && (
+                        <span className="font-semibold text-accent">{featureName}: </span>
+                      )}
+                      <span className="text-text-primary">{description}</span>
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
+          )}
+
+          {whatsNew && whatsNew.summary.length === 0 && !whatsNewLoading && (
+            <p className="text-xs text-text-secondary italic">Summary unavailable — click Regenerate to retry</p>
+          )}
+
+          {whatsNew?.cached && (
+            <p className="text-xs text-text-secondary">Cached result</p>
           )}
         </section>
 
-        {/* Sources */}
-        {summary.sources.length > 0 && (
-          <section className="space-y-2">
-            <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">Sources</h2>
-            <ul className="space-y-1">
-              {summary.sources.map((src, i) => (
-                <li key={i}>
-                  <a
-                    href={src}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-accent hover:underline break-all"
-                  >
-                    {src}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
+        {/* Release Notes link — Issue #249 */}
+        {releaseNotesUrl && (
+          <a
+            href={releaseNotesUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-surface hover:bg-surface-hover border border-border rounded-lg px-4 py-3 text-sm text-accent hover:text-accent transition-colors group"
+          >
+            <ExternalLink className="w-4 h-4 shrink-0" />
+            <span className="font-medium">View Official Release Notes</span>
+            <span className="text-text-secondary ml-auto group-hover:translate-x-0.5 transition-transform">&rarr;</span>
+          </a>
         )}
 
-        {/* Custom Sources */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">Custom Sources</h2>
-          {config && config.customSources.length > 0 && (
-            <ul className="space-y-1.5">
-              {config.customSources.map((src, i) => (
-                <li key={i} className="flex items-center justify-between gap-2">
-                  <a
-                    href={src}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-accent hover:underline break-all"
+        {/* Feature list grouped by status — Issue #249 */}
+        {groupedFeatures && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-wide">Features</h2>
+              {Object.entries(groupedFeatures).map(([status, list]) =>
+                list.length > 0 ? (
+                  <span
+                    key={status}
+                    className={`text-xs px-2 py-0.5 rounded-full border ${
+                      status === 'GA'
+                        ? 'border-green-700/50 text-green-400 bg-green-900/20'
+                        : status === 'Tech Preview'
+                        ? 'border-blue-700/50 text-blue-400 bg-blue-900/20'
+                        : 'border-red-700/50 text-red-400 bg-red-900/20'
+                    }`}
                   >
-                    {src}
-                  </a>
-                  <button
-                    onClick={() => handleRemoveSource(src)}
-                    disabled={sourceSaving}
-                    className="text-text-secondary hover:text-critical transition-colors disabled:opacity-50 shrink-0 text-xs"
-                    title="Remove source"
-                  >
-                    x
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="flex gap-2">
-            <input
-              type="url"
-              value={newSource}
-              onChange={e => setNewSource(e.target.value)}
-              placeholder="https://..."
-              className="flex-1 bg-surface border border-border rounded px-3 py-1.5 text-sm text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent"
-              onKeyDown={e => { if (e.key === 'Enter') handleAddSource() }}
-            />
-            <button
-              onClick={handleAddSource}
-              disabled={sourceSaving || !newSource.trim()}
-              className="bg-accent text-white px-3 py-1.5 rounded text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              Add
-            </button>
-          </div>
-          {sourceError && <p className="text-xs text-critical">{sourceError}</p>}
+                    {status} ({list.length})
+                  </span>
+                ) : null
+              )}
+            </div>
 
-          {/* Follow links toggle */}
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={config?.followLinks ?? false}
-              onChange={e => handleFollowLinksToggle(e.target.checked)}
-              className="accent-accent"
-            />
-            <span className="text-sm text-text-secondary">
-              Follow embedded .redhat.com links for deeper context (slower)
-            </span>
-          </label>
-          {followLinksAction.error && <p className="text-xs text-warning mt-1">{followLinksAction.error}</p>}
+            {/* GA features */}
+            {groupedFeatures['GA'].length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-medium text-green-400 uppercase tracking-wide">Generally Available</h3>
+                <FeatureGroup features={groupedFeatures['GA']} expandedFeatures={expandedFeatures} toggleFeature={toggleFeature} />
+              </div>
+            )}
 
-          {/* Refresh Now */}
-          <div>
-            <button
-              onClick={handleRefreshNow}
-              disabled={refreshing}
-              className="text-sm text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
-            >
-              {refreshing ? 'Refreshing…' : 'Refresh Now'}
-            </button>
-            {refreshError && <p className="text-xs text-critical mt-1">{refreshError}</p>}
-          </div>
-        </section>
+            {/* Tech Preview features */}
+            {groupedFeatures['Tech Preview'].length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-medium text-blue-400 uppercase tracking-wide">Tech Preview</h3>
+                <FeatureGroup features={groupedFeatures['Tech Preview']} expandedFeatures={expandedFeatures} toggleFeature={toggleFeature} />
+              </div>
+            )}
 
-        {/* Metadata footer */}
-        <footer className="border-t border-border pt-4 space-y-1">
-          <p className="text-xs text-text-secondary">Last synthesized: {new Date(summary.synthesizedAt).toLocaleString()}</p>
-          <p className="text-xs text-text-secondary">Last refreshed: {new Date(summary.refreshedAt).toLocaleString()}</p>
-        </footer>
+            {/* Deprecated features */}
+            {groupedFeatures['Deprecated'].length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-xs font-medium text-red-400 uppercase tracking-wide">Deprecated</h3>
+                <FeatureGroup features={groupedFeatures['Deprecated']} expandedFeatures={expandedFeatures} toggleFeature={toggleFeature} />
+              </div>
+            )}
+          </section>
+        )}
 
       </div>
     </div>

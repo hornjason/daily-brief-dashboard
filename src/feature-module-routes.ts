@@ -34,6 +34,29 @@ export function createFeatureModuleRouter() {
     }
   })
 
+  // GET /api/feature-modules/nav — GitHub Issue #234
+  router.get('/api/feature-modules/nav', (c) => {
+    const navEntries = FeatureModuleRegistry.getNav()
+    const tabEntries = FeatureModuleRegistry.getAccountTabs()
+
+    // Merge into a single list: all modules that declare nav OR accountTab
+    const merged = new Map<string, { name: string; nav?: any; accountTab?: any; scope: string }>()
+
+    for (const entry of navEntries) {
+      merged.set(entry.name, { name: entry.name, nav: entry.nav, scope: entry.scope })
+    }
+    for (const entry of tabEntries) {
+      const existing = merged.get(entry.name)
+      if (existing) {
+        existing.accountTab = entry.accountTab
+      } else {
+        merged.set(entry.name, { name: entry.name, accountTab: entry.accountTab, scope: entry.scope })
+      }
+    }
+
+    return c.json(Array.from(merged.values()))
+  })
+
   // GET /api/modules/status
   router.get('/api/modules/status', (c) => {
     const status = FeatureModuleRegistry.getStatus()

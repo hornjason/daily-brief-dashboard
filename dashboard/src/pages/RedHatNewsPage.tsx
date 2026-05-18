@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
+import { ModulePageShell } from '../components/ModulePageShell'
 import { Newspaper, Calendar, Filter, ExternalLink, RefreshCw } from 'lucide-react'
 
 interface RSSItem {
@@ -99,27 +100,23 @@ export function RedHatNewsPage() {
   }, [data, productFilter])
 
   return (
-    <div className="min-h-screen bg-bg">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-surface border-b border-border">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Newspaper className="w-6 h-6 text-accent" />
-            <h1 className="text-2xl font-semibold text-text-primary">Red Hat News</h1>
-          </div>
+    <ModulePageShell
+      title="Red Hat News"
+      icon="Rss"
+      scope="portfolio"
+    >
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        {/* Refresh button */}
+        <div className="flex justify-end mb-4">
           <button
             onClick={fetchData}
             disabled={loading}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-border text-sm text-text-secondary hover:text-text-primary hover:border-text-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-6xl mx-auto px-6 py-8">
         {/* Loading State */}
         {loading && (
           <div className="py-20 text-center">
@@ -244,6 +241,6 @@ export function RedHatNewsPage() {
           </div>
         )}
       </div>
-    </div>
+    </ModulePageShell>
   )
 }

@@ -2,7 +2,7 @@
 // GitHub Issue #153 — News radar feature module registration
 // Implements news search, caching, and cleanup
 
-import { FeatureModuleRegistry, type Signal } from '../feature-module-registry'
+import { FeatureModuleRegistry, type Signal, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry'
 import { newsProvider, type NewsItem } from '../news-provider.ts'
 import { toSlug } from '../cache-layer.ts'
 import { existsSync, unlinkSync, writeFileSync, mkdirSync, readFileSync } from 'fs'
@@ -17,6 +17,22 @@ if (!existsSync(CACHE_DIR)) {
 
 FeatureModuleRegistry.register({
   name: 'news-radar',
+
+  scope: 'both',
+
+  nav: {
+    label: 'News',
+    icon: 'Newspaper',
+    group: 'intelligence',
+    path: '/dashboard/news',
+    order: 20,
+  },
+
+  accountTab: {
+    label: 'News',
+    icon: 'Newspaper',
+    order: 20,
+  },
 
   cachePaths: (slug: string) => [
     `data/cache/news/${slug}.json`,

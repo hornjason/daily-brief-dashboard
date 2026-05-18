@@ -30,6 +30,24 @@ export interface Signal {
   metadata?: Record<string, unknown>
 }
 
+// ── Nav / Scope types (GitHub Issue #234) ────────────────────────────────────
+
+export type ModuleScope = 'portfolio' | 'customer' | 'both'
+
+export interface NavDeclaration {
+  label: string
+  icon: string
+  group: 'actions' | 'intelligence'
+  path: string
+  order?: number
+}
+
+export interface AccountTabDeclaration {
+  label: string
+  icon: string
+  order?: number
+}
+
 // ── Feature Module contract ──────────────────────────────────────────────────
 
 export interface FeatureModule {
@@ -51,6 +69,12 @@ export interface FeatureModule {
   syncNow: (customerName: string) => Promise<void>
   /** Optional: Provide signals for content generation (GitHub Issue #171) */
   signals?: (customerSlug: string) => Promise<Signal[]>
+  /** Optional: Navigation declaration for sidebar/header (GitHub Issue #234) */
+  nav?: NavDeclaration
+  /** Optional: Account detail tab declaration (GitHub Issue #234) */
+  accountTab?: AccountTabDeclaration
+  /** Optional: Where this module applies — defaults to 'both' (GitHub Issue #234) */
+  scope?: ModuleScope
 }
 
 export interface ModuleStatus {
@@ -174,6 +198,42 @@ export const FeatureModuleRegistry = {
     }
 
     return allSignals
+  },
+
+  /**
+   * Return modules that declare nav, sorted by nav.order ascending (nulls last).
+   * GitHub Issue #234 — Nav auto-discovery
+   */
+  getNav(): Array<{ name: string; nav: NavDeclaration; scope: ModuleScope }> {
+    const entries: Array<{ name: string; nav: NavDeclaration; scope: ModuleScope }> = []
+    for (const module of _modules.values()) {
+      if (module.nav) {
+        entries.push({ name: module.name, nav: module.nav, scope: module.scope ?? 'both' })
+      }
+    }
+    return entries.sort((a, b) => {
+      const oa = a.nav.order ?? Number.MAX_SAFE_INTEGER
+      const ob = b.nav.order ?? Number.MAX_SAFE_INTEGER
+      return oa - ob
+    })
+  },
+
+  /**
+   * Return modules that declare accountTab, sorted by accountTab.order ascending (nulls last).
+   * GitHub Issue #234 — AccountTab auto-discovery
+   */
+  getAccountTabs(): Array<{ name: string; accountTab: AccountTabDeclaration; scope: ModuleScope }> {
+    const entries: Array<{ name: string; accountTab: AccountTabDeclaration; scope: ModuleScope }> = []
+    for (const module of _modules.values()) {
+      if (module.accountTab) {
+        entries.push({ name: module.name, accountTab: module.accountTab, scope: module.scope ?? 'both' })
+      }
+    }
+    return entries.sort((a, b) => {
+      const oa = a.accountTab.order ?? Number.MAX_SAFE_INTEGER
+      const ob = b.accountTab.order ?? Number.MAX_SAFE_INTEGER
+      return oa - ob
+    })
   },
 
   /**

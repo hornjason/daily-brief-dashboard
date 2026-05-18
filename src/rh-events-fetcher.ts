@@ -46,6 +46,45 @@ const PRODUCT_KEYWORDS: Record<string, string[]> = {
   RHOAI: ['openshift ai', 'rhoai', 'instructlab', 'ai workshop'],
 }
 
+// ── Metadata / Location Patterns ─────────────────────────────────────────────
+
+/** Parts matching these are metadata, not the event name */
+const METADATA_PATTERNS = [
+  /reg\s*page/i,
+  /reg\s*list/i,
+  /reg\s*report/i,
+  /event\s*lead/i,
+  /event\s*overview/i,
+  /marketing\s*lead/i,
+  /planning\s*deck/i,
+  /sales\s*invite/i,
+  /social\s*link/i,
+  /social\s*copy/i,
+  /invite\s*copy/i,
+  /^social$/i,
+  /^pdf(\s+email)?$/i,
+  /^\s*pdf\s*$/i,
+  /event\s*features?:/i,
+]
+
+/** Matches location + time patterns like "Cambridge, MA 2:00pm to 4:30pm" */
+const LOCATION_TIME_PATTERN = /[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*,\s+[A-Z]{2}\b/
+const TIME_PATTERN = /\d{1,2}:\d{2}\s*(?:am|pm)/i
+
+/**
+ * Check if a part looks like a location/time string rather than an event name
+ */
+function isLocationTimePart(part: string): boolean {
+  return LOCATION_TIME_PATTERN.test(part) || TIME_PATTERN.test(part)
+}
+
+/**
+ * Check if a part is metadata (not the event name)
+ */
+function isMetadataPart(part: string): boolean {
+  return METADATA_PATTERNS.some(p => p.test(part.trim()))
+}
+
 // ── Garbage Pattern Filtering ────────────────────────────────────────────────
 
 const GARBAGE_PATTERNS = [
@@ -54,6 +93,13 @@ const GARBAGE_PATTERNS = [
   /^short cut/i,
   /^bookmark/i,
   /^revamp\s+\w+$/i,        // "Revamp RHEL", "Revamp AAP", etc.
+  /more\s+details/i,        // "More details coming soon", "More details"
+  /details\s+coming/i,      // "details coming soon"
+  /^html$/i,                // standalone "HTML" metadata label
+  /^pdf$/i,                 // standalone "PDF" metadata label
+  /ancillary\s+event/i,     // sub-event descriptions, not main events
+  /^(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+\d+\s*:/i,
+  // Raw input lines starting with "June 3:" etc. — these are unparsed source lines
 ]
 
 /**
@@ -120,6 +166,35 @@ function extractLocation(text: string): string | null {
   return match ? `${match[1]}, ${match[2]}` : null
 }
 
+const STATE_TO_REGION: Record<string, RHEvent['region']> = {
+  // Northeast
+  CT: 'northeast', DE: 'northeast', MA: 'northeast', MD: 'northeast', ME: 'northeast',
+  NH: 'northeast', NJ: 'northeast', NY: 'northeast', PA: 'northeast', RI: 'northeast',
+  VT: 'northeast', VA: 'northeast', DC: 'northeast',
+  // Southeast
+  AL: 'southeast', AR: 'southeast', FL: 'southeast', GA: 'southeast', KY: 'southeast',
+  LA: 'southeast', MS: 'southeast', NC: 'southeast', SC: 'southeast', TN: 'southeast',
+  WV: 'southeast', PR: 'southeast',
+  // Central
+  IA: 'central', IL: 'central', IN: 'central', KS: 'central', MI: 'central',
+  MN: 'central', MO: 'central', ND: 'central', NE: 'central', OH: 'central',
+  OK: 'central', SD: 'central', TX: 'central', WI: 'central',
+  // West
+  AK: 'west', AZ: 'west', CA: 'west', CO: 'west', HI: 'west', ID: 'west',
+  MT: 'west', NM: 'west', NV: 'west', OR: 'west', UT: 'west', WA: 'west', WY: 'west',
+  // Canada
+  AB: 'canada', BC: 'canada', MB: 'canada', NB: 'canada', NL: 'canada',
+  NS: 'canada', NT: 'canada', NU: 'canada', ON: 'canada', PE: 'canada',
+  QC: 'canada', SK: 'canada', YT: 'canada',
+}
+
+function getRegionFromLocation(location: string | null): RHEvent['region'] | null {
+  if (!location) return null
+  const stateMatch = location.match(/,\s*([A-Z]{2})\b/)
+  if (!stateMatch) return null
+  return STATE_TO_REGION[stateMatch[1]] ?? null
+}
+
 /**
  * Unwrap Google redirect URLs
  * Extracts the actual URL from google.com/url?q= wrappers
@@ -143,6 +218,67 @@ function extractRegUrlFromHTML(htmlLine: string): string | null {
 
   const wrappedUrl = match[1].trim()
   return unwrapGoogleUrl(wrappedUrl)
+}
+
+/** Patterns for links that are NOT registration/event info URLs */
+const SKIP_LINK_PATTERNS = [
+  /\.pdf$/i,
+  /^mailto:/i,
+  /^#/,                      // Google Doc internal anchors
+  /social/i,
+  /planning\s*deck/i,
+]
+
+interface ExtractedLink {
+  url: string
+  text: string
+}
+
+/**
+ * Extract all <a> links from HTML, returning url + anchor text.
+ * Filters out metadata links (PDFs, mailto, social, internal anchors).
+ * Unwraps Google redirect URLs.
+ */
+function extractAllLinks(htmlLine: string): ExtractedLink[] {
+  const results: ExtractedLink[] = []
+  const re = /<a[^>]+href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi
+  let m: RegExpExecArray | null
+
+  while ((m = re.exec(htmlLine)) !== null) {
+    const rawUrl = m[1].trim()
+    const text = m[2].replace(/<[^>]+>/g, '').trim()
+
+    // Skip metadata links
+    if (SKIP_LINK_PATTERNS.some(p => p.test(rawUrl) || p.test(text))) continue
+
+    const url = unwrapGoogleUrl(rawUrl)
+    if (url) results.push({ url, text })
+  }
+
+  return results
+}
+
+/**
+ * Extract the best registration/event URL from HTML.
+ * Priority:
+ *   1. Explicit "Reg Page" link
+ *   2. A descriptive link (3+ words, not metadata) — the event name is often hyperlinked
+ */
+function extractBestUrl(htmlLine: string): { url: string; linkName: string | null } | null {
+  // 1. Try explicit "Reg Page" link first
+  const regPage = extractRegUrlFromHTML(htmlLine)
+  if (regPage) return { url: regPage, linkName: null }
+
+  // 2. Try descriptive links (event name is often the link text)
+  const links = extractAllLinks(htmlLine)
+  for (const link of links) {
+    const words = link.text.split(/\s+/).length
+    if (words >= 3 && !isMetadataPart(link.text) && !isLocationTimePart(link.text)) {
+      return { url: link.url, linkName: link.text }
+    }
+  }
+
+  return null
 }
 
 /**
@@ -200,45 +336,104 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
     format = 'hybrid'
   }
 
-  // Second part is the event name
-  const name = parts[1]?.trim() ?? ''
+  // ── Extract URLs from HTML before stripping tags ──────────────────────────
+  const urlInfo = extractBestUrl(htmlLine)
+  const registrationUrl = urlInfo?.url ?? null
+
+  // ── Identify the event name ──────────────────────────────────────────────
+  // Priority 1: If the HTML had a descriptive hyperlink, use its text as name
+  // Priority 2: Score pipe-separated parts and pick the best candidate
+  const candidates = parts.slice(1)
+  let bestName = ''
+  let bestScore = -1
+  let bestIndex = -1
+
+  // If we got a name from a hyperlink, prefer it
+  if (urlInfo?.linkName) {
+    bestName = urlInfo.linkName
+    // Find which candidate index matches this link text (for summary exclusion)
+    for (let i = 0; i < candidates.length; i++) {
+      if (candidates[i].trim().includes(urlInfo.linkName)) {
+        bestIndex = i
+        break
+      }
+    }
+  }
+
+  // Fall back to scoring if no link-derived name
+  if (!bestName) {
+    for (let i = 0; i < candidates.length; i++) {
+      const part = candidates[i].trim()
+      if (!part) continue
+
+      // Skip metadata parts
+      if (isMetadataPart(part)) continue
+
+      // Skip location/time parts
+      if (isLocationTimePart(part)) continue
+
+      // Score: word count + length, heavily penalize short parts
+      const words = part.split(/\s+/).length
+      if (words < 3) continue
+
+      const score = words * 10 + part.length
+
+      if (score > bestScore) {
+        bestScore = score
+        bestName = part
+        bestIndex = i
+      }
+    }
+  }
+
+  // If best name is garbage, try harder: use any hyperlinked text from the HTML
+  if (!bestName || isGarbageEvent(bestName)) {
+    const links = extractAllLinks(htmlLine)
+    for (const link of links) {
+      const words = link.text.split(/\s+/).length
+      if (words >= 3 && !isMetadataPart(link.text) && !isLocationTimePart(link.text) && !isGarbageEvent(link.text)) {
+        bestName = link.text
+        break
+      }
+    }
+  }
+
+  const name = bestName
   if (!name) return null
 
   // Filter garbage events
   if (isGarbageEvent(name)) return null
 
-  // Event name must have at least 3 words (filter single/two-word titles)
-  const wordCount = name.split(/\s+/).length
-  if (wordCount < 3) return null
-
-  // Try to extract location
+  // Try to extract location from ANY part (not just parts[0])
   const location = extractLocation(plainText)
 
+  // Derive region from location (state → region mapping) — more accurate than doc section headers
   // Virtual events are always national
-  const finalRegion = format === 'virtual' ? 'national' : region
-
-  // Extract registration URL from HTML (before stripping tags)
-  const registrationUrl = extractRegUrlFromHTML(htmlLine)
+  const locationRegion = getRegionFromLocation(location)
+  const finalRegion = format === 'virtual' ? 'national' : (locationRegion ?? region)
 
   // Tag with products
   const productTags = tagWithProducts(name)
 
-  // Extract summary from parts after the event name
-  // Parts typically: [date+format, name, location/details, personas, reg page, event lead, etc.]
-  // Summary = everything after name, excluding "Reg Page", "Event Lead:", etc.
-  const summaryParts = parts.slice(2)  // skip date+format and name
-    .filter(p => {
-      const lower = p.toLowerCase()
-      // Skip metadata fields
-      return !lower.includes('reg page') &&
-             !lower.includes('reg report') &&
-             !lower.includes('event lead:') &&
-             !lower.includes('marketing lead') &&
-             !lower.includes('social') &&
-             !lower.match(/^\w+,\s+\w{2}$/)  // skip "City, ST" patterns
+  // ── Build clean summary ──────────────────────────────────────────────────
+  // Exclude: parts[0] (date+format), the name part, metadata, and locations
+  const summaryParts = candidates
+    .filter((p, i) => {
+      if (i === bestIndex) return false           // already shown as title
+      const trimmed = p.trim()
+      if (!trimmed) return false
+      if (isMetadataPart(trimmed)) return false
+      if (isLocationTimePart(trimmed)) return false
+      if (LOCATION_TIME_PATTERN.test(trimmed)) return false
+      return true
     })
     .join(' ')
     .trim()
+
+  // Clean summary: if it looks like a raw pipe-separated source line, discard it
+  const cleanSummary = (summaryParts.includes('|') || summaryParts === plainText)
+    ? ''
+    : summaryParts
 
   return {
     name,
@@ -249,7 +444,7 @@ function parseEventLine(htmlLine: string, region: RHEvent['region']): RHEvent | 
     productTags,
     registrationUrl,
     description: plainText,
-    summary: summaryParts,
+    summary: cleanSummary,
   }
 }
 

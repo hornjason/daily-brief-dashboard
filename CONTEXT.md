@@ -257,6 +257,63 @@ _Avoid_: "data sources", "signal sources" (use "signal stack" as the canonical t
 The pattern where new data sources automatically contribute to all content generation features by implementing `signals()` on their feature module. No wiring needed in consumers — the registry collects from all modules that implement the method. See ADR-021.
 _Avoid_: "signal registration", "signal wiring"
 
+### Navigation
+
+**Page nav** (also: page-level navigation):
+The sidebar navigates between discrete pages (routes), not scroll positions within a single page. Each top-level concern gets its own route. The prior scroll-to pattern was replaced because feature density made the single-page layout unmanageable.
+_Avoid_: "scroll nav", "section nav", "anchor nav"
+
+**Core page**:
+A page that exists regardless of which feature modules are registered: Home, Accounts, Calendar, Admin. Hardcoded in the sidebar. These represent structural concerns, not optional capabilities.
+_Avoid_: "built-in page", "system page"
+
+**Module page**:
+A top-level sidebar page auto-discovered from the Feature Module Registry. Every feature module that declares `nav` on its contract gets a sidebar entry and a route. Customer-scoped modules include a customer picker on their page. The sidebar is a capability menu — users see everything the system can do without drilling into accounts first.
+_Avoid_: "feature page", "plugin page"
+
+**Feature-first navigation**:
+The primary discovery path is sidebar → feature → select customer, not sidebar → customer → discover feature in tabs. Every module gets a top-level page so capabilities are immediately visible. Account detail tabs remain as a secondary convenience path (same components, pre-filtered to that customer).
+_Avoid_: "customer-first nav"
+
+**Sidebar group**:
+A collapsible section in the sidebar that organizes module pages by purpose. Two groups: `actions` (things you do — Meeting Prep, Campaigns, Tools) and `intelligence` (things you learn — News, Products, Events). Core pages (Home, Accounts, Calendar, Book of Business, Admin) sit outside groups. Modules declare their group in the `nav` contract field; the sidebar auto-discovers and renders them under the right heading.
+_Avoid_: "nav section", "sidebar category"
+
+**Module scope**:
+Each feature module declares its operating scope: `portfolio` (operates across all customers — e.g., News, Products), `customer` (operates on one customer at a time — e.g., Meeting Prep), or `both` (has portfolio and per-customer views — e.g., Campaigns). Scope determines whether the module page includes a customer picker and whether it also appears as an account detail tab.
+_Avoid_: "module type", "feature scope"
+
+**Home page**:
+The daily starting point. Contains Morning Summary, Top Actions Panel, and KPI Cards only — designed to be read in 30 seconds with no scrolling past the fold. Pipeline detail, Cloud Spend detail, Calendar, and Account grid live on their own pages.
+_Avoid_: "dashboard", "landing page" (too generic — say "Home page")
+
+**Book of Business page** (also: portfolio overview):
+A dedicated page showing Pipeline and Cloud Spend breakdowns — the detailed per-stage, per-product views that were previously collapsed sections on the Home page. Represents the AE's full book of business. KPI cards on the Home page still show the headline numbers; this page has the drill-down.
+_Avoid_: "pipeline page", "cloud spend page" (it's one combined portfolio view)
+
+**Intelligence tab** (composite):
+A single account detail tab that aggregates content from multiple modules: `news-radar` (customer news articles), `product-lifecycle` (product roadmap), and `rh-events` (Red Hat events). Not a module itself — it's a composite view. Each contributing module has its own sidebar page for portfolio-level access; the Intelligence tab is the customer-scoped summary. The Overview tab remains the default.
+_Avoid_: "intelligence module", "intel tab"
+
+**CustomerPicker** (shared component):
+A standardized searchable dropdown at the top of every customer-scoped module page. Shows accounts grouped by AE. Carries customer context when navigating between module pages and account detail tabs — selecting Acme on one module page pre-selects Acme on the next. URL includes customer slug for bookmarkability (e.g., `/dashboard/meeting-prep?customer=acme-corp`). For `scope: 'both'` modules, defaults to portfolio view with the picker acting as a filter.
+_Avoid_: "customer selector", "account dropdown"
+
+**ModulePageShell** (shared layout):
+A standardized page wrapper that every module page renders inside. Provides consistent layout: page title, CustomerPicker (for customer/both scope), loading/empty/error states, and content area. Ensures every module page looks, feels, and behaves identically. Modules supply their content component; the shell handles all chrome.
+_Avoid_: "page template", "page layout"
+
+### Design principles
+
+**Contract-driven standardization**:
+Every module declares its full presence — data lifecycle, signals, navigation, tabs, scope — in a single `FeatureModule` registration. The system auto-discovers everything from the contract. No manual wiring, no special-casing, no per-module layout code. Adding a new feature = one file implementing the contract. UI components (`ModulePageShell`, `CustomerPicker`, tab bar) are shared and identical across all modules.
+
+**Desktop-only**:
+The dashboard targets desktop browsers only. Mobile/tablet responsiveness is a future item — the app runs on a local container, so mobile access requires network access to the host. No responsive breakpoints or mobile layouts in current scope.
+
+**Visual design pass**:
+Part of the nav architecture work — Aditi reviews colors, typography, spacing, and component consistency to ensure enterprise-grade visual quality across all module pages and shared components.
+
 ## Flagged ambiguities
 
 - "Shared Drive" (Google product name) vs. "L3 shared folder" (our concept): the L3 shared folder lives _in_ a Google Shared Drive, but the terms are not interchangeable. Use "L3 shared folder" for the concept, "Shared Drive" only when referring to the Google Drive product feature.

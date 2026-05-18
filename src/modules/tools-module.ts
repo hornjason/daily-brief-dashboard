@@ -2,7 +2,7 @@
 // GitHub Issue #146 — Business value tools feature module registration
 // GitHub Issue #150 — NotebookLM sync on artifact upload
 
-import { FeatureModuleRegistry } from '../feature-module-registry'
+import { FeatureModuleRegistry, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry'
 import { customers } from '../server-state'
 import { findCustomerDriveFolder } from '../lib/customer-folder'
 import { createOrUpdateNotebook } from '../notebooklm'
@@ -11,6 +11,22 @@ import { google } from 'googleapis'
 
 FeatureModuleRegistry.register({
   name: 'tools',
+
+  scope: 'customer',
+
+  nav: {
+    label: 'Tools',
+    icon: 'Wrench',
+    group: 'actions',
+    path: '/dashboard/tools',
+    order: 30,
+  },
+
+  accountTab: {
+    label: 'Tools',
+    icon: 'Wrench',
+    order: 40,
+  },
 
   cachePaths: (slug: string) => [
     `data/cache/tools/${slug}.json`,

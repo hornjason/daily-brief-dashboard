@@ -650,6 +650,25 @@ export function scheduleTerritorySync(): void {
         console.log(`[territory-sync] ${fresh.length} new removal notifications written`)
       }
 
+      // Clean old notifications (30 day retention)
+      try {
+        if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
+          const notifications = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
+          const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+          const cleaned = notifications.pending.filter((n: any) => {
+            const detectedTime = new Date(n.detectedAt).getTime()
+            return detectedTime > thirtyDaysAgo
+          })
+          if (cleaned.length < notifications.pending.length) {
+            const updated = { ...notifications, pending: cleaned }
+            writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
+            console.log(`[territory-sync] cleaned ${notifications.pending.length - cleaned.length} old notifications (>30 days)`)
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[territory-sync] notification cleanup failed: ${e.message}`)
+      }
+
       // Persist team data to cache
       if (result.teamData && Object.keys(result.teamData).length > 0) {
         const { persistTeamCache } = await import('./account-team.ts')
@@ -1438,16 +1457,15 @@ export function scheduleProductIntelRefresh(): void {
   setTimeout(async () => {
     console.log('[product-intel] weekly refresh started')
     try {
-      const { refreshAllProducts } = await import('./product-release-radar.ts')
-      await refreshAllProducts()
-      console.log('[product-intel] weekly refresh completed')
-      // Extract + enrich features after product refresh
-      try {
-        const { refreshAllFeatures } = await import('./product-feature-radar.ts')
-        await refreshAllFeatures()
-        console.log('[product-intel] weekly feature radar refresh completed')
-      } catch (featErr: any) {
-        console.error('[product-intel] weekly feature radar refresh failed:', featErr?.message ?? featErr)
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const module = FeatureModuleRegistry.get('product-intel')
+      if (module) {
+        await module.fetch('_global')
+        FeatureModuleRegistry.recordOutcome('product-intel', { success: true })
+        console.log('[product-intel] weekly refresh completed')
+      } else {
+        console.error('[product-intel] module not registered')
+        throw new Error('product-intel module not found in registry')
       }
 
       // Regenerate per-customer product intel after features are fresh

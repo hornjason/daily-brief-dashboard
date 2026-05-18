@@ -6,7 +6,7 @@
  * Provides Signal generation for content generation features.
  */
 
-import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
+import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { fetchRedHatRSS, type RSSItem } from '../rh-rss-fetcher.ts'
 import { existsSync, unlinkSync, readFileSync } from 'fs'
 import { resolve } from 'path'
@@ -15,6 +15,16 @@ const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss', 'rh-fee
 
 FeatureModuleRegistry.register({
   name: 'rh-rss',
+
+  scope: 'portfolio',
+
+  nav: {
+    label: 'Red Hat News',
+    icon: 'Rss',
+    group: 'intelligence',
+    path: '/dashboard/rh-news',
+    order: 40,
+  },
 
   cachePaths: () => ['data/cache/rss/rh-feeds.json'],
 

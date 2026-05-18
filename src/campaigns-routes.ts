@@ -14,12 +14,10 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { Readable } from 'stream'
-import { getGeminiToken } from './gemini-auth.ts'
+import { callGemini } from './gemini-call.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
-import { getGeminiModel } from './ai-config.ts'
 import { customers } from './server-state.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { toSlug } from './cache-layer.ts'
 import { sanitizeErr } from './utils.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
@@ -187,14 +185,6 @@ async function callGeminiForCampaign(opts: {
   voiceInstruction?: string
   personas?: Array<{ role: string; enabled: boolean; relevantVPs?: string[] }>
 }): Promise<string> {
-  const project = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model = 'gemini-2.5-pro'  // Pro for campaigns — better instruction following for council rules
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
-
-  const token = await getGeminiToken()
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-
   // Assemble user prompt with material + signals
   const intelligenceSummary = opts.customerSignals.intelligence?.company
     ? opts.customerSignals.intelligence.company.substring(0, 4000)
@@ -244,41 +234,16 @@ Now generate a complete campaign for ${opts.customerName} with positioning and e
 Generate email templates for these personas (C-level + director-level tiers for each):
 ${personasStr}`
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(180_000), // 3 min
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: CAMPAIGN_SYSTEM_PROMPT }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-      },
-    }),
+  const result = await callGemini(CAMPAIGN_SYSTEM_PROMPT, userPrompt, {
+    callType: 'campaign-generation',
+    customerName: opts.customerName,
+    model: 'pro',  // Pro for campaigns — better instruction following for council rules
+    temperature: 0.7,
+    // No deltaKey — campaigns are customer-specific and material may change
   })
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 300)}`)
-  }
-
-  const json = await res.json() as any
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
-      callType: 'campaign-generation',
-      customerName: opts.customerName,
-      inputTokens: usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  if (!text) throw new Error('Gemini returned empty response')
-  return text
+  if (!result.text) throw new Error('Gemini returned empty response')
+  return result.text
 }
 
 // ── Drive persistence ────────────────────────────────────────────────────────

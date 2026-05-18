@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { ModulePageShell } from '../components/ModulePageShell'
 import { ProductReleaseBanner } from '../components/ProductReleaseBanner'
 import { FeatureFilterBar } from '../components/FeatureFilterBar'
 import { SpotlightStrip } from '../components/SpotlightStrip'
@@ -69,7 +70,7 @@ function TerritoryRadarCard({
     <div className="bg-surface border border-border rounded-xl p-5 mb-4">
       {/* Compact header */}
       <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-base font-semibold text-text-primary">{summary.displayName}</h2>
+        <a href={`/dashboard/products/${summary.slug}`} className="text-base font-semibold text-text-primary hover:text-accent transition-colors">{summary.displayName}</a>
         {summary.currentVersion && (
           <span className="text-xs font-mono bg-surface-hover border border-border px-2 py-0.5 rounded-full text-text-secondary">
             v{summary.currentVersion}
@@ -446,7 +447,11 @@ export function ProductsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex-1 flex flex-col">
+    <ModulePageShell
+      title="Product Intelligence"
+      icon="Package"
+      scope="portfolio"
+    >
       <ProductReleaseBanner
         alerts={alerts}
         summaries={summaries}
@@ -575,6 +580,6 @@ export function ProductsPage() {
         onClose={() => setSelectedFeature(null)}
         onTagClick={tag => { handleTagClick(tag); setSelectedFeature(null) }}
       />
-    </div>
+    </ModulePageShell>
   )
 }

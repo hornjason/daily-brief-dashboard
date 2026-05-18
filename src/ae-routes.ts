@@ -296,6 +296,81 @@ export function createAeRouter(): Hono {
           } catch (e: any) {
             console.warn(`[ae-routes] feature module cleanup failed for ${customerName}:`, e?.message ?? e)
           }
+
+          // Issue #256 — Clean orphaned cache files not covered by FeatureModuleRegistry
+          const slug = toSlug(customerName)
+          const cacheDir = process.env.CACHE_DIR ?? resolve(import.meta.dir, '../cache')
+
+          // 1. Per-customer product intelligence (e.g., data/cache/product-intel/rhel-customer-intel/{slug}.json)
+          const productIntelDir = resolve(cacheDir, 'product-intel')
+          try {
+            // Clean all {product}-customer-intel/{slug}.json files
+            const productDirs = readdirSync(productIntelDir, { withFileTypes: true })
+            for (const entry of productDirs) {
+              if (!entry.isDirectory() || !entry.name.endsWith('-customer-intel')) continue
+              const cachePath = resolve(productIntelDir, entry.name, `${slug}.json`)
+              if (existsSync(cachePath)) {
+                unlinkSync(cachePath)
+                console.log(`[cleanup] removed ${cachePath}`)
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[cleanup] failed to clean product-intel for ${slug}:`, e.message)
+          }
+
+          // 2. Material extraction cache — keyed by URL hash, not customer slug
+          // (skip — no customer-specific cleanup possible without tracking URL→customer mapping)
+
+          // 3. Customer docs corpus (e.g., data/cache/product-intel/customer-docs/{slug}.json)
+          try {
+            const customerDocsPath = resolve(productIntelDir, 'customer-docs', `${slug}.json`)
+            if (existsSync(customerDocsPath)) {
+              unlinkSync(customerDocsPath)
+              console.log(`[cleanup] removed ${customerDocsPath}`)
+            }
+          } catch (e: any) {
+            console.warn(`[cleanup] failed to clean customer-docs for ${slug}:`, e.message)
+          }
+
+          // 4. Gemini delta cache — no directory exists yet, but add cleanup for future-proofing
+          try {
+            const geminiDeltaDir = resolve(cacheDir, 'gemini-delta')
+            if (existsSync(geminiDeltaDir)) {
+              const deltaFiles = readdirSync(geminiDeltaDir)
+              for (const file of deltaFiles) {
+                if (file.includes(slug)) {
+                  const deltaPath = resolve(geminiDeltaDir, file)
+                  try {
+                    unlinkSync(deltaPath)
+                    console.log(`[cleanup] removed ${deltaPath}`)
+                  } catch (e: any) {
+                    console.warn(`[cleanup] failed to delete ${deltaPath}:`, e.message)
+                  }
+                }
+              }
+            }
+          } catch (e: any) {
+            console.warn(`[cleanup] failed to scan gemini-delta for ${slug}:`, e.message)
+          }
+        }
+      }
+
+      // Issue #256 — Clean AE-specific caches (style guides)
+      if (removedAeNames.length > 0) {
+        for (const aeName of removedAeNames) {
+          const aeSlug = toSlug(aeName)
+          const cacheDir = process.env.CACHE_DIR ?? resolve(import.meta.dir, '../cache')
+
+          // Style guides (e.g., data/cache/style-guides/{ae-slug}.json)
+          try {
+            const styleGuidePath = resolve(cacheDir, 'style-guides', `${aeSlug}.json`)
+            if (existsSync(styleGuidePath)) {
+              unlinkSync(styleGuidePath)
+              console.log(`[cleanup] removed ${styleGuidePath}`)
+            }
+          } catch (e: any) {
+            console.warn(`[cleanup] failed to clean style-guide for ${aeSlug}:`, e.message)
+          }
         }
       }
 

@@ -110,11 +110,16 @@ function transformProduct(slug: string, displayName: string, cycles: EndOfLifeCy
   // Check if extended support is available
   const eusAvailable = currentCycle.extendedSupport !== false && currentCycle.extendedSupport !== undefined
 
+  // Use latestPatch as currentVersion when cycle is major-only (e.g., RHEL "10" → "10.1")
+  const displayVersion = currentCycle.latest && currentCycle.latest !== currentCycle.cycle
+    ? currentCycle.latest
+    : currentCycle.cycle
+
   return {
     slug,
     displayName,
-    currentVersion: currentCycle.cycle,
-    latestPatch: currentCycle.latest || currentCycle.cycle,  // Fallback to cycle if latest not available
+    currentVersion: displayVersion,
+    latestPatch: currentCycle.latest || currentCycle.cycle,
     nextVersion: nextCycle?.cycle ?? null,
     nextExpected: nextCycle?.releaseDate ?? null,
     gaDate: currentCycle.releaseDate,

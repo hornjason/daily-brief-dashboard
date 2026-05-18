@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-13
+updated: 2026-05-17
 ---
 
 # DailyBriefDashboard — Project State
@@ -11,7 +11,7 @@ updated: 2026-05-13
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-13 — Infrastructure hardening: `make up` pre-flight guard, `make doctor` environment validation, `make backup-config`/`restore-config` for portable migration, nightly workflow container health check, `docs/NEW-MACHINE-SETUP.md` runbook. Mac Mini Gate 3 fixed (config restored, container restarted).
+Last updated: 2026-05-17 — Infrastructure hardening: `make up` pre-flight guard, `make doctor` environment validation, `make backup-config`/`restore-config` for portable migration, nightly workflow container health check, `docs/NEW-MACHINE-SETUP.md` runbook. Mac Mini Gate 3 fixed (config restored, container restarted).
 
 ---
 
@@ -27,6 +27,15 @@ Last updated: 2026-05-13 — Infrastructure hardening: `make up` pre-flight guar
 | `/dashboard/admin` | AdminPage | ✅ Working | See Admin Page section below |
 | `/dashboard/batch` | BatchPage | ✅ Working | Batch operations: multi-customer campaigns, news refresh, PitchBuilder/FinListics checklists |
 | `/dashboard/rh-news` | RedHatNewsPage | ✅ Working | Full Red Hat RSS news feed: blog, press releases, developer blog. Product tag filtering. Linked from Pulse card "View All". |
+| `/dashboard/meeting-prep` | MeetingPrepPage | ✅ Working | Meeting prep with mandatory context panel, HTML Google Docs output, Red Hat brand formatting. Calendar view with customer filter toggle. |
+| `/dashboard/home` | HomePage | ✅ Working | Feature-first navigation hub |
+| `/dashboard/accounts` | AccountsPage | ✅ Working | Account listing with module page shell |
+| `/dashboard/calendar` | CalendarPage | ✅ Working | Calendar strip view |
+| `/dashboard/campaigns` | CampaignsPage | ✅ Working | Campaign management |
+| `/dashboard/events` | EventsPage | ✅ Working | Red Hat events with region filtering |
+| `/dashboard/news` | NewsPage | ✅ Working | News aggregation from RSS feeds |
+| `/dashboard/tools` | ToolsPage | ✅ Working | Utility tools |
+| `/dashboard/book-of-business` | BookOfBusinessPage | ✅ Working | Book of business overview |
 
 **SPA catch-all:** Unknown routes fall through to the main dashboard (no 404 page).
 
