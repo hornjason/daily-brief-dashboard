@@ -2,13 +2,13 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-08
+updated: 2026-05-17
 ---
 
 # Timer Reference
 
-Complete verified inventory of all timers in DailyBriefDashboard. 33 server-side timers across 16 source files + 4 sync daemon timers in `scripts/sync-l3-daemon.ts` (Group 7).
-Last verified: 2026-04-01 (server timers, Marcus Webb). Sync daemon timers updated 2026-05-08.
+Complete verified inventory of all timers in DailyBriefDashboard. 38 server-side timers across 20 source files + 4 sync daemon timers in `scripts/sync-l3-daemon.ts` (Group 7).
+Last verified: 2026-05-17 (added RSS, lifecycle, release radar, news, events timers).
 
 ---
 
@@ -24,6 +24,11 @@ These run continuously from server startup for the process lifetime.
 | 4 | RH Keep-Alive | `rh-scraper.ts` | 8min | No |
 | 5 | SF Keep-Alive | `sf-scraper.ts` | 60min | No |
 | 6 | Drive Watcher Poll | `background-scheduler.ts` | 10min | No |
+| 7 | RSS Feed Refresh | `rh-rss-fetcher.ts` | 4h | No — API: `POST /api/admin/rss-feeds/refresh` |
+| 8 | Product Lifecycle Refresh | `product-lifecycle.ts` | Weekly (Sunday 6am ET) | No |
+| 9 | Product Release Radar | `product-release-radar.ts` | Weekly (Sunday 6am ET) | No |
+| 10 | News Radar Refresh | `news-provider.ts` | Daily (5:30am ET) | No |
+| 11 | Red Hat Events Refresh | `rh-events-fetcher.ts` | Weekly | No |
 
 ---
 
