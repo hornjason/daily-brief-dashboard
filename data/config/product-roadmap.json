@@ -12,6 +12,7 @@
     {
       "product": "ocp",
       "displayName": "Red Hat OpenShift Container Platform",
+      "currentVersionOverride": "4.21",
       "nextVersion": "4.22",
       "expectedDate": "2026-09",
       "highlights": [],

@@ -522,12 +522,13 @@ async function generateMeetingPrep(
     ? lifecycleCache.products
         .filter(p => productSlugs.length === 0 || productSlugs.includes(p.slug))
         .map(p => {
-          // Merge roadmap data for next version if available
+          // Merge roadmap data — current version override + next version
           const roadmap = roadmapData.find(r => r.product === p.slug)
+          const currentVer = (roadmap as any)?.currentVersionOverride ?? p.currentVersion
           const nextVer = roadmap?.nextVersion ?? p.nextVersion
           const nextDate = roadmap?.expectedDate ?? p.nextExpected?.slice(0, 10)
           const highlights = roadmap?.highlights?.length ? ` — ${roadmap.highlights.slice(0, 3).join(', ')}` : ''
-          return `${p.displayName}: v${p.currentVersion} (GA: ${p.gaDate?.slice(0, 10) ?? '?'}, EOL: ${p.eolDate?.slice(0, 10) ?? '?'})${nextVer ? ` → Next: v${nextVer} (expected ${nextDate ?? 'TBD'})${highlights}` : ''}`
+          return `${p.displayName}: v${currentVer} (GA: ${p.gaDate?.slice(0, 10) ?? '?'}, EOL: ${p.eolDate?.slice(0, 10) ?? '?'})${nextVer ? ` → Next: v${nextVer} (expected ${nextDate ?? 'TBD'})${highlights}` : ''}`
         })
         .join('\n')
     : ''
