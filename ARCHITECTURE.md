@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-14
+updated: 2026-05-18
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -1408,3 +1408,33 @@ const promptSection = toPromptContext(team)
 
 - **`makeAuth` missing import** in `src/account-intelligence.ts` — caused intelligence generation to crash on startup when `makeAuth` was called but not imported from `google-auth-library`.
 - **`google` (googleapis) missing import** in `src/account-intelligence.ts` — caused Drive docs write step (Step 3) to fail with `google is not defined`. Both caught when triggering "Generate All" to restore industry/segment labels after customers.json restore.
+
+## §21. Gemini Output Quality Gate (ADR-024, 2026-05-18)
+
+`validateAndRetry()` in `src/gemini-quality-gate.ts` validates all Gemini-generated content before it is saved to cache or Drive. It operates as a middleware pattern — wrapping the output of any generation function, regardless of whether that function uses `callGemini()` or the legacy `callGeminiGrounded()` path.
+
+### Quality loop
+
+1. Route generates content via Gemini (any method)
+2. Route calls `validateAndRetry(rawOutput, { validator }, retryFn)`
+3. Validator runs domain-specific checks, produces a `QualityScorecard`
+4. If score >= threshold: return output + scorecard
+5. If score < threshold: call `retryFn(failures, attempt)` — the route rebuilds the prompt with structured error feedback and calls Gemini again
+6. Max 2 retries. Best-scoring attempt always returned (never fails the request)
+
+### Per-content validators
+
+| Validator | File | Threshold | Key checks |
+|-----------|------|-----------|------------|
+| Campaign | `quality-validators/campaign-validator.ts` | 70 | Positioning >= 2, email count >= 4, subject lines, body length, varied features, no internal data |
+| Meeting prep | `quality-validators/meeting-prep-validator.ts` | 75 | 10 numbered sections, partner context table, Why Red Hat >= 4 rows, discussion questions with named attendees, action items with names + dates |
+| Intelligence | `quality-validators/intelligence-validator.ts` | 80 | Executive summary, company overview >= 200 chars, revenue/employee data, >= 3 competitive signals, regional coverage, source citations |
+| Account plan | `quality-validators/account-plan-validator.ts` | 75 | >= 10 sections, whitespace map table, >= 3 initiatives, actions table with owners, team members, Red Hat products |
+
+### Scorecard persistence
+
+Scorecards are stored in the existing cache entry for each output (`.qualityScorecard` field). No new cache files.
+
+### Key constraint
+
+This module does NOT modify `callGemini()` or any transport-level code. `callGemini()` handles HTTP retry (429s), cost tracking, and delta caching. The quality gate handles business-logic validation. Separate concerns.

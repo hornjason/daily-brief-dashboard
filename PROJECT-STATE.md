@@ -11,7 +11,7 @@ updated: 2026-05-17
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-17 — Infrastructure hardening: `make up` pre-flight guard, `make doctor` environment validation, `make backup-config`/`restore-config` for portable migration, nightly workflow container health check, `docs/NEW-MACHINE-SETUP.md` runbook. Mac Mini Gate 3 fixed (config restored, container restarted).
+Last updated: 2026-05-18 — Universal output quality gate (ADR-024, #289 Phase 1): `src/gemini-quality-gate.ts` with `validateAndRetry()` middleware, four domain validators (`src/quality-validators/`), wired into campaigns, meeting prep, intelligence, and account plan generation. Auto-retries up to 2x with structured error feedback. Quality scorecards stored in cache entries.
 
 ---
 
