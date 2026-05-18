@@ -485,6 +485,30 @@ export async function generateCampaign(
   // Get account team
   const accountTeam = getAccountTeam(customer)
 
+  // Reconstruct template signals from cache + registry (legacy signals object is empty since #276)
+  const templateSignals: any = { ...signals }
+  try {
+    const { existsSync: fsExists, readFileSync: fsRead } = await import('fs')
+    const { resolve: pathResolve } = await import('path')
+    const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+    const intelPath = pathResolve(cacheDir, 'intelligence', `${slug}.json`)
+    if (fsExists(intelPath)) {
+      templateSignals.intelligence = JSON.parse(fsRead(intelPath, 'utf-8'))
+    }
+  } catch { /* silent — template will show dashes */ }
+  const subSignals = registrySignals.filter(s => s.source === 'subscriptions')
+  if (subSignals.length > 0) {
+    templateSignals.subscriptions = subSignals.map(s => ({
+      productName: s.metadata?.product ?? s.headline,
+      quantity: s.metadata?.quantity ?? 1,
+      status: 'Active',
+    }))
+  }
+  const caseSignals = registrySignals.filter(s => s.source === 'cases')
+  if (caseSignals.length > 0) templateSignals.cases = caseSignals
+  const pipelineSignals = registrySignals.filter(s => s.source === 'pipeline')
+  if (pipelineSignals.length > 0) templateSignals.pipeline = pipelineSignals
+
   const htmlContent = generateCampaignHTML({
     materialTitle,
     materialUrl,
@@ -492,7 +516,7 @@ export async function generateCampaign(
     aeName: customer.ae ?? 'Unknown AE',
     generatedDate: timestamp,
     accountTeam,
-    signals,
+    signals: templateSignals,
     markdown,
   })
 
