@@ -11,6 +11,7 @@ import {
   buildScorecard,
   countTableRows,
   extractNumberedSection,
+  insertAfterNumberedSection,
   hasSpecificNames,
   formatFailureFeedback,
   type QualityValidator,
@@ -198,6 +199,89 @@ This is the objective paragraph.
 | Jason | Follow up | Next week |`
     const section = extractNumberedSection(content, 10)
     expect(section).toContain('Jason')
+  })
+})
+
+describe('insertAfterNumberedSection', () => {
+  const tableMarkdown = `\n\n**Other Certified Partners:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n| Acme Corp | Container Mgmt | US | [Catalog](https://example.com) |`
+
+  it('inserts content between section 2 and section 3', () => {
+    const content = `### 1. Meeting Objective
+Discuss Q3 goals.
+
+### 2. Partner Context
+Insight Direct is the primary SI.
+
+### 3. Customer Snapshot
+| Revenue | $50M |`
+
+    const result = insertAfterNumberedSection(content, 2, tableMarkdown)
+
+    // Table should appear after section 2 content
+    expect(result).toContain('Insight Direct is the primary SI.')
+    expect(result).toContain('**Other Certified Partners:**')
+    expect(result).toContain('| Acme Corp |')
+    // Table should be before section 3
+    const tablePos = result.indexOf('**Other Certified Partners:**')
+    const section3Pos = result.indexOf('### 3. Customer Snapshot')
+    expect(tablePos).toBeLessThan(section3Pos)
+  })
+
+  it('appends to end when target section is the last section', () => {
+    const content = `### 1. Meeting Objective
+Discuss Q3 goals.
+
+### 2. Partner Context
+Insight Direct is the primary SI.`
+
+    const result = insertAfterNumberedSection(content, 2, tableMarkdown)
+
+    expect(result).toContain('Insight Direct is the primary SI.')
+    expect(result).toContain('| Acme Corp |')
+    // Table should be at the end
+    expect(result.endsWith('|')).toBe(true)
+  })
+
+  it('appends to end when section number is not found', () => {
+    const content = `### 1. Meeting Objective
+Discuss Q3 goals.`
+
+    const result = insertAfterNumberedSection(content, 2, tableMarkdown)
+
+    // Should fallback to appending at end
+    expect(result).toContain('Discuss Q3 goals.')
+    expect(result).toContain('| Acme Corp |')
+  })
+
+  it('handles ## style headers', () => {
+    const content = `## 2. Partner Context
+Partner info here.
+
+## 3. Customer Snapshot
+Snapshot data.`
+
+    const result = insertAfterNumberedSection(content, 2, tableMarkdown)
+
+    const tablePos = result.indexOf('**Other Certified Partners:**')
+    const section3Pos = result.indexOf('## 3. Customer Snapshot')
+    expect(tablePos).toBeLessThan(section3Pos)
+  })
+
+  it('preserves all original content', () => {
+    const content = `### 1. Meeting Objective
+Discuss Q3 goals.
+
+### 2. Partner Context
+Insight Direct is the primary SI.
+
+### 3. Customer Snapshot
+Revenue data here.`
+
+    const result = insertAfterNumberedSection(content, 2, tableMarkdown)
+
+    expect(result).toContain('Discuss Q3 goals.')
+    expect(result).toContain('Insight Direct is the primary SI.')
+    expect(result).toContain('Revenue data here.')
   })
 })
 

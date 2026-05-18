@@ -182,6 +182,36 @@ export function extractNumberedSection(content: string, sectionNumber: number): 
   return content.slice(startIdx, endIdx).trim()
 }
 
+/** Insert content after a numbered section (before the next numbered section starts).
+ *  If the target section is not found, appends to end of content as fallback. */
+export function insertAfterNumberedSection(content: string, sectionNumber: number, insertContent: string): string {
+  // Find the target section header
+  const sectionPattern = new RegExp(
+    `^#{1,4}\\s*${sectionNumber}\\.\\s+.*$`,
+    'm'
+  )
+  const sectionMatch = content.match(sectionPattern)
+  if (!sectionMatch) {
+    // Section not found — append to end as fallback
+    return content + '\n' + insertContent
+  }
+
+  // Find the start of the next numbered section
+  const afterSectionStart = sectionMatch.index! + sectionMatch[0].length
+  const rest = content.slice(afterSectionStart)
+  const nextSectionPattern = /^#{1,4}\s*\d+\.\s+/m
+  const nextMatch = rest.match(nextSectionPattern)
+
+  if (nextMatch) {
+    // Insert just before the next section header
+    const insertPos = afterSectionStart + nextMatch.index!
+    return content.slice(0, insertPos) + insertContent + '\n\n' + content.slice(insertPos)
+  } else {
+    // No next section — append after this section's content
+    return content + '\n' + insertContent
+  }
+}
+
 /** Extract a section by header text (e.g., "## Whitespace Map") */
 export function extractSection(content: string, headerPattern: RegExp): string {
   const match = content.match(headerPattern)

@@ -16,7 +16,7 @@ import { resolve } from 'path'
 import { Readable } from 'stream'
 import { google } from 'googleapis'
 import { callGemini } from './gemini-call.ts'
-import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from './gemini-quality-gate.ts'
+import { validateAndRetry, formatFailureFeedback, insertAfterNumberedSection, type QualityScorecard } from './gemini-quality-gate.ts'
 import { meetingPrepValidator } from './quality-validators/meeting-prep-validator.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
@@ -575,6 +575,7 @@ async function generateMeetingPrep(
 
   let attendeeResearch = ''
   let partnerResearch = ''
+  let otherPartnersTable = ''
 
   // Separate customer attendees from partner attendees
   const customerAttendees = attendeeEmails.filter(e => {
@@ -666,7 +667,7 @@ Format as a markdown table:
           const link = p.catalogUrl ? `[Catalog](${p.catalogUrl})` : (p.sourceUrl ? `[Profile](${p.sourceUrl})` : '—')
           return `| ${p.name} | ${p.specializations.join(', ')} | ${p.country || p.geo || '—'} | ${link} |`
         }).join('\n')
-        partnerResearch += `\n\n**Other Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${partnerRows}`
+        otherPartnersTable = `\n\n**Other Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${partnerRows}`
       }
     } else {
       // Unknown partner — single Gemini grounding search for the company
@@ -845,7 +846,13 @@ Also note other certified partners that could help. Skip individual attendee pro
       return retryResult.text
     }
   )
-  const prepContent = gateResult.output
+  let prepContent = gateResult.output
+
+  // Insert deterministic "Other Certified Partners" table after section 2
+  // (kept out of Gemini to preserve links and formatting — ADR council hybrid inline)
+  if (otherPartnersTable) {
+    prepContent = insertAfterNumberedSection(prepContent, 2, otherPartnersTable)
+  }
 
   // ── Step 5: Save to Google Drive as HTML-imported Google Doc ────────────
 
