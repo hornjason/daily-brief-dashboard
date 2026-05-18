@@ -662,8 +662,11 @@ Format as a markdown table:
         p.specializations.some(s => (specToProduct[s] ?? []).some(ps => productSlugs.includes(ps)))
       )
       if (relevantPartners.length > 0) {
-        partnerResearch += '\n\n**Other Certified Partners for These Products:**\n' +
-          relevantPartners.slice(0, 5).map(p => `- ${p.name}: ${p.specializations.join(', ')}`).join('\n')
+        const partnerRows = relevantPartners.slice(0, 8).map(p => {
+          const link = p.catalogUrl ? `[Catalog](${p.catalogUrl})` : (p.sourceUrl ? `[Profile](${p.sourceUrl})` : '—')
+          return `| ${p.name} | ${p.specializations.join(', ')} | ${p.country || p.geo || '—'} | ${link} |`
+        }).join('\n')
+        partnerResearch += `\n\n**Other Certified Partners for These Products:**\n| Partner | Specializations | Region | Link |\n|---|---|---|---|\n${partnerRows}`
       }
     } else {
       // Unknown partner — single Gemini grounding search for the company
