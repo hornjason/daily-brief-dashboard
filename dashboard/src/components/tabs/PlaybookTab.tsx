@@ -245,32 +245,90 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
     }
   }
 
-  // Render section content
+  // Render bold markdown: **text** → <strong>text</strong>
+  const renderInlineMarkdown = (text: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g)
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="text-text-primary font-semibold">{part.slice(2, -2)}</strong>
+      }
+      return <span key={i}>{part}</span>
+    })
+  }
+
+  // Render section content with markdown support (bullets, tables, headers, bold)
   const renderSection = (title: string, content: string) => {
-    return (
-      <div className="prose prose-sm max-w-none text-text-primary">
-        {content.split('\n').map((line: string, i: number) => {
-          if (!line.trim()) return null
+    const lines = content.split('\n')
 
-          // Handle markdown lists
-          if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-            return (
-              <div key={i} className="flex gap-2 mb-2">
-                <span className="text-accent mt-0.5 shrink-0">·</span>
-                <span>{line.trim().replace(/^[-*]\s*/, '')}</span>
-              </div>
-            )
-          }
+    // Detect markdown table blocks
+    const elements: React.ReactNode[] = []
+    let i = 0
+    while (i < lines.length) {
+      const line = lines[i].trim()
+      if (!line) { i++; continue }
 
-          // Handle headers
-          if (line.trim().startsWith('### ')) {
-            return <h4 key={i} className="text-sm font-semibold mt-4 mb-2">{line.replace(/^###\s*/, '')}</h4>
-          }
+      // Detect table: line starts with | and next line is separator |---|
+      if (line.startsWith('|') && i + 1 < lines.length && /^\|[\s-|]+\|$/.test(lines[i + 1]?.trim())) {
+        // Collect all table lines
+        const tableLines: string[] = []
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          tableLines.push(lines[i].trim())
+          i++
+        }
+        // Parse header + separator + rows
+        const headerCells = tableLines[0].split('|').filter(c => c.trim()).map(c => c.trim())
+        const dataRows = tableLines.slice(2).map(row => row.split('|').filter(c => c.trim()).map(c => c.trim()))
 
-          return <p key={i} className="mb-2">{line}</p>
-        })}
-      </div>
-    )
+        elements.push(
+          <div key={`table-${i}`} className="overflow-x-auto mb-4">
+            <table className="w-full text-sm border border-border-primary rounded">
+              <thead>
+                <tr className="bg-surface-secondary">
+                  {headerCells.map((cell, ci) => (
+                    <th key={ci} className="px-3 py-2 text-left text-xs font-semibold text-text-secondary border-b border-border-primary">{renderInlineMarkdown(cell)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dataRows.map((row, ri) => (
+                  <tr key={ri} className="border-b border-border-primary last:border-0">
+                    {row.map((cell, ci) => (
+                      <td key={ci} className="px-3 py-2 text-text-primary">{renderInlineMarkdown(cell)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+        continue
+      }
+
+      // Handle markdown lists
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        elements.push(
+          <div key={i} className="flex gap-2 mb-2">
+            <span className="text-accent mt-0.5 shrink-0">·</span>
+            <span className="text-text-primary">{renderInlineMarkdown(line.replace(/^[-*]\s*/, ''))}</span>
+          </div>
+        )
+        i++
+        continue
+      }
+
+      // Handle headers
+      if (line.startsWith('### ')) {
+        elements.push(<h4 key={i} className="text-sm font-semibold mt-4 mb-2 text-text-primary">{line.replace(/^###\s*/, '')}</h4>)
+        i++
+        continue
+      }
+
+      // Regular text
+      elements.push(<p key={i} className="mb-2 text-text-primary">{renderInlineMarkdown(line)}</p>)
+      i++
+    }
+
+    return <div className="prose prose-sm max-w-none">{elements}</div>
   }
 
   // Loading state

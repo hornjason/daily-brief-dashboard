@@ -213,25 +213,33 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
     ? expansionOpps.recommendations.map(r => `- ${r.product} (${r.confidence}): ${r.why}`).join('\n')
     : ''
 
-  const systemPrompt = `You are a strategic account intelligence analyst for Red Hat. Generate a Customer Engagement Playbook for the specified customer. Your output must be structured JSON matching the schema provided.
+  const systemPrompt = `You are a strategic account intelligence analyst for Red Hat. Generate a Customer Engagement Playbook. Output structured JSON matching the schema.
 
-The playbook has 6 narrative sections you must generate:
-1. strategicPosition — High-level strategic assessment of the customer relationship (200+ chars)
-2. keyRelationships — Key contacts, decision makers, and relationship dynamics
-3. currentPriorities — What the customer is focused on right now
-4. productAlignment — Per-product assessment with use case and confidence level (HIGH/MEDIUM/LOW)
-5. expansionOpportunities — Where Red Hat can grow the footprint
-6. renewalsAndRisk — Renewal timeline, risk factors, and retention strategy
+FORMAT RULES (critical — the playbook must be scannable in 30 seconds):
+- Use bullet points (- ), NEVER dense paragraphs
+- Each bullet: one fact, one insight, or one action. Max 2 sentences per bullet.
+- 4-6 bullets per section, not walls of text
+- Bold key terms: **RHEL**, **Ansible**, **OpenShift**, company names, metrics
+- For keyRelationships: use markdown table format: "| Name | Role | Focus Area |\\n|---|---|---|\\n| Person | Title | What they care about |"
+- For renewalsAndRisk: lead with dates and urgency, then risk factors as bullets
+
+The playbook has 6 narrative sections:
+1. strategicPosition — 4-6 bullets: why this customer matters, where Red Hat fits, key opportunity
+2. keyRelationships — Markdown TABLE of key contacts (customer + partner + Red Hat team) with Name | Role | Focus Area columns
+3. currentPriorities — 4-6 bullets: what the customer is working on NOW, each citing a specific signal or data point
+4. productAlignment — Per-product: 1-2 sentence use case tied to a specific customer initiative
+5. expansionOpportunities — 3-5 bullets: products they don't have but should, each with the signal that suggests it
+6. renewalsAndRisk — Lead with renewal dates (bold if within 90 days), then 3-4 risk factor bullets
 
 Sections 5 (openActionItems) and 6 (engagementHistory) are NOT generated — they start empty.
 
-For productAlignment, generate one entry per product with:
+For productAlignment entries:
 - productSlug: the product identifier
 - displayName: human-readable product name
 - confidence: HIGH, MEDIUM, or LOW based on evidence strength
-- useCase: 1-2 sentence description of how the customer uses or should use this product
+- useCase: 1-2 sentences tying the product to a SPECIFIC customer initiative (not generic value props)
 
-Be specific, evidence-based, and actionable. Reference actual data from the customer's signals, subscriptions, and cases. Do not fabricate data points.`
+Be specific and evidence-based. Cite actual data: subscription quantities, case numbers, renewal dates, industry trends. Never fabricate.`
 
   const userPrompt = `Generate the Customer Engagement Playbook for: ${customer.name}
 
