@@ -72,6 +72,7 @@ import './src/modules/docs-module.ts'  // #274
 import './src/modules/intelligence-module.ts'  // #274
 import './src/modules/customer-product-intel-module.ts'  // #274
 import './src/modules/account-plan-module.ts'  // #274
+import './src/modules/playbook-module.ts'  // #299
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────
@@ -84,6 +85,8 @@ import { createBatchRouter } from './src/batch-routes.ts'
 import { createNewsRouter } from './src/news-routes.ts'
 // ── GitHub #200: Intelligence surfaces routes ───────────────────────────
 import { createIntelligenceRouter } from './src/intelligence-routes.ts'
+// ── GitHub #293: Playbook routes ────────────────────────────────────────
+import { createPlaybookRouter } from './src/playbook-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -308,6 +311,8 @@ app.route('/', createBatchRouter())
 app.route('/', createMeetingPrepRouter())
 // ── GitHub #200: Intelligence surfaces routes ───────────────────────────────
 app.route('/', createIntelligenceRouter())
+// ── GitHub #293: Playbook routes ────────────────────────────────────────────
+app.route('/', createPlaybookRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
