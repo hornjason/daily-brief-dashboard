@@ -11,7 +11,7 @@ updated: 2026-05-17
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-18 — Quality gate (ADR-024) + meeting prep enrichment (ADR-025, #290). Four enrichment tables injected after Gemini sections 4-7: Product Alignment with confidence + proof points, Summit announcements, enhanced lifecycle with key changes + customer angle, RSS/blog intelligence with real URLs. Hybrid inline pattern: Gemini narrative + deterministic reference data.
+Last updated: 2026-05-18 — Customer Engagement Playbook (ADR-026, #291): persistent per-customer intelligence with 8 sections, meeting note ingestion, derived meeting prep, publish to Drive, action item tracking. Plus quality gate (ADR-024), meeting prep enrichment (ADR-025), hybrid inline pattern.
 
 ---
 

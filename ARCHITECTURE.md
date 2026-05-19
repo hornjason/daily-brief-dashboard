@@ -1451,3 +1451,47 @@ Enrichment tables are additive — they cannot cause a previously-passing qualit
 ### Key constraint
 
 This module does NOT modify `callGemini()` or any transport-level code. `callGemini()` handles HTTP retry (429s), cost tracking, and delta caching. The quality gate handles business-logic validation. Separate concerns.
+
+## §22. Customer Engagement Playbook (ADR-026, 2026-05-18)
+
+Persistent, per-customer intelligence that accumulates over time. Replaces throwaway meeting prep with a living document. Meeting prep becomes a derived view.
+
+### Playbook state
+
+`data/cache/playbooks/{customer-slug}.json` — single JSON file per customer with 8 sections:
+
+| Section | Source | Gemini vs Deterministic |
+|---------|--------|------------------------|
+| 1. Strategic Position | Intelligence, account plan, meeting notes | Gemini narrative |
+| 2. Key Relationships | Account team, meeting attendees, partners | Gemini + deterministic team data |
+| 3. Current Priorities | Intelligence, meeting notes (freshest wins) | Gemini narrative |
+| 4. Product Alignment | Value maps, subscriptions, product radar, lifecycle | Gemini use cases + deterministic proof points, links |
+| 5. Open Action Items | Extracted from meeting notes | Structured data (tracked persistently) |
+| 6. Engagement History | Meeting notes summaries, campaigns | Append-only structured log |
+| 7. Expansion Opportunities | Expansion analysis, feature radar | Gemini narrative |
+| 8. Renewals & Risk | Subscriptions, open cases | Gemini wrapping deterministic data |
+
+### Meeting note ingestion
+
+`POST /api/customer/:name/playbook/ingest-notes` with `{ docUrl: string }`. Reads Google Doc via Drive API, Gemini full-state merge (current playbook + new notes → updated playbook). Extracts action items, adds engagement history entry.
+
+### Derived meeting prep
+
+When a playbook exists, `meeting-prep-routes.ts` reads from it (filtered for attendees) with a shorter Gemini prompt. Falls back to existing flow when no playbook exists. Gate: `if (readPlaybook(slug)) { derived } else { existing }`.
+
+### Feature module
+
+Registered as `playbook` in Feature Module Registry (ADR-020). Contributes action items and engagement entries to universal signal stack. **Must declare `accountTab`** for the tab to appear on the customer detail page — tabs are dynamically loaded from `/api/feature-modules/nav`.
+
+### API surface
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/customer/:name/playbook` | Read playbook state |
+| POST | `/api/customer/:name/playbook/generate` | Generate from data sources |
+| POST | `/api/customer/:name/playbook/ingest-notes` | Merge meeting notes |
+| POST | `/api/customer/:name/playbook/publish` | Google Doc snapshot |
+| PATCH | `/api/customer/:name/playbook/action-items/:id` | Toggle action item |
+| GET | `/api/customer/:name/playbook/history` | Ingestion provenance |
+| POST | `/api/playbook/generate-all` | Batch generate |
+| GET | `/api/playbook/generate-all/status` | Batch progress |
