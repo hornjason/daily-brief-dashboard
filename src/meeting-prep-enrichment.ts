@@ -103,29 +103,41 @@ export function extractProductProofPoints(slug: string, sectionText: string | nu
     const fullText = readFileSync(VALUE_MAP_PATH_ENV, 'utf-8')
 
     const productNames: Record<string, string[]> = {
-      'aap': ['ansible', 'ansible automation platform'],
-      'rhel': ['rhel', 'enterprise linux'],
-      'ocp': ['openshift', 'openshift container platform'],
-      'rhoai': ['openshift ai', 'red hat ai'],
+      'aap': ['ansible', 'ansible automation platform', 'automate the enterprise'],
+      'rhel': ['rhel', 'enterprise linux', 'rhel in the cloud', 'aap for rhel', 'standardization and automation', 'downtime', 'infrastructure', 'security fte', 'compliance fte'],
+      'ocp': ['openshift', 'openshift container platform', 'container platform'],
+      'rhoai': ['openshift ai', 'red hat ai', 'enterprise linux ai'],
       'acs': ['advanced cluster security'],
       'acm': ['advanced cluster management'],
     }
     const names = productNames[slug] ?? [slug]
 
+    // Find sections that mention this product and extract metrics from them
     const lines = fullText.split('\n')
-    const relevantLines: string[] = []
+    const relevantChunks: string[] = []
+
+    // Strategy: find Value Map headers containing product name, then grab full section
     for (let i = 0; i < lines.length; i++) {
       const lower = lines[i].toLowerCase()
-      if (names.some(n => lower.includes(n)) || /\d+%/.test(lines[i])) {
-        const context = lines.slice(Math.max(0, i - 2), Math.min(lines.length, i + 3)).join('\n')
+      const isHeader = lower.includes('value map') || lower.includes('business value') || lower.includes('source: idc') || lower.includes('source: forrester')
+      if (isHeader && names.some(n => lower.includes(n))) {
+        // Grab a wide window (50 lines) after product-related headers
+        relevantChunks.push(lines.slice(i, Math.min(lines.length, i + 50)).join('\n'))
+      }
+    }
+
+    // Also scan for percentage lines near product mentions (wider window: 15 lines)
+    for (let i = 0; i < lines.length; i++) {
+      if (/\d+%/.test(lines[i])) {
+        const context = lines.slice(Math.max(0, i - 15), Math.min(lines.length, i + 5)).join('\n')
         if (names.some(n => context.toLowerCase().includes(n))) {
-          relevantLines.push(lines[i])
+          relevantChunks.push(lines[i])
         }
       }
     }
 
-    if (relevantLines.length > 0) {
-      const combined = relevantLines.join('\n')
+    if (relevantChunks.length > 0) {
+      const combined = relevantChunks.join('\n')
       const metrics = extractProofPoints(combined)
       if (metrics.length >= 2) return metrics
     }
@@ -171,6 +183,16 @@ function findSubscription(rows: ProductSubscription[], slug: string): ProductSub
 /** Escape pipe characters in table cell content */
 function escapeCell(text: string): string {
   return text.replace(/\|/g, '\\|').replace(/\n/g, ' ')
+}
+
+/** Truncate at sentence boundary, fallback to word boundary */
+function truncateAtSentence(text: string, maxLen: number): string {
+  if (!text || text.length <= maxLen) return text || '—'
+  const truncated = text.slice(0, maxLen)
+  const lastPeriod = truncated.lastIndexOf('.')
+  if (lastPeriod > maxLen * 0.5) return truncated.slice(0, lastPeriod + 1)
+  const lastSpace = truncated.lastIndexOf(' ')
+  return lastSpace > 0 ? truncated.slice(0, lastSpace) + '...' : truncated + '...'
 }
 
 // ── Builder 1: Product Alignment Table (Section 4) ──────────────────────────
@@ -231,13 +253,19 @@ export function buildProductAlignmentTable(
         : `${slug.toUpperCase()} deployment`
 
     // --- Summit/recent news ---
-    const recentSummary = productSummaries.find(
-      p => p.slug === slug && p.gaDate && isWithinDays(p.gaDate, 30, now)
-    )
+    const summary = productSummaries.find(p => p.slug === slug)
+    const recentDate = summary?.gaDate ?? summary?.refreshedAt ?? summary?.synthesizedAt
     let newsCell = '—'
-    if (recentSummary) {
-      const bullet = recentSummary.summaryBullets?.[0] ?? recentSummary.summaryText?.slice(0, 60)
-      newsCell = `**${recentSummary.shortName ?? recentSummary.displayName} ${recentSummary.currentVersion} GA** — ${escapeCell(bullet)}`
+    if (summary && summary.summaryBullets?.length) {
+      const bullet = summary.summaryBullets[0].slice(0, 80)
+      const version = summary.currentVersion ?? ''
+      const name = summary.shortName ?? summary.displayName
+      const isRecent = recentDate && isWithinDays(recentDate, 30, now)
+      if (isRecent) {
+        newsCell = `**${name} ${version}** — ${escapeCell(bullet)}`
+      } else {
+        newsCell = `${name} ${version} — ${escapeCell(bullet)}`
+      }
     }
 
     rows.push(`| ${escapeCell(slug.toUpperCase())} | ${useCase} | ${confidence} | ${escapeCell(proofCell)} | ${newsCell} |`)
@@ -269,17 +297,19 @@ export function buildSummitAnnouncementsTable(
   // Product summaries within 30 days
   for (const ps of productSummaries) {
     if (!productSlugs.includes(ps.slug)) continue
-    if (!ps.gaDate || !isWithinDays(ps.gaDate, 30, now)) continue
+    const dateStr = ps.gaDate ?? ps.refreshedAt ?? ps.synthesizedAt
+    if (!dateStr || !isWithinDays(dateStr, 30, now)) continue
 
-    const age = daysBetween(ps.gaDate, now)
+    const age = daysBetween(dateStr, now)
     const recency = age <= 7 ? ` (${age} days old)` : ''
-    const bullets = (ps.summaryBullets ?? []).slice(0, 2).join(', ')
+    const bullets = (ps.summaryBullets ?? []).slice(0, 2).map(b => b.slice(0, 60)).join('; ')
+    const label = ps.gaDate ? 'GA' : 'Latest'
     items.push({
-      announcement: `${ps.displayName} ${ps.currentVersion} GA`,
+      announcement: `${ps.displayName} ${ps.currentVersion} ${label}`,
       whatsNew: bullets || ps.summaryText?.slice(0, 80) || '—',
-      released: `${new Date(ps.gaDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${recency}`,
-      whyMatters: ps.summaryBullets?.[0] ?? '—',
-      sortDate: new Date(ps.gaDate).getTime(),
+      released: `${new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${recency}`,
+      whyMatters: ps.summaryBullets?.[0]?.slice(0, 60) ?? '—',
+      sortDate: new Date(dateStr).getTime(),
     })
   }
 
@@ -293,7 +323,7 @@ export function buildSummitAnnouncementsTable(
     const recency = age <= 7 ? ` (${age} days old)` : ''
     items.push({
       announcement: item.title,
-      whatsNew: item.description?.slice(0, 80) || '—',
+      whatsNew: truncateAtSentence(item.description ?? '', 80),
       released: `${new Date(item.pubDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${recency}`,
       whyMatters: `Source: ${item.source}`,
       sortDate: new Date(item.pubDate).getTime(),
@@ -361,21 +391,23 @@ export function buildEnhancedLifecycleTable(
         if (!keyChanges.includes(b)) keyChanges.push(b)
       }
     }
-    const keyChangesStr = keyChanges.slice(0, MAX_KEY_CHANGES).join(', ') || '—'
+    // Truncate each key change to keep table readable
+    const keyChangesStr = keyChanges.slice(0, MAX_KEY_CHANGES).map(c => c.slice(0, 60).replace(/,\s*$/, '')).join('; ') || '—'
 
     // Customer Angle: template from subscription data
-    let customerAngle = `Benefits from ${keyChanges[0] ?? 'latest updates'}`
+    const shortChange = (keyChanges[0] ?? 'latest updates').slice(0, 50).replace(/,\s*$/, '')
+    let customerAngle = `Benefits from ${shortChange}`
     if (sheetCache) {
       const sub = findSubscription(sheetCache.rows, lc.slug)
       if (sub && sub.quantity > 0) {
         const unit = sub.productDescription?.toLowerCase().includes('node')
-          ? 'nodes'
+          ? (sub.quantity === 1 ? 'node' : 'nodes')
           : sub.productDescription?.toLowerCase().includes('host')
-          ? 'hosts'
+          ? (sub.quantity === 1 ? 'host' : 'hosts')
           : sub.productDescription?.toLowerCase().includes('core')
-          ? 'cores'
-          : 'units'
-        customerAngle = `Your ${sub.quantity} ${unit} benefits from ${keyChanges[0] ?? 'latest updates'}`
+          ? (sub.quantity === 1 ? 'core' : 'cores')
+          : (sub.quantity === 1 ? 'unit' : 'units')
+        customerAngle = `Your ${sub.quantity} ${unit} — ${shortChange}`
       }
     }
 
