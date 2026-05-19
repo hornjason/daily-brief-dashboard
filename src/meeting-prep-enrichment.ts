@@ -223,12 +223,16 @@ export function buildProductAlignmentTable(
     const intel = getIntelFn ? getIntelFn(slug, customerSlug) : null
     const hasSubscription = sheetCache ? !!findSubscription(sheetCache.rows, slug) : false
 
+    // --- Proof points (scan full file for IDC/Forrester metrics) ---
+    const proofPoints = extractProductProofPoints(slug, valueMapText)
+    const hasRealMetrics = proofPoints.length >= 2
+
     // --- Confidence scoring (deterministic per ADR-025) ---
     let confidence: 'HIGH' | 'MEDIUM' | 'LOW'
     const relevanceHigh = intel && intel.relevanceScore === 'HIGH'
     const relevanceMedium = intel && intel.relevanceScore === 'MEDIUM'
 
-    if (hasSubscription && relevanceHigh && valueMapText) {
+    if (hasSubscription && (relevanceHigh || hasRealMetrics)) {
       confidence = 'HIGH'
     } else if (hasSubscription || relevanceMedium) {
       confidence = 'MEDIUM'
@@ -236,8 +240,6 @@ export function buildProductAlignmentTable(
       confidence = 'LOW'
     }
 
-    // --- Proof points (scan full file for IDC/Forrester metrics) ---
-    const proofPoints = extractProductProofPoints(slug, valueMapText)
     const proofCell = proofPoints.length >= 2
       ? proofPoints.join(', ')
       : 'See value map documentation'
@@ -245,7 +247,7 @@ export function buildProductAlignmentTable(
     // --- Use case (from intelligence or subscription) ---
     const sub = sheetCache ? findSubscription(sheetCache.rows, slug) : undefined
     const intelAction = intel?.priorityAction && intel.priorityAction !== 'Analysis unavailable' ? intel.priorityAction : ''
-    const subQty = sub?.quantity ? `${sub.quantity} units` : ''
+    const subQty = sub?.quantity ? `${sub.quantity} ${sub.quantity === 1 ? 'unit' : 'units'}` : ''
     const useCase = intelAction
       ? escapeCell(intelAction.slice(0, 80))
       : sub?.productDescription
