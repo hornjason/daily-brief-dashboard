@@ -608,10 +608,22 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
                     {product.proofPoints && (
                       <div>
                         <span className="font-medium text-text-primary">Proof Points:</span>
-                        <div className="text-text-secondary mt-1 prose prose-sm max-w-none">
-                          {product.proofPoints.split('\n').map((line: string, i: number) => (
-                            line.trim() && <p key={i} className="mb-1">{line}</p>
-                          ))}
+                        <div className="mt-2 space-y-1.5">
+                          {product.proofPoints.split(/[|]/).map((point: string, i: number) => {
+                            const trimmed = point.trim()
+                            if (!trimmed) return null
+                            const pctMatch = trimmed.match(/^(\d+%)/)
+                            return (
+                              <div key={i} className="flex items-start gap-2 text-sm">
+                                {pctMatch ? (
+                                  <span className="shrink-0 px-2 py-0.5 rounded bg-accent/15 text-accent font-semibold text-xs">{pctMatch[1]}</span>
+                                ) : (
+                                  <span className="shrink-0 text-accent mt-0.5">·</span>
+                                )}
+                                <span className="text-text-secondary">{pctMatch ? trimmed.slice(pctMatch[1].length).trim() : trimmed}</span>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )}

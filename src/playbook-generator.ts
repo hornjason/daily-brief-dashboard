@@ -502,9 +502,7 @@ export async function ingestMeetingNotes(
 Return structured JSON with:
 - updatedSections: object with keys for each narrative section that changed (strategicPosition, keyRelationships, currentPriorities, expansionOpportunities, renewalsAndRisk). Only include sections that the notes actually update. The value is the full updated text for that section (merge existing + new information).
 - newActionItems: array of { text, owner } for any commitments, follow-ups, or deadlines mentioned in the notes.
-- engagementSummary: 1-2 sentence summary of this meeting/interaction.
-- meetingDate: ISO date string (YYYY-MM-DD) for when this meeting occurred, or today if unclear.
-- attendees: array of attendee names mentioned in the notes.
+- engagements: array of meetings found in the notes. Each entry: { summary: "1-2 sentence summary", meetingDate: "YYYY-MM-DD", attendees: ["name1", "name2"] }. If the document contains notes from MULTIPLE meetings, create a SEPARATE entry for each meeting with its own date and attendees. Do NOT combine multiple meetings into one entry.
 - sectionsUpdated: array of section keys that were updated.`
 
   const currentSections: Record<string, string> = {
@@ -551,12 +549,21 @@ For engagement history: add a summary entry for this meeting.`
           required: ['text', 'owner'],
         },
       },
-      engagementSummary: { type: 'STRING' },
-      meetingDate: { type: 'STRING' },
-      attendees: { type: 'ARRAY', items: { type: 'STRING' } },
+      engagements: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            summary: { type: 'STRING' },
+            meetingDate: { type: 'STRING' },
+            attendees: { type: 'ARRAY', items: { type: 'STRING' } },
+          },
+          required: ['summary', 'meetingDate', 'attendees'],
+        },
+      },
       sectionsUpdated: { type: 'ARRAY', items: { type: 'STRING' } },
     },
-    required: ['updatedSections', 'newActionItems', 'engagementSummary', 'meetingDate', 'attendees', 'sectionsUpdated'],
+    required: ['updatedSections', 'newActionItems', 'engagements', 'sectionsUpdated'],
   }
 
   // ── Call Gemini ──────────────────────────────────────────────────────
@@ -573,9 +580,7 @@ For engagement history: add a summary entry for this meeting.`
   let geminiData: {
     updatedSections: Record<string, string>
     newActionItems: Array<{ text: string; owner: string }>
-    engagementSummary: string
-    meetingDate: string
-    attendees: string[]
+    engagements: Array<{ summary: string; meetingDate: string; attendees: string[] }>
     sectionsUpdated: string[]
   }
 
@@ -628,16 +633,28 @@ For engagement history: add a summary entry for this meeting.`
 
   // ── 3. Add engagement history entry (newest first) ──────────────────
 
-  const newEntry: EngagementEntry = {
-    date: geminiData.meetingDate || now.slice(0, 10),
-    type: 'meeting',
-    summary: geminiData.engagementSummary,
+  // Handle multiple meetings from a single doc
+  const newEntries: EngagementEntry[] = (geminiData.engagements ?? []).map(eng => ({
+    date: eng.meetingDate || now.slice(0, 10),
+    type: 'meeting' as const,
+    summary: eng.summary,
     sourceNoteId: docId,
-    attendees: geminiData.attendees ?? [],
+    attendees: eng.attendees ?? [],
+  }))
+
+  // Fallback: if no engagements array (legacy response), create single entry
+  if (newEntries.length === 0) {
+    newEntries.push({
+      date: now.slice(0, 10),
+      type: 'meeting',
+      summary: 'Meeting notes ingested',
+      sourceNoteId: docId,
+      attendees: [],
+    })
   }
 
   updatedPlaybook.sections.engagementHistory = {
-    entries: [newEntry, ...existing.sections.engagementHistory.entries],
+    entries: [...newEntries, ...existing.sections.engagementHistory.entries],
     updatedAt: now,
   }
 

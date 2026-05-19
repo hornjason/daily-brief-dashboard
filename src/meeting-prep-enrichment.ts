@@ -67,6 +67,18 @@ const MAX_KEY_CHANGES = 3
  * Parse value map text for quantified metrics: percentages, dollar amounts,
  * and analyst citations (Forrester, IDC, Gartner, ESG).
  */
+function humanizeProofPoint(pct: string, rawLabel: string, source: string): string {
+  const label = rawLabel.toLowerCase()
+  if (label.includes('downtime')) return `${pct} reduction in unplanned downtime${source}`
+  if (label.includes('meantime') || label.includes('mttr') || label.includes('resolution')) return `${pct} faster mean time to resolution${source}`
+  if (label.includes('productivity') || label.includes('fte')) return `${pct} improvement in ${label.replace(/fte/i, 'staff').trim()}${source}`
+  if (label.includes('provisioning') || label.includes('deploy')) return `${pct} faster ${label.trim()}${source}`
+  if (label.includes('security') || label.includes('compliance')) return `${pct} improvement in ${label.trim()}${source}`
+  if (label.includes('saving') || label.includes('cost') || label.includes('reduction')) return `${pct} ${label.trim()}${source}`
+  if (label.includes('faster') || label.includes('new')) return `${pct} ${label.trim()}${source}`
+  return `${pct} improvement in ${label.trim()}${source}`
+}
+
 export function extractProofPoints(valueMapText: string): string[] {
   const metrics: string[] = []
   const lines = valueMapText.split('\n')
@@ -86,11 +98,13 @@ export function extractProofPoints(valueMapText: string): string[] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
 
-    // Match percentage metrics: "58% Unplanned Downtime"
+    // Match percentage metrics: "58% Unplanned Downtime" → human-readable sentence
     const pctMatch = line.match(/^(\d+%)\s+([\w\s]{3,40}?)$/m)
     if (pctMatch) {
       const source = findNearbySource(i)
-      const metric = `${pctMatch[1]} ${pctMatch[2].trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}${source}`
+      const pct = pctMatch[1]
+      const rawLabel = pctMatch[2].trim()
+      const metric = humanizeProofPoint(pct, rawLabel, source)
       if (!metrics.includes(metric)) metrics.push(metric)
       if (metrics.length >= MAX_PROOF_POINTS) break
     }
