@@ -41,6 +41,7 @@ import { runIntelligencePipeline, getJobStatus } from './account-intelligence.ts
 import { readCCSPCache } from './cache-layer.ts'
 import { generateMeetingPrepHTML } from './meeting-prep-html-template.ts'
 import { buildProductAlignmentTable, buildSummitAnnouncementsTable, buildEnhancedLifecycleTable, buildRSSIntelligenceTable } from './meeting-prep-enrichment.ts'
+import { readPlaybook } from './playbook-generator.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -821,33 +822,232 @@ Also note other certified partners that could help. Skip individual attendee pro
 |---|---|---|
 [Specific team member names. Pre/during/post meeting. Include "share X blog post with Y" items from news section.]`
 
-  const geminiResult = await callGemini(systemPrompt, userPrompt, {
-    callType: 'meeting-prep-synthesis',
-    customerName: customer.name,
-    model: 'full',
-    timeoutMs: 120_000,
-  })
+  // ── Step 4: Check for existing playbook (ADR-026 derived view) ──────────
+  const playbook = readPlaybook(slug)
+  let prepContent: string
+  let qualityScorecard: QualityScorecard | undefined
 
-  // Quality gate (ADR-024) — validate and retry if below threshold
-  const gateResult = await validateAndRetry(
-    geminiResult.text,
-    { validator: meetingPrepValidator },
-    async (failures) => {
-      const feedback = formatFailureFeedback(failures)
-      const retryResult = await callGemini(
-        systemPrompt,
-        userPrompt + '\n\n' + feedback,
-        {
-          callType: 'meeting-prep-synthesis',
-          customerName: customer.name,
-          model: 'full',
-          timeoutMs: 120_000,
-        }
-      )
-      return retryResult.text
-    }
-  )
-  let prepContent = gateResult.output
+  if (playbook) {
+    console.log(`[meeting-prep] Found playbook for ${customer.name} — generating derived meeting prep`)
+
+    // Build attendee filter: match against key relationships and team members
+    const attendeeNames = meeting.attendees
+      .map(email => getAttendeeDisplayName(meeting, email))
+      .filter(n => !n.endsWith('@redhat.com'))
+
+    // Extract relevant playbook sections
+    const strategicPosition = playbook.sections.strategicPosition.content
+    const currentPriorities = playbook.sections.currentPriorities.content
+    const expansionOpps = playbook.sections.expansionOpportunities.content
+    const renewalsRisk = playbook.sections.renewalsAndRisk.content
+
+    // Filter key relationships by attendees in this meeting
+    const keyRelationships = playbook.sections.keyRelationships.content
+      .split('\n')
+      .filter(line => {
+        const lowerLine = line.toLowerCase()
+        return attendeeNames.some(name => lowerLine.includes(name.toLowerCase()))
+      })
+      .join('\n')
+
+    // Filter product alignment to products in focus
+    const relevantProducts = playbook.sections.productAlignment.products
+      .filter(p => productSlugs.length === 0 || productSlugs.includes(p.productSlug))
+      .map(p => `**${p.displayName}**\n- Use Case: ${p.useCase}\n- Proof Points: ${p.proofPoints}\n- What's New: ${p.whatsNew}\n- Lifecycle: ${p.lifecycle}\n${p.featureTalkingPoints ? `- Feature Highlights: ${p.featureTalkingPoints}` : ''}`)
+      .join('\n\n')
+
+    // Get recent engagement history (last 5 entries)
+    const recentEngagement = playbook.sections.engagementHistory.entries
+      .slice(0, 5)
+      .map(e => `- ${e.date}: ${e.summary}${e.attendees.length ? ` (${e.attendees.join(', ')})` : ''}`)
+      .join('\n')
+
+    // Filter open action items to those relevant for this meeting
+    const openActions = playbook.sections.openActionItems.items
+      .filter(item => item.status === 'open')
+      .map(item => `- ${item.text} (Owner: ${item.owner})`)
+      .join('\n')
+
+    // Build shorter, focused Gemini prompt using playbook intelligence
+    const derivedSystemPrompt = `You are generating a focused Red Hat sales meeting prep document using existing playbook intelligence. The playbook has already synthesized customer context — your job is to craft a meeting-specific narrative that guides the account team through THIS specific meeting.
+
+RULES:
+- Use the playbook's strategic position and priorities as foundation — don't reinvent them
+- Focus discussion questions and talking points on the specific attendees in this meeting
+- Cross-reference product alignment from the playbook against meeting objectives
+- Keep each section to 3-5 lines of meeting-specific guidance
+- Cite specific data from the playbook (case numbers, renewal dates, product versions)
+- ALL data sections use markdown tables with | delimiters and |---| separator rows`
+
+    const derivedUserPrompt = `Generate a focused meeting prep for this specific meeting using the existing customer playbook:
+
+## Meeting Details
+- Customer: ${customer.name}
+- Meeting: ${meeting.meetingTitle}
+- Date: ${dateStr}
+- Attendees: ${attendeeNames.join(', ') || 'Not specified'}
+${meeting.context?.objective ? `\n## MEETING OBJECTIVE\n${meeting.context.objective}\n` : ''}
+${meeting.context?.notes ? `\n## ADDITIONAL CONTEXT\n${meeting.context.notes}\n` : ''}
+
+## From Customer Playbook
+
+### Strategic Position (established intelligence)
+${strategicPosition}
+
+### Current Priorities (from playbook)
+${currentPriorities}
+
+### Key Relationships (filtered to meeting attendees)
+${keyRelationships || 'No key relationships match this meeting\'s attendees'}
+
+### Product Alignment (products in focus for this meeting)
+${relevantProducts || 'No product alignment data for meeting focus products'}
+
+### Recent Engagement History
+${recentEngagement || 'No recent engagement history'}
+
+### Open Action Items (relevant to this meeting)
+${openActions || 'No open action items'}
+
+### Expansion Opportunities (from playbook)
+${expansionOpps}
+
+### Renewals & Risk (from playbook)
+${renewalsRisk}
+
+## Additional Context for This Meeting
+
+### Meeting Attendees (full research)
+${attendeeResearch || 'No attendee research available'}
+
+### Open Support Cases
+${caseSummary}
+
+### Recent Product News
+${rssContext || 'No recent news available'}
+
+---
+
+Generate the document with these EXACT 10 sections, drawing from the playbook context above:
+
+# Meeting Prep: ${customer.name} — ${meeting.meetingTitle}
+**${dateStr}** | Prepared for: ${accountTeam.find(m => m.role === 'ae')?.name || accountTeam[0]?.name || 'Account Team'}
+
+### 1. Meeting Objective
+[Restate the meeting purpose in context of the playbook's strategic position. 2-3 lines max.]
+
+### 2. ${detectedPartners.length > 0 ? 'Partner Context' : 'Meeting Attendees'}
+${detectedPartners.length > 0
+  ? `[For the partner(s) in this meeting, show:
+| Partner | Specialization | Role with ${customer.name} | Recommended Focus |
+|---|---|---|---|
+Also note other certified partners that could help. Skip individual attendee profiles.]`
+  : `[Customer attendees table:
+| Name & Title | Background | Key Signals | Engagement Angle |
+|---|---|---|---|]`}
+
+### 3. Customer Snapshot
+[Pull 3-5 key points from the playbook's strategic position and current priorities. Be specific.]
+
+### 4. Why Red Hat
+[Use product alignment from playbook. Cross-reference against customer goals:]
+| Customer Goal | Red Hat Solution | Business Impact | Proof Point |
+|---|---|---|---|
+[Minimum 3 rows, maximum 6. Every row cites playbook data.]
+
+### 5. What's New
+[From playbook product alignment "What's New" + recent product news. ONLY subscribed products.]
+| Product | Announcement | Why It Matters for ${customer.name} |
+|---|---|---|
+
+### 6. Product Lifecycle
+[From playbook product alignment lifecycle data]
+| Product | Current | Next Version | Next Expected | EOL Date |
+|---|---|---|---|---|
+
+### 7. Expansion Opportunities
+[From playbook expansion section. Only include if playbook has real signals.]
+| Product | Signal | Business Case | Next Step |
+|---|---|---|
+
+### 8. Discussion Questions
+[Generate 7-10 meeting-specific questions based on attendees + playbook priorities]
+| For | Question | Purpose |
+|---|---|---|
+["For" = specific attendee name. "Purpose" = cite playbook signal or priority. Advance the sale.]
+
+### 9. Open Cases & Renewals
+[From support cases + playbook renewals section]
+| Type | Detail | Status | Action |
+|---|---|---|---|
+
+### 10. Action Items
+[Pre-meeting prep items for the account team, plus any open actions from playbook]
+| Who | Action | When |
+|---|---|---|`
+
+    // Shorter Gemini call — playbook is primary context
+    const geminiResult = await callGemini(derivedSystemPrompt, derivedUserPrompt, {
+      callType: 'meeting-prep-derived-from-playbook',
+      customerName: customer.name,
+      model: 'full',
+      timeoutMs: 90_000, // Shorter timeout — less synthesis needed
+    })
+
+    // Quality gate (ADR-024) — validate and retry if below threshold
+    const gateResult = await validateAndRetry(
+      geminiResult.text,
+      { validator: meetingPrepValidator },
+      async (failures) => {
+        const feedback = formatFailureFeedback(failures)
+        const retryResult = await callGemini(
+          derivedSystemPrompt,
+          derivedUserPrompt + '\n\n' + feedback,
+          {
+            callType: 'meeting-prep-derived-from-playbook',
+            customerName: customer.name,
+            model: 'full',
+            timeoutMs: 90_000,
+          }
+        )
+        return retryResult.text
+      }
+    )
+    prepContent = gateResult.output
+    qualityScorecard = gateResult.scorecard
+  } else {
+    // ── No playbook: existing flow (unchanged) ──────────────────────────────
+    console.log(`[meeting-prep] No playbook for ${customer.name} — using standard generation flow`)
+
+    const geminiResult = await callGemini(systemPrompt, userPrompt, {
+      callType: 'meeting-prep-synthesis',
+      customerName: customer.name,
+      model: 'full',
+      timeoutMs: 120_000,
+    })
+
+    // Quality gate (ADR-024) — validate and retry if below threshold
+    const gateResult = await validateAndRetry(
+      geminiResult.text,
+      { validator: meetingPrepValidator },
+      async (failures) => {
+        const feedback = formatFailureFeedback(failures)
+        const retryResult = await callGemini(
+          systemPrompt,
+          userPrompt + '\n\n' + feedback,
+          {
+            callType: 'meeting-prep-synthesis',
+            customerName: customer.name,
+            model: 'full',
+            timeoutMs: 120_000,
+          }
+        )
+        return retryResult.text
+      }
+    )
+    prepContent = gateResult.output
+    qualityScorecard = gateResult.scorecard
+  }
 
   // Insert deterministic "Other Certified Partners" table after section 2
   // (kept out of Gemini to preserve links and formatting — ADR council hybrid inline)
@@ -964,7 +1164,7 @@ Also note other certified partners that could help. Skip individual attendee pro
   writeJsonAtomic(contentPath, {
     ...entry,
     content: prepContent,
-    qualityScorecard: gateResult.scorecard,
+    qualityScorecard,
   })
 
   return { docUrl, title: docTitle, generatedAt }
