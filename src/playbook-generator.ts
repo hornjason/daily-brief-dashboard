@@ -32,6 +32,8 @@ import type {
   PlaybookState,
   PlaybookSection,
   ProductAlignmentEntry,
+  ActionItem,
+  EngagementEntry,
   SubscriptionSnapshot,
   CaseSnapshot,
   LifecycleSnapshot,
@@ -437,6 +439,201 @@ Generate the 6 narrative sections plus product alignment entries as structured J
   console.log(`[playbook] Playbook generated for ${customer.name}: ${productEntries.length} products, ${subscriptions.length} subscriptions, ${cases.length} cases`)
 
   return playbookState
+}
+
+/**
+ * Ingest meeting notes into an existing playbook via Gemini merge.
+ *
+ * Per ADR-026 section 2: full-state merge in a single Gemini call.
+ * Gemini receives the current playbook sections plus new meeting notes,
+ * returns updated narrative sections + extracted action items.
+ *
+ * Post-Gemini:
+ *   1. Merge updated sections into existing PlaybookState
+ *   2. Add new action items to openActionItems.items
+ *   3. Add engagement entry to engagementHistory.entries (newest first)
+ *   4. Add provenance entry to sources array
+ *   5. Update lastMeetingNoteAt timestamp
+ *   6. Re-inject deterministic data (subscriptions, cases, lifecycle unchanged)
+ *   7. Write updated playbook via writePlaybook()
+ */
+export async function ingestMeetingNotes(
+  existing: PlaybookState,
+  noteContent: string,
+  docUrl: string,
+): Promise<PlaybookState> {
+  const now = new Date().toISOString()
+  const docId = docUrl.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? 'unknown'
+
+  console.log(`[playbook] Ingesting meeting notes for ${existing.customerName} (doc: ${docId})`)
+
+  // ── Build Gemini merge prompt (ADR-026 structured XML) ──────────────
+
+  const systemPrompt = `You are updating a customer engagement playbook with new meeting notes. Merge the notes into the existing playbook, updating relevant sections. Do not lose existing information — add to it. Extract any action items. Update current priorities if the notes reveal new information.
+
+Return structured JSON with:
+- updatedSections: object with keys for each narrative section that changed (strategicPosition, keyRelationships, currentPriorities, expansionOpportunities, renewalsAndRisk). Only include sections that the notes actually update. The value is the full updated text for that section (merge existing + new information).
+- newActionItems: array of { text, owner } for any commitments, follow-ups, or deadlines mentioned in the notes.
+- engagementSummary: 1-2 sentence summary of this meeting/interaction.
+- meetingDate: ISO date string (YYYY-MM-DD) for when this meeting occurred, or today if unclear.
+- attendees: array of attendee names mentioned in the notes.
+- sectionsUpdated: array of section keys that were updated.`
+
+  const currentSections: Record<string, string> = {
+    strategicPosition: existing.sections.strategicPosition.content,
+    keyRelationships: existing.sections.keyRelationships.content,
+    currentPriorities: existing.sections.currentPriorities.content,
+    expansionOpportunities: existing.sections.expansionOpportunities.content,
+    renewalsAndRisk: existing.sections.renewalsAndRisk.content,
+  }
+
+  const userPrompt = `<current-playbook>
+${JSON.stringify(currentSections, null, 2)}
+</current-playbook>
+
+<new-meeting-notes>
+${noteContent}
+</new-meeting-notes>
+
+Update the playbook sections based on these meeting notes. Return the updated sections.
+For action items: extract any commitments, follow-ups, or deadlines from the notes.
+For engagement history: add a summary entry for this meeting.`
+
+  const responseSchema = {
+    type: 'OBJECT',
+    properties: {
+      updatedSections: {
+        type: 'OBJECT',
+        properties: {
+          strategicPosition: { type: 'STRING' },
+          keyRelationships: { type: 'STRING' },
+          currentPriorities: { type: 'STRING' },
+          expansionOpportunities: { type: 'STRING' },
+          renewalsAndRisk: { type: 'STRING' },
+        },
+      },
+      newActionItems: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            text: { type: 'STRING' },
+            owner: { type: 'STRING' },
+          },
+          required: ['text', 'owner'],
+        },
+      },
+      engagementSummary: { type: 'STRING' },
+      meetingDate: { type: 'STRING' },
+      attendees: { type: 'ARRAY', items: { type: 'STRING' } },
+      sectionsUpdated: { type: 'ARRAY', items: { type: 'STRING' } },
+    },
+    required: ['updatedSections', 'newActionItems', 'engagementSummary', 'meetingDate', 'attendees', 'sectionsUpdated'],
+  }
+
+  // ── Call Gemini ──────────────────────────────────────────────────────
+
+  const geminiResult = await callGemini(systemPrompt, userPrompt, {
+    callType: 'playbook-note-ingestion',
+    customerName: existing.customerName,
+    model: 'full',
+    responseSchema,
+    deltaKey: `playbook-ingest-${existing.customerSlug}-${docId}`,
+    temperature: 0.2,
+  })
+
+  let geminiData: {
+    updatedSections: Record<string, string>
+    newActionItems: Array<{ text: string; owner: string }>
+    engagementSummary: string
+    meetingDate: string
+    attendees: string[]
+    sectionsUpdated: string[]
+  }
+
+  try {
+    geminiData = JSON.parse(geminiResult.text)
+  } catch {
+    console.error(`[playbook] Failed to parse Gemini ingestion response for ${existing.customerSlug}`)
+    throw new Error(`Gemini returned non-JSON response for playbook note ingestion`)
+  }
+
+  // ── 1. Merge updated narrative sections ─────────────────────────────
+
+  const narrativeSections = ['strategicPosition', 'keyRelationships', 'currentPriorities', 'expansionOpportunities', 'renewalsAndRisk'] as const
+  type NarrativeKey = typeof narrativeSections[number]
+
+  const updatedPlaybook: PlaybookState = {
+    ...existing,
+    lastMeetingNoteAt: now,
+    sections: { ...existing.sections },
+  }
+
+  for (const key of narrativeSections) {
+    const updatedContent = geminiData.updatedSections[key]
+    if (updatedContent) {
+      const existingSection = existing.sections[key] as PlaybookSection
+      updatedPlaybook.sections[key] = {
+        content: updatedContent,
+        updatedAt: now,
+        sourceNotes: [...existingSection.sourceNotes, docId],
+      }
+    }
+  }
+
+  // ── 2. Add new action items ─────────────────────────────────────────
+
+  const newItems: ActionItem[] = (geminiData.newActionItems ?? []).map(item => ({
+    id: crypto.randomUUID(),
+    text: item.text,
+    owner: item.owner,
+    sourceNoteId: docId,
+    createdAt: now,
+    completedAt: null,
+    status: 'open' as const,
+  }))
+
+  updatedPlaybook.sections.openActionItems = {
+    items: [...existing.sections.openActionItems.items, ...newItems],
+    updatedAt: now,
+  }
+
+  // ── 3. Add engagement history entry (newest first) ──────────────────
+
+  const newEntry: EngagementEntry = {
+    date: geminiData.meetingDate || now.slice(0, 10),
+    type: 'meeting',
+    summary: geminiData.engagementSummary,
+    sourceNoteId: docId,
+    attendees: geminiData.attendees ?? [],
+  }
+
+  updatedPlaybook.sections.engagementHistory = {
+    entries: [newEntry, ...existing.sections.engagementHistory.entries],
+    updatedAt: now,
+  }
+
+  // ── 4. Add provenance entry ─────────────────────────────────────────
+
+  const provenanceEntry: PlaybookSource = {
+    type: 'meeting-note',
+    sourceId: docId,
+    ingestedAt: now,
+    sectionsUpdated: geminiData.sectionsUpdated ?? Object.keys(geminiData.updatedSections).filter(k => geminiData.updatedSections[k]),
+  }
+
+  updatedPlaybook.sources = [...existing.sources, provenanceEntry]
+
+  // ── 5-6. Deterministic data is preserved (spread from existing) ─────
+  // Already handled by the spread: updatedPlaybook.deterministic === existing.deterministic
+
+  // ── 7. Write updated playbook ───────────────────────────────────────
+
+  writePlaybook(updatedPlaybook)
+
+  console.log(`[playbook] Notes ingested for ${existing.customerName}: ${newItems.length} new action items, ${geminiData.sectionsUpdated?.length ?? 0} sections updated`)
+
+  return updatedPlaybook
 }
 
 // ── Private helpers ─────────────────────────────────────────────────────────
