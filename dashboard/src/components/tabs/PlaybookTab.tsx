@@ -423,9 +423,21 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
             Ingest Notes
           </button>
           <button
-            disabled
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary opacity-50 cursor-not-allowed"
-            title="Publishing to Drive will be available in #297"
+            onClick={async () => {
+              try {
+                setGenerating(true)
+                const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/playbook/publish`, { method: 'POST' })
+                if (!res.ok) throw new Error(await res.text())
+                const data = await res.json()
+                if (data.docUrl) window.open(data.docUrl, '_blank')
+              } catch (e: any) {
+                console.error('Publish failed:', e)
+              } finally {
+                setGenerating(false)
+              }
+            }}
+            disabled={generating || !playbook}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:border-accent/50 hover:text-accent transition-colors disabled:opacity-50"
           >
             <FileText className="w-3.5 h-3.5" />
             Publish to Drive
@@ -568,7 +580,7 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
                   <div className="space-y-2 text-sm">
                     <div>
                       <span className="font-medium text-text-primary">Use Case:</span>
-                      <p className="text-text-secondary mt-1">{product.useCase}</p>
+                      <p className="text-text-secondary mt-1">{renderInlineMarkdown(product.useCase)}</p>
                     </div>
 
                     {product.proofPoints && (
