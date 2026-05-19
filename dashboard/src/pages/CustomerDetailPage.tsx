@@ -61,6 +61,7 @@ import { CampaignsTab } from '../components/tabs/CampaignsTab'
 import { NewsTab } from '../components/tabs/NewsTab'
 import { IntelligenceTab } from '../components/tabs/IntelligenceTab'
 import { ToolsTab } from '../components/tabs/ToolsTab'
+import { PlaybookTab } from '../components/tabs/PlaybookTab'
 import { MeetingPrepContent } from './MeetingPrepPage'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
@@ -1025,6 +1026,7 @@ const TAB_COMPONENTS: Record<string, React.ComponentType<{ customerName: string 
   'meeting-prep': ({ customerName }: { customerName: string }) => <MeetingPrepContent customerName={customerName} />,
   tools: ToolsTab,
   intelligence: IntelligenceTab,
+  playbook: PlaybookTab,
 }
 
 function renderTabContent(activeTab: string, customerName: string) {
