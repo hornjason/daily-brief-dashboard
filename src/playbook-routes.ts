@@ -424,18 +424,35 @@ function generatePlaybookHTML(playbook: PlaybookState): string {
   }
 
   const renderContent = (content: string): string => {
-    return content
-      .split('\n')
-      .map(line => {
-        const trimmed = line.trim()
-        if (!trimmed) return ''
-        if (/^[-*•]\s+/.test(trimmed)) {
-          return `<li>${applyInlineFormatting(trimmed.replace(/^[-*•]\s+/, ''))}</li>`
+    const lines = content.split('\n')
+    const result: string[] = []
+    let i = 0
+
+    while (i < lines.length) {
+      const trimmed = lines[i].trim()
+      if (!trimmed) { i++; continue }
+
+      // Detect markdown table blocks
+      if (trimmed.startsWith('|') && i + 1 < lines.length && /^\|[\s-|]+\|$/.test(lines[i + 1]?.trim())) {
+        const tableLines: string[] = []
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          tableLines.push(lines[i].trim())
+          i++
         }
-        return `<p style="margin:8px 0">${applyInlineFormatting(trimmed)}</p>`
-      })
-      .filter(Boolean)
-      .join('\n')
+        const headerCells = tableLines[0].split('|').filter(c => c.trim()).map(c => applyInlineFormatting(c.trim()))
+        const dataRows = tableLines.slice(2).map(row => row.split('|').filter(c => c.trim()).map(c => applyInlineFormatting(c.trim())))
+        result.push(`<table><tr>${headerCells.map(c => `<th>${c}</th>`).join('')}</tr>${dataRows.map(row => `<tr>${row.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</table>`)
+        continue
+      }
+
+      if (/^[-*•]\s+/.test(trimmed)) {
+        result.push(`<li>${applyInlineFormatting(trimmed.replace(/^[-*•]\s+/, ''))}</li>`)
+      } else {
+        result.push(`<p style="margin:8px 0">${applyInlineFormatting(trimmed)}</p>`)
+      }
+      i++
+    }
+    return result.join('\n')
   }
 
   const renderActionItems = (items: typeof playbook.sections.openActionItems.items): string => {

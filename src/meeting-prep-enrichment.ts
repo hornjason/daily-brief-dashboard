@@ -69,16 +69,45 @@ const MAX_KEY_CHANGES = 3
  */
 export function extractProofPoints(valueMapText: string): string[] {
   const metrics: string[] = []
-  const patterns: RegExp[] = [
-    /\d+%\s+\w[\w\s]{2,30}?(?=\s+\d|\s*$|\s*[,;.|])/gm,  // percentage metrics: "58% Unplanned Downtime"
-    /\$[\d,.]+[BMK]?\s+\w+/g,                // dollar metrics: "$2B ARR"
-    /(?:Forrester|IDC|Gartner|ESG)\s*[-–—]?\s*[\w\s,]+/g,  // analyst citations: "IDC - The Business Value of..."
-  ]
-  for (const p of patterns) {
-    const matches = valueMapText.match(p) ?? []
-    metrics.push(...matches.map(m => m.trim().slice(0, 60)).slice(0, 4))
+  const lines = valueMapText.split('\n')
+
+  // Find nearby source citation for context
+  const findNearbySource = (lineIdx: number): string => {
+    for (let j = lineIdx + 1; j < Math.min(lineIdx + 8, lines.length); j++) {
+      const sourceLine = lines[j].trim()
+      if (/^Source:\s*(IDC|Forrester|Gartner|ESG)/i.test(sourceLine)) {
+        const match = sourceLine.match(/Source:\s*(.{10,60}?)(?:\s*\(|$)/i)
+        return match ? ` (${match[1].trim()})` : ''
+      }
+    }
+    return ''
   }
-  return [...new Set(metrics)].slice(0, MAX_PROOF_POINTS)
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+
+    // Match percentage metrics: "58% Unplanned Downtime"
+    const pctMatch = line.match(/^(\d+%)\s+([\w\s]{3,40}?)$/m)
+    if (pctMatch) {
+      const source = findNearbySource(i)
+      const metric = `${pctMatch[1]} ${pctMatch[2].trim().toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}${source}`
+      if (!metrics.includes(metric)) metrics.push(metric)
+      if (metrics.length >= MAX_PROOF_POINTS) break
+    }
+
+    // Match dollar metrics: "$2B ARR"
+    const dollarMatch = line.match(/(\$[\d,.]+[BMK]?\s+\w[\w\s]{2,20})/g)
+    if (dollarMatch) {
+      for (const m of dollarMatch) {
+        const source = findNearbySource(i)
+        const metric = `${m.trim()}${source}`
+        if (!metrics.includes(metric)) metrics.push(metric)
+        if (metrics.length >= MAX_PROOF_POINTS) break
+      }
+    }
+  }
+
+  return metrics.slice(0, MAX_PROOF_POINTS)
 }
 
 const VALUE_MAP_PATH_ENV = process.env.CACHE_DIR

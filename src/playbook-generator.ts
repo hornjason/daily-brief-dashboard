@@ -177,6 +177,22 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
 
   const teamContext = toPromptContext(teamMembers)
 
+  // Load partner data
+  const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../data/config')
+  let partnerContext = ''
+  try {
+    const partnersPath = resolve(CONFIG_DIR, 'partners.json')
+    if (existsSync(partnersPath)) {
+      const partners = JSON.parse(readFileSync(partnersPath, 'utf-8')) as Array<{
+        name: string; specializations: string[]; country: string; catalogUrl?: string; partnershipLevel: string
+      }>
+      if (partners.length > 0) {
+        partnerContext = '| Partner | Specializations | Region | Partnership Level |\n|---|---|---|---|\n' +
+          partners.map(p => `| ${p.name} | ${p.specializations.join(', ')} | ${p.country} | ${p.partnershipLevel} |`).join('\n')
+      }
+    }
+  } catch {}
+
   const signalSummary = signalResult.registrySignals
     .slice(0, 30)
     .map(s => `[${s.source}] ${s.headline}: ${s.detail}`)
@@ -225,7 +241,7 @@ FORMAT RULES (critical — the playbook must be scannable in 30 seconds):
 
 The playbook has 6 narrative sections:
 1. strategicPosition — 4-6 bullets: why this customer matters, where Red Hat fits, key opportunity
-2. keyRelationships — Markdown TABLE of key contacts (customer + partner + Red Hat team) with Name | Role | Focus Area columns
+2. keyRelationships — TWO markdown tables: first "Red Hat Account Team" (Name | Role | Focus Area), then "Certified Partners" (Partner | Specializations | Region) with catalog links if available. Include ALL partners from the partner data.
 3. currentPriorities — 4-6 bullets: what the customer is working on NOW, each citing a specific signal or data point
 4. productAlignment — Per-product: 1-2 sentence use case tied to a specific customer initiative
 5. expansionOpportunities — 3-5 bullets: products they don't have but should, each with the signal that suggests it
@@ -246,6 +262,10 @@ Be specific and evidence-based. Cite actual data: subscription quantities, case 
 <account_team>
 ${teamContext}
 </account_team>
+
+<partners>
+${partnerContext || 'No partner data available.'}
+</partners>
 
 <signals>
 ${signalSummary || 'No signals available.'}

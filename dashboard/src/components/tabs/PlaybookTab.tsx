@@ -250,7 +250,7 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
     const parts = text.split(/(\*\*[^*]+\*\*)/g)
     return parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="text-text-primary font-semibold">{part.slice(2, -2)}</strong>
+        return <strong key={i} className="text-accent font-semibold">{part.slice(2, -2)}</strong>
       }
       return <span key={i}>{part}</span>
     })
