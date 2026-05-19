@@ -45,6 +45,12 @@ FeatureModuleRegistry.register({
 
   scope: 'customer',
 
+  accountTab: {
+    label: 'Playbook',
+    icon: 'BookOpen',
+    order: 5,
+  },
+
   cachePaths: (slug: string) => [
     `data/cache/playbooks/${slug}.json`,
   ],
