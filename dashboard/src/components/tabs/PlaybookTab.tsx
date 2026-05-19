@@ -31,7 +31,8 @@ import {
   CheckCircle,
   Circle,
   ExternalLink,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react'
 import type { PlaybookState, ActionItem, ProductAlignmentEntry } from '../../../../src/playbook-types'
 
@@ -415,6 +416,27 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
           <h1 className="text-2xl font-bold text-text-primary">Customer Engagement Playbook</h1>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              if (!confirm('Regenerate playbook from current data? This will refresh all sections.')) return
+              try {
+                setGenerating(true)
+                const res = await fetch(`/api/customer/${encodeURIComponent(customerName)}/playbook/generate`, { method: 'POST' })
+                if (!res.ok) throw new Error(await res.text())
+                const data = await res.json()
+                setPlaybook(data)
+              } catch (e: any) {
+                console.error('Regenerate failed:', e)
+              } finally {
+                setGenerating(false)
+              }
+            }}
+            disabled={generating}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:border-accent/50 hover:text-accent transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} />
+            Regenerate
+          </button>
           <button
             onClick={() => setIngestModalOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:border-accent/50 hover:text-accent transition-colors"
