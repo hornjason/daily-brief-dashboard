@@ -194,7 +194,8 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
   } catch {}
 
   const signalSummary = signalResult.registrySignals
-    .slice(0, 30)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .slice(0, 40)
     .map(s => `[${s.source}] ${s.headline}: ${s.detail}`)
     .join('\n')
 
@@ -226,7 +227,12 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
   }).join('\n\n')
 
   const expansionContext = expansionOpps?.recommendations?.length
-    ? expansionOpps.recommendations.map(r => `- ${r.product} (${r.confidence}): ${r.why}`).join('\n')
+    ? expansionOpps.recommendations.map(r => {
+        const slug = r.productSlug ?? toSlug(r.product)
+        const valueMap = getValueMap(slug)
+        const proofPoints = valueMap ? extractProductProofPoints(slug, valueMap) : ''
+        return `- ${r.product} (${r.confidence}): ${r.why}${proofPoints ? `\n  Business value metrics: ${proofPoints}` : ''}`
+      }).join('\n')
     : ''
 
   const systemPrompt = `You are a strategic account intelligence analyst for Red Hat. Generate a Customer Engagement Playbook. Output structured JSON matching the schema.
@@ -239,13 +245,33 @@ FORMAT RULES (critical — the playbook must be scannable in 30 seconds):
 - For keyRelationships: use markdown table format: "| Name | Role | Focus Area |\\n|---|---|---|\\n| Person | Title | What they care about |"
 - For renewalsAndRisk: lead with dates and urgency, then risk factors as bullets
 
-The playbook has 6 narrative sections:
+The playbook has 8 narrative sections:
 1. strategicPosition — 4-6 bullets: why this customer matters, where Red Hat fits, key opportunity
 2. keyRelationships — TWO markdown tables: first "Red Hat Account Team" (Name | Role | Focus Area), then "Certified Partners" (Partner | Specializations | Region) with catalog links if available. Include ALL partners from the partner data.
 3. currentPriorities — 4-6 bullets: what the customer is working on NOW, each citing a specific signal or data point
 4. productAlignment — Per-product: 1-2 sentence use case tied to a specific customer initiative
-5. expansionOpportunities — 3-5 bullets: products they don't have but should, each with the signal that suggests it
+5. expansionOpportunities — 3-5 bullets: products they don't have but should. Each bullet MUST include:
+   - Product name and confidence (HIGH/MEDIUM/LOW)
+   - The specific signal or customer initiative that suggests it
+   - Business value metrics from value maps (e.g., "customers see 30% improvement in security staff productivity, 58% reduction in unplanned downtime")
+   - Format: "**Product (CONFIDENCE):** Signal/initiative context. Business value: [specific metrics from value maps]."
 6. renewalsAndRisk — Lead with renewal dates (bold if within 90 days), then 3-4 risk factor bullets
+7. swotAnalysis — SWOT analysis of the Red Hat relationship with this customer:
+   ### Strengths — 3-4 bullets: where Red Hat is strong (active subscriptions, engaged team, high-confidence products, good case resolution)
+   ### Weaknesses — 3-4 bullets: gaps (expired subscriptions, no meeting history, low product confidence, unresolved cases)
+   ### Opportunities — 3-4 bullets: expansion signals (cloud spend without managed service, new product fits, upcoming renewals to upsell)
+   ### Threats — 3-4 bullets: risks (competitor presence, budget constraints, subscription lapses, compliance issues)
+
+8. meddpicc — MEDDPICC sales qualification assessment. For each of the 8 fields, assess based on available data:
+   - M (Metrics): what success metrics matter to this customer
+   - E (Economic Buyer): who controls budget decisions
+   - D1 (Decision Criteria): how they evaluate solutions
+   - D2 (Decision Process): their buying/approval process
+   - P (Paper Process): procurement and contracting process
+   - I (Identified Pain): their pain points driving action
+   - C1 (Champion): internal advocate for Red Hat
+   - C2 (Competition): competitors or alternatives they're evaluating
+   For each: return status (confirmed if clear evidence, developing if partial/inferred, unknown if no data) and 1-2 sentence evidence.
 
 Sections 5 (openActionItems) and 6 (engagementHistory) are NOT generated — they start empty.
 
@@ -319,8 +345,22 @@ Generate the 6 narrative sections plus product alignment entries as structured J
       },
       expansionOpportunities: { type: 'STRING', description: 'Expansion opportunities narrative' },
       renewalsAndRisk: { type: 'STRING', description: 'Renewals and risk narrative' },
+      swotAnalysis: { type: 'STRING', description: 'SWOT analysis with ### Strengths, ### Weaknesses, ### Opportunities, ### Threats subsections' },
+      meddpicc: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            field: { type: 'STRING', description: 'One of: M, E, D1, D2, P, I, C1, C2' },
+            displayName: { type: 'STRING', description: 'Human name: Metrics, Economic Buyer, Decision Criteria, Decision Process, Paper Process, Identified Pain, Champion, Competition' },
+            status: { type: 'STRING', enum: ['confirmed', 'developing', 'unknown'] },
+            evidence: { type: 'STRING', description: '1-2 sentence evidence or justification' },
+          },
+          required: ['field', 'displayName', 'status', 'evidence'],
+        },
+      },
     },
-    required: ['strategicPosition', 'keyRelationships', 'currentPriorities', 'productAlignment', 'expansionOpportunities', 'renewalsAndRisk'],
+    required: ['strategicPosition', 'keyRelationships', 'currentPriorities', 'productAlignment', 'expansionOpportunities', 'renewalsAndRisk', 'swotAnalysis', 'meddpicc'],
   }
 
   // ── Step 3: Call Gemini ───────────────────────────────────────────────
@@ -341,6 +381,8 @@ Generate the 6 narrative sections plus product alignment entries as structured J
     productAlignment: Array<{ productSlug: string; displayName: string; confidence: string; useCase: string }>
     expansionOpportunities: string
     renewalsAndRisk: string
+    swotAnalysis: string
+    meddpicc: Array<{ field: string; displayName: string; status: string; evidence: string }>
   }
 
   try {
@@ -441,6 +483,22 @@ Generate the 6 narrative sections plus product alignment entries as structured J
       },
       expansionOpportunities: defaultSection(geminiData.expansionOpportunities),
       renewalsAndRisk: defaultSection(geminiData.renewalsAndRisk),
+      swotAnalysis: defaultSection(geminiData.swotAnalysis),
+      meddpicc: {
+        entries: (geminiData.meddpicc ?? []).map((m: any) => ({
+          field: m.field,
+          displayName: m.displayName,
+          status: m.status || 'unknown',
+          evidence: m.evidence || '',
+          sourceNoteId: null,
+          updatedAt: now,
+        })),
+        qualificationScore: Math.round(
+          ((geminiData.meddpicc ?? []).filter((m: any) => m.status === 'confirmed').length / 8) * 100
+        ),
+        updatedAt: now,
+        sourceNotes: [],
+      },
     },
     deterministic: {
       subscriptions,
@@ -456,6 +514,7 @@ Generate the 6 narrative sections plus product alignment entries as structured J
         sectionsUpdated: [
           'strategicPosition', 'keyRelationships', 'currentPriorities',
           'productAlignment', 'expansionOpportunities', 'renewalsAndRisk',
+          'swotAnalysis', 'meddpicc',
         ],
       },
     ],
@@ -500,9 +559,10 @@ export async function ingestMeetingNotes(
   const systemPrompt = `You are updating a customer engagement playbook with new meeting notes. Merge the notes into the existing playbook, updating relevant sections. Do not lose existing information — add to it. Extract any action items. Update current priorities if the notes reveal new information.
 
 Return structured JSON with:
-- updatedSections: object with keys for each narrative section that changed (strategicPosition, keyRelationships, currentPriorities, expansionOpportunities, renewalsAndRisk). Only include sections that the notes actually update. The value is the full updated text for that section (merge existing + new information).
+- updatedSections: object with keys for each narrative section that changed (strategicPosition, keyRelationships, currentPriorities, expansionOpportunities, renewalsAndRisk, swotAnalysis). Only include sections that the notes actually update. The value is the full updated text for that section (merge existing + new information).
 - newActionItems: array of { text, owner } for any commitments, follow-ups, or deadlines mentioned in the notes.
 - engagements: array of meetings found in the notes. Each entry: { summary: "1-2 sentence summary", meetingDate: "YYYY-MM-DD", attendees: ["name1", "name2"] }. If the document contains notes from MULTIPLE meetings, create a SEPARATE entry for each meeting with its own date and attendees. Do NOT combine multiple meetings into one entry.
+- meddpicUpdates: array of MEDDPICC fields that the meeting notes inform. Only include fields with new evidence. Each entry: { field: "M"|"E"|"D1"|"D2"|"P"|"I"|"C1"|"C2", status: "confirmed"|"developing"|"unknown", evidence: "1-2 sentence justification" }
 - sectionsUpdated: array of section keys that were updated.`
 
   const currentSections: Record<string, string> = {
@@ -511,11 +571,16 @@ Return structured JSON with:
     currentPriorities: existing.sections.currentPriorities.content,
     expansionOpportunities: existing.sections.expansionOpportunities.content,
     renewalsAndRisk: existing.sections.renewalsAndRisk.content,
+    swotAnalysis: existing.sections.swotAnalysis.content,
   }
 
   const userPrompt = `<current-playbook>
 ${JSON.stringify(currentSections, null, 2)}
 </current-playbook>
+
+<current-meddpicc>
+${JSON.stringify(existing.sections.meddpicc?.entries ?? [], null, 2)}
+</current-meddpicc>
 
 <new-meeting-notes>
 ${noteContent}
@@ -523,7 +588,8 @@ ${noteContent}
 
 Update the playbook sections based on these meeting notes. Return the updated sections.
 For action items: extract any commitments, follow-ups, or deadlines from the notes.
-For engagement history: add a summary entry for this meeting.`
+For engagement history: add a summary entry for this meeting.
+For MEDDPICC: if the meeting notes provide evidence for any qualification field, include it in meddpicUpdates.`
 
   const responseSchema = {
     type: 'OBJECT',
@@ -536,6 +602,7 @@ For engagement history: add a summary entry for this meeting.`
           currentPriorities: { type: 'STRING' },
           expansionOpportunities: { type: 'STRING' },
           renewalsAndRisk: { type: 'STRING' },
+          swotAnalysis: { type: 'STRING' },
         },
       },
       newActionItems: {
@@ -561,6 +628,19 @@ For engagement history: add a summary entry for this meeting.`
           required: ['summary', 'meetingDate', 'attendees'],
         },
       },
+      meddpicUpdates: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            field: { type: 'STRING' },
+            status: { type: 'STRING', enum: ['confirmed', 'developing', 'unknown'] },
+            evidence: { type: 'STRING' },
+          },
+          required: ['field', 'status', 'evidence'],
+        },
+        description: 'MEDDPICC fields that the meeting notes inform. Only include fields with new evidence.',
+      },
       sectionsUpdated: { type: 'ARRAY', items: { type: 'STRING' } },
     },
     required: ['updatedSections', 'newActionItems', 'engagements', 'sectionsUpdated'],
@@ -581,6 +661,7 @@ For engagement history: add a summary entry for this meeting.`
     updatedSections: Record<string, string>
     newActionItems: Array<{ text: string; owner: string }>
     engagements: Array<{ summary: string; meetingDate: string; attendees: string[] }>
+    meddpicUpdates?: Array<{ field: string; status: string; evidence: string }>
     sectionsUpdated: string[]
   }
 
@@ -593,7 +674,7 @@ For engagement history: add a summary entry for this meeting.`
 
   // ── 1. Merge updated narrative sections ─────────────────────────────
 
-  const narrativeSections = ['strategicPosition', 'keyRelationships', 'currentPriorities', 'expansionOpportunities', 'renewalsAndRisk'] as const
+  const narrativeSections = ['strategicPosition', 'keyRelationships', 'currentPriorities', 'expansionOpportunities', 'renewalsAndRisk', 'swotAnalysis'] as const
   type NarrativeKey = typeof narrativeSections[number]
 
   const updatedPlaybook: PlaybookState = {
@@ -629,6 +710,27 @@ For engagement history: add a summary entry for this meeting.`
   updatedPlaybook.sections.openActionItems = {
     items: [...existing.sections.openActionItems.items, ...newItems],
     updatedAt: now,
+  }
+
+  // ── 2b. Merge MEDDPICC updates ──────────────────────────────────────
+
+  if (geminiData.meddpicUpdates?.length && updatedPlaybook.sections.meddpicc) {
+    for (const update of geminiData.meddpicUpdates) {
+      const existing = updatedPlaybook.sections.meddpicc.entries.find(e => e.field === update.field)
+      if (existing) {
+        existing.status = update.status as 'confirmed' | 'developing' | 'unknown'
+        existing.evidence = update.evidence
+        existing.sourceNoteId = docId
+        existing.updatedAt = now
+      }
+    }
+    updatedPlaybook.sections.meddpicc.qualificationScore = Math.round(
+      (updatedPlaybook.sections.meddpicc.entries.filter(e => e.status === 'confirmed').length / 8) * 100
+    )
+    updatedPlaybook.sections.meddpicc.updatedAt = now
+    if (!updatedPlaybook.sections.meddpicc.sourceNotes.includes(docId)) {
+      updatedPlaybook.sections.meddpicc.sourceNotes.push(docId)
+    }
   }
 
   // ── 3. Add engagement history entry (newest first) ──────────────────

@@ -17,6 +17,8 @@ if (!existsSync(CACHE_DIR)) {
 
 FeatureModuleRegistry.register({
   name: 'news-radar',
+  displayName: 'News Radar',
+  refreshEndpoint: '/api/refresh/news',
 
   scope: 'both',
 
@@ -99,7 +101,8 @@ FeatureModuleRegistry.register({
     // Get threshold from customer config (default 7)
     const threshold = getCustomerNewsThreshold(customerSlug)
 
-    // Filter by threshold, map to Signal shape, sort by score descending
+    // Filter by threshold, map to Signal shape, sort by rawRelevance descending
+    // ADR-027: Convert score to rawRelevance, add customerSlug to metadata
     const signals = cacheData.articles
       .filter((article) => article.significanceScore >= threshold)
       .map((article): Signal => ({
@@ -107,16 +110,17 @@ FeatureModuleRegistry.register({
         type: 'news',
         headline: article.headline,
         detail: article.summary,
-        score: article.significanceScore / 10,  // Normalize 0-10 to 0-1
+        rawRelevance: article.significanceScore / 10,  // ADR-027: Normalize 0-10 to 0-1
         timestamp: article.publishedDate,
         url: article.sourceUrl,
         metadata: {
+          customerSlug,  // ADR-027: Mark as customer-specific (news is scraped per customer)
           productTags: (article as any).productTags,  // Optional field, may not exist
           sourceName: article.sourceName,
           signalType: article.signalType,
         },
       }))
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))  // Sort by score descending
+      .sort((a, b) => (b.rawRelevance ?? 0) - (a.rawRelevance ?? 0))  // Sort by rawRelevance descending
 
     return signals
   },

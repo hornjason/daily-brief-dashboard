@@ -24,6 +24,7 @@ import type { ProductLifecycle } from './product-lifecycle.ts'
 import type { RHEvent } from './rh-events-fetcher.ts'
 import { enrichEvents } from './event-enricher.ts'
 import { loadFeedConfig, fetchRedHatRSS, type RSSFeedConfig } from './rh-rss-fetcher.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
@@ -698,6 +699,7 @@ export function createIntelligenceRouter(): Hono {
     try {
       console.log('[intelligence-routes] Triggering manual RSS refresh')
       await fetchRedHatRSS()
+      FeatureModuleRegistry.recordOutcome('rss', { success: true })
       return c.json({ status: 'complete' })
     } catch (e: any) {
       console.warn('[intelligence-routes] RSS refresh failed:', e?.message ?? e)

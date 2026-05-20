@@ -13,6 +13,7 @@ import { resolve } from 'path'
 import { newsProvider } from './news-provider.ts'
 import { toSlug } from './cache-layer.ts'
 import type { NewsItem } from './news-provider.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
@@ -160,6 +161,27 @@ export function createNewsRouter(): Hono {
       console.error('[news-routes] Failed to read highlights:', e.message)
       return c.json({ error: e.message }, 500)
     }
+  })
+
+  /**
+   * POST /api/refresh/news
+   * Refresh news for all customers (GitHub Issue #309)
+   */
+  app.post('/api/refresh/news', async (c) => {
+    const { customers } = await import('./server-state.ts')
+    let success = 0, failed = 0
+    for (const customer of customers) {
+      try {
+        await newsProvider.searchNews(customer.name)
+        success++
+      } catch { failed++ }
+    }
+    FeatureModuleRegistry.recordOutcome('news', {
+      success: failed === 0,
+      recordCount: success,
+      error: failed > 0 ? `${failed} customers failed` : undefined,
+    })
+    return c.json({ ok: true, refreshed: success, failed })
   })
 
   return app

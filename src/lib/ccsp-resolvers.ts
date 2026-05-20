@@ -476,10 +476,16 @@ export function parseCcspRows(
   if (acctCol < 0 || acvCol < 0) return []
 
   const records: CCSPRecord[] = []
-  for (const row of rows.slice(1)) {
+  const dataRows = rows.slice(1)
+  let skippedInvalidAcv = 0
+
+  for (const row of dataRows) {
     const acvStr = String(row[acvCol] ?? '').replace(/[$,]/g, '').trim()
     const acv = parseFloat(acvStr)
-    if (!acv || isNaN(acv)) continue
+    if (!acv || isNaN(acv)) {
+      skippedInvalidAcv++
+      continue
+    }
 
     const productOfferingGroupRaw = String(row[18] ?? '').trim()
     records.push({
@@ -492,5 +498,14 @@ export function parseCcspRows(
       ...(productOfferingGroupRaw ? { productOfferingGroup: productOfferingGroupRaw } : {}),
     })
   }
+
+  // Diagnostic logging when returning 0 records from non-empty input (issue #303)
+  if (records.length === 0 && dataRows.length > 0) {
+    console.warn(`[ccsp] sheet ${spreadsheetId}: parseCcspRows returned 0 records from ${dataRows.length} data rows. ` +
+      `Headers: [${headers.slice(0, 10).join(', ')}${headers.length > 10 ? '...' : ''}]. ` +
+      `First data row: [${dataRows[0]?.slice(0, 10).map(v => String(v ?? '').slice(0, 20)).join(', ')}${(dataRows[0]?.length ?? 0) > 10 ? '...' : ''}]. ` +
+      `Skipped ${skippedInvalidAcv} rows due to invalid/missing ACV.`)
+  }
+
   return records
 }

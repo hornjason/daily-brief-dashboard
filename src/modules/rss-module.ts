@@ -15,6 +15,8 @@ const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss', 'rh-fee
 
 FeatureModuleRegistry.register({
   name: 'rh-rss',
+  displayName: 'RSS Feeds',
+  refreshEndpoint: '/api/admin/rss-feeds/refresh',
 
   scope: 'portfolio',
 
@@ -66,21 +68,48 @@ FeatureModuleRegistry.register({
       return []
     }
 
-    // Score items by age
+    // ADR-027: Convert scoring to rawRelevance, detect customer/industry specificity
     const now = Date.now()
     const signals: Signal[] = []
+
+    // Import customers to check for name matches
+    const { customers } = await import('../server-state.ts')
+    const customer = customers.find(c => {
+      const { toSlug } = require('../cache-layer.ts')
+      return toSlug(c.name) === customerSlug
+    })
+    const customerNameLower = customer?.name.toLowerCase() ?? ''
 
     for (const item of cache.items) {
       const pubDate = new Date(item.pubDate)
       const ageMs = now - pubDate.getTime()
       const ageHours = ageMs / (1000 * 60 * 60)
 
-      // Score: 0.6 for < 24h, 0.4 for < 48h, 0.3 for older
-      let score = 0.3
+      // rawRelevance: 0.9 for < 24h, 0.6 for < 48h, 0.3 for older
+      let rawRelevance = 0.3
       if (ageHours < 24) {
-        score = 0.6
+        rawRelevance = 0.9
       } else if (ageHours < 48) {
-        score = 0.4
+        rawRelevance = 0.6
+      }
+
+      // Check if customer name appears in headline or description
+      const titleLower = item.title.toLowerCase()
+      const descLower = item.description.toLowerCase()
+      const hasCustomerName = customerNameLower && (
+        titleLower.includes(customerNameLower) ||
+        descLower.includes(customerNameLower)
+      )
+
+      // Build metadata
+      const metadata: Record<string, any> = {
+        productTags: item.productTags,
+        feedSource: item.source,
+      }
+
+      // Mark customer-specific signals
+      if (hasCustomerName) {
+        metadata.customerSlug = customerSlug
       }
 
       signals.push({
@@ -88,18 +117,15 @@ FeatureModuleRegistry.register({
         type: 'news',
         headline: item.title,
         detail: item.description,
-        score,
+        rawRelevance,
         timestamp: item.pubDate,
         url: item.link,
-        metadata: {
-          productTags: item.productTags,
-          feedSource: item.source,
-        },
+        metadata,
       })
     }
 
-    // Sort by score descending
-    signals.sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    // Sort by rawRelevance descending
+    signals.sort((a, b) => (b.rawRelevance ?? 0) - (a.rawRelevance ?? 0))
 
     return signals
   },

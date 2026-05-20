@@ -34,7 +34,7 @@ import {
   X,
   RefreshCw
 } from 'lucide-react'
-import type { PlaybookState, ActionItem, ProductAlignmentEntry } from '../../../../src/playbook-types'
+import type { PlaybookState, ActionItem, ProductAlignmentEntry, MEDDPICCEntry } from '../../../../src/playbook-types'
 
 interface PlaybookTabProps {
   customerName: string
@@ -259,7 +259,13 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
 
   // Render section content with markdown support (bullets, tables, headers, bold)
   const renderSection = (title: string, content: string) => {
-    const lines = content.split('\n')
+    // Pre-process: Gemini sometimes returns bullets/headers on a single line
+    const normalized = content
+      .replace(/\s+(#{1,3}\s)/g, '\n$1')
+      .replace(/\.\s+-\s+\*\*/g, '.\n- **')
+      .replace(/\s+•\s+/g, '\n• ')
+      .replace(/\.\s*Business value:/g, '.\n**Business value:** ')
+    const lines = normalized.split('\n')
 
     // Detect markdown table blocks
     const elements: React.ReactNode[] = []
@@ -518,7 +524,27 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
         )}
       </div>
 
-      {/* Section 2: Key Relationships */}
+      {/* Section 2: SWOT Analysis */}
+      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+        <button
+          onClick={() => toggleSection('swotAnalysis')}
+          className="w-full px-5 py-4 cursor-pointer hover:bg-border/10 transition-colors flex items-center justify-between text-left"
+        >
+          <h2 className="text-lg font-semibold text-text-primary">SWOT Analysis</h2>
+          {expandedSections.has('swotAnalysis') ? (
+            <ChevronUp className="w-5 h-5 text-text-secondary" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-text-secondary" />
+          )}
+        </button>
+        {expandedSections.has('swotAnalysis') && (
+          <div className="px-5 py-4 border-t border-border/60">
+            {renderSection('SWOT Analysis', playbook.sections.swotAnalysis?.content || '')}
+          </div>
+        )}
+      </div>
+
+      {/* Section 3: Key Relationships */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         <button
           onClick={() => toggleSection('keyRelationships')}
@@ -558,7 +584,71 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
         )}
       </div>
 
-      {/* Section 4: Product Alignment */}
+      {/* Section 5: MEDDPICC Qualification */}
+      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+        <button
+          onClick={() => toggleSection('meddpicc')}
+          className="w-full px-5 py-4 cursor-pointer hover:bg-border/10 transition-colors flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-text-primary">MEDDPICC Qualification</h2>
+            {playbook.sections.meddpicc && (
+              <span className={`px-3 py-1 rounded text-xs font-semibold ${
+                playbook.sections.meddpicc.qualificationScore >= 63
+                  ? 'bg-green-500/20 text-green-400'
+                  : playbook.sections.meddpicc.qualificationScore >= 25
+                  ? 'bg-yellow-500/20 text-yellow-400'
+                  : 'bg-red-500/20 text-red-400'
+              }`}>
+                {playbook.sections.meddpicc.qualificationScore}% Qualified
+              </span>
+            )}
+          </div>
+          {expandedSections.has('meddpicc') ? (
+            <ChevronUp className="w-5 h-5 text-text-secondary" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-text-secondary" />
+          )}
+        </button>
+        {expandedSections.has('meddpicc') && (
+          <div className="px-5 py-4 border-t border-border/60">
+            {!playbook.sections.meddpicc || playbook.sections.meddpicc.entries.length === 0 ? (
+              <p className="text-sm text-text-secondary italic">No MEDDPICC data available</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                {playbook.sections.meddpicc.entries.map((entry: MEDDPICCEntry) => (
+                  <div
+                    key={entry.field}
+                    className={`bg-bg-secondary/30 rounded-lg p-4 border-l-4 ${
+                      entry.status === 'confirmed'
+                        ? 'border-green-500'
+                        : entry.status === 'developing'
+                        ? 'border-yellow-500'
+                        : 'border-zinc-500'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-semibold text-text-primary">{entry.displayName}</h3>
+                      <span className={`text-xs px-2 py-0.5 rounded font-semibold ${
+                        entry.status === 'confirmed'
+                          ? 'bg-green-500/20 text-green-400'
+                          : entry.status === 'developing'
+                          ? 'bg-yellow-500/20 text-yellow-400'
+                          : 'bg-zinc-500/20 text-zinc-400'
+                      }`}>
+                        {entry.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-text-secondary">{renderInlineMarkdown(entry.evidence)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Section 6: Product Alignment */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         <button
           onClick={() => toggleSection('productAlignment')}
@@ -776,6 +866,7 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
           </div>
         )}
       </div>
+
 
       </>
       )}

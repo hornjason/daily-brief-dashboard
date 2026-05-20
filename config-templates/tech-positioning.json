@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "name": "VMware",
+      "aliases": ["vSphere", "ESXi", "Tanzu", "vCenter", "VMware Cloud"],
+      "category": "virtualization",
+      "redHatPositioning": "OpenShift Virtualization provides a migration path from VMware, consolidating VMs and containers on a single platform. Reduces licensing costs and eliminates vendor lock-in.",
+      "redHatProducts": ["ocp", "rhel"]
+    },
+    {
+      "name": "AWS",
+      "aliases": ["Amazon Web Services", "EKS", "EC2", "S3", "Lambda", "Fargate"],
+      "category": "cloud",
+      "redHatPositioning": "ROSA (Red Hat OpenShift Service on AWS) provides managed OpenShift on AWS. RHEL is available on AWS Marketplace with commit drawdown. Ansible Automation Platform manages AWS infrastructure.",
+      "redHatProducts": ["ocp", "rhel", "aap"]
+    },
+    {
+      "name": "Microsoft Azure",
+      "aliases": ["Azure", "AKS", "Azure DevOps", "Azure Functions"],
+      "category": "cloud",
+      "redHatPositioning": "ARO (Azure Red Hat OpenShift) provides managed OpenShift on Azure. RHEL is a first-class Azure VM image. Ansible manages Azure resources natively.",
+      "redHatProducts": ["ocp", "rhel", "aap"]
+    },
+    {
+      "name": "Google Cloud",
+      "aliases": ["GCP", "GKE", "Google Kubernetes Engine", "Cloud Run"],
+      "category": "cloud",
+      "redHatPositioning": "OpenShift Dedicated on GCP provides managed OpenShift. RHEL on Google Cloud with Marketplace integration. OpenShift Virtualization on Google Baremetal with NetApp Volumes.",
+      "redHatProducts": ["ocp", "rhel"]
+    },
+    {
+      "name": "Kubernetes",
+      "aliases": ["K8s", "k8s", "vanilla Kubernetes"],
+      "category": "container-orchestration",
+      "redHatPositioning": "OpenShift IS enterprise Kubernetes with added security, CI/CD, monitoring, and multi-cluster management. Migration from vanilla K8s to OpenShift adds enterprise support and lifecycle management.",
+      "redHatProducts": ["ocp", "acs", "acm"]
+    },
+    {
+      "name": "Docker",
+      "aliases": ["Docker Desktop", "Docker Hub", "Dockerfile", "Docker Compose"],
+      "category": "containers",
+      "redHatPositioning": "Podman provides a daemonless, rootless alternative to Docker. RHEL includes Podman, Buildah, and Skopeo as container tools. OpenShift uses CRI-O runtime.",
+      "redHatProducts": ["rhel", "ocp"]
+    },
+    {
+      "name": "Terraform",
+      "aliases": ["HashiCorp Terraform", "OpenTofu", "HCL", "Terraform Cloud"],
+      "category": "infrastructure-as-code",
+      "redHatPositioning": "Ansible Automation Platform provides agentless infrastructure automation. Ansible can orchestrate Terraform or replace it entirely for configuration management and provisioning.",
+      "redHatProducts": ["aap"]
+    },
+    {
+      "name": "Jenkins",
+      "aliases": ["Jenkins CI", "Jenkins Pipeline", "Jenkins X"],
+      "category": "ci-cd",
+      "redHatPositioning": "OpenShift Pipelines (Tekton) provides cloud-native CI/CD built into OpenShift. OpenShift GitOps (Argo CD) for declarative deployments.",
+      "redHatProducts": ["ocp"]
+    },
+    {
+      "name": "Splunk",
+      "aliases": ["Splunk Enterprise", "Splunk Cloud", "Splunk SIEM"],
+      "category": "observability",
+      "redHatPositioning": "Ansible integrates with Splunk for automated incident response and remediation. RHEL Insights feeds into Splunk for infrastructure monitoring.",
+      "redHatProducts": ["aap", "rhel"]
+    },
+    {
+      "name": "ServiceNow",
+      "aliases": ["SNOW", "ITSM", "ServiceNow CMDB"],
+      "category": "itsm",
+      "redHatPositioning": "Ansible Automation Platform has certified ServiceNow collection for automated ticket management, CMDB updates, and incident remediation workflows.",
+      "redHatProducts": ["aap"]
+    },
+    {
+      "name": "Datadog",
+      "aliases": ["Datadog APM", "Datadog Infrastructure"],
+      "category": "observability",
+      "redHatPositioning": "OpenShift integrates with Datadog for application monitoring. Ansible automates Datadog agent deployment and configuration across infrastructure.",
+      "redHatProducts": ["ocp", "aap"]
+    },
+    {
+      "name": "GitLab",
+      "aliases": ["GitLab CI", "GitLab Runner", "GitLab DevSecOps"],
+      "category": "ci-cd",
+      "redHatPositioning": "OpenShift Pipelines and GitOps provide native CI/CD on OpenShift. Red Hat Developer Hub integrates with GitLab for developer portal workflows.",
+      "redHatProducts": ["ocp", "rhdh"]
+    },
+    {
+      "name": "PagerDuty",
+      "aliases": ["PagerDuty Incident Response"],
+      "category": "incident-management",
+      "redHatPositioning": "Ansible Automation Platform integrates with PagerDuty for automated incident response. Event-Driven Ansible can trigger remediation from PagerDuty alerts.",
+      "redHatProducts": ["aap"]
+    },
+    {
+      "name": "HashiCorp Vault",
+      "aliases": ["Vault", "HCP Vault", "Vault Enterprise"],
+      "category": "secrets-management",
+      "redHatPositioning": "OpenShift integrates with Vault for secrets management. Ansible manages Vault configuration and policy deployment.",
+      "redHatProducts": ["ocp", "aap"]
+    },
+    {
+      "name": "Kafka",
+      "aliases": ["Apache Kafka", "Confluent", "Strimzi", "Confluent Platform"],
+      "category": "streaming",
+      "redHatPositioning": "AMQ Streams (Strimzi) provides Kafka on OpenShift with operator-managed lifecycle. Ansible automates Kafka cluster provisioning.",
+      "redHatProducts": ["ocp", "aap"]
+    },
+    {
+      "name": "Oracle",
+      "aliases": ["Oracle Cloud", "OCI", "Oracle Database", "Oracle Exadata"],
+      "category": "cloud-database",
+      "redHatPositioning": "RHEL is certified on Oracle Cloud. Oracle Cloud Marketplace Publisher Agreement signed — Red Hat products available for purchase directly. OpenShift runs on OCI.",
+      "redHatProducts": ["rhel", "ocp"]
+    },
+    {
+      "name": "SUSE",
+      "aliases": ["SLES", "Rancher", "SUSE Linux", "SUSE Manager"],
+      "category": "competitor-linux",
+      "redHatPositioning": "RHEL provides superior lifecycle management, ecosystem breadth, and enterprise support. CentOS-to-RHEL migration path. Insights provides proactive risk assessment.",
+      "redHatProducts": ["rhel", "satellite"]
+    },
+    {
+      "name": "Canonical",
+      "aliases": ["Ubuntu", "Ubuntu Server", "Landscape", "Ubuntu Pro"],
+      "category": "competitor-linux",
+      "redHatPositioning": "RHEL provides predictable lifecycle, certified ISV ecosystem, and enterprise compliance. Convert Ubuntu workloads to RHEL for consistent enterprise support.",
+      "redHatProducts": ["rhel", "satellite"]
+    },
+    {
+      "name": "Ansible",
+      "aliases": ["Ansible Tower", "AWX", "Ansible Automation Platform", "AAP"],
+      "category": "automation",
+      "redHatPositioning": "Ansible Automation Platform provides enterprise automation with RBAC, audit logging, and certified content. Event-Driven Ansible enables reactive automation.",
+      "redHatProducts": ["aap"]
+    },
+    {
+      "name": "Puppet",
+      "aliases": ["Puppet Enterprise", "Puppet Agent"],
+      "category": "configuration-management",
+      "redHatPositioning": "Ansible provides agentless configuration management as a Puppet alternative. Ansible Automation Platform eliminates the need for agent deployment and PKI infrastructure.",
+      "redHatProducts": ["aap"]
+    },
+    {
+      "name": "Chef",
+      "aliases": ["Chef Infra", "Chef Automate"],
+      "category": "configuration-management",
+      "redHatPositioning": "Ansible provides agentless alternative to Chef. No Ruby dependency, YAML-based playbooks are more accessible. Ansible Automation Platform offers enterprise governance.",
+      "redHatProducts": ["aap"]
+    },
+    {
+      "name": "Dynatrace",
+      "aliases": ["Dynatrace OneAgent", "Dynatrace SaaS"],
+      "category": "observability",
+      "redHatPositioning": "OpenShift integrates with Dynatrace for full-stack monitoring. Ansible automates Dynatrace deployment. OpenShift includes built-in monitoring with Prometheus and Grafana.",
+      "redHatProducts": ["ocp", "aap"]
+    },
+    {
+      "name": "Jira",
+      "aliases": ["Jira Software", "Jira Service Management", "Atlassian Jira"],
+      "category": "project-management",
+      "redHatPositioning": "Ansible Automation Platform integrates with Jira for automated ticket workflows. Red Hat Developer Hub provides Jira integration for developer portal.",
+      "redHatProducts": ["aap", "rhdh"]
+    },
+    {
+      "name": "Elasticsearch",
+      "aliases": ["Elastic", "ELK Stack", "Kibana", "Logstash", "OpenSearch"],
+      "category": "search-analytics",
+      "redHatPositioning": "OpenShift provides certified Elasticsearch operators for log aggregation. OpenShift Logging (based on Vector/Loki) offers integrated alternative. Ansible manages Elasticsearch clusters.",
+      "redHatProducts": ["ocp", "aap"]
+    },
+    {
+      "name": "Nginx",
+      "aliases": ["NGINX Plus", "NGINX Ingress"],
+      "category": "web-server",
+      "redHatPositioning": "OpenShift includes HAProxy-based ingress by default. Red Hat 3scale API Management provides API gateway capabilities beyond basic reverse proxy.",
+      "redHatProducts": ["ocp"]
+    },
+    {
+      "name": "MongoDB",
+      "aliases": ["MongoDB Atlas", "Mongo"],
+      "category": "database",
+      "redHatPositioning": "MongoDB has certified OpenShift operator for deployment on OpenShift. Ansible automates MongoDB provisioning and configuration.",
+      "redHatProducts": ["ocp", "aap"]
+    },
+    {
+      "name": "PostgreSQL",
+      "aliases": ["Postgres", "Aurora PostgreSQL", "Cloud SQL PostgreSQL"],
+      "category": "database",
+      "redHatPositioning": "Crunchy PostgreSQL operator is certified on OpenShift. RHEL ships PostgreSQL packages. Ansible manages PostgreSQL deployment and configuration.",
+      "redHatProducts": ["ocp", "rhel", "aap"]
+    },
+    {
+      "name": "GitHub",
+      "aliases": ["GitHub Actions", "GitHub Enterprise", "GitHub Copilot"],
+      "category": "devops",
+      "redHatPositioning": "OpenShift Pipelines and GitOps integrate with GitHub for CI/CD. Red Hat Developer Hub provides GitHub integration for developer portal and software catalog.",
+      "redHatProducts": ["ocp", "rhdh"]
+    },
+    {
+      "name": "Tableau",
+      "aliases": ["Tableau Server", "Tableau Online", "Tableau Cloud"],
+      "category": "analytics",
+      "redHatPositioning": "RHEL provides certified platform for Tableau Server deployment. Ansible automates Tableau infrastructure provisioning and scaling.",
+      "redHatProducts": ["rhel", "aap"]
+    },
+    {
+      "name": "SAP",
+      "aliases": ["SAP HANA", "SAP S/4HANA", "SAP ERP", "SAP BTP"],
+      "category": "erp",
+      "redHatPositioning": "RHEL for SAP Solutions is the #1 certified Linux platform for SAP HANA and S/4HANA. Ansible for SAP provides automated deployment and lifecycle management.",
+      "redHatProducts": ["rhel", "aap"]
+    }
+  ]
+}

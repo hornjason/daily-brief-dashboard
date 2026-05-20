@@ -77,14 +77,12 @@ describe('news-module signals()', () => {
     expect(signal.type).toBe('news')
     expect(signal.headline).toBe('Company announces major acquisition')
     expect(signal.detail).toBe('Company XYZ acquires competitor for $5B')
-    expect(signal.score).toBe(0.8)  // 8/10 = 0.8
+    expect(signal.rawRelevance).toBe(0.8)  // ADR-027: modules use rawRelevance, not score
     expect(signal.timestamp).toBe('2026-05-14T10:00:00Z')
     expect(signal.url).toBe('https://example.com/article')
-    expect(signal.metadata).toEqual({
-      productTags: undefined,  // Not set in test data
-      sourceName: 'TechCrunch',
-      signalType: 'acquisition',
-    })
+    expect(signal.metadata?.customerSlug).toBe(testSlug)  // ADR-027: added customerSlug
+    expect(signal.metadata?.sourceName).toBe('TechCrunch')
+    expect(signal.metadata?.signalType).toBe('acquisition')
   })
 
   it('normalizes significanceScore from 0-10 to score 0-1', async () => {
@@ -104,11 +102,11 @@ describe('news-module signals()', () => {
     const newsModule = FeatureModuleRegistry.get('news-radar')
     const signals = await newsModule!.signals!(testSlug)
 
-    // Verify: All 3 pass threshold, sorted by score descending
+    // Verify: All 3 pass threshold, sorted by rawRelevance descending (ADR-027)
     expect(signals).toHaveLength(3)
-    expect(signals[0].score).toBe(1.0)  // 10/10
-    expect(signals[1].score).toBe(0.8)  // 8/10
-    expect(signals[2].score).toBe(0.7)  // 7/10
+    expect(signals[0].rawRelevance).toBe(1.0)  // 10/10
+    expect(signals[1].rawRelevance).toBe(0.8)  // 8/10
+    expect(signals[2].rawRelevance).toBe(0.7)  // 7/10
   })
 
   it('filters by threshold (default 7)', async () => {
@@ -232,10 +230,10 @@ describe('news-module signals()', () => {
     const newsModule = FeatureModuleRegistry.get('news-radar')
     const signals = await newsModule!.signals!(testSlug)
 
-    // Verify: Results sorted by score descending (10, 8, 7)
+    // Verify: Results sorted by rawRelevance descending (10, 8, 7) — ADR-027
     expect(signals).toHaveLength(3)
-    expect(signals[0].score).toBe(1.0)  // 10/10
-    expect(signals[1].score).toBe(0.8)  // 8/10
-    expect(signals[2].score).toBe(0.7)  // 7/10
+    expect(signals[0].rawRelevance).toBe(1.0)  // 10/10
+    expect(signals[1].rawRelevance).toBe(0.8)  // 8/10
+    expect(signals[2].rawRelevance).toBe(0.7)  // 7/10
   })
 })

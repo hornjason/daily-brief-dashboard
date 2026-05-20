@@ -28,6 +28,7 @@ import { stampProvenance, mergeProvenance, resolveDiscoveryResult } from './acco
 import { APP_VERSION } from './admin-routes.ts'
 import { deriveConfidence, ConnectionHealthSchema } from './connection-health.ts'
 import { markRunning, recordOutcome, getScraperStatus, getUnifiedStatus } from './scraper-status-store.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { ScraperRegistry } from './scraper-registry.ts'
 
 // ── BKL-M50e: Scraper telemetry + history ──────────────────────────────────
@@ -496,9 +497,11 @@ export async function runRhScrapeWithState(): Promise<void> {
       // Write name-discovered cases directly (no batch scrape needed)
       await writeJsonAtomicAsync(RH_CASES_CACHE_PATH, { scrapedAt: new Date().toISOString(), accounts: [], cases: nameDiscoveredCases }, { mode: 0o600 })
       recordOutcome('rh-cases', { success: true, recordCount: nameDiscoveredCases.length })
+      FeatureModuleRegistry.recordOutcome('rh-cases', { success: true, recordCount: nameDiscoveredCases.length })
     } else {
       console.log('[rh-scraper] no account numbers and no name-search cases — nothing to cache')
       recordOutcome('rh-cases', { success: true, recordCount: 0 })
+      FeatureModuleRegistry.recordOutcome('rh-cases', { success: true, recordCount: 0 })
     }
     return
   }
@@ -618,6 +621,7 @@ export async function runRhScrapeWithState(): Promise<void> {
       recordCount: cases.length,
       durationMs: Date.now() - _rhTelemetryStart,
     })
+    FeatureModuleRegistry.recordOutcome('rh-cases', { success: true, recordCount: cases.length })
     // BKL-CONN-ARCH-01: clear failure count for connection-state grace tracking
     recordConnectionSuccess('rh')
 
@@ -648,6 +652,7 @@ export async function runRhScrapeWithState(): Promise<void> {
       durationMs: Date.now() - _rhTelemetryStart,
       error: sanitizeErr(e),
     })
+    FeatureModuleRegistry.recordOutcome('rh-cases', { success: false, error: sanitizeErr(e) })
 
     // BKL-CONN-ARCH-01: track outcome through scrape-outcome.ts. Auth signals
     // (SessionExpiredError) expire immediately; other errors require 2

@@ -142,6 +142,36 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
+  // SWOT Analysis — present, >= 100 chars
+  const swot = parsed.sections?.swotAnalysis?.content ?? ''
+  checks.push({
+    name: 'swot-present',
+    passed: swot.length >= 100,
+    expected: '>= 100 chars',
+    actual: `${swot.length} chars`,
+    severity: 'required',
+  })
+
+  // MEDDPICC — 8 entries
+  const meddpicEntries = parsed.sections?.meddpicc?.entries ?? []
+  checks.push({
+    name: 'meddpicc-entries',
+    passed: meddpicEntries.length === 8,
+    expected: '8 entries',
+    actual: `${meddpicEntries.length} entries`,
+    severity: 'required',
+  })
+
+  // MEDDPICC — not all unknown
+  const hasKnownFields = meddpicEntries.some(e => e.status !== 'unknown')
+  checks.push({
+    name: 'meddpicc-not-all-unknown',
+    passed: hasKnownFields,
+    expected: 'at least 1 non-unknown',
+    actual: `${meddpicEntries.filter(e => e.status !== 'unknown').length} known`,
+    severity: 'required',
+  })
+
   return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, checks)
 }
 

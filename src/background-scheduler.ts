@@ -1,4 +1,4 @@
-import { existsSync, unlinkSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, unlinkSync, readFileSync, writeFileSync, statSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
@@ -231,6 +231,7 @@ let _watchdogRhSessionPath = ''
 
 let _subscriptionsLastRun = 0
 let _ccspLastRun = 0
+let _pipelineLastRun = 0
 let _heartbeatStarted = false
 
 export function rescheduleRefreshTimers(intervals: typeof DEFAULT_REFRESH_INTERVALS): void {
@@ -238,6 +239,7 @@ export function rescheduleRefreshTimers(intervals: typeof DEFAULT_REFRESH_INTERV
   // Setting to Date.now() means "just ran" — first refresh fires after the configured interval.
   _subscriptionsLastRun = Date.now()
   _ccspLastRun = Date.now()
+  _pipelineLastRun = Date.now()
 
   if (customers.length === 0) return
 
@@ -1024,8 +1026,45 @@ export function initBackgroundScheduler(opts: {
   // On startup: run a full refresh, then schedule per-source timers
   if (customers.length > 0) {
     refreshAll().catch((e: any) => console.error('[refresh] startup refresh failed:', e?.message ?? e))
+
+    // #305: Force-refresh pipeline if cache is empty (first container start or after wipe)
+    const pipelineCache = readPipelineCache()
+    if (!pipelineCache?.records || pipelineCache.records.length === 0) {
+      console.log('[startup] pipeline cache empty — force refreshing')
+      refreshPipeline(true).catch((e: any) => console.error('[refresh] pipeline startup refresh failed:', e?.message ?? e))
+    }
+
     rescheduleRefreshTimers(getRefreshIntervals())
   }
+
+  // #309: Seed initial status from cache file mtimes for sources without explicit tracking
+  setTimeout(async () => {
+    try {
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const CACHE = process.env.CACHE_DIR ?? 'data/cache'
+      const seedFromCache = (name: string, cachePath: string) => {
+        try {
+          if (existsSync(cachePath)) {
+            const stat = statSync(cachePath)
+            const existing = FeatureModuleRegistry.getAllStatus()[name]
+            if (!existing?.lastChecked) {
+              FeatureModuleRegistry.updateStatus(name, {
+                lastChecked: stat.mtime.toISOString(),
+                lastChanged: stat.mtime.toISOString(),
+              })
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      seedFromCache('rh-cases', resolve(CACHE, 'cases.json'))
+      seedFromCache('rss', resolve(CACHE, 'rss-cache.json'))
+      seedFromCache('events', resolve(CACHE, 'events.json'))
+      seedFromCache('partners', resolve(process.env.CONFIG_DIR ?? 'config', 'partners.json'))
+      console.log('[registry] Seeded initial status from cache file mtimes')
+    } catch (e: any) {
+      console.warn('[registry] Failed to seed status from cache files:', e?.message)
+    }
+  }, 3000)
 
   // L4 writer schedulers — primary node only (BKL-SYNC-L3-02)
   if (isPrimary) {
@@ -1200,6 +1239,17 @@ export function initBackgroundScheduler(opts: {
           console.log(`[refresh] tick: CCSP due (${Math.round(ccspElapsed / 60_000)}m elapsed) — triggering`)
           _ccspLastRun = now
           refreshCCSP().catch((e: any) => console.error('[refresh] CCSP failed:', e?.message ?? e))
+        }
+      }
+
+      // Timer 3: Pipeline refresh (#302 — runs on hero installs via L3 Drive CSV sync)
+      if (customers.length > 0) {
+        const pipelineIntervalMs = intervals.pipeline * 60 * 1000
+        const pipelineElapsed = now - _pipelineLastRun
+        if (pipelineElapsed >= pipelineIntervalMs) {
+          console.log(`[refresh] tick: Pipeline due (${Math.round(pipelineElapsed / 60_000)}m elapsed) — triggering`)
+          _pipelineLastRun = now
+          refreshPipeline().catch((e: any) => console.error('[refresh] Pipeline failed:', e?.message ?? e))
         }
       }
 

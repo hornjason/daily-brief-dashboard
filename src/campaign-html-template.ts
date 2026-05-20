@@ -6,6 +6,7 @@
  */
 
 import type { AccountTeamMember } from './types.ts'
+import { escapeHtml, applyInlineFormatting } from './lib/markdown-to-html.ts'
 
 interface CampaignHTMLOptions {
   materialTitle: string
@@ -119,39 +120,8 @@ function parseCampaignMarkdown(markdown: string): ParsedCampaign {
 }
 
 /**
- * Escape HTML special characters
- */
-function escapeHTML(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
-}
-
-/**
- * Convert markdown-style links to HTML links
- */
-function convertMarkdownLinks(text: string): string {
-  // Standard markdown: [text](url) -> <a href="url">text</a>
-  let result = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: #1a73e8;">$1</a>')
-  // Gemini alternate format: [url] text -> <a href="url">text</a>
-  result = result.replace(/\[(https?:\/\/[^\]]+)\]\s*([^[\n]+)/g, '<a href="$1" style="color: #1a73e8;">$2</a>')
-  // Bare URLs: https://... -> clickable link
-  result = result.replace(/(?<!")(https?:\/\/[^\s<>"]+)/g, '<a href="$1" style="color: #1a73e8;">Link</a>')
-  return result
-}
-
-/**
- * Convert markdown bold to HTML strong
- */
-function convertMarkdownBold(text: string): string {
-  return text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-}
-
-/**
- * Convert markdown bullets to HTML
+ * Convert markdown bullets to HTML with campaign-specific styling.
+ * Uses shared applyInlineFormatting for inline markup (GitHub Issue #311).
  */
 function convertMarkdownBullets(text: string): string {
   const lines = text.split('\n')
@@ -164,14 +134,14 @@ function convertMarkdownBullets(text: string): string {
       if (!inBulletList) {
         inBulletList = true
       }
-      const bulletText = convertMarkdownLinks(convertMarkdownBold(bulletMatch[1]))
+      const bulletText = applyInlineFormatting(bulletMatch[1])
       html += `<p style="font-size: 15px; padding: 4px 0 4px 24px; margin: 4px 0; position: relative;"><span style="position: absolute; left: 8px; color: #c41e3a; font-size: 18px;">•</span>${bulletText}</p>\n`
     } else {
       if (inBulletList && line.trim() === '') {
         inBulletList = false
       }
       if (line.trim().length > 0) {
-        const formattedLine = convertMarkdownLinks(convertMarkdownBold(line))
+        const formattedLine = applyInlineFormatting(line)
         html += `<p style="font-size: 15px; margin: 0 0 10px 0;">${formattedLine}</p>\n`
       }
     }
@@ -404,17 +374,17 @@ export function generateCampaignHTML(options: CampaignHTMLOptions): string {
 <head><meta charset="utf-8"></head>
 <body style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.7; color: #202124;">
 
-<h1 style="font-size: 28px; color: #c41e3a; margin: 0 0 4px 0; border-bottom: 3px solid #c41e3a; padding-bottom: 12px;">Content Campaign: ${escapeHTML(options.materialTitle)}</h1>
-<h2 style="font-size: 22px; color: #202124; margin: 8px 0 4px 0;">${escapeHTML(options.customerName)}</h2>
+<h1 style="font-size: 28px; color: #c41e3a; margin: 0 0 4px 0; border-bottom: 3px solid #c41e3a; padding-bottom: 12px;">Content Campaign: ${escapeHtml(options.materialTitle)}</h1>
+<h2 style="font-size: 22px; color: #202124; margin: 8px 0 4px 0;">${escapeHtml(options.customerName)}</h2>
 <p style="font-size: 14px; color: #5f6368; margin: 0 0 24px 0;">Generated ${options.generatedDate} · ${
   options.accountTeam && options.accountTeam.length > 0
-    ? options.accountTeam.map(m => `${m.role.toUpperCase()}: ${escapeHTML(m.name)}`).join(' · ')
-    : `AE: ${escapeHTML(options.aeName)}`
-}${options.focus ? ` · Focus: ${escapeHTML(options.focus)}` : ''}${options.style ? ` · Style: ${escapeHTML(options.style)}` : ''}</p>
+    ? options.accountTeam.map(m => `${m.role.toUpperCase()}: ${escapeHtml(m.name)}`).join(' · ')
+    : `AE: ${escapeHtml(options.aeName)}`
+}${options.focus ? ` · Focus: ${escapeHtml(options.focus)}` : ''}${options.style ? ` · Style: ${escapeHtml(options.style)}` : ''}</p>
 
 <table width="100%" cellpadding="10" cellspacing="0" style="background: #f8f9fa; margin-bottom: 24px;">
   <tr>
-    <td style="font-size: 14px; color: #5f6368;"><strong style="color: #202124;">Source:</strong> <a href="${escapeHTML(options.materialUrl)}" style="color: #1a73e8;">${escapeHTML(options.materialTitle)}</a></td>
+    <td style="font-size: 14px; color: #5f6368;"><strong style="color: #202124;">Source:</strong> <a href="${escapeHtml(options.materialUrl)}" style="color: #1a73e8;">${escapeHtml(options.materialTitle)}</a></td>
   </tr>
 </table>
 
@@ -426,22 +396,22 @@ ${contacts.length > 0 ? `
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Title</td>
   </tr>
   ${contacts.map(c => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHTML(c.name)}</td>
-    <td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.title)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(c.name)}</td>
+    <td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.title)}</td>
   </tr>`).join('\n')}
 </table>` : ''}
 
 <h2 style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #c41e3a; margin: 16px 0 12px 0;">🎯 Generation Config</h2>
 <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #5f6368; margin-bottom: 16px; border: 1px solid #e8eaed;">
   <tr><td style="font-weight: bold; width: 120px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Model</td><td style="border-bottom: 1px solid #e8eaed;">Gemini 2.5 Pro (Vertex AI)</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(options.aeName)}</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">AE Voice</td><td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(options.aeName)}</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Account Team</td><td style="border-bottom: 1px solid #e8eaed;">${
     options.accountTeam && options.accountTeam.length > 0
-      ? options.accountTeam.map(m => `${escapeHTML(m.name)} (${m.role.toUpperCase()})`).join(', ')
-      : escapeHTML(options.aeName) + ' (AE)'
+      ? options.accountTeam.map(m => `${escapeHtml(m.name)} (${m.role.toUpperCase()})`).join(', ')
+      : escapeHtml(options.aeName) + ' (AE)'
   }</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Email Tiers</td><td style="border-bottom: 1px solid #e8eaed;">3 Executive (≤90 words) + 3 Manager (200-250 words)</td></tr>
-  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Target Personas</td><td style="border-bottom: 1px solid #e8eaed;">${parsed.emailTemplates.length > 0 ? parsed.emailTemplates.map(e => `${escapeHTML(e.persona)} (${escapeHTML(e.tier)})`).join(' · ') : '6 personas (3 exec + 3 mgr)'}</td></tr>
+  <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Target Personas</td><td style="border-bottom: 1px solid #e8eaed;">${parsed.emailTemplates.length > 0 ? parsed.emailTemplates.map(e => `${escapeHtml(e.persona)} (${escapeHtml(e.tier)})`).join(' · ') : '6 personas (3 exec + 3 mgr)'}</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">Signals Used</td><td style="border-bottom: 1px solid #e8eaed;">${options.signalsLoaded?.join(', ') || 'Intelligence brief, customer docs, subscriptions, cases, account plan'}</td></tr>
   <tr><td style="font-weight: bold; background: #f8f9fa;">Council Rules</td><td>11 council-validated email design rules (see checklist below)</td></tr>
 </table>
@@ -488,7 +458,7 @@ ${contacts.length > 0 ? `
 </table>
 
 ${parsed.customerContext ? `<h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">📋 Customer Context</h3>
-<p style="font-size: 15px; color: #5f6368; margin: 0 0 20px 0;">${escapeHTML(parsed.customerContext)}</p>` : ''}
+<p style="font-size: 15px; color: #5f6368; margin: 0 0 20px 0;">${escapeHtml(parsed.customerContext)}</p>` : ''}
 
 ${structured.initiatives.length > 0 ? `
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">🎯 Strategic Initiatives</h3>
@@ -499,15 +469,15 @@ ${structured.initiatives.length > 0 ? `
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Detail</td>
   </tr>
   ${structured.initiatives.map(i => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHTML(i.name)}</td>
-    <td style="border-bottom: 1px solid #e8eaed; text-align: center;"><span style="background: ${i.priority === 'HIGH' ? '#c5221f' : '#f9ab00'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${escapeHTML(i.priority)}</span></td>
-    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHTML(i.detail)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(i.name)}</td>
+    <td style="border-bottom: 1px solid #e8eaed; text-align: center;"><span style="background: ${i.priority === 'HIGH' ? '#c5221f' : '#f9ab00'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">${escapeHtml(i.priority)}</span></td>
+    <td style="border-bottom: 1px solid #e8eaed; font-size: 13px; color: #5f6368;">${escapeHtml(i.detail)}</td>
   </tr>`).join('\n')}
 </table>` : ''}
 
 ${structured.competitors.length > 0 ? `
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚔️ Competitive Position</h3>
-${(structured as any).differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHTML((structured as any).differentiation)}</p>` : ''}
+${(structured as any).differentiation ? `<p style="font-size: 14px; color: #5f6368; margin: 0 0 12px 0;"><strong>Differentiation:</strong> ${escapeHtml((structured as any).differentiation)}</p>` : ''}
 <table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px;">
   <tr style="background: #f8f9fa;">
     <td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Competitor</td>
@@ -515,16 +485,16 @@ ${(structured as any).differentiation ? `<p style="font-size: 14px; color: #5f63
     ${structured.competitors.some(c => c.advantage) ? `<td style="font-weight: bold; border-bottom: 1px solid #dadce0;">Advantage</td>` : ''}
   </tr>
   ${structured.competitors.map(c => `<tr>
-    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHTML(c.name)}</td>
-    ${structured.competitors.some(cc => cc.threat) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.threat)}</td>` : ''}
-    ${structured.competitors.some(cc => cc.advantage) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHTML(c.advantage)}</td>` : ''}
+    <td style="border-bottom: 1px solid #e8eaed; font-weight: bold;">${escapeHtml(c.name)}</td>
+    ${structured.competitors.some(cc => cc.threat) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.threat)}</td>` : ''}
+    ${structured.competitors.some(cc => cc.advantage) ? `<td style="border-bottom: 1px solid #e8eaed;">${escapeHtml(c.advantage)}</td>` : ''}
   </tr>`).join('\n')}
 </table>` : ''}
 
 <h3 style="font-size: 16px; color: #202124; margin: 24px 0 12px 0;">⚠️ Outreach Guardrails</h3>
-<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHTML(g)).join(', ')}</p>
-${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHTML(g)).join(', ')}</p>` : ''}
-<p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHTML(g)).join(', ')}</p>
+<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fce8e6; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">NEVER</span> ${structured.guardrails.never.map(g => escapeHtml(g)).join(', ')}</p>
+${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin: 4px 0;"><span style="background: #fef7e0; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">CAREFUL</span> ${structured.guardrails.careful.map(g => escapeHtml(g)).join(', ')}</p>` : ''}
+<p style="font-size: 14px; margin: 4px 0;"><span style="background: #e6f4ea; color: #137333; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">SAFE</span> ${structured.guardrails.safe.map(g => escapeHtml(g)).join(', ')}</p>
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
 
@@ -536,7 +506,7 @@ ${structured.guardrails.careful.length > 0 ? `<p style="font-size: 14px; margin:
 
 ${parsed.positioning.map((p, i) => `<div style="border-left: 4px solid #c41e3a; padding: 16px 20px; margin-bottom: 20px; background: #fef7f7;">
   <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #c41e3a; font-weight: bold; margin: 0 0 8px 0;">MATCH #${i + 1}</p>
-  <p style="font-size: 15px; color: #3c4043; margin: 0; line-height: 1.6;">${convertMarkdownLinks(convertMarkdownBold(escapeHTML(p)))}</p>
+  <p style="font-size: 15px; color: #3c4043; margin: 0; line-height: 1.6;">${applyInlineFormatting(escapeHtml(p))}</p>
 </div>`).join('\n')}
 
 <hr style="border: none; border-top: 1px solid #dadce0; margin: 32px 0;">
@@ -546,15 +516,15 @@ ${parsed.positioning.map((p, i) => `<div style="border-left: 4px solid #c41e3a; 
 
 ${parsed.emailTemplates.map(email => `<div style="border: 2px solid #dadce0; margin-bottom: 24px;">
   <div style="background: #c41e3a; padding: 12px 20px;">
-    <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHTML(email.persona)}</span>
+    <span style="color: white; font-size: 16px; font-weight: bold;">📧  ${escapeHtml(email.persona)}</span>
   </div>
   <div style="padding: 8px 20px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;">
-    <p style="font-size: 14px; color: #5f6368; margin: 0;">Subject: <strong style="color: #202124;">${escapeHTML(email.subject)}</strong></p>
+    <p style="font-size: 14px; color: #5f6368; margin: 0;">Subject: <strong style="color: #202124;">${escapeHtml(email.subject)}</strong></p>
   </div>
   <div style="padding: 20px;">
     ${convertMarkdownBullets(email.body)}
     <div style="margin-top: 20px; padding-top: 14px; border-top: 3px solid #c41e3a;">
-      <p style="font-size: 16px; font-weight: bold; margin: 0;">${escapeHTML(options.aeName)}</p>
+      <p style="font-size: 16px; font-weight: bold; margin: 0;">${escapeHtml(options.aeName)}</p>
       <p style="font-size: 14px; color: #5f6368; margin: 2px 0 0 0;">Account Executive · <span style="color: #c41e3a; font-weight: bold;">Red Hat</span></p>
     </div>
   </div>

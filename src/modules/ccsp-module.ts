@@ -13,6 +13,8 @@ import { toSlug } from '../cache-layer.ts'
 
 FeatureModuleRegistry.register({
   name: 'ccsp',
+  displayName: 'CCSP Cloud Spend',
+  refreshEndpoint: '/api/refresh/ccsp',
 
   scope: 'customer',
 
@@ -52,14 +54,21 @@ FeatureModuleRegistry.register({
         'Google': 'OSD on GCP (OpenShift Dedicated)',
       }
 
+      // ADR-027: rawRelevance based on ACV
+      let rawRelevance = 0.3
+      if (acv > 100000) rawRelevance = 0.9
+      else if (acv > 50000) rawRelevance = 0.7
+      else if (acv > 10000) rawRelevance = 0.5
+
       signals.push({
         source: 'ccsp',
         type: 'cloud-spend',
         headline: `${cloud} cloud spend: $${Math.round(acv).toLocaleString()} ACV`,
         detail: `Products: ${products.join(', ') || 'unspecified'}. ${cloudToProduct[cloud] ? `Managed service opportunity: ${cloudToProduct[cloud]}` : ''}`,
-        score: acv > 100000 ? 0.9 : acv > 50000 ? 0.7 : acv > 10000 ? 0.5 : 0.3,
+        rawRelevance,
         timestamp: cache.cachedAt,
         metadata: {
+          customerSlug,  // ADR-027: Mark as customer-specific
           cloudPartner: cloud,
           acvPlus: acv,
           products,
@@ -76,10 +85,11 @@ FeatureModuleRegistry.register({
         type: 'cloud-spend',
         headline: `Total cloud spend: $${Math.round(totalACV).toLocaleString()} ACV across ${clouds.join(', ')}`,
         detail: `Customer is active on ${clouds.length} cloud platform${clouds.length > 1 ? 's' : ''}. Consider cross-cloud consistency positioning with OpenShift.`,
-        score: 0.8,
+        rawRelevance: 0.8,
         timestamp: cache.cachedAt,
         metadata: {
-          totalACV,
+          customerSlug,  // ADR-027: Mark as customer-specific
+          acvPlus: totalACV,
           cloudPartners: clouds,
         },
       })

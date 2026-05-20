@@ -96,6 +96,8 @@ async function fetchFromDrive(deckId: string): Promise<void> {
 
 FeatureModuleRegistry.register({
   name: 'value-maps',
+  displayName: 'Value Maps',
+  refreshEndpoint: '/api/products/refresh-all',
 
   scope: 'portfolio',
 
@@ -149,12 +151,13 @@ FeatureModuleRegistry.register({
         type: 'intelligence',
         headline: `Business value context for ${slug.toUpperCase()}`,
         detail: summary,
-        score: isCustomerSpecific ? 0.75 : 0.6,
+        rawRelevance: isCustomerSpecific ? 0.75 : 0.6,  // ADR-027
         timestamp: new Date().toISOString(),
         metadata: {
+          customerSlug: isCustomerSpecific ? customerSlug : undefined,  // ADR-027: Only customer-specific if they have products
           productSlug: slug,
           contentLength: content.length,
-          isCustomerSpecific,
+          redHatProducts: [slug],  // ADR-027: booster for RH products
         },
       })
     }

@@ -11,6 +11,8 @@ import { toSlug } from '../cache-layer.ts'
 
 FeatureModuleRegistry.register({
   name: 'pipeline',
+  displayName: 'Pipeline',
+  refreshEndpoint: '/api/refresh/pipeline',
   scope: 'portfolio',
   cachePaths: () => ['data/cache/pipeline-data.json'],
   async fetch(): Promise<void> {},
@@ -46,24 +48,27 @@ FeatureModuleRegistry.register({
       const name = opp.oppName ?? 'Opportunity'
       const closeDate = opp.closeDate ?? ''
 
-      let score = 0.5
+      // ADR-027: rawRelevance based on stage
+      let rawRelevance = 0.5
       const stageLower = stage.toLowerCase()
-      if (stageLower.includes('commit') || stageLower.includes('closed')) score = 0.9
-      else if (stageLower.includes('best case') || stageLower.includes('upside')) score = 0.7
-      else if (stageLower.includes('pipeline')) score = 0.4
+      if (stageLower.includes('commit') || stageLower.includes('closed')) rawRelevance = 0.9
+      else if (stageLower.includes('best case') || stageLower.includes('upside')) rawRelevance = 0.7
+      else if (stageLower.includes('pipeline')) rawRelevance = 0.5
+      else rawRelevance = 0.3
 
       signals.push({
         source: 'pipeline',
         type: 'expansion',
         headline: `${name} — ${stage}`,
         detail: `$${Math.round(acv).toLocaleString()} ACV${closeDate ? ` | Close: ${closeDate}` : ''} | ${opp.products?.join(', ') ?? ''}`,
-        score,
+        rawRelevance,
         timestamp: cache.cachedAt ?? new Date().toISOString(),
         expiresAt: closeDate || undefined,  // Opportunities expire after close date (GitHub Issue #278)
         metadata: {
+          customerSlug,  // ADR-027: Mark as customer-specific
           opportunityName: name,
           stage,
-          acv,
+          amount: acv,  // ADR-027: amount for scoring booster
           closeDate,
           products: opp.products,
           renewal: opp.renewal,

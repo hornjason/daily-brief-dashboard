@@ -15,6 +15,8 @@ const CASES_PATH = resolve(CACHE_DIR, 'cases.json')
 
 FeatureModuleRegistry.register({
   name: 'cases',
+  displayName: 'RH Cases',
+  refreshEndpoint: '/api/scrape/rh',
   scope: 'portfolio',
   cachePaths: () => ['data/cache/cases.json'],
   async fetch(): Promise<void> {},
@@ -47,20 +49,30 @@ FeatureModuleRegistry.register({
 
     if (customerCases.length === 0) return []
 
-    return customerCases.map(c => ({
-      source: 'cases',
-      type: 'case' as const,
-      headline: `Case ${c.caseNumber}: ${c.summary?.substring(0, 80) ?? 'No summary'}`,
-      detail: `Status: ${c.status} | Severity: ${c.severity} | Product: ${c.product ?? 'Unknown'} | Open ${c.daysOpen ?? '?'} days`,
-      score: c.severity === '1' ? 0.9 : c.severity === '2' ? 0.7 : c.severity === '3' ? 0.5 : 0.3,
-      timestamp: new Date().toISOString(),
-      metadata: {
-        caseNumber: c.caseNumber,
-        status: c.status,
-        severity: c.severity,
-        product: c.product,
-        daysOpen: c.daysOpen,
-      },
-    }))
+    // ADR-027: rawRelevance based on severity
+    return customerCases.map(c => {
+      let rawRelevance = 0.3
+      if (c.severity === '1') rawRelevance = 0.9
+      else if (c.severity === '2') rawRelevance = 0.7
+      else if (c.severity === '3') rawRelevance = 0.5
+      else rawRelevance = 0.3
+
+      return {
+        source: 'cases',
+        type: 'case' as const,
+        headline: `Case ${c.caseNumber}: ${c.summary?.substring(0, 80) ?? 'No summary'}`,
+        detail: `Status: ${c.status} | Severity: ${c.severity} | Product: ${c.product ?? 'Unknown'} | Open ${c.daysOpen ?? '?'} days`,
+        rawRelevance,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          customerSlug,  // ADR-027: Mark as customer-specific
+          caseNumber: c.caseNumber,
+          status: c.status,
+          severity: c.severity,
+          product: c.product,
+          daysOpen: c.daysOpen,
+        },
+      }
+    })
   },
 })

@@ -119,6 +119,22 @@ FeatureModuleRegistry.register({
       }
     }
 
+    // MEDDPICC qualification gaps
+    const meddpicc = playbook.sections.meddpicc
+    if (meddpicc?.entries?.length) {
+      const unknowns = meddpicc.entries.filter(e => e.status === 'unknown')
+      if (unknowns.length > 0) {
+        signals.push({
+          source: 'playbook',
+          type: 'qualification-gap',
+          headline: `MEDDPICC: ${unknowns.length} qualification gap${unknowns.length > 1 ? 's' : ''}`,
+          detail: `Unknown fields: ${unknowns.map(e => e.displayName).join(', ')}. Needs discovery conversations.`,
+          score: unknowns.length >= 5 ? 0.8 : unknowns.length >= 3 ? 0.6 : 0.4,
+          timestamp: meddpicc.updatedAt,
+        })
+      }
+    }
+
     return signals
   },
 })

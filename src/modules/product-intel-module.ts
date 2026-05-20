@@ -14,6 +14,8 @@ const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), '
 
 FeatureModuleRegistry.register({
   name: 'product-intel',
+  displayName: 'Product Features',
+  refreshEndpoint: '/api/products/features/refresh-all',
 
   scope: 'portfolio',
 

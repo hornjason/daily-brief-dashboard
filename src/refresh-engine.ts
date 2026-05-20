@@ -14,6 +14,7 @@ import { recordOutcome } from './scraper-status-store.ts'
 import { recordCcspRefreshAt } from './ccsp-scraper.ts'
 import { recordSupportableRefreshAt } from './supportable-scraper.ts'
 import { emitCacheLevel } from './ingest-events.js'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { normalizeSettings } from './region-config.ts'
 import { parseCsvToSfReport } from './csv-parse.ts'
 import { discoverL3Csv, readL3CsvRaw } from './lib/l3-csv-reader.ts'
@@ -150,6 +151,7 @@ export async function refreshSubscriptions(force = false): Promise<void> {
     if (allCustomersCached) {
       console.log('[refresh:subscriptions] L1 cache fresh for all customers — skipping Drive check')
       emitCacheLevel({ ae: null, flow: 'sfBookings', level: 1 })
+      FeatureModuleRegistry.updateStatus('subscriptions', { lastChecked: new Date().toISOString() })
       return
     }
     try {
@@ -174,6 +176,7 @@ export async function refreshSubscriptions(force = false): Promise<void> {
   }
   const totalRows = customers.reduce((sum, cu) => sum + (readSheetCache(cu.name)?.rows?.length ?? 0), 0)
   recordOutcome('supportable', { success: true, recordCount: totalRows })
+  FeatureModuleRegistry.recordOutcome('subscriptions', { success: true, recordCount: totalRows })
   recordSupportableRefreshAt()
   console.log(`[refresh:subscriptions] done (${refreshed}/${customers.length} customers, batch mode)`)
 }
@@ -189,6 +192,7 @@ export async function refreshCCSP(force = false): Promise<void> {
         const ageHours = Math.round((now - new Date(cached.cachedAt).getTime()) / 3_600_000 * 10) / 10
         console.log(`[refresh:ccsp] L1 cache fresh (${ageHours}h old) — skipping`)
         emitCacheLevel({ ae: null, flow: 'ccsp', level: 1 })
+        FeatureModuleRegistry.updateStatus('ccsp', { lastChecked: new Date().toISOString() })
         return
       }
     }
@@ -218,30 +222,54 @@ export async function refreshCCSP(force = false): Promise<void> {
         const csvText = await readL3CsvRaw(csv.fileId, driveApi)
         const { headers, rows } = parseCsvToSfReport(csvText)
         const parsed = parseCcspRows([headers, ...rows], csv.fileId)
+
         // ADR-019: CCSP CSVs are POD-level — filter to bootstrapped customers only
         // and attribute each record to its AE (matches pipeline filterToAEs behavior)
+        const beforeFilter = parsed.length
+        const matched: CCSPRecord[] = []
+        const unmatched: string[] = []
+
         for (const rec of parsed) {
           const recName = (rec.accountName ?? '').toLowerCase()
           const custMatch = customers.find(cu => {
             const cuName = cu.name.toLowerCase()
             return recName.includes(cuName) || cuName.includes(recName)
           })
-          if (!custMatch) continue
+          if (!custMatch) {
+            unmatched.push(rec.accountName)
+            continue
+          }
           if (custMatch.ae) rec.ae = custMatch.ae
-          allRecords.push(rec)
+          matched.push(rec)
         }
+
+        allRecords.push(...matched)
         discoveredFileIds.push(csv.fileId)
+
+        // Diagnostic logging when customer filter removes all records (issue #303)
+        if (beforeFilter > 0 && matched.length === 0) {
+          console.warn(`[refresh:ccsp] ${podKey} CSV: customer filter removed all ${beforeFilter} records. ` +
+            `Unmatched accounts: [${unmatched.slice(0, 5).join(', ')}${unmatched.length > 5 ? `... (${unmatched.length - 5} more)` : ''}]. ` +
+            `Bootstrapped customers: [${customers.map(c => c.name).slice(0, 5).join(', ')}${customers.length > 5 ? `... (${customers.length - 5} more)` : ''}]`)
+        } else if (beforeFilter > 0) {
+          console.log(`[refresh:ccsp] ${podKey} CSV: ${matched.length}/${beforeFilter} records matched bootstrapped customers`)
+        }
       }
     }
 
-    // Guard: don't overwrite with empty if we already have data (unless force)
-    if (allRecords.length === 0 && (cached?.records?.length ?? 0) > 0 && !force) {
-      console.log(`[refresh:ccsp] got 0 records but cache has data — keeping existing`)
-      return
+    // Guard: never write zero records (#305)
+    // Case 1: Cache has data — don't overwrite with empty (unless force)
+    // Case 2: CSVs exist but parse returned 0 — likely parser issue, keep existing or skip
+    if (allRecords.length === 0) {
+      if (discoveredFileIds.length > 0) {
+        console.warn(`[refresh:ccsp] parsed 0 records from ${discoveredFileIds.length} CSVs — possible parser issue, keeping existing cache`)
+      }
+      return  // Never write zero records to cache
     }
 
     writeCCSPCache(allRecords, discoveredFileIds)
     recordOutcome('ccsp', { success: true, recordCount: allRecords.length })
+    FeatureModuleRegistry.recordOutcome('ccsp', { success: true, recordCount: allRecords.length })
     recordCcspRefreshAt()
     console.log(`[refresh:ccsp] done — ${allRecords.length} records from ${discoveredFileIds.length} CSVs`)
   } catch (e: any) {
@@ -260,6 +288,7 @@ export async function refreshPipeline(force = false): Promise<void> {
         const ageHours = Math.round((now - new Date(cached.cachedAt).getTime()) / 3_600_000 * 10) / 10
         console.log(`[refresh:pipeline] L1 cache fresh (${ageHours}h old) — skipping`)
         emitCacheLevel({ ae: null, flow: 'sfPipeline', level: 1 })
+        FeatureModuleRegistry.updateStatus('pipeline', { lastChecked: new Date().toISOString() })
         return
       }
     }
@@ -293,10 +322,14 @@ export async function refreshPipeline(force = false): Promise<void> {
       }
     }
 
-    // Guard: don't overwrite with empty if we already have data (unless force)
-    if (allRecords.length === 0 && (cached?.records?.length ?? 0) > 0 && !force) {
-      console.log(`[refresh:pipeline] got 0 records but cache has data — keeping existing`)
-      return
+    // Guard: never write zero records (#305)
+    // Case 1: Cache has data — don't overwrite with empty (unless force)
+    // Case 2: CSVs exist but parse returned 0 — likely parser issue, keep existing or skip
+    if (allRecords.length === 0) {
+      if (discoveredFileIds.length > 0) {
+        console.warn(`[refresh:pipeline] parsed 0 records from ${discoveredFileIds.length} CSVs — possible parser issue, keeping existing cache`)
+      }
+      return  // Never write zero records to cache
     }
 
     // Deduplicate by oppNumber (same logic as fetchPipelineData)
@@ -310,6 +343,7 @@ export async function refreshPipeline(force = false): Promise<void> {
 
     writePipelineCache(deduped, discoveredFileIds)
     recordOutcome('sf-pipeline', { success: true, recordCount: deduped.length })
+    FeatureModuleRegistry.recordOutcome('pipeline', { success: true, recordCount: deduped.length })
     console.log(`[refresh:pipeline] done — ${deduped.length} records from ${discoveredFileIds.length} CSVs`)
   } catch (e: any) {
     console.warn(`[refresh:pipeline] ${e.message}`)
@@ -335,6 +369,30 @@ export function createRefreshRouter(): Hono {
   router.post('/api/refresh/ccsp', async (c) => {
     await refreshCCSP(true)
     return c.json({ ok: true, refreshedAt: new Date().toISOString() })
+  })
+  router.post('/api/refresh/tech-stack', async (c) => {
+    let success = 0, failed = 0
+    for (const customer of customers) {
+      try {
+        const mod = FeatureModuleRegistry.get('tech-stack')
+        if (mod) await mod.syncNow(customer.name)
+        success++
+      } catch { failed++ }
+    }
+    FeatureModuleRegistry.recordOutcome('tech-stack', { success: failed === 0, recordCount: success })
+    return c.json({ ok: true, refreshed: success, failed, refreshedAt: new Date().toISOString() })
+  })
+  router.post('/api/refresh/cloud-marketplace', async (c) => {
+    const mod = FeatureModuleRegistry.get('cloud-marketplace')
+    if (!mod) return c.json({ ok: false, error: 'Module not registered' }, 500)
+    try {
+      await mod.syncNow('')
+      FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: true })
+      return c.json({ ok: true, refreshedAt: new Date().toISOString() })
+    } catch (e: any) {
+      FeatureModuleRegistry.recordOutcome('cloud-marketplace', { success: false, error: e.message })
+      return c.json({ ok: false, error: e.message }, 500)
+    }
   })
   return router
 }

@@ -10,7 +10,7 @@ export type SignalType =
   | 'news' | 'intelligence' | 'expansion' | 'subscription'
   | 'case' | 'email' | 'meeting' | 'product-release'
   | 'event' | 'product-intel' | 'account-plan' | 'competitive' | 'brief'
-  | 'cloud-spend'
+  | 'cloud-spend' | 'qualification-gap' | 'technology'
 
 export interface Signal {
   /** Module name that produced this signal (e.g., 'news-radar', 'campaigns') */
@@ -21,16 +21,102 @@ export interface Signal {
   headline: string
   /** Full content */
   detail: string
-  /** 0-1 normalized score, optional — omit when source has no natural ranking */
+  /** 0-1 normalized score, optional — SET ONLY BY REGISTRY, NOT MODULES */
   score?: number
   /** ISO 8601 timestamp */
   timestamp: string
   /** Optional URL */
   url?: string
+  /** 0-1: module's within-domain ranking (replaces score for modules) — ADR-027 */
+  rawRelevance?: number
   /** Per-type extras (e.g., case severity, subscription node count) */
   metadata?: Record<string, unknown>
   /** ISO 8601 — signal is stale/irrelevant after this date (GitHub Issue #278) */
   expiresAt?: string
+}
+
+// ── Centralized Scoring (ADR-027) ───────────────────────────────────────────
+
+type Specificity = 'customer' | 'industry' | 'general'
+
+const SPECIFICITY_RANGES: Record<Specificity, { floor: number; ceiling: number }> = {
+  'customer': { floor: 0.50, ceiling: 1.00 },
+  'industry': { floor: 0.35, ceiling: 0.69 },
+  'general':  { floor: 0.10, ceiling: 0.35 },
+}
+
+const SIGNAL_BUDGETS: Record<string, number> = {
+  'pipeline': 10,
+  'ccsp': 8,
+  'cases': 8,
+  'cloud-marketplace': 10,
+  'tech-stack': 8,
+  'rh-rss': 5,
+  'subscriptions': 5,
+  'intelligence': 5,
+  'value-maps': 3,
+  'news-radar': 5,
+}
+
+const DEFAULT_BUDGET = 5
+
+/**
+ * Detect signal specificity from metadata.
+ * ADR-027 §1 — Specificity determines score range.
+ */
+function detectSpecificity(signal: Signal): Specificity {
+  const m = signal.metadata ?? {}
+
+  // Customer-specific: has customerSlug, or source is inherently per-customer
+  if (m.customerSlug || m.accountNumber || m.severity || m.acvPlus !== undefined) {
+    return 'customer'
+  }
+
+  if (m.industryMatch) {
+    return 'industry'
+  }
+
+  return 'general'
+}
+
+/**
+ * Centralized signal scoring function.
+ * ADR-027 §4 — Modules provide rawRelevance + metadata, registry scores.
+ */
+function scoreSignal(signal: Signal): Signal {
+  const specificity = detectSpecificity(signal)
+  const { floor, ceiling } = SPECIFICITY_RANGES[specificity]
+  const tierRange = ceiling - floor
+  const rawRelevance = signal.rawRelevance ?? 0.5
+
+  let baseScore = floor + (rawRelevance * tierRange)
+
+  // Boosters from metadata (ADR-027 §3)
+  const m: any = signal.metadata ?? {}
+
+  if (Array.isArray(m.redHatProducts) && m.redHatProducts.length > 0) baseScore += 0.10
+  if ((Number(m.acvPlus) || 0) > 0 || (Number(m.amount) || 0) > 0) baseScore += 0.10
+  if (m.confidence === 'HIGH') baseScore += 0.05
+  if (m.confidence === 'LOW') baseScore -= 0.10
+  if (m.context === 'evaluating' || m.context === 'migrating_from') baseScore += 0.10
+
+  if (m.severity) {
+    const sev = Number(m.severity)
+    if (sev <= 1) baseScore += 0.15
+    else if (sev <= 2) baseScore += 0.10
+  }
+
+  if (m.endDate) {
+    const daysToEnd = (new Date(String(m.endDate)).getTime() - Date.now()) / 86400000
+    if (daysToEnd > 0 && daysToEnd <= 90) baseScore += 0.10
+  }
+
+  if (m.hasCloudSpend) baseScore += 0.10
+
+  // Clamp to specificity range
+  const finalScore = Math.max(floor, Math.min(ceiling, baseScore))
+
+  return { ...signal, score: finalScore }
 }
 
 // ── Time decay function (GitHub Issue #278) ──────────────────────────────────
@@ -80,6 +166,10 @@ export interface AccountTabDeclaration {
 export interface FeatureModule {
   /** Unique identifier (e.g., 'campaigns', 'news-radar') */
   name: string
+  /** Human-readable name for admin UI (GitHub Issue #308) */
+  displayName?: string
+  /** API endpoint to trigger manual refresh (GitHub Issue #308) */
+  refreshEndpoint?: string
   /** Cache file paths for a given customer slug */
   cachePaths: (slug: string) => string[]
   /** Optional: Drive folder paths this module writes to */
@@ -105,10 +195,11 @@ export interface FeatureModule {
 }
 
 export interface ModuleStatus {
-  lastRun: string | null
-  lastSuccess: string | null
-  lastError: string | null
-  state: 'idle' | 'running' | 'failed'
+  lastChecked: string | null    // When we last attempted refresh (even L1 cache hits)
+  lastChanged: string | null    // When data actually changed (new records/content)
+  lastError: string | null      // Actionable error message
+  state: 'idle' | 'refreshing' | 'queued' | 'error'
+  recordCount: number | null    // How many records in cache
 }
 
 export interface StartupCatchUpResult {
@@ -119,17 +210,61 @@ export interface StartupCatchUpResult {
 
 // ── Internal state ───────────────────────────────────────────────────────────
 
+import { writeFileSync, readFileSync, existsSync } from 'fs'
+import { resolve } from 'path'
+
 const _modules = new Map<string, FeatureModule>()
 const _status = new Map<string, ModuleStatus>()
+
+// ── Status persistence (GitHub Issue #309) ──────────────────────────────────
+
+const STATUS_MANIFEST_PATH = resolve(
+  process.env.CACHE_DIR ?? 'data/cache',
+  'data-sources-status.json'
+)
+
+function persistStatus(): void {
+  try {
+    const obj: Record<string, ModuleStatus> = {}
+    for (const [name, status] of _status) {
+      obj[name] = status
+    }
+    writeFileSync(STATUS_MANIFEST_PATH, JSON.stringify(obj, null, 2), { mode: 0o600 })
+  } catch (e: any) {
+    console.warn('[registry] Failed to persist status:', e.message)
+  }
+}
+
+function loadStatus(): void {
+  try {
+    if (existsSync(STATUS_MANIFEST_PATH)) {
+      const data = JSON.parse(readFileSync(STATUS_MANIFEST_PATH, 'utf-8'))
+      for (const [name, status] of Object.entries(data)) {
+        if (_status.has(name)) {
+          _status.set(name, { ..._status.get(name)!, ...(status as ModuleStatus), state: 'idle' })
+        } else {
+          _status.set(name, status as ModuleStatus)
+        }
+      }
+      console.log(`[registry] Loaded status for ${Object.keys(data).length} modules from manifest`)
+    }
+  } catch (e: any) {
+    console.warn('[registry] Failed to load status manifest:', e.message)
+  }
+}
+
+// Load persisted status at module initialization
+loadStatus()
 
 // ── Helper functions ─────────────────────────────────────────────────────────
 
 function defaultStatus(): ModuleStatus {
   return {
-    lastRun: null,
-    lastSuccess: null,
+    lastChecked: null,
+    lastChanged: null,
     lastError: null,
     state: 'idle',
+    recordCount: null,
   }
 }
 
@@ -245,8 +380,26 @@ export const FeatureModuleRegistry = {
       }
     }
 
-    // Apply time decay to all signals before returning
-    return allSignals.map(applyTimeDecay)
+    // ADR-027: Score centrally, apply time decay, budget-cap per source
+    const scored = allSignals.map(scoreSignal).map(applyTimeDecay)
+
+    // Budget cap per source
+    const bySource = new Map<string, Signal[]>()
+    for (const s of scored) {
+      const group = bySource.get(s.source) ?? []
+      group.push(s)
+      bySource.set(s.source, group)
+    }
+
+    const budgeted: Signal[] = []
+    for (const [source, signals] of bySource) {
+      const cap = SIGNAL_BUDGETS[source] ?? DEFAULT_BUDGET
+      signals.sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      budgeted.push(...signals.slice(0, cap))
+    }
+
+    budgeted.sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    return budgeted
   },
 
   /**
@@ -299,10 +452,10 @@ export const FeatureModuleRegistry = {
 
   /**
    * Record the outcome of a fetch/syncNow operation.
-   * Updates lastRun, lastSuccess/lastError, and state.
+   * Updates lastChecked, lastChanged/lastError, and state.
    */
   /**
-   * Run catch-up for all modules whose lastRun is older than their refreshInterval.
+   * Run catch-up for all modules whose lastChecked is older than their refreshInterval.
    * Called once at startup to handle missed scheduled runs (e.g., container was down overnight).
    * Modules with refreshInterval=null (on-demand only) are skipped.
    */
@@ -316,15 +469,15 @@ export const FeatureModuleRegistry = {
       }
 
       const status = _status.get(module.name)
-      const lastRun = status?.lastRun ? new Date(status.lastRun).getTime() : 0
-      const elapsed = Date.now() - lastRun
+      const lastChecked = status?.lastChecked ? new Date(status.lastChecked).getTime() : 0
+      const elapsed = Date.now() - lastChecked
 
       if (elapsed < module.refreshInterval) {
-        results.push({ moduleName: module.name, action: 'skipped', reason: `last run ${Math.round(elapsed / 60_000)}m ago, interval is ${Math.round(module.refreshInterval / 60_000)}m` })
+        results.push({ moduleName: module.name, action: 'skipped', reason: `last checked ${Math.round(elapsed / 60_000)}m ago, interval is ${Math.round(module.refreshInterval / 60_000)}m` })
         continue
       }
 
-      console.log(`[feature-module-registry] startup catch-up: ${module.name} is stale (last run ${status?.lastRun ?? 'never'})`)
+      console.log(`[feature-module-registry] startup catch-up: ${module.name} is stale (last checked ${status?.lastChecked ?? 'never'})`)
 
       for (const customerName of customerNames) {
         try {
@@ -364,8 +517,8 @@ export const FeatureModuleRegistry = {
       if (!module.syncNow) { skipped.push(module.name); continue }
 
       const status = _status.get(module.name)
-      const lastRun = status?.lastRun ? new Date(status.lastRun).getTime() : 0
-      const elapsed = Date.now() - lastRun
+      const lastChecked = status?.lastChecked ? new Date(status.lastChecked).getTime() : 0
+      const elapsed = Date.now() - lastChecked
       const threshold = module.refreshInterval ?? ON_DEMAND_STALE_MS
 
       if (elapsed < threshold) {
@@ -399,7 +552,7 @@ export const FeatureModuleRegistry = {
     return { refreshed, skipped, failed }
   },
 
-  recordOutcome(name: string, outcome: { success: boolean; error?: string }): void {
+  recordOutcome(name: string, outcome: { success: boolean; error?: string; recordCount?: number; dataChanged?: boolean }): void {
     const now = new Date().toISOString()
     let status = _status.get(name)
 
@@ -408,15 +561,60 @@ export const FeatureModuleRegistry = {
       _status.set(name, status)
     }
 
-    status.lastRun = now
+    status.lastChecked = now
 
     if (outcome.success) {
-      status.lastSuccess = now
+      // Only update lastChanged when data actually changed (not a no-op refresh)
+      if (outcome.dataChanged !== false) {
+        status.lastChanged = now
+      }
       status.lastError = null
       status.state = 'idle'
     } else {
       status.lastError = outcome.error ?? 'Unknown error'
-      status.state = 'failed'
+      status.state = 'error'
     }
+
+    if (outcome.recordCount !== undefined) {
+      status.recordCount = outcome.recordCount
+    }
+
+    persistStatus()
+  },
+
+  /**
+   * Get status map for all modules (including non-registered ones seeded from manifest).
+   * Returns a record keyed by module name. GitHub Issue #309
+   */
+  getAllStatus(): Record<string, ModuleStatus> {
+    const result: Record<string, ModuleStatus> = {}
+    for (const [name, status] of _status) {
+      result[name] = { ...status }
+    }
+    return result
+  },
+
+  /**
+   * Update status for a module externally (e.g., L1 cache hits, scraper bridges).
+   * GitHub Issue #309
+   */
+  updateStatus(name: string, partial: Partial<ModuleStatus>): void {
+    const current = _status.get(name) ?? defaultStatus()
+    _status.set(name, { ...current, ...partial })
+    persistStatus()
+  },
+
+  getAllModules(): Array<{ name: string; displayName: string; refreshEndpoint: string | null; refreshInterval: number | null; scope: ModuleScope }> {
+    const result: Array<{ name: string; displayName: string; refreshEndpoint: string | null; refreshInterval: number | null; scope: ModuleScope }> = []
+    for (const module of _modules.values()) {
+      result.push({
+        name: module.name,
+        displayName: module.displayName ?? module.name,
+        refreshEndpoint: module.refreshEndpoint ?? null,
+        refreshInterval: module.refreshInterval ?? null,
+        scope: module.scope ?? 'both',
+      })
+    }
+    return result
   },
 }

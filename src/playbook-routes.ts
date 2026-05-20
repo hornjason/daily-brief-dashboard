@@ -23,6 +23,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { driveClient } from './lib/drive-client.ts'
 import type { Customer } from './types.ts'
+import { escapeHtml, applyInlineFormatting, renderMarkdownToHtml } from './lib/markdown-to-html.ts'
 
 // ── In-flight guard ─────────────────────────────────────────────────────────
 
@@ -404,96 +405,156 @@ export function createPlaybookRouter(): Hono {
 /**
  * Convert playbook state to styled HTML for Google Docs import.
  * Follows meeting-prep-html-template.ts pattern with Red Hat branding.
+ * Uses shared markdown-to-html utilities (GitHub Issue #311).
  */
 function generatePlaybookHTML(playbook: PlaybookState): string {
-  const escapeHtml = (text: string): string => {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;')
-  }
-
-  const applyInlineFormatting = (text: string): string => {
-    let result = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    result = result.replace(/__([^_]+)__/g, '<strong>$1</strong>')
-    result = result.replace(/(?<!https?:\/\/[^\s]*)\*([^*]+)\*/g, '<em>$1</em>')
-    result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#0066cc">$1</a>')
-    return result
-  }
-
-  const renderContent = (content: string): string => {
-    const lines = content.split('\n')
-    const result: string[] = []
-    let i = 0
-
-    while (i < lines.length) {
-      const trimmed = lines[i].trim()
-      if (!trimmed) { i++; continue }
-
-      // Detect markdown table blocks
-      if (trimmed.startsWith('|') && i + 1 < lines.length && /^\|[\s-|]+\|$/.test(lines[i + 1]?.trim())) {
-        const tableLines: string[] = []
-        while (i < lines.length && lines[i].trim().startsWith('|')) {
-          tableLines.push(lines[i].trim())
-          i++
-        }
-        const headerCells = tableLines[0].split('|').filter(c => c.trim()).map(c => applyInlineFormatting(c.trim()))
-        const dataRows = tableLines.slice(2).map(row => row.split('|').filter(c => c.trim()).map(c => applyInlineFormatting(c.trim())))
-        result.push(`<table><tr>${headerCells.map(c => `<th>${c}</th>`).join('')}</tr>${dataRows.map(row => `<tr>${row.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</table>`)
-        continue
-      }
-
-      if (/^[-*•]\s+/.test(trimmed)) {
-        result.push(`<li>${applyInlineFormatting(trimmed.replace(/^[-*•]\s+/, ''))}</li>`)
-      } else {
-        result.push(`<p style="margin:8px 0">${applyInlineFormatting(trimmed)}</p>`)
-      }
-      i++
-    }
-    return result.join('\n')
-  }
 
   const renderActionItems = (items: typeof playbook.sections.openActionItems.items): string => {
     if (items.length === 0) return '<p style="margin:8px 0"><em>No action items</em></p>'
 
-    return `<table>
-<tr><th>Action</th><th>Owner</th><th>Status</th><th>Created</th></tr>
-${items.map(item => `<tr>
-  <td>${escapeHtml(item.text)}</td>
-  <td>${escapeHtml(item.owner)}</td>
-  <td><span class="badge-${item.status === 'completed' ? 'new' : 'urgent'}">${item.status.toUpperCase()}</span></td>
-  <td>${new Date(item.createdAt).toLocaleDateString()}</td>
-</tr>`).join('\n')}
-</table>`
+    return items.map(item => {
+      const statusColor = item.status === 'completed' ? '#3d7317' : '#EE0000'
+      const statusIcon = item.status === 'completed' ? '✓' : '○'
+      return `<div style="border:1px solid #e0e0e0;border-left:4px solid ${statusColor};padding:10px 16px;margin:8px 0;border-radius:4px">
+<p style="margin:0 0 4px 0"><span style="color:${statusColor};font-weight:bold">${statusIcon} ${item.status.toUpperCase()}</span></p>
+<p style="margin:4px 0;font-size:10pt">${escapeHtml(item.text)}</p>
+<p style="margin:4px 0 0 0;font-size:8pt;color:#707070"><strong>Owner:</strong> ${escapeHtml(item.owner)} · <strong>Created:</strong> ${new Date(item.createdAt).toLocaleDateString()}</p>
+</div>`
+    }).join('\n')
   }
 
   const renderProductAlignment = (products: typeof playbook.sections.productAlignment.products): string => {
     if (products.length === 0) return '<p style="margin:8px 0"><em>No product alignment data</em></p>'
 
-    return `<table>
-<tr><th>Product</th><th>Confidence</th><th>Use Case</th></tr>
-${products.map(p => `<tr>
-  <td><strong>${escapeHtml(p.displayName)}</strong></td>
-  <td><span class="badge-${p.confidence === 'HIGH' ? 'new' : p.confidence === 'MEDIUM' ? 'info' : 'urgent'}">${p.confidence}</span></td>
-  <td>${escapeHtml(p.useCase)}</td>
-</tr>`).join('\n')}
-</table>`
+    const confidenceColor = (c: string) => c === 'HIGH' ? '#3d7317' : c === 'MEDIUM' ? '#b8860b' : '#EE0000'
+
+    return products.map(p => {
+      let html = `<div style="border:1px solid #e0e0e0;border-left:4px solid ${confidenceColor(p.confidence)};padding:12px 16px;margin:6px 0;border-radius:4px">`
+      html += `<p style="margin:0 0 6px 0"><strong style="font-size:11pt">${escapeHtml(p.displayName)}</strong> <span style="color:${confidenceColor(p.confidence)};font-weight:bold;font-size:9pt">${p.confidence}</span></p>`
+      html += `<p style="margin:4px 0;font-size:10pt">${applyInlineFormatting(p.useCase)}</p>`
+      if (p.proofPoints) {
+        html += `<p style="margin:8px 0 4px 0;font-weight:bold;font-size:9pt">Proof Points:</p>`
+        const points = p.proofPoints.split('|').map(pp => pp.trim()).filter(Boolean)
+        for (const point of points) {
+          const match = point.match(/^(\d+%)\s+(.+)/)
+          if (match) {
+            html += `<p style="margin:2px 0 2px 12px;font-size:9pt"><span style="color:#3d7317;font-weight:bold">${match[1]}</span> ${match[2]}</p>`
+          } else {
+            html += `<p style="margin:2px 0 2px 12px;font-size:9pt">${point}</p>`
+          }
+        }
+      }
+      if (p.lifecycle) {
+        html += `<p style="margin:8px 0 0 0;font-size:9pt"><strong>Lifecycle:</strong> ${escapeHtml(p.lifecycle)}</p>`
+      }
+      html += `</div>`
+      return html
+    }).join('\n')
   }
 
   const renderEngagementHistory = (entries: typeof playbook.sections.engagementHistory.entries): string => {
     if (entries.length === 0) return '<p style="margin:8px 0"><em>No engagement history</em></p>'
 
-    return `<table>
-<tr><th>Date</th><th>Type</th><th>Summary</th><th>Attendees</th></tr>
-${entries.slice(0, 10).map(e => `<tr>
-  <td>${e.date}</td>
-  <td>${escapeHtml(e.type)}</td>
-  <td>${escapeHtml(e.summary)}</td>
-  <td>${e.attendees.join(', ')}</td>
-</tr>`).join('\n')}
-</table>`
+    const typeColor = (t: string) => t === 'meeting' ? '#0066cc' : t === 'decision' ? '#3d7317' : t === 'campaign' ? '#b8860b' : '#707070'
+
+    return entries.slice(0, 10).map(e => `<div style="border-left:3px solid ${typeColor(e.type)};padding:8px 16px;margin:8px 0">
+<p style="margin:0;font-size:9pt;color:#707070"><strong>${e.date}</strong> · <span style="color:${typeColor(e.type)};font-weight:bold">${escapeHtml(e.type.toUpperCase())}</span></p>
+<p style="margin:4px 0;font-size:10pt">${escapeHtml(e.summary)}</p>
+${e.attendees.length ? `<p style="margin:2px 0 0 0;font-size:8pt;color:#707070">Attendees: ${e.attendees.join(', ')}</p>` : ''}
+</div>`).join('\n')
+  }
+
+  const renderMEDDPICC = (section: typeof playbook.sections.meddpicc): string => {
+    if (!section?.entries?.length) return '<p style="margin:8px 0"><em>No MEDDPICC data</em></p>'
+
+    const statusColor = (s: string) => s === 'confirmed' ? '#3d7317' : s === 'developing' ? '#b8860b' : '#999'
+    const statusLabel = (s: string) => s === 'confirmed' ? 'CONFIRMED' : s === 'developing' ? 'DEVELOPING' : 'UNKNOWN'
+
+    let html = `<p style="margin:8px 0"><strong>Qualification Score: ${section.qualificationScore}%</strong> (${section.entries.filter(e => e.status === 'confirmed').length}/8 confirmed)</p>`
+
+    html += section.entries.map(e => `<div style="border:1px solid #e0e0e0;border-left:4px solid ${statusColor(e.status)};padding:10px 16px;margin:8px 0;border-radius:4px">
+<p style="margin:0 0 4px 0"><strong>${escapeHtml(e.displayName)}</strong> <span style="color:${statusColor(e.status)};font-weight:bold;font-size:9pt">${statusLabel(e.status)}</span></p>
+<p style="margin:4px 0;font-size:10pt">${applyInlineFormatting(e.evidence)}</p>
+</div>`).join('\n')
+
+    return html
+  }
+
+  const renderExpansionOpportunities = (content: string): string => {
+    if (!content?.trim()) return '<p style="margin:8px 0"><em>No expansion opportunities</em></p>'
+
+    // Pre-process inline bullets — but keep Business value with its parent bullet
+    const normalized = content
+      .replace(/\.\s*-\s+/g, '.\n- ')
+      .replace(/([^-\n])\s+-\s+/g, '$1\n- ')
+
+    const bullets = normalized.split('\n').map(l => l.trim()).filter(l => /^[-*•]/.test(l))
+
+    if (bullets.length === 0) return renderMarkdownToHtml(content)
+
+    const confidenceColor = (c: string) => c === 'HIGH' ? '#3d7317' : c === 'MEDIUM' ? '#b8860b' : '#EE0000'
+
+    return bullets.map(bullet => {
+      const text = bullet.replace(/^[-*•]\s*/, '')
+      const match = text.match(/^\*\*(.+?)\s*\((\w+)\):\*\*\s*(.*)/)
+      if (match) {
+        const [, product, confidence, rest] = match
+        const bvMatch = rest.match(/^(.*?)\.\s*(?:<br><strong>)?Business value:(?:<\/strong>)?\s*(.*)$/si)
+        let description = rest
+        let businessValue = ''
+        if (bvMatch) {
+          description = bvMatch[1] + '.'
+          businessValue = bvMatch[2]
+        }
+        let html = `<div style="border:1px solid #e0e0e0;border-left:4px solid ${confidenceColor(confidence)};padding:10px 16px;margin:8px 0;border-radius:4px">`
+        html += `<p style="margin:0 0 4px 0"><strong style="font-size:11pt">${applyInlineFormatting(product)}</strong> <span style="color:${confidenceColor(confidence)};font-weight:bold;font-size:9pt">${confidence}</span></p>`
+        html += `<p style="margin:4px 0;font-size:10pt">${applyInlineFormatting(description)}</p>`
+        if (businessValue) {
+          html += `<p style="margin:6px 0 0 0;font-size:9pt"><strong style="color:#5f0000">Business value:</strong> ${applyInlineFormatting(businessValue)}</p>`
+        }
+        html += `</div>`
+        return html
+      }
+      return `<p style="margin:8px 0">${applyInlineFormatting(text)}</p>`
+    }).join('\n')
+  }
+
+  const renderKeyRelationships = (content: string): string => {
+    if (!content?.trim()) return '<p style="margin:8px 0"><em>No key relationships</em></p>'
+
+    const lines = content.split('\n')
+    let html = ''
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+      if (!line) continue
+
+      if (line.startsWith('|') && i + 1 < lines.length && /^\|[\s-|]+\|$/.test(lines[i + 1]?.trim())) {
+        // Save header row before advancing
+        const headerCols = line.split('|').filter(c => c.trim()).map(c => c.trim().toLowerCase())
+        const rows: string[][] = []
+        i += 2
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          rows.push(lines[i].trim().split('|').filter(c => c.trim()).map(c => c.trim()))
+          i++
+        }
+        i--
+
+        const isPartner = headerCols.some(h => h.includes('partner') || h.includes('specializ'))
+        const sectionLabel = isPartner ? 'Certified Partners' : 'Account Team'
+        html += `<p style="margin:12px 0 4px 0;font-size:9pt;color:#5f0000;font-weight:bold;text-transform:uppercase;letter-spacing:1px">${sectionLabel}</p>`
+
+        for (const row of rows) {
+          const name = row[0] ?? ''
+          const role = row[1] ?? ''
+          const focus = row[2] ?? ''
+          html += `<p style="margin:2px 0;font-size:10pt"><strong>${applyInlineFormatting(name)}</strong> · ${applyInlineFormatting(role)}${focus ? ` — ${applyInlineFormatting(focus)}` : ''}</p>`
+        }
+      } else {
+        html += `<p style="margin:8px 0">${applyInlineFormatting(line)}</p>`
+      }
+    }
+    return html
   }
 
   const generatedDate = new Date(playbook.generatedAt).toLocaleDateString('en-US', {
@@ -551,6 +612,8 @@ ${entries.slice(0, 10).map(e => `<tr>
     padding: 8px 10px;
     border: 1px solid #e0e0e0;
     vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
   tr:nth-child(even) td {
     background-color: #f2f2f2;
@@ -591,28 +654,34 @@ ${entries.slice(0, 10).map(e => `<tr>
 <div class="subtitle"><strong>Generated:</strong> ${generatedDate}</div>
 
 <h2>1. Strategic Position</h2>
-${renderContent(playbook.sections.strategicPosition.content)}
+${renderMarkdownToHtml(playbook.sections.strategicPosition.content)}
 
-<h2>2. Key Relationships</h2>
-${renderContent(playbook.sections.keyRelationships.content)}
+<h2>2. SWOT Analysis</h2>
+${renderMarkdownToHtml(playbook.sections.swotAnalysis?.content ?? '')}
 
-<h2>3. Current Priorities</h2>
-${renderContent(playbook.sections.currentPriorities.content)}
+<h2>3. Key Relationships</h2>
+${renderKeyRelationships(playbook.sections.keyRelationships.content)}
 
-<h2>4. Product Alignment</h2>
+<h2>4. Current Priorities</h2>
+${renderMarkdownToHtml(playbook.sections.currentPriorities.content)}
+
+<h2>5. MEDDPICC Qualification</h2>
+${renderMEDDPICC(playbook.sections.meddpicc)}
+
+<h2>6. Product Alignment</h2>
 ${renderProductAlignment(playbook.sections.productAlignment.products)}
 
-<h2>5. Open Action Items</h2>
+<h2>7. Open Action Items</h2>
 ${renderActionItems(playbook.sections.openActionItems.items)}
 
-<h2>6. Engagement History</h2>
+<h2>8. Engagement History</h2>
 ${renderEngagementHistory(playbook.sections.engagementHistory.entries)}
 
-<h2>7. Expansion Opportunities</h2>
-${renderContent(playbook.sections.expansionOpportunities.content)}
+<h2>9. Expansion Opportunities</h2>
+${renderExpansionOpportunities(playbook.sections.expansionOpportunities.content)}
 
-<h2>8. Renewals and Risk</h2>
-${renderContent(playbook.sections.renewalsAndRisk.content)}
+<h2>10. Renewals and Risk</h2>
+${renderMarkdownToHtml(playbook.sections.renewalsAndRisk.content)}
 
 <div class="footer">Generated by PAI Intelligence — ${generatedDate}</div>
 </body>

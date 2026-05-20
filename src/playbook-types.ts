@@ -31,6 +31,8 @@ export interface PlaybookState {
     engagementHistory: EngagementHistorySection // Append-only log
     expansionOpportunities: PlaybookSection
     renewalsAndRisk: PlaybookSection
+    swotAnalysis: PlaybookSection
+    meddpicc: MEDDPICCSection
   }
 
   // Deterministic data snapshots — injected post-Gemini, NOT LLM-generated
@@ -97,6 +99,22 @@ export interface EngagementEntry {
 export interface EngagementHistorySection {
   entries: EngagementEntry[]         // Append-only, newest first
   updatedAt: string
+}
+
+export interface MEDDPICCEntry {
+  field: string                      // M, E, D1, D2, P, I, C1, C2
+  displayName: string                // "Metrics", "Economic Buyer", etc.
+  status: 'confirmed' | 'developing' | 'unknown'
+  evidence: string                   // 1-2 sentence justification
+  sourceNoteId: string | null
+  updatedAt: string
+}
+
+export interface MEDDPICCSection {
+  entries: MEDDPICCEntry[]
+  qualificationScore: number         // 0-100
+  updatedAt: string
+  sourceNotes: string[]
 }
 
 // ── Provenance ──────────────────────────────────────────────────────────────

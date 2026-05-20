@@ -72,6 +72,7 @@ export function readEmailSettings(): EmailSettings {
 export const DEFAULT_REFRESH_INTERVALS = {
   subscriptions: 4 * 60,   // minutes
   ccsp:          60 * 24,  // daily
+  pipeline:      60 * 24,  // daily — same as CCSP (L3 Drive CSV sync)
   rhScrape:      90,       // RH portal support case scrape — every 90 min (Sev1 responsiveness)
 }
 

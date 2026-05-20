@@ -473,6 +473,66 @@ describe('parseCcspRows — pattern detection fallback', () => {
     expect(recs).toHaveLength(1)
     expect(recs[0].acvPlus).toBe(12345.67)
   })
+
+  // Issue #303 regression: diagnostic logging when columns not found (existing behavior)
+  test('logs diagnostic message when no account name or ACV column found', () => {
+    const consoleWarn = mock((msg: string) => {})
+    const originalWarn = console.warn
+    console.warn = consoleWarn
+
+    // Use text-only data with no recognizable patterns (no quarter, no date, no ACV-like numbers)
+    const rows: unknown[][] = [
+      ['Column A', 'Column B', 'Column C'],
+      ['text only', 'more text', 'even more'],
+      ['no numbers', 'no dates', 'no quarters'],
+    ]
+
+    const recs = parseCcspRows(rows, 'test-sheet-303', 'TestAE')
+    expect(recs).toHaveLength(0)
+
+    // Should have logged warnings about missing columns (existing behavior at lines 470-475)
+    expect(consoleWarn).toHaveBeenCalled()
+    const calls = consoleWarn.mock.calls.map((c: any) => c[0])
+    const acctWarning = calls.find((msg: string) =>
+      msg.includes('no account name column found') &&
+      msg.includes('test-sheet-303')
+    )
+    const acvWarning = calls.find((msg: string) =>
+      msg.includes('no ACV column found') &&
+      msg.includes('test-sheet-303')
+    )
+    expect(acctWarning).toBeDefined()
+    expect(acvWarning).toBeDefined()
+
+    console.warn = originalWarn
+  })
+
+  test('logs diagnostic message when 0 records due to all invalid ACV values', () => {
+    const consoleWarn = mock((msg: string) => {})
+    const originalWarn = console.warn
+    console.warn = consoleWarn
+
+    const rows: unknown[][] = [
+      ['Account Name', 'Fiscal Year Quarter', 'Opportunity Close Date', 'Financial Partner', 'ACV Plus'],
+      ['Crowdstrike, Inc.', '2025-Q1', '3/24/2025', 'Amazon AWS', ''],        // empty ACV
+      ['Dropbox, Inc.', '2025-Q2', '6/25/2025', 'Google Cloud', 'invalid'],   // non-numeric
+      ['Illumio, Inc.', '2025-Q3', '9/29/2025', 'Microsoft Azure', 'N/A'],    // text
+    ]
+
+    const recs = parseCcspRows(rows, 'test-sheet-303-acv', 'TestAE')
+    expect(recs).toHaveLength(0)
+
+    // Should log diagnostic mentioning "Skipped N rows due to invalid/missing ACV"
+    expect(consoleWarn).toHaveBeenCalled()
+    const calls = consoleWarn.mock.calls.map((c: any) => c[0])
+    const diagnosticMsg = calls.find((msg: string) =>
+      msg.includes('parseCcspRows returned 0 records') &&
+      msg.includes('Skipped 3 rows due to invalid/missing ACV')
+    )
+    expect(diagnosticMsg).toBeDefined()
+
+    console.warn = originalWarn
+  })
 })
 
 // ── Resolver chain ───────────────────────────────────────────────────────────

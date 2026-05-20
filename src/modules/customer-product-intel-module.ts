@@ -11,6 +11,8 @@ const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 
 FeatureModuleRegistry.register({
   name: 'customer-product-intel',
+  displayName: 'Customer Product Intel',
+  refreshEndpoint: '/api/products/refresh-all',
   scope: 'customer',
   cachePaths: () => [],
   async fetch(): Promise<void> {},

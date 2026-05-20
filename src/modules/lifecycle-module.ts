@@ -11,6 +11,8 @@ const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'product-lifec
 
 FeatureModuleRegistry.register({
   name: 'product-lifecycle',
+  displayName: 'Product Lifecycle',
+  refreshEndpoint: '/api/products/refresh-all',
 
   scope: 'portfolio',
 

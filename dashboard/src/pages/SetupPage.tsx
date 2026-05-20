@@ -10,6 +10,7 @@ import { HeroStep3Connections } from '../components/HeroStep3Connections'
 // BKL-CONN-ARCH-01: two-axis connection state derivation
 import { deriveRhCard, deriveSfCard } from '../lib/connection-state'
 import { AEsCustomersSection } from './setup/AEsCustomersSection'
+import { DataFreshnessDashboard } from '../components/DataFreshnessDashboard'
 import {
   CheckCircle,
   XCircle,
@@ -423,7 +424,7 @@ function GoogleAuthSection() {
 
 // ── Main Setup Page ────────────────────────────────────────────────────────────
 
-type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings'
+type SectionId = 'oauth-keys' | 'google-auth' | 'aes' | 'rh-portal' | 'data-sources' | 'settings' | 'ai-settings' | 'automation-settings' | 'data-freshness'
 
 export default function SetupPage() {
   const [openSection, setOpenSection] = useState<SectionId | null>(null)
@@ -438,6 +439,14 @@ export default function SetupPage() {
   const [sfSyncSuccess, setSfSyncSuccess] = useState<string | null>(null)
   const [sfSyncError, setSfSyncError] = useState<string | null>(null)
   const sfSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [pipelineRefreshing, setPipelineRefreshing] = useState(false)
+  const [pipelineRefreshSuccess, setPipelineRefreshSuccess] = useState<string | null>(null)
+  const [pipelineRefreshError, setPipelineRefreshError] = useState<string | null>(null)
+  const pipelineRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [ccspRefreshing, setCcspRefreshing] = useState(false)
+  const [ccspRefreshSuccess, setCcspRefreshSuccess] = useState<string | null>(null)
+  const [ccspRefreshError, setCcspRefreshError] = useState<string | null>(null)
+  const ccspRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [resetConfirm, setResetConfirm] = useState<'full' | 'data' | null>(null)
   // BKL-HERO-01 Phase 2 — gate Step 3 Connections accordion behind !isL3Only.
   const nodeRoleApi = useApi<{ isL3Only: boolean }>('/api/node-role')
@@ -549,8 +558,60 @@ export default function SetupPage() {
     finally { setSfSyncing(false) }
   }
 
+  const handlePipelineRefresh = async () => {
+    setPipelineRefreshing(true)
+    setPipelineRefreshSuccess(null)
+    setPipelineRefreshError(null)
+    try {
+      const r = await fetch('/api/refresh/pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (r.ok) {
+        const d = await r.json().catch(() => ({})) as { recordCount?: number }
+        const count = d.recordCount ?? 0
+        setPipelineRefreshSuccess(`✓ Refresh complete — ${count} rows`)
+        if (pipelineRefreshTimerRef.current) clearTimeout(pipelineRefreshTimerRef.current)
+        pipelineRefreshTimerRef.current = setTimeout(() => setPipelineRefreshSuccess(null), 8_000)
+      } else {
+        const err = await r.json().catch(() => ({})) as { error?: string }
+        setPipelineRefreshError(err.error ?? `Refresh failed (${r.status})`)
+      }
+    } catch { setPipelineRefreshError('Refresh failed — network error') }
+    finally { setPipelineRefreshing(false) }
+  }
+
+  const handleCcspRefresh = async () => {
+    setCcspRefreshing(true)
+    setCcspRefreshSuccess(null)
+    setCcspRefreshError(null)
+    try {
+      const r = await fetch('/api/refresh/ccsp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (r.ok) {
+        const d = await r.json().catch(() => ({})) as { recordCount?: number }
+        const count = d.recordCount ?? 0
+        setCcspRefreshSuccess(`✓ Refresh complete — ${count} rows`)
+        if (ccspRefreshTimerRef.current) clearTimeout(ccspRefreshTimerRef.current)
+        ccspRefreshTimerRef.current = setTimeout(() => setCcspRefreshSuccess(null), 8_000)
+      } else {
+        const err = await r.json().catch(() => ({})) as { error?: string }
+        setCcspRefreshError(err.error ?? `Refresh failed (${r.status})`)
+      }
+    } catch { setCcspRefreshError('Refresh failed — network error') }
+    finally { setCcspRefreshing(false) }
+  }
+
   useEffect(() => {
-    return () => { if (sfSyncTimerRef.current) clearTimeout(sfSyncTimerRef.current) }
+    return () => {
+      if (sfSyncTimerRef.current) clearTimeout(sfSyncTimerRef.current)
+      if (pipelineRefreshTimerRef.current) clearTimeout(pipelineRefreshTimerRef.current)
+      if (ccspRefreshTimerRef.current) clearTimeout(ccspRefreshTimerRef.current)
+    }
   }, [])
 
   const doReset = async (full: boolean) => {
@@ -725,8 +786,64 @@ export default function SetupPage() {
                 )}
               </div>
             </div>
+            {/* Pipeline Data Refresh */}
+            <div className="mt-4 pt-4 border-t border-gray-700 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-200">Pipeline Data</p>
+                <p className="text-xs text-gray-500 mt-0.5">Refresh pipeline opportunities from Drive</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={handlePipelineRefresh}
+                  disabled={pipelineRefreshing}
+                  data-testid="pipeline-refresh-btn"
+                  className="px-3 py-1.5 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors"
+                >
+                  {pipelineRefreshing ? 'Refreshing...' : 'Refresh Now'}
+                </button>
+                {pipelineRefreshSuccess && (
+                  <span data-testid="pipeline-refresh-success" className="text-xs text-green-400">{pipelineRefreshSuccess}</span>
+                )}
+                {pipelineRefreshError && (
+                  <span data-testid="pipeline-refresh-error" role="alert" className="text-xs text-red-400">{pipelineRefreshError}</span>
+                )}
+              </div>
+            </div>
+            {/* CCSP Cloud Spend Refresh */}
+            <div className="mt-4 pt-4 border-t border-gray-700 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-200">CCSP Cloud Spend</p>
+                <p className="text-xs text-gray-500 mt-0.5">Refresh cloud marketplace revenue from Drive</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={handleCcspRefresh}
+                  disabled={ccspRefreshing}
+                  data-testid="ccsp-refresh-btn"
+                  className="px-3 py-1.5 text-xs font-medium rounded bg-gray-600 hover:bg-gray-500 disabled:opacity-40 text-white transition-colors"
+                >
+                  {ccspRefreshing ? 'Refreshing...' : 'Refresh Now'}
+                </button>
+                {ccspRefreshSuccess && (
+                  <span data-testid="ccsp-refresh-success" className="text-xs text-green-400">{ccspRefreshSuccess}</span>
+                )}
+                {ccspRefreshError && (
+                  <span data-testid="ccsp-refresh-error" role="alert" className="text-xs text-red-400">{ccspRefreshError}</span>
+                )}
+              </div>
+            </div>
           </AccordionSection>
           )}
+
+          <AccordionSection
+            id="data-freshness"
+            title="Data Freshness"
+            badge={<span className="text-xs text-text-secondary">Monitor</span>}
+            isOpen={openSection === 'data-freshness'}
+            onToggle={() => toggleSection('data-freshness')}
+          >
+            <DataFreshnessDashboard />
+          </AccordionSection>
 
           <AccordionSection
             id="aes"

@@ -2523,3 +2523,46 @@ test('REG-032: /api/version endpoint returns current semver version', async () =
   // Version should be a semver-like string (e.g. 1.7.0-rc8)
   expect(body.version).toMatch(/^\d+\.\d+\.\d+/)
 })
+
+// ── REG-033: Pipeline refresh runs on hero install (#302) ──
+// Verifies pipeline refresh is added to heartbeat tick (not locked behind isPrimary).
+// Before fix: pipeline refresh only ran in schedulePipelineSync() inside if(isPrimary),
+// meaning hero installs never synced pipeline from Drive CSVs.
+test.describe('REG-033: Pipeline refresh on hero install (#302)', () => {
+  test('background-scheduler has _pipelineLastRun variable', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/background-scheduler.ts'), 'utf8')
+    expect(src).toContain('_pipelineLastRun')
+  })
+
+  test('heartbeat tick includes pipeline refresh timer', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/background-scheduler.ts'), 'utf8')
+    // Pipeline tick should exist alongside CCSP tick in the heartbeat interval
+    expect(src).toContain('Timer 2: CCSP refresh')
+    expect(src).toContain('refreshPipeline()')
+  })
+
+  test('DEFAULT_REFRESH_INTERVALS includes pipeline', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/settings-api.ts'), 'utf8')
+    expect(src).toMatch(/pipeline.*:.*\d+/)
+  })
+})
+
+// ── REG-034: Zero-record cache protection (#305) ──
+// Verifies that when parsing returns 0 records from non-empty CSV content,
+// the cache is NOT overwritten — preventing permanent data loss from parser bugs.
+test.describe('REG-034: Zero-record cache protection (#305)', () => {
+  test('refreshCCSP never writes zero records when CSVs exist', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/refresh-engine.ts'), 'utf8')
+    // Should have a guard that checks discoveredFileIds.length > 0 before writing empty
+    const ccspSection = src.substring(src.indexOf('export async function refreshCCSP'), src.indexOf('export async function refreshPipeline'))
+    expect(ccspSection).toMatch(/allRecords\.length === 0/)
+    expect(ccspSection).toMatch(/discoveredFileIds\.length/)
+  })
+
+  test('refreshPipeline never writes zero records when CSVs exist', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/refresh-engine.ts'), 'utf8')
+    const pipelineSection = src.substring(src.indexOf('export async function refreshPipeline'))
+    expect(pipelineSection).toMatch(/allRecords\.length === 0/)
+    expect(pipelineSection).toMatch(/discoveredFileIds\.length/)
+  })
+})

@@ -33,6 +33,7 @@ import {
   buildCustomerIntelContext,
 } from './customer-product-intel.ts'
 import { toSlug } from './cache-layer.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { customers } from './server-state.ts'
 import { getValueMap } from './value-map-loader.ts'
 
@@ -619,10 +620,15 @@ export function createProductIntelRouter(): Hono {
       await refreshAllFeatures()
       const products = loadProductConfig()
       const caches: any[] = []
+      let totalFeatures = 0
       for (const p of products) {
         const cache = getFeatureCache(p.slug)
-        if (cache) caches.push({ slug: p.slug, featureCount: cache.features.length, extractedAt: cache.extractedAt, enrichedAt: cache.enrichedAt })
+        if (cache) {
+          caches.push({ slug: p.slug, featureCount: cache.features.length, extractedAt: cache.extractedAt, enrichedAt: cache.enrichedAt })
+          totalFeatures += cache.features.length
+        }
       }
+      FeatureModuleRegistry.recordOutcome('product-features', { success: true, recordCount: totalFeatures })
       return c.json({ ok: true, products: caches })
     } catch (e: any) {
       console.error('[product-intel] POST /api/products/features/refresh-all error:', sanitizeErr(e))
@@ -788,6 +794,7 @@ export function createProductIntelRouter(): Hono {
     try {
       await refreshAllProducts()
       const summaries = getAllProductSummaries()
+      FeatureModuleRegistry.recordOutcome('product-lifecycle', { success: true, recordCount: summaries.length })
       return c.json({ success: true, count: summaries.length, products: summaries })
     } catch (e: any) {
       console.error('[product-intel] POST /api/products/refresh-all error:', sanitizeErr(e))

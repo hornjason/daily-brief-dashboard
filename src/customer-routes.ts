@@ -734,6 +734,44 @@ export function createCustomerRouter(): Hono {
     })
   })
 
+  // ADR-027: Signal scoring debug endpoint
+  router.get('/api/customer/:name/signals/debug', async (c) => {
+    const rawName = decodeURIComponent(c.req.param('name'))
+    const customer = customers.find((cu) => cu.name.toLowerCase() === rawName.toLowerCase())
+    if (!customer) return c.json({ error: 'Customer not found' }, 404)
+
+    const slug = toSlug(customer.name)
+    const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+    const signals = await FeatureModuleRegistry.collectAllSignals(slug)
+
+    const debugSignals = signals.map(s => ({
+      source: s.source,
+      type: s.type,
+      headline: s.headline,
+      score: s.score,
+      rawRelevance: (s as any).rawRelevance,
+      metadata: s.metadata,
+      tier: (s.score ?? 0) >= 0.90 ? 'Critical' :
+            (s.score ?? 0) >= 0.70 ? 'High' :
+            (s.score ?? 0) >= 0.50 ? 'Medium' :
+            (s.score ?? 0) >= 0.35 ? 'Low' : 'Noise',
+    }))
+
+    // Group by tier for summary
+    const byTier: Record<string, number> = {}
+    for (const s of debugSignals) {
+      byTier[s.tier] = (byTier[s.tier] ?? 0) + 1
+    }
+
+    return c.json({
+      customer: customer.name,
+      slug,
+      totalSignals: debugSignals.length,
+      byTier,
+      signals: debugSignals,
+    })
+  })
+
   // BKL-AI-INTEL-02: Drive discovery fallback. After a cache wipe, getJobStatus
   // returns nothing because both in-memory jobs and disk cache are empty — even
   // when intelligence docs already exist in the customer's Drive folder. The UI

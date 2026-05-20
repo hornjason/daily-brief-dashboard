@@ -29,6 +29,7 @@ describe('FeatureModuleRegistry.collectAllSignals', () => {
           type: 'news',
           headline: 'Test headline 1',
           detail: 'Test detail 1',
+          rawRelevance: 0.9,  // ADR-027: higher relevance to ensure it sorts first
           timestamp: '2026-05-14T00:00:00Z',
         }
       ]
@@ -46,6 +47,7 @@ describe('FeatureModuleRegistry.collectAllSignals', () => {
           type: 'intelligence',
           headline: 'Test headline 2',
           detail: 'Test detail 2',
+          rawRelevance: 0.5,  // ADR-027: lower relevance to ensure it sorts second
           timestamp: '2026-05-14T01:00:00Z',
         }
       ]
@@ -185,6 +187,7 @@ describe('FeatureModuleRegistry.collectAllSignals', () => {
           type: 'news',
           headline: 'Signal 1A',
           detail: 'Detail 1A',
+          rawRelevance: 0.9,  // ADR-027: ensure it sorts first
           timestamp: '2026-05-14T00:00:00Z',
         },
         {
@@ -192,6 +195,7 @@ describe('FeatureModuleRegistry.collectAllSignals', () => {
           type: 'news',
           headline: 'Signal 1B',
           detail: 'Detail 1B',
+          rawRelevance: 0.8,  // ADR-027: ensure it sorts second
           timestamp: '2026-05-14T01:00:00Z',
         }
       ]
@@ -209,6 +213,7 @@ describe('FeatureModuleRegistry.collectAllSignals', () => {
           type: 'intelligence',
           headline: 'Signal 2A',
           detail: 'Detail 2A',
+          rawRelevance: 0.7,  // ADR-027: ensure it sorts third
           timestamp: '2026-05-14T02:00:00Z',
         }
       ]

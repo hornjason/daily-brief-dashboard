@@ -11,6 +11,8 @@ const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 
 FeatureModuleRegistry.register({
   name: 'subscriptions',
+  displayName: 'Subscriptions',
+  refreshEndpoint: '/api/refresh/subscriptions',
   scope: 'customer',
   cachePaths: () => [],
   async fetch(): Promise<void> {},
@@ -48,9 +50,14 @@ FeatureModuleRegistry.register({
         type: 'subscription',
         headline: `${product} — ${qty} subscription${qty !== 1 ? 's' : ''}`,
         detail: nearestEnd ? `Earliest renewal: ${nearestEnd}` : 'Active subscription',
-        score: 0.5,
+        rawRelevance: 0.5,  // ADR-027: default relevance
         timestamp: data.cachedAt ?? new Date().toISOString(),
-        metadata: { product, quantity: qty, nearestEnd },
+        metadata: {
+          customerSlug,  // ADR-027: Mark as customer-specific
+          product,
+          quantity: qty,
+          endDate: nearestEnd,  // ADR-027: endDate for renewal urgency booster
+        },
       })
     }
 

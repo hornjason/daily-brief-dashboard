@@ -1,10 +1,10 @@
-import { readFileSync, writeFileSync, existsSync, statSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from 'fs'
 import { readdir } from 'fs/promises'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { Hono } from 'hono'
 import { aes, customers } from './server-state.ts'
-import { toSlug, readPipelineCache, readLatestBriefCache, readSheetCache } from './cache-layer.ts'
+import { toSlug, readPipelineCache, readLatestBriefCache, readSheetCache, readCCSPCache } from './cache-layer.ts'
 import { computeAllHealthScores, isFreeOrTrial } from './health-score.ts'
 import { fetchCases } from './redhat.ts'
 import { fetchCustomerEmails } from './customer.ts'
@@ -15,6 +15,7 @@ import { getGeminiModelLite } from './ai-config.ts'
 import { buildContactHistory, detectGoneSilent } from './email-extraction.ts'
 import { normalizeSettings } from './region-config.ts'
 import { isEnterpriseTab, extractEnterpriseAeMap, extractEnterpriseAeAccounts } from './territory-sync.ts'
+import { FeatureModuleRegistry } from './feature-module-registry.ts'
 
 // ── Staleness detection (#279) ───────────────────────────────────────────────
 /**
@@ -812,38 +813,39 @@ export function createDashboardRouter(): Hono {
     }
   })
 
-  // ── BKL-M39: Dashboard freshness endpoint ─────────────────────────────────
+  // ── GitHub Issue #309: Registry-driven data freshness dashboard ─────────
   router.get('/api/status/freshness', (c) => {
-    const freshness: Record<string, string | null> = {}
+    const allStatus = FeatureModuleRegistry.getAllStatus()
+    const allModules = FeatureModuleRegistry.getAllModules()
 
-    // Read lastRun timestamps from schedulerConfig in data-sources.json
-    try {
-      const ds = JSON.parse(readFileSync(DATA_SOURCES_PATH, 'utf-8'))
-      const cfg = ds.schedulerConfig ?? {}
-      freshness.ccsp = cfg.ccspLastRun ?? null
-      freshness.supportable = cfg.supportableLastRun ?? null
-      freshness.territory = cfg.territoryLastRun ?? null
-      freshness.sfPipeline = cfg.sfPipelineLastRun ?? null
-      freshness.rhCases = cfg.rhLastRun ?? null
-    } catch {
-      // data-sources.json missing — all null
+    const calculateStatus = (lastChecked: string | null, intervalMs: number | null): 'fresh' | 'stale' | 'critical' | 'unknown' => {
+      if (!intervalMs) return 'unknown'
+      if (!lastChecked) return 'critical'
+      const ageMs = Date.now() - new Date(lastChecked).getTime()
+      if (ageMs < intervalMs) return 'fresh'
+      if (ageMs < intervalMs * 2) return 'stale'
+      return 'critical'
     }
 
-    // Check cache file mtimes for additional staleness signals
-    try {
-      const stat = statSync(resolve(CACHE_DIR, 'pipeline-data.json'))
-      freshness.pipelineCache = stat.mtime.toISOString()
-    } catch { /* file may not exist yet */ }
-    try {
-      const stat = statSync(resolve(CACHE_DIR, 'ccsp-data.json'))
-      freshness.ccspCache = stat.mtime.toISOString()
-    } catch { /* file may not exist yet */ }
-    try {
-      const stat = statSync(resolve(CACHE_DIR, 'cases.json'))
-      freshness.rhCasesCache = stat.mtime.toISOString()
-    } catch { /* file may not exist yet */ }
+    const sources = allModules
+      .filter(m => m.displayName !== m.name)
+      .map(module => {
+        const status = allStatus[module.name] ?? { lastChecked: null, lastChanged: null, lastError: null, state: 'idle' as const, recordCount: null }
+        return {
+          name: module.name,
+          displayName: module.displayName,
+          lastChecked: status.lastChecked,
+          lastChanged: status.lastChanged,
+          recordCount: status.recordCount,
+          intervalMinutes: module.refreshInterval ? Math.round(module.refreshInterval / 60_000) : null,
+          refreshEndpoint: module.refreshEndpoint,
+          status: status.state === 'error' ? 'critical' as const : calculateStatus(status.lastChecked, module.refreshInterval),
+          state: status.state,
+          error: status.lastError,
+        }
+      })
 
-    return c.json(freshness)
+    return c.json({ sources })
   })
 
   // ── R05: KPI history / sparkline data ────────────────────────────────────

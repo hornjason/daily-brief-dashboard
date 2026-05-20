@@ -29,6 +29,10 @@ Read `ARCHITECTURE.md` and `PRINCIPLES.md` before making changes. They document 
 - Config files mutated at runtime is intentional — config IS the persistence layer
 - In-memory mutex is safe — single-threaded Bun process
 
+## Design Principles — Deep Module Architecture (MANDATORY)
+
+**Read `PRINCIPLES.md` before building any feature.** It defines the three-layer architecture (signal scoring → template engine → thin consumers), the 5 pre-flight questions every feature must answer, and the anti-patterns to avoid. No exceptions — every new feature, every new module, every new consumer must follow PRINCIPLES.md.
+
 **AccountTeam contract (MANDATORY for team/person references):**
 - Any feature that references team members (AE, ASA, SSP, SSA, managers) MUST use `getAccountTeam(customer)` from `src/account-team.ts` — never hardcode names or read `customer.ae` alone
 - For Gemini prompts: use `toPromptContext(team)` for canonical team section

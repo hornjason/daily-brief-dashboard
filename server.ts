@@ -73,6 +73,8 @@ import './src/modules/intelligence-module.ts'  // #274
 import './src/modules/customer-product-intel-module.ts'  // #274
 import './src/modules/account-plan-module.ts'  // #274
 import './src/modules/playbook-module.ts'  // #299
+import './src/modules/tech-stack-module.ts'  // #307
+import './src/modules/cloud-marketplace-module.ts'  // #306
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────

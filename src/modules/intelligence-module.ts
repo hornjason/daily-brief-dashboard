@@ -11,6 +11,8 @@ const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 
 FeatureModuleRegistry.register({
   name: 'intelligence',
+  displayName: 'Intelligence',
+  refreshEndpoint: '/api/intelligence/generate-all',
   scope: 'customer',
   cachePaths: () => [],
   async fetch(): Promise<void> {},
@@ -36,9 +38,14 @@ FeatureModuleRegistry.register({
         type: 'intelligence',
         headline: `Company intelligence for ${data.customerName ?? customerSlug}`,
         detail: data.company.substring(0, 300),
-        score: 0.7,
+        rawRelevance: 0.7,  // ADR-027
         timestamp: data.cachedAt ?? new Date().toISOString(),
-        metadata: { docType: 'company', length: data.company.length, docUrl: data.companyDocUrl },
+        metadata: {
+          customerSlug,  // ADR-027: Mark as customer-specific
+          docType: 'company',
+          length: data.company.length,
+          docUrl: data.companyDocUrl,
+        },
       })
     }
 
@@ -48,9 +55,14 @@ FeatureModuleRegistry.register({
         type: 'intelligence',
         headline: `Industry analysis: ${data.industryClassification ?? 'unclassified'}`,
         detail: data.industry.substring(0, 300),
-        score: 0.6,
+        rawRelevance: 0.6,  // ADR-027
         timestamp: data.cachedAt ?? new Date().toISOString(),
-        metadata: { docType: 'industry', length: data.industry.length, docUrl: data.industryDocUrl },
+        metadata: {
+          customerSlug,  // ADR-027: Mark as customer-specific
+          docType: 'industry',
+          length: data.industry.length,
+          docUrl: data.industryDocUrl,
+        },
       })
     }
 

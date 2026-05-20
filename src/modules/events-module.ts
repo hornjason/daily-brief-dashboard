@@ -89,6 +89,7 @@ function getCustomerRegion(customerSlug: string): string | null {
 
 FeatureModuleRegistry.register({
   name: 'rh-events',
+  displayName: 'Events',
 
   scope: 'portfolio',
 
