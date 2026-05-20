@@ -139,8 +139,9 @@ FeatureModuleRegistry.register({
           type: 'qualification-gap',
           headline: `MEDDPICC: ${unknowns.length} qualification gap${unknowns.length > 1 ? 's' : ''}`,
           detail: `Unknown fields: ${unknowns.map(e => e.displayName).join(', ')}. Needs discovery conversations.`,
-          score: unknowns.length >= 5 ? 0.8 : unknowns.length >= 3 ? 0.6 : 0.4,
+          rawRelevance: unknowns.length >= 5 ? 0.8 : unknowns.length >= 3 ? 0.6 : 0.4,
           timestamp: meddpicc.updatedAt,
+          metadata: { customerSlug },
         })
       }
     }

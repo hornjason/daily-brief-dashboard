@@ -1495,3 +1495,48 @@ Registered as `playbook` in Feature Module Registry (ADR-020). Contributes actio
 | GET | `/api/customer/:name/playbook/history` | Ingestion provenance |
 | POST | `/api/playbook/generate-all` | Batch generate |
 | GET | `/api/playbook/generate-all/status` | Batch progress |
+
+## §22. Universal Signal Scoring (ADR-027, 2026-05-19)
+
+All signal scoring is centralized in `feature-module-registry.ts`. Modules NEVER set `score` directly — they provide `rawRelevance` (0-1 within-domain ranking) and structured `metadata`. The registry's `scoreSignal()` function determines the final score.
+
+### Specificity detection
+The registry examines metadata to classify each signal:
+- **customer** (floor 0.50, ceiling 1.00): has `customerSlug`, `accountNumber`, `severity`, or `acvPlus`
+- **industry** (floor 0.35, ceiling 0.69): has `industryMatch`
+- **general** (floor 0.10, ceiling 0.35): neither customer nor industry indicators
+
+### Boosters (from metadata)
+`redHatProducts` non-empty (+0.10), `acvPlus`/`amount` > 0 (+0.10), `confidence: HIGH` (+0.05), `context: evaluating/migrating_from` (+0.10), `severity` 1 (+0.15) / 2 (+0.10), `endDate` within 90 days (+0.10), `hasCloudSpend` (+0.10), `confidence: LOW` (-0.10).
+
+### Per-source budget caps
+Applied in `collectAllSignals()` after scoring. pipeline=10, ccsp=8, cases=8, cloud-marketplace=10, tech-stack=8, rh-rss=5, subscriptions=5, intelligence=5, value-maps=3, news-radar=5, default=5.
+
+### Signal debug
+`GET /api/customer/:name/signals/debug` returns every signal with score, tier, rawRelevance, metadata, and tier classification (Critical/High/Medium/Low/Noise).
+
+### Delta cache invalidation
+`SCORING_VERSION` constant in `gemini-call.ts` is included in the delta cache hash. Bump it when scoring logic changes to invalidate all cached Gemini responses.
+
+Full spec: `docs/adr/ADR-027-universal-signal-scoring-contract.md`. Design principles: `PRINCIPLES.md`.
+
+## §23. Cloud Marketplace Module (#306, 2026-05-19)
+
+`src/modules/cloud-marketplace-module.ts` ingests Red Hat's monthly Cloud Marketplaces newsletter via Gmail API, extracts linked Google Slides/Docs, reads them via Drive API export, and uses Gemini structured extraction to parse per-cloud marketplace data.
+
+### Pipeline
+1. Gmail API search (`subject:"Cloud Marketplaces and Private Offers Newsletter"`)
+2. Extract Google Slides/Docs/Drive URLs from email HTML body
+3. `drive.files.export` each file as plain text
+4. Gemini structured extraction → per-cloud sections (AWS, Google, Microsoft, Oracle)
+5. Cache at `data/cache/cloud-marketplace/latest.json`
+6. Signals cross-reference customer CCSP cloud spend
+
+### Signal types
+- `product-release`: marketplace offerings (RHEL HPC, OpenShift AI, etc.)
+- `product-intel`: programs (EDP, CPPO, Cloud Commit, MACC) and incentives (SPIFFs, sales boosts)
+
+### Scoring (ADR-027)
+Signals with `hasCloudSpend: true` and `acvPlus > 0` score Critical (customer has active spend on that hyperscaler + marketplace offering available). Programs have `rawRelevance: 0.8` (directly actionable), incentives `0.75`, offerings `0.7`.
+
+Refresh: `POST /api/refresh/cloud-marketplace`. Budget cap: 10 signals per customer. Auto-discovered in Data Freshness dashboard.

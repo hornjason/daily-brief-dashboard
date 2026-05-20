@@ -110,8 +110,15 @@ Last updated: 2026-05-18 — Customer Engagement Playbook (ADR-026, #291): persi
 - `GET /api/customer/:name/tools/artifacts` — List uploaded artifacts
 
 ### Feature Modules
-- `GET /api/modules/status` — Registry status for all modules
+- `GET /api/modules/status` — Registry status for all modules (21 modules, auto-discovered)
 - `POST /api/customer/:name/modules/:moduleName/sync` — Trigger module sync
+- `GET /api/customer/:name/signals/debug` — Signal debug: every signal with score, tier, rawRelevance, metadata, specificity (ADR-027)
+
+### Cloud Marketplace (#306)
+- `POST /api/refresh/cloud-marketplace` — Fetch latest newsletter from Gmail, extract slide decks, Gemini extraction
+- Cache: `data/cache/cloud-marketplace/latest.json` — per-cloud offerings, programs, incentives
+- Source: Gmail search for Cloud Marketplaces newsletter → Google Slides/Docs export → Gemini structured extraction
+- Signals: cross-referenced with CCSP cloud spend per customer (EDP, CPPO, Cloud Commit, MACC)
 
 ### Batch Operations
 - `POST /api/batch/execute` — Batch campaigns/news with SSE progress streaming

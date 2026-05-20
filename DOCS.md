@@ -69,7 +69,8 @@ Docs with `status: active` that are maintained and indexed here. All others are 
 | `docs/SCRAPER-RULES.md` | reference | Scraper stability rules — read before touching scrapers |
 | `docs/DATA-RULES.md` | reference | Cache, sheets, territory sync rules |
 | `docs/PROJECT-MAP.md` | reference | Module inventory, API endpoints, timer reference |
-| `docs/PRINCIPLES.md` | reference | Development principles |
+| `PRINCIPLES.md` | reference | Deep module architecture — three-layer design, pre-flight questions, anti-patterns (ADR-027) |
+| `docs/adr/ADR-027-universal-signal-scoring-contract.md` | adr | Signal scoring contract — centralized scoring, specificity, boosters, budget caps |
 | `docs/FLOWS.md` | reference | End-to-end flow walkthroughs |
 | `CONTRIBUTING.md` | reference | Development workflow — skill pipeline, testing, PRs, filing bugs |
 | `docs/ARCHITECTURE-REFACTOR-PLAYBOOK.md` | runbook | Per-candidate loop for BKL-ARCH items: design → implement → close |

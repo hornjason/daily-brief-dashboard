@@ -31,7 +31,11 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `src/region-config.ts` | `RegionConfig` interface (`id`, `label`, `type`, `territorySheetUrl`, `podBookingsFolderId`, `parentFolderId`, `pods`). `normalizeSettings()` — coerces raw JSON to typed settings. `coerceRegion()` — per-region coercion with safe defaults. `getRegionById()`. |
 | `src/setup-routes.ts` | OAuth setup + territory sync routes. `runStartupDriveMerge()` — on startup, if any region has `parentFolderId`, fetches `Config/settings.json` from Drive and deep-merges (Drive wins on `regions[]`, local wins on all other keys). Best-effort — never crashes server. |
 | `src/territory-sync.ts` | Territory sheet diff + auto-add/flag removals. Exports `isEnterpriseTab`, `extractEnterpriseAeMap`, `enterpriseTerritoryKey` — used by `dashboard-routes.ts` territory-names/territory-lookup endpoints for enterprise regions (e.g. TOLA). |
-| `src/refresh-engine.ts` | refreshAll/Subscriptions/CCSP/Pipeline from Google Sheets |
+| `src/feature-module-registry.ts` | FeatureModule registry — 21 modules, centralized signal scoring (ADR-027), specificity detection, per-source budget caps, `collectAllSignals()`, `scoreSignal()` |
+| `src/lib/signal-loader.ts` | `loadCustomerSignals()` — calls `collectAllSignals()`, returns scored/budget-capped signals for all consumers |
+| `src/modules/cloud-marketplace-module.ts` | #306 — Gmail newsletter → slide deck extraction → Gemini → per-cloud offerings/programs/incentives, CCSP cross-ref signals |
+| `src/modules/tech-stack-module.ts` | #307 — Customer tech detection (Tier 1 static + Tier 2 Gemini grounded search), RH product positioning |
+| `src/refresh-engine.ts` | refreshAll/Subscriptions/CCSP/Pipeline from Google Sheets + cloud-marketplace refresh route |
 | `src/cache-layer.ts` | ADR-013 canonical cache layer. Tiers: Tier 2 (email/meeting 2h TTL), Tier 3 (doc content + doc classification + brief fingerprint + CCSP/pipeline hash guards), Tier 4 (intelligence 14d/30d TTL + shared industry-analysis by industry+region). `BRIEF_CACHE_TTL_MS` is 7d safety-net (fingerprint is primary invalidator). |
 | `src/pipeline.ts` | SF pipeline data fetch + dedup |
 | `src/sheets.ts` | Google Sheets read/write, tab matching, quota retry |
@@ -56,7 +60,8 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 ## Architecture & Design Docs
 
 - `ARCHITECTURE.md` — System design, data flows, intentional patterns
-- `PRINCIPLES.md` — Design constraints
+- `PRINCIPLES.md` — Deep module architecture: three-layer design (scoring → templates → thin consumers), pre-flight questions, anti-patterns
+- `docs/adr/ADR-027-universal-signal-scoring-contract.md` — Signal scoring contract: centralized scoring, specificity, boosters, budget caps
 - `docs/ADDING-NEW-AE.md` — AE onboarding runbook (bootstrap, post-triggers, validation)
 - `docs/ENVIRONMENTS.md` — Environment strategy: 4 containers (prod 7777, dev 7778, test 7776, demo 7779), promotion pipeline, tunnel setup
 
