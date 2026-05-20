@@ -17,6 +17,8 @@ updated: 2026-05-03
 
 Never ask Jason "does X exist?" without checking PROJECT-STATE.md first.
 
+**After every ship (make rebuild) and before ending a session:** Run `/doc-hygiene` to verify all docs reflect what shipped. This is not optional — stale docs cause the same gaps as stale code.
+
 **Update `PROJECT-STATE.md` immediately when any of these happen (no exceptions, no deferring to end of session):**
 - New API endpoint added or removed
 - New frontend page or component added
