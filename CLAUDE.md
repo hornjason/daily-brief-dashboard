@@ -9,7 +9,13 @@ updated: 2026-05-03
 
 ## Read Before Touching Code
 
-Read `PROJECT-STATE.md` **first** — it tells you what pages, endpoints, and config files exist right now. Never ask Jason "does X exist?" without checking it first.
+**At session start, before ANY work, read these in order:**
+1. `PROJECT-STATE.md` — what exists right now (endpoints, modules, config)
+2. `PRINCIPLES.md` — three-layer architecture, pre-flight questions, anti-patterns
+3. `ARCHITECTURE.md` — scan section headers for relevant context to the task
+4. Any checkpoint in `~/.claude/MEMORY/WORK/` if resuming prior work
+
+Never ask Jason "does X exist?" without checking PROJECT-STATE.md first.
 
 **Update `PROJECT-STATE.md` immediately when any of these happen (no exceptions, no deferring to end of session):**
 - New API endpoint added or removed
