@@ -21,14 +21,14 @@ export interface Signal {
   headline: string
   /** Full content */
   detail: string
-  /** 0-1 normalized score, optional — SET ONLY BY REGISTRY, NOT MODULES */
+  /** 0-1 normalized score — SET ONLY BY REGISTRY, NOT MODULES (ADR-027) */
   score?: number
+  /** 0-1: module's within-domain ranking (ADR-027) — replaces hardcoded score */
+  rawRelevance?: number
   /** ISO 8601 timestamp */
   timestamp: string
   /** Optional URL */
   url?: string
-  /** 0-1: module's within-domain ranking (replaces score for modules) — ADR-027 */
-  rawRelevance?: number
   /** Per-type extras (e.g., case severity, subscription node count) */
   metadata?: Record<string, unknown>
   /** ISO 8601 — signal is stale/irrelevant after this date (GitHub Issue #278) */

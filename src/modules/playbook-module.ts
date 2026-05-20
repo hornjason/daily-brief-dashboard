@@ -9,13 +9,18 @@ import type { ActionItem, EngagementEntry } from '../playbook-types.ts'
 /**
  * Convert an open action item to a signal.
  */
-function actionItemToSignal(item: ActionItem): Signal {
+function actionItemToSignal(item: ActionItem, customerSlug: string): Signal {
   return {
     source: 'playbook',
     type: 'account-plan',
     headline: item.text,
     detail: `Owner: ${item.owner}`,
+    rawRelevance: 0.7,
     timestamp: item.createdAt,
+    metadata: {
+      customerSlug,
+      owner: item.owner,
+    },
   }
 }
 
@@ -23,7 +28,7 @@ function actionItemToSignal(item: ActionItem): Signal {
  * Convert an engagement entry to a signal.
  * Only include entries from the last 30 days.
  */
-function engagementEntryToSignal(entry: EngagementEntry): Signal | null {
+function engagementEntryToSignal(entry: EngagementEntry, customerSlug: string): Signal | null {
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
   const entryDate = new Date(entry.date).getTime()
 
@@ -36,7 +41,12 @@ function engagementEntryToSignal(entry: EngagementEntry): Signal | null {
     type: 'meeting',
     headline: entry.summary,
     detail: `Attendees: ${entry.attendees.join(', ')}`,
+    rawRelevance: 0.6,
     timestamp: entry.date,
+    metadata: {
+      customerSlug,
+      attendees: entry.attendees,
+    },
   }
 }
 
@@ -107,13 +117,13 @@ FeatureModuleRegistry.register({
     // Open action items
     for (const item of playbook.sections.openActionItems.items) {
       if (item.status === 'open') {
-        signals.push(actionItemToSignal(item))
+        signals.push(actionItemToSignal(item, customerSlug))
       }
     }
 
     // Recent engagement entries
     for (const entry of playbook.sections.engagementHistory.entries) {
-      const signal = engagementEntryToSignal(entry)
+      const signal = engagementEntryToSignal(entry, customerSlug)
       if (signal) {
         signals.push(signal)
       }

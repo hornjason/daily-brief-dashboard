@@ -28,6 +28,9 @@ const CACHE_DIR = resolve(import.meta.dir, '../data/cache/gemini-delta')
 const PROJECT_ID = process.env.VERTEX_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || 'jhorn-pai'
 const LOCATION = process.env.VERTEX_LOCATION || process.env.GOOGLE_CLOUD_LOCATION || 'us-east1'
 
+// Scoring version — bump when signal scoring logic changes to invalidate delta caches
+const SCORING_VERSION = 'adr027-v1'
+
 // Timeout tiers (ms) — see ADR-023
 const TIMEOUT_STRUCTURED = 30_000  // responseSchema present
 const TIMEOUT_GROUNDED = 120_000   // grounding enabled
@@ -231,7 +234,7 @@ function extractTokens(responseBody: any): { inputTokens: number; outputTokens: 
 // ── Delta cache helpers ──────────────────────────────────────────────────────
 
 function hashInputs(systemPrompt: string, userPrompt: string, schema?: object): string {
-  const combined = systemPrompt + userPrompt + JSON.stringify(schema ?? '')
+  const combined = SCORING_VERSION + systemPrompt + userPrompt + JSON.stringify(schema ?? '')
   return 'sha256:' + createHash('sha256').update(combined, 'utf-8').digest('hex')
 }
 
