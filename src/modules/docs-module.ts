@@ -34,9 +34,10 @@ FeatureModuleRegistry.register({
       type: 'intelligence' as const,
       headline: f.name ?? 'Document',
       detail: `${f.mimeType?.replace('application/vnd.google-apps.', '') ?? 'file'} | Modified: ${f.modifiedTime?.substring(0, 10) ?? 'unknown'}`,
-      score: 0.4,
+      rawRelevance: 0.4,
       timestamp: f.modifiedTime ?? data.extractedAt ?? new Date().toISOString(),
       metadata: {
+        customerSlug,
         fileName: f.name,
         mimeType: f.mimeType,
         hasContent: !!(f.textContent),

@@ -36,9 +36,12 @@ FeatureModuleRegistry.register({
       type: 'account-plan',
       headline: firstLine.replace(/^#+\s*/, '').substring(0, 80),
       detail: content.substring(0, 300),
-      score: 0.7,
+      rawRelevance: 0.7,
       timestamp: mtime,
-      metadata: { contentLength: content.length },
+      metadata: {
+        customerSlug,
+        contentLength: content.length,
+      },
     }]
   },
 })

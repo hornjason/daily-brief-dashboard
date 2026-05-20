@@ -21,8 +21,10 @@ export interface Signal {
   headline: string
   /** Full content */
   detail: string
-  /** 0-1 normalized score, optional — omit when source has no natural ranking */
+  /** 0-1 normalized score, optional — SET ONLY BY REGISTRY, NOT MODULES (ADR-027) */
   score?: number
+  /** 0-1: module's within-domain ranking (ADR-027) — replaces hardcoded score */
+  rawRelevance?: number
   /** ISO 8601 timestamp */
   timestamp: string
   /** Optional URL */

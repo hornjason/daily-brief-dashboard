@@ -43,9 +43,10 @@ FeatureModuleRegistry.register({
           type: 'product-intel',
           headline: `${product} intelligence — relevance ${intel.relevanceScore ?? '?'}/10`,
           detail: parts.join(' | ') || 'Product intel generated',
-          score: (intel.relevanceScore ?? 5) / 10,
+          rawRelevance: (intel.relevanceScore ?? 5) / 10,
           timestamp: intel.generatedAt ?? data.cachedAt ?? new Date().toISOString(),
           metadata: {
+            customerSlug,
             product,
             relevanceScore: intel.relevanceScore,
             expansionOpps: intel.expansionOpportunities?.length ?? 0,
