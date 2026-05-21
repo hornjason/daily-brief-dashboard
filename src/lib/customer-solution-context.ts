@@ -1,15 +1,16 @@
 /**
  * Customer Solution Context Utility (ADR-030)
  *
- * Cross-references customer tech-stack detections against the solution-plays.json
- * catalog to produce actionable solution play recommendations.
- *
- * Phase 1: activeSolutionPlays only. Phases 2-3 will add marketplaceOpportunities,
- * versionCorrelations, and crossSellSignals.
+ * Cross-references customer data across multiple caches to produce:
+ * - Solution play recommendations (tech-stack × solution-plays catalog)
+ * - Marketplace opportunities (CCSP spend × cloud-marketplace programs)
+ * - Version correlations (subscriptions × cases × lifecycle)
+ * - Cross-sell signals (pipeline × tech-stack)
  */
 
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
+import { toSlug } from '../cache-layer.ts'
 
 function getConfigDir(): string {
   return process.env.CONFIG_DIR ?? 'config'
@@ -131,6 +132,116 @@ function readTechStackCache(customerSlug: string): TechEntry[] {
   }
 }
 
+// ── CCSP / Cloud Marketplace Cache (Phase 2) ───────────────────────────
+
+interface CCSPRecord {
+  accountName: string
+  cloudPartner: string
+  acvPlus: number
+  productOfferingGroup?: string
+}
+
+interface CloudMarketplaceCache {
+  clouds: Array<{
+    provider: string
+    programs: Array<{ name: string; description: string; eligibility?: string }>
+  }>
+  cachedAt: string
+}
+
+function readCCSPRecords(customerSlug: string): CCSPRecord[] {
+  try {
+    const p = resolve(getCacheDir(), 'ccsp.json')
+    if (!existsSync(p)) return []
+    const data = JSON.parse(readFileSync(p, 'utf-8'))
+    return (data.records ?? []).filter((r: any) =>
+      toSlug(r.accountName ?? '') === customerSlug
+    )
+  } catch { return [] }
+}
+
+function readCloudMarketplaceCache(): CloudMarketplaceCache | null {
+  try {
+    const p = resolve(getCacheDir(), 'cloud-marketplace', 'latest.json')
+    if (!existsSync(p)) return null
+    return JSON.parse(readFileSync(p, 'utf-8'))
+  } catch { return null }
+}
+
+function readSubscriptionProducts(customerSlug: string): string[] {
+  try {
+    const p = resolve(getCacheDir(), `${customerSlug}-sheets.json`)
+    if (!existsSync(p)) return []
+    const data = JSON.parse(readFileSync(p, 'utf-8'))
+    const rows = data.rows ?? data.subscriptions ?? (Array.isArray(data) ? data : [])
+    const products = new Set<string>()
+    for (const row of rows) {
+      const desc = String(row.productDescription ?? row.product ?? '').toLowerCase()
+      if (desc.includes('openshift')) products.add('OpenShift')
+      if (desc.includes('enterprise linux') || desc.includes('rhel')) products.add('RHEL')
+      if (desc.includes('ansible')) products.add('Ansible')
+      if (desc.includes('satellite')) products.add('Satellite')
+      if (desc.includes('quay')) products.add('Quay')
+    }
+    return Array.from(products)
+  } catch { return [] }
+}
+
+// ── Cases / Lifecycle Cache (Phase 3) ──────────────────────────────────
+
+interface CaseEntry {
+  caseNumber: string
+  severity: string
+  product?: string
+  version?: string
+  status: string
+}
+
+interface LifecycleEvent {
+  product: string
+  version: string
+  phase: string
+  date: string
+}
+
+function readCustomerCases(customerSlug: string): CaseEntry[] {
+  try {
+    const p = resolve(getCacheDir(), 'rh-cases', `${customerSlug}.json`)
+    if (!existsSync(p)) return []
+    const data = JSON.parse(readFileSync(p, 'utf-8'))
+    return (data.cases ?? data ?? []).filter((c: any) => c.status !== 'Closed')
+  } catch { return [] }
+}
+
+function readLifecycleCache(): LifecycleEvent[] {
+  try {
+    const p = resolve(getCacheDir(), 'product-lifecycle.json')
+    if (!existsSync(p)) return []
+    const data = JSON.parse(readFileSync(p, 'utf-8'))
+    return data.events ?? data ?? []
+  } catch { return [] }
+}
+
+// ── Pipeline Cache (Phase 3) ───────────────────────────────────────────
+
+interface PipelineDeal {
+  oppName: string
+  acv: number
+  forecastCategory: string
+  products: string[]
+}
+
+function readPipelineDeals(customerSlug: string): PipelineDeal[] {
+  try {
+    const p = resolve(getCacheDir(), 'pipeline.json')
+    if (!existsSync(p)) return []
+    const data = JSON.parse(readFileSync(p, 'utf-8'))
+    return (data.records ?? []).filter((r: any) =>
+      toSlug(r.accountName ?? '') === customerSlug
+    )
+  } catch { return [] }
+}
+
 // ── Result Cache (per-customer, TTL-based) ─────────────────────────────
 
 const _resultCache = new Map<string, { result: CustomerSolutionContext; cachedAt: number }>()
@@ -207,15 +318,172 @@ export function getCustomerSolutionContext(customerSlug: string): CustomerSoluti
     })
   }
 
+  // Phase 2: Marketplace opportunities (CCSP × cloud-marketplace × subscriptions)
+  const marketplaceOpportunities = computeMarketplaceOpportunities(customerSlug)
+
+  // Phase 3: Version correlations (subscriptions × cases × lifecycle)
+  const versionCorrelations = computeVersionCorrelations(customerSlug)
+
+  // Phase 3: Cross-sell signals (pipeline × tech-stack)
+  const crossSellSignals = computeCrossSellSignals(customerSlug, detectedTechs, catalog)
+
   const result: CustomerSolutionContext = {
     activeSolutionPlays,
-    marketplaceOpportunities: [],
-    versionCorrelations: [],
-    crossSellSignals: [],
+    marketplaceOpportunities,
+    versionCorrelations,
+    crossSellSignals,
   }
 
   _resultCache.set(customerSlug, { result, cachedAt: Date.now() })
   return result
+}
+
+// ── Phase 2: Marketplace Opportunities ──────────────────────────────────
+
+function computeMarketplaceOpportunities(customerSlug: string): MarketplaceOpportunity[] {
+  const ccspRecords = readCCSPRecords(customerSlug)
+  if (ccspRecords.length === 0) return []
+
+  const marketplaceCache = readCloudMarketplaceCache()
+  const subscriptionProducts = readSubscriptionProducts(customerSlug)
+
+  // Aggregate spend by cloud provider
+  const spendByProvider = new Map<string, number>()
+  for (const r of ccspRecords) {
+    const current = spendByProvider.get(r.cloudPartner) ?? 0
+    spendByProvider.set(r.cloudPartner, current + (r.acvPlus || 0))
+  }
+
+  const opportunities: MarketplaceOpportunity[] = []
+
+  for (const [provider, spend] of spendByProvider) {
+    if (spend <= 0) continue
+
+    // Find eligible programs from marketplace cache
+    const eligiblePrograms: string[] = []
+    if (marketplaceCache) {
+      const providerMap: Record<string, string> = { AWS: 'AWS', Google: 'Google', Microsoft: 'Microsoft' }
+      const cloudSection = marketplaceCache.clouds.find(c =>
+        providerMap[c.provider] === provider
+      )
+      if (cloudSection) {
+        eligiblePrograms.push(...cloudSection.programs.map(p => p.name))
+      }
+    }
+
+    // Private offer eligibility: spend > $100K threshold
+    const privateOfferEligible = spend >= 100_000
+
+    opportunities.push({
+      provider,
+      currentSpend: spend,
+      eligiblePrograms,
+      privateOfferEligible,
+      movableSubscriptions: subscriptionProducts,
+    })
+  }
+
+  return opportunities.sort((a, b) => b.currentSpend - a.currentSpend)
+}
+
+// ── Phase 3: Version Correlations ──────────────────────────────────────
+
+function computeVersionCorrelations(customerSlug: string): VersionCorrelation[] {
+  const cases = readCustomerCases(customerSlug)
+  if (cases.length === 0) return []
+
+  const lifecycle = readLifecycleCache()
+
+  // Group cases by product
+  const casesByProduct = new Map<string, CaseEntry[]>()
+  for (const c of cases) {
+    const product = c.product ?? 'Unknown'
+    const existing = casesByProduct.get(product) ?? []
+    existing.push(c)
+    casesByProduct.set(product, existing)
+  }
+
+  const correlations: VersionCorrelation[] = []
+
+  for (const [product, productCases] of casesByProduct) {
+    // Find version from cases
+    const versions = productCases.map(c => c.version).filter(Boolean)
+    const primaryVersion = versions[0] ?? ''
+
+    // Look for lifecycle event matching this product
+    const lifecycleEvent = lifecycle.find(e =>
+      product.toLowerCase().includes(e.product.toLowerCase()) ||
+      e.product.toLowerCase().includes(product.toLowerCase())
+    )
+
+    const hasLifecycleEvent = !!lifecycleEvent
+    const amplified = productCases.length >= 2 && hasLifecycleEvent
+
+    if (productCases.length >= 2 || hasLifecycleEvent) {
+      correlations.push({
+        product,
+        subscriptionVersion: primaryVersion,
+        activeCases: productCases.length,
+        lifecycleEvent: lifecycleEvent ? `${lifecycleEvent.phase} ${lifecycleEvent.date}` : undefined,
+        amplified,
+      })
+    }
+  }
+
+  return correlations.sort((a, b) => b.activeCases - a.activeCases)
+}
+
+// ── Phase 3: Cross-Sell Signals ────────────────────────────────────────
+
+function computeCrossSellSignals(
+  customerSlug: string,
+  detectedTechs: TechEntry[],
+  catalog: SolutionPlayCatalog,
+): CrossSellSignal[] {
+  const deals = readPipelineDeals(customerSlug)
+  if (deals.length === 0 || detectedTechs.length === 0) return []
+
+  const signals: CrossSellSignal[] = []
+
+  for (const deal of deals) {
+    for (const dealProduct of deal.products) {
+      // Find solution plays that involve this deal's product
+      const relatedPlays = catalog.plays.filter(p =>
+        p.redHatProducts.some(rp =>
+          dealProduct.toLowerCase().includes(rp) || rp.includes(dealProduct.toLowerCase())
+        )
+      )
+
+      for (const play of relatedPlays) {
+        // Check if any trigger technology is detected
+        const { matched } = matchTechnologies(detectedTechs, play.triggerTechnologies)
+        if (matched.length > 0) {
+          // Find cross-sell products from the play that aren't in the deal
+          const crossSellProducts = play.redHatProducts.filter(p =>
+            !deal.products.some(dp => dp.toLowerCase().includes(p))
+          )
+
+          for (const crossSellProduct of crossSellProducts) {
+            signals.push({
+              pipelineProduct: dealProduct,
+              relatedTech: matched[0],
+              crossSellProduct,
+              stage: deal.forecastCategory,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  // Dedupe by crossSellProduct
+  const seen = new Set<string>()
+  return signals.filter(s => {
+    const key = `${s.pipelineProduct}:${s.crossSellProduct}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /** Reset the catalog cache (for testing) */

@@ -308,9 +308,13 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
     }
   }
 
-  const rows: string[] = []
-  rows.push('| TDP | Play | Trigger Technologies | Products | Business Value |')
-  rows.push('|-----|------|---------------------|----------|----------------|')
+  const parts: string[] = []
+
+  // Solution Plays sub-section
+  const playRows: string[] = []
+  playRows.push('### Solution Plays')
+  playRows.push('| TDP | Play | Trigger Technologies | Products | Business Value |')
+  playRows.push('|-----|------|---------------------|----------|----------------|')
 
   for (const s of uniqueSignals.slice(0, 6)) {
     const m = s.metadata ?? {}
@@ -321,10 +325,52 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
     const valueProps = Array.isArray(m.valueProps)
       ? m.valueProps[0]?.slice(0, 80) ?? ''
       : ''
-    rows.push(`| ${tdp} | ${playName} | ${techs} | ${products} | ${valueProps} |`)
+    playRows.push(`| ${tdp} | ${playName} | ${techs} | ${products} | ${valueProps} |`)
+  }
+  parts.push(playRows.join('\n'))
+
+  // Marketplace Opportunities sub-section (from signals with privateOfferEligible or provider+acvPlus)
+  const marketplaceSignals = signals.filter(s => {
+    const m = s.metadata ?? {}
+    return m.hasCloudSpend && m.acvPlus && Number(m.acvPlus) > 0
+  })
+  if (marketplaceSignals.length > 0) {
+    const seen = new Set<string>()
+    const mktRows: string[] = []
+    mktRows.push('### Marketplace Opportunities')
+    mktRows.push('| Provider | Spend | Programs | Private Offer |')
+    mktRows.push('|----------|-------|----------|---------------|')
+    for (const s of marketplaceSignals) {
+      const m = s.metadata ?? {}
+      const provider = String(m.provider ?? m.cloudPartner ?? '')
+      if (!provider || seen.has(provider)) continue
+      seen.add(provider)
+      const spend = `$${Math.round(Number(m.acvPlus ?? 0)).toLocaleString()}`
+      const programs = Array.isArray(m.eligiblePrograms) ? m.eligiblePrograms.join(', ') : 'N/A'
+      const privateOffer = m.privateOfferEligible ? 'Eligible' : '—'
+      mktRows.push(`| ${provider} | ${spend} | ${programs} | ${privateOffer} |`)
+    }
+    if (mktRows.length > 3) parts.push(mktRows.join('\n'))
   }
 
-  return rows.join('\n')
+  // Version Correlations sub-section (from signals with type='version-correlation')
+  const versionSignals = signals.filter(s => s.metadata?.amplified)
+  if (versionSignals.length > 0) {
+    const vcRows: string[] = []
+    vcRows.push('### Urgent Correlations')
+    vcRows.push('| Product | Cases | Lifecycle Event |')
+    vcRows.push('|---------|-------|-----------------|')
+    for (const s of versionSignals.slice(0, 4)) {
+      const m = s.metadata ?? {}
+      const product = String(m.product ?? 'Unknown')
+      const cases = String(m.activeCases ?? s.headline.match(/(\d+) active/)?.[1] ?? '?')
+      const lifecycle = String(m.lifecycleEvent ?? '—')
+      vcRows.push(`| ${product} | ${cases} | ${lifecycle} |`)
+    }
+    parts.push(vcRows.join('\n'))
+  }
+
+  return parts.join('\n\n')
 }
 
 /**
