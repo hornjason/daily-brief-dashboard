@@ -186,6 +186,7 @@ export function SystemOverviewPanel() {
   const [health, setHealth] = useState<HealthModule[]>([])
   const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([])
   const [freshness, setFreshness] = useState<DataFreshnessStatus | null>(null)
+  const [crossref, setCrossref] = useState<CrossrefStatus | null>(null)
   const [activeDetail, setActiveDetail] = useState<DetailPanel>(null)
 
   const loadData = async () => {
@@ -209,6 +210,12 @@ export function SystemOverviewPanel() {
       if (freshRes.ok) {
         const freshData: DataFreshnessStatus = await freshRes.json()
         setFreshness(freshData)
+      }
+
+      // Fetch cross-reference status (ADR-029)
+      const crossrefRes = await fetch('/api/admin/signal-crossref-status')
+      if (crossrefRes.ok) {
+        setCrossref(await crossrefRes.json())
       }
     } catch (err) {
       console.error('Failed to load system overview data:', err)
@@ -253,10 +260,16 @@ export function SystemOverviewPanel() {
   const freshnessStatusColor: 'green' | 'yellow' | 'red' | 'gray' =
     staleCount > 0 ? 'yellow' : freshCount === totalSources && totalSources > 0 ? 'green' : 'gray'
 
+  const crossrefTotal = crossref?.totals.totalPortfolioSignals ?? 0
+  const crossrefMatched = crossref?.totals.matchedSignals ?? 0
+  const crossrefMatchRate = crossrefTotal > 0 ? crossrefMatched / crossrefTotal : 0
+  const crossrefColor: 'green' | 'yellow' | 'red' | 'gray' =
+    crossrefTotal === 0 ? 'gray' : crossrefMatchRate > 0.5 ? 'green' : crossrefMatchRate > 0.2 ? 'yellow' : 'red'
+
   return (
     <div className="space-y-6">
       {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
           title="Signal Quality"
           mainText={healthErrors > 0 ? `${healthErrors} error${healthErrors > 1 ? 's' : ''}` : healthWarnings > 0 ? `${healthWarnings} warning${healthWarnings > 1 ? 's' : ''}` : `${healthHealthy} healthy`}
@@ -291,6 +304,15 @@ export function SystemOverviewPanel() {
           statusColor={totalSignals > 0 ? 'green' : 'gray'}
           selected={activeDetail === 'coverage'}
           onClick={() => setActiveDetail(activeDetail === 'coverage' ? null : 'coverage')}
+        />
+
+        <SummaryCard
+          title="Cross-Reference"
+          mainText={`${crossrefMatched}/${crossrefTotal}`}
+          subtitle={`${crossref?.totals.customersWithProducts ?? 0} customers with products`}
+          statusColor={crossrefColor}
+          selected={activeDetail === 'crossref'}
+          onClick={() => setActiveDetail(activeDetail === 'crossref' ? null : 'crossref')}
         />
       </div>
 
@@ -363,6 +385,60 @@ export function SystemOverviewPanel() {
                 {health.filter(m => m.signalCount === 0).length} modules with no signals: {health.filter(m => m.signalCount === 0).map(m => FRIENDLY_NAMES[m.name] ?? m.name).join(', ')}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Cross-Reference Detail (ADR-029) */}
+      {activeDetail === 'crossref' && crossref && (
+        <div className="bg-gray-800 rounded-lg border border-blue-500/30 p-4">
+          <h3 className="text-sm font-medium text-gray-200 mb-3">Signal Cross-Reference Status</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-700 text-gray-400">
+                  <th className="text-left py-2 pr-4">Customer</th>
+                  <th className="text-left py-2 pr-4">Owned</th>
+                  <th className="text-left py-2 pr-4">Expansion</th>
+                  <th className="text-right py-2">Matched</th>
+                </tr>
+              </thead>
+              <tbody>
+                {crossref.customers
+                  .filter(c => c.portfolioSignals > 0 || c.ownedProducts.length > 0 || c.interestProducts.length > 0)
+                  .sort((a, b) => b.matchedSignals - a.matchedSignals)
+                  .map(c => (
+                    <tr key={c.slug} className="border-b border-gray-700/50">
+                      <td className="py-1.5 pr-4 text-gray-300">{c.name}</td>
+                      <td className="py-1.5 pr-4">
+                        <div className="flex flex-wrap gap-1">
+                          {c.ownedProducts.map(p => (
+                            <span key={p} className="text-green-400 bg-green-400/10 px-1 py-0.5 rounded text-xs border border-green-400/20 uppercase">{p}</span>
+                          ))}
+                          {c.ownedProducts.length === 0 && <span className="text-gray-500">—</span>}
+                        </div>
+                      </td>
+                      <td className="py-1.5 pr-4">
+                        <div className="flex flex-wrap gap-1">
+                          {c.interestProducts.map(p => (
+                            <span key={p} className="text-cyan-400 bg-cyan-400/10 px-1 py-0.5 rounded text-xs border border-cyan-400/20 uppercase">{p}</span>
+                          ))}
+                          {c.interestProducts.length === 0 && <span className="text-gray-500">—</span>}
+                        </div>
+                      </td>
+                      <td className="py-1.5 text-right font-mono">
+                        <span className={c.matchedSignals > 0 ? 'text-green-400' : 'text-gray-500'}>
+                          {c.matchedSignals}
+                        </span>
+                        <span className="text-gray-500">/{c.portfolioSignals}</span>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-3 text-xs text-gray-500 border-t border-gray-700 pt-2">
+            Totals: {crossref.totals.subscriptionMatches} subscription + {crossref.totals.interestMatches} interest matches across {crossref.totals.customersWithProducts} customers
           </div>
         </div>
       )}
