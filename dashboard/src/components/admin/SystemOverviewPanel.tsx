@@ -92,12 +92,16 @@ function SummaryCard({
   subtitle,
   progressPercent,
   statusColor,
+  selected,
+  onClick,
 }: {
   title: string
   mainText: string
   subtitle?: string
   progressPercent?: number
   statusColor?: 'green' | 'yellow' | 'red' | 'gray'
+  selected?: boolean
+  onClick?: () => void
 }) {
   const colorClasses = {
     green: 'text-green-400 bg-green-400',
@@ -109,7 +113,12 @@ function SummaryCard({
   const statusClass = statusColor ? colorClasses[statusColor] : ''
 
   return (
-    <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+    <button
+      onClick={onClick}
+      className={`bg-gray-800 rounded-lg p-3 border transition-colors text-left w-full ${
+        selected ? 'border-blue-500 ring-1 ring-blue-500/30' : 'border-gray-700 hover:border-gray-600'
+      }`}
+    >
       <div className="text-xs font-medium text-gray-400 mb-1">{title}</div>
       <div className="flex items-center gap-2 mb-1">
         <div className="text-lg font-medium text-gray-100">{mainText}</div>
@@ -130,7 +139,7 @@ function SummaryCard({
           />
         </div>
       )}
-    </div>
+    </button>
   )
 }
 
@@ -143,10 +152,26 @@ interface HealthModule {
   signalCount: number
 }
 
+type DetailPanel = 'quality' | 'tasks' | 'currency' | 'coverage' | null
+
+const FRIENDLY_NAMES: Record<string, string> = {
+  'news-radar': 'Customer News', 'product-lifecycle': 'Product End-of-Life',
+  'rh-rss': 'Red Hat Blog & Press', 'rh-events': 'Red Hat Events',
+  'product-intel': 'Product Features', 'ccsp': 'Cloud Spend (CCSP)',
+  'value-maps': 'Business Value Maps', 'cases': 'Support Cases',
+  'subscriptions': 'Subscriptions', 'pipeline': 'Sales Pipeline',
+  'customer-docs': 'Customer Documents', 'customer-product-intel': 'Product Talking Points',
+  'emails': 'Email History', 'intelligence': 'Company Intelligence',
+  'account-plan': 'Account Plans', 'cloud-marketplace': 'Cloud Marketplace',
+  'tech-stack': 'Technology Detection', 'playbook': 'Engagement Playbook',
+  'campaigns': 'Email Campaigns', 'meeting-prep': 'Meeting Prep', 'tools': 'Business Value Tools',
+}
+
 export function SystemOverviewPanel() {
   const [health, setHealth] = useState<HealthModule[]>([])
   const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([])
   const [freshness, setFreshness] = useState<DataFreshnessStatus | null>(null)
+  const [activeDetail, setActiveDetail] = useState<DetailPanel>(null)
 
   const loadData = async () => {
     try {
@@ -217,41 +242,118 @@ export function SystemOverviewPanel() {
     <div className="space-y-6">
       {/* Summary Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Module Health — errors/warnings from signal quality checks */}
         <SummaryCard
           title="Signal Quality"
           mainText={healthErrors > 0 ? `${healthErrors} error${healthErrors > 1 ? 's' : ''}` : healthWarnings > 0 ? `${healthWarnings} warning${healthWarnings > 1 ? 's' : ''}` : `${healthHealthy} healthy`}
-          subtitle={`${totalSignals} signals across ${health.length} modules`}
+          subtitle={`${totalSignals} signals across ${health.length} modules — click for details`}
           statusColor={healthColor}
+          selected={activeDetail === 'quality'}
+          onClick={() => setActiveDetail(activeDetail === 'quality' ? null : 'quality')}
         />
 
-        {/* Automated Tasks */}
         <SummaryCard
           title="Automated Tasks"
           mainText={`${scheduledTasks.length} tasks — ${runningCount > 0 ? `${runningCount} running` : 'all idle'}`}
-          subtitle="Background jobs that keep data current"
+          subtitle="Click to see task schedule"
           statusColor={taskStatusColor}
+          selected={activeDetail === 'tasks'}
+          onClick={() => setActiveDetail(activeDetail === 'tasks' ? null : 'tasks')}
         />
 
-        {/* Data Currency */}
         <SummaryCard
           title="Data Currency"
           mainText={`${freshCount}/${totalSources} fresh — ${staleCount} stale`}
-          subtitle="How current your customer data is"
+          subtitle="Click to see source freshness"
           statusColor={freshnessStatusColor}
+          selected={activeDetail === 'currency'}
+          onClick={() => setActiveDetail(activeDetail === 'currency' ? null : 'currency')}
         />
 
-        {/* Total Signal Count */}
         <SummaryCard
           title="Intelligence Coverage"
           mainText={`${totalSignals} signals`}
-          subtitle={`From ${health.filter(m => m.signalCount > 0).length} active data sources`}
+          subtitle={`From ${health.filter(m => m.signalCount > 0).length} sources — click for breakdown`}
           statusColor={totalSignals > 0 ? 'green' : 'gray'}
+          selected={activeDetail === 'coverage'}
+          onClick={() => setActiveDetail(activeDetail === 'coverage' ? null : 'coverage')}
         />
       </div>
 
-      {/* Scheduled Tasks Table */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+      {/* ── Detail Panel (expands below selected card) ──────────────────── */}
+      {activeDetail === 'quality' && (
+        <div className="bg-gray-800 rounded-lg border border-blue-500/30 p-4">
+          <h3 className="text-sm font-medium text-gray-200 mb-3">Signal Quality Details</h3>
+          <div className="space-y-1.5 text-xs">
+            {health.filter(m => m.status === 'error').map(m => (
+              <div key={m.name} className="flex items-start gap-2">
+                <Circle className="w-2.5 h-2.5 fill-current text-red-400 mt-0.5 shrink-0" />
+                <div>
+                  <span className="text-gray-200 font-medium">{FRIENDLY_NAMES[m.name] ?? m.name}</span>
+                  <span className="text-gray-500"> — {m.signalCount} signals</span>
+                  {m.warnings.map((w, i) => <div key={i} className="text-red-400">{w}</div>)}
+                </div>
+              </div>
+            ))}
+            {health.filter(m => m.status === 'warning').map(m => (
+              <div key={m.name} className="flex items-start gap-2">
+                <Circle className="w-2.5 h-2.5 fill-current text-yellow-400 mt-0.5 shrink-0" />
+                <div>
+                  <span className="text-gray-200 font-medium">{FRIENDLY_NAMES[m.name] ?? m.name}</span>
+                  <span className="text-gray-500"> — {m.signalCount} signals</span>
+                  {m.warnings.map((w, i) => <div key={i} className="text-yellow-400">{w}</div>)}
+                </div>
+              </div>
+            ))}
+            {health.filter(m => m.status === 'healthy' && m.signalCount > 0).map(m => (
+              <div key={m.name} className="flex items-center gap-2">
+                <Circle className="w-2.5 h-2.5 fill-current text-green-400 shrink-0" />
+                <span className="text-gray-300">{FRIENDLY_NAMES[m.name] ?? m.name}</span>
+                <span className="text-gray-500">— {m.signalCount} signals</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeDetail === 'currency' && freshness && (
+        <div className="bg-gray-800 rounded-lg border border-blue-500/30 p-4">
+          <h3 className="text-sm font-medium text-gray-200 mb-3">Data Source Freshness</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+            {freshness.sources.map((s: any) => (
+              <div key={s.name} className="flex items-center gap-2 py-1">
+                <Circle className={`w-2.5 h-2.5 fill-current shrink-0 ${
+                  s.status === 'fresh' ? 'text-green-400' : s.status === 'stale' ? 'text-yellow-400' : s.status === 'critical' ? 'text-red-400' : 'text-gray-400'
+                }`} />
+                <span className="text-gray-300">{s.displayName || FRIENDLY_NAMES[s.name] || s.name}</span>
+                {s.lastChecked && <span className="text-gray-500 ml-auto">{formatRelTime(s.lastChecked)}</span>}
+                {s.recordCount !== null && <span className="text-gray-600">({s.recordCount})</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeDetail === 'coverage' && (
+        <div className="bg-gray-800 rounded-lg border border-blue-500/30 p-4">
+          <h3 className="text-sm font-medium text-gray-200 mb-3">Signal Coverage by Module</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+            {health.filter(m => m.signalCount > 0).sort((a, b) => b.signalCount - a.signalCount).map(m => (
+              <div key={m.name} className="flex items-center justify-between py-1">
+                <span className="text-gray-300">{FRIENDLY_NAMES[m.name] ?? m.name}</span>
+                <span className="text-gray-400 font-mono">{m.signalCount}</span>
+              </div>
+            ))}
+            {health.filter(m => m.signalCount === 0).length > 0 && (
+              <div className="col-span-full text-gray-500 pt-1 border-t border-gray-700">
+                {health.filter(m => m.signalCount === 0).length} modules with no signals: {health.filter(m => m.signalCount === 0).map(m => FRIENDLY_NAMES[m.name] ?? m.name).join(', ')}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Scheduled Tasks Table — visible when tasks card is selected */}
+      {activeDetail === 'tasks' && <div className="bg-gray-800 rounded-lg border border-blue-500/30 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-700">
           <h3 className="text-sm font-medium text-gray-200">Scheduled Tasks</h3>
         </div>
@@ -309,7 +411,7 @@ export function SystemOverviewPanel() {
             </tbody>
           </table>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

@@ -18,7 +18,8 @@ import { initSfContext } from '../src/sf-scraper.ts'
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { syncAllPods } from './sync-pod-l3.ts'
 import { isPrimary } from '../src/lib/node-role.ts'
-import { isContextHealthy } from './sync-l3-daemon-utils.ts'
+import { isContextHealthy, canContextRender } from './sync-l3-daemon-utils.ts'
+import { adoptSfContext } from '../src/sf-scraper.ts'
 
 // ── Guard: primary node only ──────────────────────────────────────────────────
 
@@ -36,6 +37,11 @@ const TABLEAU_VIZ_URL = 'https://10ay.online.tableau.com/t/redhatanalytics/views
 const SF_BASE_URL = 'https://redhatcrm.lightning.force.com/lightning/page/home'
 const KEEPALIVE_INTERVAL_MS = 2 * 60 * 60 * 1000  // 2 hours
 const ALERT_EMAIL = 'jhorn@redhat.com'
+
+// BKL-SYNC-CHROME-LEAK Layer 4: Proactive recycle constants
+const RECYCLE_INTERVAL_MS = 12 * 60 * 60 * 1000  // 12 hours
+// BKL-SYNC-CHROME-LEAK Bonus: Memory threshold for proactive recycle
+const RSS_THRESHOLD_BYTES = 3 * 1024 * 1024 * 1024  // 3 GB
 
 // ── Time helpers ──────────────────────────────────────────────────────────────
 
@@ -190,6 +196,17 @@ async function doKeepalive(): Promise<void> {
       throw new Error(`SF session expired — redirected to ${sfFinal}`)
     }
 
+    // BKL-SYNC-CHROME-LEAK Bonus: Memory monitoring — trigger proactive recycle on high RSS
+    const rss = process.memoryUsage().rss
+    const rssMB = Math.round(rss / 1024 / 1024)
+    if (rss > RSS_THRESHOLD_BYTES) {
+      console.warn(`[sync-daemon] keepalive: RSS ${rssMB}MB exceeds ${Math.round(RSS_THRESHOLD_BYTES / 1024 / 1024)}MB threshold — triggering proactive recycle`)
+      await page.close().catch(() => {})
+      await proactiveRecycle()
+      return
+    }
+    console.log(`[sync-daemon] keepalive: RSS ${rssMB}MB (threshold: ${Math.round(RSS_THRESHOLD_BYTES / 1024 / 1024)}MB)`)
+
     // BKL-#223: RH context health probe — detect dead/unresponsive browser contexts
     // After ~6 days uptime, the RH Portal browser context (Playwright BrowserContext)
     // can silently die — the Chromium process becomes unresponsive. The SSO cookies
@@ -232,10 +249,86 @@ async function doKeepalive(): Promise<void> {
   }
 }
 
+// ── BKL-SYNC-CHROME-LEAK Layer 4: Proactive browser recycle ─────────────────
+
+/**
+ * Proactively recycle the browser: persist session state, close browser,
+ * kill orphan Chrome processes, re-init context, and re-adopt sister scrapers.
+ * Prevents Chrome memory bloat from accumulating over 48h+ uptime.
+ */
+async function proactiveRecycle(): Promise<void> {
+  console.log('[sync-daemon] proactiveRecycle: starting browser recycle…')
+  const { closeScrapeContext, initScrapeContext: reinitCtx, getScrapeContext: getCtx } = await import('../src/rh-scraper.ts')
+  const { closeSfContext } = await import('../src/sf-scraper.ts')
+
+  try {
+    // 1. Persist session state (cookies) to disk before closing
+    const ctx = getCtx()
+    if (ctx) {
+      try {
+        const state = await ctx.storageState()
+        const { writeFileSync } = await import('node:fs')
+        writeFileSync(`${PROFILE_DIR}/session-state.json`, JSON.stringify(state), { mode: 0o600 })
+        console.log('[sync-daemon] proactiveRecycle: session state persisted')
+      } catch (e: any) {
+        console.warn(`[sync-daemon] proactiveRecycle: session persist failed: ${e?.message}`)
+      }
+    }
+
+    // 2. Close browser contexts properly
+    await closeScrapeContext().catch(() => {})
+    await closeSfContext().catch(() => {})
+
+    // 3. Kill any remaining Chrome processes (safety net)
+    try {
+      const { execSync } = await import('node:child_process')
+      execSync('pkill -f "chromium|chrome" 2>/dev/null || true', { timeout: 5_000 })
+      console.log('[sync-daemon] proactiveRecycle: orphan Chrome processes killed')
+    } catch { /* non-fatal */ }
+
+    // 4. Brief pause for process cleanup
+    await new Promise(r => setTimeout(r, 2_000))
+
+    // 5. Re-init scrape context from persisted profile
+    await reinitCtx(PROFILE_DIR)
+    const newCtx = getCtx()
+    if (!newCtx) {
+      console.error('[sync-daemon] proactiveRecycle: failed to re-init browser context')
+      return
+    }
+
+    // 6. Re-adopt sister scrapers (CCSP, SF)
+    adoptCcspContext(newCtx)
+    try {
+      await initSfContext(PROFILE_DIR)
+    } catch (e: any) {
+      console.warn(`[sync-daemon] proactiveRecycle: SF re-init warning: ${e?.message}`)
+    }
+
+    console.log('[sync-daemon] proactiveRecycle: browser recycled successfully')
+  } catch (e: any) {
+    console.error(`[sync-daemon] proactiveRecycle: failed: ${e?.message ?? e}`)
+  }
+}
+
 // ── Sync cycle ────────────────────────────────────────────────────────────────
 
 async function runSyncCycle(): Promise<void> {
   console.log('[sync-daemon] starting daily sync cycle…')
+
+  // BKL-SYNC-CHROME-LEAK Layer 3: Pre-sync rendering health check.
+  // If the browser can respond to IPC but can't render, recycle before syncing.
+  const ctx = getScrapeContext()
+  if (ctx) {
+    const canRender = await canContextRender(ctx)
+    if (!canRender) {
+      console.warn('[sync-daemon] pre-sync render check FAILED — recycling browser before sync')
+      await proactiveRecycle()
+    } else {
+      console.log('[sync-daemon] pre-sync render check passed')
+    }
+  }
+
   try {
     const result = await syncAllPods()
     const errorCount = result.results.filter(r => r.status === 'error').length
@@ -397,7 +490,18 @@ async function main(): Promise<void> {
     }
   }, 30_000)
 
-  // Timer 4: daily sync at 5:30am ET
+  // Timer 4: BKL-SYNC-CHROME-LEAK Layer 4 — proactive browser recycle every 12h
+  setInterval(async () => {
+    console.log('[sync-daemon] scheduled 12h browser recycle starting…')
+    try {
+      await proactiveRecycle()
+      console.log('[sync-daemon] scheduled 12h browser recycle: OK')
+    } catch (e: any) {
+      console.error('[sync-daemon] scheduled 12h browser recycle: FAILED —', e?.message ?? e)
+    }
+  }, RECYCLE_INTERVAL_MS)
+
+  // Timer 5: daily sync at 5:30am ET
   scheduleNextSync()
 }
 

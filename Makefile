@@ -791,6 +791,7 @@ sync-up: sync-down
 	@test -f $(SYNC_DATA_DIR)/config/settings.json || \
 	  (echo "ERROR: Bootstrap $(SYNC_DATA_DIR)/config/settings.json first" && exit 1)
 	podman run -d \
+	  --init \
 	  -v $(SYNC_DATA_DIR):/data:rw,Z \
 	  --env-file $(SYNC_ENV_FILE) \
 	  -e NODE_ROLE=primary \
@@ -830,6 +831,7 @@ sync-up-vnc: sync-down
 	@test -f $(SYNC_DATA_DIR)/config/settings.json || \
 	  (echo "ERROR: Bootstrap $(SYNC_DATA_DIR)/config/settings.json first" && exit 1)
 	podman run -d \
+	  --init \
 	  -p 6082:6080 \
 	  -v $(SYNC_DATA_DIR):/data:rw,Z \
 	  --env-file $(SYNC_ENV_FILE) \

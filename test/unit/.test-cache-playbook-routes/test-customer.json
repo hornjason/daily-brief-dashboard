@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "customerSlug": "test-customer",
+  "customerName": "Test Customer",
+  "generatedAt": "2026-05-21T14:38:42.840Z",
+  "lastMeetingNoteAt": null,
+  "sections": {
+    "strategicPosition": {
+      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "sourceNotes": []
+    },
+    "keyRelationships": {
+      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "sourceNotes": []
+    },
+    "currentPriorities": {
+      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "sourceNotes": []
+    },
+    "productAlignment": {
+      "products": [],
+      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "sourceNotes": []
+    },
+    "openActionItems": {
+      "items": [],
+      "updatedAt": "2026-05-21T14:38:42.840Z"
+    },
+    "engagementHistory": {
+      "entries": [],
+      "updatedAt": "2026-05-21T14:38:42.840Z"
+    },
+    "expansionOpportunities": {
+      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "sourceNotes": []
+    },
+    "renewalsAndRisk": {
+      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "sourceNotes": []
+    },
+    "swotAnalysis": {
+      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "sourceNotes": []
+    },
+    "meddpicc": {
+      "entries": [],
+      "qualificationScore": 0,
+      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "sourceNotes": []
+    }
+  },
+  "deterministic": {
+    "subscriptions": [],
+    "cases": [],
+    "lifecycle": [
+      {
+        "productSlug": "ocp",
+        "displayName": "Red Hat OpenShift Container Platform",
+        "currentVersion": "4.20",
+        "gaDate": "2025-10-21",
+        "eolDate": "2027-04-21"
+      },
+      {
+        "productSlug": "rhel",
+        "displayName": "Red Hat Enterprise Linux",
+        "currentVersion": "10",
+        "gaDate": "2025-05-20",
+        "eolDate": "2035-05-31"
+      },
+      {
+        "productSlug": "aap",
+        "displayName": "Red Hat Ansible Automation Platform",
+        "currentVersion": "2.6",
+        "gaDate": "2025-10-01",
+        "eolDate": "2027-10-01"
+      }
+    ],
+    "teamMembers": [
+      {
+        "name": "Test AE",
+        "title": "Account Executive",
+        "role": "ae"
+      }
+    ]
+  },
+  "sources": [
+    {
+      "type": "auto-generate",
+      "sourceId": "auto",
+      "ingestedAt": "2026-05-21T14:38:42.840Z",
+      "sectionsUpdated": [
+        "strategicPosition",
+        "keyRelationships",
+        "currentPriorities",
+        "productAlignment",
+        "expansionOpportunities",
+        "renewalsAndRisk",
+        "swotAnalysis",
+        "meddpicc"
+      ]
+    }
+  ]
+}

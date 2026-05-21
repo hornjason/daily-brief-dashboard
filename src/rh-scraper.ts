@@ -252,6 +252,24 @@ function _attachPageCrashHandler(page: Page): void {
   })
 }
 
+/**
+ * BKL-SYNC-CHROME-LEAK Layer 1b: Kill orphan Chromium processes left behind by
+ * browser.close() failures or IPC disconnects. In a container, all chrome/chromium
+ * processes are ours — safe to kill. On host, this is a no-op if no orphans exist.
+ */
+async function killOrphanChromeProcesses(): Promise<void> {
+  try {
+    const { execSync } = await import('node:child_process')
+    // pkill sends SIGTERM to all matching processes. -f matches full command line.
+    // Ignore exit code — pkill returns 1 when no processes matched.
+    execSync('pkill -f "chromium|chrome" 2>/dev/null || true', { timeout: 5_000 })
+    console.log('[rh-scraper] killOrphanChromeProcesses: sent SIGTERM to any remaining Chrome processes')
+  } catch (e: any) {
+    // Non-fatal — pkill may not exist or may fail
+    console.warn(`[rh-scraper] killOrphanChromeProcesses: ${e?.message ?? e}`)
+  }
+}
+
 async function _autoRecover(profileDir: string): Promise<void> {
   if (_recoveryInProgress) {
     console.log('[rh-scraper] recovery already in progress — skipping')
@@ -262,6 +280,22 @@ async function _autoRecover(profileDir: string): Promise<void> {
   try {
     // Save storage state before closing if context is still accessible
     await persistSessionState().catch(() => {})
+
+    // BKL-SYNC-CHROME-LEAK Layer 1: Close the old browser properly before clearing refs.
+    // Without this, browser.close() never fires and Chrome processes accumulate.
+    if (_context) {
+      try {
+        const browser = _context.browser()
+        if (browser) {
+          console.log('[rh-scraper] _autoRecover: closing old browser before relaunch')
+          await browser.close().catch(() => {})
+        }
+      } catch { /* context may already be dead — that's fine */ }
+    }
+
+    // BKL-SYNC-CHROME-LEAK Layer 1b: Kill any orphan Chrome processes that browser.close() missed.
+    // In a container, these are all our children — safe to kill.
+    await killOrphanChromeProcesses()
 
     // Clear stale references
     if (_keepAliveTimer) { clearInterval(_keepAliveTimer); _keepAliveTimer = null }
