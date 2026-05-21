@@ -180,4 +180,67 @@ describe('getCustomerProductContext', () => {
     expect(ctx.ownedProducts).toContain('runtimes')
     expect(ctx.ownedProducts).toContain('aap')
   })
+
+  it('extracts interest products from intelligence whitespace section', () => {
+    mkdirSync(resolve(CACHE_DIR, 'intelligence'), { recursive: true })
+    writeFileSync(resolve(CACHE_DIR, 'intelligence', 'acme-corp.json'), JSON.stringify({
+      company: `## Company Overview
+Some company info.
+
+## Whitespace & Opportunity Mapping (Red Hat Product Fit)
+
+### RHEL Fit
+RHEL would help with infrastructure.
+
+### OpenShift Fit
+OpenShift would modernize their apps.
+
+### Ansible Fit
+Ansible would automate their operations.
+
+### Red Hat AI Fit
+Red Hat AI would enable ML workloads.
+`,
+    }))
+
+    const ctx = getCustomerProductContext('acme-corp')
+    expect(ctx.interestProducts).toContain('rhel')
+    expect(ctx.interestProducts).toContain('ocp')
+    expect(ctx.interestProducts).toContain('aap')
+    expect(ctx.interestProducts).toContain('rhoai')
+    expect(ctx.allRelevantProducts).toContain('ocp')
+  })
+
+  it('interest products exclude already-owned products in allRelevantProducts dedup', () => {
+    writeFileSync(resolve(CACHE_DIR, 'acme-corp-sheets.json'), JSON.stringify({
+      rows: [{ productDescription: 'Red Hat Enterprise Linux Server', quantity: 5 }]
+    }))
+    mkdirSync(resolve(CACHE_DIR, 'intelligence'), { recursive: true })
+    writeFileSync(resolve(CACHE_DIR, 'intelligence', 'acme-corp.json'), JSON.stringify({
+      company: `## Whitespace & Opportunity Mapping
+### RHEL Fit
+Already owns it.
+### OpenShift Fit
+Expansion opportunity.
+`,
+    }))
+
+    const ctx = getCustomerProductContext('acme-corp')
+    expect(ctx.ownedProducts).toContain('rhel')
+    expect(ctx.interestProducts).toContain('rhel')
+    expect(ctx.interestProducts).toContain('ocp')
+    // allRelevantProducts deduplicates
+    expect(ctx.allRelevantProducts.filter(p => p === 'rhel')).toHaveLength(1)
+    expect(ctx.allRelevantProducts).toContain('ocp')
+  })
+
+  it('returns empty interest when no whitespace section', () => {
+    mkdirSync(resolve(CACHE_DIR, 'intelligence'), { recursive: true })
+    writeFileSync(resolve(CACHE_DIR, 'intelligence', 'acme-corp.json'), JSON.stringify({
+      company: '## Executive Summary\nJust a summary.',
+    }))
+
+    const ctx = getCustomerProductContext('acme-corp')
+    expect(ctx.interestProducts).toEqual([])
+  })
 })

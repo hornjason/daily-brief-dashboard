@@ -45,7 +45,7 @@ export function normalizeProductSlug(name: string): string | undefined {
   if (PRODUCT_SLUG_MAP[normalized]) return PRODUCT_SLUG_MAP[normalized]
 
   // Substring match — check more specific patterns first
-  if (normalized.includes('openshift ai') || normalized.includes('rhoai')) return 'rhoai'
+  if (normalized.includes('openshift ai') || normalized.includes('rhoai') || normalized === 'red hat ai') return 'rhoai'
   if (normalized.includes('openshift')) return 'ocp'
   if (normalized.includes('enterprise linux') || normalized.includes('rhel')) return 'rhel'
   if (normalized.includes('ansible')) return 'aap'
@@ -109,15 +109,32 @@ function extractProductSlugsFromRows(rows: any[]): string[] {
   return [...new Set(products)]
 }
 
-function extractInterestProducts(_customerSlug: string): string[] {
+function extractInterestProducts(customerSlug: string): string[] {
   try {
-    const intelligencePath = resolve(getCacheDir(), 'intelligence', `${_customerSlug}.json`)
+    const intelligencePath = resolve(getCacheDir(), 'intelligence', `${customerSlug}.json`)
     if (!existsSync(intelligencePath)) return []
 
-    // Subscription match alone solves the primary problem per ADR-029.
-    // Interest match from intelligence themes is a future enhancement.
-    return []
-  } catch {
+    const data = JSON.parse(readFileSync(intelligencePath, 'utf-8'))
+    const company: string = data.company ?? ''
+    if (!company) return []
+
+    // Parse "### {Product} Fit" headings from "Whitespace & Opportunity Mapping" section
+    const whitespaceStart = company.indexOf('Whitespace')
+    if (whitespaceStart === -1) return []
+
+    const whitespaceText = company.substring(whitespaceStart)
+    const fitHeadings = whitespaceText.match(/^### (.+?)\s*Fit/gm) ?? []
+
+    const products: string[] = []
+    for (const heading of fitHeadings) {
+      const productName = heading.replace('### ', '').replace(/\s*Fit$/, '').trim()
+      const slug = normalizeProductSlug(productName)
+      if (slug) products.push(slug)
+    }
+
+    return [...new Set(products)]
+  } catch (e: any) {
+    console.warn(`[customer-product-context] Failed to extract interest products for ${customerSlug}:`, e?.message)
     return []
   }
 }
