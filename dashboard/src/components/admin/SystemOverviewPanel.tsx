@@ -152,7 +152,22 @@ interface HealthModule {
   signalCount: number
 }
 
-type DetailPanel = 'quality' | 'tasks' | 'currency' | 'coverage' | null
+type DetailPanel = 'quality' | 'tasks' | 'currency' | 'coverage' | 'crossref' | null
+
+interface CrossrefCustomer {
+  name: string; slug: string
+  ownedProducts: string[]; interestProducts: string[]
+  portfolioSignals: number; matchedSignals: number
+  subscriptionMatches: number; interestMatches: number
+}
+
+interface CrossrefStatus {
+  customers: CrossrefCustomer[]
+  totals: {
+    customersWithProducts: number; totalPortfolioSignals: number
+    matchedSignals: number; subscriptionMatches: number; interestMatches: number
+  }
+}
 
 const FRIENDLY_NAMES: Record<string, string> = {
   'news-radar': 'Customer News', 'product-lifecycle': 'Product End-of-Life',

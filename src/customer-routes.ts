@@ -813,5 +813,70 @@ export function createCustomerRouter(): Hono {
     }
   })
 
+  // ── ADR-029: Cross-reference observability endpoint ───────────────────────
+  let _crossrefCache: { data: any; expiresAt: number } | null = null
+  const CROSSREF_TTL_MS = 60_000
+  const PORTFOLIO_SOURCES = ['product-lifecycle', 'product-intel', 'rh-rss', 'rh-events', 'value-maps']
+
+  router.get('/api/admin/signal-crossref-status', async (c) => {
+    try {
+      const now = Date.now()
+      if (_crossrefCache && _crossrefCache.expiresAt > now) {
+        return c.json(_crossrefCache.data)
+      }
+
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+
+      const customerResults: Array<{
+        name: string; slug: string
+        ownedProducts: string[]; interestProducts: string[]
+        portfolioSignals: number; matchedSignals: number
+        subscriptionMatches: number; interestMatches: number
+      }> = []
+
+      let totalPortfolioSignals = 0, totalMatchedSignals = 0
+      let totalSubscriptionMatches = 0, totalInterestMatches = 0
+      let customersWithProducts = 0
+
+      for (const customer of customers) {
+        const slug = toSlug(customer.name)
+        const productCtx = getCustomerProductContext(slug)
+        const allSignals = await FeatureModuleRegistry.collectAllSignals(slug)
+        const portfolioSignals = allSignals.filter(s => PORTFOLIO_SOURCES.includes(s.source))
+
+        let subscriptionMatches = 0, interestMatches = 0
+        for (const s of portfolioSignals) {
+          const matchType = s.metadata?.matchType as string | undefined
+          if (matchType === 'subscription') subscriptionMatches++
+          else if (matchType === 'interest') interestMatches++
+        }
+
+        const matched = subscriptionMatches + interestMatches
+        if (productCtx.ownedProducts.length > 0 || productCtx.interestProducts.length > 0) customersWithProducts++
+        totalPortfolioSignals += portfolioSignals.length
+        totalMatchedSignals += matched
+        totalSubscriptionMatches += subscriptionMatches
+        totalInterestMatches += interestMatches
+
+        customerResults.push({
+          name: customer.name, slug,
+          ownedProducts: productCtx.ownedProducts, interestProducts: productCtx.interestProducts,
+          portfolioSignals: portfolioSignals.length, matchedSignals: matched,
+          subscriptionMatches, interestMatches,
+        })
+      }
+
+      const responseData = {
+        customers: customerResults,
+        totals: { customersWithProducts, totalPortfolioSignals, matchedSignals: totalMatchedSignals, subscriptionMatches: totalSubscriptionMatches, interestMatches: totalInterestMatches },
+      }
+
+      _crossrefCache = { data: responseData, expiresAt: now + CROSSREF_TTL_MS }
+      return c.json(responseData)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
+  })
+
   return router
 }

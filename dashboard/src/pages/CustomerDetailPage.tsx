@@ -1055,12 +1055,14 @@ function renderTabContent(activeTab: string, customerName: string) {
 
 // ── Signal Inventory Panel (GitHub Issue #273) ─────────────────────────────
 
+const PORTFOLIO_SOURCES = ['product-lifecycle', 'product-intel', 'rh-rss', 'rh-events', 'value-maps']
+
 function SignalInventoryPanel({ customerName }: { customerName: string }) {
   const [inventory, setInventory] = useState<any>(null)
   const [expanded, setExpanded] = useState(false)
 
   const fetchInventory = () => {
-    fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/inventory`)
+    fetch(`/api/customer/${encodeURIComponent(customerName)}/signals/inventory?detail=true`)
       .then(r => r.ok ? r.json() : null)
       .then(setInventory)
       .catch(() => setInventory(null))
@@ -1077,6 +1079,31 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
   const sources = Object.entries(inventory.sources ?? {}) as [string, { count: number }][]
   const activeSources = sources.filter(([, v]) => v.count > 0).length
   const totalSignals = inventory.totalSignals ?? 0
+  const signals: any[] = inventory.signals ?? []
+
+  // Cross-reference match counts per portfolio source
+  const crossrefBySource: Record<string, { subscription: number; interest: number }> = {}
+  const matchedProductTypes: Record<string, 'subscription' | 'interest'> = {}
+
+  for (const s of signals) {
+    if (!PORTFOLIO_SOURCES.includes(s.source)) continue
+    if (!crossrefBySource[s.source]) crossrefBySource[s.source] = { subscription: 0, interest: 0 }
+    const matchType = s.metadata?.matchType as string | undefined
+    if (matchType === 'subscription') crossrefBySource[s.source].subscription++
+    else if (matchType === 'interest') crossrefBySource[s.source].interest++
+
+    const products = s.metadata?.redHatProducts as string[] | undefined
+    if (products && matchType) {
+      for (const p of products) {
+        if (!matchedProductTypes[p] || matchType === 'subscription') {
+          matchedProductTypes[p] = matchType as 'subscription' | 'interest'
+        }
+      }
+    }
+  }
+
+  const ownedProducts = Object.entries(matchedProductTypes).filter(([, t]) => t === 'subscription').map(([p]) => p)
+  const expansionProducts = Object.entries(matchedProductTypes).filter(([, t]) => t === 'interest').map(([p]) => p)
 
   // Known module names for detecting missing sources
   const ALL_MODULES = ['product-lifecycle', 'rh-rss', 'rh-events', 'ccsp', 'value-maps', 'intelligence', 'customer-docs', 'subscriptions', 'emails', 'cases', 'pipeline', 'customer-product-intel', 'account-plan']
@@ -1110,15 +1137,28 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
 
       {expanded && (
         <div className="mt-3 space-y-1.5">
-          {sources.map(([source, info]) => (
-            <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
-              <div className="flex items-center gap-2">
-                <span className="text-green-400">✓</span>
-                <span className="text-text-primary">{source}</span>
+          {sources.map(([source, info]) => {
+            const xref = crossrefBySource[source]
+            return (
+              <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span className="text-text-primary">{source}</span>
+                  {xref && xref.subscription > 0 && (
+                    <span className="text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded text-xs font-medium border border-green-400/20">
+                      {xref.subscription} owned
+                    </span>
+                  )}
+                  {xref && xref.interest > 0 && (
+                    <span className="text-accent bg-accent/10 px-1.5 py-0.5 rounded text-xs font-medium border border-accent/20">
+                      {xref.interest} expansion
+                    </span>
+                  )}
+                </div>
+                <span className="text-text-secondary">{info.count} signal{info.count !== 1 ? 's' : ''}</span>
               </div>
-              <span className="text-text-secondary">{info.count} signal{info.count !== 1 ? 's' : ''}</span>
-            </div>
-          ))}
+            )
+          })}
 
           {missingSources.map(source => (
             <div key={source} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-bg-secondary/50">
@@ -1129,6 +1169,24 @@ function SignalInventoryPanel({ customerName }: { customerName: string }) {
               <span className="text-text-secondary/50">no data</span>
             </div>
           ))}
+
+          {(ownedProducts.length > 0 || expansionProducts.length > 0) && (
+            <div className="pt-2 mt-2 border-t border-border">
+              <div className="text-xs text-text-secondary mb-1.5">Products Matched</div>
+              <div className="flex flex-wrap gap-1">
+                {ownedProducts.map(p => (
+                  <span key={p} className="text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded text-xs font-medium border border-green-400/20 uppercase">
+                    {p}
+                  </span>
+                ))}
+                {expansionProducts.map(p => (
+                  <span key={p} className="text-accent bg-accent/10 px-1.5 py-0.5 rounded text-xs font-medium border border-accent/20 uppercase">
+                    {p}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
