@@ -1,6 +1,6 @@
 ---
 doc-type: adr
-status: proposed
+status: accepted
 owner: jason
 updated: 2026-05-21
 ---
@@ -13,7 +13,7 @@ updated: 2026-05-21
 
 ## Status
 
-Proposed
+Accepted (2026-05-21) — All three phases implemented and deployed.
 
 ## Context
 

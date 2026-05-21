@@ -56,6 +56,7 @@ const SIGNAL_BUDGETS: Record<string, number> = {
   'intelligence': 5,
   'value-maps': 3,
   'news-radar': 5,
+  'solution-intelligence': 8,
 }
 
 const DEFAULT_BUDGET = 5

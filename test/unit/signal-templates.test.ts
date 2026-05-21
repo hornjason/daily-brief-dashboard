@@ -12,6 +12,7 @@ import {
   templateCases,
   templateTechStack,
   templateKeyRelationships,
+  templateStrategicOpportunities,
   templateAll,
   type TemplateOptions,
 } from '../../src/lib/signal-templates.ts'
@@ -425,5 +426,148 @@ describe('signal routing by metadata', () => {
 
     const result = templateAll([productSig])
     expect(result.sections.productAlignment).not.toBeNull()
+  })
+})
+
+// ── Strategic Opportunities (ADR-030) ─────────────────────────────────────
+
+describe('templateStrategicOpportunities', () => {
+  const mockSolutionPlaySignal: Signal = {
+    source: 'tech-stack',
+    type: 'technology',
+    headline: 'VMware (industry-tool, migrating_from)',
+    detail: 'VMware virtualization platform',
+    score: 0.85,
+    timestamp: new Date().toISOString(),
+    metadata: {
+      customerSlug: 'acme',
+      solutionPlayId: 'vmware-migration',
+      solutionPlayName: 'VMware to OpenShift Virtualization Migration',
+      solutionTdp: 'Virtualization',
+      valueProps: ['Eliminate VMware licensing costs (40-60% reduction)'],
+      solutionCategory: 'modernization',
+      redHatProducts: ['ocp', 'rhel'],
+      confidence: 'HIGH',
+    },
+  }
+
+  const mockSecondPlaySignal: Signal = {
+    source: 'tech-stack',
+    type: 'technology',
+    headline: 'ServiceNow (industry-tool, using)',
+    detail: 'ITSM platform',
+    score: 0.7,
+    timestamp: new Date().toISOString(),
+    metadata: {
+      customerSlug: 'acme',
+      solutionPlayId: 'itsm-automation',
+      solutionPlayName: 'ITSM Automation with EDA',
+      solutionTdp: 'Automation',
+      valueProps: ['Reduce MTTR by automating triage'],
+      solutionCategory: 'automation',
+      redHatProducts: ['aap', 'rhel'],
+      confidence: 'MEDIUM',
+    },
+  }
+
+  test('renders solution plays table with TDP column', () => {
+    const result = templateStrategicOpportunities([mockSolutionPlaySignal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('### Solution Plays')
+    expect(result).toContain('| TDP |')
+    expect(result).toContain('Virtualization')
+    expect(result).toContain('VMware to OpenShift Virtualization Migration')
+    expect(result).toContain('ocp, rhel')
+  })
+
+  test('dedupes signals by solutionPlayId', () => {
+    const duplicate: Signal = { ...mockSolutionPlaySignal, headline: 'vSphere (industry-tool, using)' }
+    const result = templateStrategicOpportunities([mockSolutionPlaySignal, duplicate])
+    expect(result).not.toBeNull()
+    const playNameCount = (result!.match(/VMware to OpenShift Virtualization Migration/g) ?? []).length
+    expect(playNameCount).toBe(1)
+  })
+
+  test('renders multiple plays', () => {
+    const result = templateStrategicOpportunities([mockSolutionPlaySignal, mockSecondPlaySignal])
+    expect(result).not.toBeNull()
+    expect(result).toContain('Virtualization')
+    expect(result).toContain('Automation')
+  })
+
+  test('returns null when no signals have solutionPlayId', () => {
+    const noPlaySignal: Signal = {
+      source: 'tech-stack',
+      type: 'technology',
+      headline: 'Docker',
+      detail: 'Container runtime',
+      timestamp: new Date().toISOString(),
+      metadata: { confidence: 'HIGH' },
+    }
+    const result = templateStrategicOpportunities([noPlaySignal])
+    expect(result).toBeNull()
+  })
+
+  test('renders marketplace opportunities sub-section when cloud signals present', () => {
+    const cloudSignal: Signal = {
+      source: 'cloud-marketplace',
+      type: 'product-release',
+      headline: 'AWS: ROSA',
+      detail: 'Managed OpenShift on AWS',
+      score: 0.9,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        provider: 'AWS',
+        hasCloudSpend: true,
+        acvPlus: 250000,
+        eligiblePrograms: ['CPPO', 'EDP'],
+        privateOfferEligible: true,
+      },
+    }
+    const result = templateStrategicOpportunities([mockSolutionPlaySignal, cloudSignal])
+    expect(result).toContain('### Marketplace Opportunities')
+    expect(result).toContain('AWS')
+    expect(result).toContain('Eligible')
+  })
+
+  test('renders version correlations sub-section when amplified signals present', () => {
+    const versionSignal: Signal = {
+      source: 'solution-intelligence',
+      type: 'product-intel',
+      headline: 'RHEL 8: 3 active cases + EOL Jun 2026',
+      detail: 'Version correlation',
+      score: 0.9,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        product: 'RHEL',
+        activeCases: 3,
+        lifecycleEvent: 'EOL 2026-06-30',
+        amplified: true,
+      },
+    }
+    const result = templateStrategicOpportunities([mockSolutionPlaySignal, versionSignal])
+    expect(result).toContain('### Urgent Correlations')
+    expect(result).toContain('RHEL')
+  })
+
+  test('templateAll includes strategicOpportunities in sections', () => {
+    const result = templateAll([mockSolutionPlaySignal])
+    expect(result.sections.strategicOpportunities).not.toBeNull()
+    expect(result.deterministic).toContain('## Strategic Opportunities')
+  })
+
+  test('Strategic Opportunities renders before Product Alignment', () => {
+    const productSignal: Signal = {
+      source: 'subscriptions',
+      type: 'subscription',
+      headline: 'OpenShift',
+      detail: 'Active subscription',
+      timestamp: new Date().toISOString(),
+      metadata: { product: 'OpenShift' },
+    }
+    const result = templateAll([mockSolutionPlaySignal, productSignal])
+    const stratIdx = result.deterministic.indexOf('## Strategic Opportunities')
+    const prodIdx = result.deterministic.indexOf('## Product Alignment')
+    expect(stratIdx).toBeLessThan(prodIdx)
   })
 })

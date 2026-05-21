@@ -1685,3 +1685,54 @@ All checks use auto-discovery from the registry and file system — no hardcoded
 ```
 
 Admin page Feature Modules section shows compliance warnings per module.
+
+## §27. Solution Intelligence Engine (ADR-030, 2026-05-21)
+
+Cross-reference layer that sits between data caches and signal-producing modules. Reads from multiple existing caches, computes cross-references, and provides enriched context.
+
+### Architecture
+
+```
+Data Sources (existing caches)
+  tech-stack, CCSP, cloud-marketplace, cases, lifecycle, pipeline, subscriptions
+       ↓ reads
+Solution Intelligence Layer
+  solution-plays.json (static catalog, 16 plays, 6 TDPs)
+  customer-solution-context.ts → getCustomerSolutionContext()
+       ↓ enriches
+solution-intelligence-module.ts (registered, budget=8)
+tech-stack-module.ts (enriches signals with play metadata)
+       ↓ scored signals
+Template Engine → Strategic Opportunities section
+  Sub-sections: Solution Plays, Marketplace Opportunities, Urgent Correlations
+       ↓
+Consumers (playbook, brief, campaign, meeting-prep) — zero changes
+```
+
+### Key files
+
+| File | Purpose |
+|------|---------|
+| `config-templates/solution-plays.json` | Static catalog: 16 plays with TDP refs, trigger technologies, value props |
+| `src/lib/customer-solution-context.ts` | Cross-reference engine: 4 output arrays, 5-min TTL result cache |
+| `src/modules/solution-intelligence-module.ts` | Registered module: emits solution-play, marketplace, version-correlation signals |
+| `src/modules/tech-stack-module.ts` | Enhanced: adds solutionPlayId/Name/Tdp/valueProps to tech signals |
+| `src/lib/signal-templates.ts` | Strategic Opportunities section with 3 sub-sections |
+| `scripts/scrape-saleshub.ts` | SalesHub scraper (Mac Mini L4 daemon) |
+| `scripts/sync-saleshub-drive.ts` | Syncs scraped data to Drive L4 folder |
+
+### Cross-reference matrix (Phase 1-3)
+
+| Cross-reference | Reads | Produces |
+|---|---|---|
+| Tech × Solution plays | tech-stack cache + solution-plays.json | `activeSolutionPlays[]` |
+| Cloud spend × Programs | CCSP cache + cloud-marketplace cache + subscriptions | `marketplaceOpportunities[]` |
+| Cases × Lifecycle | rh-cases cache + product-lifecycle.json | `versionCorrelations[]` |
+| Pipeline × Tech stack | pipeline cache + tech-stack cache + catalog | `crossSellSignals[]` |
+
+### Constraints
+
+- No Gemini calls — pure deterministic computation
+- No new data dependencies — reads existing caches only
+- Registry scores unchanged — ADR-027 scoring applies automatically
+- Consumers unchanged — new signals route through existing templateAll()
