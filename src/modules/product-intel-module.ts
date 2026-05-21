@@ -2,12 +2,13 @@
 // Registers Product Intelligence (release radar + feature radar) with the Feature Module Registry.
 // Wraps existing functions from product-release-radar.ts and product-feature-radar.ts.
 
-import { FeatureModuleRegistry } from '../feature-module-registry.ts'
+import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { refreshAllProducts, getAllProductSummaries } from '../product-release-radar.ts'
 import { refreshAllFeatures, getFeatureCache } from '../product-feature-radar.ts'
 import { toSlug } from '../cache-layer.ts'
 import { existsSync, unlinkSync, readdirSync, statSync } from 'fs'
 import { resolve } from 'path'
+import { getCustomerProductContext } from '../lib/customer-product-context.ts'
 
 const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../../data')
 const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
@@ -92,10 +93,48 @@ FeatureModuleRegistry.register({
     await refreshAllFeatures()
   },
 
-  async signals(customerSlug: string): Promise<any[]> {
-    // Product intelligence signals are generated from cached summaries
-    // This would return product-related signals for a customer (if we had customer-product mapping)
-    // For now, return empty array — will be enhanced when customer-product mapping exists
-    return []
+  async signals(customerSlug: string): Promise<Signal[]> {
+    const summaries = getAllProductSummaries()
+    if (!summaries || summaries.length === 0) return []
+
+    const context = getCustomerProductContext(customerSlug)
+    const signals: Signal[] = []
+
+    for (const summary of summaries) {
+      if (!summary.slug || !summary.summaryText) continue
+
+      const isOwned = context.ownedProducts.includes(summary.slug)
+      const isInterest = !isOwned && context.interestProducts.includes(summary.slug)
+      const rawRelevance = (isOwned || isInterest) ? 0.7 : 0.5
+
+      const headline = summary.displayName
+        ? `${summary.displayName} — ${summary.summaryText.substring(0, 80)}${summary.summaryText.length > 80 ? '...' : ''}`
+        : summary.summaryText.substring(0, 100)
+
+      const metadata: Record<string, any> = { productSlug: summary.slug }
+
+      if (isOwned) {
+        metadata.customerSlug = customerSlug
+        metadata.matchType = 'subscription'
+        metadata.redHatProducts = [summary.slug]
+      } else if (isInterest) {
+        metadata.customerSlug = customerSlug
+        metadata.matchType = 'interest'
+        metadata.context = 'evaluating'
+        metadata.redHatProducts = [summary.slug]
+      }
+
+      signals.push({
+        source: 'product-intel',
+        type: 'product-intel',
+        headline,
+        detail: summary.summaryText,
+        rawRelevance,
+        timestamp: new Date().toISOString(),
+        metadata,
+      })
+    }
+
+    return signals
   },
 })

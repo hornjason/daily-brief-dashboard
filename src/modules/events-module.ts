@@ -10,6 +10,7 @@ import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleSco
 import { fetchRHEvents, type RHEvent } from '../rh-events-fetcher.ts'
 import { existsSync, unlinkSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
+import { getCustomerProductContext, normalizeProductSlug } from '../lib/customer-product-context.ts'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'events', 'rh-events.json')
 const CONFIG_DIR = resolve(process.env.CONFIG_DIR ?? 'data/config')
@@ -156,15 +157,13 @@ FeatureModuleRegistry.register({
       return []
     }
 
-    // Get customer's region
     const customerRegion = getCustomerRegion(customerSlug)
+    const context = getCustomerProductContext(customerSlug)
 
-    // Filter events
     const now = Date.now()
     const signals: Signal[] = []
 
     for (const event of cache.events) {
-      // Parse event date
       let eventDate: number
       try {
         eventDate = new Date(event.date).getTime()
@@ -172,15 +171,11 @@ FeatureModuleRegistry.register({
         continue
       }
 
-      // Only include upcoming events (within 90 days)
       const daysUntil = (eventDate - now) / (1000 * 60 * 60 * 24)
       if (daysUntil < 0 || daysUntil > 90) {
         continue
       }
 
-      // Include if:
-      // - Virtual/national events (available to everyone)
-      // - In-person events matching customer's region
       const include = event.region === 'national' ||
                      (customerRegion && event.region === customerRegion)
 
@@ -188,12 +183,45 @@ FeatureModuleRegistry.register({
         continue
       }
 
-      // Score by proximity
-      let score = 0.4  // base score for within 90 days
+      // ADR-029: rawRelevance based on proximity
+      let rawRelevance = 0.5
       if (daysUntil <= 14) {
-        score = 0.8  // within 2 weeks
+        rawRelevance = 0.9
       } else if (daysUntil <= 30) {
-        score = 0.6  // within 1 month
+        rawRelevance = 0.7
+      }
+
+      // ADR-029: cross-reference productTags against customer products
+      let productMatch = false
+      const matchedProducts: string[] = []
+
+      if (event.productTags && event.productTags.length > 0) {
+        for (const tag of event.productTags) {
+          const slug = normalizeProductSlug(tag)
+          if (slug && context.allRelevantProducts.includes(slug)) {
+            productMatch = true
+            if (!matchedProducts.includes(slug)) matchedProducts.push(slug)
+          }
+        }
+      }
+
+      const metadata: Record<string, any> = {
+        format: event.format,
+        location: event.location,
+        region: event.region,
+        productTags: event.productTags,
+        registrationUrl: event.registrationUrl,
+      }
+
+      if (productMatch) {
+        metadata.customerSlug = customerSlug
+        if (context.ownedProducts.some(p => matchedProducts.includes(p))) {
+          metadata.matchType = 'subscription'
+        } else {
+          metadata.matchType = 'interest'
+          metadata.context = 'evaluating'
+        }
+        metadata.redHatProducts = matchedProducts
       }
 
       signals.push({
@@ -201,17 +229,11 @@ FeatureModuleRegistry.register({
         type: 'event',
         headline: event.name,
         detail: `${event.format === 'virtual' ? 'Virtual' : event.location || 'Location TBD'} • ${event.date}`,
-        score,
+        rawRelevance,
         timestamp: event.date,
         url: event.registrationUrl || undefined,
-        expiresAt: event.date,  // Events expire after they happen (GitHub Issue #278)
-        metadata: {
-          format: event.format,
-          location: event.location,
-          region: event.region,
-          productTags: event.productTags,
-          registrationUrl: event.registrationUrl,
-        },
+        expiresAt: event.date,
+        metadata,
       })
     }
 
