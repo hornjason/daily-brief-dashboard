@@ -2,50 +2,50 @@
   "version": 1,
   "customerSlug": "test-customer",
   "customerName": "Test Customer",
-  "generatedAt": "2026-05-21T14:38:42.840Z",
+  "generatedAt": "2026-05-21T15:10:34.424Z",
   "lastMeetingNoteAt": null,
   "sections": {
     "strategicPosition": {
-      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "updatedAt": "2026-05-21T15:10:34.424Z",
       "sourceNotes": []
     },
     "keyRelationships": {
-      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "updatedAt": "2026-05-21T15:10:34.424Z",
       "sourceNotes": []
     },
     "currentPriorities": {
-      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "updatedAt": "2026-05-21T15:10:34.424Z",
       "sourceNotes": []
     },
     "productAlignment": {
       "products": [],
-      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "updatedAt": "2026-05-21T15:10:34.424Z",
       "sourceNotes": []
     },
     "openActionItems": {
       "items": [],
-      "updatedAt": "2026-05-21T14:38:42.840Z"
+      "updatedAt": "2026-05-21T15:10:34.424Z"
     },
     "engagementHistory": {
       "entries": [],
-      "updatedAt": "2026-05-21T14:38:42.840Z"
+      "updatedAt": "2026-05-21T15:10:34.424Z"
     },
     "expansionOpportunities": {
-      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "updatedAt": "2026-05-21T15:10:34.424Z",
       "sourceNotes": []
     },
     "renewalsAndRisk": {
-      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "updatedAt": "2026-05-21T15:10:34.424Z",
       "sourceNotes": []
     },
     "swotAnalysis": {
-      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "updatedAt": "2026-05-21T15:10:34.424Z",
       "sourceNotes": []
     },
     "meddpicc": {
       "entries": [],
       "qualificationScore": 0,
-      "updatedAt": "2026-05-21T14:38:42.840Z",
+      "updatedAt": "2026-05-21T15:10:34.424Z",
       "sourceNotes": []
     }
   },
@@ -87,7 +87,7 @@
     {
       "type": "auto-generate",
       "sourceId": "auto",
-      "ingestedAt": "2026-05-21T14:38:42.840Z",
+      "ingestedAt": "2026-05-21T15:10:34.424Z",
       "sectionsUpdated": [
         "strategicPosition",
         "keyRelationships",
