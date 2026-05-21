@@ -1,0 +1,258 @@
+{
+  "version": 2,
+  "tdps": [
+    "AI",
+    "App Platform",
+    "Automation",
+    "Virtualization",
+    "Server/Cloud OS",
+    "Edge"
+  ],
+  "plays": [
+    {
+      "id": "vmware-migration",
+      "name": "VMware to OpenShift Virtualization Migration",
+      "tdp": "Virtualization",
+      "summary": "Consolidate VMs and containers on a single OpenShift platform, eliminating VMware licensing.",
+      "triggerTechnologies": ["VMware", "vSphere", "ESXi", "Tanzu", "vCenter"],
+      "redHatProducts": ["ocp", "rhel", "acm"],
+      "valueProps": [
+        "Eliminate VMware licensing costs (avg 40-60% reduction)",
+        "Consolidate VM and container workloads on one platform",
+        "Multi-cluster management with ACM for hybrid deployments"
+      ],
+      "cloudAmplifiers": ["AWS", "Azure", "Google"],
+      "relatedPlays": ["platform-modernization", "cloud-native-adoption"],
+      "category": "modernization"
+    },
+    {
+      "id": "itsm-automation",
+      "name": "IT Service Management Automation with EDA",
+      "tdp": "Automation",
+      "summary": "Automate ServiceNow ticket resolution and CMDB updates with Event-Driven Ansible.",
+      "triggerTechnologies": ["ServiceNow", "SNOW", "ITSM"],
+      "redHatProducts": ["aap", "rhel"],
+      "valueProps": [
+        "Reduce mean-time-to-resolution by automating ticket triage and remediation",
+        "Keep CMDB accurate with automated discovery and reconciliation",
+        "Event-driven workflows trigger Ansible jobs on ServiceNow events"
+      ],
+      "relatedPlays": ["network-automation", "security-automation", "aiops-automation"],
+      "category": "automation"
+    },
+    {
+      "id": "cloud-native-adoption",
+      "name": "Cloud-Native Application Platform",
+      "tdp": "App Platform",
+      "summary": "Standardize on OpenShift as the enterprise Kubernetes platform with built-in CI/CD and security.",
+      "triggerTechnologies": ["Kubernetes", "K8s", "Docker", "EKS", "AKS", "GKE"],
+      "redHatProducts": ["ocp", "acs", "rhdh", "quay"],
+      "valueProps": [
+        "Enterprise Kubernetes with security, CI/CD, and observability built in",
+        "Advanced Cluster Security for supply chain and runtime protection",
+        "Developer Hub for self-service developer portals"
+      ],
+      "cloudAmplifiers": ["AWS", "Azure", "Google"],
+      "relatedPlays": ["vmware-migration", "ai-ml-platform"],
+      "category": "platform"
+    },
+    {
+      "id": "platform-modernization",
+      "name": "Infrastructure Modernization with RHEL",
+      "tdp": "Server/Cloud OS",
+      "summary": "Modernize from legacy Unix/proprietary OS to RHEL for standardized, secure infrastructure.",
+      "triggerTechnologies": ["AIX", "Solaris", "HP-UX", "CentOS", "Ubuntu", "SUSE", "Oracle Linux", "Windows Server"],
+      "redHatProducts": ["rhel", "satellite", "insights"],
+      "valueProps": [
+        "Standardize on enterprise Linux with commercial support and lifecycle management",
+        "Satellite for multi-site management, patching, and compliance",
+        "Insights for proactive risk detection and automated remediation"
+      ],
+      "relatedPlays": ["vmware-migration", "security-compliance"],
+      "category": "modernization"
+    },
+    {
+      "id": "ai-ml-platform",
+      "name": "AI/ML Platform with OpenShift AI",
+      "tdp": "AI",
+      "summary": "Build and deploy AI/ML models at scale with OpenShift AI and RHEL AI.",
+      "triggerTechnologies": ["TensorFlow", "PyTorch", "Kubeflow", "MLflow", "SageMaker", "Databricks", "Jupyter", "NVIDIA"],
+      "redHatProducts": ["ocp", "rhoai"],
+      "valueProps": [
+        "Unified AI/ML platform with model serving, training, and pipelines",
+        "GPU sharing and quota management across data science teams",
+        "RHEL AI for single-server inference with InstructLab model customization"
+      ],
+      "cloudAmplifiers": ["AWS", "Azure", "Google"],
+      "relatedPlays": ["cloud-native-adoption", "agentic-ai"],
+      "category": "ai"
+    },
+    {
+      "id": "agentic-ai",
+      "name": "Agentic AI on Red Hat",
+      "tdp": "AI",
+      "summary": "Build and deploy agentic AI applications that move from insights to automated action.",
+      "triggerTechnologies": ["LangChain", "LLM", "GPT", "Claude", "AI agents", "GenAI", "Generative AI"],
+      "redHatProducts": ["ocp", "rhoai"],
+      "valueProps": [
+        "Enterprise-grade platform for deploying AI agents at scale",
+        "Model serving infrastructure with InstructLab customization",
+        "Secure, auditable AI agent workflows with OpenShift guardrails"
+      ],
+      "cloudAmplifiers": ["AWS", "Azure", "Google"],
+      "relatedPlays": ["ai-ml-platform", "cloud-native-adoption"],
+      "category": "ai"
+    },
+    {
+      "id": "network-automation",
+      "name": "Network Automation with Ansible",
+      "tdp": "Automation",
+      "summary": "Automate network device configuration, compliance, and operations across multi-vendor environments.",
+      "triggerTechnologies": ["Cisco", "Juniper", "Arista", "Palo Alto", "F5", "Fortinet", "Checkpoint"],
+      "redHatProducts": ["aap"],
+      "valueProps": [
+        "Agentless network automation across multi-vendor environments",
+        "Pre-built certified collections for Cisco, Juniper, Arista, and 50+ vendors",
+        "Network automation as code with GitOps-style change management"
+      ],
+      "relatedPlays": ["itsm-automation", "security-automation"],
+      "category": "automation"
+    },
+    {
+      "id": "security-automation",
+      "name": "Security Automation and Compliance",
+      "tdp": "Automation",
+      "summary": "Automate security operations, compliance checks, and incident response with Ansible.",
+      "triggerTechnologies": ["Splunk", "QRadar", "CrowdStrike", "Carbon Black", "Palo Alto", "Fortinet", "Checkpoint"],
+      "redHatProducts": ["aap", "acs", "rhel"],
+      "valueProps": [
+        "Automated security incident response and remediation workflows",
+        "SCAP-based compliance scanning and automated remediation with RHEL",
+        "Integration with SIEM/SOAR platforms for closed-loop security automation"
+      ],
+      "relatedPlays": ["network-automation", "itsm-automation", "security-compliance"],
+      "category": "security"
+    },
+    {
+      "id": "security-compliance",
+      "name": "Security and Compliance Platform",
+      "tdp": "App Platform",
+      "summary": "Enterprise security from platform to application with ACS, RHEL security profiles, and Insights.",
+      "triggerTechnologies": ["Twistlock", "Prisma Cloud", "Aqua Security", "Sysdig", "Snyk"],
+      "redHatProducts": ["acs", "ocp", "rhel", "insights"],
+      "valueProps": [
+        "Kubernetes-native security with ACS for supply chain and runtime protection",
+        "FIPS, STIG, and CIS benchmarks built into RHEL security profiles",
+        "Proactive vulnerability management with Red Hat Insights"
+      ],
+      "relatedPlays": ["cloud-native-adoption", "security-automation"],
+      "category": "security"
+    },
+    {
+      "id": "aiops-automation",
+      "name": "AIOps: Turn Intelligence into Action",
+      "tdp": "Automation",
+      "summary": "Transform monitoring insights into automated remediation with Event-Driven Ansible.",
+      "triggerTechnologies": ["Datadog", "Splunk", "Dynatrace", "New Relic", "PagerDuty", "Instana", "Turbonomic"],
+      "redHatProducts": ["aap", "rhel"],
+      "valueProps": [
+        "Event-driven workflows replace manual troubleshooting with automated remediation",
+        "Integration with IBM Instana and Turbonomic for observability-driven automation",
+        "Reduce mean-time-to-resolution by automating L1/L2 runbooks"
+      ],
+      "relatedPlays": ["itsm-automation", "security-automation"],
+      "category": "automation"
+    },
+    {
+      "id": "cloud-marketplace",
+      "name": "Cloud Marketplace and CPPO",
+      "tdp": "App Platform",
+      "summary": "Purchase Red Hat subscriptions through cloud provider marketplaces with commit drawdown.",
+      "triggerTechnologies": ["AWS", "Azure", "Google Cloud", "EKS", "AKS", "GKE"],
+      "redHatProducts": ["ocp", "rhel", "aap"],
+      "valueProps": [
+        "Draw down existing cloud commits against Red Hat subscriptions",
+        "Simplified procurement through existing cloud billing relationships",
+        "Private offers and CPPO for enterprise-scale cloud marketplace deals"
+      ],
+      "cloudAmplifiers": ["AWS", "Azure", "Google"],
+      "relatedPlays": ["cloud-native-adoption"],
+      "category": "cloud"
+    },
+    {
+      "id": "iac-modernization",
+      "name": "Infrastructure-as-Code Modernization",
+      "tdp": "Automation",
+      "summary": "Replace fragmented IaC tooling with unified Ansible automation across hybrid cloud.",
+      "triggerTechnologies": ["Terraform", "Puppet", "Chef", "SaltStack", "OpenTofu"],
+      "redHatProducts": ["aap", "rhel"],
+      "valueProps": [
+        "Agentless automation eliminates agent sprawl and management overhead",
+        "Unified automation language across cloud, network, security, and infrastructure",
+        "Ansible Lightspeed AI for accelerated playbook development"
+      ],
+      "relatedPlays": ["network-automation", "itsm-automation"],
+      "category": "automation"
+    },
+    {
+      "id": "ci-cd-modernization",
+      "name": "CI/CD Pipeline Modernization",
+      "tdp": "App Platform",
+      "summary": "Replace legacy CI/CD with cloud-native pipelines and GitOps on OpenShift.",
+      "triggerTechnologies": ["Jenkins", "GitLab", "GitHub Actions", "CircleCI", "Bamboo", "TeamCity"],
+      "redHatProducts": ["ocp", "rhdh", "quay"],
+      "valueProps": [
+        "Tekton-based cloud-native CI/CD pipelines built into OpenShift",
+        "Argo CD for declarative GitOps deployments across clusters",
+        "Developer Hub for golden-path templates and self-service onboarding"
+      ],
+      "relatedPlays": ["cloud-native-adoption", "security-compliance"],
+      "category": "platform"
+    },
+    {
+      "id": "digital-sovereignty",
+      "name": "Digital Sovereignty and Data Residency",
+      "tdp": "Server/Cloud OS",
+      "summary": "Meet data sovereignty requirements with on-premise or sovereign cloud deployments.",
+      "triggerTechnologies": ["Sovereign Cloud", "On-Premise", "Air-Gapped", "GDPR"],
+      "redHatProducts": ["ocp", "rhel", "satellite", "acm"],
+      "valueProps": [
+        "Deploy OpenShift in sovereign cloud or air-gapped environments",
+        "FIPS-validated cryptography and classified workload support",
+        "Multi-cluster management for distributed sovereign deployments"
+      ],
+      "relatedPlays": ["security-compliance", "platform-modernization"],
+      "category": "security"
+    },
+    {
+      "id": "edge-computing",
+      "name": "Edge Computing with OpenShift and RHEL",
+      "tdp": "Edge",
+      "summary": "Deploy and manage workloads at the edge with lightweight OpenShift and RHEL for Edge.",
+      "triggerTechnologies": ["IoT", "Edge", "MEC", "Industrial IoT", "SCADA"],
+      "redHatProducts": ["ocp", "rhel", "acm"],
+      "valueProps": [
+        "Single Node OpenShift and MicroShift for resource-constrained edge sites",
+        "RHEL for Edge with OSTree-based atomic updates and rollback",
+        "Zero-touch provisioning for thousands of edge locations"
+      ],
+      "relatedPlays": ["cloud-native-adoption", "digital-sovereignty"],
+      "category": "platform"
+    },
+    {
+      "id": "observability-platform",
+      "name": "Observability and Monitoring Consolidation",
+      "tdp": "App Platform",
+      "summary": "Consolidate monitoring with OpenShift observability stack and Ansible-driven remediation.",
+      "triggerTechnologies": ["Prometheus", "Grafana", "ELK", "Elasticsearch", "Nagios", "Zabbix"],
+      "redHatProducts": ["ocp", "aap"],
+      "valueProps": [
+        "Built-in Prometheus, Grafana, and OpenTelemetry in OpenShift",
+        "Centralized logging and distributed tracing across clusters",
+        "Closed-loop automation: observability triggers Ansible remediation"
+      ],
+      "relatedPlays": ["aiops-automation", "cloud-native-adoption"],
+      "category": "platform"
+    }
+  ]
+}

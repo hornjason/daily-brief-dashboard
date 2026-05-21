@@ -38,6 +38,7 @@ export interface TemplateResult {
     cases: string | null
     techStack: string | null
     keyRelationships: string | null
+    strategicOpportunities: string | null
   }
 }
 
@@ -287,6 +288,46 @@ export function templateKeyRelationships(team?: AccountTeamMember[]): string | n
 }
 
 /**
+ * Strategic Opportunities section (ADR-030): solution plays triggered by
+ * detected technologies. Routes signals where metadata.solutionPlayId is present.
+ *
+ * Renders: Play name, trigger technologies, products, business value
+ */
+export function templateStrategicOpportunities(signals: Signal[]): string | null {
+  const stratSignals = signals.filter(s => s.metadata?.solutionPlayId)
+  if (stratSignals.length === 0) return null
+
+  // Dedupe by solutionPlayId — a play may match multiple technologies
+  const seenPlays = new Set<string>()
+  const uniqueSignals: Signal[] = []
+  for (const s of stratSignals) {
+    const playId = String(s.metadata!.solutionPlayId)
+    if (!seenPlays.has(playId)) {
+      seenPlays.add(playId)
+      uniqueSignals.push(s)
+    }
+  }
+
+  const rows: string[] = []
+  rows.push('| TDP | Play | Trigger Technologies | Products | Business Value |')
+  rows.push('|-----|------|---------------------|----------|----------------|')
+
+  for (const s of uniqueSignals.slice(0, 6)) {
+    const m = s.metadata ?? {}
+    const tdp = String(m.solutionTdp ?? '')
+    const playName = String(m.solutionPlayName ?? 'Unknown')
+    const techs = s.headline.replace(/ \(.*\)$/, '')
+    const products = Array.isArray(m.redHatProducts) ? m.redHatProducts.join(', ') : ''
+    const valueProps = Array.isArray(m.valueProps)
+      ? m.valueProps[0]?.slice(0, 80) ?? ''
+      : ''
+    rows.push(`| ${tdp} | ${playName} | ${techs} | ${products} | ${valueProps} |`)
+  }
+
+  return rows.join('\n')
+}
+
+/**
  * Orchestrator: Assemble all sections into a complete template result.
  *
  * @param signals - Scored signals from the registry
@@ -308,10 +349,12 @@ export function templateAll(
   const cases = templateCases(filteredSignals)
   const techStack = templateTechStack(filteredSignals)
   const keyRelationships = templateKeyRelationships(team)
+  const strategicOpportunities = templateStrategicOpportunities(filteredSignals)
 
   // Assemble deterministic markdown output
   const sections: string[] = []
 
+  if (strategicOpportunities) sections.push(`## Strategic Opportunities\n\n${strategicOpportunities}`)
   if (productAlignment) sections.push(`## Product Alignment\n\n${productAlignment}`)
   if (cloudMarketplace) sections.push(`## Cloud Marketplace\n\n${cloudMarketplace}`)
   if (renewals) sections.push(`## Renewals & Pipeline\n\n${renewals}`)
@@ -366,6 +409,7 @@ export function templateAll(
       cases,
       techStack,
       keyRelationships,
+      strategicOpportunities,
     },
   }
 }

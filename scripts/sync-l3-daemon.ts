@@ -17,6 +17,8 @@ import { adoptCcspContext } from '../src/ccsp-scraper.ts'
 import { initSfContext } from '../src/sf-scraper.ts'
 import { sendBriefEmail } from '../src/email-sender.ts'
 import { syncAllPods } from './sync-pod-l3.ts'
+import { scrapeSalesHub } from './scrape-saleshub.ts'
+import { syncSalesHubToDrive } from './sync-saleshub-drive.ts'
 import { isPrimary } from '../src/lib/node-role.ts'
 import { isContextHealthy, canContextRender } from './sync-l3-daemon-utils.ts'
 import { adoptSfContext } from '../src/sf-scraper.ts'
@@ -394,6 +396,7 @@ async function main(): Promise<void> {
   const CACHE_DIR = process.env.CACHE_DIR ?? '/data/cache'
   const TRIGGER_FILE = `${CACHE_DIR}/sync-trigger`
   const KEEPALIVE_TRIGGER_FILE = `${CACHE_DIR}/keepalive-trigger`
+  const SALESHUB_TRIGGER_FILE = `${CACHE_DIR}/saleshub-trigger`
 
   if (existsSync(TRIGGER_FILE)) {
     try {
@@ -410,6 +413,15 @@ async function main(): Promise<void> {
       console.log('[sync-daemon] deleted stale keepalive trigger file from prior run')
     } catch (e: any) {
       console.warn('[sync-daemon] could not delete stale keepalive trigger file:', e.message)
+    }
+  }
+
+  if (existsSync(SALESHUB_TRIGGER_FILE)) {
+    try {
+      unlinkSync(SALESHUB_TRIGGER_FILE)
+      console.log('[sync-daemon] deleted stale saleshub trigger file from prior run')
+    } catch (e: any) {
+      console.warn('[sync-daemon] could not delete stale saleshub trigger file:', e.message)
     }
   }
 
@@ -490,7 +502,38 @@ async function main(): Promise<void> {
     }
   }, 30_000)
 
-  // Timer 4: BKL-SYNC-CHROME-LEAK Layer 4 — proactive browser recycle every 12h
+  // Timer 4: SalesHub scrape trigger — poll every 30s for /data/cache/saleshub-trigger
+  // ADR-030: scrapes all product pages from saleshub.redhat.com DocCenter
+  let saleshubRunning = false
+  setInterval(async () => {
+    if (!existsSync(SALESHUB_TRIGGER_FILE)) return
+    if (saleshubRunning) {
+      console.log('[sync-daemon] saleshub trigger fired but scrape already running — discarding')
+      try { unlinkSync(SALESHUB_TRIGGER_FILE) } catch { /* best-effort */ }
+      return
+    }
+    try {
+      unlinkSync(SALESHUB_TRIGGER_FILE)
+    } catch (e: any) {
+      console.error('[sync-daemon] failed to delete saleshub trigger file:', e.message)
+      return
+    }
+    console.log('[sync-daemon] saleshub trigger detected — starting scrape')
+    saleshubRunning = true
+    try {
+      const products = await scrapeSalesHub()
+      console.log(`[sync-daemon] saleshub scrape complete — ${products.length} products`)
+      // Sync scraped data to Drive L4 folder
+      const driveResult = await syncSalesHubToDrive()
+      console.log(`[sync-daemon] saleshub Drive sync — ${driveResult.uploaded} files, ${driveResult.shortcuts} shortcuts`)
+    } catch (e: any) {
+      console.error('[sync-daemon] saleshub scrape failed:', e.message)
+    } finally {
+      saleshubRunning = false
+    }
+  }, 30_000)
+
+  // Timer 5: BKL-SYNC-CHROME-LEAK Layer 4 — proactive browser recycle every 12h
   setInterval(async () => {
     console.log('[sync-daemon] scheduled 12h browser recycle starting…')
     try {

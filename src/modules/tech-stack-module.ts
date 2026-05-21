@@ -13,6 +13,7 @@ import { getGeminiToken } from '../gemini-auth.ts'
 import { getGeminiModel } from '../ai-config.ts'
 import { recordGeminiUsage } from '../gemini-cost-tracker.ts'
 import { sanitizeErr } from '../utils.ts'
+import { getCustomerSolutionContext } from '../lib/customer-solution-context.ts'
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -395,12 +396,24 @@ FeatureModuleRegistry.register({
     const cached = readExistingTechCache(customerSlug)
     if (!cached || !cached.technologies?.length) return []
 
+    // ADR-030: Get solution play context for this customer
+    const solutionCtx = getCustomerSolutionContext(customerSlug)
+    const playsByTech = new Map<string, typeof solutionCtx.activeSolutionPlays[0]>()
+    for (const play of solutionCtx.activeSolutionPlays) {
+      for (const tech of play.matchedTechnologies) {
+        playsByTech.set(tech.toLowerCase(), play)
+      }
+    }
+
     // ADR-027: rawRelevance based on confidence
     return cached.technologies.map((tech): Signal => {
       let rawRelevance = 0.5
       if (tech.confidence === 'HIGH') rawRelevance = 0.8
       else if (tech.confidence === 'MEDIUM') rawRelevance = 0.5
       else rawRelevance = 0.3
+
+      // ADR-030: Enrich with solution play metadata if a matching play exists
+      const matchedPlay = playsByTech.get(tech.name.toLowerCase())
 
       return {
         source: 'tech-stack',
@@ -410,12 +423,19 @@ FeatureModuleRegistry.register({
         rawRelevance,
         timestamp: tech.lastResearched,
         metadata: {
-          customerSlug,  // ADR-027: Mark as customer-specific
+          customerSlug,
           category: tech.category,
           context: tech.context,
           infrastructure: tech.infrastructure,
           redHatProducts: tech.redHatProducts,
           confidence: tech.confidence,
+          ...(matchedPlay ? {
+            solutionPlayId: matchedPlay.playId,
+            solutionPlayName: matchedPlay.playName,
+            solutionTdp: matchedPlay.tdp,
+            valueProps: matchedPlay.valueProps,
+            solutionCategory: matchedPlay.category,
+          } : {}),
         },
       }
     })
