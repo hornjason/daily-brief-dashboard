@@ -523,11 +523,30 @@ async function main(): Promise<void> {
     try {
       const products = await scrapeSalesHub()
       console.log(`[sync-daemon] saleshub scrape complete — ${products.length} products`)
-      // Sync scraped data to Drive L4 folder
       const driveResult = await syncSalesHubToDrive()
       console.log(`[sync-daemon] saleshub Drive sync — ${driveResult.uploaded} files, ${driveResult.shortcuts} shortcuts`)
+      await sendBriefEmail(
+        ALERT_EMAIL,
+        `SalesHub Sync Complete — ${new Date().toISOString().slice(0, 10)}`,
+        `<html><body>
+          <h2>SalesHub Scrape + Drive Sync Complete</h2>
+          <p><strong>Products scraped:</strong> ${products.length}</p>
+          <p><strong>Files uploaded to Drive:</strong> ${driveResult.uploaded}</p>
+          <p><strong>Google Drive shortcuts created:</strong> ${driveResult.shortcuts}</p>
+          <p>Data saved to <code>/data/cache/saleshub/</code> and synced to the SalesHub folder in Drive.</p>
+        </body></html>`,
+      ).catch(emailErr => console.warn('[sync-daemon] saleshub success email failed:', emailErr.message))
     } catch (e: any) {
       console.error('[sync-daemon] saleshub scrape failed:', e.message)
+      await sendBriefEmail(
+        ALERT_EMAIL,
+        `ALERT: SalesHub Sync Failed — ${new Date().toISOString().slice(0, 10)}`,
+        `<html><body>
+          <h2>SalesHub Scrape Failed</h2>
+          <p><strong>Error:</strong> ${e?.message ?? e}</p>
+          <p>Check daemon logs: <code>make sync-logs</code></p>
+        </body></html>`,
+      ).catch(emailErr => console.warn('[sync-daemon] saleshub failure email failed:', emailErr.message))
     } finally {
       saleshubRunning = false
     }
