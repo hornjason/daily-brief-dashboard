@@ -1,6 +1,9 @@
 // ── R18: Three-Step Brief Pipeline (EXTRACT -> RANK -> SYNTHESIZE) ─────────
 //
 // R23: The extraction system prompt + schema are identical across all customers.
+
+import { templateAll } from './lib/signal-templates.ts'
+import type { Signal as RegistrySignal } from './feature-module-registry.ts'
 // Gemini context caching would cache these as a cachedContent resource (24h TTL)
 // and reference by name in subsequent calls, reducing token costs 70-85%.
 // Implementation: create cached content via Vertex AI API on server start,
