@@ -55,6 +55,8 @@ export function normalizeProductSlug(name: string): string | undefined {
   if (normalized.includes('developer hub') || normalized.includes('rhdh')) return 'rhdh'
   if (normalized.includes('satellite')) return 'satellite'
   if (normalized.includes('insights')) return 'insights'
+  if (normalized.includes('runtimes')) return 'runtimes'
+  if (normalized.includes('integration')) return 'integration'
 
   return undefined
 }
@@ -69,38 +71,42 @@ export function getCustomerProductContext(customerSlug: string): CustomerProduct
 
 function extractOwnedProducts(customerSlug: string): string[] {
   try {
-    const path = resolve(getConfigDir(), 'customers.json')
-    if (!existsSync(path)) return []
-
-    const raw = readFileSync(path, 'utf-8')
-    const parsed = JSON.parse(raw)
-    const customers = Array.isArray(parsed) ? parsed : parsed.customers ?? []
-
-    const customer = customers.find((c: any) => toSlug(c.name) === customerSlug || c.slug === customerSlug)
-    if (!customer || !customer.subscriptions) return []
-
-    const products: string[] = []
-    for (const sub of customer.subscriptions) {
-      const name = (sub.productName || sub.product || '').toLowerCase()
-      if (!name) continue
-
-      if (name.includes('openshift ai') || name.includes('rhoai')) products.push('rhoai')
-      else if (name.includes('openshift')) products.push('ocp')
-      else if (name.includes('enterprise linux') || name.includes('rhel')) products.push('rhel')
-      else if (name.includes('ansible')) products.push('aap')
-      else if (name.includes('cluster security') || name.includes('acs')) products.push('acs')
-      else if (name.includes('cluster management') || name.includes('acm')) products.push('acm')
-      else if (name.includes('quay')) products.push('quay')
-      else if (name.includes('developer hub') || name.includes('rhdh')) products.push('rhdh')
-      else if (name.includes('satellite')) products.push('satellite')
-      else if (name.includes('insights')) products.push('insights')
+    // Primary source: sheets cache (same source as subscriptions-module)
+    const sheetsPath = resolve(getCacheDir(), `${customerSlug}-sheets.json`)
+    if (existsSync(sheetsPath)) {
+      const data = JSON.parse(readFileSync(sheetsPath, 'utf-8'))
+      const rows = data.rows ?? data.subscriptions ?? (Array.isArray(data) ? data : [])
+      if (rows.length > 0) return extractProductSlugsFromRows(rows)
     }
 
-    return [...new Set(products)]
+    // Fallback: customers.json subscriptions field (if populated by SF bookings sync)
+    const configPath = resolve(getConfigDir(), 'customers.json')
+    if (existsSync(configPath)) {
+      const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
+      const customers = Array.isArray(parsed) ? parsed : parsed.customers ?? []
+      const customer = customers.find((c: any) => toSlug(c.name) === customerSlug || c.slug === customerSlug)
+      if (customer?.subscriptions?.length > 0) {
+        return extractProductSlugsFromRows(customer.subscriptions)
+      }
+    }
+
+    return []
   } catch (e: any) {
     console.warn(`[customer-product-context] Failed to extract owned products for ${customerSlug}:`, e?.message)
     return []
   }
+}
+
+function extractProductSlugsFromRows(rows: any[]): string[] {
+  const products: string[] = []
+  for (const row of rows) {
+    const name = (row.productDescription || row.productName || row.product || row.SKU || '').toLowerCase()
+    if (!name) continue
+
+    const slug = normalizeProductSlug(name)
+    if (slug) products.push(slug)
+  }
+  return [...new Set(products)]
 }
 
 function extractInterestProducts(_customerSlug: string): string[] {

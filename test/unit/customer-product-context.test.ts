@@ -133,4 +133,51 @@ describe('getCustomerProductContext', () => {
     const ctx = getCustomerProductContext('acme-corp')
     expect(ctx.ownedProducts).toEqual([])
   })
+
+  it('reads from sheets cache as primary source', () => {
+    writeFileSync(resolve(CACHE_DIR, 'acme-corp-sheets.json'), JSON.stringify({
+      rows: [
+        { productDescription: 'Red Hat Enterprise Linux Server, Premium', quantity: 10, status: 'Active' },
+        { productDescription: 'Red Hat Ansible Automation Platform, Standard (100 Managed Nodes)', quantity: 5 },
+      ]
+    }))
+
+    const ctx = getCustomerProductContext('acme-corp')
+    expect(ctx.ownedProducts).toContain('rhel')
+    expect(ctx.ownedProducts).toContain('aap')
+  })
+
+  it('sheets cache takes priority over customers.json', () => {
+    writeFileSync(resolve(CACHE_DIR, 'acme-corp-sheets.json'), JSON.stringify({
+      rows: [
+        { productDescription: 'OpenShift Container Platform', quantity: 5 },
+      ]
+    }))
+    writeFileSync(resolve(CONFIG_DIR, 'customers.json'), JSON.stringify({
+      customers: [{ name: 'Acme Corp', slug: 'acme-corp', subscriptions: [
+        { productName: 'RHEL', quantity: 10 },
+      ]}]
+    }))
+
+    const ctx = getCustomerProductContext('acme-corp')
+    expect(ctx.ownedProducts).toContain('ocp')
+    expect(ctx.ownedProducts).not.toContain('rhel')
+  })
+
+  it('normalizes real subscription descriptions', () => {
+    writeFileSync(resolve(CACHE_DIR, 'acme-corp-sheets.json'), JSON.stringify({
+      rows: [
+        { productDescription: 'Red Hat Enterprise Linux for Virtual Datacenters with Satellite, Premium' },
+        { productDescription: 'Red Hat Satellite Infrastructure Subscription' },
+        { productDescription: 'Red Hat Runtimes, Premium (64 Cores or 128 vCPUs)' },
+        { productDescription: 'Red Hat Ansible Automation Platform, Standard (100 Managed Nodes)' },
+      ]
+    }))
+
+    const ctx = getCustomerProductContext('acme-corp')
+    expect(ctx.ownedProducts).toContain('rhel')
+    expect(ctx.ownedProducts).toContain('satellite')
+    expect(ctx.ownedProducts).toContain('runtimes')
+    expect(ctx.ownedProducts).toContain('aap')
+  })
 })
