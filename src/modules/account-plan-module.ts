@@ -33,7 +33,17 @@ FeatureModuleRegistry.register({
   cacheTtlMs: ACCOUNT_PLAN_TTL_MS,
   async fetch(): Promise<void> {},
   async cleanup(): Promise<void> {},
-  async syncNow(): Promise<void> {},
+  refreshEndpoint: '/api/customer/_global/modules/account-plan/sync',
+  async syncNow(customerName: string): Promise<void> {
+    if (!customerName || customerName === '_global') return
+    const { generateAndSaveAccountPlan } = await import('../account-plan.ts')
+    const { customers } = await import('../server-state.ts')
+    const customer = customers.find((c: any) => c.name.toLowerCase() === customerName.toLowerCase())
+    if (!customer) return
+    const cacheDir = process.env.CACHE_DIR ?? 'data/cache'
+    const configDir = process.env.CONFIG_DIR ?? 'config'
+    await generateAndSaveAccountPlan(customer, cacheDir, configDir)
+  },
 
   async ensureFresh(customerSlug: string): Promise<void> {
     if (isAccountPlanFresh(customerSlug)) {

@@ -35,7 +35,14 @@ FeatureModuleRegistry.register({
   cacheTtlMs: EMAILS_TTL_MS,
   async fetch(): Promise<void> {},
   async cleanup(): Promise<void> {},
-  async syncNow(): Promise<void> {},
+  refreshEndpoint: '/api/customer/_global/modules/emails/sync',
+  async syncNow(customerName: string): Promise<void> {
+    if (!customerName || customerName === '_global') return
+    const { fetchCustomerEmails } = await import('../customer.ts')
+    const { customers } = await import('../server-state.ts')
+    const customer = customers.find((c: any) => c.name.toLowerCase() === customerName.toLowerCase())
+    if (customer) await fetchCustomerEmails(customer)
+  },
 
   async ensureFresh(customerSlug: string): Promise<void> {
     if (isEmailCacheFresh(customerSlug)) {

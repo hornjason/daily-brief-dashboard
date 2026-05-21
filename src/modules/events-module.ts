@@ -91,6 +91,7 @@ function getCustomerRegion(customerSlug: string): string | null {
 FeatureModuleRegistry.register({
   name: 'rh-events',
   displayName: 'Events',
+  refreshEndpoint: '/api/customer/_global/modules/rh-events/sync',
 
   scope: 'portfolio',
 
