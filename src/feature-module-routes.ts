@@ -2,6 +2,7 @@
 // GitHub Issue #144 — Sync Now API endpoint for registered feature modules
 import { Hono } from 'hono'
 import { FeatureModuleRegistry } from './feature-module-registry'
+import { schedulerRegistry } from './scheduler-registry'
 import { customers } from './server-state'
 import { sanitizeErr } from './utils'
 import { writeJsonAtomic } from './lib/atomic-write'
@@ -75,6 +76,18 @@ export function createFeatureModuleRouter() {
       refreshInterval: FeatureModuleRegistry.get(name)?.refreshInterval ?? null
     }))
     return c.json({ modules })
+  })
+
+  // GET /api/modules/compliance — GitHub Issue #329
+  router.get('/api/modules/compliance', (c) => {
+    const report = FeatureModuleRegistry.getComplianceReport()
+    return c.json(report)
+  })
+
+  // GET /api/admin/scheduler-status — ADR-028 Phase 1
+  router.get('/api/admin/scheduler-status', (c) => {
+    const entries = schedulerRegistry.getStatus()
+    return c.json({ entries })
   })
 
   // GET /api/modules/health — GitHub Issue #321

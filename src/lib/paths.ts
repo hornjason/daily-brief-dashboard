@@ -13,4 +13,4 @@ import { resolve } from 'path'
 export const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../../config')
 export const DATA_DIR = process.env.DATA_DIR ?? resolve(import.meta.dir, '../../data')
 export const CACHE_DIR = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
-export const DATA_CONFIG_DIR = resolve(DATA_DIR, 'config')
+export const DATA_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(DATA_DIR, 'config')
