@@ -2,13 +2,13 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-17
+updated: 2026-05-21
 ---
 
 # Timer Reference
 
-Complete verified inventory of all timers in DailyBriefDashboard. 38 server-side timers across 20 source files + 4 sync daemon timers in `scripts/sync-l3-daemon.ts` (Group 7).
-Last verified: 2026-05-17 (added RSS, lifecycle, release radar, news, events timers).
+Complete verified inventory of all timers in DailyBriefDashboard. 38 server-side timers across 20 source files + 5 sync daemon timers in `scripts/sync-l3-daemon.ts` (Group 7).
+Last verified: 2026-05-21 (added D5 proactive browser recycle timer, memory monitoring in D1).
 
 ---
 
@@ -267,6 +267,7 @@ These run inside `scripts/sync-l3-daemon.ts` in the separate `pai-sync-l3` podma
 | D2 | Sync Trigger Poller | `scripts/sync-l3-daemon.ts` | 30s (`setInterval`) | No |
 | D3 | Daily Sync | `scripts/sync-l3-daemon.ts` | 5:30am ET (`setTimeout` reschedule loop) | No |
 | D4 | Keepalive Trigger Poller | `scripts/sync-l3-daemon.ts` | 30s (`setInterval`) | No |
+| D5 | Proactive Browser Recycle | `scripts/sync-l3-daemon.ts` | 12h (`setInterval`) | No |
 
 ### D1 — SSO Keepalive (every 2h)
 
@@ -277,6 +278,8 @@ Manual trigger: `make keepalive-now` (creates `/data/cache/keepalive-trigger`, p
 **Non-obvious:** fires independently of sync cycle. A keepalive failure does not abort a running sync — it only emails and logs.
 
 **RH context health probe (#223):** After Tableau+SF checks, keepalive probes the RH browser context via `isContextHealthy(ctx, 5000ms)`. If the Chromium process has died (common after ~6 days uptime), auto-recovers from saved cookies on disk via `recoverScrapeContext()` and re-adopts CCSP context. Sends alert email only if recovery fails.
+
+**Memory monitoring (BKL-SYNC-CHROME-LEAK):** After health probe, checks `process.memoryUsage().rss` against `RSS_THRESHOLD_BYTES` (3GB). If exceeded, triggers `proactiveRecycle()` immediately — prevents Chrome memory leaks from degrading rendering before the 12h scheduled recycle fires.
 
 ### D2 — Trigger Poller (every 30s)
 
@@ -295,6 +298,24 @@ Uses `setTimeout` reschedule loop (same pattern as server-side scheduler timers)
 Polls for `/data/cache/keepalive-trigger` file. When found: deletes the file atomically (before keepalive starts), then calls `doKeepalive()`. Maximum latency from `make keepalive-now` to execution start: 30s.
 
 **Non-obvious:** trigger file is deleted BEFORE keepalive starts (mirrors D2 sync trigger pattern). Allows watching keepalive execution in VNC without waiting for the 2-hour automatic timer.
+
+### D5 — Proactive Browser Recycle (every 12h)
+
+Prevents Chrome memory leaks from accumulating to the point where iframes stop rendering. Chromium's JS VM leaks ~200-400MB per recovery cycle; after ~48h of operation with multiple recoveries, the container hits its 4GB memory limit and Chromium can navigate pages but can't render complex iframe content (Salesforce Lightning reports show empty `(no body)` iframes).
+
+**Recycle sequence:**
+1. Persist session cookies via `storageState()` to `/data/rh-profile/session-state.json`
+2. Close browser contexts properly (`closeScrapeContext()` + `closeSfContext()`)
+3. Kill any remaining orphan Chrome processes via `pkill -f "chromium|chrome"`
+4. 2-second pause for process cleanup
+5. Re-initialize scrape context from persisted profile (`initScrapeContext()`)
+6. Re-adopt sister scrapers (CCSP via `adoptCcspContext()`, SF via `initSfContext()`)
+
+**Also triggered by:**
+- Memory threshold exceeded (RSS > 3GB, checked in D1 keepalive)
+- Pre-sync rendering health check failure (`canContextRender()` returns false before `syncAllPods()`)
+
+**Non-obvious:** `proactiveRecycle()` uses `closeScrapeContext()` which sets `_intentionalClose = true` — this suppresses the auto-recovery handler that would otherwise fire on browser disconnect, preventing a recovery-during-recycle race condition.
 
 ---
 

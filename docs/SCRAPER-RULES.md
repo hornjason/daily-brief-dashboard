@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-05
+updated: 2026-05-21
 ---
 
 # Scraper Rules (do not regress)
@@ -23,6 +23,10 @@ updated: 2026-05-05
 - Territory sheet is AE→territory map ONLY — never a customer data source; customers come exclusively from sf-bookings-sync
 - Chrome needs `--no-sandbox` + `--disable-dev-shm-usage` at all 4 `launchPersistentContext` sites
 - `--shm-size=2g` + `--memory=4g` in Makefile — do not remove (Chromium stability)
+- Auto-recovery (`_autoRecover`) must call `browser.close()` on the old context AND `killOrphanChromeProcesses()` before launching a new `launchPersistentContext()`. Without this, orphan Chrome processes accumulate (~200MB each) until the container OOMs and Chromium can't render iframes. (BKL-SYNC-CHROME-LEAK)
+- `pai-sync-l3` container must always run with `--init` flag — Bun at PID=1 cannot reap zombie Chrome children, causing process leak. The Makefile enforces this in `sync-up` and `sync-up-vnc` targets.
+- Pre-sync rendering health check (`canContextRender()`) runs before every `syncAllPods()` call — if the browser can respond to IPC but can't render content, it triggers `proactiveRecycle()` before proceeding. Do not remove this gate.
+- Browser contexts are proactively recycled every 12h and when RSS exceeds 3GB — this prevents the ~48h degradation window where Chrome leaks accumulate to the point of iframe rendering failure
 - Circuit breakers reset on auth event (RH or SF SSO) — do not change this behavior
 - Manual "Run Now" overrides circuit breakers — intentional design, not a bug
 - Auth pre-flight checks RH session before startup scrape — do not remove

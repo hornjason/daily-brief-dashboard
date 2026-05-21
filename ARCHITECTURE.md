@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-18
+updated: 2026-05-21
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -100,11 +100,13 @@ RH Portal SSO login → BrowserContext created
 3. `initSfContext(PROFILE_DIR)` — opens SF Playwright context (non-fatal if it fails; SF shares the RH profile)
 4. Boot cleanup — deletes any stale `/data/cache/sync-trigger` from a prior daemon crash
 
-*Timer 1 — SSO keepalive (every 2h):* Opens a new page, navigates Tableau viz embed (`/t/site/views/OverallCloudConsumptionDashboard/CloudConsumption`), waits for SSO redirect chain to complete, validates viz rendered (Raw Data tab visible), then navigates SF Lightning home (`/lightning/page/home`). Auto-fills email from `TABLEAU_USER_EMAIL` if session expired. After Tableau+SF checks, probes the RH browser context health via `isContextHealthy()` (5s timeout on `ctx.pages()`). If the context is dead/unresponsive (e.g. Chromium process died after extended uptime), auto-recovers from saved cookies on disk via `recoverScrapeContext()` and re-adopts CCSP context — no container restart or re-login needed. Sends alert email if recovery fails. (#223)
+*Timer 1 — SSO keepalive (every 2h):* Opens a new page, navigates Tableau viz embed (`/t/site/views/OverallCloudConsumptionDashboard/CloudConsumption`), waits for SSO redirect chain to complete, validates viz rendered (Raw Data tab visible), then navigates SF Lightning home (`/lightning/page/home`). Auto-fills email from `TABLEAU_USER_EMAIL` if session expired. After Tableau+SF checks, probes the RH browser context health via `isContextHealthy()` (5s timeout on `ctx.pages()`). If the context is dead/unresponsive (e.g. Chromium process died after extended uptime), auto-recovers from saved cookies on disk via `recoverScrapeContext()` and re-adopts CCSP context — no container restart or re-login needed. Sends alert email if recovery fails. (#223). Also monitors container RSS memory — if RSS exceeds 3GB (75% of 4GB limit), triggers `proactiveRecycle()` to kill all Chrome processes and relaunch a fresh context before memory pressure causes rendering failures.
 
 *Timer 2 — trigger poller (every 30s):* Checks for `/data/cache/sync-trigger`. If present: deletes it atomically, runs `syncAllPods()` using live contexts. Discards trigger if a sync is already running.
 
-*Timer 3 — daily sync (5:30am ET = 09:30 UTC):* Calls `scheduleNextSync()` → `setTimeout` → `runSyncCycle()` → `syncAllPods()`. Self-reschedules for next day after each run.
+*Timer 3 — daily sync (5:30am ET = 09:30 UTC):* Calls `scheduleNextSync()` → `setTimeout` → `runSyncCycle()` → `syncAllPods()`. Self-reschedules for next day after each run. Before calling `syncAllPods()`, runs a rendering health check via `canContextRender()` — if the browser can't render a page (zombie Chromium), triggers `proactiveRecycle()` first.
+
+*Timer 5 — proactive browser recycle (every 12h):* Persists session cookies → closes browser contexts (`closeScrapeContext()` + `closeSfContext()`) → kills all orphan Chrome processes via `pkill` → re-initializes contexts from persisted profile → re-adopts CCSP and SF scrapers. Prevents Chrome memory leaks from accumulating to the point where iframes stop rendering (~48h degradation observed pre-fix).
 
 **Per-pod sync steps (inside `syncAllPods()`):**
 1. Skip pods with no `sfReportId` or no Bookings GSheet in Drive
@@ -123,7 +125,7 @@ RH Portal SSO login → BrowserContext created
 
 The sync summary email includes an HTML table: one row per pod with pod key, CCSP row count, SF row count, and OK/SKIPPED/ERROR status.
 
-**Container identity:** The sync daemon runs as a **separate podman container named `pai-sync-l3`** — it is NOT a process inside `pai-dashboard`. Same image (`daily-brief-dashboard:latest`), launched with `SYNC_DAEMON=true` and `NODE_ROLE=primary`. It mounts `data-sync/` (not `data/`) and exposes no ports.
+**Container identity:** The sync daemon runs as a **separate podman container named `pai-sync-l3`** — it is NOT a process inside `pai-dashboard`. Uses the L4 daemon image (`daily-brief-l4-daemon:latest`, built via `make build-l4`), launched with `SYNC_DAEMON=true` and `NODE_ROLE=primary`. It mounts `data-sync/` (not `data/`) and exposes no ports. The container runs with `--init` flag (tini/catatonit) for proper zombie Chrome process reaping — without this, orphaned Chromium renderer processes accumulate and are never cleaned up.
 
 ```
 pai-dashboard   ← app server, port 7777
@@ -171,7 +173,7 @@ make sync-now     # trigger an immediate sync (30s max latency)
 
 **Container image & runtime stack:**
 
-`pai-sync-l3` is NOT a slim purpose-built container. It runs the full `daily-brief-dashboard:latest` image — the same image as `pai-dashboard`. The `SYNC_DAEMON=true` env var is the only difference.
+`pai-sync-l3` uses a dedicated L4 daemon image (`daily-brief-l4-daemon:latest`, built via `Dockerfile.l4`). This image contains Playwright + Chromium + browser scrapers but NOT the dashboard UI or API server. The `SYNC_DAEMON=true` env var tells entrypoint.sh to run `sync-l3-daemon.ts` instead of `server.ts`.
 
 `entrypoint.sh` always boots the complete VNC display stack first, regardless of mode:
 ```

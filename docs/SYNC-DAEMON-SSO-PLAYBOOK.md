@@ -2,7 +2,7 @@
 doc-type: runbook
 status: active
 owner: jason
-updated: 2026-05-08
+updated: 2026-05-21
 ---
 
 # L3 Sync Daemon — SSO Playbook (BKL-SYNC-L3-04)
@@ -163,6 +163,26 @@ within 2 hours of the next start.
 |---|---|
 | `Keepalive Failed` email | `make sync-up-vnc` → re-auth → `make sync-down && make sync-up` |
 | `Sync FAILED` email with auth error | Same as above |
+| `Sync FAILED` + `iframe body text: (no body)` in logs | Chrome memory exhaustion — restart: `make sync-down && make sync-up` (proactive recycle should prevent this; if it recurs, check that `--init` flag is set and D5 timer is firing) |
+| `Sync FAILED` + many `storageState: timed out` lines | Browser context degradation — `make sync-down && make sync-up` to get fresh Chromium |
+| Container memory >80% (`podman stats pai-sync-l3`) | Force recycle: `make sync-down && make sync-up` (D5 12h recycle + 3GB RSS monitor should prevent this) |
 | Container not running | `make sync-up` (cookies still valid if down <8h) |
 | Mac Mini rebooted | `make sync-up` — launchd plist auto-runs this at login |
 | Daemon watchdog email `L3 Sync Daemon DOWN` | `ssh jasonhorn@100.97.86.25` (Tailscale) or `ssh ssh.jasonhorn.io` → `make sync-up` from project root |
+
+---
+
+## Chrome process leak prevention (BKL-SYNC-CHROME-LEAK)
+
+The daemon has 4 layers of defense against Chrome process accumulation:
+
+1. **Process cleanup in auto-recovery** — `_autoRecover()` calls `browser.close()` + `killOrphanChromeProcesses()` before launching new contexts
+2. **`--init` container flag** — tini/catatonit reaps zombie Chrome children that Bun PID=1 cannot
+3. **Pre-sync rendering check** — `canContextRender()` tests page rendering before each sync cycle; triggers `proactiveRecycle()` if failed
+4. **Proactive 12h recycle** — D5 timer persists cookies, kills all Chrome, relaunches fresh context
+
+If all 4 layers are working, manual restarts for memory issues should be extremely rare. Monitor with:
+```bash
+podman stats --no-stream pai-sync-l3    # check memory usage
+podman exec pai-sync-l3 ps aux | grep chrome | wc -l   # count Chrome processes (expect 15-25)
+```
