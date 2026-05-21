@@ -76,6 +76,24 @@ describe('playbook-validator', () => {
           updatedAt: new Date().toISOString(),
           sourceNotes: [],
         },
+        swotAnalysis: {
+          content: 'Strengths: strong technical team with deep infrastructure experience. Weaknesses: limited cloud-native expertise and skills gaps. Opportunities: modernization budget approved for cloud migration. Threats: competing priorities and vendor lock-in concerns.',
+          updatedAt: new Date().toISOString(),
+          sourceNotes: [],
+        },
+        meddpicc: {
+          entries: [
+            { field: 'metrics', status: 'known', evidence: 'ROI analysis complete' },
+            { field: 'economic-buyer', status: 'known', evidence: 'CFO approved budget' },
+            { field: 'decision-criteria', status: 'known', evidence: 'Security and TCO are primary' },
+            { field: 'decision-process', status: 'known', evidence: 'Q3 evaluation timeline' },
+            { field: 'paper-process', status: 'known', evidence: 'Standard procurement flow' },
+            { field: 'identify-pain', status: 'known', evidence: 'Legacy system maintenance costs' },
+            { field: 'champion', status: 'known', evidence: 'CTO Sarah Chen' },
+            { field: 'competition', status: 'known', evidence: 'AWS and VMware in evaluation' },
+          ],
+          updatedAt: new Date().toISOString(),
+        },
       },
       deterministic: {
         subscriptions: [],
@@ -232,6 +250,24 @@ describe('playbook-validator', () => {
           updatedAt: new Date().toISOString(),
           sourceNotes: [],
         },
+        swotAnalysis: {
+          content: 'Strengths: strong engineering team with deep expertise. Weaknesses: limited cloud skills. Opportunities: budget approved. Threats: vendor lock-in.',
+          updatedAt: new Date().toISOString(),
+          sourceNotes: [],
+        },
+        meddpicc: {
+          entries: [
+            { field: 'metrics', status: 'known', evidence: 'test' },
+            { field: 'economic-buyer', status: 'known', evidence: 'test' },
+            { field: 'decision-criteria', status: 'known', evidence: 'test' },
+            { field: 'decision-process', status: 'known', evidence: 'test' },
+            { field: 'paper-process', status: 'known', evidence: 'test' },
+            { field: 'identify-pain', status: 'known', evidence: 'test' },
+            { field: 'champion', status: 'known', evidence: 'test' },
+            { field: 'competition', status: 'known', evidence: 'test' },
+          ],
+          updatedAt: new Date().toISOString(),
+        },
       },
       deterministic: {
         subscriptions: [],
@@ -309,6 +345,24 @@ describe('playbook-validator', () => {
           content: 'No significant renewal risks identified.',
           updatedAt: new Date().toISOString(),
           sourceNotes: [],
+        },
+        swotAnalysis: {
+          content: 'Strengths: strong engineering team with deep expertise. Weaknesses: limited cloud skills. Opportunities: budget approved. Threats: vendor lock-in.',
+          updatedAt: new Date().toISOString(),
+          sourceNotes: [],
+        },
+        meddpicc: {
+          entries: [
+            { field: 'metrics', status: 'known', evidence: 'test' },
+            { field: 'economic-buyer', status: 'known', evidence: 'test' },
+            { field: 'decision-criteria', status: 'known', evidence: 'test' },
+            { field: 'decision-process', status: 'known', evidence: 'test' },
+            { field: 'paper-process', status: 'known', evidence: 'test' },
+            { field: 'identify-pain', status: 'known', evidence: 'test' },
+            { field: 'champion', status: 'known', evidence: 'test' },
+            { field: 'competition', status: 'known', evidence: 'test' },
+          ],
+          updatedAt: new Date().toISOString(),
         },
       },
       deterministic: {

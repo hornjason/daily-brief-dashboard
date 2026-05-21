@@ -7,6 +7,17 @@ import { describe, test, expect, beforeEach, mock } from 'bun:test'
 const mockStatus: Record<string, { lastChecked: string | null }> = {}
 const mockRegistry = {
   getAllStatus: () => mockStatus,
+  list: () => [
+    { name: 'rh-cases' },
+    { name: 'product-lifecycle' },
+    { name: 'product-intel' },
+    { name: 'value-maps' },
+    { name: 'rh-rss' },
+    { name: 'intelligence' },
+    { name: 'news-radar' },
+    { name: 'customer-product-intel' },
+    { name: 'partners' },
+  ],
   get: (name: string) => ({
     fetch: mock(async () => {}),
   }),
@@ -19,11 +30,11 @@ const mockRefreshCCSP = mock(async () => {})
 const mockRefreshPipeline = mock(async () => {})
 
 // Setup mocks before importing the module under test
-mock.module('./feature-module-registry.ts', () => ({
+mock.module('../../src/feature-module-registry.ts', () => ({
   FeatureModuleRegistry: mockRegistry,
 }))
 
-mock.module('./refresh-engine.ts', () => ({
+mock.module('../../src/refresh-engine.ts', () => ({
   refreshSubscriptions: mockRefreshSubscriptions,
   refreshCCSP: mockRefreshCCSP,
   refreshPipeline: mockRefreshPipeline,
@@ -48,11 +59,19 @@ describe('runStartupCascade', () => {
 
   test('skips cascade when all modules have timestamps', async () => {
     // All modules have lastChecked timestamp
-    mockStatus['subscriptions'] = { lastChecked: '2026-05-20T10:00:00Z' }
-    mockStatus['partners'] = { lastChecked: '2026-05-20T10:00:00Z' }
-    mockStatus['pipeline'] = { lastChecked: '2026-05-20T10:00:00Z' }
-    mockStatus['ccsp'] = { lastChecked: '2026-05-20T10:00:00Z' }
-    mockStatus['rh-cases'] = { lastChecked: '2026-05-20T10:00:00Z' }
+    const timestamp = '2026-05-20T10:00:00Z'
+    mockStatus['subscriptions'] = { lastChecked: timestamp }
+    mockStatus['partners'] = { lastChecked: timestamp }
+    mockStatus['pipeline'] = { lastChecked: timestamp }
+    mockStatus['ccsp'] = { lastChecked: timestamp }
+    mockStatus['rh-cases'] = { lastChecked: timestamp }
+    mockStatus['product-lifecycle'] = { lastChecked: timestamp }
+    mockStatus['product-intel'] = { lastChecked: timestamp }
+    mockStatus['value-maps'] = { lastChecked: timestamp }
+    mockStatus['rh-rss'] = { lastChecked: timestamp }
+    mockStatus['intelligence'] = { lastChecked: timestamp }
+    mockStatus['news-radar'] = { lastChecked: timestamp }
+    mockStatus['customer-product-intel'] = { lastChecked: timestamp }
 
     const result = await runStartupCascade()
 
@@ -62,9 +81,9 @@ describe('runStartupCascade', () => {
   })
 
   test('runs cascade when modules have no timestamp', async () => {
-    // Fresh install — no timestamps
-    mockStatus['pipeline'] = { lastChecked: null }
-    mockStatus['ccsp'] = { lastChecked: null }
+    // Fresh install — set all modules to null (or leave mockStatus empty so they're undefined)
+    // Empty mockStatus means all modules return undefined status, triggering cascade
+    // (beforeEach already clears mockStatus, so it's already empty)
 
     const result = await runStartupCascade()
 
@@ -78,10 +97,8 @@ describe('runStartupCascade', () => {
   })
 
   test('runs tiers in dependency order', async () => {
-    // Mock all modules as fresh
-    mockStatus['pipeline'] = { lastChecked: null }
-    mockStatus['ccsp'] = { lastChecked: null }
-    mockStatus['product-lifecycle'] = { lastChecked: null }
+    // Mock all modules as fresh (empty mockStatus means undefined status for all)
+    // (beforeEach already clears mockStatus)
 
     const callOrder: string[] = []
 
@@ -118,9 +135,7 @@ describe('runStartupCascade', () => {
   })
 
   test('handles partial failure gracefully', async () => {
-    mockStatus['pipeline'] = { lastChecked: null }
-    mockStatus['ccsp'] = { lastChecked: null }
-
+    // All modules fresh (empty mockStatus)
     // Make pipeline fail
     mockRefreshPipeline.mockRejectedValue(new Error('Pipeline refresh failed'))
 

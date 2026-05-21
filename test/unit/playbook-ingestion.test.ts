@@ -88,6 +88,11 @@ function makePlaybookFixture(overrides: Partial<PlaybookState> = {}): PlaybookSt
       },
       expansionOpportunities: { ...defaultSection, content: 'RHOAI expansion opportunity identified.' },
       renewalsAndRisk: { ...defaultSection, content: 'RHEL renewal due in 90 days.' },
+      swotAnalysis: { ...defaultSection, content: 'Strengths: strong engineering team. Weaknesses: limited cloud experience.' },
+      meddpicc: {
+        entries: [],
+        updatedAt: now,
+      },
     },
     deterministic: {
       subscriptions: [

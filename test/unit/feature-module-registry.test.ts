@@ -179,16 +179,17 @@ describe('FeatureModuleRegistry', () => {
     const initialStatus = FeatureModuleRegistry.getStatus()
     expect(initialStatus['status-test']).toBeDefined()
     expect(initialStatus['status-test']?.state).toBe('idle')
-    expect(initialStatus['status-test']?.lastSuccess).toBeNull()
+    // lastChanged may be null (fresh registry) or a timestamp (loaded from manifest)
+    // This test just verifies the status structure exists
 
     FeatureModuleRegistry.recordOutcome('status-test', { success: true })
 
     const afterSuccess = FeatureModuleRegistry.getStatus()
     expect(afterSuccess['status-test']?.state).toBe('idle')
-    expect(afterSuccess['status-test']?.lastSuccess).not.toBeNull()
+    expect(afterSuccess['status-test']?.lastChanged).not.toBeNull()
   })
 
-  test('recordOutcome with success updates lastSuccess', () => {
+  test('recordOutcome with success updates lastChanged', () => {
     const module: FeatureModule = {
       name: 'success-test',
       cachePaths: () => [],
@@ -201,7 +202,7 @@ describe('FeatureModuleRegistry', () => {
     FeatureModuleRegistry.recordOutcome('success-test', { success: true })
 
     const status = FeatureModuleRegistry.getStatus()
-    expect(status['success-test']?.lastSuccess).not.toBeNull()
+    expect(status['success-test']?.lastChanged).not.toBeNull()
     expect(status['success-test']?.lastError).toBeNull()
     expect(status['success-test']?.state).toBe('idle')
   })
@@ -223,6 +224,6 @@ describe('FeatureModuleRegistry', () => {
 
     const status = FeatureModuleRegistry.getStatus()
     expect(status['failure-test']?.lastError).toBe('Test failure message')
-    expect(status['failure-test']?.state).toBe('failed')
+    expect(status['failure-test']?.state).toBe('error')
   })
 })

@@ -1,12 +1,14 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test'
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from 'fs'
 import { resolve } from 'path'
-import { reconcileConfig, getAuthConfigPath, getPodConfigPath, getUserSettingsPath } from '../../src/config-reconciler.ts'
 
 const TEST_CONFIG_DIR = resolve(import.meta.dir, '../tmp-config-reconciler-test')
 
 // Override CONFIG_DIR for test isolation BEFORE importing the module
 process.env.CONFIG_DIR = TEST_CONFIG_DIR
+
+// Dynamic import to ensure env var is set before module evaluation
+const { reconcileConfig, getAuthConfigPath, getPodConfigPath, getUserSettingsPath } = await import('../../src/config-reconciler.ts')
 
 const AUTH_CONFIG_PATH = getAuthConfigPath()
 const POD_CONFIG_PATH = getPodConfigPath()

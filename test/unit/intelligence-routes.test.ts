@@ -358,15 +358,18 @@ describe('Intelligence Routes', () => {
     }
   })
 
-  test('GET /api/customer/:name/intelligence/roadmap - returns empty when no cache exists', async () => {
+  test('GET /api/customer/:name/intelligence/roadmap - returns global products for any valid customer name', async () => {
     const app = createIntelligenceRouter()
 
+    // Route now serves global product intelligence regardless of customer existence
     const res = await app.request('/api/customer/NonExistent/intelligence/roadmap')
     expect(res.status).toBe(200)
 
     const json = await res.json()
-    expect(json.products).toEqual([])
-    expect(json.cachedAt).toBe(null)
+    // Should return global product lifecycle data (not customer-specific)
+    expect(Array.isArray(json.products)).toBe(true)
+    expect(json.products.length).toBeGreaterThan(0)
+    expect(json.cachedAt).toBeDefined()
   })
 
   test('GET /api/customer/:name/intelligence/roadmap - handles invalid slug gracefully', async () => {

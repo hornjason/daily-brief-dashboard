@@ -13,12 +13,12 @@ describe('CAMPAIGN_SYSTEM_PROMPT validation', () => {
   let systemPrompt: string
 
   // Read the actual source file to extract CAMPAIGN_SYSTEM_PROMPT
-  const sourcePath = resolve(import.meta.dir, '../../src/campaigns-routes.ts')
+  const sourcePath = resolve(import.meta.dir, '../../src/campaign-service.ts')
   const sourceContent = readFileSync(sourcePath, 'utf-8')
   const match = sourceContent.match(/const CAMPAIGN_SYSTEM_PROMPT = `([\s\S]+?)`\s*\n/)
 
   if (!match) {
-    throw new Error('CAMPAIGN_SYSTEM_PROMPT not found in campaigns-routes.ts')
+    throw new Error('CAMPAIGN_SYSTEM_PROMPT not found in campaign-service.ts')
   }
 
   systemPrompt = match[1]

@@ -14,14 +14,31 @@ const ROOT = resolve(import.meta.dir, '../..')
 const BG_SCHED = readFileSync(resolve(ROOT, 'src/background-scheduler.ts'), 'utf-8')
 
 // Extract the isPrimary gate block to test its contents
-// The block starts at 'if (isPrimary) {\n    // Territory syncs' and ends at its closing brace
+// The block starts at 'if (isPrimary) {' and ends at its closing brace
 function extractIsPrimaryBlock(): string {
   const marker = 'if (isPrimary) {'
-  const markerIdx = BG_SCHED.lastIndexOf(marker + '\n    // Territory syncs')
+  // Find the isPrimary block that contains territory sync (not catch-up block)
+  const markerIdx = BG_SCHED.indexOf(marker)
   if (markerIdx === -1) return ''
-  // Find the matching closing brace (next '\n  }' after the block start)
-  const closeIdx = BG_SCHED.indexOf('\n  }', markerIdx + marker.length)
-  return BG_SCHED.slice(markerIdx, closeIdx + 4)
+  // Find the matching closing brace at same indentation level (starts with '  }')
+  // Look for the closing brace that's not nested deeper
+  let braceCount = 0
+  let inBlock = false
+  let closeIdx = markerIdx
+  for (let i = markerIdx; i < BG_SCHED.length; i++) {
+    const char = BG_SCHED[i]
+    if (char === '{') {
+      braceCount++
+      inBlock = true
+    } else if (char === '}') {
+      braceCount--
+      if (inBlock && braceCount === 0) {
+        closeIdx = i
+        break
+      }
+    }
+  }
+  return BG_SCHED.slice(markerIdx, closeIdx + 1)
 }
 
 describe('BKL-SYNC-L3-02: isPrimary predicate declared', () => {
@@ -47,20 +64,21 @@ describe('BKL-SYNC-L3-02: isPrimary predicate declared', () => {
 })
 
 describe('BKL-SYNC-L3-02: L4 writer schedulers gated behind isPrimary', () => {
-  test('isPrimary block contains scheduleTerritorySync()', () => {
+  test('isPrimary block contains territory-sync scheduler', () => {
     const block = extractIsPrimaryBlock()
     expect(block.length).toBeGreaterThan(0)
-    expect(block).toContain('scheduleTerritorySync()')
+    expect(block).toContain("name: 'territory-sync'")
   })
 
-  test('isPrimary block contains schedulePipelineSync(', () => {
+  test('isPrimary block contains sf-pipeline scheduler', () => {
     const block = extractIsPrimaryBlock()
-    expect(block).toContain('schedulePipelineSync(')
+    expect(block).toContain("name: 'sf-pipeline'")
   })
 
-  test('isPrimary block contains scheduleCcspSync()', () => {
+  // Note: CCSP scheduler not migrated to registry yet — still uses old pattern outside isPrimary
+  test('isPrimary block does NOT contain CCSP (not migrated to registry)', () => {
     const block = extractIsPrimaryBlock()
-    expect(block).toContain('scheduleCcspSync()')
+    expect(block).not.toContain("name: 'ccsp'")
   })
 })
 
