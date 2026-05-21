@@ -23,7 +23,7 @@ import type { NewsItem } from './news-provider.ts'
 import type { ProductLifecycle } from './product-lifecycle.ts'
 import type { RHEvent } from './rh-events-fetcher.ts'
 import { enrichEvents } from './event-enricher.ts'
-import { loadFeedConfig, fetchRedHatRSS, type RSSFeedConfig } from './rh-rss-fetcher.ts'
+import { loadFeedConfig, fetchRedHatRSS, type RSSFeedConfig, type RSSItem } from './rh-rss-fetcher.ts'
 import { CACHE_DIR as BASE_CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
@@ -658,13 +658,20 @@ export function createIntelligenceRouter(): Hono {
 
   /**
    * PATCH /api/admin/rss-feeds
-   * Toggle RSS feed enabled/disabled
+   * Update RSS feed configuration (enabled, label, category, productTags, url)
    */
   app.patch('/api/admin/rss-feeds', async (c) => {
-    const body = await c.req.json<{ url: string; enabled: boolean }>()
+    const body = await c.req.json<{
+      url: string
+      enabled?: boolean
+      label?: string
+      category?: string
+      productTags?: string[]
+      newUrl?: string
+    }>()
 
-    if (!body.url || body.enabled === undefined) {
-      return c.json({ error: 'url and enabled are required' }, 400)
+    if (!body.url) {
+      return c.json({ error: 'url is required' }, 400)
     }
 
     const configPath = resolve(CONFIG_DIR, 'rss-feeds.json')
@@ -684,10 +691,16 @@ export function createIntelligenceRouter(): Hono {
       return c.json({ error: 'Feed not found' }, 404)
     }
 
-    feed.enabled = body.enabled
+    // Update fields if provided
+    if (body.enabled !== undefined) feed.enabled = body.enabled
+    if (body.label !== undefined) feed.label = body.label
+    if (body.category !== undefined) feed.category = body.category
+    if (body.productTags !== undefined) feed.productTags = body.productTags
+    if (body.newUrl !== undefined) feed.url = body.newUrl
+
     writeFileSync(configPath, JSON.stringify(feeds, null, 2))
 
-    console.log(`[intelligence-routes] ${body.enabled ? 'Enabled' : 'Disabled'} RSS feed: ${body.url}`)
+    console.log(`[intelligence-routes] Updated RSS feed: ${body.url}`)
     return c.json({ feed })
   })
 
@@ -703,6 +716,69 @@ export function createIntelligenceRouter(): Hono {
     } catch (e: any) {
       console.warn('[intelligence-routes] RSS refresh failed:', e?.message ?? e)
       return c.json({ error: e?.message ?? 'RSS refresh failed' }, 500)
+    }
+  })
+
+  /**
+   * GET /api/admin/rss-feeds/preview
+   * Fetch and display raw RSS feed content for testing
+   */
+  app.get('/api/admin/rss-feeds/preview', async (c) => {
+    const url = c.req.query('url')
+    if (!url) {
+      return c.json({ error: 'url query parameter required' }, 400)
+    }
+
+    try {
+      const res = await fetch(decodeURIComponent(url), {
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!res.ok) {
+        return c.html(`<html><head><title>RSS Feed Preview Error</title><style>body { background: #1a1a2e; color: #e0e0e0; font-family: monospace; padding: 20px; }</style></head><body><h1>Error fetching feed</h1><p>HTTP ${res.status}</p></body></html>`)
+      }
+      const text = await res.text()
+      const escaped = text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      return c.html(`<html><head><title>RSS Feed Preview</title><style>body { background: #1a1a2e; color: #e0e0e0; font-family: monospace; padding: 20px; white-space: pre-wrap; word-wrap: break-word; }</style></head><body>${escaped}</body></html>`)
+    } catch (e: any) {
+      return c.html(`<html><head><title>RSS Feed Preview Error</title><style>body { background: #1a1a2e; color: #e0e0e0; font-family: monospace; padding: 20px; }</style></head><body><h1>Error fetching feed</h1><p>${e?.message ?? 'Unknown error'}</p></body></html>`)
+    }
+  })
+
+  /**
+   * GET /api/admin/rss-feeds/stats
+   * Return per-feed article counts and latest article dates from cache
+   */
+  app.get('/api/admin/rss-feeds/stats', (c) => {
+    const cachePath = resolve(BASE_CACHE_DIR, 'rss', 'rh-feeds.json')
+
+    if (!existsSync(cachePath)) {
+      return c.json({ stats: {} })
+    }
+
+    try {
+      const cache = JSON.parse(readFileSync(cachePath, 'utf-8')) as { items: RSSItem[] }
+      const stats: Record<string, { articleCount: number; lastArticleDate: string | null }> = {}
+
+      // Group items by source
+      for (const item of cache.items) {
+        if (!stats[item.source]) {
+          stats[item.source] = { articleCount: 0, lastArticleDate: null }
+        }
+        stats[item.source].articleCount++
+
+        // Track latest pubDate
+        if (item.pubDate) {
+          const currentLatest = stats[item.source].lastArticleDate
+          if (!currentLatest || new Date(item.pubDate) > new Date(currentLatest)) {
+            stats[item.source].lastArticleDate = item.pubDate
+          }
+        }
+      }
+
+      return c.json({ stats })
+    } catch (e: any) {
+      console.warn('[intelligence-routes] Failed to read RSS cache for stats:', e?.message ?? e)
+      return c.json({ stats: {} })
     }
   })
 

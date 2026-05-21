@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Circle } from 'lucide-react'
+import { RefreshCw, Circle, ChevronDown, ChevronRight } from 'lucide-react'
 import { formatRelTime } from '../../lib/format'
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// ── Friendly names ──────────────────────────────────────────────────────────
 
 const FRIENDLY_NAMES: Record<string, string> = {
   'news-radar': 'Customer News',
@@ -23,7 +23,43 @@ const FRIENDLY_NAMES: Record<string, string> = {
   'cloud-marketplace': 'Cloud Marketplace Programs',
   'tech-stack': 'Technology Detection',
   'playbook': 'Engagement Playbook',
+  'campaigns': 'Email Campaigns',
+  'meeting-prep': 'Meeting Prep',
+  'tools': 'Business Value Tools',
 }
+
+// ── Source grouping ─────────────────────────────────────────────────────────
+
+interface SourceGroup {
+  label: string
+  description: string
+  sources: string[]
+}
+
+const SOURCE_GROUPS: SourceGroup[] = [
+  {
+    label: 'Customer Data',
+    description: 'Raw data from CRM, support, and communication systems',
+    sources: ['cases', 'emails', 'subscriptions', 'pipeline', 'ccsp'],
+  },
+  {
+    label: 'Intelligence & Analysis',
+    description: 'AI-generated insights and research about your customers',
+    sources: ['intelligence', 'account-plan', 'news-radar', 'customer-product-intel'],
+  },
+  {
+    label: 'Product & Market',
+    description: 'Red Hat product updates, events, and market data',
+    sources: ['product-lifecycle', 'product-intel', 'cloud-marketplace', 'tech-stack', 'value-maps', 'rh-rss', 'rh-events'],
+  },
+  {
+    label: 'Generated Content',
+    description: 'Documents and deliverables produced from your data',
+    sources: ['playbook', 'campaigns', 'meeting-prep', 'customer-docs', 'tools'],
+  },
+]
+
+// ── Types ───────────────────────────────────────────────────────────────────
 
 interface DataSourceStatus {
   name: string
@@ -36,7 +72,7 @@ interface DataSourceStatus {
   refreshEndpoint: string | null
 }
 
-// ── Data Source Card ───────────────────────────────────────────────────────────
+// ── Data Source Card ────────────────────────────────────────────────────────
 
 function DataSourceCard({
   source,
@@ -56,20 +92,13 @@ function DataSourceCard({
           ? 'text-red-400'
           : 'text-gray-400'
 
-  const stateColor =
-    source.state === 'refreshing'
-      ? 'text-yellow-400'
-      : source.state === 'error'
-        ? 'text-red-400'
-        : 'text-green-400'
-
   const displayName = source.displayName || FRIENDLY_NAMES[source.name] || source.name
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <Circle className={`w-3 h-3 fill-current ${statusColor}`} />
+          <Circle className={`w-2.5 h-2.5 fill-current ${statusColor}`} />
           <span className="text-sm font-medium text-gray-200">{displayName}</span>
         </div>
         {source.refreshEndpoint && (
@@ -77,26 +106,20 @@ function DataSourceCard({
             onClick={onRefresh}
             disabled={refreshing || source.state === 'refreshing'}
             aria-label={`Refresh ${displayName}`}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
+            className="px-2 py-1 text-xs font-medium rounded bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors whitespace-nowrap shrink-0 flex items-center gap-1"
           >
-            <RefreshCw
-              className={`w-3.5 h-3.5 ${refreshing || source.state === 'refreshing' ? 'animate-spin' : ''}`}
-            />
+            <RefreshCw className={`w-3 h-3 ${refreshing || source.state === 'refreshing' ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
         )}
       </div>
-      <div className="space-y-1 text-xs text-gray-400">
+      <div className="space-y-0.5 text-xs text-gray-400">
         {source.lastChecked && (
-          <div>
-            Last checked: <span className="text-gray-300">{formatRelTime(source.lastChecked)}</span>
-          </div>
+          <div>Last checked: <span className="text-gray-300">{formatRelTime(source.lastChecked)}</span></div>
         )}
         {!source.lastChecked && <div className="text-gray-500">Never run</div>}
         {source.recordCount !== null && (
-          <div>
-            Records: <span className="text-gray-300">{source.recordCount.toLocaleString()}</span>
-          </div>
+          <div>Records: <span className="text-gray-300">{source.recordCount.toLocaleString()}</span></div>
         )}
         {source.state === 'refreshing' && (
           <div className="flex items-center gap-1.5 text-yellow-400">
@@ -105,16 +128,65 @@ function DataSourceCard({
           </div>
         )}
         {source.error && source.state === 'error' && (
-          <div className="text-red-400 truncate" title={source.error}>
-            Error: {source.error}
-          </div>
+          <div className="text-red-400 truncate" title={source.error}>Error: {source.error}</div>
         )}
       </div>
     </div>
   )
 }
 
-// ── Main Panel ─────────────────────────────────────────────────────────────────
+// ── Collapsible Group ───────────────────────────────────────────────────────
+
+function SourceGroupSection({
+  group,
+  sources,
+  onRefresh,
+  refreshing,
+}: {
+  group: SourceGroup
+  sources: DataSourceStatus[]
+  onRefresh: (source: DataSourceStatus) => void
+  refreshing: Record<string, boolean>
+}) {
+  const [open, setOpen] = useState(true)
+  const groupSources = sources.filter(s => group.sources.includes(s.name))
+  if (groupSources.length === 0) return null
+
+  const freshCount = groupSources.filter(s => s.status === 'fresh').length
+
+  return (
+    <div className="border border-gray-700 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-800 hover:bg-gray-750 transition-colors text-left"
+        aria-label={`${open ? 'Collapse' : 'Expand'} ${group.label} section`}
+      >
+        <div>
+          <span className="text-sm font-medium text-gray-200">{group.label}</span>
+          <span className="ml-2 text-xs text-gray-500">{freshCount}/{groupSources.length} fresh</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">{group.description}</span>
+          {open ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+        </div>
+      </button>
+      {open && (
+        <div className="p-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {groupSources.map(source => (
+            <DataSourceCard
+              key={source.name}
+              source={source}
+              onRefresh={() => onRefresh(source)}
+              refreshing={refreshing[source.name] ?? false}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Panel ──────────────────────────────────────────────────────────────
 
 export function DataSourcesPanel() {
   const [sources, setSources] = useState<DataSourceStatus[]>([])
@@ -140,35 +212,38 @@ export function DataSourcesPanel() {
 
   const handleRefreshSource = async (source: DataSourceStatus) => {
     if (!source.refreshEndpoint) return
-
-    setRefreshing((r) => ({ ...r, [source.name]: true }))
+    setRefreshing(r => ({ ...r, [source.name]: true }))
     try {
       const res = await fetch(source.refreshEndpoint, { method: 'POST' })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         console.error(`Refresh failed for ${source.name}:`, (data as { error?: string }).error)
       }
-      await loadData()
+      // Poll until done for async endpoints
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 2000))
+        await loadData()
+        const current = sources.find(s => s.name === source.name)
+        if (current && current.state !== 'refreshing') break
+      }
     } catch (err) {
       console.error(`Network error refreshing ${source.name}:`, err)
     } finally {
-      setRefreshing((r) => ({ ...r, [source.name]: false }))
+      setRefreshing(r => ({ ...r, [source.name]: false }))
     }
   }
 
   return (
-    <div>
-      <h3 className="text-sm font-medium text-gray-200 mb-3">Data Sources</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {sources.map((source) => (
-          <DataSourceCard
-            key={source.name}
-            source={source}
-            onRefresh={() => handleRefreshSource(source)}
-            refreshing={refreshing[source.name] ?? false}
-          />
-        ))}
-      </div>
+    <div className="space-y-3">
+      {SOURCE_GROUPS.map(group => (
+        <SourceGroupSection
+          key={group.label}
+          group={group}
+          sources={sources}
+          onRefresh={handleRefreshSource}
+          refreshing={refreshing}
+        />
+      ))}
     </div>
   )
 }
