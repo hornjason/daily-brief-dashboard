@@ -13,6 +13,7 @@
 
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
+import { CACHE_DIR } from './lib/paths.ts'
 
 // ── Slug → product display-name mapping ────────────────────────────────────
 // These names match the "Value Map" headers in the exported deck.
@@ -43,8 +44,7 @@ let _cache: Map<string, string> | null = null
  * Checks DATA_DIR env first (container), then falls back to relative path.
  */
 function getValueMapPath(): string {
-  const cacheDir = process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')
-  return resolve(cacheDir, 'value-maps/business-value-maps.txt')
+  return resolve(CACHE_DIR, 'value-maps/business-value-maps.txt')
 }
 
 /**

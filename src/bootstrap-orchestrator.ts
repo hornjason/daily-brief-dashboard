@@ -1227,6 +1227,20 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
     // Force-refresh now so the cards have data the moment bootstrap finishes.
     refreshSubscriptions(true).catch(e => console.warn('[auto-bootstrap] post-bootstrap subscription cache refresh failed:', e?.message ?? e))
 
+    // GitHub Issue #310: Seed manifest timestamps so heartbeat doesn't re-trigger all sources
+    // Bootstrap writes Subscriptions and Pipeline data, mark them as refreshed to prevent cascade
+    ;(async () => {
+      try {
+        const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+        const now = new Date().toISOString()
+        FeatureModuleRegistry.recordOutcome('subscriptions', { success: true })
+        FeatureModuleRegistry.recordOutcome('pipeline', { success: true })
+        console.log('[auto-bootstrap] Seeded manifest timestamps for subscriptions + pipeline')
+      } catch (e: any) {
+        console.warn('[auto-bootstrap] Failed to seed manifest timestamps:', e?.message)
+      }
+    })()
+
     // BKL-HERO-PRODUCT-PREREQ-01: Trigger product refresh after auto-bootstrap completes
     // (OAuth keys now exist from wizard, products can synthesize with Gemini)
     fetch(`${baseUrl}/api/products/refresh-all`, { method: 'POST' })

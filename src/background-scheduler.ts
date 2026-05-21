@@ -662,10 +662,24 @@ export function initBackgroundScheduler(opts: {
   // Validate cached account numbers — warn/clear false positives before scrapes start
   validateCachedAccountNumbers()
 
-  // On startup: run a full refresh, then schedule per-source timers
+  // On startup: check if this is a fresh install or normal restart
+  // If any module has no timestamp, run the cascade
+  // Otherwise, run a full refresh for existing install
   if (customers.length > 0) {
-    refreshAll().catch((e: any) => console.error('[refresh] startup refresh failed:', e?.message ?? e))
-    rescheduleRefreshTimers(getRefreshIntervals())
+    (async () => {
+      const { runStartupCascade } = await import('./startup-cascade.ts')
+      const allModuleStatus = await import('./feature-module-registry.ts').then(m => m.FeatureModuleRegistry.getAllStatus())
+      const hasFreshModules = Object.values(allModuleStatus).some(s => !s?.lastChecked)
+
+      if (hasFreshModules) {
+        console.log('[startup] Fresh install detected — running cascade instead of full refresh')
+        const result = await runStartupCascade()
+        console.log(`[startup] Cascade complete: ${result.completed.length} succeeded, ${result.skipped.length} skipped, ${result.failed.length} failed`)
+      } else {
+        refreshAll().catch((e: any) => console.error('[refresh] startup refresh failed:', e?.message ?? e))
+      }
+      rescheduleRefreshTimers(getRefreshIntervals())
+    })()
   }
 
   // L4 writer schedulers and core schedules migrated to scheduler registry (ADR-028)
