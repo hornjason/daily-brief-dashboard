@@ -4,14 +4,6 @@ import { formatRelTime } from '../../lib/format'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface ModuleComplianceData {
-  score: number
-  signalProducers: number
-  withEnsureFresh: number
-  compliant: string[]
-  advisory: string[]
-}
-
 interface ScheduledTask {
   name: string
   type: 'daily' | 'interval' | 'weekly'
@@ -144,18 +136,25 @@ function SummaryCard({
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
+interface HealthModule {
+  name: string
+  status: 'healthy' | 'warning' | 'error'
+  warnings: string[]
+  signalCount: number
+}
+
 export function SystemOverviewPanel() {
-  const [compliance, setCompliance] = useState<ModuleComplianceData | null>(null)
+  const [health, setHealth] = useState<HealthModule[]>([])
   const [scheduledTasks, setScheduledTasks] = useState<ScheduledTask[]>([])
   const [freshness, setFreshness] = useState<DataFreshnessStatus | null>(null)
 
   const loadData = async () => {
     try {
-      // Fetch compliance data
-      const compRes = await fetch('/api/modules/compliance')
-      if (compRes.ok) {
-        const compData: ModuleComplianceData = await compRes.json()
-        setCompliance(compData)
+      // Fetch module health (errors/warnings)
+      const healthRes = await fetch('/api/modules/health')
+      if (healthRes.ok) {
+        const healthData = await healthRes.json()
+        setHealth(healthData.modules ?? [])
       }
 
       // Fetch scheduler status
@@ -189,12 +188,21 @@ export function SystemOverviewPanel() {
 
   // Calculate summary metrics
   const runningCount = scheduledTasks.filter(t => t.state === 'running').length
-  const errorCount = scheduledTasks.filter(t => t.state === 'error').length
+  const taskErrorCount = scheduledTasks.filter(t => t.state === 'error').length
   const freshCount = freshness?.sources.filter(s => s.status === 'fresh').length ?? 0
   const staleCount = freshness?.sources.filter(s => s.status === 'stale').length ?? 0
   const totalSources = freshness?.sources.length ?? 0
 
-  const taskStatusColor: 'green' | 'yellow' | 'red' | 'gray' = errorCount > 0
+  // Health metrics
+  const healthErrors = health.filter(m => m.status === 'error').length
+  const healthWarnings = health.filter(m => m.status === 'warning').length
+  const healthHealthy = health.filter(m => m.status === 'healthy').length
+  const totalSignals = health.reduce((sum, m) => sum + m.signalCount, 0)
+
+  const healthColor: 'green' | 'yellow' | 'red' | 'gray' =
+    healthErrors > 0 ? 'red' : healthWarnings > 0 ? 'yellow' : health.length > 0 ? 'green' : 'gray'
+
+  const taskStatusColor: 'green' | 'yellow' | 'red' | 'gray' = taskErrorCount > 0
     ? 'red'
     : runningCount > 0
       ? 'yellow'
@@ -209,12 +217,12 @@ export function SystemOverviewPanel() {
     <div className="space-y-6">
       {/* Summary Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Module Health */}
+        {/* Module Health — errors/warnings from signal quality checks */}
         <SummaryCard
-          title="Module Health"
-          mainText={`${compliance?.score ?? 0}% — ${compliance?.withEnsureFresh ?? 0}/${compliance?.signalProducers ?? 0} modules`}
-          subtitle="How many data modules follow best practices"
-          progressPercent={compliance?.score ?? 0}
+          title="Signal Quality"
+          mainText={healthErrors > 0 ? `${healthErrors} error${healthErrors > 1 ? 's' : ''}` : healthWarnings > 0 ? `${healthWarnings} warning${healthWarnings > 1 ? 's' : ''}` : `${healthHealthy} healthy`}
+          subtitle={`${totalSignals} signals across ${health.length} modules`}
+          statusColor={healthColor}
         />
 
         {/* Automated Tasks */}
@@ -233,16 +241,12 @@ export function SystemOverviewPanel() {
           statusColor={freshnessStatusColor}
         />
 
-        {/* Auto-Refresh Coverage */}
+        {/* Total Signal Count */}
         <SummaryCard
-          title="Auto-Refresh Coverage"
-          mainText={`${compliance?.withEnsureFresh ?? 0}/${compliance?.signalProducers ?? 0} auto-refresh`}
-          subtitle="Modules that refresh data before generating content"
-          progressPercent={
-            compliance
-              ? Math.round((compliance.withEnsureFresh / compliance.signalProducers) * 100)
-              : 0
-          }
+          title="Intelligence Coverage"
+          mainText={`${totalSignals} signals`}
+          subtitle={`From ${health.filter(m => m.signalCount > 0).length} active data sources`}
+          statusColor={totalSignals > 0 ? 'green' : 'gray'}
         />
       </div>
 
