@@ -11,11 +11,12 @@ Every feature in this project follows three architectural layers. Violating thes
 
 ## The Three Layers
 
-### Layer 1: Signal producers report facts, the registry scores them (ADR-027)
+### Layer 1: Signal producers report facts, the registry scores AND refreshes them (ADR-027, #328)
 - Modules NEVER set `score` directly. They set `rawRelevance` + structured `metadata`.
 - The registry's `scoreSignal()` determines specificity (customer/industry/general) and applies boosters from metadata.
 - New signal sources automatically get correct scoring by providing the right metadata fields.
-- Reference: `docs/adr/ADR-027-universal-signal-scoring-contract.md`
+- **Pre-flight refresh (#328):** Modules implement optional `ensureFresh(customerSlug)` + `cacheTtlMs`. Before content generation, `loadCustomerSignals({ ensureFresh: true })` auto-refreshes ALL stale modules in parallel. New modules get refresh for free by implementing `ensureFresh()`. No hardcoded lists.
+- Reference: `docs/adr/ADR-027-universal-signal-scoring-contract.md`, ARCHITECTURE.md §25
 
 ### Layer 2: Template engine renders deterministic sections from scored signals (#326)
 - Deterministic sections (product alignment, cloud marketplace, renewals, cases, tech stack) are TEMPLATED from signals — never sent to Gemini for editorial judgment.
@@ -27,7 +28,7 @@ Every feature in this project follows three architectural layers. Violating thes
   - `renewal` / `stage` / `closeDate` → Renewals & Pipeline
   - `confidence` / `context` / `infrastructure` → Tech Stack
 - New signal sources auto-template into the right section. No consumer code changes, no prompt engineering.
-- Reference: `src/lib/signal-templates.ts` (when built)
+- Reference: `src/lib/signal-templates.ts`
 
 ### Layer 3: Consumers are thin — they call the template engine and slice
 - Every consumer (playbook, brief, campaign, meeting prep, email outreach) calls `templateAll(signals, team, { format })`.
@@ -63,6 +64,7 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 3. **Which template section does this data belong in?** Route by metadata keys. If no section fits, define a new one.
 4. **Does every consumer that should see this data actually see it?** Trace the signal through template engine to each consumer output. Verify with the debug endpoint: `GET /api/customer/:name/signals/debug`
 5. **What happens when this data is missing or stale?** Module health guard should flag it. Admin page should show actionable fix.
+6. **Does this module implement `ensureFresh()`?** If it produces signals with a cache, it MUST implement `ensureFresh()` + `cacheTtlMs` so pre-flight refresh covers it automatically. No module should be invisible to the refresh system.
 
 ## Anti-patterns
 
@@ -71,6 +73,8 @@ Answer these before writing code. If you can't answer them, you're not ready to 
 - ❌ Building a consumer that assembles its own signal context — use `templateAll()`
 - ❌ Creating a feature without answering the 5 pre-flight questions
 - ❌ Shipping without checking the signal debug endpoint for the new data
+- ❌ Building a module with cached data but no `ensureFresh()` — consumers will generate with stale/missing data
+- ❌ Hardcoding refresh sources in signal-loader — use the registry auto-discovery pattern
 
 ## Signal Scoring Quick Reference (ADR-027)
 

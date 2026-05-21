@@ -32,7 +32,7 @@ import { runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, s
 import { aes, patchAe } from './server-state.ts'
 import { runCcspScrape, writeCcspSheet, ccspScrapeRunning } from './ccsp-scraper.ts'
 import { refreshSubscriptions, refreshCCSP } from './refresh-engine.ts'
-import { enqueueScraperTask } from './background-scheduler.ts'
+import { enqueueScraperTask } from './scraper-queue.ts'
 import { isPrimary } from './lib/node-role.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────

@@ -31,8 +31,18 @@ On-demand reference for agents. Not auto-loaded — read when you need orientati
 | `src/region-config.ts` | `RegionConfig` interface (`id`, `label`, `type`, `territorySheetUrl`, `podBookingsFolderId`, `parentFolderId`, `pods`). `normalizeSettings()` — coerces raw JSON to typed settings. `coerceRegion()` — per-region coercion with safe defaults. `getRegionById()`. |
 | `src/setup-routes.ts` | OAuth setup + territory sync routes. `runStartupDriveMerge()` — on startup, if any region has `parentFolderId`, fetches `Config/settings.json` from Drive and deep-merges (Drive wins on `regions[]`, local wins on all other keys). Best-effort — never crashes server. |
 | `src/territory-sync.ts` | Territory sheet diff + auto-add/flag removals. Exports `isEnterpriseTab`, `extractEnterpriseAeMap`, `enterpriseTerritoryKey` — used by `dashboard-routes.ts` territory-names/territory-lookup endpoints for enterprise regions (e.g. TOLA). |
-| `src/feature-module-registry.ts` | FeatureModule registry — 21 modules, centralized signal scoring (ADR-027), specificity detection, per-source budget caps, `collectAllSignals()`, `scoreSignal()` |
-| `src/lib/signal-loader.ts` | `loadCustomerSignals()` — calls `collectAllSignals()`, returns scored/budget-capped signals for all consumers |
+| `src/feature-module-registry.ts` | FeatureModule registry — 21 modules, centralized signal scoring (ADR-027), specificity detection, per-source budget caps, `collectAllSignals()`, `scoreSignal()`, `getRegisteredModules()`. Modules optionally implement `ensureFresh()` for pre-flight refresh (#328) |
+| `src/lib/signal-loader.ts` | `loadCustomerSignals(slug, name, { ensureFresh })` — calls `collectAllSignals()`, returns scored/budget-capped signals. `ensureSignalsCurrent()` auto-refreshes stale modules before collection (#328). See ARCHITECTURE.md §25 |
+| `src/lib/signal-templates.ts` | #326 — Shared template engine. `templateAll(signals, team, opts)` returns `{ deterministic, narrativeContext, sections }`. All 4 consumers import this. See ARCHITECTURE.md §24 |
+| `src/lib/paths.ts` | #335 — Centralized path resolution. Exports `CONFIG_DIR`, `DATA_DIR`, `CACHE_DIR`, `DATA_CONFIG_DIR`. 66 files import from here. |
+| `src/scheduler-registry.ts` | ADR-028 — Unified scheduler. 4 schedule types (daily/weekly/interval/heartbeat). `GET /api/admin/scheduler-status`. See ARCHITECTURE.md §28 |
+| `src/scraper-queue.ts` | #331 — Scraper task serialization. `enqueueScraperTask()`, `getScraperQueueStatus()`, `flushScrapersAfterAuth()`. Extracted from background-scheduler.ts |
+| `src/brief-orchestrator.ts` | #333 — Brief data assembly. `assembleBriefContext()`, `generateBriefForCustomer()`. Unified on-demand + pre-gen paths |
+| `src/campaign-service.ts` | #334 — Campaign domain logic. `generateCampaign()`, `extractMaterial()`. Zero Hono imports. See §27 |
+| `src/meeting-prep-service.ts` | #334 — Meeting prep domain logic. `generateMeetingPrep()`, `assembleMeetingPrepForMeeting()`. Zero Hono imports. See §27 |
+| `src/dashboard-service.ts` | #334 — Dashboard domain logic. `buildMorningSummary()`, `computeAggregatedKPIs()`, `lookupTerritory()`. Zero Hono imports. See §27 |
+| `src/customer-service.ts` | #334 — Customer domain logic. `getAllBriefSummaries()`, `getBatchIntelligenceState()`. Zero Hono imports. See §27 |
+| `src/product-intel-service.ts` | #334 — Product intel domain logic. `generateSingleProductIntel()`, `getTerritorySummary()`. Zero Hono imports. See §27 |
 | `src/modules/cloud-marketplace-module.ts` | #306 — Gmail newsletter → slide deck extraction → Gemini → per-cloud offerings/programs/incentives, CCSP cross-ref signals |
 | `src/modules/tech-stack-module.ts` | #307 — Customer tech detection (Tier 1 static + Tier 2 Gemini grounded search), RH product positioning |
 | `src/refresh-engine.ts` | refreshAll/Subscriptions/CCSP/Pipeline from Google Sheets + cloud-marketplace refresh route |

@@ -4,11 +4,11 @@ import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import type { EmailHighlight, DriveFile, CalendarEvent, Customer } from './types.ts'
 import { GOOGLE_OAUTH_CLIENT } from './google-oauth-config.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
 // Shared config path — uses CONFIG_DIR env var (container) or local config/ dir
 // import.meta.dir is Bun-only; fall back to process.cwd() when undefined (e.g. Playwright test runner)
-const _metaDir: string | undefined = (import.meta as any).dir
-const CONFIG_DIR_PATH = process.env.CONFIG_DIR ?? resolve(_metaDir ?? process.cwd(), _metaDir ? '../config' : 'config')
+const CONFIG_DIR_PATH = CONFIG_DIR
 const OAUTH_KEYS_PATH    = process.env.GOOGLE_OAUTH_KEYS  ?? resolve(CONFIG_DIR_PATH, 'gcp-oauth.keys.json')
 const GMAIL_TOKEN_PATH   = process.env.GMAIL_TOKEN         ?? resolve(CONFIG_DIR_PATH, '.gmail-token.json')
 const GDRIVE_TOKEN_PATH  = process.env.GDRIVE_TOKEN        ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')

@@ -12,13 +12,14 @@
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 import { getValueMap, getAvailableValueMapSlugs, clearValueMapCache } from '../value-map-loader.ts'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../cache-layer.ts'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const VALUE_MAPS_PATH = resolve(CACHE_DIR, 'value-maps/business-value-maps.txt')
 const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? 'config', 'settings.json')
+const VALUE_MAPS_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
 function getValueMapsDeckId(): string | null {
   try {
@@ -104,6 +105,24 @@ FeatureModuleRegistry.register({
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
   cachePaths: () => ['data/cache/value-maps/business-value-maps.txt'],
+
+  cacheTtlMs: VALUE_MAPS_TTL_MS,
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // Portfolio-wide cache — check single file
+    try {
+      const stat = statSync(VALUE_MAPS_PATH)
+      if (Date.now() - stat.mtimeMs < VALUE_MAPS_TTL_MS) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+
+    // Stale or missing — refresh
+    const deckId = getValueMapsDeckId()
+    if (deckId) {
+      await fetchFromDrive(deckId)
+    } else {
+      clearValueMapCache()
+    }
+  },
 
   async fetch(): Promise<void> {
     const deckId = getValueMapsDeckId()

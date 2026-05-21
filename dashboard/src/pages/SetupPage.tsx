@@ -1,16 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatRelTime } from '../lib/format'
-import { RefreshTimerSettings } from '../components/RefreshTimerSettings'
-import { AiIntelligenceSettings } from '../components/AiIntelligenceSettings'
-import { EmailSettingsSection } from '../components/EmailSettingsSection'
 import CopyButton from '../components/CopyButton'
 import { useApi } from '../hooks/useApi'
 import { HeroStep3Connections } from '../components/HeroStep3Connections'
-// BKL-CONN-ARCH-01: two-axis connection state derivation
-import { deriveRhCard, deriveSfCard } from '../lib/connection-state'
 import { AEsCustomersSection } from './setup/AEsCustomersSection'
-import { DataFreshnessDashboard } from '../components/DataFreshnessDashboard'
 import {
   CheckCircle,
   XCircle,
@@ -836,16 +830,6 @@ export default function SetupPage() {
           )}
 
           <AccordionSection
-            id="data-freshness"
-            title="Data Freshness"
-            badge={<span className="text-xs text-text-secondary">Monitor</span>}
-            isOpen={openSection === 'data-freshness'}
-            onToggle={() => toggleSection('data-freshness')}
-          >
-            <DataFreshnessDashboard />
-          </AccordionSection>
-
-          <AccordionSection
             id="aes"
             title="Step 3 of 4 — AEs & Customers"
             badge={
@@ -871,25 +855,21 @@ export default function SetupPage() {
               </a>
             </div>
           )}
-
-          <AccordionSection
-            id="ai-settings"
-            title="AI & Intelligence Settings"
-            badge={<span className="text-xs text-text-secondary">Optional</span>}
-            isOpen={openSection === 'ai-settings'}
-            onToggle={() => toggleSection('ai-settings')}
-          >
-            <AiIntelligenceSettings />
-          </AccordionSection>
         </div>
 
-        {/* Quick link to dashboard */}
-        <div className="mt-8 text-center">
+        {/* Quick links */}
+        <div className="mt-8 text-center space-y-2">
           <a
             href="/dashboard"
-            className="text-sm text-text-secondary hover:text-white transition-colors underline"
+            className="block text-sm text-text-secondary hover:text-white transition-colors underline"
           >
             Go to Dashboard
+          </a>
+          <a
+            href="/dashboard/admin"
+            className="block text-sm text-text-secondary hover:text-white transition-colors underline"
+          >
+            System Health → Admin Page
           </a>
         </div>
 

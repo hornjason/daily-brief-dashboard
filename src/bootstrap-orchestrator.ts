@@ -8,6 +8,7 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH, withQuotaRetry } from './google.ts
 import { driveClient } from './lib/drive-client.ts'
 import { normalizeCustomerName } from './lib/customer-folder.ts'
 import { aes, customers, saveAes, patchAe, CUSTOMERS_PATH } from './server-state.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 import { bootstrapAe as bootstrapAeL3, type AeBootstrapDeps } from './l3-bootstrap.ts'
 import { runSfPipelineSync, runSfPipelineSyncFromData, scrapeSfReport, createPipelineSheet, type SfReportRow } from './sf-scraper.ts'
 import { writeSubscriptionSheet } from './supportable-scraper.ts'
@@ -101,11 +102,11 @@ import {
 } from './bootstrap/steps/index.ts'
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const SRV_CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+const SRV_CONFIG_DIR = CONFIG_DIR
 const RH_PROFILE_DIR = process.env.RH_PROFILE_DIR ?? resolve(SRV_CONFIG_DIR, '.rh-chrome-profile')
 const OAUTH_STATE_PATH = resolve(SRV_CONFIG_DIR, 'oauth-state.json')
 function getDataSourcesPath(): string {
-  return resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'data-sources.json')
+  return resolve(CONFIG_DIR, 'data-sources.json')
 }
 // SETTINGS_PATH moved to ./bootstrap/helpers.ts (BKL-ARCH-01) — re-exported here.
 import { SETTINGS_PATH, findExistingSheet } from './bootstrap/helpers.ts'

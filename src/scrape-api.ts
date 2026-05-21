@@ -62,7 +62,7 @@ import {
 import { getRefreshIntervals, getAutomationConfig } from './settings-api.ts'
 import { refreshCCSP, refreshPipeline } from './refresh-engine.ts'
 import { readSheetCache, readCCSPCache, readPipelineCache } from './cache-layer.ts'
-import { enqueueScraperTask, getScraperQueueStatus } from './background-scheduler.ts'
+import { enqueueScraperTask, getScraperQueueStatus } from './scraper-queue.ts'
 import { sanitizeErr } from './utils.ts'
 import { isPrimary } from './lib/node-role.ts'
 import { safeCookieOp } from './browser-utils.ts'
@@ -71,6 +71,7 @@ import { getStatus, getScraperStatus, markRunning, recordOutcome, getUnifiedStat
 import { SETTINGS_PATH } from './drive-config-sync.ts'
 import { getScrapeContext, discoverAccountNumberByName, ensureBrowserHealthy } from './rh-scraper.ts'
 import { driveClient } from './lib/drive-client.ts'
+import { CONFIG_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 
 // ── BKL-M58 (part 3): Wall-clock timeout helper for discover tasks ────────────
 /** Rejects after `ms` milliseconds with an informative error. */
@@ -863,7 +864,7 @@ export function registerScrapeRoutes(app: Hono): void {
   // immediately after the user validates a folder, before settings.json is written.
   // Falls back to settings.json → podBookingsFolderId if no param is provided.
   app.get('/api/sf-bookings/pod-sheets', async (c) => {
-    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
+    const LOCAL_SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
     let podBookingsFolderId: string | null = c.req.query('folderId') ?? null
     const regionId = c.req.query('region') ?? undefined
     if (!podBookingsFolderId) {
@@ -892,12 +893,11 @@ export function registerScrapeRoutes(app: Hono): void {
     const folderId = (body.folderId ?? '').trim()
     const podKey = (body.podKey ?? '').trim()
     if (!folderId) return c.json({ error: 'folderId required' }, 400)
-    const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config')
-    const SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
+    const LOCAL_SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
     try {
       mkdirSync(CONFIG_DIR, { recursive: true })
       let settings: Record<string, unknown> = {}
-      try { settings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8')) } catch { /* new file */ }
+      try { settings = JSON.parse(readFileSync(LOCAL_SETTINGS_PATH, 'utf-8')) } catch { /* new file */ }
       // If podKey provided, write to the matching region (region-aware, BKL-UX93-fix).
       // Fall back to flat root for backwards compatibility when no podKey is given.
       if (podKey) {
@@ -912,12 +912,12 @@ export function registerScrapeRoutes(app: Hono): void {
       } else {
         settings.podBookingsFolderId = folderId
       }
-      writeJsonAtomic(SETTINGS_PATH, settings)
+      writeJsonAtomic(LOCAL_SETTINGS_PATH, settings)
 
       // After local save succeeds, sync updated settings to Drive Config/settings.json (best-effort)
       try {
         const { writeSettingsToDrive } = await import('./drive-config-sync.ts')
-        const updatedRaw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+        const updatedRaw = JSON.parse(readFileSync(LOCAL_SETTINGS_PATH, 'utf-8'))
         const updatedSettings = normalizeSettings(updatedRaw)
         const parentFolderId = updatedSettings.regions[0]?.parentFolderId
         if (parentFolderId) {
@@ -998,9 +998,9 @@ export function registerScrapeRoutes(app: Hono): void {
   // BKL-ARCH-01. Returns a lightweight list (id, label, type) so the frontend
   // can render a region dropdown without pulling per-region pod config.
   app.get('/api/settings/regions', (c) => {
-    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
+    const LOCAL_SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
     try {
-      const raw = readFileSync(SETTINGS_PATH, 'utf-8')
+      const raw = readFileSync(LOCAL_SETTINGS_PATH, 'utf-8')
       const settings = normalizeSettings(JSON.parse(raw))
       const regions = settings.regions.map(r => ({ id: r.id, label: r.label, type: r.type }))
       return c.json({ regions })
@@ -1044,12 +1044,11 @@ export function registerScrapeRoutes(app: Hono): void {
         return c.json({ error: 'sheetUrl contains invalid spreadsheet ID' }, 400)
       }
 
-      const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'config')
-      const SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
+      const LOCAL_SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
       mkdirSync(CONFIG_DIR, { recursive: true })
       let settings: Record<string, unknown> = {}
       try {
-        settings = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'))
+        settings = JSON.parse(readFileSync(LOCAL_SETTINGS_PATH, 'utf-8'))
       } catch { /* new file */ }
 
       const normalized = normalizeSettings(settings)
@@ -1070,7 +1069,7 @@ export function registerScrapeRoutes(app: Hono): void {
 
       const regions = Array.isArray(settings.regions) ? settings.regions : []
       settings.regions = [...regions, newRegion]
-      writeJsonAtomic(SETTINGS_PATH, settings)
+      writeJsonAtomic(LOCAL_SETTINGS_PATH, settings)
 
       return c.json({ success: true, regionId })
     } catch (e: any) {
@@ -1103,7 +1102,7 @@ export function registerScrapeRoutes(app: Hono): void {
     const { aeNames, region: regionId } = body
 
     // BKL-ARCH-01: Region-aware folder lookup. Defaults to first region when no id provided.
-    const SETTINGS_PATH = resolve(process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'), 'settings.json')
+    const LOCAL_SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
     let podBookingsFolderId: string | null = null
     try {
       const raw = readFileSync(SETTINGS_PATH, 'utf-8')

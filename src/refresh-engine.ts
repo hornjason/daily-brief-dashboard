@@ -28,8 +28,9 @@ import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 const INGEST_L1_TTL_MS = 24 * 60 * 60 * 1000
 
 // ── Settings.json reader (ADR-019) ─────────────────────────────────────────
-const _metaDirRefresh: string | undefined = (import.meta as any).dir
-const CONFIG_DIR_REFRESH = process.env.CONFIG_DIR ?? resolve(_metaDirRefresh ?? process.cwd(), _metaDirRefresh ? '../config' : 'config')
+import { CONFIG_DIR } from './lib/paths.ts'
+
+const CONFIG_DIR_REFRESH = CONFIG_DIR
 const SETTINGS_PATH_REFRESH = resolve(CONFIG_DIR_REFRESH, 'settings.json')
 
 function readSettingsJson(): Record<string, unknown> {

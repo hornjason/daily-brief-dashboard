@@ -8,11 +8,12 @@
 
 import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { fetchRHEvents, type RHEvent } from '../rh-events-fetcher.ts'
-import { existsSync, unlinkSync, readFileSync } from 'fs'
+import { existsSync, unlinkSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'events', 'rh-events.json')
 const CONFIG_DIR = resolve(process.env.CONFIG_DIR ?? 'data/config')
+const EVENTS_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
 // ── Territory to Region Mapping ──────────────────────────────────────────────
 
@@ -103,7 +104,20 @@ FeatureModuleRegistry.register({
 
   cachePaths: () => ['data/cache/events/rh-events.json'],
 
+  cacheTtlMs: EVENTS_TTL_MS,
+
   refreshInterval: 7 * 24 * 60 * 60 * 1000,  // weekly
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // Portfolio-wide cache — check single file
+    try {
+      const stat = statSync(CACHE_PATH)
+      if (Date.now() - stat.mtimeMs < EVENTS_TTL_MS) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+
+    // Stale or missing — refresh
+    await fetchRHEvents()
+  },
 
   async fetch(_customerName: string): Promise<void> {
     // Events are global, not customer-specific

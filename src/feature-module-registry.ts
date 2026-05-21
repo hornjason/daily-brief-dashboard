@@ -83,7 +83,7 @@ function detectSpecificity(signal: Signal): Specificity {
  * Centralized signal scoring function.
  * ADR-027 §4 — Modules provide rawRelevance + metadata, registry scores.
  */
-function scoreSignal(signal: Signal): Signal {
+export function scoreSignal(signal: Signal): Signal {
   const specificity = detectSpecificity(signal)
   const { floor, ceiling } = SPECIFICITY_RANGES[specificity]
   const tierRange = ceiling - floor
@@ -192,6 +192,10 @@ export interface FeatureModule {
   accountTab?: AccountTabDeclaration
   /** Optional: Where this module applies — defaults to 'both' (GitHub Issue #234) */
   scope?: ModuleScope
+  /** Optional: refresh stale data for a customer before signal collection. Called by ensureSignalsCurrent(). */
+  ensureFresh?: (customerSlug: string) => Promise<void>
+  /** Optional: how long cached data is considered fresh. Default: 1 hour. */
+  cacheTtlMs?: number
 }
 
 export interface ModuleStatus {
@@ -295,6 +299,13 @@ export const FeatureModuleRegistry = {
    * Snapshot of all registered modules in insertion order.
    */
   list(): FeatureModule[] {
+    return Array.from(_modules.values())
+  },
+
+  /**
+   * Get all registered modules (for ensureSignalsCurrent iteration).
+   */
+  getRegisteredModules(): FeatureModule[] {
     return Array.from(_modules.values())
   },
 
@@ -616,5 +627,43 @@ export const FeatureModuleRegistry = {
       })
     }
     return result
+  },
+
+  /**
+   * Get architecture compliance report — GitHub Issue #329
+   * Categorizes modules by ensureFresh/cacheTtlMs implementation.
+   */
+  getComplianceReport(): {
+    totalModules: number
+    signalProducers: number
+    withEnsureFresh: number
+    withCacheTtl: number
+    compliant: string[]
+    advisory: string[]
+    exempt: string[]
+    score: number
+  } {
+    const modules = Array.from(_modules.values())
+    const signalProducers = modules.filter(m => m.signals)
+    const withEnsureFresh = signalProducers.filter(m => m.ensureFresh)
+    const withCacheTtl = signalProducers.filter(m => m.cacheTtlMs)
+    const compliant = signalProducers.filter(m => m.ensureFresh && m.cacheTtlMs).map(m => m.name)
+    const advisory = signalProducers.filter(m => !m.ensureFresh || !m.cacheTtlMs).map(m => m.name)
+    const exempt = modules.filter(m => !m.signals).map(m => m.name)
+
+    const score = signalProducers.length > 0
+      ? Math.round((compliant.length / signalProducers.length) * 100)
+      : 100
+
+    return {
+      totalModules: modules.length,
+      signalProducers: signalProducers.length,
+      withEnsureFresh: withEnsureFresh.length,
+      withCacheTtl: withCacheTtl.length,
+      compliant,
+      advisory,
+      exempt,
+      score,
+    }
   },
 }

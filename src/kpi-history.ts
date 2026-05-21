@@ -5,8 +5,8 @@
 import { readFileSync, existsSync, readdirSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { join, resolve } from 'path'
+import { CACHE_DIR } from './lib/paths.ts'
 
-const CACHE_DIR = process.env.CACHE_DIR ?? resolve(process.env.DATA_DIR ?? 'data', 'cache')
 const HISTORY_PATH = join(CACHE_DIR, 'kpi-history.json')
 const MAX_DAYS = 90
 

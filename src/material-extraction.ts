@@ -14,10 +14,10 @@ import { createHash } from 'crypto'
 import { google } from 'googleapis'
 import { callGemini } from './gemini-call.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { CACHE_DIR } from './lib/paths.ts'
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const CACHE_DIR = process.env.CACHE_DIR ?? resolve(import.meta.dir, '../cache')
 const MATERIAL_CACHE_DIR = resolve(CACHE_DIR, 'material-extractions')
 
 // ── Types ─────────────────────────────────────────────────────────────────────

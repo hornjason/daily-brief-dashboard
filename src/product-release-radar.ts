@@ -22,6 +22,7 @@ import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { getGeminiToken } from './gemini-auth.ts'
 import { getGeminiModel } from './ai-config.ts'
 import { sanitizeErr } from './utils.ts'
+import { DATA_DIR, CONFIG_DIR, CACHE_DIR as BASE_CACHE_DIR } from './lib/paths.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -78,9 +79,7 @@ export interface ProductAlert {
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
-const DATA_DIR       = process.env.DATA_DIR       ?? resolve(import.meta.dir, '../data')
-const CONFIG_DIR     = process.env.CONFIG_DIR      ?? resolve(import.meta.dir, '../config')
-const CACHE_DIR      = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
+const CACHE_DIR      = resolve(BASE_CACHE_DIR, 'product-intel')
 const PRODUCT_INTEL_CONFIG_PATH = resolve(CONFIG_DIR, 'product-intel-config.json')
 const PRODUCT_ALERTS_PATH       = resolve(CONFIG_DIR, 'product-alerts.json')
 const CONTENT_RH_SESSION_PATH   = resolve(process.env.RH_PROFILE_DIR ?? resolve(DATA_DIR, 'rh-profile'), 'content-rh-session.json')

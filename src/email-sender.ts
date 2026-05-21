@@ -2,11 +2,9 @@
 
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { sanitizeErr } from './utils.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
-const GMAIL_TOKEN_PATH = process.env.GMAIL_TOKEN
-  ?? (process.env.CONFIG_DIR
-    ? `${process.env.CONFIG_DIR}/.gmail-token.json`
-    : `${import.meta.dir}/../config/.gmail-token.json`)
+const GMAIL_TOKEN_PATH = process.env.GMAIL_TOKEN ?? `${CONFIG_DIR}/.gmail-token.json`
 
 /**
  * Send an HTML email via the Gmail API.

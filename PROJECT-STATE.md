@@ -11,7 +11,7 @@ updated: 2026-05-17
 **This is the authoritative snapshot of what exists right now.**
 Read this before asking any "does X exist?" question. Update it after every deployment.
 
-Last updated: 2026-05-18 — Customer Engagement Playbook (ADR-026, #291): persistent per-customer intelligence with 8 sections, meeting note ingestion, derived meeting prep, publish to Drive, action item tracking. Plus quality gate (ADR-024), meeting prep enrichment (ADR-025), hybrid inline pattern.
+Last updated: 2026-05-20 — Full architecture overhaul: Signal Template Engine (#326), Pre-flight Signal Refresh (#328), Compliance Gate (#329), Scheduler Registry (#330, ADR-028), 5 route-to-service extractions (#334), Unified Paths (#335), Gemini migration (#337), Domain unit tests (#338), Admin Page Redesign (#339, 1660→58 lines + 4 focused panels). See ARCHITECTURE.md §24-§28.
 
 ---
 

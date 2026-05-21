@@ -5,7 +5,7 @@
 // cross-referenced with customer CCSP cloud spend data.
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { toSlug, readCCSPCache } from '../cache-layer.ts'
@@ -19,6 +19,7 @@ import { sanitizeErr } from '../utils.ts'
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const CLOUD_MARKETPLACE_CACHE_DIR = resolve(CACHE_DIR, 'cloud-marketplace')
 const GMAIL_TOKEN_PATH = process.env.GMAIL_TOKEN ?? resolve(process.env.CONFIG_DIR ?? 'config', '.gmail-token.json')
+const CLOUD_MARKETPLACE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
 // Ensure cache directory exists
 if (!existsSync(CLOUD_MARKETPLACE_CACHE_DIR)) {
@@ -308,6 +309,20 @@ FeatureModuleRegistry.register({
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
   cachePaths: () => ['data/cache/cloud-marketplace/latest.json'],
+
+  cacheTtlMs: CLOUD_MARKETPLACE_TTL_MS,
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // Portfolio-wide cache — check single file
+    const cachePath = resolve(CLOUD_MARKETPLACE_CACHE_DIR, 'latest.json')
+    try {
+      const stat = statSync(cachePath)
+      if (Date.now() - stat.mtimeMs < CLOUD_MARKETPLACE_TTL_MS) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+
+    // Stale or missing — refresh
+    await this.syncNow('')
+  },
 
   async fetch(): Promise<void> {
     // This module fetches portfolio-level data (newsletter), not per-customer

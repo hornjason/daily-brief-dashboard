@@ -23,12 +23,10 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
 import { isValidDriveFolderId } from './utils.ts'
 import { readScaffoldCache, writeScaffoldCache } from './bootstrap-orchestrator.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
 /** Local path to settings.json — mirrors the SETTINGS_PATH pattern used by callers. */
-export const SETTINGS_PATH = resolve(
-  process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config'),
-  'settings.json',
-)
+export const SETTINGS_PATH = resolve(CONFIG_DIR, 'settings.json')
 
 /**
  * Resolve the Drive Config/ folder ID under `parentFolderId`.

@@ -15,13 +15,14 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { callGemini } from './gemini-call.ts'
 import { readSheetCache } from './cache-layer.ts'
 import type { RHEvent } from './rh-events-fetcher.ts'
+import { CACHE_DIR as BASE_CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'events')
+const CACHE_DIR = resolve(BASE_CACHE_DIR, 'events')
 const ENRICHMENT_CACHE_PATH = resolve(CACHE_DIR, 'rh-events-enriched.json')
 const EVENTS_CACHE_PATH = resolve(CACHE_DIR, 'rh-events.json')
-const CONFIG_DIR = process.env.CONFIG_DIR ?? 'data/config'
+const CONFIG_DIR = DATA_CONFIG_DIR
 
 export const MAX_SCRAPES_PER_RUN = 5
 

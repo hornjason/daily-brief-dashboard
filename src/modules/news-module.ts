@@ -5,10 +5,11 @@
 import { FeatureModuleRegistry, type Signal, type NavDeclaration, type AccountTabDeclaration, type ModuleScope } from '../feature-module-registry'
 import { newsProvider, type NewsItem } from '../news-provider.ts'
 import { toSlug } from '../cache-layer.ts'
-import { existsSync, unlinkSync, writeFileSync, mkdirSync, readFileSync } from 'fs'
+import { existsSync, unlinkSync, writeFileSync, mkdirSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
+const NEWS_TTL_MS = 24 * 60 * 60 * 1000  // 24 hours
 
 // Ensure cache directory exists
 if (!existsSync(CACHE_DIR)) {
@@ -40,6 +41,8 @@ FeatureModuleRegistry.register({
     `data/cache/news/${slug}.json`,
   ],
 
+  cacheTtlMs: NEWS_TTL_MS,
+
   driveArtifacts: (slug: string) => [
     `${slug}/news/`,
   ],
@@ -47,6 +50,26 @@ FeatureModuleRegistry.register({
   notebookSources: true,
 
   refreshInterval: 86_400_000,  // 24 hours
+
+  async ensureFresh(customerSlug: string): Promise<void> {
+    const cachePath = resolve(CACHE_DIR, `${customerSlug}.json`)
+
+    // Check if cache exists and is fresh
+    try {
+      const stat = statSync(cachePath)
+      if (Date.now() - stat.mtimeMs < NEWS_TTL_MS) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+
+    // Stale or missing — resolve customer and refresh
+    const { customers } = await import('../server-state.ts')
+    const customer = customers.find((c: any) => toSlug(c.name) === customerSlug)
+    if (!customer) {
+      console.warn(`[news-module] ensureFresh: customer not found for slug ${customerSlug}`)
+      return
+    }
+
+    await newsProvider.searchNews(customer.name)
+  },
 
   async fetch(customerName: string): Promise<void> {
     const articles = await newsProvider.searchNews(customerName)

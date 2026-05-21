@@ -94,8 +94,9 @@ function loadBriefHistory(cacheDir: string, customerSlug: string, maxDays = 7): 
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
-const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../data')
-const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
+import { DATA_DIR, CACHE_DIR as BASE_CACHE_DIR } from './lib/paths.ts'
+
+const CACHE_DIR = resolve(BASE_CACHE_DIR, 'product-intel')
 
 function customerIntelCacheDir(slug: string): string {
   return resolve(CACHE_DIR, `${slug}-customer-intel`)
@@ -370,8 +371,7 @@ export async function generateCustomerProductIntel(opts: {
     const hasNoMatchingSubs = subscriptions.length === 0 || customerSubscribesTo(subscriptions, productConfig).length === 0
     if (hasNoMatchingSubs) {
       // Check if intelligence cache exists — if so, run expansion analysis instead of skipping
-      const expansionCacheDir = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
-      const acctIntel = loadAccountIntelligence(expansionCacheDir, customerSlug)
+      const acctIntel = loadAccountIntelligence(BASE_CACHE_DIR, customerSlug)
       if (acctIntel && (acctIntel.company.length > 50 || acctIntel.industry.length > 50)) {
         console.log(`[customer-product-intel] no subs for "${customerName}" / "${productConfig.displayName}" — running expansion analysis via intelligence cache`)
         const expansionResult = await generateExpansionAnalysis({
@@ -406,11 +406,9 @@ export async function generateCustomerProductIntel(opts: {
     }
   }
 
-  const cacheDir = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
-
   // ── Load additional signals ───────────────────────────────────────────────
-  const accountIntel  = loadAccountIntelligence(cacheDir, customerSlug)
-  const briefHistory  = loadBriefHistory(cacheDir, customerSlug, getAutomationConfig().briefHistoryDays)
+  const accountIntel  = loadAccountIntelligence(BASE_CACHE_DIR, customerSlug)
+  const briefHistory  = loadBriefHistory(BASE_CACHE_DIR, customerSlug, getAutomationConfig().briefHistoryDays)
 
   // ── Content hash for cache invalidation ───────────────────────────────────
   const contentHash = createHash('sha256')

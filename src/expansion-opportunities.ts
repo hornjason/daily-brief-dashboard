@@ -41,8 +41,7 @@ export interface ExpansionOpportunitiesResult {
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
-const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../data')
-const CACHE_DIR = process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache')
+import { CACHE_DIR } from './lib/paths.ts'
 
 function expansionCachePath(customerSlug: string): string {
   if (!customerSlug || /[^a-zA-Z0-9_-]/.test(customerSlug)) {

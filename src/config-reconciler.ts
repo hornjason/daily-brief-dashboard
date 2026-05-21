@@ -18,9 +18,10 @@
 import { readFileSync, existsSync, renameSync, mkdirSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
+import { CONFIG_DIR } from './lib/paths.ts'
 
 function getConfigDir(): string {
-  return process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+  return CONFIG_DIR
 }
 
 export function getAuthConfigPath(): string {

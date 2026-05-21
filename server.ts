@@ -25,7 +25,7 @@ import { loadServerState, aes, customers, setAes, setCustomers, patchAe, AES_PAT
 import { initRefreshEngine, createRefreshRouter, refreshSubscriptions, refreshCCSP, refreshPipeline } from './src/refresh-engine.ts'
 import { initScraperManager, createScraperRouter, runRhScrapeWithState, runSfSyncForAes, ccspInFlight, setCcspInFlight, setSfSyncLastError } from './src/scraper-manager.ts'
 import { initScrapeApi, registerScrapeRoutes } from './src/scrape-api.ts'
-import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask, scheduleProductIntelRefresh, scheduleNewsRadarRefresh, scheduleProductLifecycleRefresh, scheduleRSSRefresh, scheduleEventsRefresh } from './src/background-scheduler.ts'
+import { rescheduleRefreshTimers, initBackgroundScheduler, enqueueScraperTask } from './src/background-scheduler.ts'
 import { healStaleAccountNumbers } from './src/account-provenance-healer.ts'
 import { initDashboardRoutes, createDashboardRouter } from './src/dashboard-routes.ts'
 // ── M03 extracted modules ───────────────────────────────────────────────────
@@ -749,20 +749,10 @@ initBackgroundScheduler({
 // (missing provenance or old appVersion) and queues re-discovery.
 void healStaleAccountNumbers()
 
-// ── Wave 4: Product Intel weekly refresh (Sunday 6am ET) ────────────────────
-scheduleProductIntelRefresh()
-
-// ── Wave 5: News Radar daily refresh (5:30am ET, Issue #153) ────────────────
-scheduleNewsRadarRefresh()
-
-// ── GitHub #197: Product Lifecycle weekly refresh (Sunday 6am ET) ───────────
-scheduleProductLifecycleRefresh()
-
-// ── GitHub #174: RSS Feed refresh (every 4 hours) ────────────────────────────
-scheduleRSSRefresh()
-
-// ── GitHub #202: Events refresh (weekly) ──────────────────────────────────────
-scheduleEventsRefresh()
+// ── Waves 4-5: Scheduled refreshes now managed by scheduler registry ────────
+// Product intel, news radar, lifecycle, RSS, events are registered in
+// initBackgroundScheduler() and started via schedulerRegistry.startAll().
+// See ADR-028 for the unified scheduler pattern.
 
 // ── Wave 6: Feature module startup catch-up ─────────────────────────────────
 // If any module's lastRun is older than its refreshInterval, run it now.

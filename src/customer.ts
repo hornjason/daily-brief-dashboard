@@ -36,8 +36,9 @@ import type { MeetingPrep } from './calendar-extraction.ts'
 import { emitAIEvent } from './ai-events.ts'
 import { detectFingerprintDelta, diffDocCorpus, shouldUseDeltaMode, type BriefInputBundle } from './ai-fingerprint.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
-const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+const CONFIG_DIR_PATH   = CONFIG_DIR
 const GMAIL_TOKEN_PATH  = process.env.GMAIL_TOKEN       ?? resolve(CONFIG_DIR_PATH, '.gmail-token.json')
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN      ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
 const GCAL_TOKEN_PATH   = process.env.GCAL_TOKEN        ?? resolve(CONFIG_DIR_PATH, '.calendar-token.json')

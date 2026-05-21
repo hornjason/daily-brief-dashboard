@@ -1,4 +1,4 @@
-import { existsSync, unlinkSync, readFileSync, writeFileSync, statSync } from 'fs'
+import { existsSync, unlinkSync, readFileSync, writeFileSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
@@ -9,6 +9,7 @@ import { getSfAuthStatus } from './sf-auth.ts'
 import { getRefreshIntervals, DEFAULT_REFRESH_INTERVALS, getSchedulerConfig, updateSchedulerField } from './settings-api.ts'
 import { lastScraped, recordScrapeExpired, getRhStatus } from './rh-auth.ts'
 import { initScrapeContext, getScrapeContext, closeScrapeContext } from './rh-scraper.ts'
+import { schedulerRegistry } from './scheduler-registry.ts'
 // BKL-ARCH-L4-SPLIT: sf-scraper, ccsp-scraper, and tableau-auth are
 // L4-only modules — they belong in Dockerfile.l4, not the hero install image.
 // These imports are intentionally removed so the hero module graph contains no browser-session code.
@@ -231,7 +232,6 @@ let _watchdogRhSessionPath = ''
 
 let _subscriptionsLastRun = 0
 let _ccspLastRun = 0
-let _pipelineLastRun = 0
 let _heartbeatStarted = false
 
 export function rescheduleRefreshTimers(intervals: typeof DEFAULT_REFRESH_INTERVALS): void {
@@ -239,7 +239,6 @@ export function rescheduleRefreshTimers(intervals: typeof DEFAULT_REFRESH_INTERV
   // Setting to Date.now() means "just ran" — first refresh fires after the configured interval.
   _subscriptionsLastRun = Date.now()
   _ccspLastRun = Date.now()
-  _pipelineLastRun = Date.now()
 
   if (customers.length === 0) return
 
@@ -249,176 +248,9 @@ export function rescheduleRefreshTimers(intervals: typeof DEFAULT_REFRESH_INTERV
   console.log(`[timers] subscriptions=${intervals.subscriptions}m ccsp=${intervals.ccsp}m (heartbeat)`)
 }
 
-// ── Pipeline daily sync at 2am ET ───────────────────────────────────────────
-// SF report is generated at 1am ET daily; we sync at 2am ET to ensure it's ready.
-// Uses setTimeout + reschedule loop (container-safe — no system cron available).
-
-export function nextEt2amUtc(now?: Date): Date {
-  const _now = now ?? new Date()
-  // Derive ET UTC offset by comparing actual UTC ms with "ET time treated as UTC" ms.
-  // This correctly handles EST vs EDT without hardcoding the offset.
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  })
-  const p: Record<string, number> = {}
-  for (const part of fmt.formatToParts(_now)) {
-    if (part.type !== 'literal') p[part.type] = Number(part.value)
-  }
-  // etOffsetMs = how many ms ahead UTC is vs ET local time
-  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
-  const etOffsetMs  = _now.getTime() - etAsIfUtcMs   // e.g. 4*3600*1000 during EDT
-
-  // "Today at 2am ET" expressed as UTC
-  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, 2, 0, 0) + etOffsetMs)
-  // If already past, roll to tomorrow
-  if (target.getTime() <= _now.getTime()) {
-    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
-  }
-  return target
-}
-
-/** Returns the next UTC Date representing the next 1:45am ET. Same pattern as nextEt2amUtc. */
-export function nextEt145amUtc(now?: Date): Date {
-  const _now = now ?? new Date()
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  })
-  const p: Record<string, number> = {}
-  for (const part of fmt.formatToParts(_now)) {
-    if (part.type !== 'literal') p[part.type] = Number(part.value)
-  }
-  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
-  const etOffsetMs  = _now.getTime() - etAsIfUtcMs
-  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, 1, 45, 0) + etOffsetMs)
-  if (target.getTime() <= _now.getTime()) {
-    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
-  }
-  return target
-}
-
-/** Returns the next UTC Date representing the next 6:30am ET. Same pattern as nextEt2amUtc. */
-export function nextEt630amUtc(now?: Date): Date {
-  const _now = now ?? new Date()
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  })
-  const p: Record<string, number> = {}
-  for (const part of fmt.formatToParts(_now)) {
-    if (part.type !== 'literal') p[part.type] = Number(part.value)
-  }
-  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
-  const etOffsetMs  = _now.getTime() - etAsIfUtcMs
-  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, 6, 30, 0) + etOffsetMs)
-  if (target.getTime() <= _now.getTime()) {
-    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
-  }
-  return target
-}
-
-/** Returns the next UTC Date representing the next 7:00am ET. Same pattern as nextEt2amUtc. */
-export function nextEt7amUtc(now?: Date): Date {
-  const _now = now ?? new Date()
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  })
-  const p: Record<string, number> = {}
-  for (const part of fmt.formatToParts(_now)) {
-    if (part.type !== 'literal') p[part.type] = Number(part.value)
-  }
-  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
-  const etOffsetMs  = _now.getTime() - etAsIfUtcMs
-  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, 7, 0, 0) + etOffsetMs)
-  if (target.getTime() <= _now.getTime()) {
-    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
-  }
-  return target
-}
-
-/** Returns the next UTC Date representing the next 5:30am ET. Same pattern as nextEt2amUtc. */
-export function nextEt530amUtc(now?: Date): Date {
-  const _now = now ?? new Date()
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  })
-  const p: Record<string, number> = {}
-  for (const part of fmt.formatToParts(_now)) {
-    if (part.type !== 'literal') p[part.type] = Number(part.value)
-  }
-  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
-  const etOffsetMs  = _now.getTime() - etAsIfUtcMs
-  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, 5, 30, 0) + etOffsetMs)
-  if (target.getTime() <= _now.getTime()) {
-    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
-  }
-  return target
-}
-
-/** Returns the next UTC Date representing the next 8:00am ET. Same pattern as nextEt2amUtc. */
-export function nextEt8amUtc(now?: Date): Date {
-  const _now = now ?? new Date()
-  const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  })
-  const p: Record<string, number> = {}
-  for (const part of fmt.formatToParts(_now)) {
-    if (part.type !== 'literal') p[part.type] = Number(part.value)
-  }
-  const etAsIfUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second)
-  const etOffsetMs  = _now.getTime() - etAsIfUtcMs
-  let target = new Date(Date.UTC(p.year, p.month - 1, p.day, 8, 0, 0) + etOffsetMs)
-  if (target.getTime() <= _now.getTime()) {
-    target = new Date(target.getTime() + 24 * 60 * 60 * 1000)
-  }
-  return target
-}
-
-// ── KPI daily snapshot at 8:00am ET (R05) ───────────────────────────────────
-
-export function scheduleKpiSnapshot(): void {
-  const msUntil = nextEt8amUtc().getTime() - Date.now()
-  console.log(`[kpi-snapshot] next snapshot in ${Math.round(msUntil / 60_000)}m (8:00am ET)`)
-  setTimeout(async () => {
-    try {
-      const { customers: currentCustomers } = await import('./server-state.ts')
-      // BKL-G11: Fetch calendar for meeting counts
-      let meetingsToday = 0
-      let meetingsThisWeek = 0
-      try {
-        const { fetchCalendar } = await import('./google.ts')
-        const events = await fetchCalendar(currentCustomers)
-        const customerEvents = events.filter((ev: any) => ev.customers && ev.customers.length > 0)
-        const todayStr = new Date().toDateString()
-        const now = new Date()
-        const dayOfWeek = now.getDay()
-        const monday = new Date(now)
-        monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-        monday.setHours(0, 0, 0, 0)
-        const sunday = new Date(monday)
-        sunday.setDate(monday.getDate() + 7)
-        meetingsToday = customerEvents.filter((ev: any) => new Date(ev.start).toDateString() === todayStr).length
-        meetingsThisWeek = customerEvents.filter((ev: any) => { const d = new Date(ev.start); return d >= monday && d < sunday }).length
-      } catch { /* calendar not configured or unavailable */ }
-      const snapshot = captureSnapshot(currentCustomers.length, meetingsToday, meetingsThisWeek)
-      writeSnapshot(snapshot)
-      console.log(`[kpi-snapshot] daily snapshot captured: ${snapshot.date} — ${snapshot.metrics.totalCases} cases, ${snapshot.metrics.customerCount} customers`)
-    } catch (e: any) {
-      console.error('[kpi-snapshot] failed to capture snapshot:', e?.message ?? e)
-    }
-    scheduleKpiSnapshot()  // reschedule for next day
-  }, msUntil)
-}
+// Phase 5 cleanup: All 6 nextEtXxxUtc() wrapper functions removed (ADR-028).
+// The scheduler registry calls et-time.ts's nextEtTimeUtc() and nextEtWeekdayUtc() directly.
+// Phase 3: scheduleKpiSnapshot migrated to scheduler registry (ADR-028)
 
 // ── CCSP daily scrape at 6:30am ET ──────────────────────────────────────────
 
@@ -494,7 +326,8 @@ async function runCcspScrapeWithDelta(aesToScrape: any[]): Promise<void> {
 }
 
 export function scheduleCcspSync(): void {
-  const msUntil = nextEt630amUtc().getTime() - Date.now()
+  const { nextEtTimeUtc } = require('./lib/et-time.ts')
+  const msUntil = nextEtTimeUtc(6, 30).getTime() - Date.now()
   console.log(`[ccsp-sync] next run in ${Math.round(msUntil / 60_000)}m (6:30am ET)`)
   setTimeout(async () => {
     const ccspConfig = getSchedulerConfig()
@@ -576,210 +409,16 @@ export function scheduleCcspSync(): void {
 // Exported stub kept so any stale import in server.ts does not break at parse time.
 export function scheduleSupportableSync(): void { /* no-op */ }
 
-// ── Territory sheet daily sync at 1:45am ET ─────────────────────────────────
+// Phase 3: scheduleTerritorySync migrated to scheduler registry (ADR-028)
+// TERRITORY_NOTIFICATIONS_PATH and TerritoryNotification moved inline to registry callback
 
-const TERRITORY_NOTIFICATIONS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-notifications.json')
-
-interface TerritoryNotification {
-  type: 'removal' | 'reassignment'
-  customer: string
-  ae: string
-  detectedAt: string
-}
-
-export function scheduleTerritorySync(): void {
-  const msUntil = nextEt145amUtc().getTime() - Date.now()
-  console.log(`[territory-sync] next run in ${Math.round(msUntil / 60_000)}m (1:45am ET)`)
-  setTimeout(async () => {
-    const terrConfig = getSchedulerConfig()
-    if (!terrConfig.territoryEnabled) {
-      console.log('[territory-sync] Territory sync disabled — skipping')
-      scheduleTerritorySync()
-      return
-    }
-    console.log('[territory-sync] starting territory sheet sync…')
-    try {
-      // Pre-flight: check Google auth token exists
-      const tokenPath = process.env.GOOGLE_UNIFIED_TOKEN_PATH
-      if (tokenPath && !existsSync(tokenPath)) {
-        console.warn('[territory-sync] Google auth token missing — skipping')
-        scheduleTerritorySync()
-        return
-      }
-
-      const { aes, customers: currentCustomers, CUSTOMERS_PATH } = await import('./server-state.ts')
-      if (!aes.length) {
-        console.log('[territory-sync] no AEs configured — skipping')
-        scheduleTerritorySync()
-        return
-      }
-
-      const result = await syncTerritorySheet(aes, currentCustomers)
-
-      // Auto-add new customers
-      if (result.toAdd.length > 0) {
-        console.log(`[territory-sync] adding ${result.toAdd.length} new customers`)
-        const updated = [...currentCustomers, ...result.toAdd]
-        writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
-        // Update in-memory state
-        const { setCustomers } = await import('./server-state.ts')
-        setCustomers(updated)
-        console.log(`[territory-sync] customers updated: ${result.toAdd.map((c: any) => c.name).join(', ')}`)
-      }
-
-      // Write removal/reassignment notifications (never auto-delete)
-      if (result.toRemove.length > 0) {
-        let existing: { updatedAt: string; pending: TerritoryNotification[] } = { updatedAt: '', pending: [] }
-        try {
-          if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
-            existing = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
-          }
-        } catch {}
-        const newNotifications: TerritoryNotification[] = result.toRemove.map((c: any) => ({
-          type: 'removal' as const,
-          customer: c.name,
-          ae: c.ae,
-          detectedAt: new Date().toISOString(),
-        }))
-        // Dedup: don't add notifications already pending for same customer
-        const existingKeys = new Set(existing.pending.map((n: any) => `${n.customer}::${n.ae}`))
-        const fresh = newNotifications.filter((n: any) => !existingKeys.has(`${n.customer}::${n.ae}`))
-        const updated = {
-          updatedAt: new Date().toISOString(),
-          pending: [...existing.pending, ...fresh],
-        }
-        writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
-        console.log(`[territory-sync] ${fresh.length} new removal notifications written`)
-      }
-
-      // Clean old notifications (30 day retention)
-      try {
-        if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
-          const notifications = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
-          const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
-          const cleaned = notifications.pending.filter((n: any) => {
-            const detectedTime = new Date(n.detectedAt).getTime()
-            return detectedTime > thirtyDaysAgo
-          })
-          if (cleaned.length < notifications.pending.length) {
-            const updated = { ...notifications, pending: cleaned }
-            writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
-            console.log(`[territory-sync] cleaned ${notifications.pending.length - cleaned.length} old notifications (>30 days)`)
-          }
-        }
-      } catch (e: any) {
-        console.warn(`[territory-sync] notification cleanup failed: ${e.message}`)
-      }
-
-      // Persist team data to cache
-      if (result.teamData && Object.keys(result.teamData).length > 0) {
-        const { persistTeamCache } = await import('./account-team.ts')
-        persistTeamCache(result.teamData)
-      }
-
-      updateSchedulerField('territoryLastRun', new Date().toISOString())
-      console.log(`[territory-sync] complete: +${result.toAdd.length} added, ${result.toRemove.length} flagged for review, ${result.unchanged.length} unchanged`)
-    } catch (e: any) {
-      console.error('[territory-sync] error:', e?.message ?? e)
-    }
-    scheduleTerritorySync()  // reschedule for next day
-  }, msUntil)
-}
-
-let _sfSessionPathForScheduler = ''
-
-export function schedulePipelineSync(sfSessionPath?: string): void {
-  if (sfSessionPath) _sfSessionPathForScheduler = sfSessionPath
-  const next   = nextEt2amUtc()
-  const now    = new Date()
-  const msUntil = next.getTime() - now.getTime()
-  const hUntil  = Math.round(msUntil / 1000 / 60 / 60 * 10) / 10
-  console.log(`[pipeline-sync] next run at ${next.toISOString()} (${hUntil}h from now)`)
-
-  setTimeout(async () => {
-    const pipeConfig = getSchedulerConfig()
-    if (!pipeConfig.sfPipelineEnabled) {
-      console.log('[pipeline-sync] Pipeline sync disabled — skipping')
-      schedulePipelineSync()
-      return
-    }
-    try {
-      console.log('[pipeline-sync] starting daily 2am ET sync')
-      // Guard: skip full SF scrape if no active session — cache refresh still runs
-      const sfStatus = _sfSessionPathForScheduler
-        ? getSfAuthStatus(_sfSessionPathForScheduler)
-        : { hasSession: false }
-      if (!sfStatus.hasSession) {
-        const reason = 'Salesforce session expired. Reconnect via dashboard.'
-        console.warn(`[scheduler] SKIPPED: Pipeline sync — ${reason}`)
-        setLastSkipReason('sf-pipeline', reason)
-        await refreshPipeline()
-      } else {
-        // BKL-T06 / BKL-G30 Gap 3: SF Lightning pre-flight — gates the scrape (was log-only)
-        let sfProbeOk = false
-        try {
-          const probe = await fetch('https://redhatcrm.lightning.force.com/lightning/n/Home', {
-            signal: AbortSignal.timeout(8_000),
-            redirect: 'manual',
-          })
-          if (probe.status >= 400) {
-            const reason = `SF Lightning returned ${probe.status} — session may be expired`
-            console.warn(`[pipeline-sync] SF pre-flight: ${reason}`)
-            setLastSkipReason('sf-pipeline', reason)
-          } else {
-            console.log('[pipeline-sync] SF pre-flight: Lightning reachable')
-            sfProbeOk = true
-          }
-        } catch (e: any) {
-          const reason = `SF pre-flight probe failed: ${e?.message ?? e}`
-          console.warn(`[pipeline-sync] ${reason}`)
-          setLastSkipReason('sf-pipeline', reason)
-        }
-
-        // BKL-M49: Enqueue SF pipeline sync through scraper queue (gated on probe)
-        // BKL-INGEST-06: Wrap run with retry — failures re-enqueue with 5m→10m→15m back-off.
-        // BKL-INGEST-09 sync-state writes happen inside pipelineRun so a successful
-        // retry still marks 'ok'; the outer catch only adds retry scheduling and rethrow.
-        if (sfProbeOk) {
-          const { aes: capturedAes } = await import('./server-state.ts')
-          const pipelineRun = async () => {
-            try {
-              await runSfSyncForAes(capturedAes)
-              // BKL-INGEST-09: Mark pipeline ok in sync-state after successful sync
-              writeSyncStateFlow('pipeline', 'ok')
-            } catch (e: any) {
-              // BKL-INGEST-09: Mark pipeline failed so late startup detection knows this ran
-              writeSyncStateFlow('pipeline', 'failed')
-              throw e
-            }
-          }
-          enqueueScraperTask({
-            name: 'sf-pipeline',
-            run: async () => {
-              try {
-                await pipelineRun()
-              } catch (e: any) {
-                console.warn('[pipeline-sync] scrape failed — scheduling retry:', e?.message ?? e)
-                scheduleRetry('sf-pipeline', pipelineRun, RETRY_DELAYS, 0)
-                throw e
-              }
-            },
-            source: 'scheduled',
-            enqueuedAt: Date.now(),
-          })
-        }
-      }
-      updateSchedulerField('sfPipelineLastRun', new Date().toISOString())
-    } catch (e: any) {
-      console.warn(`[pipeline-sync] error: ${e.message}`)
-    }
-    schedulePipelineSync()  // reschedule for next day
-  }, msUntil)
-}
+// Phase 3: schedulePipelineSync migrated to scheduler registry (ADR-028)
+// _sfSessionPathForScheduler now passed via initBackgroundScheduler opts
 
 // ── Email delivery scheduler (BKL-E06) ───────────────────────────────────────
 // Reads email-settings.json on each cycle (supports live config changes).
 // At delivery time: aggregates cached data → renderBriefHtml() → sendBriefEmail().
+// NOT migrated to scheduler registry because it needs to re-read config on each cycle.
 
 const EMAIL_SETTINGS_PATH_SCHED = resolve(process.env.DATA_DIR ?? 'data', 'config', 'email-settings.json')
 
@@ -1026,64 +665,412 @@ export function initBackgroundScheduler(opts: {
   // On startup: run a full refresh, then schedule per-source timers
   if (customers.length > 0) {
     refreshAll().catch((e: any) => console.error('[refresh] startup refresh failed:', e?.message ?? e))
-
-    // #305: Force-refresh pipeline if cache is empty (first container start or after wipe)
-    const pipelineCache = readPipelineCache()
-    if (!pipelineCache?.records || pipelineCache.records.length === 0) {
-      console.log('[startup] pipeline cache empty — force refreshing')
-      refreshPipeline(true).catch((e: any) => console.error('[refresh] pipeline startup refresh failed:', e?.message ?? e))
-    }
-
     rescheduleRefreshTimers(getRefreshIntervals())
   }
 
-  // #309: Seed initial status from cache file mtimes for sources without explicit tracking
-  setTimeout(async () => {
-    try {
+  // L4 writer schedulers and core schedules migrated to scheduler registry (ADR-028)
+  // Territory, Pipeline, KPI snapshot — see registry entries below
+
+  // Email brief delivery — NOT migrated to registry (requires live config re-read)
+  // This stays as a standalone function because it needs to re-read email-settings.json
+  // on each cycle to support live config changes, which can't be expressed in the registry.
+  scheduleEmailDelivery()
+
+  // ── Phase 2: Feature module schedules migrated to scheduler registry (ADR-028) ─────
+
+  // Product Intelligence — weekly Sunday 6am ET
+  schedulerRegistry.register({
+    name: 'product-intel',
+    type: 'weekly',
+    dayOfWeek: 0, // Sunday
+    hour: 6,
+    minute: 0,
+    enabled: true,
+    run: async () => {
+      console.log('[product-intel] weekly refresh started')
       const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
-      const CACHE = process.env.CACHE_DIR ?? 'data/cache'
-      const seedFromCache = (name: string, cachePath: string) => {
+      const module = FeatureModuleRegistry.get('product-intel')
+      if (!module) {
+        console.error('[product-intel] module not registered')
+        throw new Error('product-intel module not found in registry')
+      }
+
+      await module.fetch('_global')
+      FeatureModuleRegistry.recordOutcome('product-intel', { success: true })
+      console.log('[product-intel] weekly refresh completed')
+
+      // Regenerate per-customer product intel after features are fresh
+      try {
+        const { buildCustomerIntelContext, generateCustomerProductIntel } = await import('./customer-product-intel.ts')
+        const { toSlug: slugify } = await import('./cache-layer.ts')
+        const { loadProductConfig, getCachedSummary } = await import('./product-release-radar.ts')
+        const { _generatingKeys } = await import('./product-intel-routes.ts') as any
+        const { getCachedDriveCorpus } = await import('./product-drive-ingest.ts')
+
+        const productConfigs = loadProductConfig()
+        console.log(`[product-intel] weekly customer intel refresh: ${customers.length} customers x ${productConfigs.length} products`)
+
+        for (const customer of customers) {
+          const customerSlug = slugify(customer.name)
+          try {
+            const ctx = await buildCustomerIntelContext(customerSlug)
+            for (const product of productConfigs) {
+              const summary = getCachedSummary(product.slug)
+              if (!summary) continue
+              const mutexKey = `intel:${product.slug}:${customerSlug}`
+              if (_generatingKeys && _generatingKeys.has(mutexKey)) continue
+              if (_generatingKeys) _generatingKeys.add(mutexKey)
+              try {
+                const corpus = getCachedDriveCorpus(product.slug)
+                const slidesText = corpus ? corpus.files.map((f: any) => f.textContent).join('\n\n') : ''
+                const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(product.slug)
+                await generateCustomerProductIntel({
+                  slug: product.slug,
+                  productSummary: summary,
+                  slidesText,
+                  customerName: ctx.customerName,
+                  subscriptions: ctx.subscriptions,
+                  supportCases: ctx.supportCases,
+                  customerDocsText: ctx.customerDocsText,
+                  customerDocsHash: ctx.customerDocsHash,
+                  opportunityNote: ctx.opportunityNote,
+                  productFeatures,
+                  productFeaturesHash,
+                })
+              } finally {
+                if (_generatingKeys) _generatingKeys.delete(mutexKey)
+              }
+              await new Promise(r => setTimeout(r, 3000))
+            }
+          } catch (e: any) {
+            console.error(`[product-intel] weekly customer intel refresh failed for ${customer.name}:`, e?.message)
+          }
+        }
+        console.log('[product-intel] weekly customer intel refresh completed')
+      } catch (intelErr: any) {
+        console.error('[product-intel] weekly customer intel refresh failed:', intelErr?.message ?? intelErr)
+      }
+    },
+  })
+
+  // News Radar — daily 5:30am ET
+  schedulerRegistry.register({
+    name: 'news-radar',
+    type: 'daily',
+    hour: 5,
+    minute: 30,
+    enabled: true,
+    run: async () => {
+      const { customers: currentCustomers } = await import('./server-state.ts')
+      if (!currentCustomers || currentCustomers.length === 0) {
+        console.log('[news-radar] no customers configured — skipping')
+        return
+      }
+
+      console.log(`[news-radar] starting daily news refresh for ${currentCustomers.length} customers`)
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const newsModule = FeatureModuleRegistry.get('news-radar')
+
+      if (!newsModule) {
+        console.warn('[news-radar] news-radar module not registered — skipping')
+        return
+      }
+
+      let successCount = 0
+      let errorCount = 0
+
+      for (const customer of currentCustomers) {
         try {
-          if (existsSync(cachePath)) {
-            const stat = statSync(cachePath)
-            const existing = FeatureModuleRegistry.getAllStatus()[name]
-            if (!existing?.lastChecked) {
-              FeatureModuleRegistry.updateStatus(name, {
-                lastChecked: stat.mtime.toISOString(),
-                lastChanged: stat.mtime.toISOString(),
-              })
+          await newsModule.fetch(customer.name)
+          successCount++
+          console.log(`[news-radar] refreshed news for ${customer.name}`)
+        } catch (e: any) {
+          errorCount++
+          console.error(`[news-radar] failed to refresh news for ${customer.name}:`, e?.message ?? e)
+        }
+        await new Promise(r => setTimeout(r, 3000))
+      }
+
+      console.log(`[news-radar] daily refresh complete: ${successCount} succeeded, ${errorCount} failed`)
+    },
+  })
+
+  // Product Lifecycle — weekly Sunday 6am ET
+  schedulerRegistry.register({
+    name: 'product-lifecycle',
+    type: 'weekly',
+    dayOfWeek: 0,
+    hour: 6,
+    minute: 0,
+    enabled: true,
+    run: async () => {
+      console.log('[product-lifecycle] weekly refresh started')
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const lifecycleModule = FeatureModuleRegistry.get('product-lifecycle')
+
+      if (!lifecycleModule) {
+        console.warn('[product-lifecycle] product-lifecycle module not registered — skipping')
+        return
+      }
+
+      await lifecycleModule.fetch('')
+      console.log('[product-lifecycle] weekly refresh completed')
+    },
+  })
+
+  // RSS Feed — every 4 hours
+  schedulerRegistry.register({
+    name: 'rh-rss',
+    type: 'interval',
+    intervalMs: 4 * 60 * 60 * 1000,
+    enabled: true,
+    run: async () => {
+      console.log('[rh-rss] scheduled refresh started')
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const rssModule = FeatureModuleRegistry.get('rh-rss')
+
+      if (!rssModule) {
+        console.warn('[rh-rss] rh-rss module not registered — skipping')
+        return
+      }
+
+      await rssModule.fetch('')
+      console.log('[rh-rss] scheduled refresh completed')
+    },
+  })
+
+  // Events — every 7 days
+  schedulerRegistry.register({
+    name: 'rh-events',
+    type: 'interval',
+    intervalMs: 7 * 24 * 60 * 60 * 1000,
+    enabled: true,
+    run: async () => {
+      console.log('[rh-events] scheduled refresh started')
+      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
+      const eventsModule = FeatureModuleRegistry.get('rh-events')
+
+      if (!eventsModule) {
+        console.warn('[rh-events] rh-events module not registered — skipping')
+        return
+      }
+
+      await eventsModule.fetch('')
+      console.log('[rh-events] scheduled refresh completed')
+    },
+  })
+
+  // ── Phase 3: Core schedules migrated to scheduler registry (ADR-028) ──────────
+
+  // Territory sync — daily 1:45am ET (primary only)
+  if (isPrimary) {
+    const TERRITORY_NOTIFICATIONS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-notifications.json')
+    interface TerritoryNotification {
+      type: 'removal' | 'reassignment'
+      customer: string
+      ae: string
+      detectedAt: string
+    }
+
+    schedulerRegistry.register({
+      name: 'territory-sync',
+      type: 'daily',
+      hour: 1,
+      minute: 45,
+      enabled: () => getSchedulerConfig().territoryEnabled,
+      run: async () => {
+        console.log('[territory-sync] starting territory sheet sync…')
+        // Pre-flight: check Google auth token exists
+        const tokenPath = process.env.GOOGLE_UNIFIED_TOKEN_PATH
+        if (tokenPath && !existsSync(tokenPath)) {
+          console.warn('[territory-sync] Google auth token missing — skipping')
+          return
+        }
+
+        const { aes, customers: currentCustomers, CUSTOMERS_PATH } = await import('./server-state.ts')
+        if (!aes.length) {
+          console.log('[territory-sync] no AEs configured — skipping')
+          return
+        }
+
+        const result = await syncTerritorySheet(aes, currentCustomers)
+
+        // Auto-add new customers
+        if (result.toAdd.length > 0) {
+          console.log(`[territory-sync] adding ${result.toAdd.length} new customers`)
+          const updated = [...currentCustomers, ...result.toAdd]
+          writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
+          const { setCustomers } = await import('./server-state.ts')
+          setCustomers(updated)
+          console.log(`[territory-sync] customers updated: ${result.toAdd.map((c: any) => c.name).join(', ')}`)
+        }
+
+        // Write removal/reassignment notifications (never auto-delete)
+        if (result.toRemove.length > 0) {
+          let existing: { updatedAt: string; pending: TerritoryNotification[] } = { updatedAt: '', pending: [] }
+          try {
+            if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
+              existing = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
+            }
+          } catch {}
+          const newNotifications: TerritoryNotification[] = result.toRemove.map((c: any) => ({
+            type: 'removal' as const,
+            customer: c.name,
+            ae: c.ae,
+            detectedAt: new Date().toISOString(),
+          }))
+          const existingKeys = new Set(existing.pending.map((n: any) => `${n.customer}::${n.ae}`))
+          const fresh = newNotifications.filter((n: any) => !existingKeys.has(`${n.customer}::${n.ae}`))
+          const updated = {
+            updatedAt: new Date().toISOString(),
+            pending: [...existing.pending, ...fresh],
+          }
+          writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
+          console.log(`[territory-sync] ${fresh.length} new removal notifications written`)
+        }
+
+        // Clean old notifications (30 day retention)
+        try {
+          if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
+            const notifications = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
+            const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+            const cleaned = notifications.pending.filter((n: any) => {
+              const detectedTime = new Date(n.detectedAt).getTime()
+              return detectedTime > thirtyDaysAgo
+            })
+            if (cleaned.length < notifications.pending.length) {
+              const updated = { ...notifications, pending: cleaned }
+              writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
+              console.log(`[territory-sync] cleaned ${notifications.pending.length - cleaned.length} old notifications (>30 days)`)
             }
           }
-        } catch { /* ignore */ }
-      }
-      seedFromCache('rh-cases', resolve(CACHE, 'cases.json'))
-      seedFromCache('rss', resolve(CACHE, 'rss-cache.json'))
-      seedFromCache('events', resolve(CACHE, 'events.json'))
-      seedFromCache('partners', resolve(process.env.CONFIG_DIR ?? 'config', 'partners.json'))
-      console.log('[registry] Seeded initial status from cache file mtimes')
-    } catch (e: any) {
-      console.warn('[registry] Failed to seed status from cache files:', e?.message)
-    }
-  }, 3000)
+        } catch (e: any) {
+          console.warn(`[territory-sync] notification cleanup failed: ${e.message}`)
+        }
 
-  // L4 writer schedulers — primary node only (BKL-SYNC-L3-02)
-  if (isPrimary) {
-    // Territory syncs daily at 1:45am ET (before pipeline at 2am)
-    scheduleTerritorySync()
+        // Persist team data to cache
+        if (result.teamData && Object.keys(result.teamData).length > 0) {
+          const { persistTeamCache } = await import('./account-team.ts')
+          persistTeamCache(result.teamData)
+        }
 
-    // Pipeline syncs daily at 2am ET (SF report generated at 1am ET)
-    schedulePipelineSync(opts.sfSessionPath)
+        updateSchedulerField('territoryLastRun', new Date().toISOString())
+        console.log(`[territory-sync] complete: +${result.toAdd.length} added, ${result.toRemove.length} flagged for review, ${result.unchanged.length} unchanged`)
+      },
+    })
 
-    // BKL-ARCH-L4-SPLIT: scheduleCcspSync() removed — CCSP runs in Dockerfile.l4 only
+    // Pipeline sync — daily 2am ET (primary only)
+    const _sfSessionPathForScheduler = opts.sfSessionPath || ''
+    schedulerRegistry.register({
+      name: 'sf-pipeline',
+      type: 'daily',
+      hour: 2,
+      minute: 0,
+      enabled: () => getSchedulerConfig().sfPipelineEnabled,
+      run: async () => {
+        console.log('[pipeline-sync] starting daily 2am ET sync')
+        const sfStatus = _sfSessionPathForScheduler
+          ? getSfAuthStatus(_sfSessionPathForScheduler)
+          : { hasSession: false }
+        if (!sfStatus.hasSession) {
+          const reason = 'Salesforce session expired. Reconnect via dashboard.'
+          console.warn(`[scheduler] SKIPPED: Pipeline sync — ${reason}`)
+          setLastSkipReason('sf-pipeline', reason)
+          await refreshPipeline()
+          return
+        }
+
+        // SF Lightning pre-flight
+        let sfProbeOk = false
+        try {
+          const probe = await fetch('https://redhatcrm.lightning.force.com/lightning/n/Home', {
+            signal: AbortSignal.timeout(8_000),
+            redirect: 'manual',
+          })
+          if (probe.status >= 400) {
+            const reason = `SF Lightning returned ${probe.status} — session may be expired`
+            console.warn(`[pipeline-sync] SF pre-flight: ${reason}`)
+            setLastSkipReason('sf-pipeline', reason)
+          } else {
+            console.log('[pipeline-sync] SF pre-flight: Lightning reachable')
+            sfProbeOk = true
+          }
+        } catch (e: any) {
+          const reason = `SF pre-flight probe failed: ${e?.message ?? e}`
+          console.warn(`[pipeline-sync] ${reason}`)
+          setLastSkipReason('sf-pipeline', reason)
+        }
+
+        if (sfProbeOk) {
+          const { aes: capturedAes } = await import('./server-state.ts')
+          const pipelineRun = async () => {
+            try {
+              await runSfSyncForAes(capturedAes)
+              writeSyncStateFlow('pipeline', 'ok')
+            } catch (e: any) {
+              writeSyncStateFlow('pipeline', 'failed')
+              throw e
+            }
+          }
+          enqueueScraperTask({
+            name: 'sf-pipeline',
+            run: async () => {
+              try {
+                await pipelineRun()
+              } catch (e: any) {
+                console.warn('[pipeline-sync] scrape failed — scheduling retry:', e?.message ?? e)
+                scheduleRetry('sf-pipeline', pipelineRun, RETRY_DELAYS, 0)
+                throw e
+              }
+            },
+            source: 'scheduled',
+            enqueuedAt: Date.now(),
+          })
+        }
+        updateSchedulerField('sfPipelineLastRun', new Date().toISOString())
+      },
+    })
   }
 
-  // BKL-ARCH-L4-SPLIT: scheduleSupportableSync() removed — Supportable runs in Dockerfile.l4 only
+  // KPI snapshot — daily 8am ET (all nodes)
+  schedulerRegistry.register({
+    name: 'kpi-snapshot',
+    type: 'daily',
+    hour: 8,
+    minute: 0,
+    enabled: true,
+    run: async () => {
+      const { customers: currentCustomers } = await import('./server-state.ts')
+      let meetingsToday = 0
+      let meetingsThisWeek = 0
+      try {
+        const { fetchCalendar } = await import('./google.ts')
+        const events = await fetchCalendar(currentCustomers)
+        const customerEvents = events.filter((ev: any) => ev.customers && ev.customers.length > 0)
+        const todayStr = new Date().toDateString()
+        const now = new Date()
+        const dayOfWeek = now.getDay()
+        const monday = new Date(now)
+        monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+        monday.setHours(0, 0, 0, 0)
+        const sunday = new Date(monday)
+        sunday.setDate(monday.getDate() + 7)
+        meetingsToday = customerEvents.filter((ev: any) => new Date(ev.start).toDateString() === todayStr).length
+        meetingsThisWeek = customerEvents.filter((ev: any) => { const d = new Date(ev.start); return d >= monday && d < sunday }).length
+      } catch { /* calendar not configured or unavailable */ }
+      const snapshot = captureSnapshot(currentCustomers.length, meetingsToday, meetingsThisWeek)
+      writeSnapshot(snapshot)
+      console.log(`[kpi-snapshot] daily snapshot captured: ${snapshot.date} — ${snapshot.metrics.totalCases} cases, ${snapshot.metrics.customerCount} customers`)
+    },
+  })
 
-  // KPI daily snapshot at 8am ET (R05 — after all morning syncs complete)
-  scheduleKpiSnapshot()
+  // NOTE: Email delivery is NOT migrated to the registry because it needs
+  // to re-read config on each cycle to support live settings changes. This
+  // requires a custom loop that can't be expressed in the registry's type system.
+  // It remains as a standalone function called from initBackgroundScheduler().
 
-  // Email brief delivery — scheduled per user config (BKL-E06)
-  scheduleEmailDelivery()
+  // Start all registered schedules
+  schedulerRegistry.startAll()
 
   // BKL-INGEST-09 / BKL-SYNC-L3-02: Late startup catch-up — primary node only.
   // Hero installs must NOT run catch-up: no L4 credentials, throws on every restart.
@@ -1239,17 +1226,6 @@ export function initBackgroundScheduler(opts: {
           console.log(`[refresh] tick: CCSP due (${Math.round(ccspElapsed / 60_000)}m elapsed) — triggering`)
           _ccspLastRun = now
           refreshCCSP().catch((e: any) => console.error('[refresh] CCSP failed:', e?.message ?? e))
-        }
-      }
-
-      // Timer 3: Pipeline refresh (#302 — runs on hero installs via L3 Drive CSV sync)
-      if (customers.length > 0) {
-        const pipelineIntervalMs = intervals.pipeline * 60 * 1000
-        const pipelineElapsed = now - _pipelineLastRun
-        if (pipelineElapsed >= pipelineIntervalMs) {
-          console.log(`[refresh] tick: Pipeline due (${Math.round(pipelineElapsed / 60_000)}m elapsed) — triggering`)
-          _pipelineLastRun = now
-          refreshPipeline().catch((e: any) => console.error('[refresh] Pipeline failed:', e?.message ?? e))
         }
       }
 
@@ -1469,239 +1445,5 @@ export function initBackgroundScheduler(opts: {
   process.on('SIGINT',  shutdown)
 }
 
-// ── Product Intelligence weekly refresh — Sunday 6am ET (Wave 4) ─────────────
-// Bun's setInterval is unreliable for intervals > ~1h (ADR-007).
-// Uses setTimeout + reschedule loop (container-safe).
-
-function nextEtSunday6amUtc(now?: Date): Date {
-  const base = now ?? new Date()
-  // Determine ET offset: UTC-5 (EST) or UTC-4 (EDT)
-  const etOffsetMin = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    timeZoneName: 'shortOffset',
-  })
-    .formatToParts(base)
-    .find(p => p.type === 'timeZoneName')
-    ?.value?.replace('GMT', '') ?? '-5'
-  const offsetHours = parseInt(etOffsetMin, 10) || -5
-  const offsetMs    = offsetHours * 60 * 60 * 1000
-
-  // Target: next Sunday at 06:00 ET
-  const candidate = new Date(base)
-  // Find next Sunday
-  const dayOfWeek = candidate.getUTCDay() - (offsetHours < 0 ? 0 : 0)
-  const daysUntilSunday = ((7 - candidate.getDay()) % 7) || 7
-  candidate.setUTCDate(candidate.getUTCDate() + daysUntilSunday)
-  // Set to 06:00 ET = 06:00 - offsetHours UTC
-  candidate.setUTCHours(6 - offsetHours, 0, 0, 0)
-  // If already past, add 7 days
-  if (candidate <= base) candidate.setUTCDate(candidate.getUTCDate() + 7)
-  return candidate
-}
-
-export function scheduleProductIntelRefresh(): void {
-  const msUntil = nextEtSunday6amUtc().getTime() - Date.now()
-  const hUntil  = Math.round(msUntil / 3_600_000)
-  console.log(`[product-intel] next weekly refresh in ${hUntil}h (Sunday 6:00am ET)`)
-
-  setTimeout(async () => {
-    console.log('[product-intel] weekly refresh started')
-    try {
-      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
-      const module = FeatureModuleRegistry.get('product-intel')
-      if (module) {
-        await module.fetch('_global')
-        FeatureModuleRegistry.recordOutcome('product-intel', { success: true })
-        console.log('[product-intel] weekly refresh completed')
-      } else {
-        console.error('[product-intel] module not registered')
-        throw new Error('product-intel module not found in registry')
-      }
-
-      // Regenerate per-customer product intel after features are fresh
-      try {
-        const { buildCustomerIntelContext, generateCustomerProductIntel } = await import('./customer-product-intel.ts')
-        const { toSlug: slugify } = await import('./cache-layer.ts')
-        const { loadProductConfig, getCachedSummary } = await import('./product-release-radar.ts')
-        const { _generatingKeys } = await import('./product-intel-routes.ts') as any
-        const { getCachedDriveCorpus } = await import('./product-drive-ingest.ts')
-
-        const productConfigs = loadProductConfig()
-        console.log(`[product-intel] weekly customer intel refresh: ${customers.length} customers x ${productConfigs.length} products`)
-
-        for (const customer of customers) {
-          const customerSlug = slugify(customer.name)
-          try {
-            const ctx = await buildCustomerIntelContext(customerSlug)
-            for (const product of productConfigs) {
-              const summary = getCachedSummary(product.slug)
-              if (!summary) continue  // skip products with no cached summary
-              const mutexKey = `intel:${product.slug}:${customerSlug}`
-              if (_generatingKeys && _generatingKeys.has(mutexKey)) continue  // skip if already generating
-              if (_generatingKeys) _generatingKeys.add(mutexKey)
-              try {
-                const corpus = getCachedDriveCorpus(product.slug)
-                const slidesText = corpus ? corpus.files.map((f: any) => f.textContent).join('\n\n') : ''
-                const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(product.slug)
-                await generateCustomerProductIntel({
-                  slug: product.slug,
-                  productSummary: summary,
-                  slidesText,
-                  customerName: ctx.customerName,
-                  subscriptions: ctx.subscriptions,
-                  supportCases: ctx.supportCases,
-                  customerDocsText: ctx.customerDocsText,
-                  customerDocsHash: ctx.customerDocsHash,
-                  opportunityNote: ctx.opportunityNote,
-                  productFeatures,
-                  productFeaturesHash,
-                })
-              } finally {
-                if (_generatingKeys) _generatingKeys.delete(mutexKey)
-              }
-              await new Promise(r => setTimeout(r, 3000))  // 3s between Gemini calls
-            }
-          } catch (e: any) {
-            console.error(`[product-intel] weekly customer intel refresh failed for ${customer.name}:`, e?.message)
-          }
-        }
-        console.log('[product-intel] weekly customer intel refresh completed')
-      } catch (intelErr: any) {
-        console.error('[product-intel] weekly customer intel refresh failed:', intelErr?.message ?? intelErr)
-      }
-    } catch (e: any) {
-      console.error('[product-intel] weekly refresh failed:', e?.message ?? e)
-    }
-    scheduleProductIntelRefresh()  // reschedule for next Sunday
-  }, msUntil)
-}
-
-// ── News Radar daily refresh at 5:30am ET (Issue #153) ───────────────────────
-
-export function scheduleNewsRadarRefresh(): void {
-  const msUntil = nextEt530amUtc().getTime() - Date.now()
-  console.log(`[news-radar] next refresh in ${Math.round(msUntil / 60_000)}m (5:30am ET)`)
-  setTimeout(async () => {
-    try {
-      const { customers: currentCustomers } = await import('./server-state.ts')
-      if (!currentCustomers || currentCustomers.length === 0) {
-        console.log('[news-radar] no customers configured — skipping')
-        scheduleNewsRadarRefresh()
-        return
-      }
-
-      console.log(`[news-radar] starting daily news refresh for ${currentCustomers.length} customers`)
-
-      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
-      const newsModule = FeatureModuleRegistry.get('news-radar')
-
-      if (!newsModule) {
-        console.warn('[news-radar] news-radar module not registered — skipping')
-        scheduleNewsRadarRefresh()
-        return
-      }
-
-      let successCount = 0
-      let errorCount = 0
-
-      for (const customer of currentCustomers) {
-        try {
-          await newsModule.fetch(customer.name)
-          successCount++
-          console.log(`[news-radar] refreshed news for ${customer.name}`)
-        } catch (e: any) {
-          errorCount++
-          console.error(`[news-radar] failed to refresh news for ${customer.name}:`, e?.message ?? e)
-        }
-        await new Promise(r => setTimeout(r, 3000))
-      }
-
-      console.log(`[news-radar] daily refresh complete: ${successCount} succeeded, ${errorCount} failed`)
-    } catch (e: any) {
-      console.error('[news-radar] daily refresh error:', e?.message ?? e)
-    }
-    scheduleNewsRadarRefresh()
-  }, msUntil)
-}
-
-// ── Product Lifecycle weekly refresh at Sunday 6am ET (GitHub #197) ──────────
-
-export function scheduleProductLifecycleRefresh(): void {
-  const msUntil = nextEtSunday6amUtc().getTime() - Date.now()
-  const hUntil = Math.round(msUntil / 3_600_000)
-  console.log(`[product-lifecycle] next refresh in ${hUntil}h (Sunday 6:00am ET)`)
-
-  setTimeout(async () => {
-    console.log('[product-lifecycle] weekly refresh started')
-    try {
-      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
-      const lifecycleModule = FeatureModuleRegistry.get('product-lifecycle')
-
-      if (!lifecycleModule) {
-        console.warn('[product-lifecycle] product-lifecycle module not registered — skipping')
-        scheduleProductLifecycleRefresh()
-        return
-      }
-
-      await lifecycleModule.fetch('')  // Product lifecycle is global, not customer-specific
-      console.log('[product-lifecycle] weekly refresh completed')
-    } catch (e: any) {
-      console.error('[product-lifecycle] weekly refresh error:', e?.message ?? e)
-    }
-    scheduleProductLifecycleRefresh()  // reschedule for next Sunday
-  }, msUntil)
-}
-
-// ── RSS Feed refresh every 4 hours (GitHub #174) ─────────────────────────────
-
-export function scheduleRSSRefresh(): void {
-  const REFRESH_INTERVAL = 4 * 60 * 60 * 1000  // 4 hours
-  console.log(`[rh-rss] next refresh in ${Math.round(REFRESH_INTERVAL / 60_000)}m (4 hours)`)
-
-  setTimeout(async () => {
-    console.log('[rh-rss] scheduled refresh started')
-    try {
-      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
-      const rssModule = FeatureModuleRegistry.get('rh-rss')
-
-      if (!rssModule) {
-        console.warn('[rh-rss] rh-rss module not registered — skipping')
-        scheduleRSSRefresh()
-        return
-      }
-
-      await rssModule.fetch('')  // RSS is global, not customer-specific
-      console.log('[rh-rss] scheduled refresh completed')
-    } catch (e: any) {
-      console.error('[rh-rss] scheduled refresh error:', e?.message ?? e)
-    }
-    scheduleRSSRefresh()  // reschedule for next 4 hours
-  }, REFRESH_INTERVAL)
-}
-
-// ── Events refresh every 7 days (GitHub #202) ─────────────────────────────────
-
-export function scheduleEventsRefresh(): void {
-  const REFRESH_INTERVAL = 7 * 24 * 60 * 60 * 1000  // 7 days
-  console.log(`[rh-events] next refresh in ${Math.round(REFRESH_INTERVAL / (24 * 60_000))} days (weekly)`)
-
-  setTimeout(async () => {
-    console.log('[rh-events] scheduled refresh started')
-    try {
-      const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
-      const eventsModule = FeatureModuleRegistry.get('rh-events')
-
-      if (!eventsModule) {
-        console.warn('[rh-events] rh-events module not registered — skipping')
-        scheduleEventsRefresh()
-        return
-      }
-
-      await eventsModule.fetch('')  // Events are global, not customer-specific
-      console.log('[rh-events] scheduled refresh completed')
-    } catch (e: any) {
-      console.error('[rh-events] scheduled refresh error:', e?.message ?? e)
-    }
-    scheduleEventsRefresh()  // reschedule for next 7 days
-  }, REFRESH_INTERVAL)
-}
+// Phase 2 feature module schedules migrated to schedulerRegistry (ADR-028).
+// See registrations in initBackgroundScheduler() below.

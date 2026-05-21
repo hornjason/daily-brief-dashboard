@@ -5,8 +5,8 @@
 import { readFileSync } from 'fs'
 import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
+import { CONFIG_DIR } from './lib/paths.ts'
 
-const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const HISTORY_PATH = resolve(CONFIG_DIR, 'bootstrap-history.json')
 
 export interface BootstrapRun {

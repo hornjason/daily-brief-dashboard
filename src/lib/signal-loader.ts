@@ -1,6 +1,7 @@
 // src/lib/signal-loader.ts
 // GitHub Issue #171 — Universal signal loading for content generation
 // Combines registry signal collection + legacy cache fallback
+// GitHub Issue #328 — Universal pre-flight signal refresh
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
 
@@ -27,6 +28,62 @@ export interface SignalLoadResult {
   registrySignals: Signal[]  // Flat array from collectAllSignals()
   loaded: string[]
   missing: string[]
+  refreshResult?: { refreshed: string[]; skipped: string[]; failed: string[] }
+}
+
+// ── Pre-flight signal refresh ────────────────────────────────────────────────
+
+/**
+ * Ensure all signal sources are current before content generation.
+ * Calls ensureFresh() on all registered modules that implement it.
+ * Runs all refreshes in parallel with a 30-second timeout.
+ * Fail-open: errors are logged but don't block.
+ * GitHub Issue #328
+ */
+export async function ensureSignalsCurrent(
+  customerSlug: string,
+  customerName?: string
+): Promise<{ refreshed: string[]; skipped: string[]; failed: string[] }> {
+  const MAX_WAIT_MS = 30_000
+  const refreshed: string[] = []
+  const skipped: string[] = []
+  const failed: string[] = []
+
+  const modules = FeatureModuleRegistry.getRegisteredModules()
+  const promises: Promise<void>[] = []
+
+  for (const module of modules) {
+    if (!module.ensureFresh) {
+      skipped.push(module.name)
+      continue
+    }
+
+    promises.push(
+      module.ensureFresh(customerSlug)
+        .then(() => {
+          refreshed.push(module.name)
+          console.log(`[signal-preflight] ${module.name} refreshed for ${customerSlug}`)
+        })
+        .catch((e: any) => {
+          console.warn(`[signal-preflight] ${module.name} failed for ${customerSlug}:`, e?.message ?? e)
+          failed.push(module.name)
+        })
+    )
+  }
+
+  if (promises.length > 0) {
+    const startTime = performance.now()
+    await Promise.race([
+      Promise.allSettled(promises),
+      new Promise(r => setTimeout(r, MAX_WAIT_MS)),
+    ])
+    const elapsed = performance.now() - startTime
+    console.log(
+      `[signal-preflight] ensureSignalsCurrent for ${customerSlug}: ${refreshed.length} refreshed, ${skipped.length} skipped, ${failed.length} failed (${elapsed.toFixed(0)}ms)`
+    )
+  }
+
+  return { refreshed, skipped, failed }
 }
 
 // ── Signal loading ───────────────────────────────────────────────────────────
@@ -40,12 +97,30 @@ export interface SignalLoadResult {
  *
  * Returns signals in the registry format plus empty legacy signals object for backward compatibility.
  * Missing sources are logged but don't block generation.
+ *
+ * GitHub Issue #328: When options.ensureFresh is true, calls ensureSignalsCurrent() before
+ * collecting signals to ensure all sources are current.
  */
-export async function loadCustomerSignals(customerSlug: string, customerName?: string): Promise<SignalLoadResult> {
+export async function loadCustomerSignals(
+  customerSlug: string,
+  customerName?: string,
+  options?: { ensureFresh?: boolean }
+): Promise<SignalLoadResult> {
   const signals: CustomerSignals = {}  // Empty — deprecated, consumers should use registrySignals
   const loaded: string[] = []
   const missing: string[] = []
   let registrySignals: Signal[] = []
+  let refreshResult: { refreshed: string[]; skipped: string[]; failed: string[] } | undefined
+
+  // Pre-flight refresh if requested
+  if (options?.ensureFresh) {
+    try {
+      refreshResult = await ensureSignalsCurrent(customerSlug, customerName)
+    } catch (e: any) {
+      console.warn(`[signal-loader] Pre-flight refresh failed for ${customerSlug}:`, e.message)
+      // Continue to signal collection even if refresh failed (fail-open)
+    }
+  }
 
   // Collect signals from all registered modules (single path)
   try {
@@ -53,7 +128,7 @@ export async function loadCustomerSignals(customerSlug: string, customerName?: s
   } catch (e: any) {
     console.warn(`[signal-loader] Registry collection failed for ${customerSlug}:`, e.message)
     // Return empty result on registry failure — don't block generation
-    return { signals, registrySignals: [], loaded, missing }
+    return { signals, registrySignals: [], loaded, missing, refreshResult }
   }
 
   // Build loaded/missing lists from registry signals
@@ -73,5 +148,5 @@ export async function loadCustomerSignals(customerSlug: string, customerName?: s
   // For now, missing will be empty unless we add that capability to the registry
 
   console.log(`[signal-loader] Signal stack for ${customerSlug}: loaded=[${loaded.join(',')}] missing=[${missing.join(',')}] registry=${registrySignals.length}`)
-  return { signals, registrySignals, loaded, missing }
+  return { signals, registrySignals, loaded, missing, refreshResult }
 }

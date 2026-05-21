@@ -5,7 +5,7 @@
 // Tier 2: Gemini grounded search for proprietary/customer-specific tech.
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, statSync } from 'fs'
 import { resolve } from 'path'
 import { createHash } from 'crypto'
 import { toSlug } from '../cache-layer.ts'
@@ -19,6 +19,7 @@ import { sanitizeErr } from '../utils.ts'
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const CONFIG_DIR = process.env.CONFIG_DIR ?? 'config'
 const TECH_CACHE_DIR = resolve(CACHE_DIR, 'tech-stack')
+const TECH_STACK_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
 // Ensure cache directory exists
 if (!existsSync(TECH_CACHE_DIR)) {
@@ -367,6 +368,28 @@ FeatureModuleRegistry.register({
   refreshInterval: 7 * 24 * 60 * 60 * 1000, // weekly
 
   cachePaths: (slug: string) => [`data/cache/tech-stack/${slug}.json`],
+
+  cacheTtlMs: TECH_STACK_TTL_MS,
+
+  async ensureFresh(customerSlug: string): Promise<void> {
+    const cachePath = resolve(TECH_CACHE_DIR, `${customerSlug}.json`)
+
+    // Check if cache exists and is fresh
+    try {
+      const stat = statSync(cachePath)
+      if (Date.now() - stat.mtimeMs < TECH_STACK_TTL_MS) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+
+    // Stale or missing — resolve customer and refresh
+    const { customers } = await import('../server-state.ts')
+    const customer = customers.find((c: any) => toSlug(c.name) === customerSlug)
+    if (!customer) {
+      console.warn(`[tech-stack-module] ensureFresh: customer not found for slug ${customerSlug}`)
+      return
+    }
+
+    await this.syncNow(customer.name)
+  },
 
   async signals(customerSlug: string): Promise<Signal[]> {
     const cached = readExistingTechCache(customerSlug)

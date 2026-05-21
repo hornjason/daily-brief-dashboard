@@ -14,8 +14,9 @@ The dashboard is a personal AE intelligence tool that aggregates customer data f
 ### Data tiers
 
 **L4 data**:
-Live data scraped directly from source systems (CCSP, Salesforce). Only produced by the primary node. Requires authenticated browser sessions.
+Live data scraped directly from source systems via browser automation (Tableau CCSP, Salesforce Lightning). Only produced by the primary node (Mac Mini, `Dockerfile.l4`). Requires authenticated Playwright browser sessions.
 _Avoid_: "raw data", "live scrape", "scraped data"
+_Note_: RH Portal cases are NOT L4 data. On the hero install, cases use Bearer token auth (`REDHAT_OFFLINE_TOKEN` → Hydra SOLR API, pure HTTP, no browser). The browser path is retained as disaster recovery only (`RH_CASES_TRANSPORT=browser`).
 
 **L3 data** (also: L3 cache):
 A Google Drive shared folder that holds a daily snapshot of L4 data (CCSP bookings, SF pipeline). The source of truth for all non-primary nodes. Updated once per day by the L3 sync daemon running on the primary node.
@@ -313,6 +314,16 @@ The dashboard targets desktop browsers only. Mobile/tablet responsiveness is a f
 
 **Visual design pass**:
 Part of the nav architecture work — Aditi reviews colors, typography, spacing, and component consistency to ensure enterprise-grade visual quality across all module pages and shared components.
+
+### Admin page architecture
+
+**System Health Dashboard**:
+The admin page is a single unified surface for understanding system state. Organized into panels by concern: System Overview (compliance score, scheduled tasks, data freshness summary), Operations (scraper status, cache management, Gemini usage), and Settings (AI config, scheduler config, region access). Every panel follows the same visual language: status dots (green/yellow/red circles), refresh buttons (RefreshCw icon), progress indicators (progress bar for batch, pulsing dot for indeterminate), and relative timestamps (formatRelTime).
+_Avoid_: "admin dashboard" (too generic — say "System Health Dashboard"), scattering the same data across multiple pages
+
+**Operational status indicator**:
+A consistent 3-color circle icon used everywhere that shows entity health: green (healthy/fresh/idle), yellow (stale/warning/running), red (error/critical/failed). Gray for unknown/not-configured. Always a filled Circle component from lucide-react, never text checkmarks or colored text.
+_Avoid_: mixing status indicator patterns — never use ✓/✗ text, colored text labels, or ad-hoc badge styles
 
 ## Flagged ambiguities
 

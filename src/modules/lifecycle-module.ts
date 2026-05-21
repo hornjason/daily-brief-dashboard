@@ -4,10 +4,11 @@
 
 import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { fetchProductLifecycle, readProductLifecycleCache } from '../product-lifecycle.ts'
-import { existsSync, unlinkSync } from 'fs'
+import { existsSync, unlinkSync, statSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'product-lifecycle.json')
+const LIFECYCLE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
 FeatureModuleRegistry.register({
   name: 'product-lifecycle',
@@ -26,7 +27,20 @@ FeatureModuleRegistry.register({
 
   cachePaths: () => ['data/cache/product-lifecycle.json'],
 
+  cacheTtlMs: LIFECYCLE_TTL_MS,
+
   refreshInterval: 7 * 24 * 60 * 60 * 1000,  // weekly
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // Portfolio-wide cache — check single file
+    try {
+      const stat = statSync(CACHE_PATH)
+      if (Date.now() - stat.mtimeMs < LIFECYCLE_TTL_MS) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+
+    // Stale or missing — refresh
+    await fetchProductLifecycle()
+  },
 
   async fetch(_customerName: string): Promise<void> {
     // Product lifecycle is global, not customer-specific

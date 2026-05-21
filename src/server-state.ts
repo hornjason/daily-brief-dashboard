@@ -4,10 +4,11 @@ import { writeJsonAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { mergeCustomers, readExistingCustomers } from './customer-merge.ts'
 import { backupNow } from './backup-config.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
 // ── Path constants ──────────────────────────────────────────────────────────
 
-export const CONFIG_DIR_PATH: string = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+export const CONFIG_DIR_PATH: string = CONFIG_DIR
 export const AES_PATH: string = resolve(CONFIG_DIR_PATH, 'aes.json')
 export const CUSTOMERS_PATH: string = resolve(CONFIG_DIR_PATH, 'customers.json')
 

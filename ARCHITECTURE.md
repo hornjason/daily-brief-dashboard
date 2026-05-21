@@ -797,35 +797,70 @@ The 15-minute heartbeat tick in `src/background-scheduler.ts` includes a lightwe
 
 ---
 
-## §11. Data Refresh Architecture — Two-Stage Pipeline
+## §11. Data Refresh Architecture — Hero vs L4 Daemon
 
-There are two completely separate operations that are both loosely called "refresh." Understanding the distinction is critical to knowing what's stale and what's not.
+Two deployment targets with distinct data responsibilities. Understanding which data layer each operates on is critical.
 
-### Stage 1 — Scrape: source system → Google Sheets
+### Hero install (NODE_ROLE unset) — L3 reader + RH cases
 
-Scrapers go out to live external systems and write new data into Google Sheets. This is the only stage that generates new data.
+The hero install reads pre-populated data from Google Drive (L3) and fetches RH cases via Bearer token — **no Playwright browser required**.
 
-| Scraper | Source | Writes to | Automatic timer? | Configurable? |
+| Data Source | Method | Writes to | Timer | Notes |
 |---|---|---|---|---|
-| RH cases | RH Portal (Playwright) | Local cases cache (`rh-cases.json`) | Yes — 15-min tick, runs when elapsed > `rhScrape` interval | Yes — `rhScrape` in data-sources.json (default: 240 min) |
-| Supportable | Supportable 360 (Playwright, VPN) | Google Sheets per AE | **No** — bootstrap only | N/A |
-| CCSP | Tableau (Playwright) | Google Sheets per AE | **No** — bootstrap only | N/A |
-| SF pipeline | Salesforce report (Playwright) | Google Sheets per AE | **No** — manual trigger or on SF login | N/A |
+| **RH cases** | `REDHAT_OFFLINE_TOKEN` → Bearer token → Hydra SOLR API (pure HTTP) | `data/cache/cases.json` | 15-min heartbeat tick | **No browser** — uses offline token exchange (ADR-014). `RH_CASES_TRANSPORT` defaults to `'bearer'`. Browser path retained as disaster recovery only (`RH_CASES_TRANSPORT=browser`). |
+| **CCSP** | Google Drive API → CSV discovery (ADR-019) | `data/cache/ccsp-data.json` | Interval timer (default 24h) | **L3 read** — reads CSVs written by L4 daemon. No browser needed. |
+| **Pipeline** | Google Drive API → CSV discovery (ADR-019) | `data/cache/pipeline-data.json` | Daily at 2am ET | **L3 read** — reads CSVs written by L4 daemon. No browser needed. |
+| **Subscriptions** | Google Sheets API → SF Bookings sheet | `data/cache/sheet-cache-*.json` | Interval timer (default 240 min) | **L3 read** — reads sheets populated by bootstrap. No browser needed. |
 
-**Gap:** Supportable and CCSP sheets are only populated once — during the initial bootstrap. They are never automatically re-scraped after that. The Google Sheet data ages indefinitely until bootstrap is re-run or a manual scrape is triggered via the bootstrap API endpoints (`POST /api/bootstrap/supportable`, `POST /api/bootstrap/ccsp`). This is a known limitation, not a bug — the scrapers require Playwright sessions that may require VPN or Tableau login, making fully automated re-scrape impractical without session management improvements.
+**Supportable is permanently disabled** (`SUPPORTABLE_DISABLED=true`). Account number discovery uses SOLR name search via Bearer token (hero) or RH Portal sidebar autocomplete via Playwright (primary node only).
 
-### Stage 2 — Refresh: Google Sheets → local JSON cache
+### L4 daemon (NODE_ROLE=primary, Mac Mini) — browser-based scrapers
 
-Refresh functions read from already-populated Google Sheets and update the local `data/cache/` JSON files. The dashboard reads from cache only — it never calls Google APIs directly.
+The L4 daemon runs browser-based scrapers that write to the L3 shared Drive folder. Built with `Dockerfile.l4`, separate image from the hero install.
 
-| Function | Reads from | Writes to | Timer | Configurable? | Drive-change check? |
-|---|---|---|---|---|---|
-| `refreshSubscriptions()` | Supportable sheet (Sheets API) | `data/cache/sheet-cache-*.json` | Yes — interval timer | Yes — `subscriptions` in data-sources.json (default: 240 min) | Yes — skips if sheet unchanged |
-| `refreshCCSP()` | CCSP sheet (Sheets API) | `data/cache/ccsp-data.json` | Yes — interval timer | Yes — `ccsp` in data-sources.json (default: 1440 min / 24h) | Yes — skips if sheet unchanged |
-| `refreshPipeline()` | Pipeline sheet (Sheets API) | `data/cache/pipeline-data.json` | Yes — daily at 2am ET | **No** — hardcoded daily | Yes — skips if sheet unchanged |
-| `refreshAll()` | Both subscriptions + CCSP | Both caches | On startup + `/api/refresh` | N/A | Via above functions |
+| Scraper | Source | Writes to | Notes |
+|---|---|---|---|
+| **CCSP/Tableau** | Tableau (Playwright browser) | L3 shared Drive folder (CSV) | Requires Tableau SSO login |
+| **SF Pipeline** | Salesforce Lightning (Playwright browser) | L3 shared Drive folder (CSV) | Requires SF OAuth session |
 
-`refreshAll()` is called on server startup (if customers exist) and via `POST /api/refresh`. It does **not** include pipeline.
+The L4 daemon writes CSVs to Drive → the hero install's `refreshCCSP()` and `refreshPipeline()` read those CSVs via Drive API.
+
+### Scraper queue (hero + primary)
+
+`src/scraper-queue.ts` serializes operations that share browser context or session state. On the hero install with bearer transport, the queue primarily serializes account number discovery and SF pipeline sync. On the primary node, it also serializes CCSP/Tableau and Supportable browser scrapes. The queue exists in both images for the `flushScrapersAfterAuth()` post-authentication path.
+
+## §27. Service Module Pattern (#334, 2026-05-20)
+
+All 5 major route files have been extracted into service modules. Route files are thin HTTP adapters; services contain pure domain logic with zero Hono imports.
+
+| Route file | Lines | Service file | Lines |
+|---|---|---|---|
+| `campaigns-routes.ts` | 211 | `campaign-service.ts` | 627 |
+| `meeting-prep-routes.ts` | 174 | `meeting-prep-service.ts` | 1190 |
+| `dashboard-routes.ts` | 193 | `dashboard-service.ts` | 1313 |
+| `customer-routes.ts` | 796 | `customer-service.ts` | 668 |
+| `product-intel-routes.ts` | 361 | `product-intel-service.ts` | 740 |
+
+**Pattern:** Route handler = parse request → call service → return c.json(result). Service = pure business logic, independently testable, zero framework dependency.
+
+**Adding new endpoints:** Create the domain function in the service module, then add a thin route handler.
+
+## §28. Scheduler Registry (ADR-028, 2026-05-20)
+
+`src/scheduler-registry.ts` — centralized scheduler with 4 schedule types (daily, weekly, interval, heartbeat). Modules register their schedule; the registry owns setTimeout lifecycle and status tracking.
+
+Admin endpoint: `GET /api/admin/scheduler-status` — shows all scheduled tasks, next run time, last success/failure.
+
+Phase 1 (infrastructure) shipped. Phases 2-5 (migrating existing schedule functions) in future sessions. See `docs/adr/ADR-028-unified-scheduler-registry.md`.
+
+### Refresh functions (hero install, L3 → L2)
+
+| Function | Reads from | Writes to | Timer | Configurable? |
+|---|---|---|---|---|
+| `refreshSubscriptions()` | SF Bookings sheet (Sheets API) | `data/cache/sheet-cache-*.json` | Interval | Yes — `subscriptions` in data-sources.json |
+| `refreshCCSP()` | L3 CSV files (Drive API, ADR-019) | `data/cache/ccsp-data.json` | Interval | Yes — `ccsp` in data-sources.json |
+| `refreshPipeline()` | L3 CSV files (Drive API, ADR-019) | `data/cache/pipeline-data.json` | Daily 2am ET | No — hardcoded daily |
+| `refreshAll()` | Subscriptions + CCSP | Both caches | Startup + `/api/refresh` | N/A |
 
 ### How to configure intervals
 
@@ -1540,3 +1575,111 @@ Full spec: `docs/adr/ADR-027-universal-signal-scoring-contract.md`. Design princ
 Signals with `hasCloudSpend: true` and `acvPlus > 0` score Critical (customer has active spend on that hyperscaler + marketplace offering available). Programs have `rawRelevance: 0.8` (directly actionable), incentives `0.75`, offerings `0.7`.
 
 Refresh: `POST /api/refresh/cloud-marketplace`. Budget cap: 10 signals per customer. Auto-discovered in Data Freshness dashboard.
+
+## §24. Signal Template Engine (#326, 2026-05-20)
+
+`src/lib/signal-templates.ts` — shared deterministic template engine for all signal consumers. Replaces per-consumer inline signal formatting with a centralized module.
+
+Signals arrive already scored from the registry (§22). The template engine ONLY formats — no scoring, no Gemini calls. Returns:
+- **`deterministic`** — structured markdown sections (product alignment, cloud marketplace, renewals, cases, tech stack, key relationships)
+- **`narrativeContext`** — top N signals formatted for Gemini prompts (format varies by consumer)
+
+### Signal routing
+
+Signals auto-route to sections by metadata keys (priority order):
+1. `hasCloudSpend` or `provider` → Cloud Marketplace
+2. `severity` or `caseNumber` → Cases
+3. `renewal` or `stage + closeDate` → Renewals
+4. `infrastructure` or `confidence + context(eval/migrate)` → Tech Stack
+5. `redHatProducts` or `product` → Product Alignment
+6. Fallback: source name
+
+### Consumer integration
+
+| Consumer | File | Format | Uses deterministic? | maxNarrative |
+|----------|------|--------|---------------------|-------------|
+| Playbook | `playbook-generator.ts` | `playbook` | Yes | 40 |
+| Brief | `brief-pipeline.ts` | `brief` | No | 10 |
+| Campaign | `campaigns-routes.ts` | `campaign` | No | 20 |
+| Meeting Prep | `meeting-prep-routes.ts` | `meeting-prep` | Yes | 20 |
+
+Adding new template sections: add function + routing case in `routeSignal()` + wire into `templateAll()`. All consumers auto-receive. Design principles: `PRINCIPLES.md`. Full design: GitHub issue #326.
+
+## §25. Pre-flight Signal Refresh (#328, 2026-05-20)
+
+Universal auto-discovery signal refresh before content generation. When any consumer calls `loadCustomerSignals(slug, name, { ensureFresh: true })`, ALL registered modules that implement `ensureFresh()` refresh their data before signals are collected.
+
+### Architecture
+
+The `FeatureModule` interface has two optional fields:
+```typescript
+ensureFresh?: (customerSlug: string) => Promise<void>  // refresh stale data
+cacheTtlMs?: number                                     // how long data is fresh
+```
+
+`ensureSignalsCurrent()` in `signal-loader.ts`:
+1. Gets ALL registered modules from `FeatureModuleRegistry.getRegisteredModules()`
+2. Calls `ensureFresh()` on every module that implements it
+3. Runs all refreshes in parallel (`Promise.allSettled`)
+4. 30-second timeout — anything not done is abandoned
+5. Fail-open — refresh failures don't block generation
+6. Returns `{ refreshed, skipped, failed }` for logging
+
+### Auto-discovery contract
+
+New modules automatically participate by implementing `ensureFresh()`. No hardcoded source list. No consumer changes needed. The registry is the single source of truth for what gets refreshed.
+
+### Current implementations
+
+| Module | TTL | Refresh action |
+|--------|-----|---------------|
+| emails | 4h | `fetchCustomerEmails()` |
+| account-plan | 7d | `generateAndSaveAccountPlan()` |
+| intelligence | 14d | `runIntelligencePipeline()` |
+
+### Consumer integration
+
+All 4 consumers pass `{ ensureFresh: true }`:
+- `playbook-generator.ts` → `loadCustomerSignals(slug, name, { ensureFresh: true })`
+- `customer.ts` (brief generation) → `ensureSignalsCurrent()` before `collectAllSignals()`
+- `campaigns-routes.ts` → `loadCustomerSignals(slug, name, { ensureFresh: true })`
+- `meeting-prep-routes.ts` → `loadCustomerSignals(slug, name, { ensureFresh: true })`
+
+Page-load and display endpoints use default `ensureFresh: false` — they read current state without triggering refresh.
+
+### Adding pre-flight to a new module
+
+1. Add `ensureFresh(customerSlug)` to your module — check cache freshness, refresh if stale
+2. Add `cacheTtlMs` to your module — how long your data is considered fresh
+3. Done. `loadCustomerSignals({ ensureFresh: true })` will call your `ensureFresh()` automatically.
+
+## §26. Architecture Compliance Gate (#329, 2026-05-20)
+
+Two-layer enforcement of the three-layer architecture (scoring → templates → thin consumers).
+
+### Build-time gate
+
+`test/unit/architecture-compliance.test.ts` runs with `bun test` and checks:
+- **No hardcoded scores:** Module files must use `rawRelevance`, never `score:` directly
+- **Consumer template usage:** All consumer files must import from `signal-templates.ts`
+- **Consumer pre-flight:** All consumers must use `loadCustomerSignals({ ensureFresh: true })` or `ensureSignalsCurrent()`
+- **Module coverage report:** Advisory listing of modules with `signals()` but missing `ensureFresh`/`cacheTtlMs`
+
+All checks use auto-discovery from the registry and file system — no hardcoded lists. New modules and consumers are automatically checked.
+
+### Runtime compliance
+
+`GET /api/modules/compliance` returns:
+```json
+{
+  "totalModules": 21,
+  "signalProducers": 18,
+  "withEnsureFresh": 3,
+  "compliant": ["emails", "intelligence", "account-plan"],
+  "advisory": ["news-radar", "cases", ...],
+  "exempt": ["campaigns", "tools", "meeting-prep"],
+  "score": 17
+}
+```
+
+Admin page Feature Modules section shows compliance warnings per module.

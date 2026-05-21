@@ -1,8 +1,9 @@
 import { google } from 'googleapis'
 import { resolve } from 'path'
 import { makeAuth } from './google.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
-const CONFIG_DIR_PATH   = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+const CONFIG_DIR_PATH   = CONFIG_DIR
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
 
 export interface PipelineRecord {

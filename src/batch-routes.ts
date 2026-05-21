@@ -14,7 +14,7 @@ import { customers } from './server-state.ts'
 import { FeatureModuleRegistry } from './feature-module-registry.ts'
 import { toSlug } from './cache-layer.ts'
 import { sanitizeErr } from './utils.ts'
-import { generateCampaign, type CampaignRequest } from './campaigns-routes.ts'
+import { generateCampaign, type CampaignRequest } from './campaign-service.ts'
 import type { Customer } from './types.ts'
 
 // ── Types ─────────────────────────────────────────────────────────────────────

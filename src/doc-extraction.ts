@@ -6,9 +6,7 @@
 import { google } from 'googleapis'
 import { existsSync } from 'node:fs'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { fetchGeminiWithRetry } from './gemini-fetch.ts'
-import { getGeminiModelLite } from './ai-config.ts'
+import { callGemini } from './gemini-call.ts'
 import { readDocClassCache, writeDocClassCache } from './cache-layer.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -179,67 +177,20 @@ const EMPTY_CLASSIFICATION: DocClassification = {
 // ── Gemini structured call (replicated from customer.ts — not exported there) ─
 
 export async function callGeminiStructured(systemPrompt: string, userPrompt: string, responseSchema: object): Promise<any> {
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModelLite()  // BKL-AI-COST-01: doc classification is high-volume, use lite model
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set in .env — required for Gemini via Vertex AI')
-
-  async function getAccessToken(): Promise<string> {
-    let t: string | null | undefined
-    const saKeyB64 = process.env.GEMINI_SERVICE_ACCOUNT_KEY
-    if (saKeyB64) {
-      const keyData = JSON.parse(Buffer.from(saKeyB64, 'base64').toString())
-      const jwtAuth = new google.auth.JWT({
-        email: keyData.client_email,
-        key:   keyData.private_key,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-      })
-      t = (await jwtAuth.getAccessToken()).token
-    } else {
-      const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
-      t = (await auth.getAccessToken()).token
-    }
-    if (!t) throw new Error('Failed to get access token for Gemini — set GEMINI_SERVICE_ACCOUNT_KEY in .env')
-    return t
-  }
-
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 1024,
-      thinkingConfig: { thinkingBudget: 0 },
-      responseMimeType: 'application/json',
-      responseSchema,
-    },
-  })
-
-  // BKL-TEST-P0-04c: shared 429-retry helper. Exhausted retries throw
-  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
-  // canonical "Gemini API error NNN (project=... location=... model=...)"
-  // message with Bearer redaction.
-  const res = await fetchGeminiWithRetry(url, getAccessToken, requestBody, {
-    callType: 'doc-classify', customerName: 'unknown', model, project, location,
-    logPrefix: '[doc-extract] callGeminiStructured',
-  })
-
-  const json = await res.json() as any
-  // BKL-M52: record token usage for cost tracking
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
+  // BKL-AI-COST-01: doc classification is high-volume, use lite model
+  const result = await callGemini(
+    systemPrompt,
+    userPrompt,
+    {
       callType: 'doc-classify',
       customerName: 'unknown',
-      inputTokens:  usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-  return JSON.parse(text)
+      model: 'lite',
+      temperature: 0.7,
+      responseSchema,
+    }
+  )
+
+  return JSON.parse(result.text)
 }
 
 // ── Single document classification ───────────────────────────────────────────

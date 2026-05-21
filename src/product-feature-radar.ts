@@ -50,8 +50,9 @@ export interface ProductFeatureCache {
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
-const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../data')
-const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
+import { CACHE_DIR as BASE_CACHE_DIR, CONFIG_DIR } from './lib/paths.ts'
+
+const CACHE_DIR = resolve(BASE_CACHE_DIR, 'product-intel')
 
 function featureCachePath(slug: string): string {
   return resolve(CACHE_DIR, `${slug}-features.json`)
@@ -286,7 +287,6 @@ async function fetchLatestReleaseNotesContent(
 
 // ── Extraction ────────────────────────────────────────────────────────────────
 
-const CONFIG_DIR  = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const CONFIG_PATH = resolve(CONFIG_DIR, 'product-intel-config.json')
 
 export async function extractProductFeatures(slug: string): Promise<ProductFeatureCache | null> {

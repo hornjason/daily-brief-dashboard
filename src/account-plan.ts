@@ -24,10 +24,11 @@ import { recordGeminiUsage } from './gemini-cost-tracker.ts'
 import { toSlug } from './cache-layer.ts'
 import type { Customer } from './types.ts'
 import { getOperatorProfile } from './account-team.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
 
-const CONFIG_DIR_PATH  = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+const CONFIG_DIR_PATH  = CONFIG_DIR
 
 // ── In-app config path (inside container: /app/config/account-plan/) ─────────
 const APP_CONFIG_DIR = resolve(import.meta.dir, '../config/account-plan')

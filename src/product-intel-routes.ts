@@ -1,14 +1,12 @@
 /**
- * Product Intelligence Routes — Wave 4 Phase 1
+ * Product Intelligence Routes — HTTP Adapter
  *
- * REST API for product release radar data.
- * Separate from product-intelligence.ts (BKL-AI16 Q&A routes in customer-routes.ts).
+ * Thin HTTP layer over product-intel-service.ts domain logic.
+ * All business logic lives in the service module.
  */
 
 import { Hono } from 'hono'
-import { existsSync, readdirSync, readFileSync } from 'fs'
-import { resolve } from 'path'
-import { google } from 'googleapis'
+import { sanitizeErr } from './utils.ts'
 import {
   getAllProductSummaries,
   getCachedSummary,
@@ -17,64 +15,27 @@ import {
   getProductAlerts,
   acknowledgeAlert,
   loadProductConfig,
-  loadProductIntelConfig,
-  saveProductConfig,
-  getProductIntelParentFolderId,
-} from './product-release-radar.ts'
-import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
-import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
-import { callGemini } from './gemini-call.ts'
-import { readProductLifecycleCache } from './product-lifecycle.ts'
-import { refreshDriveCorpus, getCachedDriveCorpus } from './product-drive-ingest.ts'
-import { getFeatureCache, extractProductFeatures, enrichFeatures, refreshAllFeatures, isAllowedUrl } from './product-feature-radar.ts'
-import {
+  setupDriveFolders,
+  ingestSlides,
+  getSlidesStatus,
+  _allCustomersBatchState,
+  startAllCustomersBatch,
+  generateAllProductsForCustomer,
+  generateSingleProductIntel,
   getCachedCustomerProductIntel,
-  generateCustomerProductIntel,
-  buildCustomerIntelContext,
-} from './customer-product-intel.ts'
-import { toSlug } from './cache-layer.ts'
-import { FeatureModuleRegistry } from './feature-module-registry.ts'
-import { customers } from './server-state.ts'
-import { getValueMap } from './value-map-loader.ts'
-
-// ── BKL-W5-RK-F1: Startup assertion that CACHE_DIR resolves within DATA_DIR ──
-// Only fires when both env vars are explicitly set (not defaulted). If an operator
-// explicitly configures both DATA_DIR and CACHE_DIR but points CACHE_DIR outside
-// DATA_DIR, that's a misconfiguration worth catching at startup.
-if (process.env.DATA_DIR && process.env.CACHE_DIR) {
-  const _resolvedData  = resolve(process.env.DATA_DIR)
-  const _resolvedCache = resolve(process.env.CACHE_DIR)
-  if (!_resolvedCache.startsWith(_resolvedData + '/') && _resolvedCache !== _resolvedData) {
-    throw new Error(
-      `[product-intel-routes] CACHE_DIR (${_resolvedCache}) must resolve within DATA_DIR (${_resolvedData}). ` +
-      `Refusing to start with misconfigured path env vars.`
-    )
-  }
-}
+  generateWhatsNew,
+  getAllFeatureCaches,
+  refreshAllProductFeatures,
+  getTerritorySummary,
+  getFeatureCache,
+  refreshProductFeatures,
+  updateProductSources,
+} from './product-intel-service.ts'
 
 // ── BKL-S16: In-memory mutex for Gemini generation endpoints ──────────────────
 // Bun is single-threaded — a Set of active keys prevents concurrent duplicate calls.
 // Keys: "intel:{slug}:{customerSlug}" | "refresh:{slug}" | "features:{slug}"
-export const _generatingKeys = new Set<string>()
-
-// ── Batch all-customers state (R4) ────────────────────────────────────────────
-let _allCustomersBatchState: {
-  running: boolean
-  current: string | null
-  completed: number
-  total: number
-  errors: string[]
-  startedAt: string | null
-  completedAt: string | null
-} = {
-  running: false,
-  current: null,
-  completed: 0,
-  total: 0,
-  errors: [],
-  startedAt: null,
-  completedAt: null,
-}
+const _generatingKeys = new Set<string>()
 
 export function createProductIntelRouter(): Hono {
   const router = new Hono()
@@ -127,147 +88,42 @@ export function createProductIntelRouter(): Hono {
   })
 
   // POST /api/products/setup-drive-folders — bootstrap Drive subfolders for each product
-  // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "setup-drive-folders"
   router.post('/api/products/setup-drive-folders', async (c) => {
     try {
-      const config = loadProductIntelConfig()
-      // BKL-UX-PRODUCT-FOLDER-CONFIG-01: source parent folder from existing
-      // AE records via the helper (was: config.driveParentFolderId).
-      const parentFolderId = getProductIntelParentFolderId()
-      if (!parentFolderId) {
-        return c.json({ error: 'No parent folder configured — bootstrap an AE first to set the shared Drive parent folder' }, 400)
-      }
-      if (!isValidDriveFolderId(parentFolderId)) {
-        return c.json({ error: 'Invalid parent folder id resolved from AE records' }, 500)
-      }
-
-      const drive = google.drive({ version: 'v3', auth: makeAuth(GOOGLE_UNIFIED_TOKEN_PATH) })
-      const products = [...config.products]
-      const results: { slug: string; driveFolder: string; created: boolean }[] = []
-
-      // BKL-DRIVE-PRODUCTS-ROOT-01: slug folders go under Products/ subfolder, not CommandCenter root.
-      // Find Products/ under parentFolderId (created by ensureConfigAndProductsScaffold during bootstrap).
-      let productsFolderId = parentFolderId
-      const productsSearch = await drive.files.list({
-        q: `name='Products' and '${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-        fields: 'files(id)',
-        supportsAllDrives: true,
-        includeItemsFromAllDrives: true,
-      }).catch(() => ({ data: { files: [] } }))
-      if (productsSearch.data.files?.length) {
-        productsFolderId = productsSearch.data.files[0].id!
-      } else {
-        const created = await drive.files.create({
-          requestBody: { name: 'Products', mimeType: 'application/vnd.google-apps.folder', parents: [parentFolderId] },
-          supportsAllDrives: true,
-          fields: 'id',
-        }).catch(() => null)
-        if (created?.data.id) {
-          productsFolderId = created.data.id
-        } else {
-          console.warn('[product-intel] setup-drive-folders: failed to create Products/ folder — falling back to CommandCenter root')
-        }
-      }
-
-      for (let i = 0; i < products.length; i++) {
-        const product = products[i]
-
-        // Skip if already configured — but verify it's a child of productsFolderId.
-        // BKL-UX-PRODUCT-FOLDER-REPARENT-01: existing folders from older installs
-        // may not live under Products/. Add productsFolderId as an additional parent (non-destructive).
-        if (product.driveFolder) {
-          const meta = await drive.files.get({
-            fileId: product.driveFolder,
-            fields: 'id,parents',
-            supportsAllDrives: true,
-          }).catch(() => null)
-          if (meta?.data.parents && !meta.data.parents.includes(productsFolderId)) {
-            await drive.files.update({
-              fileId: product.driveFolder,
-              addParents: productsFolderId,
-              supportsAllDrives: true,
-              fields: 'id',
-            }).catch((e: any) => console.warn(`[product-intel] setup-drive-folders: failed to re-parent ${product.slug}:`, e?.message))
-            console.log(`[product-intel] setup-drive-folders: re-parented ${product.slug} under Products/ (${productsFolderId})`)
-          }
-          results.push({ slug: product.slug, driveFolder: product.driveFolder, created: false })
-          continue
-        }
-
-        // Check if folder already exists under Products/
-        const safeName = product.slug.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-        const existing = await drive.files.list({
-          q: `name='${safeName}' and '${productsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-          fields: 'files(id, name)',
-          supportsAllDrives: true,
-          includeItemsFromAllDrives: true,
-        }).catch(() => ({ data: { files: [] } }))
-
-        if (existing.data.files?.length) {
-          const folderId = existing.data.files[0].id!
-          products[i] = { ...product, driveFolder: folderId }
-          results.push({ slug: product.slug, driveFolder: folderId, created: false })
-          console.log(`[product-intel] setup-drive-folders: reusing existing folder for ${product.slug} under Products/ (${folderId})`)
-        } else {
-          const folder = await drive.files.create({
-            requestBody: {
-              name: product.slug,
-              mimeType: 'application/vnd.google-apps.folder',
-              parents: [productsFolderId],
-            },
-            supportsAllDrives: true,
-            fields: 'id',
-          })
-          const folderId = folder.data.id!
-          products[i] = { ...product, driveFolder: folderId }
-          results.push({ slug: product.slug, driveFolder: folderId, created: true })
-          console.log(`[product-intel] setup-drive-folders: created folder for ${product.slug} under Products/ (${folderId})`)
-        }
-      }
-
-      saveProductConfig(products)
+      const results = await setupDriveFolders()
       return c.json({ products: results })
     } catch (e: any) {
       console.error('[product-intel] POST /api/products/setup-drive-folders error:', sanitizeErr(e))
-      return c.json({ error: sanitizeErr(e) }, 500)
+      const status = e.message.includes('No parent folder') ? 400 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     }
   })
 
   // POST /api/products/ingest-slides — ingest Drive corpus for a product
-  // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "ingest-slides"
   router.post('/api/products/ingest-slides', async (c) => {
     let body: { slug?: string }
     try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON body' }, 400) }
     const slug = body?.slug
     if (!slug) return c.json({ error: 'slug is required' }, 400)
-    const products = loadProductConfig()
-    const product = products.find(p => p.slug === slug)
-    if (!product) return c.json({ error: `Unknown product: ${slug}` }, 400)
-    if (!product.driveFolder) return c.json({ error: `driveFolder is null for ${slug}` }, 400)
+
     try {
-      const corpus = await refreshDriveCorpus(slug)
-      if (!corpus) return c.json({ error: `No exportable files found for ${slug}` }, 400)
-      const totalChars = corpus.files.reduce((sum, f) => sum + f.textContent.length, 0)
-      // Auto-extract features after slide ingest (fire-and-forget)
-      extractProductFeatures(slug).then(cache => {
-        if (cache) enrichFeatures(slug).catch(e => console.warn('[feature-radar] enrichment failed:', e?.message))
-      }).catch(e => console.warn('[feature-radar] extraction failed after ingest:', e?.message))
-      return c.json({ slug, filesProcessed: corpus.files.length, textChars: totalChars, corpusHash: corpus.corpusHash, sources: corpus.files.map(f => f.name) })
+      const result = await ingestSlides(slug)
+      return c.json(result)
     } catch (e: any) {
       console.error(`[product-intel] ingest-slides error for ${slug}:`, sanitizeErr(e))
-      return c.json({ error: sanitizeErr(e) }, 500)
+      const status = e.message.includes('Unknown product') || e.message.includes('driveFolder is null') || e.message.includes('No exportable files') ? 400 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     }
   })
 
   // GET /api/products/slides-status — read cached Drive corpus without calling Drive
-  // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "slides-status"
   router.get('/api/products/slides-status', (c) => {
     const slug = c.req.query('slug')
     if (!slug) return c.json({ error: 'slug query param is required' }, 400)
     try {
-      const corpus = getCachedDriveCorpus(slug)
-      if (!corpus) return c.json(null)
-      return c.json({ slug: corpus.slug, files: corpus.files.map(f => ({ name: f.name, fileId: f.fileId, modifiedTime: f.modifiedTime })), corpusHash: corpus.corpusHash, extractedAt: corpus.extractedAt })
+      const result = getSlidesStatus(slug)
+      if (!result) return c.json(null)
+      return c.json(result)
     } catch (e: any) {
       return c.json({ error: sanitizeErr(e) }, 500)
     }
@@ -288,144 +144,25 @@ export function createProductIntelRouter(): Hono {
   })
 
   // POST /api/products/intel/generate-all-customers — regenerate intel for all customers x all products
-  // NOTE: registered BEFORE /api/products/:slug and BEFORE /:customerSlug to avoid slug collision
   router.post('/api/products/intel/generate-all-customers', async (c) => {
-    const batchKey = 'intel:batch:all-customers'
-    if (_generatingKeys.has(batchKey)) {
-      return c.json({ error: 'Batch generation already running', state: _allCustomersBatchState }, 409)
+    try {
+      const result = startAllCustomersBatch(_generatingKeys)
+      return c.json(result)
+    } catch (e: any) {
+      return c.json({ error: sanitizeErr(e), state: _allCustomersBatchState }, 409)
     }
-    _generatingKeys.add(batchKey)
-
-    const productConfigs = loadProductConfig()
-    const customerList   = [...customers]
-    const total          = customerList.length
-
-    _allCustomersBatchState = {
-      running: true,
-      current: null,
-      completed: 0,
-      total,
-      errors: [],
-      startedAt: new Date().toISOString(),
-      completedAt: null,
-    }
-
-    // Return immediately — run in background
-    ;(async () => {
-      try {
-        for (const customer of customerList) {
-          const customerSlug = toSlug(customer.name)
-          _allCustomersBatchState.current = customer.name
-          try {
-            const ctx = await buildCustomerIntelContext(customerSlug)
-            for (const product of productConfigs) {
-              const summary = getCachedSummary(product.slug)
-              if (!summary) continue
-              const mutexKey = `intel:${product.slug}:${customerSlug}`
-              if (_generatingKeys.has(mutexKey)) continue
-              _generatingKeys.add(mutexKey)
-              try {
-                const corpus     = getCachedDriveCorpus(product.slug)
-                const slidesText = corpus ? corpus.files.map(f => f.textContent).join('\n\n') : ''
-                const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(product.slug)
-                await generateCustomerProductIntel({
-                  slug: product.slug,
-                  productSummary: summary,
-                  slidesText,
-                  customerName: ctx.customerName,
-                  subscriptions: ctx.subscriptions,
-                  supportCases: ctx.supportCases,
-                  customerDocsText: ctx.customerDocsText,
-                  customerDocsHash: ctx.customerDocsHash,
-                  opportunityNote: ctx.opportunityNote,
-                  productFeatures,
-                  productFeaturesHash,
-                })
-              } finally {
-                _generatingKeys.delete(mutexKey)
-              }
-              await new Promise(r => setTimeout(r, 3000))  // 3s between Gemini calls
-            }
-          } catch (e: any) {
-            const msg = `${customer.name}: ${sanitizeErr(e)}`
-            console.error(`[product-intel] generate-all-customers: ${msg}`)
-            _allCustomersBatchState.errors.push(msg)
-          }
-          _allCustomersBatchState.completed++
-        }
-        console.log(`[product-intel] generate-all-customers: completed ${total} customers`)
-      } finally {
-        _allCustomersBatchState.running = false
-        _allCustomersBatchState.current = null
-        _allCustomersBatchState.completedAt = new Date().toISOString()
-        _generatingKeys.delete(batchKey)
-      }
-    })()
-
-    return c.json({ message: 'Batch generation started', customerCount: total })
   })
 
   // POST /api/products/intel/:customerSlug/generate-all — generate intel for ALL products sequentially
-  // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "intel"
   router.post('/api/products/intel/:customerSlug/generate-all', async (c) => {
     const customerSlug = c.req.param('customerSlug')
-    if (!/^[a-z0-9-]+$/.test(customerSlug)) {
-      return c.json({ error: 'Invalid customerSlug' }, 400)
+    try {
+      const result = await generateAllProductsForCustomer(customerSlug, _generatingKeys)
+      return c.json(result)
+    } catch (e: any) {
+      const status = e.message.includes('Invalid customerSlug') ? 400 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     }
-
-    const products = loadProductConfig()
-    const queued: string[] = []
-    const skipped: string[] = []
-
-    // Resolve customer context once — shared across all product generations
-    const ctx = await buildCustomerIntelContext(customerSlug)
-
-    // Sequential loop — Gemini rate limits require sequential generation
-    for (const product of products) {
-      const slug     = product.slug
-      const mutexKey = `intel:${slug}:${customerSlug}`
-
-      if (_generatingKeys.has(mutexKey)) {
-        skipped.push(slug)
-        continue
-      }
-
-      const productSummary = getCachedSummary(slug)
-      if (!productSummary) {
-        console.warn(`[product-intel] generate-all: no cached summary for ${slug} — skipping`)
-        skipped.push(slug)
-        continue
-      }
-
-      _generatingKeys.add(mutexKey)
-      try {
-        const corpus     = getCachedDriveCorpus(slug)
-        const slidesText = corpus ? corpus.files.map(f => f.textContent).join('\n\n') : ''
-        const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(slug)
-
-        await generateCustomerProductIntel({
-          slug,
-          productSummary,
-          slidesText,
-          customerName: ctx.customerName,
-          subscriptions: ctx.subscriptions,
-          supportCases: ctx.supportCases,
-          customerDocsText: ctx.customerDocsText,
-          customerDocsHash: ctx.customerDocsHash,
-          opportunityNote: ctx.opportunityNote,
-          productFeatures,
-          productFeaturesHash,
-        })
-        queued.push(slug)
-      } catch (e: any) {
-        console.error(`[product-intel] generate-all: error generating ${slug}/${customerSlug}:`, sanitizeErr(e))
-        skipped.push(slug)
-      } finally {
-        _generatingKeys.delete(mutexKey)
-      }
-    }
-
-    return c.json({ queued, skipped })
   })
 
   // GET /api/products/:slug/intel/:customerSlug — cached customer intel (no generation)
@@ -447,53 +184,21 @@ export function createProductIntelRouter(): Hono {
 
   // POST /api/products/:slug/intel/:customerSlug/generate — generate (or regenerate) customer intel
   router.post('/api/products/:slug/intel/:customerSlug/generate', async (c) => {
-    const slug         = c.req.param('slug')
+    const slug = c.req.param('slug')
     const customerSlug = c.req.param('customerSlug')
-    if (!/^[a-z0-9-]+$/.test(slug) || !/^[a-z0-9-]+$/.test(customerSlug)) {
-      return c.json({ error: 'Invalid slug' }, 400)
-    }
     const mutexKey = `intel:${slug}:${customerSlug}`
+
     if (_generatingKeys.has(mutexKey)) {
       return c.json({ error: `Generation already in progress for ${slug}/${customerSlug}` }, 409)
     }
     _generatingKeys.add(mutexKey)
     try {
-      // Resolve product config
-      const products = loadProductConfig()
-      const product  = products.find(p => p.slug === slug)
-      if (!product) return c.json({ error: `Unknown product: ${slug}` }, 400)
-      // Drive corpus is optional (Phase 2) — products without driveFolder use release-notes-only
-
-      // Resolve product summary
-      const productSummary = getCachedSummary(slug)
-      if (!productSummary) return c.json({ error: `No cached summary for ${slug} — run POST /api/products/${slug}/refresh first` }, 400)
-
-      // Drive corpus — concat all file text; empty string if no corpus yet
-      const corpus     = getCachedDriveCorpus(slug)
-      const slidesText = corpus ? corpus.files.map(f => f.textContent).join('\n\n') : ''
-
-      // Resolve customer context via shared helper
-      const ctx = await buildCustomerIntelContext(customerSlug)
-      const { features: productFeatures, hash: productFeaturesHash } = ctx.productFeaturesFn(slug)
-
-      const intel = await generateCustomerProductIntel({
-        slug,
-        productSummary,
-        slidesText,
-        customerName: ctx.customerName,
-        subscriptions: ctx.subscriptions,
-        supportCases: ctx.supportCases,
-        customerDocsText: ctx.customerDocsText,
-        customerDocsHash: ctx.customerDocsHash,
-        opportunityNote: ctx.opportunityNote,
-        productFeatures,
-        productFeaturesHash,
-      })
-
+      const intel = await generateSingleProductIntel(slug, customerSlug)
       return c.json(intel)
     } catch (e: any) {
       console.error(`[product-intel] POST /api/products/${slug}/intel/${customerSlug}/generate error:`, sanitizeErr(e))
-      return c.json({ error: sanitizeErr(e) }, 500)
+      const status = e.message.includes('Invalid slug') || e.message.includes('Unknown product') || e.message.includes('No cached summary') ? 400 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     } finally {
       _generatingKeys.delete(mutexKey)
     }
@@ -505,102 +210,23 @@ export function createProductIntelRouter(): Hono {
   // GET /api/products/:slug/whats-new — Gemini-synthesized sales talking points for current release
   router.get('/api/products/:slug/whats-new', async (c) => {
     const slug = c.req.param('slug')
-    if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)
     const forceRefresh = c.req.query('refresh') === 'true'
-
     try {
-      // Get feature cache for this product (may be empty — value maps can still generate)
-      const featureCache = getFeatureCache(slug)
-      const hasFeatures = featureCache && featureCache.features.length > 0
-
-      // Get version — prefer product summary (radar, authoritative) over lifecycle (endoflife.date)
-      const radarSummary = getCachedSummary(slug)
-      const lifecycleCache = readProductLifecycleCache()
-      const lifecycle = lifecycleCache?.products.find(p => p.slug === slug)
-      const version = radarSummary?.currentVersion ?? lifecycle?.currentVersion ?? featureCache?.features[0]?.versionCurrent ?? 'latest'
-
-      // Filter features for synthesis (empty array if no feature cache)
-      let featuresForSynthesis: any[] = []
-      if (hasFeatures) {
-        const gaFeatures = featureCache!.features.filter(f =>
-          f.status === 'GA' && (f.versionCurrent === version || f.versionIntroduced === version)
-        )
-        featuresForSynthesis = gaFeatures.length > 0
-          ? gaFeatures
-          : featureCache!.features.filter(f => f.status === 'GA').length > 0
-            ? featureCache!.features.filter(f => f.status === 'GA').slice(0, 20)
-            : featureCache!.features.slice(0, 20)
-      }
-
-      // Build feature context for Gemini
-      const featureContext = featuresForSynthesis.map(f =>
-        `- [${f.status}] ${f.name}: ${f.description}${f.enrichedDescription ? ' ' + f.enrichedDescription : ''}`
-      ).join('\n')
-
-      const productName = featureCache?.displayName ?? radarSummary?.displayName ?? slug.toUpperCase()
-      const deltaKey = forceRefresh ? undefined : `product-whats-new:${slug}:${version}`
-      const valueMapContent = getValueMap(slug)
-
-      // If no features AND no value maps, return empty
-      if (featuresForSynthesis.length === 0 && !valueMapContent) {
-        return c.json({ summary: [], version, generatedAt: new Date().toISOString(), cached: false })
-      }
-
-      const systemPrompt = 'You are a Red Hat product expert. Given the features in this release and the business value context, write a concise summary (5-7 bullet points) covering both GA and Tech Preview features. For each bullet, use this exact format: "**Feature Name**: explanation of what it does and business value." Start with the most impactful GA features, then include 1-2 notable Tech Preview features that customers should know about. Connect each feature to a business outcome (cost reduction, risk mitigation, productivity, revenue growth). Write as if briefing an Account Executive before a customer meeting. Return ONLY a JSON array of strings, each being one bullet point with the **bold** feature name. No numbering, no extra text.'
-
-      // Build user prompt — features (if any) + value maps (if available)
-      let userPrompt = `Product: ${productName}\nVersion: ${version}`
-      if (featureContext) {
-        userPrompt += `\n\nFeatures in this release:\n${featureContext}`
-      }
-      if (valueMapContent) {
-        userPrompt += `\n\nBusiness Value Context (use this to frame features in terms of customer outcomes):\n${valueMapContent}`
-      }
-
-      const result = await callGemini(systemPrompt, userPrompt, {
-        callType: 'product-whats-new',
-        model: 'full',
-        deltaKey,
-        responseSchema: {
-          type: 'ARRAY',
-          items: { type: 'STRING' },
-        },
-      })
-
-      // Parse the response — it should be a JSON array of strings
-      let summary: string[]
-      try {
-        summary = JSON.parse(result.text)
-        if (!Array.isArray(summary)) summary = [result.text]
-      } catch {
-        // If not valid JSON, split by newlines and clean up
-        summary = result.text.split('\n').filter(line => line.trim().length > 0).slice(0, 5)
-      }
-
-      return c.json({
-        summary,
-        version,
-        generatedAt: new Date().toISOString(),
-        cached: result.cached,
-      })
+      const result = await generateWhatsNew(slug, forceRefresh)
+      return c.json(result)
     } catch (e: any) {
       console.error(`[product-intel] GET /api/products/${slug}/whats-new error:`, sanitizeErr(e))
-      return c.json({ error: sanitizeErr(e) }, 500)
+      const status = e.message.includes('Invalid slug') ? 400 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     }
   })
 
   // ── Feature Radar Routes ──────────────────────────────────────────────────
 
   // GET /api/products/features — all products' feature caches
-  // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "features"
   router.get('/api/products/features', (c) => {
     try {
-      const products = loadProductConfig()
-      const caches: any[] = []
-      for (const p of products) {
-        const cache = getFeatureCache(p.slug)
-        if (cache) caches.push(cache)
-      }
+      const caches = getAllFeatureCaches()
       return c.json(caches)
     } catch (e: any) {
       console.error('[product-intel] GET /api/products/features error:', sanitizeErr(e))
@@ -609,123 +235,27 @@ export function createProductIntelRouter(): Hono {
   })
 
   // POST /api/products/features/refresh-all — extract + enrich features for all products
-  // NOTE: registered BEFORE /api/products/:slug to avoid ":slug" matching "features"
   router.post('/api/products/features/refresh-all', async (c) => {
-    const mutexKey = 'refresh-all'
-    if (_generatingKeys.has(mutexKey)) {
-      return c.json({ error: 'Feature refresh-all already in progress' }, 409)
-    }
-    _generatingKeys.add(mutexKey)
     try {
-      await refreshAllFeatures()
-      const products = loadProductConfig()
-      const caches: any[] = []
-      let totalFeatures = 0
-      for (const p of products) {
-        const cache = getFeatureCache(p.slug)
-        if (cache) {
-          caches.push({ slug: p.slug, featureCount: cache.features.length, extractedAt: cache.extractedAt, enrichedAt: cache.enrichedAt })
-          totalFeatures += cache.features.length
-        }
-      }
-      FeatureModuleRegistry.recordOutcome('product-features', { success: true, recordCount: totalFeatures })
-      return c.json({ ok: true, products: caches })
+      const result = await refreshAllProductFeatures(_generatingKeys)
+      return c.json(result)
     } catch (e: any) {
       console.error('[product-intel] POST /api/products/features/refresh-all error:', sanitizeErr(e))
-      return c.json({ error: sanitizeErr(e) }, 500)
-    } finally {
-      _generatingKeys.delete(mutexKey)
+      const status = e.message.includes('already in progress') ? 409 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     }
   })
 
   // GET /api/products/:slug/territory-summary — aggregate customer intel for a product across territory
   router.get('/api/products/:slug/territory-summary', (c) => {
     const slug = c.req.param('slug')
-    if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)
     try {
-      const DATA_DIR = process.env.DATA_DIR ?? resolve(import.meta.dir, '../data')
-      const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
-      // Defense-in-depth: ensure CACHE_DIR is within expected /data volume (Rook finding BKL-W5-RK-F1)
-      if (!CACHE_DIR.startsWith('/data')) {
-        console.error('territory-summary: CACHE_DIR is not within expected /data volume:', CACHE_DIR)
-        return c.json({ error: 'Server configuration error' }, 500)
-      }
-      const intelDir = resolve(CACHE_DIR, `${slug}-customer-intel`)
-      const totalCustomers = customers.length
-
-      // BKL-UI-01: filter on-disk customer-intel cache by active customer slugs to avoid
-      // surfacing stale intel for customers that have since been removed. Do NOT clear the
-      // cache on customer wipe — filter at read time instead, so intel is preserved if the
-      // customer is re-added.
-      const activeCustomerSlugs = new Set(customers.map(c => toSlug(c.name)))
-
-      const coverageBreakdown: Record<string, number> = { HIGH: 0, MEDIUM: 0, LOW: 0, NONE: 0 }
-      const priorityActions: { action: string; confidence: string; customer: string }[] = []
-      let lastUpdated: string | null = null
-
-      if (existsSync(intelDir)) {
-        const files = readdirSync(intelDir).filter(f => f.endsWith('.json'))
-        for (const file of files) {
-          // BKL-UI-01: cache filenames are `${customerSlug}.json` — skip any file whose
-          // customerSlug is not in the active customer list.
-          const fileCustomerSlug = file.replace(/\.json$/, '')
-          if (!activeCustomerSlugs.has(fileCustomerSlug)) continue
-          try {
-            const raw = JSON.parse(readFileSync(resolve(intelDir, file), 'utf-8'))
-            const intel = raw.intel ?? raw
-            const score = intel.relevanceScore ?? 'NONE'
-            if (score in coverageBreakdown) coverageBreakdown[score]++
-            if (
-              intel.priorityAction &&
-              intel.priorityAction !== 'Analysis unavailable' &&
-              !intel.priorityAction.startsWith('Analysis skipped')
-            ) {
-              priorityActions.push({
-                action: intel.priorityAction,
-                confidence: score,
-                customer: intel.customer ?? fileCustomerSlug.replace(/[^\w\s-]/g, ''),
-              })
-            }
-            const ts = raw.cachedAt ?? intel.generatedAt
-            if (ts && (!lastUpdated || ts > lastUpdated)) lastUpdated = ts
-          } catch { /* skip corrupt cache files */ }
-        }
-      }
-
-      const coverageCount = coverageBreakdown.HIGH + coverageBreakdown.MEDIUM + coverageBreakdown.LOW + coverageBreakdown.NONE
-
-      // Top 3 priority actions: prefer HIGH confidence, then MEDIUM, then LOW
-      const confidenceOrder: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0 }
-      const topPriorityActions = priorityActions
-        .sort((a, b) => (confidenceOrder[b.confidence] ?? 0) - (confidenceOrder[a.confidence] ?? 0))
-        .slice(0, 3)
-        .map(p => ({ action: p.action, customer: p.customer, confidence: p.confidence }))
-
-      // Slide corpus status
-      const corpus = getCachedDriveCorpus(slug)
-      const slidesStatus = corpus
-        ? { filesIngested: corpus.files.length, lastRefreshed: corpus.extractedAt }
-        : { filesIngested: 0, lastRefreshed: null }
-
-      // Feature radar status
-      const featureCache = getFeatureCache(slug)
-      const featureStatus = featureCache
-        ? { featureCount: featureCache.features.length, extractedAt: featureCache.extractedAt, enrichedAt: featureCache.enrichedAt }
-        : null
-
-      return c.json({
-        slug,
-        coverageCount,
-        totalCustomers,
-        coverageBreakdown,
-        topPriorityActions,
-        lastUpdated,
-        slidesStatus,
-        featureStatus,
-      })
+      const result = getTerritorySummary(slug)
+      return c.json(result)
     } catch (e: any) {
       console.error(`[product-intel] GET /api/products/${slug}/territory-summary error:`, sanitizeErr(e))
-      return c.json({ error: 'Failed to generate territory summary' }, 500)
+      const status = e.message.includes('Invalid slug') || e.message.includes('Server configuration error') ? 400 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     }
   })
 
@@ -746,22 +276,13 @@ export function createProductIntelRouter(): Hono {
   // POST /api/products/:slug/features/refresh — extract + enrich features for one product
   router.post('/api/products/:slug/features/refresh', async (c) => {
     const slug = c.req.param('slug')
-    const mutexKey = `features:${slug}`
-    if (_generatingKeys.has(mutexKey)) {
-      return c.json({ error: `Feature refresh already in progress for ${slug}` }, 409)
-    }
-    _generatingKeys.add(mutexKey)
     try {
-      const cache = await extractProductFeatures(slug)
-      if (!cache) return c.json({ error: `Extraction failed for ${slug} — no Drive corpus?` }, 400)
-      await enrichFeatures(slug)
-      const updated = getFeatureCache(slug)
-      return c.json(updated)
+      const result = await refreshProductFeatures(slug, _generatingKeys)
+      return c.json(result)
     } catch (e: any) {
       console.error(`[product-intel] POST /api/products/${slug}/features/refresh error:`, sanitizeErr(e))
-      return c.json({ error: sanitizeErr(e) }, 500)
-    } finally {
-      _generatingKeys.delete(mutexKey)
+      const status = e.message.includes('already in progress') ? 409 : e.message.includes('Extraction failed') ? 400 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     }
   })
 
@@ -794,7 +315,6 @@ export function createProductIntelRouter(): Hono {
     try {
       await refreshAllProducts()
       const summaries = getAllProductSummaries()
-      FeatureModuleRegistry.recordOutcome('product-lifecycle', { success: true, recordCount: summaries.length })
       return c.json({ success: true, count: summaries.length, products: summaries })
     } catch (e: any) {
       console.error('[product-intel] POST /api/products/refresh-all error:', sanitizeErr(e))
@@ -827,31 +347,13 @@ export function createProductIntelRouter(): Hono {
   router.patch('/api/products/:slug/sources', async (c) => {
     const slug = c.req.param('slug')
     try {
-      const products = loadProductConfig()
-      const idx = products.findIndex(p => p.slug === slug)
-      if (idx === -1) return c.json({ error: `Unknown product: ${slug}` }, 404)
-
-      const body = await c.req.json() as { customSources?: string[]; followLinks?: boolean }
-
-      // Validate each URL against allowed domains (reuses feature radar allowlist — BKL-S13)
-      if (Array.isArray(body.customSources)) {
-        for (const url of body.customSources) {
-          if (!url.startsWith('http') || !isAllowedUrl(url)) {
-            return c.json({ error: `URL not in allowed domains (redhat.com, openshift.com, github.com/openshift): ${url}` }, 400)
-          }
-        }
-        products[idx] = { ...products[idx], customSources: body.customSources }
-      }
-
-      if (typeof body.followLinks === 'boolean') {
-        products[idx] = { ...products[idx], followLinks: body.followLinks }
-      }
-
-      saveProductConfig(products)
-      return c.json({ ok: true, product: products[idx] })
+      const body = await c.req.json()
+      const result = await updateProductSources(slug, body)
+      return c.json(result)
     } catch (e: any) {
       console.error(`[product-intel] PATCH /api/products/${slug}/sources error:`, sanitizeErr(e))
-      return c.json({ error: sanitizeErr(e) }, 500)
+      const status = e.message.includes('Unknown product') ? 404 : e.message.includes('not in allowed domains') ? 400 : 500
+      return c.json({ error: sanitizeErr(e) }, status)
     }
   })
 

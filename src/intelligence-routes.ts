@@ -24,14 +24,14 @@ import type { ProductLifecycle } from './product-lifecycle.ts'
 import type { RHEvent } from './rh-events-fetcher.ts'
 import { enrichEvents } from './event-enricher.ts'
 import { loadFeedConfig, fetchRedHatRSS, type RSSFeedConfig } from './rh-rss-fetcher.ts'
-import { FeatureModuleRegistry } from './feature-module-registry.ts'
+import { CACHE_DIR as BASE_CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
-const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'news')
-const MAIN_CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache')
+const CACHE_DIR = resolve(BASE_CACHE_DIR, 'news')
+const MAIN_CACHE_DIR = BASE_CACHE_DIR
 const INTEL_CACHE_DIR = resolve(MAIN_CACHE_DIR, 'intelligence')
-const CONFIG_DIR = process.env.CONFIG_DIR ?? 'data/config'
+const CONFIG_DIR = DATA_CONFIG_DIR
 
 // ── Cache helpers ────────────────────────────────────────────────────────────
 
@@ -699,7 +699,6 @@ export function createIntelligenceRouter(): Hono {
     try {
       console.log('[intelligence-routes] Triggering manual RSS refresh')
       await fetchRedHatRSS()
-      FeatureModuleRegistry.recordOutcome('rss', { success: true })
       return c.json({ status: 'complete' })
     } catch (e: any) {
       console.warn('[intelligence-routes] RSS refresh failed:', e?.message ?? e)

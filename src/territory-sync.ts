@@ -14,7 +14,7 @@
  * derived from the pod keys in settings.json.
  */
 
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { google } from 'googleapis'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
@@ -24,8 +24,17 @@ import {
   derivePodKeywordMap,
   type RegionConfig,
 } from './region-config.ts'
+import { writeJsonAtomic } from './lib/atomic-write.ts'
 
 const TERRITORY_SHEET_ID_FALLBACK = '1wblku7v2dsnZ-DAlAq2yPkBiWsIxA6EvTcxblhjZwb8'
+const TERRITORY_NOTIFICATIONS_PATH = resolve(process.env.DATA_DIR ?? 'data', 'cache', 'territory-notifications.json')
+
+interface TerritoryNotification {
+  type: 'removal' | 'reassignment'
+  customer: string
+  ae: string
+  detectedAt: string
+}
 
 function loadSettingsRaw(): Record<string, unknown> {
   try {
@@ -636,4 +645,111 @@ async function syncEnterpriseRegion(
   }
 
   return { toAdd, toRemove, unchanged, teamData: Object.keys(teamDataByTerritory).length > 0 ? teamDataByTerritory : undefined }
+}
+
+// ── Territory Sync Orchestration ────────────────────────────────────────────
+
+/**
+ * Run the full territory sync orchestration flow.
+ *
+ * Executes all territory sync business logic:
+ * 1. Pre-flight checks (Google auth, AE config)
+ * 2. Calls syncTerritorySheet() to compare sheet vs current state
+ * 3. Auto-adds new customers to customers.json
+ * 4. Writes removal/reassignment notifications (never auto-deletes)
+ * 5. Cleans old notifications (30-day retention)
+ * 6. Persists team cache
+ *
+ * Returns counts for added, flagged, and unchanged customers.
+ */
+export async function runTerritorySyncOrchestration(): Promise<{
+  added: number
+  flagged: number
+  unchanged: number
+}> {
+  console.log('[territory-sync] starting territory sheet sync…')
+
+  // Pre-flight: check Google auth token exists
+  const tokenPath = process.env.GOOGLE_UNIFIED_TOKEN_PATH
+  if (tokenPath && !existsSync(tokenPath)) {
+    console.warn('[territory-sync] Google auth token missing — skipping')
+    return { added: 0, flagged: 0, unchanged: 0 }
+  }
+
+  const { aes, customers: currentCustomers, CUSTOMERS_PATH } = await import('./server-state.ts')
+  if (!aes.length) {
+    console.log('[territory-sync] no AEs configured — skipping')
+    return { added: 0, flagged: 0, unchanged: 0 }
+  }
+
+  const result = await syncTerritorySheet(aes, currentCustomers)
+
+  // Auto-add new customers
+  if (result.toAdd.length > 0) {
+    console.log(`[territory-sync] adding ${result.toAdd.length} new customers`)
+    const updated = [...currentCustomers, ...result.toAdd]
+    writeJsonAtomic(CUSTOMERS_PATH, { customers: updated })
+    // Update in-memory state
+    const { setCustomers } = await import('./server-state.ts')
+    setCustomers(updated)
+    console.log(`[territory-sync] customers updated: ${result.toAdd.map((c: any) => c.name).join(', ')}`)
+  }
+
+  // Write removal/reassignment notifications (never auto-delete)
+  if (result.toRemove.length > 0) {
+    let existing: { updatedAt: string; pending: TerritoryNotification[] } = { updatedAt: '', pending: [] }
+    try {
+      if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
+        existing = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
+      }
+    } catch {}
+    const newNotifications: TerritoryNotification[] = result.toRemove.map((c: any) => ({
+      type: 'removal' as const,
+      customer: c.name,
+      ae: c.ae,
+      detectedAt: new Date().toISOString(),
+    }))
+    // Dedup: don't add notifications already pending for same customer
+    const existingKeys = new Set(existing.pending.map((n: any) => `${n.customer}::${n.ae}`))
+    const fresh = newNotifications.filter((n: any) => !existingKeys.has(`${n.customer}::${n.ae}`))
+    const updated = {
+      updatedAt: new Date().toISOString(),
+      pending: [...existing.pending, ...fresh],
+    }
+    writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
+    console.log(`[territory-sync] ${fresh.length} new removal notifications written`)
+  }
+
+  // Clean old notifications (30 day retention)
+  try {
+    if (existsSync(TERRITORY_NOTIFICATIONS_PATH)) {
+      const notifications = JSON.parse(readFileSync(TERRITORY_NOTIFICATIONS_PATH, 'utf-8'))
+      const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+      const cleaned = notifications.pending.filter((n: any) => {
+        const detectedTime = new Date(n.detectedAt).getTime()
+        return detectedTime > thirtyDaysAgo
+      })
+      if (cleaned.length < notifications.pending.length) {
+        const updated = { ...notifications, pending: cleaned }
+        writeFileSync(TERRITORY_NOTIFICATIONS_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
+        console.log(`[territory-sync] cleaned ${notifications.pending.length - cleaned.length} old notifications (>30 days)`)
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[territory-sync] notification cleanup failed: ${e.message}`)
+  }
+
+  // Persist team data to cache
+  if (result.teamData && Object.keys(result.teamData).length > 0) {
+    const { persistTeamCache } = await import('./account-team.ts')
+    persistTeamCache(result.teamData)
+  }
+
+  console.log(`[territory-sync] complete: +${result.toAdd.length} added, ${result.toRemove.length} flagged for review, ${result.unchanged.length} unchanged`)
+
+  return {
+    added: result.toAdd.length,
+    flagged: result.toRemove.length,
+    unchanged: result.unchanged.length,
+  }
 }

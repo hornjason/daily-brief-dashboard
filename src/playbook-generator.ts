@@ -26,6 +26,7 @@ import { getValueMap } from './value-map-loader.ts'
 import { getCachedCustomerProductIntel } from './customer-product-intel.ts'
 import { getCachedExpansionOpportunities } from './expansion-opportunities.ts'
 import { extractProductProofPoints } from './meeting-prep-enrichment.ts'
+import { templateAll } from './lib/signal-templates.ts'
 
 import type { Customer, SupportCase } from './types.ts'
 import type {
@@ -114,7 +115,7 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
     productSummaries,
     expansionOpps,
   ] = await Promise.all([
-    loadCustomerSignals(slug, customer.name),
+    loadCustomerSignals(slug, customer.name, { ensureFresh: true }),
     Promise.resolve(getAccountTeam(customer)),
     Promise.resolve(readSheetCache(customer.name)),
     fetchCases({ includeAll: false }).catch(() => [] as SupportCase[]),
@@ -193,11 +194,10 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
     }
   } catch {}
 
-  const signalSummary = signalResult.registrySignals
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    .slice(0, 40)
-    .map(s => `[${s.source}] ${s.headline}: ${s.detail}`)
-    .join('\n')
+  const templateResult = templateAll(signalResult.registrySignals, teamMembers, {
+    format: 'playbook',
+    maxNarrative: 40,
+  })
 
   const subscriptionContext = subCache?.rows?.length
     ? subCache.rows.map(r => `${r.productDescription} — qty ${r.quantity}, ${r.status}${r.endDate ? `, ends ${r.endDate}` : ''}`).join('\n')
@@ -293,8 +293,12 @@ ${teamContext}
 ${partnerContext || 'No partner data available.'}
 </partners>
 
+<deterministic_sections>
+${templateResult.deterministic || 'No deterministic signal data available.'}
+</deterministic_sections>
+
 <signals>
-${signalSummary || 'No signals available.'}
+${templateResult.narrativeContext || 'No signals available.'}
 </signals>
 
 <subscriptions>

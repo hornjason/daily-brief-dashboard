@@ -8,10 +8,11 @@
 
 import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleScope } from '../feature-module-registry.ts'
 import { fetchRedHatRSS, type RSSItem } from '../rh-rss-fetcher.ts'
-import { existsSync, unlinkSync, readFileSync } from 'fs'
+import { existsSync, unlinkSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss', 'rh-feeds.json')
+const RSS_TTL_MS = 4 * 60 * 60 * 1000  // 4 hours
 
 FeatureModuleRegistry.register({
   name: 'rh-rss',
@@ -30,7 +31,20 @@ FeatureModuleRegistry.register({
 
   cachePaths: () => ['data/cache/rss/rh-feeds.json'],
 
+  cacheTtlMs: RSS_TTL_MS,
+
   refreshInterval: 4 * 60 * 60 * 1000,  // 4 hours
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // Portfolio-wide cache — check single file
+    try {
+      const stat = statSync(CACHE_PATH)
+      if (Date.now() - stat.mtimeMs < RSS_TTL_MS) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+
+    // Stale or missing — refresh
+    await fetchRedHatRSS()
+  },
 
   async fetch(_customerName: string): Promise<void> {
     // RSS is global, not customer-specific

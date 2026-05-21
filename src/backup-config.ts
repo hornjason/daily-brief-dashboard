@@ -7,8 +7,8 @@ import { readFileSync } from 'fs'
 import { writeJsonAtomic, writeFileAtomic } from './lib/atomic-write.ts'
 import { resolve } from 'path'
 import { makeAuth, GOOGLE_UNIFIED_TOKEN_PATH } from './google.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
-const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
 const AES_PATH = resolve(CONFIG_DIR, 'aes.json')
 const CUSTOMERS_PATH = resolve(CONFIG_DIR, 'customers.json')
 const DATA_SOURCES_PATH = resolve(CONFIG_DIR, 'data-sources.json')

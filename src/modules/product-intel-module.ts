@@ -6,11 +6,12 @@ import { FeatureModuleRegistry } from '../feature-module-registry.ts'
 import { refreshAllProducts, getAllProductSummaries } from '../product-release-radar.ts'
 import { refreshAllFeatures, getFeatureCache } from '../product-feature-radar.ts'
 import { toSlug } from '../cache-layer.ts'
-import { existsSync, unlinkSync, readdirSync } from 'fs'
+import { existsSync, unlinkSync, readdirSync, statSync } from 'fs'
 import { resolve } from 'path'
 
 const DATA_DIR  = process.env.DATA_DIR  ?? resolve(import.meta.dir, '../../data')
 const CACHE_DIR = resolve(process.env.CACHE_DIR ?? resolve(DATA_DIR, 'cache'), 'product-intel')
+const PRODUCT_INTEL_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
 FeatureModuleRegistry.register({
   name: 'product-intel',
@@ -32,7 +33,37 @@ FeatureModuleRegistry.register({
     `data/cache/product-intel/${slug}-features.json`,
   ],
 
+  cacheTtlMs: PRODUCT_INTEL_TTL_MS,
+
   refreshInterval: 7 * 24 * 60 * 60 * 1000,  // 7 days (weekly)
+
+  async ensureFresh(_customerSlug: string): Promise<void> {
+    // Portfolio-wide cache — check any summary file as staleness indicator
+    // All product summaries refresh together, so checking one is sufficient
+    if (!existsSync(CACHE_DIR)) {
+      await refreshAllProducts()
+      await refreshAllFeatures()
+      return
+    }
+
+    try {
+      const files = readdirSync(CACHE_DIR).filter(f => f.endsWith('-summary.json'))
+      if (files.length === 0) {
+        // No summaries exist — needs refresh
+        await refreshAllProducts()
+        await refreshAllFeatures()
+        return
+      }
+
+      // Check mtime of first summary file
+      const stat = statSync(resolve(CACHE_DIR, files[0]))
+      if (Date.now() - stat.mtimeMs < PRODUCT_INTEL_TTL_MS) return // fresh
+    } catch { /* file doesn't exist — needs refresh */ }
+
+    // Stale or missing — refresh
+    await refreshAllProducts()
+    await refreshAllFeatures()
+  },
 
   async fetch(_customerName: string): Promise<void> {
     // Product intelligence is global (portfolio-level), not customer-specific

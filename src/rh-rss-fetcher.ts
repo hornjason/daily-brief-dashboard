@@ -8,8 +8,9 @@
 
 import { existsSync, writeFileSync, mkdirSync, readFileSync } from 'fs'
 import { resolve } from 'path'
+import { CACHE_DIR as BASE_CACHE_DIR, DATA_CONFIG_DIR } from './lib/paths.ts'
 
-const CACHE_DIR = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss')
+const CACHE_DIR = resolve(BASE_CACHE_DIR, 'rss')
 const CACHE_PATH = resolve(CACHE_DIR, 'rh-feeds.json')
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -39,10 +40,8 @@ export interface RSSFeedConfig {
 
 // ── Config Loading ───────────────────────────────────────────────────────────
 
-const CONFIG_DIR = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../data/config')
-
 export function loadFeedConfig(): RSSFeedConfig[] {
-  const configPath = resolve(CONFIG_DIR, 'rss-feeds.json')
+  const configPath = resolve(DATA_CONFIG_DIR, 'rss-feeds.json')
 
   if (!existsSync(configPath)) {
     // Fallback to original hardcoded feeds

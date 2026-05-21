@@ -17,16 +17,14 @@ import { validateAndRetry, formatFailureFeedback, type QualityScorecard } from '
 import { intelligenceValidator } from './quality-validators/intelligence-validator.ts'
 import { resolve } from 'path'
 import { google } from 'googleapis'
-import { getGeminiToken } from './gemini-auth.ts'
 import { makeAuth } from './google.ts'
 import { driveClient } from './lib/drive-client.ts'
 import { sanitizePromptInput } from './utils.ts'
-import { getGeminiModel } from './ai-config.ts'
 import { aes, customers, patchCustomer, CUSTOMERS_PATH } from './server-state.ts'
 import { readSheetCache, readIndustryAnalysisCache, writeIndustryAnalysisCache } from './cache-layer.ts'
-import { recordGeminiUsage } from './gemini-cost-tracker.ts'
-import { fetchGeminiWithRetry } from './gemini-fetch.ts'
+import { callGemini } from './gemini-call.ts'
 import type { Customer } from './types.ts'
+import { CONFIG_DIR } from './lib/paths.ts'
 
 // ── Quality gate scorecard storage (ADR-024) ─────────────────────────────────
 // Module-level map so orchestration code can retrieve the scorecard after generation
@@ -37,7 +35,7 @@ export function getLastQualityScorecard(customerName: string): QualityScorecard 
 
 // ── Config paths ──────────────────────────────────────────────────────────────
 
-const CONFIG_DIR_PATH  = process.env.CONFIG_DIR ?? resolve(import.meta.dir, '../config')
+const CONFIG_DIR_PATH  = CONFIG_DIR
 const GDRIVE_TOKEN_PATH = process.env.GDRIVE_TOKEN ?? resolve(CONFIG_DIR_PATH, '.gdrive-server-credentials.json')
 
 // ── BKL-AI-03 / BKL-TOKEN-02: Intelligence cache TTL (tiered) ───────────────
@@ -152,135 +150,6 @@ export function extractGoogleDocId(url: string | undefined | null): string | nul
   return m?.[1] ?? null
 }
 
-// ── Gemini call with Google Search grounding ─────────────────────────────────
-
-interface GeminiGroundedOptions {
-  systemPrompt: string
-  userPrompt: string
-  maxOutputTokens?: number
-  temperature?: number
-}
-
-async function callGeminiGrounded(opts: GeminiGroundedOptions & { callType?: string; customerName?: string }): Promise<string> {
-  const project  = process.env.GOOGLE_CLOUD_PROJECT
-  const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-  const model    = getGeminiModel()
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
-
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: opts.systemPrompt }] },
-    contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
-    tools: [{ google_search: {} }],
-    generationConfig: {
-      temperature: opts.temperature ?? 1.0,
-      maxOutputTokens: opts.maxOutputTokens ?? 8192,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  })
-
-  // BKL-TEST-P0-04c: shared 429-retry helper. Preserves the 120s per-attempt
-  // AbortSignal.timeout that callGeminiGrounded originally set (grounded calls
-  // are slow — industry analysis can take 60s+). Exhausted retries throw
-  // "Gemini 429 after 4 retries — rate limited"; non-429 errors throw the
-  // canonical "Gemini API error NNN (project=... location=... model=...)"
-  // message with Bearer redaction.
-  const res = await fetchGeminiWithRetry(url, getGeminiToken, requestBody, {
-    callType:     opts.callType ?? 'intelligence-grounded',
-    customerName: opts.customerName ?? 'unknown',
-    model, project, location,
-    timeoutMs: 120_000,
-    logPrefix: '[acct-intel]',
-  })
-
-  const json = await res.json() as any
-  // BKL-M52: record token usage for cost tracking
-  const usage = json.usageMetadata
-  if (usage) {
-    recordGeminiUsage({
-      timestamp: new Date().toISOString(),
-      callType:     opts.callType ?? 'intelligence-grounded',
-      customerName: opts.customerName ?? 'unknown',
-      inputTokens:  usage.promptTokenCount ?? 0,
-      outputTokens: usage.candidatesTokenCount ?? 0,
-      model,
-    })
-  }
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text
-  if (!text) {
-    const finishReason = json.candidates?.[0]?.finishReason ?? 'unknown'
-    const safetyRatings = JSON.stringify(json.candidates?.[0]?.safetyRatings ?? [])
-    throw new Error(`Gemini returned no text content (finishReason=${finishReason}, safetyRatings=${safetyRatings})`)
-  }
-  return text
-}
-
-// ── Structured Gemini call with grounding (for industry identification) ──────
-
-// Grounded + structured: Vertex AI doesn't allow google_search + responseSchema together.
-// So we use grounding for search, ask for JSON in the prompt, and parse the text response.
-async function callGeminiGroundedStructured(opts: GeminiGroundedOptions & { responseSchema: object; callType?: string; customerName?: string }): Promise<any> {
-  const text = await callGeminiGrounded({
-    ...opts,
-    systemPrompt: opts.systemPrompt + '\n\nIMPORTANT: Return your response as valid JSON matching this schema: ' + JSON.stringify(opts.responseSchema),
-  })
-  // Extract JSON from the response — try multiple extraction strategies
-  // Strategy 1: ```json ... ``` block
-  const fenceMatch = text.match(/```json\s*([\s\S]*?)\s*```/)
-  if (fenceMatch) return JSON.parse(fenceMatch[1])
-  // Strategy 2: first { to last } (handles grounding citations after the JSON)
-  const firstBrace = text.indexOf('{')
-  const lastBrace = text.lastIndexOf('}')
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    try { return JSON.parse(text.slice(firstBrace, lastBrace + 1)) } catch { /* fall through */ }
-  }
-  // Strategy 3: strip markdown formatting and retry
-  const stripped = text.replace(/\[\d+\]/g, '').replace(/\*\*/g, '').trim()
-  const strippedBrace = stripped.indexOf('{')
-  const strippedLastBrace = stripped.lastIndexOf('}')
-  if (strippedBrace !== -1 && strippedLastBrace > strippedBrace) {
-    try { return JSON.parse(stripped.slice(strippedBrace, strippedLastBrace + 1)) } catch { /* fall through */ }
-  }
-  // Strategy 4: grounded response had no JSON — re-prompt without grounding (structured-only fallback)
-  // Vertex AI allows responseSchema on non-grounded calls. Use it as a last resort.
-  // BKL-TEST-P0-04c: the fallback path now uses fetchGeminiWithRetry so a 429
-  // here no longer silently fails — previously the bare fetch had no retry,
-  // so Vertex quota pressure surfaced as "Gemini grounded response did not
-  // contain valid JSON" instead of the real rate-limit signal.
-  try {
-    const project  = process.env.GOOGLE_CLOUD_PROJECT
-    const location = process.env.GOOGLE_CLOUD_LOCATION ?? 'us-central1'
-    const model    = getGeminiModel()
-    if (!project) throw new Error('GOOGLE_CLOUD_PROJECT not set — required for Gemini via Vertex AI')
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${model}:generateContent`
-    const fallbackBody = JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: opts.userPrompt }] }],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: opts.maxOutputTokens ?? 1024,
-        thinkingConfig: { thinkingBudget: 0 },
-        responseMimeType: 'application/json',
-        responseSchema: (opts as any).responseSchema,
-      },
-    })
-    const fallbackRes = await fetchGeminiWithRetry(url, getGeminiToken, fallbackBody, {
-      callType:     opts.callType ?? 'intelligence-grounded-fallback',
-      customerName: opts.customerName ?? 'unknown',
-      model, project, location,
-      timeoutMs: 30_000,
-      logPrefix: '[acct-intel] grounded-structured-fallback',
-    })
-    if (fallbackRes.ok) {
-      const fallbackJson = await fallbackRes.json() as any
-      const fallbackText = fallbackJson.candidates?.[0]?.content?.parts?.[0]?.text
-      if (fallbackText) {
-        try { return JSON.parse(fallbackText) } catch { /* fall through */ }
-      }
-    }
-  } catch { /* fall through to final error */ }
-  throw new Error('Gemini grounded response did not contain valid JSON')
-}
-
 // ── BKL-AI01: Identify industry/segment per customer ─────────────────────────
 
 export interface IndustryResult {
@@ -304,20 +173,26 @@ const INDUSTRY_SCHEMA = {
 export async function identifyIndustry(customerName: string): Promise<IndustryResult> {
   console.log(`[acct-intel] Identifying industry for ${customerName}`)
 
-  const result = await callGeminiGroundedStructured({
-    systemPrompt: `You are an industry classification analyst. Use Google Search to verify current information about the company. Return accurate, specific industry and market segment classifications.`,
-    userPrompt: `What industry and market segment does "${sanitizePromptInput(customerName, 200)}" operate in?
+  const geminiResult = await callGemini(
+    `You are an industry classification analyst. Use Google Search to verify current information about the company. Return accurate, specific industry and market segment classifications.`,
+    `What industry and market segment does "${sanitizePromptInput(customerName, 200)}" operate in?
 
 Return:
 - industry: The broad industry (e.g. "Financial Services", "Healthcare", "Technology", "Retail")
 - segment: The specific market segment within that industry (e.g. "Cloud Infrastructure", "Digital Payments", "Enterprise SaaS")
 - description: One sentence describing what the company does
 - competitors: Top 3 direct competitors by name`,
-    responseSchema: INDUSTRY_SCHEMA,
-    callType: 'intelligence-industry',
-    customerName,
-  })
+    {
+      callType: 'intelligence-industry',
+      customerName,
+      grounding: true,
+      responseSchema: INDUSTRY_SCHEMA,
+      model: 'full',
+      temperature: 1.0,
+    }
+  )
 
+  const result = JSON.parse(geminiResult.text)
   console.log(`[acct-intel] ${customerName} → ${result.industry} / ${result.segment}`)
   return result
 }
@@ -580,29 +455,36 @@ export async function generateCompanyIntelligence(customer: Customer, industry: 
     .replace(/\{date\}/g, date)
 
   console.log(`[acct-intel] Generating company intelligence for ${customer.name}`)
-  const rawBrief = await callGeminiGrounded({
+  const rawBriefResult = await callGemini(
     systemPrompt,
     userPrompt,
-    maxOutputTokens: 4096,
-    temperature: 1.0,
-    callType: 'intelligence-company',
-    customerName: customer.name,
-  })
+    {
+      callType: 'intelligence-company',
+      customerName: customer.name,
+      grounding: true,
+      model: 'full',
+      temperature: 1.0,
+    }
+  )
 
   // Quality gate (ADR-024) — validate and retry if below threshold
   const gateResult = await validateAndRetry(
-    rawBrief,
+    rawBriefResult.text,
     { validator: intelligenceValidator },
     async (failures) => {
       const feedback = formatFailureFeedback(failures)
-      return callGeminiGrounded({
+      const retryResult = await callGemini(
         systemPrompt,
-        userPrompt: userPrompt + '\n\n' + feedback,
-        maxOutputTokens: 4096,
-        temperature: 1.0,
-        callType: 'intelligence-company',
-        customerName: customer.name,
-      })
+        userPrompt + '\n\n' + feedback,
+        {
+          callType: 'intelligence-company',
+          customerName: customer.name,
+          grounding: true,
+          model: 'full',
+          temperature: 1.0,
+        }
+      )
+      return retryResult.text
     }
   )
 
@@ -758,14 +640,18 @@ export async function generateIndustryAnalysis(customer: Customer, industry: str
     .replace(/\{date\}/g, date)
 
   console.log(`[acct-intel] Generating industry analysis for ${customer.name} (${industrySegment})`)
-  const analysis = await callGeminiGrounded({
+  const analysisResult = await callGemini(
     systemPrompt,
     userPrompt,
-    maxOutputTokens: 4096,
-    temperature: 1.0,
-    callType: 'intelligence-analysis',
-    customerName: customer.name,
-  })
+    {
+      callType: 'intelligence-analysis',
+      customerName: customer.name,
+      grounding: true,
+      model: 'full',
+      temperature: 1.0,
+    }
+  )
+  const analysis = analysisResult.text
 
   // BKL-TOKEN-05: Write-through to shared cache so next customer with same
   // industry/region skips the grounded call.

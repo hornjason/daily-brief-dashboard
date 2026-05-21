@@ -306,7 +306,7 @@ function AutoBootstrapProgress({ state, onReset, tableauSessionNeeded }: { state
                   <div className="flex gap-2 flex-wrap">
                     <RetryStepButton
                       label="Retry CCSP"
-                      endpoint="/api/scrape/ccsp"
+                      endpoint="/api/refresh/ccsp"
                       body={{}}
                     />
                   </div>

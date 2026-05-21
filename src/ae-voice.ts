@@ -16,10 +16,10 @@ import { findCustomerDriveFolder } from './lib/customer-folder.ts'
 import { aes, customers } from './server-state.ts'
 import { toSlug, readEmailCache } from './cache-layer.ts'
 import type { EmailHighlight } from './types.ts'
+import { CACHE_DIR } from './lib/paths.ts'
 
 // ── Config paths ──────────────────────────────────────────────────────────────
 
-const CACHE_DIR = process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')
 const STYLE_GUIDES_DIR = resolve(CACHE_DIR, 'style-guides')
 const SKILL_VOICES_DIR = resolve(process.env.HOME ?? '', '.claude/skills/ContentCampaign/voices')
 
