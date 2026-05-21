@@ -668,8 +668,8 @@ export function initBackgroundScheduler(opts: {
   if (customers.length > 0) {
     (async () => {
       const { runStartupCascade } = await import('./startup-cascade.ts')
-      const allModuleStatus = await import('./feature-module-registry.ts').then(m => m.FeatureModuleRegistry.getAllStatus())
-      const hasFreshModules = Object.values(allModuleStatus).some(s => !s?.lastChecked)
+      const allModuleStatus = await import('./feature-module-registry.ts').then(m => m.FeatureModuleRegistry.getStatus())
+      const hasFreshModules = Object.values(allModuleStatus).some((s: any) => !s?.lastChecked)
 
       if (hasFreshModules) {
         console.log('[startup] Fresh install detected — running cascade instead of full refresh')

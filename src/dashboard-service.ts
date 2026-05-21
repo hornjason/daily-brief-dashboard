@@ -789,8 +789,8 @@ export async function computeTemporalDelta(customerName: string) {
 // ── Data freshness dashboard ──────────────────────────────────────────────────
 
 export function computeFreshnessStatus() {
-  const allStatus = FeatureModuleRegistry.getAllStatus()
-  const allModules = FeatureModuleRegistry.getAllModules()
+  const allStatus = FeatureModuleRegistry.getStatus()
+  const allModules = FeatureModuleRegistry.list()
 
   const calculateStatus = (lastChecked: string | null, intervalMs: number | null, recordCount: number | null): 'fresh' | 'stale' | 'critical' | 'unknown' => {
     if (!intervalMs) {
@@ -806,18 +806,19 @@ export function computeFreshnessStatus() {
   }
 
   const sources = allModules
-    .filter(m => m.displayName !== m.name)
-    .map(module => {
-      const status = allStatus[module.name] ?? { lastChecked: null, lastChanged: null, lastError: null, state: 'idle' as const, recordCount: null }
+    .filter((m: any) => m.displayName !== m.name)
+    .map((module: any) => {
+      const status: any = allStatus[module.name] ?? { lastRun: null, lastSuccess: null, lastError: null, state: 'idle', recordCount: null }
+      const lastChecked = status.lastChecked ?? status.lastRun ?? status.lastSuccess
       return {
         name: module.name,
-        displayName: module.displayName,
-        lastChecked: status.lastChecked,
-        lastChanged: status.lastChanged,
-        recordCount: status.recordCount,
+        displayName: module.displayName ?? module.name,
+        lastChecked,
+        lastChanged: status.lastChanged ?? lastChecked,
+        recordCount: status.recordCount ?? null,
         intervalMinutes: module.refreshInterval ? Math.round(module.refreshInterval / 60_000) : null,
-        refreshEndpoint: module.refreshEndpoint,
-        status: status.state === 'error' ? 'critical' as const : calculateStatus(status.lastChecked, module.refreshInterval, status.recordCount),
+        refreshEndpoint: module.refreshEndpoint ?? null,
+        status: status.state === 'error' || status.state === 'failed' ? 'critical' as const : calculateStatus(lastChecked, module.refreshInterval, status.recordCount),
         state: status.state,
         error: status.lastError,
       }

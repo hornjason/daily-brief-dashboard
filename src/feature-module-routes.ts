@@ -4,7 +4,12 @@ import { Hono } from 'hono'
 import { FeatureModuleRegistry } from './feature-module-registry'
 import { customers } from './server-state'
 import { sanitizeErr } from './utils'
-import { schedulerRegistry } from './scheduler-registry'
+import { writeJsonAtomic } from './lib/atomic-write'
+import { resolve } from 'path'
+
+// GitHub Issue #321 — Persistent module health file
+const CACHE_DIR = process.env.CACHE_DIR ?? resolve(import.meta.dir, '../data/cache')
+const MODULE_HEALTH_PATH = resolve(CACHE_DIR, 'module-health.json')
 
 export function createFeatureModuleRouter() {
   const router = new Hono()
@@ -72,16 +77,24 @@ export function createFeatureModuleRouter() {
     return c.json({ modules })
   })
 
-  // GET /api/modules/compliance — GitHub Issue #329
-  router.get('/api/modules/compliance', (c) => {
-    const report = FeatureModuleRegistry.getComplianceReport()
-    return c.json(report)
-  })
+  // GET /api/modules/health — GitHub Issue #321
+  router.get('/api/modules/health', async (c) => {
+    try {
+      const report = await FeatureModuleRegistry.getHealthReport()
 
-  // GET /api/admin/scheduler-status — ADR-028 Phase 1
-  router.get('/api/admin/scheduler-status', (c) => {
-    const entries = schedulerRegistry.getStatus()
-    return c.json({ entries })
+      // Persist to disk so admin page can read without re-running analysis
+      try {
+        writeJsonAtomic(MODULE_HEALTH_PATH, report)
+      } catch (writeErr: any) {
+        console.warn('[module-health] Failed to persist health report:', sanitizeErr(writeErr))
+        // Don't fail the request if persistence fails
+      }
+
+      return c.json(report)
+    } catch (e: any) {
+      console.error('[module-health] GET /api/modules/health error:', sanitizeErr(e))
+      return c.json({ error: sanitizeErr(e) }, 500)
+    }
   })
 
   return router

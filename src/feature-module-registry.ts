@@ -666,4 +666,55 @@ export const FeatureModuleRegistry = {
       score,
     }
   },
+
+  async getHealthReport(testCustomerSlug?: string): Promise<{
+    modules: Array<{
+      name: string
+      status: 'healthy' | 'warning' | 'error'
+      warnings: string[]
+      signalCount: number
+      tierDistribution: Record<string, number>
+    }>
+  }> {
+    const modules = this.getRegisteredModules()
+    const results: Array<{ name: string; status: 'healthy' | 'warning' | 'error'; warnings: string[]; signalCount: number; tierDistribution: Record<string, number> }> = []
+
+    for (const mod of modules) {
+      if (!mod.signals) {
+        results.push({ name: mod.name, status: 'healthy', warnings: [], signalCount: 0, tierDistribution: {} })
+        continue
+      }
+
+      try {
+        const slug = testCustomerSlug ?? '_global'
+        const signals = await mod.signals(slug)
+        const scored = signals.map(scoreSignal)
+        const warnings: string[] = []
+        const tierDist: Record<string, number> = { Critical: 0, High: 0, Medium: 0, Low: 0, Noise: 0 }
+
+        for (const s of scored) {
+          const sc = s.score ?? 0
+          if (sc >= 0.90) tierDist.Critical++
+          else if (sc >= 0.70) tierDist.High++
+          else if (sc >= 0.50) tierDist.Medium++
+          else if (sc >= 0.35) tierDist.Low++
+          else tierDist.Noise++
+        }
+
+        if (scored.length === 0) warnings.push('No signals returned')
+        if (scored.length > 0 && tierDist.Noise === scored.length) warnings.push('All signals scoring as Noise — check metadata')
+        if (scored.length > 0 && new Set(scored.map(s => s.rawRelevance)).size === 1) warnings.push('All signals have same rawRelevance — no differentiation')
+        if (scored.length > 0 && !scored.some(s => s.metadata?.customerSlug)) warnings.push('No customerSlug in metadata — all scoring as general')
+
+        const status = warnings.some(w => w.includes('All signals scoring as Noise')) ? 'error' as const
+          : warnings.length > 0 ? 'warning' as const : 'healthy' as const
+
+        results.push({ name: mod.name, status, warnings, signalCount: scored.length, tierDistribution: tierDist })
+      } catch (e: any) {
+        results.push({ name: mod.name, status: 'error', warnings: [`Module threw: ${e.message}`], signalCount: 0, tierDistribution: {} })
+      }
+    }
+
+    return { modules: results }
+  },
 }

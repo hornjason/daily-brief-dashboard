@@ -73,8 +73,6 @@ import './src/modules/intelligence-module.ts'  // #274
 import './src/modules/customer-product-intel-module.ts'  // #274
 import './src/modules/account-plan-module.ts'  // #274
 import './src/modules/playbook-module.ts'  // #299
-import './src/modules/tech-stack-module.ts'  // #307
-import './src/modules/cloud-marketplace-module.ts'  // #306
 // ── GitHub #148: Tools artifact upload routes ────────────────────────────
 import { createToolsRouter } from './src/tools-routes.ts'
 // ── GitHub #229: Meeting Prep routes ─────────────────────────────────────
@@ -749,15 +747,15 @@ initBackgroundScheduler({
 // (missing provenance or old appVersion) and queues re-discovery.
 void healStaleAccountNumbers()
 
-// ── Waves 4-5: Scheduled refreshes now managed by scheduler registry ────────
+// ── Waves 4-5: Scheduled refreshes managed by scheduler registry (ADR-028) ──
 // Product intel, news radar, lifecycle, RSS, events are registered in
 // initBackgroundScheduler() and started via schedulerRegistry.startAll().
-// See ADR-028 for the unified scheduler pattern.
 
 // ── Wave 6: Feature module startup catch-up ─────────────────────────────────
 // If any module's lastRun is older than its refreshInterval, run it now.
 // Handles the case where the container was down during a scheduled window.
 import { FeatureModuleRegistry } from './src/feature-module-registry.ts'
+import { writeJsonAtomic } from './src/lib/atomic-write.ts'
 setTimeout(async () => {
   try {
     const customerNames = customers.map((c: Customer) => c.name)
@@ -765,6 +763,17 @@ setTimeout(async () => {
     const results = await FeatureModuleRegistry.startupCatchUp(customerNames)
     for (const r of results) {
       console.log(`[startup] module catch-up: ${r.moduleName} → ${r.action} (${r.reason})`)
+    }
+
+    // GitHub Issue #321 — Generate module health report on startup
+    // Persist to disk so admin page can display without re-running analysis
+    try {
+      const healthReport = await FeatureModuleRegistry.getHealthReport()
+      const MODULE_HEALTH_PATH = resolve(CACHE_DIR, 'module-health.json')
+      writeJsonAtomic(MODULE_HEALTH_PATH, healthReport)
+      console.log('[startup] module health report generated and persisted')
+    } catch (healthErr: any) {
+      console.warn('[startup] module health check failed:', healthErr?.message ?? healthErr)
     }
   } catch (e: any) {
     console.warn('[startup] module catch-up failed:', e?.message ?? e)
