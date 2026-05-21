@@ -63,6 +63,7 @@ import { IntelligenceTab } from '../components/tabs/IntelligenceTab'
 import { ToolsTab } from '../components/tabs/ToolsTab'
 import { PlaybookTab } from '../components/tabs/PlaybookTab'
 import { MeetingPrepContent } from './MeetingPrepPage'
+import { TechStackSection } from '../components/TechStackSection'
 
 // ── Config / provider setup ───────────────────────────────────────────────────
 
@@ -1505,6 +1506,7 @@ export function CustomerDetailPage() {
           <main className="w-full lg:w-[65%] overflow-y-auto p-6 pr-3 space-y-6">
           <TemporalDeltaSection customerName={customerName} />
           <BriefSection name={customerName} />
+          <TechStackSection customerName={customerName} />
           <ProductIntelSection
             customerName={customerName}
             customerSlug={customerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
