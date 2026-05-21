@@ -6,6 +6,7 @@
  */
 
 import { callGemini } from './gemini-call.ts'
+import { loadNewsConfig } from './news-config.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,9 +48,10 @@ class GeminiGroundedNewsProvider implements NewsProvider {
    * First Gemini call: Search for news with Google Search grounding and extract structured data
    */
   private async searchAndExtract(customerName: string): Promise<Omit<NewsItem, 'significanceScore'>[]> {
-    const userPrompt = `Search for recent news articles (last 48 hours) about ${customerName}.
-Find articles about: leadership changes, acquisitions, partnerships, earnings,
-layoffs, product launches, regulatory issues, or major business developments.
+    const config = loadNewsConfig()
+
+    const userPrompt = `Search for recent news articles (last ${config.searchDepthDays * 24} hours) about ${customerName}.
+Find articles about: ${config.signalTypes.join(', ')}.
 
 Return JSON array: [{ headline, summary, sourceUrl, sourceName, publishedDate, signalType }]
 Return empty array if no significant news found. Do not fabricate articles.
@@ -171,11 +173,18 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
    * Second Gemini call: Score significance of articles
    */
   private async scoreSignificance(articles: Omit<NewsItem, 'significanceScore'>[], customerName: string): Promise<NewsItem[]> {
+    const config = loadNewsConfig()
+
+    // Build scoring guidelines from config
+    const guidelines = Object.entries(config.significanceGuidelines)
+      .map(([range, desc]) => `- ${range}: ${desc}`)
+      .join('\n')
+
     const userPrompt = `Score each article 1-10 for business significance to a Red Hat Account Solution Architect managing this customer:
-- 9-10: Critical (bankruptcy, major acquisition, C-suite departure)
-- 7-8: Important (new tech initiative, major partnership, earnings surprise)
-- 4-6: Notable (product launch, minor leadership change, industry report)
-- 1-3: Low (routine press release, minor mention)
+${guidelines}
+
+Higher scores for articles mentioning: ${config.criticalKeywords.join(', ')}
+Lower scores for articles mentioning: ${config.excludeKeywords.join(', ')}
 
 Input articles: ${JSON.stringify(articles, null, 2)}
 
@@ -192,8 +201,8 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
 
     if (!result.text) {
       console.warn('[news-provider] Gemini returned no content for scoring query')
-      // Fallback: return articles with default score of 5
-      return articles.map(a => ({ ...a, significanceScore: 5 }))
+      // Fallback: return articles with default score from config
+      return articles.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
     }
 
     // Parse JSON response
@@ -204,15 +213,15 @@ Return valid JSON only — no markdown, no code blocks, no explanatory text.`
 
       if (!Array.isArray(scoredArticles)) {
         console.warn('[news-provider] Gemini scoring response was not an array')
-        return articles.map(a => ({ ...a, significanceScore: 5 }))
+        return articles.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
       }
 
       return scoredArticles
     } catch (e: any) {
       console.warn('[news-provider] Failed to parse Gemini scoring response:', e.message)
       console.warn('[news-provider] Raw response:', result.text.slice(0, 500))
-      // Fallback: return articles with default score of 5
-      return articles.map(a => ({ ...a, significanceScore: 5 }))
+      // Fallback: return articles with default score from config
+      return articles.map(a => ({ ...a, significanceScore: config.defaultThreshold }))
     }
   }
 

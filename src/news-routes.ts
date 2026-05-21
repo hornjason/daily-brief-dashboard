@@ -1,10 +1,12 @@
 /**
  * News Radar API Routes
  *
- * Three endpoints:
+ * Five endpoints:
  * - GET /api/customer/:name/news — read from cache
  * - POST /api/customer/:name/news/refresh — search + cache + return
  * - GET /api/news/highlights — high-score articles across all customers
+ * - GET /api/admin/news-config — return current configuration
+ * - POST /api/admin/news-config — update configuration
  */
 
 import { Hono } from 'hono'
@@ -13,7 +15,7 @@ import { resolve } from 'path'
 import { newsProvider } from './news-provider.ts'
 import { toSlug } from './cache-layer.ts'
 import type { NewsItem } from './news-provider.ts'
-import { FeatureModuleRegistry } from './feature-module-registry.ts'
+import { loadNewsConfig, updateNewsConfig } from './news-config.ts'
 
 // ── Cache directory ──────────────────────────────────────────────────────────
 
@@ -164,24 +166,43 @@ export function createNewsRouter(): Hono {
   })
 
   /**
-   * POST /api/refresh/news
-   * Refresh news for all customers (GitHub Issue #309)
+   * GET /api/admin/news-config
+   * Return current news search and scoring configuration
    */
-  app.post('/api/refresh/news', async (c) => {
-    const { customers } = await import('./server-state.ts')
-    let success = 0, failed = 0
-    for (const customer of customers) {
-      try {
-        await newsProvider.searchNews(customer.name)
-        success++
-      } catch { failed++ }
+  app.get('/api/admin/news-config', (c) => {
+    try {
+      const config = loadNewsConfig()
+      return c.json(config)
+    } catch (e: any) {
+      console.error('[news-routes] Failed to load config:', e.message)
+      return c.json({ error: e.message }, 500)
     }
-    FeatureModuleRegistry.recordOutcome('news', {
-      success: failed === 0,
-      recordCount: success,
-      error: failed > 0 ? `${failed} customers failed` : undefined,
-    })
-    return c.json({ ok: true, refreshed: success, failed })
+  })
+
+  /**
+   * POST /api/admin/news-config
+   * Update news search and scoring configuration
+   *
+   * Accepts partial config updates. Validates before writing.
+   */
+  app.post('/api/admin/news-config', async (c) => {
+    try {
+      const body = await c.req.json()
+
+      // Update config
+      const result = updateNewsConfig(body)
+
+      if (!result.success) {
+        return c.json({ error: result.error }, 400)
+      }
+
+      // Return updated config
+      const config = loadNewsConfig()
+      return c.json(config)
+    } catch (e: any) {
+      console.error('[news-routes] Failed to update config:', e.message)
+      return c.json({ error: e.message }, 500)
+    }
   })
 
   return app
