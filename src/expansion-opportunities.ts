@@ -26,7 +26,8 @@ import { customerSubscribesTo } from './customer-product-intel.ts'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ExpansionRecommendation {
-  product: string       // product slug from config
+  product: string       // product display name
+  productSlug?: string  // normalized slug (falls back to toSlug(product))
   why: string           // 1-2 sentences citing the signal
   features: string[]    // 2-3 relevant feature names from feature cache
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
