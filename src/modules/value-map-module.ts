@@ -14,7 +14,7 @@ import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.t
 import { getValueMap, getAvailableValueMapSlugs, clearValueMapCache } from '../value-map-loader.ts'
 import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs'
 import { resolve } from 'path'
-import { toSlug } from '../cache-layer.ts'
+import { getCustomerProductContext } from '../lib/customer-product-context.ts'
 
 const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
 const VALUE_MAPS_PATH = resolve(CACHE_DIR, 'value-maps/business-value-maps.txt')
@@ -28,42 +28,6 @@ function getValueMapsDeckId(): string | null {
     return settings.valueMapsDeckId ?? null
   } catch {
     return null
-  }
-}
-
-function getCustomersPath(): string {
-  const configDir = process.env.CONFIG_DIR ?? 'config'
-  return resolve(configDir, 'customers.json')
-}
-
-function getCustomerProducts(customerSlug: string): string[] {
-  try {
-    const path = getCustomersPath()
-    if (!existsSync(path)) return []
-    const customers = JSON.parse(readFileSync(path, 'utf-8'))
-    const custs = Array.isArray(customers) ? customers : customers.customers ?? []
-    const customer = custs.find((c: any) => toSlug(c.name) === customerSlug)
-    if (!customer) return []
-
-    const products: string[] = []
-    if (customer.subscriptions) {
-      for (const sub of customer.subscriptions) {
-        const name = (sub.productName || sub.product || '').toLowerCase()
-        if (name.includes('openshift')) products.push('ocp')
-        else if (name.includes('enterprise linux') || name.includes('rhel')) products.push('rhel')
-        else if (name.includes('ansible')) products.push('aap')
-        else if (name.includes('cluster security') || name.includes('acs')) products.push('acs')
-        else if (name.includes('cluster management') || name.includes('acm')) products.push('acm')
-        else if (name.includes('quay')) products.push('quay')
-        else if (name.includes('openshift ai') || name.includes('rhoai')) products.push('rhoai')
-        else if (name.includes('developer hub') || name.includes('rhdh')) products.push('rhdh')
-        else if (name.includes('satellite')) products.push('satellite')
-        else if (name.includes('insights')) products.push('insights')
-      }
-    }
-    return [...new Set(products)]
-  } catch {
-    return []
   }
 }
 
@@ -148,10 +112,11 @@ FeatureModuleRegistry.register({
     const availableSlugs = getAvailableValueMapSlugs()
     if (availableSlugs.length === 0) return []
 
-    const customerProducts = getCustomerProducts(customerSlug)
-    const isCustomerSpecific = customerProducts.length > 0
-    const slugsToUse = isCustomerSpecific
-      ? customerProducts.filter(s => availableSlugs.includes(s))
+    // ADR-029: use shared utility instead of local getCustomerProducts
+    const context = getCustomerProductContext(customerSlug)
+    const hasRelevantProducts = context.allRelevantProducts.length > 0
+    const slugsToUse = hasRelevantProducts
+      ? context.allRelevantProducts.filter(s => availableSlugs.includes(s))
       : availableSlugs
 
     if (slugsToUse.length === 0) return []
@@ -165,19 +130,33 @@ FeatureModuleRegistry.register({
       const lines = content.split('\n').filter(l => l.trim())
       const summary = lines.slice(0, 5).join(' ').substring(0, 500)
 
+      const isOwned = context.ownedProducts.includes(slug)
+      const isInterest = !isOwned && context.interestProducts.includes(slug)
+
+      const metadata: Record<string, any> = {
+        productSlug: slug,
+        contentLength: content.length,
+      }
+
+      if (isOwned) {
+        metadata.customerSlug = customerSlug
+        metadata.matchType = 'subscription'
+        metadata.redHatProducts = [slug]
+      } else if (isInterest) {
+        metadata.customerSlug = customerSlug
+        metadata.matchType = 'interest'
+        metadata.context = 'evaluating'
+        metadata.redHatProducts = [slug]
+      }
+
       signals.push({
         source: 'value-maps',
         type: 'intelligence',
         headline: `Business value context for ${slug.toUpperCase()}`,
         detail: summary,
-        rawRelevance: isCustomerSpecific ? 0.75 : 0.6,  // ADR-027
+        rawRelevance: (isOwned || isInterest) ? 0.75 : 0.6,
         timestamp: new Date().toISOString(),
-        metadata: {
-          customerSlug: isCustomerSpecific ? customerSlug : undefined,  // ADR-027: Only customer-specific if they have products
-          productSlug: slug,
-          contentLength: content.length,
-          redHatProducts: [slug],  // ADR-027: booster for RH products
-        },
+        metadata,
       })
     }
 

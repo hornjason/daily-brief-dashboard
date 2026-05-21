@@ -6,6 +6,7 @@ import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleSco
 import { fetchProductLifecycle, readProductLifecycleCache } from '../product-lifecycle.ts'
 import { existsSync, unlinkSync, statSync } from 'fs'
 import { resolve } from 'path'
+import { getCustomerProductContext } from '../lib/customer-product-context.ts'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'product-lifecycle.json')
 const LIFECYCLE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
@@ -66,12 +67,13 @@ FeatureModuleRegistry.register({
       return []
     }
 
+    const context = getCustomerProductContext(customerSlug)
     const signals: Signal[] = []
     const now = new Date()
 
     for (const product of cache.products) {
-      // Calculate days until EOL for scoring
-      let score = 0.4  // default score
+      // ADR-029: rawRelevance based on lifecycle urgency
+      let rawRelevance = 0.5
 
       if (product.eolDate && product.eolDate !== 'N/A') {
         try {
@@ -79,18 +81,17 @@ FeatureModuleRegistry.register({
           const daysUntilEol = Math.floor((eolDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
           if (daysUntilEol < 90) {
-            score = 0.8  // EOL soon — high priority
+            rawRelevance = 0.9
           } else if (product.nextVersion) {
-            score = 0.6  // New version available
+            rawRelevance = 0.7
           }
         } catch {
-          // Invalid date format — use default score
+          // Invalid date format — use default
         }
       } else if (product.nextVersion) {
-        score = 0.6  // New version available
+        rawRelevance = 0.7
       }
 
-      // Build headline
       const versionPart = `${product.displayName.replace('Red Hat ', '')} ${product.currentVersion}`
       const eolPart = product.eolDate !== 'N/A'
         ? `EOL ${new Date(product.eolDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short' })}`
@@ -98,7 +99,6 @@ FeatureModuleRegistry.register({
 
       const headline = `${versionPart} — ${eolPart}`
 
-      // Build detail
       const parts: string[] = []
       parts.push(`Current version: ${product.latestPatch}`)
       parts.push(`GA: ${new Date(product.gaDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}`)
@@ -114,22 +114,39 @@ FeatureModuleRegistry.register({
 
       const detail = parts.join(' | ')
 
+      // ADR-029: cross-reference against customer subscriptions/interests
+      const isOwned = context.ownedProducts.includes(product.slug)
+      const isInterest = !isOwned && context.interestProducts.includes(product.slug)
+
+      const metadata: Record<string, any> = {
+        slug: product.slug,
+        currentVersion: product.currentVersion,
+        latestPatch: product.latestPatch,
+        eolDate: product.eolDate,
+        nextVersion: product.nextVersion,
+        nextExpected: product.nextExpected,
+        eusAvailable: product.eusAvailable,
+      }
+
+      if (isOwned) {
+        metadata.customerSlug = customerSlug
+        metadata.matchType = 'subscription'
+        metadata.redHatProducts = [product.slug]
+      } else if (isInterest) {
+        metadata.customerSlug = customerSlug
+        metadata.matchType = 'interest'
+        metadata.context = 'evaluating'
+        metadata.redHatProducts = [product.slug]
+      }
+
       signals.push({
         source: 'product-lifecycle',
         type: 'product-release',
         headline,
         detail,
-        score,
+        rawRelevance,
         timestamp: cache.fetchedAt,
-        metadata: {
-          slug: product.slug,
-          currentVersion: product.currentVersion,
-          latestPatch: product.latestPatch,
-          eolDate: product.eolDate,
-          nextVersion: product.nextVersion,
-          nextExpected: product.nextExpected,
-          eusAvailable: product.eusAvailable,
-        },
+        metadata,
       })
     }
 

@@ -10,6 +10,7 @@ import { FeatureModuleRegistry, type Signal, type NavDeclaration, type ModuleSco
 import { fetchRedHatRSS, type RSSItem } from '../rh-rss-fetcher.ts'
 import { existsSync, unlinkSync, readFileSync, statSync } from 'fs'
 import { resolve } from 'path'
+import { getCustomerProductContext, normalizeProductSlug } from '../lib/customer-product-context.ts'
 
 const CACHE_PATH = resolve(process.env.CACHE_DIR ?? 'data/cache', 'rss', 'rh-feeds.json')
 const RSS_TTL_MS = 4 * 60 * 60 * 1000  // 4 hours
@@ -82,7 +83,7 @@ FeatureModuleRegistry.register({
       return []
     }
 
-    // ADR-027: Convert scoring to rawRelevance, detect customer/industry specificity
+    const context = getCustomerProductContext(customerSlug)
     const now = Date.now()
     const signals: Signal[] = []
 
@@ -99,12 +100,25 @@ FeatureModuleRegistry.register({
       const ageMs = now - pubDate.getTime()
       const ageHours = ageMs / (1000 * 60 * 60)
 
-      // rawRelevance: 0.9 for < 24h, 0.6 for < 48h, 0.3 for older
       let rawRelevance = 0.3
       if (ageHours < 24) {
         rawRelevance = 0.9
       } else if (ageHours < 48) {
         rawRelevance = 0.6
+      }
+
+      // ADR-029: cross-reference productTags against customer products
+      let productMatch = false
+      const matchedProducts: string[] = []
+
+      if (item.productTags && item.productTags.length > 0) {
+        for (const tag of item.productTags) {
+          const slug = normalizeProductSlug(tag)
+          if (slug && context.allRelevantProducts.includes(slug)) {
+            productMatch = true
+            if (!matchedProducts.includes(slug)) matchedProducts.push(slug)
+          }
+        }
       }
 
       // Check if customer name appears in headline or description
@@ -115,15 +129,27 @@ FeatureModuleRegistry.register({
         descLower.includes(customerNameLower)
       )
 
-      // Build metadata
       const metadata: Record<string, any> = {
         productTags: item.productTags,
         feedSource: item.source,
       }
 
-      // Mark customer-specific signals
+      // Name match takes priority, then subscription, then interest
       if (hasCustomerName) {
         metadata.customerSlug = customerSlug
+        metadata.matchType = 'name'
+      } else if (productMatch) {
+        metadata.customerSlug = customerSlug
+        if (context.ownedProducts.some(p => matchedProducts.includes(p))) {
+          metadata.matchType = 'subscription'
+        } else {
+          metadata.matchType = 'interest'
+          metadata.context = 'evaluating'
+        }
+      }
+
+      if (matchedProducts.length > 0) {
+        metadata.redHatProducts = matchedProducts
       }
 
       signals.push({
