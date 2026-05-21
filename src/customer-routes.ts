@@ -366,9 +366,17 @@ export function createCustomerRouter(): Hono {
     const { FeatureModuleRegistry } = await import('./feature-module-registry.ts')
     const registrySignals = await FeatureModuleRegistry.collectAllSignals(slug)
 
+    const detail = c.req.query('detail') === 'true'
+    const sourceFilter = c.req.query('source')
+
+    let filtered = registrySignals
+    if (sourceFilter) {
+      filtered = filtered.filter(s => s.source === sourceFilter)
+    }
+
     // Group by source
     const bySource: Record<string, { count: number; types: string[]; topHeadline: string }> = {}
-    for (const s of registrySignals) {
+    for (const s of filtered) {
       if (!bySource[s.source]) {
         bySource[s.source] = { count: 0, types: [], topHeadline: '' }
       }
@@ -381,12 +389,25 @@ export function createCustomerRouter(): Hono {
       }
     }
 
-    return c.json({
+    const response: any = {
       customer: customer.name,
       slug,
-      totalSignals: registrySignals.length,
+      totalSignals: filtered.length,
       sources: bySource,
-    })
+    }
+
+    if (detail) {
+      response.signals = filtered.map(s => ({
+        source: s.source,
+        type: s.type,
+        headline: s.headline,
+        score: s.score,
+        rawRelevance: s.rawRelevance,
+        metadata: s.metadata,
+      }))
+    }
+
+    return c.json(response)
   })
 
   // BKL-AI-INTEL-02: Drive discovery fallback. After a cache wipe, getJobStatus
