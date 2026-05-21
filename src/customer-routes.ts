@@ -25,6 +25,7 @@ import { readAccountPlan, generateAndSaveAccountPlan } from './account-plan.ts'
 import { getAiConfig } from './ai-config.ts'
 import { queryProductIntelligence } from './product-intelligence.ts'
 import * as CustomerService from './customer-service.ts'
+import { getCustomerProductContext } from './lib/customer-product-context.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
