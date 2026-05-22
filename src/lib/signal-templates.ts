@@ -11,6 +11,7 @@
 
 import type { Signal } from '../feature-module-registry.ts'
 import type { AccountTeamMember } from '../types.ts'
+import { getTacticsByTdp, getTdpDescription } from './saleshub-knowledge-loader.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ export interface TemplateResult {
     techStack: string | null
     keyRelationships: string | null
     strategicOpportunities: string | null
+    saleshubContext: string | null
   }
 }
 
@@ -405,6 +407,75 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
 /**
  * Orchestrator: Assemble all sections into a complete template result.
  *
+/**
+ * SalesHub Context section — aggregates ALL SalesHub knowledge relevant
+ * to this customer's signals into a single section. This is the canonical
+ * way SalesHub content enters every consumer (playbook, brief, campaign,
+ * meeting-prep). Any new consumer that calls templateAll() gets this
+ * automatically — no per-consumer wiring needed.
+ *
+ * Content: TDP positioning, tactic talk tracks, customer wins, linked assets.
+ * Source: saleshub-knowledge.json via saleshub-knowledge-loader.ts.
+ */
+export function templateSalesHubContext(signals: Signal[]): string | null {
+  // Find unique TDPs from signals that have solution play metadata
+  const tdpSet = new Set<string>()
+  for (const s of signals) {
+    const tdp = s.metadata?.solutionTdp
+    if (typeof tdp === 'string' && tdp) tdpSet.add(tdp)
+  }
+
+  if (tdpSet.size === 0) return null
+
+  const parts: string[] = []
+
+  for (const tdpName of tdpSet) {
+    const tdpDesc = getTdpDescription(tdpName)
+    const tactics = getTacticsByTdp(tdpName)
+
+    if (!tdpDesc && tactics.length === 0) continue
+
+    const tdpLines: string[] = []
+    tdpLines.push(`### ${tdpName}`)
+    if (tdpDesc) tdpLines.push(`> ${tdpDesc.slice(0, 300)}`)
+
+    for (const tactic of tactics.slice(0, 5)) {
+      tdpLines.push(`\n**${tactic.name}**`)
+      if (tactic.talkTrack) {
+        tdpLines.push(`*Talk track:* ${tactic.talkTrack.slice(0, 250)}`)
+      }
+      if (tactic.customerWins.length > 0) {
+        tdpLines.push('*Customer proof points:*')
+        for (const win of tactic.customerWins.slice(0, 3)) {
+          tdpLines.push(`- ${win}`)
+        }
+      }
+      if (tactic.whatToSay.length > 0) {
+        tdpLines.push('*Key messaging:*')
+        for (const say of tactic.whatToSay.slice(0, 3)) {
+          tdpLines.push(`- ${say}`)
+        }
+      }
+      if (tactic.whatToShare.length > 0) {
+        const assets = tactic.whatToShare.filter(a => a.url).slice(0, 5)
+        if (assets.length > 0) {
+          tdpLines.push('*Assets to share:*')
+          for (const asset of assets) {
+            tdpLines.push(`- [${asset.name}](${asset.url})`)
+          }
+        }
+      }
+    }
+
+    parts.push(tdpLines.join('\n'))
+  }
+
+  return parts.length > 0 ? parts.join('\n\n') : null
+}
+
+/**
+ * Orchestrator: Assemble all sections into a complete template result.
+ *
  * @param signals - Scored signals from the registry
  * @param team - Account team members array from getAccountTeam() (optional)
  * @param options - Format and filtering options
@@ -425,11 +496,13 @@ export function templateAll(
   const techStack = templateTechStack(filteredSignals)
   const keyRelationships = templateKeyRelationships(team)
   const strategicOpportunities = templateStrategicOpportunities(filteredSignals)
+  const saleshubContext = templateSalesHubContext(filteredSignals)
 
   // Assemble deterministic markdown output
   const sections: string[] = []
 
   if (strategicOpportunities) sections.push(`## Strategic Opportunities\n\n${strategicOpportunities}`)
+  if (saleshubContext) sections.push(`## Sales Plays, TDPs & Tactics\n\n${saleshubContext}`)
   if (productAlignment) sections.push(`## Product Alignment\n\n${productAlignment}`)
   if (cloudMarketplace) sections.push(`## Cloud Marketplace\n\n${cloudMarketplace}`)
   if (renewals) sections.push(`## Renewals & Pipeline\n\n${renewals}`)
@@ -474,6 +547,11 @@ export function templateAll(
     narrativeContext = `${narrativeContext}\n\nCompany Intelligence:\n${options.intelligenceContext}`
   }
 
+  // Append SalesHub talk tracks to narrative context so Gemini uses the language
+  if (saleshubContext) {
+    narrativeContext = `${narrativeContext}\n\nSales Plays, TDPs & Tactics (use this positioning language in your output):\n${saleshubContext}`
+  }
+
   return {
     deterministic,
     narrativeContext,
@@ -485,6 +563,7 @@ export function templateAll(
       techStack,
       keyRelationships,
       strategicOpportunities,
+      saleshubContext,
     },
   }
 }

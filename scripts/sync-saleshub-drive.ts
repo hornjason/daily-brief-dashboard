@@ -180,28 +180,55 @@ export async function syncSalesHubToDrive(): Promise<{ uploaded: number; shortcu
   const jsonFiles = readdirSync(SALESHUB_CACHE).filter(f => f.endsWith('.json'))
   console.log(`[sync-saleshub-drive] Syncing ${jsonFiles.length} files to Drive…`)
 
-  for (const fileName of jsonFiles) {
+  // Upload the knowledge base and index files
+  for (const fileName of ['saleshub-knowledge.json', 'saleshub-products.json']) {
     const filePath = resolve(SALESHUB_CACHE, fileName)
-    const content = readFileSync(filePath, 'utf-8')
-
-    await uploadJsonFile(drive, saleshubFolderId, fileName, content)
-    uploaded++
-
-    // For product files, create shortcuts for Google Docs/Slides URLs
-    // Skip index files and the knowledge file (they don't have googleDocsUrls)
-    if (fileName !== 'saleshub-products.json' && fileName !== 'saleshub-knowledge.json') {
-      try {
-        const product: SalesHubProduct = JSON.parse(content)
-        for (const url of product.googleDocsUrls ?? []) {
-          const shortcutName = `${product.name} — ${url.includes('presentation') ? 'Slides' : 'Doc'}`
-          await createDriveShortcut(drive, saleshubFolderId, shortcutName, url)
-          shortcuts++
-        }
-      } catch {}
+    if (existsSync(filePath)) {
+      await uploadJsonFile(drive, saleshubFolderId, fileName, readFileSync(filePath, 'utf-8'))
+      uploaded++
     }
+  }
 
-    // Rate limit courtesy
-    await new Promise(r => setTimeout(r, 200))
+  // Read the knowledge base to create organized shortcuts
+  const knowledgePath = resolve(SALESHUB_CACHE, 'saleshub-knowledge.json')
+  if (existsSync(knowledgePath)) {
+    const knowledge = JSON.parse(readFileSync(knowledgePath, 'utf-8'))
+
+    // Create subfolders for organized content
+    const tacticsFolderId = await findOrCreateFolder(drive, saleshubFolderId, 'Sales Tactics')
+    const playsFolderId = await findOrCreateFolder(drive, saleshubFolderId, 'Sales Plays')
+    const productsFolderId = await findOrCreateFolder(drive, saleshubFolderId, 'Products')
+
+    // Create shortcuts for all tactic what-to-share assets
+    for (const tactic of knowledge.tactics ?? []) {
+      for (const asset of tactic.whatToShare ?? []) {
+        if (!asset.url || !asset.name) continue
+        const isGoogleDoc = asset.url.includes('docs.google.com') || asset.url.includes('drive.google.com')
+        if (isGoogleDoc) {
+          await createDriveShortcut(drive, tacticsFolderId, `${tactic.name} — ${asset.name}`, asset.url)
+        }
+        shortcuts++
+        await new Promise(r => setTimeout(r, 100))
+      }
+    }
+    console.log(`[sync-saleshub-drive] Created shortcuts for tactic assets`)
+
+    // Create shortcuts for all product Google Docs/Slides and decks
+    for (const product of knowledge.products ?? []) {
+      for (const url of product.googleDocsUrls ?? []) {
+        const isSlides = url.includes('presentation')
+        await createDriveShortcut(drive, productsFolderId, `${product.name} — ${isSlides ? 'Slides' : 'Doc'}`, url)
+        shortcuts++
+        await new Promise(r => setTimeout(r, 100))
+      }
+      for (const deck of product.decks ?? []) {
+        if (!deck.url || !deck.url.includes('docs.google.com')) continue
+        await createDriveShortcut(drive, productsFolderId, `${product.name} — ${deck.name}`, deck.url)
+        shortcuts++
+        await new Promise(r => setTimeout(r, 100))
+      }
+    }
+    console.log(`[sync-saleshub-drive] Created shortcuts for product assets`)
   }
 
   console.log(`[sync-saleshub-drive] Done — ${uploaded} files uploaded, ${shortcuts} shortcuts created`)
