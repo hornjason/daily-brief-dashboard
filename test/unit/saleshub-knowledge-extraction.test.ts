@@ -157,7 +157,7 @@ describe('buildSalesHubKnowledge', () => {
     expect(knowledge.scrapedAt).toBeTruthy()
     expect(knowledge.products.length).toBe(1)
     expect(knowledge.salesPlays.length).toBe(1)
-    expect(knowledge.tactics.length).toBe(1)
+    expect(knowledge.tactics.length).toBe(2) // 1 from product tdpSections (non-TDP entry) + 1 standalone
     expect(knowledge.tdps.length).toBeGreaterThanOrEqual(1)
 
     // Verify product structure
@@ -168,9 +168,11 @@ describe('buildSalesHubKnowledge', () => {
     // Verify sales play structure
     expect(knowledge.salesPlays[0].linkedTdps).toContain('Automation')
 
-    // Verify tactic structure
-    expect(knowledge.tactics[0].customerWins.length).toBe(1)
-    expect(knowledge.tactics[0].parentTdp).toBe('Automation')
+    // Verify tactic structure — standalone tactic has customerWins
+    const standaloneTactic = knowledge.tactics.find(t => t.name === 'AIOps: Turn Intelligence into Action')
+    expect(standaloneTactic).toBeDefined()
+    expect(standaloneTactic!.customerWins.length).toBe(1)
+    expect(standaloneTactic!.parentTdp).toBe('Automation')
 
     // Verify TDP aggregation from products
     const automationTdp = knowledge.tdps.find(t => t.name === 'Automation TDP')

@@ -322,12 +322,41 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
     const playName = String(m.solutionPlayName ?? 'Unknown')
     const techs = s.headline.replace(/ \(.*\)$/, '')
     const products = Array.isArray(m.redHatProducts) ? m.redHatProducts.join(', ') : ''
-    const valueProps = Array.isArray(m.valueProps)
-      ? m.valueProps[0]?.slice(0, 80) ?? ''
-      : ''
-    playRows.push(`| ${tdp} | ${playName} | ${techs} | ${products} | ${valueProps} |`)
+    // Prefer SalesHub talk track over generic valueProps
+    const businessValue = m.talkTrack
+      ? String(m.talkTrack).slice(0, 120)
+      : (Array.isArray(m.valueProps) ? m.valueProps[0]?.slice(0, 80) ?? '' : '')
+    playRows.push(`| ${tdp} | ${playName} | ${techs} | ${products} | ${businessValue} |`)
   }
   parts.push(playRows.join('\n'))
+
+  // Customer wins proof points (from any signal with customerWins)
+  const allWins: string[] = []
+  for (const s of uniqueSignals) {
+    const wins = s.metadata?.customerWins
+    if (Array.isArray(wins)) {
+      for (const w of wins) {
+        if (typeof w === 'string' && w.length > 5 && !allWins.includes(w)) allWins.push(w)
+      }
+    }
+  }
+  if (allWins.length > 0) {
+    parts.push('### Customer Proof Points\n' + allWins.slice(0, 5).map(w => `- ${w}`).join('\n'))
+  }
+
+  // Linked assets (decks, resources)
+  const allAssets: Array<{ name: string; url: string }> = []
+  for (const s of uniqueSignals) {
+    const assets = s.metadata?.linkedAssets
+    if (Array.isArray(assets)) {
+      for (const a of assets as Array<{ name: string; url: string }>) {
+        if (a.url && !allAssets.some(x => x.name === a.name)) allAssets.push(a)
+      }
+    }
+  }
+  if (allAssets.length > 0) {
+    parts.push('### Linked Assets\n' + allAssets.slice(0, 8).map(a => `- [${a.name}](${a.url})`).join('\n'))
+  }
 
   // Marketplace Opportunities sub-section (from signals with privateOfferEligible or provider+acvPlus)
   const marketplaceSignals = signals.filter(s => {

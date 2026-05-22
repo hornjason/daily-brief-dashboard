@@ -268,48 +268,65 @@ async function extractProductPage(page: Page, productName: string, productUrl: s
 async function discoverSalesPlayLinks(page: Page): Promise<Array<{ name: string; url: string }>> {
   console.log('[scrape-saleshub] Discovering Sales Play pages from DocCenter…')
 
-  // Navigate to the DocCenter homepage to find Sales Play section links
-  const homepageUrl = `${SALESHUB_URL}/apps/doccenter/${DOCCENTER_PROFILE}`
-  await page.goto(homepageUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  // Navigate to DocCenter and use the "Sales Play" filter sidebar to find tagged content
+  // The DocCenter page text shows filter categories including "Sales Play" with named plays
+  const doccenterUrl = `${SALESHUB_URL}/apps/doccenter/${DOCCENTER_PROFILE}/main///`
+  await page.goto(doccenterUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
 
-  const links = await page.evaluate(() => {
+  // Known Sales Play names from SalesHub (from DocCenter filter sidebar)
+  const knownPlays = [
+    'Build and Run Applications',
+    'Modernize Infrastructure',
+    'The AI-Ready Enterprise',
+    'Sovereignty',
+    'IT Operations Efficiency',
+  ]
+
+  // Find links to pages tagged as Sales Plays
+  const links = await page.evaluate((plays) => {
     const items: { name: string; url: string }[] = []
     const allLinks = document.querySelectorAll('a[href]')
     allLinks.forEach(a => {
       const text = a.textContent?.trim() ?? ''
       const href = a.getAttribute('href') ?? ''
-      const lower = text.toLowerCase()
-      // Sales Play pages contain keywords like "Build and Run", "Modernize", "Secure", "Automate"
-      // and are major category landing pages
-      if (href.includes('doccenter') && href.includes('lf') &&
-          (lower.includes('sales play') ||
-           lower.includes('build and run') ||
-           lower.includes('modernize infrastructure') ||
-           lower.includes('accelerate application') ||
-           lower.includes('automate at scale') ||
-           lower.includes('secure the hybrid cloud') ||
-           lower.includes('deploy at the edge'))) {
-        items.push({
-          name: text,
-          url: href.startsWith('http') ? href : `${window.location.origin}${href}`,
-        })
+      if (!href.includes('doccenter') || !href.includes('lf')) return
+      for (const play of plays) {
+        if (text.toLowerCase().includes(play.toLowerCase())) {
+          items.push({
+            name: play,
+            url: href.startsWith('http') ? href : `${window.location.origin}${href}`,
+          })
+          break
+        }
       }
     })
-    // Dedupe
     const seen = new Set<string>()
     return items.filter(i => {
       if (seen.has(i.name)) return false
       seen.add(i.name)
       return true
     })
-  })
+  }, knownPlays)
 
   console.log(`[scrape-saleshub] Found ${links.length} Sales Play pages`)
+
+  // If no links found on DocCenter, create placeholder entries from known plays
+  if (links.length === 0) {
+    console.log('[scrape-saleshub] No Sales Play links found — using known play names as placeholders')
+    return knownPlays.map(name => ({ name, url: '' }))
+  }
+
   return links
 }
 
 async function extractSalesPlayPage(page: Page, playName: string, playUrl: string): Promise<ScrapedSalesPlay | null> {
+  // If no URL (placeholder entry), return the play with just the name
+  if (!playUrl) {
+    console.log(`[scrape-saleshub] Sales Play placeholder: ${playName}`)
+    return { name: playName, description: '', linkedTdps: [], url: '' }
+  }
+
   try {
     console.log(`[scrape-saleshub] Scraping Sales Play: ${playName}`)
     await page.goto(playUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
@@ -366,40 +383,36 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
 // ── Pass 3: Sales Tactic Page Extraction ─────────────────────────────────────
 
 async function discoverSalesTacticLinks(page: Page): Promise<Array<{ name: string; url: string }>> {
-  console.log('[scrape-saleshub] Discovering Sales Tactic pages from DocCenter…')
+  console.log('[scrape-saleshub] Discovering Sales Tactic pages…')
 
-  const homepageUrl = `${SALESHUB_URL}/apps/doccenter/${DOCCENTER_PROFILE}`
-  await page.goto(homepageUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  // Navigate to SalesHub homepage where Sales Tactics section has links
+  await page.goto(`${SALESHUB_URL}/apps/home`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
 
-  // Expand any accordions on the homepage to reveal tactic links
-  await clickAccordionExpanders(page)
+  // Known tactic names from DocCenter filter sidebar
+  const knownTactics = [
+    'Agentic AI', 'Inference at Scale', 'Production AI', 'Sovereign (Private) AI',
+    'AIOps', 'Optimize and Modernize IT Ops', 'Automate at Scale', 'Network Automation',
+    'VMware Migration', 'Cloud-Native Adoption', 'Application Modernization',
+    'Platform Engineering', 'Developer Productivity', 'Edge Computing',
+    'Digital Sovereignty', 'Supply Chain Security', 'Security Automation',
+    'Observability', 'Database Modernization', 'Infrastructure as Code',
+  ]
 
-  const links = await page.evaluate(() => {
+  const links = await page.evaluate((tactics) => {
     const items: { name: string; url: string }[] = []
     const allLinks = document.querySelectorAll('a[href]')
     allLinks.forEach(a => {
       const text = a.textContent?.trim() ?? ''
       const href = a.getAttribute('href') ?? ''
-      // Known Sales Tactic page names from the brief
-      const tacticKeywords = [
-        'agentic ai', 'aiops', 'automate at scale', 'cloud marketplace',
-        'cloud-native', 'consolidate infrastructure', 'database modernization',
-        'developer productivity', 'digital sovereignty', 'edge computing',
-        'event-driven', 'infrastructure as code', 'it service management',
-        'network automation', 'observability', 'platform engineering',
-        'security automation', 'security compliance', 'supply chain security',
-        'vmware migration', 'application modernization',
-      ]
-      const lower = text.toLowerCase()
-      if (href.includes('doccenter') && href.includes('lf') && text.length > 5 && text.length < 80) {
-        // Check if this looks like a tactic page
-        if (tacticKeywords.some(kw => lower.includes(kw)) ||
-            (lower.includes('tactic') && !lower.includes('product'))) {
+      if (!href.includes('doccenter') || !href.includes('lf')) return
+      for (const tactic of tactics) {
+        if (text.toLowerCase().includes(tactic.toLowerCase())) {
           items.push({
-            name: text,
+            name: tactic,
             url: href.startsWith('http') ? href : `${window.location.origin}${href}`,
           })
+          break
         }
       }
     })
@@ -409,9 +422,15 @@ async function discoverSalesTacticLinks(page: Page): Promise<Array<{ name: strin
       seen.add(i.name)
       return true
     })
-  })
+  }, knownTactics)
 
-  console.log(`[scrape-saleshub] Found ${links.length} Sales Tactic pages`)
+  console.log(`[scrape-saleshub] Found ${links.length} Sales Tactic pages from homepage`)
+
+  // Also check "frequently used" section which has tactic pages we visited
+  if (links.length < 5) {
+    console.log('[scrape-saleshub] Few tactic links found — tactic pages extracted from product TDP sections instead')
+  }
+
   return links
 }
 

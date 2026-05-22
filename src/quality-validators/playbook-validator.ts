@@ -172,6 +172,22 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
+  // saleshub-talk-track — only check when content references TDPs/solution plays
+  const fullContent = JSON.stringify(parsed).toLowerCase()
+  const referencesPlays = fullContent.includes('solution play') || fullContent.includes('tdp') ||
+    fullContent.includes('sales tactic') || fullContent.includes('strategic opportunit')
+  if (referencesPlays) {
+    const hasTalkTrackLanguage = fullContent.includes('positions') || fullContent.includes('action layer') ||
+      fullContent.includes('event-driven') || fullContent.includes('consolidate')
+    checks.push({
+      name: 'saleshub-talk-track',
+      passed: hasTalkTrackLanguage,
+      expected: 'SalesHub talk track language incorporated when solution plays referenced',
+      actual: hasTalkTrackLanguage ? 'talk track language detected' : 'generic positioning only',
+      severity: 'recommended',
+    })
+  }
+
   return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, checks)
 }
 

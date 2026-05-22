@@ -251,56 +251,98 @@ export function parseSalesTacticSections(text: string): {
  * Build the complete SalesHubKnowledge structure from scraped data.
  * Aggregates TDPs across products, deduplicates, and cross-references.
  */
+// Garbage filter: entries that aren't real TDP/tactic content
+function isGarbageEntry(name: string, description: string): boolean {
+  const lower = name.toLowerCase()
+  if (lower.startsWith('visit') || lower.startsWith('arrow') || lower.includes('item(s)')) return true
+  if (lower.startsWith('content detail') || lower.startsWith('content propert')) return true
+  if (lower.startsWith('rating') || lower.startsWith('review')) return true
+  if (description.includes('redhat.com/') && description.length < 100 && !isTdpEntry(name)) return true
+  return false
+}
+
+// Classify: entries with "TDP" in name are actual TDPs, others are tactics
+function isTdpEntry(name: string): boolean {
+  return /\bTDP\b/i.test(name)
+}
+
 export function buildSalesHubKnowledge(
   products: ScrapedProduct[],
   salesPlays: ScrapedSalesPlay[],
   tactics: ScrapedSalesTactic[],
 ): SalesHubKnowledge {
-  // Build TDP index from all product pages (deduplicate by name)
   const tdpMap = new Map<string, TdpNode>()
+  const tacticNodes: TacticNode[] = []
 
   for (const product of products) {
+    // Find the parent TDP name for this product's sections
+    let currentTdpName = ''
+
     for (const section of product.tdpSections) {
-      const existing = tdpMap.get(section.name)
-      if (existing) {
-        // Add this product to the existing TDP
-        if (!existing.products.includes(product.name)) {
-          existing.products.push(product.name)
-        }
-        // Keep the longer description
-        if (section.description.length > existing.description.length) {
-          existing.description = section.description
+      if (isGarbageEntry(section.name, section.description)) continue
+
+      if (isTdpEntry(section.name)) {
+        // This is an actual TDP
+        currentTdpName = section.name
+        const existing = tdpMap.get(section.name)
+        if (existing) {
+          if (!existing.products.includes(product.name)) existing.products.push(product.name)
+          if (section.description.length > existing.description.length) {
+            existing.description = section.description
+          }
+        } else {
+          tdpMap.set(section.name, {
+            name: section.name,
+            description: section.description,
+            tactics: [],
+            products: [product.name],
+          })
         }
       } else {
-        tdpMap.set(section.name, {
+        // This is a tactic under the current TDP
+        const parentTdp = currentTdpName || 'Unknown'
+        tacticNodes.push({
           name: section.name,
-          description: section.description,
-          tactics: [],
-          products: [product.name],
+          talkTrack: section.description,
+          customerWins: [],
+          whatToSay: [],
+          whatToShare: [],
+          parentTdp,
         })
-      }
-    }
-
-    // Also add tactic names to TDP records
-    for (const tactic of product.salesTactics) {
-      // Try to find a parent TDP for this tactic based on position
-      for (const [, tdp] of tdpMap) {
-        if (!tdp.tactics.includes(tactic.name)) {
-          tdp.tactics.push(tactic.name)
+        // Link tactic to its parent TDP
+        const tdp = tdpMap.get(parentTdp)
+        if (tdp && !tdp.tactics.includes(section.name)) {
+          tdp.tactics.push(section.name)
         }
-        break // Associate with first TDP as default
       }
     }
   }
 
-  // Cross-reference standalone tactics with TDPs
+  // Add standalone scraped tactics
   for (const tactic of tactics) {
+    const existing = tacticNodes.find(t => t.name === tactic.name)
+    if (existing) {
+      if (tactic.talkTrack && tactic.talkTrack.length > existing.talkTrack.length) {
+        existing.talkTrack = tactic.talkTrack
+      }
+      if (tactic.customerWins.length > 0) existing.customerWins = tactic.customerWins
+      if (tactic.whatToSay.length > 0) existing.whatToSay = tactic.whatToSay
+      if (tactic.whatToShare.length > 0) existing.whatToShare = tactic.whatToShare
+    } else {
+      tacticNodes.push({
+        name: tactic.name,
+        talkTrack: tactic.talkTrack,
+        customerWins: tactic.customerWins,
+        whatToSay: tactic.whatToSay,
+        whatToShare: tactic.whatToShare,
+        parentTdp: tactic.parentTdp,
+      })
+    }
+    // Link to TDP
     if (tactic.parentTdp) {
       for (const [, tdp] of tdpMap) {
         if (tdp.name.toLowerCase().includes(tactic.parentTdp.toLowerCase())) {
-          if (!tdp.tactics.includes(tactic.name)) {
-            tdp.tactics.push(tactic.name)
-          }
+          if (!tdp.tactics.includes(tactic.name)) tdp.tactics.push(tactic.name)
         }
       }
     }
@@ -325,16 +367,6 @@ export function buildSalesHubKnowledge(
     name: sp.name,
     description: sp.description,
     linkedTdps: sp.linkedTdps,
-  }))
-
-  // Build tactic nodes
-  const tacticNodes: TacticNode[] = tactics.map(t => ({
-    name: t.name,
-    talkTrack: t.talkTrack,
-    customerWins: t.customerWins,
-    whatToSay: t.whatToSay,
-    whatToShare: t.whatToShare,
-    parentTdp: t.parentTdp,
   }))
 
   return {

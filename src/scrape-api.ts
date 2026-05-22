@@ -1273,4 +1273,34 @@ export function registerScrapeRoutes(app: Hono): void {
     const totalCustomers = summary.reduce((s, r) => s + r.customersTotal, 0)
     return c.json({ aes: targetAes.length, customersTotal: totalCustomers, customersMatched: totalMatched, summary })
   })
+
+  // ── SalesHub Knowledge Base status + refresh (ADR-030 Slice 5) ──────────────
+
+  app.get('/api/saleshub/status', (c) => {
+    const { getKnowledgeStats } = require('./lib/saleshub-knowledge-loader.ts')
+    const stats = getKnowledgeStats()
+    const staleDays = stats.scrapedAt
+      ? Math.floor((Date.now() - new Date(stats.scrapedAt).getTime()) / (1000 * 60 * 60 * 24))
+      : -1
+    return c.json({
+      ...stats,
+      staleDays,
+      freshness: staleDays < 0 ? 'unknown' : staleDays < 7 ? 'fresh' : staleDays < 30 ? 'stale' : 'expired',
+    })
+  })
+
+  app.post('/api/saleshub/refresh', (c) => {
+    if (!isPrimary()) {
+      return c.json({ error: 'SalesHub refresh only available on primary (Mac Mini) node' }, 404)
+    }
+    const CACHE_DIR = process.env.CACHE_DIR ?? 'data/cache'
+    const { writeFileSync } = require('fs')
+    const { resolve } = require('path')
+    try {
+      writeFileSync(resolve(CACHE_DIR, 'saleshub-trigger'), '')
+      return c.json({ ok: true, message: 'SalesHub scrape triggered — check logs for progress' })
+    } catch (e: any) {
+      return c.json({ error: `Failed to write trigger: ${e.message}` }, 500)
+    }
+  })
 }

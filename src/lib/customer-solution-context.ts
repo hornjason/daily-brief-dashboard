@@ -11,6 +11,7 @@
 import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../cache-layer.ts'
+import { getTacticsByTdp, getAssetsByPlay } from './saleshub-knowledge-loader.ts'
 
 function getConfigDir(): string {
   return process.env.CONFIG_DIR ?? 'config'
@@ -37,6 +38,9 @@ export interface ActiveSolutionPlay {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW'
   redHatProducts: string[]
   valueProps: string[]
+  talkTrack?: string
+  customerWins?: string[]
+  linkedAssets?: Array<{ name: string; url: string; type: string }>
   cloudAmplifier?: { provider: string; spend: number }
   category: string
 }
@@ -307,6 +311,19 @@ export function getCustomerSolutionContext(customerSlug: string): CustomerSoluti
           category: play.category,
         })
       }
+    }
+
+    // Enrich with SalesHub knowledge base (talk tracks, customer wins, linked assets)
+    for (const play of activeSolutionPlays) {
+      const tactics = getTacticsByTdp(play.tdp)
+      if (tactics.length > 0) {
+        const bestTactic = tactics[0]
+        if (bestTactic.talkTrack) play.talkTrack = bestTactic.talkTrack
+        const allWins = tactics.flatMap(t => t.customerWins).filter(w => w.length > 0)
+        if (allWins.length > 0) play.customerWins = allWins
+      }
+      const assets = getAssetsByPlay(play.playId)
+      if (assets.length > 0) play.linkedAssets = assets
     }
 
     // Sort by confidence (HIGH first) then by number of matched technologies

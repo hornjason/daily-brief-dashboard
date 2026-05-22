@@ -1,0 +1,988 @@
+{
+  "version": 1,
+  "scrapedAt": "2026-05-22T02:35:57.316Z",
+  "salesPlays": [
+    {
+      "name": "Build and Run Applications",
+      "description": "",
+      "linkedTdps": []
+    },
+    {
+      "name": "Modernize Infrastructure",
+      "description": "",
+      "linkedTdps": []
+    },
+    {
+      "name": "The AI-Ready Enterprise",
+      "description": "",
+      "linkedTdps": []
+    },
+    {
+      "name": "Sovereignty",
+      "description": "",
+      "linkedTdps": []
+    },
+    {
+      "name": "IT Operations Efficiency",
+      "description": "",
+      "linkedTdps": []
+    }
+  ],
+  "tdps": [
+    {
+      "name": "Automation TDP",
+      "description": "The Automation Technical Decision Point (TDP) positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT, using a unified governance framework to consolidate fragmented tools and deliver measurable outcomes like 68% faster deployments and reduced downtime.",
+      "tactics": [
+        "AIOps:Turn Intelligence into Action",
+        "Optimize and Modernize IT Ops",
+        "Automate at Scale",
+        "Network automation"
+      ],
+      "products": [
+        "Red Hat Ansible Automation Platform"
+      ]
+    }
+  ],
+  "tactics": [
+    {
+      "name": "AIOps:Turn Intelligence into Action",
+      "talkTrack": "This AIOps tactic positions Red Hat Ansible Automation Platform as the \"action layer\" that transforms monitoring insights into automated remediation, enabling IT teams to replace manual troubleshooting with event-driven workflows that optimize costs and ensure AI policy compliance.",
+      "customerWins": [],
+      "whatToSay": [],
+      "whatToShare": [],
+      "parentTdp": "Automation TDP"
+    },
+    {
+      "name": "Optimize and Modernize IT Ops",
+      "talkTrack": "This tactic positions Red Hat Ansible Automation Platform as a unified foundation to eliminate tool silos and operational debt, allowing sellers to demonstrate how centralized governance secures immediate operational wins while accelerating strategic initiatives like VM modernization and cloud migration.",
+      "customerWins": [],
+      "whatToSay": [],
+      "whatToShare": [],
+      "parentTdp": "Automation TDP"
+    },
+    {
+      "name": "Automate at Scale",
+      "talkTrack": "This tactic helps sellers migrate DIY users and scale existing customers by positioning Red Hat Ansible Automation Platform as a secure, enterprise-grade standard that breaks down operational silos and unlocks the ROI needed to shift resources toward strategic innovation.",
+      "customerWins": [],
+      "whatToSay": [],
+      "whatToShare": [],
+      "parentTdp": "Automation TDP"
+    },
+    {
+      "name": "Network automation",
+      "talkTrack": "This tactic enables sellers to position Red Hat Network Automation as the solution for modern network complexity, replacing manual processes and downtime with a resilient, multi-vendor automation framework that ensures faster response times and seamless scalability.",
+      "customerWins": [],
+      "whatToSay": [],
+      "whatToShare": [],
+      "parentTdp": "Automation TDP"
+    }
+  ],
+  "products": [
+    {
+      "name": "Azure Red Hat OpenShift",
+      "slug": "azure-red-hat-openshift",
+      "description": "",
+      "tdpContent": [],
+      "decks": [],
+      "resources": [
+        {
+          "name": "Region availability",
+          "url": "https://azure.microsoft.com/en-us/explore/global-infrastructure/products-by-region/",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": [
+        "https://docs.google.com/document/d/1MNHd5rajFCwuv7DX2cQAa37E4_NUSWw9j65K5t-qpM8/edit?tab=t.0",
+        "https://docs.google.com/document/d/1FjVPR2xEYwEoFtc-iEx08fySlT87WHtJ5-et_lrGLak/edit?tab=t.0"
+      ]
+    },
+    {
+      "name": "OpenShift layered services",
+      "slug": "openshift-layered-services",
+      "description": "Overview of Layered ServicesGitOpsPipelinesServerlessService MeshZero Trust Workload Identity Manager",
+      "tdpContent": [],
+      "decks": [],
+      "resources": [
+        {
+          "name": "Guide to Pipelines blog series",
+          "url": "https://www.redhat.com/en/blog/guide-to-openshift-pipelines-part-1-introducing-openshift-pipelines",
+          "type": "external"
+        },
+        {
+          "name": "https://www.redhat.com/en/resources/atruvia-customer-case-study",
+          "url": "https://www.redhat.com/en/resources/atruvia-customer-case-study",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Advanced Cluster Management for Kubernetes (RHACM)",
+      "slug": "red-hat-advanced-cluster-management-for-kubernetes-rhacm",
+      "description": "Product newsBusiness decksTechnical decksKey resourcesTop training resources",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "RHACM customer deck (edit before using)",
+          "url": "https://docs.google.com/presentation/d/1jm_sWmSDElKGufJO5MLvbY8CdEKA8-6Y4L8YP3uP1ro/edit?slide=id.g2d1ab182bc4_3_445#slide=id.g2d1ab182bc4_3_445",
+          "type": "google-slides"
+        }
+      ],
+      "resources": [
+        {
+          "name": "ACM 2.16 release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/",
+          "type": "external"
+        },
+        {
+          "name": "ACM 2.15 release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_management_for_kubernetes/",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": [
+        "https://docs.google.com/presentation/d/1U1wUX-tNPmtW88EQnEWAtpanhU3mQ9k7qrjswbPnX_s/edit?slide=id.g390c3676b18_0_115#slide=id.g390c3676b18_0_115",
+        "https://docs.google.com/presentation/d/1jm_sWmSDElKGufJO5MLvbY8CdEKA8-6Y4L8YP3uP1ro/edit?slide=id.g2d1ab182bc4_3_445#slide=id.g2d1ab182bc4_3_445"
+      ]
+    },
+    {
+      "name": "Red Hat Advanced Cluster Security for Kubernetes (RHACS)",
+      "slug": "red-hat-advanced-cluster-security-for-kubernetes-rhacs",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "RHACS: Product Overview",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhlpint?RelayState=deeplinkoffering%3D57859455",
+          "type": "external"
+        },
+        {
+          "name": "RHACS: Technical Overview",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhlpint?RelayState=deeplinkoffering%3D58312152",
+          "type": "external"
+        }
+      ],
+      "resources": [
+        {
+          "name": "RHACS 4.10 release notes and documentation",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_security_for_kubernetes/4.10/html-single/release_notes/index",
+          "type": "external"
+        },
+        {
+          "name": "RHACS 4.9 release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_security_for_kubernetes/4.9/html-single/release_notes/index",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Advanced Developer Suite",
+      "slug": "red-hat-advanced-developer-suite",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Customer facing slide deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfc4bc2ccb-730c-4876-adb6-2c2b83c1df98//",
+          "type": "seismic"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-delivers-red-hat-advanced-developer-suite-accelerate-application-development",
+          "type": "external"
+        },
+        {
+          "name": "Business value blog: RHDH 1.8 delivers context-aware AI, faster self-service and scalable governance",
+          "url": "https://www.redhat.com/en/blog/red-hat-developer-hub-18-delivers-context-aware-ai-faster-self-service-and-scalable-governance",
+          "type": "external"
+        },
+        {
+          "name": "When is it going to be available?",
+          "url": "https://videos.learning.redhat.com/media/Developer%20Hub%3A%20When%20is%20it%20going%20to%20be%20available/1_l5lob7tf",
+          "type": "external"
+        },
+        {
+          "name": "Webinar",
+          "url": "https://www.redhat.com/en/events/webinar/unlocking-developer-productivity-how-to-provide-consistent-high-quality-user-experiences-in-less-time",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat AI",
+      "slug": "red-hat-ai",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Red Hat AI Factory with NVIDIA | Customer deck",
+          "url": "https://docs.google.com/presentation/d/1SCpQUIOUUhjthohxISdIyVfT0JnmRy-iZdiz9-W5Ke0/edit?slide=id.g3c08bf4bc5d_0_1784#slide=id.g3c08bf4bc5d_0_1784",
+          "type": "google-slides"
+        },
+        {
+          "name": "Red Hat Services AI Factory pitch deck",
+          "url": "https://docs.google.com/presentation/d/1FEJZ2En94HNBZ-IsEXCoON9gRMyUXZRX0TSaX_VYPCE/edit?slide=id.g3cfd113af62_8_726#slide=id.g3cfd113af62_8_726",
+          "type": "google-slides"
+        },
+        {
+          "name": "See the Enablement Deck",
+          "url": "https://docs.google.com/presentation/d/1T9BIcnZzfjmguKI9ajVOYVBWJwfGD-bkxUAj2SA9xeA/edit?slide=id.g3a9dc6bc118_0_869#slide=id.g3a9dc6bc118_0_869",
+          "type": "google-slides"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Red Hat AI Factory with NVIDIA Accelerates the Path to Scalable Production AI",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-ai-factory-nvidia-accelerates-path-scalable-production-ai",
+          "type": "external"
+        },
+        {
+          "name": "Messaging Guide: Red Hat AI Factory with NVIDIA",
+          "url": "https://docs.google.com/document/d/1xOgFKTWsvu7IrRL0SGJXTmFdZg97un40t4fR6hDWIpg/edit?tab=t.gmjaxa7zb5ny#heading=h.66y4kqbj468a",
+          "type": "google-docs"
+        },
+        {
+          "name": "UK Ministry of Defence Collaborates with Red Hat to Unlock AI Capabilities",
+          "url": "https://www.redhat.com/en/about/press-releases/uk-ministry-defence-collaborates-red-hat-improve-digital-delivery-unlock-ai-capabilities-and-scale-its-hybrid-cloud",
+          "type": "external"
+        },
+        {
+          "name": "Red Hat Expands Collaboration with NVIDIA to Pair Enterprise Open Source with Rack-Scale AI",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-nvidia-pair-enterprise-open-source-rack-scale-ai-faster-production-ready-innovation",
+          "type": "external"
+        },
+        {
+          "name": "Feb 24th Press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-launches-red-hat-ai-enterprise-deliver-unified-ai-platform-spans-metal-agents",
+          "type": "external"
+        },
+        {
+          "name": "Website",
+          "url": "https://www.redhat.com/en/products/ai/enterprise",
+          "type": "external"
+        },
+        {
+          "name": "Access and share the press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-nvidia-pair-enterprise-open-source-rack-scale-ai-faster-production-ready-innovation",
+          "type": "external"
+        },
+        {
+          "name": "press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-brings-distributed-ai-inference-production-ai-workloads-red-hat-ai-3",
+          "type": "external"
+        },
+        {
+          "name": "A Guide for Enterprise AI Factory at Northrop Grumman",
+          "url": "https://videos.learning.redhat.com/playlist/dedicated/366567272/1_vgaeogo4/1_tvoeme44",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": [
+        "https://docs.google.com/presentation/d/1SCpQUIOUUhjthohxISdIyVfT0JnmRy-iZdiz9-W5Ke0/edit?slide=id.g3c08bf4bc5d_0_1784#slide=id.g3c08bf4bc5d_0_1784",
+        "https://docs.google.com/document/d/1xOgFKTWsvu7IrRL0SGJXTmFdZg97un40t4fR6hDWIpg/edit?tab=t.gmjaxa7zb5ny#heading=h.66y4kqbj468a",
+        "https://docs.google.com/document/d/1g-DsbyJREmOMK8c9yaIIR9h_fPSioHAeY-LJ1eHWpM4/edit?tab=t.0#heading=h.66y4kqbj468a",
+        "https://docs.google.com/presentation/d/1FEJZ2En94HNBZ-IsEXCoON9gRMyUXZRX0TSaX_VYPCE/edit?slide=id.g3cfd113af62_8_726#slide=id.g3cfd113af62_8_726",
+        "https://docs.google.com/document/d/13oobzdLzTZ8kUn09je2OebqHszZ6AC7ZID7W7kezOgc/edit?tab=t.0#heading=h.66y4kqbj468a",
+        "https://docs.google.com/presentation/d/1T9BIcnZzfjmguKI9ajVOYVBWJwfGD-bkxUAj2SA9xeA/edit?slide=id.g3a9dc6bc118_0_869#slide=id.g3a9dc6bc118_0_869",
+        "https://docs.google.com/presentation/d/14H1MDe9FUvDbeW3W_HvnXRWJ6Th8GoAaYoFNkUEdbCY/edit?slide=id.g39439827e06_0_14756#slide=id.g39439827e06_0_14756",
+        "https://drive.google.com/file/d/1SZ5hkZZmBR9hSied1aPmXyJZ0iF65Afc/view?usp=sharing",
+        "https://docs.google.com/document/d/15sHQsLuwZeh9cprmNjS_iIesSR5h8aqI-CPxMZRLK3M/edit?tab=t.0#heading=h.1fhko2egeb28",
+        "https://docs.google.com/presentation/d/1C_QXEZktAT6_BlOg9tCeA0A23L9e1IKv/edit?slide=id.p1#slide=id.p1",
+        "https://docs.google.com/presentation/d/1bLzn3xop6MefFYeRNllBSVjFrQqN3M4z-DE1echgJJQ/edit?slide=id.g3876b526b50_22_0#slide=id.g3876b526b50_22_0",
+        "https://docs.google.com/presentation/d/14H1MDe9FUvDbeW3W_HvnXRWJ6Th8GoAaYoFNkUEdbCY/edit?slide=id.g39439827e06_0_14756#slide=id.g39439827e06_0_14756",
+        "https://drive.google.com/file/d/1SZ5hkZZmBR9hSied1aPmXyJZ0iF65Afc/view?usp=sharing",
+        "https://docs.google.com/document/d/15sHQsLuwZeh9cprmNjS_iIesSR5h8aqI-CPxMZRLK3M/edit?tab=t.0#heading=h.1fhko2egeb28",
+        "https://docs.google.com/presentation/d/1C_QXEZktAT6_BlOg9tCeA0A23L9e1IKv/edit?slide=id.p1#slide=id.p1",
+        "https://docs.google.com/presentation/d/1VvlqnhwCDWbqYEqNgP4yklHqVoRcamkhPz-j6SaTUgo/edit?slide=id.g3d3ef49894f_1_3#slide=id.g3d3ef49894f_1_3",
+        "https://docs.google.com/presentation/d/1aaJiNrkDRFNCsOfzf2uQP9IIYhLTdwvxvaUifd37FAE/edit?slide=id.g39af1dccc9b_0_1#slide=id.g39af1dccc9b_0_1",
+        "https://docs.google.com/forms/d/e/1FAIpQLSeB0xkfZl7j9WaH_oLAH4ChTkUlZNDqzAhk725ls0SfZoKp6A/viewform"
+      ]
+    },
+    {
+      "name": "Red Hat Ansible Automation Platform",
+      "slug": "red-hat-ansible-automation-platform",
+      "description": "",
+      "tdpContent": [
+        {
+          "type": "tdp",
+          "name": "Automation TDP",
+          "description": "The Automation Technical Decision Point (TDP) positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT, using a unified governance framework to consolidate fragmented tools and deliver measurable outcomes like 68% faster deployments and reduced downtime."
+        },
+        {
+          "type": "tdp",
+          "name": "AIOps:Turn Intelligence into Action",
+          "description": "This AIOps tactic positions Red Hat Ansible Automation Platform as the \"action layer\" that transforms monitoring insights into automated remediation, enabling IT teams to replace manual troubleshooting with event-driven workflows that optimize costs and ensure AI policy compliance."
+        },
+        {
+          "type": "tdp",
+          "name": "Optimize and Modernize IT Ops",
+          "description": "This tactic positions Red Hat Ansible Automation Platform as a unified foundation to eliminate tool silos and operational debt, allowing sellers to demonstrate how centralized governance secures immediate operational wins while accelerating strategic initiatives like VM modernization and cloud migration."
+        },
+        {
+          "type": "tdp",
+          "name": "Automate at Scale",
+          "description": "This tactic helps sellers migrate DIY users and scale existing customers by positioning Red Hat Ansible Automation Platform as a secure, enterprise-grade standard that breaks down operational silos and unlocks the ROI needed to shift resources toward strategic innovation."
+        },
+        {
+          "type": "tdp",
+          "name": "Network automation",
+          "description": "This tactic enables sellers to position Red Hat Network Automation as the solution for modern network complexity, replacing manual processes and downtime with a resilient, multi-vendor automation framework that ensures faster response times and seamless scalability."
+        }
+      ],
+      "decks": [
+        {
+          "name": "Ansible Lightspeed customer deck",
+          "url": "https://docs.google.com/presentation/d/1ks2S2SJ_zFOFj4JcEHTPdFSXOMQql-TSD9EWShB7Z5k/edit?slide=id.g351ba319158_0_24674#slide=id.g351ba319158_0_24674",
+          "type": "google-slides"
+        },
+        {
+          "name": "Ansible Lightspeed enablement overview",
+          "url": "https://docs.google.com/presentation/d/1LZTrVoqYFk_0e51tPXZW-qkEhA5rwk_xl_Ik_6gWCOk/edit?slide=id.g2920d80b76a_0_731#slide=id.g2920d80b76a_0_731",
+          "type": "google-slides"
+        },
+        {
+          "name": "AAP 2.6 one-slide overview",
+          "url": "https://content.redhat.com/content/dam/rhcc/pnt/products-portfolio/products-cloud-services/red-hat-ansible/ABU%20_%20AAP%202%206%20one%20slide%20overview.pptx",
+          "type": "external"
+        },
+        {
+          "name": "AAP 2.6 release overview + reference guide",
+          "url": "https://content.redhat.com/content/dam/rhcc/pnt/products-portfolio/products-cloud-services/red-hat-ansible/ABU%20_%20AAP%202%206%20Release%20overview%20%20%20reference%20guide.pptx",
+          "type": "external"
+        },
+        {
+          "name": "Overview slide",
+          "url": "https://content.redhat.com/content/dam/rhcc/pnt/products-portfolio/products-cloud-services/red-hat-ansible/abu-2024-forrester-wave-for-infrastructure-automation-slide.pptx",
+          "type": "external"
+        },
+        {
+          "name": "Ansible Basics: Automation Technical Overview (DO007)",
+          "url": "https://www.redhat.com/en/services/training/do007-ansible-essentials-simplicity-automation-technical-overview",
+          "type": "external"
+        },
+        {
+          "name": "AAP 2.6 Release overview + reference guide",
+          "url": "https://saleshub.redhat.com/Link/Content/DCcJ7j8ch9fRm8FJJJ7FFGQc7mX8",
+          "type": "seismic"
+        },
+        {
+          "name": "Red Hat Ansible Lightspeed overview",
+          "url": "https://saleshub.redhat.com/Link/Content/DC9QbD96TMWXX8WW86qQ967f37BG",
+          "type": "seismic"
+        },
+        {
+          "name": "AAP Sales Assisted Trial Overview & Request Instructions",
+          "url": "https://docs.google.com/presentation/d/1oST1ePUx4e8E9OagHIVKksLvUQrVywKgzdRVB3JoWkw/edit?slide=id.g3bdc8c846e4_0_811#slide=id.g3bdc8c846e4_0_811",
+          "type": "google-slides"
+        },
+        {
+          "name": "Ansible Basics: Automation Technical Overview (DO007)",
+          "url": "https://www.redhat.com/en/services/training/do007-ansible-essentials-simplicity-automation-technical-overview",
+          "type": "external"
+        }
+      ],
+      "resources": [
+        {
+          "name": "AAP 2.6 release overview + reference guide",
+          "url": "https://content.redhat.com/content/dam/rhcc/pnt/products-portfolio/products-cloud-services/red-hat-ansible/ABU%20_%20AAP%202%206%20Release%20overview%20%20%20reference%20guide.pptx",
+          "type": "external"
+        },
+        {
+          "name": "What's new in AAP 2.6 webinar",
+          "url": "https://www.redhat.com/en/events/webinar/whats-new-red-hat-ansible-automation-platform-2.6",
+          "type": "external"
+        },
+        {
+          "name": "AI solution guides for AAP",
+          "url": "https://access.redhat.com/articles/7117333",
+          "type": "external"
+        },
+        {
+          "name": "Press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-ansible-automation-platform-established-leader-infrastructure-automation-industry-research-firm",
+          "type": "external"
+        },
+        {
+          "name": "Website",
+          "url": "https://www.redhat.com/en/technologies/management/ansible",
+          "type": "external"
+        },
+        {
+          "name": "Release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.6/html/release_notes/index",
+          "type": "external"
+        },
+        {
+          "name": "Automation webinars",
+          "url": "https://www.redhat.com/en/events/red-hat-webinars?on-demand=automation",
+          "type": "external"
+        },
+        {
+          "name": "Self-paced labs for AAP",
+          "url": "https://www.redhat.com/en/interactive-labs/ansible",
+          "type": "external"
+        },
+        {
+          "name": "Success stories",
+          "url": "https://www.redhat.com/en/success-stories",
+          "type": "external"
+        },
+        {
+          "name": "Competitive",
+          "url": "https://content.redhat.com/content/rhcc/us/en/competition/competition-overview/competition-ansible.html",
+          "type": "external"
+        },
+        {
+          "name": "AAP 2.6 Release overview + reference guide",
+          "url": "https://saleshub.redhat.com/Link/Content/DCcJ7j8ch9fRm8FJJJ7FFGQc7mX8",
+          "type": "seismic"
+        },
+        {
+          "name": "Self-paced labs for Ansible Automation Platform",
+          "url": "https://www.redhat.com/en/interactive-labs/ansible",
+          "type": "external"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform available in AWS Marketplace",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/aws",
+          "type": "external"
+        },
+        {
+          "name": "Red Hat Ansible Automation Platform available from Google Cloud Marketplace",
+          "url": "https://www.redhat.com/en/technologies/management/ansible/google-cloud",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": [
+        "https://docs.google.com/presentation/d/1ks2S2SJ_zFOFj4JcEHTPdFSXOMQql-TSD9EWShB7Z5k/edit?slide=id.g351ba319158_0_24674#slide=id.g351ba319158_0_24674",
+        "https://docs.google.com/presentation/d/1LZTrVoqYFk_0e51tPXZW-qkEhA5rwk_xl_Ik_6gWCOk/edit?slide=id.g2920d80b76a_0_731#slide=id.g2920d80b76a_0_731",
+        "https://docs.google.com/presentation/d/1oST1ePUx4e8E9OagHIVKksLvUQrVywKgzdRVB3JoWkw/edit?slide=id.g3bdc8c846e4_0_811#slide=id.g3bdc8c846e4_0_811"
+      ]
+    },
+    {
+      "name": "Red Hat Application Foundations",
+      "slug": "red-hat-application-foundations",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Unlocking data potential: Flink and Streams for Apache Kafka overview",
+          "url": "https://videos.learning.redhat.com/media/Unlocking%20Data%20Potential%3A%20Flink%20and%20Streams%20for%20Apache%20Kafka%20Overview/1_hqq182xc",
+          "type": "external"
+        }
+      ],
+      "resources": [],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Connectivity Link",
+      "slug": "red-hat-connectivity-link",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Kuadrant in a nutshell - Upstream project overview",
+          "url": "https://www.youtube.com/watch?v=euWAMvQojP4",
+          "type": "external"
+        },
+        {
+          "name": "Overview video",
+          "url": "https://videos.learning.redhat.com/media/Red+Hat+Connectivity+linkA+Solutions+You+Can+Use/1_3va3ceb2",
+          "type": "external"
+        }
+      ],
+      "resources": [
+        {
+          "name": "CoreDNS integration for on-premise DNS is Generally Available",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_connectivity_link/1.3/html-single/configuring_and_deploying_gateway_policies/#con-about-using-onprem-dns-coredns_rhcl-using-on-prem-dns-coredns",
+          "type": "external"
+        },
+        {
+          "name": "Updated Observability documentation is now available",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_connectivity_link/1.3/html-single/observability/index#rhcl-observability",
+          "type": "external"
+        },
+        {
+          "name": "Manage AI resource use with TokenRateLimitPolicy",
+          "url": "https://developers.redhat.com/articles/2026/02/18/manage-ai-resource-use-tokenratelimitpolicy",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Desktop",
+      "slug": "red-hat-desktop",
+      "description": "Including Red Hat build of Podman Desktop",
+      "tdpContent": [],
+      "decks": [],
+      "resources": [],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Enterprise Linux",
+      "slug": "red-hat-enterprise-linux",
+      "description": "",
+      "tdpContent": [
+        {
+          "type": "tdp",
+          "name": "Visit the webpage:",
+          "description": "redhat.com/rhelAdditional resources:youtube.com/RedHatEnterpriseLinuxSubscription guide"
+        }
+      ],
+      "decks": [
+        {
+          "name": "What's New (Technical Presentation)",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVGVjaG5pY2FsIHByZXNlbnRhdGlvbg%253D%253D%252Flf6fdcbfd1-6424-4350-ad50-e545e98d261a//",
+          "type": "seismic"
+        },
+        {
+          "name": "ELVA Enablement Deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CRW5hYmxlbWVudA%253D%253D%252Flf6772fbe7-f0ef-47d5-85a7-09392796ba1e//",
+          "type": "seismic"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Press release",
+          "url": "http://www.redhat.com/en/about/press-releases/red-hat-delivers-post-quantum-readiness-and-ai-powered-automation-latest-versions-red-hat-enterprise-linux",
+          "type": "external"
+        },
+        {
+          "name": "release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/10.2_release_notes/index",
+          "type": "external"
+        },
+        {
+          "name": "release notes",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/9/html/9.8_release_notes/index",
+          "type": "external"
+        },
+        {
+          "name": "User Guide",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQXNzZXNzbWVudA%253D%253D%252Flfa6078782-1036-49b4-8848-0a6aee1f41c1//",
+          "type": "seismic"
+        },
+        {
+          "name": "Interactive labs for Red Hat Enterprise Linux",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVVJMIGFzc2V0%252Flff69f821e-727a-4f61-bb13-d6c80aff1f6f//",
+          "type": "seismic"
+        },
+        {
+          "name": "Subscription guide",
+          "url": "https://www.redhat.com/en/resources/red-hat-enterprise-linux-subscription-guide?extIdCarryOver=true&sc_cid=RHCTN0250000435836",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Enterprise Linux Product features and components",
+      "slug": "red-hat-enterprise-linux-product-features-and-components",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Value of RHEL Business Deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf3fcd5834-7447-4d75-b665-0b1f78911df5//",
+          "type": "seismic"
+        },
+        {
+          "name": "Customer presentation deck: RHEL on HPC",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfcb110fad-43c9-4845-96fd-99877a57ab0c//",
+          "type": "seismic"
+        },
+        {
+          "name": "Video - overview",
+          "url": "https://www.youtube.com/watch?v=qjA1Y20iTio",
+          "type": "external"
+        },
+        {
+          "name": "Web page - overview",
+          "url": "https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux-10/image-mode",
+          "type": "external"
+        },
+        {
+          "name": "Customer facing presentation",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf13fde25c-f16c-47f8-9636-7d21c0d24814//",
+          "type": "seismic"
+        },
+        {
+          "name": "Customer facing presentation",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVGVjaG5pY2FsIHByZXNlbnRhdGlvbg%253D%253D%252Flff8f422cc-2904-4d1f-8236-ab27af27d52e//",
+          "type": "seismic"
+        },
+        {
+          "name": "Zero Trust Identity and Access Management presentation",
+          "url": "https://docs.google.com/presentation/d/1LlWHaB6TwFPxZFnTeUXsQDchuA_FCTPXJg79YHG1FIc/edit?slide=id.g2f234100052_0_37#slide=id.g2f234100052_0_37",
+          "type": "google-slides"
+        },
+        {
+          "name": "Overview",
+          "url": "https://access.redhat.com/articles/3050101",
+          "type": "external"
+        },
+        {
+          "name": "Overview",
+          "url": "https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/10/html/managing_systems_in_the_rhel_web_console/getting-started-with-the-rhel-web-console",
+          "type": "external"
+        },
+        {
+          "name": "RHEL Security Deck - Long Version",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf400cebbe-063c-439d-a3d1-e057e3be53be//",
+          "type": "seismic"
+        },
+        {
+          "name": "RHEL Security Deck - Short Version",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf0961964a-ab77-4883-a76d-de7dcc826f26//",
+          "type": "seismic"
+        },
+        {
+          "name": "Customer-facing deck - Secure and Manage RHEL Sales Tactic CY26",
+          "url": "https://saleshub.redhat.com/Link/Content/DC7hfWCT9XVFCGQVVHHcpFbMVFcP",
+          "type": "seismic"
+        },
+        {
+          "name": "Overview video",
+          "url": "https://www.youtube.com/watch?v=CqCjqiA9MJ4",
+          "type": "external"
+        },
+        {
+          "name": "Customer deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfeeee7fc7-92fe-4909-8ae0-b940fa4e2060//",
+          "type": "seismic"
+        },
+        {
+          "name": "Customer deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf219e99b9-0081-40a5-b5ce-a07c6404c457//",
+          "type": "seismic"
+        },
+        {
+          "name": "Customer deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flfeeee7fc7-92fe-4909-8ae0-b940fa4e2060//",
+          "type": "seismic"
+        },
+        {
+          "name": "Overview video",
+          "url": "https://www.youtube.com/watch?v=CqCjqiA9MJ4",
+          "type": "external"
+        },
+        {
+          "name": "Customer deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf7f82fdca-3804-4226-abf3-a7f872480698//",
+          "type": "seismic"
+        }
+      ],
+      "resources": [
+        {
+          "name": "7 key success factors - user testimonials",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQ2FzZSBzdHVkeQ%253D%253D%252Flfd213ff9f-f16f-4c39-ba7c-66108f1e0b30//",
+          "type": "seismic"
+        },
+        {
+          "name": "7 key success factors - user testimonials",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQW5hbHlzdCBtYXRlcmlhbA%253D%253D%252Flfe0ef479f-897b-4f09-bd93-b94b40bc2603//",
+          "type": "seismic"
+        },
+        {
+          "name": "Lab - Command line assistant problem solving",
+          "url": "https://zero.rhdp.net/lab/zt-rhelbu.zt-command-line-assistant-problem-solving.prod",
+          "type": "external"
+        },
+        {
+          "name": "Lab - Introduction to image mode for Red Hat Enterprise Linux",
+          "url": "https://zero.rhdp.net/lab/zt-rhelbu.zt-image-mode-basics.prod",
+          "type": "external"
+        },
+        {
+          "name": "Lab - Perform an in-place upgrade with leapp",
+          "url": "https://www.redhat.com/en/interactive-labs/perform-in-place-upgrade-with-leapp",
+          "type": "external"
+        },
+        {
+          "name": "Lab - Build a Standard Operating Environment with RHEL system roles",
+          "url": "https://zero.rhdp.net/lab/zt-rhelbu.zt-rhel-system-roles.prod",
+          "type": "external"
+        },
+        {
+          "name": "Lab - Configure firewalls with RHEL system roles",
+          "url": "https://zero.rhdp.net/lab/zt-rhelbu.zt-firewall-system-role.prod",
+          "type": "external"
+        },
+        {
+          "name": "Lab - Using web console to monitor performance",
+          "url": "https://zero.rhdp.net/lab/zt-rhelbu.zt-webconsole-perf.prod",
+          "type": "external"
+        },
+        {
+          "name": "Lab: Perform an in-place upgrade with Leapp",
+          "url": "https://www.redhat.com/en/interactive-labs/perform-in-place-upgrade-with-leapp",
+          "type": "external"
+        },
+        {
+          "name": "SQL everywhere: platform choices whitepaper",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CT3ZlcnZpZXc%253D%252Flf17cd36cf-2412-4a3f-830c-bc18def17589//",
+          "type": "seismic"
+        }
+      ],
+      "googleDocsUrls": [
+        "https://docs.google.com/presentation/d/1LlWHaB6TwFPxZFnTeUXsQDchuA_FCTPXJg79YHG1FIc/edit?slide=id.g2f234100052_0_37#slide=id.g2f234100052_0_37"
+      ]
+    },
+    {
+      "name": "Red Hat Lightspeed",
+      "slug": "red-hat-lightspeed",
+      "description": "(Formerly Red Hat Insights)",
+      "tdpContent": [],
+      "decks": [],
+      "resources": [
+        {
+          "name": "Red Hat Lightspeed release notes",
+          "url": "https://access.redhat.com/documentation/en-us/red_hat_insights/1-latest/html/release_notes/index?extIdCarryOver=true&sc_cid=701f2000001Css5AAC",
+          "type": "external"
+        },
+        {
+          "name": "Information & resources",
+          "url": "https://access.redhat.com/node/5245251",
+          "type": "external"
+        },
+        {
+          "name": "Release notes",
+          "url": "https://access.redhat.com/documentation/en-us/red_hat_insights/2023/html/release_notes/index",
+          "type": "external"
+        },
+        {
+          "name": "IDC Business Value whitepaper",
+          "url": "https://www.redhat.com/en/resources/idc-business-value-red-hat-insights-analyst-material",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat OpenShift",
+      "slug": "red-hat-openshift",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Red Hat OpenShift Virtualization: Overview",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhlpint?RelayState=deeplinkoffering%3D57859463",
+          "type": "external"
+        },
+        {
+          "name": "Deploying Containerized Applications Technical Overview | DO080",
+          "url": "https://videos.learning.redhat.com/playlist/dedicated/1_vp5oxizq/1_zooe7vgi",
+          "type": "external"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Red Hat OpenShift Installation Lab | DO322",
+          "url": "https://www.redhat.com/en/services/training/do322-red-hat-openshift-installation-lab",
+          "type": "external"
+        },
+        {
+          "name": "Red Hat OpenShift Migration Lab | DO326",
+          "url": "https://role.rhu.redhat.com/rol-rhu/app/courses/do326-1.6/pages/pr01",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": [
+        "https://docs.google.com/spreadsheets/d/1ZDXo22PeGIMO6SKv1obevPU4zRZWVtfA3yQnJ3FiiMc/edit?usp=sharing"
+      ]
+    },
+    {
+      "name": "Red Hat OpenShift Dedicated",
+      "slug": "red-hat-openshift-dedicated",
+      "description": "",
+      "tdpContent": [],
+      "decks": [],
+      "resources": [
+        {
+          "name": "Regional availability",
+          "url": "https://docs.redhat.com/en/documentation/openshift_dedicated/4/html/introduction_to_openshift_dedicated/policies-and-service-definition#gcp-regions-availability-zones_osd-service-definition",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat OpenShift Service on AWS",
+      "slug": "red-hat-openshift-service-on-aws",
+      "description": "",
+      "tdpContent": [],
+      "decks": [],
+      "resources": [
+        {
+          "name": "Press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-openshift-service-aws-hosted-control-planes-aws-govcloud-achieves-fedramp-high-authorization?_gl=1*1bilz1a*_gcl_aw*R0NMLjE3NzIxMzAyNjAuRUFJYUlRb2JDaE1JN2FmY3plUDNrZ01WQ0VCX0FCMUpTQ2JYRUFBWUFTQUFFZ0xvaF9EX0J3RQ..*_gcl_dc*R0NMLjE3NzIxMzAyNjAuRUFJYUlRb2JDaE1JN2FmY3plUDNrZ01WQ0VCX0FCMUpTQ2JYRUFBWUFTQUFFZ0xvaF9EX0J3RQ..*_gcl_au*MjEzOTg1NzY2Ny4xNzY1MjE0MTg2",
+          "type": "external"
+        },
+        {
+          "name": "Press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-openshift-service-aws-hosted-control-planes-aws-govcloud-achieves-fedramp-high-authorization",
+          "type": "external"
+        },
+        {
+          "name": "Region availability",
+          "url": "https://docs.aws.amazon.com/general/latest/gr/rosa.html#rosa_region",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat OpenShift Virtualization",
+      "slug": "red-hat-openshift-virtualization",
+      "description": "",
+      "tdpContent": [],
+      "decks": [],
+      "resources": [
+        {
+          "name": "Press Release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-unveils-red-hat-openshift-virtualization-engine",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat OpenStack",
+      "slug": "red-hat-openstack",
+      "description": "Including Red Hat OpenStack Platform",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Red Hat OpenStack Services on OpenShift: Product Overview",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhlpint?RelayState=deeplinkoffering%3D63110366",
+          "type": "external"
+        },
+        {
+          "name": "Red Hat OpenStack Technical Overview - CL010",
+          "url": "https://www.redhat.com/en/services/training/cl010-red-hat-openstack-technical-overview?section=overview",
+          "type": "external"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Feature Release 4",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUm9hZG1hcA%253D%253D%252Flf9e87fc99-91bf-4598-ada5-ec115b797c9f//",
+          "type": "seismic"
+        },
+        {
+          "name": "press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-openstack-services-openshift-now-generally-available",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Runtimes",
+      "slug": "red-hat-runtimes",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Product Overview",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhlpint?RelayState=deeplinkoffering%3D58671583",
+          "type": "external"
+        },
+        {
+          "name": "Technical Overview",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhlpint?RelayState=deeplinkoffering%3D59719403",
+          "type": "external"
+        },
+        {
+          "name": "Product Overview",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhopen?RelayState=deeplinkoffering%3D58847835",
+          "type": "external"
+        },
+        {
+          "name": "Technical Overview",
+          "url": "https://training-lms.redhat.com/sso/saml/auth/rhopen?RelayState=deeplinkoffering%3D59719502",
+          "type": "external"
+        },
+        {
+          "name": "Quarkus technical deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVGVjaG5pY2FsIHByZXNlbnRhdGlvbg%253D%253D%252Flf40309bad-cb12-4d88-a860-b5a36098e0d5//",
+          "type": "seismic"
+        },
+        {
+          "name": "Red Hat build of Keycloak overview",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CRW5hYmxlbWVudA%253D%253D%252Flfc9eb11f1-8072-4a2f-9371-9f514de18281//",
+          "type": "seismic"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Press release",
+          "url": "https://www.redhat.com/en/about/press-releases/red-hat-extends-java-support-cloud-jboss-enterprise-application-platform-8",
+          "type": "external"
+        },
+        {
+          "name": "Red Hat build of Quarkus 3.2 release notes",
+          "url": "https://developers.redhat.com/articles/2023/10/12/whats-new-version-32-red-hat-build-quarkus",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Satellite",
+      "slug": "red-hat-satellite",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "Deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CVGVjaG5pY2FsIHByZXNlbnRhdGlvbg%253D%253D%252Flf83e4a04d-7d98-4216-b7ff-96a59a6ba18c//",
+          "type": "seismic"
+        },
+        {
+          "name": "Deck",
+          "url": "https://saleshub.redhat.com/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CQnVzaW5lc3MgcHJlc2VudGF0aW9u%252Flf87931de2-fe31-41e7-9920-d4613da3b528//",
+          "type": "seismic"
+        },
+        {
+          "name": "Satellite Techincal Overview (RH053)",
+          "url": "https://www.redhat.com/en/services/training/rh053-red-hat-satellite-technical-overview",
+          "type": "external"
+        }
+      ],
+      "resources": [
+        {
+          "name": "Satellite Basics Lab",
+          "url": "https://www.redhat.com/en/satellite-basics-lab",
+          "type": "external"
+        }
+      ],
+      "googleDocsUrls": []
+    },
+    {
+      "name": "Red Hat Service Interconnect",
+      "slug": "red-hat-service-interconnect",
+      "description": "",
+      "tdpContent": [],
+      "decks": [
+        {
+          "name": "RHSI overview",
+          "url": "https://videos.learning.redhat.com/media/Red%20Hat%20Service%20Interconnect%20Enablement%20recording%20/1_rnuy1owb",
+          "type": "external"
+        },
+        {
+          "name": "RHSI overview & use cases (May 2024)",
+          "url": "https://videos.learning.redhat.com/media/RHSI%20Overview%20%20Use%20Cases%20-%20May%202024/1_so2xhkoi",
+          "type": "external"
+        }
+      ],
+      "resources": [],
+      "googleDocsUrls": []
+    }
+  ]
+}

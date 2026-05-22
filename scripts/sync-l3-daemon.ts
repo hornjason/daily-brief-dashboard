@@ -19,6 +19,7 @@ import { sendBriefEmail } from '../src/email-sender.ts'
 import { syncAllPods } from './sync-pod-l3.ts'
 import { scrapeSalesHub } from './scrape-saleshub.ts'
 import { syncSalesHubToDrive } from './sync-saleshub-drive.ts'
+import { enrichSolutionPlays } from './enrich-solution-plays.ts'
 import { isPrimary } from '../src/lib/node-role.ts'
 import { isContextHealthy, canContextRender } from './sync-l3-daemon-utils.ts'
 import { adoptSfContext } from '../src/sf-scraper.ts'
@@ -526,6 +527,8 @@ async function main(): Promise<void> {
       console.log(`[sync-daemon] saleshub scrape complete — ${products.length} products, ${knowledge.tdps.length} TDPs, ${knowledge.tactics.length} tactics, ${knowledge.salesPlays.length} plays`)
       const driveResult = await syncSalesHubToDrive()
       console.log(`[sync-daemon] saleshub Drive sync — ${driveResult.uploaded} files, ${driveResult.shortcuts} shortcuts`)
+      const enrichResult = enrichSolutionPlays()
+      console.log(`[sync-daemon] saleshub enrichment — ${enrichResult.enriched}/${enrichResult.total} plays enriched`)
       await sendBriefEmail(
         ALERT_EMAIL,
         `SalesHub Sync Complete — ${new Date().toISOString().slice(0, 10)}`,
@@ -539,6 +542,8 @@ async function main(): Promise<void> {
           <h3>Drive Sync</h3>
           <p><strong>Files uploaded to Drive:</strong> ${driveResult.uploaded}</p>
           <p><strong>Google Drive shortcuts created:</strong> ${driveResult.shortcuts}</p>
+          <h3>Enrichment</h3>
+          <p><strong>Solution plays enriched:</strong> ${enrichResult.enriched}/${enrichResult.total}</p>
           <p>Knowledge base saved to <code>/data/cache/saleshub/saleshub-knowledge.json</code> and synced to the SalesHub folder in Drive.</p>
         </body></html>`,
       ).catch(emailErr => console.warn('[sync-daemon] saleshub success email failed:', emailErr.message))

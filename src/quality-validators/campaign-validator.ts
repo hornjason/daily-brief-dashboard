@@ -169,6 +169,19 @@ function validate(output: string): QualityScorecard {
     severity: 'required',
   })
 
+  // saleshub-positioning — recommended: check if SalesHub positioning language appears
+  const lowerOutput = output.toLowerCase()
+  const hasSalesHubLanguage = lowerOutput.includes('positions') || lowerOutput.includes('tactic') ||
+    lowerOutput.includes('decision point') || lowerOutput.includes('action layer') ||
+    lowerOutput.includes('modernize') || lowerOutput.includes('consolidate')
+  checks.push({
+    name: 'saleshub-positioning',
+    passed: hasSalesHubLanguage || emailBlocks.length === 0,
+    expected: 'SalesHub positioning language used when TDP signals present',
+    actual: hasSalesHubLanguage ? 'SalesHub language detected' : 'generic positioning',
+    severity: 'recommended',
+  })
+
   return buildScorecard(CONTENT_TYPE, PASS_THRESHOLD, checks)
 }
 
