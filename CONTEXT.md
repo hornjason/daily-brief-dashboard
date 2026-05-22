@@ -325,6 +325,22 @@ _Avoid_: "admin dashboard" (too generic — say "System Health Dashboard"), scat
 A consistent 3-color circle icon used everywhere that shows entity health: green (healthy/fresh/idle), yellow (stale/warning/running), red (error/critical/failed). Gray for unknown/not-configured. Always a filled Circle component from lucide-react, never text checkmarks or colored text.
 _Avoid_: mixing status indicator patterns — never use ✓/✗ text, colored text labels, or ad-hoc badge styles
 
+**SalesHub Knowledge Base**:
+Two-file architecture for Red Hat sales enablement intelligence. `saleshub-knowledge.json` is scraped from saleshub.redhat.com (Seismic platform) and contains the full content tree: Sales Plays (management-level motions like "Modernize Infrastructure"), Technology Decision Points (TDPs — the framework for a technology conversation), Sales Tactics (the HOW — talk tracks, customer wins, what-to-say/share), and Products (leaf nodes with decks and resources). `solution-plays.json` is the curated mapping layer: trigger technologies → which TDP/play/tactics apply. The knowledge base is refreshable via `make saleshub-now` on the Mac Mini L4 daemon.
+_Avoid_: "SalesHub mirror" (this is contextual intelligence filtered through customer data, not a content mirror)
+
+**Technology Decision Point (TDP)**:
+Red Hat's standard framework for structuring a technology conversation. Six official TDPs: AI, App Platform, Automation, Virtualization, Server/Cloud OS, Edge. Each TDP has a positioning statement, linked tactics, and associated products. Management tracks pipeline execution against TDPs. The `tdp` field in `solution-plays.json` maps each play to its TDP.
+_Avoid_: "technology area" (too vague), "product category" (TDPs span products)
+
+**Sales Tactic**:
+A conversation-level playbook under a TDP. Contains: talk track (what to say), customer wins (proof points), what-to-share (decks, demos, resources), and target personas. Examples: "AIOps: Turn Intelligence into Action", "Automate at Scale", "Agentic AI". Tactics are the HOW that makes TDPs actionable.
+_Avoid_: "strategy" (too high-level), "use case" (too generic)
+
+**Sales Play**:
+Management-level sales motion that spans multiple TDPs. Five official plays: Build and Run Applications, Modernize Infrastructure, The AI-Ready Enterprise, Sovereignty, IT Operations Efficiency. Pipeline reporting rolls up to sales plays. Each play has customer-facing decks and target personas.
+_Avoid_: "solution play" in isolation (use "solution play" for the trigger-technology mapping in solution-plays.json, "sales play" for the management-level motion in saleshub-knowledge.json)
+
 ## Flagged ambiguities
 
 - "Shared Drive" (Google product name) vs. "L3 shared folder" (our concept): the L3 shared folder lives _in_ a Google Shared Drive, but the terms are not interchangeable. Use "L3 shared folder" for the concept, "Shared Drive" only when referring to the Google Drive product feature.

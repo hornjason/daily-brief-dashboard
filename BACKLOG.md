@@ -10222,3 +10222,12 @@ BKL-TEAM-01 → #205 — AccountTeam Phase 2: Parse team members from territory 
 BKL-TEAM-02 → #206 — Wire AccountTeam into briefs, meeting prep, email outreach
 BKL-TEAM-03 → #207 — AccountTeam role taxonomy refinement (manager subtypes)
 BKL-SYNC-L3-07 → #223 — Auto-recover dead RH browser context in keepalive (closed)
+BKL-SALESHUB-01 → #355 — SalesHub Intelligence Module: contextual TDP/Play/Tactic recommendations per customer
+BKL-SALESHUB-02 → #356 — ADR-030 quality debt: missing tests, module registration, doc updates
+BKL-SALESHUB-03 → #357 — PRD: SalesHub Intelligence Module
+BKL-SALESHUB-04 → #358 — Slice 1: Enhanced scraper — full content extraction
+BKL-SALESHUB-05 → #359 — Slice 2: Knowledge loader + solution-plays enrichment
+BKL-SALESHUB-06 → #360 — Slice 3: Enrich signals with talk tracks + linked assets
+BKL-SALESHUB-07 → #361 — Slice 4: Template engine renders enriched content
+BKL-SALESHUB-08 → #362 — Slice 5: Admin panel freshness + refresh
+BKL-SALESHUB-09 → #363 — Slice 6: Quality validators for SalesHub content
