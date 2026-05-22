@@ -95,13 +95,27 @@ export function parseTdpSectionsFromText(
   const results: Array<{ name: string; description: string }> = []
   const seen = new Set<string>()
 
-  // Find TDP area in text — match from any TDP/tactics header to a boundary marker
-  const tdpAreaMatch = text.match(
-    /(?:TDP|Technology Decision Point|Sales tactics)[\s\S]*?(?=Product Features|Deployment options|$)/i,
-  )
-  if (!tdpAreaMatch) return results
+  // Find TDP area in text — the TDP header appears twice: once in sidebar nav (short),
+  // once in expanded content area (followed by actual descriptions). Find ALL matches
+  // and use the one with the longest content before the next boundary.
+  const tdpHeaderPattern = /\d{4}\s+\w+\s+TDP\s*&\s*Sales\s+tactics/gi
+  let bestArea = ''
+  let match: RegExpExecArray | null
+  while ((match = tdpHeaderPattern.exec(text)) !== null) {
+    const afterMatch = text.slice(match.index)
+    const endMatch = afterMatch.match(/\n(?:Product Features|Deployment options|Content Details|Content Properties)\n/i)
+    const candidate = endMatch ? afterMatch.slice(0, endMatch.index) : afterMatch.slice(0, 5000)
+    if (candidate.length > bestArea.length) bestArea = candidate
+  }
 
-  const tdpArea = tdpAreaMatch[0]
+  // Fallback: search for individual TDP/tactic descriptions anywhere in the text
+  if (bestArea.length < 100) {
+    const fallbackMatch = text.match(/(?:Automation TDP|Virtualization TDP|App Platform TDP|AI TDP|Server.*TDP)[\s\S]{0,5000}/i)
+    if (fallbackMatch) bestArea = fallbackMatch[0].slice(0, 5000)
+  }
+
+  if (!bestArea) return results
+  const tdpArea = bestArea
   const lines = tdpArea.split('\n').filter(l => l.trim().length > 0)
 
   let currentName = ''
@@ -115,10 +129,10 @@ export function parseTdpSectionsFromText(
     if (trimmed.toLowerCase().startsWith('product features')) break
     if (trimmed.toLowerCase().startsWith('deployment options')) break
 
-    // Description detection: longer text starting with descriptive words
+    // Description detection: longer text that reads like a positioning statement
     const isDescription =
       trimmed.length > 40 &&
-      (trimmed.startsWith('This') || trimmed.startsWith('The'))
+      /^(This|The|A |An |It |In |By |For |With |Enables|Positions|Helps|Provides|Supports|Delivers|Combines|Offers|Discover)/i.test(trimmed)
 
     // Title detection: shorter text that isn't a description
     const isTitle =
@@ -127,7 +141,10 @@ export function parseTdpSectionsFromText(
       trimmed.length >= 5 &&
       !trimmed.includes('item(s)') &&
       !trimmed.startsWith('How to') &&
-      !trimmed.toLowerCase().includes('product features')
+      !trimmed.startsWith('arrow') &&
+      !trimmed.toLowerCase().includes('product features') &&
+      !trimmed.toLowerCase().includes('content details') &&
+      !trimmed.toLowerCase().includes('content properties')
 
     if (isTitle) {
       currentName = trimmed
