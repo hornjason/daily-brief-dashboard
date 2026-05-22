@@ -33,6 +33,7 @@ import {
   type ScrapedSalesPlay,
   type ScrapedSalesTactic,
 } from './saleshub-knowledge-extraction.ts'
+import { discoverAllPages } from './saleshub-page-discovery.ts'
 
 const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 const CACHE_DIR = process.env.CACHE_DIR ?? '/data/cache'
@@ -626,9 +627,15 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       await scrapePage.waitForTimeout(1_000)
     }
 
+    // ── API-based Page Discovery (replaces manual homepage navigation) ──────
+    console.log('[scrape-saleshub] === DISCOVERING PAGES VIA SEISMIC API ===')
+    const discoveryPage = await context.newPage()
+    const discovered = await discoverAllPages(discoveryPage)
+    await discoveryPage.close()
+
     // ── Pass 2: Sales Play Pages ─────────────────────────────────────────────
-    console.log('[scrape-saleshub] === PASS 2: Sales Play Pages ===')
-    const playLinks = await discoverSalesPlayLinks(scrapePage)
+    console.log(`[scrape-saleshub] === PASS 2: Sales Play Pages (${discovered.plays.length} discovered) ===`)
+    const playLinks = discovered.plays
 
     for (let i = 0; i < playLinks.length; i++) {
       const pl = playLinks[i]
@@ -643,8 +650,8 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
     }
 
     // ── Pass 3: Sales Tactic Pages ───────────────────────────────────────────
-    console.log('[scrape-saleshub] === PASS 3: Sales Tactic Pages ===')
-    const tacticLinks = await discoverSalesTacticLinks(scrapePage)
+    console.log(`[scrape-saleshub] === PASS 3: Sales Tactic Pages (${discovered.tactics.length} discovered) ===`)
+    const tacticLinks = discovered.tactics
 
     for (let i = 0; i < tacticLinks.length; i++) {
       const tl = tacticLinks[i]
