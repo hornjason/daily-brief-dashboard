@@ -35,7 +35,7 @@
     },
     {
       "name": "Sovereignty",
-      "description": "is no longer just a geopolitical concern—it is a strategic business imperative driven by the",
+      "description": "Digital sovereignty is no longer just a geopolitical concern—it is a strategic business imperative driven by the",
       "linkedTdps": [
         "AI",
         "Edge"
@@ -53,7 +53,7 @@
   ],
   "tdps": [
     {
-      "name": "Automation TDP",
+      "name": "Automation",
       "description": "The Automation Technical Decision Point (TDP) positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT, using a unified governance framework to consolidate fragmented tools and deliver measurable outcomes like 68% faster deployments and reduced downtime.",
       "tactics": [
         "AIOps:Turn Intelligence into Action",
@@ -61,22 +61,201 @@
         "Automate at Scale",
         "Network automation",
         "AIOps: Turn Intelligence into Action",
-        "Network Automation",
         "VM migration & modernization"
       ],
       "products": [
         "Red Hat Ansible Automation Platform"
       ]
+    },
+    {
+      "name": "AI",
+      "description": "The AI Technology Decision Point positions Red Hat as the trusted open platform for building, deploying, and scaling AI/ML workloads. Covers model training and serving with OpenShift AI, single-server inference with RHEL AI and InstructLab, and enterprise-grade agentic AI deployments.",
+      "tactics": [
+        "Cloud marketplaces and private offers"
+      ],
+      "products": [
+        "Red Hat AI",
+        "Red Hat OpenShift"
+      ]
+    },
+    {
+      "name": "App Platform",
+      "description": "The Application Platform Technology Decision Point positions Red Hat OpenShift as the enterprise Kubernetes platform with built-in CI/CD, security, and developer tooling. Covers cloud-native application development, container management, and platform engineering.",
+      "tactics": [
+        "Container Adoption Journey",
+        "DevX & platform engineering to build modern applications",
+        "Kubernetes for 3rd party AI workloads",
+        "Kubernetes for 3rd party workloads (Non-AI)",
+        "Multicluster management & security at scale for Kubernetes",
+        "Operationalize AI",
+        "Secure the software supply chain"
+      ],
+      "products": [
+        "Red Hat OpenShift",
+        "Red Hat Advanced Cluster Security for Kubernetes (RHACS)",
+        "Red Hat Advanced Cluster Management for Kubernetes (RHACM)"
+      ]
+    },
+    {
+      "name": "Edge",
+      "description": "The Edge Technology Decision Point positions Red Hat for deploying and managing workloads at the edge with lightweight OpenShift (SNO, MicroShift) and RHEL for Edge. Covers zero-touch provisioning, AI inference at the edge, and sovereign edge deployments.",
+      "tactics": [
+        "Agentic AI",
+        "Inference at Scale",
+        "Production AI",
+        "Sovereign (Private) AI"
+      ],
+      "products": [
+        "Red Hat OpenShift",
+        "Red Hat Enterprise Linux"
+      ]
+    },
+    {
+      "name": "Server/Cloud OS",
+      "description": "The Server/Cloud Operating System Technology Decision Point positions Red Hat Enterprise Linux as the standard enterprise Linux platform. Covers migration from legacy Unix/proprietary OS, RHEL lifecycle management, Satellite for multi-site management, and Insights for proactive risk detection.",
+      "tactics": [
+        "Deploy new critical & AI applications on RHEL",
+        "Migrate to the Cloud",
+        "Secure and Manage RHEL",
+        "Standardize & Modernize your Operating System"
+      ],
+      "products": [
+        "Red Hat Enterprise Linux",
+        "Red Hat Satellite"
+      ]
+    },
+    {
+      "name": "Virtualization",
+      "description": "The Virtualization Technology Decision Point positions Red Hat OpenShift Virtualization for VMware migration and VM-container consolidation. Covers eliminating VMware licensing costs, running VMs and containers on a single platform, and multi-cluster management with ACM.",
+      "tactics": [
+        "VM migration & modernization"
+      ],
+      "products": [
+        "Red Hat OpenShift Virtualization",
+        "Red Hat OpenShift",
+        "Red Hat Advanced Cluster Management for Kubernetes (RHACM)"
+      ]
     }
   ],
   "tactics": [
     {
-      "name": "AIOps:Turn Intelligence into Action",
+      "name": "AIOps: Turn Intelligence into Action",
       "talkTrack": "This AIOps tactic positions Red Hat Ansible Automation Platform as the \"action layer\" that transforms monitoring insights into automated remediation, enabling IT teams to replace manual troubleshooting with event-driven workflows that optimize costs and ensure AI policy compliance.",
-      "customerWins": [],
-      "whatToSay": [],
-      "whatToShare": [],
-      "parentTdp": "Automation TDP"
+      "customerWins": [
+        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
+        "0 item(s) selected",
+        "Unlock AI value in IT operations with Red Hat Ansible Automation Platform",
+        "Displaying slide 1 of 1",
+        "Select case studies from interactive customer references dashboard"
+      ],
+      "whatToSay": [
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence",
+        "Business content",
+        "0 item(s) selected"
+      ],
+      "whatToShare": [
+        {
+          "name": "What to show → differentiate with product demos",
+          "url": "javascript:void(0)",
+          "type": "external"
+        },
+        {
+          "name": "Customer pitch",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "0 item(s) selected",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "AIOps - CY'26 Customer Pitch Video",
+          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
+          "type": "google-slides"
+        },
+        {
+          "name": "Video recording of the AIOps customer-facing deck presentation.",
+          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
+          "type": "google-slides"
+        },
+        {
+          "name": "Displaying slide 1 of 1",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "AIOps = artificial intelligence for IT operations",
+          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
+          "type": "google-slides"
+        },
+        {
+          "name": "AIOps doesn’t replace DevOps—it’s an evolution of DevOps. AIOps is another point along the same digital transformation life cycle. AIOps and DevOps share the same responsibilities. Read more about AIOps online here: https://www.redhat.com/en/topics/ai/what-is-aiops?sc_cid=7015Y000003t3zHQAQ",
+          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
+          "type": "google-slides"
+        },
+        {
+          "name": "arrow up",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Business content",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "AIOps - CY'26 Customer Facing deck",
+          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
+          "type": "google-slides"
+        },
+        {
+          "name": "What to show",
+          "url": "javascript:void(0)",
+          "type": "external"
+        },
+        {
+          "name": "arrow down",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Demos that highlight differentiation and technical value",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Interactive experiences",
+          "url": "http://redhat.com/aap-interact",
+          "type": "external"
+        },
+        {
+          "name": "Content Kit: AIOps",
+          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
+          "type": "google-slides"
+        },
+        {
+          "name": "Demo: AIOps",
+          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
+          "type": "google-slides"
+        },
+        {
+          "name": "Workshop: AIOps",
+          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
+          "type": "google-slides"
+        },
+        {
+          "name": "Solution Guide",
+          "url": "https://access.redhat.com/articles/7119667",
+          "type": "external"
+        }
+      ],
+      "parentTdp": "Automation"
     },
     {
       "name": "Optimize and Modernize IT Ops",
@@ -306,7 +485,7 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Automation TDP"
+      "parentTdp": "Automation"
     },
     {
       "name": "Automate at Scale",
@@ -465,15 +644,128 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Automation TDP"
+      "parentTdp": "Automation"
     },
     {
       "name": "Network automation",
       "talkTrack": "This tactic enables sellers to position Red Hat Network Automation as the solution for modern network complexity, replacing manual processes and downtime with a resilient, multi-vendor automation framework that ensures faster response times and seamless scalability.",
-      "customerWins": [],
-      "whatToSay": [],
-      "whatToShare": [],
-      "parentTdp": "Automation TDP"
+      "customerWins": [
+        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
+        "0 item(s) selected"
+      ],
+      "whatToSay": [
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
+        "Business content",
+        "0 item(s) selected"
+      ],
+      "whatToShare": [
+        {
+          "name": "What to show → differentiate with product demos.",
+          "url": "javascript:void(0)",
+          "type": "external"
+        },
+        {
+          "name": "Customer Pitch",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "0 item(s) selected",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Network Automation - Customer facing Pitch",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "Network Automation- Customer Facing Deck Recording- What good looks like.",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "Displaying slide 1 of 1",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "arrow up",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Business content",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Network Automation CY'26 Customer Facing Deck",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "Technical",
+          "url": "https://content.redhat.com/us/en/sales-enablement/sales-plays-overview/tactic-network-automation.html#tabs-532b621f0b-item-9bcd9c3cbf-tab:~:text=Ansible%20Technical%20Account%20Manager",
+          "type": "external"
+        },
+        {
+          "name": "Ansible Network Automation - 301 - Technical Deck",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "What to show",
+          "url": "javascript:void(0)",
+          "type": "external"
+        },
+        {
+          "name": "arrow down",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Demos that highlight differentiation and technical value",
+          "url": "",
+          "type": "seismic"
+        },
+        {
+          "name": "Demo(s): Network Automation",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "Workshop(s): Network Automation",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "Interactive lab(s): Network Automation",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "Interactive Walkthrough: Network Automation with Red Hat Ansible",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "Demo links",
+          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
+          "type": "external"
+        },
+        {
+          "name": "Remote Server Management public architecture",
+          "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html?#remote-server-auto",
+          "type": "external"
+        }
+      ],
+      "parentTdp": "Automation"
     },
     {
       "name": "Agentic AI",
@@ -513,146 +805,6 @@
         }
       ],
       "parentTdp": "Edge"
-    },
-    {
-      "name": "AIOps: Turn Intelligence into Action",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected",
-        "Unlock AI value in IT operations with Red Hat Ansible Automation Platform",
-        "Displaying slide 1 of 1",
-        "Select case studies from interactive customer references dashboard"
-      ],
-      "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence",
-        "Business content",
-        "0 item(s) selected",
-        "0 item(s) selected"
-      ],
-      "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Customer pitch",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "AIOps - CY'26 Customer Pitch Video",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "Video recording of the AIOps customer-facing deck presentation.",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "AIOps = artificial intelligence for IT operations",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "AIOps doesn’t replace DevOps—it’s an evolution of DevOps. AIOps is another point along the same digital transformation life cycle. AIOps and DevOps share the same responsibilities. Read more about AIOps online here: https://www.redhat.com/en/topics/ai/what-is-aiops?sc_cid=7015Y000003t3zHQAQ",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Business content",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "AIOps - CY'26 Customer Facing deck",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "AIOps - CY'26 Customer Pitch Video",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Interactive experiences",
-          "url": "http://redhat.com/aap-interact",
-          "type": "external"
-        },
-        {
-          "name": "Content Kit: AIOps",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "Demo: AIOps",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "Workshop: AIOps",
-          "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
-          "type": "google-slides"
-        },
-        {
-          "name": "Solution Guide",
-          "url": "https://access.redhat.com/articles/7119667",
-          "type": "external"
-        }
-      ],
-      "parentTdp": "Automation"
     },
     {
       "name": "Cloud marketplaces and private offers",
@@ -1694,158 +1846,6 @@
         }
       ],
       "parentTdp": "App Platform"
-    },
-    {
-      "name": "Network Automation",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
-      "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "Business content",
-        "0 item(s) selected",
-        "0 item(s) selected"
-      ],
-      "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos.",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Customer Pitch",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Network Automation - Customer facing Pitch",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Network Automation- Customer Facing Deck Recording- What good looks like.",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Business content",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Network Automation CY'26 Customer Facing Deck",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Technical",
-          "url": "https://content.redhat.com/us/en/sales-enablement/sales-plays-overview/tactic-network-automation.html#tabs-532b621f0b-item-9bcd9c3cbf-tab:~:text=Ansible%20Technical%20Account%20Manager",
-          "type": "external"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Ansible Network Automation - 301 - Technical Deck",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Business content",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s): Network Automation",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Workshop(s): Network Automation",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Interactive lab(s): Network Automation",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Interactive Walkthrough: Network Automation with Red Hat Ansible",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Technical",
-          "url": "https://content.redhat.com/us/en/sales-enablement/sales-plays-overview/tactic-network-automation.html#tabs-532b621f0b-item-9bcd9c3cbf-tab:~:text=Ansible%20Technical%20Account%20Manager",
-          "type": "external"
-        },
-        {
-          "name": "Demo links",
-          "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
-          "type": "external"
-        },
-        {
-          "name": "Remote Server Management public architecture",
-          "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html?#remote-server-auto",
-          "type": "external"
-        }
-      ],
-      "parentTdp": "Automation"
     },
     {
       "name": "Operationalize AI",
