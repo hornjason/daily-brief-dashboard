@@ -36,6 +36,7 @@ interface SearchDoc {
   contentId: string
   versionId: string
   format: string
+  contentType: string
 }
 
 function getL4FolderId(): string | null {
@@ -83,7 +84,7 @@ export async function downloadSalesHubContent(): Promise<{ downloaded: number; u
 
   try {
     // Step 1: Capture auth token
-    const page = await context.newPage()
+    let page = await context.newPage()
     let auth = '', headers: Record<string, string> = {}
     page.on('request', (req) => {
       if (!auth && req.headers().authorization?.startsWith('Bearer ')) {
@@ -138,7 +139,11 @@ export async function downloadSalesHubContent(): Promise<{ downloaded: number; u
         const data = await res.json()
         return (data?.ServiceResult?.Documents ?? [])
           .filter((d: any) => d.Format && !['JSON', 'MP4', 'MOV', 'WEBM', 'ZIP', 'PNG', 'YouTube', 'URL'].includes(d.Format))
-          .map((d: any) => ({ name: d.Name, contentId: d.ContentId, versionId: d.VersionId, format: d.Format }))
+          .map((d: any) => {
+            const ctProp = (d.CustomProperties ?? []).find((p: any) => p.name === 'Content Type')
+            const contentType = ctProp?.values?.[0]?.value ?? d.Format
+            return { name: d.Name, contentId: d.ContentId, versionId: d.VersionId, format: d.Format, contentType }
+          })
       }, { pattern, url: searchUrl, auth, pvid: PROFILE_VERSION_ID, tsid: headers.teamsiteid })
 
       for (const doc of docs) {
@@ -152,8 +157,10 @@ export async function downloadSalesHubContent(): Promise<{ downloaded: number; u
     console.log(`[download] Found ${allDocs.length} unique key documents to download`)
     await page.close()
 
-    // Step 3: Download each file via browser page context (CAUGS API needs full session)
-    // Use page.evaluate to make the CAUGS call from within the authenticated browser
+    // Step 3: Download each file by navigating to its DocCenter page and clicking Download
+    await page.close()
+    const dlPage = await context.newPage()
+
     for (let i = 0; i < allDocs.length; i++) {
       const doc = allDocs[i]
       const filename = `${doc.name}.${doc.format.toLowerCase()}`
@@ -166,52 +173,33 @@ export async function downloadSalesHubContent(): Promise<{ downloaded: number; u
       }
 
       try {
-        const fileData = await page.evaluate(async (args) => {
-          const caugsRes = await fetch('/gateway/services/caugs/tenants/redhat/v1/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: args.auth },
-            body: JSON.stringify({ contentId: args.contentId, versionId: args.versionId }),
-          })
-          if (!caugsRes.ok) return { error: `CAUGS ${caugsRes.status}` }
-          const caugsData = await caugsRes.json()
-          const blobUrl = (caugsData as any)?.url ?? (caugsData as any)?.downloadUrl ?? (caugsData as any)?.Url ?? ''
-          if (!blobUrl) return { error: 'No blob URL', keys: Object.keys(caugsData as object) }
+        // Build DocCenter URL with correct content type encoding
+        const contentTypeB64 = Buffer.from(doc.contentType).toString('base64').replace(/=/g, '%3D')
+        const docUrl = `https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252C${contentTypeB64}%252Flf${doc.versionId}//`
 
-          const blobRes = await fetch(blobUrl)
-          if (!blobRes.ok) return { error: `Blob ${blobRes.status}` }
-          const buffer = await blobRes.arrayBuffer()
-          // Convert to base64 to pass back to Node
-          const bytes = new Uint8Array(buffer)
-          let binary = ''
-          for (let j = 0; j < bytes.length; j++) binary += String.fromCharCode(bytes[j])
-          return { size: buffer.byteLength, base64: btoa(binary) }
-        }, { contentId: doc.contentId, versionId: doc.versionId, auth })
+        await dlPage.goto(docUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+        await dlPage.waitForTimeout(5_000)
 
-        if (fileData.error) {
-          console.warn(`[download] (${i + 1}/${allDocs.length}) ✗ ${doc.name}: ${fileData.error}`)
-          errors++
-        } else if (fileData.base64) {
-          writeFileSync(localPath, Buffer.from(fileData.base64, 'base64'))
-          console.log(`[download] (${i + 1}/${allDocs.length}) ✓ ${doc.name} (${doc.format}, ${Math.round((fileData.size ?? 0) / 1024)}KB)`)
+        const downloadBtn = dlPage.locator('text=Download').first()
+        if (await downloadBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
+          const downloadPromise = dlPage.waitForEvent('download', { timeout: 30_000 })
+          await downloadBtn.click()
+          const download = await downloadPromise
+          await download.saveAs(localPath)
+          console.log(`[download] (${i + 1}/${allDocs.length}) ✓ ${download.suggestedFilename()}`)
           downloaded++
+        } else {
+          console.warn(`[download] (${i + 1}/${allDocs.length}) ✗ No Download button: ${doc.name}`)
+          errors++
         }
       } catch (e: any) {
         console.error(`[download] (${i + 1}/${allDocs.length}) ✗ ${doc.name}: ${e.message?.slice(0, 80)}`)
         errors++
-        // If page died, create a new one
-        if (e.message?.includes('closed')) {
-          try {
-            page = await context.newPage()
-            await page.goto(`https://saleshub.redhat.com/apps/doccenter/${PROFILE_VERSION_ID}/main///`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-            await page.waitForTimeout(8_000)
-            console.log('[download] Recovered page context')
-          } catch { break }
-        }
       }
 
-      await new Promise(r => setTimeout(r, 300))
+      await new Promise(r => setTimeout(r, 1_000))
     }
-    await page.close()
+    await dlPage.close()
 
     // Step 4: Upload to Google Drive
     const l4FolderId = getL4FolderId()
