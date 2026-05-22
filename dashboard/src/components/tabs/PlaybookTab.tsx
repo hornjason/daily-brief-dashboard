@@ -524,6 +524,71 @@ export function PlaybookTab({ customerName }: PlaybookTabProps) {
         )}
       </div>
 
+      {/* Section 1b: Solution Plays (deterministic — TDP/Play/Tactic breakdown) */}
+      {playbook.deterministic?.solutionPlays && playbook.deterministic.solutionPlays.length > 0 && (
+        <div className="bg-surface border border-border rounded-xl overflow-hidden">
+          <button
+            onClick={() => toggleSection('solutionPlays')}
+            className="w-full px-5 py-4 cursor-pointer hover:bg-border/10 transition-colors flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-text-primary">Solution Plays</h2>
+              <span className="text-xs px-2 py-0.5 bg-accent/10 text-accent rounded-full">
+                {playbook.deterministic.solutionPlays.length} active
+              </span>
+            </div>
+            {expandedSections.has('solutionPlays') ? (
+              <ChevronUp className="w-5 h-5 text-text-secondary" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-text-secondary" />
+            )}
+          </button>
+          {expandedSections.has('solutionPlays') && (
+            <div className="px-5 py-4 border-t border-border/60 space-y-4">
+              {playbook.deterministic.solutionPlays.map((play: any, idx: number) => (
+                <div key={idx} className="border border-border/40 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-medium px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded">{play.tdp}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${play.confidence === 'HIGH' ? 'bg-green-500/10 text-green-400' : play.confidence === 'MEDIUM' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-gray-500/10 text-gray-400'}`}>
+                      {play.confidence}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-semibold text-text-primary mb-1">{play.playName}</h3>
+                  <p className="text-xs text-text-secondary mb-2">
+                    Triggered by: {play.triggerTechnologies?.join(', ') || 'N/A'}
+                  </p>
+                  {play.talkTrack && (
+                    <p className="text-xs text-text-secondary italic border-l-2 border-accent/30 pl-3 mb-2">
+                      {play.talkTrack.length > 200 ? play.talkTrack.slice(0, 200) + '…' : play.talkTrack}
+                    </p>
+                  )}
+                  {play.customerWins && play.customerWins.length > 0 && (
+                    <div className="mt-2">
+                      <span className="text-xs font-medium text-text-secondary">Proof points:</span>
+                      <ul className="mt-1 space-y-0.5">
+                        {play.customerWins.map((win: string, i: number) => (
+                          <li key={i} className="text-xs text-text-secondary">• {win}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {play.linkedAssets && play.linkedAssets.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {play.linkedAssets.map((asset: any, i: number) => (
+                        <a key={i} href={asset.url} target="_blank" rel="noopener noreferrer"
+                           className="text-xs text-accent hover:text-accent/80 underline">
+                          {asset.name}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Section 2: SWOT Analysis */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
         <button

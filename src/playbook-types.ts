@@ -41,6 +41,7 @@ export interface PlaybookState {
     cases: CaseSnapshot[]
     lifecycle: LifecycleSnapshot[]
     teamMembers: AccountTeamMember[]
+    solutionPlays?: SolutionPlaySnapshot[]
   }
 
   // Provenance: which sources contributed to the current state
@@ -154,4 +155,14 @@ export interface LifecycleSnapshot {
   eolDate: string
   nextVersion?: string
   nextExpected?: string
+}
+
+export interface SolutionPlaySnapshot {
+  tdp: string
+  playName: string
+  triggerTechnologies: string[]
+  talkTrack?: string
+  customerWins?: string[]
+  linkedAssets?: Array<{ name: string; url: string }>
+  confidence: string
 }

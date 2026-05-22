@@ -454,6 +454,19 @@ Generate the 6 narrative sections plus product alignment entries as structured J
       nextExpected: p.nextExpected ?? undefined,
     }))
 
+  // Solution play snapshots (deterministic, from solution intelligence engine)
+  const { getCustomerSolutionContext } = await import('./lib/customer-solution-context.ts')
+  const solutionCtx = getCustomerSolutionContext(slug)
+  const solutionPlaySnapshots = solutionCtx.activeSolutionPlays.map(p => ({
+    tdp: p.tdp,
+    playName: p.playName,
+    triggerTechnologies: p.matchedTechnologies,
+    talkTrack: p.talkTrack,
+    customerWins: p.customerWins,
+    linkedAssets: p.linkedAssets?.map(a => ({ name: a.name, url: a.url })),
+    confidence: p.confidence,
+  }))
+
   // ── Step 5: Assemble PlaybookState ────────────────────────────────────
 
   const defaultSection = (content: string): PlaybookSection => ({
@@ -509,6 +522,7 @@ Generate the 6 narrative sections plus product alignment entries as structured J
       cases,
       lifecycle,
       teamMembers: teamMembers,
+      solutionPlays: solutionPlaySnapshots,
     },
     sources: [
       {
