@@ -189,6 +189,8 @@ Last updated: 2026-05-20 — Full architecture overhaul: Signal Template Engine 
 | `.google-token.json` | Google OAuth (Drive, Sheets, Gmail, Calendar) | ❌ No — **preserve on resets** | Re-authenticate (5 min) |
 | `.rh-session.json` | RH Portal session cookie | ❌ No | Re-login via Admin page |
 | `.sf-session.json` | SF session flag | ❌ No | Re-login via Admin page |
+| `solution-plays.json` | 16 solution plays with TDP mappings, trigger technologies, value props | ✅ Ships in `config-templates/` | Seeded on first boot from config-templates |
+| `saleshub-knowledge.json` | SalesHub knowledge base: TDPs, tactics (talk tracks), sales plays, products | ✅ Ships in `config-templates/` | Seeded on first boot; refreshed via `make saleshub-now` on Mac Mini |
 
 **Implemented (BKL-BACKUP-01):** Config backup sheet created at POD Bootstrap; auto-syncs aes.json + customers.json + data-sources.json + product-intel-config.json on every save (backup-config.ts + backup-routes.ts). Admin page Backup/Restore buttons still pending.
 
