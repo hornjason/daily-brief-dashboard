@@ -188,7 +188,8 @@ export async function syncSalesHubToDrive(): Promise<{ uploaded: number; shortcu
     uploaded++
 
     // For product files, create shortcuts for Google Docs/Slides URLs
-    if (fileName !== 'saleshub-products.json') {
+    // Skip index files and the knowledge file (they don't have googleDocsUrls)
+    if (fileName !== 'saleshub-products.json' && fileName !== 'saleshub-knowledge.json') {
       try {
         const product: SalesHubProduct = JSON.parse(content)
         for (const url of product.googleDocsUrls ?? []) {

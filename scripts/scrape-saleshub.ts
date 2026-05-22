@@ -1,26 +1,38 @@
 /**
- * scripts/scrape-saleshub.ts — SalesHub product page scraper
+ * scripts/scrape-saleshub.ts — SalesHub full content scraper (#358)
  *
- * Scrapes all 21+ product pages from Red Hat SalesHub (Seismic platform).
- * Extracts: product descriptions, TDP/Sales Tactics sections, value props,
- * Google Docs/Slides URLs, and key resources.
+ * Three-pass scraper for Red Hat SalesHub (Seismic platform):
+ *   Pass 1: Product pages (21+) — click accordion expanders, extract TDP content
+ *   Pass 2: Sales Play pages — discover from DocCenter homepage, extract description + linked TDPs
+ *   Pass 3: Sales Tactic pages — discover from DocCenter homepage, extract structured sections
  *
  * Uses session-state.json cookies from the daemon's browser profile to
  * authenticate via a separate Chromium instance (avoids profile lock).
  *
- * Output: /data/cache/saleshub/{product-slug}.json per product
- *         /data/cache/saleshub/saleshub-products.json index
+ * Output:
+ *   /data/cache/saleshub/{product-slug}.json per product
+ *   /data/cache/saleshub/saleshub-products.json index
+ *   /data/cache/saleshub/saleshub-knowledge.json full knowledge base
+ *   config-templates/saleshub-knowledge.json (for container distribution)
  *
  * Called by sync-l3-daemon.ts via saleshub-trigger file mechanism.
  */
 
 import { chromium } from '@playwright/test'
 import type { BrowserContext, Page } from '@playwright/test'
-import { readFileSync, mkdirSync, existsSync } from 'fs'
+import { readFileSync, mkdirSync, existsSync, copyFileSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../src/cache-layer.ts'
 import { writeJsonAtomic } from '../src/lib/atomic-write.ts'
 import { BASE_CHROMIUM_ARGS } from '../src/browser-utils.ts'
+import {
+  parseTdpSectionsFromText,
+  parseSalesTacticSections,
+  buildSalesHubKnowledge,
+  type SalesHubKnowledge,
+  type ScrapedSalesPlay,
+  type ScrapedSalesTactic,
+} from './saleshub-knowledge-extraction.ts'
 
 const PROFILE_DIR = process.env.RH_PROFILE_DIR ?? '/data/rh-profile'
 const CACHE_DIR = process.env.CACHE_DIR ?? '/data/cache'
@@ -28,6 +40,10 @@ const OUTPUT_DIR = resolve(CACHE_DIR, 'saleshub')
 const SALESHUB_URL = 'https://saleshub.redhat.com'
 const DOCCENTER_PROFILE = '1d1918e9-b5b0-4428-b8fc-87e02ad44156'
 const CHROMIUM_PATH = '/ms-playwright/chromium-1208/chrome-linux/chrome'
+
+// Wait times for SPA rendering
+const INITIAL_SPA_WAIT_MS = 12_000
+const POST_EXPAND_WAIT_MS = 3_000
 
 export interface SalesHubProduct {
   slug: string
@@ -67,11 +83,45 @@ function classifyUrl(url: string): ResourceLink['type'] {
   return 'external'
 }
 
+// ── Pass 1: Product Page Extraction (with accordion expansion) ───────────────
+
+async function clickAccordionExpanders(page: Page): Promise<number> {
+  // Click all elements matching text="arrow down" to expand accordion sections
+  let clickedCount = 0
+  try {
+    const arrowElements = await page.getByText('arrow down').all()
+    console.log(`[scrape-saleshub] Found ${arrowElements.length} accordion expanders`)
+    for (const el of arrowElements) {
+      try {
+        await el.click({ timeout: 2_000 })
+        clickedCount++
+      } catch {
+        // Element may not be clickable or visible — skip
+      }
+    }
+    if (clickedCount > 0) {
+      console.log(`[scrape-saleshub] Clicked ${clickedCount} expanders, waiting for content…`)
+      await page.waitForTimeout(POST_EXPAND_WAIT_MS)
+    }
+  } catch (e: any) {
+    console.warn(`[scrape-saleshub] Accordion expansion warning: ${e.message}`)
+  }
+  return clickedCount
+}
+
 async function extractProductPage(page: Page, productName: string, productUrl: string): Promise<SalesHubProduct | null> {
   try {
-    console.log(`[scrape-saleshub] Scraping: ${productName}`)
+    console.log(`[scrape-saleshub] Scraping product: ${productName}`)
     await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
-    await page.waitForTimeout(5_000)
+
+    // Wait for initial SPA render (Seismic needs time)
+    await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
+
+    // Click accordion expanders to reveal TDP/tactic content
+    const expandedCount = await clickAccordionExpanders(page)
+    if (expandedCount > 0) {
+      console.log(`[scrape-saleshub] Expanded ${expandedCount} accordion sections on ${productName}`)
+    }
 
     const data = await page.evaluate(() => {
       const mainEl = document.querySelector('main, [role="main"], body') as HTMLElement
@@ -106,10 +156,10 @@ async function extractProductPage(page: Page, productName: string, productUrl: s
         description = descParts.join('\n').slice(0, 2000)
       }
 
-      return { headings, links, description, mainText: mainText.slice(0, 20000) }
+      return { headings, links, description, mainText: mainText.slice(0, 30000) }
     })
 
-    // Parse TDP sections from headings
+    // Parse TDP sections from headings (original approach)
     const tdpSections: TdpSection[] = []
     const salesTactics: SalesTacticSection[] = []
 
@@ -152,28 +202,15 @@ async function extractProductPage(page: Page, productName: string, productUrl: s
       }
     }
 
-    // Also parse TDP/tactic sections from the main text using pattern matching
-    const tdpPattern = /([A-Z][^:\n]{5,80})\s*\n\s*((?:This|The)\s+[^.]+\.(?:[^.]+\.){0,3})/g
+    // Also parse TDP/tactic sections from the expanded main text using extraction module
     const mainText = data.mainText
     const tdpSectionNames = new Set(tdpSections.map(t => t.name))
 
-    // Look for "2026 ... TDP & Sales tactics" section in text
-    const tdpAreaMatch = mainText.match(/(?:TDP|Technology Decision Point)[\s\S]*?(?=(?:Product Features|Deployment options|$))/i)
-    if (tdpAreaMatch) {
-      const tdpArea = tdpAreaMatch[0]
-      const lines = tdpArea.split('\n').filter(l => l.trim().length > 0)
-      let currentName = ''
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (trimmed.length < 100 && trimmed.length > 5 && !trimmed.startsWith('This') && !trimmed.startsWith('The') && !trimmed.includes('item(s)')) {
-          currentName = trimmed
-        } else if (currentName && trimmed.length > 50 && (trimmed.startsWith('This') || trimmed.startsWith('The'))) {
-          if (!tdpSectionNames.has(currentName)) {
-            tdpSections.push({ name: currentName, description: trimmed })
-            tdpSectionNames.add(currentName)
-          }
-          currentName = ''
-        }
+    const textParsedTdps = parseTdpSectionsFromText(mainText)
+    for (const tdp of textParsedTdps) {
+      if (!tdpSectionNames.has(tdp.name)) {
+        tdpSections.push(tdp)
+        tdpSectionNames.add(tdp.name)
       }
     }
 
@@ -205,7 +242,7 @@ async function extractProductPage(page: Page, productName: string, productUrl: s
 
     const slug = toSlug(productName)
 
-    return {
+    const product: SalesHubProduct = {
       slug,
       name: productName,
       description: data.description,
@@ -217,13 +254,271 @@ async function extractProductPage(page: Page, productName: string, productUrl: s
       decks,
       scrapedAt: new Date().toISOString(),
     }
+
+    console.log(`[scrape-saleshub] ${productName}: ${tdpSections.length} TDPs, ${salesTactics.length} tactics, ${googleDocsUrls.length} docs`)
+    return product
   } catch (e: any) {
     console.error(`[scrape-saleshub] Failed to scrape ${productName}: ${e.message}`)
     return null
   }
 }
 
-export async function scrapeSalesHub(): Promise<SalesHubProduct[]> {
+// ── Pass 2: Sales Play Page Extraction ───────────────────────────────────────
+
+async function discoverSalesPlayLinks(page: Page): Promise<Array<{ name: string; url: string }>> {
+  console.log('[scrape-saleshub] Discovering Sales Play pages from DocCenter…')
+
+  // Navigate to the DocCenter homepage to find Sales Play section links
+  const homepageUrl = `${SALESHUB_URL}/apps/doccenter/${DOCCENTER_PROFILE}`
+  await page.goto(homepageUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
+
+  const links = await page.evaluate(() => {
+    const items: { name: string; url: string }[] = []
+    const allLinks = document.querySelectorAll('a[href]')
+    allLinks.forEach(a => {
+      const text = a.textContent?.trim() ?? ''
+      const href = a.getAttribute('href') ?? ''
+      const lower = text.toLowerCase()
+      // Sales Play pages contain keywords like "Build and Run", "Modernize", "Secure", "Automate"
+      // and are major category landing pages
+      if (href.includes('doccenter') && href.includes('lf') &&
+          (lower.includes('sales play') ||
+           lower.includes('build and run') ||
+           lower.includes('modernize infrastructure') ||
+           lower.includes('accelerate application') ||
+           lower.includes('automate at scale') ||
+           lower.includes('secure the hybrid cloud') ||
+           lower.includes('deploy at the edge'))) {
+        items.push({
+          name: text,
+          url: href.startsWith('http') ? href : `${window.location.origin}${href}`,
+        })
+      }
+    })
+    // Dedupe
+    const seen = new Set<string>()
+    return items.filter(i => {
+      if (seen.has(i.name)) return false
+      seen.add(i.name)
+      return true
+    })
+  })
+
+  console.log(`[scrape-saleshub] Found ${links.length} Sales Play pages`)
+  return links
+}
+
+async function extractSalesPlayPage(page: Page, playName: string, playUrl: string): Promise<ScrapedSalesPlay | null> {
+  try {
+    console.log(`[scrape-saleshub] Scraping Sales Play: ${playName}`)
+    await page.goto(playUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+    await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
+
+    // Expand accordions
+    await clickAccordionExpanders(page)
+
+    const data = await page.evaluate(() => {
+      const mainEl = document.querySelector('main, [role="main"], body') as HTMLElement
+      const mainText = mainEl?.innerText ?? ''
+
+      // Extract description — first meaningful paragraph
+      let description = ''
+      const paragraphs = document.querySelectorAll('p, div > span')
+      for (const p of paragraphs) {
+        const text = p.textContent?.trim() ?? ''
+        if (text.length > 50 && !text.includes('Rating') && !text.includes('Review')) {
+          description = text.slice(0, 2000)
+          break
+        }
+      }
+
+      // Extract all links for TDP/product cross-references
+      const links = Array.from(document.querySelectorAll('a[href]')).map(a => ({
+        text: a.textContent?.trim() ?? '',
+        href: a.getAttribute('href') ?? '',
+      }))
+
+      return { description, mainText: mainText.slice(0, 20000), links }
+    })
+
+    // Identify linked TDPs from page text and links
+    const knownTdps = ['AI', 'App Platform', 'Automation', 'Virtualization', 'Server/Cloud OS', 'Edge']
+    const linkedTdps: string[] = []
+    for (const tdp of knownTdps) {
+      if (data.mainText.toLowerCase().includes(tdp.toLowerCase())) {
+        linkedTdps.push(tdp)
+      }
+    }
+
+    return {
+      name: playName,
+      description: data.description,
+      linkedTdps,
+      url: playUrl,
+    }
+  } catch (e: any) {
+    console.error(`[scrape-saleshub] Failed to scrape Sales Play ${playName}: ${e.message}`)
+    return null
+  }
+}
+
+// ── Pass 3: Sales Tactic Page Extraction ─────────────────────────────────────
+
+async function discoverSalesTacticLinks(page: Page): Promise<Array<{ name: string; url: string }>> {
+  console.log('[scrape-saleshub] Discovering Sales Tactic pages from DocCenter…')
+
+  const homepageUrl = `${SALESHUB_URL}/apps/doccenter/${DOCCENTER_PROFILE}`
+  await page.goto(homepageUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
+
+  // Expand any accordions on the homepage to reveal tactic links
+  await clickAccordionExpanders(page)
+
+  const links = await page.evaluate(() => {
+    const items: { name: string; url: string }[] = []
+    const allLinks = document.querySelectorAll('a[href]')
+    allLinks.forEach(a => {
+      const text = a.textContent?.trim() ?? ''
+      const href = a.getAttribute('href') ?? ''
+      // Known Sales Tactic page names from the brief
+      const tacticKeywords = [
+        'agentic ai', 'aiops', 'automate at scale', 'cloud marketplace',
+        'cloud-native', 'consolidate infrastructure', 'database modernization',
+        'developer productivity', 'digital sovereignty', 'edge computing',
+        'event-driven', 'infrastructure as code', 'it service management',
+        'network automation', 'observability', 'platform engineering',
+        'security automation', 'security compliance', 'supply chain security',
+        'vmware migration', 'application modernization',
+      ]
+      const lower = text.toLowerCase()
+      if (href.includes('doccenter') && href.includes('lf') && text.length > 5 && text.length < 80) {
+        // Check if this looks like a tactic page
+        if (tacticKeywords.some(kw => lower.includes(kw)) ||
+            (lower.includes('tactic') && !lower.includes('product'))) {
+          items.push({
+            name: text,
+            url: href.startsWith('http') ? href : `${window.location.origin}${href}`,
+          })
+        }
+      }
+    })
+    const seen = new Set<string>()
+    return items.filter(i => {
+      if (seen.has(i.name)) return false
+      seen.add(i.name)
+      return true
+    })
+  })
+
+  console.log(`[scrape-saleshub] Found ${links.length} Sales Tactic pages`)
+  return links
+}
+
+async function extractSalesTacticPage(page: Page, tacticName: string, tacticUrl: string): Promise<ScrapedSalesTactic | null> {
+  try {
+    console.log(`[scrape-saleshub] Scraping Sales Tactic: ${tacticName}`)
+    await page.goto(tacticUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 })
+    await page.waitForTimeout(INITIAL_SPA_WAIT_MS)
+
+    // Expand accordions
+    await clickAccordionExpanders(page)
+
+    const mainText = await page.evaluate(() => {
+      const mainEl = document.querySelector('main, [role="main"], body') as HTMLElement
+      return mainEl?.innerText ?? ''
+    })
+
+    // Extract structured sections
+    const sections = parseSalesTacticSections(mainText)
+
+    // Extract links for whatToShare
+    const pageLinks = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('a[href]')).map(a => ({
+        text: a.textContent?.trim() ?? '',
+        href: a.getAttribute('href') ?? '',
+      })).filter(l => l.text && l.href && l.text.length > 3 && !l.href.startsWith('#'))
+    })
+
+    // Enrich whatToShare with actual URLs from page links
+    const enrichedShares: Array<{ name: string; url: string; type: string }> = []
+    for (const share of sections.whatToShare) {
+      // Try to find a matching link
+      const matchingLink = pageLinks.find(l =>
+        l.text.toLowerCase().includes(share.name.toLowerCase().slice(0, 20)) ||
+        share.name.toLowerCase().includes(l.text.toLowerCase().slice(0, 20)),
+      )
+      enrichedShares.push({
+        name: share.name,
+        url: matchingLink?.href ?? '',
+        type: matchingLink ? classifyUrl(matchingLink.href) : 'seismic',
+      })
+    }
+
+    // Also find shareable assets from links that look like decks/docs
+    for (const link of pageLinks) {
+      const lower = link.text.toLowerCase()
+      if ((lower.includes('deck') || lower.includes('presentation') ||
+           lower.includes('guide') || lower.includes('whitepaper') ||
+           lower.includes('infographic') || lower.includes('cheat sheet')) &&
+          !enrichedShares.some(s => s.url === link.href)) {
+        enrichedShares.push({
+          name: link.text,
+          url: link.href,
+          type: classifyUrl(link.href),
+        })
+      }
+    }
+
+    // Determine parent TDP from page content
+    const knownTdps = ['AI', 'App Platform', 'Automation', 'Virtualization', 'Server/Cloud OS', 'Edge']
+    let parentTdp = ''
+    const mainTextLower = mainText.toLowerCase()
+
+    // Try to find "Supporting TDPs" section
+    const tdpSectionMatch = mainText.match(/Supporting TDPs[\s\S]*?(?=\n\n|\n[A-Z]|$)/i)
+    if (tdpSectionMatch) {
+      for (const tdp of knownTdps) {
+        if (tdpSectionMatch[0].toLowerCase().includes(tdp.toLowerCase())) {
+          parentTdp = tdp
+          break
+        }
+      }
+    }
+
+    // Fallback: infer from content keywords
+    if (!parentTdp) {
+      if (mainTextLower.includes('ansible') || mainTextLower.includes('automation platform')) parentTdp = 'Automation'
+      else if (mainTextLower.includes('openshift') || mainTextLower.includes('kubernetes')) parentTdp = 'App Platform'
+      else if (mainTextLower.includes('rhel') || mainTextLower.includes('enterprise linux')) parentTdp = 'Server/Cloud OS'
+      else if (mainTextLower.includes('virtualization') || mainTextLower.includes('vmware')) parentTdp = 'Virtualization'
+      else if (mainTextLower.includes('edge') || mainTextLower.includes('microshift')) parentTdp = 'Edge'
+      else if (mainTextLower.includes('ai') || mainTextLower.includes('machine learning')) parentTdp = 'AI'
+    }
+
+    return {
+      name: tacticName,
+      talkTrack: sections.talkTrack,
+      customerWins: sections.customerWins,
+      whatToSay: sections.whatToSay,
+      whatToShare: enrichedShares,
+      parentTdp,
+      url: tacticUrl,
+    }
+  } catch (e: any) {
+    console.error(`[scrape-saleshub] Failed to scrape Sales Tactic ${tacticName}: ${e.message}`)
+    return null
+  }
+}
+
+// ── Main Scrape Function ─────────────────────────────────────────────────────
+
+export interface SalesHubScrapeResult {
+  products: SalesHubProduct[]
+  knowledge: SalesHubKnowledge
+}
+
+export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
   const sessionStatePath = resolve(PROFILE_DIR, 'session-state.json')
   if (!existsSync(sessionStatePath)) {
     throw new Error(`[scrape-saleshub] No session-state.json at ${sessionStatePath}`)
@@ -250,17 +545,18 @@ export async function scrapeSalesHub(): Promise<SalesHubProduct[]> {
   })
 
   const products: SalesHubProduct[] = []
+  const salesPlays: ScrapedSalesPlay[] = []
+  const tactics: ScrapedSalesTactic[] = []
 
   try {
-    // Step 1: Navigate to Products listing and discover all product page URLs
-    console.log('[scrape-saleshub] Discovering product pages from Products listing…')
+    // ── Pass 1: Product Pages ──────────────────────────────────────────────
+    console.log('[scrape-saleshub] === PASS 1: Product Pages ===')
     const listingPage = await context.newPage()
     const productsUrl = `${SALESHUB_URL}/apps/doccenter/${DOCCENTER_PROFILE}/doc/%252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%252CPT0%253D%252CUGFnZSBSSFNI%252Flf3e41b707-4f29-4a23-9ee9-27736d70c8eb//`
 
     await listingPage.goto(productsUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
     await listingPage.waitForTimeout(8_000)
 
-    // Extract product names and their URLs from the listing
     const productLinks = await listingPage.evaluate(() => {
       const items: { name: string; url: string }[] = []
       const links = document.querySelectorAll('a[href]')
@@ -279,7 +575,6 @@ export async function scrapeSalesHub(): Promise<SalesHubProduct[]> {
           items.push({ name: text, url: href.startsWith('http') ? href : `${window.location.origin}${href}` })
         }
       })
-      // Dedupe by name
       const seen = new Set<string>()
       return items.filter(i => {
         if (seen.has(i.name)) return false
@@ -295,7 +590,7 @@ export async function scrapeSalesHub(): Promise<SalesHubProduct[]> {
 
     await listingPage.close()
 
-    // Step 2: Scrape each product page
+    // Scrape each product page with accordion expansion
     const scrapePage = await context.newPage()
 
     for (let i = 0; i < productLinks.length; i++) {
@@ -305,7 +600,6 @@ export async function scrapeSalesHub(): Promise<SalesHubProduct[]> {
       const product = await extractProductPage(scrapePage, pl.name, pl.url)
       if (product) {
         products.push(product)
-
         writeJsonAtomic(resolve(OUTPUT_DIR, `${product.slug}.json`), product)
       }
 
@@ -313,12 +607,63 @@ export async function scrapeSalesHub(): Promise<SalesHubProduct[]> {
       await scrapePage.waitForTimeout(1_000)
     }
 
+    // ── Pass 2: Sales Play Pages ─────────────────────────────────────────────
+    console.log('[scrape-saleshub] === PASS 2: Sales Play Pages ===')
+    const playLinks = await discoverSalesPlayLinks(scrapePage)
+
+    for (let i = 0; i < playLinks.length; i++) {
+      const pl = playLinks[i]
+      console.log(`[scrape-saleshub] (${i + 1}/${playLinks.length}) Sales Play: ${pl.name}`)
+
+      const play = await extractSalesPlayPage(scrapePage, pl.name, pl.url)
+      if (play) {
+        salesPlays.push(play)
+      }
+
+      await scrapePage.waitForTimeout(1_000)
+    }
+
+    // ── Pass 3: Sales Tactic Pages ───────────────────────────────────────────
+    console.log('[scrape-saleshub] === PASS 3: Sales Tactic Pages ===')
+    const tacticLinks = await discoverSalesTacticLinks(scrapePage)
+
+    for (let i = 0; i < tacticLinks.length; i++) {
+      const tl = tacticLinks[i]
+      console.log(`[scrape-saleshub] (${i + 1}/${tacticLinks.length}) Sales Tactic: ${tl.name}`)
+
+      const tactic = await extractSalesTacticPage(scrapePage, tl.name, tl.url)
+      if (tactic) {
+        tactics.push(tactic)
+      }
+
+      await scrapePage.waitForTimeout(1_000)
+    }
+
     await scrapePage.close()
 
-    // Step 3: Write combined index
+    // ── Build Knowledge Base ─────────────────────────────────────────────────
+    console.log('[scrape-saleshub] Building knowledge base…')
+    const knowledge = buildSalesHubKnowledge(products, salesPlays, tactics)
+
+    // Write knowledge file to cache
+    const knowledgePath = resolve(OUTPUT_DIR, 'saleshub-knowledge.json')
+    writeJsonAtomic(knowledgePath, knowledge)
+
+    // Also copy to config-templates for container distribution
+    const configTemplatesDir = resolve(process.cwd(), 'config-templates')
+    if (existsSync(configTemplatesDir)) {
+      const templatePath = resolve(configTemplatesDir, 'saleshub-knowledge.json')
+      writeJsonAtomic(templatePath, knowledge)
+      console.log(`[scrape-saleshub] Knowledge file also written to ${templatePath}`)
+    }
+
+    // Write combined product index (backward compatible)
     const index = {
       scrapedAt: new Date().toISOString(),
       productCount: products.length,
+      salesPlayCount: salesPlays.length,
+      tacticCount: tactics.length,
+      tdpCount: knowledge.tdps.length,
       products: products.map(p => ({
         slug: p.slug,
         name: p.name,
@@ -330,20 +675,40 @@ export async function scrapeSalesHub(): Promise<SalesHubProduct[]> {
     }
 
     writeJsonAtomic(resolve(OUTPUT_DIR, 'saleshub-products.json'), index)
-    console.log(`[scrape-saleshub] Done — scraped ${products.length} products, saved to ${OUTPUT_DIR}/`)
+
+    console.log(`[scrape-saleshub] === SCRAPE COMPLETE ===`)
+    console.log(`  Products: ${products.length}`)
+    console.log(`  Sales Plays: ${salesPlays.length}`)
+    console.log(`  Sales Tactics: ${tactics.length}`)
+    console.log(`  TDPs (aggregated): ${knowledge.tdps.length}`)
+    console.log(`  Knowledge file: ${knowledgePath}`)
+
+    // Log products with 0 TDP sections for troubleshooting
+    const noTdpProducts = products.filter(p => p.tdpSections.length === 0)
+    if (noTdpProducts.length > 0) {
+      console.log(`[scrape-saleshub] Products with 0 TDP sections:`)
+      for (const p of noTdpProducts) {
+        console.log(`  - ${p.name}`)
+      }
+    }
+
+    return { products, knowledge }
 
   } finally {
     await context.close()
     await browser.close()
   }
-
-  return products
 }
 
 // Direct execution
 if (import.meta.main) {
-  scrapeSalesHub().catch(err => {
-    console.error('[scrape-saleshub] Fatal:', err)
-    process.exit(1)
-  })
+  scrapeSalesHub()
+    .then(result => {
+      console.log(`\nSalesHub scrape completed successfully.`)
+      console.log(`Knowledge base: ${result.knowledge.products.length} products, ${result.knowledge.tdps.length} TDPs, ${result.knowledge.tactics.length} tactics, ${result.knowledge.salesPlays.length} plays`)
+    })
+    .catch(err => {
+      console.error('[scrape-saleshub] Fatal:', err)
+      process.exit(1)
+    })
 }

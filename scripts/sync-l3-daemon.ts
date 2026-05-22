@@ -521,8 +521,9 @@ async function main(): Promise<void> {
     console.log('[sync-daemon] saleshub trigger detected — starting scrape')
     saleshubRunning = true
     try {
-      const products = await scrapeSalesHub()
-      console.log(`[sync-daemon] saleshub scrape complete — ${products.length} products`)
+      const result = await scrapeSalesHub()
+      const { products, knowledge } = result
+      console.log(`[sync-daemon] saleshub scrape complete — ${products.length} products, ${knowledge.tdps.length} TDPs, ${knowledge.tactics.length} tactics, ${knowledge.salesPlays.length} plays`)
       const driveResult = await syncSalesHubToDrive()
       console.log(`[sync-daemon] saleshub Drive sync — ${driveResult.uploaded} files, ${driveResult.shortcuts} shortcuts`)
       await sendBriefEmail(
@@ -530,10 +531,15 @@ async function main(): Promise<void> {
         `SalesHub Sync Complete — ${new Date().toISOString().slice(0, 10)}`,
         `<html><body>
           <h2>SalesHub Scrape + Drive Sync Complete</h2>
+          <h3>Knowledge Base Stats</h3>
           <p><strong>Products scraped:</strong> ${products.length}</p>
+          <p><strong>TDPs extracted:</strong> ${knowledge.tdps.length}</p>
+          <p><strong>Sales Tactics extracted:</strong> ${knowledge.tactics.length}</p>
+          <p><strong>Sales Plays extracted:</strong> ${knowledge.salesPlays.length}</p>
+          <h3>Drive Sync</h3>
           <p><strong>Files uploaded to Drive:</strong> ${driveResult.uploaded}</p>
           <p><strong>Google Drive shortcuts created:</strong> ${driveResult.shortcuts}</p>
-          <p>Data saved to <code>/data/cache/saleshub/</code> and synced to the SalesHub folder in Drive.</p>
+          <p>Knowledge base saved to <code>/data/cache/saleshub/saleshub-knowledge.json</code> and synced to the SalesHub folder in Drive.</p>
         </body></html>`,
       ).catch(emailErr => console.warn('[sync-daemon] saleshub success email failed:', emailErr.message))
     } catch (e: any) {
