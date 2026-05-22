@@ -569,6 +569,13 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
   const tactics: ScrapedSalesTactic[] = []
 
   try {
+    // ── API-based Page Discovery (run FIRST while session is fresh) ────────
+    console.log('[scrape-saleshub] === DISCOVERING PAGES VIA SEISMIC API ===')
+    const discoveryPage = await context.newPage()
+    const discovered = await discoverAllPages(discoveryPage)
+    await discoveryPage.close()
+    console.log(`[scrape-saleshub] Discovered: ${discovered.tactics.length} tactics, ${discovered.plays.length} plays, ${discovered.tdps.length} TDPs`)
+
     // ── Pass 1: Product Pages ──────────────────────────────────────────────
     console.log('[scrape-saleshub] === PASS 1: Product Pages ===')
     const listingPage = await context.newPage()
@@ -626,12 +633,6 @@ export async function scrapeSalesHub(): Promise<SalesHubScrapeResult> {
       // Brief pause between pages
       await scrapePage.waitForTimeout(1_000)
     }
-
-    // ── API-based Page Discovery (replaces manual homepage navigation) ──────
-    console.log('[scrape-saleshub] === DISCOVERING PAGES VIA SEISMIC API ===')
-    const discoveryPage = await context.newPage()
-    const discovered = await discoverAllPages(discoveryPage)
-    await discoveryPage.close()
 
     // ── Pass 2: Sales Play Pages ─────────────────────────────────────────────
     console.log(`[scrape-saleshub] === PASS 2: Sales Play Pages (${discovered.plays.length} discovered) ===`)

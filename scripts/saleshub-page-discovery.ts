@@ -53,13 +53,12 @@ export async function discoverAllPages(page: Page): Promise<DiscoveryResult> {
   await page.goto(DOCCENTER_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.waitForTimeout(10_000)
 
-  // Capture Bearer token from SPA's API requests
-  let auth = '', searchUrl = '', hdrs: Record<string, string> = {}
+  // Capture Bearer token from ANY Seismic API request (not just /results)
+  let auth = '', hdrs: Record<string, string> = {}
   const capturePromise = new Promise<void>(resolve => {
     page.on('request', (req) => {
-      if (req.url().includes('/results') && req.method() === 'POST' && !auth) {
+      if (!auth && req.headers().authorization?.startsWith('Bearer ')) {
         auth = req.headers().authorization ?? ''
-        searchUrl = req.url()
         hdrs = req.headers()
         resolve()
       }
@@ -68,10 +67,16 @@ export async function discoverAllPages(page: Page): Promise<DiscoveryResult> {
   })
   await capturePromise
 
-  if (!auth || !searchUrl) {
+  // Build the search URL from the captured request pattern
+  const userId = hdrs['x-seismic-userid'] ?? ''
+  const searchUrl = `https://saleshub.redhat.com/gateway/services/search/tenants/redhat/api/services/search/v1/results?userId=${userId}&languages=en-us`
+
+  if (!auth) {
     console.warn('[page-discovery] Could not capture Seismic auth token — falling back to empty discovery')
     return { tactics: [], plays: [], tdps: [], products: [], all: [] }
   }
+
+  console.log(`[page-discovery] Auth captured (${auth.length} chars). Headers: profileversionid=${hdrs.profileversionid ?? 'N/A'}, teamsiteid=${hdrs.teamsiteid ?? 'N/A'}`)
 
   console.log('[page-discovery] Auth captured, querying Page RHSH content…')
 
