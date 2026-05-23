@@ -56,12 +56,10 @@
       "name": "Automation",
       "description": "The Automation Technical Decision Point (TDP) positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT, using a unified governance framework to consolidate fragmented tools and deliver measurable outcomes like 68% faster deployments and reduced downtime.",
       "tactics": [
-        "AIOps:Turn Intelligence into Action",
+        "AIOps: Turn Intelligence into Action",
         "Optimize and Modernize IT Ops",
         "Automate at Scale",
-        "Network automation",
-        "AIOps: Turn Intelligence into Action",
-        "VM migration & modernization"
+        "Network automation"
       ],
       "products": [
         "Red Hat Ansible Automation Platform"
@@ -71,7 +69,10 @@
       "name": "AI",
       "description": "The AI Technology Decision Point positions Red Hat as the trusted open platform for building, deploying, and scaling AI/ML workloads. Covers model training and serving with OpenShift AI, single-server inference with RHEL AI and InstructLab, and enterprise-grade agentic AI deployments.",
       "tactics": [
-        "Cloud marketplaces and private offers"
+        "Agentic AI",
+        "Inference at Scale",
+        "Production AI",
+        "Sovereign (Private) AI"
       ],
       "products": [
         "Red Hat AI",
@@ -82,6 +83,7 @@
       "name": "App Platform",
       "description": "The Application Platform Technology Decision Point positions Red Hat OpenShift as the enterprise Kubernetes platform with built-in CI/CD, security, and developer tooling. Covers cloud-native application development, container management, and platform engineering.",
       "tactics": [
+        "Cloud marketplaces and private offers",
         "Container Adoption Journey",
         "DevX & platform engineering to build modern applications",
         "Kubernetes for 3rd party AI workloads",
@@ -99,12 +101,7 @@
     {
       "name": "Edge",
       "description": "The Edge Technology Decision Point positions Red Hat for deploying and managing workloads at the edge with lightweight OpenShift (SNO, MicroShift) and RHEL for Edge. Covers zero-touch provisioning, AI inference at the edge, and sovereign edge deployments.",
-      "tactics": [
-        "Agentic AI",
-        "Inference at Scale",
-        "Production AI",
-        "Sovereign (Private) AI"
-      ],
+      "tactics": [],
       "products": [
         "Red Hat OpenShift",
         "Red Hat Enterprise Linux"
@@ -804,7 +801,7 @@
           "type": "seismic"
         }
       ],
-      "parentTdp": "Edge"
+      "parentTdp": "AI"
     },
     {
       "name": "Cloud marketplaces and private offers",
@@ -812,7 +809,7 @@
       "customerWins": [],
       "whatToSay": [],
       "whatToShare": [],
-      "parentTdp": "AI"
+      "parentTdp": "App Platform"
     },
     {
       "name": "Container Adoption Journey",
@@ -1155,7 +1152,7 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Edge"
+      "parentTdp": "AI"
     },
     {
       "name": "Kubernetes for 3rd party AI workloads",
@@ -2007,7 +2004,7 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Edge"
+      "parentTdp": "AI"
     },
     {
       "name": "Secure and Manage RHEL",
@@ -2380,7 +2377,7 @@
           "type": "external"
         }
       ],
-      "parentTdp": "Edge"
+      "parentTdp": "AI"
     },
     {
       "name": "Standardize & Modernize your Operating System",
@@ -2742,7 +2739,7 @@
           "type": "seismic"
         }
       ],
-      "parentTdp": "Automation"
+      "parentTdp": "Virtualization"
     }
   ],
   "products": [

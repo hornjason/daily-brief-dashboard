@@ -1,0 +1,322 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-22T14:50:03.522Z",
+  "tdps": [
+    {
+      "name": "Automation",
+      "description": "The Automation Technical Decision Point (TDP) positions Red Hat Ansible Automation Platform as the mission-critical foundation for modernizing IT, using a unified governance framework to consolidate f",
+      "tactics": [
+        {
+          "name": "AIOps: Turn Intelligence into Action",
+          "hasTalkTrack": true,
+          "customerWins": 5,
+          "assets": 12
+        },
+        {
+          "name": "Optimize and Modernize IT Ops",
+          "hasTalkTrack": true,
+          "customerWins": 0,
+          "assets": 24
+        },
+        {
+          "name": "Automate at Scale",
+          "hasTalkTrack": true,
+          "customerWins": 3,
+          "assets": 10
+        },
+        {
+          "name": "Network automation",
+          "hasTalkTrack": true,
+          "customerWins": 2,
+          "assets": 13
+        }
+      ],
+      "products": [
+        {
+          "name": "Red Hat Ansible Automation Platform",
+          "googleDocs": 3,
+          "decks": 10,
+          "resources": 14
+        }
+      ]
+    },
+    {
+      "name": "AI",
+      "description": "The AI Technology Decision Point positions Red Hat as the trusted open platform for building, deploying, and scaling AI/ML workloads. Covers model training and serving with OpenShift AI, single-server",
+      "tactics": [
+        {
+          "name": "Agentic AI",
+          "hasTalkTrack": true,
+          "customerWins": 4,
+          "assets": 0
+        },
+        {
+          "name": "Inference at Scale",
+          "hasTalkTrack": true,
+          "customerWins": 5,
+          "assets": 12
+        },
+        {
+          "name": "Production AI",
+          "hasTalkTrack": true,
+          "customerWins": 5,
+          "assets": 16
+        },
+        {
+          "name": "Sovereign (Private) AI",
+          "hasTalkTrack": true,
+          "customerWins": 3,
+          "assets": 6
+        }
+      ],
+      "products": [
+        {
+          "name": "Red Hat AI",
+          "googleDocs": 18,
+          "decks": 3,
+          "resources": 9
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "googleDocs": 1,
+          "decks": 2,
+          "resources": 2
+        }
+      ]
+    },
+    {
+      "name": "App Platform",
+      "description": "The Application Platform Technology Decision Point positions Red Hat OpenShift as the enterprise Kubernetes platform with built-in CI/CD, security, and developer tooling. Covers cloud-native applicati",
+      "tactics": [
+        {
+          "name": "Cloud marketplaces and private offers",
+          "hasTalkTrack": false,
+          "customerWins": 0,
+          "assets": 0
+        },
+        {
+          "name": "Container Adoption Journey",
+          "hasTalkTrack": false,
+          "customerWins": 0,
+          "assets": 0
+        },
+        {
+          "name": "DevX & platform engineering to build modern applications",
+          "hasTalkTrack": true,
+          "customerWins": 0,
+          "assets": 9
+        },
+        {
+          "name": "Kubernetes for 3rd party AI workloads",
+          "hasTalkTrack": true,
+          "customerWins": 2,
+          "assets": 6
+        },
+        {
+          "name": "Kubernetes for 3rd party workloads (Non-AI)",
+          "hasTalkTrack": true,
+          "customerWins": 2,
+          "assets": 23
+        },
+        {
+          "name": "Multicluster management & security at scale for Kubernetes",
+          "hasTalkTrack": true,
+          "customerWins": 2,
+          "assets": 6
+        },
+        {
+          "name": "Operationalize AI",
+          "hasTalkTrack": false,
+          "customerWins": 0,
+          "assets": 2
+        },
+        {
+          "name": "Secure the software supply chain",
+          "hasTalkTrack": true,
+          "customerWins": 0,
+          "assets": 9
+        }
+      ],
+      "products": [
+        {
+          "name": "Red Hat OpenShift",
+          "googleDocs": 1,
+          "decks": 2,
+          "resources": 2
+        },
+        {
+          "name": "Red Hat Advanced Cluster Security for Kubernetes (RHACS)",
+          "googleDocs": 0,
+          "decks": 2,
+          "resources": 2
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Kubernetes (RHACM)",
+          "googleDocs": 2,
+          "decks": 1,
+          "resources": 2
+        }
+      ]
+    },
+    {
+      "name": "Edge",
+      "description": "The Edge Technology Decision Point positions Red Hat for deploying and managing workloads at the edge with lightweight OpenShift (SNO, MicroShift) and RHEL for Edge. Covers zero-touch provisioning, AI",
+      "tactics": [],
+      "products": [
+        {
+          "name": "Red Hat OpenShift",
+          "googleDocs": 1,
+          "decks": 2,
+          "resources": 2
+        },
+        {
+          "name": "Red Hat Enterprise Linux",
+          "googleDocs": 0,
+          "decks": 2,
+          "resources": 6
+        }
+      ]
+    },
+    {
+      "name": "Server/Cloud OS",
+      "description": "The Server/Cloud Operating System Technology Decision Point positions Red Hat Enterprise Linux as the standard enterprise Linux platform. Covers migration from legacy Unix/proprietary OS, RHEL lifecyc",
+      "tactics": [
+        {
+          "name": "Deploy new critical & AI applications on RHEL",
+          "hasTalkTrack": true,
+          "customerWins": 2,
+          "assets": 9
+        },
+        {
+          "name": "Migrate to the Cloud",
+          "hasTalkTrack": true,
+          "customerWins": 4,
+          "assets": 22
+        },
+        {
+          "name": "Secure and Manage RHEL",
+          "hasTalkTrack": true,
+          "customerWins": 2,
+          "assets": 10
+        },
+        {
+          "name": "Standardize & Modernize your Operating System",
+          "hasTalkTrack": true,
+          "customerWins": 2,
+          "assets": 12
+        }
+      ],
+      "products": [
+        {
+          "name": "Red Hat Enterprise Linux",
+          "googleDocs": 0,
+          "decks": 2,
+          "resources": 6
+        },
+        {
+          "name": "Red Hat Satellite",
+          "googleDocs": 0,
+          "decks": 3,
+          "resources": 1
+        }
+      ]
+    },
+    {
+      "name": "Virtualization",
+      "description": "The Virtualization Technology Decision Point positions Red Hat OpenShift Virtualization for VMware migration and VM-container consolidation. Covers eliminating VMware licensing costs, running VMs and ",
+      "tactics": [
+        {
+          "name": "VM migration & modernization",
+          "hasTalkTrack": true,
+          "customerWins": 2,
+          "assets": 18
+        }
+      ],
+      "products": [
+        {
+          "name": "Red Hat OpenShift Virtualization",
+          "googleDocs": 0,
+          "decks": 0,
+          "resources": 1
+        },
+        {
+          "name": "Red Hat OpenShift",
+          "googleDocs": 1,
+          "decks": 2,
+          "resources": 2
+        },
+        {
+          "name": "Red Hat Advanced Cluster Management for Kubernetes (RHACM)",
+          "googleDocs": 2,
+          "decks": 1,
+          "resources": 2
+        }
+      ]
+    }
+  ],
+  "salesPlays": [
+    {
+      "name": "Build and Run Applications",
+      "description": "The Build & Run sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that enables modernize legacy applications, build new cloud-native apps faster and improve developer ",
+      "linkedTdps": [
+        "AI",
+        "App Platform",
+        "Automation",
+        "Edge"
+      ],
+      "totalTactics": 16,
+      "tacticsWithContent": 13,
+      "totalProducts": 6
+    },
+    {
+      "name": "IT Operations Efficiency",
+      "description": "The IT Operations Efficiency sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that helps customers simplify deployments, expand automation and unify day-2 operations\u2014",
+      "linkedTdps": [
+        "AI",
+        "Automation",
+        "Virtualization",
+        "Edge"
+      ],
+      "totalTactics": 9,
+      "tacticsWithContent": 9,
+      "totalProducts": 6
+    },
+    {
+      "name": "Modernize Infrastructure",
+      "description": "The Modernize Infrastructure sales play is a guide for positioning Red Hat as the trusted, open hybrid platform for organizations to standardize, secure and modernize their legacy infrastructure - red",
+      "linkedTdps": [
+        "AI",
+        "App Platform",
+        "Automation",
+        "Virtualization",
+        "Edge"
+      ],
+      "totalTactics": 17,
+      "tacticsWithContent": 14,
+      "totalProducts": 7
+    },
+    {
+      "name": "Sovereignty",
+      "description": "Digital sovereignty is no longer just a geopolitical concern\u2014it is a strategic business imperative driven by the",
+      "linkedTdps": [
+        "AI",
+        "Edge"
+      ],
+      "totalTactics": 4,
+      "tacticsWithContent": 4,
+      "totalProducts": 3
+    },
+    {
+      "name": "The AI-Ready Enterprise",
+      "description": "The AI-Ready Enterprise sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that enables enterprises to scale AI operations reliably and cost-effectively while maintaini",
+      "linkedTdps": [
+        "AI",
+        "Automation",
+        "Edge"
+      ],
+      "totalTactics": 8,
+      "tacticsWithContent": 8,
+      "totalProducts": 4
+    }
+  ]
+}
