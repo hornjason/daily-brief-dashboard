@@ -463,19 +463,45 @@ export function templateSalesAlignment(signals: Signal[]): string | null {
     byTdp.set(play.tdp, existing)
   }
 
-  const lines: string[] = []
+  // Build a table for clean management-ready output
+  const rows: string[] = []
+  rows.push('| TDP | Solution Play | Detected Technologies | Confidence |')
+  rows.push('|-----|--------------|----------------------|------------|')
 
   for (const [tdp, plays] of byTdp) {
-    lines.push(`**TDP: ${tdp}**`)
     for (const play of plays) {
       const rawConf = play.confidence
-      const confBadge = (rawConf === 'LOW' || rawConf === 'low') ? '⚪' : (rawConf === 'MEDIUM' || rawConf === 'medium') ? '🟡' : '🟢'
-      lines.push(`${confBadge} ${play.name}`)
-      lines.push(`  Triggered by: ${play.techs.join(', ')}`)
+      const confLabel = (rawConf === 'LOW' || rawConf === 'low') ? 'Low' : (rawConf === 'MEDIUM' || rawConf === 'medium') ? 'Medium' : 'High'
+      const confBadge = confLabel === 'Low' ? '⚪' : confLabel === 'Medium' ? '🟡' : '🟢'
+      rows.push(`| ${tdp} | ${play.name} | ${play.techs.join(', ')} | ${confBadge} ${confLabel} |`)
     }
   }
 
-  return lines.join('\n')
+  // Add sales play roll-up summary below the table
+  const allTdps = Array.from(byTdp.keys())
+  const playRollups: string[] = []
+
+  // Map TDPs to their parent sales plays using known mappings
+  const tdpToPlays: Record<string, string[]> = {
+    'AI': ['The AI-Ready Enterprise', 'Build and Run Applications'],
+    'App Platform': ['Build and Run Applications', 'Modernize Infrastructure'],
+    'Automation': ['IT Operations Efficiency', 'Modernize Infrastructure', 'The AI-Ready Enterprise'],
+    'Virtualization': ['Modernize Infrastructure', 'IT Operations Efficiency'],
+    'Server/Cloud OS': ['Modernize Infrastructure'],
+    'Edge': ['Build and Run Applications', 'Sovereignty'],
+  }
+
+  const activePlays = new Set<string>()
+  for (const tdp of allTdps) {
+    for (const play of tdpToPlays[tdp] ?? []) activePlays.add(play)
+  }
+
+  if (activePlays.size > 0) {
+    playRollups.push('')
+    playRollups.push(`**Active Sales Plays:** ${Array.from(activePlays).join(' · ')}`)
+  }
+
+  return rows.join('\n') + playRollups.join('\n')
 }
 
 /**
