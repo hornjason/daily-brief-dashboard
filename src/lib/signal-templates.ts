@@ -481,24 +481,22 @@ export function templateSalesAlignment(signals: Signal[]): string | null {
 
   const lines: string[] = []
 
-  // Active Sales Plays roll-up first
+  // Active Sales Plays roll-up
   if (activeSalesPlays.size > 0) {
-    lines.push(`**Active Sales Plays:** ${Array.from(activeSalesPlays).join(' · ')}`)
-    lines.push('')
+    lines.push(`Sales Plays: ${Array.from(activeSalesPlays).join(', ')}`)
   }
 
-  // TDP details with solution plays underneath
+  // TDP → Play → Technologies
   for (const [tdp, plays] of byTdp) {
-    lines.push(`**${tdp} TDP**`)
+    lines.push(`TDP: ${tdp}`)
     for (const play of plays) {
       const rawConf = play.confidence
       const confBadge = (rawConf === 'LOW' || rawConf === 'low') ? '⚪' : (rawConf === 'MEDIUM' || rawConf === 'medium') ? '🟡' : '🟢'
-      lines.push(`${confBadge} **${play.name}** — ${play.techs.join(', ')}`)
+      lines.push(`  ${confBadge} ${play.name} (${play.techs.join(', ')})`)
     }
-    lines.push('')
   }
 
-  return lines.join('\n').trim()
+  return lines.join('\n')
 }
 
 /**
