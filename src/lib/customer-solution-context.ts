@@ -271,10 +271,13 @@ function matchTechnologies(
         bestConfidence = tech.confidence
       }
     }
-    // Also check infrastructure array for matches
+    // Also check infrastructure array for matches — use parent tech's confidence
     for (const infra of tech.infrastructure ?? []) {
       if (triggerSet.has(infra.toLowerCase()) && !matched.includes(infra)) {
         matched.push(infra)
+        if (confidenceOrder[tech.confidence] > confidenceOrder[bestConfidence]) {
+          bestConfidence = tech.confidence
+        }
       }
     }
   }

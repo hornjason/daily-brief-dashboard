@@ -39,6 +39,7 @@ export interface TemplateResult {
     cases: string | null
     techStack: string | null
     keyRelationships: string | null
+    salesAlignment: string | null
     strategicOpportunities: string | null
     saleshubContext: string | null
   }
@@ -408,6 +409,76 @@ export function templateStrategicOpportunities(signals: Signal[]): string | null
  * Orchestrator: Assemble all sections into a complete template result.
  *
 /**
+ * Sales Alignment section — shows which Sales Plays and TDPs apply to
+ * this customer based on detected technologies. Designed for management
+ * visibility: clear mapping from customer signals → TDP → Sales Play.
+ *
+ * Appears near the top of every output so leadership can immediately
+ * see which sales motions are in play.
+ */
+export function templateSalesAlignment(signals: Signal[]): string | null {
+  // Collect plays, deduplicating by playId and merging trigger technologies
+  const playMap = new Map<string, { playName: string; tdp: string; techs: Set<string>; confidence: string }>()
+
+  for (const s of signals) {
+    const playId = s.metadata?.solutionPlayId
+    const playName = s.metadata?.solutionPlayName
+    const tdp = s.metadata?.solutionTdp
+    const confidence = s.metadata?.confidence
+    if (!playId || !playName || !tdp) continue
+
+    const key = String(playId)
+    const existing = playMap.get(key)
+    if (existing) {
+      // Merge trigger technologies
+      const techs = Array.isArray(s.metadata?.matchedTechnologies)
+        ? (s.metadata!.matchedTechnologies as string[])
+        : [s.headline.replace(/ \(.*\)$/, '')]
+      for (const t of techs) existing.techs.add(t)
+      // Upgrade confidence (keep highest)
+      if (confidence === 'HIGH') existing.confidence = 'HIGH'
+      else if (confidence === 'MEDIUM' && existing.confidence !== 'HIGH') existing.confidence = 'MEDIUM'
+    } else {
+      const techs = new Set(
+        Array.isArray(s.metadata?.matchedTechnologies)
+          ? (s.metadata!.matchedTechnologies as string[])
+          : [s.headline.replace(/ \(.*\)$/, '')]
+      )
+      playMap.set(key, {
+        playName: String(playName),
+        tdp: String(tdp),
+        techs,
+        confidence: String(confidence ?? 'MEDIUM'),
+      })
+    }
+  }
+
+  if (playMap.size === 0) return null
+
+  // Group by TDP
+  const byTdp = new Map<string, Array<{ name: string; techs: string[]; confidence: string }>>()
+  for (const [, play] of playMap) {
+    const existing = byTdp.get(play.tdp) ?? []
+    existing.push({ name: play.playName, techs: Array.from(play.techs), confidence: play.confidence })
+    byTdp.set(play.tdp, existing)
+  }
+
+  const lines: string[] = []
+
+  for (const [tdp, plays] of byTdp) {
+    lines.push(`**TDP: ${tdp}**`)
+    for (const play of plays) {
+      const rawConf = play.confidence
+      const confBadge = (rawConf === 'LOW' || rawConf === 'low') ? '⚪' : (rawConf === 'MEDIUM' || rawConf === 'medium') ? '🟡' : '🟢'
+      lines.push(`${confBadge} ${play.name}`)
+      lines.push(`  Triggered by: ${play.techs.join(', ')}`)
+    }
+  }
+
+  return lines.join('\n')
+}
+
+/**
  * SalesHub Context section — aggregates ALL SalesHub knowledge relevant
  * to this customer's signals into a single section. This is the canonical
  * way SalesHub content enters every consumer (playbook, brief, campaign,
@@ -495,14 +566,19 @@ export function templateAll(
   const cases = templateCases(filteredSignals)
   const techStack = templateTechStack(filteredSignals)
   const keyRelationships = templateKeyRelationships(team)
+  const salesAlignment = templateSalesAlignment(filteredSignals)
   const strategicOpportunities = templateStrategicOpportunities(filteredSignals)
   const saleshubContext = templateSalesHubContext(filteredSignals)
 
   // Assemble deterministic markdown output
   const sections: string[] = []
 
-  if (strategicOpportunities) sections.push(`## Strategic Opportunities\n\n${strategicOpportunities}`)
-  if (saleshubContext) sections.push(`## Sales Plays, TDPs & Tactics\n\n${saleshubContext}`)
+  // Sales Alignment at the top — management-visible TDP/Play mapping
+  if (salesAlignment) sections.push(`## Sales Alignment\n\n${salesAlignment}`)
+  // Strategic detail (solution plays table, marketplace, correlations) — consolidated under Sales Alignment
+  if (strategicOpportunities) sections.push(strategicOpportunities)
+  // Talk tracks and positioning detail — only in narrativeContext, not deterministic (avoids duplication)
+  // saleshubContext feeds Gemini but doesn't render as a separate visible section
   if (productAlignment) sections.push(`## Product Alignment\n\n${productAlignment}`)
   if (cloudMarketplace) sections.push(`## Cloud Marketplace\n\n${cloudMarketplace}`)
   if (renewals) sections.push(`## Renewals & Pipeline\n\n${renewals}`)
@@ -556,6 +632,7 @@ export function templateAll(
     deterministic,
     narrativeContext,
     sections: {
+      salesAlignment,
       productAlignment,
       cloudMarketplace,
       renewals,

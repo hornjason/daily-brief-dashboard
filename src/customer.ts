@@ -864,6 +864,14 @@ export async function generateBrief(
       )
       emitAIEvent({ type: 'generation:complete', accountId: toSlug(customer.name), flow: 'brief', source: 'l1', fingerprintHash: fingerprintResult.newFingerprint, durationMs: Date.now() - generationStart, deltaMode: false, unchangedDocCount: 0, tokensUsed: fullUsage.tokensUsed })
       console.log(`[brief] Step 3 SYNTHESIZE: ${brief.length} chars, 3-step pipeline complete`)
+
+      // Append deterministic Sales Alignment section after Gemini output
+      const { templateSalesAlignment } = await import('./lib/signal-templates.ts')
+      const salesAlignment = templateSalesAlignment(registrySignals)
+      if (salesAlignment) {
+        brief = `${brief}\n\n## Sales Alignment\n\n${salesAlignment}`
+        console.log(`[brief] Appended Sales Alignment section`)
+      }
     }
 
     return brief
@@ -986,10 +994,19 @@ List cases with severity, days open, and product. Flag Sev1/Sev2 urgently. If no
 Keep total brief under 250 words.`
 
   try {
-    return await callLLM(
+    let fallbackBrief = await callLLM(
       'You are a Red Hat Account Solution Architect AI assistant. Be specific, concise, and actionable. Always use ## markdown headers exactly as instructed.',
       prompt,
     )
+    // Append deterministic Sales Alignment section
+    const { templateSalesAlignment } = await import('./lib/signal-templates.ts')
+    const customerSlug = toSlug(customer.name)
+    const registrySignals = await FeatureModuleRegistry.collectAllSignals(customerSlug)
+    const salesAlignment = templateSalesAlignment(registrySignals)
+    if (salesAlignment) {
+      fallbackBrief = `${fallbackBrief}\n\n## Sales Alignment\n\n${salesAlignment}`
+    }
+    return fallbackBrief
   } catch (fallbackErr: any) {
     // BKL-G08: Both three-step pipeline AND single-pass fallback failed.
     // Return a minimal brief with available raw data instead of throwing HTTP 500.

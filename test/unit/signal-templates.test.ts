@@ -553,10 +553,10 @@ describe('templateStrategicOpportunities', () => {
   test('templateAll includes strategicOpportunities in sections', () => {
     const result = templateAll([mockSolutionPlaySignal])
     expect(result.sections.strategicOpportunities).not.toBeNull()
-    expect(result.deterministic).toContain('## Strategic Opportunities')
+    expect(result.deterministic).toContain('## Sales Alignment')
   })
 
-  test('Strategic Opportunities renders before Product Alignment', () => {
+  test('Sales Alignment renders before Product Alignment', () => {
     const productSignal: Signal = {
       source: 'subscriptions',
       type: 'subscription',
@@ -566,7 +566,7 @@ describe('templateStrategicOpportunities', () => {
       metadata: { product: 'OpenShift' },
     }
     const result = templateAll([mockSolutionPlaySignal, productSignal])
-    const stratIdx = result.deterministic.indexOf('## Strategic Opportunities')
+    const stratIdx = result.deterministic.indexOf('## Sales Alignment')
     const prodIdx = result.deterministic.indexOf('## Product Alignment')
     expect(stratIdx).toBeLessThan(prodIdx)
   })
