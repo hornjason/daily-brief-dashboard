@@ -194,9 +194,10 @@ export async function generatePlaybook(customer: Customer): Promise<PlaybookStat
     }
   } catch {}
 
-  const templateResult = templateAll(signalResult.registrySignals, teamMembers, {
+  const templateResult = await templateAll(signalResult.registrySignals, teamMembers, {
     format: 'playbook',
     maxNarrative: 40,
+    customerSlug: slug,
   })
 
   const subscriptionContext = subCache?.rows?.length
@@ -454,18 +455,8 @@ Generate the 6 narrative sections plus product alignment entries as structured J
       nextExpected: p.nextExpected ?? undefined,
     }))
 
-  // Solution play snapshots (deterministic, from solution intelligence engine)
-  const { getCustomerSolutionContext } = await import('./lib/customer-solution-context.ts')
-  const solutionCtx = getCustomerSolutionContext(slug)
-  const solutionPlaySnapshots = solutionCtx.activeSolutionPlays.map(p => ({
-    tdp: p.tdp,
-    playName: p.playName,
-    triggerTechnologies: p.matchedTechnologies,
-    talkTrack: p.talkTrack,
-    customerWins: p.customerWins,
-    linkedAssets: p.linkedAssets?.map(a => ({ name: a.name, url: a.url })),
-    confidence: p.confidence,
-  }))
+  // Solution play snapshots from templateAll() (ADR-031: single data path)
+  const solutionPlaySnapshots = templateResult.structured.solutionPlays
 
   // ── Step 5: Assemble PlaybookState ────────────────────────────────────
 

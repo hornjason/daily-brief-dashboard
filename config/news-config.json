@@ -1,13 +1,6 @@
 {
   "signalTypes": [
-    "leadership",
-    "acquisition",
-    "partnership",
-    "earnings",
-    "layoffs",
-    "product launches",
-    "regulatory issues",
-    "major business developments"
+    "updated-signal"
   ],
   "criticalKeywords": [
     "bankruptcy",
@@ -20,7 +13,7 @@
     "routine press release",
     "minor mention"
   ],
-  "defaultThreshold": 5,
+  "defaultThreshold": 8,
   "searchDepthDays": 2,
   "significanceGuidelines": {
     "9-10": "Critical (bankruptcy, major acquisition, C-suite departure)",

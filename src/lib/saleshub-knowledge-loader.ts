@@ -89,13 +89,11 @@ export function getTacticsByTdp(tdpName: string): TacticNode[] {
   return directMatches
 }
 
-export function getAssetsByPlay(playId: string): Array<{ name: string; url: string; type: string }> {
+export function getAssetsByPlay(playId: string, tdpName?: string): Array<{ name: string; url: string; type: string }> {
   const kb = loadKnowledgeBase()
   if (!kb) return []
 
   const normalizedId = playId.toLowerCase()
-
-  // Find product nodes whose tdpContent matches this play
   const assets: Array<{ name: string; url: string; type: string }> = []
 
   for (const product of kb.products) {
@@ -112,11 +110,14 @@ export function getAssetsByPlay(playId: string): Array<{ name: string; url: stri
     }
   }
 
-  // Also check tactics for whatToShare assets
-  for (const tactic of kb.tactics ?? []) {
-    for (const share of tactic.whatToShare) {
-      if (share.url && !assets.some(a => a.name === share.name)) {
-        assets.push(share)
+  // Only include tactic assets from tactics matching the play's TDP
+  if (tdpName) {
+    const tdpTactics = getTacticsByTdp(tdpName)
+    for (const tactic of tdpTactics) {
+      for (const share of tactic.whatToShare) {
+        if (share.url && !assets.some(a => a.name === share.name)) {
+          assets.push(share)
+        }
       }
     }
   }

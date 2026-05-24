@@ -12,8 +12,19 @@
 import type { Signal } from '../feature-module-registry.ts'
 import type { AccountTeamMember } from '../types.ts'
 import { getTacticsByTdp, getTdpDescription } from './saleshub-knowledge-loader.ts'
+import { isValidCustomerWin, isValidAsset } from './saleshub-filters.ts'
 
 // ── Types ────────────────────────────────────────────────────────────────────
+
+export interface SolutionPlaySnapshot {
+  tdp: string
+  playName: string
+  triggerTechnologies: string[]
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  talkTrack?: string
+  customerWins?: string[]
+  linkedAssets?: Array<{ name: string; url: string }>
+}
 
 export interface TemplateOptions {
   /** Consumer context determines which sections to include */
@@ -24,6 +35,8 @@ export interface TemplateOptions {
   maxNarrative?: number
   /** Legacy intelligence.company text passthrough for backward compatibility */
   intelligenceContext?: string
+  /** Customer slug — when provided, populates structured.solutionPlays */
+  customerSlug?: string
 }
 
 export interface TemplateResult {
@@ -42,6 +55,10 @@ export interface TemplateResult {
     salesAlignment: string | null
     strategicOpportunities: string | null
     saleshubContext: string | null
+  }
+  /** Structured data for rich consumers (React components, HTML renderers) */
+  structured: {
+    solutionPlays: SolutionPlaySnapshot[]
   }
 }
 
@@ -536,9 +553,10 @@ export function templateSalesHubContext(signals: Signal[]): string | null {
       if (tactic.talkTrack) {
         tdpLines.push(`*Talk track:* ${tactic.talkTrack.slice(0, 250)}`)
       }
-      if (tactic.customerWins.length > 0) {
+      const validWins = tactic.customerWins.filter(isValidCustomerWin)
+      if (validWins.length > 0) {
         tdpLines.push('*Customer proof points:*')
-        for (const win of tactic.customerWins.slice(0, 3)) {
+        for (const win of validWins.slice(0, 3)) {
           tdpLines.push(`- ${win}`)
         }
       }
@@ -549,7 +567,7 @@ export function templateSalesHubContext(signals: Signal[]): string | null {
         }
       }
       if (tactic.whatToShare.length > 0) {
-        const assets = tactic.whatToShare.filter(a => a.url).slice(0, 5)
+        const assets = tactic.whatToShare.filter(isValidAsset).slice(0, 5)
         if (assets.length > 0) {
           tdpLines.push('*Assets to share:*')
           for (const asset of assets) {
@@ -572,11 +590,11 @@ export function templateSalesHubContext(signals: Signal[]): string | null {
  * @param team - Account team members array from getAccountTeam() (optional)
  * @param options - Format and filtering options
  */
-export function templateAll(
+export async function templateAll(
   signals: Signal[],
   team?: AccountTeamMember[],
   options: TemplateOptions = { format: 'playbook' }
-): TemplateResult {
+): Promise<TemplateResult> {
   // Apply product filter if specified
   const filteredSignals = filterByProduct(signals, options.productFilter)
 
@@ -649,6 +667,26 @@ export function templateAll(
     narrativeContext = `${narrativeContext}\n\nSales Plays, TDPs & Tactics (use this positioning language in your output):\n${saleshubContext}`
   }
 
+  // Build structured solution play snapshots if customerSlug provided
+  let solutionPlays: SolutionPlaySnapshot[] = []
+  if (options.customerSlug) {
+    try {
+      const { getCustomerSolutionContext } = await import('./customer-solution-context.ts')
+      const solutionCtx = getCustomerSolutionContext(options.customerSlug)
+      solutionPlays = solutionCtx.activeSolutionPlays.map(p => ({
+        tdp: p.tdp,
+        playName: p.playName,
+        triggerTechnologies: p.matchedTechnologies,
+        confidence: p.confidence,
+        talkTrack: p.talkTrack,
+        customerWins: p.customerWins,
+        linkedAssets: p.linkedAssets?.map(a => ({ name: a.name, url: a.url })),
+      }))
+    } catch {
+      // Solution context unavailable — return empty array
+    }
+  }
+
   return {
     deterministic,
     narrativeContext,
@@ -662,6 +700,9 @@ export function templateAll(
       keyRelationships,
       strategicOpportunities,
       saleshubContext,
+    },
+    structured: {
+      solutionPlays,
     },
   }
 }

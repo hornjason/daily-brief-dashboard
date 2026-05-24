@@ -364,3 +364,113 @@ describe('Compliance report', () => {
     expect(true).toBe(true)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 8. PRINCIPLES.MD LAYER 3 — CONSUMER TEMPLATE COMPLIANCE
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('PRINCIPLES.md Layer 3 — consumers call templateAll()', () => {
+  const INDIVIDUAL_TEMPLATE_FUNCTIONS = [
+    'templateProductAlignment',
+    'templateCloudMarketplace',
+    'templateRenewals',
+    'templateCases',
+    'templateTechStack',
+    'templateKeyRelationships',
+    'templateSalesAlignment',
+    'templateStrategicOpportunities',
+    'templateSalesHubContext',
+  ]
+
+  const CONSUMER_SRC_FILES = [
+    'customer.ts',
+    'campaign-service.ts',
+    'meeting-prep-service.ts',
+    'playbook-generator.ts',
+  ]
+
+  test('no consumer imports individual template functions (Layer 3 violation)', () => {
+    const violations: string[] = []
+    for (const file of CONSUMER_SRC_FILES) {
+      const path = resolve(SRC_DIR, file)
+      if (!existsSync(path)) continue
+      const content = readFileSync(path, 'utf-8')
+      for (const fn of INDIVIDUAL_TEMPLATE_FUNCTIONS) {
+        const staticImport = new RegExp(`import\\s*\\{[^}]*${fn}[^}]*\\}\\s*from`, 'm')
+        const dynamicImport = new RegExp(`await\\s+import\\s*\\([^)]*\\).*${fn}`, 'm')
+        const destructure = new RegExp(`const\\s*\\{[^}]*${fn}[^}]*\\}\\s*=\\s*await\\s+import`, 'm')
+        if (staticImport.test(content) || dynamicImport.test(content) || destructure.test(content)) {
+          violations.push(`${file} imports ${fn} directly — must use templateAll()`)
+        }
+      }
+    }
+    expect(violations).toEqual([])
+  })
+
+  test('no consumer imports getCustomerSolutionContext directly (only modules may)', () => {
+    const violations: string[] = []
+    for (const file of CONSUMER_SRC_FILES) {
+      const path = resolve(SRC_DIR, file)
+      if (!existsSync(path)) continue
+      const content = readFileSync(path, 'utf-8')
+      if (/import\s*\{[^}]*getCustomerSolutionContext[^}]*\}\s*from/.test(content) ||
+          /await\s+import\s*\([^)]*customer-solution-context/.test(content)) {
+        violations.push(`${file} imports getCustomerSolutionContext — must go through templateAll()`)
+      }
+    }
+    expect(violations).toEqual([])
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 9. CONFIG PROPAGATION — entrypoint.sh coverage
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Config propagation — entrypoint covers all templates', () => {
+  const CONFIG_TEMPLATES_DIR = resolve(import.meta.dir, '../../config-templates')
+  const ENTRYPOINT_PATH = resolve(import.meta.dir, '../../entrypoint.sh')
+
+  test('every config-template .json is referenced in entrypoint.sh', () => {
+    if (!existsSync(CONFIG_TEMPLATES_DIR) || !existsSync(ENTRYPOINT_PATH)) return
+    const templates = readdirSync(CONFIG_TEMPLATES_DIR).filter(f => f.endsWith('.json'))
+    const entrypoint = readFileSync(ENTRYPOINT_PATH, 'utf-8')
+    const missing: string[] = []
+    for (const t of templates) {
+      if (!entrypoint.includes(t) && !entrypoint.includes('config-templates/*.json')) {
+        missing.push(`${t} not referenced in entrypoint.sh`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 10. EXPORT PARITY — Google Docs renders what Dashboard renders
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('Export parity — Google Docs HTML covers Dashboard sections', () => {
+  test('playbook-routes.ts HTML renderer covers key PlaybookTab sections', () => {
+    const routesPath = resolve(SRC_DIR, 'playbook-routes.ts')
+    const tabPath = resolve(DASHBOARD_DIR, 'components/tabs/PlaybookTab.tsx')
+    if (!existsSync(routesPath) || !existsSync(tabPath)) return
+
+    const routes = readFileSync(routesPath, 'utf-8')
+    const tab = readFileSync(tabPath, 'utf-8')
+
+    const REQUIRED_SECTIONS = [
+      { name: 'strategicPosition', check: 'strategicPosition' },
+      { name: 'productAlignment', check: 'productAlignment' },
+      { name: 'keyRelationships', check: 'keyRelationships' },
+      { name: 'engagementHistory', check: 'engagementHistory' },
+      { name: 'meddpicc', check: 'meddpicc' },
+    ]
+
+    const missing: string[] = []
+    for (const section of REQUIRED_SECTIONS) {
+      if (tab.includes(section.check) && !routes.includes(section.check)) {
+        missing.push(`PlaybookTab renders ${section.name} but generatePlaybookHTML does not`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+})

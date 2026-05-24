@@ -259,7 +259,7 @@ describe('templateKeyRelationships', () => {
 })
 
 describe('templateAll', () => {
-  test('assembles all sections with signals', () => {
+  test('assembles all sections with signals', async () => {
     const signals = [
       mockProductSignal,
       mockCloudSignal,
@@ -268,7 +268,7 @@ describe('templateAll', () => {
       mockTechSignal,
     ]
 
-    const result = templateAll(signals, mockAccountTeam)
+    const result = await templateAll(signals, mockAccountTeam)
 
     expect(result.deterministic).toContain('## Product Alignment')
     expect(result.deterministic).toContain('## Cloud Marketplace')
@@ -285,8 +285,8 @@ describe('templateAll', () => {
     expect(result.sections.keyRelationships).not.toBeNull()
   })
 
-  test('omits sections with no matching signals', () => {
-    const result = templateAll([mockProductSignal])
+  test('omits sections with no matching signals', async () => {
+    const result = await templateAll([mockProductSignal])
 
     expect(result.deterministic).toContain('## Product Alignment')
     expect(result.deterministic).not.toContain('## Cloud Marketplace')
@@ -297,41 +297,41 @@ describe('templateAll', () => {
     expect(result.sections.renewals).toBeNull()
   })
 
-  test('narrativeContext format varies by consumer', () => {
+  test('narrativeContext format varies by consumer', async () => {
     const signals = [mockProductSignal, mockCloudSignal]
 
     // Playbook format
-    const playbook = templateAll(signals, undefined, { format: 'playbook' })
+    const playbook = await templateAll(signals, undefined, { format: 'playbook' })
     expect(playbook.narrativeContext).toContain('[subscriptions] OpenShift Container Platform: Customer uses OpenShift')
 
     // Brief format
-    const brief = templateAll(signals, undefined, { format: 'brief' })
+    const brief = await templateAll(signals, undefined, { format: 'brief' })
     expect(brief.narrativeContext).toContain('[subscription] OpenShift Container Platform —')
 
     // Campaign format
-    const campaign = templateAll(signals, undefined, { format: 'campaign' })
+    const campaign = await templateAll(signals, undefined, { format: 'campaign' })
     expect(campaign.narrativeContext).toContain('[subscription] OpenShift Container Platform —')
   })
 
-  test('respects maxNarrative cap', () => {
+  test('respects maxNarrative cap', async () => {
     const signals = Array(30).fill(null).map((_, i) => ({
       ...mockProductSignal,
       headline: `Signal ${i}`,
     }))
 
-    const result = templateAll(signals, undefined, { format: 'playbook', maxNarrative: 5 })
+    const result = await templateAll(signals, undefined, { format: 'playbook', maxNarrative: 5 })
     const lines = result.narrativeContext.split('\n')
     expect(lines.length).toBe(5)
   })
 
-  test('productFilter excludes non-matching products', () => {
+  test('productFilter excludes non-matching products', async () => {
     const signals = [
       mockProductSignal, // OpenShift
       { ...mockProductSignal, metadata: { product: 'RHEL' } },
       { ...mockProductSignal, metadata: { product: 'Ansible' } },
     ]
 
-    const result = templateAll(signals, undefined, { format: 'playbook', productFilter: ['openshift'] })
+    const result = await templateAll(signals, undefined, { format: 'playbook', productFilter: ['openshift'] })
 
     // Only OpenShift signal should appear
     expect(result.narrativeContext).toContain('OpenShift')
@@ -339,8 +339,8 @@ describe('templateAll', () => {
     expect(result.narrativeContext).not.toContain('Ansible')
   })
 
-  test('intelligenceContext passthrough for campaigns', () => {
-    const result = templateAll(
+  test('intelligenceContext passthrough for campaigns', async () => {
+    const result = await templateAll(
       [mockProductSignal],
       undefined,
       { format: 'campaign', intelligenceContext: 'Fortune 500 financial services company' }
@@ -354,7 +354,7 @@ describe('templateAll', () => {
 // ── Signal Routing Tests ────────────────────────────────────────────────────
 
 describe('signal routing by metadata', () => {
-  test('routes by hasCloudSpend metadata to cloud section', () => {
+  test('routes by hasCloudSpend metadata to cloud section', async () => {
     const cloudSig: Signal = {
       source: 'unknown-source',
       type: 'subscription',
@@ -364,12 +364,12 @@ describe('signal routing by metadata', () => {
       metadata: { hasCloudSpend: true, provider: 'GCP' },
     }
 
-    const result = templateAll([cloudSig])
+    const result = await templateAll([cloudSig])
     expect(result.sections.cloudMarketplace).not.toBeNull()
     expect(result.sections.cloudMarketplace).toContain('GCP')
   })
 
-  test('routes by severity metadata to cases section', () => {
+  test('routes by severity metadata to cases section', async () => {
     const caseSig: Signal = {
       source: 'unknown-source',
       type: 'support',
@@ -379,12 +379,12 @@ describe('signal routing by metadata', () => {
       metadata: { severity: 1, caseNumber: '99999999' },
     }
 
-    const result = templateAll([caseSig])
+    const result = await templateAll([caseSig])
     expect(result.sections.cases).not.toBeNull()
     expect(result.sections.cases).toContain('99999999')
   })
 
-  test('routes by renewal metadata to renewals section', () => {
+  test('routes by renewal metadata to renewals section', async () => {
     const renewalSig: Signal = {
       source: 'unknown-source',
       type: 'pipeline',
@@ -394,12 +394,12 @@ describe('signal routing by metadata', () => {
       metadata: { renewal: true, stage: 'Negotiation', closeDate: '2026-12-31' },
     }
 
-    const result = templateAll([renewalSig])
+    const result = await templateAll([renewalSig])
     expect(result.sections.renewals).not.toBeNull()
     expect(result.sections.renewals).toContain('Negotiation')
   })
 
-  test('routes by confidence + context metadata to tech stack', () => {
+  test('routes by confidence + context metadata to tech stack', async () => {
     const techSig: Signal = {
       source: 'unknown-source',
       type: 'intelligence',
@@ -409,12 +409,12 @@ describe('signal routing by metadata', () => {
       metadata: { confidence: 'HIGH', context: 'evaluating' },
     }
 
-    const result = templateAll([techSig])
+    const result = await templateAll([techSig])
     expect(result.sections.techStack).not.toBeNull()
     expect(result.sections.techStack).toContain('evaluating')
   })
 
-  test('routes by redHatProducts metadata to product alignment', () => {
+  test('routes by redHatProducts metadata to product alignment', async () => {
     const productSig: Signal = {
       source: 'unknown-source',
       type: 'subscription',
@@ -424,7 +424,7 @@ describe('signal routing by metadata', () => {
       metadata: { redHatProducts: ['OpenShift', 'RHEL'] },
     }
 
-    const result = templateAll([productSig])
+    const result = await templateAll([productSig])
     expect(result.sections.productAlignment).not.toBeNull()
   })
 })
@@ -550,13 +550,13 @@ describe('templateStrategicOpportunities', () => {
     expect(result).toContain('RHEL')
   })
 
-  test('templateAll includes strategicOpportunities in sections', () => {
-    const result = templateAll([mockSolutionPlaySignal])
+  test('templateAll includes strategicOpportunities in sections', async () => {
+    const result = await templateAll([mockSolutionPlaySignal])
     expect(result.sections.strategicOpportunities).not.toBeNull()
     expect(result.deterministic).toContain('## Sales Alignment')
   })
 
-  test('Sales Alignment renders before Product Alignment', () => {
+  test('Sales Alignment renders before Product Alignment', async () => {
     const productSignal: Signal = {
       source: 'subscriptions',
       type: 'subscription',
@@ -565,7 +565,7 @@ describe('templateStrategicOpportunities', () => {
       timestamp: new Date().toISOString(),
       metadata: { product: 'OpenShift' },
     }
-    const result = templateAll([mockSolutionPlaySignal, productSignal])
+    const result = await templateAll([mockSolutionPlaySignal, productSignal])
     const stratIdx = result.deterministic.indexOf('## Sales Alignment')
     const prodIdx = result.deterministic.indexOf('## Product Alignment')
     expect(stratIdx).toBeLessThan(prodIdx)

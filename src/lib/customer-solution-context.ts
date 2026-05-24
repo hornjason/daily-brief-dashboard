@@ -12,6 +12,7 @@ import { readFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
 import { toSlug } from '../cache-layer.ts'
 import { getTacticsByTdp, getAssetsByPlay } from './saleshub-knowledge-loader.ts'
+import { isValidCustomerWin, isValidAsset } from './saleshub-filters.ts'
 
 function getConfigDir(): string {
   return process.env.CONFIG_DIR ?? 'config'
@@ -322,10 +323,10 @@ export function getCustomerSolutionContext(customerSlug: string): CustomerSoluti
       if (tactics.length > 0) {
         const bestTactic = tactics[0]
         if (bestTactic.talkTrack) play.talkTrack = bestTactic.talkTrack
-        const allWins = tactics.flatMap(t => t.customerWins).filter(w => w.length > 0)
+        const allWins = tactics.flatMap(t => t.customerWins).filter(w => w.length > 0).filter(isValidCustomerWin)
         if (allWins.length > 0) play.customerWins = allWins
       }
-      const assets = getAssetsByPlay(play.playId)
+      const assets = getAssetsByPlay(play.playId, play.tdp).filter(isValidAsset).slice(0, 10)
       if (assets.length > 0) play.linkedAssets = assets
     }
 

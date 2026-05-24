@@ -2,50 +2,50 @@
   "version": 1,
   "customerSlug": "test-customer",
   "customerName": "Test Customer",
-  "generatedAt": "2026-05-21T17:28:29.994Z",
+  "generatedAt": "2026-05-24T13:30:05.609Z",
   "lastMeetingNoteAt": null,
   "sections": {
     "strategicPosition": {
-      "updatedAt": "2026-05-21T17:28:29.994Z",
+      "updatedAt": "2026-05-24T13:30:05.609Z",
       "sourceNotes": []
     },
     "keyRelationships": {
-      "updatedAt": "2026-05-21T17:28:29.994Z",
+      "updatedAt": "2026-05-24T13:30:05.609Z",
       "sourceNotes": []
     },
     "currentPriorities": {
-      "updatedAt": "2026-05-21T17:28:29.994Z",
+      "updatedAt": "2026-05-24T13:30:05.609Z",
       "sourceNotes": []
     },
     "productAlignment": {
       "products": [],
-      "updatedAt": "2026-05-21T17:28:29.994Z",
+      "updatedAt": "2026-05-24T13:30:05.609Z",
       "sourceNotes": []
     },
     "openActionItems": {
       "items": [],
-      "updatedAt": "2026-05-21T17:28:29.994Z"
+      "updatedAt": "2026-05-24T13:30:05.609Z"
     },
     "engagementHistory": {
       "entries": [],
-      "updatedAt": "2026-05-21T17:28:29.994Z"
+      "updatedAt": "2026-05-24T13:30:05.609Z"
     },
     "expansionOpportunities": {
-      "updatedAt": "2026-05-21T17:28:29.994Z",
+      "updatedAt": "2026-05-24T13:30:05.609Z",
       "sourceNotes": []
     },
     "renewalsAndRisk": {
-      "updatedAt": "2026-05-21T17:28:29.994Z",
+      "updatedAt": "2026-05-24T13:30:05.609Z",
       "sourceNotes": []
     },
     "swotAnalysis": {
-      "updatedAt": "2026-05-21T17:28:29.994Z",
+      "updatedAt": "2026-05-24T13:30:05.609Z",
       "sourceNotes": []
     },
     "meddpicc": {
       "entries": [],
       "qualificationScore": 0,
-      "updatedAt": "2026-05-21T17:28:29.994Z",
+      "updatedAt": "2026-05-24T13:30:05.609Z",
       "sourceNotes": []
     }
   },
@@ -81,13 +81,14 @@
         "title": "Account Executive",
         "role": "ae"
       }
-    ]
+    ],
+    "solutionPlays": []
   },
   "sources": [
     {
       "type": "auto-generate",
       "sourceId": "auto",
-      "ingestedAt": "2026-05-21T17:28:29.994Z",
+      "ingestedAt": "2026-05-24T13:30:05.609Z",
       "sectionsUpdated": [
         "strategicPosition",
         "keyRelationships",

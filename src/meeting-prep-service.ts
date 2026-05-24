@@ -804,6 +804,16 @@ ${openActions || 'No open action items'}
 ### Expansion Opportunities (from playbook)
 ${expansionOpps}
 
+### Solution Plays (from playbook)
+${(() => {
+  const plays = playbook.deterministic?.solutionPlays ?? []
+  return plays.length > 0
+    ? plays.map((p: any) =>
+        `- **${p.playName}** (${p.tdp}, ${p.confidence}): ${p.triggerTechnologies.join(', ')}${p.talkTrack ? `\n  Talk track: ${p.talkTrack.slice(0, 200)}` : ''}`
+      ).join('\n')
+    : 'No solution plays identified'
+})()}
+
 ### Renewals & Risk (from playbook)
 ${renewalsRisk}
 

@@ -14,7 +14,7 @@
     },
     {
       "name": "IT Operations Efficiency",
-      "description": "The IT Operations Efficiency sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that helps customers simplify deployments, expand automation and unify day-2 operations—reducing cost, minimizing risk and freeing IT teams to focus on innovation across datacenter, cloud and edge.",
+      "description": "The IT Operations Efficiency sales play is a guide for positioning Red Hat as the trusted, open hybrid platform that helps customers simplify deployments, expand automation and unify day-2 operations\u2014reducing cost, minimizing risk and freeing IT teams to focus on innovation across datacenter, cloud and edge.",
       "linkedTdps": [
         "AI",
         "Automation",
@@ -35,7 +35,7 @@
     },
     {
       "name": "Sovereignty",
-      "description": "Digital sovereignty is no longer just a geopolitical concern—it is a strategic business imperative driven by the",
+      "description": "Digital sovereignty is no longer just a geopolitical concern\u2014it is a strategic business imperative driven by the",
       "linkedTdps": [
         "AI",
         "Edge"
@@ -139,33 +139,14 @@
       "name": "AIOps: Turn Intelligence into Action",
       "talkTrack": "This AIOps tactic positions Red Hat Ansible Automation Platform as the \"action layer\" that transforms monitoring insights into automated remediation, enabling IT teams to replace manual troubleshooting with event-driven workflows that optimize costs and ensure AI policy compliance.",
       "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected",
         "Unlock AI value in IT operations with Red Hat Ansible Automation Platform",
-        "Displaying slide 1 of 1",
         "Select case studies from interactive customer references dashboard"
       ],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence",
-        "Business content",
-        "0 item(s) selected"
+        "Business content"
       ],
       "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Customer pitch",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
         {
           "name": "AIOps - CY'26 Customer Pitch Video",
           "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
@@ -177,54 +158,19 @@
           "type": "google-slides"
         },
         {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "AIOps = artificial intelligence for IT operations",
           "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
           "type": "google-slides"
         },
         {
-          "name": "AIOps doesn’t replace DevOps—it’s an evolution of DevOps. AIOps is another point along the same digital transformation life cycle. AIOps and DevOps share the same responsibilities. Read more about AIOps online here: https://www.redhat.com/en/topics/ai/what-is-aiops?sc_cid=7015Y000003t3zHQAQ",
+          "name": "AIOps doesn\u2019t replace DevOps\u2014it\u2019s an evolution of DevOps. AIOps is another point along the same digital transformation life cycle. AIOps and DevOps share the same responsibilities. Read more about AIOps online here: https://www.redhat.com/en/topics/ai/what-is-aiops?sc_cid=7015Y000003t3zHQAQ",
           "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
           "type": "google-slides"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Business content",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "AIOps - CY'26 Customer Facing deck",
           "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
           "type": "google-slides"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Interactive experiences",
@@ -242,7 +188,7 @@
           "type": "google-slides"
         },
         {
-          "name": "Workshop: AIOps",
+          "name": "Workshop:\u00a0AIOps",
           "url": "https://docs.google.com/presentation/d/1tlV6CV1SZl01j3lKNRr2qD5dVNinIDnEVCegD7B_dsY/edit?slide=id.g3a047feee7c_0_0#slide=id.g3a047feee7c_0_0",
           "type": "google-slides"
         },
@@ -261,85 +207,18 @@
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
         "Business content",
-        "0 item(s) selected",
         "Optimize & Modernize - CY'26 Sales Tactic Intro deck",
         "Optimize & Modernize - CY'26 Sales Tactic Cheatsheet",
         "Email - Optimize & Modernize Sales Tactic CY26",
-        "0 item(s) selected",
         "Automation for SAP environments with Ricardo Garcia Cavero",
         "Ansible Infrastructure Automation - 301 - Technical Deck",
         "Emails for Maximize Tech Investments Sales Tactic"
       ],
       "whatToShare": [
         {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Customer pitch",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer deck - Optimize and modernize operations CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Recording of presentation of the Optimize and modernize operations customer deck.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "How Red Hat Ansible really works in relation to SAP! A proper demo!",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "In this demo we will see how the combination of Red Hat Enterprise Linux for SAP Solutions and Red Hat Ansible provide a complete platform for SAP workloads that is highly automated, simplifying dramatically the management of the SAP hosts during their entire lifecycle. We will look at how Satellite detects missing or outdated components in the servers and applies the right versions, also how Insights with its SAP specific rules can detect potential issues before they happen and how these can be solved automatically with Ansible playbooks before a failure occurs. Check the other sessions from the virtual event \"The value automation brings to SAP\" available on-demand here: https://events.redhat.com/profile/form/index.cfm?PKformID=0x504185abcd",
           "url": "/apps/insights",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Business content",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Technical",
@@ -347,32 +226,12 @@
           "type": "external"
         },
         {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Gauge customer staff’s automation proficiency with a no-cost Skills Assessment",
+          "name": "Gauge customer staff\u2019s automation proficiency with a no-cost\u00a0Skills Assessment",
           "url": "/apps/skills",
           "type": "external"
         },
         {
-          "name": "Understand the customer’s current technology, process, and culture with a no-cost Discovery Session",
+          "name": "Understand the customer\u2019s current technology, process, and culture with a no-cost\u00a0Discovery Session",
           "url": "https://portfoliohub.redhat.com/v3/serviceskit/discovery",
           "type": "external"
         },
@@ -412,12 +271,7 @@
           "type": "external"
         },
         {
-          "name": "Cloud Automation",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s): Ansible Cloud",
+          "name": "Demo(s):\u00a0Ansible Cloud",
           "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+cloud",
           "type": "external"
         },
@@ -447,11 +301,6 @@
           "type": "external"
         },
         {
-          "name": "Demo(s): EDA",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "EDA Labs - both customer facing and for your use",
           "url": "https://www.redhat.com/en/engage/event-driven-ansible-20220907",
           "type": "external"
@@ -465,11 +314,6 @@
           "name": "Interactive Walkthrough: Event-Driven Ansible with Red Hat OpenShift",
           "url": "https://interact.redhat.com/share/vEok7v9v5UbdsIj3ldmp",
           "type": "external"
-        },
-        {
-          "name": "Ansible Virtualization Migration",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Interactive Walkthrough: Virtual infrastructure automation with Red Hat Ansible",
@@ -488,57 +332,18 @@
       "name": "Automate at Scale",
       "talkTrack": "This tactic helps sellers migrate DIY users and scale existing customers by positioning Red Hat Ansible Automation Platform as a secure, enterprise-grade standard that breaks down operational silos and unlocks the ROI needed to shift resources toward strategic innovation.",
       "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "Select case studies from interactive customer references dashboard",
-        "0 item(s) selected"
+        "Select case studies from interactive customer references dashboard"
       ],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
         "Business content",
-        "0 item(s) selected",
-        "0 item(s) selected",
-        "IT Automation: Interactive experiences"
+        "IT Automation:\u00a0Interactive experiences"
       ],
       "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Sales Pitch",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Automate at Scale - CY'26 Sales Pitch",
-          "url": "",
-          "type": "seismic"
-        },
         {
           "name": "The video summarizes how organizations can automate at scale by using the Ansible Automation Platform. Automation at scale is a common concern for organizations that have adopted automation and now want to expand it across more teams to achieve greater value.",
           "url": "https://www.redhat.com/en/technologies/management/ansible/trial",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Win wire",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "TransUnion adoption of automation with Ansible Automation Platform",
@@ -551,74 +356,9 @@
           "type": "external"
         },
         {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Business content",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Automate at Scale - CY'26 Customer-facing deck",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Technical",
           "url": "https://www.redhat.com/en/services/support/technical-account-management",
           "type": "external"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Speed automation adoption with a community of practice",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Advance your automation maturity",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "An IT executive's guide to automation",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Business Value RAVE tool",
@@ -626,7 +366,7 @@
           "type": "external"
         },
         {
-          "name": "60-day Customer Trial: Ansible Automation Platform",
+          "name": "60-day Customer Trial:\u00a0Ansible Automation Platform",
           "url": "https://www.redhat.com/en/technologies/management/ansible/trial",
           "type": "external"
         },
@@ -646,31 +386,12 @@
     {
       "name": "Network automation",
       "talkTrack": "This tactic enables sellers to position Red Hat Network Automation as the solution for modern network complexity, replacing manual processes and downtime with a resilient, multi-vendor automation framework that ensures faster response times and seamless scalability.",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
+      "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "Business content",
-        "0 item(s) selected"
+        "Business content"
       ],
       "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos.",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Customer Pitch",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
         {
           "name": "Network Automation - Customer facing Pitch",
           "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
@@ -680,26 +401,6 @@
           "name": "Network Automation- Customer Facing Deck Recording- What good looks like.",
           "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Business content",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Network Automation CY'26 Customer Facing Deck",
@@ -717,27 +418,12 @@
           "type": "external"
         },
         {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Demo(s): Network Automation",
           "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
           "type": "external"
         },
         {
-          "name": "Workshop(s): Network Automation",
+          "name": "Workshop(s):\u00a0Network Automation",
           "url": "https://demo.redhat.com/catalog/babylon-catalog-prod?category=Demos&search=ansible+network",
           "type": "external"
         },
@@ -766,41 +452,17 @@
     },
     {
       "name": "Agentic AI",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
       "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected",
         "Red Hat AI Customer References",
         "Select case studies from the interactive customer references dashboard"
       ],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected",
         "Interactive experiences",
         "Intro to Agentic AI"
       ],
-      "whatToShare": [
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer facing deck Agentic AI Sales Tactic CY26",
-          "url": "",
-          "type": "seismic"
-        }
-      ],
+      "whatToShare": [],
       "parentTdp": "AI"
     },
     {
@@ -821,60 +483,16 @@
     },
     {
       "name": "Deploy new critical & AI applications on RHEL",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "customerWins": [],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
         {
           "name": "Customer facing deck Deploy new critical & AI applications on RHEL Sales Tactic CY26",
           "url": "https://www.redhat.com/en/interactive-labs/enterprise-linux",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Interactive experiences",
@@ -887,7 +505,7 @@
           "type": "external"
         },
         {
-          "name": "Solution architecture: convert from CentOS to Red Hat Enterprise Linux",
+          "name": "Solution architecture:\u00a0convert from CentOS to Red Hat Enterprise Linux",
           "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html#tabs-e445932049-item-ed0eb46749-tab",
           "type": "external"
         },
@@ -897,12 +515,12 @@
           "type": "external"
         },
         {
-          "name": "Key items: RHEL 10 demos and labs",
+          "name": "Key items:\u00a0RHEL 10 demos and labs",
           "url": "https://catalog.demo.redhat.com/catalog?search=RHEL+10&categories=%5B%22Labs%22%2C%22Demos%22%5D",
           "type": "external"
         },
         {
-          "name": "Interactive lab(s): RHEL",
+          "name": "Interactive lab(s):\u00a0RHEL",
           "url": "https://www.redhat.com/en/interactive-labs/enterprise-linux",
           "type": "external"
         }
@@ -911,37 +529,16 @@
     },
     {
       "name": "DevX & platform engineering to build modern applications",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
+          "name": "Reprint link",
+          "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
           "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner® Magic Quadrant™ for Container Management for the third year in a row.",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Reprint link",
@@ -949,44 +546,14 @@
           "type": "external"
         },
         {
-          "name": "Red Hat named a Leader in the Forrester Wave for Multicloud Container Platforms",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Reprint link",
-          "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
-          "type": "external"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s): Application Platform",
+          "name": "Demo(s):\u00a0Application Platform",
           "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
           "type": "external"
         },
         {
-          "name": "Workshop(s): Application Platform",
+          "name": "Workshop(s):\u00a0Application Platform",
           "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
           "type": "external"
-        },
-        {
-          "name": "Interactive experience(s):",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Faster Onboarding, Faster Innovation",
@@ -1008,108 +575,20 @@
     },
     {
       "name": "Inference at Scale",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
       "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected",
         "GTM Power Hour (Red Hat AI starts at 32:25)",
         "Special Edition Power Hour (Red Hat AI starts at 19:10)",
         "Select case studies from the interactive customer references dashboard"
       ],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "How to pitch Inference at Scale",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Inference at Scale Sales Tactic Intro Video",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "The Inference at Scale Sales Tactic is all about offering customers the opportunity to achieve more with less. Get more of out every GPU and entire infrastructure. Watch this 4-minute video to learn how you can help customers serve more users and agents efficiently and cost-effectively.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Why Inference at Scale?",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
         {
           "name": "Fast, cost-effective AI inference with Red Hat AI Inference Server",
           "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
           "type": "external"
-        },
-        {
-          "name": "Struggling to deploy increasingly complex AI models efficiently and affordably? Red Hat® AI Inference Server is engineered to help your organization overcome these critical deployment hurdles at scale. Join Michael Goin, Principal Software Engineer at Red Hat, as he explains how Red Hat is paving the way for more accessible and impactful AI. Discover how your enterprise can achieve: ✅ Consistent Performance: Ensure reliable results and high-speed processing for your most demanding AI applications and large language models (LLMs). ✅ Fast Deployment Cycles: Accelerate your time-to-value with access to validated, pre-optimized generative AI models ready for production. ✅ Cost-Effective Operations: Significantly reduce the operational costs typically associated with running inference for complex AI workloads. Powered by cutting-edge open source technologies like vLLM at its core, and featuring advanced model optimization capabilities (including LLM Compressor), Red Hat AI Inference Server offers unparalleled flexibility. Run your AI inference workloads wherever you need them—from your datacenter, to the public cloud, and out to the edge—all while maintaining accuracy and efficiency. It's time to make your AI innovation sustainable, scalable, and a true competitive advantage. Next Steps: ➡️ See more on Red Hat AI Inference Server → http://www.redhat.com/en/products/ai/inference-server 💻 Explore Red Hat's AI solutions portfolio → https://www.redhat.com/en/products/ai 💡 Learn about optimizing AI Workloads with vLLM → https://www.redhat.com/en/topics/ai/what-is-vllm #AIInference #RedHat #EnterpriseAI #GenerativeAI #LLMs #ModelOptimization #ScalableAI #CostEffectiveAI #HybridCloudAI #vLLM",
-          "url": "https://www.redhat.com/en/resources/ai-inference-server-datasheet",
-          "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer facing deck Inference at Scale Sales Tactic CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Interactive experiences",
@@ -1142,7 +621,7 @@
           "type": "external"
         },
         {
-          "name": "Demo(s): Red Hat AI Inference Server",
+          "name": "Demo(s):\u00a0Red Hat AI Inference Server",
           "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
           "type": "external"
         },
@@ -1156,38 +635,14 @@
     },
     {
       "name": "Kubernetes for 3rd party AI workloads",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "customerWins": [],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner® Magic Quadrant™ for Container Management for the third year in a row.",
+          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner\u00ae Magic Quadrant\u2122 for Container Management for the third year in a row.",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -1197,32 +652,12 @@
           "type": "external"
         },
         {
-          "name": "Red Hat named a Leader in the Forrester Wave for Multicloud Container Platforms",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Reprint link",
           "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
           "type": "external"
         },
         {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s): OpenShift",
+          "name": "Demo(s):\u00a0OpenShift",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         }
@@ -1231,58 +666,14 @@
     },
     {
       "name": "Kubernetes for 3rd party workloads (Non-AI)",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "customerWins": [],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Video - Kubernetes for General Applications Workloads Sales Tactic CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Video - Kubernetes for General Applications Workloads Sales Tactic CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner® Magic Quadrant™ for Container Management for the third year in a row.",
+          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner\u00ae Magic Quadrant\u2122 for Container Management for the third year in a row.",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -1292,54 +683,14 @@
           "type": "external"
         },
         {
-          "name": "Red Hat named a Leader in the Forrester Wave for Multicloud Container Platforms",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Reprint link",
           "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
           "type": "external"
         },
         {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s): OpenShift",
+          "name": "Demo(s):\u00a0OpenShift",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
-        },
-        {
-          "name": "Services",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "How Red Hat Services helps customers move from proof-of-concept to production.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Consulting Services:",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Learn more about Red Hat Consulting",
@@ -1347,12 +698,7 @@
           "type": "external"
         },
         {
-          "name": "Red Hat Training & Certifications:",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat® Training and Certification - OpenShift skills path",
+          "name": "Red Hat\u00ae Training and Certification - OpenShift skills path",
           "url": "/apps/skills",
           "type": "external"
         },
@@ -1387,27 +733,7 @@
           "type": "external"
         },
         {
-          "name": "Partner solutions",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat validated partners have a vital role in ensuring a customer shifting its VMs has a smooth migration, bridging gaps and simplifying complex processes.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "This Red Hat OpenShift Virtualization’s ecosystem of partners provides businesses with flexibility in designing, migrating, and modernizing their virtualization solutions.",
+          "name": "This Red Hat OpenShift Virtualization\u2019s ecosystem of partners provides businesses with flexibility in designing, migrating, and modernizing their virtualization solutions.",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -1415,26 +741,6 @@
           "name": "Find more information on our ISV partners here.",
           "url": "https://www.redhat.com/en/resources/openshift-virtualization-partner-ecosystem-ebook#:~:text=Red%20Hat%20OpenShift%20Virtualization%2C%20alongside,from%20more%20traditional%20virtual%20environments.",
           "type": "external"
-        },
-        {
-          "name": "Supporting tactics and products",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "5 Minute Briefs",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Easy-to-consume podcast series focused on top priorities from BU and field leaders",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Listen: App Platform and Container Management Power 5 play list",
@@ -1452,29 +758,14 @@
           "type": "external"
         },
         {
-          "name": "Explore: Red Hat OpenShift training",
+          "name": "Explore:\u00a0Red Hat OpenShift training",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
-        },
-        {
-          "name": "Content Details",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Description",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Kubernetes for 3rd party workloads (Non-AI) Sales Tactic",
           "url": "/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%25252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%25252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%25252CPT0%25253D%25252CUGFnZSBSSFNI%25252Flfdf198c3e-e4de-4c34-9efe-39759354b782//",
           "type": "external"
-        },
-        {
-          "name": "Content Type",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Page RHSH",
@@ -1485,51 +776,6 @@
           "name": "File Type",
           "url": "/apps/doccenter/1d1918e9-b5b0-4428-b8fc-87e02ad44156/doc/%25252Fdd04d516a5-19b3-48c9-e01a-d2bf52939de4%25252FdfMmNhNDhiYjktYzE1Ny00ZjgyLWJlYjUtNTdhY2NjZmY5Y2Rh%25252CPT0%25253D%25252CUGFnZSBSSFNI%25252Flfdf198c3e-e4de-4c34-9efe-39759354b782//",
           "type": "external"
-        },
-        {
-          "name": "Version created",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Jan 24, 2026",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Version",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Expiration Date",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Jul 22, 2026",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Rating",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Rating",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Content Properties",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Reviews",
-          "url": "",
-          "type": "seismic"
         }
       ],
       "parentTdp": "App Platform"
@@ -1538,59 +784,16 @@
       "name": "Migrate to the Cloud",
       "talkTrack": "Use the sections below to own the outcome for your next conversation:",
       "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected",
         "His Majesty's Revenue and Customs (HMRC) move to the cloud with Red Hat Enterprise Linux",
         "Telstra opts for RHEL over CentOS Linux for its cloud journey"
       ],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected",
         "Cloud Marketplace essentials",
         "Red Hat Enterprise Linux across hyperscalers",
         "Landing Zone for Red Hat Enterprise Linux on Azure"
       ],
       "whatToShare": [
-        {
-          "name": "What to show → product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Customer pitch",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Video Migrate to the Cloud customer facing deck CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "This video shows how to be the customer facing deck to a customer.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Cloud-optimized RHEL",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
         {
           "name": "Cloud-optimized Red Hat Enterprise Linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
@@ -1600,51 +803,6 @@
           "name": "Stop wasting time on manual configurations and inconsistent setups across multiple clouds by adopting cloud-optimized Red Hat Enterprise Linux (RHEL). This consistent platform eliminates hours of repetitive setup work, simplifies management and monitoring, and allows your team to build, deploy, and innovate faster than ever across every platform. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux/cloud",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer facing deck Migrate to the Cloud Sales Tactic CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "RHEL in the Cloud hub page",
@@ -1667,21 +825,6 @@
           "type": "external"
         },
         {
-          "name": "Services",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "How Red Hat Services helps customers move from proof-of-concept to production.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Learn more about the different ways Red Hat Services can help you sell more Red Hat Enterprise Linux.",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
@@ -1692,7 +835,7 @@
           "type": "external"
         },
         {
-          "name": "Gauge customer staff’s proficiency with a Skills Assessment",
+          "name": "Gauge customer staff\u2019s proficiency with a Skills Assessment",
           "url": "/apps/skills",
           "type": "external"
         },
@@ -1722,11 +865,6 @@
           "type": "external"
         },
         {
-          "name": "For this sales tactic, we recommend our customers the following training and certifications:",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Red Hat System Administration I",
           "url": "https://www.redhat.com/en/services/training/rh124-red-hat-system-administration-i",
           "type": "external"
@@ -1747,16 +885,6 @@
           "type": "external"
         },
         {
-          "name": "Partner Solutions",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Ecosystem solutions for partners (Red Hat Enterprise Linux)",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
@@ -1771,38 +899,14 @@
     },
     {
       "name": "Multicluster management & security at scale for Kubernetes",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "customerWins": [],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner® Magic Quadrant™ for Container Management for the third year in a row.",
+          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner\u00ae Magic Quadrant\u2122 for Container Management for the third year in a row.",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         },
@@ -1812,32 +916,12 @@
           "type": "external"
         },
         {
-          "name": "Red Hat named a Leader in the Forrester Wave for Multicloud Container Platforms",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Reprint link",
           "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
           "type": "external"
         },
         {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s): OpenShift",
+          "name": "Demo(s):\u00a0OpenShift",
           "url": "https://catalog.partner.demo.redhat.com/catalog?item=babylon-catalog-prod%2Fpartner.ocpvirt-hands-on.prod&utm_source=webapp&utm_medium=share-link&search=container+management&labels=%7B%22product%22%3A%5B%22red_hat_openshift_container_platform%22%5D%7D",
           "type": "external"
         }
@@ -1856,7 +940,7 @@
           "type": "external"
         },
         {
-          "name": "Get started with AI for enterprise: A beginner’s guide (ebook)",
+          "name": "Get started with AI for enterprise: A beginner\u2019s guide (ebook)",
           "url": "https://www.redhat.com/en/engage/artificial-intelligence-for-enterprise-beginners-guide-ebook?percmp=RHCTG0250000460019",
           "type": "external"
         }
@@ -1865,68 +949,45 @@
     },
     {
       "name": "Production AI",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
       "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected",
         "GTM Power Hour (Red Hat AI starts at 32:25)",
         "Special Edition Power Hour (Red Hat AI starts at 19:10)",
         "Select case studies from the interactive customer references dashboard"
       ],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Why Inference at Scale?",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
         {
           "name": "Fast, cost-effective AI inference with Red Hat AI Inference Server",
           "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
           "type": "external"
         },
         {
-          "name": "Struggling to deploy increasingly complex AI models efficiently and affordably? Red Hat® AI Inference Server is engineered to help your organization overcome these critical deployment hurdles at scale. Join Michael Goin, Principal Software Engineer at Red Hat, as he explains how Red Hat is paving the way for more accessible and impactful AI. Discover how your enterprise can achieve: ✅ Consistent Performance: Ensure reliable results and high-speed processing for your most demanding AI applications and large language models (LLMs). ✅ Fast Deployment Cycles: Accelerate your time-to-value with access to validated, pre-optimized generative AI models ready for production. ✅ Cost-Effective Operations: Significantly reduce the operational costs typically associated with running inference for complex AI workloads. Powered by cutting-edge open source technologies like vLLM at its core, and featuring advanced model optimization capabilities (including LLM Compressor), Red Hat AI Inference Server offers unparalleled flexibility. Run your AI inference workloads wherever you need them—from your datacenter, to the public cloud, and out to the edge—all while maintaining accuracy and efficiency. It's time to make your AI innovation sustainable, scalable, and a true competitive advantage. Next Steps: ➡️ See more on Red Hat AI Inference Server → http://www.redhat.com/en/products/ai/inference-server 💻 Explore Red Hat's AI solutions portfolio → https://www.redhat.com/en/products/ai 💡 Learn about optimizing AI Workloads with vLLM → https://www.redhat.com/en/topics/ai/what-is-vllm #AIInference #RedHat #EnterpriseAI #GenerativeAI #LLMs #ModelOptimization #ScalableAI #CostEffectiveAI #HybridCloudAI #vLLM",
-          "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
+          "name": "Interactive experiences",
+          "url": "https://www.redhat.com/en/interactive-experiences#ai-platform",
           "type": "external"
         },
         {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
+          "name": "Introduction to Red Hat AI Inference Server",
+          "url": "https://www.redhat.com/architect/portfolio/detail/89-intro-red-hat-ai-inference-server-demo?intcmp=RHCTG0250000458741",
+          "type": "external"
         },
         {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
+          "name": "Benchmarking Gen AI Inference: The Business Impact of Performance Optimization",
+          "url": "https://www.redhat.com/architect/portfolio/detail/114-benchmarking-gen-ai-inference-interactive-experience?intcmp=RHCTG0250000458741",
+          "type": "external"
         },
         {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
+          "name": "Hands on with vLLM",
+          "url": "https://www.redhat.com/architect/portfolio/detail/100-hands-on-vllm-interactive-experience?intcmp=RHCTG0250000449876",
+          "type": "external"
         },
         {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer facing deck Production AI Sales Tactic CY26",
-          "url": "",
-          "type": "seismic"
+          "name": "LLM Compression & Model Optimization",
+          "url": "https://www.redhat.com/architect/portfolio/detail/99-llm-compression-model-optimization-interactive-experience?intcmp=RHCTG0250000449876",
+          "type": "external"
         },
         {
           "name": "Interactive experiences",
@@ -1954,47 +1015,7 @@
           "type": "external"
         },
         {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Interactive experiences",
-          "url": "https://www.redhat.com/en/interactive-experiences#ai-platform",
-          "type": "external"
-        },
-        {
-          "name": "Introduction to Red Hat AI Inference Server",
-          "url": "https://www.redhat.com/architect/portfolio/detail/89-intro-red-hat-ai-inference-server-demo?intcmp=RHCTG0250000458741",
-          "type": "external"
-        },
-        {
-          "name": "Benchmarking Gen AI Inference: The Business Impact of Performance Optimization",
-          "url": "https://www.redhat.com/architect/portfolio/detail/114-benchmarking-gen-ai-inference-interactive-experience?intcmp=RHCTG0250000458741",
-          "type": "external"
-        },
-        {
-          "name": "Hands on with vLLM",
-          "url": "https://www.redhat.com/architect/portfolio/detail/100-hands-on-vllm-interactive-experience?intcmp=RHCTG0250000449876",
-          "type": "external"
-        },
-        {
-          "name": "LLM Compression & Model Optimization",
-          "url": "https://www.redhat.com/architect/portfolio/detail/99-llm-compression-model-optimization-interactive-experience?intcmp=RHCTG0250000449876",
-          "type": "external"
-        },
-        {
-          "name": "Demo: Red Hat AI Inference Server",
+          "name": "Demo:\u00a0Red Hat AI Inference Server",
           "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?labels=%7B%22product%22%3A%5B%22red_hat_ai_inference_server%22%5D%7D",
           "type": "external"
         },
@@ -2009,84 +1030,25 @@
     {
       "name": "Secure and Manage RHEL",
       "talkTrack": "Use the sections below to own the outcome for your next conversation:",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
+      "customerWins": [],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "What to Show → product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Türk Telekom accelerates digital transformation with Red Hat Enterprise Linux",
+          "name": "T\u00fcrk Telekom accelerates digital transformation with Red Hat Enterprise Linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
         {
-          "name": "Türk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
+          "name": "T\u00fcrk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer facing deck Secure and Manage RHEL Sales Tactic CY26",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "7 ways to gain business value with Red Hat Enterprise Linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Labs%22%2C%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "RHEL Virtual Workshop: OS Security and Management with Red Hat",
@@ -2099,7 +1061,7 @@
           "type": "external"
         },
         {
-          "name": "Solution architecture: convert from CentOS to Red Hat Enterprise Linux",
+          "name": "Solution architecture:\u00a0convert from CentOS to Red Hat Enterprise Linux",
           "url": "https://content.redhat.com/us/en/product/cross-portfolio-initiatives/architectures.html#tabs-e445932049-item-ed0eb46749-tab",
           "type": "external"
         },
@@ -2118,57 +1080,16 @@
     },
     {
       "name": "Secure the software supply chain",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
       "customerWins": [],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
         {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
+          "name": "Reprint link",
+          "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
           "type": "external"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Video - Secure Supply Chain Sales Tactic - CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Video - Secure Supply Chain Sales Tactic - CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat OpenShift is recognized as a Leader in the 2025 Gartner® Magic Quadrant™ for Container Management for the third year in a row.",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Reprint link",
@@ -2176,49 +1097,14 @@
           "type": "external"
         },
         {
-          "name": "Red Hat named a Leader in the Forrester Wave for Multicloud Container Platforms",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Reprint link",
-          "url": "https://www.gartner.com/reprints/?id=1-2LKN2WQC&ct=250730&st=sb",
-          "type": "external"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s): Application Platform",
+          "name": "Demo(s):\u00a0Application Platform",
           "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
           "type": "external"
         },
         {
-          "name": "Workshop(s): Application Platform",
+          "name": "Workshop(s):\u00a0Application Platform",
           "url": "https://catalog.partner.demo.redhat.com/catalog?category=Demos&search=Application+Platform",
           "type": "external"
-        },
-        {
-          "name": "Interactive experience(s):",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Faster Onboarding, Faster Innovation",
@@ -2240,129 +1126,21 @@
     },
     {
       "name": "Sovereign (Private) AI",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
       "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected",
         "Select case studies from interactive customer references dashboard"
       ],
       "whatToSay": [
-        "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected"
+        "Messaging, talk tracks, and guidance to help you position with clarity and confidence."
       ],
       "whatToShare": [
-        {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "Sovereign AI Sales Tactic Intro Video",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Sovereign AI Sales Tactic Intro Video",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "The Sovereign AI Sales Tactic is about offering customers the ability to be in full control of their AI strategy, from the silicon to the software and models.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat 101 Sovereignty",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat 101 Sovereignty - December 2, 2025",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "In December 2025, Red Hat 101 brought Red Hatters together to learn about digital sovereignty. Hosts Hans Roth, SVP and General Manager, EMEA, Jeff Lo, VP, Portfolio, and Vincent Caldeira, Chief Technology Officer, APAC, discussed: Definitions, market drivers, and customer requirements for digital sovereignty. How Red Hat is using open source as the foundation for our Sovereign Cloud approach. Red Hat’s solutions and the value they deliver. The blueprint for AI Sovereignty. Answers to questions from Red Hatters.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer facing deck Sovereign (Private) AI Sales Tactic CY26",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat’s commitments for sovereign cloud: Your cloud, your rules",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "The Sovereign Cloud Imperative",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "EMEA’s cloud sovereignty puzzle takes shape",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value.",
-          "url": "",
-          "type": "seismic"
-        },
         {
           "name": "Interactive experiences",
           "url": "https://www.redhat.com/en/interactive-experiences#ai-platform",
           "type": "external"
         },
         {
-          "name": "Model-as–a-Service",
+          "name": "Model-as\u2013a-Service",
           "url": "https://www.redhat.com/architect/portfolio/detail/95-models-as-a-service-interactive-experience?intcmp=RHCTG0250000449876",
           "type": "external"
         },
@@ -2382,80 +1160,21 @@
     {
       "name": "Standardize & Modernize your Operating System",
       "talkTrack": "Use the sections below to own the outcome for your next conversation:",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
+      "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "Linux infrastructure planning assessment",
-        "0 item(s) selected"
+        "Linux infrastructure planning assessment"
       ],
       "whatToShare": [
         {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Adopt a standardized operating environment sales tactic - Customer Facing Deck - Allison Kazerounian",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Recording of how to present the 'Adopt a standardized operating environment Sales Tactic\" (Standardize on RHEL) customer facing deck to a customer by Allison Kazerounian, Principal Product Marketing Manager, RHEL BU",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Türk Telekom accelerates digital transformation with Red Hat Enterprise Linux",
+          "name": "T\u00fcrk Telekom accelerates digital transformation with Red Hat Enterprise Linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
         {
-          "name": "Türk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
+          "name": "T\u00fcrk Telekom shares the key drivers of digital transformation and the benefits of standardizing on Red Hat Enterprise Linux. Learn more: https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer facing deck - Standardize and Modernize your OS Sales Tactic - CY26",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "What is new in Red Hat Enterprise Linux 10 and beyond",
@@ -2463,27 +1182,12 @@
           "type": "external"
         },
         {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s): Red Hat Enterprise Linux demos",
+          "name": "Demo(s):\u00a0Red Hat Enterprise Linux demos",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
         {
-          "name": "Lab(s): Red Hat Enterprise Linux labs",
+          "name": "Lab(s):\u00a0Red Hat Enterprise Linux labs",
           "url": "https://catalog.demo.redhat.com/catalog?categories=%5B%22Demos%22%5D&labels=%7B%22product_family%22%3A%5B%22red_hat_enterprise_linux%22%5D%7D",
           "type": "external"
         },
@@ -2503,7 +1207,7 @@
           "type": "external"
         },
         {
-          "name": "Key items: RHEL 10 demos and labs",
+          "name": "Key items:\u00a0RHEL 10 demos and labs",
           "url": "https://catalog.demo.redhat.com/catalog?search=RHEL+10&categories=%5B%22Labs%22%2C%22Demos%22%5D",
           "type": "external"
         },
@@ -2517,46 +1221,17 @@
     },
     {
       "name": "VM migration & modernization",
-      "talkTrack": "Use this page to guide your customer conversation — from lead generation to close.",
-      "customerWins": [
-        "Real customer stories and proven outcomes you can reference to build trust and momentum.",
-        "0 item(s) selected"
-      ],
+      "talkTrack": "Use this page to guide your customer conversation \u2014 from lead generation to close.",
+      "customerWins": [],
       "whatToSay": [
         "Messaging, talk tracks, and guidance to help you position with clarity and confidence.",
-        "0 item(s) selected",
         "OpenShift Virtualization Total Cost of Ownership Calculator (Please contact your Account Manager if you can't access the Calculator)"
       ],
       "whatToShare": [
         {
-          "name": "What to show → differentiate with product demos",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "VM migration and modernization with Red Hat and Google Cloud",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "Migrate and modernize your VMs with a fully managed platform with Red Hat OpenShift Virtualization on Red Hat OpenShift running on Google Cloud available in public preview. Robert Akerblom and Andy Repton from Red Hat will take you through core capabilities and migration strategies that you can implement with this solution. Learn more about OpenShift Virtualization. https://www.redhat.com/en/technologies/cloud-computing/openshift/virtualization?sc_cid=RHCTN0250000435994&gad_source=1&gad_campaignid=21901955479&gbraid=0AAAAADsbVMSBlJ0rnc-3jqKSjpbLQZ9JV&gclid=EAIaIQobChMIv8TlpNCbkQMVmRxECB2LZjMYEAAYASAAEgIdJvD_BwE Read the checklist: https://www.redhat.com/en/resources/migrate-openshift-on-google-cloud-checklist Walk through the arcade: https://interact.redhat.com/share/XMT5zxwurRaGYDpnKR2K",
           "url": "http://red.ht/virttcoestimator",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Is OpenShift Virtualization right for your VMs?",
@@ -2564,34 +1239,9 @@
           "type": "external"
         },
         {
-          "name": "Take the headache out of your virtual machine management with Red Hat OpenShift Virtualization. Alan Cowles, Principle Technical Marketing Manager, explains how you can move to OpenShift with a smooth migration process and gain the option to apply a host of cloud-native features to your VMs—all at your own pace. Prepare for your conversation with your sysadmin about your infrastructure management: https://www.redhat.com/en/products/virtualization Subscribe to Red Hat's YouTube channel: https://www.youtube.com/redhat/?sub_confirmation=1 #RedHat #VMmigration #OpenShift #Virtualization",
+          "name": "Take the headache out of your virtual machine management with Red Hat OpenShift Virtualization. Alan Cowles, Principle Technical Marketing Manager, explains how you can move to OpenShift with a smooth migration process and gain the option to apply a host of cloud-native features to your VMs\u2014all at your own pace. Prepare for your conversation with your sysadmin about your infrastructure management: https://www.redhat.com/en/products/virtualization Subscribe to Red Hat's YouTube channel: https://www.youtube.com/redhat/?sub_confirmation=1 #RedHat #VMmigration #OpenShift #Virtualization",
           "url": "http://red.ht/virttcoestimator",
           "type": "external"
-        },
-        {
-          "name": "Displaying slide 1 of 1",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Customer-ready assets you can present live or send after the conversation to reinforce value.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Interactive walkthrough(s):",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Migrate virtual machines with Red Hat",
@@ -2602,11 +1252,6 @@
           "name": "Automate your migration at scale",
           "url": "https://www.redhat.com/en/products/interactive-walkthrough/migrate-virtual-machines#automate-your-migration-at-scale",
           "type": "external"
-        },
-        {
-          "name": "Interactive experience(s):",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Some reasons to migrate to Red Hat OpenShift Virtualization",
@@ -2639,31 +1284,6 @@
           "type": "external"
         },
         {
-          "name": "What to show",
-          "url": "javascript:void(0)",
-          "type": "external"
-        },
-        {
-          "name": "arrow down",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demos that highlight differentiation and technical value",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Demo(s):",
-          "url": "",
-          "type": "seismic"
-        },
-        {
           "name": "OpenShift Virtualization",
           "url": "http://red.ht/virttcoestimator",
           "type": "external"
@@ -2679,64 +1299,14 @@
           "type": "external"
         },
         {
-          "name": "Workshop(s): OpenShift",
+          "name": "Workshop(s):\u00a0OpenShift",
           "url": "https://catalog.demo.redhat.com/catalog/babylon-catalog-prod?category=Workshops&search=virtualization",
           "type": "external"
-        },
-        {
-          "name": "Services",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "arrow up",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat Services accelerates the virtualization journey by solving urgent migration needs while building a sustainable foundation for the future. We help customers prepare for modernization by aligning their teams and operations with a roadmap tailored to their specific business goals and timeline.",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
         },
         {
           "name": "Virtualization Migration with RH Services - Customer Pitch Deck",
           "url": "https://content.redhat.com/content/rhcc/us/en/product/cross-portfolio-initiatives/architectures.html?#open-virt-virt",
           "type": "external"
-        },
-        {
-          "name": "Consulting",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Red Hat Training & Certifications (for customers)",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "Technical Account Manager (TAM)",
-          "url": "",
-          "type": "seismic"
-        },
-        {
-          "name": "0 item(s) selected",
-          "url": "",
-          "type": "seismic"
         }
       ],
       "parentTdp": "Virtualization"
@@ -2834,7 +1404,7 @@
           "type": "external"
         },
         {
-          "name": "RHACS 4.9 release notes",
+          "name": "RHACS 4.9 release\u00a0notes",
           "url": "https://docs.redhat.com/en/documentation/red_hat_advanced_cluster_security_for_kubernetes/4.9/html-single/release_notes/index",
           "type": "external"
         }

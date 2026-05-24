@@ -52,6 +52,13 @@ if [ -d /app/config-templates ]; then
   done
 fi
 
+# ── Force-update machine-generated configs (always overwrite from template) ────
+# saleshub-knowledge.json is scraped, not user-edited — always use the latest baked into the image
+if [ -f /app/config-templates/saleshub-knowledge.json ]; then
+  cp /app/config-templates/saleshub-knowledge.json /data/config/saleshub-knowledge.json
+  echo "[entrypoint] Updated saleshub-knowledge.json from template"
+fi
+
 # ── Seed value maps on first boot ──────────────────────────────────────────────
 if [ -f /app/config-templates/business-value-maps.txt ] && [ ! -f /data/cache/value-maps/business-value-maps.txt ]; then
   mkdir -p /data/cache/value-maps
