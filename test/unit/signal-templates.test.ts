@@ -150,6 +150,47 @@ describe('templateCloudMarketplace', () => {
     expect(result).toContain('| AWS | $125,000 | Commit, EDP | OpenShift, RHEL |')
   })
 
+  test('aggregates program names from individual program signals (#378)', () => {
+    // Individual program signals have offeringType: 'program' but no programs array
+    const programSignal1: Signal = {
+      source: 'cloud-marketplace',
+      type: 'product-intel',
+      headline: 'AWS program: EDP — leverage existing $50,000 spend',
+      detail: 'Enterprise Discount Program',
+      score: 0.8,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        provider: 'AWS',
+        offeringType: 'program',
+        hasCloudSpend: true,
+        acvPlus: 50000,
+      },
+    }
+    const programSignal2: Signal = {
+      source: 'cloud-marketplace',
+      type: 'product-intel',
+      headline: 'AWS program: CPPO — leverage existing $50,000 spend',
+      detail: 'Channel Partner Private Offer',
+      score: 0.8,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        provider: 'AWS',
+        offeringType: 'program',
+        hasCloudSpend: true,
+        acvPlus: 50000,
+      },
+    }
+
+    const result = templateCloudMarketplace([programSignal1, programSignal2])
+    expect(result).not.toBeNull()
+    // Should aggregate program names from headlines into Programs column
+    expect(result).toContain('EDP')
+    expect(result).toContain('CPPO')
+    // Should show one aggregated row per provider, not individual rows
+    const awsRows = result!.split('\n').filter(l => l.includes('| AWS |'))
+    expect(awsRows.length).toBe(1)
+  })
+
   test('handles missing ACV', () => {
     const signalNoACV: Signal = {
       ...mockCloudSignal,

@@ -166,19 +166,49 @@ export function templateCloudMarketplace(signals: Signal[]): string | null {
   const cloudSignals = signals.filter(s => routeSignal(s) === 'cloud')
   if (cloudSignals.length === 0) return null
 
+  // #378: Aggregate by provider — collect programs and offerings from all signals
+  // Individual program/incentive signals have offeringType but no programs array
+  const byProvider = new Map<string, { acv: number; programs: Set<string>; offerings: Set<string> }>()
+
+  for (const s of cloudSignals) {
+    const m = s.metadata ?? {}
+    const provider = String(m.provider ?? 'Unknown')
+    const entry = byProvider.get(provider) ?? { acv: 0, programs: new Set(), offerings: new Set() }
+
+    // Take max ACV across signals for this provider
+    if (m.acvPlus && Number(m.acvPlus) > entry.acv) entry.acv = Number(m.acvPlus)
+
+    // Collect from explicit programs array (aggregate CCSP signals)
+    if (Array.isArray(m.programs)) {
+      for (const p of m.programs) entry.programs.add(String(p))
+    }
+
+    // Collect from individual program/incentive signals (offeringType-based)
+    if (m.offeringType === 'program' || m.offeringType === 'incentive') {
+      // Extract program name from headline pattern: "Provider program: NAME — ..."
+      const match = s.headline.match(/(?:program|incentive):\s*([^—–-]+)/i)
+      if (match) entry.programs.add(match[1].trim())
+    }
+
+    // Collect offerings
+    if (Array.isArray(m.productOfferingGroup)) {
+      for (const o of m.productOfferingGroup) entry.offerings.add(String(o))
+    } else if (m.offeringType === 'product' && m.productOfferingGroup) {
+      entry.offerings.add(String(m.productOfferingGroup))
+    }
+
+    byProvider.set(provider, entry)
+  }
+
   const rows: string[] = []
   rows.push('| Provider | ACV | Programs | Offerings |')
   rows.push('|----------|-----|----------|-----------|')
 
-  for (const s of cloudSignals.slice(0, 8)) {
-    const m = s.metadata ?? {}
-    const provider = String(m.provider ?? 'Unknown')
-    const acv = m.acvPlus ? `$${Math.round(Number(m.acvPlus)).toLocaleString()}` : 'N/A'
-    const programs = Array.isArray(m.programs) ? m.programs.join(', ') : 'N/A'
-    const offerings = Array.isArray(m.productOfferingGroup)
-      ? m.productOfferingGroup.join(', ')
-      : String(m.productOfferingGroup ?? 'N/A')
-    rows.push(`| ${provider} | ${acv} | ${programs} | ${offerings.slice(0, 40)} |`)
+  for (const [provider, data] of byProvider) {
+    const acv = data.acv > 0 ? `$${Math.round(data.acv).toLocaleString()}` : 'N/A'
+    const programs = data.programs.size > 0 ? Array.from(data.programs).join(', ') : 'N/A'
+    const offerings = data.offerings.size > 0 ? Array.from(data.offerings).join(', ').slice(0, 40) : 'N/A'
+    rows.push(`| ${provider} | ${acv} | ${programs} | ${offerings} |`)
   }
 
   return rows.join('\n')
