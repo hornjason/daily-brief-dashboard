@@ -96,6 +96,8 @@ import { createCloudMarketplaceRouter } from './src/cloud-marketplace-routes.ts'
 import { createIntelligenceRouter } from './src/intelligence-routes.ts'
 // ── GitHub #293: Playbook routes ────────────────────────────────────────
 import { createPlaybookRouter } from './src/playbook-routes.ts'
+// ── GitHub #327: People data layer ─────────────────────────────────────
+import { createPeopleRouter } from './src/people-routes.ts'
 
 // Safety net: log unhandled promise rejections instead of crashing Bun
 // (council decision 2026-04-03 — Playwright download promises can reject after page death)
@@ -325,6 +327,8 @@ app.route('/', createMeetingPrepRouter())
 app.route('/', createIntelligenceRouter())
 // ── GitHub #293: Playbook routes ────────────────────────────────────────────
 app.route('/', createPlaybookRouter())
+// ── GitHub #327: People data layer ─────────────────────────────────────────
+app.route('/', createPeopleRouter())
 
 // Redirect root to command center
 app.get('/', (c) => c.redirect('/dashboard'))
