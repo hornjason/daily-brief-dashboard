@@ -1,6 +1,7 @@
 /**
  * Customer Product Intel Module — GitHub Issue #274
  * Migrates legacy per-product customer intel cache to registry signal contract.
+ * GitHub Issue #353 — Connect features to business objectives via initiativeAlignment
  */
 
 import { FeatureModuleRegistry, type Signal } from '../feature-module-registry.ts'
@@ -40,12 +41,26 @@ FeatureModuleRegistry.register({
         if (intel.expansionOpportunities?.length) parts.push(`${intel.expansionOpportunities.length} expansion opps`)
         if (intel.competitiveAngle) parts.push(intel.competitiveAngle.substring(0, 100))
 
+        // #353: Surface business objective alignment in detail
+        const initiatives: string[] = Array.isArray(intel.initiativeAlignment) ? intel.initiativeAlignment : []
+        if (initiatives.length > 0) {
+          parts.push(`Objective alignment: ${initiatives[0].substring(0, 120)}`)
+        }
+
+        const featureTPs: any[] = Array.isArray(intel.featureTalkingPoints) ? intel.featureTalkingPoints : []
+
+        // #353: Boost rawRelevance when business objectives are connected
+        let rawRelevance = (typeof intel.relevanceScore === 'number' ? intel.relevanceScore : 5) / 10
+        if (initiatives.length > 0) {
+          rawRelevance = Math.min(1.0, rawRelevance + 0.1)
+        }
+
         signals.push({
           source: 'customer-product-intel',
           type: 'product-intel',
           headline: `${product} intelligence — relevance ${intel.relevanceScore ?? '?'}/10`,
           detail: parts.join(' | ') || 'Product intel generated',
-          rawRelevance: (intel.relevanceScore ?? 5) / 10,
+          rawRelevance,
           timestamp: intel.generatedAt ?? data.cachedAt ?? new Date().toISOString(),
           metadata: {
             customerSlug,
@@ -54,6 +69,8 @@ FeatureModuleRegistry.register({
             expansionOpps: intel.expansionOpportunities?.length ?? 0,
             hasRoadmap: !!intel.roadmapRelevance,
             hasCaseAlignment: !!intel.caseAlignment,
+            initiativeAlignment: initiatives,
+            featureTalkingPoints: featureTPs,
           },
         })
       }
