@@ -360,6 +360,40 @@ describe('templateUpcomingEvents', () => {
   })
 })
 
+// ── Account Plan (#380) ───────────────────────────────────────────────────
+
+describe('templateAccountPlan', () => {
+  const mockAccountPlanSignal: Signal = {
+    source: 'account-plan',
+    type: 'account-plan',
+    headline: 'Acme Corp Account Plan',
+    detail: 'Key objectives: cloud migration to OpenShift, automation with Ansible, security modernization with ACS.',
+    score: 0.9,
+    timestamp: new Date().toISOString(),
+    metadata: {
+      customerSlug: 'acme-corp',
+      contentLength: 2500,
+    },
+  }
+
+  test('templateAll includes account plan in deterministic output for playbook', async () => {
+    const result = await templateAll([mockAccountPlanSignal], undefined, { format: 'playbook' })
+    expect(result.deterministic).toContain('## Account Plan')
+    expect(result.deterministic).toContain('cloud migration')
+    expect(result.sections.accountPlan).not.toBeNull()
+  })
+
+  test('templateAll includes account plan in deterministic output for brief', async () => {
+    const result = await templateAll([mockAccountPlanSignal], undefined, { format: 'brief' })
+    expect(result.deterministic).toContain('## Account Plan')
+  })
+
+  test('account plan does not appear in campaign format', async () => {
+    const result = await templateAll([mockAccountPlanSignal], undefined, { format: 'campaign' })
+    expect(result.deterministic).not.toContain('## Account Plan')
+  })
+})
+
 describe('templateAll', () => {
   test('assembles all sections with signals', async () => {
     const signals = [

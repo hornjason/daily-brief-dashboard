@@ -59,6 +59,8 @@ export interface TemplateResult {
     salesAlignment: string | null
     strategicOpportunities: string | null
     saleshubContext: string | null
+    upcomingEvents: string | null
+    accountPlan: string | null
   }
   /** Structured data for rich consumers (React components, HTML renderers) */
   structured: {
@@ -79,7 +81,7 @@ export interface TemplateResult {
  * 4. Tech: infrastructure metadata OR (confidence AND context with eval/migration keywords)
  * 5. Product: redHatProducts OR product metadata (fallback for subscription-like signals)
  */
-function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'other' {
+function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' | 'tech' | 'event' | 'account-plan' | 'other' {
   const m = signal.metadata ?? {}
 
   // Metadata-driven routing (most specific first)
@@ -96,6 +98,9 @@ function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' |
 
   // #377: Events — signals from rh-events or with format metadata and event type
   if (signal.source === 'rh-events' || (m.format && signal.type === 'event')) return 'event'
+
+  // #380: Account plan — strategic context, deterministic in playbook/brief
+  if (signal.source === 'account-plan' || signal.type === 'account-plan') return 'account-plan'
 
   // Product: subscription/ccsp/product metadata (default for RH product signals)
   // #375: Also route signals with productTags (rh-rss) or productSlug (value-maps)
@@ -718,6 +723,12 @@ export async function templateAll(
   const saleshubContext = templateSalesHubContext(filteredSignals)
   const upcomingEvents = templateUpcomingEvents(filteredSignals)
 
+  // #380: Account plan — render as text section for playbook/brief only
+  const accountPlanSignals = filteredSignals.filter(s => routeSignal(s) === 'account-plan')
+  const accountPlan = accountPlanSignals.length > 0
+    ? accountPlanSignals.map(s => s.detail).join('\n\n')
+    : null
+
   // Assemble deterministic markdown output
   const sections: string[] = []
 
@@ -733,6 +744,10 @@ export async function templateAll(
   if (cases) sections.push(`## Support Cases\n\n${cases}`)
   if (techStack) sections.push(`## Technology Stack\n\n${techStack}`)
   if (upcomingEvents) sections.push(`## Upcoming Events\n\n${upcomingEvents}`)
+  // #380: Account plan — long-form text, only in playbook/brief (not campaign)
+  if (accountPlan && (options.format === 'playbook' || options.format === 'brief' || options.format === 'meeting-prep')) {
+    sections.push(`## Account Plan\n\n${accountPlan}`)
+  }
   if (keyRelationships) sections.push(`## Key Relationships\n\n${keyRelationships}`)
 
   const deterministic = sections.join('\n\n')
@@ -826,6 +841,7 @@ export async function templateAll(
       strategicOpportunities,
       saleshubContext,
       upcomingEvents,
+      accountPlan,
     },
     structured: {
       solutionPlays,

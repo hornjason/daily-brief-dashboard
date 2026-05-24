@@ -128,6 +128,21 @@ describe('routeSignal coverage — #325 audit', () => {
     expect(result).toContain('rhel')
   })
 
+  test('account-plan signals route to account-plan section (#380)', () => {
+    const signal = makeSignal({
+      source: 'account-plan',
+      type: 'account-plan',
+      headline: 'Acme Corp Strategic Plan',
+      detail: 'Key objectives: cloud migration, automation, security modernization',
+      metadata: {
+        customerSlug: 'acme-corp',
+        contentLength: 2500,
+      },
+    })
+    // Should NOT appear in product alignment (it's an account plan, not a product)
+    expect(templateProductAlignment([signal])).toBeNull()
+  })
+
   test('signals without routing metadata still reach narrativeContext', () => {
     // news-radar signals with no product metadata fall to 'other'
     // They should NOT appear in any deterministic section
