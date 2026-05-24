@@ -95,7 +95,8 @@ function routeSignal(signal: Signal): 'product' | 'cloud' | 'renewal' | 'case' |
   }
 
   // Product: subscription/ccsp/product metadata (default for RH product signals)
-  if (m.redHatProducts || m.product) return 'product'
+  // #375: Also route signals with productTags (rh-rss) or productSlug (value-maps)
+  if (m.redHatProducts || m.product || (Array.isArray(m.productTags) && m.productTags.length > 0) || m.productSlug) return 'product'
 
   // Fallback to source name for legacy signals
   if (signal.source === 'cloud-marketplace') return 'cloud'
@@ -141,7 +142,9 @@ export function templateProductAlignment(signals: Signal[]): string | null {
     const m = s.metadata ?? {}
     const products = m.redHatProducts
     const firstProduct = Array.isArray(products) && products.length > 0 ? products[0] : null
-    const product = String(m.product ?? firstProduct ?? 'Unknown')
+    // #375/#379: Also read productTags (rh-rss) and productSlug (value-maps)
+    const firstTag = Array.isArray(m.productTags) && m.productTags.length > 0 ? m.productTags[0] : null
+    const product = String(m.product ?? firstProduct ?? m.productSlug ?? firstTag ?? 'Unknown')
     const confidence = String(m.confidence ?? '').toUpperCase() || 'MEDIUM'
     const context = String(m.context ?? s.detail.slice(0, 60)) || s.headline.slice(0, 60)
     rows.push(`| ${product} | ${confidence} | ${context} |`)
