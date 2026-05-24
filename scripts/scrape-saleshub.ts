@@ -374,8 +374,9 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
     await clickAccordionExpanders(page)
 
     const data = await page.evaluate(() => {
-      const mainEl = document.querySelector('main, [role="main"], body') as HTMLElement
-      const mainText = mainEl?.innerText ?? ''
+      // Use document.body (not main element) to include sidebar content
+      // The "TDPs Powering the Play" section is in the sidebar, outside <main>
+      const mainText = document.body?.innerText ?? ''
 
       // Extract description — first meaningful paragraph
       let description = ''
