@@ -176,8 +176,8 @@ FeatureModuleRegistry.register({
         continue
       }
 
-      const include = event.region === 'national' ||
-                     (customerRegion && event.region === customerRegion)
+      const regionMatch = customerRegion ? event.region === customerRegion : false
+      const include = event.region === 'national' || regionMatch
 
       if (!include) {
         continue
@@ -189,6 +189,11 @@ FeatureModuleRegistry.register({
         rawRelevance = 0.9
       } else if (daysUntil <= 30) {
         rawRelevance = 0.7
+      }
+
+      // #354: Boost relevance for geographic proximity (region match > national)
+      if (regionMatch && event.format !== 'virtual') {
+        rawRelevance = Math.min(1.0, rawRelevance + 0.1)
       }
 
       // ADR-029: cross-reference productTags against customer products
@@ -209,6 +214,8 @@ FeatureModuleRegistry.register({
         format: event.format,
         location: event.location,
         region: event.region,
+        regionMatch,
+        customerRegion: customerRegion ?? undefined,
         productTags: event.productTags,
         registrationUrl: event.registrationUrl,
       }
