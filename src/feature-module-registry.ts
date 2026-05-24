@@ -10,7 +10,7 @@ export type SignalType =
   | 'news' | 'intelligence' | 'expansion' | 'subscription'
   | 'case' | 'email' | 'meeting' | 'product-release'
   | 'event' | 'product-intel' | 'account-plan' | 'competitive' | 'brief'
-  | 'cloud-spend' | 'qualification-gap' | 'technology'
+  | 'cloud-spend' | 'qualification-gap' | 'technology' | 'acquisition'
 
 export interface Signal {
   /** Module name that produced this signal (e.g., 'news-radar', 'campaigns') */
@@ -57,6 +57,7 @@ const SIGNAL_BUDGETS: Record<string, number> = {
   'value-maps': 3,
   'news-radar': 5,
   'solution-intelligence': 8,
+  'mergers-acquisitions': 5,
 }
 
 const DEFAULT_BUDGET = 5
