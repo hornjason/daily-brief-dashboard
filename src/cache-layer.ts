@@ -1,11 +1,29 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 import { resolve } from 'path'
-import { createHash } from 'crypto'
 import { Hono } from 'hono'
 import type { CCSPRecord } from './sheets.ts'
 import type { PipelineRecord } from './pipeline.ts'
 import type { ProductSubscription, EmailHighlight, CalendarEvent } from './types.ts'
 import type { DocClassification } from './doc-extraction.ts'
+import {
+  createTTLStrategy,
+  createContentHashStrategy,
+  readCacheFile,
+  writeCacheFile,
+  hashData,
+} from './lib/cache-strategy.ts'
+
+// Re-export strategy primitives for new modules to declare their cache strategy
+export {
+  createTTLStrategy,
+  createContentHashStrategy,
+  createContentAddressedStrategy,
+  readCacheFile,
+  writeCacheFile,
+  hashData,
+  type CacheStrategy,
+  type CacheEntry,
+} from './lib/cache-strategy.ts'
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let CACHE_DIR = ''
@@ -104,6 +122,8 @@ export function writeBriefCache(
 
 export const EMAIL_CACHE_TTL_MS = 2 * 60 * 60 * 1000  // 2 hours
 
+const emailStrategy = createTTLStrategy(EMAIL_CACHE_TTL_MS)
+
 function emailCachePath(customerSlug: string): string {
   if (!customerSlug || /[^a-zA-Z0-9_-]/.test(customerSlug)) {
     throw new Error(`[cache] unsafe slug for email cache path: "${customerSlug}"`)
@@ -112,25 +132,12 @@ function emailCachePath(customerSlug: string): string {
 }
 
 export function readEmailCache(customerSlug: string): EmailHighlight[] | null {
-  try {
-    const raw = JSON.parse(readFileSync(emailCachePath(customerSlug), 'utf-8'))
-    const ttlMs = typeof raw.ttlMs === 'number' ? raw.ttlMs : EMAIL_CACHE_TTL_MS
-    const age = Date.now() - new Date(raw.cachedAt).getTime()
-    if (age > ttlMs) return null  // expired
-    return Array.isArray(raw.data) ? raw.data : null
-  } catch {
-    return null
-  }
+  const entry = readCacheFile<EmailHighlight[]>(emailCachePath(customerSlug), emailStrategy)
+  return entry ? (entry.data as EmailHighlight[]) : null
 }
 
 export function writeEmailCache(customerSlug: string, emails: EmailHighlight[]): void {
-  try {
-    writeFileSync(
-      emailCachePath(customerSlug),
-      JSON.stringify({ data: emails, cachedAt: new Date().toISOString(), ttlMs: EMAIL_CACHE_TTL_MS }),
-      { mode: 0o600 },
-    )
-  } catch (e: any) { console.warn('[cache] email write failed:', e.message) }
+  writeCacheFile(emailCachePath(customerSlug), { data: emails, cachedAt: new Date().toISOString(), ttlMs: EMAIL_CACHE_TTL_MS }, emailStrategy)
 }
 
 // ── Meeting cache — Tier 2 (ADR-013) ────────────────────────────────────────
@@ -138,6 +145,8 @@ export function writeEmailCache(customerSlug: string, emails: EmailHighlight[]):
 // live Google Calendar API calls on every brief generation.
 
 export const MEETING_CACHE_TTL_MS = 2 * 60 * 60 * 1000  // 2 hours
+
+const meetingStrategy = createTTLStrategy(MEETING_CACHE_TTL_MS)
 
 function meetingCachePath(customerSlug: string): string {
   if (!customerSlug || /[^a-zA-Z0-9_-]/.test(customerSlug)) {
@@ -147,28 +156,19 @@ function meetingCachePath(customerSlug: string): string {
 }
 
 export function readMeetingCache(customerSlug: string): CalendarEvent[] | null {
-  try {
-    const raw = JSON.parse(readFileSync(meetingCachePath(customerSlug), 'utf-8'))
-    const ttlMs = typeof raw.ttlMs === 'number' ? raw.ttlMs : MEETING_CACHE_TTL_MS
-    const age = Date.now() - new Date(raw.cachedAt).getTime()
-    if (age > ttlMs) return null  // expired
-    return Array.isArray(raw.data) ? raw.data : null
-  } catch {
-    return null
-  }
+  const entry = readCacheFile<CalendarEvent[]>(meetingCachePath(customerSlug), meetingStrategy)
+  return entry ? (entry.data as CalendarEvent[]) : null
 }
 
 export function writeMeetingCache(customerSlug: string, meetings: CalendarEvent[]): void {
-  try {
-    writeFileSync(
-      meetingCachePath(customerSlug),
-      JSON.stringify({ data: meetings, cachedAt: new Date().toISOString(), ttlMs: MEETING_CACHE_TTL_MS }),
-      { mode: 0o600 },
-    )
-  } catch (e: any) { console.warn('[cache] meeting write failed:', e.message) }
+  writeCacheFile(meetingCachePath(customerSlug), { data: meetings, cachedAt: new Date().toISOString(), ttlMs: MEETING_CACHE_TTL_MS }, meetingStrategy)
 }
 
 // ── Sheet data cache — permanent (no date), stays until force-refreshed ────────
+// Strategy: content-hash — skips writes when data is unchanged
+
+const sheetHashStrategy = createContentHashStrategy()
+
 export function sheetCachePath(customerName: string): string {
   const slug = toSlug(customerName)
   if (!slug || /[^a-zA-Z0-9_-]/.test(slug)) {
@@ -187,10 +187,8 @@ export function readSheetCache(customerName: string): { rows: ProductSubscriptio
 
 export function writeSheetCache(customerName: string, rows: ProductSubscription[]): void {
   try {
-    const newHash = createHash('sha256').update(JSON.stringify(rows)).digest('hex').slice(0, 16)
     const existing = readSheetCache(customerName)
-    const existingHash = existing ? createHash('sha256').update(JSON.stringify(existing.rows)).digest('hex').slice(0, 16) : null
-    if (existingHash === newHash) return  // data unchanged — preserve cachedAt so brief cache stays valid
+    if (sheetHashStrategy.shouldSkipWrite(existing ? { data: existing.rows, cachedAt: existing.cachedAt } : null, rows)) return
     writeFileSync(sheetCachePath(customerName), JSON.stringify({ rows, cachedAt: new Date().toISOString() }), { mode: 0o600 })
   } catch (e: any) { console.warn('[cache] sheet write failed:', e.message) }
 }
@@ -219,6 +217,8 @@ export function readLatestBriefCache(customerName: string): { text: string; cach
 }
 
 // ── CCSP Cloud Spend cache ──────────────────────────────────────────────────
+// Strategy: content-hash — skips writes when records are unchanged
+
 export function readCCSPCache(): { records: CCSPRecord[]; cachedAt: string; fileIds?: string[]; hash?: string } | null {
   try {
     return JSON.parse(readFileSync(`${CACHE_DIR}/ccsp-data.json`, 'utf-8'))
@@ -237,7 +237,6 @@ export function isCCSPCacheStale(currentSheetIds: string[]): boolean {
   if (!cached) return true  // no cache at all — stale by definition
   const cachedIds = cached.fileIds ?? []
   if (currentSheetIds.length !== cachedIds.length) return true
-  // Sort both for order-independent comparison
   const sortedCurrent = [...currentSheetIds].sort()
   const sortedCached = [...cachedIds].sort()
   return sortedCurrent.some((id, i) => id !== sortedCached[i])
@@ -258,17 +257,19 @@ export function invalidateCCSPCache(): void {
 
 export function writeCCSPCache(records: CCSPRecord[], fileIds: string[] = []): void {
   try {
-    const newHash = createHash('sha256').update(JSON.stringify(records)).digest('hex').slice(0, 16)
+    const newHash = hashData(records)
     const existing = readCCSPCache()
-    const existingHash = existing
-      ? (existing.hash ?? createHash('sha256').update(JSON.stringify(existing.records)).digest('hex').slice(0, 16))
-      : null
-    if (existingHash === newHash) return  // data unchanged — preserve cachedAt so brief fingerprint stays stable
+    if (existing) {
+      const existingHash = existing.hash ?? hashData(existing.records)
+      if (existingHash === newHash) return  // data unchanged — preserve cachedAt so brief fingerprint stays stable
+    }
     writeFileSync(`${CACHE_DIR}/ccsp-data.json`, JSON.stringify({ records, cachedAt: new Date().toISOString(), fileIds, hash: newHash }), { mode: 0o600 })
   } catch (e: any) { console.warn('[cache] CCSP write failed:', e.message) }
 }
 
 // ── Pipeline cache ──────────────────────────────────────────────────────────
+// Strategy: content-hash — skips writes when records+fileIds are unchanged
+
 export function readPipelineCache(): { records: PipelineRecord[]; cachedAt: string; fileIds?: string[]; hash?: string } | null {
   try {
     return JSON.parse(readFileSync(`${CACHE_DIR}/pipeline-data.json`, 'utf-8'))
@@ -288,7 +289,6 @@ export function isPipelineCacheStale(currentSheetIds: string[]): boolean {
   if (!cached) return true  // no cache at all — stale by definition
   const cachedIds = cached.fileIds ?? []
   if (currentSheetIds.length !== cachedIds.length) return true
-  // Sort both for order-independent comparison
   const sortedCurrent = [...currentSheetIds].sort()
   const sortedCached = [...cachedIds].sort()
   return sortedCurrent.some((id, i) => id !== sortedCached[i])
@@ -309,18 +309,18 @@ export function invalidatePipelineCache(): void {
 
 export function writePipelineCache(records: PipelineRecord[], fileIds: string[] = []): void {
   try {
-    const newHash = createHash('sha256').update(JSON.stringify({ records, fileIds })).digest('hex').slice(0, 16)
+    const newHash = hashData({ records, fileIds })
     const existing = readPipelineCache()
-    const existingHash = existing
-      ? (existing.hash ?? createHash('sha256').update(JSON.stringify({ records: existing.records, fileIds: existing.fileIds ?? [] })).digest('hex').slice(0, 16))
-      : null
-    if (existingHash === newHash) return  // data unchanged — preserve cachedAt so brief fingerprint stays stable
+    if (existing) {
+      const existingHash = existing.hash ?? hashData({ records: existing.records, fileIds: existing.fileIds ?? [] })
+      if (existingHash === newHash) return  // data unchanged — preserve cachedAt so brief fingerprint stays stable
+    }
     writeFileSync(`${CACHE_DIR}/pipeline-data.json`, JSON.stringify({ records, cachedAt: new Date().toISOString(), fileIds, hash: newHash }), { mode: 0o600 })
   } catch (e: any) { console.warn('[cache] pipeline write failed:', e.message) }
 }
 
 // ── Drive doc raw content cache — Tier 3 (ADR-013) ──────────────────────────
-// Content-addressed by (fileId, modifiedTime). No TTL — fingerprint IS the invalidation key.
+// Strategy: content-addressed — keyed by (fileId, modifiedTime), no TTL.
 // Eliminates repeated drive.files.export() and PDF multimodal re-runs on every brief.
 
 function safeModTime(modifiedTime: string): string {
@@ -352,7 +352,7 @@ export function writeDocContentCache(fileId: string, modifiedTime: string, conte
 }
 
 // ── Doc classification cache — Tier 3 (ADR-013) ─────────────────────────────
-// Content-addressed by (fileId, modifiedTime). No TTL.
+// Strategy: content-addressed — keyed by (fileId, modifiedTime), no TTL.
 // Eliminates N Gemini classification calls per brief for stable Drive folders.
 
 function docClassCachePath(fileId: string, modifiedTime: string): string {
@@ -387,6 +387,8 @@ export function writeDocClassCache(fileId: string, modifiedTime: string, classif
 
 export const INDUSTRY_ANALYSIS_TTL_MS = 30 * 24 * 60 * 60 * 1000  // 30 days
 
+const industryStrategy = createTTLStrategy(INDUSTRY_ANALYSIS_TTL_MS)
+
 export function industryAnalysisSlug(industry: string, region = 'global'): string {
   return (industry + '-' + region)
     .toLowerCase()
@@ -405,8 +407,7 @@ function industryAnalysisCachePath(industry: string, region = 'global'): string 
 export function readIndustryAnalysisCache(industry: string, region = 'global'): { analysis: string; cachedAt: string } | null {
   try {
     const data = JSON.parse(readFileSync(industryAnalysisCachePath(industry, region), 'utf-8'))
-    const age = Date.now() - new Date(data.cachedAt).getTime()
-    if (age > INDUSTRY_ANALYSIS_TTL_MS) return null  // expired per 30d TTL
+    if (!industryStrategy.isValid(data)) return null
     if (typeof data.analysis !== 'string') return null
     return { analysis: data.analysis, cachedAt: data.cachedAt }
   } catch {
