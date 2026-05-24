@@ -2,7 +2,7 @@
 doc-type: reference
 status: active
 owner: jason
-updated: 2026-05-13
+updated: 2026-05-24
 ---
 
 # DailyBriefDashboard — Documentation Index
@@ -34,8 +34,9 @@ updated: 2026-05-13
 | Check current system state (containers, AE count) | `PROJECT-STATE.md` |
 | Set up Salesforce report for pipeline sync | `docs/SF-REPORT-SETUP.md` |
 | Understand the test environment strategy | `docs/ENVIRONMENTS.md` |
-| Run or debug tests | `docs/TESTING-RUNBOOK.md` |
+| Run or debug tests | `docs/TESTING-RUNBOOK.md` — unit tests: `bun test --isolate test/unit/` |
 | Understand the E2E bootstrap test flow and assertions | `docs/E2E-BOOTSTRAP-FLOW.md` |
+| Build a new feature module | `docs/MODULE-DEVELOPER-GUIDE.md` + `docs/FEATURE-MODULE-GUIDE.md` |
 | Understand security baseline and rules | `docs/SECURITY-BASELINE.md` |
 
 ---
@@ -78,6 +79,11 @@ Docs with `status: active` that are maintained and indexed here. All others are 
 | `docs/agents/issue-tracker.md` | reference | GitHub Issues `gh` CLI commands for this repo |
 | `docs/agents/triage-labels.md` | reference | Triage label vocabulary and creation commands |
 | `docs/agents/domain.md` | reference | Domain doc layout for engineering skills |
+| `docs/MODULE-DEVELOPER-GUIDE.md` | reference | How to build a FeatureModule — registration, signals, nav, cleanup |
+| `docs/FEATURE-MODULE-GUIDE.md` | reference | Feature module registry patterns and lifecycle hooks |
+| `docs/designs/199-intelligence-surfaces.md` | spec | Intelligence tab and customer detail surface designs |
+| `docs/designs/214-intelligence-tab-layout.md` | spec | Intelligence tab layout and component specs |
+| `docs/designs/216-morning-summary-redesign.md` | spec | Morning summary email/dashboard redesign |
 
 ---
 

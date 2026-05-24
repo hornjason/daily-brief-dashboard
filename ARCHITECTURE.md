@@ -2,7 +2,7 @@
 doc-type: architecture
 status: active
 owner: jason
-updated: 2026-05-21
+updated: 2026-05-24
 ---
 
 # DailyBriefDashboard — Architecture Reference
@@ -1718,7 +1718,9 @@ Consumers (playbook, brief, campaign, meeting-prep) — zero changes
 | `src/modules/solution-intelligence-module.ts` | Registered module: emits solution-play, marketplace, version-correlation signals |
 | `src/modules/tech-stack-module.ts` | Enhanced: adds solutionPlayId/Name/Tdp/valueProps to tech signals |
 | `src/lib/signal-templates.ts` | Strategic Opportunities section with 3 sub-sections |
-| `scripts/scrape-saleshub.ts` | SalesHub scraper (Mac Mini L4 daemon) |
+| `scripts/scrape-saleshub.ts` | SalesHub 4-pass scraper: products, TDP pages (#366), sales plays (#367), tactics |
+| `scripts/saleshub-knowledge-extraction.ts` | Pure extraction: parseTdpPageSections (7 sections), parseSalesPlayPageSections (8 sections), buildSalesHubKnowledge |
+| `scripts/saleshub-page-discovery.ts` | Seismic API-based page discovery for TDPs, plays, tactics |
 | `scripts/sync-saleshub-drive.ts` | Syncs scraped data to Drive L4 folder |
 
 ### Cross-reference matrix (Phase 1-3)
