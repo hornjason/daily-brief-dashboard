@@ -272,6 +272,15 @@ async function uploadCampaignToDrive(
   signals: CustomerSignals,
 ): Promise<{ driveUrl: string; htmlUrl: string }> {
   const campaignsFolderId = await ensureCampaignsSubfolder(customerFolderId)
+  const docName = `${materialTitle} - Campaign for ${customer.name}`
+
+  // Use driveClient.upsertDoc which creates the doc via Docs API batchUpdate (#314)
+  // instead of uploading HTML. Native formatting — no HTML re-interpretation.
+  const driveUrl = await driveClient.upsertDoc(campaignsFolderId, docName, markdown)
+  console.log(`[campaigns] Created Google Doc via Docs API: ${docName} → ${driveUrl}`)
+
+  // HTML file kept for browser preview — still uses generateCampaignHTML
+  const accountTeam = getAccountTeam(customer)
   const timestamp = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -279,12 +288,6 @@ async function uploadCampaignToDrive(
     hour: '2-digit',
     minute: '2-digit',
   })
-  const docName = `${materialTitle} - Campaign for ${customer.name}`
-
-  // Get account team
-  const accountTeam = getAccountTeam(customer)
-
-  // Generate rich HTML output
   const htmlContent = generateCampaignHTML({
     materialTitle,
     materialUrl,
@@ -298,26 +301,6 @@ async function uploadCampaignToDrive(
 
   const auth = makeAuth(GOOGLE_UNIFIED_TOKEN_PATH)
   const drive = google.drive({ version: 'v3', auth })
-
-  // File 1: Google Doc (formatted, editable) — HTML imported and converted
-  const docResponse = await drive.files.create({
-    requestBody: {
-      name: docName,
-      mimeType: 'application/vnd.google-apps.document',
-      parents: [campaignsFolderId],
-    },
-    media: {
-      mimeType: 'text/html',
-      body: Readable.from(Buffer.from(htmlContent)),
-    },
-    fields: 'id,webViewLink',
-    supportsAllDrives: true,
-  })
-
-  const driveUrl = docResponse.data.webViewLink ?? `https://docs.google.com/document/d/${docResponse.data.id}/edit`
-  console.log(`[campaigns] Created Google Doc: ${docName} → ${driveUrl}`)
-
-  // File 2: HTML file (raw, for browser preview in Drive)
   const htmlResponse = await drive.files.create({
     requestBody: {
       name: `${docName}.html`,
