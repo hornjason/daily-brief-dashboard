@@ -55,7 +55,7 @@ import { inferCustomerDomain, isHighConfidenceDomain } from './domains.ts'
 import { batchInferDomains, isPublicDomain, tier1Clearbit } from './domain-waterfall.ts'
 import type { AE } from './types.ts'
 import { sanitizeErr, isValidDriveFolderId } from './utils.ts'
-import { loadProductIntelConfig, saveProductConfig, getProductIntelParentFolderId } from './product-release-radar.ts'
+import { loadProductIntelConfig, loadProductConfig, saveProductConfig, getProductIntelParentFolderId } from './product-release-radar.ts'
 import { recordBootstrapRun } from './bootstrap-history.ts'
 import { getBackupSheetId, setBackupSheetId, createBackupSheet } from './backup-config.ts'
 import { normalizeSettings } from './region-config.ts'
@@ -408,6 +408,31 @@ async function bootstrapPOD(opts: {
   // BKL-DRIVE-SCAFFOLD-01: Idempotently scaffold Config/ and Products/<slug> under parentFolderId.
   // Runs once per POD bootstrap, before per-AE Drive folder creation. Non-fatal.
   const scaffoldResult = await ensureConfigAndProductsScaffold(parentFolderId)
+
+  // BKL-GITHUB-345: Write productSubfolders back to product-intel-config.json
+  // so product-drive-ingest.ts can find the folder IDs when ingesting Drive corpus.
+  if (scaffoldResult && scaffoldResult.productSubfolders && Object.keys(scaffoldResult.productSubfolders).length > 0) {
+    try {
+      const products = loadProductConfig()
+      let updated = false
+      const productSubfolders = scaffoldResult.productSubfolders
+      const updatedProducts = products.map((p: any) => {
+        const folderId = productSubfolders[p.slug]
+        if (folderId && !p.driveFolder) {
+          console.log(`[pod-bootstrap] Setting driveFolder for ${p.slug}: ${folderId}`)
+          updated = true
+          return { ...p, driveFolder: folderId }
+        }
+        return p
+      })
+      if (updated) {
+        saveProductConfig(updatedProducts)
+        console.log(`[pod-bootstrap] Wrote productSubfolders to product-intel-config.json`)
+      }
+    } catch (e: any) {
+      console.warn('[pod-bootstrap] Failed to write productSubfolders to config (non-blocking):', e?.message)
+    }
+  }
 
   // BKL-BACKUP-01 / BKL-DRIVE-APPBACKUP-01: Create config backup sheet in Config/ subfolder.
   // Fall back to parentFolderId if scaffold didn't run (no auth, existing install, etc.)
@@ -943,6 +968,31 @@ function runAutoBootstrap(inputs: AutoBootstrapInputs): void {
     let perAeScaffold: ScaffoldEntry | null = null
     if (parentFolderId) {
       perAeScaffold = await ensureConfigAndProductsScaffold(parentFolderId)
+
+      // BKL-GITHUB-345: Write productSubfolders back to product-intel-config.json
+      // so product-drive-ingest.ts can find the folder IDs when ingesting Drive corpus.
+      if (perAeScaffold && perAeScaffold.productSubfolders && Object.keys(perAeScaffold.productSubfolders).length > 0) {
+        try {
+          const products = loadProductConfig()
+          let updated = false
+          const productSubfolders = perAeScaffold.productSubfolders
+          const updatedProducts = products.map((p: any) => {
+            const folderId = productSubfolders[p.slug]
+            if (folderId && !p.driveFolder) {
+              console.log(`[auto-bootstrap] Setting driveFolder for ${p.slug}: ${folderId}`)
+              updated = true
+              return { ...p, driveFolder: folderId }
+            }
+            return p
+          })
+          if (updated) {
+            saveProductConfig(updatedProducts)
+            console.log(`[auto-bootstrap] Wrote productSubfolders to product-intel-config.json`)
+          }
+        } catch (e: any) {
+          console.warn('[auto-bootstrap] Failed to write productSubfolders to config (non-blocking):', e?.message)
+        }
+      }
     }
 
     // Pre-flight — Ensure product intel Drive folders exist under Products/

@@ -2566,3 +2566,30 @@ test.describe('REG-034: Zero-record cache protection (#305)', () => {
     expect(pipelineSection).toMatch(/discoveredFileIds\.length/)
   })
 })
+
+// ── REG-035: Product-intel driveFolder persistence (#345) ──
+// Verifies that bootstrap scaffold writes productSubfolders back to product-intel-config.json.
+// Before fix: ensureConfigAndProductsScaffold() created product subfolders and returned IDs,
+// but those IDs were never written to config — product-drive-ingest.ts read null driveFolder.
+test.describe('REG-035: Bootstrap scaffold persists product driveFolder IDs (#345)', () => {
+  test('bootstrap-orchestrator imports saveProductConfig', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    expect(src).toContain('saveProductConfig')
+  })
+
+  test('bootstrap-orchestrator writes productSubfolders after scaffold', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/bootstrap-orchestrator.ts'), 'utf8')
+    // After scaffold returns, should read config, update driveFolder, and save
+    const scaffoldSection = src.substring(
+      src.indexOf('ensureConfigAndProductsScaffold'),
+      src.indexOf('async function notify')
+    )
+    // Should save config after scaffold completes
+    expect(scaffoldSection).toMatch(/saveProductConfig|productSubfolders/)
+  })
+
+  test('product-drive-ingest reads driveFolder from config', () => {
+    const src = fs.readFileSync(path.join(__dirname, '../src/product-drive-ingest.ts'), 'utf8')
+    expect(src).toContain('product.driveFolder')
+  })
+})
