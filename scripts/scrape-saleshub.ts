@@ -417,7 +417,10 @@ async function extractSalesPlayPage(page: Page, playName: string, playUrl: strin
       console.log(`[scrape-saleshub] ${playName}: tdpAlignment = ${sections.tdpAlignment.join(', ')}`)
     } else {
       const hasTdpPowering = data.mainText.includes('TDPs Powering')
+      const tdpIdx = data.mainText.indexOf('TDPs Powering')
+      const contextSnippet = tdpIdx > -1 ? JSON.stringify(data.mainText.slice(tdpIdx, tdpIdx + 300)) : 'NOT FOUND'
       console.log(`[scrape-saleshub] ${playName}: tdpAlignment empty (TDPs Powering in text: ${hasTdpPowering}, text length: ${data.mainText.length})`)
+      console.log(`[scrape-saleshub] ${playName}: context around TDPs Powering: ${contextSnippet}`)
     }
 
     return {
